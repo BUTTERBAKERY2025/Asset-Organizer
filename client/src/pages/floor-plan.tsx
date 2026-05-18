@@ -19,7 +19,10 @@ import {
   Crown, Shield, Calculator, Coffee, ChefHat, Utensils, Sparkles,
   Handshake, Package, Cake, HardHat, Wine, Soup, Sun, Sunset, Moon, RotateCw,
 } from "lucide-react";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
+import { ZoomIn, ZoomOut, Maximize2, Lock, Unlock, Magnet, Grid3x3, Search } from "lucide-react";
 import type { Branch } from "@shared/schema";
 
 interface BranchEmployee {
@@ -158,6 +161,22 @@ export default function FloorPlanPage() {
   } | null>(null);
   // Role placement mode: when set, the next canvas click drops an empty slot of this role
   const [placementRole, setPlacementRole] = useState<string | null>(null);
+  // Canvas controls — toolbar state
+  const [zoom, setZoom] = useState(1);
+  const [showGrid, setShowGrid] = useState(true);
+  const [snapGrid, setSnapGrid] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const [empSearch, setEmpSearch] = useState("");
+  const [sidebarTab, setSidebarTab] = useState<"roles" | "zones" | "employees">("roles");
+  const canvasWrapRef = useRef<HTMLDivElement>(null);
+  const GRID_SIZE = 10;
+  const snap = (n: number) => snapGrid ? Math.round(n / GRID_SIZE) * GRID_SIZE : Math.round(n);
+  const setZoomClamped = (z: number) => setZoom(Math.min(2, Math.max(0.25, Math.round(z * 100) / 100)));
+  const fitToView = () => {
+    if (!canvasWrapRef.current || !data) return;
+    const avail = canvasWrapRef.current.clientWidth - 16;
+    setZoomClamped(avail / data.plan.width);
+  };
   // Exit placement mode on Escape
   useEffect(() => {
     if (!placementRole) return;
@@ -203,14 +222,21 @@ export default function FloorPlanPage() {
     mutationFn: async (id: number) => (await apiRequest("DELETE", `/api/floor-plans/${selectedBranchId}/assignments/${id}?shift=${selectedShift}`)).json(),
     onSuccess: () => { invalidate(); setEditAssignDialog(null); toast({ title: "تم إزالة الموظف من المخطط" }); },
   });
+  const updatePlan = useMutation({
+    mutationFn: async (body: any) =>
+      (await apiRequest("PUT", `/api/floor-plans/${selectedBranchId}`, body)).json(),
+    onSuccess: () => invalidate(),
+    onError: (e: any) => toast({ title: "فشل تحديث المخطط", description: e?.message, variant: "destructive" }),
+  });
 
   // ---- Drag & Drop helpers ----
+  // Canvas may be CSS-scaled (zoom). `getBoundingClientRect()` returns the
+  // already-scaled rect, so we divide by `zoom` to recover plan coordinates.
   const getCanvasCoords = (e: React.DragEvent | React.MouseEvent) => {
     const rect = canvasRef.current!.getBoundingClientRect();
-    return {
-      x: Math.max(0, Math.round((e as any).clientX - rect.left)),
-      y: Math.max(0, Math.round((e as any).clientY - rect.top)),
-    };
+    const x = ((e as any).clientX - rect.left) / zoom;
+    const y = ((e as any).clientY - rect.top) / zoom;
+    return { x: Math.max(0, snap(x)), y: Math.max(0, snap(y)) };
   };
 
   // Rotation-aware hit test — inverse-rotates the point into the zone's local
@@ -255,23 +281,24 @@ export default function FloorPlanPage() {
       const preset = zone ? ZONE_PRESETS.find(p => p.name === zone.name) : undefined;
       setAssignDialog({ x, y, employeeId, suggestedRole: preset?.defaultRole || undefined });
     } else if (moveAssignIdStr) {
+      if (locked) return;
       const id = parseInt(moveAssignIdStr, 10);
-      const dx = parseInt(e.dataTransfer.getData("x-offset") || "0", 10);
-      const dy = parseInt(e.dataTransfer.getData("y-offset") || "0", 10);
-      updateAssignment.mutate({ id, body: { x: Math.max(0, x - dx), y: Math.max(0, y - dy) } });
+      const dx = parseFloat(e.dataTransfer.getData("x-offset") || "0");
+      const dy = parseFloat(e.dataTransfer.getData("y-offset") || "0");
+      updateAssignment.mutate({ id, body: { x: Math.max(0, snap(x - dx)), y: Math.max(0, snap(y - dy)) } });
     } else if (moveZoneIdStr) {
+      if (locked) return;
       const id = parseInt(moveZoneIdStr, 10);
       // dx/dy = cursor offset from the zone's CENTER (rotation pivot) at drag-start,
-      // captured in canvas space. This stays glued to the same visual point on
-      // the rotated zone, so the drop position is correct at any rotation.
-      const dx = parseInt(e.dataTransfer.getData("x-offset") || "0", 10);
-      const dy = parseInt(e.dataTransfer.getData("y-offset") || "0", 10);
+      // in plan coordinates. Stays glued to the visual grab point regardless of rotation.
+      const dx = parseFloat(e.dataTransfer.getData("x-offset") || "0");
+      const dy = parseFloat(e.dataTransfer.getData("y-offset") || "0");
       const z = data?.zones.find(zz => zz.id === id);
       if (!z) return;
       const newCx = x - dx;
       const newCy = y - dy;
-      const newX = Math.max(0, Math.round(newCx - z.width / 2));
-      const newY = Math.max(0, Math.round(newCy - z.height / 2));
+      const newX = Math.max(0, snap(newCx - z.width / 2));
+      const newY = Math.max(0, snap(newCy - z.height / 2));
       updateZone.mutate({ id, body: { x: newX, y: newY } });
     }
   };
@@ -330,18 +357,19 @@ export default function FloorPlanPage() {
     let x = startX, y = startY, w = startW, h = startH;
     const MIN = 60;
     const onMove = (ev: MouseEvent) => {
-      const dx = ev.clientX - mx;
-      const dy = ev.clientY - my;
-      if (dir.includes("r")) w = Math.max(MIN, Math.round(startW + dx));
+      // Convert screen-pixel delta to plan-coordinate delta when zoomed
+      const dx = (ev.clientX - mx) / zoom;
+      const dy = (ev.clientY - my) / zoom;
+      if (dir.includes("r")) w = Math.max(MIN, snap(startW + dx));
       if (dir.includes("l")) {
-        const nw = Math.max(MIN, Math.round(startW - dx));
-        x = Math.max(0, Math.round(startX + (startW - nw)));
+        const nw = Math.max(MIN, snap(startW - dx));
+        x = Math.max(0, snap(startX + (startW - nw)));
         w = nw;
       }
-      if (dir.includes("b")) h = Math.max(MIN, Math.round(startH + dy));
+      if (dir.includes("b")) h = Math.max(MIN, snap(startH + dy));
       if (dir.includes("t")) {
-        const nh = Math.max(MIN, Math.round(startH - dy));
-        y = Math.max(0, Math.round(startY + (startH - nh)));
+        const nh = Math.max(MIN, snap(startH - dy));
+        y = Math.max(0, snap(startY + (startH - nh)));
         h = nh;
       }
       setResizing({ id: zoneId, x, y, width: w, height: h });
@@ -466,211 +494,282 @@ export default function FloorPlanPage() {
         ) : isLoading || !data ? (
           <Card><CardContent className="py-16 text-center text-muted-foreground">جارٍ التحميل...</CardContent></Card>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
-            {/* Sidebar */}
-            <div className="space-y-4">
-              {/* PRIMARY: Role palette — distribute the plan by role first, assign people later */}
-              <Card className={placementRole ? "border-primary ring-2 ring-primary/30" : ""}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <UserIcon className="w-4 h-4" /> لوحة الوظائف
-                    {placementRole && (
-                      <Badge variant="default" className="ms-auto text-[10px]" data-testid="badge-placement-active">
-                        وضع الإضافة
-                      </Badge>
-                    )}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    اختر وظيفة ثم اضغط على المخطط لإضافة موقع شاغر لها. كرّر الضغط لإضافة عدة مواقع. اضغط Esc للخروج.
-                  </p>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {COMMON_ROLES.map(r => {
-                      const def = ROLE_DEFS[r]; const RI = def.icon;
-                      const active = placementRole === r;
-                      return (
-                        <button
-                          key={r}
-                          type="button"
-                          onClick={() => setPlacementRole(active ? null : r)}
-                          data-testid={`btn-role-${r}`}
-                          className={`flex items-center gap-2 p-1.5 rounded-md border text-right transition-colors ${
-                            active
-                              ? "border-primary bg-primary/10"
-                              : "border-border bg-card hover:bg-accent hover:border-primary"
-                          }`}
-                          title={`إضافة موقع: ${def.label}`}
-                        >
-                          <span
-                            className="w-7 h-7 flex items-center justify-center text-white shrink-0"
-                            style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}
-                          >
-                            <RI className="w-3.5 h-3.5" />
-                          </span>
-                          <span className="text-xs truncate flex-1">{def.label}</span>
-                        </button>
-                      );
-                    })}
+          <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4">
+            {/* Sidebar — tabbed to keep the page compact */}
+            <Card className="lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-6rem)] flex flex-col overflow-hidden">
+              {/* Live shift summary (always visible) */}
+              <div className="p-3 border-b bg-muted/40">
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">المواقع</div>
+                    <div className="text-base font-bold tabular-nums" data-testid="stat-total-slots">{data.assignments.length}</div>
                   </div>
-                  {placementRole && (
-                    <Button
-                      variant="outline" size="sm" className="w-full"
-                      onClick={() => setPlacementRole(null)}
-                      data-testid="btn-cancel-placement"
-                    >
-                      إنهاء وضع الإضافة (Esc)
-                    </Button>
-                  )}
-                  <Button className="w-full justify-start" variant="ghost" size="sm" onClick={() => setZoneDialog({ mode: "create" })} data-testid="btn-add-zone">
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">مُعيَّنة</div>
+                    <div className="text-base font-bold tabular-nums text-green-700" data-testid="stat-filled-slots">{data.assignments.length - emptySlots.length}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-muted-foreground">شاغرة</div>
+                    <div className="text-base font-bold tabular-nums text-amber-700" data-testid="stat-empty-slots">{emptySlots.length}</div>
+                  </div>
+                </div>
+                {data.assignments.length > 0 && (
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden mt-2" title="نسبة الإشغال">
+                    <div
+                      className="h-full bg-green-500 transition-all"
+                      style={{ width: `${Math.round(((data.assignments.length - emptySlots.length) / data.assignments.length) * 100)}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <Tabs value={sidebarTab} onValueChange={(v) => setSidebarTab(v as any)} dir="rtl" className="flex flex-col flex-1 overflow-hidden">
+                <TabsList className="grid grid-cols-3 mx-2 mt-2">
+                  <TabsTrigger value="roles" data-testid="tab-sidebar-roles" className="text-xs">الوظائف</TabsTrigger>
+                  <TabsTrigger value="zones" data-testid="tab-sidebar-zones" className="text-xs">المناطق</TabsTrigger>
+                  <TabsTrigger value="employees" data-testid="tab-sidebar-employees" className="text-xs gap-1">
+                    الموظفون
+                    <Badge variant="secondary" className="h-4 px-1 text-[10px] tabular-nums" data-testid="badge-unplaced-count">{unplacedEmployees.length}</Badge>
+                  </TabsTrigger>
+                </TabsList>
+
+                {/* Roles tab */}
+                <TabsContent value="roles" className="flex-1 overflow-auto m-0 p-3 space-y-2">
+                  <div className={`rounded-md border p-2 ${placementRole ? "border-primary bg-primary/5" : "border-transparent"}`}>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed mb-2">
+                      اختر وظيفة ثم اضغط على المخطط لإضافة موقع شاغر. Esc للخروج.
+                    </p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {COMMON_ROLES.map(r => {
+                        const def = ROLE_DEFS[r]; const RI = def.icon;
+                        const active = placementRole === r;
+                        return (
+                          <button
+                            key={r} type="button"
+                            onClick={() => setPlacementRole(active ? null : r)}
+                            data-testid={`btn-role-${r}`}
+                            className={`flex items-center gap-1.5 p-1.5 rounded-md border text-right transition-colors ${
+                              active ? "border-primary bg-primary/10 ring-1 ring-primary"
+                                     : "border-border bg-card hover:bg-accent hover:border-primary"
+                            }`}
+                            title={`إضافة موقع: ${def.label}`}
+                          >
+                            <span className="w-6 h-6 flex items-center justify-center text-white shrink-0"
+                              style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}>
+                              <RI className="w-3 h-3" />
+                            </span>
+                            <span className="text-[11px] truncate flex-1">{def.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {placementRole && (
+                      <Button variant="outline" size="sm" className="w-full mt-2 h-7 text-xs"
+                        onClick={() => setPlacementRole(null)} data-testid="btn-cancel-placement">
+                        إنهاء وضع الإضافة (Esc)
+                      </Button>
+                    )}
+                  </div>
+                  <Separator />
+                  <Button className="w-full justify-start" variant="outline" size="sm"
+                    onClick={() => setZoneDialog({ mode: "create" })} data-testid="btn-add-zone">
                     <Plus className="w-4 h-4 ml-1" /> إضافة منطقة مخصصة
                   </Button>
-                </CardContent>
-              </Card>
+                </TabsContent>
 
-              {/* Preset zones — one-click bakery/cafe areas */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">مناطق جاهزة</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-1.5">
+                {/* Zones tab — preset bakery/cafe areas */}
+                <TabsContent value="zones" className="flex-1 overflow-auto m-0 p-3 space-y-1.5">
+                  <p className="text-[11px] text-muted-foreground mb-1">
+                    اضغط لإضافة منطقة جاهزة بألوان وأبعاد مناسبة. يمكنك تحريكها، تكبيرها، أو تدويرها بعد الإضافة.
+                  </p>
                   {ZONE_PRESETS.map(preset => {
                     const def = preset.defaultRole ? ROLE_DEFS[preset.defaultRole] : null;
                     const PI = def?.icon;
                     return (
                       <button
-                        key={preset.name}
-                        type="button"
-                        onClick={() => addPresetZone(preset)}
-                        disabled={createZone.isPending}
-                        data-testid={`btn-preset-${preset.name}`}
+                        key={preset.name} type="button" onClick={() => addPresetZone(preset)}
+                        disabled={createZone.isPending} data-testid={`btn-preset-${preset.name}`}
                         className="w-full flex items-center gap-2 p-2 rounded-md border border-border bg-card hover:bg-accent hover:border-primary transition-colors text-right disabled:opacity-50"
                       >
-                        <span
-                          className="w-5 h-5 rounded shrink-0 border border-black/10"
-                          style={{ backgroundColor: preset.color }}
-                          aria-hidden
-                        />
+                        <span className="w-5 h-5 rounded shrink-0 border border-black/10"
+                          style={{ backgroundColor: preset.color }} aria-hidden />
                         <span className="flex-1 text-sm truncate">{preset.name}</span>
                         {def && PI && (
-                          <span
-                            className="w-6 h-6 flex items-center justify-center text-white shrink-0"
+                          <span className="w-6 h-6 flex items-center justify-center text-white shrink-0"
                             style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}
-                            title={`الوظيفة الافتراضية: ${preset.defaultRole}`}
-                          >
+                            title={`الوظيفة الافتراضية: ${preset.defaultRole}`}>
                             <PI className="w-3 h-3" />
                           </span>
                         )}
                       </button>
                     );
                   })}
-                </CardContent>
-              </Card>
+                </TabsContent>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <UserIcon className="w-4 h-4" />
-                    موظفون متاحون للتعيين
-                    <Badge variant="secondary" className="ms-auto" data-testid="badge-unplaced-count">{unplacedEmployees.length}</Badge>
-                  </CardTitle>
-                  <p className="text-[11px] text-muted-foreground pt-1">
-                    اسحب موظفاً وأفلته على موقع شاغر لملئه، أو على المخطط لإنشاء موقع جديد.
-                  </p>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <ScrollArea className="h-[520px]">
-                    <div className="p-3 space-y-1.5">
-                      {unplacedEmployees.length === 0 ? (
-                        <div className="text-center text-xs text-muted-foreground py-6">
-                          {data.employees.length === 0 ? "لا يوجد موظفون نشطون بهذا الفرع" : `جميع الموظفين موزَّعون في شفت ${SHIFTS.find(s => s.value === selectedShift)?.label}`}
-                        </div>
-                      ) : unplacedEmployees.map(emp => {
-                        const def = getRoleDef(null, emp.jobTitle);
-                        const RoleIcon = def.icon;
-                        return (
-                        <div
-                          key={emp.id}
-                          draggable
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData("application/x-employee-id", String(emp.id));
-                            e.dataTransfer.effectAllowed = "move";
-                          }}
-                          className="flex items-center gap-2 p-2 rounded-md border border-border bg-card hover:bg-accent hover:border-primary cursor-grab active:cursor-grabbing transition-colors"
-                          data-testid={`employee-pill-${emp.id}`}
-                        >
-                          <GripVertical className="w-4 h-4 text-muted-foreground shrink-0" />
-                          <div
-                            className="w-8 h-8 flex items-center justify-center text-white shrink-0"
-                            style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}
-                          >
-                            <RoleIcon className="w-4 h-4" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium truncate">{emp.employeeName}</div>
-                            <div className="text-xs text-muted-foreground truncate">{emp.jobTitle}</div>
-                          </div>
-                        </div>
-                      );})}
+                {/* Employees tab — searchable + draggable */}
+                <TabsContent value="employees" className="flex-1 overflow-hidden m-0 flex flex-col">
+                  <div className="p-3 pb-2 space-y-2">
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      اسحب موظفاً وأفلته على موقع شاغر لملئه، أو على المخطط لإنشاء موقع جديد.
+                    </p>
+                    <div className="relative">
+                      <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                      <Input
+                        value={empSearch} onChange={(e) => setEmpSearch(e.target.value)}
+                        placeholder="ابحث بالاسم أو الوظيفة..." className="h-8 pr-8 text-sm"
+                        data-testid="input-employee-search"
+                      />
+                    </div>
+                  </div>
+                  <ScrollArea className="flex-1">
+                    <div className="px-3 pb-3 space-y-1.5">
+                      {(() => {
+                        const q = empSearch.trim().toLowerCase();
+                        const filtered = q
+                          ? unplacedEmployees.filter(e =>
+                              e.employeeName.toLowerCase().includes(q) ||
+                              (e.jobTitle || "").toLowerCase().includes(q))
+                          : unplacedEmployees;
+                        if (filtered.length === 0) {
+                          return (
+                            <div className="text-center text-xs text-muted-foreground py-6">
+                              {data.employees.length === 0
+                                ? "لا يوجد موظفون نشطون بهذا الفرع"
+                                : q ? "لا نتائج مطابقة للبحث"
+                                    : `جميع الموظفين موزَّعون في شفت ${SHIFTS.find(s => s.value === selectedShift)?.label}`}
+                            </div>
+                          );
+                        }
+                        return filtered.map(emp => {
+                          const def = getRoleDef(null, emp.jobTitle);
+                          const RoleIcon = def.icon;
+                          return (
+                            <div key={emp.id} draggable
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData("application/x-employee-id", String(emp.id));
+                                e.dataTransfer.effectAllowed = "move";
+                              }}
+                              className="flex items-center gap-2 p-2 rounded-md border border-border bg-card hover:bg-accent hover:border-primary cursor-grab active:cursor-grabbing transition-colors"
+                              data-testid={`employee-pill-${emp.id}`}
+                            >
+                              <GripVertical className="w-4 h-4 text-muted-foreground shrink-0" />
+                              <div className="w-8 h-8 flex items-center justify-center text-white shrink-0"
+                                style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}>
+                                <RoleIcon className="w-4 h-4" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium truncate">{emp.employeeName}</div>
+                                <div className="text-xs text-muted-foreground truncate">{emp.jobTitle}</div>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                   </ScrollArea>
-                </CardContent>
-              </Card>
-
-              {/* Plan summary */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">ملخّص الشِفت</CardTitle>
-                </CardHeader>
-                <CardContent className="text-xs space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">إجمالي المواقع</span>
-                    <span className="font-semibold tabular-nums" data-testid="stat-total-slots">{data.assignments.length}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">مواقع مُعيَّنة</span>
-                    <span className="font-semibold tabular-nums text-green-700" data-testid="stat-filled-slots">{data.assignments.length - emptySlots.length}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">مواقع شاغرة</span>
-                    <span className="font-semibold tabular-nums text-amber-700" data-testid="stat-empty-slots">{emptySlots.length}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                </TabsContent>
+              </Tabs>
+            </Card>
 
             {/* Canvas */}
             <Card className="overflow-hidden">
-              <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                <CardTitle className="text-base">المخطط</CardTitle>
-                <div className="text-xs text-muted-foreground tabular-nums">
-                  {data.plan.width} × {data.plan.height}  ·  المناطق: {data.zones.length}  ·  المعيَّنون: {data.assignments.length}
+              {/* Sticky toolbar — zoom, grid, snap, lock, plan size */}
+              <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b p-2 flex flex-wrap items-center gap-2">
+                {/* Zoom group */}
+                <div className="flex items-center gap-1 rounded-md border bg-card p-0.5">
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setZoomClamped(zoom - 0.1)} title="تصغير" data-testid="btn-zoom-out">
+                    <ZoomOut className="w-4 h-4" />
+                  </Button>
+                  <button type="button" onClick={() => setZoomClamped(1)} className="text-xs font-medium tabular-nums w-12 text-center hover:bg-accent rounded" title="إعادة 100%" data-testid="btn-zoom-reset">
+                    {Math.round(zoom * 100)}%
+                  </button>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setZoomClamped(zoom + 0.1)} title="تكبير" data-testid="btn-zoom-in">
+                    <ZoomIn className="w-4 h-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={fitToView} title="ملاءمة الشاشة" data-testid="btn-zoom-fit">
+                    <Maximize2 className="w-4 h-4" />
+                  </Button>
                 </div>
-              </CardHeader>
+
+                {/* Toggles */}
+                <div className="flex items-center gap-3 rounded-md border bg-card px-2 py-1">
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer" title="إظهار/إخفاء الشبكة">
+                    <Grid3x3 className="w-3.5 h-3.5 text-muted-foreground" />
+                    <Switch checked={showGrid} onCheckedChange={setShowGrid} data-testid="switch-grid" className="scale-75" />
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer" title={`المحاذاة لشبكة ${GRID_SIZE} بكسل`}>
+                    <Magnet className="w-3.5 h-3.5 text-muted-foreground" />
+                    <Switch checked={snapGrid} onCheckedChange={setSnapGrid} data-testid="switch-snap" className="scale-75" />
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer" title="قفل التحريك والتكبير">
+                    {locked ? <Lock className="w-3.5 h-3.5 text-amber-600" /> : <Unlock className="w-3.5 h-3.5 text-muted-foreground" />}
+                    <Switch checked={locked} onCheckedChange={setLocked} data-testid="switch-lock" className="scale-75" />
+                  </label>
+                </div>
+
+                {/* Plan size editor */}
+                <div className="flex items-center gap-1 rounded-md border bg-card px-2 py-1 text-xs">
+                  <span className="text-muted-foreground">المقاس:</span>
+                  <Input
+                    type="number" value={data.plan.width} min={400} max={4000} step={20}
+                    onBlur={(e) => {
+                      const w = parseInt(e.target.value, 10);
+                      if (!isNaN(w) && w !== data.plan.width) updatePlan.mutate({ width: Math.max(400, Math.min(4000, w)) });
+                    }}
+                    defaultValue={data.plan.width}
+                    key={`w-${data.plan.id}-${data.plan.width}`}
+                    className="h-6 w-16 px-1 text-xs tabular-nums"
+                    data-testid="input-plan-width"
+                  />
+                  <span className="text-muted-foreground">×</span>
+                  <Input
+                    type="number" min={300} max={4000} step={20}
+                    onBlur={(e) => {
+                      const h = parseInt(e.target.value, 10);
+                      if (!isNaN(h) && h !== data.plan.height) updatePlan.mutate({ height: Math.max(300, Math.min(4000, h)) });
+                    }}
+                    defaultValue={data.plan.height}
+                    key={`h-${data.plan.id}-${data.plan.height}`}
+                    className="h-6 w-16 px-1 text-xs tabular-nums"
+                    data-testid="input-plan-height"
+                  />
+                </div>
+
+                {/* Stats badge — always visible at-a-glance */}
+                <Badge variant="outline" className="ms-auto text-[11px] tabular-nums gap-1.5" data-testid="badge-canvas-stats">
+                  <span className="text-muted-foreground">المناطق</span> <span className="font-semibold">{data.zones.length}</span>
+                  <Separator orientation="vertical" className="h-3 mx-1" />
+                  <span className="text-green-700 font-semibold">{data.assignments.length - emptySlots.length}</span>
+                  <span className="text-muted-foreground">/</span>
+                  <span className="font-semibold">{data.assignments.length}</span>
+                </Badge>
+              </div>
+
               <CardContent className="p-0">
                 {placementRole && (() => {
                   const def = ROLE_DEFS[placementRole]; const PI = def.icon;
                   return (
-                    <div
-                      className="px-3 py-2 bg-primary/10 border-y border-primary/30 text-sm flex items-center gap-2"
-                      data-testid="banner-placement-mode"
-                    >
+                    <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 text-sm flex items-center gap-2"
+                      data-testid="banner-placement-mode">
                       <span className="w-6 h-6 flex items-center justify-center text-white shrink-0"
                         style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}>
                         <PI className="w-3.5 h-3.5" />
                       </span>
                       <span className="font-medium">اضغط على المخطط لإضافة موقع: {def.label}</span>
-                      <span className="text-xs text-muted-foreground">— كرّر للضغط لإضافة عدة مواقع. Esc للخروج.</span>
-                      <button
-                        type="button"
-                        className="ms-auto text-xs text-primary hover:underline"
-                        onClick={() => setPlacementRole(null)}
-                        data-testid="btn-exit-placement-banner"
-                      >إنهاء</button>
+                      <span className="text-xs text-muted-foreground hidden sm:inline">— كرّر للضغط لإضافة عدة مواقع. Esc للخروج.</span>
+                      <button type="button" className="ms-auto text-xs text-primary hover:underline"
+                        onClick={() => setPlacementRole(null)} data-testid="btn-exit-placement-banner">إنهاء</button>
                     </div>
                   );
                 })()}
-                <div className="overflow-auto bg-muted/30">
+                {locked && (
+                  <div className="px-3 py-1.5 bg-amber-50 border-b border-amber-200 text-xs text-amber-800 flex items-center gap-2">
+                    <Lock className="w-3.5 h-3.5" /> المخطط مقفول — لا يمكن التحريك أو التكبير أو التدوير. أوقف القفل للتعديل.
+                  </div>
+                )}
+                <div ref={canvasWrapRef} className="overflow-auto bg-muted/30">
+                  {/* Zoom wrapper — the scaled canvas occupies its scaled dimensions so scroll bars match */}
+                  <div style={{ width: data.plan.width * zoom, height: data.plan.height * zoom }}>
                   <div
                     ref={canvasRef}
                     onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
@@ -681,9 +780,13 @@ export default function FloorPlanPage() {
                       width: data.plan.width,
                       height: data.plan.height,
                       backgroundColor: data.plan.backgroundColor || "#f8fafc",
-                      backgroundImage: "linear-gradient(to right, rgba(0,0,0,0.04) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.04) 1px, transparent 1px)",
-                      backgroundSize: "40px 40px",
+                      backgroundImage: showGrid
+                        ? `linear-gradient(to right, rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.06) 1px, transparent 1px)`
+                        : undefined,
+                      backgroundSize: showGrid ? (snapGrid ? `${GRID_SIZE * 4}px ${GRID_SIZE * 4}px` : "40px 40px") : undefined,
                       cursor: placementRole ? "crosshair" : undefined,
+                      transform: `scale(${zoom})`,
+                      transformOrigin: "top right",
                     }}
                     data-testid="floor-plan-canvas"
                   >
@@ -708,21 +811,24 @@ export default function FloorPlanPage() {
                       return (
                       <div
                         key={z.id}
-                        draggable
+                        draggable={!locked}
                         onDragStart={(e) => {
+                          if (locked) { e.preventDefault(); return; }
                           if ((e.target as HTMLElement).dataset?.resize === "1") { e.preventDefault(); return; }
-                          // Offset from the zone's CENTER (rotation pivot) in canvas space.
-                          // Stays glued to the visual grab point regardless of rotation.
+                          // Offset from the zone's CENTER (rotation pivot), captured in
+                          // PLAN coordinates (divide by zoom). Stays glued to the visual
+                          // grab point regardless of rotation or zoom level.
                           const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                           const cx = rect.left + rect.width / 2;
                           const cy = rect.top + rect.height / 2;
                           e.dataTransfer.setData("application/x-zone-id", String(z.id));
-                          e.dataTransfer.setData("x-offset", String(Math.round(e.clientX - cx)));
-                          e.dataTransfer.setData("y-offset", String(Math.round(e.clientY - cy)));
+                          e.dataTransfer.setData("x-offset", String((e.clientX - cx) / zoom));
+                          e.dataTransfer.setData("y-offset", String((e.clientY - cy) / zoom));
                           e.dataTransfer.effectAllowed = "move";
                         }}
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (locked) return;
                           if ((e.target as HTMLElement).dataset?.resize === "1") return;
                           setZoneDialog({ mode: "edit", id: z.id, name: z.name, color: z.color, width: z.width, height: z.height, rotation: z.rotation || 0 });
                         }}
@@ -747,8 +853,8 @@ export default function FloorPlanPage() {
                             {rotating?.id === z.id ? `${Math.round(liveR)}°` : `${liveW} × ${liveH}`}
                           </span>
                         )}
-                        {/* 8 resize handles — corners + edges */}
-                        {handles.map(h => (
+                        {/* 8 resize handles + rotation handle — hidden when locked */}
+                        {!locked && handles.map(h => (
                           <div
                             key={h.dir}
                             data-resize="1"
@@ -759,20 +865,22 @@ export default function FloorPlanPage() {
                             data-testid={`zone-resize-${h.dir}-${z.id}`}
                           />
                         ))}
-                        {/* Rotation handle — protrudes above the top edge */}
-                        <div
-                          data-resize="1"
-                          onMouseDown={(e) => startRotate(e, z.id, z.rotation || 0, e.currentTarget.parentElement as HTMLElement)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="absolute -top-7 left-1/2 -translate-x-1/2 w-5 h-5 bg-primary text-white border-2 border-white rounded-full shadow z-20 flex items-center justify-center"
-                          style={{ touchAction: "none", cursor: "grab" }}
-                          title="اسحب للتدوير — اضغط Shift للقفز كل 15°"
-                          data-testid={`zone-rotate-${z.id}`}
-                        >
-                          <RotateCw className="w-3 h-3" />
-                        </div>
-                        {/* Visual line connecting rotation handle to zone */}
-                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-0.5 h-3 bg-primary/60 z-10 pointer-events-none" />
+                        {!locked && (
+                          <>
+                            <div
+                              data-resize="1"
+                              onMouseDown={(e) => startRotate(e, z.id, z.rotation || 0, e.currentTarget.parentElement as HTMLElement)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute -top-7 left-1/2 -translate-x-1/2 w-5 h-5 bg-primary text-white border-2 border-white rounded-full shadow z-20 flex items-center justify-center"
+                              style={{ touchAction: "none", cursor: "grab" }}
+                              title="اسحب للتدوير — اضغط Shift للقفز كل 15°"
+                              data-testid={`zone-rotate-${z.id}`}
+                            >
+                              <RotateCw className="w-3 h-3" />
+                            </div>
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-0.5 h-3 bg-primary/60 z-10 pointer-events-none" />
+                          </>
+                        )}
                       </div>
                     );})}
 
@@ -785,16 +893,20 @@ export default function FloorPlanPage() {
                       return (
                         <div
                           key={a.id}
-                          draggable
+                          draggable={!locked}
                           onDragStart={(e) => {
+                            if (locked) { e.preventDefault(); return; }
+                            // Capture offset in PLAN coordinates (account for zoom).
+                            // Pill is centered at (a.x, a.y), drawn at (a.x-30, a.y-30).
                             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                             e.dataTransfer.setData("application/x-assignment-id", String(a.id));
-                            e.dataTransfer.setData("x-offset", String(Math.round(e.clientX - rect.left)));
-                            e.dataTransfer.setData("y-offset", String(Math.round(e.clientY - rect.top)));
+                            e.dataTransfer.setData("x-offset", String((e.clientX - rect.left) / zoom - 30));
+                            e.dataTransfer.setData("y-offset", String((e.clientY - rect.top) / zoom - 30));
                             e.dataTransfer.effectAllowed = "move";
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (locked) return;
                             setEditAssignDialog({
                               id: a.id,
                               employeeId: a.employeeId,
@@ -832,6 +944,7 @@ export default function FloorPlanPage() {
                         </div>
                       );
                     })}
+                  </div>
                   </div>
                 </div>
               </CardContent>
@@ -990,6 +1103,7 @@ export default function FloorPlanPage() {
             )}
           </DialogContent>
         </Dialog>
+      </div>
       </div>
     </Layout>
   );
