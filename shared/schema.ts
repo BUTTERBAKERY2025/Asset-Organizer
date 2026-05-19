@@ -9803,8 +9803,8 @@ export const jobOffers = pgTable("job_offers", {
   createdBy: varchar("created_by").references(() => users.id),
   cancelledBy: varchar("cancelled_by").references(() => users.id),
   cancelReason: text("cancel_reason"),
-  // ربط الموظف بعد القبول
-  hiredEmployeeId: integer("hired_employee_id"),
+  // ربط الموظف بعد القبول (UUID من users.id)
+  hiredEmployeeId: varchar("hired_employee_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
@@ -9865,6 +9865,110 @@ export type JobOffer = typeof jobOffers.$inferSelect;
 export type InsertJobOffer = z.infer<typeof insertJobOfferSchema>;
 export type JobOfferToken = typeof jobOfferTokens.$inferSelect;
 export type JobOfferAuditLog = typeof jobOfferAuditLog.$inferSelect;
+
+// =====================================================
+// مباشرة العمل (Onboarding / Work Commencement) — Phase 14
+// =====================================================
+export const onboardingNotifications = pgTable("onboarding_notifications", {
+  id: serial("id").primaryKey(),
+  notificationNumber: text("notification_number").notNull().unique(),
+  // ربط بعرض العمل المقبول
+  jobOfferId: integer("job_offer_id").notNull().references(() => jobOffers.id, { onDelete: "cascade" }),
+  // بيانات مكرّرة من العرض (للأداء + للسجل التاريخي)
+  candidateName: text("candidate_name").notNull(),
+  phone: text("phone").notNull(),
+  position: text("position").notNull(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  branchName: text("branch_name"),
+  // تفاصيل المباشرة
+  actualStartDate: text("actual_start_date").notNull(),
+  workingHours: text("working_hours"),
+  reportingTo: text("reporting_to"),
+  notes: text("notes"),
+  // الحالة
+  status: text("status").default("pending").notNull(), // pending | sent | signed | confirmed | converted | cancelled
+  // الرابط العام
+  validityDays: integer("validity_days").default(7).notNull(),
+  sentAt: timestamp("sent_at"),
+  expiresAt: timestamp("expires_at"),
+  // إثبات الموظف
+  selfiePhotoUrl: text("selfie_photo_url"),
+  selfieLat: doublePrecision("selfie_lat"),
+  selfieLng: doublePrecision("selfie_lng"),
+  selfieAccuracy: doublePrecision("selfie_accuracy"),
+  selfieCapturedAt: timestamp("selfie_captured_at"),
+  // مسافة من الفرع (محسوبة وقت التوقيع)
+  distanceFromBranchM: integer("distance_from_branch_m"),
+  withinBranchRadius: boolean("within_branch_radius"),
+  employeeSignature: text("employee_signature"),
+  signedAt: timestamp("signed_at"),
+  signedIp: text("signed_ip"),
+  signedUserAgent: text("signed_user_agent"),
+  // التأكيد والتحويل
+  confirmedAt: timestamp("confirmed_at"),
+  confirmedBy: varchar("confirmed_by").references(() => users.id),
+  confirmedNotes: text("confirmed_notes"),
+  convertedAt: timestamp("converted_at"),
+  convertedBy: varchar("converted_by").references(() => users.id),
+  convertedEmployeeId: varchar("converted_employee_id").references(() => users.id),
+  // النظام
+  createdBy: varchar("created_by").references(() => users.id),
+  cancelledAt: timestamp("cancelled_at"),
+  cancelReason: text("cancel_reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_onboarding_status").on(table.status),
+  index("idx_onboarding_branch").on(table.branchId),
+  uniqueIndex("uq_onboarding_offer").on(table.jobOfferId),
+  index("idx_onboarding_created_at").on(table.createdAt),
+]);
+
+export const onboardingTokens = pgTable("onboarding_tokens", {
+  id: serial("id").primaryKey(),
+  notificationId: integer("notification_id").notNull().references(() => onboardingNotifications.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  revokedAt: timestamp("revoked_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_onboarding_tokens_token").on(table.token),
+  index("idx_onboarding_tokens_notification").on(table.notificationId),
+]);
+
+export const insertOnboardingNotificationSchema = createInsertSchema(onboardingNotifications).omit({
+  id: true,
+  notificationNumber: true,
+  status: true,
+  sentAt: true,
+  expiresAt: true,
+  selfiePhotoUrl: true,
+  selfieLat: true,
+  selfieLng: true,
+  selfieAccuracy: true,
+  selfieCapturedAt: true,
+  distanceFromBranchM: true,
+  withinBranchRadius: true,
+  employeeSignature: true,
+  signedAt: true,
+  signedIp: true,
+  signedUserAgent: true,
+  confirmedAt: true,
+  confirmedBy: true,
+  confirmedNotes: true,
+  convertedAt: true,
+  convertedBy: true,
+  convertedEmployeeId: true,
+  cancelledAt: true,
+  cancelReason: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateOnboardingNotificationSchema = insertOnboardingNotificationSchema.partial().omit({ jobOfferId: true, createdBy: true });
+export type OnboardingNotification = typeof onboardingNotifications.$inferSelect;
+export type InsertOnboardingNotification = z.infer<typeof insertOnboardingNotificationSchema>;
+export type OnboardingToken = typeof onboardingTokens.$inferSelect;
 
 // =====================================================
 // طلبات التوظيف (Employment Applications) — Phase 13

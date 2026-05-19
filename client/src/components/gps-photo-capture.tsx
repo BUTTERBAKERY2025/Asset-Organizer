@@ -22,6 +22,8 @@ interface GPSPhotoCaptureProps {
   onUpload: (photo: CapturedPhoto) => void;
   buttonLabel?: string;
   required?: boolean;
+  uploadUrl?: string;
+  extraFormFields?: Record<string, string>;
 }
 
 async function getGPS(): Promise<{ lat: number; lng: number; accuracy: number } | null> {
@@ -46,7 +48,7 @@ async function getGPS(): Promise<{ lat: number; lng: number; accuracy: number } 
   });
 }
 
-export function GPSPhotoCapture({ folder = "field", onUpload, buttonLabel = "التقاط صورة بالموقع", required }: GPSPhotoCaptureProps) {
+export function GPSPhotoCapture({ folder = "field", onUpload, buttonLabel = "التقاط صورة بالموقع", required, uploadUrl, extraFormFields }: GPSPhotoCaptureProps) {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -64,7 +66,11 @@ export function GPSPhotoCapture({ folder = "field", onUpload, buttonLabel = "ا�
         (async () => {
           const fd = new FormData();
           fd.append("file", file);
-          const resp = await fetch(`/api/uploads?folder=${encodeURIComponent(folder)}`, {
+          if (extraFormFields) {
+            for (const [k, v] of Object.entries(extraFormFields)) fd.append(k, v);
+          }
+          const url = uploadUrl || `/api/uploads?folder=${encodeURIComponent(folder)}`;
+          const resp = await fetch(url, {
             method: "POST",
             body: fd,
             credentials: "include",
