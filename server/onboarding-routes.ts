@@ -151,6 +151,11 @@ export function registerOnboardingRoutes(app: Express) {
         }));
         res.json(result);
       } catch (e: any) {
+        if (e?.code === "42P01") {
+          // job_offers أو onboarding tables غير موجودة — قاعدة بيانات لم تتم ترقيتها بعد
+          console.warn("[onboarding] list: missing table:", e.message);
+          return res.json([]);
+        }
         console.error("[onboarding] list error:", e);
         res.status(500).json({ error: e.message });
       }
@@ -196,6 +201,10 @@ export function registerOnboardingRoutes(app: Express) {
         }
         res.json(counts);
       } catch (e: any) {
+        if (e?.code === "42P01") {
+          console.warn("[onboarding] stats: missing table:", e.message);
+          return res.json({ total: 0, pending: 0, sent: 0, signed: 0, confirmed: 0, converted: 0 });
+        }
         console.error("[onboarding] stats error:", e);
         res.status(500).json({ error: e.message });
       }
