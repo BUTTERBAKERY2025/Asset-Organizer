@@ -1,4 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
+import { useReactToPrint } from "react-to-print";
+import { CompanyHeader } from "@/components/company-header";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Layout } from "@/components/layout";
@@ -18,6 +20,7 @@ import { apiRequest } from "@/lib/queryClient";
 import {
   UserPlus, ArrowRight, Send, CheckCircle2, Loader2, MapPin, Camera, Eye, Copy,
   ClipboardCheck, Users, Briefcase, Phone, FileText, MessageCircle, XCircle, AlertTriangle,
+  Printer, Download,
 } from "lucide-react";
 import type { JobOffer, OnboardingNotification, Branch } from "@shared/schema";
 
@@ -478,11 +481,30 @@ function ViewDialog({ row, onClose }: { row: Row | null; onClose: () => void }) 
   });
   const n = data?.notification || row?.notification;
   const o = data?.offer || row?.offer;
+  const printRef = useRef<HTMLDivElement>(null);
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: `إشعار-مباشرة-العمل-${row?.offer?.candidateName || ""}`,
+  });
 
   return (
     <Dialog open={!!row} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>تفاصيل المباشرة</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle className="flex items-center justify-between gap-2">
+            <span>تفاصيل المباشرة</span>
+            {row && (
+              <div className="flex gap-2">
+                <Button size="sm" onClick={() => handlePrint()} className="gap-1 bg-amber-600 hover:bg-amber-700 text-white" data-testid="btn-print-onboarding">
+                  <Printer className="w-4 h-4" /> طباعة
+                </Button>
+                <Button size="sm" onClick={() => handlePrint()} className="gap-1 bg-blue-600 hover:bg-blue-700 text-white" data-testid="btn-pdf-onboarding" title="من نافذة الطباعة اختر: حفظ كـ PDF">
+                  <Download className="w-4 h-4" /> حفظ PDF
+                </Button>
+              </div>
+            )}
+          </DialogTitle>
+        </DialogHeader>
         {row && (
           <div className="space-y-3 text-sm">
             <div className="grid grid-cols-2 gap-2">
@@ -531,6 +553,92 @@ function ViewDialog({ row, onClose }: { row: Row | null; onClose: () => void }) 
                 <img src={n.employeeSignature} alt="signature" className="max-h-24 bg-white border rounded" />
               </div>
             )}
+          </div>
+        )}
+
+        {/* قالب الطباعة المخفي — يظهر فقط أثناء الطباعة/PDF */}
+        {row && (
+          <div className="hidden">
+            <div ref={printRef} className="p-4 bg-white text-sm" dir="rtl" style={{ minHeight: "100vh" }}>
+              <CompanyHeader templateTitle="إشعار مباشرة العمل" templateTitleEn="Work Commencement Notice" />
+
+              <div className="border border-slate-300 rounded p-3 mb-3 mt-3">
+                <h3 className="font-bold text-[#1a3a2f] mb-2 border-b border-[#1a3a2f] pb-1 text-sm">
+                  1. بيانات الموظف / Employee Data
+                </h3>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div><span className="font-semibold">الاسم:</span> {row.offer.candidateName}</div>
+                  <div><span className="font-semibold">الهاتف:</span> {row.offer.phone || "-"}</div>
+                  <div><span className="font-semibold">الوظيفة:</span> {row.offer.position}</div>
+                  <div><span className="font-semibold">الفرع:</span> {row.offer.branchName || "-"}</div>
+                  <div><span className="font-semibold">الراتب الأساسي:</span> {row.offer.basicSalary || "-"} ر.س</div>
+                  <div><span className="font-semibold">الجنسية:</span> {(row.offer as any).nationality || "-"}</div>
+                </div>
+              </div>
+
+              <div className="border border-slate-300 rounded p-3 mb-3">
+                <h3 className="font-bold text-[#1a3a2f] mb-2 border-b border-[#1a3a2f] pb-1 text-sm">
+                  2. تفاصيل المباشرة / Onboarding Details
+                </h3>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div><span className="font-semibold">تاريخ المباشرة الفعلي:</span> {n?.actualStartDate || row.offer.startDate || "-"}</div>
+                  <div><span className="font-semibold">ساعات الدوام:</span> {n?.workingHours || "-"}</div>
+                  <div><span className="font-semibold">المسؤول المباشر:</span> {n?.reportingTo || "-"}</div>
+                  <div><span className="font-semibold">الحالة:</span> {STATUS[n?.status || "pending"]?.label || "-"}</div>
+                  {n?.notes && (
+                    <div className="col-span-2"><span className="font-semibold">ملاحظات:</span> {n.notes}</div>
+                  )}
+                </div>
+              </div>
+
+              {n?.selfiePhotoUrl && (
+                <div className="border border-slate-300 rounded p-3 mb-3">
+                  <h3 className="font-bold text-[#1a3a2f] mb-2 border-b border-[#1a3a2f] pb-1 text-sm">
+                    3. إثبات الحضور في الفرع / Branch Attendance Proof
+                  </h3>
+                  <div className="flex gap-3 items-start">
+                    <img src={n.selfiePhotoUrl} alt="selfie" className="w-40 h-40 object-cover border rounded" crossOrigin="anonymous" />
+                    <div className="text-xs space-y-1 flex-1">
+                      {n.selfieLat != null && n.selfieLng != null && (
+                        <div><span className="font-semibold">الإحداثيات:</span> {n.selfieLat.toFixed(5)}, {n.selfieLng.toFixed(5)}</div>
+                      )}
+                      {n.distanceFromBranchM != null && (
+                        <div>
+                          <span className="font-semibold">المسافة من الفرع:</span> {n.distanceFromBranchM} متر
+                          {n.withinBranchRadius ? " ✓ ضمن النطاق" : " ⚠ خارج النطاق"}
+                        </div>
+                      )}
+                      {n.signedAt && (
+                        <div><span className="font-semibold">وقت التوقيع:</span> {new Date(n.signedAt).toLocaleString("ar-SA")}</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 mt-6">
+                <div className="border border-slate-300 rounded p-3 min-h-[120px]">
+                  <p className="font-semibold text-xs mb-2 text-center">توقيع الموظف / Employee Signature</p>
+                  {n?.employeeSignature ? (
+                    <img src={n.employeeSignature} alt="signature" className="max-h-20 mx-auto" crossOrigin="anonymous" />
+                  ) : (
+                    <div className="h-20" />
+                  )}
+                  <p className="text-[10px] text-center text-slate-500 mt-2">
+                    {n?.signedAt ? new Date(n.signedAt).toLocaleString("ar-SA") : ""}
+                  </p>
+                </div>
+                <div className="border border-slate-300 rounded p-3 min-h-[120px]">
+                  <p className="font-semibold text-xs mb-2 text-center">توقيع مدير الموارد البشرية</p>
+                  <div className="h-20" />
+                  <p className="text-[10px] text-center text-slate-500 mt-2">التاريخ: ___ / ___ / ______</p>
+                </div>
+              </div>
+
+              <div className="mt-6 text-center text-[10px] text-slate-500 border-t pt-2">
+                هذه الوثيقة مولّدة إلكترونياً من نظام باتر لإدارة الموارد البشرية
+              </div>
+            </div>
           </div>
         )}
       </DialogContent>

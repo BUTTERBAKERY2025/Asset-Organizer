@@ -1,6 +1,5 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Camera, MapPin, Loader2, X, AlertTriangle } from "lucide-react";
@@ -108,19 +107,37 @@ export function GPSPhotoCapture({ folder = "field", onUpload, buttonLabel = "ا�
 
   return (
     <div className="flex flex-col gap-2" data-testid="gps-photo-capture">
-      <Input
+      {/* native input — مرئي بصرياً عبر sr-only بدلاً من display:none لضمان فتح الكاميرا على iOS/iPad */}
+      <input
         ref={fileRef}
         type="file"
         accept="image/*"
         capture="environment"
-        className="hidden"
         onChange={handleFile}
+        disabled={busy}
         data-testid="input-photo-file"
+        style={{
+          position: "absolute",
+          width: 1,
+          height: 1,
+          padding: 0,
+          margin: -1,
+          overflow: "hidden",
+          clip: "rect(0,0,0,0)",
+          whiteSpace: "nowrap",
+          border: 0,
+        }}
       />
       <Button
         type="button"
         variant="outline"
-        onClick={() => fileRef.current?.click()}
+        onClick={(e) => {
+          e.preventDefault();
+          if (!fileRef.current) return;
+          // إعادة تعيين القيمة لضمان حدث change حتى لو اختار نفس الملف
+          try { fileRef.current.value = ""; } catch {}
+          fileRef.current.click();
+        }}
         disabled={busy}
         className="w-full h-12 gap-2"
         data-testid="button-capture-photo"
