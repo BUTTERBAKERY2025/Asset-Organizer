@@ -47,6 +47,48 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-gray-100 text-gray-800",
 };
 
+// فتح المرفق بأمان: data URL → blob URL ليفتح في كل المتصفحات (Chrome/Safari تحجب data: مباشرة)
+function openAttachment(url: string | null | undefined) {
+  if (!url) return;
+  try {
+    if (url.startsWith("data:")) {
+      const commaIdx = url.indexOf(",");
+      if (commaIdx === -1) { window.open(url, "_blank"); return; }
+      const meta = url.substring(5, commaIdx);
+      const isBase64 = meta.includes(";base64");
+      const mime = meta.split(";")[0] || "application/octet-stream";
+      const data = url.substring(commaIdx + 1);
+      let blob: Blob;
+      if (isBase64) {
+        const bin = atob(data);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        blob = new Blob([bytes], { type: mime });
+      } else {
+        blob = new Blob([decodeURIComponent(data)], { type: mime });
+      }
+      const blobUrl = URL.createObjectURL(blob);
+      const win = window.open(blobUrl, "_blank");
+      if (!win) {
+        // المتصفح حجب النافذة → نزّل الملف بدلاً من ذلك
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = `attachment.${(mime.split("/")[1] || "bin").split("+")[0]}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    } else {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  } catch (e) {
+    console.error("[openAttachment] error:", e);
+    // محاولة احتياطية مباشرة
+    try { window.open(url, "_blank"); } catch {}
+  }
+}
+
 function StatBox({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <Card className="text-center">
@@ -589,10 +631,47 @@ export default function EmploymentApplicationsPage() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-3 gap-3">
-                  {viewApp.cvUrl && <a href={viewApp.cvUrl} target="_blank" rel="noreferrer" className="border rounded p-3 text-center text-sm hover:bg-gray-50"><FileText className="w-5 h-5 inline ml-1" />السيرة الذاتية</a>}
-                  {viewApp.photoUrl && <a href={viewApp.photoUrl} target="_blank" rel="noreferrer" className="border rounded p-3 text-center text-sm hover:bg-gray-50">الصورة الشخصية</a>}
-                  {viewApp.idCopyUrl && <a href={viewApp.idCopyUrl} target="_blank" rel="noreferrer" className="border rounded p-3 text-center text-sm hover:bg-gray-50">نسخة الهوية</a>}
+                <div>
+                  <h3 className="font-semibold mb-2">المرفقات</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {[
+                      { label: "السيرة الذاتية", url: viewApp.cvUrl, key: "cv", testId: "btn-open-cv" },
+                      { label: "الصورة الشخصية", url: viewApp.photoUrl, key: "photo", testId: "btn-open-photo" },
+                      { label: "نسخة الهوية / الإقامة", url: viewApp.idCopyUrl, key: "id", testId: "btn-open-id" },
+                    ].map((f) => (
+                      <div key={f.key} className="border rounded-lg p-3 text-center space-y-2 bg-gray-50/50">
+                        <div className="text-xs font-semibold text-gray-700">{f.label}</div>
+                        {f.url ? (
+                          <>
+                            {(f.url.startsWith("data:image") || /\.(png|jpe?g|webp|gif)(\?|$)/i.test(f.url)) ? (
+                              <img
+                                src={f.url}
+                                alt={f.label}
+                                className="max-h-32 mx-auto rounded border cursor-pointer object-contain"
+                                onClick={() => openAttachment(f.url)}
+                                data-testid={`img-${f.key}`}
+                              />
+                            ) : (
+                              <div className="py-3 text-xs text-gray-500 flex items-center justify-center gap-1">
+                                <FileText className="w-4 h-4" /> ملف PDF
+                              </div>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full"
+                              onClick={() => openAttachment(f.url)}
+                              data-testid={f.testId}
+                            >
+                              <ExternalLink className="w-3.5 h-3.5 ml-1" /> فتح في نافذة جديدة
+                            </Button>
+                          </>
+                        ) : (
+                          <div className="py-4 text-xs text-gray-400">لم يُرفع</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 {viewApp.signature && (
@@ -846,6 +925,39 @@ const PrintableApplication = React.forwardRef<HTMLDivElement, { app: EmploymentA
             {app.rating ? <Field label="التقييم" value={`${app.rating} / 5`} /> : null}
             {app.hrNotes && <Field label="ملاحظات" value={app.hrNotes} />}
             {app.rejectionReason && <Field label="سبب الرفض" value={app.rejectionReason} />}
+          </>
+        )}
+
+        {(app.photoUrl || app.idCopyUrl || app.cvUrl) && (
+          <>
+            <SectionTitle>المرفقات</SectionTitle>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, pageBreakInside: "avoid" }}>
+              {app.photoUrl && (
+                <div style={{ textAlign: "center", border: "1px solid #eee", borderRadius: 4, padding: 8 }}>
+                  <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>الصورة الشخصية</div>
+                  {app.photoUrl.startsWith("data:image") || /\.(png|jpe?g|webp|gif)(\?|$)/i.test(app.photoUrl) ? (
+                    <img src={app.photoUrl} alt="photo" style={{ maxHeight: 180, maxWidth: "100%", objectFit: "contain", borderRadius: 4 }} />
+                  ) : (
+                    <div style={{ fontSize: 11, color: "#888", padding: 20 }}>مرفق PDF (يُعرض إلكترونياً)</div>
+                  )}
+                </div>
+              )}
+              {app.idCopyUrl && (
+                <div style={{ textAlign: "center", border: "1px solid #eee", borderRadius: 4, padding: 8 }}>
+                  <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>نسخة الهوية / الإقامة</div>
+                  {app.idCopyUrl.startsWith("data:image") || /\.(png|jpe?g|webp|gif)(\?|$)/i.test(app.idCopyUrl) ? (
+                    <img src={app.idCopyUrl} alt="id copy" style={{ maxHeight: 180, maxWidth: "100%", objectFit: "contain", borderRadius: 4 }} />
+                  ) : (
+                    <div style={{ fontSize: 11, color: "#888", padding: 20 }}>مرفق PDF (يُعرض إلكترونياً)</div>
+                  )}
+                </div>
+              )}
+            </div>
+            {app.cvUrl && (
+              <div style={{ marginTop: 8, fontSize: 11, color: "#666", borderTop: "1px dotted #ccc", paddingTop: 6 }}>
+                ✓ السيرة الذاتية مرفقة إلكترونياً مع الطلب (يمكن فتحها من الواجهة)
+              </div>
+            )}
           </>
         )}
 
