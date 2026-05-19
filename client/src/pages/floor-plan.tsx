@@ -623,6 +623,7 @@ export default function FloorPlanPage() {
   // landscape view. The browser's "Save as PDF" path then turns it into a PDF.
   const printableRef = useRef<HTMLDivElement>(null);
   const [sharingPdf, setSharingPdf] = useState(false);
+  const [sharingPng, setSharingPng] = useState(false);
   const handlePrint = useReactToPrint({
     contentRef: printableRef,
     documentTitle: `floor-plan-${selectedBranchId}-${selectedShift}-${selectedDate}`,
@@ -729,7 +730,10 @@ export default function FloorPlanPage() {
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 4000);
 
-      const waUrl = `https://web.whatsapp.com/send?text=${encodeURIComponent(caption)}`;
+      const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+      const waUrl = isMobile
+        ? `https://wa.me/?text=${encodeURIComponent(caption)}`
+        : `https://web.whatsapp.com/send?text=${encodeURIComponent(caption)}`;
       window.open(waUrl, "_blank", "noopener");
       toast({
         title: "تم تحميل الـ PDF",
@@ -743,6 +747,79 @@ export default function FloorPlanPage() {
       setSharingPdf(false);
     }
   };
+  // Generate the floor plan as a PNG image and share it via the native Web
+  // Share API. Unlike the text-only WhatsApp share, the PNG is rendered
+  // entirely on this device (using its own fonts/emoji set) and travels as a
+  // pixel-perfect image — so the receiver sees exactly what we see, regardless
+  // of their phone's font support for emojis or box-drawing characters.
+  const sharePngViaWhatsApp = async () => {
+    if (!printableRef.current || !data) {
+      toast({ title: "تعذّر تحضير الصورة", variant: "destructive" });
+      return;
+    }
+    setSharingPng(true);
+    try {
+      const htmlToImage = await import("html-to-image");
+      const node = printableRef.current;
+      const rect = node.getBoundingClientRect();
+      const pxW = Math.max(1, Math.round(rect.width));
+      const pxH = Math.max(1, Math.round(rect.height));
+      const imgData = await htmlToImage.toPng(node, {
+        pixelRatio: 2,
+        backgroundColor: "#ffffff",
+        width: pxW,
+        height: pxH,
+        cacheBust: true,
+        skipFonts: true,
+        filter: (n: any) => !(n?.tagName === "LINK" && n?.rel === "stylesheet" && /fonts/.test(n.href || "")),
+      });
+      // dataURL -> Blob -> File for Web Share
+      const res = await fetch(imgData);
+      const blob = await res.blob();
+      const fileName = `floor-plan-${selectedBranchId}-${selectedShift}-${selectedDate}.png`;
+      const file = new File([blob], fileName, { type: "image/png" });
+      const caption = buildShareMessage();
+
+      const nav: any = navigator;
+      if (nav.canShare && nav.canShare({ files: [file] })) {
+        try {
+          await nav.share({ files: [file], title: fileName, text: caption });
+          toast({ title: "تمت مشاركة الصورة" });
+          return;
+        } catch (err: any) {
+          if (err?.name === "AbortError") return;
+        }
+      }
+      // Fallback: download + open WhatsApp Web with caption.
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      // Use wa.me on mobile (opens the WhatsApp app directly) and web.whatsapp.com
+      // on desktop (opens WhatsApp Web). wa.me would just redirect to a mobile
+      // landing page on desktop, hurting the UX there.
+      const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+      const waUrl = isMobile
+        ? `https://wa.me/?text=${encodeURIComponent(caption)}`
+        : `https://web.whatsapp.com/send?text=${encodeURIComponent(caption)}`;
+      window.open(waUrl, "_blank", "noopener");
+      toast({
+        title: "تم تحميل الصورة",
+        description: "افتحت لك واتساب — أرفق الصورة التي تم تحميلها في المحادثة.",
+        duration: 7000,
+      });
+    } catch (e: any) {
+      console.error("PNG share failed:", e);
+      toast({ title: "فشل إنشاء الصورة", description: e?.message || "حاول مرة أخرى", variant: "destructive" });
+    } finally {
+      setSharingPng(false);
+    }
+  };
+
   // Exit placement mode on Escape
   useEffect(() => {
     if (!placementRole) return;
@@ -972,12 +1049,16 @@ export default function FloorPlanPage() {
   // Bilingual (Arabic + English) labels and visual emoji per role so the
   // shared WhatsApp/SMS message is understandable to both Arabic- and
   // English-speaking staff and looks visually friendly.
+  // Use ONLY single-codepoint emojis (no ZWJ sequences, no variation
+  // selectors like FE0F) so they survive URL encoding and render on older
+  // Android system fonts. Compound emojis like 👨‍🍳 or 🛡️ often show as
+  // tofu/boxes on devices with older Noto Color Emoji fonts.
   const ROLE_BILINGUAL: Record<string, { en: string; emoji: string }> = {
     "مدير الفرع":   { en: "Branch Manager", emoji: "👑" },
-    "مشرف":         { en: "Supervisor",     emoji: "🛡️" },
+    "مشرف":         { en: "Supervisor",     emoji: "⭐" },
     "كاشير":        { en: "Cashier",        emoji: "💵" },
-    "ويتر":         { en: "Waiter",         emoji: "🍽️" },
-    "شيف":          { en: "Chef",           emoji: "👨‍🍳" },
+    "ويتر":         { en: "Waiter",         emoji: "🍴" },
+    "شيف":          { en: "Chef",           emoji: "🍳" },
     "مساعد شيف":    { en: "Sous Chef",      emoji: "🍲" },
     "باريستا":      { en: "Barista",        emoji: "☕" },
     "عامل نظافة":   { en: "Cleaner",        emoji: "🧹" },
@@ -991,7 +1072,7 @@ export default function FloorPlanPage() {
     morning:   { ar: "صباحي",  en: "Morning",   emoji: "🌅" },
     evening:   { ar: "مسائي",  en: "Evening",   emoji: "🌆" },
     night:     { ar: "ليلي",   en: "Night",     emoji: "🌙" },
-    full_day:  { ar: "يوم كامل", en: "Full Day", emoji: "☀️" },
+    full_day:  { ar: "يوم كامل", en: "Full Day", emoji: "☀" },
   };
 
   // Build a rich bilingual (AR/EN) message with emojis + a simple zone-based
@@ -1032,18 +1113,20 @@ export default function FloorPlanPage() {
     }
 
     const lines: string[] = [];
-    // Header — bilingual title with decorative separator
-    lines.push("━━━━━━━━━━━━━━━━━━━━━");
+    // Header — bilingual title with safe ASCII separator (renders identically
+    // on every device/font; box-drawing chars like ━ show as tofu on some
+    // older Android builds).
+    lines.push("=========================");
     lines.push(`📋 *توزيع المهام / Shift Roster*`);
     lines.push(`🏢 ${branchName}`);
-    lines.push(`🗓️ ${selectedDate}  •  ${shiftMeta.emoji} ${shiftLabel} / ${shiftMeta.en}`);
-    lines.push("━━━━━━━━━━━━━━━━━━━━━");
+    lines.push(`📅 ${selectedDate}  •  ${shiftMeta.emoji} ${shiftLabel} / ${shiftMeta.en}`);
+    lines.push("=========================");
 
     // Summary chips
     lines.push("");
     lines.push(`📊 *الملخّص / Summary*`);
     lines.push(`   ✅ مُعيَّن / Assigned: *${filled.length}*`);
-    lines.push(`   ⚠️ شاغر / Vacant:   *${empty.length}*`);
+    lines.push(`   ❗ شاغر / Vacant:   *${empty.length}*`);
     if (links.length) lines.push(`   🔗 روابط مهام / Multi-task links: *${links.length}*`);
 
     // Body — per zone
@@ -1066,7 +1149,7 @@ export default function FloorPlanPage() {
         const en = meta?.en || role;
         lines.push(`  ${emoji} ${role} / ${en}`);
         for (const name of names) {
-          lines.push(`     └─ ${name}`);
+          lines.push(`     • ${name}`);
         }
       }
       if (bucket.empty.length) {
@@ -1075,7 +1158,7 @@ export default function FloorPlanPage() {
         for (const [role, n] of ec.entries()) {
           const meta = ROLE_BILINGUAL[role];
           const en = meta?.en || role;
-          lines.push(`  ⚠️ شاغر / Vacant — ${role} / ${en}  ×${n}`);
+          lines.push(`  ❗ شاغر / Vacant — ${role} / ${en}  x${n}`);
         }
       }
     }
@@ -1094,13 +1177,13 @@ export default function FloorPlanPage() {
         const tName = te?.fullName || te?.name || (ta.role || "—");
         const fRole = ROLE_BILINGUAL[fa.role || ""]?.emoji || "👤";
         const tRole = ROLE_BILINGUAL[ta.role || ""]?.emoji || "👤";
-        lines.push(`  ${fRole} ${fName} (${fa.role}) ⇄ ${tRole} ${tName} (${ta.role})`);
+        lines.push(`  ${fRole} ${fName} (${fa.role}) <=> ${tRole} ${tName} (${ta.role})`);
       }
     }
 
     // Legend — bilingual key for emojis used
     lines.push("");
-    lines.push(`🗝️ *الرموز / Legend*`);
+    lines.push(`🔑 *الرموز / Legend*`);
     const usedRoles = new Set<string>(data.assignments.map(a => a.role).filter(Boolean) as string[]);
     const legend = Array.from(usedRoles)
       .map(r => ROLE_BILINGUAL[r] ? `${ROLE_BILINGUAL[r].emoji} ${r} / ${ROLE_BILINGUAL[r].en}` : null)
@@ -1111,12 +1194,12 @@ export default function FloorPlanPage() {
         lines.push(`   ${legend[i]}${legend[i + 1] ? "   •   " + legend[i + 1] : ""}`);
       }
     }
-    lines.push(`   ✅ مُعيَّن / Assigned   •   ⚠️ شاغر / Vacant   •   🔗 مهام مشتركة / Linked`);
+    lines.push(`   ✅ مُعيَّن / Assigned   •   ❗ شاغر / Vacant   •   🔗 مهام مشتركة / Linked`);
 
     // Footer
     lines.push("");
-    lines.push("━━━━━━━━━━━━━━━━━━━━━");
-    lines.push(`— نظام باتر / Butter Bakery System`);
+    lines.push("=========================");
+    lines.push(`- نظام باتر / Butter Bakery System`);
     return lines.join("\n");
   };
 
@@ -2045,6 +2128,20 @@ export default function FloorPlanPage() {
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 : <MessageCircle className="w-3.5 h-3.5" />}
               <span className="hidden sm:inline">PDF عبر واتساب</span>
+            </Button>
+
+            <Button
+              variant="ghost" size="sm"
+              className="h-8 gap-1.5 text-xs bg-teal-50 hover:bg-teal-100 text-teal-700 px-2 sm:px-3"
+              onClick={() => sharePngViaWhatsApp()}
+              disabled={sharingPng}
+              title="إنشاء صورة ومشاركتها عبر واتساب (تضمن ظهور الرموز والأشكال)"
+              data-testid="btn-share-png-whatsapp"
+            >
+              {sharingPng
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <MessageCircle className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">صورة عبر واتساب</span>
             </Button>
 
             <Button
