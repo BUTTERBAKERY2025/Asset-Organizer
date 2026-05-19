@@ -183,6 +183,101 @@ function PersonAvatar({ def, size = 64, empty = false }: { def: RoleDef; size?: 
   );
 }
 
+// Printable view — extracted to a standalone component so the JSX stays readable
+// and the fit-to-page math runs once per render. Scales the canvas to fit A4
+// landscape in a single page.
+function PrintableFloorPlan(props: {
+  printRef: React.RefObject<HTMLDivElement>;
+  data: any;
+  branches: any[];
+  selectedBranchId: string;
+  selectedShift: string;
+  selectedDate: string;
+  employeeById: Map<number, any>;
+  emptySlotsCount: number;
+  getRoleDef: (role: string, jobTitle?: string) => any;
+  shapeStyle: (s: any) => any;
+}) {
+  const { printRef, data, branches, selectedBranchId, selectedShift, selectedDate, employeeById, emptySlotsCount, getRoleDef, shapeStyle } = props;
+  // A4 landscape printable area at 8mm margins ≈ 281×196mm → at 96dpi ≈ 1062×740px.
+  // We use slightly conservative numbers to allow for browser rounding + root
+  // padding (p-3 = 24px vertical), header (~58px) and footer (~36px).
+  const PAGE_W = 1024;
+  const PAGE_H = 696;
+  const HEADER_H = 64;
+  const FOOTER_H = 40;
+  const ROOT_VPAD = 24;
+  const planW = data?.plan?.width || 1;
+  const planH = data?.plan?.height || 1;
+  const availH = PAGE_H - HEADER_H - FOOTER_H - ROOT_VPAD;
+  const scale = Math.min(PAGE_W / planW, availH / planH, 1);
+  const branchName = branches?.find?.((b: any) => b.id === selectedBranchId)?.name ?? selectedBranchId;
+  const shiftLabel = selectedShift === "morning" ? "صباحية" : selectedShift === "evening" ? "مسائية" : "ليلية";
+  return (
+    <div ref={printRef} className="fp-print-root p-3 bg-white text-black" dir="rtl" style={{ width: PAGE_W }}>
+      <div className="mb-2 flex items-center justify-between border-b pb-2">
+        <div>
+          <h1 className="text-xl font-bold">مخطط الفرع — {branchName}</h1>
+          <p className="text-xs text-gray-600 mt-0.5">التاريخ: {selectedDate} • الوردية: {shiftLabel}</p>
+        </div>
+        <div className="text-[10px] text-gray-500">طُبع في {new Date().toLocaleString("ar-SA")}</div>
+      </div>
+      {data && (
+        <div className="fp-print-scale mx-auto" style={{ width: planW * scale, height: planH * scale }}>
+          <div
+            className="relative border border-gray-300"
+            style={{
+              width: planW, height: planH, backgroundColor: "#fafaf7",
+              transform: `scale(${scale})`, transformOrigin: "top right",
+            }}
+          >
+            {data.zones.map((z: any) => (
+              <div
+                key={z.id}
+                className="absolute rounded border-2 border-dashed flex items-start justify-start p-2 text-xs font-medium"
+                style={{
+                  left: z.x, top: z.y, width: z.width, height: z.height,
+                  backgroundColor: z.color + "55", borderColor: z.color,
+                  transform: z.rotation ? `rotate(${z.rotation}deg)` : undefined,
+                }}
+              >
+                {z.name}
+              </div>
+            ))}
+            {data.assignments.map((a: any) => {
+              const emp = a.employeeId != null ? employeeById.get(a.employeeId) : null;
+              const def = getRoleDef(a.role, emp?.jobTitle);
+              return (
+                <div key={a.id} className="absolute flex flex-col items-center" style={{ left: a.x - 30, top: a.y - 30 }}>
+                  <div
+                    className="w-12 h-12 flex items-center justify-center text-white text-xs font-bold border-2 border-white shadow"
+                    style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}
+                  >
+                    {(emp?.employeeName ?? def.label).slice(0, 2)}
+                  </div>
+                  <div className="mt-1 px-1.5 py-0.5 bg-white text-[10px] font-medium border border-gray-300 rounded max-w-[110px] truncate text-center">
+                    {emp?.employeeName ?? "غير معيّن"}
+                  </div>
+                  <div className="text-[9px] text-white px-1 rounded mt-0.5" style={{ backgroundColor: def.color }}>
+                    {def.label}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {data && (
+        <div className="mt-2 text-[11px] grid grid-cols-3 gap-4 border-t pt-1.5">
+          <div><span className="font-semibold">إجمالي المواقع:</span> {data.assignments.length}</div>
+          <div><span className="font-semibold">معيّن:</span> {data.assignments.length - emptySlotsCount}</div>
+          <div><span className="font-semibold">شاغر:</span> {emptySlotsCount}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function FloorPlanPage() {
   const { activeBranch, allowedBranches, isAdmin } = useAuth();
   const queryClient = useQueryClient();
@@ -332,7 +427,7 @@ export default function FloorPlanPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   // WhatsApp share dialog
   type WaRecipient = { phone: string; name: string };
-  const [waDialog, setWaDialog] = useState<{ recipients: WaRecipient[]; message: string; channel: "whatsapp" | "sms" } | null>(null);
+  const [waDialog, setWaDialog] = useState<{ recipients: WaRecipient[]; message: string; channel: "whatsapp" | "sms" | "walink" } | null>(null);
   // Canvas controls — toolbar state
   const [zoom, setZoom] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
@@ -414,7 +509,18 @@ export default function FloorPlanPage() {
   const handlePrint = useReactToPrint({
     contentRef: printableRef,
     documentTitle: `floor-plan-${selectedBranchId}-${selectedShift}-${selectedDate}`,
-    pageStyle: `@page { size: A4 landscape; margin: 10mm; } @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }`,
+    // A4 landscape ≈ 297×210mm. With 10mm margins → ~277×190mm printable.
+    // `.fp-print-scale` is a wrapper around the canvas that gets CSS scaled
+    // to fit the page width exactly, then we wrap it in `.fp-print-frame`
+    // sized to the scaled dimensions so the page break stays on one sheet.
+    pageStyle: `
+      @page { size: A4 landscape; margin: 8mm; }
+      @media print {
+        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .fp-print-root { page-break-inside: avoid; break-inside: avoid; }
+        .fp-print-scale { transform-origin: top right; page-break-inside: avoid; break-inside: avoid; }
+      }
+    `,
   });
   // Exit placement mode on Escape
   useEffect(() => {
@@ -651,26 +757,56 @@ export default function FloorPlanPage() {
   };
 
   const sendWhatsApp = useMutation({
-    mutationFn: async (body: { recipients: WaRecipient[]; message: string; channel: "whatsapp" | "sms" }) => {
+    mutationFn: async (body: { recipients: WaRecipient[]; message: string; channel: "whatsapp" | "sms" | "walink" }) => {
+      // "walink" mode bypasses Twilio entirely and opens wa.me links in new
+      // tabs — useful when the Twilio sandbox is restricted or recipients
+      // haven't opted-in via "join {keyword}".
+      if (body.channel === "walink") {
+        const encoded = encodeURIComponent(body.message);
+        let opened = 0;
+        for (const r of body.recipients) {
+          const digits = (r.phone || "").replace(/\D/g, "");
+          if (!digits) continue;
+          const url = `https://wa.me/${digits}?text=${encoded}`;
+          const w = window.open(url, "_blank", "noopener");
+          if (w) opened++;
+        }
+        const blocked = body.recipients.length - opened;
+        if (blocked > 0) {
+          throw new Error(`المتصفح حجب ${blocked} نافذة. اسمح بالنوافذ المنبثقة لهذا الموقع وأعد المحاولة.`);
+        }
+        return { ok: opened, fail: 0 };
+      }
       // POST one notification per recipient; the backend queues them all.
-      const results = await Promise.allSettled(body.recipients.map(r =>
-        apiRequest("POST", `/api/notifications/send`, {
+      const results = await Promise.allSettled(body.recipients.map(async r => {
+        const res = await apiRequest("POST", `/api/notifications/send`, {
           recipientPhone: r.phone,
           recipientName: r.name || null,
           channel: body.channel,
           message: body.message,
           relatedModule: "floor_plan",
           relatedEntityId: data?.plan?.id ? String(data.plan.id) : null,
-        }).then(r => r.json()).catch(e => { throw e; })
-      ));
+        });
+        const json = await res.json();
+        // Server returns 201 even on failed send (sandbox / opt-in errors).
+        // Treat any `status: failed` as a rejection so we can surface the
+        // real Twilio error to the user.
+        if (json?.status === "failed") {
+          throw new Error(json.errorMessage || "فشل في الإرسال");
+        }
+        return json;
+      }));
       const ok = results.filter(r => r.status === "fulfilled").length;
       const fail = results.length - ok;
-      return { ok, fail };
+      const firstErr = results.find(r => r.status === "rejected") as PromiseRejectedResult | undefined;
+      return { ok, fail, errorSample: firstErr?.reason?.message as string | undefined };
     },
-    onSuccess: (r) => {
+    onSuccess: (r: { ok: number; fail: number; errorSample?: string }) => {
       toast({
-        title: r.fail ? "أُرسل جزئياً" : "تم الإرسال",
-        description: r.fail ? `نجح ${r.ok} • فشل ${r.fail}` : `أُرسل لـ ${r.ok} مستلم`,
+        title: r.fail ? (r.ok ? "أُرسل جزئياً" : "فشل الإرسال") : "تم الإرسال",
+        description: r.fail
+          ? `نجح ${r.ok} • فشل ${r.fail}${r.errorSample ? ` — ${r.errorSample}` : ""}`
+          : `أُرسل لـ ${r.ok} مستلم`,
         variant: r.fail ? "destructive" : "default",
       });
       if (!r.fail) setWaDialog(null);
@@ -1525,7 +1661,7 @@ export default function FloorPlanPage() {
               onClick={() => setWaDialog({
                 recipients: [{ phone: "", name: "" }],
                 message: buildShareMessage(),
-                channel: "whatsapp",
+                channel: "walink",
               })}
               title="مشاركة عبر واتساب"
               data-testid="btn-share-whatsapp"
@@ -2714,61 +2850,21 @@ export default function FloorPlanPage() {
           </div>
         )}
 
-        {/* Hidden printable view — rendered off-screen, captured by react-to-print */}
+        {/* Hidden printable view — rendered off-screen, captured by react-to-print.
+            Scaled to fit A4 landscape (≈1040×610px usable at 96dpi with 8mm margins). */}
         <div className="hidden print:block" style={{ position: "absolute", left: -99999, top: 0 }}>
-          <div ref={printableRef} className="p-6 bg-white text-black" dir="rtl">
-            <div className="mb-4 flex items-center justify-between border-b pb-3">
-              <div>
-                <h1 className="text-2xl font-bold">مخطط الفرع — {(branches as any[])?.find?.((b: any) => b.id === selectedBranchId)?.name ?? selectedBranchId}</h1>
-                <p className="text-sm text-gray-600 mt-1">
-                  التاريخ: {selectedDate} • الوردية: {selectedShift === "morning" ? "صباحية" : selectedShift === "evening" ? "مسائية" : "ليلية"}
-                </p>
-              </div>
-              <div className="text-xs text-gray-500">طُبع في {new Date().toLocaleString("ar-SA")}</div>
-            </div>
-            {data && (
-              <div
-                className="relative border border-gray-300 mx-auto"
-                style={{ width: data.plan.width, height: data.plan.height, backgroundColor: "#fafaf7" }}
-              >
-                {data.zones.map(z => (
-                  <div key={z.id} className="absolute rounded border-2 border-dashed flex items-start justify-start p-2 text-xs font-medium"
-                    style={{
-                      left: z.x, top: z.y, width: z.width, height: z.height,
-                      backgroundColor: z.color + "55", borderColor: z.color,
-                      transform: z.rotation ? `rotate(${z.rotation}deg)` : undefined,
-                    }}>
-                    {z.name}
-                  </div>
-                ))}
-                {data.assignments.map(a => {
-                  const emp = a.employeeId != null ? employeeById.get(a.employeeId) : null;
-                  const def = getRoleDef(a.role, emp?.jobTitle);
-                  return (
-                    <div key={a.id} className="absolute flex flex-col items-center" style={{ left: a.x - 30, top: a.y - 30 }}>
-                      <div className="w-12 h-12 flex items-center justify-center text-white text-xs font-bold border-2 border-white shadow"
-                        style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}>
-                        {(emp?.employeeName ?? def.label).slice(0, 2)}
-                      </div>
-                      <div className="mt-1 px-1.5 py-0.5 bg-white text-[10px] font-medium border border-gray-300 rounded max-w-[110px] truncate text-center">
-                        {emp?.employeeName ?? "غير معيّن"}
-                      </div>
-                      <div className="text-[9px] text-white px-1 rounded mt-0.5" style={{ backgroundColor: def.color }}>
-                        {def.label}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {data && (
-              <div className="mt-4 text-xs grid grid-cols-3 gap-4">
-                <div><span className="font-semibold">إجمالي المواقع:</span> {data.assignments.length}</div>
-                <div><span className="font-semibold">معيّن:</span> {data.assignments.length - emptySlots.length}</div>
-                <div><span className="font-semibold">شاغر:</span> {emptySlots.length}</div>
-              </div>
-            )}
-          </div>
+          <PrintableFloorPlan
+            printRef={printableRef}
+            data={data}
+            branches={branches as any[]}
+            selectedBranchId={selectedBranchId}
+            selectedShift={selectedShift}
+            selectedDate={selectedDate}
+            employeeById={employeeById}
+            emptySlotsCount={emptySlots.length}
+            getRoleDef={getRoleDef}
+            shapeStyle={shapeStyle}
+          />
         </div>
 
         {/* ============ Batch 3 dialogs ============ */}
@@ -2856,15 +2952,23 @@ export default function FloorPlanPage() {
             </DialogHeader>
             {waDialog && (
               <div className="space-y-3">
-                <div className="flex items-center gap-2 text-xs">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
                   <Label className="text-xs">القناة:</Label>
                   <div className="flex rounded-md border overflow-hidden">
                     <button
                       type="button"
-                      className={`px-3 py-1 text-xs ${waDialog.channel === "whatsapp" ? "bg-green-600 text-white" : "bg-background"}`}
+                      className={`px-3 py-1 text-xs ${waDialog.channel === "walink" ? "bg-green-600 text-white" : "bg-background"}`}
+                      onClick={() => setWaDialog({ ...waDialog, channel: "walink" })}
+                      data-testid="btn-channel-walink"
+                      title="يفتح محادثة واتساب جاهزة في متصفحك — لا يحتاج Twilio"
+                    >رابط واتساب مباشر</button>
+                    <button
+                      type="button"
+                      className={`px-3 py-1 text-xs ${waDialog.channel === "whatsapp" ? "bg-green-700 text-white" : "bg-background"}`}
                       onClick={() => setWaDialog({ ...waDialog, channel: "whatsapp" })}
                       data-testid="btn-channel-whatsapp"
-                    >واتساب</button>
+                      title="إرسال آلي عبر Twilio — يتطلب أن يكون المستلم قد فعّل Sandbox"
+                    >واتساب (آلي)</button>
                     <button
                       type="button"
                       className={`px-3 py-1 text-xs ${waDialog.channel === "sms" ? "bg-primary text-primary-foreground" : "bg-background"}`}
@@ -2873,6 +2977,16 @@ export default function FloorPlanPage() {
                     >SMS</button>
                   </div>
                 </div>
+                {waDialog.channel === "walink" && (
+                  <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded p-2" data-testid="hint-walink">
+                    سيتم فتح نافذة واتساب جاهزة لكل رقم — يكفي أن تضغط "إرسال" داخل واتساب. تأكد من السماح للمتصفح بفتح النوافذ المنبثقة.
+                  </div>
+                )}
+                {waDialog.channel === "whatsapp" && (
+                  <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2" data-testid="hint-whatsapp">
+                    ملاحظة: في وضع Twilio Sandbox، يجب على كل مستلم أن يرسل أولاً رسالة "join &lt;keyword&gt;" إلى رقم Twilio. إن لم يفعل، ستفشل الرسالة بصمت.
+                  </div>
+                )}
                 <div>
                   <Label className="text-xs flex items-center justify-between">
                     <span>المستلمون</span>
@@ -2987,7 +3101,7 @@ export default function FloorPlanPage() {
                     data-testid="btn-send-share"
                   >
                     {sendWhatsApp.isPending ? <Loader2 className="w-4 h-4 animate-spin me-1" /> : <Send className="w-4 h-4 me-1" />}
-                    إرسال
+                    {waDialog.channel === "walink" ? "فتح المحادثات" : "إرسال"}
                   </Button>
                   <Button variant="outline" onClick={() => setWaDialog(null)}>إلغاء</Button>
                 </DialogFooter>
