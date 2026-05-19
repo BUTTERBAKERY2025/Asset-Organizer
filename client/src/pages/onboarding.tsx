@@ -355,6 +355,14 @@ function CreateDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: (
   const [reportingTo, setReportingTo] = useState("");
   const [notes, setNotes] = useState("");
   const [validityDays, setValidityDays] = useState(7);
+  const [branchId, setBranchId] = useState<string>("");
+
+  const offerHasBranch = !!row?.offer.branchId;
+
+  const { data: branches = [] } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/branches"],
+    enabled: !!row && !offerHasBranch,
+  });
 
   useMemo(() => {
     if (row) {
@@ -363,6 +371,7 @@ function CreateDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: (
       setReportingTo("");
       setNotes("");
       setValidityDays(7);
+      setBranchId("");
     }
   }, [row?.offer.id]);
 
@@ -375,6 +384,7 @@ function CreateDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: (
         reportingTo,
         notes,
         validityDays,
+        ...(offerHasBranch ? {} : { branchId }),
       });
       return await r.json();
     },
@@ -395,8 +405,24 @@ function CreateDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: (
             <div className="bg-amber-50 border border-amber-200 rounded p-3 space-y-1">
               <div><strong>الموظف:</strong> {row.offer.candidateName}</div>
               <div><strong>الوظيفة:</strong> {row.offer.position}</div>
-              <div><strong>الفرع:</strong> {row.offer.branchName || "-"}</div>
+              <div><strong>الفرع:</strong> {row.offer.branchName || <span className="text-red-600">غير محدد — اختر من الأسفل</span>}</div>
             </div>
+            {!offerHasBranch && (
+              <div className="space-y-1">
+                <Label>الفرع *</Label>
+                <select
+                  className="w-full border rounded h-10 px-2 bg-white"
+                  value={branchId}
+                  onChange={(e) => setBranchId(e.target.value)}
+                  data-testid="select-branch"
+                >
+                  <option value="">-- اختر الفرع --</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="space-y-1">
               <Label>تاريخ المباشرة الفعلي *</Label>
               <Input type="date" value={actualStartDate} onChange={(e) => setActualStartDate(e.target.value)} data-testid="input-start-date" />
@@ -426,6 +452,10 @@ function CreateDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: (
             onClick={() => {
               if (!actualStartDate) {
                 toast({ title: "تاريخ المباشرة مطلوب", variant: "destructive" });
+                return;
+              }
+              if (!offerHasBranch && !branchId) {
+                toast({ title: "اختر الفرع أولاً", variant: "destructive" });
                 return;
               }
               mutation.mutate();

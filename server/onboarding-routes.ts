@@ -239,7 +239,7 @@ export function registerOnboardingRoutes(app: Express) {
     requirePermission(PERMISSION_MODULE, "create"),
     async (req, res) => {
       try {
-        const { jobOfferId, actualStartDate, workingHours, reportingTo, notes, validityDays } = req.body;
+        const { jobOfferId, actualStartDate, workingHours, reportingTo, notes, validityDays, branchId: bodyBranchId } = req.body;
         if (!jobOfferId || !actualStartDate) {
           return res.status(400).json({ error: "رقم العرض وتاريخ المباشرة مطلوبان" });
         }
@@ -247,8 +247,21 @@ export function registerOnboardingRoutes(app: Express) {
         const [offer] = await db.select().from(jobOffers).where(eq(jobOffers.id, Number(jobOfferId))).limit(1);
         if (!offer) return res.status(404).json({ error: "عرض العمل غير موجود" });
         if (offer.status !== "accepted") return res.status(400).json({ error: "العرض لم يُقبل بعد" });
-        if (!checkBranchAccess(req, offer.branchId)) return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
-        if (!offer.branchId) return res.status(400).json({ error: "العرض بدون فرع — لا يمكن إنشاء إشعار مباشرة" });
+
+        // إذا كان العرض بدون فرع، نقبل الفرع من نموذج الإنشاء
+        let effectiveBranchId: string | null = offer.branchId;
+        let effectiveBranchName: string | null = offer.branchName;
+        if (!effectiveBranchId) {
+          if (!bodyBranchId) {
+            return res.status(400).json({ error: "العرض بدون فرع — اختر الفرع في النموذج" });
+          }
+          const [b] = await db.select().from(branches).where(eq(branches.id, String(bodyBranchId))).limit(1);
+          if (!b) return res.status(400).json({ error: "الفرع المحدد غير موجود" });
+          effectiveBranchId = b.id;
+          effectiveBranchName = b.name;
+        }
+
+        if (!checkBranchAccess(req, effectiveBranchId)) return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
 
         const [existing] = await db
           .select()
@@ -267,8 +280,8 @@ export function registerOnboardingRoutes(app: Express) {
             candidateName: offer.candidateName,
             phone: offer.phone,
             position: offer.position,
-            branchId: offer.branchId,
-            branchName: offer.branchName,
+            branchId: effectiveBranchId,
+            branchName: effectiveBranchName,
             actualStartDate,
             workingHours: workingHours || offer.workingHours || null,
             reportingTo: reportingTo || null,
