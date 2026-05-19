@@ -35,7 +35,8 @@ import {
   ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { useReactToPrint } from "react-to-print";
-import { ZoomIn, ZoomOut, Maximize2, Lock, Unlock, Magnet, Grid3x3, Search, Pencil, MousePointer2, ArrowUp, ArrowDown } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize2, Lock, Unlock, Magnet, Grid3x3, Search, Pencil, MousePointer2, ArrowUp, ArrowDown, FileDown } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import type { Branch } from "@shared/schema";
 
 interface BranchEmployee {
@@ -1278,158 +1279,322 @@ export default function FloorPlanPage() {
 
   return (
     <Layout>
-      <div className="container mx-auto p-4 space-y-4" dir="rtl">
-        {/* Header — title + branch selector unified into a single hero card */}
-        <Card className="overflow-hidden border-primary/20">
-          <div className="bg-gradient-to-l from-primary/10 via-primary/5 to-transparent">
-            <div className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center shrink-0 ring-1 ring-primary/20">
-                  <LayoutGrid className="w-6 h-6 text-primary" />
+      <div dir="rtl" className="flex flex-col h-[calc(100vh-4rem)] bg-[#fdfdfc] font-['Cairo']">
+        {/* TOP COMMAND BAR */}
+        <div className="h-14 border-b border-slate-200/80 bg-white flex items-center justify-between px-4 shrink-0 z-10 gap-3">
+          {/* Right cluster (RTL visual right): branch + shift + date */}
+          <div className="flex items-center gap-3 min-w-0">
+            <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
+              <SelectTrigger id="branch-sel" className="h-9 w-auto min-w-[180px] gap-2 bg-white border-slate-200" data-testid="select-branch">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-6 h-6 rounded bg-[#E4B136] text-white flex items-center justify-center font-bold text-xs shrink-0">
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                  </div>
+                  <SelectValue placeholder="اختر فرع" />
                 </div>
-                <div className="min-w-0">
-                  <h1 className="text-xl sm:text-2xl font-bold leading-tight">مخطط أرضية الفرع</h1>
-                  <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">وزّع فريق العمل على مناطق الفرع بشكل مرئي</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Label htmlFor="branch-sel" className="text-sm whitespace-nowrap text-muted-foreground">الفرع</Label>
-                <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
-                  <SelectTrigger id="branch-sel" className="w-56 h-10 bg-card shadow-sm" data-testid="select-branch">
-                    <SelectValue placeholder="اختر فرع" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {branches.map(b => (
-                      <SelectItem key={b.id} value={b.id} data-testid={`select-branch-${b.id}`}>{b.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-        </Card>
+              </SelectTrigger>
+              <SelectContent>
+                {branches.map(b => (
+                  <SelectItem key={b.id} value={b.id} data-testid={`select-branch-${b.id}`}>{b.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-        {/* Shift + date selector — grouped context bar */}
-        {selectedBranchId && (
-          <Card>
-            <CardContent className="p-3 flex flex-col lg:flex-row gap-3 items-stretch lg:items-center">
-              {/* Shift tabs — primary axis */}
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap hidden sm:inline">الوردية:</span>
-                <Tabs value={selectedShift} onValueChange={(v) => setSelectedShift(v as ShiftType)} dir="rtl" className="flex-1">
-                  <TabsList className="grid grid-cols-3 w-full max-w-xl h-10">
+            {selectedBranchId && (
+              <>
+                <Separator orientation="vertical" className="h-6" />
+
+                <Tabs value={selectedShift} onValueChange={(v) => setSelectedShift(v as ShiftType)} dir="rtl" className="h-8">
+                  <TabsList className="h-8 bg-slate-100/80 p-0.5 border border-slate-200">
                     {SHIFTS.map(s => {
                       const SI = s.icon;
                       return (
                         <TabsTrigger key={s.value} value={s.value} data-testid={`tab-shift-${s.value}`}
-                          className="gap-2 data-[state=active]:shadow-sm">
-                          <SI className="w-4 h-4" style={{ color: s.color }} />
+                          className="text-xs h-7 px-3 gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-sm">
+                          <SI className="w-3.5 h-3.5" style={{ color: s.color }} />
                           <span className="font-medium">{s.label}</span>
                         </TabsTrigger>
                       );
                     })}
                   </TabsList>
                 </Tabs>
-              </div>
 
-              {/* Date picker — secondary axis, visually separated */}
-              <div className="flex items-center gap-2 lg:border-s lg:ps-3">
-                <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap hidden sm:inline">التاريخ:</span>
-                <div className="relative">
-                  <Calendar className="w-3.5 h-3.5 text-muted-foreground absolute start-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <Input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (!v) return;
-                      setSelectedDate(v);
-                      setIsPinnedToToday(v === todayRiyadh);
-                    }}
-                    className="h-10 w-[160px] ps-7 tabular-nums font-medium"
-                    data-testid="input-plan-date"
-                  />
-                </div>
-                {selectedDate !== todayRiyadh ? (
-                  <>
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] border ${selectedDate > todayRiyadh
-                        ? "text-sky-700 border-sky-300 bg-sky-50"
-                        : "text-amber-700 border-amber-300 bg-amber-50"}`}
-                    >
-                      {selectedDate > todayRiyadh ? "تخطيط مسبق" : "مراجعة سابقة"}
-                    </Badge>
+                <Separator orientation="vertical" className="h-6" />
+
+                <div className="flex items-center gap-1.5">
+                  <div className="relative">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400 absolute start-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <Input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (!v) return;
+                        setSelectedDate(v);
+                        setIsPinnedToToday(v === todayRiyadh);
+                      }}
+                      className="h-8 w-[150px] ps-7 text-xs tabular-nums font-medium border-slate-200"
+                      data-testid="input-plan-date"
+                    />
+                  </div>
+                  {selectedDate !== todayRiyadh ? (
                     <Button
-                      variant="ghost" size="sm" className="h-8 px-2 text-xs text-primary hover:bg-primary/10"
+                      variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#E4B136] hover:bg-amber-50"
                       onClick={() => { setSelectedDate(todayRiyadh); setIsPinnedToToday(true); }}
                       data-testid="btn-date-today"
                     >
                       اليوم
                     </Button>
-                  </>
-                ) : (
-                  <Badge variant="outline" className="text-[10px] text-emerald-700 border-emerald-300 bg-emerald-50">
-                    اليوم
-                  </Badge>
-                )}
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] text-emerald-700 border-emerald-300 bg-emerald-50">
+                      اليوم
+                    </Badge>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Center: command search (wired to empSearch) */}
+          <div className="flex-1 flex justify-center max-w-md">
+            <div className="relative w-full group">
+              <Search className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#E4B136] transition-colors" />
+              <Input
+                value={empSearch}
+                onChange={(e) => setEmpSearch(e.target.value)}
+                placeholder="ابحث عن موظف أو وظيفة..."
+                className="h-8 text-xs bg-slate-50 border-slate-200 focus-visible:ring-[#E4B136] pr-8 pl-14 rounded-md shadow-inner shadow-slate-100 hover:bg-white focus:bg-white"
+                data-testid="input-command-search"
+              />
+              <div className="absolute left-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
+                <kbd className="text-[9px] font-sans bg-white border border-slate-200 rounded px-1 text-slate-400 font-medium">⌘</kbd>
+                <kbd className="text-[9px] font-sans bg-white border border-slate-200 rounded px-1 text-slate-400 font-medium">K</kbd>
               </div>
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          </div>
+
+          {/* Left cluster (RTL visual left): smart actions, history, templates, WA, PDF, save */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost" size="icon"
+                  className="h-8 w-8 text-slate-500 hover:text-amber-600 hover:bg-amber-50"
+                  disabled={smartBusy || locked || !data}
+                  title="أدوات ذكية"
+                  data-testid="btn-smart-tools"
+                >
+                  {smartBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72">
+                <DropdownMenuLabel className="text-xs">التوزيع التلقائي</DropdownMenuLabel>
+                <DropdownMenuItem
+                  onClick={autoDistribute}
+                  disabled={emptySlots.length === 0 || unplacedEmployees.length === 0}
+                  data-testid="btn-auto-distribute"
+                >
+                  <Wand2 className="w-3.5 h-3.5 me-2 text-primary" />
+                  <div className="flex-1">
+                    <div className="text-sm">توزيع تلقائي حسب الوظيفة</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {emptySlots.length} شاغر • {unplacedEmployees.length} موظف متاح
+                    </div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs">نسخ من وردية أخرى</DropdownMenuLabel>
+                {SHIFTS.filter(s => s.value !== selectedShift).map(s => (
+                  <div key={s.value}>
+                    <DropdownMenuItem onClick={() => copyFromShift(s.value, false)} data-testid={`btn-copy-empty-${s.value}`}>
+                      <CopyIcon className="w-3.5 h-3.5 me-2" />
+                      نسخ مواقع {s.label} كشواغر
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => copyFromShift(s.value, true)} data-testid={`btn-copy-full-${s.value}`}>
+                      <CopyIcon className="w-3.5 h-3.5 me-2 text-green-600" />
+                      نسخ مواقع {s.label} مع الموظفين
+                    </DropdownMenuItem>
+                  </div>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={clearShift}
+                  className="text-red-600 focus:text-red-700"
+                  disabled={(data?.assignments || []).length === 0}
+                  data-testid="btn-clear-shift"
+                >
+                  <Trash2 className="w-3.5 h-3.5 me-2" />
+                  مسح كل مواقع هذه الوردية
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Button
+              variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-slate-700"
+              onClick={() => setHistoryOpen(true)}
+              title="سجل التغييرات"
+              data-testid="btn-history"
+            >
+              <HistoryIcon className="w-4 h-4" />
+            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-slate-700"
+                  title="القوالب"
+                  data-testid="btn-templates"
+                >
+                  <BookmarkPlus className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-auto">
+                <DropdownMenuItem
+                  disabled={!data || (data.assignments.length === 0 && data.zones.length === 0)}
+                  onClick={() => setSaveTplDialog({ name: "", description: "", scope: "branch", includeZones: true })}
+                  data-testid="btn-save-template"
+                >
+                  <BookmarkPlus className="w-3.5 h-3.5 me-2 text-primary" />
+                  حفظ المخطط الحالي كقالب…
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs">القوالب المتاحة ({templates.length})</DropdownMenuLabel>
+                {templates.length === 0 && (
+                  <div className="px-2 py-3 text-xs text-muted-foreground text-center">لا توجد قوالب محفوظة</div>
+                )}
+                {templates.map((t: any) => (
+                  <div key={t.id} className="px-2 py-1.5 hover:bg-accent rounded-sm" data-testid={`template-item-${t.id}`}>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate flex items-center gap-1.5">
+                          {t.name}
+                          {!t.branchId && <Badge variant="outline" className="text-[10px] px-1 py-0">عام</Badge>}
+                        </div>
+                        {t.description && <div className="text-[11px] text-muted-foreground truncate">{t.description}</div>}
+                      </div>
+                      <Button
+                        size="sm" variant="ghost" className="h-7 px-2 text-xs text-primary"
+                        disabled={locked || applyTemplate.isPending}
+                        onClick={() => {
+                          if (confirm(`تطبيق القالب "${t.name}" على ${SHIFTS.find(s => s.value === selectedShift)?.label}؟ سيتم استبدال المواقع الحالية لهذه الوردية.`)) {
+                            applyTemplate.mutate(t.id);
+                          }
+                        }}
+                        data-testid={`btn-apply-template-${t.id}`}
+                      >
+                        تطبيق
+                      </Button>
+                      <Button
+                        size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600"
+                        disabled={deleteTemplate.isPending}
+                        onClick={() => { if (confirm(`حذف القالب "${t.name}" نهائياً؟`)) deleteTemplate.mutate(t.id); }}
+                        data-testid={`btn-delete-template-${t.id}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Button
+              variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-green-600"
+              disabled={!data || data.assignments.length === 0}
+              onClick={() => setWaDialog({
+                recipients: [{ phone: "", name: "" }],
+                message: buildShareMessage(),
+                channel: "whatsapp",
+              })}
+              title="مشاركة عبر واتساب"
+              data-testid="btn-share-whatsapp"
+            >
+              <MessageCircle className="w-4 h-4 text-green-600" />
+            </Button>
+
+            <Button
+              variant="ghost" size="sm"
+              className="h-8 gap-1.5 text-xs bg-rose-50 hover:bg-rose-100 text-rose-600 px-3"
+              onClick={() => handlePrint?.()}
+              data-testid="btn-print"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+              تصدير PDF
+            </Button>
+
+            <Button
+              variant="default" size="sm"
+              className="h-8 text-xs bg-[#E4B136] hover:bg-[#c99a2d] text-white shadow-sm gap-1.5 px-3"
+              onClick={() => { invalidate(); toast({ title: "تم تحديث المخطط", description: "كل التغييرات محفوظة." }); }}
+              data-testid="btn-save-changes"
+            >
+              <Save className="w-3.5 h-3.5" />
+              حفظ التغييرات
+            </Button>
+          </div>
+        </div>
 
         {!selectedBranchId ? (
-          <Card><CardContent className="py-16 text-center text-muted-foreground">اختر فرعاً للبدء</CardContent></Card>
+          <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">اختر فرعاً للبدء</div>
         ) : isLoading || !data ? (
-          <Card><CardContent className="py-16 text-center text-muted-foreground">جارٍ التحميل...</CardContent></Card>
+          <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">جارٍ التحميل...</div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4">
-            {/* Sidebar — tabbed to keep the page compact */}
-            <Card className="lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-6rem)] flex flex-col overflow-hidden">
-              {/* Live shift summary (always visible) */}
-              <div className="px-3 py-2.5 border-b bg-gradient-to-b from-muted/60 to-muted/20">
-                <div className="grid grid-cols-3 gap-1 text-center">
-                  <div className="rounded-md py-1.5 bg-card border">
-                    <div className="text-[9px] uppercase tracking-wide text-muted-foreground font-medium">المواقع</div>
-                    <div className="text-base font-bold tabular-nums leading-tight" data-testid="stat-total-slots">{data.assignments.length}</div>
+          <div className="flex flex-1 overflow-hidden">
+            {/* LEFT RAIL (RTL: visual right) — tabbed library */}
+            <div className="w-64 border-l border-slate-200/80 bg-white flex flex-col shrink-0 z-10 shadow-[2px_0_12px_rgba(0,0,0,0.02)]">
+              <Tabs value={sidebarTab} onValueChange={(v) => setSidebarTab(v as any)} dir="rtl" className="flex-1 flex flex-col overflow-hidden">
+                <div className="flex items-center px-3 pt-1 border-b border-slate-200/80 shrink-0">
+                  <TabsList className="h-9 w-full bg-transparent p-0 justify-start gap-4 rounded-none">
+                    <TabsTrigger
+                      value="roles" data-testid="tab-sidebar-roles"
+                      className="text-xs font-medium h-9 rounded-none border-b-2 border-transparent data-[state=active]:border-[#E4B136] data-[state=active]:text-[#E4B136] data-[state=active]:bg-transparent px-1 data-[state=active]:shadow-none"
+                    >
+                      الوظائف
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="zones" data-testid="tab-sidebar-zones"
+                      className="text-xs font-medium h-9 rounded-none border-b-2 border-transparent data-[state=active]:border-[#E4B136] data-[state=active]:text-[#E4B136] data-[state=active]:bg-transparent px-1 data-[state=active]:shadow-none"
+                    >
+                      المناطق
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="employees" data-testid="tab-sidebar-employees"
+                      className="text-xs font-medium h-9 rounded-none border-b-2 border-transparent data-[state=active]:border-[#E4B136] data-[state=active]:text-[#E4B136] data-[state=active]:bg-transparent px-1 gap-1 data-[state=active]:shadow-none"
+                    >
+                      الموظفون
+                      <Badge variant="secondary" className="h-4 px-1 text-[10px] tabular-nums" data-testid="badge-unplaced-count">{unplacedEmployees.length}</Badge>
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
+
+                {/* Library filter — bound to empSearch so the command-bar search and this filter stay in sync */}
+                <div className="p-3 border-b border-slate-200/80 bg-slate-50/50 shrink-0">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Input
+                      value={empSearch}
+                      onChange={(e) => setEmpSearch(e.target.value)}
+                      placeholder="تصفية..."
+                      className="h-7 text-xs pr-7 bg-white border-slate-200"
+                      data-testid="input-sidebar-filter"
+                    />
                   </div>
-                  <div className="rounded-md py-1.5 bg-emerald-50 border border-emerald-200">
-                    <div className="text-[9px] uppercase tracking-wide text-emerald-700/80 font-medium">مُعيَّنة</div>
-                    <div className="text-base font-bold tabular-nums leading-tight text-emerald-700" data-testid="stat-filled-slots">{data.assignments.length - emptySlots.length}</div>
-                  </div>
-                  <div className="rounded-md py-1.5 bg-amber-50 border border-amber-200">
-                    <div className="text-[9px] uppercase tracking-wide text-amber-700/80 font-medium">شاغرة</div>
-                    <div className="text-base font-bold tabular-nums leading-tight text-amber-700" data-testid="stat-empty-slots">{emptySlots.length}</div>
+                  {/* Compact shift stats */}
+                  <div className="grid grid-cols-3 gap-1 text-center mt-2">
+                    <div className="rounded py-1 bg-white border border-slate-200">
+                      <div className="text-[8px] uppercase tracking-wide text-slate-500 font-medium">المواقع</div>
+                      <div className="text-xs font-bold tabular-nums leading-tight" data-testid="stat-total-slots">{data.assignments.length}</div>
+                    </div>
+                    <div className="rounded py-1 bg-emerald-50 border border-emerald-200">
+                      <div className="text-[8px] uppercase tracking-wide text-emerald-700/80 font-medium">مُعيَّنة</div>
+                      <div className="text-xs font-bold tabular-nums leading-tight text-emerald-700" data-testid="stat-filled-slots">{data.assignments.length - emptySlots.length}</div>
+                    </div>
+                    <div className="rounded py-1 bg-amber-50 border border-amber-200">
+                      <div className="text-[8px] uppercase tracking-wide text-amber-700/80 font-medium">شاغرة</div>
+                      <div className="text-xs font-bold tabular-nums leading-tight text-amber-700" data-testid="stat-empty-slots">{emptySlots.length}</div>
+                    </div>
                   </div>
                 </div>
-                {data.assignments.length > 0 && (() => {
-                  const pct = Math.round(((data.assignments.length - emptySlots.length) / data.assignments.length) * 100);
-                  return (
-                    <div className="mt-2">
-                      <div className="flex items-center justify-between text-[10px] mb-0.5">
-                        <span className="text-muted-foreground">نسبة الإشغال</span>
-                        <span className="font-semibold tabular-nums">{pct}%</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-muted overflow-hidden" title={`${pct}%`}>
-                        <div
-                          className={`h-full transition-all ${pct === 100 ? "bg-emerald-500" : pct >= 70 ? "bg-amber-500" : "bg-rose-500"}`}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              <Tabs value={sidebarTab} onValueChange={(v) => setSidebarTab(v as any)} dir="rtl" className="flex flex-col flex-1 overflow-hidden">
-                <TabsList className="grid grid-cols-3 mx-2 mt-2">
-                  <TabsTrigger value="roles" data-testid="tab-sidebar-roles" className="text-xs">الوظائف</TabsTrigger>
-                  <TabsTrigger value="zones" data-testid="tab-sidebar-zones" className="text-xs">المناطق</TabsTrigger>
-                  <TabsTrigger value="employees" data-testid="tab-sidebar-employees" className="text-xs gap-1">
-                    الموظفون
-                    <Badge variant="secondary" className="h-4 px-1 text-[10px] tabular-nums" data-testid="badge-unplaced-count">{unplacedEmployees.length}</Badge>
-                  </TabsTrigger>
-                </TabsList>
 
                 {/* Roles tab */}
                 <TabsContent value="roles" className="flex-1 overflow-auto m-0 p-3 space-y-2">
@@ -1650,239 +1815,81 @@ export default function FloorPlanPage() {
                   </ScrollArea>
                 </TabsContent>
               </Tabs>
-            </Card>
+            </div>
 
-            {/* Canvas */}
-            <Card className="overflow-hidden">
-              {/* Sticky toolbar — zoom, grid, snap, lock, plan size */}
-              <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b p-2 flex flex-wrap items-center gap-2">
-                {/* Zoom group */}
-                <div className="flex items-center gap-1 rounded-md border bg-card p-0.5">
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setZoomClamped(zoom - 0.1)} title="تصغير" data-testid="btn-zoom-out">
-                    <ZoomOut className="w-4 h-4" />
+            {/* CENTER CANVAS COLUMN */}
+            <div className="flex-1 flex flex-col relative bg-[#f8f9fa] overflow-hidden">
+              {/* Floating zoom dock — top-right of canvas (visual right in RTL) */}
+              <div className="absolute top-3 right-3 z-20 flex flex-col gap-1.5">
+                <div className="bg-white rounded-md shadow-sm border border-slate-200/80 p-1 flex flex-col gap-0.5">
+                  <Button variant="ghost" size="icon" className="h-7 w-7 rounded-sm text-slate-600 hover:text-[#E4B136] hover:bg-amber-50"
+                    onClick={() => setZoomClamped(zoom + 0.1)} title="تكبير" data-testid="btn-zoom-in">
+                    <ZoomIn className="w-3.5 h-3.5" />
                   </Button>
-                  <button type="button" onClick={() => setZoomClamped(1)} className="text-xs font-medium tabular-nums w-12 text-center hover:bg-accent rounded" title="إعادة 100%" data-testid="btn-zoom-reset">
+                  <button type="button" onClick={() => setZoomClamped(1)}
+                    className="text-[9px] font-medium text-center text-slate-500 py-1 border-y border-slate-200 my-0.5 cursor-pointer hover:text-slate-800 tabular-nums"
+                    data-testid="btn-zoom-reset">
                     {Math.round(zoom * 100)}%
                   </button>
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setZoomClamped(zoom + 0.1)} title="تكبير" data-testid="btn-zoom-in">
-                    <ZoomIn className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={fitToView} title="ملاءمة الشاشة" data-testid="btn-zoom-fit">
-                    <Maximize2 className="w-4 h-4" />
+                  <Button variant="ghost" size="icon" className="h-7 w-7 rounded-sm text-slate-600 hover:text-[#E4B136] hover:bg-amber-50"
+                    onClick={() => setZoomClamped(zoom - 0.1)} title="تصغير" data-testid="btn-zoom-out">
+                    <ZoomOut className="w-3.5 h-3.5" />
                   </Button>
                 </div>
-
-                {/* Toggles */}
-                <div className="flex items-center gap-3 rounded-md border bg-card px-2 py-1">
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer" title="إظهار/إخفاء الشبكة">
-                    <Grid3x3 className="w-3.5 h-3.5 text-muted-foreground" />
-                    <Switch checked={showGrid} onCheckedChange={setShowGrid} data-testid="switch-grid" className="scale-75" />
-                  </label>
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer" title={`المحاذاة لشبكة ${GRID_SIZE} بكسل`}>
-                    <Magnet className="w-3.5 h-3.5 text-muted-foreground" />
-                    <Switch checked={snapGrid} onCheckedChange={setSnapGrid} data-testid="switch-snap" className="scale-75" />
-                  </label>
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer" title="قفل التحريك والتكبير">
-                    {locked ? <Lock className="w-3.5 h-3.5 text-amber-600" /> : <Unlock className="w-3.5 h-3.5 text-muted-foreground" />}
-                    <Switch checked={locked} onCheckedChange={setLocked} data-testid="switch-lock" className="scale-75" />
-                  </label>
-                </div>
-
-                {/* Plan size editor */}
-                <div className="flex items-center gap-1 rounded-md border bg-card px-2 py-1 text-xs">
-                  <span className="text-muted-foreground">المقاس:</span>
-                  <Input
-                    type="number" value={data.plan.width} min={400} max={4000} step={20}
-                    onBlur={(e) => {
-                      const w = parseInt(e.target.value, 10);
-                      if (!isNaN(w) && w !== data.plan.width) updatePlan.mutate({ width: Math.max(400, Math.min(4000, w)) });
-                    }}
-                    defaultValue={data.plan.width}
-                    key={`w-${data.plan.id}-${data.plan.width}`}
-                    className="h-6 w-16 px-1 text-xs tabular-nums"
-                    data-testid="input-plan-width"
-                  />
-                  <span className="text-muted-foreground">×</span>
-                  <Input
-                    type="number" min={300} max={4000} step={20}
-                    onBlur={(e) => {
-                      const h = parseInt(e.target.value, 10);
-                      if (!isNaN(h) && h !== data.plan.height) updatePlan.mutate({ height: Math.max(300, Math.min(4000, h)) });
-                    }}
-                    defaultValue={data.plan.height}
-                    key={`h-${data.plan.id}-${data.plan.height}`}
-                    className="h-6 w-16 px-1 text-xs tabular-nums"
-                    data-testid="input-plan-height"
-                  />
-                </div>
-
-                {/* Undo / Redo / Print group */}
-                <div className="flex items-center gap-1 rounded-md border bg-card p-0.5">
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
-                    disabled={!canUndo} onClick={doUndo}
-                    title="تراجع (Ctrl+Z)" data-testid="btn-undo">
-                    <Undo2 className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
-                    disabled={!canRedo} onClick={doRedo}
-                    title="إعادة (Ctrl+Shift+Z)" data-testid="btn-redo">
-                    <Redo2 className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
-                    onClick={() => handlePrint?.()}
-                    title="طباعة / حفظ PDF" data-testid="btn-print">
-                    <Printer className="w-4 h-4" />
+                <div className="bg-white rounded-md shadow-sm border border-slate-200/80 p-1">
+                  <Button variant="ghost" size="icon" className="h-7 w-7 rounded-sm text-slate-600 hover:text-[#E4B136] hover:bg-amber-50"
+                    onClick={fitToView} title="ملاءمة الشاشة" data-testid="btn-zoom-fit">
+                    <Maximize2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
-
-                {/* Templates — save current as template / apply a saved one */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" data-testid="btn-templates">
-                      <Bookmark className="w-3.5 h-3.5" /> القوالب
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-auto">
-                    <DropdownMenuItem
-                      disabled={!data || (data.assignments.length === 0 && data.zones.length === 0)}
-                      onClick={() => setSaveTplDialog({ name: "", description: "", scope: "branch", includeZones: true })}
-                      data-testid="btn-save-template"
-                    >
-                      <BookmarkPlus className="w-3.5 h-3.5 me-2 text-primary" />
-                      حفظ المخطط الحالي كقالب…
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel className="text-xs">القوالب المتاحة ({templates.length})</DropdownMenuLabel>
-                    {templates.length === 0 && (
-                      <div className="px-2 py-3 text-xs text-muted-foreground text-center">لا توجد قوالب محفوظة</div>
-                    )}
-                    {templates.map((t: any) => (
-                      <div key={t.id} className="px-2 py-1.5 hover:bg-accent rounded-sm" data-testid={`template-item-${t.id}`}>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium truncate flex items-center gap-1.5">
-                              {t.name}
-                              {!t.branchId && <Badge variant="outline" className="text-[10px] px-1 py-0">عام</Badge>}
-                            </div>
-                            {t.description && <div className="text-[11px] text-muted-foreground truncate">{t.description}</div>}
-                          </div>
-                          <Button
-                            size="sm" variant="ghost" className="h-7 px-2 text-xs text-primary"
-                            disabled={locked || applyTemplate.isPending}
-                            onClick={() => {
-                              if (confirm(`تطبيق القالب "${t.name}" على ${SHIFTS.find(s => s.value === selectedShift)?.label}؟ سيتم استبدال المواقع الحالية لهذه الوردية.`)) {
-                                applyTemplate.mutate(t.id);
-                              }
-                            }}
-                            data-testid={`btn-apply-template-${t.id}`}
-                          >
-                            تطبيق
-                          </Button>
-                          <Button
-                            size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600"
-                            disabled={deleteTemplate.isPending}
-                            onClick={() => { if (confirm(`حذف القالب "${t.name}" نهائياً؟`)) deleteTemplate.mutate(t.id); }}
-                            data-testid={`btn-delete-template-${t.id}`}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                {/* WhatsApp share */}
-                <Button
-                  variant="outline" size="sm" className="h-7 gap-1.5 text-xs"
-                  disabled={!data || data.assignments.length === 0}
-                  onClick={() => setWaDialog({
-                    recipients: [{ phone: "", name: "" }],
-                    message: buildShareMessage(),
-                    channel: "whatsapp",
-                  })}
-                  title="إرسال التوزيع عبر واتساب / SMS"
-                  data-testid="btn-share-whatsapp"
-                >
-                  <MessageCircle className="w-3.5 h-3.5 text-green-600" /> مشاركة
-                </Button>
-
-                {/* History */}
-                <Button
-                  variant="outline" size="sm" className="h-7 gap-1.5 text-xs"
-                  onClick={() => { setHistoryOpen(true); }}
-                  title="سجل التغييرات"
-                  data-testid="btn-history"
-                >
-                  <HistoryIcon className="w-3.5 h-3.5" /> السجل
-                </Button>
-
-                {/* Smart tools — auto-distribute, copy from shift, clear */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline" size="sm"
-                      className="h-7 gap-1.5 text-xs border-primary/40 text-primary hover:bg-primary/10"
-                      disabled={smartBusy || locked}
-                      data-testid="btn-smart-tools"
-                    >
-                      {smartBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
-                      أدوات ذكية
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-72">
-                    <DropdownMenuLabel className="text-xs">التوزيع التلقائي</DropdownMenuLabel>
-                    <DropdownMenuItem
-                      onClick={autoDistribute}
-                      disabled={emptySlots.length === 0 || unplacedEmployees.length === 0}
-                      data-testid="btn-auto-distribute"
-                    >
-                      <Wand2 className="w-3.5 h-3.5 me-2 text-primary" />
-                      <div className="flex-1">
-                        <div className="text-sm">توزيع تلقائي حسب الوظيفة</div>
-                        <div className="text-[11px] text-muted-foreground">
-                          {emptySlots.length} شاغر • {unplacedEmployees.length} موظف متاح
-                        </div>
-                      </div>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel className="text-xs">نسخ من وردية أخرى</DropdownMenuLabel>
-                    {SHIFTS.filter(s => s.value !== selectedShift).map(s => (
-                      <div key={s.value}>
-                        <DropdownMenuItem onClick={() => copyFromShift(s.value, false)} data-testid={`btn-copy-empty-${s.value}`}>
-                          <CopyIcon className="w-3.5 h-3.5 me-2" />
-                          نسخ مواقع {s.label} كشواغر
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => copyFromShift(s.value, true)} data-testid={`btn-copy-full-${s.value}`}>
-                          <CopyIcon className="w-3.5 h-3.5 me-2 text-green-600" />
-                          نسخ مواقع {s.label} مع الموظفين
-                        </DropdownMenuItem>
-                      </div>
-                    ))}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={clearShift}
-                      className="text-red-600 focus:text-red-700"
-                      disabled={(data?.assignments || []).length === 0}
-                      data-testid="btn-clear-shift"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 me-2" />
-                      مسح كل مواقع هذه الوردية
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                {/* Stats badge — always visible at-a-glance */}
-                <Badge variant="outline" className="ms-auto text-[11px] tabular-nums gap-1.5" data-testid="badge-canvas-stats">
-                  <span className="text-muted-foreground">المناطق</span> <span className="font-semibold">{data.zones.length}</span>
-                  <Separator orientation="vertical" className="h-3 mx-1" />
-                  <span className="text-green-700 font-semibold">{data.assignments.length - emptySlots.length}</span>
-                  <span className="text-muted-foreground">/</span>
-                  <span className="font-semibold">{data.assignments.length}</span>
-                </Badge>
               </div>
 
-              <CardContent className="p-0">
+              {/* Floating left dock — undo/redo + tool selection + plan size */}
+              <div className="absolute top-3 left-3 z-20">
+                <div className="bg-white/95 backdrop-blur-sm rounded-md shadow-sm border border-slate-200/80 p-1 flex items-center gap-0.5">
+                  <Button variant="ghost" size="icon" className="h-7 w-7 rounded-sm text-[#E4B136] bg-amber-50" title="تحديد">
+                    <MousePointer2 className="w-3.5 h-3.5" />
+                  </Button>
+                  <Separator orientation="vertical" className="h-4 mx-1" />
+                  <Button variant="ghost" size="icon" className="h-7 w-7 rounded-sm text-slate-500 hover:text-slate-700"
+                    disabled={!canUndo} onClick={doUndo} title="تراجع (Ctrl+Z)" data-testid="btn-undo">
+                    <Undo2 className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 rounded-sm text-slate-500 hover:text-slate-700"
+                    disabled={!canRedo} onClick={doRedo} title="إعادة (Ctrl+Shift+Z)" data-testid="btn-redo">
+                    <Redo2 className="w-3.5 h-3.5" />
+                  </Button>
+                  <Separator orientation="vertical" className="h-4 mx-1" />
+                  <div className="flex items-center gap-1 px-1 text-[10px] text-slate-500" title="مقاس المخطط">
+                    <Input
+                      type="number" min={400} max={4000} step={20}
+                      onBlur={(e) => {
+                        const w = parseInt(e.target.value, 10);
+                        if (!isNaN(w) && w !== data.plan.width) updatePlan.mutate({ width: Math.max(400, Math.min(4000, w)) });
+                      }}
+                      defaultValue={data.plan.width}
+                      key={`w-${data.plan.id}-${data.plan.width}`}
+                      className="h-6 w-14 px-1 text-[10px] tabular-nums"
+                      data-testid="input-plan-width"
+                    />
+                    <span>×</span>
+                    <Input
+                      type="number" min={300} max={4000} step={20}
+                      onBlur={(e) => {
+                        const h = parseInt(e.target.value, 10);
+                        if (!isNaN(h) && h !== data.plan.height) updatePlan.mutate({ height: Math.max(300, Math.min(4000, h)) });
+                      }}
+                      defaultValue={data.plan.height}
+                      key={`h-${data.plan.id}-${data.plan.height}`}
+                      className="h-6 w-14 px-1 text-[10px] tabular-nums"
+                      data-testid="input-plan-height"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Inline status banners (coverage / placement-mode / locked / help) — kept from original chrome */}
+              <div className="shrink-0 relative z-[1]">
                 {/* Health banner — at-a-glance coverage, missing roles, unassigned people */}
                 {data.assignments.length > 0 && (() => {
                   const filled = data.assignments.length - emptySlots.length;
@@ -1953,7 +1960,8 @@ export default function FloorPlanPage() {
                     <span className="hidden sm:flex items-center gap-1 text-amber-700">• المواقع الشاغرة تُفتح بنقرة واحدة للتعيين</span>
                   </div>
                 )}
-                <div ref={canvasWrapRef} className="overflow-auto bg-muted/30">
+              </div>
+                <div ref={canvasWrapRef} className="flex-1 relative overflow-auto butter-canvas-pattern">
                   {/* Zoom wrapper — the scaled canvas occupies its scaled dimensions so scroll bars match */}
                   <div style={{ width: data.plan.width * zoom, height: data.plan.height * zoom }}>
                   <div
@@ -2333,8 +2341,124 @@ export default function FloorPlanPage() {
                   </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+
+              {/* BOTTOM STATUS BAR */}
+              <div className="h-8 border-t border-slate-200/80 bg-white flex items-center justify-between px-3 shrink-0 text-[10px] text-slate-500 font-medium">
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={() => setShowGrid(!showGrid)} className="flex items-center gap-1.5 cursor-pointer hover:text-slate-800 transition-colors" data-testid="btn-toggle-grid">
+                    <Grid3x3 className="w-3 h-3" /> {showGrid ? "الشبكة مفعلة" : "الشبكة معطلة"}
+                  </button>
+                  <Separator orientation="vertical" className="h-3" />
+                  <button type="button" onClick={() => setLocked(!locked)} className="flex items-center gap-1.5 cursor-pointer hover:text-slate-800 transition-colors" data-testid="btn-toggle-lock">
+                    {locked ? <Lock className="w-3 h-3 text-amber-600" /> : <Unlock className="w-3 h-3" />}
+                    {locked ? "اللوحة مقفولة" : "اللوحة مفتوحة"}
+                  </button>
+                  <Separator orientation="vertical" className="h-3" />
+                  <button type="button" onClick={() => setSnapGrid(!snapGrid)} className="flex items-center gap-1.5 cursor-pointer hover:text-slate-800 transition-colors" data-testid="btn-toggle-snap">
+                    <Magnet className="w-3 h-3" /> {snapGrid ? "الالتصاق مفعّل" : "الالتصاق معطّل"}
+                  </button>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="tabular-nums text-slate-500" data-testid="status-coverage">
+                    المناطق {data.zones.length} • {data.assignments.length - emptySlots.length}/{data.assignments.length}
+                  </span>
+                  <Separator orientation="vertical" className="h-3" />
+                  <span className="text-slate-400">المخطط محفوظ تلقائياً</span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500" aria-hidden />
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT RAIL (RTL: visual left) — coverage + status */}
+            <div className="w-64 border-r border-slate-200/80 bg-white flex flex-col shrink-0 z-10 shadow-[-2px_0_12px_rgba(0,0,0,0.02)]">
+              <div className="h-12 border-b border-slate-200/80 flex items-center px-4 font-bold text-xs shrink-0">
+                حالة التغطية (الوردية {SHIFTS.find(s => s.value === selectedShift)?.label})
+              </div>
+              <ScrollArea className="flex-1">
+                <div className="p-4 space-y-5">
+                  {(() => {
+                    const total = data.assignments.length;
+                    const filled = total - emptySlots.length;
+                    const pct = total > 0 ? Math.round((filled / total) * 100) : 0;
+                    const tone = pct === 100 ? "text-emerald-600" : pct >= 70 ? "text-amber-600" : "text-rose-600";
+                    return (
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-end text-xs">
+                          <span className="text-slate-600 font-medium">تغطية الوردية</span>
+                          <span className={`font-bold tabular-nums ${tone}`}>{pct}%</span>
+                        </div>
+                        <Progress value={pct} className="h-2 bg-slate-100" />
+                        <p className="text-[10px] text-slate-400 tabular-nums">{filled} من أصل {total} موقع معيّن</p>
+                      </div>
+                    );
+                  })()}
+
+                  <Separator />
+
+                  <div className="space-y-2.5">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">نواقص حرجة</h4>
+                    {missingByRole.size === 0 && unassignedScheduledCount === 0 ? (
+                      <div className="text-[11px] text-slate-400 italic">لا توجد نواقص</div>
+                    ) : (
+                      <>
+                        {Array.from(missingByRole.entries()).slice(0, 4).map(([role, n]) => (
+                          <div key={role} className="bg-amber-50 border border-amber-100 rounded-md p-2.5 flex gap-2.5 items-start" data-testid={`missing-role-${role}`}>
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+                            <div className="flex flex-col gap-0.5 min-w-0">
+                              <span className="text-xs font-bold text-amber-700 truncate">{role} ({n}) ناقص</span>
+                              <span className="text-[10px] text-amber-600/80">موقع شاغر يحتاج إلى تعيين</span>
+                            </div>
+                          </div>
+                        ))}
+                        {unassignedScheduledCount > 0 && (
+                          <div className="bg-sky-50 border border-sky-100 rounded-md p-2.5 flex gap-2.5 items-start" data-testid="missing-scheduled">
+                            <Users className="w-3.5 h-3.5 text-sky-600 mt-0.5 shrink-0" />
+                            <div className="flex flex-col gap-0.5 min-w-0">
+                              <span className="text-xs font-bold text-sky-700">{unassignedScheduledCount} مجدول بلا موقع</span>
+                              <span className="text-[10px] text-sky-600/80">موظفون مجدولون لكن لم يُعيَّنوا</span>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">مناطق مكتملة</h4>
+                    {(() => {
+                      const byZone = data.zones.map(z => {
+                        const inside = data.assignments.filter(a =>
+                          a.x >= z.x && a.x <= z.x + z.width && a.y >= z.y && a.y <= z.y + z.height
+                        );
+                        const filled = inside.filter(a => a.employeeId != null).length;
+                        return { z, total: inside.length, filled };
+                      }).filter(item => item.total > 0 && item.filled === item.total);
+                      if (byZone.length === 0) {
+                        return <div className="text-[11px] text-slate-400 italic">لا توجد مناطق مكتملة بعد</div>;
+                      }
+                      return byZone.slice(0, 8).map(({ z, total, filled }) => (
+                        <div key={z.id} className="flex items-center gap-2" data-testid={`complete-zone-${z.id}`}>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          <span className="text-xs text-slate-600 truncate flex-1">{z.name}</span>
+                          <span className="text-[10px] text-slate-400 tabular-nums">{filled}/{total}</span>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">خريطة مصغرة</h4>
+                    <div className="aspect-video border border-dashed border-slate-200 rounded-md bg-slate-50 flex items-center justify-center" data-testid="minimap-placeholder">
+                      <span className="text-[10px] text-slate-400">قريباً</span>
+                    </div>
+                  </div>
+                </div>
+              </ScrollArea>
+            </div>
           </div>
         )}
 
