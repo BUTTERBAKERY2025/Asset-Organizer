@@ -293,6 +293,40 @@ export function registerJobOfferRoutes(app: Express) {
     }
   );
 
+  // حذف العرض — للأدمن فقط (حماية مزدوجة: التحقق من الدور قبل المتابعة)
+  app.delete(
+    "/api/hr/job-offers/:id",
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const user: any = (req as any).user;
+        if (!user || user.role !== "admin") {
+          return res.status(403).json({ error: "هذا الإجراء متاح للمسؤول (Admin) فقط" });
+        }
+        const id = Number(req.params.id);
+        if (!Number.isFinite(id)) return res.status(400).json({ error: "معرّف غير صالح" });
+
+        const [existing] = await db
+          .select()
+          .from(jobOffers)
+          .where(eq(jobOffers.id, id))
+          .limit(1);
+        if (!existing) return res.status(404).json({ error: "غير موجود" });
+
+        // إلغاء أي توكنات نشطة ثم حذف العرض (cascade على audit/tokens مفترض في الـ schema، نحذف يدوياً للأمان)
+        await db.delete(jobOfferTokens).where(eq(jobOfferTokens.offerId, id));
+        await db.delete(jobOfferAuditLog).where(eq(jobOfferAuditLog.offerId, id));
+        await db.delete(jobOffers).where(eq(jobOffers.id, id));
+
+        console.log(`[job-offers] DELETED by admin=${user.username || user.id} offer=${existing.offerNumber}`);
+        res.json({ success: true });
+      } catch (e: any) {
+        console.error("[job-offers] delete error:", e);
+        res.status(500).json({ error: e.message });
+      }
+    }
+  );
+
   // إرسال العرض للمرشح: توليد توكن وحفظ، إرسال واتساب
   app.post(
     "/api/hr/job-offers/:id/send",

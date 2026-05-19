@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient as qc } from "@/lib/queryClient";
 import {
   Briefcase,
@@ -32,6 +33,8 @@ import {
   Mail,
   MessageCircle,
   Printer,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import type { JobOffer } from "@shared/schema";
 import { useReactToPrint } from "react-to-print";
@@ -108,14 +111,17 @@ const emptyForm: OfferForm = {
 
 export default function JobOffersPage() {
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState<OfferForm>(emptyForm);
   const [step, setStep] = useState(1);
+  const [editId, setEditId] = useState<number | null>(null);
   const [viewOffer, setViewOffer] = useState<JobOffer | null>(null);
   const [shareLink, setShareLink] = useState<{ link: string; offer: JobOffer } | null>(null);
+  const [deleteOffer, setDeleteOffer] = useState<JobOffer | null>(null);
 
   // Prefill from accepted employment application (Convert to Job Offer)
   useEffect(() => {
@@ -172,11 +178,82 @@ export default function JobOffersPage() {
       setShowCreate(false);
       setForm(emptyForm);
       setStep(1);
+      setEditId(null);
     },
     onError: (e: any) => {
       toast({ title: "فشل الإنشاء", description: e.message, variant: "destructive" });
     },
   });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: OfferForm }) => {
+      const res = await apiRequest("PATCH", `/api/hr/job-offers/${id}`, data);
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "تم التحديث", description: "تم حفظ التعديلات على العرض" });
+      queryClient.invalidateQueries({ queryKey: ["/api/hr/job-offers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hr/job-offers/stats"] });
+      setShowCreate(false);
+      setForm(emptyForm);
+      setStep(1);
+      setEditId(null);
+    },
+    onError: (e: any) => {
+      toast({ title: "فشل التحديث", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("DELETE", `/api/hr/job-offers/${id}`);
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "تم الحذف", description: "تم حذف العرض نهائياً" });
+      queryClient.invalidateQueries({ queryKey: ["/api/hr/job-offers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hr/job-offers/stats"] });
+      setDeleteOffer(null);
+    },
+    onError: (e: any) => {
+      toast({ title: "فشل الحذف", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const openEditDialog = (o: JobOffer) => {
+    setForm({
+      candidateName: o.candidateName || "",
+      candidateNameEn: o.candidateNameEn || "",
+      nationality: o.nationality || "",
+      idNumber: o.idNumber || "",
+      idPlace: o.idPlace || "",
+      idExpiry: o.idExpiry || "",
+      phone: o.phone || "",
+      email: o.email || "",
+      qualification: o.qualification || "",
+      position: o.position || "",
+      positionEn: o.positionEn || "",
+      department: o.department || "",
+      branchName: o.branchName || "",
+      startDate: o.startDate || "",
+      contractDurationMonths: o.contractDurationMonths || 12,
+      probationDays: o.probationDays || 180,
+      workingHours: o.workingHours || "",
+      basicSalary: o.basicSalary || 0,
+      housingAllowance: o.housingAllowance || 0,
+      transportAllowance: o.transportAllowance || 0,
+      otherAllowances: o.otherAllowances || 0,
+      annualLeaveDays: o.annualLeaveDays || 21,
+      hasMedicalInsurance: !!o.hasMedicalInsurance,
+      hasTravelTickets: !!o.hasTravelTickets,
+      benefitsNotes: o.benefitsNotes || "",
+      termsNotes: o.termsNotes || "",
+      validityDays: o.validityDays || 2,
+    });
+    setEditId(o.id);
+    setStep(1);
+    setShowCreate(true);
+  };
 
   const sendMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -228,7 +305,11 @@ export default function JobOffersPage() {
       toast({ title: "بيانات ناقصة", description: "الاسم والهاتف والوظيفة وتاريخ المباشرة مطلوبة", variant: "destructive" });
       return;
     }
-    createMutation.mutate(form);
+    if (editId) {
+      updateMutation.mutate({ id: editId, data: form });
+    } else {
+      createMutation.mutate(form);
+    }
   };
 
   const copyLink = (link: string) => {
@@ -259,7 +340,7 @@ export default function JobOffersPage() {
           actions={
             <Button
               size="sm"
-              onClick={() => { setForm(emptyForm); setStep(1); setShowCreate(true); }}
+              onClick={() => { setForm(emptyForm); setStep(1); setEditId(null); setShowCreate(true); }}
               className="gap-2"
               data-testid="btn-new-offer"
             >
@@ -347,9 +428,21 @@ export default function JobOffersPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1 flex-wrap">
-                            <Button size="sm" variant="outline" onClick={() => setViewOffer(o)} data-testid={`btn-view-${o.id}`}>
+                            <Button size="sm" variant="outline" onClick={() => setViewOffer(o)} data-testid={`btn-view-${o.id}`} title="عرض">
                               <Eye className="w-3.5 h-3.5" />
                             </Button>
+                            {o.status === "draft" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-amber-700 border-amber-300 hover:bg-amber-50"
+                                onClick={() => openEditDialog(o)}
+                                data-testid={`btn-edit-${o.id}`}
+                                title="تعديل"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
                             {(o.status === "draft" || o.status === "expired") && (
                               <Button
                                 size="sm"
@@ -368,6 +461,7 @@ export default function JobOffersPage() {
                                   variant="outline"
                                   onClick={() => extendMutation.mutate({ id: o.id, days: 2 })}
                                   data-testid={`btn-extend-${o.id}`}
+                                  title="تمديد الصلاحية"
                                 >
                                   <CalendarPlus className="w-3.5 h-3.5" />
                                 </Button>
@@ -392,8 +486,21 @@ export default function JobOffersPage() {
                                   cancelMutation.mutate({ id: o.id, reason });
                                 }}
                                 data-testid={`btn-cancel-${o.id}`}
+                                title="إلغاء"
                               >
                                 <XCircle className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                            {isAdmin && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-red-700 border-red-300 hover:bg-red-50"
+                                onClick={() => setDeleteOffer(o)}
+                                data-testid={`btn-delete-${o.id}`}
+                                title="حذف نهائي (Admin)"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             )}
                           </div>
@@ -407,11 +514,13 @@ export default function JobOffersPage() {
           </CardContent>
         </Card>
 
-        {/* Create Wizard */}
-        <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        {/* Create / Edit Wizard */}
+        <Dialog open={showCreate} onOpenChange={(o) => { if (!o) { setEditId(null); } setShowCreate(o); }}>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>إنشاء عرض عمل جديد — الخطوة {step} من 4</DialogTitle>
+              <DialogTitle>
+                {editId ? `تعديل العرض — الخطوة ${step} من 4` : `إنشاء عرض عمل جديد — الخطوة ${step} من 4`}
+              </DialogTitle>
             </DialogHeader>
             <div className="flex gap-1 mb-4">
               {[1, 2, 3, 4].map((s) => (
@@ -563,10 +672,12 @@ export default function JobOffersPage() {
                 <Button
                   className="bg-green-600 hover:bg-green-700"
                   onClick={handleCreateSubmit}
-                  disabled={createMutation.isPending}
+                  disabled={createMutation.isPending || updateMutation.isPending}
                   data-testid="btn-submit-offer"
                 >
-                  {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "حفظ كمسودة"}
+                  {(createMutation.isPending || updateMutation.isPending)
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : editId ? "حفظ التعديلات" : "حفظ كمسودة"}
                 </Button>
               )}
             </DialogFooter>
@@ -608,6 +719,37 @@ export default function JobOffersPage() {
               <DialogTitle>تفاصيل العرض {viewOffer?.offerNumber}</DialogTitle>
             </DialogHeader>
             {viewOffer && <OfferDetails offer={viewOffer} />}
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation — Admin only */}
+        <Dialog open={!!deleteOffer} onOpenChange={(o) => !o && setDeleteOffer(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-red-700">⚠️ حذف نهائي للعرض</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 text-sm">
+              <p>سيتم حذف العرض التالي نهائياً ولا يمكن استعادته:</p>
+              <div className="bg-red-50 border border-red-200 rounded p-3 space-y-1">
+                <div><strong>رقم العرض:</strong> {deleteOffer?.offerNumber}</div>
+                <div><strong>المرشح:</strong> {deleteOffer?.candidateName}</div>
+                <div><strong>الوظيفة:</strong> {deleteOffer?.position}</div>
+              </div>
+              <p className="text-xs text-slate-500">هذا الإجراء متاح للمسؤول (Admin) فقط ويتم تسجيله في السجلات.</p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteOffer(null)} data-testid="btn-cancel-delete">
+                إلغاء
+              </Button>
+              <Button
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => deleteOffer && deleteMutation.mutate(deleteOffer.id)}
+                disabled={deleteMutation.isPending}
+                data-testid="btn-confirm-delete"
+              >
+                {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "تأكيد الحذف"}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
