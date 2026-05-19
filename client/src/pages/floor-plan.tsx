@@ -652,23 +652,37 @@ export default function FloorPlanPage() {
     }
     setSharingPdf(true);
     try {
-      const [{ default: html2canvas }, jsPDFmod] = await Promise.all([
-        import("html2canvas"),
+      // html-to-image uses SVG foreignObject so it natively handles modern
+      // CSS (incl. Tailwind v4's oklch() color tokens) that html2canvas can't
+      // parse. We render at 2× pixel density for a crisp PDF.
+      const [htmlToImage, jsPDFmod] = await Promise.all([
+        import("html-to-image"),
         import("jspdf"),
       ]);
       const jsPDF = (jsPDFmod as any).jsPDF || (jsPDFmod as any).default;
 
-      // Make sure the offscreen printable node is visible to html2canvas. It
-      // already lives in the DOM (just CSS-hidden via the print stylesheet),
-      // so html2canvas can read it directly.
       const node = printableRef.current;
-      const canvas = await html2canvas(node, {
-        scale: 2,
-        useCORS: true,
+      const rect = node.getBoundingClientRect();
+      const pxW = Math.max(1, Math.round(rect.width));
+      const pxH = Math.max(1, Math.round(rect.height));
+      const imgData = await htmlToImage.toPng(node, {
+        pixelRatio: 2,
         backgroundColor: "#ffffff",
-        logging: false,
+        width: pxW,
+        height: pxH,
+        cacheBust: true,
+        // Skip remote fonts/icons that may CORS-block and abort the render.
+        skipFonts: true,
+        filter: (n: any) => !(n?.tagName === "LINK" && n?.rel === "stylesheet" && /fonts/.test(n.href || "")),
       });
-      const imgData = canvas.toDataURL("image/png");
+      // Build a temporary canvas just to read intrinsic dimensions for jsPDF.
+      const tmpImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const im = new Image();
+        im.onload = () => resolve(im);
+        im.onerror = reject;
+        im.src = imgData;
+      });
+      const canvas = { width: tmpImg.naturalWidth, height: tmpImg.naturalHeight };
 
       // A4 landscape = 297×210 mm; use 8mm margins.
       const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
