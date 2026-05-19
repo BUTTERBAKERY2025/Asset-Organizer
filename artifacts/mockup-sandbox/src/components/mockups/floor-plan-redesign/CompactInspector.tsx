@@ -4,7 +4,8 @@ import {
   Cake, Handshake, ClipboardList, Sparkles, 
   ZoomIn, ZoomOut, Maximize, Grid, Magnet, Lock, 
   Undo, Redo, Hand, Search, Save, Printer, History, 
-  LayoutTemplate, Wand2, MessageCircle, Plus, X, ChevronLeft, MoreHorizontal, UserPlus, SlidersHorizontal, MousePointer2
+  LayoutTemplate, Wand2, MessageCircle, Plus, X, ChevronLeft, MoreHorizontal, UserPlus, SlidersHorizontal, MousePointer2,
+  FileDown, LayoutGrid, AlertCircle, CheckCircle2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -57,6 +58,13 @@ export function CompactInspector() {
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
 
   const selectedZone = ZONES.find((z) => z.id === selectedZoneId);
+  const totalAssigned = ZONES.reduce((sum, z) => sum + z.employeeIds.length, 0);
+  const missingByRole = [
+    { role: 'باريستا', count: 2, color: '#92400e' },
+    { role: 'كاشير', count: 1, color: '#059669' },
+    { role: 'ويتر', count: 1, color: '#d97706' },
+    { role: 'شيف', count: 1, color: '#dc2626' },
+  ];
 
   return (
     <div className="butter-inspector-root relative w-full overflow-hidden flex flex-col" style={{ height: '860px' }} dir="rtl">
@@ -82,6 +90,19 @@ export function CompactInspector() {
             <Tooltip>
               <TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-9 w-9 text-green-600 hover:text-green-700 hover:bg-green-50"><MessageCircle className="w-5 h-5" /></Button></TooltipTrigger>
               <TooltipContent>بث واتساب</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-3 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-semibold" onClick={() => window.print()}>
+                  <FileDown className="w-4 h-4" />
+                  <span className="text-xs">تصدير PDF</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>تصدير الخطة بصيغة PDF</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-9 w-9 text-slate-600"><Printer className="w-5 h-5" /></Button></TooltipTrigger>
+              <TooltipContent>طباعة</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-9 w-9 text-slate-600"><History className="w-5 h-5" /></Button></TooltipTrigger>
@@ -146,8 +167,8 @@ export function CompactInspector() {
         </div>
       </div>
 
-      {/* Canvas Area */}
-      <main className="flex-1 w-full h-full relative butter-canvas-pattern pt-24" onClick={() => setSelectedZoneId(null)}>
+      {/* Canvas Area — leave room on the right for the always-visible inspector */}
+      <main className="flex-1 h-full relative butter-canvas-pattern pt-24 pr-[336px]" onClick={() => setSelectedZoneId(null)}>
         {ZONES.map((zone) => (
           <div
             key={zone.id}
@@ -193,16 +214,19 @@ export function CompactInspector() {
         ))}
       </main>
 
-      {/* Floating Inspector Panel */}
-      <div 
-        className={`absolute top-24 right-4 bottom-24 w-80 butter-glass rounded-2xl border border-slate-200/60 shadow-xl transition-all duration-300 ease-out transform ${
-          selectedZoneId ? 'translate-x-0 opacity-100' : 'translate-x-8 opacity-0 pointer-events-none'
-        } flex flex-col z-20`}
+      {/* Always-visible Inspector Panel — overview when nothing selected, zone details when a zone is clicked */}
+      <aside
+        className="absolute top-24 right-4 bottom-6 w-80 butter-glass rounded-2xl border border-slate-200/60 shadow-xl flex flex-col z-20"
       >
-        {selectedZone && (
+        {selectedZone ? (
           <>
             <div className="p-5 border-b border-slate-100/50 flex justify-between items-start">
               <div>
+                <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
+                  <button onClick={() => setSelectedZoneId(null)} className="hover:text-amber-600 transition-colors">نظرة عامة</button>
+                  <ChevronLeft className="w-3 h-3 rotate-180" />
+                  <span>منطقة</span>
+                </div>
                 <h3 className="font-bold text-lg text-slate-800">{selectedZone.name}</h3>
                 <p className="text-sm text-slate-500 mt-1">تفاصيل المنطقة والتغطية</p>
               </div>
@@ -210,7 +234,7 @@ export function CompactInspector() {
                 <X className="w-4 h-4" />
               </Button>
             </div>
-            
+
             <ScrollArea className="flex-1 p-5" dir="rtl">
               <div className="space-y-6">
                 <div>
@@ -218,17 +242,17 @@ export function CompactInspector() {
                     <h4 className="text-sm font-bold text-slate-700">الموظفين المعينين</h4>
                     <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">{selectedZone.employeeIds.length}</Badge>
                   </div>
-                  
+
                   <div className="space-y-2">
                     {selectedZone.employeeIds.map((empId) => {
                       const emp = EMPLOYEES.find(e => e.id === empId);
                       if (!emp) return null;
                       const role = ROLES[emp.roleId as keyof typeof ROLES];
                       const Icon = role.icon;
-                      
+
                       return (
                         <div key={emp.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50/80 transition-colors border border-transparent hover:border-slate-100 group">
-                          <div 
+                          <div
                             className={`w-10 h-10 rounded-full flex items-center justify-center text-white shrink-0 shadow-sm`}
                             style={{ backgroundColor: role.color }}
                           >
@@ -245,7 +269,7 @@ export function CompactInspector() {
                       );
                     })}
                   </div>
-                  
+
                   <Button variant="outline" className="w-full mt-3 bg-white/50 border-dashed text-slate-500 hover:text-amber-600 hover:border-amber-200 hover:bg-amber-50/50">
                     <UserPlus className="w-4 h-4 ml-2" />
                     تعيين موظف
@@ -271,8 +295,97 @@ export function CompactInspector() {
               </div>
             </ScrollArea>
           </>
+        ) : (
+          <>
+            <div className="p-5 border-b border-slate-100/50">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center text-amber-600">
+                  <LayoutGrid className="w-4 h-4" />
+                </div>
+                <h3 className="font-bold text-lg text-slate-800">نظرة عامة</h3>
+              </div>
+              <p className="text-sm text-slate-500">الوردية الصباحية · فرع الرياض</p>
+            </div>
+
+            <ScrollArea className="flex-1 p-5" dir="rtl">
+              <div className="space-y-6">
+                {/* Coverage progress */}
+                <div>
+                  <div className="flex justify-between items-baseline mb-2">
+                    <h4 className="text-sm font-bold text-slate-700">تغطية الوردية</h4>
+                    <span className="text-2xl font-extrabold text-amber-600 tabular-nums">82%</span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
+                    <div className="h-full rounded-full bg-gradient-to-l from-amber-400 to-amber-500" style={{ width: '82%' }} />
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-500 mt-2">
+                    <span>{totalAssigned} موظف معيّن</span>
+                    <span>من أصل 28</span>
+                  </div>
+                </div>
+
+                <Separator className="bg-slate-100/50" />
+
+                {/* Missing roles */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertCircle className="w-4 h-4 text-rose-500" />
+                    <h4 className="text-sm font-bold text-slate-700">أدوار ناقصة</h4>
+                    <Badge variant="outline" className="text-rose-600 border-rose-200 bg-rose-50 mr-auto">5</Badge>
+                  </div>
+                  <div className="space-y-2">
+                    {missingByRole.map((m) => (
+                      <div key={m.role} className="flex items-center gap-3 p-2.5 rounded-xl bg-rose-50/40 border border-rose-100/60">
+                        <div className="w-8 h-8 rounded-full shrink-0" style={{ backgroundColor: m.color, opacity: 0.18 }} />
+                        <span className="text-sm font-medium text-slate-700 flex-1">{m.role}</span>
+                        <span className="text-sm font-bold text-rose-600 tabular-nums">×{m.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <Separator className="bg-slate-100/50" />
+
+                {/* Zones list */}
+                <div>
+                  <h4 className="text-sm font-bold text-slate-700 mb-3">المناطق ({ZONES.length})</h4>
+                  <div className="space-y-1.5">
+                    {ZONES.map((z) => (
+                      <button
+                        key={z.id}
+                        onClick={(e) => { e.stopPropagation(); setSelectedZoneId(z.id); }}
+                        className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-amber-50/60 border border-transparent hover:border-amber-100 transition-colors text-right group"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 group-hover:bg-amber-100 flex items-center justify-center text-slate-500 group-hover:text-amber-600 shrink-0">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                        <span className="text-sm font-medium text-slate-700 flex-1 truncate">{z.name}</span>
+                        <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-none text-xs">
+                          {z.employeeIds.length}
+                        </Badge>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <Separator className="bg-slate-100/50" />
+
+                {/* Export */}
+                <div className="space-y-2">
+                  <Button className="w-full bg-amber-500 hover:bg-amber-600 text-white shadow-sm shadow-amber-500/20" onClick={() => window.print()}>
+                    <FileDown className="w-4 h-4 ml-2" />
+                    تصدير الخطة (PDF)
+                  </Button>
+                  <Button variant="outline" className="w-full">
+                    <MessageCircle className="w-4 h-4 ml-2" />
+                    إرسال للموظفين (واتساب)
+                  </Button>
+                </div>
+              </div>
+            </ScrollArea>
+          </>
         )}
-      </div>
+      </aside>
 
       {/* Floating Action Button (Bottom Left) */}
       <div className="absolute bottom-6 left-6 z-20">
