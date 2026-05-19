@@ -864,39 +864,154 @@ export default function FloorPlanPage() {
     onError: (e: any) => toast({ title: "فشل الحذف", description: e?.message, variant: "destructive" }),
   });
 
-  // Build a readable Arabic message summarizing the current shift for
-  // WhatsApp/SMS. Group employees by role; list empty slots at the bottom.
+  // Bilingual (Arabic + English) labels and visual emoji per role so the
+  // shared WhatsApp/SMS message is understandable to both Arabic- and
+  // English-speaking staff and looks visually friendly.
+  const ROLE_BILINGUAL: Record<string, { en: string; emoji: string }> = {
+    "مدير الفرع":   { en: "Branch Manager", emoji: "👑" },
+    "مشرف":         { en: "Supervisor",     emoji: "🛡️" },
+    "كاشير":        { en: "Cashier",        emoji: "💵" },
+    "ويتر":         { en: "Waiter",         emoji: "🍽️" },
+    "شيف":          { en: "Chef",           emoji: "👨‍🍳" },
+    "مساعد شيف":    { en: "Sous Chef",      emoji: "🍲" },
+    "باريستا":      { en: "Barista",        emoji: "☕" },
+    "عامل نظافة":   { en: "Cleaner",        emoji: "🧹" },
+    "مضيف":         { en: "Host",           emoji: "🤝" },
+    "أمين مخزن":    { en: "Storekeeper",    emoji: "📦" },
+    "حلواني":       { en: "Pastry Chef",    emoji: "🧁" },
+    "عامل":         { en: "Worker",         emoji: "👷" },
+    "محضر طلبات":   { en: "Order Prep",     emoji: "📋" },
+  };
+  const SHIFT_BILINGUAL: Record<string, { ar: string; en: string; emoji: string }> = {
+    morning:   { ar: "صباحي",  en: "Morning",   emoji: "🌅" },
+    evening:   { ar: "مسائي",  en: "Evening",   emoji: "🌆" },
+    night:     { ar: "ليلي",   en: "Night",     emoji: "🌙" },
+    full_day:  { ar: "يوم كامل", en: "Full Day", emoji: "☀️" },
+  };
+
+  // Build a rich bilingual (AR/EN) message with emojis + a simple zone-based
+  // visual layout. Suitable for WhatsApp where emojis and box-drawing chars
+  // render beautifully on both phones and desktop.
   const buildShareMessage = () => {
     if (!data) return "";
     const branchName = branches.find(b => b.id === selectedBranchId)?.name || "";
+    const shiftMeta = SHIFT_BILINGUAL[selectedShift] || { ar: selectedShift, en: selectedShift, emoji: "🕐" };
     const shiftLabel = SHIFTS.find(s => s.value === selectedShift)?.label || selectedShift;
     const empById = new Map((data.employees || []).map(e => [e.id, e]));
     const filled = data.assignments.filter(a => a.employeeId != null);
     const empty = data.assignments.filter(a => a.employeeId == null);
-    const byRole = new Map<string, string[]>();
-    for (const a of filled) {
-      const e = empById.get(a.employeeId as number);
-      const name = e?.fullName || e?.name || `موظف #${a.employeeId}`;
-      const key = a.role || "—";
-      if (!byRole.has(key)) byRole.set(key, []);
-      byRole.get(key)!.push(name);
+    const links = data.links || [];
+
+    // Group by zone, then by role within zone, so the message mirrors the
+    // physical layout of the branch (Kitchen, Bar, Floor, etc.).
+    const zonesById = new Map<number, { name: string }>();
+    for (const z of (data.zones || [])) zonesById.set(z.id, { name: z.name });
+    const pointInZone = (a: any) => {
+      for (const z of (data.zones || [])) {
+        if (a.x >= z.x && a.x <= z.x + z.width && a.y >= z.y && a.y <= z.y + z.height) {
+          return z;
+        }
+      }
+      return null;
+    };
+    const byZone = new Map<string, { filled: any[]; empty: any[] }>();
+    const ensureZone = (k: string) => {
+      if (!byZone.has(k)) byZone.set(k, { filled: [], empty: [] });
+      return byZone.get(k)!;
+    };
+    for (const a of data.assignments) {
+      const z = pointInZone(a);
+      const zoneName = z?.name || "خارج المناطق / Other";
+      const bucket = ensureZone(zoneName);
+      if (a.employeeId != null) bucket.filled.push(a); else bucket.empty.push(a);
     }
+
     const lines: string[] = [];
-    lines.push(`📋 توزيع المهام — ${branchName}`);
-    lines.push(`🗓️ ${selectedDate} • ${shiftLabel}`);
+    // Header — bilingual title with decorative separator
+    lines.push("━━━━━━━━━━━━━━━━━━━━━");
+    lines.push(`📋 *توزيع المهام / Shift Roster*`);
+    lines.push(`🏢 ${branchName}`);
+    lines.push(`🗓️ ${selectedDate}  •  ${shiftMeta.emoji} ${shiftLabel} / ${shiftMeta.en}`);
+    lines.push("━━━━━━━━━━━━━━━━━━━━━");
+
+    // Summary chips
     lines.push("");
-    for (const [role, names] of byRole.entries()) {
-      lines.push(`• ${role}: ${names.join("، ")}`);
-    }
-    if (empty.length) {
+    lines.push(`📊 *الملخّص / Summary*`);
+    lines.push(`   ✅ مُعيَّن / Assigned: *${filled.length}*`);
+    lines.push(`   ⚠️ شاغر / Vacant:   *${empty.length}*`);
+    if (links.length) lines.push(`   🔗 روابط مهام / Multi-task links: *${links.length}*`);
+
+    // Body — per zone
+    for (const [zoneName, bucket] of byZone.entries()) {
+      if (!bucket.filled.length && !bucket.empty.length) continue;
       lines.push("");
-      lines.push(`⚠️ مواقع شاغرة (${empty.length}):`);
-      const ec = new Map<string, number>();
-      for (const a of empty) ec.set(a.role || "—", (ec.get(a.role || "—") || 0) + 1);
-      for (const [role, n] of ec.entries()) lines.push(`  - ${role} × ${n}`);
+      lines.push(`📍 *${zoneName}*`);
+      // Group assignments by role
+      const roleMap = new Map<string, string[]>();
+      for (const a of bucket.filled) {
+        const e = empById.get(a.employeeId as number);
+        const name = e?.fullName || e?.name || `#${a.employeeId}`;
+        const key = a.role || "—";
+        if (!roleMap.has(key)) roleMap.set(key, []);
+        roleMap.get(key)!.push(name);
+      }
+      for (const [role, names] of roleMap.entries()) {
+        const meta = ROLE_BILINGUAL[role];
+        const emoji = meta?.emoji || "👤";
+        const en = meta?.en || role;
+        lines.push(`  ${emoji} ${role} / ${en}`);
+        for (const name of names) {
+          lines.push(`     └─ ${name}`);
+        }
+      }
+      if (bucket.empty.length) {
+        const ec = new Map<string, number>();
+        for (const a of bucket.empty) ec.set(a.role || "—", (ec.get(a.role || "—") || 0) + 1);
+        for (const [role, n] of ec.entries()) {
+          const meta = ROLE_BILINGUAL[role];
+          const en = meta?.en || role;
+          lines.push(`  ⚠️ شاغر / Vacant — ${role} / ${en}  ×${n}`);
+        }
+      }
     }
+
+    // Multi-task links section (employee covers two positions)
+    if (links.length) {
+      lines.push("");
+      lines.push(`🔗 *مهام مشتركة / Multi-task Coverage*`);
+      for (const l of links) {
+        const fa = data.assignments.find(a => a.id === l.fromAssignmentId);
+        const ta = data.assignments.find(a => a.id === l.toAssignmentId);
+        if (!fa || !ta) continue;
+        const fe = fa.employeeId ? empById.get(fa.employeeId as number) : null;
+        const te = ta.employeeId ? empById.get(ta.employeeId as number) : null;
+        const fName = fe?.fullName || fe?.name || (fa.role || "—");
+        const tName = te?.fullName || te?.name || (ta.role || "—");
+        const fRole = ROLE_BILINGUAL[fa.role || ""]?.emoji || "👤";
+        const tRole = ROLE_BILINGUAL[ta.role || ""]?.emoji || "👤";
+        lines.push(`  ${fRole} ${fName} (${fa.role}) ⇄ ${tRole} ${tName} (${ta.role})`);
+      }
+    }
+
+    // Legend — bilingual key for emojis used
     lines.push("");
-    lines.push(`— نظام إدارة باتر`);
+    lines.push(`🗝️ *الرموز / Legend*`);
+    const usedRoles = new Set<string>(data.assignments.map(a => a.role).filter(Boolean) as string[]);
+    const legend = Array.from(usedRoles)
+      .map(r => ROLE_BILINGUAL[r] ? `${ROLE_BILINGUAL[r].emoji} ${r} / ${ROLE_BILINGUAL[r].en}` : null)
+      .filter(Boolean) as string[];
+    if (legend.length) {
+      // 2 per line for compactness
+      for (let i = 0; i < legend.length; i += 2) {
+        lines.push(`   ${legend[i]}${legend[i + 1] ? "   •   " + legend[i + 1] : ""}`);
+      }
+    }
+    lines.push(`   ✅ مُعيَّن / Assigned   •   ⚠️ شاغر / Vacant   •   🔗 مهام مشتركة / Linked`);
+
+    // Footer
+    lines.push("");
+    lines.push("━━━━━━━━━━━━━━━━━━━━━");
+    lines.push(`— نظام باتر / Butter Bakery System`);
     return lines.join("\n");
   };
 
