@@ -647,6 +647,9 @@ export default function FloorPlanPage() {
   // WhatsApp Web with the prepared bilingual caption so the user attaches the
   // freshly-downloaded file.
   const sharePdfViaWhatsApp = async () => {
+    // Re-entrancy guard: a second rapid click can fire before React re-renders
+    // the disabled state on the button, so we also block at the handler level.
+    if (sharingPdf) return;
     if (!printableRef.current || !data) {
       toast({ title: "تعذّر تحضير الملف", variant: "destructive" });
       return;
@@ -714,9 +717,14 @@ export default function FloorPlanPage() {
           toast({ title: "تمت مشاركة الملف" });
           return;
         } catch (err: any) {
-          // User cancelled — silently exit.
-          if (err?.name === "AbortError") return;
-          // Fall through to download fallback otherwise.
+          // Treat any user-cancel signal as silent exit (do NOT trigger
+          // fallback download + WhatsApp tab — would be confusing UX).
+          const name = err?.name || "";
+          const msg = (err?.message || "").toLowerCase();
+          if (name === "AbortError" || name === "NotAllowedError" || msg.includes("cancel") || msg.includes("abort")) {
+            return;
+          }
+          // Fall through to download fallback for real failures.
         }
       }
 
@@ -753,6 +761,8 @@ export default function FloorPlanPage() {
   // pixel-perfect image — so the receiver sees exactly what we see, regardless
   // of their phone's font support for emojis or box-drawing characters.
   const sharePngViaWhatsApp = async () => {
+    // Re-entrancy guard — see comment in sharePdfViaWhatsApp.
+    if (sharingPng) return;
     if (!printableRef.current || !data) {
       toast({ title: "تعذّر تحضير الصورة", variant: "destructive" });
       return;
@@ -787,7 +797,11 @@ export default function FloorPlanPage() {
           toast({ title: "تمت مشاركة الصورة" });
           return;
         } catch (err: any) {
-          if (err?.name === "AbortError") return;
+          const name = err?.name || "";
+          const msg = (err?.message || "").toLowerCase();
+          if (name === "AbortError" || name === "NotAllowedError" || msg.includes("cancel") || msg.includes("abort")) {
+            return;
+          }
         }
       }
       // Fallback: download + open WhatsApp Web with caption.
