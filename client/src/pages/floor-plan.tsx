@@ -90,9 +90,6 @@ const ZONE_PRESETS: ZonePreset[] = [
   { name: "صالة الطعام",  color: "#bfdbfe", defaultRole: "ويتر",       width: 320, height: 200 },
   { name: "الاستقبال",    color: "#a5f3fc", defaultRole: "مضيف",       width: 180, height: 120 },
   { name: "المخزن",       color: "#e5e7eb", defaultRole: "أمين مخزن",  width: 200, height: 140 },
-  { name: "غرفة الموظفين", color: "#ddd6fe", defaultRole: null,        width: 180, height: 120 },
-  { name: "النظافة",      color: "#cbd5e1", defaultRole: "عامل نظافة", width: 140, height: 100 },
-  { name: "بار العصائر",  color: "#fde68a", defaultRole: "باريستا",    width: 200, height: 130 },
   { name: "محطة التحضير", color: "#d9f99d", defaultRole: "محضر طلبات", width: 220, height: 140 },
 ];
 
