@@ -63,20 +63,58 @@ async function generateOfferNumber(): Promise<string> {
 }
 
 function buildOfferMessage(offer: any, link: string): string {
-  return `السلام عليكم ورحمة الله وبركاته
-${offer.candidateName} المحترم/ة
+  const positionLine = offer.positionEn
+    ? `*${offer.position}* / _${offer.positionEn}_`
+    : `*${offer.position}*`;
+  const nameLine = offer.candidateNameEn
+    ? `${offer.candidateName} / ${offer.candidateNameEn}`
+    : offer.candidateName;
 
-نتشرف بأن نقدم لكم عرض عمل من شركة الزبد الأفضل التجارية للوظيفة:
-*${offer.position}*
+  return `🥐 *BUTTER BAKERY* 🥐
+🌟 *عرض عمل رسمي* | *Official Job Offer* 🌟
+━━━━━━━━━━━━━━━━━━━━
 
-يرجى مراجعة العرض كاملاً والرد عليه (قبول أو رفض) خلال *${offer.validityDays} يوماً* عبر الرابط التالي:
+السلام عليكم ورحمة الله وبركاته
+_Peace be upon you,_
+
+عزيزي/عزيزتي *${nameLine}* المحترم/ة 🤝
+_Dear ${offer.candidateNameEn || offer.candidateName},_
+
+━━━━━━━━━━━━━━━━━━━━
+🎉 *يسعدنا في باتر بيكري أن نرحّب بانضمامك إلى عائلتنا!*
+🎉 _We at Butter Bakery are delighted to welcome you to our family!_
+━━━━━━━━━━━━━━━━━━━━
+
+📋 *تفاصيل العرض | Offer Details:*
+
+💼 *الوظيفة | Position:*
+${positionLine}
+
+🏢 *الشركة | Company:*
+شركة الزبد الأفضل التجارية
+_Best Butter Trading Company_
+
+📄 *رقم العرض | Offer No.:*
+\`${offer.offerNumber}\`
+
+━━━━━━━━━━━━━━━━━━━━
+🔗 *رابط العرض الكامل | Full Offer Link:*
 ${link}
 
-ملاحظة: الرابط ينتهي بعد ${offer.validityDays} يوم من تاريخ الإرسال.
+⏰ *صالح لمدة | Valid for:* ${offer.validityDays} ${offer.validityDays === 1 ? "يوم | day" : "أيام | days"}
+✍️ يمكنك مراجعة جميع التفاصيل (الراتب، البدلات، المزايا) والرد بالقبول أو الرفض إلكترونياً.
+✍️ _Please review all details (salary, allowances, benefits) and respond electronically._
+━━━━━━━━━━━━━━━━━━━━
 
-مع تحياتنا،
-إدارة الموارد البشرية
-شركة الزبد الأفضل التجارية`;
+نتطلع لرؤيتك ضمن فريقنا قريباً 🌹
+_Looking forward to seeing you on our team soon!_
+
+مع أطيب التحيات،
+_With our warmest regards,_
+
+👥 *إدارة الموارد البشرية*
+👥 _Human Resources Department_
+*Butter Bakery* | باتر بيكري`;
 }
 
 export function registerJobOfferRoutes(app: Express) {

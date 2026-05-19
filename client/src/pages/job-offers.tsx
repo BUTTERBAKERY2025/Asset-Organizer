@@ -696,7 +696,18 @@ export default function JobOffersPage() {
                 </Button>
                 {shareLink && (
                   <a
-                    href={`https://wa.me/?text=${encodeURIComponent(`عرض العمل: ${shareLink.link}`)}`}
+                    href={`https://wa.me/?text=${encodeURIComponent(
+                      `🥐 *BUTTER BAKERY* 🥐\n🌟 *عرض عمل رسمي* | *Official Job Offer* 🌟\n━━━━━━━━━━━━━━━━━━━━\n\n` +
+                      `السلام عليكم ورحمة الله وبركاته\n_Peace be upon you,_\n\n` +
+                      `عزيزي/عزيزتي *${shareLink.offer.candidateName}* المحترم/ة 🤝\n\n` +
+                      `🎉 *يسعدنا في باتر بيكري أن نرحّب بانضمامك إلى عائلتنا!*\n` +
+                      `🎉 _We at Butter Bakery are delighted to welcome you to our family!_\n\n` +
+                      `💼 *الوظيفة | Position:* ${shareLink.offer.position}\n` +
+                      `📄 *رقم العرض | Offer No.:* ${shareLink.offer.offerNumber}\n\n` +
+                      `🔗 *رابط العرض | Offer Link:*\n${shareLink.link}\n\n` +
+                      `⏰ *صالح لمدة | Valid for:* ${shareLink.offer.validityDays} أيام / days\n\n` +
+                      `مع أطيب التحيات،\n_With our warmest regards,_\n👥 *إدارة الموارد البشرية | HR Department*\n*Butter Bakery* | باتر بيكري`
+                    )}`}
                     target="_blank"
                     rel="noreferrer"
                     className="flex-1"
