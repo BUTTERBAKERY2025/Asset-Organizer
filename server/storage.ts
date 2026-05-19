@@ -584,6 +584,9 @@ import {
   floorPlanTemplates,
   type FloorPlanTemplate,
   type InsertFloorPlanTemplate,
+  floorPlanLinks,
+  type FloorPlanLink,
+  type InsertFloorPlanLink,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -17268,6 +17271,34 @@ export class DatabaseStorage implements IStorage {
         eq(floorPlanAssignments.shiftType, shiftType),
       ))
       .returning({ id: floorPlanAssignments.id });
+    return result.length > 0;
+  }
+
+  // ----- Floor Plan Links (multi-task visual connections) -----
+  // Links are shift-scoped — a connection drawn in the morning shift won't
+  // bleed into evening. Order of `from`/`to` is normalized (smaller id first)
+  // before insert so the unique index treats A→B and B→A as the same link.
+  async getFloorPlanLinks(floorPlanId: number, shiftType?: string): Promise<FloorPlanLink[]> {
+    if (shiftType) {
+      return db.select().from(floorPlanLinks)
+        .where(and(eq(floorPlanLinks.floorPlanId, floorPlanId), eq(floorPlanLinks.shiftType, shiftType)));
+    }
+    return db.select().from(floorPlanLinks).where(eq(floorPlanLinks.floorPlanId, floorPlanId));
+  }
+
+  async createFloorPlanLink(data: InsertFloorPlanLink): Promise<FloorPlanLink> {
+    const a = Math.min(data.fromAssignmentId, data.toAssignmentId);
+    const b = Math.max(data.fromAssignmentId, data.toAssignmentId);
+    const [created] = await db.insert(floorPlanLinks)
+      .values({ ...data, fromAssignmentId: a, toAssignmentId: b })
+      .returning();
+    return created;
+  }
+
+  async deleteFloorPlanLink(id: number, floorPlanId: number): Promise<boolean> {
+    const result = await db.delete(floorPlanLinks)
+      .where(and(eq(floorPlanLinks.id, id), eq(floorPlanLinks.floorPlanId, floorPlanId)))
+      .returning({ id: floorPlanLinks.id });
     return result.length > 0;
   }
 

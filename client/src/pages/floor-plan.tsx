@@ -35,7 +35,7 @@ import {
   ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { useReactToPrint } from "react-to-print";
-import { ZoomIn, ZoomOut, Maximize2, Lock, Unlock, Magnet, Grid3x3, Search, Pencil, MousePointer2, ArrowUp, ArrowDown, FileDown, PanelLeft, PanelRight } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize2, Lock, Unlock, Magnet, Grid3x3, Search, Pencil, MousePointer2, ArrowUp, ArrowDown, FileDown, PanelLeft, PanelRight, Link2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Link } from "wouter";
 import type { Branch } from "@shared/schema";
@@ -60,6 +60,9 @@ interface FloorPlanData {
   zones: Array<{ id: number; name: string; color: string; x: number; y: number; width: number; height: number; rotation: number }>;
   assignments: Array<{ id: number; employeeId: number | null; role: string | null; notes: string | null; x: number; y: number; shiftType: ShiftType }>;
   employees: BranchEmployee[];
+  // Multi-task links — drawn lines between two assignments in the same shift.
+  // Indicates a shared/cross-functional role visually only.
+  links?: Array<{ id: number; fromAssignmentId: number; toAssignmentId: number; label: string | null; color: string; shiftType: ShiftType }>;
   shiftType: ShiftType;
 }
 
@@ -199,6 +202,7 @@ function PrintableFloorPlan(props: {
   shapeStyle: (s: any) => any;
 }) {
   const { printRef, data, branches, selectedBranchId, selectedShift, selectedDate, employeeById, emptySlotsCount, getRoleDef } = props;
+  const printLinks: any[] = data?.links || [];
   // A4 landscape printable area at 8mm margins ≈ 281×196mm → at 96dpi ≈ 1062×740px.
   // We use slightly conservative numbers to allow for browser rounding + root
   // padding (p-3 = 24px vertical), header (~58px) and footer (~36px).
@@ -247,6 +251,28 @@ function PrintableFloorPlan(props: {
                 {z.name}
               </div>
             ))}
+            {/* Multi-task links — drawn under pawns just like the live canvas. */}
+            {printLinks.length > 0 && (
+              <svg
+                className="absolute inset-0"
+                width={data.plan.width}
+                height={data.plan.height}
+                style={{ pointerEvents: "none", zIndex: 5 }}
+              >
+                {printLinks.map((l: any) => {
+                  const from = data.assignments.find((a: any) => a.id === l.fromAssignmentId);
+                  const to = data.assignments.find((a: any) => a.id === l.toAssignmentId);
+                  if (!from || !to) return null;
+                  return (
+                    <line key={l.id}
+                      x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+                      stroke={l.color || "#6366f1"} strokeWidth={3.5}
+                      strokeDasharray="6 4" strokeLinecap="round" opacity={0.85}
+                    />
+                  );
+                })}
+              </svg>
+            )}
             {/* Assignments — use the same PersonAvatar component as the on-screen
                 canvas so PDF output matches the live view exactly. */}
             {data.assignments.map((a: any) => {
@@ -518,6 +544,62 @@ export default function FloorPlanPage() {
   const touchDragRef = useRef<TouchPayload | null>(null);
   const [touchGhost, setTouchGhost] = useState<{ x: number; y: number; label: string } | null>(null);
 
+  // ---- Multi-task linking state ----
+  // `linkingFrom` is the source assignment id while the user is dragging a
+  // link-line. `linkCursor` tracks the live pointer position in PLAN
+  // coordinates so we can render the ghost line. Cleared on pointerup.
+  const [linkingFrom, setLinkingFrom] = useState<number | null>(null);
+  const [linkCursor, setLinkCursor] = useState<{ x: number; y: number } | null>(null);
+  const beginLinkDrag = (assignmentId: number, e: React.PointerEvent) => {
+    if (locked) return;
+    e.stopPropagation();
+    e.preventDefault();
+    setLinkingFrom(assignmentId);
+    // Initial cursor position in plan coords
+    if (canvasRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect();
+      setLinkCursor({ x: (e.clientX - rect.left) / zoom, y: (e.clientY - rect.top) / zoom });
+    }
+  };
+  useEffect(() => {
+    if (linkingFrom == null) return;
+    const onMove = (ev: PointerEvent) => {
+      if (!canvasRef.current) return;
+      const rect = canvasRef.current.getBoundingClientRect();
+      setLinkCursor({ x: (ev.clientX - rect.left) / zoom, y: (ev.clientY - rect.top) / zoom });
+    };
+    const onUp = (ev: PointerEvent) => {
+      // Find the assignment under the pointer (if any) by walking up from
+      // the element at the drop point. Pawns expose data-assignment-id.
+      const target = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
+      const pawn = target?.closest?.("[data-assignment-id]") as HTMLElement | null;
+      const toId = pawn ? parseInt(pawn.dataset.assignmentId || "", 10) : NaN;
+      if (!isNaN(toId) && toId !== linkingFrom) {
+        // Prevent duplicate pair (either direction) — server enforces it too
+        const exists = (data?.links || []).some(l =>
+          (l.fromAssignmentId === linkingFrom && l.toAssignmentId === toId) ||
+          (l.fromAssignmentId === toId && l.toAssignmentId === linkingFrom));
+        if (!exists) {
+          createLink.mutate({ fromAssignmentId: linkingFrom, toAssignmentId: toId });
+        } else {
+          toast({ title: "هاتان البطاقتان مربوطتان بالفعل" });
+        }
+      }
+      setLinkingFrom(null);
+      setLinkCursor(null);
+    };
+    const onEsc = (ev: KeyboardEvent) => { if (ev.key === "Escape") { setLinkingFrom(null); setLinkCursor(null); } };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("keydown", onEsc);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("keydown", onEsc);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkingFrom, zoom, data?.links]);
+
   // ---- Print / PDF export ----
   // Uses react-to-print to capture the canvas + a header for a printable A4
   // landscape view. The browser's "Save as PDF" path then turns it into a PDF.
@@ -633,11 +715,39 @@ export default function FloorPlanPage() {
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey });
       const prev = queryClient.getQueryData<any>(queryKey);
-      patchCache(d => ({ ...d, assignments: d.assignments.filter((a: any) => a.id !== id) }));
+      patchCache(d => ({
+        ...d,
+        assignments: d.assignments.filter((a: any) => a.id !== id),
+        // Drop any links touching the deleted pawn so the SVG doesn't
+        // leave a dangling ghost line until the next refetch.
+        links: (d.links || []).filter((l: any) => l.fromAssignmentId !== id && l.toAssignmentId !== id),
+      }));
       return { prev };
     },
     onError: (_e, _v, ctx: any) => { if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev); },
     onSuccess: () => { setEditAssignDialog(null); },
+  });
+
+  // ----- Multi-task Links (visual connections between two pawns) -----
+  // Marks employees who cover multiple positions in the same shift. The line
+  // is shift-scoped — switching to another shift hides it. Created by
+  // dragging from one pawn's link handle to another pawn.
+  const createLink = useMutation({
+    mutationFn: async (body: { fromAssignmentId: number; toAssignmentId: number; label?: string | null }) =>
+      (await apiRequest("POST", `/api/floor-plans/${selectedBranchId}/links`, { ...body, shiftType: selectedShift })).json(),
+    onSuccess: () => { invalidate(); toast({ title: "تم ربط البطاقتين" }); },
+    onError: (e: any) => toast({ title: "فشل الربط", description: e?.message, variant: "destructive" }),
+  });
+  const deleteLink = useMutation({
+    mutationFn: async (id: number) => (await apiRequest("DELETE", `/api/floor-plans/${selectedBranchId}/links/${id}`)).json(),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey });
+      const prev = queryClient.getQueryData<any>(queryKey);
+      patchCache(d => ({ ...d, links: (d.links || []).filter((l: any) => l.id !== id) }));
+      return { prev };
+    },
+    onError: (_e, _v, ctx: any) => { if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev); },
+    onSuccess: () => toast({ title: "تم حذف الربط" }),
   });
   const updatePlan = useMutation({
     mutationFn: async (body: any) =>
@@ -2368,6 +2478,69 @@ export default function FloorPlanPage() {
                       </ContextMenu>
                     );})}
 
+                    {/* Multi-task link lines (SVG overlay) — rendered between
+                        zones and pawns so the lines visually sit underneath
+                        the avatars. Uses raw plan coordinates (no zoom math)
+                        since this SVG lives inside the scaled canvas. */}
+                    {(() => {
+                      const links = data.links || [];
+                      const ghost = linkingFrom != null && linkCursor
+                        ? data.assignments.find(a => a.id === linkingFrom)
+                        : null;
+                      if (!links.length && !ghost) return null;
+                      return (
+                        <svg
+                          className="absolute inset-0"
+                          width={data.plan.width}
+                          height={data.plan.height}
+                          style={{ pointerEvents: "none", zIndex: 5 }}
+                          data-testid="svg-links-overlay"
+                        >
+                          {links.map(l => {
+                            const from = data.assignments.find(a => a.id === l.fromAssignmentId);
+                            const to = data.assignments.find(a => a.id === l.toAssignmentId);
+                            if (!from || !to) return null;
+                            return (
+                              <g key={l.id}>
+                                <line
+                                  x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+                                  stroke={l.color || "#6366f1"}
+                                  strokeWidth={3.5}
+                                  strokeDasharray="6 4"
+                                  strokeLinecap="round"
+                                  opacity={0.85}
+                                />
+                                {/* Clickable hit area to delete the link */}
+                                <line
+                                  x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+                                  stroke="transparent" strokeWidth={16}
+                                  style={{ pointerEvents: locked ? "none" : "stroke", cursor: "pointer" }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (locked) return;
+                                    if (window.confirm("حذف الربط بين هاتين البطاقتين؟")) {
+                                      deleteLink.mutate(l.id);
+                                    }
+                                  }}
+                                  data-testid={`link-line-${l.id}`}
+                                >
+                                  <title>اضغط لحذف الربط</title>
+                                </line>
+                              </g>
+                            );
+                          })}
+                          {/* Ghost line while dragging */}
+                          {ghost && linkCursor && (
+                            <line
+                              x1={ghost.x} y1={ghost.y} x2={linkCursor.x} y2={linkCursor.y}
+                              stroke="#6366f1" strokeWidth={3} strokeDasharray="5 4"
+                              strokeLinecap="round" opacity={0.6}
+                            />
+                          )}
+                        </svg>
+                      );
+                    })()}
+
                     {/* Role slots (with or without an assigned employee) */}
                     {data.assignments.map(a => {
                       const emp = a.employeeId != null ? employeeById.get(a.employeeId) : null;
@@ -2426,6 +2599,7 @@ export default function FloorPlanPage() {
                           className="absolute flex flex-col items-center cursor-grab active:cursor-grabbing group"
                           style={{ left: a.x - 30, top: a.y - 30, zIndex: 10 + (((a as any).zIndex ?? 0)) }}
                           data-testid={`assignment-${a.id}`}
+                          data-assignment-id={a.id}
                           title={isEmpty ? `${def.label} — غير معيّن` : `${emp!.employeeName} — ${def.label}`}
                         >
                           <div className="group-hover:scale-110 transition-transform drop-shadow-lg">
@@ -2454,6 +2628,27 @@ export default function FloorPlanPage() {
                               data-testid={`btn-edit-assignment-${a.id}`}
                             >
                               <Pencil className="w-3 h-3" />
+                            </button>
+                          )}
+                          {/* Link handle — drag from here to another pawn to
+                              create a multi-task link. Stops propagation so
+                              the pawn itself doesn't start a move drag. */}
+                          {!locked && (
+                            <button
+                              type="button"
+                              onPointerDown={(e) => beginLinkDrag(a.id, e)}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                              className={`absolute -top-1 -left-1 w-6 h-6 rounded-full shadow-md border flex items-center justify-center z-20 transition-opacity touch-none ${
+                                linkingFrom === a.id
+                                  ? "bg-indigo-500 text-white border-indigo-600 opacity-100"
+                                  : "bg-white text-indigo-600 border-border opacity-0 group-hover:opacity-100"
+                              }`}
+                              title="اسحب إلى بطاقة أخرى لإنشاء ربط (multi-task)"
+                              data-testid={`btn-link-assignment-${a.id}`}
+                              style={{ cursor: linkingFrom === a.id ? "grabbing" : "crosshair" }}
+                            >
+                              <Link2 className="w-3 h-3" />
                             </button>
                           )}
                           <div

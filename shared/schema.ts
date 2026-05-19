@@ -10,6 +10,7 @@ import {
   index,
   uniqueIndex,
   unique,
+  check,
   jsonb,
   boolean,
   doublePrecision,
@@ -10109,3 +10110,34 @@ export const insertFloorPlanTemplateSchema = createInsertSchema(floorPlanTemplat
 });
 export type FloorPlanTemplate = typeof floorPlanTemplates.$inferSelect;
 export type InsertFloorPlanTemplate = z.infer<typeof insertFloorPlanTemplateSchema>;
+
+// Multi-task links — visual line connecting two assignments in the same shift,
+// used to indicate one employee (or a tightly-coupled pair) covers both
+// positions. Purely visual; doesn't move employees or change RBAC.
+// Direction is irrelevant — we always store the smaller assignment id in
+// `fromAssignmentId` to make the (from,to) pair unique regardless of which
+// pawn the user dragged from first.
+export const floorPlanLinks = pgTable("floor_plan_links", {
+  id: serial("id").primaryKey(),
+  floorPlanId: integer("floor_plan_id").notNull().references(() => branchFloorPlans.id, { onDelete: "cascade" }),
+  shiftType: text("shift_type").notNull().default("morning"),
+  fromAssignmentId: integer("from_assignment_id").notNull().references(() => floorPlanAssignments.id, { onDelete: "cascade" }),
+  toAssignmentId: integer("to_assignment_id").notNull().references(() => floorPlanAssignments.id, { onDelete: "cascade" }),
+  label: text("label"),
+  color: text("color").notNull().default("#6366f1"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_floor_plan_links_pair")
+    .on(table.floorPlanId, table.shiftType, table.fromAssignmentId, table.toAssignmentId),
+  index("idx_floor_plan_links_plan_shift").on(table.floorPlanId, table.shiftType),
+  // Enforce a canonical ordering at the DB layer so the pair (A,B) and (B,A)
+  // cannot both exist regardless of insert path. Storage layer normalizes
+  // before insert, and this CHECK is a defence-in-depth backstop.
+  check("floor_plan_links_ordered_pair", sql`${table.fromAssignmentId} < ${table.toAssignmentId}`),
+]);
+
+export const insertFloorPlanLinkSchema = createInsertSchema(floorPlanLinks).omit({
+  id: true, createdAt: true,
+});
+export type FloorPlanLink = typeof floorPlanLinks.$inferSelect;
+export type InsertFloorPlanLink = z.infer<typeof insertFloorPlanLinkSchema>;

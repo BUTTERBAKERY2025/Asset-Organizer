@@ -34024,12 +34024,13 @@ export async function registerRoutes(
       const shiftType = normalizeShift(req.query.shift);
       if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
       const plan = await storage.getOrCreateBranchFloorPlan(branchId);
-      const [zones, assignments, employees] = await Promise.all([
+      const [zones, assignments, employees, links] = await Promise.all([
         storage.getFloorPlanZones(plan.id),
         storage.getFloorPlanAssignments(plan.id, shiftType),
         storage.getBranchEmployeesByBranch(branchId, { status: 'active' }).catch(() => []),
+        storage.getFloorPlanLinks(plan.id, shiftType).catch(() => []),
       ]);
-      res.json({ plan, zones, assignments, employees, shiftType });
+      res.json({ plan, zones, assignments, employees, links, shiftType });
     } catch (error: any) {
       console.error("Error fetching floor plan:", error);
       res.status(500).json({ error: error.message || "Failed to fetch floor plan" });
@@ -34243,6 +34244,67 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error deleting assignment:", error);
       res.status(500).json({ error: error.message || "Failed to delete assignment" });
+    }
+  });
+
+  // ===== Multi-task Links (cross-position visual connections) =====
+  // Links are shift-scoped and reference two assignments. Both endpoints must
+  // belong to the same plan + shift; we validate to prevent IDOR / dangling.
+  app.post("/api/floor-plans/:branchId/links", isAuthenticated, requirePermission("floor_plan", "edit"), async (req, res) => {
+    try {
+      const { branchId } = req.params;
+      if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
+      const { fromAssignmentId, toAssignmentId, shiftType, label, color } = req.body || {};
+      const shift = requireShift(shiftType, res);
+      if (!shift) return;
+      const fromId = parseInt(fromAssignmentId, 10);
+      const toId = parseInt(toAssignmentId, 10);
+      if (isNaN(fromId) || isNaN(toId)) {
+        return res.status(400).json({ error: "fromAssignmentId و toAssignmentId مطلوبان" });
+      }
+      if (fromId === toId) {
+        return res.status(400).json({ error: "لا يمكن ربط البطاقة بنفسها" });
+      }
+      const plan = await storage.getOrCreateBranchFloorPlan(branchId);
+      // Both endpoints must exist in this plan + shift.
+      const assignments = await storage.getFloorPlanAssignments(plan.id, shift);
+      const ids = new Set(assignments.map(a => a.id));
+      if (!ids.has(fromId) || !ids.has(toId)) {
+        return res.status(404).json({ error: "إحدى البطاقتين غير موجودة في هذا الشِفت" });
+      }
+      const created = await storage.createFloorPlanLink({
+        floorPlanId: plan.id,
+        shiftType: shift,
+        fromAssignmentId: fromId,
+        toAssignmentId: toId,
+        label: typeof label === "string" && label.trim() ? label.trim() : null,
+        color: typeof color === "string" && /^#[0-9a-fA-F]{6}$/.test(color) ? color : "#6366f1",
+      });
+      auditFloorPlan(req, "create_link", `${plan.id}:${shift}`,
+        `ربط بطاقتين (${shift}) — #${fromId} ↔ #${toId}`);
+      res.status(201).json(created);
+    } catch (error: any) {
+      console.error("Error creating link:", error);
+      if (error?.code === "23505") {
+        return res.status(409).json({ error: "هذا الربط موجود بالفعل" });
+      }
+      res.status(500).json({ error: error.message || "Failed to create link" });
+    }
+  });
+
+  app.delete("/api/floor-plans/:branchId/links/:id", isAuthenticated, requirePermission("floor_plan", "edit"), async (req, res) => {
+    try {
+      const { branchId } = req.params;
+      const id = parseInt(req.params.id, 10);
+      if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
+      const plan = await storage.getOrCreateBranchFloorPlan(branchId);
+      const ok = await storage.deleteFloorPlanLink(id, plan.id);
+      if (!ok) return res.status(404).json({ error: "Link not found" });
+      auditFloorPlan(req, "delete_link", String(plan.id), `حذف ربط #${id}`);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting link:", error);
+      res.status(500).json({ error: error.message || "Failed to delete link" });
     }
   });
 
