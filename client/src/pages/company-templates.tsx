@@ -2305,6 +2305,10 @@ export default function CompanyTemplates() {
                     setLocation("/hr/applications");
                     return;
                   }
+                  if (template.id === "work_start") {
+                    setLocation("/hr/onboarding");
+                    return;
+                  }
                   setSelectedTemplate(template.id);
                   setIsDialogOpen(true);
                 }}
