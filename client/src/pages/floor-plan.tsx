@@ -251,24 +251,41 @@ function PrintableFloorPlan(props: {
                 {z.name}
               </div>
             ))}
-            {/* Multi-task links — drawn under pawns just like the live canvas. */}
+            {/* Multi-task links — drawn under pawns just like the live canvas.
+                Static (no animation) for clean print/PDF output. */}
             {printLinks.length > 0 && (
               <svg
                 className="absolute inset-0"
                 width={data.plan.width}
                 height={data.plan.height}
-                style={{ pointerEvents: "none", zIndex: 5 }}
+                style={{ pointerEvents: "none", zIndex: 5, overflow: "visible" }}
               >
+                <defs>
+                  <linearGradient id="fp-link-grad-print" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#8b5cf6" />
+                    <stop offset="50%" stopColor="#6366f1" />
+                    <stop offset="100%" stopColor="#06b6d4" />
+                  </linearGradient>
+                </defs>
                 {printLinks.map((l: any) => {
                   const from = data.assignments.find((a: any) => a.id === l.fromAssignmentId);
                   const to = data.assignments.find((a: any) => a.id === l.toAssignmentId);
                   if (!from || !to) return null;
+                  const dx = to.x - from.x, dy = to.y - from.y;
+                  const len = Math.max(1, Math.hypot(dx, dy));
+                  const bow = Math.min(60, Math.max(18, len * 0.14));
+                  const nx = -dy / len, ny = dx / len;
+                  const mx = (from.x + to.x) / 2, my = (from.y + to.y) / 2;
+                  const cx = mx + nx * bow, cy = my + ny * bow;
+                  const d = `M ${from.x} ${from.y} Q ${cx} ${cy} ${to.x} ${to.y}`;
+                  const stroke = l.color || "url(#fp-link-grad-print)";
                   return (
-                    <line key={l.id}
-                      x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-                      stroke={l.color || "#6366f1"} strokeWidth={3.5}
-                      strokeDasharray="6 4" strokeLinecap="round" opacity={0.85}
-                    />
+                    <g key={l.id}>
+                      <path d={d} fill="none" stroke={l.color || "#6366f1"} strokeWidth={7} opacity={0.15} strokeLinecap="round" />
+                      <path d={d} fill="none" stroke={stroke} strokeWidth={2.5} strokeDasharray="7 5" strokeLinecap="round" opacity={0.95} />
+                      <circle cx={from.x} cy={from.y} r={4} fill="#fff" stroke={l.color || "#6366f1"} strokeWidth={2} />
+                      <circle cx={to.x}   cy={to.y}   r={4} fill="#fff" stroke={l.color || "#6366f1"} strokeWidth={2} />
+                    </g>
                   );
                 })}
               </svg>
@@ -550,6 +567,7 @@ export default function FloorPlanPage() {
   // coordinates so we can render the ghost line. Cleared on pointerup.
   const [linkingFrom, setLinkingFrom] = useState<number | null>(null);
   const [linkCursor, setLinkCursor] = useState<{ x: number; y: number } | null>(null);
+  const [hoverLinkId, setHoverLinkId] = useState<number | null>(null);
   const beginLinkDrag = (assignmentId: number, e: React.PointerEvent) => {
     if (locked) return;
     e.stopPropagation();
@@ -2488,33 +2506,92 @@ export default function FloorPlanPage() {
                         ? data.assignments.find(a => a.id === linkingFrom)
                         : null;
                       if (!links.length && !ghost) return null;
+                      // Build a smooth quadratic Bezier with a perpendicular
+                      // bow so multiple links between different pawns don't
+                      // overlap visually. Returns [pathD, midX, midY].
+                      const curveFor = (x1: number, y1: number, x2: number, y2: number): [string, number, number] => {
+                        const dx = x2 - x1, dy = y2 - y1;
+                        const len = Math.max(1, Math.hypot(dx, dy));
+                        // Perpendicular unit vector, bow size ~14% of length capped to 60px.
+                        const bow = Math.min(60, Math.max(18, len * 0.14));
+                        const nx = -dy / len, ny = dx / len;
+                        const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+                        const cx = mx + nx * bow, cy = my + ny * bow;
+                        // Midpoint of the quadratic curve at t=0.5 — used to
+                        // position the delete badge so it sits on the curve.
+                        const tx = 0.25 * x1 + 0.5 * cx + 0.25 * x2;
+                        const ty = 0.25 * y1 + 0.5 * cy + 0.25 * y2;
+                        return [`M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`, tx, ty];
+                      };
                       return (
                         <svg
                           className="absolute inset-0"
                           width={data.plan.width}
                           height={data.plan.height}
-                          style={{ pointerEvents: "none", zIndex: 5 }}
+                          style={{ pointerEvents: "none", zIndex: 5, overflow: "visible" }}
                           data-testid="svg-links-overlay"
                         >
+                          <defs>
+                            <linearGradient id="fp-link-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                              <stop offset="0%" stopColor="#8b5cf6" />
+                              <stop offset="50%" stopColor="#6366f1" />
+                              <stop offset="100%" stopColor="#06b6d4" />
+                            </linearGradient>
+                            <filter id="fp-link-glow" x="-30%" y="-30%" width="160%" height="160%">
+                              <feGaussianBlur stdDeviation="3" result="blur" />
+                              <feMerge>
+                                <feMergeNode in="blur" />
+                                <feMergeNode in="SourceGraphic" />
+                              </feMerge>
+                            </filter>
+                          </defs>
                           {links.map(l => {
                             const from = data.assignments.find(a => a.id === l.fromAssignmentId);
                             const to = data.assignments.find(a => a.id === l.toAssignmentId);
                             if (!from || !to) return null;
+                            const stroke = l.color || "url(#fp-link-grad)";
+                            const [d, mx, my] = curveFor(from.x, from.y, to.x, to.y);
+                            const isHover = hoverLinkId === l.id;
                             return (
-                              <g key={l.id}>
-                                <line
-                                  x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+                              <g key={l.id} data-testid={`link-line-${l.id}`}>
+                                {/* Soft outer halo behind the line */}
+                                <path
+                                  d={d}
+                                  fill="none"
                                   stroke={l.color || "#6366f1"}
-                                  strokeWidth={3.5}
-                                  strokeDasharray="6 4"
+                                  strokeWidth={isHover ? 10 : 8}
                                   strokeLinecap="round"
-                                  opacity={0.85}
+                                  opacity={0.18}
+                                  filter="url(#fp-link-glow)"
                                 />
-                                {/* Clickable hit area to delete the link */}
-                                <line
-                                  x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-                                  stroke="transparent" strokeWidth={16}
+                                {/* Main animated dashed line */}
+                                <path
+                                  d={d}
+                                  fill="none"
+                                  stroke={stroke}
+                                  strokeWidth={isHover ? 3.5 : 2.75}
+                                  strokeDasharray="7 5"
+                                  strokeLinecap="round"
+                                  opacity={0.95}
+                                >
+                                  <animate
+                                    attributeName="stroke-dashoffset"
+                                    from="0" to="-24" dur="1.1s" repeatCount="indefinite"
+                                  />
+                                </path>
+                                {/* Endpoint dots */}
+                                <circle cx={from.x} cy={from.y} r={4.5} fill="#fff" stroke={l.color || "#6366f1"} strokeWidth={2} />
+                                <circle cx={to.x}   cy={to.y}   r={4.5} fill="#fff" stroke={l.color || "#6366f1"} strokeWidth={2} />
+                                {/* Transparent hit area on the curve to capture hover/click */}
+                                <path
+                                  d={d}
+                                  fill="none"
+                                  stroke="transparent"
+                                  strokeWidth={20}
+                                  strokeLinecap="round"
                                   style={{ pointerEvents: locked ? "none" : "stroke", cursor: "pointer" }}
+                                  onMouseEnter={() => setHoverLinkId(l.id)}
+                                  onMouseLeave={() => setHoverLinkId(prev => prev === l.id ? null : prev)}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (locked) return;
@@ -2522,21 +2599,51 @@ export default function FloorPlanPage() {
                                       deleteLink.mutate(l.id);
                                     }
                                   }}
-                                  data-testid={`link-line-${l.id}`}
                                 >
                                   <title>اضغط لحذف الربط</title>
-                                </line>
+                                </path>
+                                {/* Delete badge at the curve midpoint */}
+                                <g
+                                  transform={`translate(${mx}, ${my})`}
+                                  style={{
+                                    pointerEvents: locked ? "none" : "all",
+                                    cursor: "pointer",
+                                    opacity: isHover ? 1 : 0,
+                                    transition: "opacity 150ms ease",
+                                  }}
+                                  onMouseEnter={() => setHoverLinkId(l.id)}
+                                  onMouseLeave={() => setHoverLinkId(prev => prev === l.id ? null : prev)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (locked) return;
+                                    if (window.confirm("حذف الربط بين هاتين البطاقتين؟")) {
+                                      deleteLink.mutate(l.id);
+                                    }
+                                  }}
+                                  data-testid={`link-delete-${l.id}`}
+                                >
+                                  <circle r={11} fill="#fff" stroke={l.color || "#6366f1"} strokeWidth={2} />
+                                  <line x1={-4} y1={-4} x2={4} y2={4} stroke={l.color || "#6366f1"} strokeWidth={2} strokeLinecap="round" />
+                                  <line x1={4}  y1={-4} x2={-4} y2={4} stroke={l.color || "#6366f1"} strokeWidth={2} strokeLinecap="round" />
+                                  <title>حذف الربط</title>
+                                </g>
                               </g>
                             );
                           })}
-                          {/* Ghost line while dragging */}
-                          {ghost && linkCursor && (
-                            <line
-                              x1={ghost.x} y1={ghost.y} x2={linkCursor.x} y2={linkCursor.y}
-                              stroke="#6366f1" strokeWidth={3} strokeDasharray="5 4"
-                              strokeLinecap="round" opacity={0.6}
-                            />
-                          )}
+                          {/* Ghost line while dragging — curved + animated */}
+                          {ghost && linkCursor && (() => {
+                            const [gd] = curveFor(ghost.x, ghost.y, linkCursor.x, linkCursor.y);
+                            return (
+                              <g>
+                                <path d={gd} fill="none" stroke="#a5b4fc" strokeWidth={7} opacity={0.35} strokeLinecap="round" filter="url(#fp-link-glow)" />
+                                <path d={gd} fill="none" stroke="url(#fp-link-grad)" strokeWidth={2.75} strokeDasharray="6 5" strokeLinecap="round" opacity={0.9}>
+                                  <animate attributeName="stroke-dashoffset" from="0" to="-22" dur="0.9s" repeatCount="indefinite" />
+                                </path>
+                                <circle cx={ghost.x} cy={ghost.y} r={5} fill="#6366f1" stroke="#fff" strokeWidth={2} />
+                                <circle cx={linkCursor.x} cy={linkCursor.y} r={5} fill="#06b6d4" stroke="#fff" strokeWidth={2} />
+                              </g>
+                            );
+                          })()}
                         </svg>
                       );
                     })()}
