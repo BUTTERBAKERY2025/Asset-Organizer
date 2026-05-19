@@ -35,8 +35,9 @@ import {
   ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { useReactToPrint } from "react-to-print";
-import { ZoomIn, ZoomOut, Maximize2, Lock, Unlock, Magnet, Grid3x3, Search, Pencil, MousePointer2, ArrowUp, ArrowDown, FileDown } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize2, Lock, Unlock, Magnet, Grid3x3, Search, Pencil, MousePointer2, ArrowUp, ArrowDown, FileDown, PanelLeft, PanelRight } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { Link } from "wouter";
 import type { Branch } from "@shared/schema";
 
 interface BranchEmployee {
@@ -342,6 +343,8 @@ export default function FloorPlanPage() {
   const [locked, setLocked] = useState(false);
   const [empSearch, setEmpSearch] = useState("");
   const [sidebarTab, setSidebarTab] = useState<"roles" | "zones" | "employees">("roles");
+  const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
+  const [mobileRightOpen, setMobileRightOpen] = useState(false);
   // Show only employees actually scheduled to work this shift today (pulled from
   // the schedule system). Reduces noise and prevents assigning someone on leave.
   const [scheduledOnly, setScheduledOnly] = useState(true);
@@ -1355,8 +1358,8 @@ export default function FloorPlanPage() {
             )}
           </div>
 
-          {/* Center: command search (wired to empSearch) */}
-          <div className="flex-1 flex justify-center max-w-md">
+          {/* Center: command search (hidden on mobile, wired to empSearch) */}
+          <div className="hidden md:flex flex-1 justify-center max-w-md">
             <div className="relative w-full group">
               <Search className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#E4B136] transition-colors" />
               <Input
@@ -1375,6 +1378,27 @@ export default function FloorPlanPage() {
 
           {/* Left cluster (RTL visual left): smart actions, history, templates, WA, PDF, save */}
           <div className="flex items-center gap-1.5 shrink-0">
+            {/* Mobile-only: toggle right sidebar (tools/employees/zones) */}
+            <Button
+              variant="ghost" size="icon"
+              className="h-8 w-8 text-slate-500 hover:text-[#E4B136] lg:hidden"
+              onClick={() => setMobileRightOpen(true)}
+              title="الأدوات والموظفين"
+              data-testid="btn-mobile-right-panel"
+            >
+              <PanelRight className="w-4 h-4" />
+            </Button>
+            {/* Mobile-only: toggle left sidebar (coverage status) */}
+            <Button
+              variant="ghost" size="icon"
+              className="h-8 w-8 text-slate-500 hover:text-[#E4B136] lg:hidden"
+              onClick={() => setMobileLeftOpen(true)}
+              title="حالة التغطية"
+              data-testid="btn-mobile-left-panel"
+            >
+              <PanelLeft className="w-4 h-4" />
+            </Button>
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -1514,22 +1538,22 @@ export default function FloorPlanPage() {
 
             <Button
               variant="ghost" size="sm"
-              className="h-8 gap-1.5 text-xs bg-rose-50 hover:bg-rose-100 text-rose-600 px-3"
+              className="h-8 gap-1.5 text-xs bg-rose-50 hover:bg-rose-100 text-rose-600 px-2 sm:px-3"
               onClick={() => handlePrint?.()}
               data-testid="btn-print"
             >
               <FileDown className="w-3.5 h-3.5" />
-              تصدير PDF
+              <span className="hidden sm:inline">تصدير PDF</span>
             </Button>
 
             <Button
               variant="default" size="sm"
-              className="h-8 text-xs bg-[#E4B136] hover:bg-[#c99a2d] text-white shadow-sm gap-1.5 px-3"
+              className="h-8 text-xs bg-[#E4B136] hover:bg-[#c99a2d] text-white shadow-sm gap-1.5 px-2 sm:px-3"
               onClick={() => { invalidate(); toast({ title: "تم تحديث المخطط", description: "كل التغييرات محفوظة." }); }}
               data-testid="btn-save-changes"
             >
               <Save className="w-3.5 h-3.5" />
-              حفظ التغييرات
+              <span className="hidden sm:inline">حفظ التغييرات</span>
             </Button>
           </div>
         </div>
@@ -1539,9 +1563,24 @@ export default function FloorPlanPage() {
         ) : isLoading || !data ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">جارٍ التحميل...</div>
         ) : (
-          <div className="flex flex-1 overflow-hidden">
-            {/* LEFT RAIL (RTL: visual right) — tabbed library */}
-            <div className="w-64 border-l border-slate-200/80 bg-white flex flex-col shrink-0 z-10 shadow-[2px_0_12px_rgba(0,0,0,0.02)]">
+          <div className="flex flex-1 overflow-hidden relative">
+            {/* Mobile backdrop — closes any open drawer on tap */}
+            {(mobileLeftOpen || mobileRightOpen) && (
+              <div
+                className="lg:hidden fixed inset-0 bg-black/30 z-30 animate-in fade-in"
+                onClick={() => { setMobileLeftOpen(false); setMobileRightOpen(false); }}
+                data-testid="mobile-drawer-backdrop"
+              />
+            )}
+
+            {/* LEFT RAIL (RTL: visual right) — tabbed library
+                On lg+: static side column. On smaller screens: slide-in drawer from right. */}
+            <div
+              {...(!mobileRightOpen && { inert: "" as any, "aria-hidden": true })}
+              className={`w-64 border-l border-slate-200/80 bg-white flex flex-col shrink-0 shadow-[2px_0_12px_rgba(0,0,0,0.02)]
+              lg:relative lg:z-10 lg:!translate-x-0 lg:[&]:!pointer-events-auto lg:[&]:!opacity-100
+              max-lg:fixed max-lg:top-0 max-lg:bottom-0 max-lg:right-0 max-lg:z-40 max-lg:shadow-2xl max-lg:transition-transform max-lg:duration-200
+              ${mobileRightOpen ? "max-lg:translate-x-0" : "max-lg:translate-x-full max-lg:pointer-events-none"}`}>
               <Tabs value={sidebarTab} onValueChange={(v) => setSidebarTab(v as any)} dir="rtl" className="flex-1 flex flex-col overflow-hidden">
                 <div className="flex items-center px-3 pt-1 border-b border-slate-200/80 shrink-0">
                   <TabsList className="h-9 w-full bg-transparent p-0 justify-start gap-4 rounded-none">
@@ -1565,6 +1604,14 @@ export default function FloorPlanPage() {
                       <Badge variant="secondary" className="h-4 px-1 text-[10px] tabular-nums" data-testid="badge-unplaced-count">{unplacedEmployees.length}</Badge>
                     </TabsTrigger>
                   </TabsList>
+                  <Button
+                    variant="ghost" size="icon"
+                    className="h-7 w-7 lg:hidden text-slate-400 ms-1"
+                    onClick={() => setMobileRightOpen(false)}
+                    data-testid="btn-close-right-drawer"
+                  >
+                    <XIcon className="w-4 h-4" />
+                  </Button>
                 </div>
 
                 {/* Library filter — bound to empSearch so the command-bar search and this filter stay in sync */}
@@ -2369,10 +2416,24 @@ export default function FloorPlanPage() {
               </div>
             </div>
 
-            {/* RIGHT RAIL (RTL: visual left) — coverage + status */}
-            <div className="w-64 border-r border-slate-200/80 bg-white flex flex-col shrink-0 z-10 shadow-[-2px_0_12px_rgba(0,0,0,0.02)]">
-              <div className="h-12 border-b border-slate-200/80 flex items-center px-4 font-bold text-xs shrink-0">
-                حالة التغطية (الوردية {SHIFTS.find(s => s.value === selectedShift)?.label})
+            {/* RIGHT RAIL (RTL: visual left) — coverage + status
+                On lg+: static side column. On smaller screens: slide-in drawer from left. */}
+            <div
+              {...(!mobileLeftOpen && { inert: "" as any, "aria-hidden": true })}
+              className={`w-64 border-r border-slate-200/80 bg-white flex flex-col shrink-0 shadow-[-2px_0_12px_rgba(0,0,0,0.02)]
+              lg:relative lg:z-10 lg:!translate-x-0 lg:[&]:!pointer-events-auto lg:[&]:!opacity-100
+              max-lg:fixed max-lg:top-0 max-lg:bottom-0 max-lg:left-0 max-lg:z-40 max-lg:shadow-2xl max-lg:transition-transform max-lg:duration-200
+              ${mobileLeftOpen ? "max-lg:translate-x-0" : "max-lg:-translate-x-full max-lg:pointer-events-none"}`}>
+              <div className="h-12 border-b border-slate-200/80 flex items-center px-4 font-bold text-xs shrink-0 justify-between">
+                <span>حالة التغطية (الوردية {SHIFTS.find(s => s.value === selectedShift)?.label})</span>
+                <Button
+                  variant="ghost" size="icon"
+                  className="h-7 w-7 lg:hidden text-slate-400"
+                  onClick={() => setMobileLeftOpen(false)}
+                  data-testid="btn-close-left-drawer"
+                >
+                  <XIcon className="w-4 h-4" />
+                </Button>
               </div>
               <ScrollArea className="flex-1">
                 <div className="p-4 space-y-5">
@@ -2455,6 +2516,37 @@ export default function FloorPlanPage() {
                     <div className="aspect-video border border-dashed border-slate-200 rounded-md bg-slate-50 flex items-center justify-center" data-testid="minimap-placeholder">
                       <span className="text-[10px] text-slate-400">قريباً</span>
                     </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Cross-page quick links to related modules */}
+                  <div className="space-y-2">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">صفحات ذات علاقة</h4>
+                    <Link
+                      href="/shift-management"
+                      className="flex items-center gap-2 p-2 rounded-md text-xs text-slate-600 hover:bg-amber-50 hover:text-[#E4B136] transition-colors border border-transparent hover:border-amber-200"
+                      data-testid="link-shift-management"
+                    >
+                      <Calendar className="w-3.5 h-3.5 shrink-0" />
+                      <span className="flex-1 truncate">إدارة الورديات والجداول</span>
+                    </Link>
+                    <Link
+                      href="/attendance-dashboard"
+                      className="flex items-center gap-2 p-2 rounded-md text-xs text-slate-600 hover:bg-amber-50 hover:text-[#E4B136] transition-colors border border-transparent hover:border-amber-200"
+                      data-testid="link-attendance"
+                    >
+                      <Users className="w-3.5 h-3.5 shrink-0" />
+                      <span className="flex-1 truncate">لوحة الحضور والانصراف</span>
+                    </Link>
+                    <Link
+                      href="/branch-employees"
+                      className="flex items-center gap-2 p-2 rounded-md text-xs text-slate-600 hover:bg-amber-50 hover:text-[#E4B136] transition-colors border border-transparent hover:border-amber-200"
+                      data-testid="link-branch-employees"
+                    >
+                      <UserIcon className="w-3.5 h-3.5 shrink-0" />
+                      <span className="flex-1 truncate">موظفو الفرع</span>
+                    </Link>
                   </div>
                 </div>
               </ScrollArea>
