@@ -86,10 +86,18 @@ export async function sendWhatsAppMessage(to: string, message: string): Promise<
       to: `whatsapp:${formattedPhone}`,
     });
 
-    console.log(`WhatsApp message sent to ${formattedPhone} from ${fromNumber}: ${result.sid}`);
+    // Redact phone numbers in logs — keep only last 4 digits for debugging.
+    // Never log fromNumber (sandbox/sender) or the Twilio auth response payload.
+    console.log(`WhatsApp message sent to ***${formattedPhone.slice(-4)}: ${result.sid}`);
     return { success: true, messageId: result.sid };
   } catch (error: any) {
-    console.error('Error sending WhatsApp message:', error.message);
+    // Sanitize error.message: Twilio errors sometimes echo phone numbers and
+    // (rarely) credential fragments. Strip anything that looks like a phone.
+    const safe = String(error?.message || "")
+      .replace(/\+?\d{7,}/g, "***")
+      .replace(/AC[0-9a-fA-F]{32}/g, "AC***")
+      .replace(/SK[0-9a-fA-F]{32}/g, "SK***");
+    console.error('Error sending WhatsApp message:', safe);
     return { success: false, error: error.message };
   }
 }
@@ -108,10 +116,14 @@ export async function sendSMS(to: string, message: string): Promise<{ success: b
       to: formattedPhone,
     });
 
-    console.log(`SMS sent to ${formattedPhone}: ${result.sid}`);
+    console.log(`SMS sent to ***${formattedPhone.slice(-4)}: ${result.sid}`);
     return { success: true, messageId: result.sid };
   } catch (error: any) {
-    console.error('Error sending SMS:', error.message);
+    const safe = String(error?.message || "")
+      .replace(/\+?\d{7,}/g, "***")
+      .replace(/AC[0-9a-fA-F]{32}/g, "AC***")
+      .replace(/SK[0-9a-fA-F]{32}/g, "SK***");
+    console.error('Error sending SMS:', safe);
     return { success: false, error: error.message };
   }
 }

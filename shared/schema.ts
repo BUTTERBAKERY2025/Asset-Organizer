@@ -1190,6 +1190,7 @@ export const MODULE_ACTIONS = [
   "notify",
   "change_status",
   "assign_reviewer",
+  "advanced",
 ] as const;
 
 export type ModuleAction = (typeof MODULE_ACTIONS)[number];
@@ -1353,6 +1354,7 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   
   // نقطة بيع الفعاليات
   event_pos: "نقطة بيع الفعاليات",
+  floor_plan: "مخطط الأرضية",
 };
 
 // Action labels for UI display (Arabic)
@@ -1375,6 +1377,7 @@ export const ACTION_LABELS: Record<ModuleAction, string> = {
   notify: "إشعارات",
   change_status: "تغيير الحالة",
   assign_reviewer: "تعيين مراجع",
+  advanced: "متقدم",
 };
 
 // Module groups for UI organization
@@ -1922,6 +1925,11 @@ export const notificationQueue = pgTable("notification_queue", {
   relatedEntityId: text("related_entity_id"),
   sentAt: timestamp("sent_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  // Retry bookkeeping for the notification scheduler (max 3 attempts).
+  // These columns exist in the production DB (Phase 11) but were missing
+  // from the typed schema, causing TS errors in server/scheduler.ts.
+  retryCount: integer("retry_count").default(0).notNull(),
+  lastAttemptAt: timestamp("last_attempt_at"),
 }, (table) => [
   index("idx_notification_queue_status").on(table.status),
   index("idx_notification_queue_created_at").on(table.createdAt),
@@ -1934,6 +1942,8 @@ export const insertNotificationQueueSchema = createInsertSchema(
   id: true,
   createdAt: true,
   sentAt: true,
+  retryCount: true,
+  lastAttemptAt: true,
 });
 
 export type NotificationQueueItem = typeof notificationQueue.$inferSelect;
