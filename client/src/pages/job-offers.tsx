@@ -35,7 +35,9 @@ import {
   Printer,
   Pencil,
   Trash2,
+  ArrowRight,
 } from "lucide-react";
+import { useLocation } from "wouter";
 import type { JobOffer } from "@shared/schema";
 import { useReactToPrint } from "react-to-print";
 
@@ -112,6 +114,7 @@ const emptyForm: OfferForm = {
 export default function JobOffersPage() {
   const { toast } = useToast();
   const { isAdmin } = useAuth();
+  const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
@@ -338,14 +341,25 @@ export default function JobOffersPage() {
           title="عروض العمل"
           description="إدارة وإرسال عروض العمل للمرشحين"
           actions={
-            <Button
-              size="sm"
-              onClick={() => { setForm(emptyForm); setStep(1); setEditId(null); setShowCreate(true); }}
-              className="gap-2"
-              data-testid="btn-new-offer"
-            >
-              <Plus className="w-4 h-4" /> عرض جديد
-            </Button>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation("/"); }}
+                className="gap-1"
+                data-testid="btn-back"
+              >
+                <ArrowRight className="w-4 h-4" /> عودة
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => { setForm(emptyForm); setStep(1); setEditId(null); setShowCreate(true); }}
+                className="gap-2"
+                data-testid="btn-new-offer"
+              >
+                <Plus className="w-4 h-4" /> عرض جديد
+              </Button>
+            </div>
           }
         />
 

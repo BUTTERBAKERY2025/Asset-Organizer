@@ -19,6 +19,7 @@ import type { EmploymentApplication, JobVacancy } from "@shared/schema";
 import {
   Plus, Send, Eye, Trash2, Briefcase, Users, Search, Copy, ExternalLink,
   CheckCircle, XCircle, Clock, FileText, Star, RefreshCw, Printer,
+  ArrowRight,
 } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -306,7 +307,16 @@ export default function EmploymentApplicationsPage() {
           title="طلبات التوظيف"
           description="إدارة الطلبات الموجّهة والمفتوحة من المتقدمين"
           actions={
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation("/"); }}
+                data-testid="button-back"
+                className="gap-1"
+              >
+                <ArrowRight className="w-4 h-4" /> عودة
+              </Button>
               <Button size="sm" onClick={() => setShowVacancy(true)} variant="outline" data-testid="button-new-vacancy">
                 <Briefcase className="w-4 h-4 ml-1" /> وظيفة جديدة
               </Button>
