@@ -622,6 +622,7 @@ export default function FloorPlanPage() {
   // Uses react-to-print to capture the canvas + a header for a printable A4
   // landscape view. The browser's "Save as PDF" path then turns it into a PDF.
   const printableRef = useRef<HTMLDivElement>(null);
+  const [sharingPdf, setSharingPdf] = useState(false);
   const handlePrint = useReactToPrint({
     contentRef: printableRef,
     documentTitle: `floor-plan-${selectedBranchId}-${selectedShift}-${selectedDate}`,
@@ -638,6 +639,96 @@ export default function FloorPlanPage() {
       }
     `,
   });
+
+  // Generate the floor plan as a PDF Blob (A4 landscape) and share it via the
+  // native Web Share API when available — this opens the OS share sheet which
+  // includes WhatsApp on phones. Fallback: download the PDF locally and open
+  // WhatsApp Web with the prepared bilingual caption so the user attaches the
+  // freshly-downloaded file.
+  const sharePdfViaWhatsApp = async () => {
+    if (!printableRef.current || !data) {
+      toast({ title: "تعذّر تحضير الملف", variant: "destructive" });
+      return;
+    }
+    setSharingPdf(true);
+    try {
+      const [{ default: html2canvas }, jsPDFmod] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
+      ]);
+      const jsPDF = (jsPDFmod as any).jsPDF || (jsPDFmod as any).default;
+
+      // Make sure the offscreen printable node is visible to html2canvas. It
+      // already lives in the DOM (just CSS-hidden via the print stylesheet),
+      // so html2canvas can read it directly.
+      const node = printableRef.current;
+      const canvas = await html2canvas(node, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+      });
+      const imgData = canvas.toDataURL("image/png");
+
+      // A4 landscape = 297×210 mm; use 8mm margins.
+      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const margin = 8;
+      const maxW = pageW - margin * 2;
+      const maxH = pageH - margin * 2;
+      // Fit image to page preserving aspect ratio.
+      const ratio = Math.min(maxW / canvas.width, maxH / canvas.height);
+      const drawW = canvas.width * ratio;
+      const drawH = canvas.height * ratio;
+      const offX = (pageW - drawW) / 2;
+      const offY = (pageH - drawH) / 2;
+      pdf.addImage(imgData, "PNG", offX, offY, drawW, drawH);
+
+      const fileName = `floor-plan-${selectedBranchId}-${selectedShift}-${selectedDate}.pdf`;
+      const blob = pdf.output("blob") as Blob;
+      const file = new File([blob], fileName, { type: "application/pdf" });
+      const caption = buildShareMessage();
+
+      // 1) Native share sheet with file (best UX — works on iOS/Android and on
+      //    desktop Chromium with the share sheet). Lets user pick WhatsApp.
+      const nav: any = navigator;
+      if (nav.canShare && nav.canShare({ files: [file] })) {
+        try {
+          await nav.share({ files: [file], title: fileName, text: caption });
+          toast({ title: "تمت مشاركة الملف" });
+          return;
+        } catch (err: any) {
+          // User cancelled — silently exit.
+          if (err?.name === "AbortError") return;
+          // Fall through to download fallback otherwise.
+        }
+      }
+
+      // 2) Fallback: download the PDF and open WhatsApp with caption.
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+
+      const waUrl = `https://web.whatsapp.com/send?text=${encodeURIComponent(caption)}`;
+      window.open(waUrl, "_blank", "noopener");
+      toast({
+        title: "تم تحميل الـ PDF",
+        description: "افتحت لك واتساب — اسحب الملف من شريط التحميل وأرفِقه في المحادثة.",
+        duration: 7000,
+      });
+    } catch (e: any) {
+      console.error("PDF share failed:", e);
+      toast({ title: "فشل إنشاء الـ PDF", description: e?.message || "حاول مرة أخرى", variant: "destructive" });
+    } finally {
+      setSharingPdf(false);
+    }
+  };
   // Exit placement mode on Escape
   useEffect(() => {
     if (!placementRole) return;
@@ -1922,10 +2013,24 @@ export default function FloorPlanPage() {
                 message: buildShareMessage(),
                 channel: "walink",
               })}
-              title="مشاركة عبر واتساب"
+              title="مشاركة عبر واتساب (نص)"
               data-testid="btn-share-whatsapp"
             >
               <MessageCircle className="w-4 h-4 text-green-600" />
+            </Button>
+
+            <Button
+              variant="ghost" size="sm"
+              className="h-8 gap-1.5 text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-2 sm:px-3"
+              onClick={() => sharePdfViaWhatsApp()}
+              disabled={sharingPdf}
+              title="إنشاء PDF ومشاركته عبر واتساب"
+              data-testid="btn-share-pdf-whatsapp"
+            >
+              {sharingPdf
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <MessageCircle className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">PDF عبر واتساب</span>
             </Button>
 
             <Button
