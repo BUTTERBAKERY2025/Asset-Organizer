@@ -198,7 +198,7 @@ function PrintableFloorPlan(props: {
   getRoleDef: (role: string, jobTitle?: string) => any;
   shapeStyle: (s: any) => any;
 }) {
-  const { printRef, data, branches, selectedBranchId, selectedShift, selectedDate, employeeById, emptySlotsCount, getRoleDef, shapeStyle } = props;
+  const { printRef, data, branches, selectedBranchId, selectedShift, selectedDate, employeeById, emptySlotsCount, getRoleDef } = props;
   // A4 landscape printable area at 8mm margins ≈ 281×196mm → at 96dpi ≈ 1062×740px.
   // We use slightly conservative numbers to allow for browser rounding + root
   // padding (p-3 = 24px vertical), header (~58px) and footer (~36px).
@@ -231,34 +231,50 @@ function PrintableFloorPlan(props: {
               transform: `scale(${scale})`, transformOrigin: "top right",
             }}
           >
+            {/* Zones — mirror the on-screen styling (rounded-lg, opacity, transform-origin center). */}
             {data.zones.map((z: any) => (
               <div
                 key={z.id}
-                className="absolute rounded border-2 border-dashed flex items-start justify-start p-2 text-xs font-medium"
+                className="absolute rounded-lg border-2 border-dashed flex items-start justify-start p-2 text-xs font-medium shadow-sm"
                 style={{
                   left: z.x, top: z.y, width: z.width, height: z.height,
-                  backgroundColor: z.color + "55", borderColor: z.color,
+                  backgroundColor: z.color + "cc", borderColor: z.color,
                   transform: z.rotation ? `rotate(${z.rotation}deg)` : undefined,
+                  transformOrigin: "center center",
+                  color: "#1f2937",
                 }}
               >
                 {z.name}
               </div>
             ))}
+            {/* Assignments — use the same PersonAvatar component as the on-screen
+                canvas so PDF output matches the live view exactly. */}
             {data.assignments.map((a: any) => {
               const emp = a.employeeId != null ? employeeById.get(a.employeeId) : null;
               const def = getRoleDef(a.role, emp?.jobTitle);
+              const isEmpty = !emp;
               return (
-                <div key={a.id} className="absolute flex flex-col items-center" style={{ left: a.x - 30, top: a.y - 30 }}>
+                <div
+                  key={a.id}
+                  className="absolute flex flex-col items-center"
+                  style={{ left: a.x - 30, top: a.y - 30, zIndex: 10 + (a.zIndex ?? 0) }}
+                >
+                  <div className="drop-shadow">
+                    <PersonAvatar def={def} size={64} empty={isEmpty} />
+                  </div>
                   <div
-                    className="w-12 h-12 flex items-center justify-center text-white text-xs font-bold border-2 border-white shadow"
-                    style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}
+                    className={`mt-1 px-2 py-0.5 rounded-md text-[11px] font-medium text-center max-w-[130px] truncate ${
+                      isEmpty
+                        ? "bg-amber-50 text-amber-700 border border-amber-200 italic"
+                        : "bg-white border border-gray-200 shadow-sm"
+                    }`}
                   >
-                    {(emp?.employeeName ?? def.label).slice(0, 2)}
+                    {emp ? emp.employeeName : "غير معيّن"}
                   </div>
-                  <div className="mt-1 px-1.5 py-0.5 bg-white text-[10px] font-medium border border-gray-300 rounded max-w-[110px] truncate text-center">
-                    {emp?.employeeName ?? "غير معيّن"}
-                  </div>
-                  <div className="text-[9px] text-white px-1 rounded mt-0.5" style={{ backgroundColor: def.color }}>
+                  <div
+                    className="mt-0.5 text-[9px] text-white px-1.5 rounded"
+                    style={{ backgroundColor: def.color }}
+                  >
                     {def.label}
                   </div>
                 </div>
