@@ -16,6 +16,7 @@ import {
   Camera, Upload, Image as ImageIcon, Video, Palette, Type, FileImage, FolderArchive,
   Search, Download, Trash2, Copy, Loader2, X, Plus, Pencil, Eye, FileText, Sparkles,
   Folder, FolderOpen, ArrowRight, Layers, HardDrive, Calendar,
+  LayoutGrid, Grid3x3, List as ListIcon,
 } from "lucide-react";
 import butterLogo from "@/assets/butter-logo.png";
 
@@ -53,6 +54,91 @@ function formatBytes(b: number) {
   const u = ["B", "KB", "MB", "GB"];
   const i = Math.min(Math.floor(Math.log(b) / Math.log(1024)), u.length - 1);
   return (b / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1) + " " + u[i];
+}
+
+type ViewMode = "grid" | "large" | "list";
+
+function ViewModeToggle({ value, onChange }: { value: ViewMode; onChange: (v: ViewMode) => void }) {
+  const opts: { v: ViewMode; icon: any; title: string }[] = [
+    { v: "grid", icon: Grid3x3, title: "شبكة عادية" },
+    { v: "large", icon: LayoutGrid, title: "شبكة كبيرة" },
+    { v: "list", icon: ListIcon, title: "قائمة" },
+  ];
+  return (
+    <div className="inline-flex border rounded-lg bg-white p-0.5">
+      {opts.map(o => {
+        const Icon = o.icon;
+        return (
+          <button
+            key={o.v}
+            type="button"
+            onClick={() => onChange(o.v)}
+            title={o.title}
+            data-testid={`view-mode-${o.v}`}
+            className={`p-1.5 rounded transition ${value === o.v ? "bg-amber-600 text-white" : "text-slate-500 hover:bg-amber-50"}`}
+          >
+            <Icon className="w-4 h-4" />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function AssetGrid({ assets, view, onView, onEdit, onDelete }: {
+  assets: MediaAsset[]; view: ViewMode;
+  onView: (a: MediaAsset) => void; onEdit: (a: MediaAsset) => void; onDelete: (a: MediaAsset) => void;
+}) {
+  if (view === "list") {
+    return (
+      <div className="divide-y border rounded-lg overflow-hidden bg-white">
+        {assets.map(a => <AssetListRow key={a.id} asset={a} onView={() => onView(a)} onEdit={() => onEdit(a)} onDelete={() => onDelete(a)} />)}
+      </div>
+    );
+  }
+  const gridClass = view === "large"
+    ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"
+    : "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3";
+  return (
+    <div className={gridClass}>
+      {assets.map(a => <AssetCard key={a.id} asset={a} large={view === "large"} onView={() => onView(a)} onEdit={() => onEdit(a)} onDelete={() => onDelete(a)} />)}
+    </div>
+  );
+}
+
+function AssetListRow({ asset, onView, onEdit, onDelete }: { asset: MediaAsset; onView: () => void; onEdit: () => void; onDelete: () => void }) {
+  const isImage = asset.fileType === "image";
+  const isVideo = asset.fileType === "video";
+  const thumb = `/api/media/assets/${asset.id}/view`;
+  return (
+    <div className="flex items-center gap-3 p-3 hover:bg-amber-50/40 transition" data-testid={`asset-row-${asset.id}`}>
+      <div className="w-14 h-14 flex-shrink-0 rounded-lg overflow-hidden bg-slate-100 cursor-pointer" onClick={onView}>
+        {isImage ? <img src={thumb} alt={asset.title} className="w-full h-full object-cover" loading="lazy" />
+          : isVideo ? <div className="w-full h-full flex items-center justify-center bg-slate-800 text-white"><Video className="w-6 h-6" /></div>
+          : <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-500"><FileText className="w-6 h-6" /></div>}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold text-sm truncate" title={asset.title}>{asset.title}</div>
+        <div className="text-xs text-slate-500 truncate">{asset.fileName}</div>
+        {asset.tags && asset.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">{asset.tags.slice(0, 3).map(t => <Badge key={t} variant="secondary" className="text-[10px] px-1.5 py-0">{t}</Badge>)}</div>
+        )}
+      </div>
+      <div className="hidden md:block text-xs text-slate-500 w-24 text-center">
+        {asset.designer || "—"}
+      </div>
+      <div className="hidden sm:block text-xs text-slate-500 w-20 text-center">
+        {formatBytes(asset.fileSize)}
+      </div>
+      {asset.platform && <Badge variant="outline" className="text-[10px] hidden md:inline-flex">{PLATFORM_LABELS[asset.platform] || asset.platform}</Badge>}
+      <div className="flex gap-1 flex-shrink-0">
+        <Button size="sm" variant="outline" className="h-8 px-2" onClick={onView} title="معاينة"><Eye className="w-3.5 h-3.5" /></Button>
+        <a href={`/api/media/assets/${asset.id}/download`}><Button size="sm" variant="outline" className="h-8 px-2" title="تنزيل"><Download className="w-3.5 h-3.5" /></Button></a>
+        <Button size="sm" variant="outline" className="h-8 px-2" onClick={onEdit} title="تعديل"><Pencil className="w-3.5 h-3.5" /></Button>
+        <Button size="sm" variant="outline" className="h-8 px-2 text-red-600 hover:bg-red-50" onClick={onDelete} title="حذف"><Trash2 className="w-3.5 h-3.5" /></Button>
+      </div>
+    </div>
+  );
 }
 
 export default function MarketingMediaTeamPage() {
@@ -547,6 +633,8 @@ function CampaignDetail({ id, onBack }: { id: number; onBack: () => void }) {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [previewing, setPreviewing] = useState<MediaAsset | null>(null);
   const [editing, setEditing] = useState<MediaAsset | null>(null);
+  const [view, setView] = useState<ViewMode>(() => (localStorage.getItem("media-view-campaign") as ViewMode) || "grid");
+  useEffect(() => { localStorage.setItem("media-view-campaign", view); }, [view]);
 
   const params = new URLSearchParams({ campaignId: String(id) }); if (q.trim()) params.set("q", q.trim());
   const { data: assets = [], isLoading } = useQuery<MediaAsset[]>({
@@ -608,6 +696,7 @@ function CampaignDetail({ id, onBack }: { id: number; onBack: () => void }) {
           <Search className="absolute right-2 top-2.5 w-4 h-4 text-slate-400" />
           <Input value={q} onChange={e => setQ(e.target.value)} placeholder="بحث داخل الحملة..." className="pr-8" />
         </div>
+        <ViewModeToggle value={view} onChange={setView} />
         <Button onClick={() => setUploadOpen(true)} className="bg-amber-600 hover:bg-amber-700" data-testid="btn-upload-to-campaign">
           <Upload className="w-4 h-4 ml-1" /> رفع للحملة
         </Button>
@@ -625,11 +714,13 @@ function CampaignDetail({ id, onBack }: { id: number; onBack: () => void }) {
               action={<Button onClick={() => setUploadOpen(true)} className="bg-amber-600 hover:bg-amber-700"><Upload className="w-4 h-4 ml-1" /> رفع جديد</Button>}
             />
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {assets.map(a => (
-                <AssetCard key={a.id} asset={a} onView={() => setPreviewing(a)} onEdit={() => setEditing(a)} onDelete={() => { if (confirm(`حذف "${a.title}"؟`)) delAsset.mutate(a.id); }} />
-              ))}
-            </div>
+            <AssetGrid
+              assets={assets}
+              view={view}
+              onView={setPreviewing}
+              onEdit={setEditing}
+              onDelete={(a) => { if (confirm(`حذف "${a.title}"؟`)) delAsset.mutate(a.id); }}
+            />
           )}
         </CardContent>
       </Card>
@@ -663,6 +754,8 @@ function AssetGalleryTab({ category, showPlatform }: { category: string; showPla
   const [uploadOpen, setUploadOpen] = useState(false);
   const [previewing, setPreviewing] = useState<MediaAsset | null>(null);
   const [editing, setEditing] = useState<MediaAsset | null>(null);
+  const [view, setView] = useState<ViewMode>(() => (localStorage.getItem(`media-view-${category}`) as ViewMode) || "grid");
+  useEffect(() => { localStorage.setItem(`media-view-${category}`, view); }, [view, category]);
 
   const params = new URLSearchParams({ category });
   if (q.trim()) params.set("q", q.trim());
@@ -705,6 +798,7 @@ function AssetGalleryTab({ category, showPlatform }: { category: string; showPla
             </SelectContent>
           </Select>
         )}
+        <ViewModeToggle value={view} onChange={setView} />
         <Button onClick={() => setUploadOpen(true)} className="bg-amber-600 hover:bg-amber-700" data-testid="btn-upload-asset">
           <Upload className="w-4 h-4 ml-1" /> رفع جديد
         </Button>
@@ -717,11 +811,13 @@ function AssetGalleryTab({ category, showPlatform }: { category: string; showPla
           ) : assets.length === 0 ? (
             <EmptyState text={`لا توجد ملفات في "${CATEGORY_LABELS[category]}"`} sub="اضغط رفع جديد لإضافة أول ملف" />
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {assets.map(a => (
-                <AssetCard key={a.id} asset={a} onView={() => setPreviewing(a)} onEdit={() => setEditing(a)} onDelete={() => { if (confirm(`حذف "${a.title}"؟`)) delAsset.mutate(a.id); }} />
-              ))}
-            </div>
+            <AssetGrid
+              assets={assets}
+              view={view}
+              onView={setPreviewing}
+              onEdit={setEditing}
+              onDelete={(a) => { if (confirm(`حذف "${a.title}"؟`)) delAsset.mutate(a.id); }}
+            />
           )}
         </CardContent>
       </Card>
@@ -733,36 +829,42 @@ function AssetGalleryTab({ category, showPlatform }: { category: string; showPla
   );
 }
 
-function AssetCard({ asset, onView, onEdit, onDelete }: { asset: MediaAsset; onView: () => void; onEdit: () => void; onDelete: () => void }) {
+function AssetCard({ asset, onView, onEdit, onDelete, large }: { asset: MediaAsset; onView: () => void; onEdit: () => void; onDelete: () => void; large?: boolean }) {
   const isImage = asset.fileType === "image";
   const isVideo = asset.fileType === "video";
   const thumb = `/api/media/assets/${asset.id}/view`;
+  const titleSize = large ? "text-sm" : "text-xs";
+  const iconSize = large ? "w-16 h-16" : "w-10 h-10";
   return (
     <div className="group border rounded-xl overflow-hidden bg-white hover:shadow-lg hover:border-amber-300 transition-all" data-testid={`asset-${asset.id}`}>
-      <div className="aspect-square bg-slate-100 relative cursor-pointer" onClick={onView}>
+      <div className={`${large ? "aspect-video" : "aspect-square"} bg-slate-100 relative cursor-pointer`} onClick={onView}>
         {isImage ? (
           <img src={thumb} alt={asset.title} className="w-full h-full object-cover" loading="lazy" />
         ) : isVideo ? (
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 text-white relative">
-            <Video className="w-10 h-10" />
+            <Video className={iconSize} />
             <Badge className="absolute bottom-1 right-1 text-[10px] bg-black/60">فيديو</Badge>
           </div>
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 p-3 bg-gradient-to-br from-slate-50 to-slate-100">
-            <FileText className="w-10 h-10 mb-1" />
-            <span className="text-xs uppercase font-bold">{asset.fileName.split(".").pop()}</span>
+            <FileText className={`${iconSize} mb-1`} />
+            <span className={`${large ? "text-sm" : "text-xs"} uppercase font-bold`}>{asset.fileName.split(".").pop()}</span>
           </div>
         )}
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-          <Eye className="w-6 h-6 text-white" />
+          <Eye className={large ? "w-8 h-8 text-white" : "w-6 h-6 text-white"} />
         </div>
       </div>
-      <div className="p-2.5">
-        <div className="text-xs font-bold truncate" title={asset.title}>{asset.title}</div>
+      <div className={large ? "p-3" : "p-2.5"}>
+        <div className={`${titleSize} font-bold truncate`} title={asset.title}>{asset.title}</div>
+        {large && asset.description && <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{asset.description}</div>}
         <div className="text-[10px] text-slate-500 flex items-center justify-between mt-0.5">
           <span>{formatBytes(asset.fileSize)}</span>
           {asset.platform && <Badge variant="outline" className="text-[9px] px-1 py-0">{PLATFORM_LABELS[asset.platform] || asset.platform}</Badge>}
         </div>
+        {large && asset.tags && asset.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1.5">{asset.tags.slice(0, 4).map(t => <Badge key={t} variant="secondary" className="text-[9px] px-1.5 py-0">{t}</Badge>)}</div>
+        )}
         <div className="flex gap-1 mt-2">
           <a href={`/api/media/assets/${asset.id}/download`} className="flex-1"><Button size="sm" variant="outline" className="w-full h-7 text-xs"><Download className="w-3 h-3" /></Button></a>
           <Button size="sm" variant="outline" className="h-7 px-2" onClick={onEdit}><Pencil className="w-3 h-3" /></Button>
