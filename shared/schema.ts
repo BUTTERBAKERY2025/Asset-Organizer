@@ -10303,7 +10303,7 @@ export const branchOpeningGuests = pgTable("branch_opening_guests", {
 ]);
 
 export const insertBranchOpeningCampaignSchema = createInsertSchema(branchOpeningCampaigns).omit({
-  id: true, createdAt: true, updatedAt: true,
+  id: true, createdAt: true, updatedAt: true, slug: true,
 });
 export const updateBranchOpeningCampaignSchema = insertBranchOpeningCampaignSchema.partial().omit({ createdBy: true });
 export type BranchOpeningCampaign = typeof branchOpeningCampaigns.$inferSelect;

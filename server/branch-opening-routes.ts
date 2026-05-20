@@ -77,7 +77,7 @@ export function registerBranchOpeningRoutes(app: Express) {
           createdBy: user?.id ?? null,
         });
         // ضمان slug فريد
-        let baseSlug = body.slug?.trim() ? slugify(body.slug) : slugify(`${body.branchName}-${body.branchCity}`);
+        let baseSlug = slugify(`${body.branchName}-${body.branchCity}`);
         let finalSlug = baseSlug;
         let i = 1;
         while (true) {
