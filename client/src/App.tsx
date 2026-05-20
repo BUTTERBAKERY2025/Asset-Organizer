@@ -96,6 +96,7 @@ const MarketingAlertsPage = makeLazy("marketing-alerts");
 const MarketingExpensesPage = makeLazy("marketing-expenses");
 const MarketingSocialPage = makeLazy("marketing-social");
 const MarketingOpeningCampaignsPage = makeLazy("marketing-opening-campaigns");
+const MarketingMediaTeamPage = makeLazy("marketing-media-team");
 const OpeningPublicPage = makeLazy("opening-public");
 const SocialResponsibilityPage = makeLazy("social-responsibility");
 const SettingsDashboardPage = makeLazy("settings-dashboard");
@@ -366,6 +367,7 @@ const Router = React.memo(function Router() {
       <Route path="/marketing-campaigns">{() => <ModulePage component={MarketingCampaignsPage} module="marketing_campaigns" />}</Route>
       <Route path="/marketing-social">{() => <ModulePage component={MarketingSocialPage} module="marketing" />}</Route>
       <Route path="/marketing-opening-campaigns">{() => <ModulePage component={MarketingOpeningCampaignsPage} module="marketing" />}</Route>
+      <Route path="/marketing-media-team">{() => <ModulePage component={MarketingMediaTeamPage} module="marketing" />}</Route>
       <Route path="/social-responsibility">{() => <ModulePage component={SocialResponsibilityPage} module="social_responsibility" />}</Route>
       <Route path="/marketing-influencers">{() => <ModulePage component={MarketingInfluencersPage} module="marketing_influencers" />}</Route>
       <Route path="/influencer-contracts">{() => <ModulePage component={InfluencerContractsPage} module="marketing_influencers" />}</Route>

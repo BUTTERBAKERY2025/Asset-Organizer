@@ -10314,3 +10314,65 @@ export const insertBranchOpeningGuestSchema = createInsertSchema(branchOpeningGu
 });
 export type BranchOpeningGuest = typeof branchOpeningGuests.$inferSelect;
 export type InsertBranchOpeningGuest = z.infer<typeof insertBranchOpeningGuestSchema>;
+
+// ===== فريق التصوير والميديا =====
+export const mediaAssets = pgTable("media_assets", {
+  id: serial("id").primaryKey(),
+  category: text("category").notNull(), // identity | photos | products | templates | archive
+  title: text("title").notNull(),
+  description: text("description"),
+  fileType: text("file_type").notNull(), // image | video | design | document | other
+  mimeType: text("mime_type").notNull(),
+  fileName: text("file_name").notNull(),
+  storagePath: text("storage_path").notNull(),
+  fileSize: integer("file_size").notNull(),
+  thumbnailPath: text("thumbnail_path"),
+  tags: text("tags").array().default(sql`'{}'::text[]`),
+  branchId: integer("branch_id"),
+  campaignId: integer("campaign_id"),
+  platform: text("platform"), // instagram | tiktok | snapchat | twitter | youtube | other
+  publishDate: text("publish_date"),
+  designer: text("designer"),
+  uploadedBy: varchar("uploaded_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_media_assets_category").on(table.category),
+  index("idx_media_assets_branch").on(table.branchId),
+  index("idx_media_assets_campaign").on(table.campaignId),
+  index("idx_media_assets_platform").on(table.platform),
+]);
+
+export const brandColors = pgTable("brand_colors", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  hex: text("hex").notNull(),
+  description: text("description"),
+  usage: text("usage"),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const brandFonts = pgTable("brand_fonts", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  family: text("family").notNull(),
+  language: text("language").notNull(), // ar | en | both
+  weights: text("weights"),
+  downloadUrl: text("download_url"),
+  notes: text("notes"),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertMediaAssetSchema = createInsertSchema(mediaAssets).omit({ id: true, createdAt: true });
+export const updateMediaAssetSchema = insertMediaAssetSchema.partial().omit({ uploadedBy: true, storagePath: true, fileName: true, fileSize: true, mimeType: true });
+export type MediaAsset = typeof mediaAssets.$inferSelect;
+export type InsertMediaAsset = z.infer<typeof insertMediaAssetSchema>;
+
+export const insertBrandColorSchema = createInsertSchema(brandColors).omit({ id: true, createdAt: true });
+export type BrandColor = typeof brandColors.$inferSelect;
+export type InsertBrandColor = z.infer<typeof insertBrandColorSchema>;
+
+export const insertBrandFontSchema = createInsertSchema(brandFonts).omit({ id: true, createdAt: true });
+export type BrandFont = typeof brandFonts.$inferSelect;
+export type InsertBrandFont = z.infer<typeof insertBrandFontSchema>;

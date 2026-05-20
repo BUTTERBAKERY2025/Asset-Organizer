@@ -16,7 +16,7 @@ import {
   Shield, MapPin, Megaphone, UserCheck, Calendar, UsersRound, Building, Briefcase,
   Receipt, PieChart, Lock, Layers, PieChartIcon, Share2, Languages, Warehouse,
   PackageCheck, Send, ShoppingCart, FolderOpen, Landmark, Scale, Vote, FileCheck,
-  Sparkles, Crown, Handshake, DoorOpen, Bell, Store, ShieldAlert, MessageCircle, LayoutGrid
+  Sparkles, Crown, Handshake, DoorOpen, Bell, Store, ShieldAlert, MessageCircle, LayoutGrid, Camera
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
@@ -353,6 +353,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/marketing-campaigns", label: t("sidebar.marketingCampaigns"), icon: Target, module: "marketing_campaigns", indent: true },
           { href: "/marketing-social", label: t("sidebar.socialMedia"), icon: Share2, module: "marketing", indent: true },
           { href: "/marketing-opening-campaigns", label: "حملات افتتاح الفروع", icon: Gift, module: "marketing", indent: true },
+          { href: "/marketing-media-team", label: "فريق التصوير والميديا", icon: Camera, module: "marketing", indent: true },
           { href: "/social-responsibility", label: t("sidebar.socialResponsibility"), icon: Handshake, module: "social_responsibility", indent: true },
           { href: "/marketing-influencers", label: t("sidebar.influencers"), icon: UserCheck, module: "marketing_influencers", indent: true },
           { href: "/influencer-contracts", label: t("sidebar.influencerContracts"), icon: FileText, module: "marketing_influencers", indent: true },

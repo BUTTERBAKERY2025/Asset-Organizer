@@ -113,6 +113,7 @@ import { registerGovernanceRoutes } from "./governance-routes";
 import { registerJobOfferRoutes } from "./job-offers-routes";
 import { registerOnboardingRoutes } from "./onboarding-routes";
 import { registerBranchOpeningRoutes } from "./branch-opening-routes";
+import { registerMediaTeamRoutes } from "./media-team-routes";
 import { registerEmploymentApplicationRoutes } from "./employment-applications-routes";
 import { registerSocialResponsibilityRoutes } from "./social-responsibility-routes";
 import { registerSecurityRoutes } from "./security-routes";
@@ -398,6 +399,7 @@ export async function registerRoutes(
   registerJobOfferRoutes(app);
   registerOnboardingRoutes(app);
   registerBranchOpeningRoutes(app);
+  registerMediaTeamRoutes(app);
   registerEmploymentApplicationRoutes(app);
   registerSocialResponsibilityRoutes(app);
   registerSecurityRoutes(app);
