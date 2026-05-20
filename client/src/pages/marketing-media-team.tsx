@@ -217,11 +217,28 @@ function IdentityTab() {
     queryKey: ["/api/media/assets", "identity"],
     queryFn: async () => { const r = await fetch("/api/media/assets?category=identity"); return r.json(); },
   });
+  const { data: stats } = useQuery<any>({
+    queryKey: ["/api/media/stats"],
+    queryFn: async () => { const r = await fetch("/api/media/stats"); return r.json(); },
+  });
 
   const [colorOpen, setColorOpen] = useState(false);
   const [editColor, setEditColor] = useState<BrandColor | null>(null);
   const [fontOpen, setFontOpen] = useState(false);
   const [editFont, setEditFont] = useState<BrandFont | null>(null);
+
+  // استخراج إحصائيات بنوع الملف
+  const imgCount = stats?.byType?.find((r: any) => r.file_type === "image")?.count || 0;
+  const vidCount = stats?.byType?.find((r: any) => r.file_type === "video")?.count || 0;
+  const docCount = (stats?.byType || []).filter((r: any) => r.file_type !== "image" && r.file_type !== "video").reduce((s: number, r: any) => s + Number(r.count || 0), 0);
+  const totalCount = Number(stats?.totals?.total_count || 0);
+  const totalSize = Number(stats?.totals?.total_size || 0);
+  const campsTotal = Number(stats?.campaigns?.total || 0);
+  const campsActive = Number(stats?.campaigns?.active || 0);
+
+  // أبرز فئات الملفات
+  const catRows = stats?.byCategory || [];
+  const maxCatCount = Math.max(1, ...catRows.map((r: any) => Number(r.count || 0)));
 
   const saveColor = useMutation({
     mutationFn: async (body: any) => {
@@ -251,9 +268,68 @@ function IdentityTab() {
   const copyHex = (hex: string) => { navigator.clipboard.writeText(hex); toast({ title: "تم النسخ", description: hex }); };
 
   return (
-    <div className="space-y-6">
-      <SectionCard title="اللوجو الرسمي" icon={<ImageIcon className="w-5 h-5" />} count={logoAssets.length}>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="space-y-5">
+      {/* ===== داش بورد الإحصائيات ===== */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
+        <MiniStat icon={<Layers className="w-4 h-4" />} label="إجمالي الملفات" value={totalCount} tone="amber" />
+        <MiniStat icon={<ImageIcon className="w-4 h-4" />} label="الصور" value={imgCount} tone="blue" />
+        <MiniStat icon={<Video className="w-4 h-4" />} label="الفيديوهات" value={vidCount} tone="rose" />
+        <MiniStat icon={<FileText className="w-4 h-4" />} label="ملفات أخرى" value={docCount} tone="purple" />
+        <MiniStat icon={<FolderOpen className="w-4 h-4" />} label="الحملات" value={`${campsActive}/${campsTotal}`} tone="green" />
+        <MiniStat icon={<HardDrive className="w-4 h-4" />} label="حجم المكتبة" value={formatBytes(totalSize)} tone="slate" />
+      </div>
+
+      {/* ===== توزيع الملفات حسب الفئة + ملخص الهوية ===== */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* بطاقة توزيع */}
+        <Card className="lg:col-span-2 border-0 shadow-sm overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 bg-gradient-to-l from-slate-50 to-white border-b py-3 px-4">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <div className="bg-amber-100 text-amber-700 p-1.5 rounded-md"><Layers className="w-4 h-4" /></div>
+              توزيع الملفات حسب الفئة
+            </CardTitle>
+            <Badge variant="secondary" className="text-[10px]">{catRows.length} فئة</Badge>
+          </CardHeader>
+          <CardContent className="p-4 space-y-2.5">
+            {catRows.length === 0 ? (
+              <div className="text-center text-sm text-slate-400 py-6">لا توجد بيانات بعد</div>
+            ) : catRows.map((r: any) => {
+              const pct = Math.round((Number(r.count) / maxCatCount) * 100);
+              return (
+                <div key={r.category} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-slate-700">{CATEGORY_LABELS[r.category] || r.category}</span>
+                    <span className="text-slate-500"><span className="font-bold text-slate-800">{r.count}</span> ملف · {formatBytes(Number(r.total_size))}</span>
+                  </div>
+                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-l from-amber-500 to-orange-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+
+        {/* بطاقة ملخص الهوية */}
+        <Card className="border-0 shadow-sm overflow-hidden">
+          <CardHeader className="bg-gradient-to-l from-amber-50 to-white border-b py-3 px-4">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <div className="bg-amber-100 text-amber-700 p-1.5 rounded-md"><Sparkles className="w-4 h-4" /></div>
+              عناصر الهوية
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 space-y-3">
+            <IdentitySummaryRow icon={<ImageIcon className="w-4 h-4" />} label="أصول الهوية (لوجو)" value={logoAssets.length} color="amber" />
+            <IdentitySummaryRow icon={<Palette className="w-4 h-4" />} label="الألوان الرسمية" value={colors.length} color="rose" />
+            <IdentitySummaryRow icon={<Type className="w-4 h-4" />} label="الخطوط المعتمدة" value={fonts.length} color="indigo" />
+            <IdentitySummaryRow icon={<FolderOpen className="w-4 h-4" />} label="الحملات النشطة" value={campsActive} color="green" />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ===== اللوجو الرسمي ===== */}
+      <SectionCard title="اللوجو الرسمي" icon={<ImageIcon className="w-4 h-4" />} count={logoAssets.length}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <LogoPreview label="كريمي" bg="#FFF8EE" />
           <LogoPreview label="أبيض" bg="#FFFFFF" />
           <LogoPreview label="ذهبي" bg="#D4A574" />
@@ -261,30 +337,32 @@ function IdentityTab() {
         </div>
       </SectionCard>
 
-      <SectionCard title="لوحة الألوان الرسمية" icon={<Palette className="w-5 h-5" />} count={colors.length} action={
-        <Button size="sm" onClick={() => { setEditColor(null); setColorOpen(true); }} data-testid="btn-add-color" className="bg-amber-600 hover:bg-amber-700">
-          <Plus className="w-4 h-4 ml-1" /> إضافة لون
+      {/* ===== لوحة الألوان ===== */}
+      <SectionCard title="لوحة الألوان الرسمية" icon={<Palette className="w-4 h-4" />} count={colors.length} action={
+        <Button size="sm" onClick={() => { setEditColor(null); setColorOpen(true); }} data-testid="btn-add-color" className="bg-amber-600 hover:bg-amber-700 h-8">
+          <Plus className="w-3.5 h-3.5 ml-1" /> <span className="hidden sm:inline">إضافة لون</span><span className="sm:hidden">لون</span>
         </Button>
       }>
-        {colors.length === 0 ? <EmptyState text="لا توجد ألوان بعد" /> : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+        {colors.length === 0 ? <EmptyState text="لا توجد ألوان بعد" sub="أضف أول لون لبناء لوحة الهوية البصرية" /> : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
             {colors.map(c => (
-              <div key={c.id} className="border rounded-xl overflow-hidden bg-white hover:shadow-md transition group" data-testid={`color-${c.id}`}>
-                <div className="h-24 cursor-pointer relative" style={{ backgroundColor: c.hex }} onClick={() => copyHex(c.hex)}>
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/30 transition">
-                    <Copy className="w-5 h-5 text-white" />
-                  </div>
-                </div>
-                <div className="p-3">
-                  <div className="font-bold text-sm">{c.name}</div>
-                  <div className="flex items-center justify-between mt-1">
-                    <code className="text-xs text-slate-600 cursor-pointer font-mono" onClick={() => copyHex(c.hex)}>{c.hex.toUpperCase()}</code>
-                    <div className="flex gap-0.5">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditColor(c); setColorOpen(true); }}><Pencil className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600" onClick={() => { if (confirm("حذف اللون؟")) delColor.mutate(c.id); }}><Trash2 className="w-3.5 h-3.5" /></Button>
+              <div key={c.id} className="border rounded-xl overflow-hidden bg-white hover:shadow-md hover:border-amber-300 transition group" data-testid={`color-${c.id}`}>
+                <div className="h-20 cursor-pointer relative" style={{ backgroundColor: c.hex }} onClick={() => copyHex(c.hex)}>
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 transition">
+                    <div className="bg-white/90 text-slate-800 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1">
+                      <Copy className="w-3 h-3" /> نسخ
                     </div>
                   </div>
-                  {c.usage && <div className="text-xs text-slate-500 mt-1.5">{c.usage}</div>}
+                </div>
+                <div className="p-2.5">
+                  <div className="font-bold text-xs truncate" title={c.name}>{c.name}</div>
+                  <code className="text-[10px] text-slate-500 font-mono block cursor-pointer hover:text-amber-600 truncate" onClick={() => copyHex(c.hex)} title="نسخ">{c.hex.toUpperCase()}</code>
+                  {c.usage && <div className="text-[10px] text-slate-400 mt-0.5 truncate" title={c.usage}>{c.usage}</div>}
+                  <div className="flex gap-0.5 mt-1.5 pt-1.5 border-t">
+                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { setEditColor(c); setColorOpen(true); }}><Pencil className="w-3 h-3" /></Button>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 text-red-600 hover:bg-red-50" onClick={() => { if (confirm("حذف اللون؟")) delColor.mutate(c.id); }}><Trash2 className="w-3 h-3" /></Button>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 mr-auto" onClick={() => copyHex(c.hex)} title="نسخ"><Copy className="w-3 h-3" /></Button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -292,29 +370,33 @@ function IdentityTab() {
         )}
       </SectionCard>
 
-      <SectionCard title="الخطوط المعتمدة" icon={<Type className="w-5 h-5" />} count={fonts.length} action={
-        <Button size="sm" onClick={() => { setEditFont(null); setFontOpen(true); }} data-testid="btn-add-font" className="bg-amber-600 hover:bg-amber-700">
-          <Plus className="w-4 h-4 ml-1" /> إضافة خط
+      {/* ===== الخطوط ===== */}
+      <SectionCard title="الخطوط المعتمدة" icon={<Type className="w-4 h-4" />} count={fonts.length} action={
+        <Button size="sm" onClick={() => { setEditFont(null); setFontOpen(true); }} data-testid="btn-add-font" className="bg-amber-600 hover:bg-amber-700 h-8">
+          <Plus className="w-3.5 h-3.5 ml-1" /> <span className="hidden sm:inline">إضافة خط</span><span className="sm:hidden">خط</span>
         </Button>
       }>
-        {fonts.length === 0 ? <EmptyState text="لا توجد خطوط بعد" /> : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {fonts.length === 0 ? <EmptyState text="لا توجد خطوط بعد" sub="أضف خطوط العلامة التجارية ليتمكن الفريق من استخدامها" /> : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {fonts.map(f => (
-              <div key={f.id} className="border rounded-xl p-4 bg-white hover:shadow-md transition" data-testid={`font-${f.id}`}>
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <div className="font-bold text-lg">{f.name}</div>
-                    <Badge variant="secondary" className="text-[10px] mt-0.5">{f.language === "ar" ? "عربي" : f.language === "en" ? "إنجليزي" : "متعدد"}</Badge>
+              <div key={f.id} className="border rounded-xl p-3.5 bg-white hover:shadow-md hover:border-amber-300 transition group relative overflow-hidden" data-testid={`font-${f.id}`}>
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-l from-amber-500 to-orange-500 opacity-0 group-hover:opacity-100 transition" />
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="min-w-0">
+                    <div className="font-bold text-sm truncate" title={f.name}>{f.name}</div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <Badge variant="secondary" className="text-[9px] px-1.5 py-0">{f.language === "ar" ? "عربي" : f.language === "en" ? "إنجليزي" : "متعدد"}</Badge>
+                      {f.weights && <span className="text-[10px] text-slate-400">· {f.weights}</span>}
+                    </div>
                   </div>
-                  <div className="flex gap-1">
-                    {f.downloadUrl && <a href={f.downloadUrl} target="_blank" rel="noreferrer"><Button size="icon" variant="ghost" className="h-7 w-7"><Download className="w-3.5 h-3.5" /></Button></a>}
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditFont(f); setFontOpen(true); }}><Pencil className="w-3.5 h-3.5" /></Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600" onClick={() => { if (confirm("حذف الخط؟")) delFont.mutate(f.id); }}><Trash2 className="w-3.5 h-3.5" /></Button>
+                  <div className="flex gap-0.5 flex-shrink-0">
+                    {f.downloadUrl && <a href={f.downloadUrl} target="_blank" rel="noreferrer"><Button size="icon" variant="ghost" className="h-6 w-6"><Download className="w-3 h-3" /></Button></a>}
+                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { setEditFont(f); setFontOpen(true); }}><Pencil className="w-3 h-3" /></Button>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 text-red-600 hover:bg-red-50" onClick={() => { if (confirm("حذف الخط؟")) delFont.mutate(f.id); }}><Trash2 className="w-3 h-3" /></Button>
                   </div>
                 </div>
-                <div className="text-2xl my-3 leading-relaxed" style={{ fontFamily: f.family }}>أبجد هوز حطي — Aa Bb 123</div>
-                {f.weights && <div className="text-xs text-slate-600">الأوزان: {f.weights}</div>}
-                {f.notes && <div className="text-xs text-slate-500 mt-0.5">{f.notes}</div>}
+                <div className="text-xl my-2 leading-relaxed text-slate-700 truncate" style={{ fontFamily: f.family }}>أبجد هوز — Aa Bb 123</div>
+                {f.notes && <div className="text-[10px] text-slate-400 truncate" title={f.notes}>{f.notes}</div>}
               </div>
             ))}
           </div>
@@ -323,6 +405,44 @@ function IdentityTab() {
 
       <ColorDialog open={colorOpen} onClose={() => { setColorOpen(false); setEditColor(null); }} initial={editColor} onSave={(v: any) => saveColor.mutate(v)} saving={saveColor.isPending} />
       <FontDialog open={fontOpen} onClose={() => { setFontOpen(false); setEditFont(null); }} initial={editFont} onSave={(v: any) => saveFont.mutate(v)} saving={saveFont.isPending} />
+    </div>
+  );
+}
+
+function MiniStat({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: any; tone: string }) {
+  const tones: Record<string, { bg: string; text: string; ring: string }> = {
+    amber:  { bg: "bg-amber-50",   text: "text-amber-700",   ring: "ring-amber-100" },
+    blue:   { bg: "bg-blue-50",    text: "text-blue-700",    ring: "ring-blue-100" },
+    rose:   { bg: "bg-rose-50",    text: "text-rose-700",    ring: "ring-rose-100" },
+    purple: { bg: "bg-purple-50",  text: "text-purple-700",  ring: "ring-purple-100" },
+    green:  { bg: "bg-emerald-50", text: "text-emerald-700", ring: "ring-emerald-100" },
+    indigo: { bg: "bg-indigo-50",  text: "text-indigo-700",  ring: "ring-indigo-100" },
+    slate:  { bg: "bg-slate-100",  text: "text-slate-700",   ring: "ring-slate-200" },
+  };
+  const t = tones[tone] || tones.amber;
+  return (
+    <div className="bg-white border rounded-xl p-3 hover:shadow-sm transition group">
+      <div className="flex items-center gap-2">
+        <div className={`${t.bg} ${t.text} p-1.5 rounded-lg ring-1 ${t.ring} group-hover:scale-110 transition`}>{icon}</div>
+        <div className="text-[10px] sm:text-xs text-slate-500 truncate">{label}</div>
+      </div>
+      <div className="text-lg sm:text-xl font-bold text-slate-800 mt-1.5 truncate">{value}</div>
+    </div>
+  );
+}
+
+function IdentitySummaryRow({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: number; color: string }) {
+  const colors: Record<string, string> = {
+    amber: "bg-amber-100 text-amber-700",
+    rose: "bg-rose-100 text-rose-700",
+    indigo: "bg-indigo-100 text-indigo-700",
+    green: "bg-emerald-100 text-emerald-700",
+  };
+  return (
+    <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition">
+      <div className={`${colors[color]} p-2 rounded-lg`}>{icon}</div>
+      <div className="flex-1 text-xs sm:text-sm font-medium text-slate-700">{label}</div>
+      <div className="text-lg font-extrabold text-slate-900">{value}</div>
     </div>
   );
 }
@@ -357,12 +477,14 @@ function EmptyState({ text, sub, action }: { text: string; sub?: string; action?
 }
 
 function LogoPreview({ label, bg }: { label: string; bg: string }) {
+  const isDark = bg === "#1A1A1A";
   return (
-    <div className="border rounded-xl overflow-hidden hover:shadow-md transition">
-      <div className="h-32 flex items-center justify-center p-4" style={{ backgroundColor: bg }}>
-        <img src={butterLogo} alt="Butter Bakery" className="max-h-full max-w-full object-contain" />
+    <div className="border rounded-xl overflow-hidden hover:shadow-md hover:border-amber-300 transition group">
+      <div className="h-24 sm:h-28 flex items-center justify-center p-3 sm:p-4 relative" style={{ backgroundColor: bg }}>
+        <img src={butterLogo} alt="Butter Bakery" className="max-h-full max-w-full object-contain group-hover:scale-105 transition" />
+        <div className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${isDark ? "bg-white/50" : "bg-slate-300"}`} />
       </div>
-      <div className="text-xs text-center py-2 bg-white font-medium">على الـ{label}</div>
+      <div className="text-[11px] sm:text-xs text-center py-1.5 sm:py-2 bg-white font-semibold text-slate-700">على الـ{label}</div>
     </div>
   );
 }

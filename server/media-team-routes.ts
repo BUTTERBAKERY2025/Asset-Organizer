@@ -60,11 +60,14 @@ export function registerMediaTeamRoutes(app: Express) {
   // إحصائيات
   app.get("/api/media/stats", isAuthenticated, requirePermission(PM, "view"), async (_req, res) => {
     try {
-      const rows = await db.execute<any>(sql`
-        SELECT category, COUNT(*)::int AS count, COALESCE(SUM(file_size),0)::bigint AS total_size
-        FROM media_assets GROUP BY category
-      `).then((r: any) => r.rows ?? r);
-      res.json(rows);
+      const [byCat, byType, totals, brand, camps] = await Promise.all([
+        db.execute<any>(sql`SELECT category, COUNT(*)::int AS count, COALESCE(SUM(file_size),0)::bigint AS total_size FROM media_assets GROUP BY category`).then((r: any) => r.rows ?? r),
+        db.execute<any>(sql`SELECT file_type, COUNT(*)::int AS count, COALESCE(SUM(file_size),0)::bigint AS total_size FROM media_assets GROUP BY file_type`).then((r: any) => r.rows ?? r),
+        db.execute<any>(sql`SELECT COUNT(*)::int AS total_count, COALESCE(SUM(file_size),0)::bigint AS total_size, COUNT(DISTINCT designer)::int AS designers_count FROM media_assets`).then((r: any) => (r.rows ?? r)[0]),
+        db.execute<any>(sql`SELECT (SELECT COUNT(*) FROM brand_colors)::int AS colors_count, (SELECT COUNT(*) FROM brand_fonts)::int AS fonts_count`).then((r: any) => (r.rows ?? r)[0]),
+        db.execute<any>(sql`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE status='active')::int AS active FROM media_campaigns`).then((r: any) => (r.rows ?? r)[0]),
+      ]);
+      res.json({ byCategory: byCat, byType, totals, brand, campaigns: camps });
     } catch (e: any) {
       console.error("[media] stats error:", e);
       res.status(500).json({ error: e.message });
