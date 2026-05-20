@@ -8336,45 +8336,42 @@ export async function registerRoutes(
         branchIds = branches.map(b => b.id);
       }
       
-      const results = [];
-      
-      for (const bId of branchIds) {
-        // 1. Get branch info
-        const branch = await storage.getBranch(bId);
-        if (!branch) continue;
-        
-        // 2. Get sales from cashier_journals
-        const startDate = `${yearNum}-${String(monthNum).padStart(2, '0')}-01`;
-        const endDate = `${yearNum}-${String(monthNum).padStart(2, '0')}-${new Date(yearNum, monthNum, 0).getDate()}`;
-        
-        // جلب اليوميات المعتمدة (posted أو approved)
-        const journalsResult = await storage.getCashierJournalsFiltered({
-          branchId: bId
-        });
-        
+      // Use cached getAllBranches lookup instead of N separate getBranch() calls
+      const allBranchesForLookup = await storage.getAllBranches();
+      const branchMap = new Map(allBranchesForLookup.map(b => [b.id, b]));
+
+      // Process branches in small batches to respect the DB pool limit
+      // (Supabase pool max=15; each branch issues 4 parallel queries → batch of 3 = 12 concurrent queries, safely under the limit).
+      const BRANCH_BATCH_SIZE = 3;
+      const processBranch = async (bId: string) => {
+        const branch = branchMap.get(bId);
+        if (!branch) return null;
+
+        const [journalsResult, settings, inputs, allBranchEmps] = await Promise.all([
+          storage.getCashierJournalsFiltered({ branchId: bId }),
+          storage.getPnlBranchSettings(bId),
+          storage.getPnlMonthlyInputs(bId, yearNum, monthNum),
+          storage.getBranchEmployeesByBranch(bId),
+        ]);
+
         // فلترة اليوميات المعتمدة فقط (posted أو approved)
-        const approvedJournals = journalsResult.journals.filter((j: any) => 
+        const approvedJournals = journalsResult.journals.filter((j: any) =>
           j.status === 'posted' || j.status === 'approved'
         );
-        
+
         // Filter by date range from approved journals
         const monthJournals = approvedJournals.filter((j: any) => {
           const jDate = new Date(j.journalDate);
           return jDate.getFullYear() === yearNum && (jDate.getMonth() + 1) === monthNum;
         });
-        
+
         const grossSales = monthJournals.reduce((sum: number, j: any) => sum + (j.totalSales || 0), 0);
-        
-        // 3. Calculate VAT (15%) - صافي المبيعات = الإجمالي ÷ 1.15
+
+        // VAT (15%) - صافي المبيعات = الإجمالي ÷ 1.15
         const netSales = grossSales / 1.15;
         const vatAmount = grossSales - netSales;
-        
-        // 4. Get P&L settings (fixed rent)
-        const settings = await storage.getPnlBranchSettings(bId);
+
         const monthlyRent = settings?.monthlyRent || 0;
-        
-        // 5. Get monthly inputs (variable costs)
-        const inputs = await storage.getPnlMonthlyInputs(bId, yearNum, monthNum);
         const electricityCost = inputs?.electricityCost || 0;
         const waterCost = inputs?.waterCost || 0;
         const utilitiesOther = inputs?.utilitiesOther || 0;
@@ -8383,9 +8380,7 @@ export async function registerRoutes(
         const marketingCost = inputs?.marketingCost || 0;
         const suppliesCost = inputs?.suppliesCost || 0;
         const otherCosts = inputs?.otherCosts || 0;
-        
-        // 6. Get employee costs from branch_employees
-        const allBranchEmps = await storage.getBranchEmployeesByBranch(bId);
+
         const employees = allBranchEmps.filter((e: any) => e.status === 'active');
         let totalSalaries = 0;
         let totalGosi = 0; // Saudi GOSI 12%
@@ -8443,23 +8438,23 @@ export async function registerRoutes(
         const grossMargin = netSales > 0 ? (grossProfit / netSales) * 100 : 0;
         const netMargin = netSales > 0 ? (netProfit / netSales) * 100 : 0;
         
-        results.push({
+        return {
           branchId: bId,
           branchName: branch.name,
           branchNameEn: branch.name, // Use Arabic name for now
           year: yearNum,
           month: monthNum,
-          
+
           // Sales
           grossSales,
           vatAmount,
           netSales,
-          
+
           // COGS
           cogsCost,
           grossProfit,
           grossMargin,
-          
+
           // Employee costs breakdown
           employeeCosts: {
             salaries: totalSalaries,
@@ -8467,10 +8462,10 @@ export async function registerRoutes(
             nonSaudiCosts: totalNonSaudiCosts,
             total: totalEmployeeCosts
           },
-          
+
           // Fixed costs
           rent: monthlyRent,
-          
+
           // Variable costs
           utilities: {
             electricity: electricityCost,
@@ -8478,7 +8473,7 @@ export async function registerRoutes(
             other: utilitiesOther,
             total: totalUtilities
           },
-          
+
           // Other operating costs
           operatingCosts: {
             maintenance: maintenanceCost,
@@ -8486,18 +8481,27 @@ export async function registerRoutes(
             supplies: suppliesCost,
             other: otherCosts
           },
-          
+
           totalOperatingCosts,
           operatingProfit,
           netProfit,
           netMargin,
-          
+
           // Metadata
           journalCount: monthJournals.length,
           employeeCount: employees.length,
           hasMonthlyInputs: !!inputs
-        });
+        };
+      };
+
+      const branchResults: Array<Awaited<ReturnType<typeof processBranch>>> = [];
+      for (let i = 0; i < branchIds.length; i += BRANCH_BATCH_SIZE) {
+        const batch = branchIds.slice(i, i + BRANCH_BATCH_SIZE);
+        const batchResults = await Promise.all(batch.map(processBranch));
+        branchResults.push(...batchResults);
       }
+
+      const results = branchResults.filter((r): r is NonNullable<typeof r> => r !== null);
       
       // Calculate company-wide totals if multiple branches
       if (results.length > 1) {
