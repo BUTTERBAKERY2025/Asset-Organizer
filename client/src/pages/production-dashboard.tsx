@@ -167,7 +167,7 @@ export default function ProductionDashboardPage() {
     },
     enabled: !!selectedBranch && !!selectedDate,
     staleTime: 1000 * 30,
-    refetchInterval: autoRefresh ? 60000 : false,
+    refetchInterval: () => (autoRefresh && !(typeof document !== "undefined" && document.hidden) ? 60000 : false),
     placeholderData: (prev) => prev,
   });
 

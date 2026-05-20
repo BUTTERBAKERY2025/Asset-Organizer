@@ -20,9 +20,10 @@ export function usePermissions() {
       return res.json();
     },
     enabled: !!user,
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 60,
+    gcTime: 1000 * 60 * 120,
     refetchOnWindowFocus: false,
-    refetchOnMount: true,
+    refetchOnMount: false,
     refetchOnReconnect: true,
   });
 

@@ -174,7 +174,7 @@ export default function EventPosPage() {
       const res = await apiRequest("GET", `/api/pos/sales/${EVENT_BRANCH_ID}?dateFrom=${historyDateFrom}&dateTo=${historyDateTo}`);
       return res.json();
     },
-    refetchInterval: 30000,
+    refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 30000),
   });
 
   const { data: todaySummary } = useQuery({
@@ -184,7 +184,7 @@ export default function EventPosPage() {
       const res = await apiRequest("GET", `/api/pos/summary/${EVENT_BRANCH_ID}/${today}`);
       return res.json();
     },
-    refetchInterval: 30000,
+    refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 30000),
   });
 
   const { data: heldOrders = [], refetch: refetchHeld } = useQuery({

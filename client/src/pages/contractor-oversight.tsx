@@ -142,7 +142,7 @@ export default function ContractorOversightPage() {
 
   const { data, isLoading, error } = useQuery<OversightResponse>({
     queryKey: ["/api/construction/oversight"],
-    refetchInterval: 60000,
+    refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 60000),
     staleTime: 30000,
   });
 

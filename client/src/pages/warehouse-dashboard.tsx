@@ -70,7 +70,7 @@ export default function WarehouseDashboardPage() {
       const res = await fetch(`/api/warehouse/dashboard-stats${params}`);
       return res.json();
     },
-    refetchInterval: 60000,
+    refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 60000),
     staleTime: 1000 * 30, // 30 seconds - dashboard stats
     placeholderData: (prev) => prev, // Keep previous data while loading
   });
@@ -82,7 +82,7 @@ export default function WarehouseDashboardPage() {
       const res = await fetch(`/api/warehouse/notifications${params}`);
       return res.json();
     },
-    refetchInterval: 60000,
+    refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 60000),
     staleTime: 1000 * 30, // 30 seconds
     placeholderData: (prev) => prev,
   });
@@ -94,7 +94,7 @@ export default function WarehouseDashboardPage() {
       const res = await fetch(`/api/warehouse/notifications/unread-count${params}`);
       return res.json();
     },
-    refetchInterval: 60000,
+    refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 60000),
     staleTime: 1000 * 30, // 30 seconds
     placeholderData: (prev) => prev,
   });

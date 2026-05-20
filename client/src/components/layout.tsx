@@ -144,7 +144,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
     if (activeGroup) {
       setOpenGroups(prev => prev[activeGroup] ? prev : { ...prev, [activeGroup]: true });
     }
-    prefetchAdjacentPages(location);
+    const prefetchTimer = setTimeout(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      prefetchAdjacentPages(location);
+    }, 500);
     requestAnimationFrame(() => {
       const bar = document.getElementById("nav-progress-bar");
       if (bar && bar.classList.contains("loading")) {
@@ -152,6 +155,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         setTimeout(() => { bar.className = ""; }, 180);
       }
     });
+    return () => clearTimeout(prefetchTimer);
   }, [location]);
 
   const handleLinkHover = useCallback((href: string) => {

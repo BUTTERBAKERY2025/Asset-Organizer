@@ -115,7 +115,7 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
       return data;
     },
     enabled: !!selectedDate && !!selectedBranch,
-    refetchInterval: autoRefresh ? 60000 : false,
+    refetchInterval: () => (autoRefresh && !(typeof document !== "undefined" && document.hidden) ? 60000 : false),
     staleTime: 30 * 1000,
     refetchOnWindowFocus: false,
     retry: false,

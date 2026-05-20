@@ -108,7 +108,7 @@ export function NotificationsDropdown() {
       return res.json();
     },
     staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
+    refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 60 * 1000),
   });
 
   // Optimistic update: flip isRead in the cache immediately so the badge counter

@@ -202,7 +202,7 @@ export default function ConstructionProjectDetailPage() {
       return res.json();
     },
     enabled: projectId > 0,
-    refetchInterval: 60_000,
+    refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 60_000),
   });
 
   const TRADE_LABELS: Record<string, string> = {

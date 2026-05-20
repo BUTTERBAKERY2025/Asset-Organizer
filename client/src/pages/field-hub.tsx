@@ -18,7 +18,7 @@ interface FieldHubData {
 export default function FieldHubPage() {
   const { data, isLoading } = useQuery<FieldHubData>({
     queryKey: ["/api/field-hub"],
-    refetchInterval: 60000,
+    refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 60000),
   });
 
   return (

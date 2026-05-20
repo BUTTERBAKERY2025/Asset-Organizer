@@ -69,7 +69,7 @@ export default function NotificationsCenterPage() {
   });
   const { data: queue = [], isLoading: loadingQueue } = useQuery<QueueItem[]>({
     queryKey: ["/api/notification-queue"],
-    refetchInterval: 15000,
+    refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 15000),
   });
 
   const reportTypes = status?.reportTypes || {};

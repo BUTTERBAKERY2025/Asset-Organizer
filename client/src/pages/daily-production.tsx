@@ -199,7 +199,7 @@ export default function DailyProductionPage() {
       return res.json();
     },
     enabled: !!branchId,
-    refetchInterval: autoRefresh ? 60000 : false,
+    refetchInterval: () => (autoRefresh && !(typeof document !== "undefined" && document.hidden) ? 60000 : false),
     staleTime: 15000,
   });
 
@@ -212,7 +212,7 @@ export default function DailyProductionPage() {
       return res.json();
     },
     enabled: !!branchId && !!selectedDate,
-    refetchInterval: autoRefresh ? 60000 : false,
+    refetchInterval: () => (autoRefresh && !(typeof document !== "undefined" && document.hidden) ? 60000 : false),
     staleTime: 15000,
   });
 

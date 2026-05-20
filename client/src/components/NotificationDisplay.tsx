@@ -450,7 +450,7 @@ export function NotificationDisplay() {
       if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
-    refetchInterval: 60000,
+    refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 60000),
     refetchOnMount: true,
     staleTime: 30000,
     enabled: true,
