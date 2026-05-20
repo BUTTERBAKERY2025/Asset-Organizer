@@ -135,8 +135,15 @@ app.use((req, res, next) => {
 
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (reqPath.startsWith("/api") && duration > 500) {
-      log(`SLOW ${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`);
+    if (reqPath.startsWith("/api")) {
+      // Tiered logging: critical >2s, slow >500ms, watch >200ms
+      if (duration > 2000) {
+        log(`🔴 CRITICAL ${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`);
+      } else if (duration > 500) {
+        log(`🟠 SLOW ${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`);
+      } else if (duration > 200) {
+        log(`🟡 WATCH ${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`);
+      }
     }
   });
 

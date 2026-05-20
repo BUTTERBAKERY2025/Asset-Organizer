@@ -8316,6 +8316,7 @@ export async function registerRoutes(
 
   // Enhanced P&L Summary - ملخص الأرباح والخسائر المحسن
   app.get("/api/pnl/enhanced-summary", isAuthenticated, requirePermission("pnl", "view"), async (req, res) => {
+    const __t0 = Date.now();
     try {
       const { branchId, year, month } = req.query;
       const yearNum = parseInt(year as string) || new Date().getFullYear();
@@ -8548,9 +8549,11 @@ export async function registerRoutes(
         totals.grossMargin = totals.netSales > 0 ? (totals.grossProfit / totals.netSales) * 100 : 0;
         totals.netMargin = totals.netSales > 0 ? (totals.netProfit / totals.netSales) * 100 : 0;
         
+        console.log(`[perf] /api/pnl/enhanced-summary (multi) branches=${results.length} took ${Date.now() - __t0}ms`);
         return res.json({ branches: results, totals });
       }
-      
+
+      console.log(`[perf] /api/pnl/enhanced-summary (single) branches=${results.length} took ${Date.now() - __t0}ms`);
       res.json({ branches: results, totals: results[0] || null });
     } catch (error) {
       console.error("Error getting enhanced P&L summary:", error);
