@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { PartyPopper, Gift, Sparkles, Loader2, CheckCircle2, MapPin, Calendar, Ticket } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import butterLogo from "@/assets/butter-logo.png";
 
 interface Campaign {
   id: number; slug: string; title: string; branchName: string; branchCity: string;
@@ -105,8 +106,11 @@ export default function OpeningPublicPage() {
       <div className="relative z-10 max-w-md mx-auto p-4 py-6 min-h-screen flex flex-col">
         {/* الهيدر */}
         <div className="text-center mb-6">
+          <div className="bg-white rounded-2xl shadow-lg p-4 inline-block mb-3">
+            <img src={butterLogo} alt="باتر بيكري" className="h-20 w-auto mx-auto" data-testid="img-logo" />
+          </div>
           <div className="inline-block animate-bounce-slow">
-            <PartyPopper className="w-14 h-14 text-amber-600 mx-auto" />
+            <PartyPopper className="w-12 h-12 text-amber-600 mx-auto" />
           </div>
           <h1 className="text-2xl font-bold text-amber-900 mt-2">
             {campaign.headline || `احتفل معنا بافتتاح ${campaign.branchName}!`}

@@ -17,6 +17,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { QRCodeSVG } from "qrcode.react";
 import { PartyPopper, QrCode, Users, Eye, Plus, Trash2, Pencil, Link as LinkIcon, Copy, Printer, Download, Loader2, X } from "lucide-react";
 import * as XLSX from "xlsx";
+import butterLogo from "@/assets/butter-logo.png";
 
 interface Campaign {
   id: number; slug: string; title: string; branch_name: string; branch_city: string;
@@ -330,7 +331,8 @@ function QRDialog({ campaign, onClose }: { campaign: Campaign | null; onClose: (
           <DialogTitle>رابط الحملة و QR Code</DialogTitle>
         </DialogHeader>
         <div ref={printRef} className="space-y-4 p-6 bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg text-center">
-          <PartyPopper className="w-10 h-10 mx-auto text-amber-600" />
+          <img src={butterLogo} alt="باتر بيكري" className="h-16 w-auto mx-auto" />
+          <PartyPopper className="w-8 h-8 mx-auto text-amber-600" />
           <h2 className="text-xl font-bold text-amber-900">افتتاح {campaign.branch_name}</h2>
           <p className="text-sm text-slate-600">{campaign.branch_city}</p>
           {campaign.opening_date && <p className="text-sm font-bold text-amber-700">{campaign.opening_date}</p>}
