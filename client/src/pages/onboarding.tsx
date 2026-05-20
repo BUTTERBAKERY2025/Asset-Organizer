@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -648,96 +649,207 @@ function ViewDialog({ row, onClose }: { row: Row | null; onClose: () => void }) 
 
 function ConvertDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: () => void; onSuccess: () => void }) {
   const { toast } = useToast();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  // بيانات HR
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [jobTitle, setJobTitle] = useState("");
-  const [role, setRole] = useState("employee");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [nationality, setNationality] = useState("");
+  const [basicSalary, setBasicSalary] = useState<string>("0");
+  const [housingAllowance, setHousingAllowance] = useState<string>("0");
+  const [transportAllowance, setTransportAllowance] = useState<string>("0");
+  const [otherAllowances, setOtherAllowances] = useState<string>("0");
+  const [iqamaNumber, setIqamaNumber] = useState("");
+  const [hireDate, setHireDate] = useState("");
+  // حساب الدخول (اختياري)
+  const [createLogin, setCreateLogin] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState("employee");
 
   useMemo(() => {
     if (row) {
+      const o = row.offer as any;
       const parts = row.offer.candidateName.split(" ");
       setFirstName(parts[0] || "");
       setLastName(parts.slice(1).join(" ") || "");
       setJobTitle(row.offer.position || "");
       setEmail(row.offer.email || "");
       setPhone(row.offer.phone || "");
-      // اقتراح اسم مستخدم تلقائي من الإيميل/الهاتف
+      setNationality(o.nationality || "");
+      setBasicSalary(String(o.basicSalary ?? 0));
+      setHousingAllowance(String(o.housingAllowance ?? 0));
+      setTransportAllowance(String(o.transportAllowance ?? 0));
+      setOtherAllowances(String(o.otherAllowances ?? 0));
+      setIqamaNumber(o.idNumber || "");
+      setHireDate(row.notification?.actualStartDate || row.offer.startDate || "");
       const suggested = row.offer.email?.split("@")[0] || row.offer.phone?.replace(/\D/g, "") || "";
       setUsername(suggested);
       setPassword("");
       setRole("employee");
+      setCreateLogin(false);
     }
   }, [row?.offer.id]);
 
   const mutation = useMutation({
     mutationFn: async () => {
       const r = await apiRequest("POST", `/api/hr/onboarding/${row!.notification!.id}/convert`, {
-        username, password, firstName, lastName, jobTitle, role, email, phone,
+        createLogin,
+        username: createLogin ? username : undefined,
+        password: createLogin ? password : undefined,
+        role: createLogin ? role : undefined,
+        firstName,
+        lastName,
+        jobTitle,
+        email,
+        phone,
+        nationality,
+        basicSalary: Number(basicSalary) || 0,
+        housingAllowance: Number(housingAllowance) || 0,
+        transportAllowance: Number(transportAllowance) || 0,
+        otherAllowances: Number(otherAllowances) || 0,
+        iqamaNumber,
+        hireDate,
       });
       return await r.json();
     },
-    onSuccess: () => {
-      toast({ title: "تم تسجيل الموظف", description: "تمت إضافته في بيانات موظفي الفرع" });
+    onSuccess: (data: any) => {
+      toast({
+        title: "تم تسجيل الموظف",
+        description: data?.message || "تمت إضافته في موظفي الفرع",
+      });
       onSuccess();
       onClose();
     },
     onError: (e: any) => toast({ title: "فشل التحويل", description: e.message, variant: "destructive" }),
   });
 
+  // حساب إجمالي الراتب للعرض
+  const grossSalary = (Number(basicSalary) || 0) + (Number(housingAllowance) || 0) +
+    (Number(transportAllowance) || 0) + (Number(otherAllowances) || 0);
+
   return (
     <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>تحويل إلى موظف فرع</DialogTitle></DialogHeader>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>تسجيل موظف جديد في الموارد البشرية</DialogTitle>
+        </DialogHeader>
         {row && (
-          <div className="space-y-3 text-sm">
+          <div className="space-y-4 text-sm">
             <div className="bg-green-50 border border-green-200 rounded p-3 text-xs">
               ✓ تم تأكيد مباشرة <strong>{row.offer.candidateName}</strong> في فرع <strong>{row.offer.branchName}</strong>.
-              املأ بيانات الدخول لإضافته في موظفي الفرع.
+              يتم تسجيله كموظف HR كامل (راتب، جنسية، تأمينات) في صفحة موظفي الفرع.
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>اسم المستخدم *</Label>
-                <Input value={username} onChange={(e) => setUsername(e.target.value)} dir="ltr" data-testid="input-username" />
+
+            {/* ===== بيانات الموظف الأساسية ===== */}
+            <div>
+              <h3 className="font-bold text-sm mb-2 text-slate-700 border-b pb-1">بيانات الموظف</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>الاسم الأول</Label>
+                  <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} data-testid="input-first-name" />
+                </div>
+                <div className="space-y-1">
+                  <Label>اسم العائلة</Label>
+                  <Input value={lastName} onChange={(e) => setLastName(e.target.value)} data-testid="input-last-name" />
+                </div>
+                <div className="space-y-1">
+                  <Label>المسمى الوظيفي *</Label>
+                  <Input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} data-testid="input-job-title" />
+                </div>
+                <div className="space-y-1">
+                  <Label>الجنسية *</Label>
+                  <Input value={nationality} onChange={(e) => setNationality(e.target.value)} placeholder="مثال: سعودي / مصري / يمني" data-testid="input-nationality" />
+                </div>
+                <div className="space-y-1">
+                  <Label>الهاتف</Label>
+                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} dir="ltr" data-testid="input-phone" />
+                </div>
+                <div className="space-y-1">
+                  <Label>البريد الإلكتروني</Label>
+                  <Input value={email} onChange={(e) => setEmail(e.target.value)} dir="ltr" data-testid="input-email" />
+                </div>
+                <div className="space-y-1">
+                  <Label>رقم الهوية / الإقامة</Label>
+                  <Input value={iqamaNumber} onChange={(e) => setIqamaNumber(e.target.value)} dir="ltr" data-testid="input-iqama" />
+                </div>
+                <div className="space-y-1">
+                  <Label>تاريخ التعيين</Label>
+                  <Input type="date" value={hireDate} onChange={(e) => setHireDate(e.target.value)} data-testid="input-hire-date" />
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label>كلمة المرور *</Label>
-                <Input type="text" value={password} onChange={(e) => setPassword(e.target.value)} dir="ltr" placeholder="8+ أحرف، كبيرة وصغيرة وأرقام" data-testid="input-password" />
+            </div>
+
+            {/* ===== الراتب والبدلات ===== */}
+            <div>
+              <h3 className="font-bold text-sm mb-2 text-slate-700 border-b pb-1">الراتب والبدلات (من عرض العمل)</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>الراتب الأساسي * (ر.س)</Label>
+                  <Input type="number" value={basicSalary} onChange={(e) => setBasicSalary(e.target.value)} dir="ltr" data-testid="input-basic-salary" />
+                </div>
+                <div className="space-y-1">
+                  <Label>بدل السكن (ر.س)</Label>
+                  <Input type="number" value={housingAllowance} onChange={(e) => setHousingAllowance(e.target.value)} dir="ltr" data-testid="input-housing" />
+                </div>
+                <div className="space-y-1">
+                  <Label>بدل المواصلات (ر.س)</Label>
+                  <Input type="number" value={transportAllowance} onChange={(e) => setTransportAllowance(e.target.value)} dir="ltr" data-testid="input-transport" />
+                </div>
+                <div className="space-y-1">
+                  <Label>بدلات أخرى (ر.س)</Label>
+                  <Input type="number" value={otherAllowances} onChange={(e) => setOtherAllowances(e.target.value)} dir="ltr" data-testid="input-other-allowance" />
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label>الاسم الأول</Label>
-                <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+              <div className="mt-2 text-xs bg-amber-50 border border-amber-200 rounded p-2">
+                <strong>إجمالي الراتب:</strong> {grossSalary.toLocaleString()} ر.س
+                {nationality === "سعودي" && " (سيُخصم منه التأمينات للموظف السعودي)"}
               </div>
-              <div className="space-y-1">
-                <Label>اسم العائلة</Label>
-                <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+            </div>
+
+            {/* ===== حساب دخول النظام (اختياري) ===== */}
+            <div className="border-2 border-blue-200 rounded-lg p-3 bg-blue-50/50">
+              <div className="flex items-start gap-2 mb-2">
+                <Checkbox
+                  id="create-login"
+                  checked={createLogin}
+                  onCheckedChange={(c) => setCreateLogin(c === true)}
+                  data-testid="checkbox-create-login"
+                />
+                <div>
+                  <Label htmlFor="create-login" className="font-bold cursor-pointer">
+                    إنشاء حساب دخول للنظام أيضاً
+                  </Label>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    اختياري — للموظفين الذين يحتاجون استخدام النظام (كاشير، مدير، إلخ).
+                    يمكن تركه فارغاً للعمال الذين لا يحتاجون دخولاً للنظام.
+                  </p>
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label>المسمى الوظيفي</Label>
-                <Input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} />
-              </div>
-              <div className="space-y-1">
-                <Label>الدور</Label>
-                <Select value={role} onValueChange={setRole}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="employee">موظف</SelectItem>
-                    <SelectItem value="viewer">مشاهد</SelectItem>
-                    <SelectItem value="attendance_clerk">موظف حضور</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>الهاتف</Label>
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} dir="ltr" />
-              </div>
-              <div className="space-y-1">
-                <Label>البريد الإلكتروني</Label>
-                <Input value={email} onChange={(e) => setEmail(e.target.value)} dir="ltr" />
-              </div>
+              {createLogin && (
+                <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-blue-200">
+                  <div className="space-y-1">
+                    <Label>اسم المستخدم *</Label>
+                    <Input value={username} onChange={(e) => setUsername(e.target.value)} dir="ltr" data-testid="input-username" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>كلمة المرور *</Label>
+                    <Input type="text" value={password} onChange={(e) => setPassword(e.target.value)} dir="ltr" placeholder="8+ أحرف، كبيرة وصغيرة وأرقام" data-testid="input-password" />
+                  </div>
+                  <div className="space-y-1 col-span-2">
+                    <Label>الدور في النظام</Label>
+                    <Select value={role} onValueChange={setRole}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="employee">موظف</SelectItem>
+                        <SelectItem value="viewer">مشاهد</SelectItem>
+                        <SelectItem value="attendance_clerk">موظف حضور</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -746,8 +858,20 @@ function ConvertDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: 
           <Button
             className="bg-green-600 hover:bg-green-700"
             onClick={() => {
-              if (!username || !password) {
-                toast({ title: "اسم المستخدم وكلمة المرور مطلوبان", variant: "destructive" });
+              if (!jobTitle.trim()) {
+                toast({ title: "المسمى الوظيفي مطلوب", variant: "destructive" });
+                return;
+              }
+              if (!nationality.trim()) {
+                toast({ title: "الجنسية مطلوبة", variant: "destructive" });
+                return;
+              }
+              if (!Number(basicSalary) || Number(basicSalary) <= 0) {
+                toast({ title: "الراتب الأساسي مطلوب", variant: "destructive" });
+                return;
+              }
+              if (createLogin && (!username || !password)) {
+                toast({ title: "اسم المستخدم وكلمة المرور مطلوبان لحساب الدخول", variant: "destructive" });
                 return;
               }
               mutation.mutate();
@@ -755,7 +879,7 @@ function ConvertDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: 
             disabled={mutation.isPending}
             data-testid="btn-convert-submit"
           >
-            {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "تسجيل كموظف فرع"}
+            {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "تسجيل الموظف"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -8,6 +8,7 @@ import {
   jobOffers,
   branches,
   users,
+  branchEmployees,
 } from "@shared/schema";
 import crypto from "crypto";
 import { storage } from "./storage";
@@ -457,18 +458,41 @@ export function registerOnboardingRoutes(app: Express) {
     async (req, res) => {
       try {
         const id = Number(req.params.id);
-        const { username, password, firstName, lastName, jobTitle, role, email, phone } = req.body;
+        const {
+          // حساب الدخول (اختياري)
+          createLogin,
+          username,
+          password,
+          role,
+          // بيانات HR (إجبارية لإنشاء موظف الفرع)
+          firstName,
+          lastName,
+          jobTitle,
+          email,
+          phone,
+          nationality,
+          basicSalary,
+          housingAllowance,
+          transportAllowance,
+          otherAllowances,
+          socialInsuranceDeduction,
+          iqamaNumber,
+          hireDate,
+        } = req.body;
 
-        if (!username || !password) return res.status(400).json({ error: "اسم المستخدم وكلمة المرور مطلوبان" });
-        if (username.length < 3 || username.length > 50) return res.status(400).json({ error: "اسم المستخدم يجب أن يكون بين 3 و 50 حرفاً" });
-        if (password.length < 8) return res.status(400).json({ error: "كلمة المرور يجب أن تكون 8 أحرف على الأقل" });
-        if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
-          return res.status(400).json({ error: "كلمة المرور يجب أن تحتوي على حروف كبيرة وصغيرة وأرقام" });
+        // التحقق من حساب الدخول لو مطلوب
+        if (createLogin) {
+          if (!username || !password) return res.status(400).json({ error: "اسم المستخدم وكلمة المرور مطلوبان لإنشاء حساب دخول" });
+          if (username.length < 3 || username.length > 50) return res.status(400).json({ error: "اسم المستخدم يجب أن يكون بين 3 و 50 حرفاً" });
+          if (password.length < 8) return res.status(400).json({ error: "كلمة المرور يجب أن تكون 8 أحرف على الأقل" });
+          if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+            return res.status(400).json({ error: "كلمة المرور يجب أن تحتوي على حروف كبيرة وصغيرة وأرقام" });
+          }
         }
 
         // SECURITY: enforce role allowlist (admins only can assign privileged roles)
         let effectiveRole: string = role || "employee";
-        if (!ALLOWED_CONVERT_ROLES.includes(effectiveRole as any)) {
+        if (createLogin && !ALLOWED_CONVERT_ROLES.includes(effectiveRole as any)) {
           if (!isAdmin(req)) {
             return res.status(403).json({ error: `الدور '${effectiveRole}' غير مسموح. الأدوار المتاحة: ${ALLOWED_CONVERT_ROLES.join(", ")}` });
           }
@@ -478,77 +502,179 @@ export function registerOnboardingRoutes(app: Express) {
         if (!n) return res.status(404).json({ error: "الإشعار غير موجود" });
         if (!checkBranchAccess(req, n.branchId)) return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
         if (n.status !== "confirmed") return res.status(400).json({ error: "يجب تأكيد المباشرة أولاً قبل التحويل لموظف" });
-        if (n.convertedEmployeeId) return res.status(409).json({ error: "تم تحويل هذا الموظف مسبقاً", employeeId: n.convertedEmployeeId });
+        if ((n as any).convertedBranchEmployeeId || n.convertedEmployeeId) {
+          return res.status(409).json({
+            error: "تم تحويل هذا الموظف مسبقاً",
+            branchEmployeeId: (n as any).convertedBranchEmployeeId,
+            userId: n.convertedEmployeeId,
+          });
+        }
         if (!n.branchId) return res.status(400).json({ error: "الإشعار بدون فرع مرتبط" });
 
-        // اسم المستخدم فريد
-        const existing = await storage.getUserByUsername(username);
-        if (existing) return res.status(400).json({ error: "اسم المستخدم مسجل مسبقاً" });
+        // قراءة عرض العمل لجلب البيانات الافتراضية (الراتب، الجنسية، إلخ)
+        const [offer] = await db.select().from(jobOffers).where(eq(jobOffers.id, n.jobOfferId)).limit(1);
+        if (!offer) return res.status(404).json({ error: "عرض العمل المرتبط غير موجود" });
+
+        // التحقق من بيانات HR الأساسية
+        const finalNationality = (nationality || offer.nationality || "").trim();
+        if (!finalNationality) return res.status(400).json({ error: "الجنسية مطلوبة (غير موجودة في عرض العمل، يجب إدخالها يدوياً)" });
+
+        const finalSalary = Number(basicSalary ?? offer.basicSalary ?? 0);
+        if (!finalSalary || finalSalary <= 0) return res.status(400).json({ error: "الراتب الأساسي مطلوب ويجب أن يكون أكبر من صفر" });
+
+        // التحقق من اسم المستخدم لو حساب دخول مطلوب
+        if (createLogin) {
+          const existing = await storage.getUserByUsername(username);
+          if (existing) return res.status(400).json({ error: "اسم المستخدم مسجل مسبقاً" });
+        }
 
         const reqUser: any = (req as any).user;
-        const bcrypt = (await import("bcrypt")).default;
-        const hashedPassword = await bcrypt.hash(password, 10);
 
-        // إنشاء الموظف + ربط الإشعار + ربط عرض العمل — كله داخل معاملة واحدة ذرّية
-        const created = await db.transaction(async (tx) => {
-          const [newUser] = await tx
-            .insert(users)
-            .values({
-              username,
-              password: hashedPassword,
-              firstName: firstName || n.candidateName.split(" ")[0] || n.candidateName,
-              lastName: lastName || n.candidateName.split(" ").slice(1).join(" ") || "-",
-              phone: phone || n.phone,
-              email: email || null,
-              branchId: n.branchId,
-              jobTitle: jobTitle || n.position,
-              role: effectiveRole,
-              isActive: "active",
-            })
-            .returning();
+        // معاملة ذرّية: إنشاء سجل HR + (اختياري) حساب الدخول + ربط الإشعار + ربط عرض العمل
+        const result = await db.transaction(async (tx) => {
+          // 1) إنشاء حساب الدخول (اختياري)
+          let newUserId: string | null = null;
+          if (createLogin) {
+            const bcrypt = (await import("bcrypt")).default;
+            const hashedPassword = await bcrypt.hash(password, 10);
+            const [newUser] = await tx
+              .insert(users)
+              .values({
+                username,
+                password: hashedPassword,
+                firstName: firstName || n.candidateName.split(" ")[0] || n.candidateName,
+                lastName: lastName || n.candidateName.split(" ").slice(1).join(" ") || "-",
+                phone: phone || n.phone,
+                email: email || offer.email || null,
+                branchId: n.branchId,
+                jobTitle: jobTitle || n.position,
+                role: effectiveRole,
+                isActive: "active",
+              })
+              .returning();
+            newUserId = newUser.id;
+          }
 
-          // قفل صف الإشعار + التحديث الذرّي (يمنع التحويل المزدوج عند تنفيذ متوازٍ)
+          // 2) إنشاء سجل HR كامل في branch_employees (دائماً)
+          // ملاحظة: createBranchEmployee يحسب totalSalary + employeeNumber تلقائياً، لكنّه خارج tx
+          // لذا نُنفّذ الإدراج المباشر داخل tx ثم نحسب القيم يدوياً
+          const housing = Number(housingAllowance ?? offer.housingAllowance ?? 0);
+          const transport = Number(transportAllowance ?? offer.transportAllowance ?? 0);
+          const other = Number(otherAllowances ?? offer.otherAllowances ?? 0);
+          // للسعوديين: نسبة التأمينات الاجتماعية 9.75% من الراتب الأساسي (نظام التأمينات السعودي)
+          // يمكن تجاوزها يدوياً عبر socialInsuranceDeduction من الـ body
+          const ssDeduction = Number(socialInsuranceDeduction ?? (finalNationality === "سعودي" ? Math.round(finalSalary * 0.0975) : 0));
+          const grossSalary = finalSalary + housing + transport + other;
+          const socialIns = finalNationality === "سعودي" ? ssDeduction : 0;
+          const totalSalary = grossSalary - socialIns;
+
+          // توليد رقم موظف
+          const branchPrefixes: Record<string, string> = {
+            medina: "MED", jeddah: "JED", riyadh: "RYD", makkah: "MAK", dammam: "DAM",
+          };
+          const prefix = branchPrefixes[n.branchId!] || n.branchId!.substring(0, 3).toUpperCase();
+          const existingNumsRes: any = await tx.execute(sql`
+            SELECT employee_number FROM branch_employees WHERE branch_id = ${n.branchId}
+          `);
+          const rows = (existingNumsRes?.rows ?? existingNumsRes) as Array<{ employee_number: string | null }>;
+          let maxNum = 0;
+          for (const r of rows) {
+            const m = r.employee_number?.match(/(\d+)$/);
+            if (m) {
+              const v = parseInt(m[1], 10);
+              if (v > maxNum) maxNum = v;
+            }
+          }
+          const employeeNumber = `${prefix}-${String(maxNum + 1).padStart(5, "0")}`;
+          const nowDate = new Date();
+
+          const [newBranchEmployee] = await tx.insert(branchEmployees).values({
+            branchId: n.branchId!,
+            linkedUserId: newUserId,
+            employeeNumber,
+            employeeName: n.candidateName,
+            jobTitle: jobTitle || n.position,
+            nationality: finalNationality,
+            salary: finalSalary,
+            housingAllowance: housing,
+            transportAllowance: transport,
+            otherAllowances: other,
+            socialInsuranceDeduction: socialIns,
+            totalSalary,
+            hireDate: hireDate || n.actualStartDate || offer.startDate || nowDate.toISOString().slice(0, 10),
+            iqamaNumber: iqamaNumber || offer.idNumber || null,
+            phoneNumber: phone || n.phone,
+            status: "active",
+            statusChangedAt: nowDate,
+            statusChangedBy: reqUser?.id ?? null,
+          }).returning();
+
+          // سجل تاريخ الحالة
+          await tx.execute(sql`
+            INSERT INTO employee_status_history (branch_employee_id, old_status, new_status, changed_by, reason)
+            VALUES (${newBranchEmployee.id}, NULL, 'active', ${reqUser?.id ?? null}, 'Hired via onboarding conversion')
+          `);
+
+          // 3) تحديث الإشعار ذرياً (يمنع التحويل المزدوج)
           const updateRes: any = await tx.execute(sql`
             UPDATE onboarding_notifications
             SET status = 'converted',
                 converted_at = NOW(),
                 converted_by = ${reqUser?.id || null},
-                converted_employee_id = ${newUser.id},
+                converted_employee_id = ${newUserId},
+                converted_branch_employee_id = ${newBranchEmployee.id},
                 updated_at = NOW()
-            WHERE id = ${id} AND converted_employee_id IS NULL AND status = 'confirmed'
+            WHERE id = ${id}
+              AND converted_branch_employee_id IS NULL
+              AND status = 'confirmed'
             RETURNING id
           `);
           const affected = updateRes?.rowCount ?? updateRes?.rows?.length ?? 0;
           if (affected === 0) {
-            throw new Error("تعذّر التحويل — قد يكون تم تحويله مسبقاً");
+            // علامة خاصة للتفريق بين خطأ السباق ومشاكل أخرى — يُترجم لـ 409 خارج المعاملة
+            const err: any = new Error("تعذّر التحويل — قد يكون تم تحويله مسبقاً (race)");
+            err.code = "ALREADY_CONVERTED";
+            throw err;
           }
 
-          // ربط عرض العمل بالموظف الجديد (hired_employee_id الآن varchar UUID)
-          await tx.execute(sql`
-            UPDATE job_offers
-            SET hired_employee_id = ${newUser.id}, updated_at = NOW()
-            WHERE id = ${n.jobOfferId}
-          `);
+          // 4) ربط عرض العمل (hired_employee_id يربط بـ users — يُحدّث فقط إذا أُنشئ حساب دخول)
+          if (newUserId) {
+            await tx.execute(sql`
+              UPDATE job_offers
+              SET hired_employee_id = ${newUserId}, updated_at = NOW()
+              WHERE id = ${n.jobOfferId}
+            `);
+          }
 
-          // تطبيق صلاحيات المسمى الوظيفي (خارج جدول users — لا حاجة لـ tx)
-          return newUser;
+          return { newUserId, branchEmployee: newBranchEmployee };
         });
 
-        // تطبيق صلاحيات المسمى الوظيفي بعد نجاح المعاملة
-        try {
-          const { JOB_TITLES } = await import("@shared/permissions" as any).catch(() => ({ JOB_TITLES: [] as string[] }));
-          const finalJobTitle = jobTitle || n.position;
-          if (finalJobTitle && reqUser?.id && Array.isArray(JOB_TITLES) && JOB_TITLES.includes(finalJobTitle)) {
-            await storage.applyJobRolePermissions(created.id, finalJobTitle, reqUser.id);
+        // تطبيق صلاحيات المسمى الوظيفي (فقط لو أُنشئ user account)
+        if (result.newUserId) {
+          try {
+            const { JOB_TITLES } = await import("@shared/permissions" as any).catch(() => ({ JOB_TITLES: [] as string[] }));
+            const finalJobTitle = jobTitle || n.position;
+            if (finalJobTitle && reqUser?.id && Array.isArray(JOB_TITLES) && JOB_TITLES.includes(finalJobTitle)) {
+              await storage.applyJobRolePermissions(result.newUserId, finalJobTitle, reqUser.id);
+            }
+          } catch (permErr) {
+            console.warn("[onboarding] applyJobRolePermissions skipped:", permErr);
           }
-        } catch (permErr) {
-          console.warn("[onboarding] applyJobRolePermissions skipped:", permErr);
         }
 
-        const { password: _, ...safe } = created;
-        res.status(201).json({ employee: safe, notificationId: id });
+        res.status(201).json({
+          branchEmployee: result.branchEmployee,
+          userId: result.newUserId,
+          notificationId: id,
+          message: result.newUserId
+            ? "تم تسجيل الموظف في HR وإنشاء حساب دخول للنظام"
+            : "تم تسجيل الموظف في HR (بدون حساب دخول)",
+        });
       } catch (e: any) {
         console.error("[onboarding] convert error:", e);
+        if (e?.code === "ALREADY_CONVERTED") {
+          return res.status(409).json({ error: "تم تحويل هذا الموظف مسبقاً" });
+        }
         res.status(500).json({ error: e.message });
       }
     }

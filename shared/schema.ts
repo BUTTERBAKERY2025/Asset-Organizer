@@ -9910,7 +9910,8 @@ export const onboardingNotifications = pgTable("onboarding_notifications", {
   confirmedNotes: text("confirmed_notes"),
   convertedAt: timestamp("converted_at"),
   convertedBy: varchar("converted_by").references(() => users.id),
-  convertedEmployeeId: varchar("converted_employee_id").references(() => users.id),
+  convertedEmployeeId: varchar("converted_employee_id").references(() => users.id), // حساب الدخول (اختياري)
+  convertedBranchEmployeeId: integer("converted_branch_employee_id").references(() => branchEmployees.id), // سجل HR في موظفي الفرع
   // النظام
   createdBy: varchar("created_by").references(() => users.id),
   cancelledAt: timestamp("cancelled_at"),
@@ -9960,6 +9961,7 @@ export const insertOnboardingNotificationSchema = createInsertSchema(onboardingN
   convertedAt: true,
   convertedBy: true,
   convertedEmployeeId: true,
+  convertedBranchEmployeeId: true,
   cancelledAt: true,
   cancelReason: true,
   createdAt: true,
