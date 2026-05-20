@@ -331,16 +331,14 @@ export function registerJobOfferRoutes(app: Express) {
     }
   );
 
-  // حذف العرض — للأدمن فقط (حماية مزدوجة: التحقق من الدور قبل المتابعة)
+  // حذف العرض — يتطلب صلاحية حذف على وحدة الموارد البشرية (RBAC)
   app.delete(
     "/api/hr/job-offers/:id",
     isAuthenticated,
+    requirePermission(PERMISSION_MODULE, "delete"),
     async (req, res) => {
       try {
         const user: any = (req as any).user;
-        if (!user || user.role !== "admin") {
-          return res.status(403).json({ error: "هذا الإجراء متاح للمسؤول (Admin) فقط" });
-        }
         const id = Number(req.params.id);
         if (!Number.isFinite(id)) return res.status(400).json({ error: "معرّف غير صالح" });
 
@@ -356,7 +354,7 @@ export function registerJobOfferRoutes(app: Express) {
         await db.delete(jobOfferAuditLog).where(eq(jobOfferAuditLog.offerId, id));
         await db.delete(jobOffers).where(eq(jobOffers.id, id));
 
-        console.log(`[job-offers] DELETED by admin=${user.username || user.id} offer=${existing.offerNumber}`);
+        console.log(`[job-offers] DELETED by user=${user?.username || user?.id} role=${user?.role} offer=${existing.offerNumber}`);
         res.json({ success: true });
       } catch (e: any) {
         console.error("[job-offers] delete error:", e);
