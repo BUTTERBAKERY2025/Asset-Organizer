@@ -1,5 +1,5 @@
 import { Layout } from "@/components/layout";
-import { PageHeader } from "@/components/dashboard/page-header";
+import { SecurityHero } from "@/components/security/security-hero";
 import { ExportButtons } from "@/components/export-buttons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,8 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { TablePagination } from "@/components/ui/pagination";
-import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2, Wand2, Pencil, Search, X, Filter, KeyRound, Power, ArrowRight } from "lucide-react";
-import { Link } from "wouter";
+import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2, Wand2, Pencil, Search, X, Filter, KeyRound, Power } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
@@ -697,16 +696,14 @@ export default function UsersPage() {
     <Layout>
       <div className="page-container space-y-4" dir="rtl">
         <SettingsBreadcrumb currentPage="إدارة المستخدمين" currentIcon={Users} />
-        <PageHeader
+        <SecurityHero
           icon={Users}
-          tone="primary"
           title="إدارة المستخدمين"
-          description="إضافة وإدارة صلاحيات المستخدمين"
-          backHref="/settings"
+          description="إضافة وتعديل وحذف المستخدمين وإدارة صلاحياتهم وفروعهم"
           actions={
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="sm" data-testid="button-add-user">
+              <Button size="sm" className="bg-white text-violet-700 hover:bg-violet-50 shadow-md font-semibold" data-testid="button-add-user">
                 <Plus className="w-4 h-4 ml-2" />
                 إضافة مستخدم
               </Button>
@@ -1118,7 +1115,7 @@ export default function UsersPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="text-amber-600 hover:text-amber-700 h-7 w-7 sm:h-8 sm:w-8"
+                              className="text-violet-600 hover:text-violet-700 h-7 w-7 sm:h-8 sm:w-8"
                               onClick={() => openEditDialog(user)}
                               data-testid={`button-edit-${user.id}`}
                               title="تعديل البيانات"

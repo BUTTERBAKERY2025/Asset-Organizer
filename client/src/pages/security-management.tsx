@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
+import { SecurityHero, SECURITY_TABS_LIST, SECURITY_TAB_TRIGGER } from "@/components/security/security-hero";
 import { useState } from "react";
 import { 
   Loader2, 
@@ -31,7 +32,6 @@ import {
   Trash2,
   Eye,
   EyeOff,
-  ArrowRight,
   QrCode,
   Download,
   RefreshCw,
@@ -39,7 +39,6 @@ import {
   MapPin,
   FileDown
 } from "lucide-react";
-import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import { ar } from "date-fns/locale";
 
@@ -407,37 +406,32 @@ export default function SecurityManagementPage() {
           currentPage="إدارة الأمان"
           currentIcon={Shield}
         />
-        
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4 sm:mb-6">
-          <Link href="/settings">
-            <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
-          <Shield className="h-6 w-6 sm:h-8 sm:w-8 text-amber-600" />
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-security-page-title">إدارة الأمان</h1>
-            <p className="text-sm sm:text-base text-muted-foreground" data-testid="text-security-page-description">إدارة إعدادات الأمان والجلسات والتنبيهات</p>
-          </div>
-        </div>
+
+        <SecurityHero
+          icon={Shield}
+          title="إدارة الأمان"
+          description="المصادقة الثنائية وقيود IP والجلسات والتنبيهات الأمنية"
+          badge="جديد"
+          badgeTone="amber"
+        />
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 mb-4 sm:mb-6 h-auto">
-            <TabsTrigger value="settings" className="flex items-center gap-1 sm:gap-2 h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-security-settings">
+          <TabsList className={`grid w-full grid-cols-3 sm:grid-cols-5 mb-4 sm:mb-6 ${SECURITY_TABS_LIST}`}>
+            <TabsTrigger value="settings" className={`flex items-center gap-1 sm:gap-2 ${SECURITY_TAB_TRIGGER}`} data-testid="tab-security-settings">
               <Key className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">الإعدادات</span>
               <span className="sm:hidden">إعدادات</span>
             </TabsTrigger>
-            <TabsTrigger value="sessions" className="flex items-center gap-1 sm:gap-2 h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-security-sessions">
+            <TabsTrigger value="sessions" className={`flex items-center gap-1 sm:gap-2 ${SECURITY_TAB_TRIGGER}`} data-testid="tab-security-sessions">
               <Monitor className="h-3 w-3 sm:h-4 sm:w-4" />
               الجلسات
             </TabsTrigger>
-            <TabsTrigger value="activity" className="flex items-center gap-1 sm:gap-2 h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-activity-log">
+            <TabsTrigger value="activity" className={`flex items-center gap-1 sm:gap-2 ${SECURITY_TAB_TRIGGER}`} data-testid="tab-activity-log">
               <History className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">سجل الأنشطة</span>
               <span className="sm:hidden">أنشطة</span>
             </TabsTrigger>
-            <TabsTrigger value="alerts" className="flex items-center gap-1 sm:gap-2 h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-security-alerts">
+            <TabsTrigger value="alerts" className={`flex items-center gap-1 sm:gap-2 ${SECURITY_TAB_TRIGGER}`} data-testid="tab-security-alerts">
               <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">التنبيهات</span>
               <span className="sm:hidden">تنبيه</span>
@@ -447,7 +441,7 @@ export default function SecurityManagementPage() {
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="templates" className="flex items-center gap-1 sm:gap-2 h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-role-templates">
+            <TabsTrigger value="templates" className={`flex items-center gap-1 sm:gap-2 ${SECURITY_TAB_TRIGGER}`} data-testid="tab-role-templates">
               <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">قوالب الأدوار</span>
               <span className="sm:hidden">قوالب</span>
@@ -517,7 +511,7 @@ export default function SecurityManagementPage() {
                           أكواد الاسترداد المتبقية: {twoFactorStatus.backupCodesCount || 0}
                         </p>
                         {twoFactorStatus.backupCodesCount < 3 && (
-                          <p className="text-sm text-amber-600">
+                          <p className="text-sm text-violet-600">
                             تحذير: أكواد الاسترداد منخفضة. يُنصح بإعادة توليدها.
                           </p>
                         )}
@@ -921,7 +915,7 @@ export default function SecurityManagementPage() {
                       <Card key={template.id} className="border-2" data-testid={`card-template-${template.id}`}>
                         <CardHeader className="pb-2">
                           <CardTitle className="text-lg flex items-center gap-2">
-                            <Shield className="h-5 w-5 text-amber-600" />
+                            <Shield className="h-5 w-5 text-violet-600" />
                             <span data-testid={`text-template-name-${template.id}`}>{template.name}</span>
                             {template.isSystemDefault && (
                               <Badge variant="secondary" className="mr-auto" data-testid={`badge-template-default-${template.id}`}>افتراضي</Badge>
@@ -1157,7 +1151,7 @@ export default function SecurityManagementPage() {
                 <Copy className="h-4 w-4 ml-2" />
                 نسخ جميع الأكواد
               </Button>
-              <p className="text-xs text-amber-600 text-center">
+              <p className="text-xs text-violet-600 text-center">
                 تحذير: هذه الأكواد لن تظهر مرة أخرى!
               </p>
             </div>

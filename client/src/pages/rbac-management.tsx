@@ -1,5 +1,5 @@
 import { Layout } from "@/components/layout";
-import { PageHeader } from "@/components/dashboard/page-header";
+import { SecurityHero, SECURITY_TABS_LIST, SECURITY_TAB_TRIGGER } from "@/components/security/security-hero";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,8 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import { Loader2, Shield, Users, Building2, Key, UserPlus, Pencil, Trash2, ChevronDown, ChevronUp, Check, X, ArrowRight } from "lucide-react";
-import { Link } from "wouter";
+import { Loader2, Shield, Users, Building2, Key, UserPlus, Pencil, Trash2, ChevronDown, ChevronUp, Check, X } from "lucide-react";
 import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
 import { useState, useEffect } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -578,12 +577,11 @@ export default function RBACManagementPage() {
     <Layout>
       <div className="page-container space-y-4" dir="rtl">
         <SettingsBreadcrumb currentPage="الأدوار والصلاحيات" currentIcon={Shield} />
-        <PageHeader
+        <SecurityHero
           icon={Shield}
-          tone="primary"
           title="إدارة الأدوار والصلاحيات"
-          description="نظام التحكم بالوصول المبني على الأدوار (RBAC)"
-          backHref="/settings"
+          description="نظام التحكم بالوصول المبني على الأدوار (RBAC) — الأدوار والأقسام والصلاحيات التفصيلية"
+          badge="RBAC"
         />
 
         <div className="kpi-grid">
@@ -626,11 +624,11 @@ export default function RBACManagementPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
-            <TabsTrigger value="users" className="h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-users">المستخدمين</TabsTrigger>
-            <TabsTrigger value="roles" className="h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-roles">الأدوار</TabsTrigger>
-            <TabsTrigger value="departments" className="h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-departments">الأقسام</TabsTrigger>
-            <TabsTrigger value="permissions" className="h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-permissions">الصلاحيات</TabsTrigger>
+          <TabsList className={`grid w-full grid-cols-2 sm:grid-cols-4 ${SECURITY_TABS_LIST}`}>
+            <TabsTrigger value="users" className={SECURITY_TAB_TRIGGER} data-testid="tab-users">المستخدمين</TabsTrigger>
+            <TabsTrigger value="roles" className={SECURITY_TAB_TRIGGER} data-testid="tab-roles">الأدوار</TabsTrigger>
+            <TabsTrigger value="departments" className={SECURITY_TAB_TRIGGER} data-testid="tab-departments">الأقسام</TabsTrigger>
+            <TabsTrigger value="permissions" className={SECURITY_TAB_TRIGGER} data-testid="tab-permissions">الصلاحيات</TabsTrigger>
           </TabsList>
 
           <TabsContent value="users" className="space-y-4">

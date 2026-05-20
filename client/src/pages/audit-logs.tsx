@@ -16,9 +16,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, Loader2, FileText, RefreshCw, Filter, History, ArrowRight, Users, Activity, TrendingUp, Clock, Plus, Edit, Trash2, Eye, LogIn, Wifi, Monitor, Smartphone, Tablet, Globe } from "lucide-react";
-import { Link } from "wouter";
+import { Search, Loader2, FileText, RefreshCw, Filter, History, Users, Activity, TrendingUp, Clock, Plus, Edit, Trash2, Eye, LogIn, Wifi, Monitor, Smartphone, Tablet, Globe } from "lucide-react";
 import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
+import { SecurityHero, SECURITY_TABS_LIST, SECURITY_TAB_TRIGGER } from "@/components/security/security-hero";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { SystemAuditLog, User } from "@shared/schema";
@@ -208,106 +208,70 @@ export default function AuditLogsPage() {
     return { total, creates, updates, deletes, activeUsers };
   }, [userStats]);
 
+  /** بطاقة إحصائية موحّدة بنمط ExactFlow */
+  function AuditStatCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: number; tone: "violet" | "emerald" | "indigo" | "rose" | "fuchsia" }) {
+    const tones = {
+      violet:  { bg: "bg-violet-50",  text: "text-violet-700",  ring: "ring-violet-100",  icon: "bg-violet-100 text-violet-700" },
+      emerald: { bg: "bg-emerald-50", text: "text-emerald-700", ring: "ring-emerald-100", icon: "bg-emerald-100 text-emerald-700" },
+      indigo:  { bg: "bg-indigo-50",  text: "text-indigo-700",  ring: "ring-indigo-100",  icon: "bg-indigo-100 text-indigo-700" },
+      rose:    { bg: "bg-rose-50",    text: "text-rose-700",    ring: "ring-rose-100",    icon: "bg-rose-100 text-rose-700" },
+      fuchsia: { bg: "bg-fuchsia-50", text: "text-fuchsia-700", ring: "ring-fuchsia-100", icon: "bg-fuchsia-100 text-fuchsia-700" },
+    } as const;
+    const t = tones[tone];
+    return (
+      <Card className={`border ${t.ring.replace("ring-", "border-")} ${t.bg} shadow-sm hover:shadow-md transition group`} data-testid={`stat-card-${tone}`}>
+        <CardContent className="p-3 flex items-center gap-3">
+          <div className={`${t.icon} p-2 rounded-xl ring-1 ${t.ring} group-hover:scale-110 transition shadow-sm`}>{icon}</div>
+          <div className="min-w-0">
+            <p className="text-[11px] sm:text-xs text-slate-500 truncate">{label}</p>
+            <p className={`text-lg font-bold ${t.text} tabular-nums`}>{value.toLocaleString('en')}</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Layout>
       <div className="page-container space-y-4" dir="rtl">
         <SettingsBreadcrumb currentPage="سجل التدقيق" currentIcon={History} />
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/settings">
-              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
-                سجل التدقيق
-              </h1>
-              <p className="text-sm sm:text-base text-muted-foreground mt-1">
-                متابعة جميع العمليات والتغييرات في النظام
-              </p>
-            </div>
-          </div>
-          <Button onClick={handleRefresh} variant="outline" className="h-11 sm:h-9 w-full sm:w-auto" data-testid="button-refresh-logs">
-            <RefreshCw className="w-4 h-4 ml-2" />
-            تحديث
-          </Button>
-        </div>
+
+        <SecurityHero
+          icon={History}
+          title="سجل التدقيق"
+          description="تتبّع جميع العمليات والتغييرات والأنشطة في النظام"
+          actions={
+            <Button onClick={handleRefresh} className="bg-white text-violet-700 hover:bg-violet-50 shadow-md font-semibold" data-testid="button-refresh-logs">
+              <RefreshCw className="w-4 h-4 ml-2" />
+              تحديث
+            </Button>
+          }
+        />
 
         {/* Summary Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-            <CardContent className="p-3 flex items-center gap-3">
-              <div className="p-2 bg-blue-500 rounded-lg">
-                <Activity className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="text-xs text-blue-600">إجمالي العمليات</p>
-                <p className="text-lg font-bold text-blue-700">{summaryStats.total.toLocaleString('en')}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-            <CardContent className="p-3 flex items-center gap-3">
-              <div className="p-2 bg-green-500 rounded-lg">
-                <Plus className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="text-xs text-green-600">إنشاء</p>
-                <p className="text-lg font-bold text-green-700">{summaryStats.creates.toLocaleString('en')}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
-            <CardContent className="p-3 flex items-center gap-3">
-              <div className="p-2 bg-amber-500 rounded-lg">
-                <Edit className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="text-xs text-amber-600">تعديل</p>
-                <p className="text-lg font-bold text-amber-700">{summaryStats.updates.toLocaleString('en')}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
-            <CardContent className="p-3 flex items-center gap-3">
-              <div className="p-2 bg-red-500 rounded-lg">
-                <Trash2 className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="text-xs text-red-600">حذف</p>
-                <p className="text-lg font-bold text-red-700">{summaryStats.deletes.toLocaleString('en')}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-            <CardContent className="p-3 flex items-center gap-3">
-              <div className="p-2 bg-purple-500 rounded-lg">
-                <Users className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="text-xs text-purple-600">مستخدمين نشطين</p>
-                <p className="text-lg font-bold text-purple-700">{summaryStats.activeUsers}</p>
-              </div>
-            </CardContent>
-          </Card>
+          <AuditStatCard icon={<Activity className="w-5 h-5" />} label="إجمالي العمليات" value={summaryStats.total} tone="violet" />
+          <AuditStatCard icon={<Plus className="w-5 h-5" />} label="إنشاء" value={summaryStats.creates} tone="emerald" />
+          <AuditStatCard icon={<Edit className="w-5 h-5" />} label="تعديل" value={summaryStats.updates} tone="indigo" />
+          <AuditStatCard icon={<Trash2 className="w-5 h-5" />} label="حذف" value={summaryStats.deletes} tone="rose" />
+          <AuditStatCard icon={<Users className="w-5 h-5" />} label="مستخدمين نشطين" value={summaryStats.activeUsers} tone="fuchsia" />
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 h-11">
-            <TabsTrigger value="logs" className="flex items-center gap-2">
+          <TabsList className={`grid w-full grid-cols-3 ${SECURITY_TABS_LIST}`}>
+            <TabsTrigger value="logs" className={`flex items-center gap-2 ${SECURITY_TAB_TRIGGER}`} data-testid="tab-logs">
               <FileText className="w-4 h-4" />
               سجل العمليات
             </TabsTrigger>
-            <TabsTrigger value="users" className="flex items-center gap-2">
+            <TabsTrigger value="users" className={`flex items-center gap-2 ${SECURITY_TAB_TRIGGER}`} data-testid="tab-users">
               <Users className="w-4 h-4" />
               تقرير المستخدمين
             </TabsTrigger>
-            <TabsTrigger value="online" className="flex items-center gap-2">
+            <TabsTrigger value="online" className={`flex items-center gap-2 ${SECURITY_TAB_TRIGGER}`} data-testid="tab-online">
               <Wifi className="w-4 h-4" />
               المتصلين الآن
               {onlineUsers.length > 0 && (
-                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-green-100 text-green-700">
+                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-emerald-100 text-emerald-700 data-[state=active]:bg-white/20 data-[state=active]:text-white">
                   {onlineUsers.length}
                 </Badge>
               )}
