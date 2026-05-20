@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useReactToPrint } from "react-to-print";
 import { CompanyHeader } from "@/components/company-header";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -14,16 +14,74 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useBranches } from "@/hooks/useBranches";
+import { useForm, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import {
   UserPlus, ArrowRight, Send, CheckCircle2, Loader2, MapPin, Camera, Eye, Copy,
   ClipboardCheck, Users, Briefcase, Phone, FileText, MessageCircle, XCircle, AlertTriangle,
   Printer, Download,
 } from "lucide-react";
 import type { JobOffer, OnboardingNotification, Branch } from "@shared/schema";
+
+// نفس الـ schema المستخدم في صفحة موظفي الفرع لضمان توحيد البيانات
+const employeeFormSchema = z.object({
+  branchId: z.string().min(1, "الفرع مطلوب"),
+  employeeName: z.string().min(1, "اسم الموظف مطلوب"),
+  employeeNameEn: z.string().optional(),
+  jobTitle: z.string().min(1, "الوظيفة مطلوبة"),
+  department: z.string().optional(),
+  nationality: z.string().min(1, "الجنسية مطلوبة"),
+  salary: z.coerce.number().min(0, "الراتب يجب أن يكون رقم موجب"),
+  housingAllowance: z.coerce.number().min(0).optional(),
+  transportAllowance: z.coerce.number().min(0).optional(),
+  foodAllowance: z.coerce.number().min(0).optional(),
+  otherAllowances: z.coerce.number().min(0).optional(),
+  socialInsuranceDeduction: z.coerce.number().min(0).optional(),
+  hireDate: z.string().optional(),
+  healthCertificate: z.string().optional(),
+  healthCertificateExpiry: z.string().optional(),
+  iqamaNumber: z.string().optional(),
+  iqamaExpiry: z.string().optional(),
+  passportNumber: z.string().optional(),
+  passportExpiry: z.string().optional(),
+  phoneNumber: z.string().optional(),
+  emergencyContact: z.string().optional(),
+  bankName: z.string().optional(),
+  bankAccountNumber: z.string().optional(),
+  status: z.string().default("active"),
+  contractType: z.string().optional(),
+  workPermitNumber: z.string().optional(),
+  notes: z.string().optional(),
+  // حساب الدخول الاختياري
+  createLogin: z.boolean().default(false),
+  username: z.string().optional(),
+  password: z.string().optional(),
+  role: z.string().optional(),
+});
+type EmployeeFormData = z.infer<typeof employeeFormSchema>;
+
+const STATUS_OPTIONS_AR = [
+  { value: "active", label: "نشط" },
+  { value: "inactive", label: "غير نشط" },
+  { value: "on_leave", label: "في إجازة" },
+  { value: "terminated", label: "منتهي" },
+];
+const HEALTH_CERT_OPTIONS_AR = [
+  { value: "none", label: "لا يوجد" },
+  { value: "valid", label: "ساري" },
+  { value: "expired", label: "منتهي" },
+  { value: "pending", label: "قيد التجديد" },
+];
+
+function fmtSAR(v: number): string {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(v) + " ريال";
+}
 
 interface Row { offer: JobOffer; notification: OnboardingNotification | null; }
 
@@ -649,69 +707,114 @@ function ViewDialog({ row, onClose }: { row: Row | null; onClose: () => void }) 
 
 function ConvertDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: () => void; onSuccess: () => void }) {
   const { toast } = useToast();
-  // بيانات HR
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [jobTitle, setJobTitle] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [nationality, setNationality] = useState("");
-  const [basicSalary, setBasicSalary] = useState<string>("0");
-  const [housingAllowance, setHousingAllowance] = useState<string>("0");
-  const [transportAllowance, setTransportAllowance] = useState<string>("0");
-  const [otherAllowances, setOtherAllowances] = useState<string>("0");
-  const [iqamaNumber, setIqamaNumber] = useState("");
-  const [hireDate, setHireDate] = useState("");
-  // حساب الدخول (اختياري)
-  const [createLogin, setCreateLogin] = useState(false);
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole] = useState("employee");
+  const { branches } = useBranches();
 
-  useMemo(() => {
+  // جلب الإعدادات (الوظائف، الجنسيات، الأقسام، البنوك، أنواع العقود) — نفس مصدر صفحة موظفي الفرع
+  const { data: settingsData, isLoading: isLoadingSettings } = useQuery({
+    queryKey: ["/api/employee-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/employee-settings", { credentials: "include" });
+      if (!res.ok) throw new Error("فشل جلب الإعدادات");
+      const d = await res.json();
+      return Array.isArray(d) ? d : [];
+    },
+  });
+  const settingsByCategory = useMemo(() => {
+    const g: Record<string, any[]> = {};
+    (settingsData || []).forEach((s: any) => {
+      if (!g[s.category]) g[s.category] = [];
+      g[s.category].push(s);
+    });
+    return g;
+  }, [settingsData]);
+
+  const form = useForm<EmployeeFormData>({
+    resolver: zodResolver(employeeFormSchema),
+    defaultValues: {
+      branchId: "",
+      employeeName: "",
+      employeeNameEn: "",
+      jobTitle: "",
+      department: "",
+      nationality: "",
+      salary: 0,
+      housingAllowance: 0,
+      transportAllowance: 0,
+      foodAllowance: 0,
+      otherAllowances: 0,
+      socialInsuranceDeduction: 0,
+      status: "active",
+      healthCertificate: "none",
+      createLogin: false,
+      role: "employee",
+    },
+  });
+
+  // مراقبة الحقول الديناميكية
+  const wBranch = useWatch({ control: form.control, name: "branchId" });
+  const wStatus = useWatch({ control: form.control, name: "status" });
+  const wJob = useWatch({ control: form.control, name: "jobTitle" });
+  const wNat = useWatch({ control: form.control, name: "nationality" });
+  const wDept = useWatch({ control: form.control, name: "department" });
+  const wHealth = useWatch({ control: form.control, name: "healthCertificate" });
+  const wBank = useWatch({ control: form.control, name: "bankName" });
+  const wContract = useWatch({ control: form.control, name: "contractType" });
+  const wSalary = useWatch({ control: form.control, name: "salary" });
+  const wHousing = useWatch({ control: form.control, name: "housingAllowance" });
+  const wTransport = useWatch({ control: form.control, name: "transportAllowance" });
+  const wFood = useWatch({ control: form.control, name: "foodAllowance" });
+  const wOther = useWatch({ control: form.control, name: "otherAllowances" });
+  const wSocialIns = useWatch({ control: form.control, name: "socialInsuranceDeduction" });
+  const wCreateLogin = useWatch({ control: form.control, name: "createLogin" });
+  const wRole = useWatch({ control: form.control, name: "role" });
+
+  // تعبئة تلقائية من بيانات عرض العمل والإشعار عند فتح النافذة
+  useEffect(() => {
     if (row) {
       const o = row.offer as any;
-      const parts = row.offer.candidateName.split(" ");
-      setFirstName(parts[0] || "");
-      setLastName(parts.slice(1).join(" ") || "");
-      setJobTitle(row.offer.position || "");
-      setEmail(row.offer.email || "");
-      setPhone(row.offer.phone || "");
-      setNationality(o.nationality || "");
-      setBasicSalary(String(o.basicSalary ?? 0));
-      setHousingAllowance(String(o.housingAllowance ?? 0));
-      setTransportAllowance(String(o.transportAllowance ?? 0));
-      setOtherAllowances(String(o.otherAllowances ?? 0));
-      setIqamaNumber(o.idNumber || "");
-      setHireDate(row.notification?.actualStartDate || row.offer.startDate || "");
+      const n = row.notification as any;
       const suggested = row.offer.email?.split("@")[0] || row.offer.phone?.replace(/\D/g, "") || "";
-      setUsername(suggested);
-      setPassword("");
-      setRole("employee");
-      setCreateLogin(false);
+      form.reset({
+        branchId: o.branchId || "",
+        employeeName: row.offer.candidateName || "",
+        employeeNameEn: "",
+        jobTitle: row.offer.position || "",
+        department: "",
+        nationality: o.nationality || "",
+        salary: Number(o.basicSalary ?? 0),
+        housingAllowance: Number(o.housingAllowance ?? 0),
+        transportAllowance: Number(o.transportAllowance ?? 0),
+        foodAllowance: 0,
+        otherAllowances: Number(o.otherAllowances ?? 0),
+        socialInsuranceDeduction: 0,
+        hireDate: n?.actualStartDate || row.offer.startDate || "",
+        healthCertificate: "none",
+        healthCertificateExpiry: "",
+        iqamaNumber: o.idNumber || "",
+        iqamaExpiry: "",
+        passportNumber: "",
+        passportExpiry: "",
+        phoneNumber: row.offer.phone || "",
+        emergencyContact: "",
+        bankName: "",
+        bankAccountNumber: "",
+        status: "active",
+        contractType: "",
+        workPermitNumber: "",
+        notes: "",
+        createLogin: false,
+        username: suggested,
+        password: "",
+        role: "employee",
+      });
     }
-  }, [row?.offer.id]);
+  }, [row?.offer.id, row?.notification?.id]);
 
   const mutation = useMutation({
-    mutationFn: async () => {
-      const r = await apiRequest("POST", `/api/hr/onboarding/${row!.notification!.id}/convert`, {
-        createLogin,
-        username: createLogin ? username : undefined,
-        password: createLogin ? password : undefined,
-        role: createLogin ? role : undefined,
-        firstName,
-        lastName,
-        jobTitle,
-        email,
-        phone,
-        nationality,
-        basicSalary: Number(basicSalary) || 0,
-        housingAllowance: Number(housingAllowance) || 0,
-        transportAllowance: Number(transportAllowance) || 0,
-        otherAllowances: Number(otherAllowances) || 0,
-        iqamaNumber,
-        hireDate,
-      });
+    mutationFn: async (data: EmployeeFormData) => {
+      // الفرع مقفول دائماً على فرع الإشعار — نتجاهل أي تعديل من الـ UI
+      const payload = { ...data, branchId: (row?.offer as any)?.branchId || data.branchId };
+      const r = await apiRequest("POST", `/api/hr/onboarding/${row!.notification!.id}/convert`, payload);
       return await r.json();
     },
     onSuccess: (data: any) => {
@@ -725,122 +828,325 @@ function ConvertDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: 
     onError: (e: any) => toast({ title: "فشل التحويل", description: e.message, variant: "destructive" }),
   });
 
-  // حساب إجمالي الراتب للعرض
-  const grossSalary = (Number(basicSalary) || 0) + (Number(housingAllowance) || 0) +
-    (Number(transportAllowance) || 0) + (Number(otherAllowances) || 0);
+  const onSubmit = (data: EmployeeFormData) => {
+    if (data.createLogin && (!data.username || !data.password)) {
+      toast({ title: "اسم المستخدم وكلمة المرور مطلوبان لحساب الدخول", variant: "destructive" });
+      return;
+    }
+    mutation.mutate(data);
+  };
+
+  // حساب الإجماليات
+  const allowancesSum = Number(wSalary || 0) + Number(wHousing || 0) + Number(wTransport || 0) +
+    Number(wFood || 0) + Number(wOther || 0);
+  const socialIns = wNat === "سعودي" ? Number(wSocialIns || 0) : 0;
+  const netSalary = allowancesSum - socialIns;
 
   return (
     <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
-          <DialogTitle>تسجيل موظف جديد في الموارد البشرية</DialogTitle>
+          <DialogTitle>إضافة موظف جديد (من إشعار مباشرة العمل)</DialogTitle>
+          <p className="text-sm text-slate-500">أدخل بيانات الموظف الأساسية والرواتب والمستندات</p>
         </DialogHeader>
         {row && (
-          <div className="space-y-4 text-sm">
-            <div className="bg-green-50 border border-green-200 rounded p-3 text-xs">
-              ✓ تم تأكيد مباشرة <strong>{row.offer.candidateName}</strong> في فرع <strong>{row.offer.branchName}</strong>.
-              يتم تسجيله كموظف HR كامل (راتب، جنسية، تأمينات) في صفحة موظفي الفرع.
-            </div>
+          <div className="bg-green-50 border border-green-200 rounded p-2 text-xs mb-2">
+            ✓ تم تأكيد مباشرة <strong>{row.offer.candidateName}</strong> في فرع <strong>{row.offer.branchName}</strong> —
+            البيانات معبّأة تلقائياً من عرض العمل.
+          </div>
+        )}
+        <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
+          const errorMessages = Object.values(errors).map((e: any) => e?.message).filter(Boolean);
+          if (errorMessages.length > 0) {
+            toast({ title: "يرجى تعبئة الحقول المطلوبة", description: errorMessages.join("، "), variant: "destructive" });
+          }
+        })} className="space-y-6">
+          <Tabs defaultValue="basic" className="w-full">
+            <TabsList className="grid grid-cols-5 w-full">
+              <TabsTrigger value="basic">البيانات الأساسية</TabsTrigger>
+              <TabsTrigger value="salary">الراتب والبدلات</TabsTrigger>
+              <TabsTrigger value="documents">المستندات</TabsTrigger>
+              <TabsTrigger value="contact">التواصل والبنك</TabsTrigger>
+              <TabsTrigger value="login">حساب الدخول</TabsTrigger>
+            </TabsList>
 
-            {/* ===== بيانات الموظف الأساسية ===== */}
-            <div>
-              <h3 className="font-bold text-sm mb-2 text-slate-700 border-b pb-1">بيانات الموظف</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>الاسم الأول</Label>
-                  <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} data-testid="input-first-name" />
+            {/* ============= TAB 1: البيانات الأساسية ============= */}
+            <TabsContent value="basic" className="space-y-4 pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>الفرع (مقفول من الإشعار)</Label>
+                  <Select value={wBranch} disabled>
+                    <SelectTrigger data-testid="select-branch" className="bg-slate-100 cursor-not-allowed">
+                      <SelectValue placeholder="—" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {branches?.map((b: any) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-slate-500">الفرع مرتبط بإشعار مباشرة العمل ولا يمكن تغييره من هنا</p>
                 </div>
-                <div className="space-y-1">
-                  <Label>اسم العائلة</Label>
-                  <Input value={lastName} onChange={(e) => setLastName(e.target.value)} data-testid="input-last-name" />
+                <div className="space-y-2">
+                  <Label>الحالة</Label>
+                  <Select value={wStatus} onValueChange={(v) => form.setValue("status", v)}>
+                    <SelectTrigger data-testid="select-status"><SelectValue placeholder="اختر الحالة" /></SelectTrigger>
+                    <SelectContent>
+                      {STATUS_OPTIONS_AR.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="space-y-1">
-                  <Label>المسمى الوظيفي *</Label>
-                  <Input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} data-testid="input-job-title" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>اسم الموظف بالعربي *</Label>
+                  <Input {...form.register("employeeName")} placeholder="أدخل الاسم بالعربي" data-testid="input-name-ar" />
+                  {form.formState.errors.employeeName && <p className="text-sm text-red-500">{form.formState.errors.employeeName.message}</p>}
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-2">
+                  <Label>اسم الموظف بالإنجليزي</Label>
+                  <Input {...form.register("employeeNameEn")} placeholder="Enter name in English" dir="ltr" data-testid="input-name-en" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>الوظيفة *</Label>
+                  <Select value={wJob} onValueChange={(v) => form.setValue("jobTitle", v, { shouldValidate: true })}>
+                    <SelectTrigger data-testid="select-job" className={form.formState.errors.jobTitle ? "border-red-500" : ""}>
+                      <SelectValue placeholder="اختر الوظيفة" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60 overflow-y-auto">
+                      {isLoadingSettings ? <SelectItem value="" disabled>جاري التحميل...</SelectItem>
+                        : (settingsByCategory.job_title?.filter((s: any) => s.isActive) || []).length > 0
+                          ? settingsByCategory.job_title?.filter((s: any) => s.isActive).map((job: any) => (
+                              <SelectItem key={job.id} value={job.labelAr}>{job.labelAr}</SelectItem>))
+                          : <SelectItem value="" disabled>لا توجد وظائف - أضف من الإعدادات</SelectItem>}
+                    </SelectContent>
+                  </Select>
+                  {form.formState.errors.jobTitle && <p className="text-sm text-red-500">{form.formState.errors.jobTitle.message}</p>}
+                </div>
+                <div className="space-y-2">
                   <Label>الجنسية *</Label>
-                  <Input value={nationality} onChange={(e) => setNationality(e.target.value)} placeholder="مثال: سعودي / مصري / يمني" data-testid="input-nationality" />
+                  <Select value={wNat} onValueChange={(v) => {
+                    form.setValue("nationality", v, { shouldValidate: true });
+                    if (v !== "سعودي") form.setValue("socialInsuranceDeduction", 0);
+                  }}>
+                    <SelectTrigger data-testid="select-nationality" className={form.formState.errors.nationality ? "border-red-500" : ""}>
+                      <SelectValue placeholder="اختر الجنسية" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60 overflow-y-auto">
+                      {isLoadingSettings ? <SelectItem value="" disabled>جاري التحميل...</SelectItem>
+                        : (settingsByCategory.nationality?.filter((s: any) => s.isActive) || []).length > 0
+                          ? settingsByCategory.nationality?.filter((s: any) => s.isActive).map((nat: any) => (
+                              <SelectItem key={nat.id} value={nat.labelAr}>{nat.labelAr}</SelectItem>))
+                          : <SelectItem value="" disabled>لا توجد جنسيات - أضف من الإعدادات</SelectItem>}
+                    </SelectContent>
+                  </Select>
+                  {form.formState.errors.nationality && <p className="text-sm text-red-500">{form.formState.errors.nationality.message}</p>}
                 </div>
-                <div className="space-y-1">
-                  <Label>الهاتف</Label>
-                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} dir="ltr" data-testid="input-phone" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>القسم</Label>
+                  <Select value={wDept || ""} onValueChange={(v) => form.setValue("department", v)}>
+                    <SelectTrigger data-testid="select-department"><SelectValue placeholder="اختر القسم" /></SelectTrigger>
+                    <SelectContent className="max-h-60 overflow-y-auto">
+                      {isLoadingSettings ? <SelectItem value="" disabled>جاري التحميل...</SelectItem>
+                        : (settingsByCategory.department?.filter((s: any) => s.isActive) || []).length > 0
+                          ? settingsByCategory.department?.filter((s: any) => s.isActive).map((d: any) => (
+                              <SelectItem key={d.id} value={d.labelAr}>{d.labelAr}</SelectItem>))
+                          : <SelectItem value="" disabled>لا توجد أقسام - أضف من الإعدادات</SelectItem>}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="space-y-1">
-                  <Label>البريد الإلكتروني</Label>
-                  <Input value={email} onChange={(e) => setEmail(e.target.value)} dir="ltr" data-testid="input-email" />
-                </div>
-                <div className="space-y-1">
-                  <Label>رقم الهوية / الإقامة</Label>
-                  <Input value={iqamaNumber} onChange={(e) => setIqamaNumber(e.target.value)} dir="ltr" data-testid="input-iqama" />
-                </div>
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <Label>تاريخ التعيين</Label>
-                  <Input type="date" value={hireDate} onChange={(e) => setHireDate(e.target.value)} data-testid="input-hire-date" />
+                  <Input type="date" {...form.register("hireDate")} data-testid="input-hire-date" />
                 </div>
               </div>
-            </div>
+            </TabsContent>
 
-            {/* ===== الراتب والبدلات ===== */}
-            <div>
-              <h3 className="font-bold text-sm mb-2 text-slate-700 border-b pb-1">الراتب والبدلات (من عرض العمل)</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>الراتب الأساسي * (ر.س)</Label>
-                  <Input type="number" value={basicSalary} onChange={(e) => setBasicSalary(e.target.value)} dir="ltr" data-testid="input-basic-salary" />
+            {/* ============= TAB 2: الراتب والبدلات ============= */}
+            <TabsContent value="salary" className="space-y-4 pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>الراتب الأساسي (ريال) *</Label>
+                  <Input type="number" {...form.register("salary")} placeholder="0" data-testid="input-salary" />
                 </div>
-                <div className="space-y-1">
-                  <Label>بدل السكن (ر.س)</Label>
-                  <Input type="number" value={housingAllowance} onChange={(e) => setHousingAllowance(e.target.value)} dir="ltr" data-testid="input-housing" />
-                </div>
-                <div className="space-y-1">
-                  <Label>بدل المواصلات (ر.س)</Label>
-                  <Input type="number" value={transportAllowance} onChange={(e) => setTransportAllowance(e.target.value)} dir="ltr" data-testid="input-transport" />
-                </div>
-                <div className="space-y-1">
-                  <Label>بدلات أخرى (ر.س)</Label>
-                  <Input type="number" value={otherAllowances} onChange={(e) => setOtherAllowances(e.target.value)} dir="ltr" data-testid="input-other-allowance" />
+                <div className="space-y-2">
+                  <Label>بدل السكن (ريال)</Label>
+                  <Input type="number" {...form.register("housingAllowance")} placeholder="0" data-testid="input-housing" />
                 </div>
               </div>
-              <div className="mt-2 text-xs bg-amber-50 border border-amber-200 rounded p-2">
-                <strong>إجمالي الراتب:</strong> {grossSalary.toLocaleString()} ر.س
-                {nationality === "سعودي" && " (سيُخصم منه التأمينات للموظف السعودي)"}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>بدل المواصلات (ريال)</Label>
+                  <Input type="number" {...form.register("transportAllowance")} placeholder="0" data-testid="input-transport" />
+                </div>
+                <div className="space-y-2">
+                  <Label>بدل الطعام (ريال)</Label>
+                  <Input type="number" {...form.register("foodAllowance")} placeholder="0" data-testid="input-food" />
+                </div>
               </div>
-            </div>
+              <div className="space-y-2">
+                <Label>بدلات أخرى (ريال)</Label>
+                <Input type="number" {...form.register("otherAllowances")} placeholder="0" data-testid="input-other" />
+              </div>
+              {wNat === "سعودي" && (
+                <div className="space-y-2">
+                  <Label className="text-red-600">خصم التأمينات الاجتماعية (ريال) - للسعوديين</Label>
+                  <Input type="number" {...form.register("socialInsuranceDeduction")} placeholder="0"
+                    className="border-red-200 focus:border-red-400" data-testid="input-social-insurance" />
+                  <p className="text-xs text-gray-500">يتم خصم هذا المبلغ من إجمالي الراتب</p>
+                </div>
+              )}
+              <Card className="bg-amber-50">
+                <CardContent className="pt-4 space-y-2">
+                  <div className="flex justify-between items-center text-sm text-gray-600">
+                    <span>مجموع الراتب والبدلات:</span>
+                    <span>{fmtSAR(allowancesSum)}</span>
+                  </div>
+                  {wNat === "سعودي" && socialIns > 0 && (
+                    <div className="flex justify-between items-center text-sm text-red-600">
+                      <span>خصم التأمينات الاجتماعية:</span>
+                      <span>- {fmtSAR(socialIns)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center border-t pt-2">
+                    <span className="font-bold">صافي الراتب:</span>
+                    <span className="text-xl font-bold text-amber-700">{fmtSAR(netSalary)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-            {/* ===== حساب دخول النظام (اختياري) ===== */}
-            <div className="border-2 border-blue-200 rounded-lg p-3 bg-blue-50/50">
-              <div className="flex items-start gap-2 mb-2">
+            {/* ============= TAB 3: المستندات ============= */}
+            <TabsContent value="documents" className="space-y-4 pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>حالة الشهادة الصحية</Label>
+                  <Select value={wHealth} onValueChange={(v) => form.setValue("healthCertificate", v)}>
+                    <SelectTrigger data-testid="select-health-cert"><SelectValue placeholder="اختر الحالة" /></SelectTrigger>
+                    <SelectContent>
+                      {HEALTH_CERT_OPTIONS_AR.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>تاريخ انتهاء الشهادة الصحية</Label>
+                  <Input type="date" {...form.register("healthCertificateExpiry")} data-testid="input-health-expiry" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>رقم الإقامة</Label>
+                  <Input {...form.register("iqamaNumber")} placeholder="أدخل رقم الإقامة" dir="ltr" data-testid="input-iqama" />
+                </div>
+                <div className="space-y-2">
+                  <Label>تاريخ انتهاء الإقامة</Label>
+                  <Input type="date" {...form.register("iqamaExpiry")} data-testid="input-iqama-expiry" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>رقم الجواز</Label>
+                  <Input {...form.register("passportNumber")} placeholder="أدخل رقم الجواز" dir="ltr" data-testid="input-passport" />
+                </div>
+                <div className="space-y-2">
+                  <Label>تاريخ انتهاء الجواز</Label>
+                  <Input type="date" {...form.register("passportExpiry")} data-testid="input-passport-expiry" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>رقم رخصة العمل</Label>
+                <Input {...form.register("workPermitNumber")} placeholder="أدخل رقم رخصة العمل" dir="ltr" data-testid="input-work-permit" />
+              </div>
+            </TabsContent>
+
+            {/* ============= TAB 4: التواصل والبنك ============= */}
+            <TabsContent value="contact" className="space-y-4 pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>رقم الجوال</Label>
+                  <Input {...form.register("phoneNumber")} placeholder="05xxxxxxxx" dir="ltr" data-testid="input-phone" />
+                </div>
+                <div className="space-y-2">
+                  <Label>رقم الطوارئ</Label>
+                  <Input {...form.register("emergencyContact")} placeholder="رقم للتواصل في الطوارئ" dir="ltr" data-testid="input-emergency" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>اسم البنك</Label>
+                  <Select value={wBank || ""} onValueChange={(v) => form.setValue("bankName", v)}>
+                    <SelectTrigger data-testid="select-bank"><SelectValue placeholder="اختر البنك" /></SelectTrigger>
+                    <SelectContent className="max-h-60 overflow-y-auto">
+                      {isLoadingSettings ? <SelectItem value="" disabled>جاري التحميل...</SelectItem>
+                        : (settingsByCategory.bank?.filter((s: any) => s.isActive) || []).length > 0
+                          ? settingsByCategory.bank?.filter((s: any) => s.isActive).map((b: any) => (
+                              <SelectItem key={b.id} value={b.labelAr}>{b.labelAr}</SelectItem>))
+                          : <SelectItem value="" disabled>لا توجد بنوك - أضف من الإعدادات</SelectItem>}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>رقم الحساب البنكي (IBAN)</Label>
+                  <Input {...form.register("bankAccountNumber")} placeholder="SAxxxxxxxxxxxxxxxxxx" dir="ltr" data-testid="input-iban" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>نوع العقد</Label>
+                  <Select value={wContract || ""} onValueChange={(v) => form.setValue("contractType", v)}>
+                    <SelectTrigger data-testid="select-contract-type"><SelectValue placeholder="اختر نوع العقد" /></SelectTrigger>
+                    <SelectContent className="max-h-60 overflow-y-auto">
+                      {isLoadingSettings ? <SelectItem value="" disabled>جاري التحميل...</SelectItem>
+                        : (settingsByCategory.contract_type?.filter((s: any) => s.isActive) || []).length > 0
+                          ? settingsByCategory.contract_type?.filter((s: any) => s.isActive).map((ct: any) => (
+                              <SelectItem key={ct.id} value={ct.labelAr}>{ct.labelAr}</SelectItem>))
+                          : <SelectItem value="" disabled>لا توجد أنواع عقود - أضف من الإعدادات</SelectItem>}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>ملاحظات</Label>
+                  <Input {...form.register("notes")} placeholder="ملاحظات إضافية" data-testid="input-notes" />
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* ============= TAB 5: حساب الدخول (اختياري) ============= */}
+            <TabsContent value="login" className="space-y-4 pt-4">
+              <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded">
                 <Checkbox
                   id="create-login"
-                  checked={createLogin}
-                  onCheckedChange={(c) => setCreateLogin(c === true)}
+                  checked={!!wCreateLogin}
+                  onCheckedChange={(c) => form.setValue("createLogin", c === true)}
                   data-testid="checkbox-create-login"
                 />
                 <div>
-                  <Label htmlFor="create-login" className="font-bold cursor-pointer">
-                    إنشاء حساب دخول للنظام أيضاً
-                  </Label>
-                  <p className="text-xs text-slate-600 mt-0.5">
+                  <Label htmlFor="create-login" className="font-bold cursor-pointer">إنشاء حساب دخول للنظام</Label>
+                  <p className="text-xs text-slate-600 mt-1">
                     اختياري — للموظفين الذين يحتاجون استخدام النظام (كاشير، مدير، إلخ).
-                    يمكن تركه فارغاً للعمال الذين لا يحتاجون دخولاً للنظام.
+                    اتركه فارغاً للعمال الذين لا يحتاجون دخولاً.
                   </p>
                 </div>
               </div>
-              {createLogin && (
-                <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-blue-200">
-                  <div className="space-y-1">
-                    <Label>اسم المستخدم *</Label>
-                    <Input value={username} onChange={(e) => setUsername(e.target.value)} dir="ltr" data-testid="input-username" />
+              {wCreateLogin && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>اسم المستخدم *</Label>
+                      <Input {...form.register("username")} dir="ltr" data-testid="input-username" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>كلمة المرور *</Label>
+                      <Input type="text" {...form.register("password")} dir="ltr"
+                        placeholder="8+ أحرف، كبيرة وصغيرة وأرقام" data-testid="input-password" />
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <Label>كلمة المرور *</Label>
-                    <Input type="text" value={password} onChange={(e) => setPassword(e.target.value)} dir="ltr" placeholder="8+ أحرف، كبيرة وصغيرة وأرقام" data-testid="input-password" />
-                  </div>
-                  <div className="space-y-1 col-span-2">
+                  <div className="space-y-2">
                     <Label>الدور في النظام</Label>
-                    <Select value={role} onValueChange={setRole}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                    <Select value={wRole} onValueChange={(v) => form.setValue("role", v)}>
+                      <SelectTrigger data-testid="select-role"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="employee">موظف</SelectItem>
                         <SelectItem value="viewer">مشاهد</SelectItem>
@@ -850,38 +1156,18 @@ function ConvertDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: 
                   </div>
                 </div>
               )}
-            </div>
+            </TabsContent>
+          </Tabs>
+
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button type="button" variant="outline" onClick={onClose}>إلغاء</Button>
+            <Button type="submit" className="bg-amber-600 hover:bg-amber-700"
+              disabled={mutation.isPending} data-testid="btn-convert-submit">
+              {mutation.isPending && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+              إضافة
+            </Button>
           </div>
-        )}
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>إلغاء</Button>
-          <Button
-            className="bg-green-600 hover:bg-green-700"
-            onClick={() => {
-              if (!jobTitle.trim()) {
-                toast({ title: "المسمى الوظيفي مطلوب", variant: "destructive" });
-                return;
-              }
-              if (!nationality.trim()) {
-                toast({ title: "الجنسية مطلوبة", variant: "destructive" });
-                return;
-              }
-              if (!Number(basicSalary) || Number(basicSalary) <= 0) {
-                toast({ title: "الراتب الأساسي مطلوب", variant: "destructive" });
-                return;
-              }
-              if (createLogin && (!username || !password)) {
-                toast({ title: "اسم المستخدم وكلمة المرور مطلوبان لحساب الدخول", variant: "destructive" });
-                return;
-              }
-              mutation.mutate();
-            }}
-            disabled={mutation.isPending}
-            data-testid="btn-convert-submit"
-          >
-            {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "تسجيل الموظف"}
-          </Button>
-        </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

@@ -464,20 +464,38 @@ export function registerOnboardingRoutes(app: Express) {
           username,
           password,
           role,
-          // بيانات HR (إجبارية لإنشاء موظف الفرع)
-          firstName,
-          lastName,
+          // بيانات HR — نفس حقول نموذج موظفي الفرع (employeeFormSchema)
+          branchId: bodyBranchId,
+          employeeName,
+          employeeNameEn,
           jobTitle,
-          email,
-          phone,
+          department,
           nationality,
-          basicSalary,
+          salary,
           housingAllowance,
           transportAllowance,
+          foodAllowance,
           otherAllowances,
           socialInsuranceDeduction,
-          iqamaNumber,
           hireDate,
+          healthCertificate,
+          healthCertificateExpiry,
+          iqamaNumber,
+          iqamaExpiry,
+          passportNumber,
+          passportExpiry,
+          phoneNumber,
+          emergencyContact,
+          bankName,
+          bankAccountNumber,
+          status,
+          contractType,
+          workPermitNumber,
+          notes,
+          // اختيارية — للتوافق مع نسخ سابقة من الـ client
+          email,
+          phone,
+          basicSalary,
         } = req.body;
 
         // التحقق من حساب الدخول لو مطلوب
@@ -519,7 +537,8 @@ export function registerOnboardingRoutes(app: Express) {
         const finalNationality = (nationality || offer.nationality || "").trim();
         if (!finalNationality) return res.status(400).json({ error: "الجنسية مطلوبة (غير موجودة في عرض العمل، يجب إدخالها يدوياً)" });
 
-        const finalSalary = Number(basicSalary ?? offer.basicSalary ?? 0);
+        // salary = نموذج موظفي الفرع، basicSalary = للتوافق مع نسخة سابقة
+        const finalSalary = Number(salary ?? basicSalary ?? offer.basicSalary ?? 0);
         if (!finalSalary || finalSalary <= 0) return res.status(400).json({ error: "الراتب الأساسي مطلوب ويجب أن يكون أكبر من صفر" });
 
         // التحقق من اسم المستخدم لو حساب دخول مطلوب
@@ -537,14 +556,16 @@ export function registerOnboardingRoutes(app: Express) {
           if (createLogin) {
             const bcrypt = (await import("bcrypt")).default;
             const hashedPassword = await bcrypt.hash(password, 10);
+            const nameForUser = (employeeName || n.candidateName || "").trim();
+            const parts = nameForUser.split(/\s+/);
             const [newUser] = await tx
               .insert(users)
               .values({
                 username,
                 password: hashedPassword,
-                firstName: firstName || n.candidateName.split(" ")[0] || n.candidateName,
-                lastName: lastName || n.candidateName.split(" ").slice(1).join(" ") || "-",
-                phone: phone || n.phone,
+                firstName: parts[0] || nameForUser,
+                lastName: parts.slice(1).join(" ") || "-",
+                phone: phoneNumber || phone || n.phone,
                 email: email || offer.email || null,
                 branchId: n.branchId,
                 jobTitle: jobTitle || n.position,
@@ -560,11 +581,12 @@ export function registerOnboardingRoutes(app: Express) {
           // لذا نُنفّذ الإدراج المباشر داخل tx ثم نحسب القيم يدوياً
           const housing = Number(housingAllowance ?? offer.housingAllowance ?? 0);
           const transport = Number(transportAllowance ?? offer.transportAllowance ?? 0);
+          const food = Number(foodAllowance ?? 0);
           const other = Number(otherAllowances ?? offer.otherAllowances ?? 0);
           // للسعوديين: نسبة التأمينات الاجتماعية 9.75% من الراتب الأساسي (نظام التأمينات السعودي)
           // يمكن تجاوزها يدوياً عبر socialInsuranceDeduction من الـ body
           const ssDeduction = Number(socialInsuranceDeduction ?? (finalNationality === "سعودي" ? Math.round(finalSalary * 0.0975) : 0));
-          const grossSalary = finalSalary + housing + transport + other;
+          const grossSalary = finalSalary + housing + transport + food + other;
           const socialIns = finalNationality === "سعودي" ? ssDeduction : 0;
           const totalSalary = grossSalary - socialIns;
 
@@ -592,19 +614,33 @@ export function registerOnboardingRoutes(app: Express) {
             branchId: n.branchId!,
             linkedUserId: newUserId,
             employeeNumber,
-            employeeName: n.candidateName,
+            employeeName: (employeeName || n.candidateName || "").trim(),
+            employeeNameEn: employeeNameEn || null,
             jobTitle: jobTitle || n.position,
+            department: department || null,
             nationality: finalNationality,
             salary: finalSalary,
             housingAllowance: housing,
             transportAllowance: transport,
+            foodAllowance: food,
             otherAllowances: other,
             socialInsuranceDeduction: socialIns,
             totalSalary,
             hireDate: hireDate || n.actualStartDate || offer.startDate || nowDate.toISOString().slice(0, 10),
+            healthCertificate: healthCertificate || "none",
+            healthCertificateExpiry: healthCertificateExpiry || null,
             iqamaNumber: iqamaNumber || offer.idNumber || null,
-            phoneNumber: phone || n.phone,
-            status: "active",
+            iqamaExpiry: iqamaExpiry || null,
+            passportNumber: passportNumber || null,
+            passportExpiry: passportExpiry || null,
+            phoneNumber: phoneNumber || phone || n.phone,
+            emergencyContact: emergencyContact || null,
+            bankName: bankName || null,
+            bankAccountNumber: bankAccountNumber || null,
+            status: status || "active",
+            contractType: contractType || "full_time",
+            workPermitNumber: workPermitNumber || null,
+            notes: notes || null,
             statusChangedAt: nowDate,
             statusChangedBy: reqUser?.id ?? null,
           }).returning();
