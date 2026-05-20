@@ -115,11 +115,9 @@ export default function OpeningPublicPage() {
       <div className="relative z-10 max-w-md mx-auto p-4 py-6 min-h-screen flex flex-col">
         {/* الهيدر */}
         <div className="text-center mb-6">
-          <div className="bg-white rounded-2xl shadow-lg p-4 inline-block mb-3">
-            <img src={butterLogo} alt="باتر بيكري" className="h-20 w-auto mx-auto" data-testid="img-logo" />
-          </div>
-          <div className="inline-block animate-bounce-slow">
-            <PartyPopper className="w-12 h-12 text-amber-600 mx-auto" />
+          <img src={butterLogo} alt="Butter Bakery" className="h-28 sm:h-32 w-auto mx-auto drop-shadow-sm" data-testid="img-logo" />
+          <div className="inline-block animate-bounce-slow mt-1">
+            <PartyPopper className="w-10 h-10 text-amber-600 mx-auto" />
           </div>
           <h1 className="text-2xl font-bold text-amber-900 mt-2">
             {campaign.headline || `احتفل معنا بافتتاح ${campaign.branchName}!`}

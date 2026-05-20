@@ -332,8 +332,8 @@ function QRDialog({ campaign, onClose }: { campaign: Campaign | null; onClose: (
           <DialogTitle>رابط الحملة و QR Code</DialogTitle>
         </DialogHeader>
         <div ref={printRef} className="space-y-4 p-6 bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg text-center">
-          <img src={butterLogo} alt="باتر بيكري" className="h-16 w-auto mx-auto" />
-          <PartyPopper className="w-8 h-8 mx-auto text-amber-600" />
+          <img src={butterLogo} alt="Butter Bakery" className="h-20 w-auto mx-auto" />
+          <PartyPopper className="w-7 h-7 mx-auto text-amber-600" />
           <h2 className="text-xl font-bold text-amber-900">افتتاح {campaign.branch_name}</h2>
           <p className="text-sm text-slate-600">{campaign.branch_city}</p>
           {campaign.opening_date && <p className="text-sm font-bold text-amber-700">{campaign.opening_date}</p>}
