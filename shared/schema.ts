@@ -10257,3 +10257,60 @@ export const insertFloorPlanLinkSchema = createInsertSchema(floorPlanLinks).omit
 });
 export type FloorPlanLink = typeof floorPlanLinks.$inferSelect;
 export type InsertFloorPlanLink = z.infer<typeof insertFloorPlanLinkSchema>;
+
+// =====================================================
+// Branch Opening Campaigns — حملات افتتاح الفروع الجديدة
+// لتوليد لينك مخصص لكل افتتاح + QR + تجميع بيانات الضيوف
+// =====================================================
+export const branchOpeningCampaigns = pgTable("branch_opening_campaigns", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(), // معرّف الرابط العام (مثل: opening-medina-2026)
+  title: text("title").notNull(), // عنوان الحملة الداخلي
+  branchName: text("branch_name").notNull(), // اسم الفرع الجديد
+  branchCity: text("branch_city").notNull(), // مدينة الفرع
+  branchAddress: text("branch_address"), // عنوان الفرع التفصيلي
+  openingDate: text("opening_date"), // تاريخ الافتتاح (YYYY-MM-DD)
+  headline: text("headline"), // عنوان جذاب يظهر للعميل
+  description: text("description"), // وصف ترحيبي
+  prizesJson: text("prizes_json"), // JSON array لجوائز عجلة الحظ ["وجبة مجانية", "خصم 20%", ...]
+  isActive: boolean("is_active").default(true).notNull(),
+  maxGuests: integer("max_guests"), // حد أقصى للتسجيلات (اختياري)
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_opening_campaigns_slug").on(table.slug),
+  index("idx_branch_opening_campaigns_active").on(table.isActive),
+]);
+
+export const branchOpeningGuests = pgTable("branch_opening_guests", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").notNull().references(() => branchOpeningCampaigns.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  phone: text("phone").notNull(),
+  nationality: text("nationality").notNull(),
+  city: text("city").notNull(),
+  district: text("district").notNull(),
+  ticketNumber: text("ticket_number").notNull(), // رقم تذكرة الضيف (مولّد تلقائياً)
+  prizeWon: text("prize_won"), // الجائزة التي حصل عليها من عجلة الحظ
+  ipAddress: text("ip_address"), // لمنع تكرار التسجيل
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_opening_guests_campaign").on(table.campaignId),
+  index("idx_branch_opening_guests_phone").on(table.phone),
+  index("idx_branch_opening_guests_campaign_phone").on(table.campaignId, table.phone),
+]);
+
+export const insertBranchOpeningCampaignSchema = createInsertSchema(branchOpeningCampaigns).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export const updateBranchOpeningCampaignSchema = insertBranchOpeningCampaignSchema.partial().omit({ createdBy: true });
+export type BranchOpeningCampaign = typeof branchOpeningCampaigns.$inferSelect;
+export type InsertBranchOpeningCampaign = z.infer<typeof insertBranchOpeningCampaignSchema>;
+
+export const insertBranchOpeningGuestSchema = createInsertSchema(branchOpeningGuests).omit({
+  id: true, createdAt: true, ticketNumber: true, prizeWon: true, ipAddress: true, userAgent: true,
+});
+export type BranchOpeningGuest = typeof branchOpeningGuests.$inferSelect;
+export type InsertBranchOpeningGuest = z.infer<typeof insertBranchOpeningGuestSchema>;

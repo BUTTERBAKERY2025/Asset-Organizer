@@ -95,6 +95,8 @@ const MarketingAssetsPage = makeLazy("marketing-assets");
 const MarketingAlertsPage = makeLazy("marketing-alerts");
 const MarketingExpensesPage = makeLazy("marketing-expenses");
 const MarketingSocialPage = makeLazy("marketing-social");
+const MarketingOpeningCampaignsPage = makeLazy("marketing-opening-campaigns");
+const OpeningPublicPage = makeLazy("opening-public");
 const SocialResponsibilityPage = makeLazy("social-responsibility");
 const SettingsDashboardPage = makeLazy("settings-dashboard");
 const BiometricSettingsPage = makeLazy("biometric-settings");
@@ -268,6 +270,7 @@ const Router = React.memo(function Router() {
       <Route path="/job-offer/:token">{() => <Suspense fallback={<PageLoadingFallback />}><JobOfferPublicPage /></Suspense>}</Route>
       <Route path="/onboarding/:token">{() => <Suspense fallback={<PageLoadingFallback />}><OnboardingPublicPage /></Suspense>}</Route>
       <Route path="/apply/v/:slug">{() => <Suspense fallback={<PageLoadingFallback />}><VacancyPublicPage /></Suspense>}</Route>
+      <Route path="/opening/:slug">{() => <Suspense fallback={<PageLoadingFallback />}><OpeningPublicPage /></Suspense>}</Route>
       <Route path="/apply/:token">{() => <Suspense fallback={<PageLoadingFallback />}><EmploymentApplicationPublicPage /></Suspense>}</Route>
       <Route path="/hr/job-offers">{() => <ModulePage component={JobOffersPage} module="hr_management" />}</Route>
       <Route path="/hr/onboarding">{() => <ModulePage component={OnboardingPage} module="hr_management" />}</Route>
@@ -362,6 +365,7 @@ const Router = React.memo(function Router() {
       <Route path="/marketing">{() => <ModulePage component={MarketingDashboardPage} module="marketing" />}</Route>
       <Route path="/marketing-campaigns">{() => <ModulePage component={MarketingCampaignsPage} module="marketing_campaigns" />}</Route>
       <Route path="/marketing-social">{() => <ModulePage component={MarketingSocialPage} module="marketing" />}</Route>
+      <Route path="/marketing-opening-campaigns">{() => <ModulePage component={MarketingOpeningCampaignsPage} module="marketing" />}</Route>
       <Route path="/social-responsibility">{() => <ModulePage component={SocialResponsibilityPage} module="social_responsibility" />}</Route>
       <Route path="/marketing-influencers">{() => <ModulePage component={MarketingInfluencersPage} module="marketing_influencers" />}</Route>
       <Route path="/influencer-contracts">{() => <ModulePage component={InfluencerContractsPage} module="marketing_influencers" />}</Route>

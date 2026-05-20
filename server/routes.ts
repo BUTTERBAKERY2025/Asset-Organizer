@@ -112,6 +112,7 @@ import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimite
 import { registerGovernanceRoutes } from "./governance-routes";
 import { registerJobOfferRoutes } from "./job-offers-routes";
 import { registerOnboardingRoutes } from "./onboarding-routes";
+import { registerBranchOpeningRoutes } from "./branch-opening-routes";
 import { registerEmploymentApplicationRoutes } from "./employment-applications-routes";
 import { registerSocialResponsibilityRoutes } from "./social-responsibility-routes";
 import { registerSecurityRoutes } from "./security-routes";
@@ -396,6 +397,7 @@ export async function registerRoutes(
   registerGovernanceRoutes(app);
   registerJobOfferRoutes(app);
   registerOnboardingRoutes(app);
+  registerBranchOpeningRoutes(app);
   registerEmploymentApplicationRoutes(app);
   registerSocialResponsibilityRoutes(app);
   registerSecurityRoutes(app);
