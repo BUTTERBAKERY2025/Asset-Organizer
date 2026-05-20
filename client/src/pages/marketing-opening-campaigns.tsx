@@ -69,7 +69,7 @@ export default function MarketingOpeningCampaignsPage() {
         <PageHeader
           title="حملات افتتاح الفروع"
           subtitle="إنشاء روابط مخصّصة لكل افتتاح فرع — يدخل العميل عبر QR ويسجل بياناته في صفحة احتفالية"
-          icon={<PartyPopper className="w-8 h-8 text-amber-600" />}
+          icon={PartyPopper}
           actions={
             <Button onClick={() => setCreating(true)} className="bg-amber-600 hover:bg-amber-700" data-testid="btn-new-campaign">
               <Plus className="w-4 h-4 ml-2" /> حملة جديدة
