@@ -97,8 +97,8 @@ function AssetGrid({ assets, view, onView, onEdit, onDelete }: {
     );
   }
   const gridClass = view === "large"
-    ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"
-    : "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3";
+    ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4"
+    : "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 2xl:grid-cols-6 gap-2 sm:gap-3";
   return (
     <div className={gridClass}>
       {assets.map(a => <AssetCard key={a.id} asset={a} large={view === "large"} onView={() => onView(a)} onEdit={() => onEdit(a)} onDelete={() => onDelete(a)} />)}
@@ -111,31 +111,28 @@ function AssetListRow({ asset, onView, onEdit, onDelete }: { asset: MediaAsset; 
   const isVideo = asset.fileType === "video";
   const thumb = `/api/media/assets/${asset.id}/view`;
   return (
-    <div className="flex items-center gap-3 p-3 hover:bg-amber-50/40 transition" data-testid={`asset-row-${asset.id}`}>
-      <div className="w-14 h-14 flex-shrink-0 rounded-lg overflow-hidden bg-slate-100 cursor-pointer" onClick={onView}>
+    <div className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 hover:bg-amber-50/40 transition" data-testid={`asset-row-${asset.id}`}>
+      <div className="w-12 h-12 sm:w-14 sm:h-14 flex-shrink-0 rounded-lg overflow-hidden bg-slate-100 cursor-pointer" onClick={onView}>
         {isImage ? <img src={thumb} alt={asset.title} className="w-full h-full object-cover" loading="lazy" />
-          : isVideo ? <div className="w-full h-full flex items-center justify-center bg-slate-800 text-white"><Video className="w-6 h-6" /></div>
-          : <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-500"><FileText className="w-6 h-6" /></div>}
+          : isVideo ? <div className="w-full h-full flex items-center justify-center bg-slate-800 text-white"><Video className="w-5 h-5 sm:w-6 sm:h-6" /></div>
+          : <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-500"><FileText className="w-5 h-5 sm:w-6 sm:h-6" /></div>}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="font-semibold text-sm truncate" title={asset.title}>{asset.title}</div>
-        <div className="text-xs text-slate-500 truncate">{asset.fileName}</div>
-        {asset.tags && asset.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1">{asset.tags.slice(0, 3).map(t => <Badge key={t} variant="secondary" className="text-[10px] px-1.5 py-0">{t}</Badge>)}</div>
-        )}
+        <div className="font-semibold text-xs sm:text-sm truncate" title={asset.title}>{asset.title}</div>
+        <div className="text-[10px] sm:text-xs text-slate-500 truncate">{asset.fileName}</div>
+        <div className="flex flex-wrap items-center gap-1 mt-0.5 sm:mt-1">
+          <span className="sm:hidden text-[10px] text-slate-500">{formatBytes(asset.fileSize)}</span>
+          {asset.tags && asset.tags.slice(0, 2).map(t => <Badge key={t} variant="secondary" className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0">{t}</Badge>)}
+        </div>
       </div>
-      <div className="hidden md:block text-xs text-slate-500 w-24 text-center">
-        {asset.designer || "—"}
-      </div>
-      <div className="hidden sm:block text-xs text-slate-500 w-20 text-center">
-        {formatBytes(asset.fileSize)}
-      </div>
+      <div className="hidden lg:block text-xs text-slate-500 w-24 text-center truncate">{asset.designer || "—"}</div>
+      <div className="hidden sm:block text-xs text-slate-500 w-20 text-center">{formatBytes(asset.fileSize)}</div>
       {asset.platform && <Badge variant="outline" className="text-[10px] hidden md:inline-flex">{PLATFORM_LABELS[asset.platform] || asset.platform}</Badge>}
-      <div className="flex gap-1 flex-shrink-0">
-        <Button size="sm" variant="outline" className="h-8 px-2" onClick={onView} title="معاينة"><Eye className="w-3.5 h-3.5" /></Button>
-        <a href={`/api/media/assets/${asset.id}/download`}><Button size="sm" variant="outline" className="h-8 px-2" title="تنزيل"><Download className="w-3.5 h-3.5" /></Button></a>
-        <Button size="sm" variant="outline" className="h-8 px-2" onClick={onEdit} title="تعديل"><Pencil className="w-3.5 h-3.5" /></Button>
-        <Button size="sm" variant="outline" className="h-8 px-2 text-red-600 hover:bg-red-50" onClick={onDelete} title="حذف"><Trash2 className="w-3.5 h-3.5" /></Button>
+      <div className="flex gap-0.5 sm:gap-1 flex-shrink-0">
+        <Button size="sm" variant="outline" className="h-9 w-9 sm:h-8 sm:w-auto sm:px-2 p-0" onClick={onView} title="معاينة"><Eye className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></Button>
+        <a href={`/api/media/assets/${asset.id}/download`}><Button size="sm" variant="outline" className="h-9 w-9 sm:h-8 sm:w-auto sm:px-2 p-0" title="تنزيل"><Download className="w-4 h-4 sm:w-3.5 sm:h-3.5" /></Button></a>
+        <Button size="sm" variant="outline" className="hidden sm:inline-flex h-8 px-2" onClick={onEdit} title="تعديل"><Pencil className="w-3.5 h-3.5" /></Button>
+        <Button size="sm" variant="outline" className="hidden sm:inline-flex h-8 px-2 text-red-600 hover:bg-red-50" onClick={onDelete} title="حذف"><Trash2 className="w-3.5 h-3.5" /></Button>
       </div>
     </div>
   );
@@ -146,19 +143,19 @@ export default function MarketingMediaTeamPage() {
 
   return (
     <Layout>
-      <div className="space-y-6 p-4 md:p-6">
+      <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6 pb-20 md:pb-6">
         {/* Hero Header */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-l from-amber-500 via-amber-600 to-orange-600 p-6 md:p-8 text-white shadow-lg">
+        <div className="relative overflow-hidden rounded-xl sm:rounded-2xl bg-gradient-to-l from-amber-500 via-amber-600 to-orange-600 p-4 sm:p-6 md:p-8 text-white shadow-lg">
           <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_top_left,white_0%,transparent_50%)]" />
-          <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="bg-white/20 backdrop-blur p-3 rounded-2xl border border-white/30">
-                <Camera className="w-8 h-8" />
+          <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-start sm:items-center gap-3 sm:gap-4">
+              <div className="bg-white/20 backdrop-blur p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-white/30 flex-shrink-0">
+                <Camera className="w-6 h-6 sm:w-8 sm:h-8" />
               </div>
-              <div>
-                <h1 className="text-2xl md:text-3xl font-extrabold">فريق التصوير والميديا</h1>
-                <p className="text-amber-50 text-sm md:text-base mt-1 max-w-2xl">
-                  مكتبة بصرية موحّدة لكل ما يخص العلامة التجارية — الهوية، بنك الصور، منتجات الفريق، القوالب، الأرشيف، وحملات التصميم
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold leading-tight">فريق التصوير والميديا</h1>
+                <p className="text-amber-50 text-xs sm:text-sm md:text-base mt-1 max-w-2xl leading-relaxed">
+                  مكتبة بصرية موحّدة — الهوية، بنك الصور، المنتجات، القوالب، الأرشيف، وحملات التصميم
                 </p>
               </div>
             </div>
@@ -166,41 +163,46 @@ export default function MarketingMediaTeamPage() {
         </div>
 
         <Tabs value={tab} onValueChange={setTab} dir="rtl">
-          <div className="overflow-x-auto -mx-1 px-1">
-            <TabsList className="bg-white border shadow-sm h-auto p-1.5 inline-flex gap-1 min-w-full md:min-w-0">
-              <TabTriggerStyled value="identity" icon={<Palette className="w-4 h-4" />} label="الهوية البصرية" />
-              <TabTriggerStyled value="campaigns" icon={<FolderOpen className="w-4 h-4" />} label="حملات التصميم" highlight />
-              <TabTriggerStyled value="photos" icon={<ImageIcon className="w-4 h-4" />} label="بنك الصور" />
-              <TabTriggerStyled value="products" icon={<Sparkles className="w-4 h-4" />} label="منتجات الفريق" />
-              <TabTriggerStyled value="templates" icon={<FileImage className="w-4 h-4" />} label="القوالب" />
-              <TabTriggerStyled value="archive" icon={<FolderArchive className="w-4 h-4" />} label="الأرشيف الخام" />
-            </TabsList>
+          {/* تبويبات قابلة للسحب الأفقي على الجوال — sticky على الجوال للوصول السريع */}
+          <div className="sticky top-0 z-20 -mx-3 sm:-mx-4 md:mx-0 px-3 sm:px-4 md:px-0 py-2 -my-2 md:my-0 md:py-0 bg-slate-50/90 md:bg-transparent backdrop-blur md:backdrop-blur-none">
+            <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
+              <TabsList className="bg-white border shadow-sm h-auto p-1 sm:p-1.5 inline-flex gap-1 min-w-full md:min-w-0">
+                <TabTriggerStyled value="identity" icon={<Palette className="w-4 h-4" />} label="الهوية" labelLg="الهوية البصرية" />
+                <TabTriggerStyled value="campaigns" icon={<FolderOpen className="w-4 h-4" />} label="الحملات" labelLg="حملات التصميم" highlight />
+                <TabTriggerStyled value="photos" icon={<ImageIcon className="w-4 h-4" />} label="الصور" labelLg="بنك الصور" />
+                <TabTriggerStyled value="products" icon={<Sparkles className="w-4 h-4" />} label="المنتجات" labelLg="منتجات الفريق" />
+                <TabTriggerStyled value="templates" icon={<FileImage className="w-4 h-4" />} label="القوالب" />
+                <TabTriggerStyled value="archive" icon={<FolderArchive className="w-4 h-4" />} label="الأرشيف" labelLg="الأرشيف الخام" />
+              </TabsList>
+            </div>
           </div>
 
-          <TabsContent value="identity" className="mt-6"><IdentityTab /></TabsContent>
-          <TabsContent value="campaigns" className="mt-6"><CampaignsTab /></TabsContent>
-          <TabsContent value="photos" className="mt-6"><AssetGalleryTab category="photos" /></TabsContent>
-          <TabsContent value="products" className="mt-6"><AssetGalleryTab category="products" showPlatform /></TabsContent>
-          <TabsContent value="templates" className="mt-6"><AssetGalleryTab category="templates" /></TabsContent>
-          <TabsContent value="archive" className="mt-6"><AssetGalleryTab category="archive" /></TabsContent>
+          <TabsContent value="identity" className="mt-4 sm:mt-6"><IdentityTab /></TabsContent>
+          <TabsContent value="campaigns" className="mt-4 sm:mt-6"><CampaignsTab /></TabsContent>
+          <TabsContent value="photos" className="mt-4 sm:mt-6"><AssetGalleryTab category="photos" /></TabsContent>
+          <TabsContent value="products" className="mt-4 sm:mt-6"><AssetGalleryTab category="products" showPlatform /></TabsContent>
+          <TabsContent value="templates" className="mt-4 sm:mt-6"><AssetGalleryTab category="templates" /></TabsContent>
+          <TabsContent value="archive" className="mt-4 sm:mt-6"><AssetGalleryTab category="archive" /></TabsContent>
         </Tabs>
       </div>
     </Layout>
   );
 }
 
-function TabTriggerStyled({ value, icon, label, highlight }: { value: string; icon: React.ReactNode; label: string; highlight?: boolean }) {
+function TabTriggerStyled({ value, icon, label, labelLg, highlight }: { value: string; icon: React.ReactNode; label: string; labelLg?: string; highlight?: boolean }) {
   return (
     <TabsTrigger
       value={value}
       data-testid={`tab-${value}`}
-      className={`relative gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg whitespace-nowrap
+      className={`relative gap-1.5 sm:gap-2 px-2.5 sm:px-3 md:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold rounded-lg whitespace-nowrap
         data-[state=active]:bg-gradient-to-l data-[state=active]:from-amber-500 data-[state=active]:to-orange-500
         data-[state=active]:text-white data-[state=active]:shadow-md
         text-slate-600 hover:bg-amber-50 transition`}
     >
-      {icon} {label}
-      {highlight && <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
+      {icon}
+      <span className="md:hidden">{label}</span>
+      <span className="hidden md:inline">{labelLg || label}</span>
+      {highlight && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
     </TabsTrigger>
   );
 }
@@ -328,15 +330,15 @@ function IdentityTab() {
 function SectionCard({ title, icon, count, action, children }: any) {
   return (
     <Card className="border-2 border-slate-100 shadow-sm">
-      <CardHeader className="flex flex-row items-center justify-between bg-gradient-to-l from-amber-50 to-white border-b py-4">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <div className="bg-amber-100 text-amber-700 p-2 rounded-lg">{icon}</div>
-          {title}
-          {count !== undefined && <Badge variant="secondary" className="mr-2">{count}</Badge>}
+      <CardHeader className="flex flex-row items-center justify-between gap-2 bg-gradient-to-l from-amber-50 to-white border-b py-3 sm:py-4 px-3 sm:px-6">
+        <CardTitle className="flex items-center gap-2 text-sm sm:text-base min-w-0">
+          <div className="bg-amber-100 text-amber-700 p-1.5 sm:p-2 rounded-lg flex-shrink-0">{icon}</div>
+          <span className="truncate">{title}</span>
+          {count !== undefined && <Badge variant="secondary" className="mr-1 sm:mr-2 flex-shrink-0">{count}</Badge>}
         </CardTitle>
-        {action}
+        {action && <div className="flex-shrink-0">{action}</div>}
       </CardHeader>
-      <CardContent className="p-5">{children}</CardContent>
+      <CardContent className="p-3 sm:p-5">{children}</CardContent>
     </Card>
   );
 }
@@ -480,7 +482,7 @@ function CampaignsTab() {
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         <Select value={statusFilter || "_all"} onValueChange={v => setStatusFilter(v === "_all" ? "" : v)}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-32 sm:w-40 h-10 sm:h-9"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="_all">كل الحملات</SelectItem>
             <SelectItem value="active">النشطة</SelectItem>
@@ -488,8 +490,8 @@ function CampaignsTab() {
           </SelectContent>
         </Select>
         <div className="flex-1" />
-        <Button onClick={() => { setEditing(null); setCreateOpen(true); }} className="bg-amber-600 hover:bg-amber-700" data-testid="btn-create-campaign">
-          <Plus className="w-4 h-4 ml-1" /> حملة جديدة
+        <Button onClick={() => { setEditing(null); setCreateOpen(true); }} className="bg-amber-600 hover:bg-amber-700 h-10 sm:h-9" data-testid="btn-create-campaign">
+          <Plus className="w-4 h-4 ml-1" /> <span className="hidden sm:inline">حملة جديدة</span><span className="sm:hidden">جديدة</span>
         </Button>
       </div>
 
@@ -529,11 +531,11 @@ function StatBox({ icon, label, value, color }: any) {
   };
   return (
     <Card className="overflow-hidden border-0 shadow-sm hover:shadow-md transition">
-      <CardContent className="p-4 flex items-center gap-3">
-        <div className={`bg-gradient-to-br ${colors[color]} text-white p-2.5 rounded-xl`}>{icon}</div>
-        <div>
-          <div className="text-xs text-slate-500">{label}</div>
-          <div className="text-xl font-bold text-slate-800">{value}</div>
+      <CardContent className="p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3">
+        <div className={`bg-gradient-to-br ${colors[color]} text-white p-2 sm:p-2.5 rounded-lg sm:rounded-xl flex-shrink-0`}>{icon}</div>
+        <div className="min-w-0">
+          <div className="text-[10px] sm:text-xs text-slate-500 truncate">{label}</div>
+          <div className="text-base sm:text-xl font-bold text-slate-800 truncate">{value}</div>
         </div>
       </CardContent>
     </Card>
@@ -545,31 +547,31 @@ function CampaignCard({ campaign, onOpen, onEdit, onDelete }: { campaign: MediaC
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-all duration-200 group border-2 border-transparent hover:border-amber-300" data-testid={`campaign-${campaign.id}`}>
       <div
-        className="h-28 relative cursor-pointer flex items-center justify-center"
+        className="h-24 sm:h-28 relative cursor-pointer flex items-center justify-center"
         style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}
         onClick={onOpen}
       >
-        <FolderOpen className="w-12 h-12 text-white/90 group-hover:scale-110 transition" />
+        <FolderOpen className="w-10 h-10 sm:w-12 sm:h-12 text-white/90 group-hover:scale-110 transition" />
         {campaign.status === "archived" && (
-          <Badge className="absolute top-2 left-2 bg-slate-700 text-white">مؤرشفة</Badge>
+          <Badge className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 bg-slate-700 text-white text-[10px] sm:text-xs">مؤرشفة</Badge>
         )}
-        <Badge className="absolute top-2 right-2 bg-white/90 text-slate-800 hover:bg-white">
+        <Badge className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 bg-white/90 text-slate-800 hover:bg-white text-[10px] sm:text-xs">
           {campaign.asset_count || 0} ملف
         </Badge>
       </div>
-      <CardContent className="p-4">
-        <h3 className="font-bold text-base truncate" title={campaign.name}>{campaign.name}</h3>
-        {campaign.description && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{campaign.description}</p>}
-        <div className="flex items-center gap-3 text-xs text-slate-500 mt-2">
+      <CardContent className="p-3 sm:p-4">
+        <h3 className="font-bold text-sm sm:text-base truncate" title={campaign.name}>{campaign.name}</h3>
+        {campaign.description && <p className="text-[11px] sm:text-xs text-slate-500 mt-1 line-clamp-2">{campaign.description}</p>}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] sm:text-xs text-slate-500 mt-2">
           <span className="flex items-center gap-1"><HardDrive className="w-3 h-3" /> {formatBytes(Number(campaign.total_size) || 0)}</span>
           {campaign.startDate && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {campaign.startDate}</span>}
         </div>
         <div className="flex gap-1 mt-3">
-          <Button size="sm" className="flex-1 bg-amber-600 hover:bg-amber-700 h-8 text-xs" onClick={onOpen}>
+          <Button size="sm" className="flex-1 bg-amber-600 hover:bg-amber-700 h-9 sm:h-8 text-xs" onClick={onOpen}>
             فتح <ArrowRight className="w-3 h-3 mr-1 rtl:rotate-180" />
           </Button>
-          <Button size="sm" variant="outline" className="h-8 px-2" onClick={onEdit}><Pencil className="w-3 h-3" /></Button>
-          <Button size="sm" variant="outline" className="h-8 px-2 text-red-600 hover:bg-red-50" onClick={onDelete}><Trash2 className="w-3 h-3" /></Button>
+          <Button size="sm" variant="outline" className="h-9 sm:h-8 w-9 sm:w-auto sm:px-2 p-0" onClick={onEdit}><Pencil className="w-3.5 h-3.5 sm:w-3 sm:h-3" /></Button>
+          <Button size="sm" variant="outline" className="h-9 sm:h-8 w-9 sm:w-auto sm:px-2 p-0 text-red-600 hover:bg-red-50" onClick={onDelete}><Trash2 className="w-3.5 h-3.5 sm:w-3 sm:h-3" /></Button>
         </div>
       </CardContent>
     </Card>
@@ -581,8 +583,8 @@ function CampaignDialog({ open, onClose, initial, onSave, saving }: any) {
   useEffect(() => { if (open) setForm(initial || { name: "", description: "", coverColor: "#D4A574", status: "active", startDate: "", endDate: "" }); }, [open, initial]);
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent dir="rtl" className="max-w-lg">
-        <DialogHeader><DialogTitle>{initial ? "تعديل الحملة" : "إنشاء حملة جديدة"}</DialogTitle></DialogHeader>
+      <DialogContent dir="rtl" className="max-w-lg max-h-[92vh] overflow-y-auto p-4 sm:p-6">
+        <DialogHeader><DialogTitle className="text-base sm:text-lg">{initial ? "تعديل الحملة" : "إنشاء حملة جديدة"}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div><Label>اسم الحملة *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="حملة افتتاح فرع الرياض" data-testid="input-campaign-name" /></div>
           <div><Label>وصف الحملة</Label><Textarea value={form.description || ""} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} placeholder="نبذة قصيرة عن الحملة..." /></div>
@@ -657,20 +659,20 @@ function CampaignDetail({ id, onBack }: { id: number; onBack: () => void }) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="rounded-2xl p-5 text-white shadow-lg" style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}>
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <Button variant="secondary" size="sm" onClick={onBack} className="bg-white/20 hover:bg-white/30 text-white border-0">
+      <div className="rounded-xl sm:rounded-2xl p-3 sm:p-5 text-white shadow-lg" style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}>
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+          <div className="flex items-start gap-2 sm:gap-3 min-w-0 flex-1">
+            <Button variant="secondary" size="sm" onClick={onBack} className="bg-white/20 hover:bg-white/30 text-white border-0 h-9 w-9 p-0 flex-shrink-0">
               <ArrowRight className="w-4 h-4 rtl:rotate-180" />
             </Button>
-            <div>
-              <div className="flex items-center gap-2">
-                <FolderOpen className="w-6 h-6" />
-                <h2 className="text-xl md:text-2xl font-extrabold">{campaign?.name || "..."}</h2>
-                {campaign?.status === "archived" && <Badge className="bg-slate-700">مؤرشفة</Badge>}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <FolderOpen className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
+                <h2 className="text-lg sm:text-xl md:text-2xl font-extrabold truncate">{campaign?.name || "..."}</h2>
+                {campaign?.status === "archived" && <Badge className="bg-slate-700 text-[10px] sm:text-xs">مؤرشفة</Badge>}
               </div>
-              {campaign?.description && <p className="text-sm text-white/90 mt-1 max-w-2xl">{campaign.description}</p>}
-              <div className="flex gap-4 text-xs text-white/80 mt-2">
+              {campaign?.description && <p className="text-xs sm:text-sm text-white/90 mt-1 max-w-2xl line-clamp-2">{campaign.description}</p>}
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] sm:text-xs text-white/80 mt-2">
                 <span>{assets.length} ملف</span>
                 <span>{formatBytes(totalSize)}</span>
                 {campaign?.startDate && <span>من {campaign.startDate}</span>}
@@ -678,10 +680,10 @@ function CampaignDetail({ id, onBack }: { id: number; onBack: () => void }) {
               </div>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 sm:flex-shrink-0">
             {assets.length > 0 && (
-              <a href={`/api/media/campaigns/${id}/download-all`}>
-                <Button size="sm" variant="secondary" className="bg-white/20 hover:bg-white/30 text-white border-0" data-testid="btn-download-zip">
+              <a href={`/api/media/campaigns/${id}/download-all`} className="flex-1 sm:flex-initial">
+                <Button size="sm" variant="secondary" className="w-full sm:w-auto bg-white/20 hover:bg-white/30 text-white border-0 h-9" data-testid="btn-download-zip">
                   <Download className="w-4 h-4 ml-1" /> تنزيل الكل (ZIP)
                 </Button>
               </a>
@@ -692,12 +694,12 @@ function CampaignDetail({ id, onBack }: { id: number; onBack: () => void }) {
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute right-2 top-2.5 w-4 h-4 text-slate-400" />
-          <Input value={q} onChange={e => setQ(e.target.value)} placeholder="بحث داخل الحملة..." className="pr-8" />
+        <div className="relative flex-1 min-w-full sm:min-w-[200px] order-1">
+          <Search className="absolute right-2 top-2.5 sm:top-3 w-4 h-4 text-slate-400" />
+          <Input value={q} onChange={e => setQ(e.target.value)} placeholder="بحث داخل الحملة..." className="pr-8 h-10 sm:h-9" />
         </div>
-        <ViewModeToggle value={view} onChange={setView} />
-        <Button onClick={() => setUploadOpen(true)} className="bg-amber-600 hover:bg-amber-700" data-testid="btn-upload-to-campaign">
+        <div className="order-2"><ViewModeToggle value={view} onChange={setView} /></div>
+        <Button onClick={() => setUploadOpen(true)} className="bg-amber-600 hover:bg-amber-700 h-10 sm:h-9 order-3 flex-1 sm:flex-initial" data-testid="btn-upload-to-campaign">
           <Upload className="w-4 h-4 ml-1" /> رفع للحملة
         </Button>
       </div>
@@ -785,21 +787,21 @@ function AssetGalleryTab({ category, showPlatform }: { category: string; showPla
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute right-2 top-2.5 w-4 h-4 text-slate-400" />
-          <Input value={q} onChange={e => setQ(e.target.value)} placeholder="بحث بالعنوان، الوسم، المصمم..." className="pr-8" data-testid="input-search-assets" />
+        <div className="relative flex-1 min-w-full sm:min-w-[200px] order-1">
+          <Search className="absolute right-2 top-2.5 sm:top-3 w-4 h-4 text-slate-400" />
+          <Input value={q} onChange={e => setQ(e.target.value)} placeholder="بحث..." className="pr-8 h-10 sm:h-9" data-testid="input-search-assets" />
         </div>
         {showPlatform && (
           <Select value={platform || "_all"} onValueChange={v => setPlatform(v === "_all" ? "" : v)}>
-            <SelectTrigger className="w-44"><SelectValue placeholder="كل المنصات" /></SelectTrigger>
+            <SelectTrigger className="w-36 sm:w-44 h-10 sm:h-9 order-2"><SelectValue placeholder="المنصات" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_all">كل المنصات</SelectItem>
               {Object.entries(PLATFORM_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
             </SelectContent>
           </Select>
         )}
-        <ViewModeToggle value={view} onChange={setView} />
-        <Button onClick={() => setUploadOpen(true)} className="bg-amber-600 hover:bg-amber-700" data-testid="btn-upload-asset">
+        <div className="order-3 sm:order-2"><ViewModeToggle value={view} onChange={setView} /></div>
+        <Button onClick={() => setUploadOpen(true)} className="bg-amber-600 hover:bg-amber-700 h-10 sm:h-9 order-4 sm:order-3 flex-1 sm:flex-initial" data-testid="btn-upload-asset">
           <Upload className="w-4 h-4 ml-1" /> رفع جديد
         </Button>
       </div>
@@ -855,20 +857,20 @@ function AssetCard({ asset, onView, onEdit, onDelete, large }: { asset: MediaAss
           <Eye className={large ? "w-8 h-8 text-white" : "w-6 h-6 text-white"} />
         </div>
       </div>
-      <div className={large ? "p-3" : "p-2.5"}>
+      <div className={large ? "p-3" : "p-2 sm:p-2.5"}>
         <div className={`${titleSize} font-bold truncate`} title={asset.title}>{asset.title}</div>
         {large && asset.description && <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{asset.description}</div>}
-        <div className="text-[10px] text-slate-500 flex items-center justify-between mt-0.5">
-          <span>{formatBytes(asset.fileSize)}</span>
-          {asset.platform && <Badge variant="outline" className="text-[9px] px-1 py-0">{PLATFORM_LABELS[asset.platform] || asset.platform}</Badge>}
+        <div className="text-[10px] text-slate-500 flex items-center justify-between mt-0.5 gap-1">
+          <span className="truncate">{formatBytes(asset.fileSize)}</span>
+          {asset.platform && <Badge variant="outline" className="text-[9px] px-1 py-0 flex-shrink-0">{PLATFORM_LABELS[asset.platform] || asset.platform}</Badge>}
         </div>
         {large && asset.tags && asset.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1.5">{asset.tags.slice(0, 4).map(t => <Badge key={t} variant="secondary" className="text-[9px] px-1.5 py-0">{t}</Badge>)}</div>
         )}
         <div className="flex gap-1 mt-2">
-          <a href={`/api/media/assets/${asset.id}/download`} className="flex-1"><Button size="sm" variant="outline" className="w-full h-7 text-xs"><Download className="w-3 h-3" /></Button></a>
-          <Button size="sm" variant="outline" className="h-7 px-2" onClick={onEdit}><Pencil className="w-3 h-3" /></Button>
-          <Button size="sm" variant="outline" className="h-7 px-2 text-red-600 hover:bg-red-50" onClick={onDelete}><Trash2 className="w-3 h-3" /></Button>
+          <a href={`/api/media/assets/${asset.id}/download`} className="flex-1"><Button size="sm" variant="outline" className="w-full h-8 sm:h-7 text-xs"><Download className="w-3.5 h-3.5 sm:w-3 sm:h-3" /></Button></a>
+          <Button size="sm" variant="outline" className="h-8 sm:h-7 w-8 sm:w-auto sm:px-2 p-0" onClick={onEdit}><Pencil className="w-3.5 h-3.5 sm:w-3 sm:h-3" /></Button>
+          <Button size="sm" variant="outline" className="h-8 sm:h-7 w-8 sm:w-auto sm:px-2 p-0 text-red-600 hover:bg-red-50" onClick={onDelete}><Trash2 className="w-3.5 h-3.5 sm:w-3 sm:h-3" /></Button>
         </div>
       </div>
     </div>
@@ -928,8 +930,8 @@ function UploadDialog({ open, onClose, category, allowVideo, acceptDesign, showP
 
   return (
     <Dialog open={open} onOpenChange={() => { if (!uploading) { reset(); onClose(); } }}>
-      <DialogContent dir="rtl" className="max-w-2xl">
-        <DialogHeader><DialogTitle>رفع ملف جديد — {CATEGORY_LABELS[category]}</DialogTitle></DialogHeader>
+      <DialogContent dir="rtl" className="max-w-2xl max-h-[92vh] overflow-y-auto p-4 sm:p-6">
+        <DialogHeader><DialogTitle className="text-base sm:text-lg">رفع ملف جديد — {CATEGORY_LABELS[category]}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div
             className="border-2 border-dashed border-amber-300 rounded-xl p-6 text-center cursor-pointer hover:bg-amber-50/50 transition"
@@ -1001,9 +1003,9 @@ function PreviewDialog({ asset, onClose }: { asset: MediaAsset | null; onClose: 
   const src = `/api/media/assets/${asset.id}/view`;
   return (
     <Dialog open={!!asset} onOpenChange={onClose}>
-      <DialogContent dir="rtl" className="max-w-4xl">
-        <DialogHeader><DialogTitle>{asset.title}</DialogTitle></DialogHeader>
-        <div className="bg-slate-900 rounded-lg flex items-center justify-center min-h-[300px] max-h-[70vh] overflow-auto">
+      <DialogContent dir="rtl" className="max-w-4xl max-h-[95vh] overflow-y-auto p-3 sm:p-6">
+        <DialogHeader><DialogTitle className="text-sm sm:text-base truncate pr-6">{asset.title}</DialogTitle></DialogHeader>
+        <div className="bg-slate-900 rounded-lg flex items-center justify-center min-h-[200px] sm:min-h-[300px] max-h-[60vh] sm:max-h-[70vh] overflow-auto">
           {asset.fileType === "image" ? (
             <img src={src} alt={asset.title} className="max-w-full max-h-[70vh] object-contain" />
           ) : asset.fileType === "video" ? (
