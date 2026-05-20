@@ -402,6 +402,7 @@ export default function RBACManagementPage() {
     },
     onSuccess: () => {
       refetchRolePerms();
+      queryClient.invalidateQueries({ queryKey: ["/api/my-permissions"] });
       toast({ title: "تم إضافة الصلاحية" });
     },
     onError: () => {
@@ -418,6 +419,7 @@ export default function RBACManagementPage() {
     },
     onSuccess: () => {
       refetchRolePerms();
+      queryClient.invalidateQueries({ queryKey: ["/api/my-permissions"] });
       toast({ title: "تم إزالة الصلاحية" });
     },
     onError: () => {
@@ -454,6 +456,7 @@ export default function RBACManagementPage() {
     onSuccess: () => {
       refetchUserAssignments();
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/my-permissions"] });
       toast({ title: "تم تعيين الدور بنجاح" });
       setAssignmentRoleId("");
       setAssignmentBranchId("all_branches");
@@ -474,6 +477,7 @@ export default function RBACManagementPage() {
     onSuccess: () => {
       refetchUserAssignments();
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/my-permissions"] });
       toast({ title: "تم حذف التعيين" });
     },
     onError: () => {

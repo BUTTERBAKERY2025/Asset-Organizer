@@ -160,6 +160,7 @@ export default function UsersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/my-permissions"] });
       toast({ title: "تم تحديث الصلاحية بنجاح" });
     },
     onError: () => {
@@ -207,6 +208,7 @@ export default function UsersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/my-permissions"] });
       toast({ title: "تم تحديث بيانات المستخدم بنجاح" });
       setIsEditDialogOpen(false);
       setSelectedUser(null);
@@ -267,6 +269,7 @@ export default function UsersPage() {
       toast({ title: "تم حفظ الصلاحيات بنجاح" });
       queryClient.invalidateQueries({ queryKey: ["/api/users", selectedUser?.id, "permissions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/users", selectedUser?.id, "permissions-with-sources"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/my-permissions"] });
       setIsPermissionsDialogOpen(false);
       setSelectedUser(null);
       setAppliedTemplate(null);
@@ -291,6 +294,7 @@ export default function UsersPage() {
       toast({ title: "تم تحديث تجاوز الصلاحية بنجاح" });
       queryClient.invalidateQueries({ queryKey: ["/api/users", selectedUser?.id, "permissions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/users", selectedUser?.id, "permissions-with-sources"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/my-permissions"] });
     },
     onError: () => {
       toast({ title: "فشل تحديث تجاوز الصلاحية", variant: "destructive" });
@@ -310,6 +314,7 @@ export default function UsersPage() {
       toast({ title: "تم إزالة تجاوز الصلاحية" });
       queryClient.invalidateQueries({ queryKey: ["/api/users", selectedUser?.id, "permissions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/users", selectedUser?.id, "permissions-with-sources"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/my-permissions"] });
     },
     onError: () => {
       toast({ title: "فشل إزالة تجاوز الصلاحية", variant: "destructive" });
