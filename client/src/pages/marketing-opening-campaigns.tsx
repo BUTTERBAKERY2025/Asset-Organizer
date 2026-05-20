@@ -26,9 +26,10 @@ interface Campaign {
   max_guests: number | null; created_at: string; guests_count: number;
 }
 interface Guest {
-  id: number; campaignId: number; name: string; phone: string; nationality: string;
+  id: number; campaignId: number; name: string; phone: string; gender: string;
   city: string; district: string; ticketNumber: string; prizeWon: string | null; createdAt: string;
 }
+const GENDER_LABEL: Record<string, string> = { male: "ذكر", female: "أنثى" };
 
 const DEFAULT_PRIZES = ["وجبة مجانية", "خصم 20%", "كوب قهوة هدية", "حلويات بالمناسبة", "خصم 10%", "بطاقة شكر"];
 
@@ -383,7 +384,7 @@ function GuestsDialog({ campaign, onClose }: { campaign: Campaign | null; onClos
       "رقم التذكرة": g.ticketNumber,
       "الاسم": g.name,
       "الجوال": g.phone,
-      "الجنسية": g.nationality,
+      "النوع": GENDER_LABEL[g.gender] || g.gender,
       "المدينة": g.city,
       "الحي": g.district,
       "الجائزة": g.prizeWon || "-",
@@ -418,7 +419,7 @@ function GuestsDialog({ campaign, onClose }: { campaign: Campaign | null; onClos
                 <TableHead>التذكرة</TableHead>
                 <TableHead>الاسم</TableHead>
                 <TableHead>الجوال</TableHead>
-                <TableHead>الجنسية</TableHead>
+                <TableHead>النوع</TableHead>
                 <TableHead>المدينة</TableHead>
                 <TableHead>الحي</TableHead>
                 <TableHead>الجائزة</TableHead>
@@ -432,7 +433,11 @@ function GuestsDialog({ campaign, onClose }: { campaign: Campaign | null; onClos
                   <TableCell className="font-mono font-bold text-amber-700">{g.ticketNumber}</TableCell>
                   <TableCell>{g.name}</TableCell>
                   <TableCell dir="ltr">{g.phone}</TableCell>
-                  <TableCell>{g.nationality}</TableCell>
+                  <TableCell>
+                    <Badge className={g.gender === "female" ? "bg-pink-100 text-pink-700" : "bg-blue-100 text-blue-700"}>
+                      {GENDER_LABEL[g.gender] || g.gender}
+                    </Badge>
+                  </TableCell>
                   <TableCell>{g.city}</TableCell>
                   <TableCell>{g.district}</TableCell>
                   <TableCell><Badge className="bg-pink-100 text-pink-700">{g.prizeWon || "-"}</Badge></TableCell>

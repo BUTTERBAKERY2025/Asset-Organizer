@@ -10288,7 +10288,7 @@ export const branchOpeningGuests = pgTable("branch_opening_guests", {
   campaignId: integer("campaign_id").notNull().references(() => branchOpeningCampaigns.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   phone: text("phone").notNull(),
-  nationality: text("nationality").notNull(),
+  gender: text("gender").notNull(),
   city: text("city").notNull(),
   district: text("district").notNull(),
   ticketNumber: text("ticket_number").notNull(), // رقم تذكرة الضيف (مولّد تلقائياً)

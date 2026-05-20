@@ -34,7 +34,7 @@ function generateTicketNumber(): string {
 const PUBLIC_REGISTER_SCHEMA = z.object({
   name: z.string().min(2, "الاسم مطلوب").max(80),
   phone: z.string().min(8, "رقم الجوال مطلوب").max(20),
-  nationality: z.string().min(2, "الجنسية مطلوبة").max(40),
+  gender: z.enum(["male", "female"], { errorMap: () => ({ message: "اختر النوع" }) }),
   city: z.string().min(2, "المدينة مطلوبة").max(60),
   district: z.string().min(2, "الحي مطلوب").max(80),
 });
@@ -251,7 +251,7 @@ export function registerBranchOpeningRoutes(app: Express) {
         campaignId: c.id,
         name: data.name.trim(),
         phone: normalizedPhone,
-        nationality: data.nationality.trim(),
+        gender: data.gender,
         city: data.city.trim(),
         district: data.district.trim(),
         ticketNumber,
