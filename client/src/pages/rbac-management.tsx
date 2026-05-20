@@ -136,6 +136,9 @@ const MODULE_LABELS: Record<string, string> = {
   employee_reports: "تقارير الموظفين",
   employee_transfers: "نقل الموظفين",
   hr_management: "إدارة الموارد البشرية",
+  hr_employment_applications: "طلبات التوظيف",
+  hr_job_offers: "عروض العمل",
+  hr_onboarding: "مباشرة العمل (إشعار)",
   
   // المالية
   cashier: "الكاشير",

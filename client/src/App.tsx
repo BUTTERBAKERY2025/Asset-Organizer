@@ -273,9 +273,9 @@ const Router = React.memo(function Router() {
       <Route path="/apply/v/:slug">{() => <Suspense fallback={<PageLoadingFallback />}><VacancyPublicPage /></Suspense>}</Route>
       <Route path="/opening/:slug">{() => <Suspense fallback={<PageLoadingFallback />}><OpeningPublicPage /></Suspense>}</Route>
       <Route path="/apply/:token">{() => <Suspense fallback={<PageLoadingFallback />}><EmploymentApplicationPublicPage /></Suspense>}</Route>
-      <Route path="/hr/job-offers">{() => <ModulePage component={JobOffersPage} module="hr_management" />}</Route>
-      <Route path="/hr/onboarding">{() => <ModulePage component={OnboardingPage} module="hr_management" />}</Route>
-      <Route path="/hr/applications">{() => <ModulePage component={EmploymentApplicationsPage} module="executive_dashboard" />}</Route>
+      <Route path="/hr/job-offers">{() => <ModulePage component={JobOffersPage} module="hr_job_offers" />}</Route>
+      <Route path="/hr/onboarding">{() => <ModulePage component={OnboardingPage} module="hr_onboarding" />}</Route>
+      <Route path="/hr/applications">{() => <ModulePage component={EmploymentApplicationsPage} module="hr_employment_applications" />}</Route>
       
       {/* HR - الموارد البشرية */}
       <Route path="/branch-employees">{() => <ModulePage component={BranchEmployeesPage} module="branch_employees" />}</Route>

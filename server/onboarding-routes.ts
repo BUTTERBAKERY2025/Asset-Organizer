@@ -14,7 +14,7 @@ import crypto from "crypto";
 import { storage } from "./storage";
 import { sendWhatsAppMessage, isTwilioConfigured } from "./twilio-service";
 
-const PERMISSION_MODULE = "hr_management" as const;
+const PERMISSION_MODULE = "hr_onboarding" as const;
 
 function checkBranchAccess(req: any, branchId: string | null): boolean {
   const filter = getEffectiveBranchFilter(req);

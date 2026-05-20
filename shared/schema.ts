@@ -1069,6 +1069,10 @@ export const SYSTEM_MODULES = [
   "employee_reports",
   "employee_transfers",
   "hr_management",
+  // وحدات الموارد البشرية التفصيلية (تحكم منفصل لكل صفحة)
+  "hr_employment_applications",
+  "hr_job_offers",
+  "hr_onboarding",
   
   // المالية
   "cashier_journal",
@@ -1261,6 +1265,9 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   employee_reports: "تقارير الموظفين",
   employee_transfers: "تحويلات الموظفين",
   hr_management: "إدارة الموارد البشرية",
+  hr_employment_applications: "طلبات التوظيف",
+  hr_job_offers: "عروض العمل",
+  hr_onboarding: "مباشرة العمل (إشعار)",
   
   // المالية
   cashier: "الكاشير",
@@ -1416,6 +1423,9 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
       "employee_reports",
       "employee_transfers",
       "hr_management",
+      "hr_employment_applications",
+      "hr_job_offers",
+      "hr_onboarding",
     ],
   },
   {
