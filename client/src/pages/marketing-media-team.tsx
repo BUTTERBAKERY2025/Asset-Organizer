@@ -75,7 +75,7 @@ function ViewModeToggle({ value, onChange }: { value: ViewMode; onChange: (v: Vi
             onClick={() => onChange(o.v)}
             title={o.title}
             data-testid={`view-mode-${o.v}`}
-            className={`p-1.5 rounded transition ${value === o.v ? "bg-amber-600 text-white" : "text-slate-500 hover:bg-amber-50"}`}
+            className={`p-1.5 rounded transition ${value === o.v ? "bg-violet-600 text-white" : "text-slate-500 hover:bg-violet-50"}`}
           >
             <Icon className="w-4 h-4" />
           </button>
@@ -111,7 +111,7 @@ function AssetListRow({ asset, onView, onEdit, onDelete }: { asset: MediaAsset; 
   const isVideo = asset.fileType === "video";
   const thumb = `/api/media/assets/${asset.id}/view`;
   return (
-    <div className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 hover:bg-amber-50/40 transition" data-testid={`asset-row-${asset.id}`}>
+    <div className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 hover:bg-violet-50/40 transition" data-testid={`asset-row-${asset.id}`}>
       <div className="w-12 h-12 sm:w-14 sm:h-14 flex-shrink-0 rounded-lg overflow-hidden bg-slate-100 cursor-pointer" onClick={onView}>
         {isImage ? <img src={thumb} alt={asset.title} className="w-full h-full object-cover" loading="lazy" />
           : isVideo ? <div className="w-full h-full flex items-center justify-center bg-slate-800 text-white"><Video className="w-5 h-5 sm:w-6 sm:h-6" /></div>
@@ -145,7 +145,7 @@ export default function MarketingMediaTeamPage() {
     <Layout>
       <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6 pb-20 md:pb-6">
         {/* Hero Header */}
-        <div className="relative overflow-hidden rounded-xl sm:rounded-2xl bg-gradient-to-l from-amber-500 via-amber-600 to-orange-600 p-4 sm:p-6 md:p-8 text-white shadow-lg">
+        <div className="relative overflow-hidden rounded-xl sm:rounded-2xl bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600 p-4 sm:p-6 md:p-8 text-white shadow-lg">
           <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_top_left,white_0%,transparent_50%)]" />
           <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-start sm:items-center gap-3 sm:gap-4">
@@ -154,7 +154,7 @@ export default function MarketingMediaTeamPage() {
               </div>
               <div className="min-w-0">
                 <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold leading-tight">فريق التصوير والميديا</h1>
-                <p className="text-amber-50 text-xs sm:text-sm md:text-base mt-1 max-w-2xl leading-relaxed">
+                <p className="text-violet-50 text-xs sm:text-sm md:text-base mt-1 max-w-2xl leading-relaxed">
                   مكتبة بصرية موحّدة — الهوية، بنك الصور، المنتجات، القوالب، الأرشيف، وحملات التصميم
                 </p>
               </div>
@@ -195,9 +195,9 @@ function TabTriggerStyled({ value, icon, label, labelLg, highlight }: { value: s
       value={value}
       data-testid={`tab-${value}`}
       className={`relative gap-1.5 sm:gap-2 px-2.5 sm:px-3 md:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold rounded-lg whitespace-nowrap
-        data-[state=active]:bg-gradient-to-l data-[state=active]:from-amber-500 data-[state=active]:to-orange-500
+        data-[state=active]:bg-gradient-to-l data-[state=active]:from-violet-500 data-[state=active]:to-fuchsia-500
         data-[state=active]:text-white data-[state=active]:shadow-md
-        text-slate-600 hover:bg-amber-50 transition`}
+        text-slate-600 hover:bg-violet-50 transition`}
     >
       {icon}
       <span className="md:hidden">{label}</span>
@@ -285,7 +285,7 @@ function IdentityTab() {
         <Card className="lg:col-span-2 border-0 shadow-sm overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between gap-2 bg-gradient-to-l from-slate-50 to-white border-b py-3 px-4">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <div className="bg-amber-100 text-amber-700 p-1.5 rounded-md"><Layers className="w-4 h-4" /></div>
+              <div className="bg-violet-100 text-violet-700 p-1.5 rounded-md"><Layers className="w-4 h-4" /></div>
               توزيع الملفات حسب الفئة
             </CardTitle>
             <Badge variant="secondary" className="text-[10px]">{catRows.length} فئة</Badge>
@@ -302,7 +302,7 @@ function IdentityTab() {
                     <span className="text-slate-500"><span className="font-bold text-slate-800">{r.count}</span> ملف · {formatBytes(Number(r.total_size))}</span>
                   </div>
                   <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-l from-amber-500 to-orange-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                    <div className="h-full bg-gradient-to-l from-violet-500 to-fuchsia-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
                   </div>
                 </div>
               );
@@ -312,9 +312,9 @@ function IdentityTab() {
 
         {/* بطاقة ملخص الهوية */}
         <Card className="border-0 shadow-sm overflow-hidden">
-          <CardHeader className="bg-gradient-to-l from-amber-50 to-white border-b py-3 px-4">
+          <CardHeader className="bg-gradient-to-l from-violet-50/80 to-white border-b py-3 px-4">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <div className="bg-amber-100 text-amber-700 p-1.5 rounded-md"><Sparkles className="w-4 h-4" /></div>
+              <div className="bg-violet-100 text-violet-700 p-1.5 rounded-md"><Sparkles className="w-4 h-4" /></div>
               عناصر الهوية
             </CardTitle>
           </CardHeader>
@@ -339,14 +339,14 @@ function IdentityTab() {
 
       {/* ===== لوحة الألوان ===== */}
       <SectionCard title="لوحة الألوان الرسمية" icon={<Palette className="w-4 h-4" />} count={colors.length} action={
-        <Button size="sm" onClick={() => { setEditColor(null); setColorOpen(true); }} data-testid="btn-add-color" className="bg-amber-600 hover:bg-amber-700 h-8">
+        <Button size="sm" onClick={() => { setEditColor(null); setColorOpen(true); }} data-testid="btn-add-color" className="bg-violet-600 hover:bg-violet-700 h-8">
           <Plus className="w-3.5 h-3.5 ml-1" /> <span className="hidden sm:inline">إضافة لون</span><span className="sm:hidden">لون</span>
         </Button>
       }>
         {colors.length === 0 ? <EmptyState text="لا توجد ألوان بعد" sub="أضف أول لون لبناء لوحة الهوية البصرية" /> : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
             {colors.map(c => (
-              <div key={c.id} className="border rounded-xl overflow-hidden bg-white hover:shadow-md hover:border-amber-300 transition group" data-testid={`color-${c.id}`}>
+              <div key={c.id} className="border rounded-xl overflow-hidden bg-white hover:shadow-md hover:border-violet-300 transition group" data-testid={`color-${c.id}`}>
                 <div className="h-20 cursor-pointer relative" style={{ backgroundColor: c.hex }} onClick={() => copyHex(c.hex)}>
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 transition">
                     <div className="bg-white/90 text-slate-800 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1">
@@ -356,7 +356,7 @@ function IdentityTab() {
                 </div>
                 <div className="p-2.5">
                   <div className="font-bold text-xs truncate" title={c.name}>{c.name}</div>
-                  <code className="text-[10px] text-slate-500 font-mono block cursor-pointer hover:text-amber-600 truncate" onClick={() => copyHex(c.hex)} title="نسخ">{c.hex.toUpperCase()}</code>
+                  <code className="text-[10px] text-slate-500 font-mono block cursor-pointer hover:text-violet-600 truncate" onClick={() => copyHex(c.hex)} title="نسخ">{c.hex.toUpperCase()}</code>
                   {c.usage && <div className="text-[10px] text-slate-400 mt-0.5 truncate" title={c.usage}>{c.usage}</div>}
                   <div className="flex gap-0.5 mt-1.5 pt-1.5 border-t">
                     <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { setEditColor(c); setColorOpen(true); }}><Pencil className="w-3 h-3" /></Button>
@@ -372,15 +372,15 @@ function IdentityTab() {
 
       {/* ===== الخطوط ===== */}
       <SectionCard title="الخطوط المعتمدة" icon={<Type className="w-4 h-4" />} count={fonts.length} action={
-        <Button size="sm" onClick={() => { setEditFont(null); setFontOpen(true); }} data-testid="btn-add-font" className="bg-amber-600 hover:bg-amber-700 h-8">
+        <Button size="sm" onClick={() => { setEditFont(null); setFontOpen(true); }} data-testid="btn-add-font" className="bg-violet-600 hover:bg-violet-700 h-8">
           <Plus className="w-3.5 h-3.5 ml-1" /> <span className="hidden sm:inline">إضافة خط</span><span className="sm:hidden">خط</span>
         </Button>
       }>
         {fonts.length === 0 ? <EmptyState text="لا توجد خطوط بعد" sub="أضف خطوط العلامة التجارية ليتمكن الفريق من استخدامها" /> : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {fonts.map(f => (
-              <div key={f.id} className="border rounded-xl p-3.5 bg-white hover:shadow-md hover:border-amber-300 transition group relative overflow-hidden" data-testid={`font-${f.id}`}>
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-l from-amber-500 to-orange-500 opacity-0 group-hover:opacity-100 transition" />
+              <div key={f.id} className="border rounded-xl p-3.5 bg-white hover:shadow-md hover:border-violet-300 transition group relative overflow-hidden" data-testid={`font-${f.id}`}>
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-l from-violet-500 to-fuchsia-500 opacity-0 group-hover:opacity-100 transition" />
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="min-w-0">
                     <div className="font-bold text-sm truncate" title={f.name}>{f.name}</div>
@@ -411,7 +411,7 @@ function IdentityTab() {
 
 function MiniStat({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: any; tone: string }) {
   const tones: Record<string, { bg: string; text: string; ring: string }> = {
-    amber:  { bg: "bg-amber-50",   text: "text-amber-700",   ring: "ring-amber-100" },
+    amber:  { bg: "bg-violet-50",  text: "text-violet-700",  ring: "ring-violet-100" },
     blue:   { bg: "bg-blue-50",    text: "text-blue-700",    ring: "ring-blue-100" },
     rose:   { bg: "bg-rose-50",    text: "text-rose-700",    ring: "ring-rose-100" },
     purple: { bg: "bg-purple-50",  text: "text-purple-700",  ring: "ring-purple-100" },
@@ -433,7 +433,7 @@ function MiniStat({ icon, label, value, tone }: { icon: React.ReactNode; label: 
 
 function IdentitySummaryRow({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: number; color: string }) {
   const colors: Record<string, string> = {
-    amber: "bg-amber-100 text-amber-700",
+    amber: "bg-violet-100 text-violet-700",
     rose: "bg-rose-100 text-rose-700",
     indigo: "bg-indigo-100 text-indigo-700",
     green: "bg-emerald-100 text-emerald-700",
@@ -450,9 +450,9 @@ function IdentitySummaryRow({ icon, label, value, color }: { icon: React.ReactNo
 function SectionCard({ title, icon, count, action, children }: any) {
   return (
     <Card className="border-2 border-slate-100 shadow-sm">
-      <CardHeader className="flex flex-row items-center justify-between gap-2 bg-gradient-to-l from-amber-50 to-white border-b py-3 sm:py-4 px-3 sm:px-6">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 bg-gradient-to-l from-violet-50/80 to-white border-b py-3 sm:py-4 px-3 sm:px-6">
         <CardTitle className="flex items-center gap-2 text-sm sm:text-base min-w-0">
-          <div className="bg-amber-100 text-amber-700 p-1.5 sm:p-2 rounded-lg flex-shrink-0">{icon}</div>
+          <div className="bg-violet-100 text-violet-700 p-1.5 sm:p-2 rounded-lg flex-shrink-0">{icon}</div>
           <span className="truncate">{title}</span>
           {count !== undefined && <Badge variant="secondary" className="mr-1 sm:mr-2 flex-shrink-0">{count}</Badge>}
         </CardTitle>
@@ -479,7 +479,7 @@ function EmptyState({ text, sub, action }: { text: string; sub?: string; action?
 function LogoPreview({ label, bg }: { label: string; bg: string }) {
   const isDark = bg === "#1A1A1A";
   return (
-    <div className="border rounded-xl overflow-hidden hover:shadow-md hover:border-amber-300 transition group">
+    <div className="border rounded-xl overflow-hidden hover:shadow-md hover:border-violet-300 transition group">
       <div className="h-24 sm:h-28 flex items-center justify-center p-3 sm:p-4 relative" style={{ backgroundColor: bg }}>
         <img src={butterLogo} alt="Butter Bakery" className="max-h-full max-w-full object-contain group-hover:scale-105 transition" />
         <div className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${isDark ? "bg-white/50" : "bg-slate-300"}`} />
@@ -508,7 +508,7 @@ function ColorDialog({ open, onClose, initial, onSave, saving }: any) {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>إلغاء</Button>
-          <Button onClick={() => onSave(form)} disabled={saving || !form.name || !form.hex} data-testid="btn-save-color" className="bg-amber-600 hover:bg-amber-700">
+          <Button onClick={() => onSave(form)} disabled={saving || !form.name || !form.hex} data-testid="btn-save-color" className="bg-violet-600 hover:bg-violet-700">
             {saving && <Loader2 className="w-4 h-4 animate-spin ml-2" />} حفظ
           </Button>
         </DialogFooter>
@@ -545,7 +545,7 @@ function FontDialog({ open, onClose, initial, onSave, saving }: any) {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>إلغاء</Button>
-          <Button onClick={() => onSave(form)} disabled={saving || !form.name || !form.family} data-testid="btn-save-font" className="bg-amber-600 hover:bg-amber-700">
+          <Button onClick={() => onSave(form)} disabled={saving || !form.name || !form.family} data-testid="btn-save-font" className="bg-violet-600 hover:bg-violet-700">
             {saving && <Loader2 className="w-4 h-4 animate-spin ml-2" />} حفظ
           </Button>
         </DialogFooter>
@@ -612,18 +612,18 @@ function CampaignsTab() {
           </SelectContent>
         </Select>
         <div className="flex-1" />
-        <Button onClick={() => { setEditing(null); setCreateOpen(true); }} className="bg-amber-600 hover:bg-amber-700 h-10 sm:h-9" data-testid="btn-create-campaign">
+        <Button onClick={() => { setEditing(null); setCreateOpen(true); }} className="bg-violet-600 hover:bg-violet-700 h-10 sm:h-9" data-testid="btn-create-campaign">
           <Plus className="w-4 h-4 ml-1" /> <span className="hidden sm:inline">حملة جديدة</span><span className="sm:hidden">جديدة</span>
         </Button>
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center p-10"><Loader2 className="w-6 h-6 animate-spin text-amber-600" /></div>
+        <div className="flex justify-center p-10"><Loader2 className="w-6 h-6 animate-spin text-violet-600" /></div>
       ) : campaigns.length === 0 ? (
         <Card><CardContent className="p-0"><EmptyState
           text="لا توجد حملات بعد"
           sub="أنشئ أول حملة لتنظيم كل التصميمات والصور والفيديوهات الخاصة بها في مكان واحد"
-          action={<Button onClick={() => setCreateOpen(true)} className="bg-amber-600 hover:bg-amber-700"><Plus className="w-4 h-4 ml-1" /> إنشاء حملة</Button>}
+          action={<Button onClick={() => setCreateOpen(true)} className="bg-violet-600 hover:bg-violet-700"><Plus className="w-4 h-4 ml-1" /> إنشاء حملة</Button>}
         /></CardContent></Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -646,7 +646,7 @@ function CampaignsTab() {
 
 function StatBox({ icon, label, value, color }: any) {
   const colors: Record<string, string> = {
-    amber: "from-amber-500 to-orange-500",
+    amber: "from-violet-500 to-fuchsia-500",
     orange: "from-orange-500 to-red-500",
     purple: "from-purple-500 to-indigo-500",
     green: "from-emerald-500 to-teal-500",
@@ -667,7 +667,7 @@ function StatBox({ icon, label, value, color }: any) {
 function CampaignCard({ campaign, onOpen, onEdit, onDelete }: { campaign: MediaCampaign; onOpen: () => void; onEdit: () => void; onDelete: () => void }) {
   const color = campaign.coverColor || "#D4A574";
   return (
-    <Card className="overflow-hidden hover:shadow-lg transition-all duration-200 group border-2 border-transparent hover:border-amber-300" data-testid={`campaign-${campaign.id}`}>
+    <Card className="overflow-hidden hover:shadow-lg transition-all duration-200 group border-2 border-transparent hover:border-violet-300" data-testid={`campaign-${campaign.id}`}>
       <div
         className="h-24 sm:h-28 relative cursor-pointer flex items-center justify-center"
         style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}
@@ -689,7 +689,7 @@ function CampaignCard({ campaign, onOpen, onEdit, onDelete }: { campaign: MediaC
           {campaign.startDate && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {campaign.startDate}</span>}
         </div>
         <div className="flex gap-1 mt-3">
-          <Button size="sm" className="flex-1 bg-amber-600 hover:bg-amber-700 h-9 sm:h-8 text-xs" onClick={onOpen}>
+          <Button size="sm" className="flex-1 bg-violet-600 hover:bg-violet-700 h-9 sm:h-8 text-xs" onClick={onOpen}>
             فتح <ArrowRight className="w-3 h-3 mr-1 rtl:rotate-180" />
           </Button>
           <Button size="sm" variant="outline" className="h-9 sm:h-8 w-9 sm:w-auto sm:px-2 p-0" onClick={onEdit}><Pencil className="w-3.5 h-3.5 sm:w-3 sm:h-3" /></Button>
@@ -737,7 +737,7 @@ function CampaignDialog({ open, onClose, initial, onSave, saving }: any) {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>إلغاء</Button>
-          <Button onClick={() => onSave(form)} disabled={saving || !form.name} className="bg-amber-600 hover:bg-amber-700" data-testid="btn-save-campaign">
+          <Button onClick={() => onSave(form)} disabled={saving || !form.name} className="bg-violet-600 hover:bg-violet-700" data-testid="btn-save-campaign">
             {saving && <Loader2 className="w-4 h-4 animate-spin ml-2" />} حفظ
           </Button>
         </DialogFooter>
@@ -821,7 +821,7 @@ function CampaignDetail({ id, onBack }: { id: number; onBack: () => void }) {
           <Input value={q} onChange={e => setQ(e.target.value)} placeholder="بحث داخل الحملة..." className="pr-8 h-10 sm:h-9" />
         </div>
         <div className="order-2"><ViewModeToggle value={view} onChange={setView} /></div>
-        <Button onClick={() => setUploadOpen(true)} className="bg-amber-600 hover:bg-amber-700 h-10 sm:h-9 order-3 flex-1 sm:flex-initial" data-testid="btn-upload-to-campaign">
+        <Button onClick={() => setUploadOpen(true)} className="bg-violet-600 hover:bg-violet-700 h-10 sm:h-9 order-3 flex-1 sm:flex-initial" data-testid="btn-upload-to-campaign">
           <Upload className="w-4 h-4 ml-1" /> رفع للحملة
         </Button>
       </div>
@@ -830,12 +830,12 @@ function CampaignDetail({ id, onBack }: { id: number; onBack: () => void }) {
       <Card>
         <CardContent className="p-4">
           {isLoading ? (
-            <div className="flex justify-center p-10"><Loader2 className="w-6 h-6 animate-spin text-amber-600" /></div>
+            <div className="flex justify-center p-10"><Loader2 className="w-6 h-6 animate-spin text-violet-600" /></div>
           ) : assets.length === 0 ? (
             <EmptyState
               text="لا توجد ملفات في هذه الحملة بعد"
               sub="ارفع صور، فيديوهات، PDF، أو ملفات تصميم خاصة بالحملة"
-              action={<Button onClick={() => setUploadOpen(true)} className="bg-amber-600 hover:bg-amber-700"><Upload className="w-4 h-4 ml-1" /> رفع جديد</Button>}
+              action={<Button onClick={() => setUploadOpen(true)} className="bg-violet-600 hover:bg-violet-700"><Upload className="w-4 h-4 ml-1" /> رفع جديد</Button>}
             />
           ) : (
             <AssetGrid
@@ -923,7 +923,7 @@ function AssetGalleryTab({ category, showPlatform }: { category: string; showPla
           </Select>
         )}
         <div className="order-3 sm:order-2"><ViewModeToggle value={view} onChange={setView} /></div>
-        <Button onClick={() => setUploadOpen(true)} className="bg-amber-600 hover:bg-amber-700 h-10 sm:h-9 order-4 sm:order-3 flex-1 sm:flex-initial" data-testid="btn-upload-asset">
+        <Button onClick={() => setUploadOpen(true)} className="bg-violet-600 hover:bg-violet-700 h-10 sm:h-9 order-4 sm:order-3 flex-1 sm:flex-initial" data-testid="btn-upload-asset">
           <Upload className="w-4 h-4 ml-1" /> رفع جديد
         </Button>
       </div>
@@ -931,7 +931,7 @@ function AssetGalleryTab({ category, showPlatform }: { category: string; showPla
       <Card>
         <CardContent className="p-4">
           {isLoading ? (
-            <div className="flex justify-center p-10"><Loader2 className="w-6 h-6 animate-spin text-amber-600" /></div>
+            <div className="flex justify-center p-10"><Loader2 className="w-6 h-6 animate-spin text-violet-600" /></div>
           ) : assets.length === 0 ? (
             <EmptyState text={`لا توجد ملفات في "${CATEGORY_LABELS[category]}"`} sub="اضغط رفع جديد لإضافة أول ملف" />
           ) : (
@@ -960,7 +960,7 @@ function AssetCard({ asset, onView, onEdit, onDelete, large }: { asset: MediaAss
   const titleSize = large ? "text-sm" : "text-xs";
   const iconSize = large ? "w-16 h-16" : "w-10 h-10";
   return (
-    <div className="group border rounded-xl overflow-hidden bg-white hover:shadow-lg hover:border-amber-300 transition-all" data-testid={`asset-${asset.id}`}>
+    <div className="group border rounded-xl overflow-hidden bg-white hover:shadow-lg hover:border-violet-300 transition-all" data-testid={`asset-${asset.id}`}>
       <div className={`${large ? "aspect-video" : "aspect-square"} bg-slate-100 relative cursor-pointer`} onClick={onView}>
         {isImage ? (
           <img src={thumb} alt={asset.title} className="w-full h-full object-cover" loading="lazy" />
@@ -1056,13 +1056,13 @@ function UploadDialog({ open, onClose, category, allowVideo, acceptDesign, showP
         <DialogHeader><DialogTitle className="text-base sm:text-lg">رفع ملف جديد — {CATEGORY_LABELS[category]}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div
-            className="border-2 border-dashed border-amber-300 rounded-xl p-6 text-center cursor-pointer hover:bg-amber-50/50 transition"
+            className="border-2 border-dashed border-violet-300 rounded-xl p-6 text-center cursor-pointer hover:bg-violet-50/50 transition"
             onClick={() => fileRef.current?.click()}
             onDragOver={e => { e.preventDefault(); }}
             onDrop={e => { e.preventDefault(); setFiles(Array.from(e.dataTransfer.files)); }}
             data-testid="upload-dropzone"
           >
-            <Upload className="w-10 h-10 text-amber-600 mx-auto mb-2" />
+            <Upload className="w-10 h-10 text-violet-600 mx-auto mb-2" />
             <p className="text-sm font-semibold">اسحب الملفات هنا أو اضغط للاختيار</p>
             <p className="text-xs text-slate-500 mt-1">
               {category === "campaigns" ? "صور، فيديو، PDF، ملفات تصميم (PSD/AI/PDF/ZIP)" :
@@ -1078,7 +1078,7 @@ function UploadDialog({ open, onClose, category, allowVideo, acceptDesign, showP
                 <div key={i} className="flex items-center justify-between text-xs">
                   <span className="truncate flex-1">{f.name}</span>
                   <span className="text-slate-500 mx-2">{formatBytes(f.size)}</span>
-                  {progress[f.name] !== undefined ? <span className="text-amber-600 font-bold">{progress[f.name]}%</span> :
+                  {progress[f.name] !== undefined ? <span className="text-violet-600 font-bold">{progress[f.name]}%</span> :
                     <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => setFiles(files.filter((_, x) => x !== i))} disabled={uploading}><X className="w-3 h-3" /></Button>}
                 </div>
               ))}
@@ -1111,7 +1111,7 @@ function UploadDialog({ open, onClose, category, allowVideo, acceptDesign, showP
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => { reset(); onClose(); }} disabled={uploading}>إلغاء</Button>
-          <Button onClick={handleUpload} disabled={!files.length || uploading} className="bg-amber-600 hover:bg-amber-700" data-testid="btn-confirm-upload">
+          <Button onClick={handleUpload} disabled={!files.length || uploading} className="bg-violet-600 hover:bg-violet-700" data-testid="btn-confirm-upload">
             {uploading && <Loader2 className="w-4 h-4 animate-spin ml-2" />} رفع {files.length || ""}
           </Button>
         </DialogFooter>
@@ -1152,7 +1152,7 @@ function PreviewDialog({ asset, onClose }: { asset: MediaAsset | null; onClose: 
           <div className="flex flex-wrap gap-1 mt-2">{asset.tags.map(t => <Badge key={t} variant="secondary">{t}</Badge>)}</div>
         )}
         <DialogFooter>
-          <a href={`/api/media/assets/${asset.id}/download`}><Button className="bg-amber-600 hover:bg-amber-700"><Download className="w-4 h-4 ml-1" /> تنزيل</Button></a>
+          <a href={`/api/media/assets/${asset.id}/download`}><Button className="bg-violet-600 hover:bg-violet-700"><Download className="w-4 h-4 ml-1" /> تنزيل</Button></a>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1194,7 +1194,7 @@ function EditAssetDialog({ asset, onClose, onSaved }: { asset: MediaAsset | null
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>إلغاء</Button>
-          <Button onClick={() => m.mutate()} disabled={m.isPending} className="bg-amber-600 hover:bg-amber-700">{m.isPending && <Loader2 className="w-4 h-4 animate-spin ml-2" />} حفظ</Button>
+          <Button onClick={() => m.mutate()} disabled={m.isPending} className="bg-violet-600 hover:bg-violet-700">{m.isPending && <Loader2 className="w-4 h-4 animate-spin ml-2" />} حفظ</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
