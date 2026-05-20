@@ -62,3 +62,19 @@ INSERT INTO brand_fonts (name, family, language, weights, download_url, notes, s
   ('Cairo', 'Cairo, sans-serif', 'ar', '300,400,600,700,800', 'https://fonts.google.com/specimen/Cairo', 'الخط العربي الأساسي', 1),
   ('Plus Jakarta Sans', 'Plus Jakarta Sans, sans-serif', 'en', '300,400,500,600,700,800', 'https://fonts.google.com/specimen/Plus+Jakarta+Sans', 'الخط الإنجليزي الأساسي', 2)
 ON CONFLICT DO NOTHING;
+
+-- حملات التصميم (مجلدات تجمع أصول كل حملة)
+CREATE TABLE IF NOT EXISTS media_campaigns (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  cover_color TEXT DEFAULT '#D4A574',
+  status TEXT NOT NULL DEFAULT 'active',
+  start_date TEXT,
+  end_date TEXT,
+  branch_id INTEGER,
+  created_by VARCHAR,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_media_campaigns_status ON media_campaigns(status);
+CREATE INDEX IF NOT EXISTS idx_media_campaigns_branch ON media_campaigns(branch_id);

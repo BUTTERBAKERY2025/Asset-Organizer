@@ -10376,3 +10376,24 @@ export type InsertBrandColor = z.infer<typeof insertBrandColorSchema>;
 export const insertBrandFontSchema = createInsertSchema(brandFonts).omit({ id: true, createdAt: true });
 export type BrandFont = typeof brandFonts.$inferSelect;
 export type InsertBrandFont = z.infer<typeof insertBrandFontSchema>;
+
+// حملات التصميم — مجلدات منظّمة تجمع كل أصول حملة/مشروع معيّن
+export const mediaCampaigns = pgTable("media_campaigns", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  coverColor: text("cover_color").default("#D4A574"),
+  status: text("status").notNull().default("active"), // active | archived
+  startDate: text("start_date"),
+  endDate: text("end_date"),
+  branchId: integer("branch_id"),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_media_campaigns_status").on(table.status),
+  index("idx_media_campaigns_branch").on(table.branchId),
+]);
+
+export const insertMediaCampaignSchema = createInsertSchema(mediaCampaigns).omit({ id: true, createdAt: true, createdBy: true });
+export type MediaCampaign = typeof mediaCampaigns.$inferSelect;
+export type InsertMediaCampaign = z.infer<typeof insertMediaCampaignSchema>;

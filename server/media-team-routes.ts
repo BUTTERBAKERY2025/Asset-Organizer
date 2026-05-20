@@ -1,14 +1,14 @@
 // فريق التصوير والميديا — نقاط نهاية بنك الصور والهوية البصرية
 import type { Express } from "express";
 import { db } from "./db";
-import { mediaAssets, brandColors, brandFonts, insertBrandColorSchema, insertBrandFontSchema } from "@shared/schema";
+import { mediaAssets, brandColors, brandFonts, mediaCampaigns, insertBrandColorSchema, insertBrandFontSchema, insertMediaCampaignSchema } from "@shared/schema";
 import { eq, and, desc, sql, inArray, ilike, or } from "drizzle-orm";
 import { isAuthenticated, requirePermission } from "./auth";
 import { z } from "zod";
 
 const PM = "marketing" as const;
 
-const ALLOWED_CATEGORIES = ["identity", "photos", "products", "templates", "archive"] as const;
+const ALLOWED_CATEGORIES = ["identity", "photos", "products", "templates", "archive", "campaigns"] as const;
 
 function detectFileType(mime: string): string {
   if (mime.startsWith("image/")) return "image";
@@ -104,6 +104,8 @@ export function registerMediaTeamRoutes(app: Express) {
             products: [/^image\//, /^video\//],
             templates: [/^image\//, /^application\/pdf$/, /^application\/postscript$/, /^application\/illustrator$/, /^image\/vnd\.adobe\.photoshop$/, /^application\/octet-stream$/],
             archive: [/^image\//, /^video\//, /^application\/pdf$/],
+            // حملات التصميم: كل أنواع المحتوى البصري والتصميمي
+            campaigns: [/^image\//, /^video\//, /^application\/pdf$/, /^application\/postscript$/, /^application\/illustrator$/, /^image\/vnd\.adobe\.photoshop$/, /^application\/octet-stream$/, /^application\/zip$/, /^application\/x-zip-compressed$/],
           };
           const policies = allowedByCategory[category] || [/^image\//];
           if (!policies.some(re => re.test(file.mimetype))) {
@@ -310,6 +312,111 @@ export function registerMediaTeamRoutes(app: Express) {
       await db.delete(brandFonts).where(eq(brandFonts.id, Number(req.params.id)));
       res.json({ ok: true });
     } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ===== حملات التصميم =====
+  // قائمة الحملات مع عدد الأصول وإجمالي الحجم لكل حملة
+  app.get("/api/media/campaigns", isAuthenticated, requirePermission(PM, "view"), async (req, res) => {
+    try {
+      const { status } = req.query as any;
+      const rows = await db.execute<any>(sql`
+        SELECT c.*,
+               COALESCE((SELECT COUNT(*)::int FROM media_assets a WHERE a.campaign_id = c.id), 0) AS asset_count,
+               COALESCE((SELECT SUM(file_size) FROM media_assets a WHERE a.campaign_id = c.id), 0)::bigint AS total_size
+        FROM media_campaigns c
+        ${status ? sql`WHERE c.status = ${status}` : sql``}
+        ORDER BY c.created_at DESC
+      `).then((r: any) => r.rows ?? r);
+      res.json(rows);
+    } catch (e: any) {
+      console.error("[media] campaigns list error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/media/campaigns/:id", isAuthenticated, requirePermission(PM, "view"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const [row] = await db.select().from(mediaCampaigns).where(eq(mediaCampaigns.id, id)).limit(1);
+      if (!row) return res.status(404).json({ error: "غير موجود" });
+      res.json(row);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.post("/api/media/campaigns", isAuthenticated, requirePermission(PM, "create"), async (req, res) => {
+    try {
+      const body = insertMediaCampaignSchema.parse(req.body);
+      const user: any = (req as any).user;
+      const [r] = await db.insert(mediaCampaigns).values({ ...body, createdBy: user?.id ?? null }).returning();
+      res.status(201).json(r);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.patch("/api/media/campaigns/:id", isAuthenticated, requirePermission(PM, "edit"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const body = insertMediaCampaignSchema.partial().parse(req.body);
+      const [r] = await db.update(mediaCampaigns).set(body).where(eq(mediaCampaigns.id, id)).returning();
+      if (!r) return res.status(404).json({ error: "غير موجود" });
+      res.json(r);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete("/api/media/campaigns/:id", isAuthenticated, requirePermission(PM, "delete"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      // فصل الأصول من الحملة قبل حذفها (لا يتم حذف الأصول نفسها)
+      await db.update(mediaAssets).set({ campaignId: null }).where(eq(mediaAssets.campaignId, id));
+      await db.delete(mediaCampaigns).where(eq(mediaCampaigns.id, id));
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  // تنزيل جميع أصول حملة كأرشيف ZIP
+  app.get("/api/media/campaigns/:id/download-all", isAuthenticated, requirePermission(PM, "view"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const [campaign] = await db.select().from(mediaCampaigns).where(eq(mediaCampaigns.id, id)).limit(1);
+      if (!campaign) return res.status(404).json({ error: "الحملة غير موجودة" });
+      const assets = await db.select().from(mediaAssets).where(eq(mediaAssets.campaignId, id));
+      if (assets.length === 0) return res.status(404).json({ error: "لا توجد ملفات في هذه الحملة" });
+
+      const AdmZip = (await import("adm-zip")).default;
+      const { downloadFromSupabase } = await import("./supabase-storage");
+      const safeName = campaign.name.replace(/[^\u0600-\u06FFa-zA-Z0-9_\-]/g, "_").slice(0, 50) || "campaign";
+      const zip = new AdmZip();
+      const usedNames = new Set<string>();
+      for (const a of assets) {
+        try {
+          const f = await downloadFromSupabase(a.storagePath);
+          if (f) {
+            const buf = Buffer.from(await f.data.arrayBuffer());
+            let name = a.fileName;
+            let i = 1;
+            while (usedNames.has(name)) {
+              const dot = a.fileName.lastIndexOf(".");
+              name = dot > 0 ? `${a.fileName.slice(0, dot)}_${i}${a.fileName.slice(dot)}` : `${a.fileName}_${i}`;
+              i++;
+            }
+            usedNames.add(name);
+            zip.addFile(name, buf);
+          }
+        } catch (e) { console.warn(`[media] skip ${a.id}:`, e); }
+      }
+      const buffer = zip.toBuffer();
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(safeName)}.zip`);
+      res.send(buffer);
+    } catch (e: any) {
+      console.error("[media] download-all error:", e);
+      if (!res.headersSent) res.status(500).json({ error: e.message });
+    }
   });
 
   console.log("[media-team] routes registered");
