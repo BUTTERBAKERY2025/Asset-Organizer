@@ -320,6 +320,21 @@ export default function JobOffersPage() {
     toast({ title: "تم نسخ الرابط" });
   };
 
+  // تطبيع رقم الجوال السعودي إلى صيغة دولية لـ wa.me (مثال: 966501234567)
+  // يدعم: 05x, 5x, 9665x, +9665x, 96605x, +96605x, 00966...
+  const normalizeSaudiPhone = (raw: string): string => {
+    let digits = (raw || "").replace(/\D/g, "");
+    if (!digits) return "";
+    // إزالة بادئة الاتصال الدولي 00
+    if (digits.startsWith("00")) digits = digits.slice(2);
+    // بادئة سعودية مع صفر زائد (مثل 96605xxxxxxxx) → نحذف الصفر بعد كود الدولة
+    if (digits.startsWith("9660")) return "966" + digits.slice(4);
+    if (digits.startsWith("966")) return digits;
+    if (digits.startsWith("0")) return "966" + digits.slice(1);
+    if (digits.length === 9 && digits.startsWith("5")) return "966" + digits;
+    return digits;
+  };
+
   const StatCard = ({ label, value, color, icon: Icon }: any) => (
     <Card>
       <CardContent className="p-4 flex items-center justify-between">
@@ -710,7 +725,7 @@ export default function JobOffersPage() {
                 </Button>
                 {shareLink && (
                   <a
-                    href={`https://wa.me/?text=${encodeURIComponent(
+                    href={`https://wa.me/${normalizeSaudiPhone(shareLink.offer.phone)}?text=${encodeURIComponent(
                       `🥐 *BUTTER BAKERY* 🥐\n🌟 *عرض عمل رسمي* | *Official Job Offer* 🌟\n━━━━━━━━━━━━━━━━━━━━\n\n` +
                       `السلام عليكم ورحمة الله وبركاته\n_Peace be upon you,_\n\n` +
                       `عزيزي/عزيزتي *${shareLink.offer.candidateName}* المحترم/ة 🤝\n\n` +
@@ -732,6 +747,12 @@ export default function JobOffersPage() {
                   </a>
                 )}
               </div>
+              {shareLink && (
+                <p className="text-xs text-slate-500 flex items-center gap-1">
+                  <Phone className="w-3 h-3" />
+                  سيُفتح واتساب مباشرة على رقم: <span dir="ltr" className="font-mono">{normalizeSaudiPhone(shareLink.offer.phone)}</span>
+                </p>
+              )}
               <p className="text-xs text-slate-500">ينتهي الرابط بعد {shareLink?.offer.validityDays} يوم</p>
             </div>
           </DialogContent>

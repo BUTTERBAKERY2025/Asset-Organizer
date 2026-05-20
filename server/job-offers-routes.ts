@@ -556,10 +556,6 @@ export function registerJobOfferRoutes(app: Express) {
       if (!tk) return res.status(404).json({ error: "الرابط غير صالح" });
       if (tk.revokedAt)
         return res.status(410).json({ error: "تم إلغاء هذا الرابط" });
-      if (tk.usedAt)
-        return res
-          .status(410)
-          .json({ error: "تم استخدام هذا الرابط مسبقاً" });
 
       const [offer] = await db
         .select()
@@ -569,9 +565,13 @@ export function registerJobOfferRoutes(app: Express) {
       if (!offer)
         return res.status(404).json({ error: "العرض غير موجود" });
 
-      // expire check
+      // إذا كان المرشّح قد ردّ مسبقاً (قبول/رفض) → اسمح بفتح الرابط لعرض حالة الرد
+      // (لا نتحقق من انتهاء الصلاحية في هذه الحالة لأن الرد تم قبلها)
+      const alreadyResponded = offer.status === "accepted" || offer.status === "declined";
+
+      // expire check — فقط إذا لم يردّ المرشّح بعد
       const now = new Date();
-      if (tk.expiresAt && new Date(tk.expiresAt) < now) {
+      if (!alreadyResponded && tk.expiresAt && new Date(tk.expiresAt) < now) {
         if (offer.status !== "expired") {
           await db
             .update(jobOffers)
@@ -584,7 +584,9 @@ export function registerJobOfferRoutes(app: Express) {
       if (
         offer.status !== "viewed" &&
         offer.status !== "accepted" &&
-        offer.status !== "declined"
+        offer.status !== "declined" &&
+        offer.status !== "cancelled" &&
+        offer.status !== "expired"
       ) {
         await db
           .update(jobOffers)

@@ -44,6 +44,9 @@ export default function JobOfferPublicPage() {
       .then((j) => {
         setData(j);
         setConfirmName(j.offer.candidateName || "");
+        // إذا تم الرد على العرض مسبقاً → اعرض رسالة الحالة الجميلة مباشرة
+        if (j.offer?.status === "accepted") setDone("accepted");
+        else if (j.offer?.status === "declined") setDone("declined");
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -131,23 +134,55 @@ export default function JobOfferPublicPage() {
   }
 
   if (done) {
+    const respondedDate = data?.offer?.respondedAt
+      ? new Date(data.offer.respondedAt).toLocaleString("ar-SA")
+      : null;
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F5F0E6] p-4" dir="rtl">
-        <Card className="max-w-md w-full">
-          <CardContent className="p-8 text-center space-y-4">
+        <Card className="max-w-lg w-full">
+          <CardContent className="p-8 text-center space-y-5">
             {done === "accepted" ? (
               <>
                 <CheckCircle2 className="w-20 h-20 text-green-600 mx-auto" />
-                <h2 className="text-2xl font-bold text-green-700">شكراً لقبولك العرض</h2>
-                <p className="text-slate-600">تم استلام موافقتك بنجاح.<br />سيتواصل معك فريق الموارد البشرية قريباً لإتمام إجراءات التعيين.</p>
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-bold text-green-700">✓ تمّت الموافقة على العرض</h2>
+                  <h3 className="text-xl font-bold text-green-700" dir="ltr">✓ Offer Already Accepted</h3>
+                </div>
+                <div className="bg-green-50 border border-green-300 rounded-lg p-4 space-y-2 text-right">
+                  <p className="text-slate-700 leading-relaxed">
+                    تم تسجيل موافقتك على هذا العرض بنجاح. سيتواصل معك فريق الموارد البشرية قريباً لإتمام إجراءات التعيين والمباشرة.
+                  </p>
+                  <p className="text-slate-700 leading-relaxed text-sm" dir="ltr">
+                    Your acceptance of this offer has been successfully recorded. Our HR team will contact you soon to complete the hiring and onboarding procedures.
+                  </p>
+                </div>
+                {respondedDate && (
+                  <p className="text-xs text-slate-500">تاريخ القبول / Accepted on: <span dir="ltr">{respondedDate}</span></p>
+                )}
               </>
             ) : (
               <>
                 <XCircle className="w-20 h-20 text-slate-500 mx-auto" />
-                <h2 className="text-2xl font-bold text-slate-700">تم استلام ردك</h2>
-                <p className="text-slate-600">شكراً لإعلامنا بقرارك. نتمنى لك التوفيق.</p>
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-bold text-slate-700">✗ تمّ رفض العرض</h2>
+                  <h3 className="text-xl font-bold text-slate-700" dir="ltr">✗ Offer Already Declined</h3>
+                </div>
+                <div className="bg-slate-50 border border-slate-300 rounded-lg p-4 space-y-2 text-right">
+                  <p className="text-slate-700 leading-relaxed">
+                    لقد سجّلت سابقاً رفضك لهذا العرض. شكراً لإعلامنا بقرارك ونتمنى لك التوفيق في مسيرتك المهنية.
+                  </p>
+                  <p className="text-slate-700 leading-relaxed text-sm" dir="ltr">
+                    You have previously declined this offer. Thank you for letting us know, and we wish you success in your career.
+                  </p>
+                </div>
+                {respondedDate && (
+                  <p className="text-xs text-slate-500">تاريخ الرد / Responded on: <span dir="ltr">{respondedDate}</span></p>
+                )}
               </>
             )}
+            <p className="text-xs text-slate-400 pt-2 border-t">
+              {data?.company?.name} — {data?.company?.nameEn}
+            </p>
           </CardContent>
         </Card>
       </div>
