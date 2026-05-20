@@ -238,7 +238,7 @@ export default function OpeningPublicPage() {
         </div>
 
         <div className="text-center mt-6 text-xs text-slate-500">
-          نشكرك على ثقتك — مخبز باتر 🧈
+          نشكرك على ثقتك — BUTTER BAKERY
         </div>
       </div>
 
