@@ -8368,13 +8368,30 @@ export async function registerRoutes(
       const { sql } = await import("drizzle-orm");
       const { db } = await import("./db");
       const result: any = await db.execute(sql`
-        SELECT file_data, mime_type, file_name
+        SELECT file_data, mime_type, file_name, journal_id
         FROM journal_attachments
         WHERE id = ${id}
         LIMIT 1
       `);
       const row = ((result as any).rows ?? result)?.[0];
       if (!row || !row.file_data) return res.status(404).json({ error: "Not found" });
+
+      // SECURITY (IDOR): enforce the same branch + ownership rules as the
+      // list endpoint. Without this, any authenticated user could enumerate
+      // attachment IDs and download other branches' files.
+      const journal = await storage.getCashierJournal(Number(row.journal_id));
+      if (!journal) return res.status(404).json({ error: "Journal not found" });
+      if (!isUserAdmin(req) && journal.branchId) {
+        const hasAccess = await canAccessBranch(req, journal.branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا المرفق" });
+      }
+      const currentUserId = String(getCurrentUser(req).id);
+      const canViewAllAttach = await canUserViewAllCashiers(req);
+      const isAssignedCashier = String(journal.cashierId) === currentUserId;
+      const isJournalCreator = journal.createdBy != null && String(journal.createdBy) === currentUserId;
+      if (!canViewAllAttach && !isAssignedCashier && !isJournalCreator) {
+        return res.status(403).json({ error: "غير مصرح بعرض هذا المرفق" });
+      }
       let raw = String(row.file_data);
       const commaIdx = raw.indexOf(",");
       if (raw.startsWith("data:") && commaIdx > 0) raw = raw.slice(commaIdx + 1);
