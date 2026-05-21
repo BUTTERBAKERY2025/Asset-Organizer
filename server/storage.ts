@@ -5250,8 +5250,17 @@ export class DatabaseStorage implements IStorage {
       .where(whereClause);
     const totalCount = countResult[0]?.count || 0;
     
-    // Get paginated results
-    let query = db.select().from(cashierSalesJournals)
+    // Get paginated results — attach `attachmentCount` via a correlated
+    // subquery so the list view can show "X مرفق" badges without N+1 fetches.
+    // The subquery is index-only thanks to idx_journal_attachments_journal_id.
+    const { getTableColumns } = await import("drizzle-orm");
+    let query = db.select({
+      ...getTableColumns(cashierSalesJournals),
+      attachmentCount: sql<number>`(
+        SELECT COUNT(*)::int FROM ${journalAttachments}
+        WHERE ${journalAttachments.journalId} = ${cashierSalesJournals.id}
+      )`.as('attachment_count'),
+    }).from(cashierSalesJournals)
       .where(whereClause)
       .orderBy(desc(cashierSalesJournals.journalDate));
     
@@ -5262,7 +5271,7 @@ export class DatabaseStorage implements IStorage {
       query = query.offset(filters.offset) as typeof query;
     }
     
-    const journals = await query;
+    const journals = await query as unknown as CashierSalesJournal[];
     
     return { journals, totalCount };
   }

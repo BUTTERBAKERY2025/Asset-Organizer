@@ -12,7 +12,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Eye, CheckCircle, XCircle, Clock, AlertTriangle, TrendingUp, TrendingDown, Minus, Wallet, Calendar, DollarSign, Users, Printer, Filter, Trash2, RotateCcw, History, User as UserIcon } from "lucide-react";
+import { Plus, Search, Eye, CheckCircle, XCircle, Clock, AlertTriangle, TrendingUp, TrendingDown, Minus, Wallet, Calendar, DollarSign, Users, Printer, Filter, Trash2, RotateCcw, History, User as UserIcon, Paperclip } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -576,6 +576,7 @@ export default function CashierJournalsPage() {
                         <TableHead className="text-left w-20 sm:w-24 text-xs sm:text-sm hidden xl:table-cell">{t("table.customers")}</TableHead>
                         <TableHead className="text-center w-24 sm:w-28 text-xs sm:text-sm hidden sm:table-cell">{t("table.difference")}</TableHead>
                         <TableHead className="text-center w-20 sm:w-24 text-xs sm:text-sm">{t("table.status")}</TableHead>
+                        <TableHead className="text-center w-16 sm:w-20 text-xs sm:text-sm hidden sm:table-cell">المرفقات</TableHead>
                         <TableHead className="text-center w-20 sm:w-24 text-xs sm:text-sm">{t("table.actions")}</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -619,6 +620,19 @@ export default function CashierJournalsPage() {
                               <Badge variant={status?.variant || "secondary"} className="text-[10px] sm:text-xs px-1.5 sm:px-2">
                                 {t(`statuses.${journal.status}`)}
                               </Badge>
+                            </TableCell>
+                            <TableCell className="text-center py-2 sm:py-3 hidden sm:table-cell" data-testid={`attachment-count-${journal.id}`}>
+                              {(() => {
+                                const cnt = Number((journal as any).attachmentCount || 0);
+                                return cnt > 0 ? (
+                                  <Badge variant="outline" className="text-[10px] sm:text-xs px-1.5 sm:px-2 gap-1">
+                                    <Paperclip className="w-3 h-3" />
+                                    {cnt}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-muted-foreground text-[10px] sm:text-xs">—</span>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell className="py-2 sm:py-3">
                               <div className="flex items-center justify-center gap-0.5 sm:gap-1">
