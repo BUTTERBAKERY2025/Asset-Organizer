@@ -177,6 +177,47 @@ export async function deleteFromSupabase(filename: string): Promise<boolean> {
   }
 }
 
+/**
+ * Recovery helper for legacy `journal_attachments.file_path` values that were
+ * saved before the storedPath fix. Those rows hold a path like
+ * `cashier-journals/4/123-456.jpg` but the actual object in the bucket was
+ * uploaded as `cashier-journals_4_123-456_<TS>_<RAND>.jpg` (slashes replaced
+ * with underscores + uniqueness suffix). This finds the most recent object
+ * whose name starts with the given sanitized prefix so the proxy endpoint
+ * can still serve the original image without a manual backfill.
+ */
+export async function findLegacyMatch(
+  sanitizedBase: string,
+  ext: string,
+): Promise<string | null> {
+  if (!supabase || !sanitizedBase || !ext) return null;
+  try {
+    const { data, error } = await supabase.storage
+      .from(DOCUMENTS_BUCKET)
+      .list('', {
+        limit: 100,
+        search: sanitizedBase,
+        sortBy: { column: 'created_at', order: 'desc' },
+      });
+    if (error) {
+      console.warn('findLegacyMatch list error:', error.message);
+      return null;
+    }
+    if (!data || data.length === 0) return null;
+    // Strict suffix contract of uploadToSupabase: `${base}_${13-digit-ts}_${8-hex}.${ext}`.
+    // Anchored regex avoids cross-record collisions (`abc` matching `abcd_…`)
+    // so the proxy never serves a different journal's file by accident.
+    const escapedBase = sanitizedBase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedExt = ext.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`^${escapedBase}_\\d{13}_[a-f0-9]{8}\\.${escapedExt}$`, 'i');
+    const match = data.find((f) => typeof f.name === 'string' && re.test(f.name));
+    return match?.name ?? null;
+  } catch (err) {
+    console.warn('findLegacyMatch exception:', err);
+    return null;
+  }
+}
+
 export function isSupabaseAvailable(): boolean {
   return supabase !== null;
 }

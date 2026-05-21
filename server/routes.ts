@@ -31996,15 +31996,21 @@ export async function registerRoutes(
             throw new Error("Supabase upload failed");
           }
 
-          console.log("File uploaded to Supabase Storage:", objectName);
+          // CRITICAL: `uploadToSupabase` sanitizes the filename (replaces '/'
+          // with '_' and appends timestamp + random suffix to guarantee
+          // uniqueness) before sending it to Supabase. Always use the
+          // returned `path` — using the requested `objectName` here saves a
+          // path that doesn't exist in storage and causes broken images.
+          const storedPath = supabaseResult.path;
+          console.log("File uploaded to Supabase Storage:", { requested: objectName, stored: storedPath });
 
           res.json({
             fileName: file.originalname,
             fileType: ext,
             fileSize: file.size,
-            filePath: objectName,
+            filePath: storedPath,
             mimeType: file.mimetype,
-            downloadUrl: `/api/uploads/file/${objectName}`,
+            downloadUrl: `/api/uploads/file/${storedPath}`,
           });
         } catch (uploadError) {
           console.error("Storage upload error:", uploadError);
@@ -32034,7 +32040,31 @@ export async function registerRoutes(
 
       const filename = rawPath.split('/').map((p: string) => pathModule.basename(p)).join('/');
 
-      const result = await downloadFromSupabase(filename);
+      let result = await downloadFromSupabase(filename);
+
+      // RECOVERY for legacy rows: rows uploaded before the storedPath fix
+      // saved `filePath` with the original folder layout (e.g.
+      // `cashier-journals/4/123-456.jpg`) but the actual object in Supabase
+      // was stored as `cashier-journals_4_123-456_<TS>_<RAND>.jpg`. When the
+      // direct lookup fails AND the path contains slashes, try to locate the
+      // real object by listing the bucket with the sanitized prefix.
+      if (!result && filename.includes('/')) {
+        try {
+          const { findLegacyMatch } = await import("./supabase-storage");
+          const ext = filename.split('.').pop()?.toLowerCase() || '';
+          const sanitizedBase = filename
+            .replace(/\.[^/.]+$/, '')
+            .replace(/[^a-zA-Z0-9\u0600-\u06FF._-]/g, '_');
+          const recovered = await findLegacyMatch(sanitizedBase, ext);
+          if (recovered) {
+            console.log("[uploads/file] recovered legacy path", { requested: filename, recovered });
+            result = await downloadFromSupabase(recovered);
+          }
+        } catch (recoverErr) {
+          console.warn("[uploads/file] legacy recovery failed", recoverErr);
+        }
+      }
+
       if (!result) {
         return res.status(404).json({ error: "الملف غير موجود" });
       }
@@ -32139,8 +32169,10 @@ export async function registerRoutes(
           if (!supabaseResult) {
             throw new Error("Supabase upload failed");
           }
-          const filePath = objectName;
-          console.log("File uploaded to Supabase Storage:", objectName);
+          // Use the actual stored path (uploadToSupabase sanitizes + suffixes
+          // the filename). Storing `objectName` instead causes 404 on read.
+          const filePath = supabaseResult.path;
+          console.log("File uploaded to Supabase Storage:", { requested: objectName, stored: filePath });
 
           res.json({
             fileName: file.originalname,
