@@ -605,17 +605,22 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {attachments.map((att) => (
+                      {attachments.map((att) => {
+                        // Supabase-backed attachments expose `downloadUrl`;
+                        // legacy rows still hold base64 in `fileData`. Either
+                        // works as an <img src> — prefer the storage URL.
+                        const imgSrc = (att as any).downloadUrl || att.fileData || '';
+                        return (
                         <div 
                           key={att.id} 
                           className="border border-border rounded-lg p-2 cursor-pointer hover:shadow-lg transition-shadow hover:border-violet-400 dark:hover:border-violet-600"
-                          onClick={() => att.fileData && setSelectedImage(att.fileData)}
+                          onClick={() => imgSrc && setSelectedImage(imgSrc)}
                         >
                           <div className="aspect-video bg-muted rounded flex items-center justify-center overflow-hidden relative group">
-                            {att.fileData ? (
+                            {imgSrc ? (
                               <>
                                 <img 
-                                  src={att.fileData} 
+                                  src={imgSrc} 
                                   alt={att.fileName}
                                   className="object-cover w-full h-full"
                                 />
@@ -630,7 +635,8 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
                           <p className="text-xs mt-2 truncate font-medium">{att.fileName}</p>
                           <p className="text-xs text-muted-foreground">{att.attachmentType}</p>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>

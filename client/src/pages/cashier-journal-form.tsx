@@ -33,12 +33,19 @@ import { ATTACHMENT_TYPE_LABELS, ATTACHMENT_TYPES, type AttachmentType } from "@
 import { printHtmlContent } from "@/lib/print-utils";
 
 // Type for an attachment that hasn't been persisted to the server yet.
+// After the Supabase migration the file is already uploaded to storage at
+// pick time; we only carry the storage pointer until the journal exists and
+// we can persist the DB row referencing it.
 type PendingAttachment = {
   attachmentType: AttachmentType;
   fileName: string;
-  fileData: string;
+  filePath: string;
+  downloadUrl: string;
   mimeType: string;
   fileSize: number;
+  // Legacy: kept optional so any stale session-storage entries from before
+  // the migration can still render (and be uploaded with the old base64 path).
+  fileData?: string;
 };
 
 // Upload a single attachment with up to 3 attempts (small exponential
@@ -381,8 +388,8 @@ export default function CashierJournalFormPage() {
   const [lightboxZoom, setLightboxZoom] = useState(1);
 
   const allAttachmentImages = [
-    ...attachments.map(a => ({ src: a.fileData, label: ATTACHMENT_TYPE_LABELS[a.attachmentType as AttachmentType] || a.attachmentType, fileName: a.fileName })),
-    ...pendingAttachments.map(a => ({ src: a.fileData, label: ATTACHMENT_TYPE_LABELS[a.attachmentType] || a.attachmentType, fileName: a.fileName })),
+    ...attachments.map(a => ({ src: (a as any).downloadUrl || a.fileData || '', label: ATTACHMENT_TYPE_LABELS[a.attachmentType as AttachmentType] || a.attachmentType, fileName: a.fileName })),
+    ...pendingAttachments.map(a => ({ src: a.downloadUrl || a.fileData || '', label: ATTACHMENT_TYPE_LABELS[a.attachmentType] || a.attachmentType, fileName: a.fileName })),
   ];
 
   const openLightbox = useCallback((index: number) => {
@@ -751,49 +758,64 @@ export default function CashierJournalFormPage() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64Data = reader.result as string;
-      if (!base64Data) {
-        toast({ title: "خطأ", description: "فشل في قراءة الملف", variant: "destructive" });
-        return;
-      }
-      if (isEdit && id) {
-        uploadAttachmentMutation.mutate({
-          journalId: parseInt(id),
-          attachment: {
-            attachmentType: type,
-            fileName: file.name,
-            fileData: base64Data,
-            mimeType: file.type,
-            fileSize: file.size,
-          },
+    // Upload directly to Supabase Storage (via the unified /api/uploads
+    // endpoint) instead of converting to base64 and stuffing into the DB.
+    // The file is associated with this journal's folder when known so it's
+    // easy to audit storage usage per journal.
+    (async () => {
+      try {
+        const folder = `cashier-journals/${id || 'pending'}`;
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch(`/api/uploads?folder=${encodeURIComponent(folder)}`, {
+          method: "POST",
+          credentials: "include",
+          body: formData,
         });
-      } else {
-        setPendingAttachments((prev) => [
-          ...prev,
-          {
-            attachmentType: type,
-            fileName: file.name,
-            fileData: base64Data,
-            mimeType: file.type,
-            fileSize: file.size,
-          },
-        ]);
-        toast({ title: "تمت إضافة المرفق", description: "سيُرفع تلقائياً عند حفظ اليومية" });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `Upload failed (HTTP ${res.status})`);
+        }
+        const result = await res.json() as { filePath: string; downloadUrl: string };
+        if (!result.filePath || !result.downloadUrl) {
+          throw new Error("استجابة الرفع غير مكتملة");
+        }
+
+        if (isEdit && id) {
+          uploadAttachmentMutation.mutate({
+            journalId: parseInt(id),
+            attachment: {
+              attachmentType: type,
+              fileName: file.name,
+              filePath: result.filePath,
+              downloadUrl: result.downloadUrl,
+              mimeType: file.type,
+              fileSize: file.size,
+            },
+          });
+        } else {
+          setPendingAttachments((prev) => [
+            ...prev,
+            {
+              attachmentType: type,
+              fileName: file.name,
+              filePath: result.filePath,
+              downloadUrl: result.downloadUrl,
+              mimeType: file.type,
+              fileSize: file.size,
+            },
+          ]);
+          toast({ title: "تمت إضافة المرفق", description: "سيُربط باليومية تلقائياً عند الحفظ" });
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "فشل في رفع الملف";
+        toast({
+          title: "فشل رفع المرفق",
+          description: msg,
+          variant: "destructive",
+        });
       }
-    };
-    // Without onerror, a failed read (corrupted file, permission denied, iOS
-    // HEIC issues) silently does nothing and the user thinks the photo was
-    // added. Surface the failure so they can pick a different file.
-    reader.onerror = () => {
-      toast({
-        title: "فشل في قراءة الملف",
-        description: "حاول مرة أخرى أو اختر صورة مختلفة",
-        variant: "destructive",
-      });
-    };
-    reader.readAsDataURL(file);
+    })();
   };
 
   const removePendingAttachment = (index: number) => {
@@ -2489,7 +2511,7 @@ export default function CashierJournalFormPage() {
                       {attachments.map((attachment, idx) => (
                         <div key={attachment.id} className="relative border rounded-lg overflow-hidden group cursor-pointer" onClick={() => openLightbox(idx)} data-testid={`attachment-image-${attachment.id}`}>
                           <img
-                            src={attachment.fileData}
+                            src={(attachment as any).downloadUrl || attachment.fileData || ''}
                             alt={attachment.fileName}
                             className="w-full h-32 object-cover transition-transform group-hover:scale-105"
                           />
@@ -2523,7 +2545,7 @@ export default function CashierJournalFormPage() {
                       {pendingAttachments.map((attachment, index) => (
                         <div key={index} className="relative border rounded-lg overflow-hidden group border-dashed border-2 border-orange-300 cursor-pointer" onClick={() => openLightbox(attachments.length + index)} data-testid={`pending-attachment-image-${index}`}>
                           <img
-                            src={attachment.fileData}
+                            src={attachment.downloadUrl || attachment.fileData || ''}
                             alt={attachment.fileName}
                             className="w-full h-32 object-cover transition-transform group-hover:scale-105"
                           />

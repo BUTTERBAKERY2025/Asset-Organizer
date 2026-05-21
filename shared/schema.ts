@@ -2597,7 +2597,12 @@ export const journalAttachments = pgTable("journal_attachments", {
     .references(() => cashierSalesJournals.id, { onDelete: "cascade" }),
   attachmentType: text("attachment_type").notNull(), // foodics_report, network_report, other
   fileName: text("file_name").notNull(),
-  fileData: text("file_data").notNull(), // Base64 encoded image
+  // Legacy: base64 inline (kept nullable so old rows keep working while we
+  // migrate everything to Supabase Storage). New uploads MUST use filePath.
+  fileData: text("file_data"),
+  // New Supabase Storage fields
+  filePath: text("file_path"), // object path inside Supabase bucket
+  downloadUrl: text("download_url"), // proxy URL: /api/uploads/file/{path}
   mimeType: text("mime_type").notNull(),
   fileSize: integer("file_size"),
   notes: text("notes"),

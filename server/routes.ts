@@ -8149,8 +8149,14 @@ export async function registerRoutes(
   app.post("/api/cashier-journals/:id/attachments", isAuthenticated, requirePermission("cashier_journal", "create"), async (req, res) => {
     try {
       const journalId = parseInt(req.params.id, 10);
-      const { attachmentType, fileName, fileData, mimeType, fileSize, notes } = req.body;
-      
+      const { attachmentType, fileName, fileData, filePath, downloadUrl, mimeType, fileSize, notes } = req.body;
+
+      // Must have EITHER a Supabase filePath (new flow) OR a base64 fileData
+      // (legacy fallback). Reject empty payloads explicitly.
+      if (!filePath && !fileData) {
+        return res.status(400).json({ error: "يجب توفير ملف للرفع (filePath أو fileData)" });
+      }
+
       // Check if journal exists
       const journal = await storage.getCashierJournal(journalId);
       if (!journal) {
@@ -8186,7 +8192,9 @@ export async function registerRoutes(
         journalId,
         attachmentType,
         fileName,
-        fileData,
+        fileData: fileData ?? null,
+        filePath: filePath ?? null,
+        downloadUrl: downloadUrl ?? null,
         mimeType,
         fileSize,
         notes,
@@ -8243,12 +8251,110 @@ export async function registerRoutes(
       if (journal.status !== 'draft') {
         return res.status(400).json({ error: "لا يمكن حذف مرفقات من يومية مرحّلة أو معتمدة" });
       }
-      
+
+      // If this attachment is stored in Supabase, delete the object from
+      // storage first. We continue with DB delete even if Supabase deletion
+      // fails (the orphan file is far less harmful than a half-deleted row).
+      if ((attachment as any).filePath) {
+        try {
+          const { deleteFromSupabase } = await import("./supabase-storage");
+          await deleteFromSupabase((attachment as any).filePath);
+        } catch (e) {
+          console.error("Failed to delete attachment from Supabase (continuing with DB delete):", e);
+        }
+      }
+
       await storage.deleteJournalAttachment(attachmentId);
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting journal attachment:", error);
       res.status(500).json({ error: "Failed to delete journal attachment" });
+    }
+  });
+
+  // Admin-only: one-shot migration that moves legacy base64 journal
+  // attachments (file_data) into Supabase Storage and back-fills file_path
+  // and download_url. Safe to re-run — only processes rows that have not yet
+  // been migrated (file_path IS NULL AND file_data IS NOT NULL).
+  app.post("/api/admin/migrate-journal-attachments-to-supabase", isAuthenticated, async (req, res) => {
+    try {
+      if (!isUserAdmin(req)) {
+        return res.status(403).json({ error: "غير مصرح - يتطلب صلاحية مدير النظام" });
+      }
+      const { uploadToSupabase, isSupabaseAvailable } = await import("./supabase-storage");
+      if (!isSupabaseAvailable()) {
+        return res.status(503).json({ error: "خدمة Supabase Storage غير متاحة - تحقق من المتغيرات SUPABASE_URL و SUPABASE_ANON_KEY" });
+      }
+
+      const { sql } = await import("drizzle-orm");
+      const { db } = await import("./db");
+      // Process in chunks to avoid OOM — base64 attachments can be MBs each.
+      // Caller may pass ?limit=N (default 25, max 100). Returns `remaining`
+      // so the client knows whether to call again.
+      const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit ?? "25"), 10) || 25));
+      const result: any = await db.execute(sql`
+        SELECT id, journal_id, file_name, mime_type, file_data
+        FROM journal_attachments
+        WHERE file_path IS NULL AND file_data IS NOT NULL
+        ORDER BY id ASC
+        LIMIT ${limit}
+      `);
+      const rows: any[] = (result as any).rows ?? result;
+      const remainingResult: any = await db.execute(sql`
+        SELECT COUNT(*)::int AS count
+        FROM journal_attachments
+        WHERE file_path IS NULL AND file_data IS NOT NULL
+      `);
+      const remainingTotal: number = ((remainingResult as any).rows ?? remainingResult)?.[0]?.count ?? 0;
+
+      let migrated = 0;
+      let failed = 0;
+      const errors: Array<{ id: number; error: string }> = [];
+
+      for (const row of rows) {
+        try {
+          // Strip optional data-URL prefix: "data:image/png;base64,XXXX"
+          let raw = String(row.file_data || "");
+          const commaIdx = raw.indexOf(",");
+          if (raw.startsWith("data:") && commaIdx > 0) raw = raw.slice(commaIdx + 1);
+          const buf = Buffer.from(raw, "base64");
+          if (buf.length === 0) {
+            failed++;
+            errors.push({ id: row.id, error: "empty buffer after base64 decode" });
+            continue;
+          }
+          const ext = (row.file_name?.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
+          const objectName = `cashier-journals/${row.journal_id}/migrated_${row.id}_${Date.now()}.${ext}`;
+          const upRes = await uploadToSupabase(buf, objectName, row.mime_type || "application/octet-stream");
+          if (!upRes) {
+            failed++;
+            errors.push({ id: row.id, error: "supabase upload returned null" });
+            continue;
+          }
+          await db.execute(sql`
+            UPDATE journal_attachments
+            SET file_path = ${upRes.path}, download_url = ${`/api/uploads/file/${upRes.path}`}
+            WHERE id = ${row.id}
+          `);
+          migrated++;
+        } catch (e: any) {
+          failed++;
+          errors.push({ id: row.id, error: e?.message || String(e) });
+        }
+      }
+
+      const remaining = Math.max(0, remainingTotal - migrated);
+      res.json({
+        processed: rows.length,
+        migrated,
+        failed,
+        remaining,
+        done: remaining === 0,
+        errors: errors.slice(0, 50),
+      });
+    } catch (error) {
+      console.error("Error in attachments migration:", error);
+      res.status(500).json({ error: "فشل في تنفيذ الترحيل" });
     }
   });
 
