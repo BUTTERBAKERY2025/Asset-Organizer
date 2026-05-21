@@ -5257,8 +5257,8 @@ export class DatabaseStorage implements IStorage {
     let query = db.select({
       ...getTableColumns(cashierSalesJournals),
       attachmentCount: sql<number>`(
-        SELECT COUNT(*)::int FROM ${journalAttachments}
-        WHERE ${journalAttachments.journalId} = ${cashierSalesJournals.id}
+        SELECT COUNT(*)::int FROM journal_attachments
+        WHERE journal_attachments.journal_id = cashier_sales_journals.id
       )`.as('attachment_count'),
     }).from(cashierSalesJournals)
       .where(whereClause)
