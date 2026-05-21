@@ -770,6 +770,9 @@ export default function OperationsReportsDashboardPage() {
     ...(filters.branchId && { branchId: filters.branchId }),
     ...(filters.startDate && { startDate: filters.startDate }),
     ...(filters.endDate && { endDate: filters.endDate }),
+    ...(filters.cashierId && { cashierId: filters.cashierId }),
+    ...(filters.journalStatus !== "all" && { status: filters.journalStatus }),
+    ...(filters.discrepancyFilter !== "all" && { discrepancyStatus: filters.discrepancyFilter }),
   }).toString();
 
   const bundleQueryString = `${queryString}${queryString ? '&' : ''}sections=report,cashierJournals,cashiers,paymentBreakdowns`;
@@ -809,9 +812,10 @@ export default function OperationsReportsDashboardPage() {
     projectedPercent: number;
     trend: 'up' | 'down' | 'stable';
   }[]>({
-    queryKey: [`/api/targets/progress-summary?yearMonth=${currentYearMonth}`],
+    queryKey: [`/api/targets/progress-summary?yearMonth=${currentYearMonth}&branchId=${filters.branchId || ''}`],
     queryFn: async () => {
-      const res = await fetch(`/api/targets/progress-summary?yearMonth=${currentYearMonth}`);
+      const url = `/api/targets/progress-summary?yearMonth=${currentYearMonth}${filters.branchId ? `&branchId=${filters.branchId}` : ''}`;
+      const res = await fetch(url);
       if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
@@ -845,9 +849,10 @@ export default function OperationsReportsDashboardPage() {
     branches: { branchId: string; branchName: string; target: number; achieved: number; percent: number; rank: number }[];
     cashiers: { cashierId: string; cashierName: string; branchId: string; target: number; achieved: number; percent: number; rank: number }[];
   }>({
-    queryKey: [`/api/targets/leaderboard?yearMonth=${currentYearMonth}`],
+    queryKey: [`/api/targets/leaderboard?yearMonth=${currentYearMonth}&branchId=${filters.branchId || ''}`],
     queryFn: async () => {
-      const res = await fetch(`/api/targets/leaderboard?yearMonth=${currentYearMonth}`);
+      const url = `/api/targets/leaderboard?yearMonth=${currentYearMonth}${filters.branchId ? `&branchId=${filters.branchId}` : ''}`;
+      const res = await fetch(url);
       if (!res.ok) return { branches: [], cashiers: [] };
       return res.json();
     },

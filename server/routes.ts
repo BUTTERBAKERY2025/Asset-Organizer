@@ -9359,7 +9359,7 @@ export async function registerRoutes(
   // ============================================================
   app.get("/api/operations/reports-bundle", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
-      const { branchId, startDate, endDate, sections } = req.query;
+      const { branchId, startDate, endDate, sections, cashierId, status, discrepancyStatus } = req.query;
       const queryBranchId = branchId as string | undefined;
       const branchFilter = getEffectiveBranchFilter(req, queryBranchId);
 
@@ -9386,7 +9386,15 @@ export async function registerRoutes(
         }
         if (startDate && typeof startDate === 'string') dbFilters.startDate = startDate;
         if (endDate && typeof endDate === 'string') dbFilters.endDate = endDate;
-        if (!canViewAll && currentUser) dbFilters.cashierId = String(currentUser.id);
+        // Non-privileged users are pinned to their own cashier id; managers
+        // may pass an explicit cashierId filter.
+        if (!canViewAll && currentUser) {
+          dbFilters.cashierId = String(currentUser.id);
+        } else if (cashierId && typeof cashierId === 'string') {
+          dbFilters.cashierId = cashierId;
+        }
+        if (status && typeof status === 'string') dbFilters.status = status;
+        if (discrepancyStatus && typeof discrepancyStatus === 'string') dbFilters.discrepancyStatus = discrepancyStatus;
         const { journals } = await storage.getCashierJournalsFiltered(dbFilters);
         sharedJournals = journals;
         return journals;
@@ -9572,7 +9580,7 @@ export async function registerRoutes(
   // Executive Summary Report - Comprehensive data for PDF/Excel export
   app.get("/api/reports/executive-summary", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
-      const { startDate, endDate, branchId } = req.query;
+      const { startDate, endDate, branchId, cashierId, status, discrepancyStatus } = req.query;
       // SECURITY: Apply branch filter
       const queryBranchId = branchId as string | undefined;
       const branchFilter = getEffectiveBranchFilter(req, queryBranchId);
@@ -9608,6 +9616,11 @@ export async function registerRoutes(
       }
       if (startDate) dashJournalFilters.startDate = startDate as string;
       if (endDate) dashJournalFilters.endDate = endDate as string;
+      // Honor optional cashier/status/discrepancy filters for the executive
+      // KPIs so the user sees numbers consistent with their dashboard filters.
+      if (cashierId && typeof cashierId === 'string') dashJournalFilters.cashierId = cashierId;
+      if (status && typeof status === 'string') dashJournalFilters.status = status;
+      if (discrepancyStatus && typeof discrepancyStatus === 'string') dashJournalFilters.discrepancyStatus = discrepancyStatus;
       const { journals: filteredJournals } = await storage.getCashierJournalsFiltered(dashJournalFilters);
 
       const goodItems = allItems.filter(i => i.status === 'good').length;
@@ -9708,7 +9721,7 @@ export async function registerRoutes(
   // Payment Method Mismatch Analysis Report - تحليل فروقات طرق الدفع بين POS والتيرمنال
   app.get("/api/reports/payment-mismatch-analysis", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
     try {
-      const { branchId, startDate, endDate } = req.query;
+      const { branchId, startDate, endDate, cashierId, status, discrepancyStatus } = req.query;
       
       // SECURITY: Apply mandatory branch filter for non-admins
       const queryBranchId = branchId as string | undefined;
@@ -9731,16 +9744,25 @@ export async function registerRoutes(
       if (endDate) {
         conditions.push(lte(cashierSalesJournals.journalDate, endDate as string));
       }
+      if (status && typeof status === 'string') {
+        conditions.push(eq(cashierSalesJournals.status, status));
+      }
+      if (discrepancyStatus && typeof discrepancyStatus === 'string') {
+        conditions.push(eq(cashierSalesJournals.discrepancyStatus, discrepancyStatus));
+      }
       
       let journals = await db.select()
         .from(cashierSalesJournals)
         .where(conditions.length > 0 ? and(...conditions) : undefined);
       
-      // SECURITY: Non-admin/manager users can only see their own mismatch data
+      // SECURITY: Non-admin/manager users can only see their own mismatch data.
+      // Privileged users may pass an explicit cashierId to drill in.
       const canViewAllMismatch = await canUserViewAllCashiers(req);
       if (!canViewAllMismatch) {
         const user = getCurrentUser(req);
         journals = journals.filter(j => String(j.cashierId) === String(user.id));
+      } else if (cashierId && typeof cashierId === 'string') {
+        journals = journals.filter(j => String(j.cashierId) === cashierId);
       }
       
       if (journals.length === 0) {
