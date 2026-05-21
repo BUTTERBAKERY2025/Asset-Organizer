@@ -6044,6 +6044,57 @@ export class DatabaseStorage implements IStorage {
     return target || undefined;
   }
 
+  // PERF: batched version used by analytics endpoints to avoid 1 query per branch.
+  async getBranchMonthlyTargetsForMonth(branchIds: string[], yearMonth: string): Promise<BranchMonthlyTarget[]> {
+    if (branchIds.length === 0) return [];
+    return db.select().from(branchMonthlyTargets).where(
+      and(
+        inArray(branchMonthlyTargets.branchId, branchIds),
+        eq(branchMonthlyTargets.yearMonth, yearMonth),
+      ),
+    );
+  }
+
+  // PERF: single grouped query that powers the Branch Competition tab — replaces
+  // the previous per-branch getCashierLeaderboard call (which itself returned
+  // many rows just to be summed) with a server-side aggregation.
+  async getBranchSalesAggregates(
+    branchIds: string[],
+    fromDate: string,
+    toDate: string,
+    status?: string,
+    discrepancyType?: string,
+  ): Promise<{ branchId: string; totalSales: number; cashierCount: number; totalTransactions: number }[]> {
+    if (branchIds.length === 0) return [];
+    const statusFilter = status ? [status] : ['posted', 'approved'];
+    const conds: any[] = [
+      inArray(cashierSalesJournals.branchId, branchIds),
+      gte(cashierSalesJournals.journalDate, fromDate),
+      lte(cashierSalesJournals.journalDate, toDate),
+      inArray(cashierSalesJournals.status, statusFilter),
+    ];
+    if (discrepancyType === 'shortage' || discrepancyType === 'surplus' || discrepancyType === 'balanced') {
+      conds.push(eq(cashierSalesJournals.discrepancyStatus, discrepancyType));
+    }
+
+    const rows = await db.select({
+      branchId: cashierSalesJournals.branchId,
+      totalSales: sql<number>`COALESCE(SUM(${cashierSalesJournals.totalSales}), 0)`.as('total_sales'),
+      totalTransactions: sql<number>`COALESCE(SUM(${cashierSalesJournals.transactionCount}), 0)`.as('total_tx'),
+      cashierCount: sql<number>`COUNT(DISTINCT ${cashierSalesJournals.cashierId})`.as('cashier_count'),
+    })
+      .from(cashierSalesJournals)
+      .where(and(...conds))
+      .groupBy(cashierSalesJournals.branchId);
+
+    return rows.map(r => ({
+      branchId: r.branchId,
+      totalSales: Number(r.totalSales) || 0,
+      cashierCount: Number(r.cashierCount) || 0,
+      totalTransactions: Number(r.totalTransactions) || 0,
+    }));
+  }
+
   async createBranchMonthlyTarget(target: InsertBranchMonthlyTarget): Promise<BranchMonthlyTarget> {
     const [created] = await db.insert(branchMonthlyTargets).values(target).returning();
     return created;
@@ -6929,106 +6980,157 @@ export class DatabaseStorage implements IStorage {
     shiftBreakdown: { morning: number; evening: number; night: number };
     status: 'exceeding' | 'on_track' | 'warning' | 'critical';
   }[]> {
-    const branches = await this.getAllBranches();
-    const targetBranches = branchId ? branches.filter(b => b.id === branchId) : branches;
+    // PERF: rewritten as a single batched query set instead of looping
+    // per branch (was 3 queries × N branches). Also fixes the "الهدف الشهري 0
+    // / نسبة التحقيق 0%" bug by falling back to the monthly target divided
+    // evenly across days when no per-day allocations were created.
+    const allBranches = await this.getAllBranches();
+    const targetBranches = branchId ? allBranches.filter(b => b.id === branchId) : allBranches;
+    if (targetBranches.length === 0) return [];
+    const scopedBranchIds = targetBranches.map(b => b.id);
+
+    const statusFilter = status ? [status] : ['posted', 'approved'];
+    const journalConds: any[] = [
+      inArray(cashierSalesJournals.branchId, scopedBranchIds),
+      gte(cashierSalesJournals.journalDate, fromDate),
+      lte(cashierSalesJournals.journalDate, toDate),
+      inArray(cashierSalesJournals.status, statusFilter),
+    ];
+    if (discrepancyType === 'shortage' || discrepancyType === 'surplus' || discrepancyType === 'balanced') {
+      journalConds.push(eq(cashierSalesJournals.discrepancyStatus, discrepancyType));
+    }
+
+    const yearMonth = fromDate.substring(0, 7);
+    const [year, monthNum] = yearMonth.split('-').map(Number);
+    const daysInMonth = new Date(year, monthNum, 0).getDate();
+
+    // (1) Aggregated journals grouped by branch + date + shift, and
+    // (2) monthly targets for the scoped branches in this month — independent.
+    const [journalRows, monthlyTargets] = await Promise.all([
+      db.select({
+        branchId: cashierSalesJournals.branchId,
+        journalDate: cashierSalesJournals.journalDate,
+        shiftType: cashierSalesJournals.shiftType,
+        totalSales: sql<number>`SUM(${cashierSalesJournals.totalSales})`.as('total_sales'),
+      })
+        .from(cashierSalesJournals)
+        .where(and(...journalConds))
+        .groupBy(
+          cashierSalesJournals.branchId,
+          cashierSalesJournals.journalDate,
+          cashierSalesJournals.shiftType,
+        ),
+      db.select().from(branchMonthlyTargets).where(
+        and(
+          inArray(branchMonthlyTargets.branchId, scopedBranchIds),
+          eq(branchMonthlyTargets.yearMonth, yearMonth),
+        ),
+      ),
+    ]);
+
+    // (3) Daily allocations — depends on (2).
+    const targetIds = monthlyTargets.map(t => t.id);
+    const allocations = targetIds.length > 0
+      ? await db.select().from(targetDailyAllocations).where(
+          and(
+            inArray(targetDailyAllocations.monthlyTargetId, targetIds),
+            gte(targetDailyAllocations.targetDate, fromDate),
+            lte(targetDailyAllocations.targetDate, toDate),
+          ),
+        )
+      : [];
+
+    // Build lookups (all O(1)).
+    const targetByBranch = new Map<string, BranchMonthlyTarget>();
+    for (const t of monthlyTargets) targetByBranch.set(t.branchId, t);
+
+    const allocByTargetDate = new Map<string, number>();
+    for (const a of allocations) {
+      allocByTargetDate.set(`${a.monthlyTargetId}|${a.targetDate}`, a.dailyTarget);
+    }
+
+    type DaySales = { totalSales: number; morning: number; evening: number; night: number };
+    const salesByBranchDate = new Map<string, DaySales>();
+    for (const r of journalRows) {
+      const key = `${r.branchId}|${r.journalDate}`;
+      const cell = salesByBranchDate.get(key) || { totalSales: 0, morning: 0, evening: 0, night: 0 };
+      const amount = Number(r.totalSales) || 0;
+      cell.totalSales += amount;
+      if (r.shiftType === 'morning') cell.morning += amount;
+      else if (r.shiftType === 'evening') cell.evening += amount;
+      else if (r.shiftType === 'night') cell.night += amount;
+      salesByBranchDate.set(key, cell);
+    }
+
+    // Count allocations per monthly target so we can detect the
+    // "monthly target set but no per-day breakdown" case and fall back to the
+    // even daily average ONLY then (avoids inflating targets when admins
+    // intentionally allocate only specific days).
+    const allocCountByTarget = new Map<number, number>();
+    for (const a of allocations) {
+      allocCountByTarget.set(a.monthlyTargetId, (allocCountByTarget.get(a.monthlyTargetId) || 0) + 1);
+    }
+
+    // Build the actual list of calendar dates between fromDate and toDate
+    // (inclusive) — safe across month boundaries.
+    const rangeDates: string[] = [];
+    {
+      const start = new Date(`${fromDate}T00:00:00Z`);
+      const end = new Date(`${toDate}T00:00:00Z`);
+      for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+        rangeDates.push(d.toISOString().substring(0, 10));
+      }
+    }
+
+    const branchNameById = new Map(targetBranches.map(b => [b.id, b.name]));
     const results: any[] = [];
 
-    // Build status filter
-    const statusFilter = status ? [status] : ['posted', 'approved'];
-    
     for (const branch of targetBranches) {
-      // Build where conditions
-      const whereConditions: any[] = [
-        eq(cashierSalesJournals.branchId, branch.id),
-        gte(cashierSalesJournals.journalDate, fromDate),
-        lte(cashierSalesJournals.journalDate, toDate),
-        inArray(cashierSalesJournals.status, statusFilter)
-      ];
+      const branchTarget = targetByBranch.get(branch.id);
+      const hasAnyAllocations = branchTarget
+        ? (allocCountByTarget.get(branchTarget.id) || 0) > 0
+        : false;
+      const dailyTargetAverage = branchTarget && branchTarget.targetAmount > 0
+        ? branchTarget.targetAmount / daysInMonth
+        : 0;
 
-      // Add discrepancy filter
-      if (discrepancyType === 'shortage') {
-        whereConditions.push(eq(cashierSalesJournals.discrepancyStatus, 'shortage'));
-      } else if (discrepancyType === 'surplus') {
-        whereConditions.push(eq(cashierSalesJournals.discrepancyStatus, 'surplus'));
-      } else if (discrepancyType === 'balanced') {
-        whereConditions.push(eq(cashierSalesJournals.discrepancyStatus, 'balanced'));
-      }
+      for (const dateStr of rangeDates) {
+        const sales = salesByBranchDate.get(`${branch.id}|${dateStr}`)
+          || { totalSales: 0, morning: 0, evening: 0, night: 0 };
+        const allocTarget = branchTarget
+          ? allocByTargetDate.get(`${branchTarget.id}|${dateStr}`)
+          : undefined;
+        // Fallback to evenly-split monthly target ONLY when no per-day
+        // allocations exist for this branch this month. If admins allocated
+        // some days deliberately, the remaining days stay at 0.
+        const targetAmount = allocTarget ?? (hasAnyAllocations ? 0 : dailyTargetAverage);
 
-      // Get journals for the date range
-      const journals = await db.select()
-        .from(cashierSalesJournals)
-        .where(and(...whereConditions));
+        // Skip days with neither target nor sales (keeps result compact).
+        if (targetAmount === 0 && sales.totalSales === 0) continue;
 
-      // Group by date
-      const salesMap = new Map<string, {
-        totalSales: number;
-        morning: number;
-        evening: number;
-        night: number;
-      }>();
-
-      for (const j of journals) {
-        const existing = salesMap.get(j.journalDate) || { totalSales: 0, morning: 0, evening: 0, night: 0 };
-        existing.totalSales += j.totalSales || 0;
-        if (j.shiftType === 'morning') existing.morning += j.totalSales || 0;
-        else if (j.shiftType === 'evening') existing.evening += j.totalSales || 0;
-        else if (j.shiftType === 'night') existing.night += j.totalSales || 0;
-        salesMap.set(j.journalDate, existing);
-      }
-
-      // Get target allocations for date range
-      const yearMonth = fromDate.substring(0, 7);
-      const target = await db.select()
-        .from(branchMonthlyTargets)
-        .where(
-          and(
-            eq(branchMonthlyTargets.branchId, branch.id),
-            eq(branchMonthlyTargets.yearMonth, yearMonth)
-          )
-        );
-
-      const allocations = target.length > 0 
-        ? await db.select().from(targetDailyAllocations)
-            .where(
-              and(
-                eq(targetDailyAllocations.monthlyTargetId, target[0].id),
-                gte(targetDailyAllocations.targetDate, fromDate),
-                lte(targetDailyAllocations.targetDate, toDate)
-              )
-            )
-        : [];
-
-      // Build a set of all dates (from both allocations and sales)
-      const allDates = new Set<string>();
-      allocations.forEach(a => allDates.add(a.targetDate));
-      Array.from(salesMap.keys()).forEach(date => allDates.add(date));
-
-      // Build results for each date (including days with targets but no sales)
-      Array.from(allDates).forEach(date => {
-        const sales = salesMap.get(date) || { totalSales: 0, morning: 0, evening: 0, night: 0 };
-        const allocation = allocations.find(a => a.targetDate === date);
-        const targetAmount = allocation?.dailyTarget || 0;
         const variance = sales.totalSales - targetAmount;
-        const achievementPercent = targetAmount > 0 ? (sales.totalSales / targetAmount) * 100 : (sales.totalSales > 0 ? 100 : 0);
-        let status: 'exceeding' | 'on_track' | 'warning' | 'critical';
-        
-        if (achievementPercent >= 100) status = 'exceeding';
-        else if (achievementPercent >= 80) status = 'on_track';
-        else if (achievementPercent >= 60) status = 'warning';
-        else status = 'critical';
+        const achievementPercent = targetAmount > 0
+          ? (sales.totalSales / targetAmount) * 100
+          : (sales.totalSales > 0 ? 100 : 0);
+
+        let dayStatus: 'exceeding' | 'on_track' | 'warning' | 'critical';
+        if (achievementPercent >= 100) dayStatus = 'exceeding';
+        else if (achievementPercent >= 80) dayStatus = 'on_track';
+        else if (achievementPercent >= 60) dayStatus = 'warning';
+        else dayStatus = 'critical';
 
         results.push({
-          date,
+          date: dateStr,
           branchId: branch.id,
-          branchName: branch.name,
+          branchName: branchNameById.get(branch.id) || branch.name,
           targetAmount,
           actualSales: sales.totalSales,
           variance,
           achievementPercent,
           shiftBreakdown: { morning: sales.morning, evening: sales.evening, night: sales.night },
-          status
+          status: dayStatus,
         });
-      });
+      }
     }
 
     return results.sort((a, b) => a.date.localeCompare(b.date));
@@ -7072,7 +7174,7 @@ export class DatabaseStorage implements IStorage {
       totalSales: number;
       transactionsCount: number;
       journalCount: number;
-      totalTickets: number;
+      sumOfJournalAvgTickets: number;
     }>();
 
     const shiftLabels: Record<string, string> = {
@@ -7083,11 +7185,11 @@ export class DatabaseStorage implements IStorage {
 
     for (const j of journals) {
       const shift = j.shiftType || 'unknown';
-      const existing = shiftStats.get(shift) || { totalSales: 0, transactionsCount: 0, journalCount: 0, totalTickets: 0 };
+      const existing = shiftStats.get(shift) || { totalSales: 0, transactionsCount: 0, journalCount: 0, sumOfJournalAvgTickets: 0 };
       existing.totalSales += j.totalSales || 0;
       existing.transactionsCount += j.transactionCount || 0;
       existing.journalCount += 1;
-      existing.totalTickets += j.averageTicket || 0;
+      existing.sumOfJournalAvgTickets += j.averageTicket || 0;
       shiftStats.set(shift, existing);
     }
 
@@ -7099,7 +7201,12 @@ export class DatabaseStorage implements IStorage {
       totalSales: stats.totalSales,
       averageSales: stats.journalCount > 0 ? stats.totalSales / stats.journalCount : 0,
       transactionsCount: stats.transactionsCount,
-      averageTicket: stats.journalCount > 0 ? stats.totalTickets / stats.journalCount : 0,
+      // FIX: weighted true average = total sales / total transactions.
+      // Fallback to the stored per-journal averageTicket only when transaction
+      // counts are missing, so the KPI no longer shows 0 by mistake.
+      averageTicket: stats.transactionsCount > 0
+        ? stats.totalSales / stats.transactionsCount
+        : (stats.journalCount > 0 ? stats.sumOfJournalAvgTickets / stats.journalCount : 0),
       journalCount: stats.journalCount,
       percentage: grandTotal > 0 ? (stats.totalSales / grandTotal) * 100 : 0
     })).sort((a, b) => b.totalSales - a.totalSales);
@@ -7197,7 +7304,12 @@ export class DatabaseStorage implements IStorage {
       totalSales: stats.totalSales,
       journalCount: stats.journalCount,
       transactionsCount: stats.transactionsCount,
-      averageTicket: stats.journalCount > 0 ? stats.totalTickets / stats.journalCount : 0,
+      // FIX: weighted true average = total sales / total transactions.
+      // Fallback to per-journal averageTicket only when transactionCount is
+      // missing on every journal — fixes the "متوسط الفاتورة 0 ر.س" bug.
+      averageTicket: stats.transactionsCount > 0
+        ? stats.totalSales / stats.transactionsCount
+        : (stats.journalCount > 0 ? stats.totalTickets / stats.journalCount : 0),
       averageDailySales: stats.uniqueDates.size > 0 ? stats.totalSales / stats.uniqueDates.size : 0,
       rank: 0,
       contribution: grandTotal > 0 ? (stats.totalSales / grandTotal) * 100 : 0,

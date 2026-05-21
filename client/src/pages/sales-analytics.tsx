@@ -162,9 +162,10 @@ export default function SalesAnalytics() {
   });
 
   const { data: branchCompetition = [], isLoading: loadingBranches, refetch: refetchBranches } = useQuery<any[]>({
-    queryKey: ["/api/analytics/branch-competition", fromDate, toDate, journalStatus, discrepancyType],
+    queryKey: ["/api/analytics/branch-competition", selectedBranch, fromDate, toDate, journalStatus, discrepancyType],
     queryFn: async () => {
       const params = new URLSearchParams({ fromDate, toDate });
+      if (selectedBranch && selectedBranch !== "all") params.append("branchId", selectedBranch);
       if (journalStatus !== "all") params.append("status", journalStatus);
       if (discrepancyType !== "all") params.append("discrepancyType", discrepancyType);
       const res = await fetch(`/api/analytics/branch-competition?${params}`);

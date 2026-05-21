@@ -13052,11 +13052,18 @@ export async function registerRoutes(
       
       // Get monthly targets for the period to calculate achievement
       const yearMonth = (fromDate as string).substring(0, 7);
-      
-      // Enrich each cashier with their incentive tier
-      const enrichedData = await Promise.all(data.map(async (cashier) => {
-        // Get branch target for calculating achievement
-        const branchTarget = await storage.getBranchMonthlyTargetByMonth(cashier.branchId, yearMonth);
+
+      // PERF: fetch all branch monthly targets used by the leaderboard once
+      // instead of per cashier (was 1 query per cashier in the leaderboard).
+      const uniqueBranchIds = Array.from(new Set(data.map(c => c.branchId)));
+      const monthlyTargetsAll = uniqueBranchIds.length > 0
+        ? await storage.getBranchMonthlyTargetsForMonth(uniqueBranchIds, yearMonth)
+        : [];
+      const targetByBranchId = new Map(monthlyTargetsAll.map(t => [t.branchId, t]));
+
+      // Enrich each cashier with their incentive tier (no DB calls in the loop).
+      const enrichedData = data.map((cashier) => {
+        const branchTarget = targetByBranchId.get(cashier.branchId);
         const targetAmount = branchTarget?.targetAmount || 0;
         const achievementPercent = targetAmount > 0 ? (cashier.totalSales / targetAmount) * 100 : 0;
         
@@ -13096,7 +13103,7 @@ export async function registerRoutes(
           } : null,
           calculatedReward
         };
-      }));
+      });
       
       res.json(enrichedData);
     } catch (error) {
@@ -13123,29 +13130,45 @@ export async function registerRoutes(
       }
       
       const yearMonth = (fromDate as string).substring(0, 7);
+      // PERF: scope branches first, then aggregate in 3 batched queries
+      // instead of running getBranchMonthlyTargetByMonth + getCashierLeaderboard
+      // per branch (was 2 × N branches DB calls + per-cashier work inside).
       const allBranches = await storage.getAllBranches();
-      const branches = branchFilter.branchIds 
-        ? allBranches.filter(b => branchFilter.branchIds!.includes(b.id))
-        : allBranches;
+      const effectiveBranchId = branchFilter.singleBranchId;
+      const branches = effectiveBranchId
+        ? allBranches.filter(b => b.id === effectiveBranchId)
+        : (branchFilter.branchIds
+          ? allBranches.filter(b => branchFilter.branchIds!.includes(b.id))
+          : allBranches);
+
+      if (branches.length === 0) {
+        return res.json([]);
+      }
+
+      const scopedBranchIds = branches.map(b => b.id);
+      const branchAgg = await storage.getBranchSalesAggregates(
+        scopedBranchIds,
+        fromDate as string,
+        toDate as string,
+        status as string | undefined,
+        discrepancyType as string | undefined,
+      );
+      const monthlyTargetsAll = await storage.getBranchMonthlyTargetsForMonth(
+        scopedBranchIds,
+        yearMonth,
+      );
       const incentiveTiers = await storage.getActiveIncentiveTiers();
-      
-      const branchStats = await Promise.all(branches.map(async (branch) => {
-        // Get branch target
-        const branchTarget = await storage.getBranchMonthlyTargetByMonth(branch.id, yearMonth);
+      const aggByBranch = new Map(branchAgg.map(r => [r.branchId, r]));
+      const targetByBranch = new Map(monthlyTargetsAll.map(t => [t.branchId, t]));
+
+      const branchStats = branches.map((branch) => {
+        const branchTarget = targetByBranch.get(branch.id);
         const targetAmount = branchTarget?.targetAmount || 0;
-        
-        // Get cashier leaderboard for this branch to sum sales
-        const cashiers = await storage.getCashierLeaderboard(
-          branch.id, 
-          fromDate as string, 
-          toDate as string,
-          status as string | undefined,
-          discrepancyType as string | undefined
-        );
-        const totalSales = cashiers.reduce((sum, c) => sum + c.totalSales, 0);
-        const cashierCount = cashiers.length;
-        const totalTransactions = cashiers.reduce((sum, c) => sum + c.transactionsCount, 0);
-        
+        const agg = aggByBranch.get(branch.id) || { totalSales: 0, cashierCount: 0, totalTransactions: 0 };
+        const totalSales = agg.totalSales;
+        const cashierCount = agg.cashierCount;
+        const totalTransactions = agg.totalTransactions;
+
         const achievementPercent = targetAmount > 0 ? (totalSales / targetAmount) * 100 : 0;
         const variance = totalSales - targetAmount;
         
@@ -13192,8 +13215,8 @@ export async function registerRoutes(
           calculatedReward,
           rank: 0
         };
-      }));
-      
+      });
+
       // Sort by achievement percent and assign ranks
       branchStats.sort((a, b) => b.achievementPercent - a.achievementPercent);
       branchStats.forEach((branch, idx) => { branch.rank = idx + 1; });
