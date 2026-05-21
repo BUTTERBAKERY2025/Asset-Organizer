@@ -5454,11 +5454,27 @@ export class DatabaseStorage implements IStorage {
       })
       .from(journalAttachments)
       .where(eq(journalAttachments.journalId, journalId));
-    return rows.map((r) => ({
-      ...r,
-      fileData: null,
-      downloadUrl: r.downloadUrl || (r.filePath ? undefined : `/api/journal-attachments/${r.id}/legacy-data`),
-    })) as JournalAttachment[];
+    return rows.map((r) => {
+      // Build a usable URL in every case:
+      // 1) saved downloadUrl (already a proxy/signed URL) — use as-is
+      // 2) Supabase row with filePath — synthesize the proxy URL
+      //    `/api/uploads/file/{path}` so the browser can fetch it through
+      //    our authenticated stream endpoint (signed URLs expire, this
+      //    proxy is stable). This was the missing branch that caused the
+      //    broken image icons in the UI.
+      // 3) Legacy base64 row — point to the streaming endpoint
+      let url: string | null = r.downloadUrl ?? null;
+      if (!url && r.filePath) {
+        url = `/api/uploads/file/${r.filePath}`;
+      } else if (!url) {
+        url = `/api/journal-attachments/${r.id}/legacy-data`;
+      }
+      return {
+        ...r,
+        fileData: null,
+        downloadUrl: url,
+      };
+    }) as JournalAttachment[];
   }
 
   async createJournalAttachment(attachment: InsertJournalAttachment): Promise<JournalAttachment> {
