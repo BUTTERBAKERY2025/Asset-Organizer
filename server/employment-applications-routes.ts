@@ -279,8 +279,30 @@ export function registerEmploymentApplicationRoutes(app: Express) {
               OR ${employmentApplications.email} ILIKE ${"%" + search + "%"})`
           );
 
+        // PERF: only select the lightweight summary fields the list view
+        // actually renders. The full row contains heavy JSONB (education,
+        // experience, additionalData…) and base64 attachments (cv/photo/id)
+        // that can be megabytes per record — fetching 500 of those was the
+        // root cause of the slow load. Full details are fetched on demand
+        // via GET /api/hr/applications/:id when the user opens a card.
         const rows = await db
-          .select()
+          .select({
+            id: employmentApplications.id,
+            applicationNumber: employmentApplications.applicationNumber,
+            source: employmentApplications.source,
+            status: employmentApplications.status,
+            rating: employmentApplications.rating,
+            fullNameAr: employmentApplications.fullNameAr,
+            phone: employmentApplications.phone,
+            targetPosition: employmentApplications.targetPosition,
+            targetBranchId: employmentApplications.targetBranchId,
+            targetBranchName: employmentApplications.targetBranchName,
+            convertedToOfferId: employmentApplications.convertedToOfferId,
+            // email is included so the client-side search box can still
+            // match by email without forcing a heavy column projection.
+            email: employmentApplications.email,
+            createdAt: employmentApplications.createdAt,
+          })
           .from(employmentApplications)
           .where(conds.length ? and(...conds) : undefined)
           .orderBy(desc(employmentApplications.createdAt))

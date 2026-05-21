@@ -110,6 +110,14 @@ export default function EmploymentApplicationsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showVacancy, setShowVacancy] = useState(false);
   const [viewApp, setViewApp] = useState<EmploymentApplication | null>(null);
+  // Tracks whether the full record (with JSONB + attachments + hrNotes/
+  // rejectionReason) has been hydrated for the currently opened dialog.
+  // Used to gate the Save/Convert actions and to keep the PATCH payload
+  // from accidentally overwriting existing notes with empty strings.
+  const [viewAppDetailLoaded, setViewAppDetailLoaded] = useState(false);
+  // Monotonic request token so a slow response for a previously-opened
+  // application can never overwrite the dialog state for a newer one.
+  const viewAppRequestId = useRef(0);
   const [shareLink, setShareLink] = useState<{ link: string; phone: string } | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
   const handlePrint = useReactToPrint({
@@ -277,14 +285,39 @@ export default function EmploymentApplicationsPage() {
     convertMut.mutate(app.id);
   };
 
-  const handleViewApp = (app: EmploymentApplication) => {
+  const handleViewApp = async (app: EmploymentApplication) => {
+    // PERF: list endpoint returns only summary columns. Fetch the full
+    // record (with JSONB + attachments) on demand when the dialog opens.
+    const myRequestId = ++viewAppRequestId.current;
     setViewApp(app);
+    setViewAppDetailLoaded(false);
     setReviewForm({
       status: app.status === "submitted" ? "under_review" : app.status,
       rating: app.rating || 0,
-      hrNotes: app.hrNotes || "",
-      rejectionReason: app.rejectionReason || "",
+      hrNotes: "",
+      rejectionReason: "",
     });
+    try {
+      const r = await apiRequest("GET", `/api/hr/applications/${app.id}`);
+      const detail = await r.json();
+      // Race-safety: only apply this response if it belongs to the
+      // most-recently-opened application (user may have already clicked
+      // a different card before this fetch resolved).
+      if (myRequestId !== viewAppRequestId.current) return;
+      if (detail && detail.application) {
+        setViewApp(detail.application);
+        setReviewForm({
+          status: detail.application.status === "submitted" ? "under_review" : detail.application.status,
+          rating: detail.application.rating || 0,
+          hrNotes: detail.application.hrNotes || "",
+          rejectionReason: detail.application.rejectionReason || "",
+        });
+        setViewAppDetailLoaded(true);
+      }
+    } catch (e: any) {
+      if (myRequestId !== viewAppRequestId.current) return;
+      toast({ title: "تعذر تحميل التفاصيل الكاملة", description: e?.message || "حاول مرة أخرى لعرض كامل البيانات", variant: "destructive" });
+    }
   };
 
   const copyLink = (link: string) => {
@@ -737,7 +770,21 @@ export default function EmploymentApplicationsPage() {
                   <Briefcase className="w-4 h-4 ml-1" /> تحويل لعرض عمل
                 </Button>
               )}
-              <Button onClick={() => viewApp && reviewMut.mutate({ id: viewApp.id, data: { ...reviewForm, rating: reviewForm.rating || undefined } })} disabled={reviewMut.isPending} className="bg-[#e67e22] hover:bg-[#d35400]" data-testid="button-save-review">
+              <Button onClick={() => {
+                if (!viewApp) return;
+                // Only send hrNotes/rejectionReason when the full record was
+                // hydrated — otherwise the empty strings would overwrite the
+                // existing values on the server.
+                const payload: any = {
+                  status: reviewForm.status,
+                  rating: reviewForm.rating || undefined,
+                };
+                if (viewAppDetailLoaded) {
+                  payload.hrNotes = reviewForm.hrNotes;
+                  payload.rejectionReason = reviewForm.rejectionReason;
+                }
+                reviewMut.mutate({ id: viewApp.id, data: payload });
+              }} disabled={reviewMut.isPending || !viewAppDetailLoaded} className="bg-[#e67e22] hover:bg-[#d35400]" data-testid="button-save-review">
                 حفظ القرار
               </Button>
             </DialogFooter>
