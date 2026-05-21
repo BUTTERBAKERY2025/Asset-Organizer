@@ -1,6 +1,9 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.SUPABASE_URL;
+const rawSupabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = rawSupabaseUrl
+  ? rawSupabaseUrl.replace(/\/rest\/v1\/?$/i, '').replace(/\/$/, '')
+  : undefined;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
 function isValidUrl(url: string | undefined): boolean {
