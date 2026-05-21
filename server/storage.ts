@@ -5432,11 +5432,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Journal Attachments
-  // PERF: excludes the heavy `fileData` (base64 blob — can be MBs per row) from
-  // list queries. New attachments expose `downloadUrl` directly. For legacy
-  // base64 rows we synthesize a lazy URL pointing to the streaming endpoint
-  // GET /api/journal-attachments/:id/legacy-data so the blob is only fetched
-  // when actually displayed.
+  // We never include the heavy `fileData` column in the list response — for
+  // Supabase rows it would be null anyway, and for legacy base64 rows we
+  // convert it to a data URI here (so the <img> tag can render it inline
+  // without an extra authenticated round-trip that was failing in
+  // production). Each journal only has a handful of attachments so the
+  // payload remains small.
   async getJournalAttachments(journalId: number): Promise<JournalAttachment[]> {
     const rows = await db
       .select({
@@ -5446,6 +5447,7 @@ export class DatabaseStorage implements IStorage {
         fileName: journalAttachments.fileName,
         filePath: journalAttachments.filePath,
         downloadUrl: journalAttachments.downloadUrl,
+        fileData: journalAttachments.fileData,
         mimeType: journalAttachments.mimeType,
         fileSize: journalAttachments.fileSize,
         notes: journalAttachments.notes,
@@ -5456,21 +5458,28 @@ export class DatabaseStorage implements IStorage {
       .where(eq(journalAttachments.journalId, journalId));
     return rows.map((r) => {
       // Build a usable URL in every case:
-      // 1) saved downloadUrl (already a proxy/signed URL) — use as-is
-      // 2) Supabase row with filePath — synthesize the proxy URL
-      //    `/api/uploads/file/{path}` so the browser can fetch it through
-      //    our authenticated stream endpoint (signed URLs expire, this
-      //    proxy is stable). This was the missing branch that caused the
-      //    broken image icons in the UI.
-      // 3) Legacy base64 row — point to the streaming endpoint
+      // 1) saved downloadUrl (already a proxy URL like /api/uploads/file/…)
+      //    — use as-is.
+      // 2) Supabase row with filePath but no saved URL — synthesize the
+      //    proxy URL `/api/uploads/file/{path}` (stable, authenticated).
+      // 3) Legacy base64 row — return the raw bytes as a `data:` URI so
+      //    the browser renders the image inline without any extra
+      //    network call. This was the missing piece that caused the
+      //    broken image icons for existing rows.
       let url: string | null = r.downloadUrl ?? null;
       if (!url && r.filePath) {
         url = `/api/uploads/file/${r.filePath}`;
-      } else if (!url) {
-        url = `/api/journal-attachments/${r.id}/legacy-data`;
+      } else if (!url && r.fileData) {
+        const raw = String(r.fileData);
+        url = raw.startsWith("data:")
+          ? raw
+          : `data:${r.mimeType || "image/png"};base64,${raw}`;
       }
       return {
         ...r,
+        // Strip the heavy column from the response — it's either already
+        // inlined into the data URI above or it's a Supabase row that
+        // doesn't need it on the client.
         fileData: null,
         downloadUrl: url,
       };
