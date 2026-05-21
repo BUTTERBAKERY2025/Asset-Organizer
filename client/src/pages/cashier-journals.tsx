@@ -112,6 +112,8 @@ export default function CashierJournalsPage() {
       return Array.isArray(data) ? data : (data.journals || []);
     },
     enabled: isBranchFilterReady,
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
   });
   
   const { data: stats, refetch: refetchStats } = useQuery<{

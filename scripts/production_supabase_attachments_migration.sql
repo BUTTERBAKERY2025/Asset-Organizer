@@ -20,6 +20,11 @@ ALTER TABLE journal_attachments
 ALTER TABLE journal_attachments
   ALTER COLUMN file_data DROP NOT NULL;
 
+-- فهرس لتسريع جلب المرفقات لكل يومية (تحسين أداء كبير)
+-- Index to speed up attachment lookups per journal (significant perf win)
+CREATE INDEX IF NOT EXISTS idx_journal_attachments_journal_id
+  ON journal_attachments(journal_id);
+
 -- التحقق / Verification (يجب أن يظهر 3 صفوف بـ is_nullable=YES):
 SELECT column_name, is_nullable, data_type
 FROM information_schema.columns

@@ -5422,9 +5422,33 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Journal Attachments
+  // PERF: excludes the heavy `fileData` (base64 blob — can be MBs per row) from
+  // list queries. New attachments expose `downloadUrl` directly. For legacy
+  // base64 rows we synthesize a lazy URL pointing to the streaming endpoint
+  // GET /api/journal-attachments/:id/legacy-data so the blob is only fetched
+  // when actually displayed.
   async getJournalAttachments(journalId: number): Promise<JournalAttachment[]> {
-    return await db.select().from(journalAttachments)
+    const rows = await db
+      .select({
+        id: journalAttachments.id,
+        journalId: journalAttachments.journalId,
+        attachmentType: journalAttachments.attachmentType,
+        fileName: journalAttachments.fileName,
+        filePath: journalAttachments.filePath,
+        downloadUrl: journalAttachments.downloadUrl,
+        mimeType: journalAttachments.mimeType,
+        fileSize: journalAttachments.fileSize,
+        notes: journalAttachments.notes,
+        uploadedBy: journalAttachments.uploadedBy,
+        uploadedAt: journalAttachments.uploadedAt,
+      })
+      .from(journalAttachments)
       .where(eq(journalAttachments.journalId, journalId));
+    return rows.map((r) => ({
+      ...r,
+      fileData: null,
+      downloadUrl: r.downloadUrl || (r.filePath ? undefined : `/api/journal-attachments/${r.id}/legacy-data`),
+    })) as JournalAttachment[];
   }
 
   async createJournalAttachment(attachment: InsertJournalAttachment): Promise<JournalAttachment> {

@@ -2608,7 +2608,9 @@ export const journalAttachments = pgTable("journal_attachments", {
   notes: text("notes"),
   uploadedBy: varchar("uploaded_by").references(() => users.id),
   uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  journalIdIdx: index("idx_journal_attachments_journal_id").on(table.journalId),
+}));
 
 export const insertJournalAttachmentSchema = createInsertSchema(
   journalAttachments,

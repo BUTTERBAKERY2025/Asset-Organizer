@@ -8358,6 +8358,37 @@ export async function registerRoutes(
     }
   });
 
+  // Streams the legacy base64 `file_data` for a single attachment as a binary
+  // response. Used as a lazy fallback for pre-migration attachments so that
+  // listing endpoints stay light (no MB-sized blobs in JSON payloads).
+  app.get("/api/journal-attachments/:id/legacy-data", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+      const { sql } = await import("drizzle-orm");
+      const { db } = await import("./db");
+      const result: any = await db.execute(sql`
+        SELECT file_data, mime_type, file_name
+        FROM journal_attachments
+        WHERE id = ${id}
+        LIMIT 1
+      `);
+      const row = ((result as any).rows ?? result)?.[0];
+      if (!row || !row.file_data) return res.status(404).json({ error: "Not found" });
+      let raw = String(row.file_data);
+      const commaIdx = raw.indexOf(",");
+      if (raw.startsWith("data:") && commaIdx > 0) raw = raw.slice(commaIdx + 1);
+      const buf = Buffer.from(raw, "base64");
+      res.setHeader("Content-Type", row.mime_type || "application/octet-stream");
+      res.setHeader("Cache-Control", "private, max-age=86400");
+      res.setHeader("Content-Length", String(buf.length));
+      return res.end(buf);
+    } catch (error) {
+      console.error("Error serving legacy attachment data:", error);
+      res.status(500).json({ error: "Failed to load legacy attachment" });
+    }
+  });
+
   // ==================== Enhanced P&L System - نظام الأرباح والخسائر المحسن ====================
 
   // Get P&L branch settings (fixed rent)
