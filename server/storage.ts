@@ -5244,13 +5244,7 @@ export class DatabaseStorage implements IStorage {
     
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
     
-    // Get total count first
-    const countResult = await db.select({ count: sql<number>`count(*)::int` })
-      .from(cashierSalesJournals)
-      .where(whereClause);
-    const totalCount = countResult[0]?.count || 0;
-    
-    // Get paginated results — attach `attachmentCount` via a correlated
+    // Build paginated query — attach `attachmentCount` via a correlated
     // subquery so the list view can show "X مرفق" badges without N+1 fetches.
     // The subquery is index-only thanks to idx_journal_attachments_journal_id.
     const { getTableColumns } = await import("drizzle-orm");
@@ -5271,7 +5265,14 @@ export class DatabaseStorage implements IStorage {
       query = query.offset(filters.offset) as typeof query;
     }
     
-    const journals = await query as unknown as CashierSalesJournal[];
+    // PERF: run count + select in parallel to halve round-trip latency.
+    const [countResult, journals] = await Promise.all([
+      db.select({ count: sql<number>`count(*)::int` })
+        .from(cashierSalesJournals)
+        .where(whereClause),
+      query as unknown as Promise<CashierSalesJournal[]>,
+    ]);
+    const totalCount = countResult[0]?.count || 0;
     
     return { journals, totalCount };
   }
@@ -5581,13 +5582,8 @@ export class DatabaseStorage implements IStorage {
     if (startDate) journalConditions.push(gte(cashierSalesJournals.journalDate, startDate));
     if (endDate) journalConditions.push(lte(cashierSalesJournals.journalDate, endDate));
 
-    // OPTIMIZED: Fetch journals with SQL WHERE instead of fetching all
-    const allJournals = await db.select()
-      .from(cashierSalesJournals)
-      .where(journalConditions.length > 0 ? and(...journalConditions) : undefined)
-      .orderBy(desc(cashierSalesJournals.journalDate));
-
-    // Also fetch Event POS sales for the same filters
+    // PERF: build all independent queries first, then await them in parallel.
+    // Previously these were sequential awaits — now ~7 queries run together.
     const posConditions: any[] = [];
     if (branchId) {
       posConditions.push(eq(posSales.branchId, branchId));
@@ -5597,9 +5593,53 @@ export class DatabaseStorage implements IStorage {
     if (startDate) posConditions.push(gte(posSales.saleDate, startDate));
     if (endDate) posConditions.push(lte(posSales.saleDate, endDate));
 
-    const allPosSales = await db.select()
-      .from(posSales)
-      .where(posConditions.length > 0 ? and(...posConditions) : undefined);
+    const orderConditions: any[] = [];
+    if (branchId) {
+      orderConditions.push(eq(productionOrders.branchId, branchId));
+    } else if (branchIds && branchIds.length > 0) {
+      orderConditions.push(inArray(productionOrders.branchId, branchIds));
+    }
+    if (startDate) orderConditions.push(gte(productionOrders.scheduledDate, startDate));
+    if (endDate) orderConditions.push(lte(productionOrders.scheduledDate, endDate));
+
+    const batchConditions: any[] = [];
+    if (branchId) {
+      batchConditions.push(eq(dailyProductionBatches.branchId, branchId));
+    } else if (branchIds && branchIds.length > 0) {
+      batchConditions.push(inArray(dailyProductionBatches.branchId, branchIds));
+    }
+    if (startDate) batchConditions.push(gte(dailyProductionBatches.productionDate, startDate));
+    if (endDate) batchConditions.push(lte(dailyProductionBatches.productionDate, endDate));
+
+    const scheduleConditions: any[] = [];
+    if (branchId) {
+      scheduleConditions.push(eq(employeeSchedules.branchId, branchId));
+    } else if (branchIds && branchIds.length > 0) {
+      scheduleConditions.push(inArray(employeeSchedules.branchId, branchIds));
+    }
+    if (startDate) scheduleConditions.push(gte(employeeSchedules.scheduleDate, startDate));
+    if (endDate) scheduleConditions.push(lte(employeeSchedules.scheduleDate, endDate));
+
+    const [allJournals, allPosSales, allOrders, allBatches, allSchedules, allBranches, products] = await Promise.all([
+      db.select()
+        .from(cashierSalesJournals)
+        .where(journalConditions.length > 0 ? and(...journalConditions) : undefined)
+        .orderBy(desc(cashierSalesJournals.journalDate)),
+      db.select()
+        .from(posSales)
+        .where(posConditions.length > 0 ? and(...posConditions) : undefined),
+      db.select()
+        .from(productionOrders)
+        .where(orderConditions.length > 0 ? and(...orderConditions) : undefined),
+      db.select()
+        .from(dailyProductionBatches)
+        .where(batchConditions.length > 0 ? and(...batchConditions) : undefined),
+      db.select()
+        .from(employeeSchedules)
+        .where(scheduleConditions.length > 0 ? and(...scheduleConditions) : undefined),
+      this.getAllBranches(),
+      this.getAllProducts(),
+    ]);
 
     const completedPosSales = allPosSales.filter(s => s.status === 'completed');
 
@@ -5696,20 +5736,7 @@ export class DatabaseStorage implements IStorage {
       .map(([date, data]) => ({ date, sales: data.sales, transactions: data.transactions }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    // OPTIMIZED: Production Report with SQL WHERE
-    const orderConditions: any[] = [];
-    if (branchId) {
-      orderConditions.push(eq(productionOrders.branchId, branchId));
-    } else if (branchIds && branchIds.length > 0) {
-      orderConditions.push(inArray(productionOrders.branchId, branchIds));
-    }
-    if (startDate) orderConditions.push(gte(productionOrders.scheduledDate, startDate));
-    if (endDate) orderConditions.push(lte(productionOrders.scheduledDate, endDate));
-
-    const allOrders = await db.select()
-      .from(productionOrders)
-      .where(orderConditions.length > 0 ? and(...orderConditions) : undefined);
-
+    // Production Report — `allOrders` already fetched in the parallel batch above.
     const totalOrders = allOrders.length;
     const pendingOrders = allOrders.filter(o => o.status === 'pending').length;
     const inProgressOrders = allOrders.filter(o => o.status === 'in_progress').length;
@@ -5741,8 +5768,7 @@ export class DatabaseStorage implements IStorage {
       qualityChecksResult = Object.entries(qualityStatusCounts).map(([status, count]) => ({ status, count }));
     }
 
-    // OPTIMIZED: Orders by product with JOIN
-    const products = await this.getAllProducts();
+    // Orders by product — `products` already fetched in the parallel batch above.
     const productOrderMap: Record<number, { productName: string; quantity: number; orderCount: number }> = {};
     for (const order of allOrders) {
       const product = products.find(p => p.id === order.productId);
@@ -5774,20 +5800,7 @@ export class DatabaseStorage implements IStorage {
       .map(([date, data]) => ({ date, quantity: data.quantity, orders: data.orders }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    // Actual Production (daily_production_batches) - real production data
-    const batchConditions: any[] = [];
-    if (branchId) {
-      batchConditions.push(eq(dailyProductionBatches.branchId, branchId));
-    } else if (branchIds && branchIds.length > 0) {
-      batchConditions.push(inArray(dailyProductionBatches.branchId, branchIds));
-    }
-    if (startDate) batchConditions.push(gte(dailyProductionBatches.productionDate, startDate));
-    if (endDate) batchConditions.push(lte(dailyProductionBatches.productionDate, endDate));
-
-    const allBatches = await db.select()
-      .from(dailyProductionBatches)
-      .where(batchConditions.length > 0 ? and(...batchConditions) : undefined);
-
+    // Actual Production — `allBatches` already fetched in the parallel batch above.
     const finishedBatches = allBatches.filter(b => b.status === 'finished');
     const inProgressBatches = allBatches.filter(b => b.status === 'in_progress');
     const totalActualQuantity = finishedBatches.reduce((sum, b) => sum + (b.quantity || 0), 0);
@@ -5850,20 +5863,7 @@ export class DatabaseStorage implements IStorage {
       byChef,
     };
 
-    // Shifts Report - using employee_schedules table (main schedule data)
-    const scheduleConditions: any[] = [];
-    if (branchId) {
-      scheduleConditions.push(eq(employeeSchedules.branchId, branchId));
-    } else if (branchIds && branchIds.length > 0) {
-      scheduleConditions.push(inArray(employeeSchedules.branchId, branchIds));
-    }
-    if (startDate) scheduleConditions.push(gte(employeeSchedules.scheduleDate, startDate));
-    if (endDate) scheduleConditions.push(lte(employeeSchedules.scheduleDate, endDate));
-
-    const allSchedules = await db.select()
-      .from(employeeSchedules)
-      .where(scheduleConditions.length > 0 ? and(...scheduleConditions) : undefined);
-
+    // Shifts Report — `allSchedules` already fetched in the parallel batch above.
     const workSchedules = allSchedules.filter(s => !s.isOff);
     const uniqueShiftDays = new Set(workSchedules.map(s => `${s.branchId}_${s.scheduleDate}_${s.shiftType}`));
     const totalShifts = uniqueShiftDays.size;
@@ -5894,8 +5894,7 @@ export class DatabaseStorage implements IStorage {
       .sort((a, b) => b.count - a.count)
       .slice(0, 20);
 
-    // Branch Comparison - SECURITY: Only include authorized branches
-    const allBranches = await this.getAllBranches();
+    // Branch Comparison — `allBranches` already fetched in the parallel batch above.
     let branchesToCompare;
     if (branchId) {
       branchesToCompare = allBranches.filter(b => b.id === branchId);
@@ -6557,32 +6556,34 @@ export class DatabaseStorage implements IStorage {
       journalIds: number[];
     }[];
   } | null> {
-    const branch = await this.getBranch(branchId);
+    // PERF: branch + monthly target are independent — fetch in parallel.
+    const [branch, branchTarget] = await Promise.all([
+      this.getBranch(branchId),
+      this.getBranchMonthlyTargetByMonth(branchId, yearMonth),
+    ]);
     if (!branch) return null;
-
-    const branchTarget = await this.getBranchMonthlyTargetByMonth(branchId, yearMonth);
     if (!branchTarget) return null;
 
     const [year, month] = yearMonth.split('-').map(Number);
     const daysInMonth = new Date(year, month, 0).getDate();
     const dailyTargetAverage = branchTarget.targetAmount / daysInMonth;
 
-    // Get daily allocations if exists
-    const allocations = await this.getTargetDailyAllocationsByMonth(branchTarget.id);
-    
-    // Get all journals for the month
     const startDate = `${yearMonth}-01`;
     const endDate = `${yearMonth}-${String(daysInMonth).padStart(2, '0')}`;
-    
-    const journals = await db.select().from(cashierSalesJournals)
-      .where(
-        and(
-          eq(cashierSalesJournals.branchId, branchId),
-          gte(cashierSalesJournals.journalDate, startDate),
-          lte(cashierSalesJournals.journalDate, endDate),
-          inArray(cashierSalesJournals.status, ['posted', 'approved'])
-        )
-      );
+
+    // PERF: allocations + journals are also independent — fetch in parallel.
+    const [allocations, journals] = await Promise.all([
+      this.getTargetDailyAllocationsByMonth(branchTarget.id),
+      db.select().from(cashierSalesJournals)
+        .where(
+          and(
+            eq(cashierSalesJournals.branchId, branchId),
+            gte(cashierSalesJournals.journalDate, startDate),
+            lte(cashierSalesJournals.journalDate, endDate),
+            inArray(cashierSalesJournals.status, ['posted', 'approved'])
+          )
+        ),
+    ]);
 
     const dayNames = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
     const dailyProgress: {
@@ -6653,7 +6654,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Get all branches sales progress summary
-  async getAllBranchesSalesProgress(yearMonth: string): Promise<{
+  async getAllBranchesSalesProgress(yearMonth: string, branchIds?: string[]): Promise<{
     branchId: string;
     branchName: string;
     targetAmount: number;
@@ -6666,13 +6667,72 @@ export class DatabaseStorage implements IStorage {
     projectedPercent: number;
     trend: 'up' | 'down' | 'stable';
   }[]> {
-    const branches = await this.getAllBranches();
+    // PERF: rewritten as a set-based query batch (4 queries total) instead of
+    // calling getBranchDailySalesProgress per branch (was N × ~4 queries with
+    // sequential awaits inside each call).
+    const allBranches = await this.getAllBranches();
+    const branches = branchIds && branchIds.length > 0
+      ? allBranches.filter(b => branchIds.includes(b.id))
+      : allBranches;
+
+    if (branches.length === 0) return [];
+
     const [year, month] = yearMonth.split('-').map(Number);
     const daysInMonth = new Date(year, month, 0).getDate();
-    const today = new Date();
-    const currentDay = today.getMonth() + 1 === month && today.getFullYear() === year 
-      ? today.getDate() 
-      : (today > new Date(year, month - 1, 1) ? daysInMonth : 0);
+    const startDate = `${yearMonth}-01`;
+    const endDate = `${yearMonth}-${String(daysInMonth).padStart(2, '0')}`;
+    const scopedBranchIds = branches.map(b => b.id);
+
+    // (1) Monthly targets for the scoped branches, and (3) daily journals
+    // grouped by branch+date. These two are independent.
+    const [monthlyTargets, dailySales] = await Promise.all([
+      db.select().from(branchMonthlyTargets).where(
+        and(
+          inArray(branchMonthlyTargets.branchId, scopedBranchIds),
+          eq(branchMonthlyTargets.yearMonth, yearMonth),
+        ),
+      ),
+      db.select({
+        branchId: cashierSalesJournals.branchId,
+        journalDate: cashierSalesJournals.journalDate,
+        totalSales: sql<number>`SUM(${cashierSalesJournals.totalSales})`.as('total_sales'),
+      })
+        .from(cashierSalesJournals)
+        .where(and(
+          inArray(cashierSalesJournals.branchId, scopedBranchIds),
+          gte(cashierSalesJournals.journalDate, startDate),
+          lte(cashierSalesJournals.journalDate, endDate),
+          inArray(cashierSalesJournals.status, ['posted', 'approved']),
+        ))
+        .groupBy(cashierSalesJournals.branchId, cashierSalesJournals.journalDate),
+    ]);
+
+    // (2) Daily allocations for those monthly targets — depends on step (1).
+    const targetIds = monthlyTargets.map(t => t.id);
+    const allocations = targetIds.length > 0
+      ? await db.select().from(targetDailyAllocations)
+          .where(inArray(targetDailyAllocations.monthlyTargetId, targetIds))
+      : [];
+
+    // Build per-branch lookups for O(1) access.
+    const targetByBranch = new Map<string, BranchMonthlyTarget>();
+    for (const t of monthlyTargets) targetByBranch.set(t.branchId, t);
+
+    const allocationsByTarget = new Map<number, TargetDailyAllocation[]>();
+    for (const a of allocations) {
+      const list = allocationsByTarget.get(a.monthlyTargetId) || [];
+      list.push(a);
+      allocationsByTarget.set(a.monthlyTargetId, list);
+    }
+
+    const salesByBranchDate = new Map<string, number>();
+    for (const r of dailySales) {
+      salesByBranchDate.set(`${r.branchId}|${r.journalDate}`, Number(r.totalSales) || 0);
+    }
+
+    const saudiToday = getSaudiArabiaTime().date;
+    const monthEndDate = endDate;
+    const cutoffDate = saudiToday < monthEndDate ? saudiToday : monthEndDate;
 
     const results: {
       branchId: string;
@@ -6689,42 +6749,53 @@ export class DatabaseStorage implements IStorage {
     }[] = [];
 
     for (const branch of branches) {
-      const progress = await this.getBranchDailySalesProgress(branch.id, yearMonth);
-      if (!progress) continue;
+      const branchTarget = targetByBranch.get(branch.id);
+      if (!branchTarget) continue;
 
-      const daysWithSales = progress.dailyProgress.filter(d => d.achievedAmount > 0).length;
-      const averageDailySales = daysWithSales > 0 ? progress.achievedAmount / daysWithSales : 0;
+      const dailyTargetAverage = branchTarget.targetAmount / daysInMonth;
+      const alloc = allocationsByTarget.get(branchTarget.id) || [];
+      const allocByDate = new Map<string, number>();
+      for (const a of alloc) allocByDate.set(a.targetDate, a.dailyTarget);
+
+      // Per-day percent for trend detection (only days <= cutoff with sales).
+      const completedPercents: number[] = [];
+      let achievedAmount = 0;
+      let daysWithSales = 0;
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${yearMonth}-${String(day).padStart(2, '0')}`;
+        const dayAchieved = salesByBranchDate.get(`${branch.id}|${dateStr}`) || 0;
+        achievedAmount += dayAchieved;
+        if (dayAchieved > 0) {
+          daysWithSales++;
+          if (dateStr <= cutoffDate) {
+            const dayTarget = allocByDate.get(dateStr) ?? dailyTargetAverage;
+            completedPercents.push(dayTarget > 0 ? (dayAchieved / dayTarget) * 100 : 0);
+          }
+        }
+      }
+
+      const averageDailySales = daysWithSales > 0 ? achievedAmount / daysWithSales : 0;
       const projectedTotal = averageDailySales * daysInMonth;
-      const projectedPercent = progress.targetAmount > 0 
-        ? (projectedTotal / progress.targetAmount) * 100 
+      const projectedPercent = branchTarget.targetAmount > 0
+        ? (projectedTotal / branchTarget.targetAmount) * 100
+        : 0;
+      const achievementPercent = branchTarget.targetAmount > 0
+        ? (achievedAmount / branchTarget.targetAmount) * 100
         : 0;
 
-      // Calculate trend: compare recent days vs earlier days to determine current direction
-      // Uses achievement % (sales/target) per day for fair comparison across different target amounts
-      const saudiToday = getSaudiArabiaTime().date;
-      const monthEndDate = `${yearMonth}-${String(daysInMonth).padStart(2, '0')}`;
-      const cutoffDate = saudiToday < monthEndDate ? saudiToday : monthEndDate;
-      const completedDaysWithSales = progress.dailyProgress
-        .filter(d => d.date <= cutoffDate && d.achievedAmount > 0);
       let trend: 'up' | 'down' | 'stable' = 'stable';
-      if (completedDaysWithSales.length >= 4) {
-        const dayPercents = completedDaysWithSales.map(d =>
-          d.targetAmount > 0 ? (d.achievedAmount / d.targetAmount) * 100 : 0
-        );
-        const recentCount = Math.max(2, Math.floor(dayPercents.length / 3));
-        const recentDays = dayPercents.slice(-recentCount);
-        const earlierDays = dayPercents.slice(0, -recentCount);
+      if (completedPercents.length >= 4) {
+        const recentCount = Math.max(2, Math.floor(completedPercents.length / 3));
+        const recentDays = completedPercents.slice(-recentCount);
+        const earlierDays = completedPercents.slice(0, -recentCount);
         const recentAvg = recentDays.reduce((s, p) => s + p, 0) / recentDays.length;
         const earlierAvg = earlierDays.reduce((s, p) => s + p, 0) / earlierDays.length;
         const diff = recentAvg - earlierAvg;
         if (diff > 5) trend = 'up';
         else if (diff < -5) trend = 'down';
-      } else if (completedDaysWithSales.length >= 2) {
-        const firstPct = completedDaysWithSales[0].targetAmount > 0
-          ? (completedDaysWithSales[0].achievedAmount / completedDaysWithSales[0].targetAmount) * 100 : 0;
-        const lastPct = completedDaysWithSales[completedDaysWithSales.length - 1].targetAmount > 0
-          ? (completedDaysWithSales[completedDaysWithSales.length - 1].achievedAmount / completedDaysWithSales[completedDaysWithSales.length - 1].targetAmount) * 100 : 0;
-        const change = lastPct - firstPct;
+      } else if (completedPercents.length >= 2) {
+        const change = completedPercents[completedPercents.length - 1] - completedPercents[0];
         if (change > 10) trend = 'up';
         else if (change < -10) trend = 'down';
       }
@@ -6732,15 +6803,15 @@ export class DatabaseStorage implements IStorage {
       results.push({
         branchId: branch.id,
         branchName: branch.name,
-        targetAmount: progress.targetAmount,
-        achievedAmount: progress.achievedAmount,
-        achievementPercent: progress.achievementPercent,
-        remainingAmount: progress.remainingAmount,
+        targetAmount: branchTarget.targetAmount,
+        achievedAmount,
+        achievementPercent,
+        remainingAmount: Math.max(0, branchTarget.targetAmount - achievedAmount),
         daysWithSales,
         averageDailySales,
         projectedTotal,
         projectedPercent,
-        trend
+        trend,
       });
     }
 

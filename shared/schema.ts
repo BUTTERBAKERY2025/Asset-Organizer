@@ -2264,6 +2264,8 @@ export const productionOrders = pgTable("production_orders", {
   index("idx_production_orders_status").on(table.status),
   index("idx_production_orders_scheduled_date").on(table.scheduledDate),
   index("idx_production_orders_branch_status").on(table.branchId, table.status),
+  // PERF: operations reports filter by branch + date range together.
+  index("idx_production_orders_branch_scheduled").on(table.branchId, table.scheduledDate),
 ]);
 
 export const insertProductionOrderSchema = createInsertSchema(
@@ -2302,7 +2304,10 @@ export const qualityChecks = pgTable("quality_checks", {
   attachmentUrl: text("attachment_url"), // صورة أو مستند
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  // PERF: operations reports join quality_checks by production_order_id.
+  index("idx_quality_checks_production_order").on(table.productionOrderId),
+]);
 
 export const insertQualityCheckSchema = createInsertSchema(qualityChecks).omit({
   id: true,
@@ -2413,6 +2418,11 @@ export const cashierSalesJournals = pgTable("cashier_sales_journals", {
   index("idx_journals_branch_date").on(table.branchId, table.journalDate),
   index("idx_journals_cashier").on(table.cashierId),
   index("idx_journals_status").on(table.status),
+  // PERF: extra covering indexes for the operations reports dashboard filters.
+  index("idx_cashier_journals_cashier_date").on(table.cashierId, table.journalDate),
+  index("idx_cashier_journals_branch_status_date").on(table.branchId, table.status, table.journalDate),
+  index("idx_cashier_journals_discrepancy").on(table.discrepancyStatus),
+  index("idx_cashier_journals_date_desc").on(table.journalDate),
 ]);
 
 export const insertCashierSalesJournalSchema = createInsertSchema(

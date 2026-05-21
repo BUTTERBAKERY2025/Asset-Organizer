@@ -9630,16 +9630,11 @@ export async function registerRoutes(
 
       const now = new Date();
       const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      const allTargetsProgress = await storage.getAllBranchesSalesProgress(currentYearMonth);
-      // SECURITY: Filter targets to user's allowed branches
-      let targetsProgress;
-      if (effectiveBranchId) {
-        targetsProgress = allTargetsProgress.filter(b => b.branchId === effectiveBranchId);
-      } else if (branchFilter.branchIds) {
-        targetsProgress = allTargetsProgress.filter(b => branchFilter.branchIds!.includes(b.branchId));
-      } else {
-        targetsProgress = allTargetsProgress;
-      }
+      // PERF: scope target computation to allowed branches to skip unnecessary work.
+      const scopedTargetBranchIds = effectiveBranchId
+        ? [effectiveBranchId]
+        : (branchFilter.branchIds || undefined);
+      const targetsProgress = await storage.getAllBranchesSalesProgress(currentYearMonth, scopedTargetBranchIds);
       const totalTarget = targetsProgress.reduce((sum, b) => sum + (b.targetAmount || 0), 0);
       const totalAchieved = targetsProgress.reduce((sum, b) => sum + (b.achievedAmount || 0), 0);
       const targetAchievementPercent = totalTarget > 0 ? (totalAchieved / totalTarget) * 100 : 0;
@@ -10730,10 +10725,12 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
       
-      const allSummary = await storage.getAllBranchesSalesProgress(yearMonth as string);
-      const summary = branchFilter.branchIds 
-        ? allSummary.filter(s => branchFilter.branchIds!.includes(s.branchId || ''))
-        : allSummary;
+      // PERF: pass branch scope into the storage layer so it only processes
+      // the user's allowed branches instead of all branches then filtering.
+      const scopedBranchIds = branchFilter.singleBranchId
+        ? [branchFilter.singleBranchId]
+        : (branchFilter.branchIds || undefined);
+      const summary = await storage.getAllBranchesSalesProgress(yearMonth as string, scopedBranchIds);
       res.json(summary);
     } catch (error) {
       console.error("Error fetching progress summary:", error);
