@@ -435,9 +435,17 @@ export default function CashierJournalFormPage() {
     enabled: isEdit,
   });
 
-  const { data: existingAttachments } = useQuery<JournalAttachment[]>({
+  // Retry transient network errors but NOT auth/permission errors —
+  // hammering a 403 endpoint just spams the server and delays the visible
+  // error message. Treat 4xx as permanent and surface the failure.
+  const { data: existingAttachments, error: attachmentsError, isError: attachmentsFailed } = useQuery<JournalAttachment[]>({
     queryKey: [`/api/cashier-journals/${id}/attachments`],
     enabled: isEdit,
+    retry: (failureCount, error: any) => {
+      const status = error?.status ?? (typeof error?.message === "string" ? parseInt(error.message.match(/^(\d{3}):/)?.[1] ?? "", 10) : 0);
+      if (status >= 400 && status < 500) return false;
+      return failureCount < 2;
+    },
   });
 
   useEffect(() => {
@@ -445,6 +453,25 @@ export default function CashierJournalFormPage() {
       setAttachments(existingAttachments);
     }
   }, [existingAttachments]);
+
+  // Surface attachment fetch failures explicitly. Without this, a 403 or
+  // 500 from the server would leave `attachments` at its initial empty
+  // array and the user would see "لا توجد مرفقات" — indistinguishable
+  // from a journal that genuinely has no photos. That silent failure was
+  // the root cause of the "sometimes appear, sometimes don't" reports.
+  useEffect(() => {
+    if (!attachmentsFailed || !attachmentsError) return;
+    const status = (attachmentsError as any)?.status ?? 0;
+    const msg = String((attachmentsError as any)?.message ?? "");
+    const isForbidden = status === 403 || msg.includes("403");
+    toast({
+      title: isForbidden ? "لا يمكن عرض المرفقات" : "تعذّر تحميل المرفقات",
+      description: isForbidden
+        ? "ليست لديك الصلاحية لعرض مرفقات هذه اليومية. تواصل مع المسؤول."
+        : "حدث خطأ أثناء جلب المرفقات. تأكد من اتصالك بالإنترنت ثم أعد تحميل الصفحة.",
+      variant: "destructive",
+    });
+  }, [attachmentsFailed, attachmentsError, toast]);
 
   // Recover attachments that failed during creation (saved in sessionStorage
   // under this journal's id) and automatically retry uploading them in the

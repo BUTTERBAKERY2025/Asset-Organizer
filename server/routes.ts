@@ -8123,9 +8123,17 @@ export async function registerRoutes(
         }
       }
       
-      // SECURITY: Non-admin/manager can only view their own journal attachments
+      // SECURITY: Non-admin/manager can view attachments if they are the
+      // assigned cashier OR the user who created the journal (e.g. a
+      // supervisor entering data on behalf of a cashier). Without the
+      // `createdBy` fallback, the creator gets a silent 403 here while still
+      // being able to load the journal form — which surfaces to the user as
+      // "no attachments" and was the root cause of the inconsistent display.
+      const currentUserId = String(getCurrentUser(req).id);
       const canViewAllAttach = await canUserViewAllCashiers(req);
-      if (!canViewAllAttach && String(journal.cashierId) !== String(getCurrentUser(req).id)) {
+      const isAssignedCashier = String(journal.cashierId) === currentUserId;
+      const isJournalCreator = journal.createdBy != null && String(journal.createdBy) === currentUserId;
+      if (!canViewAllAttach && !isAssignedCashier && !isJournalCreator) {
         return res.status(403).json({ error: "غير مصرح - يمكنك فقط عرض مرفقات يومياتك الخاصة" });
       }
       
@@ -8157,11 +8165,15 @@ export async function registerRoutes(
         }
       }
 
-      // SECURITY (IDOR): Mirror GET ownership rules — non-admin/manager users
-      // can only attach to their OWN journal, not to other cashiers' drafts
-      // they happen to know the ID of.
+      // SECURITY (IDOR): Mirror GET ownership rules — allow the assigned
+      // cashier OR the journal creator to upload attachments. Supervisors
+      // who enter journals on behalf of a cashier must be able to attach
+      // the supporting photos themselves.
+      const currentUserIdUp = String(getCurrentUser(req).id);
       const canUploadAll = await canUserViewAllCashiers(req);
-      if (!canUploadAll && String(journal.cashierId) !== String(getCurrentUser(req).id)) {
+      const isAssignedCashierUp = String(journal.cashierId) === currentUserIdUp;
+      const isJournalCreatorUp = journal.createdBy != null && String(journal.createdBy) === currentUserIdUp;
+      if (!canUploadAll && !isAssignedCashierUp && !isJournalCreatorUp) {
         return res.status(403).json({ error: "غير مصرح - يمكنك فقط إضافة مرفقات ليومياتك الخاصة" });
       }
       
@@ -8218,9 +8230,13 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Attachment not found for this journal" });
       }
 
-      // SECURITY: Mirror GET ownership rules for delete too.
+      // SECURITY: Mirror GET ownership rules for delete too — assigned
+      // cashier OR journal creator OR users with view-all.
+      const currentUserIdDel = String(getCurrentUser(req).id);
       const canDeleteAll = await canUserViewAllCashiers(req);
-      if (!canDeleteAll && String(journal.cashierId) !== String(getCurrentUser(req).id)) {
+      const isAssignedCashierDel = String(journal.cashierId) === currentUserIdDel;
+      const isJournalCreatorDel = journal.createdBy != null && String(journal.createdBy) === currentUserIdDel;
+      if (!canDeleteAll && !isAssignedCashierDel && !isJournalCreatorDel) {
         return res.status(403).json({ error: "غير مصرح - يمكنك فقط حذف مرفقات يومياتك الخاصة" });
       }
       
