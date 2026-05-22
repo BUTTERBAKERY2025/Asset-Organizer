@@ -1152,21 +1152,23 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
 
   return (
     <div className="space-y-6">
-      {/* Hero strip */}
-      <div className="rounded-2xl bg-gradient-to-l from-[#1f2937] via-[#111827] to-[#0f172a] p-6 text-white shadow-xl">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      {/* Hero strip — Butter Gold + Royal Violet identity */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600 p-6 text-white shadow-xl">
+        <div className="pointer-events-none absolute -top-16 -right-16 h-56 w-56 rounded-full bg-amber-300/20 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
+        <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm text-white/60">لوحة الأرباح والخسائر</p>
-            <h2 className="mt-1 text-2xl font-bold">{monthLabel} {selectedYear}</h2>
-            <p className="mt-1 text-sm text-white/70">
+            <p className="text-sm font-medium text-amber-200">لوحة الأرباح والخسائر</p>
+            <h2 className="mt-1 text-2xl font-bold drop-shadow-sm">{monthLabel} {selectedYear}</h2>
+            <p className="mt-1 text-sm text-white/85">
               {totals.branchName || 'جميع الفروع'} • {totals.journalCount || 0} يومية معتمدة • {totals.employeeCount || 0} موظف نشط
             </p>
           </div>
           <div className="flex items-baseline gap-3">
             <div className="text-right">
-              <p className="text-xs text-white/60">صافي المبيعات (بعد خصم الضريبة)</p>
-              <p className="text-3xl font-bold tracking-tight" dir="ltr">{formatCurrency(totals.netSales || 0)}</p>
-              <p className="mt-0.5 text-[10px] text-white/50" dir="ltr">
+              <p className="text-xs text-amber-200">صافي المبيعات (بعد خصم الضريبة)</p>
+              <p className="text-3xl font-bold tracking-tight drop-shadow-sm" dir="ltr">{formatCurrency(totals.netSales || 0)}</p>
+              <p className="mt-0.5 text-[10px] text-white/75" dir="ltr">
                 إجمالي شامل الضريبة: {formatCurrency(totals.grossSales || 0)}
               </p>
             </div>
@@ -1183,7 +1185,7 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
           subtitle={`بعد خصم ضريبة ${formatCurrency(totals.vatAmount || 0)}`}
           delta={prev.revenueChangePct}
           icon={DollarSign}
-          gradient="bg-gradient-to-br from-indigo-500 to-purple-600"
+          gradient="bg-gradient-to-br from-violet-500 to-purple-700"
         />
         <HeroKpiCard
           title="صافي الربح"
@@ -1206,7 +1208,7 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
           value={formatCurrency(totals.totalOperatingCosts || 0)}
           subtitle={`${formatPercent(ratios.opexToSales || 0)} من المبيعات`}
           icon={Wallet}
-          gradient="bg-gradient-to-br from-slate-700 to-slate-900"
+          gradient="bg-gradient-to-br from-amber-500 to-orange-600"
         />
       </div>
 
