@@ -1072,21 +1072,35 @@ function DeltaBadge({ value, invert = false }: { value: number; invert?: boolean
 }
 
 function HeroKpiCard({
-  title, value, subtitle, delta, icon: Icon, tone = 'violet', deltaInvert = false,
+  title, value, subtitle, delta, icon: Icon, tone = 'violet', kind = 'neutral', deltaInvert = false,
 }: {
   title: string; value: string; subtitle?: string;
   delta?: number; icon: any;
   tone?: 'violet' | 'emerald' | 'amber' | 'rose' | 'sky';
+  /**
+   * kind:
+   *  - 'income'  → الأرقام بلون أخضر (إيرادات/ربح)
+   *  - 'expense' → الأرقام بلون أحمر/كهرماني حسب الشدة (مصروفات/خسارة)
+   *  - 'metric'  → اللون يتبع الـ tone (مؤشرات نسبية)
+   *  - 'neutral' → نص أسود عادي
+   */
+  kind?: 'income' | 'expense' | 'metric' | 'neutral';
   deltaInvert?: boolean;
 }) {
-  const toneStyles: Record<string, { iconBg: string; iconText: string; ring: string }> = {
-    violet:  { iconBg: 'bg-violet-100',  iconText: 'text-violet-600',  ring: 'ring-violet-100' },
-    emerald: { iconBg: 'bg-emerald-100', iconText: 'text-emerald-600', ring: 'ring-emerald-100' },
-    amber:   { iconBg: 'bg-amber-100',   iconText: 'text-amber-600',   ring: 'ring-amber-100' },
-    rose:    { iconBg: 'bg-rose-100',    iconText: 'text-rose-600',    ring: 'ring-rose-100' },
-    sky:     { iconBg: 'bg-sky-100',     iconText: 'text-sky-600',     ring: 'ring-sky-100' },
+  const toneStyles: Record<string, { iconBg: string; iconText: string; ring: string; valueText: string }> = {
+    violet:  { iconBg: 'bg-violet-100',  iconText: 'text-violet-600',  ring: 'ring-violet-100',  valueText: 'text-violet-700' },
+    emerald: { iconBg: 'bg-emerald-100', iconText: 'text-emerald-600', ring: 'ring-emerald-100', valueText: 'text-emerald-700' },
+    amber:   { iconBg: 'bg-amber-100',   iconText: 'text-amber-600',   ring: 'ring-amber-100',   valueText: 'text-amber-700' },
+    rose:    { iconBg: 'bg-rose-100',    iconText: 'text-rose-600',    ring: 'ring-rose-100',    valueText: 'text-rose-700' },
+    sky:     { iconBg: 'bg-sky-100',     iconText: 'text-sky-600',     ring: 'ring-sky-100',     valueText: 'text-sky-700' },
   };
   const t = toneStyles[tone];
+  // لون الرقم يعكس طبيعته المالية (إيراد/مصروف)
+  const valueColor =
+    kind === 'income'  ? 'text-emerald-700' :
+    kind === 'expense' ? 'text-rose-700' :
+    kind === 'metric'  ? t.valueText :
+                         'text-foreground';
   return (
     <Card className="border border-border/60 bg-card shadow-sm transition-shadow hover:shadow-md">
       <CardContent className="p-4">
@@ -1098,7 +1112,7 @@ function HeroKpiCard({
         </div>
         <div className="mt-3">
           <p className="text-xs font-medium text-muted-foreground">{title}</p>
-          <p className="mt-1 text-xl font-bold tracking-tight text-foreground sm:text-2xl" dir="ltr">{value}</p>
+          <p className={`mt-1 text-xl font-bold tracking-tight sm:text-2xl ${valueColor}`} dir="ltr">{value}</p>
           {subtitle && <p className="mt-0.5 text-[11px] text-muted-foreground">{subtitle}</p>}
         </div>
       </CardContent>
@@ -1196,6 +1210,7 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
           delta={prev.revenueChangePct}
           icon={DollarSign}
           tone="violet"
+          kind="income"
         />
         <HeroKpiCard
           title="صافي الربح"
@@ -1204,6 +1219,7 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
           delta={prev.profitChangePct}
           icon={TrendingUp}
           tone={profitTone}
+          kind={(totals.netProfit || 0) >= 0 ? 'income' : 'expense'}
         />
         <HeroKpiCard
           title="نسبة الرواتب للمبيعات"
@@ -1211,6 +1227,7 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
           subtitle={`${formatCurrency(totals.employeeCosts?.total || 0)} تكلفة شهرية`}
           icon={Users}
           tone={salaryTone}
+          kind="metric"
           deltaInvert
         />
         <HeroKpiCard
@@ -1219,6 +1236,7 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
           subtitle={`${formatPercent(ratios.opexToSales || 0)} من المبيعات`}
           icon={Wallet}
           tone="amber"
+          kind="expense"
         />
       </div>
 
