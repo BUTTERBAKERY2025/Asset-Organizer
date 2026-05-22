@@ -1072,25 +1072,34 @@ function DeltaBadge({ value, invert = false }: { value: number; invert?: boolean
 }
 
 function HeroKpiCard({
-  title, value, subtitle, delta, icon: Icon, gradient, deltaInvert = false,
+  title, value, subtitle, delta, icon: Icon, tone = 'violet', deltaInvert = false,
 }: {
   title: string; value: string; subtitle?: string;
-  delta?: number; icon: any; gradient: string; deltaInvert?: boolean;
+  delta?: number; icon: any;
+  tone?: 'violet' | 'emerald' | 'amber' | 'rose' | 'sky';
+  deltaInvert?: boolean;
 }) {
+  const toneStyles: Record<string, { iconBg: string; iconText: string; ring: string }> = {
+    violet:  { iconBg: 'bg-violet-100',  iconText: 'text-violet-600',  ring: 'ring-violet-100' },
+    emerald: { iconBg: 'bg-emerald-100', iconText: 'text-emerald-600', ring: 'ring-emerald-100' },
+    amber:   { iconBg: 'bg-amber-100',   iconText: 'text-amber-600',   ring: 'ring-amber-100' },
+    rose:    { iconBg: 'bg-rose-100',    iconText: 'text-rose-600',    ring: 'ring-rose-100' },
+    sky:     { iconBg: 'bg-sky-100',     iconText: 'text-sky-600',     ring: 'ring-sky-100' },
+  };
+  const t = toneStyles[tone];
   return (
-    <Card className={`relative overflow-hidden border-0 text-white shadow-lg ${gradient}`}>
-      <div className="absolute -top-8 -left-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
-      <CardContent className="relative p-5">
-        <div className="flex items-start justify-between">
-          <div className="rounded-xl bg-white/15 p-2.5 backdrop-blur-sm">
-            <Icon className="h-5 w-5" />
+    <Card className="border border-border/60 bg-card shadow-sm transition-shadow hover:shadow-md">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${t.iconBg} ring-4 ${t.ring}`}>
+            <Icon className={`h-5 w-5 ${t.iconText}`} />
           </div>
           {typeof delta === 'number' && <DeltaBadge value={delta} invert={deltaInvert} />}
         </div>
-        <div className="mt-4">
-          <p className="text-sm font-medium text-white/80">{title}</p>
-          <p className="mt-1 text-2xl font-bold tracking-tight" dir="ltr">{value}</p>
-          {subtitle && <p className="mt-1 text-xs text-white/70">{subtitle}</p>}
+        <div className="mt-3">
+          <p className="text-xs font-medium text-muted-foreground">{title}</p>
+          <p className="mt-1 text-xl font-bold tracking-tight text-foreground sm:text-2xl" dir="ltr">{value}</p>
+          {subtitle && <p className="mt-0.5 text-[11px] text-muted-foreground">{subtitle}</p>}
         </div>
       </CardContent>
     </Card>
@@ -1142,33 +1151,34 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
   const maxBranchRevenue = Math.max(1, ...branchRanking.map((b: any) => b.netSales || 0));
   const totalPayrollCost = employeesList.reduce((s: number, e: any) => s + e.totalCost, 0) || 1;
 
-  const profitColor = (totals.netProfit || 0) >= 0
-    ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
-    : 'bg-gradient-to-br from-rose-500 to-red-600';
+  const profitTone: 'emerald' | 'rose' = (totals.netProfit || 0) >= 0 ? 'emerald' : 'rose';
   const salaryRatio = ratios.salaryToSales || 0;
-  const salaryColor = salaryRatio <= 25 ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
-    : salaryRatio <= 35 ? 'bg-gradient-to-br from-amber-500 to-orange-600'
-    : 'bg-gradient-to-br from-rose-500 to-red-600';
+  const salaryTone: 'emerald' | 'amber' | 'rose' = salaryRatio <= 25 ? 'emerald'
+    : salaryRatio <= 35 ? 'amber'
+    : 'rose';
 
   return (
     <div className="space-y-6">
-      {/* Hero strip — Butter Gold + Royal Violet identity */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-l from-violet-600 via-purple-600 to-fuchsia-600 p-6 text-white shadow-xl">
-        <div className="pointer-events-none absolute -top-16 -right-16 h-56 w-56 rounded-full bg-amber-300/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
-        <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-sm font-medium text-amber-200">لوحة الأرباح والخسائر</p>
-            <h2 className="mt-1 text-2xl font-bold drop-shadow-sm">{monthLabel} {selectedYear}</h2>
-            <p className="mt-1 text-sm text-white/85">
-              {totals.branchName || 'جميع الفروع'} • {totals.journalCount || 0} يومية معتمدة • {totals.employeeCount || 0} موظف نشط
-            </p>
+      {/* Hero strip — light, ExactFlow style */}
+      <div className="rounded-2xl border border-violet-100 bg-gradient-to-l from-violet-50 via-white to-amber-50 p-5 shadow-sm">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-600 text-white shadow-sm">
+              <TrendingUp className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-violet-700">لوحة الأرباح والخسائر</p>
+              <h2 className="mt-0.5 text-lg font-bold text-foreground">{monthLabel} {selectedYear}</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {totals.branchName || 'جميع الفروع'} • {totals.journalCount || 0} يومية معتمدة • {totals.employeeCount || 0} موظف نشط
+              </p>
+            </div>
           </div>
-          <div className="flex items-baseline gap-3">
+          <div className="flex items-baseline gap-3 md:border-r md:border-violet-100 md:pr-4">
             <div className="text-right">
-              <p className="text-xs text-amber-200">صافي المبيعات (بعد خصم الضريبة)</p>
-              <p className="text-3xl font-bold tracking-tight drop-shadow-sm" dir="ltr">{formatCurrency(totals.netSales || 0)}</p>
-              <p className="mt-0.5 text-[10px] text-white/75" dir="ltr">
+              <p className="text-[11px] text-muted-foreground">صافي المبيعات (بعد خصم الضريبة)</p>
+              <p className="text-2xl font-bold tracking-tight text-foreground" dir="ltr">{formatCurrency(totals.netSales || 0)}</p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground" dir="ltr">
                 إجمالي شامل الضريبة: {formatCurrency(totals.grossSales || 0)}
               </p>
             </div>
@@ -1185,7 +1195,7 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
           subtitle={`بعد خصم ضريبة ${formatCurrency(totals.vatAmount || 0)}`}
           delta={prev.revenueChangePct}
           icon={DollarSign}
-          gradient="bg-gradient-to-br from-violet-500 to-purple-700"
+          tone="violet"
         />
         <HeroKpiCard
           title="صافي الربح"
@@ -1193,14 +1203,14 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
           subtitle={`هامش ${formatPercent(totals.netMargin || 0)}`}
           delta={prev.profitChangePct}
           icon={TrendingUp}
-          gradient={profitColor}
+          tone={profitTone}
         />
         <HeroKpiCard
           title="نسبة الرواتب للمبيعات"
           value={`${(salaryRatio).toFixed(1)}%`}
           subtitle={`${formatCurrency(totals.employeeCosts?.total || 0)} تكلفة شهرية`}
           icon={Users}
-          gradient={salaryColor}
+          tone={salaryTone}
           deltaInvert
         />
         <HeroKpiCard
@@ -1208,7 +1218,7 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
           value={formatCurrency(totals.totalOperatingCosts || 0)}
           subtitle={`${formatPercent(ratios.opexToSales || 0)} من المبيعات`}
           icon={Wallet}
-          gradient="bg-gradient-to-br from-amber-500 to-orange-600"
+          tone="amber"
         />
       </div>
 
