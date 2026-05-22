@@ -8771,7 +8771,8 @@ export async function registerRoutes(
               grossSales: prevGrossSales,
               netSales: prevNetSales,
               netProfit: prevNetProfit,
-              revenueChangePct: delta(grossSales, prevGrossSales),
+              // المقارنة على صافي المبيعات (بعد خصم الضريبة)
+              revenueChangePct: delta(netSales, prevNetSales),
               profitChangePct: delta(netProfit, prevNetProfit),
             };
           })(),
@@ -8897,7 +8898,8 @@ export async function registerRoutes(
           if (prev === 0) return current === 0 ? 0 : current > 0 ? 100 : -100;
           return ((current - prev) / Math.abs(prev)) * 100;
         };
-        totals.previousMonth.revenueChangePct = pmDelta(totals.grossSales, totals.previousMonth.grossSales);
+        // المقارنة على صافي المبيعات (بعد خصم ضريبة القيمة المضافة)
+        totals.previousMonth.revenueChangePct = pmDelta(totals.netSales, totals.previousMonth.netSales);
         totals.previousMonth.profitChangePct = pmDelta(totals.netProfit, totals.previousMonth.netProfit);
 
         console.log(`[perf] /api/pnl/enhanced-summary (multi) branches=${results.length} took ${Date.now() - __t0}ms`);

@@ -1137,7 +1137,7 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
       .sort((a: any, b: any) => (b.netProfit || 0) - (a.netProfit || 0));
   }, [branches]);
 
-  const maxBranchRevenue = Math.max(1, ...branchRanking.map((b: any) => b.grossSales || 0));
+  const maxBranchRevenue = Math.max(1, ...branchRanking.map((b: any) => b.netSales || 0));
   const totalPayrollCost = employeesList.reduce((s: number, e: any) => s + e.totalCost, 0) || 1;
 
   const profitColor = (totals.netProfit || 0) >= 0
@@ -1162,8 +1162,11 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
           </div>
           <div className="flex items-baseline gap-3">
             <div className="text-right">
-              <p className="text-xs text-white/60">إجمالي المبيعات (شامل الضريبة)</p>
-              <p className="text-3xl font-bold tracking-tight" dir="ltr">{formatCurrency(totals.grossSales || 0)}</p>
+              <p className="text-xs text-white/60">صافي المبيعات (بعد خصم الضريبة)</p>
+              <p className="text-3xl font-bold tracking-tight" dir="ltr">{formatCurrency(totals.netSales || 0)}</p>
+              <p className="mt-0.5 text-[10px] text-white/50" dir="ltr">
+                إجمالي شامل الضريبة: {formatCurrency(totals.grossSales || 0)}
+              </p>
             </div>
             {typeof prev.revenueChangePct === 'number' && <DeltaBadge value={prev.revenueChangePct} />}
           </div>
@@ -1214,7 +1217,7 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
               <CardDescription className="text-xs">صافي المبيعات والضريبة لكل يوم خلال {monthLabel}</CardDescription>
             </div>
             <Badge variant="outline" className="font-mono text-xs">
-              متوسط يومي: {formatCurrency((totals.grossSales || 0) / Math.max(1, dailySeries.filter(d => d.gross > 0).length))}
+              متوسط يومي (صافي): {formatCurrency((totals.netSales || 0) / Math.max(1, dailySeries.filter(d => d.gross > 0).length))}
             </Badge>
           </CardHeader>
           <CardContent>
@@ -1317,7 +1320,7 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
             ) : (
               <div className="space-y-3">
                 {branchRanking.map((b: any, idx: number) => {
-                  const widthPct = ((b.grossSales || 0) / maxBranchRevenue) * 100;
+                  const widthPct = ((b.netSales || 0) / maxBranchRevenue) * 100;
                   const profitOk = (b.netProfit || 0) >= 0;
                   return (
                     <div key={b.branchId} data-testid={`row-branch-${b.branchId}`}>
@@ -1332,7 +1335,9 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
                           </Badge>
                         </div>
                         <div className="flex items-center gap-3 text-xs">
-                          <span className="text-muted-foreground" dir="ltr">{formatCurrency(b.grossSales || 0)}</span>
+                          <span className="text-muted-foreground" dir="ltr" title={`إجمالي شامل الضريبة: ${formatCurrency(b.grossSales || 0)}`}>
+                            صافي {formatCurrency(b.netSales || 0)}
+                          </span>
                           <span className={`font-bold ${profitOk ? 'text-emerald-600' : 'text-rose-600'}`} dir="ltr">
                             {profitOk ? '' : '-'}{formatCurrency(Math.abs(b.netProfit || 0))}
                           </span>
@@ -1978,7 +1983,8 @@ export default function PnLDashboard() {
       if (rentToRevenue > 15) recommendations.push("مراجعة تكاليف الإيجار مقارنة بالإيرادات");
       
       return {
-        totalRevenue: enhanced.grossSales || 0,
+        // كل المؤشرات والنسب تُحسب على صافي المبيعات (بعد خصم الضريبة)
+        totalRevenue: enhanced.netSales || 0,
         netRevenue: enhanced.netSales || 0,
         totalCOGS: enhanced.cogsCost || 0,
         grossProfit: enhanced.grossProfit || 0,
@@ -1995,7 +2001,7 @@ export default function PnLDashboard() {
         contributionMarginPct: enhanced.netSales > 0 ? (contributionMargin / enhanced.netSales) * 100 : 0,
         breakEvenPoint: contributionMargin > 0 ? ((enhanced.rent || 0) + (enhanced.utilities?.total || 0)) / (contributionMargin / (enhanced.netSales || 1)) : 0,
         breakEvenSales: contributionMargin > 0 ? ((enhanced.rent || 0) + (enhanced.utilities?.total || 0)) / (contributionMargin / (enhanced.netSales || 1)) : 0,
-        revenuePerEmployee: enhanced.employeeCount > 0 ? (enhanced.grossSales || 0) / enhanced.employeeCount : 0,
+        revenuePerEmployee: enhanced.employeeCount > 0 ? (enhanced.netSales || 0) / enhanced.employeeCount : 0,
         employeeCount: enhanced.employeeCount || 0,
         rating: netMargin >= 20 ? "excellent" : netMargin >= 15 ? "good" : netMargin >= 10 ? "average" : "poor",
         wastePercentage: 0,
@@ -2003,9 +2009,9 @@ export default function PnLDashboard() {
         rentToRevenuePct: rentToRevenue,
         salaryToRevenuePct: salaryToSales,
         salaryToSalesPct: salaryToSales,
-        laborProductivity: enhanced.employeeCount > 0 ? (enhanced.grossSales || 0) / enhanced.employeeCount : 0,
+        laborProductivity: enhanced.employeeCount > 0 ? (enhanced.netSales || 0) / enhanced.employeeCount : 0,
         invoiceCount: enhanced.journalCount || 0,
-        avgInvoiceValue: enhanced.journalCount > 0 ? (enhanced.grossSales || 0) / enhanced.journalCount : 0,
+        avgInvoiceValue: enhanced.journalCount > 0 ? (enhanced.netSales || 0) / enhanced.journalCount : 0,
         ratingReasons,
         recommendations,
       };
