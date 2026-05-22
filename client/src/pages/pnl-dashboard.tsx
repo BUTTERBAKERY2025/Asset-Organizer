@@ -413,7 +413,7 @@ async function exportEnhancedPnLToExcel(
     ["تكاليف الموظفين", "", "", `${totals.employeeCount || 0} موظف`],
     ["  - الرواتب والبدلات", totals.employeeCosts?.salaries || 0, "", ""],
     ["  - التأمينات الاجتماعية (GOSI)", totals.employeeCosts?.gosi || 0, "12%", "للسعوديين"],
-    ["  - رسوم غير السعوديين", totals.employeeCosts?.nonSaudiCosts || 0, "", "رخصة عمل + مقابل مالي + إقامة + تأمين"],
+    ["  - رسوم غير السعوديين", totals.employeeCosts?.nonSaudiCosts || 0, "", "المقابل المالي (شامل رخصة العمل) + إقامة + تأمين 2%"],
     ["  - إجمالي تكاليف الموظفين", totals.employeeCosts?.total || 0, totals.netSales > 0 ? `${((totals.employeeCosts?.total / totals.netSales) * 100).toFixed(1)}%` : "0%", ""],
     [""],
     ["المصروفات الثابتة والمرافق", "", "", ""],

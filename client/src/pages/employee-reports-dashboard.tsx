@@ -2319,10 +2319,11 @@ export default function EmployeeReportsDashboardPage() {
     const totalGosiEmployer = gosiReport.reduce((sum, r) => sum + r.employerContribution, 0);
 
     // تحليل تكاليف غير السعوديين (2% تأمين إصابات عمل + رسوم)
-    // القيم محدثة حسب نظام وزارة الموارد البشرية للشركات الكبيرة
-    const WORK_PERMIT_MONTHLY = 800; // 9,600 ريال/سنة (رسوم رخصة العمل للشركات الكبيرة)
+    // ⚠️ منذ إصلاحات وزارة الموارد البشرية (2017-2018) أصبحت رسوم رخصة العمل
+    // مدمجة ضمن المقابل المالي = 9,600 ر.س/سنة = 800 شهرياً (لا تُحتسب مرتين).
+    const WORK_PERMIT_MONTHLY = 0; // مدمج ضمن المقابل المالي (لا يُحتسب منفصلاً)
     const IQAMA_FEES_MONTHLY = 54; // 650 ريال/سنة (رسوم الإقامة)
-    const EXPAT_LEVY_MONTHLY = 800; // 9,600 ريال/سنة (المقابل المالي للشركات الكبيرة)
+    const EXPAT_LEVY_MONTHLY = 800; // 9,600 ريال/سنة (المقابل المالي شامل رخصة العمل)
     const NON_SAUDI_INSURANCE_RATE = 0.02; // 2% تأمين إصابات العمل
 
     const nonSaudiByNationality = new Map<string, { 
@@ -3956,13 +3957,13 @@ export default function EmployeeReportsDashboardPage() {
                   </CardTitle>
                   <CardDescription>
                     {isRTL 
-                      ? "تأمين إصابات العمل (2%) + رسوم رخصة العمل (800 ريال/شهر) + المقابل المالي (800 ريال/شهر) + رسوم الإقامة (54 ريال/شهر)" 
-                      : "Work injury insurance (2%) + Work permit (800 SAR/mo) + Expat levy (800 SAR/mo) + Residency (54 SAR/mo)"}
+                      ? "تأمين إصابات العمل (2%) + المقابل المالي شامل رخصة العمل (800 ريال/شهر) + رسوم الإقامة (54 ريال/شهر)" 
+                      : "Work injury insurance (2%) + Expat levy incl. work permit (800 SAR/mo) + Residency (54 SAR/mo)"}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {/* ملخص التكاليف */}
-                  <div className="grid grid-cols-2 lg:grid-cols-6 gap-2 sm:gap-3 mb-4 sm:mb-6">
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 mb-4 sm:mb-6">
                     <KpiCard
                       label={isRTL ? "غير سعودي" : "Non-Saudi"}
                       value={complianceMetrics.totalNonSaudiCount}
@@ -3975,13 +3976,7 @@ export default function EmployeeReportsDashboardPage() {
                       tone="production"
                     />
                     <KpiCard
-                      label={isRTL ? "رخصة العمل" : "Work Permit"}
-                      value={complianceMetrics.totalNonSaudiWorkPermit}
-                      unit={isRTL ? "ر.س" : "SAR"}
-                      tone="violet"
-                    />
-                    <KpiCard
-                      label={isRTL ? "المقابل المالي" : "Expat Levy"}
+                      label={isRTL ? "المقابل المالي (شامل رخصة العمل)" : "Expat Levy (incl. Work Permit)"}
                       value={complianceMetrics.totalNonSaudiExpatLevy}
                       unit={isRTL ? "ر.س" : "SAR"}
                       tone="inventory"
@@ -4011,8 +4006,7 @@ export default function EmployeeReportsDashboardPage() {
                             <TableHead className="text-center min-w-[50px]">{isRTL ? "العدد" : "Count"}</TableHead>
                             <TableHead className="text-center min-w-[90px]">{isRTL ? "الراتب+السكن" : "Salary+Housing"}</TableHead>
                             <TableHead className="text-center min-w-[70px]">{isRTL ? "تأمين 2%" : "Ins. 2%"}</TableHead>
-                            <TableHead className="text-center min-w-[70px]">{isRTL ? "رخصة العمل" : "Work Permit"}</TableHead>
-                            <TableHead className="text-center min-w-[70px]">{isRTL ? "المقابل المالي" : "Expat Levy"}</TableHead>
+                            <TableHead className="text-center min-w-[120px]">{isRTL ? "المقابل المالي (شامل رخصة العمل)" : "Expat Levy (incl. Work Permit)"}</TableHead>
                             <TableHead className="text-center min-w-[60px]">{isRTL ? "الإقامة" : "Residency"}</TableHead>
                             <TableHead className="text-center min-w-[90px]">{isRTL ? "إجمالي التكلفة" : "Total Cost"}</TableHead>
                           </TableRow>
@@ -4024,7 +4018,6 @@ export default function EmployeeReportsDashboardPage() {
                               <TableCell className="text-center">{formatNumber(nat.count)}</TableCell>
                               <TableCell className="text-center">{formatCurrency(nat.insurableSalary, isRTL)}</TableCell>
                               <TableCell className="text-center text-blue-600">{formatCurrency(nat.insuranceCost, isRTL)}</TableCell>
-                              <TableCell className="text-center text-purple-600">{formatCurrency(nat.workPermitCost, isRTL)}</TableCell>
                               <TableCell className="text-center text-amber-600">{formatCurrency(nat.expatLevyCost, isRTL)}</TableCell>
                               <TableCell className="text-center text-teal-600">{formatCurrency(nat.iqamaCost, isRTL)}</TableCell>
                               <TableCell className="text-center font-bold text-red-600">{formatCurrency(nat.totalMonthlyCost, isRTL)}</TableCell>
@@ -4243,8 +4236,8 @@ export default function EmployeeReportsDashboardPage() {
                       </h4>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
-                          <span>{isRTL ? "رخص العمل (66 ريال/موظف):" : "Work Permits (66 SAR/employee):"}</span>
-                          <span className="font-medium">{formatCurrency(complianceMetrics.governmentCosts.workPermitTotal, isRTL)}</span>
+                          <span>{isRTL ? "المقابل المالي (شامل رخصة العمل) 800 ر.س/موظف:" : "Expat Levy (incl. Work Permit) 800 SAR/employee:"}</span>
+                          <span className="font-medium">{formatCurrency(complianceMetrics.governmentCosts.expatLevyTotal, isRTL)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span>{isRTL ? "رسوم الإقامة (54 ريال/موظف):" : "Residency Fees (54 SAR/employee):"}</span>
