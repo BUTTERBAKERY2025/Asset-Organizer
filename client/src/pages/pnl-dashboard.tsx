@@ -16,7 +16,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, TrendingUp, TrendingDown, DollarSign, Percent, Award, AlertTriangle, Building, Plus, Calculator, BarChart3, PieChart, RefreshCw, FileText, ArrowUp, ArrowDown, Minus, Target, Wallet, Receipt, ShoppingCart, Users, Home, Lightbulb, Package, Trash2, ChevronDown, ChevronUp, ChevronLeft, Download, Upload, FileSpreadsheet, History, Printer } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, DollarSign, Percent, Award, AlertTriangle, Building, Plus, Calculator, BarChart3, PieChart, RefreshCw, FileText, ArrowUp, ArrowDown, Minus, Target, Wallet, Receipt, ShoppingCart, Users, Home, Lightbulb, Package, Trash2, ChevronDown, ChevronUp, ChevronLeft, Download, Upload, FileSpreadsheet, History, Printer, MoreHorizontal, Settings2, FileDown } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RePieChart, Pie, Cell, LineChart, Line, AreaChart, Area, ComposedChart } from "recharts";
 import { useToast } from "@/hooks/use-toast";
 import { downloadArabicPdf, downloadEnhancedPnLPdf, getArabicDefaultStyle, getArabicTableHeaderStyle } from "@/lib/pdfmake-arabic";
@@ -2329,200 +2330,184 @@ export default function PnLDashboard() {
           description="تحليل الأداء المالي للفروع"
           backHref="/attendance-dashboard"
           actions={selectedPeriodId ? (
-              <div className="flex gap-2 flex-wrap">
-                {/* v2 prominent entry button — first action so users find it fast */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* 1) Primary action — bold, stands alone */}
                 <Button
                   onClick={() => setShowMonthlyInputs(true)}
-                  className="h-11 sm:h-9 bg-amber-500 hover:bg-amber-600 text-white"
+                  className="h-9 bg-violet-600 hover:bg-violet-700 text-white shadow-sm"
                   data-testid="button-open-monthly-inputs"
                   disabled={!selectedBranchId}
                 >
-                  <Plus className="h-4 w-4 sm:ml-2" />
-                  <span className="hidden sm:inline">إدخال مصاريف الشهر</span>
+                  <Plus className="h-4 w-4 ml-1.5" />
+                  <span>إدخال مصاريف الشهر</span>
                 </Button>
+
+                {/* 2) Quick actions — calculate + import sales (frequent) */}
                 <Button
                   variant="outline"
-                  onClick={() => navigate("/pnl-recurring-expenses")}
-                  className="h-11 sm:h-9"
-                  data-testid="button-recurring-expenses"
+                  onClick={() => calculateMetricsMutation.mutate(selectedPeriodId)}
+                  disabled={calculateMetricsMutation.isPending}
+                  className="h-9"
+                  data-testid="button-calculate-metrics"
                 >
-                  <RefreshCw className="h-4 w-4 sm:ml-2" />
-                  <span className="hidden sm:inline">المصاريف المتكررة</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => navigate("/pnl-rent-history")}
-                  className="h-11 sm:h-9"
-                  data-testid="button-rent-history"
-                  disabled={!selectedBranchId}
-                >
-                  <History className="h-4 w-4 sm:ml-2" />
-                  <span className="hidden sm:inline">سجل الإيجار</span>
+                  {calculateMetricsMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin ml-1.5" />
+                  ) : (
+                    <Calculator className="h-4 w-4 ml-1.5" />
+                  )}
+                  <span className="hidden md:inline">حساب المؤشرات</span>
+                  <span className="md:hidden">حساب</span>
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => importSalesMutation.mutate(selectedPeriodId)}
                   disabled={importSalesMutation.isPending}
-                  className="h-11 sm:h-9"
+                  className="h-9"
                   data-testid="button-import-sales"
                 >
                   {importSalesMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin sm:ml-2" />
+                    <Loader2 className="h-4 w-4 animate-spin ml-1.5" />
                   ) : (
-                    <Download className="h-4 w-4 sm:ml-2" />
+                    <Download className="h-4 w-4 ml-1.5" />
                   )}
-                  <span className="hidden sm:inline">استيراد من الكاشير</span>
+                  <span className="hidden md:inline">استيراد من الكاشير</span>
+                  <span className="md:hidden">كاشير</span>
                 </Button>
-                <Button
-                  onClick={() => calculateMetricsMutation.mutate(selectedPeriodId)}
-                  disabled={calculateMetricsMutation.isPending}
-                  className="h-11 sm:h-9"
-                  data-testid="button-calculate-metrics"
-                >
-                  {calculateMetricsMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin sm:ml-2" />
-                  ) : (
-                    <Calculator className="h-4 w-4 sm:ml-2" />
-                  )}
-                  <span className="hidden sm:inline">حساب المؤشرات</span>
-                </Button>
-                {enhancedPnL && (
-                  <>
-                    <Button
-                      variant="default"
-                      className="h-11 sm:h-9 bg-amber-600 hover:bg-amber-700"
-                      onClick={async () => {
-                        if (!enhancedPnL?.totals?.grossSales && enhancedPnL?.totals?.grossSales !== 0) {
-                          toast({ title: "لا توجد بيانات", description: "لا توجد يوميات صندوق معتمدة لهذه الفترة", variant: "destructive" });
-                          return;
-                        }
-                        try {
-                          const branchLabel = selectedBranch?.name || "جميع الفروع";
-                          const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
-                          await downloadEnhancedPnLPdf(
-                            branchLabel,
-                            period,
-                            enhancedPnL,
-                            `تقرير_PnL_المحسن_${branchLabel}_${period}.pdf`
-                          );
-                          toast({ title: "تم التصدير", description: "تم تصدير التقرير بنجاح" });
-                        } catch (error) {
-                          console.error('PDF export error:', error);
-                          toast({ title: "خطأ", description: "فشل في تصدير PDF", variant: "destructive" });
-                        }
-                      }}
-                      data-testid="button-export-enhanced-pdf"
-                    >
-                      <Printer className="h-4 w-4 sm:ml-2" />
-                      <span className="hidden sm:inline">PDF محسن</span>
+
+                {/* 3) Settings menu — recurring/rent (occasional) */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="h-9" data-testid="button-settings-menu">
+                      <Settings2 className="h-4 w-4 ml-1.5" />
+                      <span className="hidden md:inline">إعدادات</span>
+                      <ChevronDown className="h-3.5 w-3.5 mr-1 opacity-70" />
                     </Button>
-                    <Button
-                      variant="default"
-                      className="h-11 sm:h-9 bg-green-600 hover:bg-green-700"
-                      onClick={async () => {
-                        if (!enhancedPnL?.totals?.grossSales && enhancedPnL?.totals?.grossSales !== 0) {
-                          toast({ title: "لا توجد بيانات", description: "لا توجد يوميات صندوق معتمدة لهذه الفترة", variant: "destructive" });
-                          return;
-                        }
-                        const branchLabel = selectedBranch?.name || "جميع الفروع";
-                        const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
-                        await exportEnhancedPnLToExcel(
-                          branchLabel,
-                          period,
-                          enhancedPnL
-                        );
-                      }}
-                      data-testid="button-export-enhanced-excel"
-                    >
-                      <FileSpreadsheet className="h-4 w-4 sm:ml-2" />
-                      <span className="hidden sm:inline">Excel محسن</span>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel>إدارة المصاريف الثابتة</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={() => navigate("/pnl-recurring-expenses")} data-testid="menu-recurring-expenses">
+                      <RefreshCw className="h-4 w-4 ml-2" />
+                      المصاريف المتكررة
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate("/pnl-rent-history")} disabled={!selectedBranchId} data-testid="menu-rent-history">
+                      <History className="h-4 w-4 ml-2" />
+                      سجل الإيجار
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* 4) Export menu — consolidates 6 export/import buttons */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="h-9" data-testid="button-export-menu">
+                      <FileDown className="h-4 w-4 ml-1.5" />
+                      <span className="hidden md:inline">تصدير / استيراد</span>
+                      <span className="md:hidden">تصدير</span>
+                      <ChevronDown className="h-3.5 w-3.5 mr-1 opacity-70" />
                     </Button>
-                  </>
-                )}
-                {completePnL?.metrics && (
-                  <>
-                    <Button
-                      variant="outline"
-                      className="h-11 sm:h-9"
-                      onClick={async () => {
-                        if (selectedBranch && completePnL) {
-                          try {
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-60">
+                    {enhancedPnL && (
+                      <>
+                        <DropdownMenuLabel>التقرير المحسن</DropdownMenuLabel>
+                        <DropdownMenuItem
+                          data-testid="menu-export-enhanced-pdf"
+                          onClick={async () => {
+                            if (!enhancedPnL?.totals?.grossSales && enhancedPnL?.totals?.grossSales !== 0) {
+                              toast({ title: "لا توجد بيانات", description: "لا توجد يوميات صندوق معتمدة لهذه الفترة", variant: "destructive" });
+                              return;
+                            }
+                            try {
+                              const branchLabel = selectedBranch?.name || "جميع الفروع";
+                              const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
+                              await downloadEnhancedPnLPdf(branchLabel, period, enhancedPnL, `تقرير_PnL_المحسن_${branchLabel}_${period}.pdf`);
+                              toast({ title: "تم التصدير", description: "تم تصدير التقرير بنجاح" });
+                            } catch (error) {
+                              console.error('PDF export error:', error);
+                              toast({ title: "خطأ", description: "فشل في تصدير PDF", variant: "destructive" });
+                            }
+                          }}
+                        >
+                          <Printer className="h-4 w-4 ml-2 text-rose-600" />
+                          PDF محسن
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          data-testid="menu-export-enhanced-excel"
+                          onClick={async () => {
+                            if (!enhancedPnL?.totals?.grossSales && enhancedPnL?.totals?.grossSales !== 0) {
+                              toast({ title: "لا توجد بيانات", description: "لا توجد يوميات صندوق معتمدة لهذه الفترة", variant: "destructive" });
+                              return;
+                            }
+                            const branchLabel = selectedBranch?.name || "جميع الفروع";
                             const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
-                            const docDef = generatePnLPdfReport(
-                              selectedBranch.name,
-                              period,
-                              completePnL.metrics,
-                              completePnL.sales,
-                              completePnL.cogs,
-                              completePnL.operatingExpenses,
-                              completePnL.fixedCosts
-                            );
-                            await downloadArabicPdf(docDef, `تقرير_PnL_${selectedBranch.name}_${period}.pdf`);
-                          } catch (error) {
-                            console.error('PDF export error:', error);
-                            toast({ title: "خطأ", description: "فشل في تصدير PDF", variant: "destructive" });
-                          }
-                        }
-                      }}
-                      data-testid="button-export-pdf"
-                    >
-                      <Printer className="h-4 w-4 sm:ml-2" />
-                      <span className="hidden sm:inline">PDF</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="h-11 sm:h-9"
-                      onClick={async () => {
-                        if (selectedBranch && completePnL) {
-                          const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
-                          await exportPnLToExcel(
-                            selectedBranch.name,
-                            period,
-                            completePnL.metrics,
-                            completePnL.sales,
-                            completePnL.cogs,
-                            completePnL.operatingExpenses,
-                            completePnL.fixedCosts
-                          );
-                        }
-                      }}
-                      data-testid="button-export-excel"
-                    >
-                      <FileSpreadsheet className="h-4 w-4 sm:ml-2" />
-                      <span className="hidden sm:inline">Excel</span>
-                    </Button>
-                  </>
-                )}
-                <Button
-                  variant="outline"
-                  onClick={generatePnLExcelTemplate}
-                  className="h-11 sm:h-9"
-                  data-testid="button-download-template"
-                >
-                  <Download className="h-4 w-4 sm:ml-2" />
-                  <span className="hidden sm:inline">قالب الاستيراد</span>
-                </Button>
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls"
-                    onChange={handleExcelImport}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    data-testid="input-import-excel"
-                  />
-                  <Button
-                    variant="outline"
-                    disabled={importExcelMutation.isPending}
-                    className="h-11 sm:h-9"
-                  >
-                    {importExcelMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin sm:ml-2" />
-                    ) : (
-                      <Upload className="h-4 w-4 sm:ml-2" />
+                            await exportEnhancedPnLToExcel(branchLabel, period, enhancedPnL);
+                          }}
+                        >
+                          <FileSpreadsheet className="h-4 w-4 ml-2 text-emerald-600" />
+                          Excel محسن
+                        </DropdownMenuItem>
+                        {completePnL?.metrics && <DropdownMenuSeparator />}
+                      </>
                     )}
-                    <span className="hidden sm:inline">استيراد Excel</span>
-                  </Button>
-                </div>
+                    {completePnL?.metrics && (
+                      <>
+                        <DropdownMenuLabel>التقرير الكلاسيكي</DropdownMenuLabel>
+                        <DropdownMenuItem
+                          data-testid="menu-export-pdf"
+                          onClick={async () => {
+                            if (selectedBranch && completePnL) {
+                              try {
+                                const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
+                                const docDef = generatePnLPdfReport(selectedBranch.name, period, completePnL.metrics, completePnL.sales, completePnL.cogs, completePnL.operatingExpenses, completePnL.fixedCosts);
+                                await downloadArabicPdf(docDef, `تقرير_PnL_${selectedBranch.name}_${period}.pdf`);
+                              } catch (error) {
+                                console.error('PDF export error:', error);
+                                toast({ title: "خطأ", description: "فشل في تصدير PDF", variant: "destructive" });
+                              }
+                            }
+                          }}
+                        >
+                          <Printer className="h-4 w-4 ml-2 text-rose-600" />
+                          PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          data-testid="menu-export-excel"
+                          onClick={async () => {
+                            if (selectedBranch && completePnL) {
+                              const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
+                              await exportPnLToExcel(selectedBranch.name, period, completePnL.metrics, completePnL.sales, completePnL.cogs, completePnL.operatingExpenses, completePnL.fixedCosts);
+                            }
+                          }}
+                        >
+                          <FileSpreadsheet className="h-4 w-4 ml-2 text-emerald-600" />
+                          Excel
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>استيراد من Excel</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={generatePnLExcelTemplate} data-testid="menu-download-template">
+                      <Download className="h-4 w-4 ml-2 text-sky-600" />
+                      تنزيل قالب الاستيراد
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={(e) => e.preventDefault()}
+                      className="p-0"
+                    >
+                      <label className="flex w-full cursor-pointer items-center px-2 py-1.5 text-sm hover:bg-accent" data-testid="menu-import-excel">
+                        <Upload className="h-4 w-4 ml-2 text-violet-600" />
+                        رفع ملف Excel
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls"
+                          onChange={handleExcelImport}
+                          className="hidden"
+                          data-testid="input-import-excel"
+                        />
+                      </label>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             ) : null}
         />
