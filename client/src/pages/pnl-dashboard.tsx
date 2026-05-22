@@ -2003,19 +2003,16 @@ export default function PnLDashboard() {
 
   const handleSaveMonthlyData = () => {
     if (!selectedBranchId) return;
-    
-    // Save branch settings (rent)
-    saveBranchSettingsMutation.mutate({
-      branchId: selectedBranchId,
-      monthlyRent: branchRentForm,
-    });
-    
-    // Save monthly inputs (includes the v2 expanded columns).
+
+    // الإيجار يُدار من «سجل الإيجار»، والتأمين/الاشتراكات من «المصاريف المتكررة».
+    // هنا نحفظ فقط القيم الشهرية المتغيّرة الفعلية.
     saveMonthlyInputsMutation.mutate({
       branchId: selectedBranchId,
       year: selectedYear,
       month: selectedMonth,
       ...monthlyInputsForm,
+      insuranceCost: 0,
+      subscriptionsCost: 0,
     });
   };
 
@@ -3275,25 +3272,31 @@ export default function PnLDashboard() {
                   {monthlyInputsSection === "fixed" && (
                     <div className="space-y-4">
                       <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
-                        <div className="flex items-center gap-2 text-base font-medium text-blue-800 mb-2">
-                          <Home className="h-5 w-5" />
-                          الإيجار الشهري
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2 text-base font-medium text-blue-800">
+                            <Home className="h-5 w-5" />
+                            الإيجار الشهري
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-8"
+                            onClick={() => { setShowMonthlyInputs(false); navigate("/pnl-rent-history"); }}
+                            data-testid="button-goto-rent-history"
+                          >
+                            <History className="h-3.5 w-3.5 ml-1.5" />
+                            تعديل في سجل الإيجار
+                          </Button>
                         </div>
                         <p className="text-xs text-blue-700 mb-3">
-                          القيمة المعتمدة لهذا الشهر تأتي من «سجل الإيجار». التعديل هنا يحدّث القيمة الافتراضية
-                          العامة للفرع فقط (لتوافق الإصدار السابق). للتغييرات بفترات صلاحية استخدم صفحة «سجل الإيجار».
+                          الإيجار يُدار حصرياً من <strong>«سجل الإيجار»</strong> بفترات صلاحية (شهري أو سنوي يقسّم على 12) — لا يُدخل يدوياً هنا لمنع الازدواج.
                         </p>
-                        <div className="flex items-center gap-3">
-                          <Label className="w-40">الإيجار الافتراضي للفرع</Label>
-                          <Input
-                            type="number"
-                            placeholder="0"
-                            value={branchRentForm || ""}
-                            onChange={(e) => setBranchRentForm(parseFloat(e.target.value) || 0)}
-                            className="flex-1"
-                            data-testid="input-monthly-rent"
-                          />
-                          <span className="text-muted-foreground">ريال</span>
+                        <div className="flex items-center justify-between bg-white rounded p-3 border">
+                          <span className="text-sm text-muted-foreground">القيمة المعتمدة لهذا الشهر</span>
+                          <span className="font-bold text-blue-700 text-lg" data-testid="text-rent-current">
+                            {formatCurrency(enhancedPnL?.totals?.rent || 0)}
+                          </span>
                         </div>
                       </div>
 
@@ -3422,8 +3425,6 @@ export default function PnLDashboard() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {([
                             ["governmentFees", "رسوم حكومية (بلدية، رخص)", "input-government"],
-                            ["insuranceCost", "تأمين عام/أصول", "input-insurance"],
-                            ["subscriptionsCost", "اشتراكات يدوية (سوفتوير)", "input-subscriptions"],
                             ["securityCost", "حراسة ونظافة", "input-security"],
                             ["bankFees", "عمولات بنكية ونقاط بيع", "input-bank-fees"],
                             ["fuelCost", "وقود ومواصلات", "input-fuel"],
@@ -3441,8 +3442,9 @@ export default function PnLDashboard() {
                           ))}
                         </div>
                         <p className="text-xs text-amber-700 mt-2">
-                          هذه القيم تُدخل يدوياً لكل شهر. المصاريف المتكررة الثابتة قيمتها (مثل اشتراك نظام POS الشهري)
-                          تُدار من <button type="button" onClick={() => { setShowMonthlyInputs(false); navigate("/pnl-recurring-expenses"); }} className="text-blue-600 underline">صفحة المصاريف المتكررة</button>.
+                          هذه القيم تتغيّر شهرياً وتُدخل يدوياً. أما <strong>التأمين والاشتراكات والمصاريف الثابتة المتكررة</strong> فتُدار حصرياً من
+                          <button type="button" onClick={() => { setShowMonthlyInputs(false); navigate("/pnl-recurring-expenses"); }} className="text-blue-600 underline mx-1">صفحة المصاريف المتكررة</button>
+                          لمنع الاحتساب المزدوج.
                         </p>
                       </div>
                     </div>
@@ -3482,7 +3484,7 @@ export default function PnLDashboard() {
               {(() => {
                 const f = monthlyInputsForm;
                 const utilities = (f.electricityCost || 0) + (f.waterCost || 0) + (f.utilitiesOther || 0) + (f.internetCost || 0);
-                const general = (f.governmentFees || 0) + (f.insuranceCost || 0) + (f.subscriptionsCost || 0)
+                const general = (f.governmentFees || 0)
                   + (f.securityCost || 0) + (f.bankFees || 0) + (f.fuelCost || 0);
                 const operating = (f.maintenanceCost || 0) + (f.marketingCost || 0) + (f.suppliesCost || 0) + (f.otherCosts || 0);
                 // Best-effort live preview using current enhancedPnL totals as
@@ -3493,7 +3495,7 @@ export default function PnLDashboard() {
                 const netSales = baseline?.netSales || 0;
                 const employeeCosts = baseline?.employeeCosts?.total || 0;
                 const recurring = baseline?.recurringExpenses?.total || 0;
-                const rent = branchRentForm || baseline?.rent || 0;
+                const rent = baseline?.rent || 0;
                 // COGS = admin-configured ratio × net sales (default 30%).
                 const cogs = Math.round(netSales * cogsRatio);
                 const totalOpex = employeeCosts + rent + utilities + general + operating + recurring;
@@ -3533,11 +3535,11 @@ export default function PnLDashboard() {
               </Button>
               <Button
                 onClick={handleSaveMonthlyData}
-                disabled={saveBranchSettingsMutation.isPending || saveMonthlyInputsMutation.isPending || !selectedBranchId}
+                disabled={saveMonthlyInputsMutation.isPending || !selectedBranchId}
                 className="gap-2 bg-amber-600 hover:bg-amber-700"
                 data-testid="button-save-monthly-inputs"
               >
-                {(saveBranchSettingsMutation.isPending || saveMonthlyInputsMutation.isPending) && (
+                {saveMonthlyInputsMutation.isPending && (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 )}
                 حفظ البيانات
