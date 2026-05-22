@@ -15625,15 +15625,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertRentHistoryEntry(entry: InsertPnlRentHistory & { id?: number }): Promise<PnlRentHistory> {
+    // اقتصر على الحقول القابلة للكتابة لتجنّب تمرير createdAt/updatedAt كنصوص من العميل
+    const clean: any = {
+      branchId: entry.branchId,
+      monthlyAmount: Number(entry.monthlyAmount),
+      effectiveFrom: entry.effectiveFrom,
+      effectiveTo: entry.effectiveTo ?? null,
+      contractRef: entry.contractRef ?? null,
+      notes: entry.notes ?? null,
+    };
+    if ((entry as any).createdBy) clean.createdBy = (entry as any).createdBy;
+
     if (entry.id) {
-      const { id, ...rest } = entry;
       const [updated] = await db.update(pnlRentHistory)
-        .set({ ...rest, updatedAt: new Date() })
-        .where(eq(pnlRentHistory.id, id))
+        .set({ ...clean, updatedAt: new Date() })
+        .where(eq(pnlRentHistory.id, entry.id))
         .returning();
       return updated;
     }
-    const [inserted] = await db.insert(pnlRentHistory).values(entry).returning();
+    const [inserted] = await db.insert(pnlRentHistory).values(clean).returning();
     return inserted;
   }
 

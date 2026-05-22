@@ -49,7 +49,7 @@ export default function PnlRentHistoryPage() {
     queryKey: ["/api/pnl/rent-history", branchId],
     queryFn: async () => {
       if (!branchId) return [];
-      const res = await fetch(`/api/pnl/rent-history/${branchId}`);
+      const res = await fetch(`/api/pnl/rent-history/${branchId}`, { credentials: "include" });
       if (!res.ok) throw new Error("فشل تحميل سجل الإيجار");
       return res.json();
     },
@@ -58,12 +58,30 @@ export default function PnlRentHistoryPage() {
 
   const saveMut = useMutation({
     mutationFn: async (entry: RentEntry) => {
+      // أرسل الحقول القابلة للكتابة فقط — احذف createdAt من الجلب
+      const payload: any = {
+        branchId: entry.branchId,
+        monthlyAmount: Number(entry.monthlyAmount),
+        effectiveFrom: entry.effectiveFrom,
+        effectiveTo: entry.effectiveTo || null,
+        contractRef: entry.contractRef || null,
+        notes: entry.notes || null,
+      };
+      if (entry.id) payload.id = entry.id;
       const res = await fetch("/api/pnl/rent-history", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(entry),
+        credentials: "include",
+        body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("فشل الحفظ");
+      if (!res.ok) {
+        let msg = `فشل الحفظ (HTTP ${res.status})`;
+        try {
+          const j = await res.json();
+          if (j?.error) msg = j.error;
+        } catch {}
+        throw new Error(msg);
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -78,8 +96,12 @@ export default function PnlRentHistoryPage() {
 
   const deleteMut = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`/api/pnl/rent-history/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("فشل الحذف");
+      const res = await fetch(`/api/pnl/rent-history/${id}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) {
+        let msg = `فشل الحذف (HTTP ${res.status})`;
+        try { const j = await res.json(); if (j?.error) msg = j.error; } catch {}
+        throw new Error(msg);
+      }
       return res.json();
     },
     onSuccess: () => {

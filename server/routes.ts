@@ -9038,9 +9038,10 @@ export async function registerRoutes(
         createdBy: (req as any).user?.id,
       });
       res.json(saved);
-    } catch (error) {
-      console.error("Error saving rent history entry:", error);
-      res.status(500).json({ error: "Failed to save rent history entry" });
+    } catch (error: any) {
+      console.error("Error saving rent history entry:", error?.message, error?.code, error?.detail);
+      const msg = error?.message || "Failed to save rent history entry";
+      res.status(500).json({ error: msg, code: error?.code, detail: error?.detail });
     }
   });
 
