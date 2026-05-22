@@ -8619,7 +8619,7 @@ export async function registerRoutes(
         const employees = allBranchEmps.filter((e: any) => e.status === 'active');
         let totalSalaries = 0;
         let totalGosi = 0; // Saudi GOSI 12%
-        let totalNonSaudiCosts = 0; // Work permit 800, Expat levy 800, Residency 54, Insurance 2%
+        let totalNonSaudiCosts = 0; // Expat levy (المقابل المالي شامل رخصة العمل) 800, Residency 54, Insurance 2%
         
         // قائمة الجنسيات السعودية (بالعربية والإنجليزية)
         const saudiNationalities = ['Saudi', 'saudi', 'سعودي', 'سعودية', 'Saudi Arabia', 'SA'];
@@ -8663,11 +8663,13 @@ export async function registerRoutes(
             empGosi = gosiBase * 0.12;
             totalGosi += empGosi;
           } else {
-            const workPermitMonthly = 800;
-            const expatLevyMonthly = 800;
-            const residencyMonthly = 54;
-            const insuranceRate = 0.02;
-            empNonSaudi = workPermitMonthly + expatLevyMonthly + residencyMonthly + (totalCompensation * insuranceRate);
+            // المقابل المالي (Expat Levy) شامل رسوم رخصة العمل = 9,600 ر.س
+            // سنوياً = 800 شهرياً. منذ إصلاحات 2017-2018 لم تعد هناك رسوم
+            // منفصلة لرخصة العمل تُسدد شهرياً بجانب المقابل المالي.
+            const expatLevyMonthly = 800;       // المقابل المالي (شامل رخصة العمل)
+            const residencyMonthly = 54;        // رسوم الإقامة الشهرية
+            const insuranceRate = 0.02;         // تأمين طبي تقريبي 2% من الراتب
+            empNonSaudi = expatLevyMonthly + residencyMonthly + (totalCompensation * insuranceRate);
             totalNonSaudiCosts += empNonSaudi;
           }
 
@@ -29494,7 +29496,8 @@ export async function registerRoutes(
             const gosiBase = baseSalary + housingAllowance;
             totalGosi += gosiBase * 0.12;
           } else {
-            totalNonSaudiCosts += 800 + 800 + 54 + (totalCompensation * 0.02);
+            // المقابل المالي 800 (شامل رخصة العمل) + الإقامة 54 + تأمين 2%
+            totalNonSaudiCosts += 800 + 54 + (totalCompensation * 0.02);
           }
         }
         

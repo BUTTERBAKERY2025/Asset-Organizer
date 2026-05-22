@@ -1354,7 +1354,7 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
                   'text-orange-600',
                   'bg-gradient-to-l from-orange-500 to-amber-500',
                   'card-ratio-nonsaudi',
-                  'رخصة عمل + مقابل مالي + إقامة + تأمين 2%'
+                  'المقابل المالي (شامل رخصة العمل) + إقامة + تأمين 2%'
                 )}
               </div>
               <div
