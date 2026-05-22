@@ -6130,6 +6130,17 @@ export const insertPnlBranchSettingsSchema = createInsertSchema(pnlBranchSetting
 export type PnlBranchSettings = typeof pnlBranchSettings.$inferSelect;
 export type InsertPnlBranchSettings = z.infer<typeof insertPnlBranchSettingsSchema>;
 
+// Global P&L settings (single-row table). Holds system-wide rules such as the
+// fixed COGS ratio applied to net sales. Editable by admin only.
+export const pnlGlobalSettings = pgTable("pnl_global_settings", {
+  id: serial("id").primaryKey(),
+  cogsRatio: real("cogs_ratio").notNull().default(0.30), // 0.30 = 30%
+  updatedBy: varchar("updated_by"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type PnlGlobalSettings = typeof pnlGlobalSettings.$inferSelect;
+
 // Monthly variable inputs for P&L - الإدخالات الشهرية المتغيرة
 export const pnlMonthlyInputs = pgTable("pnl_monthly_inputs", {
   id: serial("id").primaryKey(),

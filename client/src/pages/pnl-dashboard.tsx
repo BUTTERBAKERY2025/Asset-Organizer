@@ -2,6 +2,8 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useBranches } from "@/hooks/useBranches";
+import { useAuth } from "@/hooks/useAuth";
+import { apiRequest } from "@/lib/queryClient";
 import { Layout } from "@/components/layout";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -1455,6 +1457,35 @@ export default function PnLDashboard() {
   const [fixedCostsEntries, setFixedCostsEntries] = useState<Array<{ costType: string; notes: string; amount: number }>>([]);
 
   const { branches, canSelectBranch, userBranchId, isLoading: loadingBranches } = useBranches();
+  const { isAdmin } = useAuth();
+
+  // Admin-configurable COGS ratio (system-wide). Default 30%.
+  const { data: globalSettings } = useQuery<{ cogsRatio: number }>({
+    queryKey: ["/api/pnl/global-settings"],
+    staleTime: 5 * 60 * 1000,
+  });
+  const cogsRatio = globalSettings?.cogsRatio ?? 0.30;
+
+  // Admin-only inline edit for COGS ratio (shown inside expenses dialog).
+  const [cogsRatioDraft, setCogsRatioDraft] = useState<string>("");
+  const [editingCogsRatio, setEditingCogsRatio] = useState(false);
+  const saveCogsRatioMutation = useMutation({
+    mutationFn: async (pct: number) => {
+      const res = await apiRequest("PUT", "/api/pnl/global-settings", { cogsRatio: pct });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pnl/global-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pnl/enhanced-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pnl/expense-ledger"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/financials/ranking"] });
+      setEditingCogsRatio(false);
+      toast({ title: "تم تحديث نسبة COGS بنجاح" });
+    },
+    onError: (e: any) => {
+      toast({ title: "فشل التحديث", description: e?.message || "حدث خطأ", variant: "destructive" });
+    },
+  });
 
   useEffect(() => {
     if (userBranchId && !canSelectBranch) {
@@ -3137,16 +3168,81 @@ export default function PnLDashboard() {
                       </div>
 
                       <div className="p-4 rounded-lg bg-red-50 border border-red-200">
-                        <div className="flex items-center gap-2 text-base font-medium text-red-800 mb-2">
-                          <Package className="h-5 w-5" />
-                          تكلفة البضاعة المباعة (COGS)
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2 text-base font-medium text-red-800">
+                            <Package className="h-5 w-5" />
+                            تكلفة البضاعة المباعة (COGS)
+                          </div>
+                          {isAdmin && !editingCogsRatio && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setCogsRatioDraft(String(Math.round(cogsRatio * 10000) / 100));
+                                setEditingCogsRatio(true);
+                              }}
+                              data-testid="button-edit-cogs-ratio"
+                            >
+                              تعديل النسبة
+                            </Button>
+                          )}
                         </div>
-                        <p className="text-xs text-red-700 mb-3">
-                          تُحتسب تلقائياً = <strong>30% من صافي المبيعات</strong> (نسبة ثابتة لكل الفروع، لا تُدخل يدوياً).
-                        </p>
+
+                        {editingCogsRatio ? (
+                          <div className="bg-white rounded p-3 space-y-2 mb-3">
+                            <Label className="text-xs">النسبة الجديدة (%)</Label>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                step="0.1"
+                                min="0.1"
+                                max="99.9"
+                                value={cogsRatioDraft}
+                                onChange={(e) => setCogsRatioDraft(e.target.value)}
+                                className="flex-1"
+                                data-testid="input-cogs-ratio"
+                              />
+                              <span className="text-muted-foreground">%</span>
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => {
+                                  const pct = parseFloat(cogsRatioDraft);
+                                  if (!Number.isFinite(pct) || pct <= 0 || pct >= 100) {
+                                    toast({ title: "أدخل نسبة بين 0 و 100", variant: "destructive" });
+                                    return;
+                                  }
+                                  saveCogsRatioMutation.mutate(pct);
+                                }}
+                                disabled={saveCogsRatioMutation.isPending}
+                                data-testid="button-save-cogs-ratio"
+                              >
+                                حفظ
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setEditingCogsRatio(false)}
+                              >
+                                إلغاء
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              تطبيقها على كل الفروع وكل الشهور.
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-red-700 mb-3">
+                            تُحتسب تلقائياً = <strong>{(cogsRatio * 100).toFixed(1)}% من صافي المبيعات</strong>
+                            {isAdmin ? " (يمكن للأدمن تعديل النسبة)." : " (نسبة ثابتة يحددها الأدمن، لا تُدخل يدوياً)."}
+                          </p>
+                        )}
+
                         {(() => {
                           const ns = enhancedPnL?.totals?.netSales || 0;
-                          const cogs = Math.round(ns * 0.30);
+                          const cogs = Math.round(ns * cogsRatio);
                           return (
                             <div className="flex items-center justify-between bg-white rounded p-2 text-sm">
                               <span className="text-muted-foreground">القيمة المحسوبة لهذا الشهر</span>
@@ -3268,8 +3364,8 @@ export default function PnLDashboard() {
                 const employeeCosts = baseline?.employeeCosts?.total || 0;
                 const recurring = baseline?.recurringExpenses?.total || 0;
                 const rent = branchRentForm || baseline?.rent || 0;
-                // COGS = 30% of net sales (business rule, automatic).
-                const cogs = Math.round(netSales * 0.30);
+                // COGS = admin-configured ratio × net sales (default 30%).
+                const cogs = Math.round(netSales * cogsRatio);
                 const totalOpex = employeeCosts + rent + utilities + general + operating + recurring;
                 const netProfit = netSales - cogs - totalOpex;
                 const margin = netSales > 0 ? (netProfit / netSales) * 100 : 0;

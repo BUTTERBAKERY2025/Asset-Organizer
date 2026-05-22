@@ -8594,10 +8594,12 @@ export async function registerRoutes(
         const electricityCost = inputs?.electricityCost || 0;
         const waterCost = inputs?.waterCost || 0;
         const utilitiesOther = inputs?.utilitiesOther || 0;
-        // COGS is now a fixed 30% of net sales (business rule, not a manual
-        // monthly entry). The column on pnl_monthly_inputs is preserved for
-        // backward compatibility but no longer drives the calculation.
-        const cogsCost = Math.round(netSales * 0.30);
+        // COGS is now a fixed ratio of net sales (admin-configurable, default
+        // 30%, stored in pnl_global_settings and cached in memory). The column
+        // on pnl_monthly_inputs is preserved for backward compatibility but no
+        // longer drives the calculation.
+        const cogsRatio = await storage.getCogsRatio();
+        const cogsCost = Math.round(netSales * cogsRatio);
         const maintenanceCost = inputs?.maintenanceCost || 0;
         const marketingCost = inputs?.marketingCost || 0;
         const suppliesCost = inputs?.suppliesCost || 0;
@@ -8813,8 +8815,8 @@ export async function registerRoutes(
               + (prevInputs?.fuelCost || 0);
             const prevRecurringTotal = prevRecurringList.reduce((s, r) => s + (r.monthlyAmount || 0), 0);
             const prevNetSales = prevGrossSales / 1.15;
-            // Same 30% fixed rule for previous-period comparison.
-            const prevCogs = Math.round(prevNetSales * 0.30);
+            // Same admin-configurable COGS ratio for previous-period comparison.
+            const prevCogs = Math.round(prevNetSales * cogsRatio);
             const prevTotalOpex = totalEmployeeCosts + (prevPeriodRent || 0)
               + prevElectricity + prevWater + prevUtilsOther
               + prevMaint + prevMarketing + prevSupplies + prevOther
@@ -9115,6 +9117,43 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== P&L v2 — Global Settings (admin only) ====================
+  // GET is open to anyone with pnl:view (so dashboards can show the ratio).
+  // PUT requires admin (strict). Body: { cogsRatio: 0..1 } (e.g. 0.30 for 30%).
+  app.get("/api/pnl/global-settings", isAuthenticated, requirePermission("pnl", "view"), async (_req, res) => {
+    try {
+      const cogsRatio = await storage.getCogsRatio();
+      res.json({ cogsRatio });
+    } catch (error) {
+      console.error("Error fetching pnl global settings:", error);
+      res.status(500).json({ error: "Failed to fetch global settings" });
+    }
+  });
+
+  app.put("/api/pnl/global-settings", isAuthenticated, async (req, res) => {
+    try {
+      if (!isUserAdmin(req)) {
+        return res.status(403).json({ error: "هذا الإعداد للأدمن فقط" });
+      }
+      const raw = req.body?.cogsRatio;
+      // Accept either a fraction (0.30) or a percentage (30) for convenience.
+      let ratio = typeof raw === "string" ? parseFloat(raw) : Number(raw);
+      if (!Number.isFinite(ratio)) {
+        return res.status(400).json({ error: "cogsRatio يجب أن يكون رقم" });
+      }
+      if (ratio > 1) ratio = ratio / 100; // user typed 30 meaning 30%
+      if (!(ratio > 0 && ratio < 1)) {
+        return res.status(400).json({ error: "النسبة يجب أن تكون بين 0 و 100%" });
+      }
+      const currentUser = getCurrentUser(req);
+      const saved = await storage.setCogsRatio(ratio, currentUser?.id || "");
+      res.json({ cogsRatio: saved });
+    } catch (error: any) {
+      console.error("Error updating pnl global settings:", error);
+      res.status(500).json({ error: error?.message || "Failed to update global settings" });
+    }
+  });
+
   app.delete("/api/pnl/recurring-expenses/:id", isAuthenticated, requirePermission("pnl", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
@@ -9187,6 +9226,9 @@ export async function registerRoutes(
       }
       const branchMap = new Map((await storage.getAllBranches()).map(b => [b.id, b]));
 
+      // Admin-configurable COGS ratio (cached). Fetched once per request.
+      const cogsRatio = await storage.getCogsRatio();
+
       const rows: any[] = [];
       // Batch to respect the DB pool.
       const BATCH = 3;
@@ -9214,7 +9256,7 @@ export async function registerRoutes(
             } as any);
             const grossSales = (monthJournals || []).reduce((s: number, j: any) => s + (j.totalSales || 0), 0);
             const netSales = grossSales / 1.15;
-            const cogs = Math.round(netSales * 0.30);
+            const cogs = Math.round(netSales * cogsRatio);
 
             if (!inputs && !rent && recurring.length === 0 && grossSales === 0) continue;
             const i2 = inputs || ({} as any);
@@ -29418,10 +29460,12 @@ export async function registerRoutes(
         const electricityCost = inputs?.electricityCost || 0;
         const waterCost = inputs?.waterCost || 0;
         const utilitiesOther = inputs?.utilitiesOther || 0;
-        // COGS is now a fixed 30% of net sales (business rule, not a manual
-        // monthly entry). The column on pnl_monthly_inputs is preserved for
-        // backward compatibility but no longer drives the calculation.
-        const cogsCost = Math.round(netSales * 0.30);
+        // COGS is now a fixed ratio of net sales (admin-configurable, default
+        // 30%, stored in pnl_global_settings and cached in memory). The column
+        // on pnl_monthly_inputs is preserved for backward compatibility but no
+        // longer drives the calculation.
+        const cogsRatio = await storage.getCogsRatio();
+        const cogsCost = Math.round(netSales * cogsRatio);
         const maintenanceCost = inputs?.maintenanceCost || 0;
         const marketingCost = inputs?.marketingCost || 0;
         const suppliesCost = inputs?.suppliesCost || 0;

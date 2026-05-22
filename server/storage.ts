@@ -492,6 +492,7 @@ import {
   type Notification,
   type InsertNotification,
   pnlBranchSettings,
+  pnlGlobalSettings,
   type PnlBranchSettings,
   type InsertPnlBranchSettings,
   pnlMonthlyInputs,
@@ -1472,6 +1473,11 @@ export interface IStorage {
   upsertRecurringExpense(entry: InsertPnlRecurringExpense & { id?: number }): Promise<PnlRecurringExpense>;
   deleteRecurringExpense(id: number): Promise<boolean>;
   getRecurringExpenseById(id: number): Promise<PnlRecurringExpense | undefined>;
+
+  // P&L global settings (admin-editable, system-wide). Currently holds the
+  // fixed COGS ratio (default 30%). Cached in memory for cheap reads.
+  getCogsRatio(): Promise<number>;
+  setCogsRatio(ratio: number, updatedBy: string): Promise<number>;
 
   // System Notifications
   getAllSystemNotifications(): Promise<SystemNotification[]>;
@@ -15713,6 +15719,53 @@ export class DatabaseStorage implements IStorage {
       if (error?.code === '42P01') return undefined;
       throw error;
     }
+  }
+
+  // ============================================================
+  // P&L Global Settings (admin-editable, system-wide)
+  // ------------------------------------------------------------
+  // Single-row table. We cache the cogs ratio in process memory to
+  // avoid hitting the DB on every P&L computation (called per branch
+  // per month). The cache is refreshed on setCogsRatio() and on first
+  // read after process start.
+  // ============================================================
+  private _cogsRatioCache: number | null = null;
+
+  async getCogsRatio(): Promise<number> {
+    if (this._cogsRatioCache !== null) return this._cogsRatioCache;
+    try {
+      const [row] = await db.select().from(pnlGlobalSettings).orderBy(pnlGlobalSettings.id).limit(1);
+      const ratio = row?.cogsRatio ?? 0.30;
+      this._cogsRatioCache = ratio;
+      return ratio;
+    } catch (error: any) {
+      // Table missing (migration not yet run) → fall back to default.
+      if (error?.code === '42P01') {
+        this._cogsRatioCache = 0.30;
+        return 0.30;
+      }
+      throw error;
+    }
+  }
+
+  async setCogsRatio(ratio: number, updatedBy: string): Promise<number> {
+    if (!(ratio > 0 && ratio < 1)) {
+      throw new Error('cogs_ratio must be between 0 and 1 (exclusive)');
+    }
+    const existing = await db.select().from(pnlGlobalSettings).orderBy(pnlGlobalSettings.id).limit(1);
+    if (existing.length > 0) {
+      const [updated] = await db.update(pnlGlobalSettings)
+        .set({ cogsRatio: ratio, updatedBy, updatedAt: new Date() })
+        .where(eq(pnlGlobalSettings.id, existing[0].id))
+        .returning();
+      this._cogsRatioCache = updated.cogsRatio;
+      return updated.cogsRatio;
+    }
+    const [inserted] = await db.insert(pnlGlobalSettings)
+      .values({ cogsRatio: ratio, updatedBy })
+      .returning();
+    this._cogsRatioCache = inserted.cogsRatio;
+    return inserted.cogsRatio;
   }
 
   // ==========================================
