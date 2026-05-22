@@ -8594,7 +8594,10 @@ export async function registerRoutes(
         const electricityCost = inputs?.electricityCost || 0;
         const waterCost = inputs?.waterCost || 0;
         const utilitiesOther = inputs?.utilitiesOther || 0;
-        const cogsCost = inputs?.cogsCost || 0;
+        // COGS is now a fixed 30% of net sales (business rule, not a manual
+        // monthly entry). The column on pnl_monthly_inputs is preserved for
+        // backward compatibility but no longer drives the calculation.
+        const cogsCost = Math.round(netSales * 0.30);
         const maintenanceCost = inputs?.maintenanceCost || 0;
         const marketingCost = inputs?.marketingCost || 0;
         const suppliesCost = inputs?.suppliesCost || 0;
@@ -8800,7 +8803,6 @@ export async function registerRoutes(
             const prevElectricity = prevInputs?.electricityCost || 0;
             const prevWater = prevInputs?.waterCost || 0;
             const prevUtilsOther = prevInputs?.utilitiesOther || 0;
-            const prevCogs = prevInputs?.cogsCost || 0;
             const prevMaint = prevInputs?.maintenanceCost || 0;
             const prevMarketing = prevInputs?.marketingCost || 0;
             const prevSupplies = prevInputs?.suppliesCost || 0;
@@ -8811,6 +8813,8 @@ export async function registerRoutes(
               + (prevInputs?.fuelCost || 0);
             const prevRecurringTotal = prevRecurringList.reduce((s, r) => s + (r.monthlyAmount || 0), 0);
             const prevNetSales = prevGrossSales / 1.15;
+            // Same 30% fixed rule for previous-period comparison.
+            const prevCogs = Math.round(prevNetSales * 0.30);
             const prevTotalOpex = totalEmployeeCosts + (prevPeriodRent || 0)
               + prevElectricity + prevWater + prevUtilsOther
               + prevMaint + prevMarketing + prevSupplies + prevOther
@@ -9197,7 +9201,22 @@ export async function registerRoutes(
               storage.getRentForPeriod(bId, yearNum, m),
               storage.getRecurringExpensesForPeriod(bId, yearNum, m),
             ]);
-            if (!inputs && !rent && recurring.length === 0) continue; // skip empty rows
+            // Per-month gross sales → net sales → cogs (30% rule).
+            // Single SQL call scoped to this month so the ledger remains
+            // accurate without depending on monthly_inputs.cogsCost.
+            const monthStart = new Date(yearNum, m - 1, 1).toISOString().slice(0, 10);
+            const monthEnd = new Date(yearNum, m, 0).toISOString().slice(0, 10);
+            const { journals: monthJournals } = await storage.getCashierJournalsFiltered({
+              branchId: bId,
+              startDate: monthStart,
+              endDate: monthEnd,
+              status: 'approved',
+            } as any);
+            const grossSales = (monthJournals || []).reduce((s: number, j: any) => s + (j.totalSales || 0), 0);
+            const netSales = grossSales / 1.15;
+            const cogs = Math.round(netSales * 0.30);
+
+            if (!inputs && !rent && recurring.length === 0 && grossSales === 0) continue;
             const i2 = inputs || ({} as any);
             const recurringTotal = recurring.reduce((s, r) => s + (r.monthlyAmount || 0), 0);
             const utilities = (i2.electricityCost || 0) + (i2.waterCost || 0) + (i2.utilitiesOther || 0);
@@ -9212,12 +9231,12 @@ export async function registerRoutes(
               year: yearNum,
               month: m,
               rent,
-              cogs: i2.cogsCost || 0,
+              cogs,
               utilities,
               general,
               operating,
               recurring: recurringTotal,
-              total: (i2.cogsCost || 0) + rent + utilities + general + operating + recurringTotal,
+              total: cogs + rent + utilities + general + operating + recurringTotal,
               hasInputs: !!inputs,
             });
           }
@@ -29399,7 +29418,10 @@ export async function registerRoutes(
         const electricityCost = inputs?.electricityCost || 0;
         const waterCost = inputs?.waterCost || 0;
         const utilitiesOther = inputs?.utilitiesOther || 0;
-        const cogsCost = inputs?.cogsCost || 0;
+        // COGS is now a fixed 30% of net sales (business rule, not a manual
+        // monthly entry). The column on pnl_monthly_inputs is preserved for
+        // backward compatibility but no longer drives the calculation.
+        const cogsCost = Math.round(netSales * 0.30);
         const maintenanceCost = inputs?.maintenanceCost || 0;
         const marketingCost = inputs?.marketingCost || 0;
         const suppliesCost = inputs?.suppliesCost || 0;

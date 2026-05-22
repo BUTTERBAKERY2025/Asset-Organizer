@@ -3137,22 +3137,25 @@ export default function PnLDashboard() {
                       </div>
 
                       <div className="p-4 rounded-lg bg-red-50 border border-red-200">
-                        <div className="flex items-center gap-2 text-base font-medium text-red-800 mb-3">
+                        <div className="flex items-center gap-2 text-base font-medium text-red-800 mb-2">
                           <Package className="h-5 w-5" />
                           تكلفة البضاعة المباعة (COGS)
                         </div>
-                        <div className="flex items-center gap-3">
-                          <Label className="w-32">إجمالي COGS</Label>
-                          <Input
-                            type="number"
-                            placeholder="0"
-                            value={monthlyInputsForm.cogsCost || ""}
-                            onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, cogsCost: parseFloat(e.target.value) || 0})}
-                            className="flex-1"
-                            data-testid="input-cogs"
-                          />
-                          <span className="text-muted-foreground">ريال</span>
-                        </div>
+                        <p className="text-xs text-red-700 mb-3">
+                          تُحتسب تلقائياً = <strong>30% من صافي المبيعات</strong> (نسبة ثابتة لكل الفروع، لا تُدخل يدوياً).
+                        </p>
+                        {(() => {
+                          const ns = enhancedPnL?.totals?.netSales || 0;
+                          const cogs = Math.round(ns * 0.30);
+                          return (
+                            <div className="flex items-center justify-between bg-white rounded p-2 text-sm">
+                              <span className="text-muted-foreground">القيمة المحسوبة لهذا الشهر</span>
+                              <span className="font-bold text-red-700" data-testid="text-cogs-auto">
+                                {formatCurrency(cogs)}
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   )}
@@ -3265,7 +3268,8 @@ export default function PnLDashboard() {
                 const employeeCosts = baseline?.employeeCosts?.total || 0;
                 const recurring = baseline?.recurringExpenses?.total || 0;
                 const rent = branchRentForm || baseline?.rent || 0;
-                const cogs = f.cogsCost || 0;
+                // COGS = 30% of net sales (business rule, automatic).
+                const cogs = Math.round(netSales * 0.30);
                 const totalOpex = employeeCosts + rent + utilities + general + operating + recurring;
                 const netProfit = netSales - cogs - totalOpex;
                 const margin = netSales > 0 ? (netProfit / netSales) * 100 : 0;
