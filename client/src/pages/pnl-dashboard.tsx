@@ -395,8 +395,26 @@ function printEmployeesPdf(
   }).join("");
 
   const totBase = employees.reduce((s, e) => s + (e.baseSalary || 0), 0);
-  const totAllow = employees.reduce((s, e) => s + (e.housingAllowance || 0) + (e.transportAllowance || 0), 0);
-  const totOver = employees.reduce((s, e) => s + (e.gosi || 0) + (e.nonSaudiOverhead || 0), 0);
+  const totHousing = employees.reduce((s, e) => s + (e.housingAllowance || 0), 0);
+  const totTransport = employees.reduce((s, e) => s + (e.transportAllowance || 0), 0);
+  const totAllow = totHousing + totTransport;
+  const totGosi = employees.reduce((s, e) => s + (e.gosi || 0), 0);
+  const totNonSaudiOverhead = employees.reduce((s, e) => s + (e.nonSaudiOverhead || 0), 0);
+  const totOver = totGosi + totNonSaudiOverhead;
+
+  // تفصيل سعودي/غير سعودي
+  const saudis = employees.filter(e => e.isSaudi);
+  const nonSaudis = employees.filter(e => !e.isSaudi);
+  const saudiTotal = saudis.reduce((s, e) => s + (e.totalCost || 0), 0);
+  const nonSaudiTotal = nonSaudis.reduce((s, e) => s + (e.totalCost || 0), 0);
+  const saudiBase = saudis.reduce((s, e) => s + (e.baseSalary || 0), 0);
+  const saudiAllow = saudis.reduce((s, e) => s + (e.housingAllowance || 0) + (e.transportAllowance || 0), 0);
+  const saudiGosi = saudis.reduce((s, e) => s + (e.gosi || 0), 0);
+  const nonSaudiBase = nonSaudis.reduce((s, e) => s + (e.baseSalary || 0), 0);
+  const nonSaudiAllow = nonSaudis.reduce((s, e) => s + (e.housingAllowance || 0) + (e.transportAllowance || 0), 0);
+  const nonSaudiOver = nonSaudis.reduce((s, e) => s + (e.nonSaudiOverhead || 0), 0);
+
+  const pct = (n: number, d: number) => d > 0 ? ((n / d) * 100).toFixed(1) + '%' : '—';
 
   const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
 <title>تكلفة الموظفين النشطين - ${branchName} - ${monthLabel} ${year}</title>
@@ -411,6 +429,19 @@ function printEmployeesPdf(
   .kpi { flex:1; border:1px solid #E5E7EB; border-radius: 8px; padding: 8px 10px; }
   .kpi .label { font-size: 11px; color: #6B7280; }
   .kpi .value { font-size: 16px; font-weight: 800; color: #111; margin-top: 2px; }
+  .section-title { font-size: 13px; font-weight: 800; color: #4338CA; margin: 14px 0 6px; padding-bottom: 4px; border-bottom: 1px dashed #C7D2FE; }
+  .breakdown { display: flex; gap: 10px; margin-bottom: 8px; }
+  .breakdown-card { flex: 1; border: 1px solid #E5E7EB; border-radius: 10px; padding: 10px 12px; background: #FAFAFB; }
+  .breakdown-card.indigo { border-color: #C7D2FE; background: #EEF2FF; }
+  .breakdown-card.emerald { border-color: #A7F3D0; background: #ECFDF5; }
+  .breakdown-card.amber { border-color: #FCD34D; background: #FFFBEB; }
+  .breakdown-card .head { font-size: 12px; font-weight: 800; color: #111; margin-bottom: 6px; display:flex; justify-content:space-between; align-items:center; }
+  .breakdown-card .head .pct { font-size: 13px; color: #4338CA; font-weight: 800; }
+  .breakdown-card .row { display:flex; justify-content:space-between; font-size: 11.5px; padding: 3px 0; border-top: 1px dotted #E5E7EB; }
+  .breakdown-card .row:first-of-type { border-top: none; }
+  .breakdown-card .row .lbl { color: #4B5563; }
+  .breakdown-card .row .val { font-weight: 700; color: #111; }
+  .breakdown-card .row .sub { color: #6366F1; font-weight: 700; margin-inline-start: 6px; font-size: 10.5px; }
   table { width: 100%; border-collapse: collapse; font-size: 12px; }
   th, td { border: 1px solid #E5E7EB; padding: 6px 8px; text-align: center; }
   thead th { background: #EEF2FF; color: #3730A3; font-weight: 700; }
@@ -429,6 +460,57 @@ function printEmployeesPdf(
     <div class="kpi"><div class="label">إجمالي التكلفة الشهرية</div><div class="value">${fmt(totalPayroll)}</div></div>
     <div class="kpi"><div class="label">نسبة من المبيعات</div><div class="value">${salaryToSalesPct.toFixed(1)}%</div></div>
   </div>
+
+  <!-- تفصيل مكوّنات التكلفة -->
+  <div class="section-title">تفصيل مكوّنات التكلفة</div>
+  <div class="breakdown">
+    <div class="breakdown-card indigo">
+      <div class="head"><span>الرواتب الأساسية</span><span class="pct">${pct(totBase, totalPayroll)}</span></div>
+      <div class="row"><span class="lbl">إجمالي الرواتب الأساسية</span><span class="val" dir="ltr">${fmt(totBase)}</span></div>
+      <div class="row"><span class="lbl">متوسط الراتب</span><span class="val" dir="ltr">${fmt(totBase / (employees.length || 1))}</span></div>
+    </div>
+    <div class="breakdown-card emerald">
+      <div class="head"><span>البدلات</span><span class="pct">${pct(totAllow, totalPayroll)}</span></div>
+      <div class="row"><span class="lbl">بدل سكن</span><span class="val" dir="ltr">${fmt(totHousing)} <span class="sub">${pct(totHousing, totalPayroll)}</span></span></div>
+      <div class="row"><span class="lbl">بدل مواصلات</span><span class="val" dir="ltr">${fmt(totTransport)} <span class="sub">${pct(totTransport, totalPayroll)}</span></span></div>
+      <div class="row"><span class="lbl">إجمالي البدلات</span><span class="val" dir="ltr">${fmt(totAllow)}</span></div>
+    </div>
+    <div class="breakdown-card amber">
+      <div class="head"><span>التأمينات والتكاليف</span><span class="pct">${pct(totOver, totalPayroll)}</span></div>
+      <div class="row"><span class="lbl">تأمينات اجتماعية (GOSI)</span><span class="val" dir="ltr">${fmt(totGosi)} <span class="sub">${pct(totGosi, totalPayroll)}</span></span></div>
+      <div class="row"><span class="lbl">رسوم غير سعوديين</span><span class="val" dir="ltr">${fmt(totNonSaudiOverhead)} <span class="sub">${pct(totNonSaudiOverhead, totalPayroll)}</span></span></div>
+      <div class="row"><span class="lbl">إجمالي التأمينات/التكاليف</span><span class="val" dir="ltr">${fmt(totOver)}</span></div>
+    </div>
+  </div>
+
+  <!-- تفصيل حسب الجنسية -->
+  <div class="section-title">تفصيل التكلفة حسب الجنسية</div>
+  <div class="breakdown">
+    <div class="breakdown-card emerald">
+      <div class="head">
+        <span>السعوديون <span class="sub">(${saudis.length} موظف)</span></span>
+        <span class="pct">${pct(saudiTotal, totalPayroll)}</span>
+      </div>
+      <div class="row"><span class="lbl">إجمالي التكلفة الشهرية</span><span class="val" dir="ltr">${fmt(saudiTotal)}</span></div>
+      <div class="row"><span class="lbl">رواتب أساسية</span><span class="val" dir="ltr">${fmt(saudiBase)} <span class="sub">${pct(saudiBase, saudiTotal)}</span></span></div>
+      <div class="row"><span class="lbl">بدلات</span><span class="val" dir="ltr">${fmt(saudiAllow)} <span class="sub">${pct(saudiAllow, saudiTotal)}</span></span></div>
+      <div class="row"><span class="lbl">تأمينات اجتماعية (GOSI)</span><span class="val" dir="ltr">${fmt(saudiGosi)} <span class="sub">${pct(saudiGosi, saudiTotal)}</span></span></div>
+      <div class="row"><span class="lbl">متوسط تكلفة الموظف السعودي</span><span class="val" dir="ltr">${fmt(saudis.length ? saudiTotal / saudis.length : 0)}</span></div>
+    </div>
+    <div class="breakdown-card amber">
+      <div class="head">
+        <span>غير السعوديين <span class="sub">(${nonSaudis.length} موظف)</span></span>
+        <span class="pct">${pct(nonSaudiTotal, totalPayroll)}</span>
+      </div>
+      <div class="row"><span class="lbl">إجمالي التكلفة الشهرية</span><span class="val" dir="ltr">${fmt(nonSaudiTotal)}</span></div>
+      <div class="row"><span class="lbl">رواتب أساسية</span><span class="val" dir="ltr">${fmt(nonSaudiBase)} <span class="sub">${pct(nonSaudiBase, nonSaudiTotal)}</span></span></div>
+      <div class="row"><span class="lbl">بدلات</span><span class="val" dir="ltr">${fmt(nonSaudiAllow)} <span class="sub">${pct(nonSaudiAllow, nonSaudiTotal)}</span></span></div>
+      <div class="row"><span class="lbl">رسوم عمل ومرافقين</span><span class="val" dir="ltr">${fmt(nonSaudiOver)} <span class="sub">${pct(nonSaudiOver, nonSaudiTotal)}</span></span></div>
+      <div class="row"><span class="lbl">متوسط تكلفة الموظف غير السعودي</span><span class="val" dir="ltr">${fmt(nonSaudis.length ? nonSaudiTotal / nonSaudis.length : 0)}</span></div>
+    </div>
+  </div>
+
+  <div class="section-title">تفصيل بكل موظف</div>
   <table>
     <thead>
       <tr>
