@@ -373,7 +373,8 @@ function printEmployeesPdf(
   const totalPayroll = employees.reduce((s, e) => s + (e.totalCost || 0), 0) || 1;
   const branchName = totals?.branchName || (totals?.branchId === 'all' ? 'كل الفروع' : '');
   const showBranch = totals?.branchId === 'all';
-  const fmt = (n: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(n || 0);
+  // أرقام لاتينية (إنجليزية) مع عملة SAR — locale "en"
+  const fmt = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(n || 0);
 
   const rowsHtml = employees.map((e, idx) => {
     const allowances = (e.housingAllowance || 0) + (e.transportAllowance || 0);
@@ -421,7 +422,7 @@ function printEmployeesPdf(
       <div class="title">تكلفة الموظفين النشطين</div>
       <div class="meta">${branchName} — ${monthLabel} ${year}</div>
     </div>
-    <div class="meta">تاريخ الطباعة: ${new Date().toLocaleDateString("ar-SA")}</div>
+    <div class="meta">تاريخ الطباعة: ${new Date().toLocaleDateString("en-GB")}</div>
   </div>
   <div class="kpis">
     <div class="kpi"><div class="label">عدد الموظفين</div><div class="value">${employees.length}</div></div>
