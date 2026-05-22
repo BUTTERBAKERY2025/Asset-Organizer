@@ -313,6 +313,152 @@ function generatePnLPdfReport(
   return docDefinition;
 }
 
+async function exportEmployeesExcel(
+  employees: any[],
+  totals: any,
+  year: number,
+  month: number,
+  monthLabel: string,
+) {
+  const XLSX = await import("xlsx");
+  const wb = XLSX.utils.book_new();
+  const totalPayroll = employees.reduce((s, e) => s + (e.totalCost || 0), 0) || 1;
+  const branchName = totals?.branchName || (totals?.branchId === 'all' ? 'كل الفروع' : '');
+  const showBranch = totals?.branchId === 'all';
+
+  const rows = employees.map((e, idx) => {
+    const allowances = (e.housingAllowance || 0) + (e.transportAllowance || 0);
+    const overhead = (e.gosi || 0) + (e.nonSaudiOverhead || 0);
+    const pct = ((e.totalCost || 0) / totalPayroll) * 100;
+    const row: any = {
+      "#": idx + 1,
+      "الاسم": e.name || "",
+      "الوظيفة": e.position || "",
+    };
+    if (showBranch) row["الفرع"] = e.branchName || "";
+    row["الجنسية"] = e.nationality || (e.isSaudi ? "سعودي" : "غير سعودي");
+    row["الراتب الأساسي"] = e.baseSalary || 0;
+    row["البدلات"] = allowances;
+    row["تأمينات/تكاليف"] = overhead;
+    row["الإجمالي"] = e.totalCost || 0;
+    row["% من الإجمالي"] = Number(pct.toFixed(2));
+    return row;
+  });
+
+  // صف الإجمالي
+  const totalRow: any = { "#": "", "الاسم": "الإجمالي", "الوظيفة": "" };
+  if (showBranch) totalRow["الفرع"] = "";
+  totalRow["الجنسية"] = "";
+  totalRow["الراتب الأساسي"] = employees.reduce((s, e) => s + (e.baseSalary || 0), 0);
+  totalRow["البدلات"] = employees.reduce((s, e) => s + (e.housingAllowance || 0) + (e.transportAllowance || 0), 0);
+  totalRow["تأمينات/تكاليف"] = employees.reduce((s, e) => s + (e.gosi || 0) + (e.nonSaudiOverhead || 0), 0);
+  totalRow["الإجمالي"] = totalPayroll;
+  totalRow["% من الإجمالي"] = 100;
+  rows.push(totalRow);
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, "تكلفة الموظفين");
+  const safeBranch = (branchName || "تقرير").replace(/[\\/:*?"<>|]/g, "_");
+  XLSX.writeFile(wb, `تكلفة_الموظفين_${safeBranch}_${monthLabel}_${year}.xlsx`);
+}
+
+function printEmployeesPdf(
+  employees: any[],
+  totals: any,
+  year: number,
+  month: number,
+  monthLabel: string,
+  salaryToSalesPct: number,
+) {
+  const totalPayroll = employees.reduce((s, e) => s + (e.totalCost || 0), 0) || 1;
+  const branchName = totals?.branchName || (totals?.branchId === 'all' ? 'كل الفروع' : '');
+  const showBranch = totals?.branchId === 'all';
+  const fmt = (n: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(n || 0);
+
+  const rowsHtml = employees.map((e, idx) => {
+    const allowances = (e.housingAllowance || 0) + (e.transportAllowance || 0);
+    const overhead = (e.gosi || 0) + (e.nonSaudiOverhead || 0);
+    const pct = ((e.totalCost || 0) / totalPayroll) * 100;
+    return `<tr>
+      <td>${idx + 1}</td>
+      <td style="text-align:right;font-weight:600">${e.name || ""}</td>
+      <td>${e.position || "—"}</td>
+      ${showBranch ? `<td>${e.branchName || "—"}</td>` : ""}
+      <td>${e.nationality || (e.isSaudi ? "سعودي" : "غير سعودي")}</td>
+      <td dir="ltr">${fmt(e.baseSalary || 0)}</td>
+      <td dir="ltr">${fmt(allowances)}</td>
+      <td dir="ltr">${fmt(overhead)}</td>
+      <td dir="ltr" style="font-weight:700;color:#4338CA">${fmt(e.totalCost || 0)}</td>
+      <td dir="ltr">${pct.toFixed(1)}%</td>
+    </tr>`;
+  }).join("");
+
+  const totBase = employees.reduce((s, e) => s + (e.baseSalary || 0), 0);
+  const totAllow = employees.reduce((s, e) => s + (e.housingAllowance || 0) + (e.transportAllowance || 0), 0);
+  const totOver = employees.reduce((s, e) => s + (e.gosi || 0) + (e.nonSaudiOverhead || 0), 0);
+
+  const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
+<title>تكلفة الموظفين النشطين - ${branchName} - ${monthLabel} ${year}</title>
+<style>
+  @page { size: A4; margin: 12mm; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Cairo', Tahoma, Arial, sans-serif; color: #111; margin: 0; }
+  .header { display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #6366F1; padding-bottom: 8px; margin-bottom: 12px; }
+  .title { font-size: 18px; font-weight: 800; color: #4338CA; }
+  .meta { font-size: 12px; color: #555; }
+  .kpis { display:flex; gap:12px; margin-bottom: 12px; }
+  .kpi { flex:1; border:1px solid #E5E7EB; border-radius: 8px; padding: 8px 10px; }
+  .kpi .label { font-size: 11px; color: #6B7280; }
+  .kpi .value { font-size: 16px; font-weight: 800; color: #111; margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { border: 1px solid #E5E7EB; padding: 6px 8px; text-align: center; }
+  thead th { background: #EEF2FF; color: #3730A3; font-weight: 700; }
+  tfoot td { background: #F9FAFB; font-weight: 800; }
+  .footer { margin-top: 14px; font-size: 11px; color: #6B7280; text-align: center; }
+</style></head><body>
+  <div class="header">
+    <div>
+      <div class="title">تكلفة الموظفين النشطين</div>
+      <div class="meta">${branchName} — ${monthLabel} ${year}</div>
+    </div>
+    <div class="meta">تاريخ الطباعة: ${new Date().toLocaleDateString("ar-SA")}</div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="label">عدد الموظفين</div><div class="value">${employees.length}</div></div>
+    <div class="kpi"><div class="label">إجمالي التكلفة الشهرية</div><div class="value">${fmt(totalPayroll)}</div></div>
+    <div class="kpi"><div class="label">نسبة من المبيعات</div><div class="value">${salaryToSalesPct.toFixed(1)}%</div></div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>الاسم</th><th>الوظيفة</th>
+        ${showBranch ? "<th>الفرع</th>" : ""}
+        <th>الجنسية</th><th>الراتب الأساسي</th><th>البدلات</th><th>تأمينات/تكاليف</th><th>الإجمالي</th><th>%</th>
+      </tr>
+    </thead>
+    <tbody>${rowsHtml}</tbody>
+    <tfoot>
+      <tr>
+        <td colspan="${showBranch ? 5 : 4}">الإجمالي</td>
+        <td dir="ltr">${fmt(totBase)}</td>
+        <td dir="ltr">${fmt(totAllow)}</td>
+        <td dir="ltr">${fmt(totOver)}</td>
+        <td dir="ltr" style="color:#4338CA">${fmt(totalPayroll)}</td>
+        <td>100%</td>
+      </tr>
+    </tfoot>
+  </table>
+  <div class="footer">Butter Bakery — تقرير تكلفة الموظفين النشطين</div>
+  <script>window.addEventListener('load', () => { setTimeout(() => { window.print(); }, 200); });</script>
+</body></html>`;
+
+  const w = window.open("", "_blank", "width=900,height=700");
+  if (!w) return;
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+}
+
 async function exportPnLToExcel(
   branchName: string,
   period: string,
@@ -1508,8 +1654,8 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
 
       {/* Active employees panel */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <div>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2">
+          <div className="min-w-0">
             <CardTitle className="text-base font-bold flex items-center gap-2">
               <Users className="h-4 w-4 text-indigo-500" />
               تكلفة الموظفين النشطين ({employeesList.length})
@@ -1518,9 +1664,33 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
               إجمالي تكلفة الرواتب والمزايا والتأمينات الشهرية: {formatCurrency(totalPayrollCost)}
             </CardDescription>
           </div>
-          <Badge variant="secondary" className="font-mono">
-            نسبة من المبيعات: {(ratios.salaryToSales || 0).toFixed(1)}%
-          </Badge>
+          <div className="flex items-center gap-2 shrink-0">
+            <Badge variant="secondary" className="font-mono hidden sm:inline-flex">
+              نسبة من المبيعات: {(ratios.salaryToSales || 0).toFixed(1)}%
+            </Badge>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => exportEmployeesExcel(employeesList, totals, selectedYear, selectedMonth, monthLabel)}
+              disabled={employeesList.length === 0}
+              data-testid="button-export-employees-excel"
+              className="h-8 gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              <span className="hidden md:inline">Excel</span>
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => printEmployeesPdf(employeesList, totals, selectedYear, selectedMonth, monthLabel, ratios.salaryToSales || 0)}
+              disabled={employeesList.length === 0}
+              data-testid="button-export-employees-pdf"
+              className="h-8 gap-1 border-rose-300 text-rose-700 hover:bg-rose-50"
+            >
+              <Printer className="h-4 w-4" />
+              <span className="hidden md:inline">PDF</span>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {employeesList.length === 0 ? (
