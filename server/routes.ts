@@ -8511,6 +8511,10 @@ export async function registerRoutes(
       const allBranchesForLookup = await storage.getAllBranches();
       const branchMap = new Map(allBranchesForLookup.map(b => [b.id, b]));
 
+      // Compute the previous month for deltas. Wraps year boundary.
+      const prevMonthNum = monthNum === 1 ? 12 : monthNum - 1;
+      const prevYearNum = monthNum === 1 ? yearNum - 1 : yearNum;
+
       // Process branches in small batches to respect the DB pool limit
       // (Supabase pool max=15; each branch issues 4 parallel queries → batch of 3 = 12 concurrent queries, safely under the limit).
       const BRANCH_BATCH_SIZE = 3;
@@ -8518,10 +8522,11 @@ export async function registerRoutes(
         const branch = branchMap.get(bId);
         if (!branch) return null;
 
-        const [journalsResult, settings, inputs, allBranchEmps] = await Promise.all([
+        const [journalsResult, settings, inputs, prevInputs, allBranchEmps] = await Promise.all([
           storage.getCashierJournalsFiltered({ branchId: bId }),
           storage.getPnlBranchSettings(bId),
           storage.getPnlMonthlyInputs(bId, yearNum, monthNum),
+          storage.getPnlMonthlyInputs(bId, prevYearNum, prevMonthNum),
           storage.getBranchEmployeesByBranch(bId),
         ]);
 
@@ -8535,8 +8540,37 @@ export async function registerRoutes(
           const jDate = new Date(j.journalDate);
           return jDate.getFullYear() === yearNum && (jDate.getMonth() + 1) === monthNum;
         });
+        const prevMonthJournals = approvedJournals.filter((j: any) => {
+          const jDate = new Date(j.journalDate);
+          return jDate.getFullYear() === prevYearNum && (jDate.getMonth() + 1) === prevMonthNum;
+        });
 
         const grossSales = monthJournals.reduce((sum: number, j: any) => sum + (j.totalSales || 0), 0);
+        const prevGrossSales = prevMonthJournals.reduce((sum: number, j: any) => sum + (j.totalSales || 0), 0);
+
+        // Build a daily revenue series for the requested month. The frontend
+        // uses this to render the "Revenue Breakdown" stacked/area chart.
+        const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
+        const dailyMap = new Map<number, { gross: number; transactions: number }>();
+        for (const j of monthJournals) {
+          const day = new Date(j.journalDate).getDate();
+          const cur = dailyMap.get(day) || { gross: 0, transactions: 0 };
+          cur.gross += j.totalSales || 0;
+          cur.transactions += j.transactionCount || 0;
+          dailyMap.set(day, cur);
+        }
+        const dailySeries = Array.from({ length: daysInMonth }, (_, i) => {
+          const d = i + 1;
+          const v = dailyMap.get(d) || { gross: 0, transactions: 0 };
+          return {
+            day: d,
+            date: `${yearNum}-${String(monthNum).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
+            gross: v.gross,
+            net: v.gross / 1.15,
+            vat: v.gross - v.gross / 1.15,
+            transactions: v.transactions,
+          };
+        });
 
         // VAT (15%) - صافي المبيعات = الإجمالي ÷ 1.15
         const netSales = grossSales / 1.15;
@@ -8559,41 +8593,72 @@ export async function registerRoutes(
         
         // قائمة الجنسيات السعودية (بالعربية والإنجليزية)
         const saudiNationalities = ['Saudi', 'saudi', 'سعودي', 'سعودية', 'Saudi Arabia', 'SA'];
-        
+
+        // Per-employee breakdown for the new "Active Employees" panel on the
+        // dashboard. Includes the same payroll calculation as the totals so
+        // the table and aggregate always reconcile.
+        const employeesList: Array<{
+          id: any;
+          name: string;
+          position: string | null;
+          nationality: string | null;
+          isSaudi: boolean;
+          baseSalary: number;
+          housingAllowance: number;
+          transportAllowance: number;
+          totalCompensation: number;
+          gosi: number;
+          nonSaudiOverhead: number;
+          totalCost: number;
+        }> = [];
+
         for (const emp of employees) {
           // استخدام أسماء الأعمدة الصحيحة من قاعدة البيانات
-          const baseSalary = (emp as any).salary || 0;
-          const housingAllowance = (emp as any).housingAllowance || (emp as any).housing_allowance || 0;
-          const transportAllowance = (emp as any).transportAllowance || (emp as any).transport_allowance || 0;
+          const baseSalary = Number((emp as any).salary) || 0;
+          const housingAllowance = Number((emp as any).housingAllowance ?? (emp as any).housing_allowance) || 0;
+          const transportAllowance = Number((emp as any).transportAllowance ?? (emp as any).transport_allowance) || 0;
           const totalCompensation = baseSalary + housingAllowance + transportAllowance;
           
           totalSalaries += totalCompensation;
           
-          const nationality = (emp.nationality || '').trim();
+          const nationality = ((emp as any).nationality || '').trim();
           const isSaudi = saudiNationalities.some(n => 
             nationality.toLowerCase().includes(n.toLowerCase()) || n.toLowerCase().includes(nationality.toLowerCase())
           );
           
+          let empGosi = 0;
+          let empNonSaudi = 0;
           if (isSaudi) {
-            // Saudi GOSI contribution (employer 12% of basic salary + housing)
-            // GOSI is calculated on basic salary + housing allowance only (not transport)
             const gosiBase = baseSalary + housingAllowance;
-            totalGosi += gosiBase * 0.12;
+            empGosi = gosiBase * 0.12;
+            totalGosi += empGosi;
           } else {
-            // Non-Saudi costs (المنشآت الكبيرة - أكثر من 9 موظفين)
-            // رسوم رخصة العمل: 800 ريال/شهر (9,600 سنوياً)
-            // رسوم المقابل المالي: 800 ريال/شهر (9,600 سنوياً)
-            // رسوم تجديد الإقامة: 650 ريال/سنة = 54 ريال/شهر
-            // التأمين الطبي: حوالي 2% من الراتب
-            const workPermitMonthly = 800;  // رخصة العمل
-            const expatLevyMonthly = 800;   // المقابل المالي
-            const residencyMonthly = 54;    // الإقامة (650/12)
-            const insuranceRate = 0.02;     // التأمين الطبي 2%
-            
-            totalNonSaudiCosts += workPermitMonthly + expatLevyMonthly + residencyMonthly + (totalCompensation * insuranceRate);
+            const workPermitMonthly = 800;
+            const expatLevyMonthly = 800;
+            const residencyMonthly = 54;
+            const insuranceRate = 0.02;
+            empNonSaudi = workPermitMonthly + expatLevyMonthly + residencyMonthly + (totalCompensation * insuranceRate);
+            totalNonSaudiCosts += empNonSaudi;
           }
+
+          employeesList.push({
+            id: (emp as any).id,
+            name: (emp as any).fullName || (emp as any).name || (emp as any).employeeName || '—',
+            position: (emp as any).position || (emp as any).jobTitle || null,
+            nationality: nationality || null,
+            isSaudi,
+            baseSalary,
+            housingAllowance,
+            transportAllowance,
+            totalCompensation,
+            gosi: empGosi,
+            nonSaudiOverhead: empNonSaudi,
+            totalCost: totalCompensation + empGosi + empNonSaudi,
+          });
         }
-        
+        // Largest cost first — easier to spot the top contributors.
+        employeesList.sort((a, b) => b.totalCost - a.totalCost);
+
         const totalEmployeeCosts = totalSalaries + totalGosi + totalNonSaudiCosts;
         
         // 7. Calculate totals
@@ -8658,6 +8723,59 @@ export async function registerRoutes(
           netProfit,
           netMargin,
 
+          // Daily revenue series for the requested month (charts)
+          dailySeries,
+
+          // Per-employee payroll breakdown (Active Employees panel)
+          employeesList,
+
+          // Useful operating ratios (computed once on the server so all
+          // clients agree on the same denominators)
+          ratios: {
+            salaryToSales: netSales > 0 ? (totalEmployeeCosts / netSales) * 100 : 0,
+            rentToSales: netSales > 0 ? (monthlyRent / netSales) * 100 : 0,
+            cogsToSales: netSales > 0 ? (cogsCost / netSales) * 100 : 0,
+            utilitiesToSales: netSales > 0 ? (totalUtilities / netSales) * 100 : 0,
+            opexToSales: netSales > 0 ? (totalOperatingCosts / netSales) * 100 : 0,
+            grossMargin,
+            netMargin,
+          },
+
+          // Previous-month comparison block. Uses prev-month sales + prev-month
+          // monthly_inputs but keeps the *current* payroll as a stable baseline
+          // (payroll changes month-to-month are tracked separately via the
+          // monthly closing flow, not via active-employee snapshots).
+          previousMonth: (() => {
+            const prevElectricity = prevInputs?.electricityCost || 0;
+            const prevWater = prevInputs?.waterCost || 0;
+            const prevUtilsOther = prevInputs?.utilitiesOther || 0;
+            const prevCogs = prevInputs?.cogsCost || 0;
+            const prevMaint = prevInputs?.maintenanceCost || 0;
+            const prevMarketing = prevInputs?.marketingCost || 0;
+            const prevSupplies = prevInputs?.suppliesCost || 0;
+            const prevOther = prevInputs?.otherCosts || 0;
+            const prevNetSales = prevGrossSales / 1.15;
+            const prevTotalOpex = totalEmployeeCosts + monthlyRent
+              + prevElectricity + prevWater + prevUtilsOther
+              + prevMaint + prevMarketing + prevSupplies + prevOther;
+            const prevGrossProfit = prevNetSales - prevCogs;
+            const prevNetProfit = prevGrossProfit - prevTotalOpex;
+            // Signed-safe delta: works when previous value is negative (loss → profit)
+            const delta = (current: number, prev: number) => {
+              if (prev === 0) return current === 0 ? 0 : current > 0 ? 100 : -100;
+              return ((current - prev) / Math.abs(prev)) * 100;
+            };
+            return {
+              year: prevYearNum,
+              month: prevMonthNum,
+              grossSales: prevGrossSales,
+              netSales: prevNetSales,
+              netProfit: prevNetProfit,
+              revenueChangePct: delta(grossSales, prevGrossSales),
+              profitChangePct: delta(netProfit, prevNetProfit),
+            };
+          })(),
+
           // Metadata
           journalCount: monthJournals.length,
           employeeCount: employees.length,
@@ -8713,12 +8831,75 @@ export async function registerRoutes(
           netMargin: 0,
           journalCount: results.reduce((s, r) => s + r.journalCount, 0),
           employeeCount: results.reduce((s, r) => s + r.employeeCount, 0),
-          hasMonthlyInputs: results.some(r => r.hasMonthlyInputs)
+          hasMonthlyInputs: results.some(r => r.hasMonthlyInputs),
+
+          // Daily series merged across all branches (one entry per day with
+          // summed gross/net/vat/transactions). Lengths are identical because
+          // every branch builds the same daysInMonth array.
+          dailySeries: (() => {
+            const days = results[0]?.dailySeries?.length || 0;
+            return Array.from({ length: days }, (_, i) => {
+              const sample = results[0].dailySeries[i];
+              const gross = results.reduce((s, r) => s + (r.dailySeries[i]?.gross || 0), 0);
+              const transactions = results.reduce((s, r) => s + (r.dailySeries[i]?.transactions || 0), 0);
+              return {
+                day: sample.day,
+                date: sample.date,
+                gross,
+                net: gross / 1.15,
+                vat: gross - gross / 1.15,
+                transactions,
+              };
+            });
+          })(),
+
+          // Flatten all branches' employees so the dashboard can show one big
+          // ranked table when "all branches" is selected. Each entry carries
+          // its branch label for grouping.
+          employeesList: results.flatMap(r =>
+            r.employeesList.map(e => ({ ...e, branchId: r.branchId, branchName: r.branchName }))
+          ).sort((a, b) => b.totalCost - a.totalCost),
+
+          ratios: {
+            salaryToSales: 0, rentToSales: 0, cogsToSales: 0,
+            utilitiesToSales: 0, opexToSales: 0, grossMargin: 0, netMargin: 0,
+          },
+
+          previousMonth: {
+            year: results[0]?.previousMonth.year ?? prevYearNum,
+            month: results[0]?.previousMonth.month ?? prevMonthNum,
+            grossSales: results.reduce((s, r) => s + (r.previousMonth?.grossSales || 0), 0),
+            netSales: results.reduce((s, r) => s + (r.previousMonth?.netSales || 0), 0),
+            netProfit: results.reduce((s, r) => s + (r.previousMonth?.netProfit || 0), 0),
+            revenueChangePct: 0,
+            profitChangePct: 0,
+          },
         };
         
         totals.grossMargin = totals.netSales > 0 ? (totals.grossProfit / totals.netSales) * 100 : 0;
         totals.netMargin = totals.netSales > 0 ? (totals.netProfit / totals.netSales) * 100 : 0;
-        
+
+        const ns = totals.netSales || 0;
+        totals.ratios = {
+          salaryToSales: ns > 0 ? (totals.employeeCosts.total / ns) * 100 : 0,
+          rentToSales: ns > 0 ? (totals.rent / ns) * 100 : 0,
+          cogsToSales: ns > 0 ? (totals.cogsCost / ns) * 100 : 0,
+          utilitiesToSales: ns > 0 ? (totals.utilities.total / ns) * 100 : 0,
+          opexToSales: ns > 0 ? (totals.totalOperatingCosts / ns) * 100 : 0,
+          grossMargin: totals.grossMargin,
+          netMargin: totals.netMargin,
+        };
+
+        // Signed-safe MoM deltas — identical formula to the per-branch path
+        // so single vs all-branches views agree even when previous profit
+        // was negative.
+        const pmDelta = (current: number, prev: number) => {
+          if (prev === 0) return current === 0 ? 0 : current > 0 ? 100 : -100;
+          return ((current - prev) / Math.abs(prev)) * 100;
+        };
+        totals.previousMonth.revenueChangePct = pmDelta(totals.grossSales, totals.previousMonth.grossSales);
+        totals.previousMonth.profitChangePct = pmDelta(totals.netProfit, totals.previousMonth.netProfit);
+
         console.log(`[perf] /api/pnl/enhanced-summary (multi) branches=${results.length} took ${Date.now() - __t0}ms`);
         return res.json({ branches: results, totals });
       }

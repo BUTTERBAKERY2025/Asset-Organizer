@@ -1040,6 +1040,396 @@ interface PeriodComparison {
   } | null;
 }
 
+// =============================================================================
+// ModernOverview — exactflow-inspired overview tab
+// =============================================================================
+// Rich KPI cards with MoM deltas, daily revenue chart, expense distribution
+// donut, branch ranking, and per-employee payroll breakdown. All data comes
+// straight from /api/pnl/enhanced-summary so the numbers always agree with
+// the rest of the dashboard.
+type ModernOverviewProps = {
+  metrics: any;
+  totals: any;
+  branches: any[];
+  selectedYear: number;
+  selectedMonth: number;
+  monthLabel: string;
+};
+
+function DeltaBadge({ value, invert = false }: { value: number; invert?: boolean }) {
+  const positive = invert ? value < 0 : value > 0;
+  const negative = invert ? value > 0 : value < 0;
+  const Icon = value > 0 ? ArrowUp : value < 0 ? ArrowDown : Minus;
+  const color = positive ? 'text-emerald-200 bg-emerald-500/20' : negative ? 'text-rose-200 bg-rose-500/20' : 'text-white/80 bg-white/10';
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${color}`}>
+      <Icon className="h-3 w-3" />
+      {Math.abs(value).toFixed(1)}%
+    </span>
+  );
+}
+
+function HeroKpiCard({
+  title, value, subtitle, delta, icon: Icon, gradient, deltaInvert = false,
+}: {
+  title: string; value: string; subtitle?: string;
+  delta?: number; icon: any; gradient: string; deltaInvert?: boolean;
+}) {
+  return (
+    <Card className={`relative overflow-hidden border-0 text-white shadow-lg ${gradient}`}>
+      <div className="absolute -top-8 -left-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+      <CardContent className="relative p-5">
+        <div className="flex items-start justify-between">
+          <div className="rounded-xl bg-white/15 p-2.5 backdrop-blur-sm">
+            <Icon className="h-5 w-5" />
+          </div>
+          {typeof delta === 'number' && <DeltaBadge value={delta} invert={deltaInvert} />}
+        </div>
+        <div className="mt-4">
+          <p className="text-sm font-medium text-white/80">{title}</p>
+          <p className="mt-1 text-2xl font-bold tracking-tight" dir="ltr">{value}</p>
+          {subtitle && <p className="mt-1 text-xs text-white/70">{subtitle}</p>}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RatingBar({ value, max = 100, label, color }: { value: number; max?: number; label: string; color: string }) {
+  const pct = Math.min(100, (Math.abs(value) / max) * 100);
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-xs">
+        <span className="font-medium text-foreground">{label}</span>
+        <span className="font-bold text-muted-foreground" dir="ltr">{value.toFixed(1)}%</span>
+      </div>
+      <div className="h-2 w-full rounded-full bg-muted">
+        <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth, monthLabel }: ModernOverviewProps) {
+  const dailySeries: any[] = totals.dailySeries || [];
+  const employeesList: any[] = totals.employeesList || [];
+  const ratios = totals.ratios || {};
+  const prev = totals.previousMonth || {};
+
+  // Expense distribution for the donut chart
+  const expenseSlices = useMemo(() => ([
+    { name: 'تكاليف الموظفين', value: totals.employeeCosts?.total || 0, color: '#6366F1' },
+    { name: 'تكلفة البضاعة', value: totals.cogsCost || 0, color: '#10B981' },
+    { name: 'إيجار', value: totals.rent || 0, color: '#F59E0B' },
+    { name: 'مرافق', value: totals.utilities?.total || 0, color: '#EF4444' },
+    { name: 'صيانة', value: totals.operatingCosts?.maintenance || 0, color: '#8B5CF6' },
+    { name: 'تسويق', value: totals.operatingCosts?.marketing || 0, color: '#EC4899' },
+    { name: 'مستلزمات', value: totals.operatingCosts?.supplies || 0, color: '#14B8A6' },
+    { name: 'أخرى', value: totals.operatingCosts?.other || 0, color: '#64748B' },
+  ].filter(s => s.value > 0)), [totals]);
+
+  const branchRanking = useMemo(() => {
+    return [...(branches || [])]
+      .map((b: any) => ({
+        ...b,
+        salaryRatio: b.ratios?.salaryToSales ?? (b.netSales > 0 ? ((b.employeeCosts?.total || 0) / b.netSales) * 100 : 0),
+      }))
+      .sort((a: any, b: any) => (b.netProfit || 0) - (a.netProfit || 0));
+  }, [branches]);
+
+  const maxBranchRevenue = Math.max(1, ...branchRanking.map((b: any) => b.grossSales || 0));
+  const totalPayrollCost = employeesList.reduce((s: number, e: any) => s + e.totalCost, 0) || 1;
+
+  const profitColor = (totals.netProfit || 0) >= 0
+    ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
+    : 'bg-gradient-to-br from-rose-500 to-red-600';
+  const salaryRatio = ratios.salaryToSales || 0;
+  const salaryColor = salaryRatio <= 25 ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
+    : salaryRatio <= 35 ? 'bg-gradient-to-br from-amber-500 to-orange-600'
+    : 'bg-gradient-to-br from-rose-500 to-red-600';
+
+  return (
+    <div className="space-y-6">
+      {/* Hero strip */}
+      <div className="rounded-2xl bg-gradient-to-l from-[#1f2937] via-[#111827] to-[#0f172a] p-6 text-white shadow-xl">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm text-white/60">لوحة الأرباح والخسائر</p>
+            <h2 className="mt-1 text-2xl font-bold">{monthLabel} {selectedYear}</h2>
+            <p className="mt-1 text-sm text-white/70">
+              {totals.branchName || 'جميع الفروع'} • {totals.journalCount || 0} يومية معتمدة • {totals.employeeCount || 0} موظف نشط
+            </p>
+          </div>
+          <div className="flex items-baseline gap-3">
+            <div className="text-right">
+              <p className="text-xs text-white/60">إجمالي المبيعات (شامل الضريبة)</p>
+              <p className="text-3xl font-bold tracking-tight" dir="ltr">{formatCurrency(totals.grossSales || 0)}</p>
+            </div>
+            {typeof prev.revenueChangePct === 'number' && <DeltaBadge value={prev.revenueChangePct} />}
+          </div>
+        </div>
+      </div>
+
+      {/* Hero KPI Cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <HeroKpiCard
+          title="صافي المبيعات"
+          value={formatCurrency(totals.netSales || 0)}
+          subtitle={`بعد خصم ضريبة ${formatCurrency(totals.vatAmount || 0)}`}
+          delta={prev.revenueChangePct}
+          icon={DollarSign}
+          gradient="bg-gradient-to-br from-indigo-500 to-purple-600"
+        />
+        <HeroKpiCard
+          title="صافي الربح"
+          value={formatCurrency(totals.netProfit || 0)}
+          subtitle={`هامش ${formatPercent(totals.netMargin || 0)}`}
+          delta={prev.profitChangePct}
+          icon={TrendingUp}
+          gradient={profitColor}
+        />
+        <HeroKpiCard
+          title="نسبة الرواتب للمبيعات"
+          value={`${(salaryRatio).toFixed(1)}%`}
+          subtitle={`${formatCurrency(totals.employeeCosts?.total || 0)} تكلفة شهرية`}
+          icon={Users}
+          gradient={salaryColor}
+          deltaInvert
+        />
+        <HeroKpiCard
+          title="إجمالي المصروفات"
+          value={formatCurrency(totals.totalOperatingCosts || 0)}
+          subtitle={`${formatPercent(ratios.opexToSales || 0)} من المبيعات`}
+          icon={Wallet}
+          gradient="bg-gradient-to-br from-slate-700 to-slate-900"
+        />
+      </div>
+
+      {/* Daily revenue + total revenue card */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div>
+              <CardTitle className="text-base font-bold">حركة الإيرادات اليومية</CardTitle>
+              <CardDescription className="text-xs">صافي المبيعات والضريبة لكل يوم خلال {monthLabel}</CardDescription>
+            </div>
+            <Badge variant="outline" className="font-mono text-xs">
+              متوسط يومي: {formatCurrency((totals.grossSales || 0) / Math.max(1, dailySeries.filter(d => d.gross > 0).length))}
+            </Badge>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={280}>
+              <ComposedChart data={dailySeries}>
+                <defs>
+                  <linearGradient id="netRevGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#6366F1" stopOpacity={0.85} />
+                    <stop offset="100%" stopColor="#6366F1" stopOpacity={0.35} />
+                  </linearGradient>
+                  <linearGradient id="vatGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#F59E0B" stopOpacity={0.85} />
+                    <stop offset="100%" stopColor="#F59E0B" stopOpacity={0.35} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => v >= 1000 ? `${Math.round(v / 1000)}k` : v} />
+                <Tooltip
+                  formatter={(v: any, name: string) => [formatCurrency(Number(v)), name]}
+                  labelFormatter={(l) => `اليوم ${l}`}
+                  contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', direction: 'rtl' }}
+                />
+                <Legend />
+                <Bar dataKey="net" name="صافي المبيعات" stackId="rev" fill="url(#netRevGrad)" radius={[0, 0, 4, 4]} />
+                <Bar dataKey="vat" name="الضريبة" stackId="rev" fill="url(#vatGrad)" radius={[4, 4, 0, 0]} />
+                <Line type="monotone" dataKey="gross" name="الإجمالي" stroke="#0EA5E9" strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-bold">مؤشرات الكفاءة</CardTitle>
+            <CardDescription className="text-xs">نسب المصروفات الرئيسية من المبيعات</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <RatingBar label="الرواتب / المبيعات" value={ratios.salaryToSales || 0} max={50} color="bg-gradient-to-l from-indigo-500 to-purple-500" />
+            <RatingBar label="الإيجار / المبيعات" value={ratios.rentToSales || 0} max={25} color="bg-gradient-to-l from-amber-500 to-orange-500" />
+            <RatingBar label="تكلفة البضاعة / المبيعات" value={ratios.cogsToSales || 0} max={60} color="bg-gradient-to-l from-emerald-500 to-teal-500" />
+            <RatingBar label="المرافق / المبيعات" value={ratios.utilitiesToSales || 0} max={20} color="bg-gradient-to-l from-rose-500 to-red-500" />
+            <RatingBar label="إجمالي التشغيل / المبيعات" value={ratios.opexToSales || 0} max={100} color="bg-gradient-to-l from-slate-600 to-slate-800" />
+            <div className="mt-4 rounded-lg bg-muted/50 p-3 text-center">
+              <p className="text-xs text-muted-foreground">هامش الربح الصافي</p>
+              <p className={`text-2xl font-bold ${(totals.netMargin || 0) >= 20 ? 'text-emerald-600' : (totals.netMargin || 0) >= 10 ? 'text-amber-600' : 'text-rose-600'}`}>
+                {formatPercent(totals.netMargin || 0)}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Expense distribution + Branch ranking */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-bold">توزيع المصروفات</CardTitle>
+            <CardDescription className="text-xs">إجمالي {formatCurrency(totals.totalOperatingCosts || 0)}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={240}>
+              <RePieChart>
+                <Pie
+                  data={expenseSlices}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={55}
+                  outerRadius={90}
+                  paddingAngle={2}
+                >
+                  {expenseSlices.map((s, i) => <Cell key={i} fill={s.color} />)}
+                </Pie>
+                <Tooltip
+                  formatter={(v: any) => formatCurrency(Number(v))}
+                  contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', direction: 'rtl' }}
+                />
+              </RePieChart>
+            </ResponsiveContainer>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+              {expenseSlices.map((s, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
+                  <span className="flex-1 truncate text-muted-foreground">{s.name}</span>
+                  <span className="font-semibold" dir="ltr">{((s.value / (totals.totalOperatingCosts || 1)) * 100).toFixed(0)}%</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-bold">ترتيب الفروع حسب الأداء</CardTitle>
+            <CardDescription className="text-xs">صافي الربح والإيرادات لكل فرع</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {branchRanking.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">لا توجد فروع للمقارنة</p>
+            ) : (
+              <div className="space-y-3">
+                {branchRanking.map((b: any, idx: number) => {
+                  const widthPct = ((b.grossSales || 0) / maxBranchRevenue) * 100;
+                  const profitOk = (b.netProfit || 0) >= 0;
+                  return (
+                    <div key={b.branchId} data-testid={`row-branch-${b.branchId}`}>
+                      <div className="mb-1 flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${idx === 0 ? 'bg-amber-100 text-amber-700' : idx === 1 ? 'bg-slate-100 text-slate-700' : idx === 2 ? 'bg-orange-100 text-orange-700' : 'bg-muted text-muted-foreground'}`}>
+                            {idx + 1}
+                          </span>
+                          <span className="font-semibold">{b.branchName}</span>
+                          <Badge variant="outline" className="text-[10px]">
+                            رواتب {(b.salaryRatio || 0).toFixed(1)}%
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs">
+                          <span className="text-muted-foreground" dir="ltr">{formatCurrency(b.grossSales || 0)}</span>
+                          <span className={`font-bold ${profitOk ? 'text-emerald-600' : 'text-rose-600'}`} dir="ltr">
+                            {profitOk ? '' : '-'}{formatCurrency(Math.abs(b.netProfit || 0))}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={`h-full rounded-full ${profitOk ? 'bg-gradient-to-l from-emerald-500 to-teal-500' : 'bg-gradient-to-l from-rose-500 to-red-500'}`}
+                          style={{ width: `${widthPct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Active employees panel */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <div>
+            <CardTitle className="text-base font-bold flex items-center gap-2">
+              <Users className="h-4 w-4 text-indigo-500" />
+              تكلفة الموظفين النشطين ({employeesList.length})
+            </CardTitle>
+            <CardDescription className="text-xs">
+              إجمالي تكلفة الرواتب والمزايا والتأمينات الشهرية: {formatCurrency(totalPayrollCost)}
+            </CardDescription>
+          </div>
+          <Badge variant="secondary" className="font-mono">
+            نسبة من المبيعات: {(ratios.salaryToSales || 0).toFixed(1)}%
+          </Badge>
+        </CardHeader>
+        <CardContent>
+          {employeesList.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">لا يوجد موظفون نشطون</p>
+          ) : (
+            <ScrollArea className="h-[360px] pr-2">
+              <table className="w-full text-sm" data-testid="table-active-employees">
+                <thead className="sticky top-0 bg-background">
+                  <tr className="border-b text-right text-xs text-muted-foreground">
+                    <th className="py-2 font-medium">#</th>
+                    <th className="py-2 font-medium">الاسم</th>
+                    <th className="py-2 font-medium">الوظيفة</th>
+                    {totals.branchId === 'all' && <th className="py-2 font-medium">الفرع</th>}
+                    <th className="py-2 font-medium">الجنسية</th>
+                    <th className="py-2 font-medium text-left">الراتب الأساسي</th>
+                    <th className="py-2 font-medium text-left">البدلات</th>
+                    <th className="py-2 font-medium text-left">تأمينات/تكاليف</th>
+                    <th className="py-2 font-medium text-left">الإجمالي</th>
+                    <th className="py-2 font-medium text-left">%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employeesList.map((e: any, idx: number) => {
+                    const allowances = (e.housingAllowance || 0) + (e.transportAllowance || 0);
+                    const overhead = (e.gosi || 0) + (e.nonSaudiOverhead || 0);
+                    const pct = (e.totalCost / totalPayrollCost) * 100;
+                    return (
+                      <tr key={e.id || idx} className="border-b text-right last:border-0 hover:bg-muted/50" data-testid={`row-employee-${e.id}`}>
+                        <td className="py-2 text-xs text-muted-foreground">{idx + 1}</td>
+                        <td className="py-2 font-medium">{e.name}</td>
+                        <td className="py-2 text-xs text-muted-foreground">{e.position || '—'}</td>
+                        {totals.branchId === 'all' && <td className="py-2 text-xs text-muted-foreground">{e.branchName || '—'}</td>}
+                        <td className="py-2 text-xs">
+                          <Badge variant={e.isSaudi ? 'default' : 'secondary'} className="text-[10px]">
+                            {e.nationality || (e.isSaudi ? 'سعودي' : 'غير سعودي')}
+                          </Badge>
+                        </td>
+                        <td className="py-2 text-left" dir="ltr">{formatCurrency(e.baseSalary)}</td>
+                        <td className="py-2 text-left text-muted-foreground" dir="ltr">{formatCurrency(allowances)}</td>
+                        <td className="py-2 text-left text-muted-foreground" dir="ltr">{formatCurrency(overhead)}</td>
+                        <td className="py-2 text-left font-bold text-indigo-600" dir="ltr">{formatCurrency(e.totalCost)}</td>
+                        <td className="py-2 text-left">
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-12 overflow-hidden rounded-full bg-muted">
+                              <div className="h-full bg-gradient-to-l from-indigo-500 to-purple-500" style={{ width: `${Math.min(100, pct)}%` }} />
+                            </div>
+                            <span className="text-xs font-semibold" dir="ltr">{pct.toFixed(1)}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </ScrollArea>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function PnLDashboard() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -2145,428 +2535,30 @@ export default function PnLDashboard() {
               </TabsList>
 
               <TabsContent value="overview" className="space-y-6">
-                {loadingPnL ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  </div>
-                ) : metrics ? (
-                  <>
-                    <div className="flex items-center justify-between mb-6">
-                      <Badge
-                        className={`text-lg px-4 py-2 ${RATING_COLORS[metrics.rating]?.bg} ${RATING_COLORS[metrics.rating]?.text}`}
-                      >
-                        <Award className="h-5 w-5 ml-2" />
-                        التقييم: {RATING_COLORS[metrics.rating]?.label}
-                      </Badge>
-                      
-                      {comparison && (
-                        <div className="flex gap-4">
-                          {comparison.previousMonth && (
-                            <div className="flex items-center gap-2 text-sm">
-                              <History className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-muted-foreground">مقارنة بالشهر السابق:</span>
-                              <Badge variant={comparison.previousMonth.revenueChange >= 0 ? "default" : "destructive"}>
-                                {comparison.previousMonth.revenueChange >= 0 ? (
-                                  <ArrowUp className="h-3 w-3 ml-1" />
-                                ) : (
-                                  <ArrowDown className="h-3 w-3 ml-1" />
-                                )}
-                                {formatPercent(Math.abs(comparison.previousMonth.revenueChange))}
-                              </Badge>
-                            </div>
-                          )}
-                          {comparison.lastYear && (
-                            <div className="flex items-center gap-2 text-sm">
-                              <span className="text-muted-foreground">سنوياً:</span>
-                              <Badge variant={comparison.lastYear.revenueChange >= 0 ? "default" : "destructive"}>
-                                {comparison.lastYear.revenueChange >= 0 ? (
-                                  <ArrowUp className="h-3 w-3 ml-1" />
-                                ) : (
-                                  <ArrowDown className="h-3 w-3 ml-1" />
-                                )}
-                                {formatPercent(Math.abs(comparison.lastYear.revenueChange))}
-                              </Badge>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                  {loadingEnhancedPnL && !enhancedPnL ? (
+                    <div className="flex items-center justify-center py-24">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     </div>
-
-                    {/* Cashier Summary Preview */}
-                    {cashierSummary && cashierSummary.summary.journalsCount > 0 && (
-                      <Card className="mb-4 bg-blue-50 border-blue-200">
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <Receipt className="h-5 w-5 text-blue-600" />
-                              <div>
-                                <p className="font-medium text-blue-900">بيانات سجل الكاشير المتوفرة</p>
-                                <p className="text-sm text-blue-700">
-                                  {cashierSummary.summary.journalsCount} سجل - {cashierSummary.summary.daysWithData} يوم - 
-                                  إجمالي {formatCurrency(cashierSummary.summary.totalSales)}
-                                </p>
-                              </div>
-                            </div>
-                            <Button 
-                              size="sm" 
-                              onClick={() => importSalesMutation.mutate(selectedPeriodId!)}
-                              disabled={importSalesMutation.isPending}
-                              data-testid="button-import-cashier-inline"
-                            >
-                              {importSalesMutation.isPending ? (
-                                <Loader2 className="h-4 w-4 animate-spin ml-2" />
-                              ) : (
-                                <Download className="h-4 w-4 ml-2" />
-                              )}
-                              استيراد
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    <div className="kpi-grid">
-                      <Card className="border-l-4 border-l-blue-500">
-                        <CardContent className="p-3 sm:p-4 md:p-6">
-                          <div className="flex items-center justify-between">
-                            <div className="min-w-0">
-                              <p className="text-xs sm:text-sm text-muted-foreground">إجمالي الإيرادات</p>
-                              <p className="text-lg sm:text-xl md:text-2xl font-bold truncate">{formatCurrency(metrics.totalRevenue)}</p>
-                            </div>
-                            <DollarSign className="h-8 w-8 sm:h-10 sm:w-10 text-blue-500 opacity-50 shrink-0" />
-                          </div>
-                          <div className="mt-2 text-[10px] sm:text-xs text-muted-foreground">
-                            {metrics.invoiceCount} فاتورة - متوسط {formatCurrency(metrics.avgInvoiceValue)}
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      <Card className="border-l-4 border-l-green-500">
-                        <CardContent className="p-3 sm:p-4 md:p-6">
-                          <div className="flex items-center justify-between">
-                            <div className="min-w-0">
-                              <p className="text-xs sm:text-sm text-muted-foreground">إجمالي الربح</p>
-                              <p className="text-lg sm:text-xl md:text-2xl font-bold truncate">{formatCurrency(metrics.grossProfit)}</p>
-                            </div>
-                            <TrendingUp className="h-8 w-8 sm:h-10 sm:w-10 text-green-500 opacity-50 shrink-0" />
-                          </div>
-                          <div className="mt-2 flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2">
-                            <Badge variant="secondary" className="text-[10px] sm:text-xs">{formatPercent(metrics.grossMarginPct)}</Badge>
-                            <span className="text-[10px] sm:text-xs text-muted-foreground">هامش إجمالي</span>
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      <Card className={`border-l-4 ${metrics.netMarginPct >= 20 ? "border-l-emerald-500" : metrics.netMarginPct >= 15 ? "border-l-blue-500" : metrics.netMarginPct >= 10 ? "border-l-yellow-500" : "border-l-red-500"}`}>
-                        <CardContent className="p-3 sm:p-4 md:p-6">
-                          <div className="flex items-center justify-between">
-                            <div className="min-w-0">
-                              <p className="text-xs sm:text-sm text-muted-foreground">صافي الربح</p>
-                              <p className={`text-lg sm:text-xl md:text-2xl font-bold truncate ${metrics.netProfit >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                                {formatCurrency(metrics.netProfit)}
-                              </p>
-                            </div>
-                            {metrics.netProfit >= 0 ? (
-                              <TrendingUp className="h-8 w-8 sm:h-10 sm:w-10 text-emerald-500 opacity-50 shrink-0" />
-                            ) : (
-                              <TrendingDown className="h-8 w-8 sm:h-10 sm:w-10 text-red-500 opacity-50 shrink-0" />
-                            )}
-                          </div>
-                          <div className="mt-2 flex flex-col gap-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] sm:text-xs text-muted-foreground">هامش صافي الربح:</span>
-                              <Badge 
-                                className={`text-[10px] sm:text-xs ${
-                                  metrics.netMarginPct >= 20 ? "bg-green-100 text-green-800" : 
-                                  metrics.netMarginPct >= 15 ? "bg-blue-100 text-blue-800" : 
-                                  metrics.netMarginPct >= 10 ? "bg-yellow-100 text-yellow-800" : 
-                                  "bg-red-100 text-red-800"
-                                }`}
-                              >
-                                {formatPercent(metrics.netMarginPct)}
-                              </Badge>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              {metrics.netMarginPct >= 20 ? (
-                                <Badge className="bg-green-500 text-white text-[9px]">✓ ضمن الهدف (20-25%)</Badge>
-                              ) : (
-                                <Badge className="bg-orange-500 text-white text-[9px]">الهدف: 20-25%</Badge>
-                              )}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      <Card className="border-l-4 border-l-amber-500">
-                        <CardContent className="p-3 sm:p-4 md:p-6">
-                          <div className="flex items-center justify-between">
-                            <div className="min-w-0">
-                              <p className="text-xs sm:text-sm text-muted-foreground">نقطة التعادل</p>
-                              <p className="text-lg sm:text-xl md:text-2xl font-bold truncate">{formatCurrency(metrics.breakEvenSales)}</p>
-                            </div>
-                            <Target className="h-8 w-8 sm:h-10 sm:w-10 text-amber-500 opacity-50 shrink-0" />
-                          </div>
-                          <div className="mt-2 text-[10px] sm:text-xs text-muted-foreground">
-                            {metrics.totalRevenue >= metrics.breakEvenSales ? (
-                              <span className="text-green-600">✓ تجاوز التعادل</span>
-                            ) : (
-                              <span className="text-red-600">✗ قبل التعادل</span>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                      <Card>
-                        <CardContent className="p-3 sm:p-4 md:p-6">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Users className="h-4 w-4 sm:h-5 sm:w-5 text-purple-500" />
-                            <span className="font-medium text-xs sm:text-sm">نسبة الرواتب للمبيعات</span>
-                          </div>
-                          <p className="text-xl sm:text-2xl md:text-3xl font-bold">{formatPercent(metrics.salaryToSalesPct)}</p>
-                          <div className="mt-2">
-                            {metrics.salaryToSalesPct <= 25 ? (
-                              <Badge className="bg-green-100 text-green-800 text-[10px] sm:text-xs">ممتاز</Badge>
-                            ) : metrics.salaryToSalesPct <= 35 ? (
-                              <Badge className="bg-yellow-100 text-yellow-800 text-[10px] sm:text-xs">مقبول</Badge>
-                            ) : (
-                              <Badge className="bg-red-100 text-red-800 text-[10px] sm:text-xs">مرتفع</Badge>
-                            )}
-                          </div>
-                          <div className="mt-2 pt-2 border-t border-dashed">
-                            <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-relaxed">
-                              <span className="font-semibold">طريقة الحساب:</span> (إجمالي تكاليف الموظفين ÷ صافي المبيعات) × 100
-                            </p>
-                            <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-1">
-                              <span className="text-green-600">≤25% ممتاز</span> • <span className="text-yellow-600">25-35% مقبول</span> • <span className="text-red-600">&gt;35% مرتفع</span>
-                            </p>
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      <Card>
-                        <CardContent className="p-3 sm:p-4 md:p-6">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Home className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500" />
-                            <span className="font-medium text-xs sm:text-sm">نسبة الإيجار للإيرادات</span>
-                          </div>
-                          <p className="text-xl sm:text-2xl md:text-3xl font-bold">{formatPercent(metrics.rentToRevenuePct)}</p>
-                          <div className="mt-2">
-                            {metrics.rentToRevenuePct <= 10 ? (
-                              <Badge className="bg-green-100 text-green-800 text-[10px] sm:text-xs">ممتاز</Badge>
-                            ) : metrics.rentToRevenuePct <= 15 ? (
-                              <Badge className="bg-yellow-100 text-yellow-800 text-[10px] sm:text-xs">مقبول</Badge>
-                            ) : (
-                              <Badge className="bg-red-100 text-red-800 text-[10px] sm:text-xs">مرتفع</Badge>
-                            )}
-                          </div>
-                          <div className="mt-2 pt-2 border-t border-dashed">
-                            <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-relaxed">
-                              <span className="font-semibold">طريقة الحساب:</span> (الإيجار الشهري ÷ صافي المبيعات) × 100
-                            </p>
-                            <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-1">
-                              <span className="text-green-600">≤10% ممتاز</span> • <span className="text-yellow-600">10-15% مقبول</span> • <span className="text-red-600">&gt;15% مرتفع</span>
-                            </p>
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      <Card>
-                        <CardContent className="p-3 sm:p-4 md:p-6">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Package className="h-4 w-4 sm:h-5 sm:w-5 text-red-500" />
-                            <span className="font-medium text-xs sm:text-sm">نسبة الهدر</span>
-                          </div>
-                          <p className="text-xl sm:text-2xl md:text-3xl font-bold">{formatPercent(metrics.wastePct)}</p>
-                          <div className="mt-2">
-                            {metrics.wastePct <= 3 ? (
-                              <Badge className="bg-green-100 text-green-800 text-[10px] sm:text-xs">ممتاز</Badge>
-                            ) : metrics.wastePct <= 5 ? (
-                              <Badge className="bg-yellow-100 text-yellow-800 text-[10px] sm:text-xs">مقبول</Badge>
-                            ) : (
-                              <Badge className="bg-red-100 text-red-800 text-[10px] sm:text-xs">مرتفع</Badge>
-                            )}
-                          </div>
-                          <div className="mt-2 pt-2 border-t border-dashed">
-                            <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-relaxed">
-                              <span className="font-semibold">طريقة الحساب:</span> (قيمة الهدر ÷ إجمالي المبيعات) × 100
-                            </p>
-                            <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-1">
-                              <span className="text-green-600">≤3% ممتاز</span> • <span className="text-yellow-600">3-5% مقبول</span> • <span className="text-red-600">&gt;5% مرتفع</span>
-                            </p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                    {/* Advanced Financial KPIs */}
-                    <div className="kpi-grid">
-                      <Card className="border-l-4 border-l-indigo-500">
-                        <CardContent className="p-3 sm:p-4 md:p-6">
-                          <div className="flex items-center gap-2 mb-2">
-                            <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-500" />
-                            <span className="font-medium text-xs sm:text-sm">EBITDA</span>
-                          </div>
-                          <p className="text-lg sm:text-xl md:text-2xl font-bold truncate">{formatCurrency(metrics.ebitda || 0)}</p>
-                          <div className="mt-2 flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2">
-                            <Badge variant="secondary" className="text-[10px] sm:text-xs">{formatPercent(metrics.ebitdaMarginPct || 0)}</Badge>
-                            <span className="text-[10px] sm:text-xs text-muted-foreground">هامش EBITDA</span>
-                          </div>
-                          <div className="mt-2 pt-2 border-t border-dashed">
-                            <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-relaxed">
-                              <span className="font-semibold">طريقة الحساب:</span> صافي الربح + الإهلاك + الفوائد + الضرائب
-                            </p>
-                            <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-1">
-                              <span className="font-semibold">هامش EBITDA:</span> (EBITDA ÷ صافي المبيعات) × 100
-                            </p>
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      <Card className="border-l-4 border-l-cyan-500">
-                        <CardContent className="p-3 sm:p-4 md:p-6">
-                          <div className="flex items-center gap-2 mb-2">
-                            <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-cyan-500" />
-                            <span className="font-medium text-xs sm:text-sm">هامش المساهمة</span>
-                          </div>
-                          <p className="text-lg sm:text-xl md:text-2xl font-bold truncate">{formatCurrency(metrics.contributionMargin || 0)}</p>
-                          <div className="mt-2 flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2">
-                            <Badge variant="secondary" className="text-[10px] sm:text-xs">{formatPercent(metrics.contributionMarginPct || 0)}</Badge>
-                            <span className="text-[10px] sm:text-xs text-muted-foreground">من الإيرادات</span>
-                          </div>
-                          <div className="mt-2 pt-2 border-t border-dashed">
-                            <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-relaxed">
-                              <span className="font-semibold">طريقة الحساب:</span> صافي المبيعات - التكاليف المتغيرة
-                            </p>
-                            <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-1">
-                              <span className="font-semibold">النسبة:</span> (هامش المساهمة ÷ صافي المبيعات) × 100
-                            </p>
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      <Card className="border-l-4 border-l-pink-500">
-                        <CardContent className="p-3 sm:p-4 md:p-6">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Calculator className="h-4 w-4 sm:h-5 sm:w-5 text-pink-500" />
-                            <span className="font-medium text-xs sm:text-sm">الربح التشغيلي</span>
-                          </div>
-                          <p className={`text-lg sm:text-xl md:text-2xl font-bold truncate ${(metrics.operatingProfit || 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                            {formatCurrency(metrics.operatingProfit || 0)}
-                          </p>
-                          <div className="mt-2 flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2">
-                            <Badge variant={(metrics.operatingProfit || 0) >= 0 ? "default" : "destructive"} className="text-[10px] sm:text-xs">
-                              {formatPercent(metrics.operatingMarginPct || 0)}
-                            </Badge>
-                            <span className="text-[10px] sm:text-xs text-muted-foreground">هامش تشغيلي</span>
-                          </div>
-                          <div className="mt-2 pt-2 border-t border-dashed">
-                            <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-relaxed">
-                              <span className="font-semibold">طريقة الحساب:</span> إجمالي الربح - المصروفات التشغيلية
-                            </p>
-                            <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-1">
-                              <span className="font-semibold">الهامش:</span> (الربح التشغيلي ÷ صافي المبيعات) × 100
-                            </p>
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      <Card className="border-l-4 border-l-violet-500">
-                        <CardContent className="p-3 sm:p-4 md:p-6">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Users className="h-4 w-4 sm:h-5 sm:w-5 text-violet-500" />
-                            <span className="font-medium text-xs sm:text-sm">إنتاجية العمالة</span>
-                          </div>
-                          <p className="text-lg sm:text-xl md:text-2xl font-bold truncate">{formatCurrency(metrics.revenuePerEmployee || 0)}</p>
-                          <div className="mt-2">
-                            <span className="text-[10px] sm:text-xs text-muted-foreground">
-                              لكل موظف من {metrics.employeeCount || 0} موظف
-                            </span>
-                          </div>
-                          {metrics.laborProductivity && metrics.laborProductivity > 0 && (
-                            <div className="mt-1">
-                              <Badge variant="outline" className="text-[10px] sm:text-xs">
-                                {formatPercent(metrics.laborProductivity)} عائد للراتب
-                              </Badge>
-                            </div>
-                          )}
-                          <div className="mt-2 pt-2 border-t border-dashed">
-                            <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-relaxed">
-                              <span className="font-semibold">طريقة الحساب:</span> إجمالي المبيعات ÷ عدد الموظفين
-                            </p>
-                            <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-1">
-                              <span className="font-semibold">عائد الراتب:</span> (إجمالي المبيعات ÷ إجمالي الرواتب) × 100
-                            </p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                    {(metrics.ratingReasons?.length > 0 || metrics.recommendations?.length > 0) && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {metrics.ratingReasons?.length > 0 && (
-                          <Card>
-                            <CardHeader>
-                              <CardTitle className="flex items-center gap-2 text-lg">
-                                <AlertTriangle className="h-5 w-5 text-amber-500" />
-                                أسباب التقييم
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <ul className="space-y-2">
-                                {metrics.ratingReasons.map((reason, index) => (
-                                  <li key={index} className="flex items-start gap-2 text-sm">
-                                    <span className="text-amber-500 mt-1">•</span>
-                                    {reason}
-                                  </li>
-                                ))}
-                              </ul>
-                            </CardContent>
-                          </Card>
-                        )}
-
-                        {metrics.recommendations?.length > 0 && (
-                          <Card>
-                            <CardHeader>
-                              <CardTitle className="flex items-center gap-2 text-lg">
-                                <Lightbulb className="h-5 w-5 text-blue-500" />
-                                التوصيات
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <ul className="space-y-2">
-                                {metrics.recommendations.map((rec, index) => (
-                                  <li key={index} className="flex items-start gap-2 text-sm">
-                                    <span className="text-blue-500 mt-1">•</span>
-                                    {rec}
-                                  </li>
-                                ))}
-                              </ul>
-                            </CardContent>
-                          </Card>
-                        )}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <Card>
-                    <CardContent className="p-12 text-center">
-                      <FileText className="h-16 w-16 mx-auto text-muted-foreground opacity-50 mb-4" />
-                      <h3 className="text-xl font-semibold mb-2">لا توجد بيانات متاحة</h3>
-                      <p className="text-muted-foreground mb-4">
-                        يرجى إدخال بيانات التكاليف الشهرية للفترة المحددة
-                      </p>
-                      <Button
-                        onClick={() => setShowMonthlyInputs(true)}
-                      >
-                        <Plus className="h-4 w-4 ml-2" />
-                        إدخال بيانات التكاليف الشهرية
-                      </Button>
-                    </CardContent>
-                  </Card>
-                )}
-              </TabsContent>
+                  ) : metrics && enhancedPnL?.totals ? (
+                    <ModernOverview
+                      metrics={metrics}
+                      totals={enhancedPnL.totals}
+                      branches={enhancedPnL.branches || []}
+                      selectedYear={selectedYear}
+                      selectedMonth={selectedMonth}
+                      monthLabel={MONTHS_AR[selectedMonth - 1]}
+                    />
+                  ) : (
+                    <Card>
+                      <CardContent className="py-16 text-center text-muted-foreground">
+                        <BarChart3 className="h-12 w-12 mx-auto mb-3 opacity-40" />
+                        <p className="text-lg font-semibold mb-1">لا توجد بيانات لهذه الفترة</p>
+                        <p className="text-sm">اختر فرعاً وشهراً لعرض لوحة الأرباح والخسائر.</p>
+                      </CardContent>
+                    </Card>
+                  )}
+                </TabsContent>
+  
 
               <TabsContent value="details" className="space-y-6">
                 {enhancedPnL && enhancedPnL.totals ? (
