@@ -1273,6 +1273,121 @@ function ModernOverview({ metrics, totals, branches, selectedYear, selectedMonth
         </Card>
       </div>
 
+      {/* Salary-to-sales detailed breakdown — every payroll component as its
+          own ratio of net sales, plus the combined total. Lets management see
+          exactly which portion of payroll is eating margin. */}
+      {(() => {
+        const ns = totals.netSales || 0;
+        const ec = totals.employeeCosts || {};
+        const salaries = ec.salaries || 0;
+        const gosi = ec.gosi || 0;
+        const nonSaudi = ec.nonSaudiCosts || 0;
+        const total = ec.total || (salaries + gosi + nonSaudi);
+        const pct = (v: number) => ns > 0 ? (v / ns) * 100 : 0;
+        const row = (
+          label: string,
+          amount: number,
+          color: string,
+          barColor: string,
+          testId: string,
+          hint?: string,
+        ) => {
+          const p = pct(amount);
+          return (
+            <div className="rounded-lg border bg-white p-3" data-testid={testId}>
+              <div className="flex items-center justify-between mb-1">
+                <div>
+                  <p className="text-sm font-medium text-foreground">{label}</p>
+                  {hint && <p className="text-[10px] text-muted-foreground mt-0.5">{hint}</p>}
+                </div>
+                <div className="text-left">
+                  <p className={`text-lg font-bold ${color}`} dir="ltr">{p.toFixed(1)}%</p>
+                  <p className="text-xs text-muted-foreground" dir="ltr">{formatCurrency(amount)}</p>
+                </div>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-muted">
+                <div
+                  className={`h-full rounded-full ${barColor} transition-all`}
+                  style={{ width: `${Math.min(100, p * 2)}%` }}
+                />
+              </div>
+            </div>
+          );
+        };
+        const totalP = pct(total);
+        const totalColor = totalP <= 25 ? 'from-emerald-500 to-teal-600'
+          : totalP <= 35 ? 'from-amber-500 to-orange-600'
+          : 'from-rose-500 to-red-600';
+        return (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base font-bold">
+                <Users className="h-5 w-5 text-indigo-500" />
+                تفصيل نسبة الرواتب من المبيعات
+              </CardTitle>
+              <CardDescription className="text-xs">
+                كل بند من تكاليف الموظفين كنسبة من صافي المبيعات ({formatCurrency(ns)})
+                {typeof totals.employeeCount === 'number' && ` • ${totals.employeeCount} موظف نشط`}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                {row(
+                  'الرواتب والبدلات',
+                  salaries,
+                  'text-indigo-600',
+                  'bg-gradient-to-l from-indigo-500 to-purple-500',
+                  'card-ratio-salaries',
+                  'راتب أساسي + بدل سكن + بدل نقل'
+                )}
+                {row(
+                  'التأمينات الاجتماعية (GOSI)',
+                  gosi,
+                  'text-blue-600',
+                  'bg-gradient-to-l from-blue-500 to-cyan-500',
+                  'card-ratio-gosi',
+                  '12% للسعوديين فقط'
+                )}
+                {row(
+                  'رسوم غير السعوديين',
+                  nonSaudi,
+                  'text-orange-600',
+                  'bg-gradient-to-l from-orange-500 to-amber-500',
+                  'card-ratio-nonsaudi',
+                  'رخصة عمل + مقابل مالي + إقامة + تأمين 2%'
+                )}
+              </div>
+              <div
+                className={`rounded-xl bg-gradient-to-l ${totalColor} p-4 text-white shadow-md`}
+                data-testid="card-ratio-total-salary"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-white/80">إجمالي تكاليف الموظفين</p>
+                    <p className="text-2xl font-bold mt-1" dir="ltr">{formatCurrency(total)}</p>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-xs text-white/80">من المبيعات</p>
+                    <p className="text-3xl font-extrabold mt-1" dir="ltr">{totalP.toFixed(1)}%</p>
+                  </div>
+                </div>
+                <div className="mt-3 h-2 w-full rounded-full bg-white/20">
+                  <div
+                    className="h-full rounded-full bg-white/80 transition-all"
+                    style={{ width: `${Math.min(100, totalP * 2)}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-[11px] text-white/70 text-center">
+                  {totalP <= 25 ? '✓ ضمن النطاق الصحي (≤ 25%)'
+                    : totalP <= 35 ? '⚠ نطاق متوسط — راقب التوظيف'
+                    : '✗ مرتفع — راجع الهيكل الوظيفي'}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       {/* Expense distribution + Branch ranking */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card>
