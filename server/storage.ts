@@ -497,6 +497,12 @@ import {
   pnlMonthlyInputs,
   type PnlMonthlyInputs,
   type InsertPnlMonthlyInputs,
+  pnlRentHistory,
+  type PnlRentHistory,
+  type InsertPnlRentHistory,
+  pnlRecurringExpenses,
+  type PnlRecurringExpense,
+  type InsertPnlRecurringExpense,
   pointSettings,
   type PointSettings,
   type InsertPointSettings,
@@ -1454,6 +1460,18 @@ export interface IStorage {
   // P&L Monthly Inputs (Variable monthly costs)
   getPnlMonthlyInputs(branchId: string, year: number, month: number): Promise<PnlMonthlyInputs | undefined>;
   upsertPnlMonthlyInputs(inputs: InsertPnlMonthlyInputs): Promise<PnlMonthlyInputs>;
+  // P&L v2 — rent history with effective dates
+  getRentForPeriod(branchId: string, year: number, month: number): Promise<number>;
+  listRentHistory(branchId: string): Promise<PnlRentHistory[]>;
+  upsertRentHistoryEntry(entry: InsertPnlRentHistory & { id?: number }): Promise<PnlRentHistory>;
+  deleteRentHistoryEntry(id: number): Promise<boolean>;
+  getRentHistoryEntryById(id: number): Promise<PnlRentHistory | undefined>;
+  // P&L v2 — recurring monthly expenses
+  listRecurringExpenses(filter?: { branchId?: string; activeOnly?: boolean }): Promise<PnlRecurringExpense[]>;
+  getRecurringExpensesForPeriod(branchId: string, year: number, month: number): Promise<PnlRecurringExpense[]>;
+  upsertRecurringExpense(entry: InsertPnlRecurringExpense & { id?: number }): Promise<PnlRecurringExpense>;
+  deleteRecurringExpense(id: number): Promise<boolean>;
+  getRecurringExpenseById(id: number): Promise<PnlRecurringExpense | undefined>;
 
   // System Notifications
   getAllSystemNotifications(): Promise<SystemNotification[]>;
@@ -15560,6 +15578,140 @@ export class DatabaseStorage implements IStorage {
         .values(inputs)
         .returning();
       return inserted;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // P&L v2 — Rent History (effective-date based)
+  // ------------------------------------------------------------------
+  // Returns the monthly rent value that was in effect on the first day of the
+  // requested period. Picks the row whose validity window covers it; if no
+  // history rows exist yet, falls back to legacy pnl_branch_settings.monthlyRent
+  // so behavior is preserved during migration.
+  async getRentForPeriod(branchId: string, year: number, month: number): Promise<number> {
+    try {
+      const periodStart = `${year}-${String(month).padStart(2, '0')}-01`;
+      const rows = await db.select().from(pnlRentHistory)
+        .where(and(
+          eq(pnlRentHistory.branchId, branchId),
+          sql`${pnlRentHistory.effectiveFrom} <= ${periodStart}`,
+          sql`(${pnlRentHistory.effectiveTo} IS NULL OR ${pnlRentHistory.effectiveTo} >= ${periodStart})`,
+        ))
+        .orderBy(desc(pnlRentHistory.effectiveFrom))
+        .limit(1);
+      if (rows.length > 0) return rows[0].monthlyAmount || 0;
+    } catch (error: any) {
+      if (error?.code !== '42P01') throw error; // table missing → fall through
+    }
+    const legacy = await this.getPnlBranchSettings(branchId);
+    return legacy?.monthlyRent || 0;
+  }
+
+  async listRentHistory(branchId: string): Promise<PnlRentHistory[]> {
+    try {
+      return await db.select().from(pnlRentHistory)
+        .where(eq(pnlRentHistory.branchId, branchId))
+        .orderBy(desc(pnlRentHistory.effectiveFrom));
+    } catch (error: any) {
+      if (error?.code === '42P01') return [];
+      throw error;
+    }
+  }
+
+  async upsertRentHistoryEntry(entry: InsertPnlRentHistory & { id?: number }): Promise<PnlRentHistory> {
+    if (entry.id) {
+      const { id, ...rest } = entry;
+      const [updated] = await db.update(pnlRentHistory)
+        .set({ ...rest, updatedAt: new Date() })
+        .where(eq(pnlRentHistory.id, id))
+        .returning();
+      return updated;
+    }
+    const [inserted] = await db.insert(pnlRentHistory).values(entry).returning();
+    return inserted;
+  }
+
+  async deleteRentHistoryEntry(id: number): Promise<boolean> {
+    const result = await db.delete(pnlRentHistory).where(eq(pnlRentHistory.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Fetches a single rent-history row by id; used by API routes to verify
+  // branch ownership before update/delete (prevents cross-branch IDOR).
+  async getRentHistoryEntryById(id: number): Promise<PnlRentHistory | undefined> {
+    try {
+      const [row] = await db.select().from(pnlRentHistory).where(eq(pnlRentHistory.id, id)).limit(1);
+      return row || undefined;
+    } catch (error: any) {
+      if (error?.code === '42P01') return undefined;
+      throw error;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // P&L v2 — Recurring Expenses
+  // ------------------------------------------------------------------
+  async listRecurringExpenses(filter: { branchId?: string; activeOnly?: boolean } = {}): Promise<PnlRecurringExpense[]> {
+    try {
+      const conditions = [
+        filter.branchId ? eq(pnlRecurringExpenses.branchId, filter.branchId) : undefined,
+        filter.activeOnly ? eq(pnlRecurringExpenses.isActive, true) : undefined,
+      ].filter(Boolean) as any[];
+      const query = conditions.length > 0
+        ? db.select().from(pnlRecurringExpenses).where(and(...conditions))
+        : db.select().from(pnlRecurringExpenses);
+      return await query.orderBy(desc(pnlRecurringExpenses.effectiveFrom));
+    } catch (error: any) {
+      if (error?.code === '42P01') return [];
+      throw error;
+    }
+  }
+
+  // Returns every recurring expense whose validity window covers the first
+  // day of the requested period AND is_active = true.
+  async getRecurringExpensesForPeriod(branchId: string, year: number, month: number): Promise<PnlRecurringExpense[]> {
+    try {
+      const periodStart = `${year}-${String(month).padStart(2, '0')}-01`;
+      return await db.select().from(pnlRecurringExpenses)
+        .where(and(
+          eq(pnlRecurringExpenses.branchId, branchId),
+          eq(pnlRecurringExpenses.isActive, true),
+          sql`${pnlRecurringExpenses.effectiveFrom} <= ${periodStart}`,
+          sql`(${pnlRecurringExpenses.effectiveTo} IS NULL OR ${pnlRecurringExpenses.effectiveTo} >= ${periodStart})`,
+        ));
+    } catch (error: any) {
+      if (error?.code === '42P01') return [];
+      throw error;
+    }
+  }
+
+  async upsertRecurringExpense(entry: InsertPnlRecurringExpense & { id?: number }): Promise<PnlRecurringExpense> {
+    if (entry.id) {
+      const { id, ...rest } = entry;
+      const [updated] = await db.update(pnlRecurringExpenses)
+        .set({ ...rest, updatedAt: new Date() })
+        .where(eq(pnlRecurringExpenses.id, id))
+        .returning();
+      return updated;
+    }
+    const [inserted] = await db.insert(pnlRecurringExpenses).values(entry).returning();
+    return inserted;
+  }
+
+  async deleteRecurringExpense(id: number): Promise<boolean> {
+    const result = await db.delete(pnlRecurringExpenses).where(eq(pnlRecurringExpenses.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Fetches a single recurring-expense row by id; used by API routes to verify
+  // branch ownership before update/delete (prevents cross-branch IDOR).
+  async getRecurringExpenseById(id: number): Promise<PnlRecurringExpense | undefined> {
+    try {
+      const [row] = await db.select().from(pnlRecurringExpenses).where(eq(pnlRecurringExpenses.id, id)).limit(1);
+      return row || undefined;
+    } catch (error: any) {
+      if (error?.code === '42P01') return undefined;
+      throw error;
     }
   }
 

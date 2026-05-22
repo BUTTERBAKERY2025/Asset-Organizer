@@ -6147,8 +6147,16 @@ export const pnlMonthlyInputs = pgTable("pnl_monthly_inputs", {
   maintenanceCost: real("maintenance_cost").default(0), // صيانة
   marketingCost: real("marketing_cost").default(0), // تسويق
   suppliesCost: real("supplies_cost").default(0), // مستلزمات
-  otherCosts: real("other_costs").default(0), // تكاليف أخرى
-  otherCostsDetails: text("other_costs_details"), // تفاصيل التكاليف الأخرى (JSON)
+  // مصاريف عمومية إضافية (متغيرة شهرياً) — أُضيفت في v2
+  internetCost: real("internet_cost").default(0), // إنترنت واتصالات
+  governmentFees: real("government_fees").default(0), // رسوم بلدية/دفاع مدني/رخص
+  insuranceCost: real("insurance_cost").default(0), // تأمين عام/أصول
+  subscriptionsCost: real("subscriptions_cost").default(0), // اشتراكات (سوفتوير/POS) — يدوية، تختلف عن المتكررة
+  securityCost: real("security_cost").default(0), // حراسة ونظافة
+  bankFees: real("bank_fees").default(0), // عمولات بنكية ونقاط بيع
+  fuelCost: real("fuel_cost").default(0), // وقود ومواصلات
+  otherCosts: real("other_costs").default(0), // تكاليف أخرى متفرقة
+  otherCostsDetails: text("other_costs_details"), // تفاصيل التكاليف الأخرى (JSON array)
   // ملاحظات وتتبع
   notes: text("notes"),
   createdBy: varchar("created_by"),
@@ -6168,6 +6176,67 @@ export const insertPnlMonthlyInputsSchema = createInsertSchema(pnlMonthlyInputs)
 
 export type PnlMonthlyInputs = typeof pnlMonthlyInputs.$inferSelect;
 export type InsertPnlMonthlyInputs = z.infer<typeof insertPnlMonthlyInputsSchema>;
+
+// ==================== P&L Expense Management v2 ====================
+// Rent History — tracks rent value with effective dates so old months
+// keep their historical rent when contracts change. Replaces the single
+// `monthlyRent` on `pnl_branch_settings` for computation purposes.
+export const pnlRentHistory = pgTable("pnl_rent_history", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  monthlyAmount: real("monthly_amount").notNull(),
+  effectiveFrom: date("effective_from").notNull(), // YYYY-MM-01
+  effectiveTo: date("effective_to"), // null = ongoing
+  contractRef: text("contract_ref"),
+  notes: text("notes"),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_pnl_rent_history_branch").on(table.branchId),
+  index("idx_pnl_rent_history_effective").on(table.branchId, table.effectiveFrom),
+]);
+
+export const insertPnlRentHistorySchema = createInsertSchema(pnlRentHistory).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PnlRentHistory = typeof pnlRentHistory.$inferSelect;
+export type InsertPnlRentHistory = z.infer<typeof insertPnlRentHistorySchema>;
+
+// Recurring monthly expenses — subscriptions, insurance, government fees split,
+// security/cleaning contracts. Each row is auto-applied to every month its
+// validity window covers (eliminates manual re-entry).
+export const pnlRecurringExpenses = pgTable("pnl_recurring_expenses", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  category: text("category").notNull(), // subscription | insurance | license | service | maintenance | other
+  name: text("name").notNull(),
+  monthlyAmount: real("monthly_amount").notNull(),
+  effectiveFrom: date("effective_from").notNull(),
+  effectiveTo: date("effective_to"), // null = ongoing
+  vendor: text("vendor"),
+  notes: text("notes"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_pnl_recurring_branch").on(table.branchId),
+  index("idx_pnl_recurring_active").on(table.branchId, table.isActive),
+  index("idx_pnl_recurring_effective").on(table.branchId, table.effectiveFrom),
+]);
+
+export const insertPnlRecurringExpenseSchema = createInsertSchema(pnlRecurringExpenses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PnlRecurringExpense = typeof pnlRecurringExpenses.$inferSelect;
+export type InsertPnlRecurringExpense = z.infer<typeof insertPnlRecurringExpenseSchema>;
 
 // ==================== Production vs Sales Comparison System ====================
 

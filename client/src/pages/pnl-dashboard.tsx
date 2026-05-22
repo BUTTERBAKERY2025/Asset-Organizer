@@ -1643,8 +1643,12 @@ export default function PnLDashboard() {
     enabled: !!selectedPeriodId && !!completePnL?.metrics,
   });
 
-  // P&L Monthly Inputs (rent, utilities, COGS, etc.)
+  // P&L Monthly Inputs (rent, utilities, COGS, etc.) — v2 includes the new
+  // general expense columns. Rent is now read-only here (managed via the
+  // dedicated rent-history page) but still editable as a quick override that
+  // upserts the legacy pnl_branch_settings.monthlyRent fallback.
   const [showMonthlyInputs, setShowMonthlyInputs] = useState(false);
+  const [monthlyInputsSection, setMonthlyInputsSection] = useState<"fixed" | "variable" | "operating">("fixed");
   const [monthlyInputsForm, setMonthlyInputsForm] = useState({
     electricityCost: 0,
     waterCost: 0,
@@ -1653,6 +1657,13 @@ export default function PnLDashboard() {
     maintenanceCost: 0,
     marketingCost: 0,
     suppliesCost: 0,
+    internetCost: 0,
+    governmentFees: 0,
+    insuranceCost: 0,
+    subscriptionsCost: 0,
+    securityCost: 0,
+    bankFees: 0,
+    fuelCost: 0,
     otherCosts: 0,
   });
   const [branchRentForm, setBranchRentForm] = useState(0);
@@ -1698,10 +1709,77 @@ export default function PnLDashboard() {
         maintenanceCost: monthlyInputs.maintenanceCost || 0,
         marketingCost: monthlyInputs.marketingCost || 0,
         suppliesCost: monthlyInputs.suppliesCost || 0,
+        internetCost: monthlyInputs.internetCost || 0,
+        governmentFees: monthlyInputs.governmentFees || 0,
+        insuranceCost: monthlyInputs.insuranceCost || 0,
+        subscriptionsCost: monthlyInputs.subscriptionsCost || 0,
+        securityCost: monthlyInputs.securityCost || 0,
+        bankFees: monthlyInputs.bankFees || 0,
+        fuelCost: monthlyInputs.fuelCost || 0,
         otherCosts: monthlyInputs.otherCosts || 0,
       });
     }
   }, [monthlyInputs]);
+
+  // Expense ledger query — one row per (branch × month) for the selected year.
+  // Used by the new "سجل المصاريف" tab. Only enabled when that tab is open
+  // so it doesn't add load to other views.
+  const { data: expenseLedger = [], isLoading: loadingLedger } = useQuery<any[]>({
+    queryKey: ["/api/pnl/expense-ledger", selectedBranchId || 'all', selectedYear],
+    queryFn: async () => {
+      const params = new URLSearchParams({ year: String(selectedYear) });
+      if (selectedBranchId) params.set("branchId", selectedBranchId);
+      const res = await fetch(`/api/pnl/expense-ledger?${params}`);
+      if (!res.ok) throw new Error("Failed to fetch expense ledger");
+      return res.json();
+    },
+    enabled: activeTab === "expense-ledger",
+    staleTime: 60_000,
+  });
+
+  // Copy monthly inputs from the previous month (uses the dedicated v2 API).
+  // We compute the previous month from the *selected* period so the user
+  // can be on Mar 2026 and copy from Feb 2026 without changing the view.
+  const copyFromPrevMutation = useMutation({
+    mutationFn: async (overwrite: boolean) => {
+      if (!selectedBranchId) throw new Error("لم يتم اختيار فرع");
+      const fromMonth = selectedMonth === 1 ? 12 : selectedMonth - 1;
+      const fromYear = selectedMonth === 1 ? selectedYear - 1 : selectedYear;
+      const res = await fetch("/api/pnl/copy-monthly-inputs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          branchId: selectedBranchId,
+          fromYear, fromMonth,
+          toYear: selectedYear, toMonth: selectedMonth,
+          overwrite,
+        }),
+      });
+      if (res.status === 409) {
+        const err = await res.json();
+        throw Object.assign(new Error(err.error), { existing: true });
+      }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "فشل النسخ" }));
+        throw new Error(err.error || "فشل النسخ");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      refetchMonthlyInputs();
+      refetchEnhancedPnL();
+      toast({ title: "تم نسخ بيانات الشهر السابق بنجاح" });
+    },
+    onError: (err: any) => {
+      if (err?.existing) {
+        if (window.confirm("توجد بيانات بالفعل في هذا الشهر. هل تريد استبدالها؟")) {
+          copyFromPrevMutation.mutate(true);
+        }
+      } else {
+        toast({ title: err?.message || "فشل في نسخ البيانات", variant: "destructive" });
+      }
+    },
+  });
 
   // Save branch settings mutation
   const saveBranchSettingsMutation = useMutation({
@@ -1755,7 +1833,7 @@ export default function PnLDashboard() {
       monthlyRent: branchRentForm,
     });
     
-    // Save monthly inputs
+    // Save monthly inputs (includes the v2 expanded columns).
     saveMonthlyInputsMutation.mutate({
       branchId: selectedBranchId,
       year: selectedYear,
@@ -2076,6 +2154,35 @@ export default function PnLDashboard() {
           backHref="/attendance-dashboard"
           actions={selectedPeriodId ? (
               <div className="flex gap-2 flex-wrap">
+                {/* v2 prominent entry button — first action so users find it fast */}
+                <Button
+                  onClick={() => setShowMonthlyInputs(true)}
+                  className="h-11 sm:h-9 bg-amber-500 hover:bg-amber-600 text-white"
+                  data-testid="button-open-monthly-inputs"
+                  disabled={!selectedBranchId}
+                >
+                  <Plus className="h-4 w-4 sm:ml-2" />
+                  <span className="hidden sm:inline">إدخال مصاريف الشهر</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate("/pnl-recurring-expenses")}
+                  className="h-11 sm:h-9"
+                  data-testid="button-recurring-expenses"
+                >
+                  <RefreshCw className="h-4 w-4 sm:ml-2" />
+                  <span className="hidden sm:inline">المصاريف المتكررة</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate("/pnl-rent-history")}
+                  className="h-11 sm:h-9"
+                  data-testid="button-rent-history"
+                  disabled={!selectedBranchId}
+                >
+                  <History className="h-4 w-4 sm:ml-2" />
+                  <span className="hidden sm:inline">سجل الإيجار</span>
+                </Button>
                 <Button
                   variant="outline"
                   onClick={() => importSalesMutation.mutate(selectedPeriodId)}
@@ -2521,7 +2628,7 @@ export default function PnLDashboard() {
         {selectedPeriodId && (
           <>
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="overview" data-testid="tab-overview">
                   <BarChart3 className="h-4 w-4 ml-2" />
                   نظرة عامة
@@ -2529,6 +2636,10 @@ export default function PnLDashboard() {
                 <TabsTrigger value="details" data-testid="tab-details">
                   <FileText className="h-4 w-4 ml-2" />
                   التفاصيل
+                </TabsTrigger>
+                <TabsTrigger value="expense-ledger" data-testid="tab-expense-ledger">
+                  <Receipt className="h-4 w-4 ml-2" />
+                  سجل المصاريف
                 </TabsTrigger>
                 <TabsTrigger value="charts" data-testid="tab-charts">
                   <PieChart className="h-4 w-4 ml-2" />
@@ -2705,6 +2816,90 @@ export default function PnLDashboard() {
                 )}
               </TabsContent>
 
+              <TabsContent value="expense-ledger" className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Receipt className="h-5 w-5 text-amber-600" />
+                      سجل المصاريف الشهري - {selectedYear}
+                      {selectedBranch && <span className="text-sm text-muted-foreground">— {selectedBranch.name}</span>}
+                    </CardTitle>
+                    <CardDescription>
+                      تفصيل كل بنود المصاريف لكل شهر (إيجار، تكلفة بضاعة، مرافق، عامة، تشغيلية، متكررة). انقر على شهر لتعديله.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingLedger ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      </div>
+                    ) : expenseLedger.length === 0 ? (
+                      <div className="text-center py-12 text-muted-foreground">
+                        <Receipt className="h-12 w-12 mx-auto mb-3 opacity-40" />
+                        <p>لا توجد بيانات مصاريف مُدخلة لهذه السنة</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/50">
+                            <tr>
+                              <th className="text-right p-2">الشهر</th>
+                              {!selectedBranchId && <th className="text-right p-2">الفرع</th>}
+                              <th className="text-left p-2">الإيجار</th>
+                              <th className="text-left p-2">تكلفة بضاعة</th>
+                              <th className="text-left p-2">مرافق</th>
+                              <th className="text-left p-2">عامة</th>
+                              <th className="text-left p-2">تشغيلية</th>
+                              <th className="text-left p-2">متكررة</th>
+                              <th className="text-left p-2 font-bold">الإجمالي</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {expenseLedger.map((row, i) => (
+                              <tr key={`${row.branchId}-${row.month}-${i}`} className="border-t hover:bg-muted/30">
+                                <td className="p-2 font-medium">
+                                  <button
+                                    className="text-blue-600 hover:underline"
+                                    onClick={() => {
+                                      setSelectedMonth(row.month);
+                                      if (row.branchId !== selectedBranchId) setSelectedBranchId(row.branchId);
+                                      setTimeout(() => setShowMonthlyInputs(true), 300);
+                                    }}
+                                    data-testid={`btn-edit-ledger-${row.branchId}-${row.month}`}
+                                  >
+                                    {MONTHS_AR[row.month - 1]}
+                                  </button>
+                                </td>
+                                {!selectedBranchId && <td className="p-2">{row.branchName}</td>}
+                                <td className="p-2 text-left">{formatCurrency(row.rent)}</td>
+                                <td className="p-2 text-left">{formatCurrency(row.cogs)}</td>
+                                <td className="p-2 text-left">{formatCurrency(row.utilities)}</td>
+                                <td className="p-2 text-left">{formatCurrency(row.general)}</td>
+                                <td className="p-2 text-left">{formatCurrency(row.operating)}</td>
+                                <td className="p-2 text-left">{formatCurrency(row.recurring)}</td>
+                                <td className="p-2 text-left font-bold text-purple-700">{formatCurrency(row.total)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-muted/40 font-bold border-t-2">
+                            <tr>
+                              <td className="p-2" colSpan={selectedBranchId ? 1 : 2}>الإجمالي</td>
+                              <td className="p-2 text-left">{formatCurrency(expenseLedger.reduce((s, r) => s + r.rent, 0))}</td>
+                              <td className="p-2 text-left">{formatCurrency(expenseLedger.reduce((s, r) => s + r.cogs, 0))}</td>
+                              <td className="p-2 text-left">{formatCurrency(expenseLedger.reduce((s, r) => s + r.utilities, 0))}</td>
+                              <td className="p-2 text-left">{formatCurrency(expenseLedger.reduce((s, r) => s + r.general, 0))}</td>
+                              <td className="p-2 text-left">{formatCurrency(expenseLedger.reduce((s, r) => s + r.operating, 0))}</td>
+                              <td className="p-2 text-left">{formatCurrency(expenseLedger.reduce((s, r) => s + r.recurring, 0))}</td>
+                              <td className="p-2 text-left text-purple-700">{formatCurrency(expenseLedger.reduce((s, r) => s + r.total, 0))}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
               <TabsContent value="charts" className="space-y-6">
                 {metrics && (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -2853,149 +3048,253 @@ export default function PnLDashboard() {
           </>
         )}
 
-        {/* Monthly Inputs Dialog - نموذج إدخال التكاليف الشهرية */}
+        {/* Monthly Inputs Dialog v2 — sectioned (ثابتة / متغيرة / تشغيلية) with
+            copy-from-prev-month button and a live profit preview side panel. */}
         <Dialog open={showMonthlyInputs} onOpenChange={setShowMonthlyInputs}>
-          <DialogContent className="max-w-2xl" dir="rtl">
+          <DialogContent className="max-w-5xl" dir="rtl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-xl">
                 <Calculator className="h-5 w-5 text-amber-600" />
-                إدخال بيانات التكاليف الشهرية - {MONTHS_AR[selectedMonth - 1]} {selectedYear}
+                إدخال مصاريف الشهر — {MONTHS_AR[selectedMonth - 1]} {selectedYear}
+                {selectedBranch && <Badge variant="outline" className="mr-2">{selectedBranch.name}</Badge>}
               </DialogTitle>
               <CardDescription>
-                أدخل بيانات الإيجار والمرافق وتكلفة البضاعة المباعة والتكاليف الأخرى
+                أدخل مصاريف الشهر مقسّمة حسب طبيعتها. الإيجار يُحدّد من «سجل الإيجار»،
+                والمصاريف المتكررة (اشتراكات، تأمين) تُضاف تلقائياً من «المصاريف المتكررة».
               </CardDescription>
             </DialogHeader>
-            
-            <div className="space-y-6 max-h-[60vh] overflow-y-auto py-4">
-              {/* Branch Rent - Fixed */}
-              <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
-                <div className="flex items-center gap-2 text-base font-medium text-blue-800 mb-3">
-                  <Home className="h-5 w-5" />
-                  الإيجار الشهري الثابت للفرع
+
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
+              {/* Form side */}
+              <div className="space-y-3">
+                {/* Quick actions */}
+                <div className="flex items-center gap-2 flex-wrap p-2 bg-amber-50 rounded-lg border border-amber-200">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => copyFromPrevMutation.mutate(false)}
+                    disabled={copyFromPrevMutation.isPending || !selectedBranchId}
+                    data-testid="button-copy-from-prev"
+                  >
+                    {copyFromPrevMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin ml-1" /> : <RefreshCw className="h-4 w-4 ml-1" />}
+                    نسخ من الشهر السابق
+                  </Button>
+                  <span className="text-xs text-amber-800">
+                    يجلب قيم {MONTHS_AR[(selectedMonth === 1 ? 12 : selectedMonth - 1) - 1]} {selectedMonth === 1 ? selectedYear - 1 : selectedYear} كأساس.
+                  </span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Label className="w-32">الإيجار الشهري</Label>
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    value={branchRentForm || ""}
-                    onChange={(e) => setBranchRentForm(parseFloat(e.target.value) || 0)}
-                    className="flex-1"
-                    data-testid="input-monthly-rent"
-                  />
-                  <span className="text-muted-foreground">ريال</span>
+
+                {/* Section tabs */}
+                <div className="flex gap-1 border-b">
+                  {[
+                    { key: "fixed",     label: "ثابتة",     icon: Home },
+                    { key: "variable",  label: "متغيرة",    icon: Lightbulb },
+                    { key: "operating", label: "تشغيلية",  icon: ShoppingCart },
+                  ].map(s => {
+                    const Icon = s.icon;
+                    const active = monthlyInputsSection === s.key;
+                    return (
+                      <button
+                        key={s.key}
+                        type="button"
+                        onClick={() => setMonthlyInputsSection(s.key as any)}
+                        className={`flex items-center gap-2 px-4 py-2 text-sm border-b-2 transition-colors ${
+                          active ? "border-amber-500 text-amber-700 font-semibold" : "border-transparent text-muted-foreground hover:text-foreground"
+                        }`}
+                        data-testid={`section-${s.key}`}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {s.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="max-h-[55vh] overflow-y-auto py-2 px-1">
+                  {monthlyInputsSection === "fixed" && (
+                    <div className="space-y-4">
+                      <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
+                        <div className="flex items-center gap-2 text-base font-medium text-blue-800 mb-2">
+                          <Home className="h-5 w-5" />
+                          الإيجار الشهري
+                        </div>
+                        <p className="text-xs text-blue-700 mb-3">
+                          القيمة المعتمدة لهذا الشهر تأتي من «سجل الإيجار». التعديل هنا يحدّث القيمة الافتراضية
+                          العامة للفرع فقط (لتوافق الإصدار السابق). للتغييرات بفترات صلاحية استخدم صفحة «سجل الإيجار».
+                        </p>
+                        <div className="flex items-center gap-3">
+                          <Label className="w-40">الإيجار الافتراضي للفرع</Label>
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            value={branchRentForm || ""}
+                            onChange={(e) => setBranchRentForm(parseFloat(e.target.value) || 0)}
+                            className="flex-1"
+                            data-testid="input-monthly-rent"
+                          />
+                          <span className="text-muted-foreground">ريال</span>
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-lg bg-red-50 border border-red-200">
+                        <div className="flex items-center gap-2 text-base font-medium text-red-800 mb-3">
+                          <Package className="h-5 w-5" />
+                          تكلفة البضاعة المباعة (COGS)
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Label className="w-32">إجمالي COGS</Label>
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            value={monthlyInputsForm.cogsCost || ""}
+                            onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, cogsCost: parseFloat(e.target.value) || 0})}
+                            className="flex-1"
+                            data-testid="input-cogs"
+                          />
+                          <span className="text-muted-foreground">ريال</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {monthlyInputsSection === "variable" && (
+                    <div className="space-y-4">
+                      <div className="p-4 rounded-lg bg-orange-50 border border-orange-200">
+                        <div className="flex items-center gap-2 text-base font-medium text-orange-800 mb-3">
+                          <Lightbulb className="h-5 w-5" />
+                          المرافق (كهرباء، ماء، اتصالات)
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {([
+                            ["electricityCost", "الكهرباء", "input-electricity"],
+                            ["waterCost", "المياه", "input-water"],
+                            ["utilitiesOther", "مرافق أخرى", "input-utilities-other"],
+                            ["internetCost", "إنترنت واتصالات", "input-internet"],
+                          ] as const).map(([key, label, tid]) => (
+                            <div key={key} className="space-y-1">
+                              <Label className="text-xs">{label}</Label>
+                              <Input
+                                type="number"
+                                placeholder="0"
+                                value={(monthlyInputsForm as any)[key] || ""}
+                                onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, [key]: parseFloat(e.target.value) || 0})}
+                                data-testid={tid}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
+                        <div className="flex items-center gap-2 text-base font-medium text-amber-800 mb-3">
+                          <Receipt className="h-5 w-5" />
+                          مصاريف عامة شهرية
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {([
+                            ["governmentFees", "رسوم حكومية (بلدية، رخص)", "input-government"],
+                            ["insuranceCost", "تأمين عام/أصول", "input-insurance"],
+                            ["subscriptionsCost", "اشتراكات يدوية (سوفتوير)", "input-subscriptions"],
+                            ["securityCost", "حراسة ونظافة", "input-security"],
+                            ["bankFees", "عمولات بنكية ونقاط بيع", "input-bank-fees"],
+                            ["fuelCost", "وقود ومواصلات", "input-fuel"],
+                          ] as const).map(([key, label, tid]) => (
+                            <div key={key} className="space-y-1">
+                              <Label className="text-xs">{label}</Label>
+                              <Input
+                                type="number"
+                                placeholder="0"
+                                value={(monthlyInputsForm as any)[key] || ""}
+                                onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, [key]: parseFloat(e.target.value) || 0})}
+                                data-testid={tid}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-xs text-amber-700 mt-2">
+                          هذه القيم تُدخل يدوياً لكل شهر. المصاريف المتكررة الثابتة قيمتها (مثل اشتراك نظام POS الشهري)
+                          تُدار من <button type="button" onClick={() => { setShowMonthlyInputs(false); navigate("/pnl-recurring-expenses"); }} className="text-blue-600 underline">صفحة المصاريف المتكررة</button>.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {monthlyInputsSection === "operating" && (
+                    <div className="p-4 rounded-lg bg-purple-50 border border-purple-200">
+                      <div className="flex items-center gap-2 text-base font-medium text-purple-800 mb-3">
+                        <ShoppingCart className="h-5 w-5" />
+                        تكاليف تشغيلية متفرقة
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {([
+                          ["maintenanceCost", "الصيانة", "input-maintenance"],
+                          ["marketingCost", "التسويق", "input-marketing"],
+                          ["suppliesCost", "المستلزمات", "input-supplies"],
+                          ["otherCosts", "تكاليف أخرى متفرقة", "input-other-costs"],
+                        ] as const).map(([key, label, tid]) => (
+                          <div key={key} className="space-y-1">
+                            <Label className="text-xs">{label}</Label>
+                            <Input
+                              type="number"
+                              placeholder="0"
+                              value={(monthlyInputsForm as any)[key] || ""}
+                              onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, [key]: parseFloat(e.target.value) || 0})}
+                              data-testid={tid}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Utilities - Variable */}
-              <div className="p-4 rounded-lg bg-orange-50 border border-orange-200">
-                <div className="flex items-center gap-2 text-base font-medium text-orange-800 mb-3">
-                  <Lightbulb className="h-5 w-5" />
-                  المرافق (متغيرة شهرياً)
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label>الكهرباء</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={monthlyInputsForm.electricityCost || ""}
-                      onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, electricityCost: parseFloat(e.target.value) || 0})}
-                      data-testid="input-electricity"
-                    />
+              {/* Live preview side */}
+              {(() => {
+                const f = monthlyInputsForm;
+                const utilities = (f.electricityCost || 0) + (f.waterCost || 0) + (f.utilitiesOther || 0) + (f.internetCost || 0);
+                const general = (f.governmentFees || 0) + (f.insuranceCost || 0) + (f.subscriptionsCost || 0)
+                  + (f.securityCost || 0) + (f.bankFees || 0) + (f.fuelCost || 0);
+                const operating = (f.maintenanceCost || 0) + (f.marketingCost || 0) + (f.suppliesCost || 0) + (f.otherCosts || 0);
+                // Best-effort live preview using current enhancedPnL totals as
+                // a baseline. Replaces only the editable bits (utilities, general,
+                // operating, COGS, rent override) with the form values so the
+                // user sees the impact in real time before saving.
+                const baseline = enhancedPnL?.totals;
+                const netSales = baseline?.netSales || 0;
+                const employeeCosts = baseline?.employeeCosts?.total || 0;
+                const recurring = baseline?.recurringExpenses?.total || 0;
+                const rent = branchRentForm || baseline?.rent || 0;
+                const cogs = f.cogsCost || 0;
+                const totalOpex = employeeCosts + rent + utilities + general + operating + recurring;
+                const netProfit = netSales - cogs - totalOpex;
+                const margin = netSales > 0 ? (netProfit / netSales) * 100 : 0;
+                return (
+                  <div className="bg-gradient-to-b from-slate-50 to-white border rounded-lg p-4 space-y-2 text-sm self-start sticky top-0">
+                    <div className="font-semibold text-base flex items-center gap-2 mb-2">
+                      <Target className="h-4 w-4 text-amber-600" />
+                      معاينة فورية
+                    </div>
+                    <div className="flex justify-between text-muted-foreground"><span>صافي المبيعات</span><span>{formatCurrency(netSales)}</span></div>
+                    <div className="flex justify-between"><span>تكلفة البضاعة</span><span>- {formatCurrency(cogs)}</span></div>
+                    <div className="flex justify-between"><span>رواتب وأجور</span><span>- {formatCurrency(employeeCosts)}</span></div>
+                    <div className="flex justify-between"><span>الإيجار</span><span>- {formatCurrency(rent)}</span></div>
+                    <div className="flex justify-between"><span>مرافق</span><span>- {formatCurrency(utilities)}</span></div>
+                    <div className="flex justify-between"><span>عامة</span><span>- {formatCurrency(general)}</span></div>
+                    <div className="flex justify-between"><span>تشغيلية</span><span>- {formatCurrency(operating)}</span></div>
+                    <div className="flex justify-between text-muted-foreground"><span>متكررة (تلقائي)</span><span>- {formatCurrency(recurring)}</span></div>
+                    <Separator />
+                    <div className={`flex justify-between font-bold text-lg ${netProfit >= 0 ? "text-green-700" : "text-red-700"}`}>
+                      <span>صافي الربح</span>
+                      <span data-testid="preview-net-profit">{formatCurrency(netProfit)}</span>
+                    </div>
+                    <div className={`flex justify-between text-xs ${netProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      <span>هامش الربح</span>
+                      <span>{margin.toFixed(2)}%</span>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>المياه</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={monthlyInputsForm.waterCost || ""}
-                      onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, waterCost: parseFloat(e.target.value) || 0})}
-                      data-testid="input-water"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>مرافق أخرى</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={monthlyInputsForm.utilitiesOther || ""}
-                      onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, utilitiesOther: parseFloat(e.target.value) || 0})}
-                      data-testid="input-utilities-other"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* COGS - Cost of Goods Sold */}
-              <div className="p-4 rounded-lg bg-red-50 border border-red-200">
-                <div className="flex items-center gap-2 text-base font-medium text-red-800 mb-3">
-                  <Package className="h-5 w-5" />
-                  تكلفة البضاعة المباعة (COGS)
-                </div>
-                <div className="flex items-center gap-3">
-                  <Label className="w-32">إجمالي COGS</Label>
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    value={monthlyInputsForm.cogsCost || ""}
-                    onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, cogsCost: parseFloat(e.target.value) || 0})}
-                    className="flex-1"
-                    data-testid="input-cogs"
-                  />
-                  <span className="text-muted-foreground">ريال</span>
-                </div>
-              </div>
-
-              {/* Other Operating Costs */}
-              <div className="p-4 rounded-lg bg-purple-50 border border-purple-200">
-                <div className="flex items-center gap-2 text-base font-medium text-purple-800 mb-3">
-                  <Receipt className="h-5 w-5" />
-                  تكاليف تشغيلية أخرى
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>الصيانة</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={monthlyInputsForm.maintenanceCost || ""}
-                      onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, maintenanceCost: parseFloat(e.target.value) || 0})}
-                      data-testid="input-maintenance"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>التسويق</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={monthlyInputsForm.marketingCost || ""}
-                      onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, marketingCost: parseFloat(e.target.value) || 0})}
-                      data-testid="input-marketing"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>المستلزمات</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={monthlyInputsForm.suppliesCost || ""}
-                      onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, suppliesCost: parseFloat(e.target.value) || 0})}
-                      data-testid="input-supplies"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>تكاليف أخرى</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={monthlyInputsForm.otherCosts || ""}
-                      onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, otherCosts: parseFloat(e.target.value) || 0})}
-                      data-testid="input-other-costs"
-                    />
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
             </div>
 
             <DialogFooter className="mt-4">
@@ -3005,7 +3304,8 @@ export default function PnLDashboard() {
               <Button
                 onClick={handleSaveMonthlyData}
                 disabled={saveBranchSettingsMutation.isPending || saveMonthlyInputsMutation.isPending || !selectedBranchId}
-                className="gap-2"
+                className="gap-2 bg-amber-600 hover:bg-amber-700"
+                data-testid="button-save-monthly-inputs"
               >
                 {(saveBranchSettingsMutation.isPending || saveMonthlyInputsMutation.isPending) && (
                   <Loader2 className="h-4 w-4 animate-spin" />

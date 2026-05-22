@@ -112,6 +112,8 @@ const TerminatedEmployeesPage = makeLazy("terminated-employees");
 const OrganizationalStructurePage = makeLazy("organizational-structure");
 const EmployeeReportsDashboardPage = makeLazy("employee-reports-dashboard");
 const PnLDashboardPage = makeLazy("pnl-dashboard");
+const PnLRentHistoryPage = makeLazy("pnl-rent-history");
+const PnLRecurringExpensesPage = makeLazy("pnl-recurring-expenses");
 const SecurityManagementPage = makeLazy("security-management");
 const ProductionComparisonsPage = makeLazy("production-comparisons");
 const ProductionComparisonReportsPage = makeLazy("production-comparison-reports");
@@ -328,6 +330,8 @@ const Router = React.memo(function Router() {
       <Route path="/cashier-shift-performance">{() => <ProtectedPage component={CashierShiftPerformancePage} />}</Route>
       <Route path="/incentives-management">{() => <ModulePage component={IncentivesManagementPage} module="incentives" />}</Route>
       <Route path="/pnl-dashboard">{() => <ModulePage component={PnLDashboardPage} module="pnl_dashboard" />}</Route>
+      <Route path="/pnl-rent-history">{() => <ModulePage component={PnLRentHistoryPage} module="pnl_dashboard" />}</Route>
+      <Route path="/pnl-recurring-expenses">{() => <ModulePage component={PnLRecurringExpensesPage} module="pnl_dashboard" />}</Route>
       
       {/* Assets - الأصول والجرد */}
       <Route path="/dashboard">{() => <ModulePage component={DashboardPage} module="inventory" />}</Route>

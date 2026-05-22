@@ -8458,7 +8458,14 @@ export async function registerRoutes(
         maintenanceCost: 0,
         marketingCost: 0,
         suppliesCost: 0,
-        otherCosts: 0
+        internetCost: 0,
+        governmentFees: 0,
+        insuranceCost: 0,
+        subscriptionsCost: 0,
+        securityCost: 0,
+        bankFees: 0,
+        fuelCost: 0,
+        otherCosts: 0,
       });
     } catch (error) {
       console.error("Error getting P&L monthly inputs:", error);
@@ -8522,12 +8529,16 @@ export async function registerRoutes(
         const branch = branchMap.get(bId);
         if (!branch) return null;
 
-        const [journalsResult, settings, inputs, prevInputs, allBranchEmps] = await Promise.all([
+        const [journalsResult, settings, inputs, prevInputs, allBranchEmps, periodRent, prevPeriodRent, recurringList, prevRecurringList] = await Promise.all([
           storage.getCashierJournalsFiltered({ branchId: bId }),
           storage.getPnlBranchSettings(bId),
           storage.getPnlMonthlyInputs(bId, yearNum, monthNum),
           storage.getPnlMonthlyInputs(bId, prevYearNum, prevMonthNum),
           storage.getBranchEmployeesByBranch(bId),
+          storage.getRentForPeriod(bId, yearNum, monthNum),
+          storage.getRentForPeriod(bId, prevYearNum, prevMonthNum),
+          storage.getRecurringExpensesForPeriod(bId, yearNum, monthNum),
+          storage.getRecurringExpensesForPeriod(bId, prevYearNum, prevMonthNum),
         ]);
 
         // فلترة اليوميات المعتمدة فقط (posted أو approved)
@@ -8576,7 +8587,10 @@ export async function registerRoutes(
         const netSales = grossSales / 1.15;
         const vatAmount = grossSales - netSales;
 
-        const monthlyRent = settings?.monthlyRent || 0;
+        // v2: rent comes from pnl_rent_history (effective-date lookup) and
+        // recurring expenses are auto-summed per period. settings.monthlyRent
+        // is kept only as a fallback inside getRentForPeriod.
+        const monthlyRent = periodRent || 0;
         const electricityCost = inputs?.electricityCost || 0;
         const waterCost = inputs?.waterCost || 0;
         const utilitiesOther = inputs?.utilitiesOther || 0;
@@ -8585,6 +8599,17 @@ export async function registerRoutes(
         const marketingCost = inputs?.marketingCost || 0;
         const suppliesCost = inputs?.suppliesCost || 0;
         const otherCosts = inputs?.otherCosts || 0;
+        // v2 new expense columns (manual monthly entry)
+        const internetCost = inputs?.internetCost || 0;
+        const governmentFees = inputs?.governmentFees || 0;
+        const insuranceCost = inputs?.insuranceCost || 0;
+        const subscriptionsCost = inputs?.subscriptionsCost || 0;
+        const securityCost = inputs?.securityCost || 0;
+        const bankFees = inputs?.bankFees || 0;
+        const fuelCost = inputs?.fuelCost || 0;
+        const recurringTotal = recurringList.reduce((s, r) => s + (r.monthlyAmount || 0), 0);
+        const extraGeneral = internetCost + governmentFees + insuranceCost
+          + subscriptionsCost + securityCost + bankFees + fuelCost;
 
         const employees = allBranchEmps.filter((e: any) => e.status === 'active');
         let totalSalaries = 0;
@@ -8663,7 +8688,9 @@ export async function registerRoutes(
         
         // 7. Calculate totals
         const totalUtilities = electricityCost + waterCost + utilitiesOther;
-        const totalOperatingCosts = totalEmployeeCosts + monthlyRent + totalUtilities + maintenanceCost + marketingCost + suppliesCost + otherCosts;
+        const totalOperatingCosts = totalEmployeeCosts + monthlyRent + totalUtilities
+          + maintenanceCost + marketingCost + suppliesCost + otherCosts
+          + extraGeneral + recurringTotal;
         
         // 8. Calculate profit
         const grossProfit = netSales - cogsCost;
@@ -8718,6 +8745,30 @@ export async function registerRoutes(
             other: otherCosts
           },
 
+          // v2: extra general expenses (manual monthly)
+          generalExpenses: {
+            internet: internetCost,
+            government: governmentFees,
+            insurance: insuranceCost,
+            subscriptions: subscriptionsCost,
+            security: securityCost,
+            bankFees,
+            fuel: fuelCost,
+            total: extraGeneral,
+          },
+
+          // v2: recurring expenses auto-applied for this period
+          recurringExpenses: {
+            total: recurringTotal,
+            items: recurringList.map(r => ({
+              id: r.id,
+              category: r.category,
+              name: r.name,
+              monthlyAmount: r.monthlyAmount,
+              vendor: r.vendor,
+            })),
+          },
+
           totalOperatingCosts,
           operatingProfit,
           netProfit,
@@ -8754,10 +8805,16 @@ export async function registerRoutes(
             const prevMarketing = prevInputs?.marketingCost || 0;
             const prevSupplies = prevInputs?.suppliesCost || 0;
             const prevOther = prevInputs?.otherCosts || 0;
+            const prevExtra = (prevInputs?.internetCost || 0) + (prevInputs?.governmentFees || 0)
+              + (prevInputs?.insuranceCost || 0) + (prevInputs?.subscriptionsCost || 0)
+              + (prevInputs?.securityCost || 0) + (prevInputs?.bankFees || 0)
+              + (prevInputs?.fuelCost || 0);
+            const prevRecurringTotal = prevRecurringList.reduce((s, r) => s + (r.monthlyAmount || 0), 0);
             const prevNetSales = prevGrossSales / 1.15;
-            const prevTotalOpex = totalEmployeeCosts + monthlyRent
+            const prevTotalOpex = totalEmployeeCosts + (prevPeriodRent || 0)
               + prevElectricity + prevWater + prevUtilsOther
-              + prevMaint + prevMarketing + prevSupplies + prevOther;
+              + prevMaint + prevMarketing + prevSupplies + prevOther
+              + prevExtra + prevRecurringTotal;
             const prevGrossProfit = prevNetSales - prevCogs;
             const prevNetProfit = prevGrossProfit - prevTotalOpex;
             // Signed-safe delta: works when previous value is negative (loss → profit)
@@ -8825,6 +8882,22 @@ export async function registerRoutes(
             marketing: results.reduce((s, r) => s + r.operatingCosts.marketing, 0),
             supplies: results.reduce((s, r) => s + r.operatingCosts.supplies, 0),
             other: results.reduce((s, r) => s + r.operatingCosts.other, 0)
+          },
+          generalExpenses: {
+            internet: results.reduce((s, r) => s + (r.generalExpenses?.internet || 0), 0),
+            government: results.reduce((s, r) => s + (r.generalExpenses?.government || 0), 0),
+            insurance: results.reduce((s, r) => s + (r.generalExpenses?.insurance || 0), 0),
+            subscriptions: results.reduce((s, r) => s + (r.generalExpenses?.subscriptions || 0), 0),
+            security: results.reduce((s, r) => s + (r.generalExpenses?.security || 0), 0),
+            bankFees: results.reduce((s, r) => s + (r.generalExpenses?.bankFees || 0), 0),
+            fuel: results.reduce((s, r) => s + (r.generalExpenses?.fuel || 0), 0),
+            total: results.reduce((s, r) => s + (r.generalExpenses?.total || 0), 0),
+          },
+          recurringExpenses: {
+            total: results.reduce((s, r) => s + (r.recurringExpenses?.total || 0), 0),
+            items: results.flatMap(r =>
+              (r.recurringExpenses?.items || []).map(it => ({ ...it, branchId: r.branchId, branchName: r.branchName }))
+            ),
           },
           totalOperatingCosts: results.reduce((s, r) => s + r.totalOperatingCosts, 0),
           operatingProfit: results.reduce((s, r) => s + r.operatingProfit, 0),
@@ -8911,6 +8984,249 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error getting enhanced P&L summary:", error);
       res.status(500).json({ error: "Failed to get enhanced P&L summary" });
+    }
+  });
+
+  // ==================== P&L v2 — Rent History ====================
+  // Returns the full rent history for a branch (newest effective date first).
+  app.get("/api/pnl/rent-history/:branchId", isAuthenticated, requirePermission("pnl", "view"), async (req, res) => {
+    try {
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, req.params.branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
+      const rows = await storage.listRentHistory(req.params.branchId);
+      res.json(rows);
+    } catch (error) {
+      console.error("Error listing rent history:", error);
+      res.status(500).json({ error: "Failed to list rent history" });
+    }
+  });
+
+  app.post("/api/pnl/rent-history", isAuthenticated, requirePermission("pnl", "edit"), async (req, res) => {
+    try {
+      const body = req.body || {};
+      if (!body.branchId || !body.effectiveFrom || body.monthlyAmount == null) {
+        return res.status(400).json({ error: "branchId, effectiveFrom, monthlyAmount مطلوبة" });
+      }
+      // For UPDATE: trust the stored record's branchId and verify the user can
+      // access it (prevents IDOR where attacker submits a different branchId
+      // for someone else's record). Also verify the *new* branchId in case the
+      // record is being moved.
+      if (body.id) {
+        const existing = await storage.getRentHistoryEntryById(body.id);
+        if (!existing) return res.status(404).json({ error: "السجل غير موجود" });
+        if (!isUserAdmin(req)) {
+          const okOld = await canAccessBranch(req, existing.branchId);
+          const okNew = await canAccessBranch(req, body.branchId);
+          if (!okOld || !okNew) return res.status(403).json({ error: "غير مصرح بتعديل هذا الفرع" });
+        }
+      } else if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, body.branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بتعديل هذا الفرع" });
+      }
+      const saved = await storage.upsertRentHistoryEntry({
+        ...body,
+        createdBy: (req as any).user?.id,
+      });
+      res.json(saved);
+    } catch (error) {
+      console.error("Error saving rent history entry:", error);
+      res.status(500).json({ error: "Failed to save rent history entry" });
+    }
+  });
+
+  app.delete("/api/pnl/rent-history/:id", isAuthenticated, requirePermission("pnl", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "id غير صالح" });
+      // IDOR guard: fetch the record and verify branch access before delete.
+      const existing = await storage.getRentHistoryEntryById(id);
+      if (!existing) return res.status(404).json({ error: "السجل غير موجود" });
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, existing.branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بحذف سجل هذا الفرع" });
+      }
+      const ok = await storage.deleteRentHistoryEntry(id);
+      res.json({ success: ok });
+    } catch (error) {
+      console.error("Error deleting rent history entry:", error);
+      res.status(500).json({ error: "Failed to delete rent history entry" });
+    }
+  });
+
+  // ==================== P&L v2 — Recurring Expenses ====================
+  app.get("/api/pnl/recurring-expenses", isAuthenticated, requirePermission("pnl", "view"), async (req, res) => {
+    try {
+      const { branchId, activeOnly } = req.query;
+      if (branchId && !isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId as string);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
+      // If no branchId and not admin, restrict to allowed branches
+      let rows = await storage.listRecurringExpenses({
+        branchId: branchId as string | undefined,
+        activeOnly: activeOnly === 'true' || activeOnly === '1',
+      });
+      if (!branchId && !isUserAdmin(req)) {
+        const filter = getEffectiveBranchFilter(req);
+        const allowed = filter.branchIds || (filter.singleBranchId ? [filter.singleBranchId] : []);
+        const allowSet = new Set(allowed);
+        rows = rows.filter(r => allowSet.has(r.branchId));
+      }
+      res.json(rows);
+    } catch (error) {
+      console.error("Error listing recurring expenses:", error);
+      res.status(500).json({ error: "Failed to list recurring expenses" });
+    }
+  });
+
+  app.post("/api/pnl/recurring-expenses", isAuthenticated, requirePermission("pnl", "edit"), async (req, res) => {
+    try {
+      const body = req.body || {};
+      if (!body.branchId || !body.name || !body.category || !body.effectiveFrom || body.monthlyAmount == null) {
+        return res.status(400).json({ error: "branchId, name, category, effectiveFrom, monthlyAmount مطلوبة" });
+      }
+      // IDOR guard on UPDATE: validate against stored record's branchId.
+      if (body.id) {
+        const existing = await storage.getRecurringExpenseById(body.id);
+        if (!existing) return res.status(404).json({ error: "السجل غير موجود" });
+        if (!isUserAdmin(req)) {
+          const okOld = await canAccessBranch(req, existing.branchId);
+          const okNew = await canAccessBranch(req, body.branchId);
+          if (!okOld || !okNew) return res.status(403).json({ error: "غير مصرح بتعديل هذا الفرع" });
+        }
+      } else if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, body.branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بتعديل هذا الفرع" });
+      }
+      const saved = await storage.upsertRecurringExpense({
+        ...body,
+        createdBy: (req as any).user?.id,
+      });
+      res.json(saved);
+    } catch (error) {
+      console.error("Error saving recurring expense:", error);
+      res.status(500).json({ error: "Failed to save recurring expense" });
+    }
+  });
+
+  app.delete("/api/pnl/recurring-expenses/:id", isAuthenticated, requirePermission("pnl", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "id غير صالح" });
+      // IDOR guard: fetch then check branch access before delete.
+      const existing = await storage.getRecurringExpenseById(id);
+      if (!existing) return res.status(404).json({ error: "السجل غير موجود" });
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, existing.branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بحذف سجل هذا الفرع" });
+      }
+      const ok = await storage.deleteRecurringExpense(id);
+      res.json({ success: ok });
+    } catch (error) {
+      console.error("Error deleting recurring expense:", error);
+      res.status(500).json({ error: "Failed to delete recurring expense" });
+    }
+  });
+
+  // ==================== P&L v2 — Copy monthly inputs from another month ====================
+  // Body: { branchId, fromYear, fromMonth, toYear, toMonth, overwrite? }
+  // If toYear/toMonth already has data and overwrite=false → 409.
+  app.post("/api/pnl/copy-monthly-inputs", isAuthenticated, requirePermission("pnl", "edit"), async (req, res) => {
+    try {
+      const { branchId, fromYear, fromMonth, toYear, toMonth, overwrite } = req.body || {};
+      if (!branchId || !fromYear || !fromMonth || !toYear || !toMonth) {
+        return res.status(400).json({ error: "branchId و from/to year+month مطلوبة" });
+      }
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بتعديل هذا الفرع" });
+      }
+      const source = await storage.getPnlMonthlyInputs(branchId, fromYear, fromMonth);
+      if (!source) return res.status(404).json({ error: "لا توجد بيانات في الشهر المصدر" });
+      const target = await storage.getPnlMonthlyInputs(branchId, toYear, toMonth);
+      if (target && !overwrite) {
+        return res.status(409).json({ error: "يوجد بيانات بالفعل في الشهر الهدف", existing: true });
+      }
+      const { id, createdAt, updatedAt, year, month, ...rest } = source as any;
+      const saved = await storage.upsertPnlMonthlyInputs({
+        ...rest,
+        branchId,
+        year: toYear,
+        month: toMonth,
+        createdBy: (req as any).user?.id,
+      });
+      res.json(saved);
+    } catch (error) {
+      console.error("Error copying monthly inputs:", error);
+      res.status(500).json({ error: "Failed to copy monthly inputs" });
+    }
+  });
+
+  // ==================== P&L v2 — Expense Ledger ====================
+  // Lightweight read-only ledger: returns one row per (branch × month) for the
+  // requested year (or range) so the dashboard can render a sortable table.
+  app.get("/api/pnl/expense-ledger", isAuthenticated, requirePermission("pnl", "view"), async (req, res) => {
+    try {
+      const { branchId, year } = req.query;
+      const yearNum = parseInt(year as string) || new Date().getFullYear();
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
+      if (!branchFilter.hasAccess) return res.status(403).json({ error: "غير مصرح" });
+
+      let branchIds: string[] = [];
+      if (branchFilter.singleBranchId) branchIds = [branchFilter.singleBranchId];
+      else if (branchFilter.branchIds) branchIds = branchFilter.branchIds;
+      else {
+        const all = await storage.getAllBranches();
+        branchIds = all.map(b => b.id);
+      }
+      const branchMap = new Map((await storage.getAllBranches()).map(b => [b.id, b]));
+
+      const rows: any[] = [];
+      // Batch to respect the DB pool.
+      const BATCH = 3;
+      for (let i = 0; i < branchIds.length; i += BATCH) {
+        const batch = branchIds.slice(i, i + BATCH);
+        await Promise.all(batch.map(async (bId) => {
+          const branch = branchMap.get(bId);
+          if (!branch) return;
+          for (let m = 1; m <= 12; m++) {
+            const [inputs, rent, recurring] = await Promise.all([
+              storage.getPnlMonthlyInputs(bId, yearNum, m),
+              storage.getRentForPeriod(bId, yearNum, m),
+              storage.getRecurringExpensesForPeriod(bId, yearNum, m),
+            ]);
+            if (!inputs && !rent && recurring.length === 0) continue; // skip empty rows
+            const i2 = inputs || ({} as any);
+            const recurringTotal = recurring.reduce((s, r) => s + (r.monthlyAmount || 0), 0);
+            const utilities = (i2.electricityCost || 0) + (i2.waterCost || 0) + (i2.utilitiesOther || 0);
+            const general = (i2.internetCost || 0) + (i2.governmentFees || 0)
+              + (i2.insuranceCost || 0) + (i2.subscriptionsCost || 0)
+              + (i2.securityCost || 0) + (i2.bankFees || 0) + (i2.fuelCost || 0);
+            const operating = (i2.maintenanceCost || 0) + (i2.marketingCost || 0)
+              + (i2.suppliesCost || 0) + (i2.otherCosts || 0);
+            rows.push({
+              branchId: bId,
+              branchName: branch.name,
+              year: yearNum,
+              month: m,
+              rent,
+              cogs: i2.cogsCost || 0,
+              utilities,
+              general,
+              operating,
+              recurring: recurringTotal,
+              total: (i2.cogsCost || 0) + rent + utilities + general + operating + recurringTotal,
+              hasInputs: !!inputs,
+            });
+          }
+        }));
+      }
+      res.json(rows);
+    } catch (error) {
+      console.error("Error building expense ledger:", error);
+      res.status(500).json({ error: "Failed to build expense ledger" });
     }
   });
 
