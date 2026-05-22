@@ -42,6 +42,8 @@ export default function PnlRentHistoryPage() {
 
   const [editing, setEditing] = useState<RentEntry | null>(null);
   const [showDialog, setShowDialog] = useState(false);
+  const [entryMode, setEntryMode] = useState<"monthly" | "yearly">("monthly");
+  const [yearlyAmount, setYearlyAmount] = useState<number>(0);
 
   const { data: rows = [], isLoading } = useQuery<RentEntry[]>({
     queryKey: ["/api/pnl/rent-history", branchId],
@@ -96,8 +98,18 @@ export default function PnlRentHistoryPage() {
       contractRef: "",
       notes: "",
     });
+    setEntryMode("monthly");
+    setYearlyAmount(0);
     setShowDialog(true);
   };
+
+  // عند فتح حوار التعديل: ابدأ بوضع شهري (لأن المخزّن أصلاً شهري)
+  useEffect(() => {
+    if (editing?.id) {
+      setEntryMode("monthly");
+      setYearlyAmount((editing.monthlyAmount || 0) * 12);
+    }
+  }, [editing?.id]);
 
   return (
     <Layout>
@@ -208,15 +220,79 @@ export default function PnlRentHistoryPage() {
             </DialogHeader>
             {editing && (
               <div className="space-y-3 py-2">
-                <div>
-                  <Label>القيمة الشهرية (ريال)</Label>
-                  <Input
-                    type="number"
-                    value={editing.monthlyAmount || ""}
-                    onChange={e => setEditing({ ...editing, monthlyAmount: parseFloat(e.target.value) || 0 })}
-                    data-testid="input-amount"
-                  />
+                {/* اختيار طريقة إدخال الإيجار */}
+                <div className="rounded-lg border border-violet-100 bg-violet-50/40 p-3">
+                  <Label className="text-xs text-muted-foreground mb-2 block">طريقة إدخال قيمة الإيجار</Label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEntryMode("monthly")}
+                      className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition ${
+                        entryMode === "monthly"
+                          ? "border-violet-500 bg-violet-600 text-white shadow-sm"
+                          : "border-border bg-white text-foreground hover:bg-muted"
+                      }`}
+                      data-testid="mode-monthly"
+                    >
+                      شهري ثابت
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEntryMode("yearly")}
+                      className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition ${
+                        entryMode === "yearly"
+                          ? "border-violet-500 bg-violet-600 text-white shadow-sm"
+                          : "border-border bg-white text-foreground hover:bg-muted"
+                      }`}
+                      data-testid="mode-yearly"
+                    >
+                      سنوي (يقسّم على 12)
+                    </button>
+                  </div>
                 </div>
+
+                {entryMode === "monthly" ? (
+                  <div>
+                    <Label>القيمة الشهرية (ريال)</Label>
+                    <Input
+                      type="number"
+                      value={editing.monthlyAmount || ""}
+                      onChange={e => {
+                        const v = parseFloat(e.target.value) || 0;
+                        setEditing({ ...editing, monthlyAmount: v });
+                        setYearlyAmount(v * 12);
+                      }}
+                      placeholder="مثال: 5000"
+                      data-testid="input-monthly-amount"
+                    />
+                    {editing.monthlyAmount > 0 && (
+                      <p className="mt-1.5 text-xs text-muted-foreground">
+                        يعادل سنوياً: <span className="font-semibold text-violet-700">{formatCurrency(editing.monthlyAmount * 12)}</span>
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <Label>القيمة السنوية (ريال)</Label>
+                    <Input
+                      type="number"
+                      value={yearlyAmount || ""}
+                      onChange={e => {
+                        const yearly = parseFloat(e.target.value) || 0;
+                        setYearlyAmount(yearly);
+                        // تقسيم على 12 وتقريب لأقرب ريال
+                        setEditing({ ...editing, monthlyAmount: Math.round((yearly / 12) * 100) / 100 });
+                      }}
+                      placeholder="مثال: 60000"
+                      data-testid="input-yearly-amount"
+                    />
+                    {yearlyAmount > 0 && (
+                      <p className="mt-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-1.5">
+                        ↩ سيُحسب شهرياً تلقائياً: <span className="font-bold">{formatCurrency(editing.monthlyAmount)}</span> / شهر
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>من تاريخ</Label>
