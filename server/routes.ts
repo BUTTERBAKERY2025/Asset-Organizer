@@ -27532,7 +27532,23 @@ export async function registerRoutes(
       const statusFilter = queryStatus && VALID_STATUS.has(queryStatus) ? queryStatus : undefined;
       const allowedBranches = getAllowedBranchIds(req);
 
+      // PERF: callers can opt out of expensive bundle parts they don't render.
+      // E.g. terminated-employees only needs `employees`, not `stats` or
+      // `systemUsers`. Pass ?include=employees (comma-separated) to skip.
+      // Default = everything, for backwards compatibility.
+      // Guard against array/object shapes Express produces for repeated query
+      // params (?include=a&include=b). Only honor a plain string; otherwise
+      // fall back to "return everything" so callers can't break the endpoint
+      // by passing weird shapes.
+      const rawInclude = req.query.include;
+      const includeParam = typeof rawInclude === "string" ? rawInclude.trim() : "";
+      const includeSet = includeParam ? new Set(includeParam.split(",").map(s => s.trim()).filter(Boolean)) : null;
+      const wantEmployees = !includeSet || includeSet.has("employees");
+      const wantStats = !includeSet || includeSet.has("stats");
+      const wantSystemUsers = !includeSet || includeSet.has("systemUsers");
+
       const [employees, stats, systemUsers] = await Promise.all([
+        !wantEmployees ? Promise.resolve([]) :
         (async () => {
           try {
             let emps;
@@ -27562,6 +27578,7 @@ export async function registerRoutes(
             return [];
           }
         })(),
+        !wantStats ? Promise.resolve(null) :
         (async () => {
           try {
             if (allowedBranches === null) {
@@ -27600,6 +27617,7 @@ export async function registerRoutes(
             return { totalEmployees: 0, totalSalaries: 0, byNationality: [], byJobTitle: [], byStatus: [] };
           }
         })(),
+        !wantSystemUsers ? Promise.resolve([]) :
         (async () => {
           try {
             const allUsers = await storage.getAllUsers();

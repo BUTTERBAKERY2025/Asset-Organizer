@@ -65,12 +65,17 @@ export default function TerminatedEmployeesPage() {
   const [rehireReason, setRehireReason] = useState("");
 
   const { data: bundle, isLoading, isError } = useQuery<{ employees?: BranchEmployee[]; stats?: any }>({
-    queryKey: ["/api/branch-employees/bundle", selectedBranch, "terminated"],
+    queryKey: ["/api/branch-employees/bundle", selectedBranch, "terminated", "employees-only"],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (selectedBranch !== "all") params.set("branchId", selectedBranch);
       params.set("status", "terminated");
-      const res = await fetch(`/api/branch-employees/bundle?${params.toString()}`);
+      // PERF: this page only renders the employees list — skip the expensive
+      // stats aggregation and the systemUsers fetch in the bundle.
+      params.set("include", "employees");
+      const res = await fetch(`/api/branch-employees/bundle?${params.toString()}`, {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },

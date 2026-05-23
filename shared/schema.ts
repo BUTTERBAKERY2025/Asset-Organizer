@@ -5178,6 +5178,10 @@ export const employeeSchedules = pgTable("employee_schedules", {
   index("idx_employee_schedules_date").on(table.scheduleDate),
   index("idx_employee_schedules_branch").on(table.branchId),
   index("idx_employee_schedules_branch_employee").on(table.branchEmployeeId),
+  // PERF: schedule lookups are virtually always scoped to a branch + a date
+  // window. The composite makes those queries an index range scan instead of
+  // a full table scan.
+  index("idx_employee_schedules_branch_date").on(table.branchId, table.scheduleDate),
   uniqueIndex("idx_unique_schedule_per_employee_date_branch").on(table.branchEmployeeId, table.scheduleDate, table.branchId),
 ]);
 
@@ -5280,6 +5284,11 @@ export const attendanceRecords = pgTable("attendance_records", {
   index("idx_attendance_date").on(table.attendanceDate),
   index("idx_attendance_status").on(table.status),
   index("idx_attendance_branch_employee").on(table.branchEmployeeId),
+  // PERF: composite indexes for the hottest filter combinations on this table
+  // (employee/branch + date range). The single-column indexes above cannot serve
+  // these queries efficiently once the table grows past ~50k rows.
+  index("idx_attendance_branch_date").on(table.branchId, table.attendanceDate),
+  index("idx_attendance_employee_date").on(table.employeeId, table.attendanceDate),
 ]);
 
 export const insertAttendanceRecordSchema = createInsertSchema(attendanceRecords).omit({
