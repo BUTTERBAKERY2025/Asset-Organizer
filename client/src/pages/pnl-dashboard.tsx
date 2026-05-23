@@ -16,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, TrendingUp, TrendingDown, DollarSign, Percent, Award, AlertTriangle, Building, Plus, Calculator, BarChart3, PieChart, RefreshCw, FileText, ArrowUp, ArrowDown, Minus, Target, Wallet, Receipt, ShoppingCart, Users, Home, Lightbulb, Package, Trash2, ChevronDown, ChevronUp, ChevronLeft, Download, Upload, FileSpreadsheet, History, Printer, MoreHorizontal, Settings2, FileDown } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, DollarSign, Percent, Award, AlertTriangle, Building, Plus, Calculator, BarChart3, PieChart, RefreshCw, FileText, ArrowUp, ArrowDown, Minus, Target, Wallet, Receipt, ShoppingCart, Users, Home, Lightbulb, Package, Trash2, ChevronDown, ChevronUp, ChevronLeft, Download, Upload, FileSpreadsheet, History, Printer, MoreHorizontal, Settings2, FileDown, Calendar } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RePieChart, Pie, Cell, LineChart, Line, AreaChart, Area, ComposedChart } from "recharts";
 import { useToast } from "@/hooks/use-toast";
@@ -1846,6 +1846,8 @@ export default function PnLDashboard() {
   const [selectedBranchId, setSelectedBranchId] = useState<string>("");
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedMonth, setSelectedMonth] = useState<number>(currentMonth);
+  // "حتى تاريخ" — فارغ = الشهر الكامل. الصيغة: YYYY-MM-DD داخل السنة/الشهر المحدد.
+  const [asOfDate, setAsOfDate] = useState<string>("");
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
     const [rankingMetric, setRankingMetric] = useState<"profit" | "revenue" | "margin">("profit");
@@ -2274,13 +2276,14 @@ export default function PnLDashboard() {
     branches: any[];
     totals: any;
   }>({
-    queryKey: ["/api/pnl/enhanced-summary", { branchId: selectedBranchId, year: selectedYear, month: selectedMonth }],
+    queryKey: ["/api/pnl/enhanced-summary", { branchId: selectedBranchId, year: selectedYear, month: selectedMonth, asOfDate }],
     queryFn: async () => {
       const params = new URLSearchParams({
         year: selectedYear.toString(),
         month: selectedMonth.toString(),
       });
       if (selectedBranchId) params.append("branchId", selectedBranchId);
+      if (asOfDate) params.append("asOfDate", asOfDate);
       const res = await fetch(`/api/pnl/enhanced-summary?${params}`);
       if (!res.ok) throw new Error("Failed to fetch enhanced P&L");
       return res.json();
@@ -2801,6 +2804,7 @@ export default function PnLDashboard() {
                   onValueChange={(value) => {
                     const year = parseInt(value);
                     setSelectedYear(year);
+                    setAsOfDate(""); // إعادة الضبط لتجنّب تاريخ خارج الفترة الجديدة
                     handleSelectPeriod(selectedBranchId, year, selectedMonth);
                   }}
                 >
@@ -2824,6 +2828,7 @@ export default function PnLDashboard() {
                   onValueChange={(value) => {
                     const month = parseInt(value);
                     setSelectedMonth(month);
+                    setAsOfDate(""); // إعادة الضبط لتجنّب تاريخ خارج الفترة الجديدة
                     handleSelectPeriod(selectedBranchId, selectedYear, month);
                   }}
                 >
@@ -2838,6 +2843,47 @@ export default function PnLDashboard() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs sm:text-sm flex items-center gap-1">
+                  حتى تاريخ
+                  <span className="text-[10px] text-muted-foreground">(اختياري)</span>
+                </Label>
+                {(() => {
+                  // الحد الأدنى = اليوم الأول، الأقصى = آخر يوم في الشهر المختار
+                  const mm = String(selectedMonth).padStart(2, '0');
+                  const minDate = `${selectedYear}-${mm}-01`;
+                  const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
+                  const maxDate = `${selectedYear}-${mm}-${String(lastDay).padStart(2, '0')}`;
+                  return (
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="date"
+                        value={asOfDate}
+                        min={minDate}
+                        max={maxDate}
+                        onChange={(e) => setAsOfDate(e.target.value)}
+                        className="h-11 sm:h-10 flex-1"
+                        data-testid="input-as-of-date"
+                        placeholder="الشهر كامل"
+                      />
+                      {asOfDate && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-11 sm:h-10 px-2 text-xs"
+                          onClick={() => setAsOfDate("")}
+                          data-testid="button-clear-as-of-date"
+                          title="إلغاء (عرض الشهر كامل)"
+                        >
+                          ×
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="flex items-end">
@@ -3068,14 +3114,72 @@ export default function PnLDashboard() {
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     </div>
                   ) : metrics && enhancedPnL?.totals ? (
-                    <ModernOverview
-                      metrics={metrics}
-                      totals={enhancedPnL.totals}
-                      branches={enhancedPnL.branches || []}
-                      selectedYear={selectedYear}
-                      selectedMonth={selectedMonth}
-                      monthLabel={MONTHS_AR[selectedMonth - 1]}
-                    />
+                    <>
+                      {/* شريط "حتى تاريخ" + بطاقات توقع نهاية الشهر */}
+                      {enhancedPnL.totals.asOf?.isPartial && (
+                        <>
+                          <div
+                            className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 px-4 py-3 flex flex-wrap items-center gap-2 text-sm"
+                            data-testid="banner-as-of"
+                          >
+                            <Calendar className="h-4 w-4 text-amber-700 dark:text-amber-300" />
+                            <span className="font-semibold text-amber-900 dark:text-amber-100">
+                              عرض جزئي حتى تاريخ {enhancedPnL.totals.asOf.date}
+                            </span>
+                            <span className="text-amber-800 dark:text-amber-200">
+                              — تم احتساب المصروفات تناسبياً ({enhancedPnL.totals.asOf.elapsedDays} من {enhancedPnL.totals.asOf.billingDays} يوم)
+                            </span>
+                          </div>
+
+                          {enhancedPnL.totals.projection && (
+                            <Card className="border-blue-300 dark:border-blue-700">
+                              <CardHeader className="pb-3">
+                                <CardTitle className="flex items-center gap-2 text-base">
+                                  <TrendingUp className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                  توقع نهاية الشهر
+                                  <Badge variant="secondary" className="text-[10px]">متوقع</Badge>
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div data-testid="projection-gross-sales">
+                                  <p className="text-xs text-muted-foreground mb-1">إجمالي المبيعات المتوقعة</p>
+                                  <p className="text-lg font-bold">
+                                    {(enhancedPnL.totals.projection.grossSales || 0).toLocaleString('ar-SA', { maximumFractionDigits: 0 })} ر.س
+                                  </p>
+                                </div>
+                                <div data-testid="projection-net-sales">
+                                  <p className="text-xs text-muted-foreground mb-1">صافي المبيعات المتوقع</p>
+                                  <p className="text-lg font-bold">
+                                    {(enhancedPnL.totals.projection.netSales || 0).toLocaleString('ar-SA', { maximumFractionDigits: 0 })} ر.س
+                                  </p>
+                                </div>
+                                <div data-testid="projection-net-profit">
+                                  <p className="text-xs text-muted-foreground mb-1">صافي الربح المتوقع</p>
+                                  <p className={`text-lg font-bold ${(enhancedPnL.totals.projection.netProfit || 0) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                    {(enhancedPnL.totals.projection.netProfit || 0).toLocaleString('ar-SA', { maximumFractionDigits: 0 })} ر.س
+                                  </p>
+                                </div>
+                                <div data-testid="projection-net-margin">
+                                  <p className="text-xs text-muted-foreground mb-1">هامش الربح المتوقع</p>
+                                  <p className={`text-lg font-bold ${(enhancedPnL.totals.projection.netMargin || 0) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                    {(enhancedPnL.totals.projection.netMargin || 0).toFixed(1)}%
+                                  </p>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )}
+                        </>
+                      )}
+
+                      <ModernOverview
+                        metrics={metrics}
+                        totals={enhancedPnL.totals}
+                        branches={enhancedPnL.branches || []}
+                        selectedYear={selectedYear}
+                        selectedMonth={selectedMonth}
+                        monthLabel={MONTHS_AR[selectedMonth - 1]}
+                      />
+                    </>
                   ) : (
                     <Card>
                       <CardContent className="py-16 text-center text-muted-foreground">

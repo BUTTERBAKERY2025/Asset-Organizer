@@ -8500,10 +8500,40 @@ export async function registerRoutes(
   app.get("/api/pnl/enhanced-summary", isAuthenticated, requirePermission("pnl", "view"), async (req, res) => {
     const __t0 = Date.now();
     try {
-      const { branchId, year, month } = req.query;
+      const { branchId, year, month, asOfDate } = req.query;
       const yearNum = parseInt(year as string) || new Date().getFullYear();
       const monthNum = parseInt(month as string) || new Date().getMonth() + 1;
-      
+
+      // === Pro-rata "حتى تاريخ" ====================================
+      // إذا مرّر العميل asOfDate (YYYY-MM-DD) داخل نفس السنة/الشهر:
+      //   - نَحْسب المبيعات الفعلية حتى ذلك اليوم فقط.
+      //   - نُقَسِّم المصاريف الشهرية بالتناسب: monthly × elapsedDays / 30
+      //     (المستخدم اختار قسمة ثابتة على 30 يوم).
+      //   - نُضيف "توقع لنهاية الشهر" بناءً على المعدّل اليومي.
+      // بدون asOfDate → كل شيء كامل (سلوك الشهر الكامل كما كان).
+      const isValidIsoDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+      const BILLING_DAYS = 30; // قسمة ثابتة على 30 يوم بناء على تفضيل المستخدم
+      const daysInActualMonth = new Date(yearNum, monthNum, 0).getDate();
+      let asOfStr: string | null = null;
+      let elapsedDays = daysInActualMonth; // افتراضياً الشهر كامل
+      let isPartial = false;
+      if (typeof asOfDate === 'string' && isValidIsoDate(asOfDate)) {
+        // تفسير سلسلة YYYY-MM-DD مباشرةً دون الاعتماد على المنطقة الزمنية للخادم
+        const [yStr, mStr, dStr] = asOfDate.split('-');
+        const yy = parseInt(yStr, 10);
+        const mm = parseInt(mStr, 10);
+        const dd = parseInt(dStr, 10);
+        if (yy === yearNum && mm === monthNum && dd >= 1 && dd <= daysInActualMonth) {
+          asOfStr = asOfDate;
+          elapsedDays = dd;
+          isPartial = elapsedDays < daysInActualMonth;
+        }
+      }
+      // معامل التناسب للمصاريف (مقصور بحد أقصى 1 — لو اختار يوم 31 مع تقسيم 30)
+      const prorateFactor = Math.min(elapsedDays, BILLING_DAYS) / BILLING_DAYS;
+      // معامل التوقع للمبيعات إلى نهاية الشهر (المعدل اليومي × 30)
+      const projectionFactor = elapsedDays > 0 ? BILLING_DAYS / elapsedDays : 1;
+
       const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
       if (!branchFilter.hasAccess) {
         return res.status(403).json({ error: "غير مصرح بالوصول" });
@@ -8552,13 +8582,26 @@ export async function registerRoutes(
         );
 
         // Filter by date range from approved journals
+        // عند تفعيل asOfDate نَقصُر مبيعات الشهر على الأيام حتى ذلك التاريخ شاملاً.
+        // نُفسِّر تاريخ القيد كسلسلة YYYY-MM-DD مباشرةً لتجنّب اختلاف المناطق الزمنية.
+        const parseJDate = (val: any): { y: number; m: number; d: number } | null => {
+          if (!val) return null;
+          const s = typeof val === 'string' ? val : (val instanceof Date ? val.toISOString() : String(val));
+          const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+          if (!m) return null;
+          return { y: parseInt(m[1], 10), m: parseInt(m[2], 10), d: parseInt(m[3], 10) };
+        };
         const monthJournals = approvedJournals.filter((j: any) => {
-          const jDate = new Date(j.journalDate);
-          return jDate.getFullYear() === yearNum && (jDate.getMonth() + 1) === monthNum;
+          const p = parseJDate(j.journalDate);
+          if (!p) return false;
+          if (p.y !== yearNum || p.m !== monthNum) return false;
+          if (isPartial && p.d > elapsedDays) return false;
+          return true;
         });
         const prevMonthJournals = approvedJournals.filter((j: any) => {
-          const jDate = new Date(j.journalDate);
-          return jDate.getFullYear() === prevYearNum && (jDate.getMonth() + 1) === prevMonthNum;
+          const p = parseJDate(j.journalDate);
+          if (!p) return false;
+          return p.y === prevYearNum && p.m === prevMonthNum;
         });
 
         const grossSales = monthJournals.reduce((sum: number, j: any) => sum + (j.totalSales || 0), 0);
@@ -8569,7 +8612,9 @@ export async function registerRoutes(
         const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
         const dailyMap = new Map<number, { gross: number; transactions: number }>();
         for (const j of monthJournals) {
-          const day = new Date(j.journalDate).getDate();
+          const p = parseJDate(j.journalDate);
+          if (!p) continue;
+          const day = p.d;
           const cur = dailyMap.get(day) || { gross: 0, transactions: 0 };
           cur.gross += j.totalSales || 0;
           cur.transactions += j.transactionCount || 0;
@@ -8595,29 +8640,31 @@ export async function registerRoutes(
         // v2: rent comes from pnl_rent_history (effective-date lookup) and
         // recurring expenses are auto-summed per period. settings.monthlyRent
         // is kept only as a fallback inside getRentForPeriod.
-        const monthlyRent = periodRent || 0;
-        const electricityCost = inputs?.electricityCost || 0;
-        const waterCost = inputs?.waterCost || 0;
-        const utilitiesOther = inputs?.utilitiesOther || 0;
+        // === Pro-rata: كل المصاريف الشهرية تُضرب في prorateFactor عند تفعيل asOfDate ===
+        // (prorateFactor = 1 في حالة الشهر الكامل، فلا يتأثر السلوك القديم).
+        const pf = prorateFactor;
+        const monthlyRent = (periodRent || 0) * pf;
+        const electricityCost = (inputs?.electricityCost || 0) * pf;
+        const waterCost = (inputs?.waterCost || 0) * pf;
+        const utilitiesOther = (inputs?.utilitiesOther || 0) * pf;
         // COGS is now a fixed ratio of net sales (admin-configurable, default
-        // 30%, stored in pnl_global_settings and cached in memory). The column
-        // on pnl_monthly_inputs is preserved for backward compatibility but no
-        // longer drives the calculation.
+        // 30%, stored in pnl_global_settings and cached in memory). يتبع تلقائياً
+        // المبيعات الفعلية حتى التاريخ المحدد دون الحاجة لضرب prorate.
         const cogsRatio = await storage.getCogsRatio();
         const cogsCost = Math.round(netSales * cogsRatio);
-        const maintenanceCost = inputs?.maintenanceCost || 0;
-        const marketingCost = inputs?.marketingCost || 0;
-        const suppliesCost = inputs?.suppliesCost || 0;
-        const otherCosts = inputs?.otherCosts || 0;
-        // v2 new expense columns (manual monthly entry)
-        const internetCost = inputs?.internetCost || 0;
-        const governmentFees = inputs?.governmentFees || 0;
-        const insuranceCost = inputs?.insuranceCost || 0;
-        const subscriptionsCost = inputs?.subscriptionsCost || 0;
-        const securityCost = inputs?.securityCost || 0;
-        const bankFees = inputs?.bankFees || 0;
-        const fuelCost = inputs?.fuelCost || 0;
-        const recurringTotal = recurringList.reduce((s, r) => s + (r.monthlyAmount || 0), 0);
+        const maintenanceCost = (inputs?.maintenanceCost || 0) * pf;
+        const marketingCost = (inputs?.marketingCost || 0) * pf;
+        const suppliesCost = (inputs?.suppliesCost || 0) * pf;
+        const otherCosts = (inputs?.otherCosts || 0) * pf;
+        // v2 new expense columns (manual monthly entry) — prorated
+        const internetCost = (inputs?.internetCost || 0) * pf;
+        const governmentFees = (inputs?.governmentFees || 0) * pf;
+        const insuranceCost = (inputs?.insuranceCost || 0) * pf;
+        const subscriptionsCost = (inputs?.subscriptionsCost || 0) * pf;
+        const securityCost = (inputs?.securityCost || 0) * pf;
+        const bankFees = (inputs?.bankFees || 0) * pf;
+        const fuelCost = (inputs?.fuelCost || 0) * pf;
+        const recurringTotal = recurringList.reduce((s, r) => s + (r.monthlyAmount || 0), 0) * pf;
         const extraGeneral = internetCost + governmentFees + insuranceCost
           + subscriptionsCost + securityCost + bankFees + fuelCost;
 
@@ -8696,22 +8743,46 @@ export async function registerRoutes(
         // Largest cost first — easier to spot the top contributors.
         employeesList.sort((a, b) => b.totalCost - a.totalCost);
 
-        const totalEmployeeCosts = totalSalaries + totalGosi + totalNonSaudiCosts;
-        
+        // ملاحظة: قيم employeesList تبقى شهرية كاملة (للعرض) — لكن الإجمالي
+        // المستخدم في حساب المصاريف يتم تناسبه مع الفترة.
+        const totalEmployeeCostsFull = totalSalaries + totalGosi + totalNonSaudiCosts;
+        const totalEmployeeCosts = totalEmployeeCostsFull * pf;
+
         // 7. Calculate totals
         const totalUtilities = electricityCost + waterCost + utilitiesOther;
         const totalOperatingCosts = totalEmployeeCosts + monthlyRent + totalUtilities
           + maintenanceCost + marketingCost + suppliesCost + otherCosts
           + extraGeneral + recurringTotal;
-        
+
         // 8. Calculate profit
         const grossProfit = netSales - cogsCost;
         const operatingProfit = grossProfit - totalOperatingCosts;
         const netProfit = operatingProfit;
-        
+
         // 9. Calculate percentages
         const grossMargin = netSales > 0 ? (grossProfit / netSales) * 100 : 0;
         const netMargin = netSales > 0 ? (netProfit / netSales) * 100 : 0;
+
+        // === توقع لنهاية الشهر (Projection) ====================================
+        // المعدّل اليومي للمبيعات الفعلية × 30 يوم → مبيعات متوقعة.
+        // المصاريف المتوقعة = نسخة الشهر الكامل (قبل التناسب) لأن البنود الشهرية
+        // ستُسجَّل بالكامل عند نهاية الشهر بصرف النظر عن التاريخ الحالي.
+        const projGrossSales = grossSales * projectionFactor;
+        const projNetSales = projGrossSales / 1.15;
+        const projVat = projGrossSales - projNetSales;
+        const projCogs = Math.round(projNetSales * cogsRatio);
+        const projGrossProfit = projNetSales - projCogs;
+        const fullMonthOpex = totalEmployeeCostsFull + (periodRent || 0)
+          + (inputs?.electricityCost || 0) + (inputs?.waterCost || 0) + (inputs?.utilitiesOther || 0)
+          + (inputs?.maintenanceCost || 0) + (inputs?.marketingCost || 0)
+          + (inputs?.suppliesCost || 0) + (inputs?.otherCosts || 0)
+          + (inputs?.internetCost || 0) + (inputs?.governmentFees || 0)
+          + (inputs?.insuranceCost || 0) + (inputs?.subscriptionsCost || 0)
+          + (inputs?.securityCost || 0) + (inputs?.bankFees || 0) + (inputs?.fuelCost || 0)
+          + recurringList.reduce((s, r) => s + (r.monthlyAmount || 0), 0);
+        const projOperatingProfit = projGrossProfit - fullMonthOpex;
+        const projNetProfit = projOperatingProfit;
+        const projNetMargin = projNetSales > 0 ? (projNetProfit / projNetSales) * 100 : 0;
         
         return {
           branchId: bId,
@@ -8731,11 +8802,19 @@ export async function registerRoutes(
           grossMargin,
 
           // Employee costs breakdown
+          // ملاحظة: في الوضع الجزئي نُطبّق نفس معامل التناسب (pf) على
+          // المكوّنات الفرعية حتى تتطابق مع الإجمالي ولا يحدث تباين في
+          // العرض. القيم الشهرية الكاملة متاحة في employeesList للمرجع.
           employeeCosts: {
-            salaries: totalSalaries,
-            gosi: totalGosi,
-            nonSaudiCosts: totalNonSaudiCosts,
-            total: totalEmployeeCosts
+            salaries: totalSalaries * pf,
+            gosi: totalGosi * pf,
+            nonSaudiCosts: totalNonSaudiCosts * pf,
+            total: totalEmployeeCosts,
+            // مرجع للقيم الشهرية الكاملة (للتدقيق والعرض المقارن)
+            salariesFull: totalSalaries,
+            gosiFull: totalGosi,
+            nonSaudiCostsFull: totalNonSaudiCosts,
+            totalFull: totalEmployeeCostsFull,
           },
 
           // Fixed costs
@@ -8824,7 +8903,10 @@ export async function registerRoutes(
             const prevNetSales = prevGrossSales / 1.15;
             // Same admin-configurable COGS ratio for previous-period comparison.
             const prevCogs = Math.round(prevNetSales * cogsRatio);
-            const prevTotalOpex = totalEmployeeCosts + (prevPeriodRent || 0)
+            // نستخدم رواتب الشهر الكامل (totalEmployeeCostsFull) كأساس مرجعي
+            // للمقارنة مع الشهر السابق — لتجنّب تشويش الـ delta عند تفعيل
+            // "حتى تاريخ" (وإلا سيظهر تحسّن وهمي بسبب تناسب رواتب الفترة الحالية).
+            const prevTotalOpex = totalEmployeeCostsFull + (prevPeriodRent || 0)
               + prevElectricity + prevWater + prevUtilsOther
               + prevMaint + prevMarketing + prevSupplies + prevOther
               + prevExtra + prevRecurringTotal;
@@ -8846,6 +8928,30 @@ export async function registerRoutes(
               profitChangePct: delta(netProfit, prevNetProfit),
             };
           })(),
+
+          // === معلومات الفترة "حتى تاريخ" ===
+          asOf: {
+            date: asOfStr,                  // null إذا كان الشهر الكامل
+            elapsedDays,                    // الأيام المنقضية المحسوبة
+            daysInMonth: daysInActualMonth, // عدد أيام الشهر الفعلي (28/29/30/31)
+            billingDays: BILLING_DAYS,      // الأساس المستخدم في التناسب (30)
+            prorateFactor,                  // ضرب المصاريف
+            isPartial,                      // true إذا كان عرضاً جزئياً
+          },
+
+          // === توقع لنهاية الشهر (مبني على المعدّل اليومي للمبيعات
+          //     + الالتزامات الشهرية الكاملة للمصاريف) ===
+          projection: {
+            grossSales: projGrossSales,
+            netSales: projNetSales,
+            vatAmount: projVat,
+            cogsCost: projCogs,
+            grossProfit: projGrossProfit,
+            totalOperatingCosts: fullMonthOpex,
+            operatingProfit: projOperatingProfit,
+            netProfit: projNetProfit,
+            netMargin: projNetMargin,
+          },
 
           // Metadata
           journalCount: monthJournals.length,
@@ -8961,10 +9067,35 @@ export async function registerRoutes(
             revenueChangePct: 0,
             profitChangePct: 0,
           },
+
+          // === فترة "حتى تاريخ" — متطابقة عبر كل الفروع ===
+          asOf: {
+            date: asOfStr,
+            elapsedDays,
+            daysInMonth: daysInActualMonth,
+            billingDays: BILLING_DAYS,
+            prorateFactor,
+            isPartial,
+          },
+
+          // === توقع نهاية الشهر — تجميع الفروع ===
+          projection: {
+            grossSales: results.reduce((s, r) => s + (r.projection?.grossSales || 0), 0),
+            netSales: results.reduce((s, r) => s + (r.projection?.netSales || 0), 0),
+            vatAmount: results.reduce((s, r) => s + (r.projection?.vatAmount || 0), 0),
+            cogsCost: results.reduce((s, r) => s + (r.projection?.cogsCost || 0), 0),
+            grossProfit: results.reduce((s, r) => s + (r.projection?.grossProfit || 0), 0),
+            totalOperatingCosts: results.reduce((s, r) => s + (r.projection?.totalOperatingCosts || 0), 0),
+            operatingProfit: results.reduce((s, r) => s + (r.projection?.operatingProfit || 0), 0),
+            netProfit: results.reduce((s, r) => s + (r.projection?.netProfit || 0), 0),
+            netMargin: 0,
+          },
         };
         
         totals.grossMargin = totals.netSales > 0 ? (totals.grossProfit / totals.netSales) * 100 : 0;
         totals.netMargin = totals.netSales > 0 ? (totals.netProfit / totals.netSales) * 100 : 0;
+        totals.projection.netMargin = totals.projection.netSales > 0
+          ? (totals.projection.netProfit / totals.projection.netSales) * 100 : 0;
 
         const ns = totals.netSales || 0;
         totals.ratios = {
