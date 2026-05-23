@@ -10,8 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Calculator, Plus, CheckCircle2, DollarSign, Trash2 } from "lucide-react";
+import { Calculator, Plus, CheckCircle2, DollarSign, Trash2, ArrowRight } from "lucide-react";
 import { TERMINATION_TYPE_LABELS, EOS_STATUS_LABELS } from "@shared/schema";
+import { Layout } from "@/components/layout";
+import { Link } from "wouter";
 
 type Eos = any;
 type Emp = { id: number; employeeName: string; jobTitle: string; branchId: string; salary?: number; totalSalary?: number };
@@ -141,7 +143,13 @@ export default function EOSPage() {
   const fmt = (n: any) => Number(n || 0).toLocaleString("ar-SA-u-nu-latn", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
+    <Layout>
     <div className="container mx-auto p-4 space-y-4" dir="rtl" data-testid="page-hr-eos">
+      <Link href="/hr-hub">
+        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" data-testid="button-back-hr-hub">
+          <ArrowRight className="h-4 w-4 ms-1" />العودة لمركز الموارد البشرية
+        </Button>
+      </Link>
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <Calculator className="h-7 w-7 text-purple-600" />
@@ -302,6 +310,7 @@ export default function EOSPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </Layout>
   );
 }
 

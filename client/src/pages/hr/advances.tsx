@@ -10,7 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Wallet, Plus, Trash2, TrendingDown, Calendar } from "lucide-react";
+import { Wallet, Plus, Trash2, TrendingDown, Calendar, ArrowRight } from "lucide-react";
+import { Layout } from "@/components/layout";
+import { Link } from "wouter";
 
 type Adv = any;
 type Emp = { id: number; employeeName: string; jobTitle: string; branchId: string };
@@ -98,7 +100,13 @@ export default function AdvancesPage() {
   };
 
   return (
+    <Layout>
     <div className="container mx-auto p-4 space-y-4" dir="rtl" data-testid="page-hr-advances">
+      <Link href="/hr-hub">
+        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" data-testid="button-back-hr-hub">
+          <ArrowRight className="h-4 w-4 ms-1" />العودة لمركز الموارد البشرية
+        </Button>
+      </Link>
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <Wallet className="h-7 w-7 text-emerald-600" />
@@ -225,6 +233,7 @@ export default function AdvancesPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </Layout>
   );
 }
 

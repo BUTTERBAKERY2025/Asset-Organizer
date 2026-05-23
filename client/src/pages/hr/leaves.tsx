@@ -10,8 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { CalendarDays, Plus, CheckCircle2, XCircle, Clock, Trash2 } from "lucide-react";
+import { CalendarDays, Plus, CheckCircle2, XCircle, Clock, Trash2, ArrowRight } from "lucide-react";
 import { LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS } from "@shared/schema";
+import { Layout } from "@/components/layout";
+import { Link } from "wouter";
 
 type Leave = any;
 type Emp = { id: number; employeeName: string; jobTitle: string; branchId: string };
@@ -137,7 +139,13 @@ export default function LeavesPage() {
   };
 
   return (
+    <Layout>
     <div className="container mx-auto p-4 space-y-4" dir="rtl" data-testid="page-hr-leaves">
+      <Link href="/hr-hub">
+        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" data-testid="button-back-hr-hub">
+          <ArrowRight className="h-4 w-4 ms-1" />العودة لمركز الموارد البشرية
+        </Button>
+      </Link>
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <CalendarDays className="h-7 w-7 text-blue-600" />
@@ -306,6 +314,7 @@ export default function LeavesPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </Layout>
   );
 }
 
