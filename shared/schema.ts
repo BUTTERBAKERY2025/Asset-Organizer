@@ -1073,6 +1073,11 @@ export const SYSTEM_MODULES = [
   "hr_employment_applications",
   "hr_job_offers",
   "hr_onboarding",
+  "hr_documents",      // وثائق الموظفين (هوية/إقامة/رخصة/تأمين)
+  "hr_leaves",         // طلبات الإجازات والموافقة عليها
+  "hr_warnings",       // الإنذارات والمخالفات الإدارية
+  "hr_eos",            // حسابات نهاية الخدمة
+  "hr_advances",       // السلف والقروض على الموظفين
   
   // المالية
   "cashier_journal",
@@ -1268,6 +1273,11 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   hr_employment_applications: "طلبات التوظيف",
   hr_job_offers: "عروض العمل",
   hr_onboarding: "مباشرة العمل (إشعار)",
+  hr_documents: "وثائق الموظفين",
+  hr_leaves: "طلبات الإجازات",
+  hr_warnings: "الإنذارات والمخالفات",
+  hr_eos: "نهاية الخدمة",
+  hr_advances: "السلف والقروض",
   
   // المالية
   cashier: "الكاشير",
@@ -10504,3 +10514,222 @@ export const mediaCampaigns = pgTable("media_campaigns", {
 export const insertMediaCampaignSchema = createInsertSchema(mediaCampaigns).omit({ id: true, createdAt: true, createdBy: true });
 export type MediaCampaign = typeof mediaCampaigns.$inferSelect;
 export type InsertMediaCampaign = z.infer<typeof insertMediaCampaignSchema>;
+
+// ============================================================================
+// HR Hub - 4 New Modules (Documents | Leaves | Warnings | EOS)
+// ============================================================================
+
+// 1) وثائق الموظفين — هويات/إقامات/رخص/تأمينات مع تنبيهات انتهاء الصلاحية
+export const employeeDocuments = pgTable("employee_documents", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").references(() => branches.id),
+  documentType: text("document_type").notNull(), // id_card | residence | passport | driving_license | health_certificate | work_permit | contract | other
+  documentNumber: text("document_number"),
+  issueDate: text("issue_date"), // YYYY-MM-DD
+  expiryDate: text("expiry_date"), // YYYY-MM-DD
+  issuingAuthority: text("issuing_authority"),
+  fileUrl: text("file_url"),
+  notes: text("notes"),
+  status: text("status").notNull().default("active"), // active | expired | expiring_soon | archived
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_employee_documents_employee").on(table.branchEmployeeId),
+  index("idx_employee_documents_branch").on(table.branchId),
+  index("idx_employee_documents_type").on(table.documentType),
+  index("idx_employee_documents_expiry").on(table.expiryDate),
+  index("idx_employee_documents_status").on(table.status),
+]);
+
+export const insertEmployeeDocumentSchema = createInsertSchema(employeeDocuments, {
+  documentType: z.enum(["id_card", "residence", "passport", "driving_license", "health_certificate", "work_permit", "contract", "other"]),
+  status: z.enum(["active", "expired", "expiring_soon", "archived"]).optional(),
+}).omit({ id: true, createdAt: true, updatedAt: true });
+
+export type EmployeeDocument = typeof employeeDocuments.$inferSelect;
+export type InsertEmployeeDocument = z.infer<typeof insertEmployeeDocumentSchema>;
+
+export const EMPLOYEE_DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  id_card: "بطاقة هوية وطنية",
+  residence: "إقامة",
+  passport: "جواز سفر",
+  driving_license: "رخصة قيادة",
+  health_certificate: "شهادة صحية",
+  work_permit: "رخصة عمل",
+  contract: "عقد عمل",
+  other: "أخرى",
+};
+
+// 2) طلبات الإجازات
+export const leaveRequests = pgTable("leave_requests", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  leaveType: text("leave_type").notNull(), // annual | sick | emergency | maternity | paternity | unpaid | hajj | marriage | bereavement | other
+  startDate: text("start_date").notNull(), // YYYY-MM-DD
+  endDate: text("end_date").notNull(), // YYYY-MM-DD
+  totalDays: real("total_days").notNull(),
+  reason: text("reason"),
+  status: text("status").notNull().default("pending"), // pending | approved | rejected | cancelled
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewerNote: text("reviewer_note"),
+  attachmentUrl: text("attachment_url"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_leave_requests_employee").on(table.branchEmployeeId),
+  index("idx_leave_requests_branch").on(table.branchId),
+  index("idx_leave_requests_status").on(table.status),
+  index("idx_leave_requests_type").on(table.leaveType),
+  index("idx_leave_requests_start").on(table.startDate),
+]);
+
+export const insertLeaveRequestSchema = createInsertSchema(leaveRequests, {
+  leaveType: z.enum(["annual", "sick", "emergency", "maternity", "paternity", "unpaid", "hajj", "marriage", "bereavement", "other"]),
+  status: z.enum(["pending", "approved", "rejected", "cancelled"]).optional(),
+  totalDays: z.number().positive("عدد الأيام يجب أن يكون موجباً"),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "تاريخ غير صحيح"),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "تاريخ غير صحيح"),
+}).omit({ id: true, createdAt: true, updatedAt: true, reviewedBy: true, reviewedAt: true });
+
+export type LeaveRequest = typeof leaveRequests.$inferSelect;
+export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;
+
+export const LEAVE_TYPE_LABELS: Record<string, string> = {
+  annual: "إجازة سنوية",
+  sick: "إجازة مرضية",
+  emergency: "إجازة طارئة",
+  maternity: "إجازة أمومة",
+  paternity: "إجازة أبوة",
+  unpaid: "إجازة بدون راتب",
+  hajj: "إجازة حج",
+  marriage: "إجازة زواج",
+  bereavement: "إجازة وفاة",
+  other: "أخرى",
+};
+
+export const LEAVE_STATUS_LABELS: Record<string, string> = {
+  pending: "قيد المراجعة",
+  approved: "معتمدة",
+  rejected: "مرفوضة",
+  cancelled: "ملغاة",
+};
+
+// 3) الإنذارات والمخالفات الإدارية
+export const employeeWarnings = pgTable("employee_warnings", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  level: text("level").notNull(), // verbal | written_1 | written_2 | written_3 | final | termination
+  reason: text("reason").notNull(),
+  description: text("description"),
+  issuedDate: text("issued_date").notNull(), // YYYY-MM-DD
+  issuedBy: varchar("issued_by").references(() => users.id),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  acknowledgedSignature: text("acknowledged_signature"),
+  deductionAmount: real("deduction_amount").default(0),
+  attachmentUrl: text("attachment_url"),
+  status: text("status").notNull().default("active"), // active | appealed | cancelled | expired
+  expiresAt: text("expires_at"), // YYYY-MM-DD
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_employee_warnings_employee").on(table.branchEmployeeId),
+  index("idx_employee_warnings_branch").on(table.branchId),
+  index("idx_employee_warnings_status").on(table.status),
+  index("idx_employee_warnings_level").on(table.level),
+  index("idx_employee_warnings_date").on(table.issuedDate),
+]);
+
+export const insertEmployeeWarningSchema = createInsertSchema(employeeWarnings, {
+  level: z.enum(["verbal", "written_1", "written_2", "written_3", "final", "termination"]),
+  status: z.enum(["active", "appealed", "cancelled", "expired"]).optional(),
+  deductionAmount: z.number().min(0).optional(),
+  issuedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "تاريخ غير صحيح"),
+}).omit({ id: true, createdAt: true, updatedAt: true, acknowledgedAt: true, acknowledgedSignature: true });
+
+export type EmployeeWarning = typeof employeeWarnings.$inferSelect;
+export type InsertEmployeeWarning = z.infer<typeof insertEmployeeWarningSchema>;
+
+export const WARNING_LEVEL_LABELS: Record<string, string> = {
+  verbal: "إنذار شفهي",
+  written_1: "إنذار كتابي أول",
+  written_2: "إنذار كتابي ثانٍ",
+  written_3: "إنذار كتابي ثالث",
+  final: "إنذار نهائي",
+  termination: "قرار فصل",
+};
+
+export const WARNING_STATUS_LABELS: Record<string, string> = {
+  active: "ساري",
+  appealed: "قيد الاعتراض",
+  cancelled: "ملغي",
+  expired: "منتهي",
+};
+
+// 4) حسابات نهاية الخدمة (EOS)
+export const eosCalculations = pgTable("eos_calculations", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  calculationDate: text("calculation_date").notNull(), // YYYY-MM-DD
+  terminationType: text("termination_type").notNull(), // resignation | termination | end_of_contract | retirement | death
+  startDate: text("start_date").notNull(), // YYYY-MM-DD (تاريخ بداية الخدمة)
+  endDate: text("end_date").notNull(), // YYYY-MM-DD (تاريخ نهاية الخدمة)
+  totalServiceYears: real("total_service_years").notNull(),
+  basicSalary: real("basic_salary").notNull(),
+  totalSalary: real("total_salary").notNull(), // الراتب الإجمالي للحساب
+  eosAmount: real("eos_amount").notNull(), // مكافأة نهاية الخدمة (طبقاً لنظام العمل السعودي)
+  vacationBalance: real("vacation_balance").default(0), // رصيد الإجازات المتبقي بالأيام
+  vacationAmount: real("vacation_amount").default(0), // قيمة رصيد الإجازات
+  otherDues: real("other_dues").default(0), // مستحقات أخرى
+  totalDeductions: real("total_deductions").default(0), // إجمالي الخصومات (سلف غير مسددة..)
+  netAmount: real("net_amount").notNull(), // الصافي المستحق
+  notes: text("notes"),
+  status: text("status").notNull().default("draft"), // draft | approved | paid
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  paidAt: timestamp("paid_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_eos_calculations_employee").on(table.branchEmployeeId),
+  index("idx_eos_calculations_branch").on(table.branchId),
+  index("idx_eos_calculations_status").on(table.status),
+  index("idx_eos_calculations_date").on(table.calculationDate),
+]);
+
+export const insertEosCalculationSchema = createInsertSchema(eosCalculations, {
+  terminationType: z.enum(["resignation", "termination", "end_of_contract", "retirement", "death"]),
+  status: z.enum(["draft", "approved", "paid"]).optional(),
+  totalServiceYears: z.number().min(0),
+  basicSalary: z.number().min(0),
+  totalSalary: z.number().min(0),
+  eosAmount: z.number().min(0),
+  netAmount: z.number(),
+  calculationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+}).omit({ id: true, createdAt: true, updatedAt: true, approvedBy: true, approvedAt: true, paidAt: true });
+
+export type EosCalculation = typeof eosCalculations.$inferSelect;
+export type InsertEosCalculation = z.infer<typeof insertEosCalculationSchema>;
+
+export const TERMINATION_TYPE_LABELS: Record<string, string> = {
+  resignation: "استقالة",
+  termination: "فصل",
+  end_of_contract: "نهاية عقد",
+  retirement: "تقاعد",
+  death: "وفاة",
+};
+
+export const EOS_STATUS_LABELS: Record<string, string> = {
+  draft: "مسودة",
+  approved: "معتمد",
+  paid: "مدفوع",
+};

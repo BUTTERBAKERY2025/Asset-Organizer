@@ -163,6 +163,11 @@ const EmploymentApplicationPublicPage = makeLazy("employment-application-public"
 const VacancyPublicPage = makeLazy("vacancy-public");
 const FloorPlanPage = makeLazy("floor-plan");
 const HRHubPage = makeLazy("hr-hub");
+const HREmployeeDocumentsPage = makeLazy("hr/employee-documents");
+const HRLeavesPage = makeLazy("hr/leaves");
+const HRWarningsPage = makeLazy("hr/warnings");
+const HRAdvancesPage = makeLazy("hr/advances");
+const HREosPage = makeLazy("hr/eos");
 
 function AppLoadingFallback() {
   return (
@@ -282,6 +287,11 @@ const Router = React.memo(function Router() {
       
       {/* HR - الموارد البشرية */}
       <Route path="/hr-hub">{() => <ModulePage component={HRHubPage} module="hr_management" />}</Route>
+      <Route path="/hr/employee-documents">{() => <ModulePage component={HREmployeeDocumentsPage} module="hr_documents" />}</Route>
+      <Route path="/hr/leaves">{() => <ModulePage component={HRLeavesPage} module="hr_leaves" />}</Route>
+      <Route path="/hr/warnings">{() => <ModulePage component={HRWarningsPage} module="hr_warnings" />}</Route>
+      <Route path="/hr/advances">{() => <ModulePage component={HRAdvancesPage} module="hr_advances" />}</Route>
+      <Route path="/hr/eos">{() => <ModulePage component={HREosPage} module="hr_eos" />}</Route>
       <Route path="/branch-employees">{() => <ModulePage component={BranchEmployeesPage} module="branch_employees" />}</Route>
       <Route path="/terminated-employees">{() => <ModulePage component={TerminatedEmployeesPage} module="branch_employees" />}</Route>
       <Route path="/organizational-structure">{() => <ModulePage component={OrganizationalStructurePage} module="organizational_structure" />}</Route>

@@ -599,6 +599,12 @@ export default function HRHubPage() {
     staleTime: 60_000,
   });
 
+  // HR Phase 3: live counters for the new sub-modules
+  const { data: docStats } = useQuery<any>({ queryKey: ["/api/hr/documents/stats"], staleTime: 60_000 });
+  const { data: leaveStats } = useQuery<any>({ queryKey: ["/api/hr/leaves/stats"], staleTime: 60_000 });
+  const { data: warningStats } = useQuery<any>({ queryKey: ["/api/hr/warnings/stats"], staleTime: 60_000 });
+  const { data: advanceStats } = useQuery<any>({ queryKey: ["/api/hr/advances/stats"], staleTime: 60_000 });
+
   // Filter employees by selected branch
   const filteredEmployees = useMemo(() => {
     if (branchFilter === "all") return employees;
@@ -823,11 +829,11 @@ export default function HRHubPage() {
           <StatTile testId="tile-attendance"      value={activeEmployees}        label="حضور اليوم (نشطون)"     icon={Clock}          tone="blue"     href="/attendance-dashboard" />
           <StatTile testId="tile-timesheet"       value="—"                      label="تايم شيت الفترة"        icon={Calendar}       tone="indigo"   href="/timesheet" />
           <StatTile testId="tile-incentives"      value="—"                      label="حوافز قيد الاعتماد"     icon={Gift}           tone="pink"     href="/incentives-management" />
-          <StatTile testId="tile-doc-expired"     value={0}                      label="وثائق منتهية الصلاحية"  icon={AlertTriangle}  tone="rose"     comingSoon />
-          <StatTile testId="tile-leaves"          value={0}                      label="طلبات إجازات معلّقة"    icon={CalendarDays}   tone="amber"    comingSoon />
-          <StatTile testId="tile-warnings"        value={0}                      label="إنذارات ومخالفات"      icon={ShieldAlert}    tone="rose"     comingSoon />
-          <StatTile testId="tile-advances"        value={0}                      label="سلف قيد الاسترداد"      icon={TrendingDown}   tone="orange"   comingSoon />
-          <StatTile testId="tile-eos"             value={0}                      label="حسابات نهاية الخدمة"    icon={FileText}       tone="lime"     comingSoon />
+          <StatTile testId="tile-doc-expired"     value={(docStats?.expired || 0) + (docStats?.expiringSoon || 0)} label="وثائق منتهية / قاربت" icon={AlertTriangle}  tone="rose"     href="/hr/employee-documents" />
+          <StatTile testId="tile-leaves"          value={leaveStats?.pending || 0} label="طلبات إجازات معلّقة"    icon={CalendarDays}   tone="amber"    href="/hr/leaves" />
+          <StatTile testId="tile-warnings"        value={warningStats?.active || 0} label="إنذارات سارية"          icon={ShieldAlert}    tone="rose"     href="/hr/warnings" />
+          <StatTile testId="tile-advances"        value={advanceStats?.total || 0} label="سلف مسجّلة"             icon={TrendingDown}   tone="orange"   href="/hr/advances" />
+          <StatTile testId="tile-eos"             value={0}                      label="حسابات نهاية الخدمة"    icon={FileText}       tone="lime"     href="/hr/eos" />
           <StatTile testId="tile-branches"        value={branches.length}        label="عدد الفروع النشطة"      icon={Building}       tone="teal"     href="/branches" />
         </div>
 
