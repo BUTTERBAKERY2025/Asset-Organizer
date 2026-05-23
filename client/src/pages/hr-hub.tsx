@@ -29,7 +29,6 @@ import { cn } from "@/lib/utils";
 import {
   UsersRound,
   Users,
-  User,
   UserCheck,
   UserPlus,
   UserX,
@@ -92,14 +91,13 @@ type BranchEmployee = {
   fullNameArabic?: string;
   phoneNumber?: string;
   mobile?: string;
-  gender?: string | null;
   status?: string;
-  branchId?: number | string;
+  branchId?: string;
   jobTitle?: string;
   nationality?: string;
 };
 
-type Branch = { id: number; name: string; nameAr?: string };
+type Branch = { id: string; name: string; nameAr?: string };
 type EmploymentApplication = { id: number; status?: string };
 type JobOffer = { id: number; status?: string };
 
@@ -576,8 +574,11 @@ export default function HRHubPage() {
   const [branchFilter, setBranchFilter] = useState<string>("all");
   const [refreshTick, setRefreshTick] = useState(0);
 
+  // Pass branchId filter to all stats endpoints so KPIs respect the filter row
+  const branchParam = branchFilter === "all" ? "" : `?branchId=${branchFilter}`;
+
   const { data: stats, isLoading: statsLoading } = useQuery<EmployeeStats>({
-    queryKey: ["/api/branch-employees/stats"],
+    queryKey: [`/api/branch-employees/stats${branchParam}`],
     staleTime: 60_000,
   });
 
@@ -607,6 +608,20 @@ export default function HRHubPage() {
   const { data: warningStats } = useQuery<any>({ queryKey: ["/api/hr/warnings/stats"], staleTime: 60_000 });
   const { data: advanceStats } = useQuery<any>({ queryKey: ["/api/hr/advances/stats"], staleTime: 60_000 });
 
+  // Live attendance + onboarding + EOS counts (replace hard-coded zeros)
+  const { data: attendanceToday } = useQuery<any>({
+    queryKey: [`/api/attendance/stats/today${branchParam}`],
+    staleTime: 30_000,
+  });
+  const { data: onboardingStats } = useQuery<any>({
+    queryKey: ["/api/hr/onboarding/stats"],
+    staleTime: 60_000,
+  });
+  const { data: eosList = [] } = useQuery<any[]>({
+    queryKey: ["/api/hr/eos"],
+    staleTime: 60_000,
+  });
+
   // Filter employees by selected branch
   const filteredEmployees = useMemo(() => {
     if (branchFilter === "all") return employees;
@@ -626,13 +641,12 @@ export default function HRHubPage() {
     [filteredEmployees],
   );
   const inactiveEmployees = totalEmployees - activeEmployees;
-
-  const menCount = useMemo(
-    () => filteredEmployees.filter((e) => ["male", "ذكر", "M", "m"].includes((e.gender || "").toString())).length,
+  const onLeaveCount = useMemo(
+    () => filteredEmployees.filter((e) => e.status === "on_leave").length,
     [filteredEmployees],
   );
-  const womenCount = useMemo(
-    () => filteredEmployees.filter((e) => ["female", "أنثى", "F", "f"].includes((e.gender || "").toString())).length,
+  const nationalitiesCount = useMemo(
+    () => new Set(filteredEmployees.map((e) => e.nationality).filter(Boolean)).size,
     [filteredEmployees],
   );
 
@@ -724,14 +738,41 @@ export default function HRHubPage() {
       });
     }
 
-    if (totalEmployees > 0 && menCount > 0 && womenCount > 0) {
-      const ratio = (womenCount / totalEmployees) * 100;
+    if (attendanceToday && attendanceToday.total > 0) {
+      const rate = attendanceToday.attendanceRate || 0;
+      if (rate < 90) {
+        result.push({
+          id: "attendance-low",
+          icon: Clock,
+          tone: rate < 80 ? "warning" : "info",
+          title: `نسبة الحضور اليوم ${rate}%`,
+          detail: `حاضر: ${fmt(attendanceToday.present)} | غائب: ${fmt(attendanceToday.absent)} | متأخر: ${fmt(attendanceToday.late)}`,
+          action: { label: "لوحة الحضور", href: "/attendance-dashboard" },
+        });
+      }
+    }
+
+    if ((docStats?.expired || 0) + (docStats?.expiringSoon || 0) > 0) {
+      const exp = docStats.expired || 0;
+      const soon = docStats.expiringSoon || 0;
       result.push({
-        id: "diversity",
-        icon: Users,
-        tone: "success",
-        title: `التوزيع: ${fmt(menCount)} رجال / ${fmt(womenCount)} نساء`,
-        detail: `نسبة الموظفات الحالية ${ratio.toFixed(0)}%. حافظ على التنوع كميزة تنافسية.`,
+        id: "docs-expiry",
+        icon: AlertTriangle,
+        tone: exp > 0 ? "warning" : "info",
+        title: exp > 0 ? `${fmt(exp)} وثيقة منتهية الصلاحية` : `${fmt(soon)} وثيقة على وشك الانتهاء`,
+        detail: `إجمالي ${fmt(exp + soon)} وثيقة تحتاج متابعة (إقامات، رخص، شهادات صحية).`,
+        action: { label: "فتح وثائق الموظفين", href: "/hr/employee-documents" },
+      });
+    }
+
+    if ((warningStats?.active || 0) >= 3) {
+      result.push({
+        id: "warnings-many",
+        icon: ShieldAlert,
+        tone: "warning",
+        title: `${fmt(warningStats.active)} إنذار ساري`,
+        detail: "تراكم الإنذارات يشير إلى مشكلة سلوكية أو إدارية تستدعي المراجعة.",
+        action: { label: "مراجعة الإنذارات", href: "/hr/warnings" },
       });
     }
 
@@ -764,7 +805,7 @@ export default function HRHubPage() {
     }
 
     return result.slice(0, 5);
-  }, [pendingApplications, pendingOffers, totalEmployees, activeEmployees, inactiveEmployees, menCount, womenCount, stats, branchData, refreshTick]);
+  }, [pendingApplications, pendingOffers, totalEmployees, activeEmployees, inactiveEmployees, stats, branchData, attendanceToday, docStats, warningStats, refreshTick]);
 
   // ──────────────────────────────────────────────────────────────────────────
   // Render
@@ -803,12 +844,16 @@ export default function HRHubPage() {
             <span className="text-muted-foreground">إجمالي:</span>
             <span className="font-bold text-gray-900 dark:text-foreground tabular-nums" dir="ltr">{fmt(totalEmployees)}</span>
             <span className="text-gray-400">|</span>
-            <span className="inline-flex items-center gap-1 text-blue-700 dark:text-blue-400">
-              <User className="w-3 h-3" /> رجال: <span className="font-bold tabular-nums" dir="ltr">{fmt(menCount)}</span>
+            <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+              <UserCheck className="w-3 h-3" /> نشطون: <span className="font-bold tabular-nums" dir="ltr">{fmt(activeEmployees)}</span>
             </span>
             <span className="text-gray-400">|</span>
-            <span className="inline-flex items-center gap-1 text-pink-700 dark:text-pink-400">
-              <User className="w-3 h-3" /> نساء: <span className="font-bold tabular-nums" dir="ltr">{fmt(womenCount)}</span>
+            <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400">
+              <CalendarDays className="w-3 h-3" /> في إجازة: <span className="font-bold tabular-nums" dir="ltr">{fmt(onLeaveCount)}</span>
+            </span>
+            <span className="text-gray-400">|</span>
+            <span className="inline-flex items-center gap-1 text-indigo-700 dark:text-indigo-400">
+              <UsersRound className="w-3 h-3" /> جنسيات: <span className="font-bold tabular-nums" dir="ltr">{fmt(nationalitiesCount)}</span>
             </span>
           </div>
         </div>
@@ -827,15 +872,14 @@ export default function HRHubPage() {
           <StatTile testId="tile-salaries"        value={fmtMoney(stats?.totalSalaries || 0)} suffix="ر.س" label="فاتورة الرواتب الشهرية" icon={Wallet}         tone="emerald"  href="/employee-reports" />
           <StatTile testId="tile-applications"    value={pendingApplications}    label="طلبات توظيف معلّقة"     icon={Briefcase}      tone="violet"   href="/hr/applications" />
           <StatTile testId="tile-offers"          value={pendingOffers}          label="عروض عمل بانتظار رد"    icon={UserPlus}       tone="indigo"   href="/hr/job-offers" />
-          <StatTile testId="tile-onboarding"      value={0}                      label="مباشرة عمل قيد التنفيذ" icon={ClipboardCheck} tone="cyan"     href="/hr/onboarding" />
-          <StatTile testId="tile-attendance"      value={activeEmployees}        label="حضور اليوم (نشطون)"     icon={Clock}          tone="blue"     href="/attendance-dashboard" />
-          <StatTile testId="tile-timesheet"       value="—"                      label="تايم شيت الفترة"        icon={Calendar}       tone="indigo"   href="/timesheet" />
-          <StatTile testId="tile-incentives"      value="—"                      label="حوافز قيد الاعتماد"     icon={Gift}           tone="pink"     href="/incentives-management" />
+          <StatTile testId="tile-onboarding"      value={(onboardingStats?.pending || 0) + (onboardingStats?.sent || 0)} label="مباشرة عمل قيد التنفيذ" icon={ClipboardCheck} tone="cyan"     href="/hr/onboarding" />
+          <StatTile testId="tile-attendance"      value={attendanceToday?.present ?? 0} suffix={attendanceToday ? `/ ${fmt(attendanceToday.total || 0)}` : undefined} label="حضور اليوم" icon={Clock} tone="blue" href="/attendance-dashboard" />
+          <StatTile testId="tile-attendance-rate" value={`${attendanceToday?.attendanceRate ?? 0}%`} label="نسبة الحضور اليوم"      icon={TrendingUp}     tone="emerald"  href="/attendance-dashboard" />
           <StatTile testId="tile-doc-expired"     value={(docStats?.expired || 0) + (docStats?.expiringSoon || 0)} label="وثائق منتهية / قاربت" icon={AlertTriangle}  tone="rose"     href="/hr/employee-documents" />
           <StatTile testId="tile-leaves"          value={leaveStats?.pending || 0} label="طلبات إجازات معلّقة"    icon={CalendarDays}   tone="amber"    href="/hr/leaves" />
           <StatTile testId="tile-warnings"        value={warningStats?.active || 0} label="إنذارات سارية"          icon={ShieldAlert}    tone="rose"     href="/hr/warnings" />
           <StatTile testId="tile-advances"        value={advanceStats?.total || 0} label="سلف مسجّلة"             icon={TrendingDown}   tone="orange"   href="/hr/advances" />
-          <StatTile testId="tile-eos"             value={0}                      label="حسابات نهاية الخدمة"    icon={FileText}       tone="lime"     href="/hr/eos" />
+          <StatTile testId="tile-eos"             value={eosList.length}         label="حسابات نهاية الخدمة"    icon={FileText}       tone="lime"     href="/hr/eos" />
           <StatTile testId="tile-branches"        value={branches.length}        label="عدد الفروع النشطة"      icon={Building}       tone="teal"     href="/branches" />
         </div>
 
