@@ -130,7 +130,7 @@ export default function PlatformHomePage() {
   });
 
   const apps: (AppTileProps & { module?: SystemModule })[] = [
-    { title: "مركز الموارد البشرية",          icon: UsersRound,     href: "/hr-hub",                  color: "people",     module: "branch_employees" },
+    { title: "مركز الموارد البشرية",          icon: UsersRound,     href: "/hr-hub",                  color: "people",     module: "hr_management" },
     { title: t("modules.sales.title"),       icon: Receipt,        href: "/cashier-journals",        color: "money",      module: "cashier_journal" },
     { title: t("modules.operations.title"),  icon: Factory,        href: "/operations",              color: "production", module: "operations" },
     { title: t("modules.production.title"),  icon: ClipboardList,  href: "/production-dashboard",    color: "production", module: "production" },
