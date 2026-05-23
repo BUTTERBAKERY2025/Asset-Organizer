@@ -1197,9 +1197,9 @@ export default function HRHubPage() {
         </div>
 
         {/* Two-column area: charts + side widgets */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
           {/* Left: 3 donut charts (2/3 width) */}
-          <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-3 auto-rows-min items-start">
             <DonutCard
               testId="chart-branches"
               title="التوزيع حسب الفرع"
