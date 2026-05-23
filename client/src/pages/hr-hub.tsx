@@ -8,6 +8,11 @@ import {
   ResponsiveContainer,
   Tooltip,
   Legend,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
 } from "recharts";
 import { Layout } from "@/components/layout";
 import { PageHeader } from "@/components/dashboard";
@@ -143,9 +148,15 @@ interface StatTileProps {
   href?: string;
   comingSoon?: boolean;
   testId?: string;
+  // Optional comparison chip (delta vs previous period)
+  delta?: number | null;            // numeric difference (positive = up, negative = down)
+  deltaLabel?: string;              // small label, e.g. "مقارنة بالشهر السابق"
+  deltaIsPercent?: boolean;         // render delta as percentage
+  deltaInverted?: boolean;          // true = up is BAD (e.g., advances, absences); false = up is GOOD
+  target?: number;                  // optional target line (e.g., 90 for attendance rate)
 }
 
-const StatTile = React.memo(function StatTile({ value, label, icon: Icon, tone, suffix, href, comingSoon, testId }: StatTileProps) {
+const StatTile = React.memo(function StatTile({ value, label, icon: Icon, tone, suffix, href, comingSoon, testId, delta, deltaLabel, deltaIsPercent, deltaInverted, target }: StatTileProps) {
   const [, navigate] = useLocation();
   const t = TONE_MAP[tone];
   const clickable = !!href && !comingSoon;
@@ -173,6 +184,41 @@ const StatTile = React.memo(function StatTile({ value, label, icon: Icon, tone, 
           <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight line-clamp-2">
             {label}
           </p>
+          {(delta !== undefined && delta !== null) || target !== undefined ? (
+            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+              {delta !== undefined && delta !== null && (
+                (() => {
+                  const isUp = delta > 0;
+                  const isFlat = delta === 0;
+                  const isGood = isFlat ? true : (deltaInverted ? !isUp : isUp);
+                  const TrendIcon = isFlat ? CircleDot : (isUp ? TrendingUp : TrendingDown);
+                  const colorCls = isFlat
+                    ? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                    : isGood
+                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+                      : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400";
+                  return (
+                    <span
+                      className={cn("inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-semibold tabular-nums", colorCls)}
+                      dir="ltr"
+                      data-testid={testId ? `${testId}-delta` : undefined}
+                    >
+                      <TrendIcon className="w-2.5 h-2.5" />
+                      {isUp ? "+" : ""}{fmt(delta)}{deltaIsPercent ? "%" : ""}
+                    </span>
+                  );
+                })()
+              )}
+              {target !== undefined && (
+                <span className="text-[10px] text-muted-foreground" data-testid={testId ? `${testId}-target` : undefined}>
+                  الهدف {fmt(target)}{deltaIsPercent ? "%" : ""}
+                </span>
+              )}
+              {deltaLabel && (
+                <span className="text-[10px] text-muted-foreground/80 truncate">{deltaLabel}</span>
+              )}
+            </div>
+          ) : null}
         </div>
         <div className={cn("w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center shrink-0 ring-1", t.iconBg, t.iconColor, t.ring)}>
           <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -875,6 +921,163 @@ function AIInsightsCard({ insights, onRefresh }: { insights: AIInsight[]; onRefr
 }
 
 // ============================================================================
+// New Analytical Charts (Weekly Attendance, Cost Breakdown, Hiring Funnel)
+// ============================================================================
+
+type WeeklyAttendanceItem = { date: string; present: number; late: number; absent: number; total: number };
+
+const dayLabel = (iso: string) => {
+  try {
+    const d = new Date(iso + "T00:00:00");
+    return new Intl.DateTimeFormat("ar-SA-u-nu-latn", { weekday: "short", day: "numeric", month: "numeric" }).format(d);
+  } catch { return iso; }
+};
+
+const WeeklyAttendanceChart = React.memo(function WeeklyAttendanceChart({ data }: { data?: WeeklyAttendanceItem[] }) {
+  const rows = data ?? [];
+  const total = rows.reduce((s, r) => s + r.total, 0);
+  const chartData = useMemo(
+    () => rows.map((r) => ({ day: dayLabel(r.date), حاضر: r.present, متأخر: r.late, غائب: r.absent })),
+    [rows],
+  );
+  return (
+    <Card className="border-gray-100" data-testid="chart-weekly-attendance">
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <CalendarDays className="w-4 h-4 text-gray-500" />
+          <CardTitle className="text-sm font-semibold">الحضور الأسبوعي (آخر 7 أيام)</CardTitle>
+          <Badge variant="secondary" className="ms-auto h-5 text-[10px]" data-testid="chart-weekly-attendance-total">{fmt(total)}</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-2">
+        {total === 0 ? (
+          <div className="h-[220px] flex items-center justify-center text-xs text-muted-foreground">لا توجد سجلات حضور خلال 7 أيام</div>
+        ) : (
+          <div className="h-[220px]" dir="ltr">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
+                <XAxis dataKey="day" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                <Tooltip contentStyle={{ fontSize: "12px", borderRadius: "8px" }} />
+                <Legend wrapperStyle={{ fontSize: "11px" }} />
+                <Bar dataKey="حاضر" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="متأخر" stackId="a" fill="#f59e0b" />
+                <Bar dataKey="غائب" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+});
+
+type CostItem = { name: string; value: number };
+
+const CostBreakdownChart = React.memo(function CostBreakdownChart({ data }: { data?: CostItem[] }) {
+  const rows = data ?? [];
+  const total = rows.reduce((s, r) => s + r.value, 0);
+  return (
+    <Card className="border-gray-100" data-testid="chart-cost-breakdown">
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <Wallet className="w-4 h-4 text-gray-500" />
+          <CardTitle className="text-sm font-semibold">توزيع التكاليف الشهرية</CardTitle>
+          <Badge variant="secondary" className="ms-auto h-5 text-[10px]" data-testid="chart-cost-total">{fmtMoney(total)} ر.س</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-2">
+        {total === 0 ? (
+          <div className="h-[220px] flex items-center justify-center text-xs text-muted-foreground">لا توجد بيانات تكاليف</div>
+        ) : (
+          <>
+            <div className="h-[160px]" dir="ltr">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={rows} cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={2} dataKey="value" nameKey="name">
+                    {rows.map((_, idx) => (<Cell key={idx} fill={PALETTE[idx % PALETTE.length]} />))}
+                  </Pie>
+                  <Tooltip formatter={(v: any) => `${fmtMoney(Number(v))} ر.س`} contentStyle={{ fontSize: "12px", borderRadius: "8px" }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="mt-2 space-y-1 max-h-[110px] overflow-y-auto">
+              {rows.map((item, idx) => {
+                const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
+                return (
+                  <div key={item.name} className="flex items-center gap-2 text-xs" data-testid={`cost-row-${idx}`}>
+                    <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: PALETTE[idx % PALETTE.length] }} />
+                    <span className="text-gray-700 dark:text-foreground/90 truncate flex-1">{item.name}</span>
+                    <span className="tabular-nums text-muted-foreground" dir="ltr">{fmtMoney(item.value)}</span>
+                    <span className="tabular-nums text-[10px] text-muted-foreground/80 w-8 text-end" dir="ltr">{pct}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+});
+
+type FunnelData = {
+  steps: { name: string; value: number }[];
+  totals: { applicationsThisMonth: number; hiresThisMonth: number; hiresPrevMonth: number; conversionRate: number | null; forecastNextMonth: number };
+};
+
+const HiringFunnelChart = React.memo(function HiringFunnelChart({ data }: { data?: FunnelData }) {
+  const steps = data?.steps ?? [];
+  const totals = data?.totals;
+  const total = steps.reduce((s, r) => s + r.value, 0);
+  return (
+    <Card className="border-gray-100" data-testid="chart-hiring-funnel">
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <UserPlus className="w-4 h-4 text-gray-500" />
+          <CardTitle className="text-sm font-semibold">قمع التوظيف وتوقعات الشهر القادم</CardTitle>
+          <Badge variant="secondary" className="ms-auto h-5 text-[10px]">{fmt(total)}</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-2">
+        {total === 0 ? (
+          <div className="h-[180px] flex items-center justify-center text-xs text-muted-foreground">لا توجد بيانات توظيف هذا الشهر</div>
+        ) : (
+          <div className="h-[180px]" dir="ltr">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={steps} layout="vertical" margin={{ top: 4, right: 12, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#eee" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={90} />
+                <Tooltip contentStyle={{ fontSize: "12px", borderRadius: "8px" }} />
+                <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+        {totals && (
+          <div className="mt-2 grid grid-cols-3 gap-2 text-center" data-testid="hiring-forecast">
+            <div className="p-2 rounded-md bg-emerald-50 dark:bg-emerald-950/30">
+              <div className="text-base font-bold text-emerald-700 dark:text-emerald-400 tabular-nums" dir="ltr">{fmt(totals.forecastNextMonth)}</div>
+              <div className="text-[10px] text-muted-foreground">توقّع تعيينات الشهر القادم</div>
+            </div>
+            <div className="p-2 rounded-md bg-blue-50 dark:bg-blue-950/30">
+              <div className="text-base font-bold text-blue-700 dark:text-blue-400 tabular-nums" dir="ltr">{totals.conversionRate !== null ? `${totals.conversionRate}%` : "—"}</div>
+              <div className="text-[10px] text-muted-foreground">معدّل التحويل (طلب→تعيين)</div>
+            </div>
+            <div className="p-2 rounded-md bg-violet-50 dark:bg-violet-950/30">
+              <div className="text-base font-bold text-violet-700 dark:text-violet-400 tabular-nums" dir="ltr">{fmt(totals.hiresThisMonth)}</div>
+              <div className="text-[10px] text-muted-foreground">تعيينات الشهر الحالي</div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+});
+
+// ============================================================================
 // Main Page
 // ============================================================================
 
@@ -907,6 +1110,8 @@ export default function HRHubPage() {
   const onboardingStats = bundle?.onboardingStats;
   const eosStats = bundle?.eosStats ?? { total: 0 };
   const salaryClosing: SalaryClosing | undefined = bundle?.salaryClosing;
+  const comparisons = bundle?.comparisons;
+  const charts = bundle?.charts;
 
   // Global refresh — invalidates the bundle + any peripheral HR caches
   const handleGlobalRefresh = () => {
@@ -1181,18 +1386,22 @@ export default function HRHubPage() {
 
         {/* Dense KPI Grid — 2 cols mobile → 3 sm → 4 md → 5 lg → 6 xl → 7 2xl */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2 sm:gap-2.5">
-          <StatTile testId="tile-active"          value={activeEmployees}        label="الموظفون النشطون"        icon={UserCheck}      tone="teal"     href="/branch-employees" />
+          <StatTile testId="tile-active"          value={activeEmployees}        label="الموظفون النشطون"        icon={UserCheck}      tone="teal"     href="/branch-employees"
+            delta={comparisons?.hires?.delta} deltaLabel="تعيينات الشهر" />
           <StatTile testId="tile-inactive"        value={inactiveEmployees}      label="غير نشطين / موقوفون"     icon={UserX}          tone="slate"    href="/terminated-employees" />
           <StatTile testId="tile-salaries"        value={fmtMoney(stats?.totalSalaries || 0)} suffix="ر.س" label="فاتورة الرواتب الشهرية" icon={Wallet}         tone="emerald"  href="/employee-reports" />
-          <StatTile testId="tile-applications"    value={pendingApplications}    label="طلبات توظيف معلّقة"     icon={Briefcase}      tone="violet"   href="/hr/applications" />
+          <StatTile testId="tile-applications"    value={pendingApplications}    label="طلبات توظيف معلّقة"     icon={Briefcase}      tone="violet"   href="/hr/applications"
+            delta={comparisons?.applications?.deltaPct ?? null} deltaIsPercent deltaLabel="مقارنة بالشهر السابق" />
           <StatTile testId="tile-offers"          value={pendingOffers}          label="عروض عمل بانتظار رد"    icon={UserPlus}       tone="indigo"   href="/hr/job-offers" />
           <StatTile testId="tile-onboarding"      value={(onboardingStats?.pending || 0) + (onboardingStats?.sent || 0)} label="مباشرة عمل قيد التنفيذ" icon={ClipboardCheck} tone="cyan"     href="/hr/onboarding" />
           <StatTile testId="tile-attendance"      value={attendanceToday?.present ?? 0} suffix={attendanceToday ? `/ ${fmt(attendanceToday.total || 0)}` : undefined} label="حضور اليوم" icon={Clock} tone="blue" href="/attendance-dashboard" />
-          <StatTile testId="tile-attendance-rate" value={`${attendanceToday?.attendanceRate ?? 0}%`} label="نسبة الحضور اليوم"      icon={TrendingUp}     tone="emerald"  href="/attendance-dashboard" />
+          <StatTile testId="tile-attendance-rate" value={`${attendanceToday?.attendanceRate ?? 0}%`} label="نسبة الحضور اليوم"      icon={TrendingUp}     tone="emerald"  href="/attendance-dashboard"
+            delta={comparisons?.attendanceRate?.delta} deltaIsPercent target={comparisons?.attendanceRate?.target} />
           <StatTile testId="tile-doc-expired"     value={(docStats?.expired || 0) + (docStats?.expiringSoon || 0)} label="وثائق منتهية / قاربت" icon={AlertTriangle}  tone="rose"     href="/hr/employee-documents" />
           <StatTile testId="tile-leaves"          value={leaveStats?.pending || 0} label="طلبات إجازات معلّقة"    icon={CalendarDays}   tone="amber"    href="/hr/leaves" />
           <StatTile testId="tile-warnings"        value={warningStats?.active || 0} label="إنذارات سارية"          icon={ShieldAlert}    tone="rose"     href="/hr/warnings" />
-          <StatTile testId="tile-advances"        value={advanceStats?.total || 0} label="سلف مسجّلة"             icon={TrendingDown}   tone="orange"   href="/hr/advances" />
+          <StatTile testId="tile-advances"        value={advanceStats?.total || 0} label="سلف مسجّلة"             icon={TrendingDown}   tone="orange"   href="/hr/advances"
+            delta={comparisons?.advances?.deltaPct ?? null} deltaIsPercent deltaInverted deltaLabel="مقارنة بالشهر السابق" />
           <StatTile testId="tile-eos"             value={eosStats.total}         label="حسابات نهاية الخدمة"    icon={FileText}       tone="lime"     href="/hr/eos" />
           <StatTile testId="tile-branches"        value={branches.length}        label="عدد الفروع النشطة"      icon={Building}       tone="teal"     href="/branches" />
         </div>
@@ -1220,6 +1429,13 @@ export default function HRHubPage() {
             data={nationalityData}
             emptyText="لا توجد بيانات"
           />
+        </div>
+
+        {/* Row 1b: 3 NEW analytical charts — weekly attendance, cost breakdown, hiring funnel */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
+          <WeeklyAttendanceChart data={charts?.weeklyAttendance} />
+          <CostBreakdownChart data={charts?.costBreakdown} />
+          <HiringFunnelChart data={charts?.hiringFunnel} />
         </div>
 
         {/* Row 2: 3 action widgets — 1 col mobile, 2 cols tablet, 3 cols laptop+ */}

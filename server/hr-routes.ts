@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { db } from "./db";
-import { eq, and, desc, sql, inArray, gte, lte } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, gte, lte, lt } from "drizzle-orm";
 import { isAuthenticated, requirePermission, getEffectiveBranchFilter } from "./auth";
 import {
   employeeDocuments,
@@ -827,9 +827,20 @@ export function registerHrRoutes(app: Express) {
       }
       const branchIds = filter.branchIds; // null = all, [] = none
       const scopedBranchId = filter.singleBranchId || queryBranchId || null;
-      const today = new Date().toISOString().slice(0, 10);
+      const todayDate = new Date();
+      const today = todayDate.toISOString().slice(0, 10);
       const thirtyOut = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
       const thisMonth = today.slice(0, 7);
+      // Previous month YYYY-MM (e.g., 2026-04 if today is 2026-05-23)
+      const prevMonthDate = new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1);
+      const prevMonth = prevMonthDate.toISOString().slice(0, 7);
+      const prevMonthNum = prevMonthDate.getMonth() + 1;
+      const prevMonthYear = prevMonthDate.getFullYear();
+      // Last 7 days range
+      const sevenDaysAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+      // Current month start date (for hires-this-month vs prev-month)
+      const thisMonthStart = `${thisMonth}-01`;
+      const prevMonthStart = `${prevMonth}-01`;
 
       const empCond = applyBranchScope(branchEmployees, branchIds);
       const docCond = applyBranchScope(employeeDocuments, branchIds);
@@ -877,6 +888,122 @@ export function registerHrRoutes(app: Express) {
         safe(db.select({ id: jobOffers.id, status: jobOffers.status }).from(jobOffers).where(offerCond), [] as any[]),
         safe(db.select({ id: jobOffers.id }).from(jobOffers).where(offerCond ? and(offerCond, eq(jobOffers.status, "accepted")) : eq(jobOffers.status, "accepted")), [] as any[]),
       ]);
+
+      // ── Comparisons & chart aggregations (parallel, additive — failures don't break the page) ──
+      const attLast7Cond = and(
+        gte(attendanceRecords.attendanceDate, sevenDaysAgo),
+        lte(attendanceRecords.attendanceDate, today),
+        scopedBranchId
+          ? eq(attendanceRecords.branchId, scopedBranchId)
+          : (branchIds === null ? sql`true` : (branchIds.length === 0 ? sql`false` : inArray(attendanceRecords.branchId, branchIds))),
+      );
+      const prevMonthAttCond = and(
+        gte(attendanceRecords.attendanceDate, prevMonthStart),
+        lte(attendanceRecords.attendanceDate, `${prevMonth}-31`),
+        scopedBranchId
+          ? eq(attendanceRecords.branchId, scopedBranchId)
+          : (branchIds === null ? sql`true` : (branchIds.length === 0 ? sql`false` : inArray(attendanceRecords.branchId, branchIds))),
+      );
+      const thisMonthAttCond = and(
+        gte(attendanceRecords.attendanceDate, thisMonthStart),
+        lte(attendanceRecords.attendanceDate, today),
+        scopedBranchId
+          ? eq(attendanceRecords.branchId, scopedBranchId)
+          : (branchIds === null ? sql`true` : (branchIds.length === 0 ? sql`false` : inArray(attendanceRecords.branchId, branchIds))),
+      );
+
+      const [
+        weeklyAttRows,
+        prevMonthAttAgg,
+        thisMonthAttAgg,
+        thisMonthHiresAgg,
+        prevMonthHiresAgg,
+        thisMonthAppsAgg,
+        prevMonthAppsAgg,
+        prevMonthAdvAgg,
+        appsByStatusRows,
+      ] = await Promise.all([
+        // Weekly attendance grouped by date + status
+        safe(
+          db.select({
+            d: attendanceRecords.attendanceDate,
+            status: attendanceRecords.status,
+            c: sql<number>`count(*)::int`,
+          }).from(attendanceRecords).where(attLast7Cond)
+            .groupBy(attendanceRecords.attendanceDate, attendanceRecords.status),
+          [] as any[],
+        ),
+        // Prev-month attendance rate (present vs total)
+        safe(
+          db.select({
+            total: sql<number>`count(*)::int`,
+            present: sql<number>`count(*) filter (where ${attendanceRecords.status} = 'present')::int`,
+          }).from(attendanceRecords).where(prevMonthAttCond),
+          [{ total: 0, present: 0 }] as any[],
+        ),
+        // This-month attendance rate (month-to-date) — for fairer comparison
+        safe(
+          db.select({
+            total: sql<number>`count(*)::int`,
+            present: sql<number>`count(*) filter (where ${attendanceRecords.status} = 'present')::int`,
+          }).from(attendanceRecords).where(thisMonthAttCond),
+          [{ total: 0, present: 0 }] as any[],
+        ),
+        // Hires created this month
+        safe(
+          db.select({ c: sql<number>`count(*)::int` }).from(branchEmployees)
+            .where(and(empCond ?? sql`true`, gte(branchEmployees.createdAt, new Date(thisMonthStart)))),
+          [{ c: 0 }] as any[],
+        ),
+        // Hires created prev month (half-open: [prevMonthStart, thisMonthStart) )
+        safe(
+          db.select({ c: sql<number>`count(*)::int` }).from(branchEmployees)
+            .where(and(
+              empCond ?? sql`true`,
+              gte(branchEmployees.createdAt, new Date(prevMonthStart)),
+              lt(branchEmployees.createdAt, new Date(thisMonthStart)),
+            )),
+          [{ c: 0 }] as any[],
+        ),
+        // Employment applications this month
+        safe(
+          db.select({ c: sql<number>`count(*)::int` }).from(employmentApplications)
+            .where(and(appCond ?? sql`true`, gte(employmentApplications.createdAt, new Date(thisMonthStart)))),
+          [{ c: 0 }] as any[],
+        ),
+        // Employment applications prev month (half-open: [prevMonthStart, thisMonthStart) )
+        safe(
+          db.select({ c: sql<number>`count(*)::int` }).from(employmentApplications)
+            .where(and(
+              appCond ?? sql`true`,
+              gte(employmentApplications.createdAt, new Date(prevMonthStart)),
+              lt(employmentApplications.createdAt, new Date(thisMonthStart)),
+            )),
+          [{ c: 0 }] as any[],
+        ),
+        // Prev-month advances total
+        safe(
+          db.select({ amt: sql<number>`coalesce(sum(${salaryDeductions.amount}),0)::numeric` })
+            .from(salaryDeductions)
+            .where(and(
+              advCond ?? sql`true`,
+              inArray(salaryDeductions.type, ["advance", "loan_installment"]),
+              eq(salaryDeductions.month, prevMonth),
+            )),
+          [{ amt: 0 }] as any[],
+        ),
+        // Hiring funnel: applications grouped by status (current month)
+        safe(
+          db.select({
+            status: employmentApplications.status,
+            c: sql<number>`count(*)::int`,
+          }).from(employmentApplications)
+            .where(and(appCond ?? sql`true`, gte(employmentApplications.createdAt, new Date(thisMonthStart))))
+            .groupBy(employmentApplications.status),
+          [] as any[],
+        ),
+      ]);
+      void prevMonthNum; void prevMonthYear;
 
       // Employees aggregates
       const totalEmployees = employees.length;
@@ -1023,6 +1150,120 @@ export function registerHrRoutes(app: Express) {
         nationality: e.nationality,
       }));
 
+      // ── Build comparisons (current vs prev period) ──
+      const prevAttTotal = Number((prevMonthAttAgg[0] as any)?.total || 0);
+      const prevAttPresent = Number((prevMonthAttAgg[0] as any)?.present || 0);
+      const prevAttRate = prevAttTotal > 0 ? Math.round((prevAttPresent / prevAttTotal) * 100) : 0;
+      const curAttTotal = Number((thisMonthAttAgg[0] as any)?.total || 0);
+      const curAttPresent = Number((thisMonthAttAgg[0] as any)?.present || 0);
+      const curAttRate = curAttTotal > 0 ? Math.round((curAttPresent / curAttTotal) * 100) : 0;
+      const hiresThisMonth = Number((thisMonthHiresAgg[0] as any)?.c || 0);
+      const hiresPrevMonth = Number((prevMonthHiresAgg[0] as any)?.c || 0);
+      const appsThisMonth = Number((thisMonthAppsAgg[0] as any)?.c || 0);
+      const appsPrevMonth = Number((prevMonthAppsAgg[0] as any)?.c || 0);
+      const prevAdvancesAmount = Number((prevMonthAdvAgg[0] as any)?.amt || 0);
+
+      const pctDelta = (cur: number, prev: number): number | null => {
+        if (prev === 0) return cur > 0 ? 100 : null;
+        return Math.round(((cur - prev) / prev) * 100);
+      };
+
+      const comparisons = {
+        period: { current: thisMonth, previous: prevMonth },
+        attendanceRate: {
+          current: curAttRate,
+          previous: prevAttRate,
+          delta: curAttRate - prevAttRate,
+          target: 90,
+        },
+        hires: {
+          current: hiresThisMonth,
+          previous: hiresPrevMonth,
+          delta: hiresThisMonth - hiresPrevMonth,
+          deltaPct: pctDelta(hiresThisMonth, hiresPrevMonth),
+        },
+        applications: {
+          current: appsThisMonth,
+          previous: appsPrevMonth,
+          delta: appsThisMonth - appsPrevMonth,
+          deltaPct: pctDelta(appsThisMonth, appsPrevMonth),
+        },
+        advances: {
+          currentAmount: advanceStats.thisMonthAmount,
+          previousAmount: prevAdvancesAmount,
+          delta: advanceStats.thisMonthAmount - prevAdvancesAmount,
+          deltaPct: pctDelta(advanceStats.thisMonthAmount, prevAdvancesAmount),
+        },
+      };
+
+      // ── Build chart series ──
+      // Weekly attendance: build last 7 days array with present/late/absent counts
+      const weeklyAttendance: { date: string; present: number; late: number; absent: number; total: number }[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+        const dayRows = weeklyAttRows.filter((r: any) => r.d === d);
+        const present = dayRows.filter((r: any) => r.status === "present").reduce((s, r: any) => s + Number(r.c), 0);
+        const late = dayRows.filter((r: any) => r.status === "late").reduce((s, r: any) => s + Number(r.c), 0);
+        const absent = dayRows.filter((r: any) => r.status === "absent").reduce((s, r: any) => s + Number(r.c), 0);
+        weeklyAttendance.push({ date: d, present, late, absent, total: present + late + absent });
+      }
+
+      // Cost breakdown: sum of salary components from employees (real schema fields)
+      // branchEmployees.salary = الراتب الأساسي ; allowances are separate columns
+      const basicTotal = employees.reduce((s: number, e: any) => s + (Number(e.salary) || 0), 0);
+      const housingTotal = employees.reduce((s: number, e: any) => s + (Number(e.housingAllowance) || 0), 0);
+      const transportTotal = employees.reduce((s: number, e: any) => s + (Number(e.transportAllowance) || 0), 0);
+      const foodTotal = employees.reduce((s: number, e: any) => s + (Number(e.foodAllowance) || 0), 0);
+      const otherTotal = employees.reduce((s: number, e: any) => s + (Number(e.otherAllowances) || 0), 0);
+      const costBreakdown = [
+        { name: "الراتب الأساسي", value: Math.round(basicTotal) },
+        { name: "بدل السكن", value: Math.round(housingTotal) },
+        { name: "بدل النقل", value: Math.round(transportTotal) },
+        { name: "بدل الطعام", value: Math.round(foodTotal) },
+        { name: "بدلات أخرى", value: Math.round(otherTotal) },
+        { name: "سلف وأقساط (شهر حالي)", value: Math.round(advanceStats.thisMonthAmount) },
+      ].filter((c) => c.value > 0);
+
+      // Hiring funnel: applications by status this month + offers (sent/accepted) + onboarding
+      // Real status taxonomy from employmentApplications: invited/submitted/under_review/shortlisted/interviewed/hired/rejected
+      const appsStatusMap: Record<string, number> = {};
+      appsByStatusRows.forEach((r: any) => { appsStatusMap[(r.status || "invited").toLowerCase()] = Number(r.c); });
+      const totalAppsThisMonth = Object.values(appsStatusMap).reduce((s, n) => s + n, 0);
+      const offersSent = offers.filter((o: any) => ["sent", "pending"].includes(o.status)).length;
+      const offersAccepted = offers.filter((o: any) => o.status === "accepted").length;
+      // Forecast: expected hires next month = avg(this+prev) ; conversion rate from apps to hires
+      const conversionRate = appsPrevMonth > 0 ? Math.round((hiresPrevMonth / appsPrevMonth) * 100) : null;
+      const forecastNextMonth = Math.round((hiresThisMonth + hiresPrevMonth) / 2);
+      // Map real statuses (with legacy aliases) onto funnel stages
+      const stageInvited     = (appsStatusMap["invited"] || 0) + (appsStatusMap["new"] || 0) + (appsStatusMap["pending"] || 0);
+      const stageSubmitted   = (appsStatusMap["submitted"] || 0);
+      const stageUnderReview = (appsStatusMap["under_review"] || 0) + (appsStatusMap["review"] || 0) + (appsStatusMap["shortlisted"] || 0);
+      const stageInterviewed = (appsStatusMap["interviewed"] || 0) + (appsStatusMap["interview"] || 0);
+      const hiringFunnel = {
+        steps: [
+          { name: "مدعوّون", value: stageInvited },
+          { name: "طلبات مُقدَّمة", value: stageSubmitted },
+          { name: "قيد المراجعة", value: stageUnderReview },
+          { name: "تمت المقابلة", value: stageInterviewed },
+          { name: "عروض مُرسلة", value: offersSent },
+          { name: "عروض مقبولة", value: offersAccepted },
+          { name: "مباشرة عمل", value: onboardingStats.total || 0 },
+        ],
+        totals: {
+          applicationsThisMonth: totalAppsThisMonth,
+          hiresThisMonth,
+          hiresPrevMonth,
+          conversionRate,
+          forecastNextMonth,
+        },
+      };
+
+      const charts = {
+        weeklyAttendance,
+        costBreakdown,
+        hiringFunnel,
+      };
+
       res.json({
         generatedAt: new Date().toISOString(),
         branchFilter: scopedBranchId || "all",
@@ -1048,6 +1289,8 @@ export function registerHrRoutes(app: Express) {
         attendanceToday,
         eosStats,
         salaryClosing,
+        comparisons,
+        charts,
       });
     } catch (e: any) {
       console.error("[hr/hub-bundle] error:", e);
