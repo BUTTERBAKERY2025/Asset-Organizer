@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import {
@@ -141,7 +141,7 @@ interface StatTileProps {
   testId?: string;
 }
 
-function StatTile({ value, label, icon: Icon, tone, suffix, href, comingSoon, testId }: StatTileProps) {
+const StatTile = React.memo(function StatTile({ value, label, icon: Icon, tone, suffix, href, comingSoon, testId }: StatTileProps) {
   const [, navigate] = useLocation();
   const t = TONE_MAP[tone];
   const clickable = !!href && !comingSoon;
@@ -181,7 +181,7 @@ function StatTile({ value, label, icon: Icon, tone, suffix, href, comingSoon, te
       )}
     </button>
   );
-}
+});
 
 // ============================================================================
 // Donut Chart Card
@@ -195,7 +195,7 @@ interface DonutCardProps {
   emptyText?: string;
 }
 
-function DonutCard({ title, icon: Icon, data, testId, emptyText }: DonutCardProps) {
+const DonutCard = React.memo(function DonutCard({ title, icon: Icon, data, testId, emptyText }: DonutCardProps) {
   const total = data.reduce((s, d) => s + (d.value || 0), 0);
   const topItems = useMemo(
     () => [...data].sort((a, b) => b.value - a.value).slice(0, 8),
@@ -261,7 +261,7 @@ function DonutCard({ title, icon: Icon, data, testId, emptyText }: DonutCardProp
       </CardContent>
     </Card>
   );
-}
+});
 
 // ============================================================================
 // WhatsApp Quick-Send Card
@@ -571,84 +571,50 @@ function AIInsightsCard({ insights, onRefresh }: { insights: AIInsight[]; onRefr
 
 export default function HRHubPage() {
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
   const [branchFilter, setBranchFilter] = useState<string>("all");
   const [refreshTick, setRefreshTick] = useState(0);
 
-  // Pass branchId filter to all stats endpoints so KPIs respect the filter row
+  // Pass branchId filter so all bundled KPIs respect the filter row
   const branchParam = branchFilter === "all" ? "" : `?branchId=${branchFilter}`;
 
-  const { data: stats, isLoading: statsLoading } = useQuery<EmployeeStats>({
-    queryKey: [`/api/branch-employees/stats${branchParam}`],
+  // Consolidated HR Hub bundle: replaces 11+ separate API calls with 1
+  const { data: bundle, isLoading: statsLoading, isFetching: bundleFetching, refetch: refetchBundle } = useQuery<any>({
+    queryKey: [`/api/hr/hub-bundle${branchParam}`],
     staleTime: 60_000,
   });
 
-  const { data: employees = [] } = useQuery<BranchEmployee[]>({
-    queryKey: ["/api/branch-employees"],
-    staleTime: 60_000,
-  });
+  // Derive everything from the bundle (fall back to empty defaults while loading)
+  const employees: BranchEmployee[] = bundle?.employees ?? [];
+  const branches: Branch[] = bundle?.branches ?? [];
+  const applications: EmploymentApplication[] = bundle?.applications ?? [];
+  const jobOffers: JobOffer[] = bundle?.jobOffers ?? [];
+  const stats: EmployeeStats | undefined = bundle?.stats;
+  const docStats = bundle?.docStats;
+  const leaveStats = bundle?.leaveStats;
+  const warningStats = bundle?.warningStats;
+  const advanceStats = bundle?.advanceStats;
+  const attendanceToday = bundle?.attendanceToday;
+  const onboardingStats = bundle?.onboardingStats;
+  const eosStats = bundle?.eosStats ?? { total: 0 };
 
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-    staleTime: 5 * 60_000,
-  });
+  // Global refresh — invalidates the bundle + any peripheral HR caches
+  const handleGlobalRefresh = () => {
+    queryClient.invalidateQueries({ predicate: (q) => {
+      const k = String(q.queryKey?.[0] || "");
+      return k.startsWith("/api/hr/") || k.startsWith("/api/branch-employees") || k.startsWith("/api/attendance") || k.startsWith("/api/branches");
+    }});
+    refetchBundle();
+    setRefreshTick((n) => n + 1);
+  };
 
-  const { data: applications = [] } = useQuery<EmploymentApplication[]>({
-    queryKey: ["/api/hr/applications"],
-    staleTime: 60_000,
-  });
-
-  const { data: jobOffers = [] } = useQuery<JobOffer[]>({
-    queryKey: ["/api/hr/job-offers"],
-    staleTime: 60_000,
-  });
-
-  // HR Phase 3: live counters for the new sub-modules
-  const { data: docStats } = useQuery<any>({ queryKey: ["/api/hr/documents/stats"], staleTime: 60_000 });
-  const { data: leaveStats } = useQuery<any>({ queryKey: ["/api/hr/leaves/stats"], staleTime: 60_000 });
-  const { data: warningStats } = useQuery<any>({ queryKey: ["/api/hr/warnings/stats"], staleTime: 60_000 });
-  const { data: advanceStats } = useQuery<any>({ queryKey: ["/api/hr/advances/stats"], staleTime: 60_000 });
-
-  // Live attendance + onboarding + EOS counts (replace hard-coded zeros)
-  const { data: attendanceToday } = useQuery<any>({
-    queryKey: [`/api/attendance/stats/today${branchParam}`],
-    staleTime: 30_000,
-  });
-  const { data: onboardingStats } = useQuery<any>({
-    queryKey: ["/api/hr/onboarding/stats"],
-    staleTime: 60_000,
-  });
-  const { data: eosList = [] } = useQuery<any[]>({
-    queryKey: ["/api/hr/eos"],
-    staleTime: 60_000,
-  });
-
-  // Filter employees by selected branch
-  const filteredEmployees = useMemo(() => {
-    if (branchFilter === "all") return employees;
-    return employees.filter((e) => String(e.branchId) === branchFilter);
-  }, [employees, branchFilter]);
-
-  // Derived counts — when a branch is selected, trust the filtered list (may be 0).
-  // Only fall back to stats endpoint when employees list hasn't loaded yet AND no filter active.
-  const totalEmployees =
-    branchFilter !== "all"
-      ? filteredEmployees.length
-      : employees.length > 0
-        ? employees.length
-        : stats?.totalEmployees ?? 0;
-  const activeEmployees = useMemo(
-    () => filteredEmployees.filter((e) => (e.status || "active") === "active").length,
-    [filteredEmployees],
-  );
-  const inactiveEmployees = totalEmployees - activeEmployees;
-  const onLeaveCount = useMemo(
-    () => filteredEmployees.filter((e) => e.status === "on_leave").length,
-    [filteredEmployees],
-  );
-  const nationalitiesCount = useMemo(
-    () => new Set(filteredEmployees.map((e) => e.nationality).filter(Boolean)).size,
-    [filteredEmployees],
-  );
+  // Bundle is already branch-scoped server-side; employees list IS the filtered list.
+  const filteredEmployees = employees;
+  const totalEmployees = stats?.totalEmployees ?? employees.length;
+  const activeEmployees = stats?.activeEmployees ?? 0;
+  const inactiveEmployees = stats?.inactiveEmployees ?? 0;
+  const onLeaveCount = stats?.onLeaveCount ?? 0;
+  const nationalitiesCount = stats?.nationalitiesCount ?? 0;
 
   const pendingApplications = useMemo(
     () =>
@@ -752,15 +718,38 @@ export default function HRHubPage() {
       }
     }
 
-    if ((docStats?.expired || 0) + (docStats?.expiringSoon || 0) > 0) {
-      const exp = docStats.expired || 0;
-      const soon = docStats.expiringSoon || 0;
+    // إقامات منتهية (أولوية امتثال السعودية)
+    if ((docStats?.expiredIqama || 0) > 0) {
+      result.push({
+        id: "docs-iqama",
+        icon: AlertTriangle,
+        tone: "warning",
+        title: `${fmt(docStats.expiredIqama)} إقامة منتهية الصلاحية`,
+        detail: "تجديد الإقامات أولوية امتثال — التأخر قد يعرّض المنشأة لمخالفات.",
+        action: { label: "تجديد الإقامات", href: "/hr/employee-documents?type=iqama&status=expired" },
+      });
+    }
+    // شهادات صحية منتهية (لوزارة الصحة + بلدية)
+    if ((docStats?.expiredHealth || 0) > 0) {
+      result.push({
+        id: "docs-health",
+        icon: AlertTriangle,
+        tone: "warning",
+        title: `${fmt(docStats.expiredHealth)} شهادة صحية منتهية`,
+        detail: "الشهادات الصحية إلزامية للعاملين في قطاع الأغذية — راجع تجديدها فوراً.",
+        action: { label: "فتح الشهادات الصحية", href: "/hr/employee-documents?type=health_certificate&status=expired" },
+      });
+    }
+    // باقي الوثائق المنتهية أو القاربة (عام)
+    const otherExp = (docStats?.expired || 0) - (docStats?.expiredIqama || 0) - (docStats?.expiredHealth || 0);
+    const soon = docStats?.expiringSoon || 0;
+    if (otherExp + soon > 0) {
       result.push({
         id: "docs-expiry",
         icon: AlertTriangle,
-        tone: exp > 0 ? "warning" : "info",
-        title: exp > 0 ? `${fmt(exp)} وثيقة منتهية الصلاحية` : `${fmt(soon)} وثيقة على وشك الانتهاء`,
-        detail: `إجمالي ${fmt(exp + soon)} وثيقة تحتاج متابعة (إقامات، رخص، شهادات صحية).`,
+        tone: otherExp > 0 ? "warning" : "info",
+        title: otherExp > 0 ? `${fmt(otherExp)} وثيقة أخرى منتهية` : `${fmt(soon)} وثيقة قاربت على الانتهاء`,
+        detail: `إجمالي ${fmt(otherExp + soon)} وثيقة (رخص، تأشيرات، شهادات تدريبية...) تحتاج متابعة خلال 30 يوماً.`,
         action: { label: "فتح وثائق الموظفين", href: "/hr/employee-documents" },
       });
     }
@@ -819,6 +808,20 @@ export default function HRHubPage() {
           tone="people"
           title="مركز الموارد البشرية"
           description="HR HUB — لوحة موحّدة لإدارة الموظفين، الحضور، الرواتب، التوظيف، والمستندات"
+          actions={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleGlobalRefresh}
+              disabled={bundleFetching}
+              data-testid="button-refresh-hub"
+              className="gap-1.5"
+            >
+              <RefreshCw className={cn("w-3.5 h-3.5", bundleFetching && "animate-spin")} />
+              {bundleFetching ? "جارٍ التحديث..." : "تحديث البيانات"}
+            </Button>
+          }
         />
 
         {/* Filter Row */}
@@ -879,7 +882,7 @@ export default function HRHubPage() {
           <StatTile testId="tile-leaves"          value={leaveStats?.pending || 0} label="طلبات إجازات معلّقة"    icon={CalendarDays}   tone="amber"    href="/hr/leaves" />
           <StatTile testId="tile-warnings"        value={warningStats?.active || 0} label="إنذارات سارية"          icon={ShieldAlert}    tone="rose"     href="/hr/warnings" />
           <StatTile testId="tile-advances"        value={advanceStats?.total || 0} label="سلف مسجّلة"             icon={TrendingDown}   tone="orange"   href="/hr/advances" />
-          <StatTile testId="tile-eos"             value={eosList.length}         label="حسابات نهاية الخدمة"    icon={FileText}       tone="lime"     href="/hr/eos" />
+          <StatTile testId="tile-eos"             value={eosStats.total}         label="حسابات نهاية الخدمة"    icon={FileText}       tone="lime"     href="/hr/eos" />
           <StatTile testId="tile-branches"        value={branches.length}        label="عدد الفروع النشطة"      icon={Building}       tone="teal"     href="/branches" />
         </div>
 
@@ -937,7 +940,7 @@ export default function HRHubPage() {
                 { href: "/operations-employees",   label: "موظفو التشغيل",        icon: Users,          tone: "orange" as TileTone },
                 { href: "/terminated-employees",   label: "المستقيلون",           icon: UserX,          tone: "slate" as TileTone },
                 { href: "/biometric-settings",     label: "إعدادات البصمة",       icon: ShieldAlert,    tone: "rose" as TileTone },
-                { href: "/documents",              label: "المستندات",            icon: FolderOpen,     tone: "amber" as TileTone },
+                { href: "/hr/employee-documents",  label: "وثائق الموظفين",       icon: FolderOpen,     tone: "amber" as TileTone },
                 { href: "/notifications-center",   label: "مركز الإشعارات",       icon: Bell,           tone: "cyan" as TileTone },
                 { href: "/floor-plan",             label: "مخطط أرضية الفرع",     icon: PieChartIcon,   tone: "lime" as TileTone },
               ].map((item) => {

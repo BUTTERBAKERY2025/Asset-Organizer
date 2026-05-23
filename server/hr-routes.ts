@@ -11,6 +11,10 @@ import {
   branchEmployees,
   branches,
   users,
+  jobOffers,
+  employmentApplications,
+  onboardingNotifications,
+  attendanceRecords,
   insertEmployeeDocumentSchema,
   insertLeaveRequestSchema,
   insertEmployeeWarningSchema,
@@ -803,6 +807,203 @@ export function registerHrRoutes(app: Express) {
     } catch (e: any) {
       console.error("[hr/eos] delete error:", e);
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ========================================================================
+  // HR HUB BUNDLE  /api/hr/hub-bundle
+  // Consolidates all HR Hub KPIs into a single parallel query to replace
+  // the 11+ separate network round-trips the page used to make on mount.
+  // Each section is independently try/catch'd so one failure doesn't kill
+  // the whole response. Scoped by user's effective branch filter.
+  // ========================================================================
+  app.get("/api/hr/hub-bundle", isAuthenticated, requirePermission("hr_management"), async (req, res) => {
+    try {
+      const queryBranchId = (req.query.branchId as string | undefined) || undefined;
+      const filter = getEffectiveBranchFilter(req, queryBranchId);
+      if (!filter.hasAccess) {
+        return res.status(403).json({ error: "ليس لديك صلاحية الوصول" });
+      }
+      const branchIds = filter.branchIds; // null = all, [] = none
+      const scopedBranchId = filter.singleBranchId || queryBranchId || null;
+      const today = new Date().toISOString().slice(0, 10);
+      const thirtyOut = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+      const thisMonth = today.slice(0, 7);
+
+      const empCond = applyBranchScope(branchEmployees, branchIds);
+      const docCond = applyBranchScope(employeeDocuments, branchIds);
+      const leaveCond = applyBranchScope(leaveRequests, branchIds);
+      const warnCond = applyBranchScope(employeeWarnings, branchIds);
+      const advCond = applyBranchScope(salaryDeductions, branchIds);
+      const eosCond = applyBranchScope(eosCalculations, branchIds);
+      const offerCond = applyBranchScope(jobOffers, branchIds);
+      // employmentApplications uses targetBranchId (not branchId) — custom scope
+      const appCond = branchIds === null
+        ? undefined
+        : (branchIds.length === 0 ? sql`false` : inArray(employmentApplications.targetBranchId, branchIds));
+      // branches list scoped to user's accessible branches (admins see all)
+      const branchListCond = branchIds === null
+        ? undefined
+        : (branchIds.length === 0 ? sql`false` : inArray(branches.id, branchIds));
+      // attendance scoped by date + branch
+      const attDateCond = eq(attendanceRecords.attendanceDate, today);
+      const attCond = scopedBranchId
+        ? and(attDateCond, eq(attendanceRecords.branchId, scopedBranchId))
+        : (branchIds === null
+            ? attDateCond
+            : (branchIds.length === 0 ? sql`false` : and(attDateCond, inArray(attendanceRecords.branchId, branchIds))));
+
+      const safe = async <T>(p: Promise<T>, fallback: T): Promise<T> => {
+        try { return await p; } catch (e: any) { console.error("[hub-bundle section]", e?.message); return fallback; }
+      };
+
+      const [
+        employees, branchesList, docs, leaves, warns, advs, eosRows,
+        attRows, applications, offers, acceptedOffers,
+      ] = await Promise.all([
+        safe(db.select().from(branchEmployees).where(empCond), [] as any[]),
+        safe(db.select().from(branches).where(branchListCond), [] as any[]),
+        safe(db.select().from(employeeDocuments).where(docCond), [] as any[]),
+        safe(db.select().from(leaveRequests).where(leaveCond), [] as any[]),
+        safe(db.select().from(employeeWarnings).where(warnCond), [] as any[]),
+        safe(db.select().from(salaryDeductions).where(
+          advCond ? and(advCond, inArray(salaryDeductions.type, ["advance", "loan_installment"]))
+                  : inArray(salaryDeductions.type, ["advance", "loan_installment"]),
+        ), [] as any[]),
+        safe(db.select().from(eosCalculations).where(eosCond), [] as any[]),
+        safe(db.select().from(attendanceRecords).where(attCond), [] as any[]),
+        safe(db.select({ id: employmentApplications.id, status: employmentApplications.status }).from(employmentApplications).where(appCond), [] as any[]),
+        safe(db.select({ id: jobOffers.id, status: jobOffers.status }).from(jobOffers).where(offerCond), [] as any[]),
+        safe(db.select({ id: jobOffers.id }).from(jobOffers).where(offerCond ? and(offerCond, eq(jobOffers.status, "accepted")) : eq(jobOffers.status, "accepted")), [] as any[]),
+      ]);
+
+      // Employees aggregates
+      const totalEmployees = employees.length;
+      const activeEmployees = employees.filter((e: any) => (e.status || "active") === "active").length;
+      const inactiveEmployees = totalEmployees - activeEmployees;
+      const onLeaveCount = employees.filter((e: any) => e.status === "on_leave").length;
+      const nationalitiesCount = new Set(employees.map((e: any) => e.nationality).filter(Boolean)).size;
+      const totalSalaries = employees.reduce((s: number, e: any) => s + (Number(e.salary) || 0), 0);
+      const byNationalityMap: Record<string, number> = {};
+      const byJobTitleMap: Record<string, number> = {};
+      employees.forEach((e: any) => {
+        if (e.nationality) byNationalityMap[e.nationality] = (byNationalityMap[e.nationality] || 0) + 1;
+        if (e.jobTitle) byJobTitleMap[e.jobTitle] = (byJobTitleMap[e.jobTitle] || 0) + 1;
+      });
+
+      // Documents stats
+      const docStats = {
+        total: docs.length,
+        expired: docs.filter((d: any) => d.expiryDate && d.expiryDate < today).length,
+        expiringSoon: docs.filter((d: any) => d.expiryDate && d.expiryDate >= today && d.expiryDate <= thirtyOut).length,
+        expiredIqama: docs.filter((d: any) => d.documentType === "iqama" && d.expiryDate && d.expiryDate < today).length,
+        expiredHealth: docs.filter((d: any) => d.documentType === "health_certificate" && d.expiryDate && d.expiryDate < today).length,
+      };
+
+      // Leaves stats
+      const leaveStats = {
+        total: leaves.length,
+        pending: leaves.filter((l: any) => l.status === "pending").length,
+        approved: leaves.filter((l: any) => l.status === "approved").length,
+        onLeaveToday: leaves.filter((l: any) => l.status === "approved" && l.startDate <= today && l.endDate >= today).length,
+      };
+
+      // Warnings stats
+      const warningStats = {
+        total: warns.length,
+        active: warns.filter((w: any) => w.status === "active").length,
+      };
+
+      // Advances stats
+      const advanceStats = {
+        total: advs.length,
+        totalAmount: advs.reduce((s: number, d: any) => s + (Number(d.amount) || 0), 0),
+        thisMonthAmount: advs.filter((d: any) => d.month === thisMonth).reduce((s: number, d: any) => s + (Number(d.amount) || 0), 0),
+      };
+
+      // Onboarding stats (accepted offers + their notification status)
+      let onboardingStats: any = { total: acceptedOffers.length, pending: 0, sent: 0, signed: 0, confirmed: 0, converted: 0 };
+      if (acceptedOffers.length > 0) {
+        const offerIds = acceptedOffers.map((o: any) => o.id);
+        const grouped = await safe(
+          db.select({ status: onboardingNotifications.status, c: sql<number>`count(*)::int` })
+            .from(onboardingNotifications)
+            .where(inArray(onboardingNotifications.jobOfferId, offerIds))
+            .groupBy(onboardingNotifications.status),
+          [] as any[],
+        );
+        let withNotif = 0;
+        for (const g of grouped) {
+          onboardingStats[g.status] = Number(g.c);
+          withNotif += Number(g.c);
+        }
+        onboardingStats.pending = Math.max(0, acceptedOffers.length - withNotif) + (onboardingStats.pending || 0);
+      }
+
+      // Attendance today (already filtered)
+      const attTotal = attRows.length;
+      const attPresent = attRows.filter((r: any) => r.status === "present").length;
+      const attLate = attRows.filter((r: any) => r.status === "late").length;
+      const attAbsent = attRows.filter((r: any) => r.status === "absent").length;
+      const attendanceToday = {
+        date: today,
+        total: attTotal,
+        present: attPresent,
+        late: attLate,
+        absent: attAbsent,
+        attendanceRate: attTotal > 0 ? Math.round((attPresent / attTotal) * 100) : 0,
+      };
+
+      // EOS list (lightweight — count + draft count)
+      const eosStats = {
+        total: eosRows.length,
+        draft: eosRows.filter((e: any) => e.status === "draft").length,
+        pending: eosRows.filter((e: any) => e.status === "pending").length,
+      };
+
+      // Branches list — minimal payload
+      const branchesList2 = branchesList.map((b: any) => ({ id: b.id, name: b.name, nameAr: b.nameAr || null }));
+
+      // Employees minimal payload (drop heavy/sensitive fields)
+      const employeesLight = employees.map((e: any) => ({
+        id: e.id,
+        employeeName: e.employeeName,
+        employeeNameEn: e.employeeNameEn,
+        phoneNumber: e.phoneNumber,
+        status: e.status,
+        branchId: e.branchId,
+        jobTitle: e.jobTitle,
+        nationality: e.nationality,
+      }));
+
+      res.json({
+        generatedAt: new Date().toISOString(),
+        branchFilter: scopedBranchId || "all",
+        employees: employeesLight,
+        branches: branchesList2,
+        applications,
+        jobOffers: offers,
+        stats: {
+          totalEmployees,
+          activeEmployees,
+          inactiveEmployees,
+          onLeaveCount,
+          nationalitiesCount,
+          totalSalaries,
+          byNationality: Object.entries(byNationalityMap).map(([nationality, count]) => ({ nationality, count })).sort((a, b) => b.count - a.count),
+          byJobTitle: Object.entries(byJobTitleMap).map(([jobTitle, count]) => ({ jobTitle, count })).sort((a, b) => b.count - a.count),
+        },
+        docStats,
+        leaveStats,
+        warningStats,
+        advanceStats,
+        onboardingStats,
+        attendanceToday,
+        eosStats,
+      });
+    } catch (e: any) {
+      console.error("[hr/hub-bundle] error:", e);
+      res.status(500).json({ error: e.message || "فشل في تحميل بيانات لوحة الموارد البشرية" });
     }
   });
 }
