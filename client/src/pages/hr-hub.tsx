@@ -879,7 +879,7 @@ function AIInsightsCard({
                 ? "يحلّل ChatGPT بياناتك الآن..."
                 : aiPoweredBy === "ai"
                 ? "رؤى ذكية مولّدة بواسطة ChatGPT"
-                : "رؤى وتوصيات مبنية على بياناتك"}
+                : "اضغط زر التحديث لتحليل ذكي بواسطة ChatGPT"}
             </p>
           </div>
           <Button
@@ -1395,9 +1395,10 @@ export default function HRHubPage() {
     data: aiData,
     isFetching: aiFetching,
     error: aiQueryError,
+    refetch: refetchAI,
   } = useQuery<{ insights: Array<{ id: string; iconName: string; tone: AIInsight["tone"]; title: string; detail: string; action?: { label: string; href: string } }>; model?: string }>({
-    queryKey: ["/api/hr/ai-insights", branchFilter, refreshTick],
-    enabled: !!aiSnapshot,
+    queryKey: ["/api/hr/ai-insights", branchFilter],
+    enabled: false, // Manual-only — triggered by button click to control OpenAI cost
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     retry: false,
@@ -1562,7 +1563,7 @@ export default function HRHubPage() {
           <WhatsAppQuickSend employees={employees} branches={branches} />
           <AIInsightsCard
             insights={effectiveInsights}
-            onRefresh={() => setRefreshTick((t) => t + 1)}
+            onRefresh={() => { setRefreshTick((t) => t + 1); refetchAI(); }}
             isAILoading={aiFetching}
             aiError={aiErrMessage}
             aiPoweredBy={aiPoweredBy}
