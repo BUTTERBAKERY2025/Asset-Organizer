@@ -70,6 +70,9 @@ import {
   Unlock,
   CircleDot,
   CalendarClock,
+  FileWarning,
+  Award,
+  Target,
 } from "lucide-react";
 
 // ============================================================================
@@ -841,7 +844,19 @@ interface AIInsight {
   action?: { label: string; href: string };
 }
 
-function AIInsightsCard({ insights, onRefresh }: { insights: AIInsight[]; onRefresh: () => void }) {
+function AIInsightsCard({
+  insights,
+  onRefresh,
+  isAILoading,
+  aiError,
+  aiPoweredBy,
+}: {
+  insights: AIInsight[];
+  onRefresh: () => void;
+  isAILoading?: boolean;
+  aiError?: string | null;
+  aiPoweredBy?: "ai" | "fallback";
+}) {
   return (
     <Card className="border-violet-100 dark:border-violet-900/40 bg-gradient-to-br from-violet-50/40 to-indigo-50/40 dark:from-violet-950/10 dark:to-indigo-950/10" data-testid="card-ai-insights">
       <CardHeader className="pb-3">
@@ -853,21 +868,38 @@ function AIInsightsCard({ insights, onRefresh }: { insights: AIInsight[]; onRefr
             <CardTitle className="text-sm font-bold flex items-center gap-1.5">
               المساعد الذكي
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              {aiPoweredBy === "ai" && (
+                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300" data-testid="badge-ai-powered">
+                  GPT-5
+                </span>
+              )}
             </CardTitle>
-            <p className="text-[11px] text-muted-foreground">رؤى وتوصيات مبنية على بياناتك</p>
+            <p className="text-[11px] text-muted-foreground">
+              {isAILoading
+                ? "يحلّل ChatGPT بياناتك الآن..."
+                : aiPoweredBy === "ai"
+                ? "رؤى ذكية مولّدة بواسطة ChatGPT"
+                : "رؤى وتوصيات مبنية على بياناتك"}
+            </p>
           </div>
           <Button
             variant="ghost"
             size="icon"
             className="h-7 w-7"
             onClick={onRefresh}
+            disabled={isAILoading}
             data-testid="button-refresh-insights"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
+            <RefreshCw className={cn("w-3.5 h-3.5", isAILoading && "animate-spin")} />
           </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
+        {aiError && (
+          <div className="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 rounded px-2 py-1.5 border border-amber-200 dark:border-amber-900/40" data-testid="text-ai-error">
+            {aiError} — يتم عرض رؤى محلية بدلاً منها.
+          </div>
+        )}
         {insights.length === 0 ? (
           <div className="py-6 text-center">
             <Lightbulb className="w-6 h-6 mx-auto text-muted-foreground/60 mb-2" />
@@ -1312,6 +1344,93 @@ export default function HRHubPage() {
   }, [pendingApplications, pendingOffers, totalEmployees, activeEmployees, inactiveEmployees, stats, branchData, attendanceToday, docStats, warningStats, refreshTick]);
 
   // ──────────────────────────────────────────────────────────────────────────
+  // AI Insights (ChatGPT / OpenAI) — يستبدل الرؤى المحلية حين يتوفر مفتاح OpenAI
+  // ──────────────────────────────────────────────────────────────────────────
+  const aiIconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+    AlertTriangle, Briefcase, UserCheck, TrendingDown, TrendingUp,
+    Clock, ShieldAlert, Wallet, Building, Lightbulb,
+    Users, Calendar, FileWarning, Award, Target,
+  };
+
+  const aiSnapshot = useMemo(() => {
+    if (!bundle) return null;
+    return {
+      totals: {
+        totalEmployees,
+        activeEmployees,
+        inactiveEmployees,
+        totalSalaries: stats?.totalSalaries || 0,
+        avgSalary: totalEmployees > 0 ? Math.round((stats?.totalSalaries || 0) / totalEmployees) : 0,
+      },
+      recruitment: {
+        pendingApplications,
+        pendingOffers,
+      },
+      documents: {
+        expired: docStats?.expired || 0,
+        expiredIqama: docStats?.expiredIqama || 0,
+        expiredHealth: docStats?.expiredHealth || 0,
+        expiringSoon: docStats?.expiringSoon || 0,
+      },
+      warnings: { active: warningStats?.active || 0 },
+      advances: { total: advanceStats?.total || 0 },
+      leaves: { pending: leaveStats?.pending || 0 },
+      attendanceToday: attendanceToday
+        ? {
+            attendanceRate: attendanceToday.attendanceRate || 0,
+            present: attendanceToday.present || 0,
+            absent: attendanceToday.absent || 0,
+            late: attendanceToday.late || 0,
+            total: attendanceToday.total || 0,
+          }
+        : null,
+      branches: branchData.slice(0, 10).map((b) => ({ name: b.name, employees: b.value })),
+      comparisons: comparisons || null,
+      branchFilter: branchFilter === "all" ? "كل الفروع" : branchFilter,
+      generatedAt: new Date().toISOString(),
+    };
+  }, [bundle, totalEmployees, activeEmployees, inactiveEmployees, stats, pendingApplications, pendingOffers, docStats, warningStats, advanceStats, leaveStats, attendanceToday, branchData, comparisons, branchFilter]);
+
+  const {
+    data: aiData,
+    isFetching: aiFetching,
+    error: aiQueryError,
+    refetch: refetchAI,
+  } = useQuery<{ insights: Array<{ id: string; iconName: string; tone: AIInsight["tone"]; title: string; detail: string; action?: { label: string; href: string } }>; model?: string }>({
+    queryKey: ["/api/hr/ai-insights", branchFilter, refreshTick],
+    enabled: !!aiSnapshot,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    retry: false,
+    queryFn: async () => {
+      const res = await apiRequest("POST", "/api/hr/ai-insights", { snapshot: aiSnapshot });
+      return res.json();
+    },
+  });
+
+  const aiInsights: AIInsight[] | null = useMemo(() => {
+    if (!aiData?.insights?.length) return null;
+    return aiData.insights.map((x) => ({
+      id: x.id,
+      icon: aiIconMap[x.iconName] || Lightbulb,
+      tone: x.tone,
+      title: x.title,
+      detail: x.detail,
+      action: x.action,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiData]);
+
+  const aiErrMessage = aiQueryError
+    ? ((aiQueryError as any)?.message?.includes("AI_NOT_CONFIGURED")
+        ? "المساعد الذكي غير مفعّل"
+        : "تعذّر الاتصال بالمساعد الذكي")
+    : null;
+
+  const effectiveInsights = aiInsights ?? insights;
+  const aiPoweredBy: "ai" | "fallback" = aiInsights ? "ai" : "fallback";
+
+  // ──────────────────────────────────────────────────────────────────────────
   // Render
   // ──────────────────────────────────────────────────────────────────────────
   return (
@@ -1442,7 +1561,13 @@ export default function HRHubPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
           <SalaryClosingCard data={salaryClosing} />
           <WhatsAppQuickSend employees={employees} branches={branches} />
-          <AIInsightsCard insights={insights} onRefresh={() => setRefreshTick((t) => t + 1)} />
+          <AIInsightsCard
+            insights={effectiveInsights}
+            onRefresh={() => { setRefreshTick((t) => t + 1); refetchAI(); }}
+            isAILoading={aiFetching}
+            aiError={aiErrMessage}
+            aiPoweredBy={aiPoweredBy}
+          />
         </div>
 
         {/* Quick Access Grid (compact) */}

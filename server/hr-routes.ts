@@ -1297,4 +1297,112 @@ export function registerHrRoutes(app: Express) {
       res.status(500).json({ error: e.message || "فشل في تحميل بيانات لوحة الموارد البشرية" });
     }
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // POST /api/hr/ai-insights — رؤى مولّدة بالذكاء الاصطناعي (OpenAI gpt-5)
+  // يستقبل لقطة (snapshot) من بيانات الـ hub ويُعيد قائمة رؤى بالعربية
+  // Blueprint reference: javascript_openai
+  // ──────────────────────────────────────────────────────────────────────────
+  app.post("/api/hr/ai-insights", isAuthenticated, async (req, res) => {
+    try {
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        return res.status(503).json({
+          error: "AI_NOT_CONFIGURED",
+          message: "ميزة المساعد الذكي غير مفعّلة — يلزم ضبط مفتاح OpenAI.",
+        });
+      }
+
+      const snapshot = req.body?.snapshot;
+      if (!snapshot || typeof snapshot !== "object") {
+        return res.status(400).json({ error: "INVALID_SNAPSHOT", message: "snapshot مطلوب" });
+      }
+
+      const OpenAI = (await import("openai")).default;
+      // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      const openai = new OpenAI({ apiKey });
+
+      const allowedIcons = [
+        "AlertTriangle", "Briefcase", "UserCheck", "TrendingDown", "TrendingUp",
+        "Clock", "ShieldAlert", "Wallet", "Building", "Lightbulb",
+        "Users", "Calendar", "FileWarning", "Award", "Target",
+      ];
+
+      const systemPrompt = `أنت مستشار ذكي لإدارة الموارد البشرية في شركة "Butter Bakery" (مخبوزات) في المملكة العربية السعودية.
+ستحلّل لقطة بيانات HR وتُولّد رؤى عملية مختصرة بالعربية الفصحى للإدارة.
+
+الإخراج إلزامياً JSON بالشكل:
+{
+  "insights": [
+    {
+      "id": "kebab-case-id-قصير",
+      "iconName": "<أحد القيم: ${allowedIcons.join(", ")}>",
+      "tone": "warning" | "info" | "success",
+      "title": "عنوان قصير (≤ 70 حرف) يتضمن الأرقام إن أمكن",
+      "detail": "شرح مختصر (≤ 180 حرف) يفسّر السبب أو التأثير ويقترح إجراءً واضحاً",
+      "action": { "label": "نص الزر", "href": "/path" }
+    }
+  ]
+}
+
+قواعد صارمة:
+- 3 إلى 5 رؤى فقط، مرتّبة حسب الأولوية (الأخطر أولاً).
+- "tone": warning للمخاطر/التأخّر، info للحياد/المتابعة، success للإنجازات.
+- استخدم الأرقام الفعلية من اللقطة وقارن بالشهر السابق إن وُجد.
+- لا تخترع أرقاماً غير موجودة في اللقطة.
+- روابط الإجراءات يجب أن تكون من القائمة المسموحة:
+  /hr/applications, /hr/job-offers, /branch-employees, /attendance-dashboard,
+  /hr/employee-documents, /hr/warnings, /employee-reports, /organizational-structure,
+  /hr/leaves, /hr/advances, /hr/eos
+- اعتبر السياق السعودي: الإقامات والشهادات الصحية وامتثال البلدية أولوية قصوى.
+- اللهجة: مهنية مباشرة، لا حشو، لا اعتذار، لا إيموجي.`;
+
+      const userPrompt = `لقطة بيانات HR الحالية:\n${JSON.stringify(snapshot, null, 2)}`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-5",
+        max_completion_tokens: 8192,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+      });
+
+      const raw = completion.choices[0]?.message?.content || "{}";
+      let parsed: any;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        return res.status(502).json({ error: "AI_PARSE_FAILED", message: "تعذّر تحليل ردّ المساعد الذكي." });
+      }
+
+      const insights = Array.isArray(parsed?.insights) ? parsed.insights : [];
+      const cleaned = insights
+        .filter((x: any) => x && typeof x.title === "string" && typeof x.detail === "string")
+        .slice(0, 5)
+        .map((x: any, i: number) => ({
+          id: typeof x.id === "string" && x.id.trim() ? x.id : `ai-${i + 1}`,
+          iconName: allowedIcons.includes(x.iconName) ? x.iconName : "Lightbulb",
+          tone: ["warning", "info", "success"].includes(x.tone) ? x.tone : "info",
+          title: String(x.title).slice(0, 140),
+          detail: String(x.detail).slice(0, 300),
+          action:
+            x.action && typeof x.action?.label === "string" && typeof x.action?.href === "string"
+              ? { label: x.action.label.slice(0, 60), href: x.action.href }
+              : undefined,
+        }));
+
+      res.json({
+        insights: cleaned,
+        generatedAt: new Date().toISOString(),
+        model: "gpt-5",
+      });
+    } catch (e: any) {
+      console.error("[hr/ai-insights] error:", e);
+      const msg = e?.message || "فشل توليد الرؤى بالذكاء الاصطناعي";
+      const status = e?.status === 401 || e?.status === 403 ? 503 : 500;
+      res.status(status).json({ error: "AI_FAILED", message: msg });
+    }
+  });
 }
