@@ -1078,6 +1078,7 @@ export const SYSTEM_MODULES = [
   "hr_warnings",       // الإنذارات والمخالفات الإدارية
   "hr_eos",            // حسابات نهاية الخدمة
   "hr_advances",       // السلف والقروض على الموظفين
+  "salary_closing",    // إغلاق الرواتب الشهرية (صلاحية منفصلة لاعتماد الإغلاق وتصدير تقريره)
   
   // المالية
   "cashier_journal",
@@ -1278,6 +1279,7 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   hr_warnings: "الإنذارات والمخالفات",
   hr_eos: "نهاية الخدمة",
   hr_advances: "السلف والقروض",
+  salary_closing: "إغلاق الرواتب الشهرية",
   
   // المالية
   cashier: "الكاشير",

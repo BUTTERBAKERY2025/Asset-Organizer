@@ -28733,7 +28733,7 @@ export async function registerRoutes(
   });
 
   // PDF Generation endpoint for salary closing report
-  app.post("/api/pdf/salary-closing", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
+  app.post("/api/pdf/salary-closing", isAuthenticated, requirePermission("salary_closing", "view"), async (req, res) => {
     try {
       const data: SalaryClosingPdfData = req.body;
       

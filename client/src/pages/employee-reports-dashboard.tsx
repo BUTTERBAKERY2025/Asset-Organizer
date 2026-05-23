@@ -40,6 +40,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { getQueryFn, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Textarea } from "@/components/ui/textarea";
 import { useBranches } from "@/hooks/useBranches";
 import {
@@ -333,6 +334,8 @@ export default function EmployeeReportsDashboardPage() {
   const isRTL = i18n.language === "ar";
   const [, navigate] = useLocation();
   const printRef = useRef<HTMLDivElement>(null);
+  const { canView: canViewModule } = usePermissions();
+  const canCloseSalary = canViewModule("salary_closing");
   
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
@@ -3190,16 +3193,18 @@ export default function EmployeeReportsDashboardPage() {
           description={isRTL ? "تقارير تحليلية شاملة لموظفي الفروع والحضور والرواتب" : "Comprehensive analytics reports for branch employees, attendance, and salaries"}
           backHref="/attendance-dashboard"
           actions={
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-9 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
-              onClick={() => setShowSalaryClosingDialog(true)}
-              data-testid="button-salary-closing"
-            >
-              <Wallet className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
-              {isRTL ? "إغلاق الرواتب الشهرية" : "Monthly Salary Closing"}
-            </Button>
+            canCloseSalary ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+                onClick={() => setShowSalaryClosingDialog(true)}
+                data-testid="button-salary-closing"
+              >
+                <Wallet className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+                {isRTL ? "إغلاق الرواتب الشهرية" : "Monthly Salary Closing"}
+              </Button>
+            ) : null
           }
         />
 
