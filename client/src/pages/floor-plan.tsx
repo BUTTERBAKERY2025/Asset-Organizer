@@ -224,7 +224,7 @@ function PrintableFloorPlan(props: {
           <h1 className="text-xl font-bold">مخطط الفرع — {branchName}</h1>
           <p className="text-xs text-gray-600 mt-0.5">التاريخ: {selectedDate} • الوردية: {shiftLabel}</p>
         </div>
-        <div className="text-[10px] text-gray-500">طُبع في {new Date().toLocaleString("ar-SA")}</div>
+        <div className="text-[10px] text-gray-500">طُبع في {new Date().toLocaleString("ar-SA-u-nu-latn")}</div>
       </div>
       {data && (
         <div className="fp-print-scale mx-auto" style={{ width: planW * scale, height: planH * scale }}>
@@ -3809,7 +3809,7 @@ export default function FloorPlanPage() {
                       <div className="flex items-center justify-between gap-2 mb-0.5">
                         <span className="font-medium">{h.details || h.action}</span>
                         <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums" dir="ltr">
-                          {new Date(h.createdAt).toLocaleString("ar-SA", { hour12: false })}
+                          {new Date(h.createdAt).toLocaleString("ar-SA-u-nu-latn", { hour12: false })}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 text-[10px] text-muted-foreground">

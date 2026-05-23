@@ -85,7 +85,7 @@ type OversightResponse = {
 };
 
 const fmt = (n: number) =>
-  new Intl.NumberFormat("ar-SA", { maximumFractionDigits: 0 }).format(n || 0);
+  new Intl.NumberFormat("ar-SA-u-nu-latn", { maximumFractionDigits: 0 }).format(n || 0);
 
 const sevConfig = {
   critical: {

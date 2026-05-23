@@ -36,7 +36,7 @@ interface BoqItem {
 
 const fmt = (n: number | string) => {
   const v = typeof n === 'string' ? parseFloat(n) : n;
-  return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(v || 0);
+  return new Intl.NumberFormat("ar-SA-u-nu-latn", { style: "currency", currency: "SAR" }).format(v || 0);
 };
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {

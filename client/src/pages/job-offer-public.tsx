@@ -135,7 +135,7 @@ export default function JobOfferPublicPage() {
 
   if (done) {
     const respondedDate = data?.offer?.respondedAt
-      ? new Date(data.offer.respondedAt).toLocaleString("ar-SA")
+      ? new Date(data.offer.respondedAt).toLocaleString("ar-SA-u-nu-latn")
       : null;
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F5F0E6] p-4" dir="rtl">

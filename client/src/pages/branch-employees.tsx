@@ -2782,14 +2782,14 @@ export default function BranchEmployeesPage() {
                         {(viewingEmployee as any).statusChangedAt && (
                           <div className="flex justify-between">
                             <span className="text-gray-500">{isRTL ? "آخر تغيير للحالة:" : "Status Changed:"}</span>
-                            <span>{new Date((viewingEmployee as any).statusChangedAt).toLocaleDateString(isRTL ? "ar-SA" : "en-US")}</span>
+                            <span>{new Date((viewingEmployee as any).statusChangedAt).toLocaleDateString(isRTL ? "ar-SA-u-nu-latn" : "en-US")}</span>
                           </div>
                         )}
                         {viewingEmployee.status === "terminated" && (viewingEmployee as any).terminatedAt && (
                           <>
                             <div className="flex justify-between text-red-700 border-t pt-2">
                               <span className="text-gray-500">{isRTL ? "تاريخ انتهاء الخدمة:" : "Termination Date:"}</span>
-                              <span className="font-medium">{new Date((viewingEmployee as any).terminatedAt).toLocaleDateString(isRTL ? "ar-SA" : "en-US")}</span>
+                              <span className="font-medium">{new Date((viewingEmployee as any).terminatedAt).toLocaleDateString(isRTL ? "ar-SA-u-nu-latn" : "en-US")}</span>
                             </div>
                             {(viewingEmployee as any).terminationReason && (
                               <div className="text-xs bg-red-50 border border-red-200 rounded p-2 text-red-700">
@@ -2898,7 +2898,7 @@ export default function BranchEmployeesPage() {
                                 <span className="text-gray-400">←</span>
                                 {getStatusBadge(h.newStatus, isRTL)}
                                 <span className="text-xs text-gray-500 ms-auto">
-                                  {new Date(h.changedAt).toLocaleString(isRTL ? "ar-SA" : "en-US")}
+                                  {new Date(h.changedAt).toLocaleString(isRTL ? "ar-SA-u-nu-latn" : "en-US")}
                                 </span>
                               </div>
                               {h.reason && (

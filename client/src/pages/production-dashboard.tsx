@@ -175,7 +175,7 @@ export default function ProductionDashboardPage() {
   const prevDayStats = hubData?.yesterday;
 
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("ar-SA", { style: "decimal", maximumFractionDigits: 0 }).format(amount || 0) + " ر.س";
+    new Intl.NumberFormat("ar-SA-u-nu-latn", { style: "decimal", maximumFractionDigits: 0 }).format(amount || 0) + " ر.س";
 
   const completionRate = stats ? Math.round((stats.completed / Math.max(stats.total, 1)) * 100) : 0;
 

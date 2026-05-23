@@ -1364,10 +1364,10 @@ export default function VotingPage() {
                       return (
                         <TableRow key={log.id}>
                           <TableCell className="text-sm">
-                            {new Date(log.createdAt).toLocaleDateString('ar-SA')}
+                            {new Date(log.createdAt).toLocaleDateString('ar-SA-u-nu-latn')}
                             <br />
                             <span className="text-xs text-gray-500">
-                              {new Date(log.createdAt).toLocaleTimeString('ar-SA')}
+                              {new Date(log.createdAt).toLocaleTimeString('ar-SA-u-nu-latn')}
                             </span>
                           </TableCell>
                           <TableCell>

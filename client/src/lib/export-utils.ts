@@ -194,7 +194,7 @@ export function printAsPDF(
             </div>
           </div>
           <div class="header-left">
-            <div>تاريخ الإصدار: ${new Date().toLocaleDateString("ar-SA", { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+            <div>تاريخ الإصدار: ${new Date().toLocaleDateString("ar-SA-u-nu-latn", { year: 'numeric', month: 'long', day: 'numeric' })}</div>
             <div>رقم المرجع: DOC-${Date.now().toString(36).toUpperCase()}</div>
           </div>
         </div>

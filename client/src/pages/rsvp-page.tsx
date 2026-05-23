@@ -91,13 +91,13 @@ export default function RsvpPage() {
   if (!rsvpData) return null;
 
   const meetingDate = new Date(rsvpData.meetingDate);
-  const formattedDate = meetingDate.toLocaleDateString('ar-SA', {
+  const formattedDate = meetingDate.toLocaleDateString('ar-SA-u-nu-latn', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   });
-  const formattedTime = meetingDate.toLocaleTimeString('ar-SA', {
+  const formattedTime = meetingDate.toLocaleTimeString('ar-SA-u-nu-latn', {
     hour: '2-digit',
     minute: '2-digit',
   });

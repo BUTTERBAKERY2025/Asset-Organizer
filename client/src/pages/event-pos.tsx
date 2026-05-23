@@ -407,7 +407,7 @@ export default function EventPosPage() {
         branchId: EVENT_BRANCH_ID,
         cashierId: user?.id || "",
         cashierName: (user as any)?.fullName || user?.username || "",
-        label: holdLabel || `طلب ${new Date().toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}`,
+        label: holdLabel || `طلب ${new Date().toLocaleTimeString("ar-SA-u-nu-latn", { hour: "2-digit", minute: "2-digit" })}`,
         cartData: JSON.stringify(cart),
         paymentMethod,
         discountType,
@@ -537,8 +537,8 @@ export default function EventPosPage() {
     return { completedSales, voidedSales, refundedSales, totalSales, cashTotal, networkTotal, splitTotal, splitCash, splitNetwork, totalDiscount, totalVat, totalCashInDrawer: cashTotal + splitCash };
   }, [todaySales]);
 
-  const timeStr = currentTime.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" });
-  const dateStr = currentTime.toLocaleDateString("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const timeStr = currentTime.toLocaleTimeString("ar-SA-u-nu-latn", { hour: "2-digit", minute: "2-digit" });
+  const dateStr = currentTime.toLocaleDateString("ar-SA-u-nu-latn", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
   return (
     <div className="h-[100dvh] flex flex-col bg-[#f0f2f5] overflow-hidden select-none" dir="rtl">
@@ -1436,7 +1436,7 @@ export default function EventPosPage() {
                       <div className="font-bold text-sm text-gray-800">{order.label || "طلب بدون اسم"}</div>
                       <div className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
                         <Clock className="w-3 h-3" />
-                        {new Date(order.createdAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}
+                        {new Date(order.createdAt).toLocaleTimeString("ar-SA-u-nu-latn", { hour: "2-digit", minute: "2-digit" })}
                         <span className="mx-1">•</span>
                         {order.cashierName}
                       </div>
@@ -1658,7 +1658,7 @@ export default function EventPosPage() {
               </div>
               تقرير إقفال الوردية (Z-Report)
             </DialogTitle>
-            <p className="text-purple-200 text-xs mt-1">{new Date().toLocaleDateString("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
+            <p className="text-purple-200 text-xs mt-1">{new Date().toLocaleDateString("ar-SA-u-nu-latn", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
           </div>
           
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
@@ -1667,7 +1667,7 @@ export default function EventPosPage() {
               <div style={{ textAlign: "center", marginBottom: "8px" }}>
                 <div style={{ fontWeight: "bold", fontSize: "14px" }}>{invoiceSettings?.businessName || "باتر بيكري"}</div>
                 <div style={{ fontSize: "12px", fontWeight: "bold", margin: "4px 0" }}>تقرير إقفال الوردية</div>
-                <div style={{ fontSize: "10px", color: "#555" }}>{new Date().toLocaleDateString("ar-SA")} - {new Date().toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}</div>
+                <div style={{ fontSize: "10px", color: "#555" }}>{new Date().toLocaleDateString("ar-SA-u-nu-latn")} - {new Date().toLocaleTimeString("ar-SA-u-nu-latn", { hour: "2-digit", minute: "2-digit" })}</div>
                 <div style={{ fontSize: "10px", color: "#555" }}>الكاشير: {(user as any)?.fullName || user?.username}</div>
               </div>
               <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "6px 0" }} />

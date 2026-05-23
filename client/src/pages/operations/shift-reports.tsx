@@ -1212,7 +1212,7 @@ export default function ShiftReportsPage() {
                             <img src={sig.signatureData} alt="توقيع" className="max-h-24 mx-auto" />
                           </div>
                           <div className="text-xs text-center text-gray-400 mt-2">
-                            {new Date(sig.signedAt).toLocaleString("ar-SA", { dateStyle: "medium", timeStyle: "short" })}
+                            {new Date(sig.signedAt).toLocaleString("ar-SA-u-nu-latn", { dateStyle: "medium", timeStyle: "short" })}
                           </div>
                         </div>
                       ))}
@@ -1222,7 +1222,7 @@ export default function ShiftReportsPage() {
 
               <div className="mt-8 pt-4 border-t-2 border-amber-200 text-center print:mt-12">
                 <p className="text-sm font-bold text-amber-700">BUTTER BAKERY SYSTEM</p>
-                <p className="text-xs text-gray-400 mt-1">{new Date().toLocaleString("ar-SA", { dateStyle: "full", timeStyle: "short" })}</p>
+                <p className="text-xs text-gray-400 mt-1">{new Date().toLocaleString("ar-SA-u-nu-latn", { dateStyle: "full", timeStyle: "short" })}</p>
               </div>
             </div>
           </DialogContent>

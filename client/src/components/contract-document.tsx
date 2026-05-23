@@ -10,7 +10,7 @@ interface Props {
 }
 
 const fmt = (n: number | null | undefined) =>
-  new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(n || 0);
+  new Intl.NumberFormat("ar-SA-u-nu-latn", { style: "currency", currency: "SAR" }).format(n || 0);
 
 const todayAr = (d?: string | null) => d || new Date().toISOString().slice(0, 10);
 
@@ -218,7 +218,7 @@ export const ContractDocument = forwardRef<HTMLDivElement, Props>(
         </div>
 
         <div className="text-center text-xs text-gray-400 mt-8 pt-2 border-t">
-          تم إنشاء هذا العقد بواسطة نظام باتر بيكري — {new Date().toLocaleDateString('ar-SA')}
+          تم إنشاء هذا العقد بواسطة نظام باتر بيكري — {new Date().toLocaleDateString('ar-SA-u-nu-latn')}
         </div>
       </div>
     );

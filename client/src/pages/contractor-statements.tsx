@@ -26,7 +26,7 @@ interface ContractorSummary {
 }
 
 function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("ar-SA", {
+  return new Intl.NumberFormat("ar-SA-u-nu-latn", {
     style: "currency",
     currency: "SAR",
     maximumFractionDigits: 2,

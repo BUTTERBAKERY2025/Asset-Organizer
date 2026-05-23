@@ -460,7 +460,7 @@ export default function BiometricSettingsPage() {
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "-";
-    return new Date(dateStr).toLocaleDateString("ar-SA", {
+    return new Date(dateStr).toLocaleDateString("ar-SA-u-nu-latn", {
       year: "numeric",
       month: "short",
       day: "numeric",

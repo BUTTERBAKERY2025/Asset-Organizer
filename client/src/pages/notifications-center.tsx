@@ -223,7 +223,7 @@ function SchedulesTab({
                       {reportLabel(s.reportType)} • {branchName(s.branchId)} • يوم {s.dayOfMonth} الساعة {String(s.hour).padStart(2, "0")}:00
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      المستلمون: {s.recipients.length} • التشغيل التالي: {s.nextRunAt ? new Date(s.nextRunAt).toLocaleString("ar-SA") : "-"} • آخر تشغيل: {s.lastRunAt ? new Date(s.lastRunAt).toLocaleString("ar-SA") : "لم يُشغّل بعد"}
+                      المستلمون: {s.recipients.length} • التشغيل التالي: {s.nextRunAt ? new Date(s.nextRunAt).toLocaleString("ar-SA-u-nu-latn") : "-"} • آخر تشغيل: {s.lastRunAt ? new Date(s.lastRunAt).toLocaleString("ar-SA-u-nu-latn") : "لم يُشغّل بعد"}
                     </div>
                   </div>
                   <div className="flex gap-2 flex-wrap">
@@ -441,8 +441,8 @@ function QueueTab({ queue, loading }: { queue: QueueItem[]; loading: boolean }) 
                         <div className="text-destructive text-xs mt-1" data-testid={`text-error-${item.id}`}>خطأ: {item.errorMessage}</div>
                       )}
                       <div className="text-muted-foreground text-xs mt-1">
-                        {new Date(item.createdAt).toLocaleString("ar-SA")}
-                        {item.sentAt && ` • أُرسل: ${new Date(item.sentAt).toLocaleString("ar-SA")}`}
+                        {new Date(item.createdAt).toLocaleString("ar-SA-u-nu-latn")}
+                        {item.sentAt && ` • أُرسل: ${new Date(item.sentAt).toLocaleString("ar-SA-u-nu-latn")}`}
                         {item.relatedModule && ` • ${item.relatedModule}`}
                       </div>
                     </div>

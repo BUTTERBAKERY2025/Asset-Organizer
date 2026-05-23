@@ -72,7 +72,7 @@ export function ContractLiquidatedDamagesCard({ contract, canEdit }: Props) {
     onError: (e: any) => toast({ title: "فشل التنازل", description: e?.message, variant: "destructive" }),
   });
 
-  const fmt = (n: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(n || 0);
+  const fmt = (n: number) => new Intl.NumberFormat("ar-SA-u-nu-latn", { style: "currency", currency: "SAR" }).format(n || 0);
   const ldEnabled = !!contract.ldEnabled;
   const calculated = contract.ldCalculatedAmount || 0;
   const days = contract.ldCalculatedDays || 0;

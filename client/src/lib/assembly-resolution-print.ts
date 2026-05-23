@@ -109,7 +109,7 @@ const voteColor = (v: string) =>
 const fmtDate = (d?: string | null) => {
   if (!d) return "-";
   try {
-    return new Date(d).toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" });
+    return new Date(d).toLocaleDateString("ar-SA-u-nu-latn", { year: "numeric", month: "long", day: "numeric" });
   } catch {
     return "-";
   }
@@ -154,7 +154,7 @@ export function buildAssemblyResolutionHtml(
           <td>${escapeHtml(v.voterName)}</td>
           <td style="text-align:center;">${v.voterType === "shareholder" ? "مساهم" : v.voterType === "board_member" ? "عضو مجلس" : escapeHtml(v.voterType)}</td>
           <td style="text-align:center;color:${voteColor(v.vote)};font-weight:700;">${voteLabel(v.vote)}</td>
-          <td style="text-align:center;">${v.votingPower ? Number(v.votingPower).toLocaleString("ar-SA") : "-"}</td>
+          <td style="text-align:center;">${v.votingPower ? Number(v.votingPower).toLocaleString("ar-SA-u-nu-latn") : "-"}</td>
           <td style="text-align:center;font-size:8pt;color:#666;">${fmtDate(v.votedAt)}</td>
         </tr>`
         )
@@ -318,7 +318,7 @@ export function buildAssemblyResolutionHtml(
 
     <div class="footer">
       <div>${escapeHtml(co.nameAr)} | س.ت: ${escapeHtml(co.cr)}</div>
-      <div>تم الإصدار: ${new Date().toLocaleDateString("ar-SA")} | وثيقة رسمية</div>
+      <div>تم الإصدار: ${new Date().toLocaleDateString("ar-SA-u-nu-latn")} | وثيقة رسمية</div>
     </div>
   </div>
 </body>

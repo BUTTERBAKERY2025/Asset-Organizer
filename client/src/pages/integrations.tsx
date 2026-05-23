@@ -1424,7 +1424,7 @@ function AccountingSection({ exports }: { exports: AccountingExport[] }) {
                           <Badge variant="outline" className={entry.reconciliationStatus === 'matched' ? 'border-green-500 text-green-700' : entry.reconciliationStatus === 'discrepancy' ? 'border-red-500 text-red-700' : ''}>
                             {recStatusLabels[entry.reconciliationStatus] || entry.reconciliationStatus}
                           </Badge>
-                          <span className="text-sm font-mono">{parseFloat(entry.totalDebit || 0).toLocaleString('ar-SA')} ر.س</span>
+                          <span className="text-sm font-mono">{parseFloat(entry.totalDebit || 0).toLocaleString('ar-SA-u-nu-latn')} ر.س</span>
                           <span className="text-xs text-muted-foreground">{entry.entryDate}</span>
                         </div>
                       </div>
@@ -1466,8 +1466,8 @@ function AccountingSection({ exports }: { exports: AccountingExport[] }) {
                                   <td className="p-2 font-mono">{line.accountCode}</td>
                                   <td className="p-2">{line.accountName}</td>
                                   <td className="p-2 text-muted-foreground">{line.description}</td>
-                                  <td className="p-2 text-left font-mono">{parseFloat(line.debitAmount || 0) > 0 ? parseFloat(line.debitAmount).toLocaleString('ar-SA') : '-'}</td>
-                                  <td className="p-2 text-left font-mono">{parseFloat(line.creditAmount || 0) > 0 ? parseFloat(line.creditAmount).toLocaleString('ar-SA') : '-'}</td>
+                                  <td className="p-2 text-left font-mono">{parseFloat(line.debitAmount || 0) > 0 ? parseFloat(line.debitAmount).toLocaleString('ar-SA-u-nu-latn') : '-'}</td>
+                                  <td className="p-2 text-left font-mono">{parseFloat(line.creditAmount || 0) > 0 ? parseFloat(line.creditAmount).toLocaleString('ar-SA-u-nu-latn') : '-'}</td>
                                   <td className="p-2">{line.costCenter || '-'}</td>
                                 </tr>
                               ))}
@@ -1475,8 +1475,8 @@ function AccountingSection({ exports }: { exports: AccountingExport[] }) {
                             <tfoot>
                               <tr className="font-bold border-t-2">
                                 <td colSpan={4} className="p-2">الإجمالي</td>
-                                <td className="p-2 text-left font-mono">{parseFloat(entryDetails.totalDebit || 0).toLocaleString('ar-SA')}</td>
-                                <td className="p-2 text-left font-mono">{parseFloat(entryDetails.totalCredit || 0).toLocaleString('ar-SA')}</td>
+                                <td className="p-2 text-left font-mono">{parseFloat(entryDetails.totalDebit || 0).toLocaleString('ar-SA-u-nu-latn')}</td>
+                                <td className="p-2 text-left font-mono">{parseFloat(entryDetails.totalCredit || 0).toLocaleString('ar-SA-u-nu-latn')}</td>
                                 <td></td>
                               </tr>
                             </tfoot>
@@ -1563,25 +1563,25 @@ function AccountingSection({ exports }: { exports: AccountingExport[] }) {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                           <div className="text-center p-3 bg-green-50 rounded-lg">
                             <p className="text-xs text-muted-foreground">إجمالي المبيعات (النظام)</p>
-                            <p className="text-lg font-bold text-green-700">{parseFloat(rec.totalSystemSales || 0).toLocaleString('ar-SA')} <span className="text-xs">ر.س</span></p>
+                            <p className="text-lg font-bold text-green-700">{parseFloat(rec.totalSystemSales || 0).toLocaleString('ar-SA-u-nu-latn')} <span className="text-xs">ر.س</span></p>
                           </div>
                           <div className="text-center p-3 bg-blue-50 rounded-lg">
                             <p className="text-xs text-muted-foreground">الإيداعات الفعلية</p>
-                            <p className="text-lg font-bold text-blue-700">{parseFloat(rec.totalActualDeposits || 0).toLocaleString('ar-SA')} <span className="text-xs">ر.س</span></p>
+                            <p className="text-lg font-bold text-blue-700">{parseFloat(rec.totalActualDeposits || 0).toLocaleString('ar-SA-u-nu-latn')} <span className="text-xs">ر.س</span></p>
                           </div>
                           <div className={`text-center p-3 rounded-lg ${parseFloat(rec.totalVariance || 0) === 0 ? 'bg-green-50' : parseFloat(rec.totalVariance || 0) > 0 ? 'bg-amber-50' : 'bg-red-50'}`}>
                             <p className="text-xs text-muted-foreground">الفرق</p>
-                            <p className={`text-lg font-bold ${parseFloat(rec.totalVariance || 0) === 0 ? 'text-green-700' : parseFloat(rec.totalVariance || 0) > 0 ? 'text-amber-700' : 'text-red-700'}`}>{parseFloat(rec.totalVariance || 0).toLocaleString('ar-SA')} <span className="text-xs">ر.س</span></p>
+                            <p className={`text-lg font-bold ${parseFloat(rec.totalVariance || 0) === 0 ? 'text-green-700' : parseFloat(rec.totalVariance || 0) > 0 ? 'text-amber-700' : 'text-red-700'}`}>{parseFloat(rec.totalVariance || 0).toLocaleString('ar-SA-u-nu-latn')} <span className="text-xs">ر.س</span></p>
                           </div>
                           <div className="text-center p-3 bg-red-50 rounded-lg">
                             <p className="text-xs text-muted-foreground">قيمة الهالك</p>
-                            <p className="text-lg font-bold text-red-700">{parseFloat(rec.totalWasteValue || 0).toLocaleString('ar-SA')} <span className="text-xs">ر.س</span></p>
+                            <p className="text-lg font-bold text-red-700">{parseFloat(rec.totalWasteValue || 0).toLocaleString('ar-SA-u-nu-latn')} <span className="text-xs">ر.س</span></p>
                           </div>
                         </div>
                         <div className="grid grid-cols-3 md:grid-cols-5 gap-3 mt-4">
                           <div className="text-center p-2 border rounded">
                             <p className="text-xs text-muted-foreground">ض.ق.م مُحصّلة</p>
-                            <p className="font-semibold">{parseFloat(rec.vatCollected || 0).toLocaleString('ar-SA')}</p>
+                            <p className="font-semibold">{parseFloat(rec.vatCollected || 0).toLocaleString('ar-SA-u-nu-latn')}</p>
                           </div>
                           <div className="text-center p-2 border rounded">
                             <p className="text-xs text-muted-foreground">عدد القيود</p>

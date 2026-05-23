@@ -630,7 +630,7 @@ async function exportEnhancedPnLToExcel(
     ["تقرير الأرباح والخسائر المحسن"],
     [`الفرع: ${branchName}`],
     [`الفترة: ${period}`],
-    [`تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}`],
+    [`تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA-u-nu-latn')}`],
     [""],
     ["المؤشر", "القيمة", "النسبة", "الملاحظات"],
     ["إجمالي المبيعات (شامل الضريبة)", totals.grossSales || 0, "", `${totals.journalCount || 0} يومية صندوق`],
@@ -761,7 +761,7 @@ function generateEnhancedPnLPdfReport(
               { text: "تقرير الأرباح والخسائر", style: "reportTitle", alignment: "left" },
               { text: `الفرع: ${branchName}`, alignment: "left" },
               { text: `الفترة: ${period}`, alignment: "left" },
-              { text: `تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}`, alignment: "left", style: "subText" },
+              { text: `تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA-u-nu-latn')}`, alignment: "left", style: "subText" },
             ],
           },
         ],
@@ -3144,19 +3144,19 @@ export default function PnLDashboard() {
                                 <div data-testid="projection-gross-sales">
                                   <p className="text-xs text-muted-foreground mb-1">إجمالي المبيعات المتوقعة</p>
                                   <p className="text-lg font-bold">
-                                    {(enhancedPnL.totals.projection.grossSales || 0).toLocaleString('ar-SA', { maximumFractionDigits: 0 })} ر.س
+                                    {(enhancedPnL.totals.projection.grossSales || 0).toLocaleString('ar-SA-u-nu-latn', { maximumFractionDigits: 0 })} ر.س
                                   </p>
                                 </div>
                                 <div data-testid="projection-net-sales">
                                   <p className="text-xs text-muted-foreground mb-1">صافي المبيعات المتوقع</p>
                                   <p className="text-lg font-bold">
-                                    {(enhancedPnL.totals.projection.netSales || 0).toLocaleString('ar-SA', { maximumFractionDigits: 0 })} ر.س
+                                    {(enhancedPnL.totals.projection.netSales || 0).toLocaleString('ar-SA-u-nu-latn', { maximumFractionDigits: 0 })} ر.س
                                   </p>
                                 </div>
                                 <div data-testid="projection-net-profit">
                                   <p className="text-xs text-muted-foreground mb-1">صافي الربح المتوقع</p>
                                   <p className={`text-lg font-bold ${(enhancedPnL.totals.projection.netProfit || 0) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                                    {(enhancedPnL.totals.projection.netProfit || 0).toLocaleString('ar-SA', { maximumFractionDigits: 0 })} ر.س
+                                    {(enhancedPnL.totals.projection.netProfit || 0).toLocaleString('ar-SA-u-nu-latn', { maximumFractionDigits: 0 })} ر.س
                                   </p>
                                 </div>
                                 <div data-testid="projection-net-margin">

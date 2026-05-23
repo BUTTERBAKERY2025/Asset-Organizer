@@ -388,7 +388,7 @@ function GuestsDialog({ campaign, onClose }: { campaign: Campaign | null; onClos
       "المدينة": g.city,
       "الحي": g.district,
       "الجائزة": g.prizeWon || "-",
-      "تاريخ التسجيل": new Date(g.createdAt).toLocaleString("ar-SA"),
+      "تاريخ التسجيل": new Date(g.createdAt).toLocaleString("ar-SA-u-nu-latn"),
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -441,7 +441,7 @@ function GuestsDialog({ campaign, onClose }: { campaign: Campaign | null; onClos
                   <TableCell>{g.city}</TableCell>
                   <TableCell>{g.district}</TableCell>
                   <TableCell><Badge className="bg-pink-100 text-pink-700">{g.prizeWon || "-"}</Badge></TableCell>
-                  <TableCell className="text-xs">{new Date(g.createdAt).toLocaleString("ar-SA")}</TableCell>
+                  <TableCell className="text-xs">{new Date(g.createdAt).toLocaleString("ar-SA-u-nu-latn")}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

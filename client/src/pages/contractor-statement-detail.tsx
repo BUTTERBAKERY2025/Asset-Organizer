@@ -47,7 +47,7 @@ interface Statement {
 }
 
 function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("ar-SA", {
+  return new Intl.NumberFormat("ar-SA-u-nu-latn", {
     style: "currency",
     currency: "SAR",
     maximumFractionDigits: 2,
@@ -160,7 +160,7 @@ export default function ContractorStatementDetailPage() {
         {/* Print header (visible only when printing) */}
         <div className="hidden print:block text-center mb-4">
           <h1 className="text-2xl font-bold">كشف حساب: {data.contractor.name}</h1>
-          <p className="text-sm">تاريخ الإصدار: {new Date().toLocaleDateString("ar-SA")}</p>
+          <p className="text-sm">تاريخ الإصدار: {new Date().toLocaleDateString("ar-SA-u-nu-latn")}</p>
           {(from || to) && (
             <p className="text-sm">
               الفترة: {from || "البداية"} - {to || "الآن"}

@@ -499,8 +499,8 @@ export default function NotificationsManagement() {
                           {n.startDate && (
                             <span className="text-xs text-gray-400 flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
-                              {new Date(n.startDate).toLocaleDateString("ar-SA")}
-                              {n.endDate && ` - ${new Date(n.endDate).toLocaleDateString("ar-SA")}`}
+                              {new Date(n.startDate).toLocaleDateString("ar-SA-u-nu-latn")}
+                              {n.endDate && ` - ${new Date(n.endDate).toLocaleDateString("ar-SA-u-nu-latn")}`}
                             </span>
                           )}
                           {n.soundEnabled && <Volume2 className="w-3 h-3 text-gray-400" />}
@@ -1136,7 +1136,7 @@ export default function NotificationsManagement() {
                             <div>
                               <div className="text-sm font-medium text-gray-800">{reader.username}</div>
                               <div className="text-xs text-gray-400">
-                                {new Date(reader.readAt).toLocaleDateString("ar-SA")} - {new Date(reader.readAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}
+                                {new Date(reader.readAt).toLocaleDateString("ar-SA-u-nu-latn")} - {new Date(reader.readAt).toLocaleTimeString("ar-SA-u-nu-latn", { hour: "2-digit", minute: "2-digit" })}
                               </div>
                             </div>
                           </div>

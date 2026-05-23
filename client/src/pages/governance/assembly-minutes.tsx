@@ -422,7 +422,7 @@ export default function AssemblyMinutesPage() {
     const hijriFull = formatHijriFull(meetingDate);
     const gregorianDate = meetingDate.toLocaleDateString('ar-SA-u-ca-gregory', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
     const gregorianShort = meetingDate.toLocaleDateString('en-GB');
-    const dayName = meetingDate.toLocaleDateString('ar-SA', { weekday: 'long' });
+    const dayName = meetingDate.toLocaleDateString('ar-SA-u-nu-latn', { weekday: 'long' });
     const locationText = meeting?.locationType === "virtual" ? "عن بُعد عبر الوسائل الإلكترونية" : meeting?.locationType === "hybrid" ? "حضوري وعن بُعد" : "حضوري";
     const locationDetail = meeting?.location || meeting?.virtualMeetingLink || "";
     const assemblyType = meeting ? getAssemblyTypeLabel(meeting.meetingType) : "";
@@ -599,7 +599,7 @@ export default function AssemblyMinutesPage() {
                 <div style="font-size:11px;font-weight:600;color:#333;margin-bottom:5px;">${sanitize(t.shareholderName)}</div>
                 <div style="font-size:9px;color:#888;margin-bottom:8px;">عدد الأسهم: ${(t.voteWeight || 0).toLocaleString()} | التصويت: ${t.vote === 'for' ? 'موافق' : t.vote === 'against' ? 'معارض' : 'ممتنع'}</div>
                 <img src="${t.signatureData}" alt="توقيع ${sanitize(t.shareholderName)}" style="max-width:180px;max-height:80px;border:1px solid #ddd;border-radius:4px;background:white;padding:4px;" />
-                <div style="font-size:8px;color:#aaa;margin-top:5px;">تم التوقيع: ${t.votedAt ? new Date(t.votedAt).toLocaleDateString('ar-SA-u-ca-gregory') + ' ' + new Date(t.votedAt).toLocaleTimeString('ar-SA') : '-'}</div>
+                <div style="font-size:8px;color:#aaa;margin-top:5px;">تم التوقيع: ${t.votedAt ? new Date(t.votedAt).toLocaleDateString('ar-SA-u-ca-gregory') + ' ' + new Date(t.votedAt).toLocaleTimeString('ar-SA-u-nu-latn') : '-'}</div>
               </div>
             `).join('');
 
@@ -812,7 +812,7 @@ export default function AssemblyMinutesPage() {
 
   const formatDate = (date: string) => {
     try {
-      return new Date(date).toLocaleDateString('ar-SA', {
+      return new Date(date).toLocaleDateString('ar-SA-u-nu-latn', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',

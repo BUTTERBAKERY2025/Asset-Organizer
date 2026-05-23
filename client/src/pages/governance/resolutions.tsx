@@ -664,7 +664,7 @@ export default function ResolutionsPage() {
                                       </div>
                                       <div class="sig-footer">
                                         ${sig.status === 'signed' && sig.signedAt 
-                                          ? `<span class="sig-date">تاريخ التوقيع: ${new Date(sig.signedAt).toLocaleDateString('ar-SA')}</span>`
+                                          ? `<span class="sig-date">تاريخ التوقيع: ${new Date(sig.signedAt).toLocaleDateString('ar-SA-u-nu-latn')}</span>`
                                           : ''
                                         }
                                         <span class="sig-status ${sig.status}">${sig.status === 'signed' ? '✓ موقّع' : sig.status === 'declined' ? '✗ مرفوض' : '⏳ معلّق'}</span>
@@ -1145,7 +1145,7 @@ export default function ResolutionsPage() {
                                         <div class="resolution-number">رقم: ${resolution.resolutionNumber}</div>
                                       </div>
                                       <div class="meta-section">
-                                        <div class="meta-item"><span class="meta-label">التاريخ:</span> <span>${resolution.createdAt ? new Date(resolution.createdAt).toLocaleDateString('ar-SA') : new Date().toLocaleDateString('ar-SA')}</span></div>
+                                        <div class="meta-item"><span class="meta-label">التاريخ:</span> <span>${resolution.createdAt ? new Date(resolution.createdAt).toLocaleDateString('ar-SA-u-nu-latn') : new Date().toLocaleDateString('ar-SA-u-nu-latn')}</span></div>
                                         <div class="meta-item"><span class="meta-label">النوع:</span> <span>${resolutionType}</span></div>
                                         <div class="meta-item"><span class="meta-label">التصنيف:</span> <span>${category}</span></div>
                                         ${priority ? `<div class="meta-item"><span class="meta-label">الأولوية:</span> <span>${priority}</span></div>` : ''}
@@ -1201,7 +1201,7 @@ export default function ResolutionsPage() {
                                     
                                     <div class="footer">
                                       <div class="footer-right">شركة الزبد الأفضل التجارية (شركة مساهمة مقفلة) | سجل تجاري: 7026155296</div>
-                                      <div class="footer-left">تم الطباعة: ${new Date().toLocaleDateString('ar-SA')} | وثيقة رسمية</div>
+                                      <div class="footer-left">تم الطباعة: ${new Date().toLocaleDateString('ar-SA-u-nu-latn')} | وثيقة رسمية</div>
                                     </div>
                                   </div>
                                   <script>
@@ -1614,7 +1614,7 @@ export default function ResolutionsPage() {
                               )}
                             </TableCell>
                             <TableCell className="hidden md:table-cell text-xs sm:text-sm text-gray-600">
-                              {sig.signedAt ? new Date(sig.signedAt).toLocaleDateString('ar-SA') : '-'}
+                              {sig.signedAt ? new Date(sig.signedAt).toLocaleDateString('ar-SA-u-nu-latn') : '-'}
                             </TableCell>
                             <TableCell>
                               {sig.status === "pending" && (

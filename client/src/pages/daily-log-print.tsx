@@ -292,7 +292,7 @@ export default function DailyLogPrintPage() {
                     <td className="border p-2 text-center">{a.unit || "-"}</td>
                     <td className="border p-2 text-end font-mono">
                       {a.totalCost != null && Number(a.totalCost) > 0
-                        ? Number(a.totalCost).toLocaleString("ar-SA")
+                        ? Number(a.totalCost).toLocaleString("ar-SA-u-nu-latn")
                         : "-"}
                     </td>
                   </tr>
@@ -303,7 +303,7 @@ export default function DailyLogPrintPage() {
                       إجمالي تكلفة الأنشطة
                     </td>
                     <td className="border p-2 text-end font-mono">
-                      {activitiesTotal.toLocaleString("ar-SA")}
+                      {activitiesTotal.toLocaleString("ar-SA-u-nu-latn")}
                     </td>
                   </tr>
                 )}
@@ -340,7 +340,7 @@ export default function DailyLogPrintPage() {
                       {e.paymentMethod ? PAYMENT_LABELS[e.paymentMethod] || e.paymentMethod : "-"}
                     </td>
                     <td className="border p-2 text-end font-mono">
-                      {Number(e.amount).toLocaleString("ar-SA")}
+                      {Number(e.amount).toLocaleString("ar-SA-u-nu-latn")}
                     </td>
                   </tr>
                 ))}
@@ -349,7 +349,7 @@ export default function DailyLogPrintPage() {
                     إجمالي مصروفات اليوم
                   </td>
                   <td className="border p-2 text-end font-mono">
-                    {expensesTotal.toLocaleString("ar-SA")}
+                    {expensesTotal.toLocaleString("ar-SA-u-nu-latn")}
                   </td>
                 </tr>
               </tbody>
@@ -523,7 +523,7 @@ export default function DailyLogPrintPage() {
         </div>
 
         <div className="text-center text-xs text-gray-500 mt-6 print:fixed print:bottom-2 print:left-0 print:right-0">
-          تم إنشاء التقرير في {new Date().toLocaleString("ar-SA")}
+          تم إنشاء التقرير في {new Date().toLocaleString("ar-SA-u-nu-latn")}
         </div>
       </div>
     </div>

@@ -453,7 +453,7 @@ export default function JobOffersPage() {
                           <Badge className={statusInfo.color}>{statusInfo.label}</Badge>
                         </TableCell>
                         <TableCell className="text-xs">
-                          {o.expiresAt ? new Date(o.expiresAt).toLocaleDateString("ar-SA") : "-"}
+                          {o.expiresAt ? new Date(o.expiresAt).toLocaleDateString("ar-SA-u-nu-latn") : "-"}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1 flex-wrap">
@@ -830,14 +830,14 @@ function OfferDetails({ offer }: { offer: JobOffer }) {
         <Info label="بدلات أخرى" value={offer.otherAllowances.toLocaleString("en-US")} />
         <Info label="الإجمالي الشهري" value={`${total.toLocaleString("en-US")} ر.س`} />
         <Info label="الحالة" value={STATUS_LABELS[offer.status]?.label || offer.status} />
-        <Info label="الانتهاء" value={offer.expiresAt ? new Date(offer.expiresAt).toLocaleString("ar-SA") : "-"} />
+        <Info label="الانتهاء" value={offer.expiresAt ? new Date(offer.expiresAt).toLocaleString("ar-SA-u-nu-latn") : "-"} />
       </div>
 
       {offer.status === "accepted" && offer.candidateSignature && (
         <div className="border-2 border-green-300 bg-green-50 rounded p-3">
           <p className="text-sm font-semibold text-green-800 mb-2">
             <CheckCircle2 className="w-4 h-4 inline ml-1" />
-            مقبول في {offer.respondedAt ? new Date(offer.respondedAt).toLocaleString("ar-SA") : ""}
+            مقبول في {offer.respondedAt ? new Date(offer.respondedAt).toLocaleString("ar-SA-u-nu-latn") : ""}
           </p>
           <img src={offer.candidateSignature} alt="signature" className="max-h-24 bg-white border rounded" />
         </div>
@@ -847,7 +847,7 @@ function OfferDetails({ offer }: { offer: JobOffer }) {
         <div className="border-2 border-red-300 bg-red-50 rounded p-3">
           <p className="text-sm font-semibold text-red-800">
             <XCircle className="w-4 h-4 inline ml-1" />
-            مرفوض في {offer.respondedAt ? new Date(offer.respondedAt).toLocaleString("ar-SA") : ""}
+            مرفوض في {offer.respondedAt ? new Date(offer.respondedAt).toLocaleString("ar-SA-u-nu-latn") : ""}
           </p>
           {offer.declineReason && <p className="text-sm mt-1">السبب: {offer.declineReason}</p>}
         </div>
@@ -862,9 +862,9 @@ function OfferDetails({ offer }: { offer: JobOffer }) {
 
 const PrintableOffer = React.forwardRef<HTMLDivElement, { offer: JobOffer; total: number }>(
   ({ offer, total }, ref) => {
-    const today = new Date().toLocaleDateString("ar-SA");
-    const sentDate = offer.sentAt ? new Date(offer.sentAt).toLocaleDateString("ar-SA") : today;
-    const respondedDate = offer.respondedAt ? new Date(offer.respondedAt).toLocaleString("ar-SA") : null;
+    const today = new Date().toLocaleDateString("ar-SA-u-nu-latn");
+    const sentDate = offer.sentAt ? new Date(offer.sentAt).toLocaleDateString("ar-SA-u-nu-latn") : today;
+    const respondedDate = offer.respondedAt ? new Date(offer.respondedAt).toLocaleString("ar-SA-u-nu-latn") : null;
     const fmt = (n: number) => n.toLocaleString("en-US");
 
     return (
@@ -1050,7 +1050,7 @@ const PrintableOffer = React.forwardRef<HTMLDivElement, { offer: JobOffer; total
                 <div className="border-t border-slate-300 pt-1 mt-2">
                   <p className="text-[10px] text-slate-600">{offer.candidateName}</p>
                   {offer.acceptedAtSignature && (
-                    <p className="text-[9px] text-slate-500">{new Date(offer.acceptedAtSignature).toLocaleString("ar-SA")}</p>
+                    <p className="text-[9px] text-slate-500">{new Date(offer.acceptedAtSignature).toLocaleString("ar-SA-u-nu-latn")}</p>
                   )}
                 </div>
               </div>

@@ -181,7 +181,7 @@ export default function BackupsPage() {
 
   const handleCreate = () => {
     createMutation.mutate({
-      name: backupName || `نسخة احتياطية - ${new Date().toLocaleDateString('ar-SA')}`,
+      name: backupName || `نسخة احتياطية - ${new Date().toLocaleDateString('ar-SA-u-nu-latn')}`,
       tables: selectedTables,
     });
   };

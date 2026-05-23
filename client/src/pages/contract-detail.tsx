@@ -87,7 +87,7 @@ const TRIGGER_LABELS: Record<string, string> = {
 
 function formatSAR(n?: number | null) {
   if (n == null) return "0 ريال";
-  return new Intl.NumberFormat("ar-SA", { maximumFractionDigits: 2 }).format(n) + " ريال";
+  return new Intl.NumberFormat("ar-SA-u-nu-latn", { maximumFractionDigits: 2 }).format(n) + " ريال";
 }
 
 // ============================================================
@@ -548,7 +548,7 @@ export default function ContractDetailPage() {
                 <div className="col-span-full bg-emerald-100 text-emerald-800 rounded-lg p-2 text-xs flex items-center gap-2" data-testid="badge-retention-released">
                   <CheckCircle2 className="h-4 w-4" />
                   تم الإفراج عن كامل الضمان
-                  {contract.retentionReleasedAt && ` بتاريخ ${new Date(contract.retentionReleasedAt as any).toLocaleDateString('ar-SA')}`}
+                  {contract.retentionReleasedAt && ` بتاريخ ${new Date(contract.retentionReleasedAt as any).toLocaleDateString('ar-SA-u-nu-latn')}`}
                 </div>
               )}
             </CardContent>

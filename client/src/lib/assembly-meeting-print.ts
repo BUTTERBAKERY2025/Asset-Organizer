@@ -129,7 +129,7 @@ const meetingStatusLabel = (s: string) => {
 const fmtDate = (d?: string | null) => {
   if (!d) return "-";
   try {
-    return new Date(d).toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" });
+    return new Date(d).toLocaleDateString("ar-SA-u-nu-latn", { year: "numeric", month: "long", day: "numeric" });
   } catch {
     return "-";
   }
@@ -137,7 +137,7 @@ const fmtDate = (d?: string | null) => {
 const fmtTime = (d?: string | null) => {
   if (!d) return "";
   try {
-    return new Date(d).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" });
+    return new Date(d).toLocaleTimeString("ar-SA-u-nu-latn", { hour: "2-digit", minute: "2-digit" });
   } catch {
     return "";
   }
@@ -198,7 +198,7 @@ export function buildAssemblyMeetingHtml(
           <td style="text-align:center;font-weight:700;">${i + 1}</td>
           <td style="font-weight:600;">${escapeHtml(a.attendeeName)}</td>
           <td style="text-align:center;">${escapeHtml(attendeeTypeLabel(a.attendeeType))}</td>
-          <td style="text-align:center;">${a.representedShares ? Number(a.representedShares).toLocaleString("ar-SA") : "-"}</td>
+          <td style="text-align:center;">${a.representedShares ? Number(a.representedShares).toLocaleString("ar-SA-u-nu-latn") : "-"}</td>
           <td style="text-align:center;color:${st.color};font-weight:700;">${st.label}</td>
           <td style="text-align:center;font-size:8pt;">${escapeHtml(attendanceMethodLabel(a.attendanceMethod))}${a.proxyHolderName ? `<br/><span style="font-size:7pt;color:#666;">وكيل: ${escapeHtml(a.proxyHolderName)}</span>` : ""}</td>
           <td class="sig-cell">
@@ -367,7 +367,7 @@ export function buildAssemblyMeetingHtml(
         <div class="q-stat absent"><div class="q-num">${absentCount}</div><div class="q-label">غائب</div></div>
         <div class="q-stat excused"><div class="q-num">${excusedCount}</div><div class="q-label">عذر</div></div>
         <div class="q-stat proxy"><div class="q-num">${proxyCount}</div><div class="q-label">بالوكالة</div></div>
-        <div class="q-stat shares"><div class="q-num">${totalShares.toLocaleString("ar-SA")}</div><div class="q-label">أسهم حاضرة</div></div>
+        <div class="q-stat shares"><div class="q-num">${totalShares.toLocaleString("ar-SA-u-nu-latn")}</div><div class="q-label">أسهم حاضرة</div></div>
       </div>
       <div class="quorum-badge">
         نسبة الحضور: ${attendancePct}% — ${quorumMet ? `✓ تم تحقق النصاب القانوني (المطلوب ${quorumReq}%)` : `✗ لم يتحقق النصاب القانوني (المطلوب ${quorumReq}%)`}
@@ -421,7 +421,7 @@ export function buildAssemblyMeetingHtml(
 
     <div class="footer">
       <div>${escapeHtml(co.nameAr)} | س.ت: ${escapeHtml(co.cr)}</div>
-      <div>تم الإصدار: ${new Date().toLocaleDateString("ar-SA")} | محضر رسمي</div>
+      <div>تم الإصدار: ${new Date().toLocaleDateString("ar-SA-u-nu-latn")} | محضر رسمي</div>
     </div>
   </div>
 </body>

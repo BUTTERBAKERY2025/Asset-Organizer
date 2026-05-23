@@ -652,7 +652,7 @@ export default function BranchShiftsPage() {
                   onClick={goToToday}
                   data-testid="badge-working-date"
                 >
-                  {new Date(workingDate + "T12:00:00").toLocaleDateString("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Riyadh" })}
+                  {new Date(workingDate + "T12:00:00").toLocaleDateString("ar-SA-u-nu-latn", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Riyadh" })}
                   {!isWorkingDateToday && <span className="mr-1.5 text-[10px] text-amber-600">(اضغط للعودة لليوم)</span>}
                 </Badge>
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goToNextDay} disabled={isWorkingDateToday} data-testid="btn-next-day">

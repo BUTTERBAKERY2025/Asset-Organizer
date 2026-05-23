@@ -447,7 +447,7 @@ export default function ShareholdersPage() {
                     exportData, 
                     exportColumns, 
                     "سجل المساهمين وهيكل الملكية", 
-                    `تقرير رسمي صادر بتاريخ ${new Date().toLocaleDateString("ar-SA")}`,
+                    `تقرير رسمي صادر بتاريخ ${new Date().toLocaleDateString("ar-SA-u-nu-latn")}`,
                     headerInfo,
                     { landscape: true, companyName: "شركة الزبد الأفضل التجارية", showLogo: true }
                   );

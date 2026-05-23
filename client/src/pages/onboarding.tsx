@@ -601,7 +601,7 @@ function ViewDialog({ row, onClose }: { row: Row | null; onClose: () => void }) 
                       {n.withinBranchRadius ? "✓ داخل نطاق الفرع" : "⚠ خارج نطاق الفرع"} ({n.distanceFromBranchM}م)
                     </span>
                   )}
-                  {n.signedAt && <span className="bg-white border rounded px-2 py-1">وقّع: {new Date(n.signedAt).toLocaleString("ar-SA")}</span>}
+                  {n.signedAt && <span className="bg-white border rounded px-2 py-1">وقّع: {new Date(n.signedAt).toLocaleString("ar-SA-u-nu-latn")}</span>}
                 </div>
               </div>
             )}
@@ -668,7 +668,7 @@ function ViewDialog({ row, onClose }: { row: Row | null; onClose: () => void }) 
                         </div>
                       )}
                       {n.signedAt && (
-                        <div><span className="font-semibold">وقت التوقيع:</span> {new Date(n.signedAt).toLocaleString("ar-SA")}</div>
+                        <div><span className="font-semibold">وقت التوقيع:</span> {new Date(n.signedAt).toLocaleString("ar-SA-u-nu-latn")}</div>
                       )}
                     </div>
                   </div>
@@ -684,7 +684,7 @@ function ViewDialog({ row, onClose }: { row: Row | null; onClose: () => void }) 
                     <div className="h-20" />
                   )}
                   <p className="text-[10px] text-center text-slate-500 mt-2">
-                    {n?.signedAt ? new Date(n.signedAt).toLocaleString("ar-SA") : ""}
+                    {n?.signedAt ? new Date(n.signedAt).toLocaleString("ar-SA-u-nu-latn") : ""}
                   </p>
                 </div>
                 <div className="border border-slate-300 rounded p-3 min-h-[120px]">

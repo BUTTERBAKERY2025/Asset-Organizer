@@ -833,8 +833,8 @@ export default function EmploymentApplicationsPage() {
 
 const PrintableApplication = React.forwardRef<HTMLDivElement, { app: EmploymentApplication }>(
   ({ app }, ref) => {
-    const today = new Date().toLocaleDateString("ar-SA");
-    const submittedDate = app.submittedAt ? new Date(app.submittedAt).toLocaleDateString("ar-SA") : "-";
+    const today = new Date().toLocaleDateString("ar-SA-u-nu-latn");
+    const submittedDate = app.submittedAt ? new Date(app.submittedAt).toLocaleDateString("ar-SA-u-nu-latn") : "-";
     const Field = ({ label, value }: { label: string; value: any }) => (
       <div style={{ display: "flex", gap: 6, fontSize: 12, padding: "3px 0", borderBottom: "1px dotted #ddd" }}>
         <span style={{ color: "#666", minWidth: 110 }}>{label}:</span>

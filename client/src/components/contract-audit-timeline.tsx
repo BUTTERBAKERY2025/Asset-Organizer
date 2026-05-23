@@ -45,7 +45,7 @@ const MODULE_LABELS: Record<string, string> = {
 
 function formatDate(iso: string) {
   try {
-    return new Intl.DateTimeFormat("ar-SA", {
+    return new Intl.DateTimeFormat("ar-SA-u-nu-latn", {
       dateStyle: "medium",
       timeStyle: "short",
     }).format(new Date(iso));
@@ -144,7 +144,7 @@ export function ContractAuditTimeline({ contractId }: { contractId: number }) {
                           </span>
                         )}
                         {parsedDetails?.amount != null && (
-                          <span>المبلغ: <strong>{Number(parsedDetails.amount).toLocaleString("ar-SA")} ر.س</strong></span>
+                          <span>المبلغ: <strong>{Number(parsedDetails.amount).toLocaleString("ar-SA-u-nu-latn")} ر.س</strong></span>
                         )}
                         {parsedDetails?.invoiceNumber && (
                           <span>الفاتورة: {parsedDetails.invoiceNumber}</span>

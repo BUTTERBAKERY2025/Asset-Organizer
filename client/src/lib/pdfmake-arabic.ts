@@ -36,7 +36,7 @@ export async function downloadEnhancedPnLPdf(
   filename: string
 ): Promise<void> {
   const totals = enhancedData.totals || {};
-  const today = new Date().toLocaleDateString('ar-SA');
+  const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
   
   const html = `
     <!DOCTYPE html>

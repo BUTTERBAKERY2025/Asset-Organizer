@@ -182,7 +182,7 @@ function DeductionsPopover({
         >
           {totalAmount > 0 ? (
             <Badge className="bg-orange-100 text-orange-800 border-orange-300 hover:bg-orange-200 cursor-pointer text-xs">
-              - {totalAmount.toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س
+              - {totalAmount.toLocaleString("ar-SA-u-nu-latn", { maximumFractionDigits: 2 })} ر.س
             </Badge>
           ) : (
             <span className="text-gray-400 text-xs flex items-center gap-1">
@@ -212,7 +212,7 @@ function DeductionsPopover({
                         {SALARY_DEDUCTION_TYPE_LABELS[d.type] || d.type}
                       </Badge>
                       <span className="font-bold text-orange-900">
-                        {d.amount.toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س
+                        {d.amount.toLocaleString("ar-SA-u-nu-latn", { maximumFractionDigits: 2 })} ر.س
                       </span>
                     </div>
                     {d.description && (
@@ -237,7 +237,7 @@ function DeductionsPopover({
                 </div>
               ))}
               <div className="text-xs font-bold text-orange-900 text-left pt-1 border-t border-orange-200">
-                الإجمالي: - {totalAmount.toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س
+                الإجمالي: - {totalAmount.toLocaleString("ar-SA-u-nu-latn", { maximumFractionDigits: 2 })} ر.س
               </div>
             </div>
           )}

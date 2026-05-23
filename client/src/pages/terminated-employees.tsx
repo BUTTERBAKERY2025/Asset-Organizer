@@ -34,7 +34,7 @@ interface BranchEmployee {
 function formatDate(d?: string | null, isRTL = true) {
   if (!d) return "—";
   try {
-    return new Date(d).toLocaleDateString(isRTL ? "ar-SA" : "en-US");
+    return new Date(d).toLocaleDateString(isRTL ? "ar-SA-u-nu-latn" : "en-US");
   } catch {
     return "—";
   }

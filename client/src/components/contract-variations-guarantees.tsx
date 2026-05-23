@@ -27,7 +27,7 @@ import type { ContractVariation, ContractGuarantee } from "@shared/schema";
 
 function formatSAR(n?: number | null) {
   if (n == null) return "0 ريال";
-  return new Intl.NumberFormat("ar-SA", { maximumFractionDigits: 2 }).format(n) + " ريال";
+  return new Intl.NumberFormat("ar-SA-u-nu-latn", { maximumFractionDigits: 2 }).format(n) + " ريال";
 }
 
 function daysUntil(dateStr?: string | null) {

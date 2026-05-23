@@ -503,7 +503,7 @@ export default function DailyWorkLogPage() {
               {lastAutoSave && !isSubmitted && (
                 <p className="text-xs text-green-600 mt-0.5" data-testid="text-last-autosave">
                   آخر حفظ تلقائي:{" "}
-                  {lastAutoSave.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}
+                  {lastAutoSave.toLocaleTimeString("ar-SA-u-nu-latn", { hour: "2-digit", minute: "2-digit" })}
                 </p>
               )}
             </div>
@@ -975,7 +975,7 @@ export default function DailyWorkLogPage() {
                   <div className="mb-3 flex justify-between items-center bg-muted/50 rounded-lg p-3">
                     <span className="text-sm text-muted-foreground">إجمالي مصروفات اليوم</span>
                     <span className="text-lg font-bold" data-testid="text-expenses-total">
-                      {expensesTotal.toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س
+                      {expensesTotal.toLocaleString("ar-SA-u-nu-latn", { maximumFractionDigits: 2 })} ر.س
                     </span>
                   </div>
                 )}
@@ -1325,7 +1325,7 @@ function ActivityRow({
             {activity.totalCost != null && Number(activity.totalCost) > 0 && (
               <span>
                 التكلفة: <span className="font-semibold text-foreground">
-                  {Number(activity.totalCost).toLocaleString("ar-SA")}
+                  {Number(activity.totalCost).toLocaleString("ar-SA-u-nu-latn")}
                 </span> ر.س
               </span>
             )}
@@ -1643,7 +1643,7 @@ function ActivityDialog({
           {computedTotal > 0 && (
             <div className="bg-muted rounded p-2 text-sm flex justify-between">
               <span className="text-muted-foreground">إجمالي تكلفة النشاط</span>
-              <span className="font-bold">{computedTotal.toLocaleString("ar-SA")} ر.س</span>
+              <span className="font-bold">{computedTotal.toLocaleString("ar-SA-u-nu-latn")} ر.س</span>
             </div>
           )}
 
@@ -1722,7 +1722,7 @@ function ExpenseRow({
           <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
             <span>
               المبلغ: <span className="font-semibold text-foreground">
-                {Number(expense.amount).toLocaleString("ar-SA")}
+                {Number(expense.amount).toLocaleString("ar-SA-u-nu-latn")}
               </span> ر.س
             </span>
             {expense.beneficiaryName && (

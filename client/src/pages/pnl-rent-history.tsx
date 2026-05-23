@@ -27,7 +27,7 @@ type RentEntry = {
 };
 
 const formatCurrency = (n: number) =>
-  new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(n || 0);
+  new Intl.NumberFormat("ar-SA-u-nu-latn", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(n || 0);
 
 export default function PnlRentHistoryPage() {
   const [, navigate] = useLocation();
