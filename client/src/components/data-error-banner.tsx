@@ -116,8 +116,19 @@ export function DataErrorBanner() {
         }, SHOW_DELAY_MS);
       }
     };
-    recompute();
-    const unsubscribe = cache.subscribe(() => recompute());
+    // Defer to microtask so setState never fires during another component's
+    // render (root cause of the React warning "Cannot update a component
+    // (DataErrorBanner) while rendering a different component (PublicOnlyRoute)").
+    // The subscribe callback fires synchronously when any query updates — if that
+    // update happens during render, calling setState immediately is illegal.
+    let pending = false;
+    const scheduleRecompute = () => {
+      if (pending) return;
+      pending = true;
+      queueMicrotask(() => { pending = false; recompute(); });
+    };
+    scheduleRecompute();
+    const unsubscribe = cache.subscribe(scheduleRecompute);
     return () => {
       unsubscribe();
       clearShow();

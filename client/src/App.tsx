@@ -464,7 +464,7 @@ function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey="butter-theme">
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey="butter-theme" disableTransitionOnChange>
           <AuthGate>
             <ProductionProvider>
               <TooltipProvider>
