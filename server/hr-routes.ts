@@ -865,8 +865,18 @@ export function registerHrRoutes(app: Express) {
             ? attDateCond
             : (branchIds.length === 0 ? sql`false` : and(attDateCond, inArray(attendanceRecords.branchId, branchIds))));
 
+      // PERF: per-section timeout (12s) so a single slow query never blocks the
+      // whole bundle. Fallback is returned + logged instead of failing the response.
       const safe = async <T>(p: Promise<T>, fallback: T): Promise<T> => {
-        try { return await p; } catch (e: any) { console.error("[hub-bundle section]", e?.message); return fallback; }
+        try {
+          return await Promise.race([
+            p,
+            new Promise<T>((_, rej) => setTimeout(() => rej(new Error("section_timeout_12s")), 12000)),
+          ]);
+        } catch (e: any) {
+          console.error("[hub-bundle section]", e?.message);
+          return fallback;
+        }
       };
 
       const [

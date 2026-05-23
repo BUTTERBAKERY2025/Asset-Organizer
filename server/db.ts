@@ -31,8 +31,10 @@ export const pool = new Pool({
   ssl: isSupabase ? { rejectUnauthorized: false } : undefined,
   connectionTimeoutMillis: isSupabase ? 15000 : 5000,
   idleTimeoutMillis: isSupabase ? 120000 : 30000,
-  max: isSupabase ? 15 : 25,
-  min: isSupabase ? 3 : 8,
+  // PERF: raised from 15→30 to prevent pool exhaustion when many users hit hub-bundle
+  // (20+ parallel queries per request). Supabase free tier supports 60 concurrent.
+  max: isSupabase ? 30 : 25,
+  min: isSupabase ? 5 : 8,
   statement_timeout: isSupabase ? 45000 : 30000,
   keepAlive: true,
   keepAliveInitialDelayMillis: 5000,
