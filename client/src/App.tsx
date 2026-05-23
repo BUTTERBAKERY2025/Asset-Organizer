@@ -162,6 +162,7 @@ const EmploymentApplicationsPage = makeLazy("employment-applications");
 const EmploymentApplicationPublicPage = makeLazy("employment-application-public");
 const VacancyPublicPage = makeLazy("vacancy-public");
 const FloorPlanPage = makeLazy("floor-plan");
+const HRHubPage = makeLazy("hr-hub");
 
 function AppLoadingFallback() {
   return (
@@ -280,6 +281,7 @@ const Router = React.memo(function Router() {
       <Route path="/hr/applications">{() => <ModulePage component={EmploymentApplicationsPage} module="hr_employment_applications" />}</Route>
       
       {/* HR - الموارد البشرية */}
+      <Route path="/hr-hub">{() => <ModulePage component={HRHubPage} module="hr_management" />}</Route>
       <Route path="/branch-employees">{() => <ModulePage component={BranchEmployeesPage} module="branch_employees" />}</Route>
       <Route path="/terminated-employees">{() => <ModulePage component={TerminatedEmployeesPage} module="branch_employees" />}</Route>
       <Route path="/organizational-structure">{() => <ModulePage component={OrganizationalStructurePage} module="organizational_structure" />}</Route>
