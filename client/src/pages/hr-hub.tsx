@@ -1395,7 +1395,6 @@ export default function HRHubPage() {
     data: aiData,
     isFetching: aiFetching,
     error: aiQueryError,
-    refetch: refetchAI,
   } = useQuery<{ insights: Array<{ id: string; iconName: string; tone: AIInsight["tone"]; title: string; detail: string; action?: { label: string; href: string } }>; model?: string }>({
     queryKey: ["/api/hr/ai-insights", branchFilter, refreshTick],
     enabled: !!aiSnapshot,
@@ -1563,7 +1562,7 @@ export default function HRHubPage() {
           <WhatsAppQuickSend employees={employees} branches={branches} />
           <AIInsightsCard
             insights={effectiveInsights}
-            onRefresh={() => { setRefreshTick((t) => t + 1); refetchAI(); }}
+            onRefresh={() => setRefreshTick((t) => t + 1)}
             isAILoading={aiFetching}
             aiError={aiErrMessage}
             aiPoweredBy={aiPoweredBy}

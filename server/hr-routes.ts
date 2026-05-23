@@ -1303,7 +1303,54 @@ export function registerHrRoutes(app: Express) {
   // يستقبل لقطة (snapshot) من بيانات الـ hub ويُعيد قائمة رؤى بالعربية
   // Blueprint reference: javascript_openai
   // ──────────────────────────────────────────────────────────────────────────
-  app.post("/api/hr/ai-insights", isAuthenticated, async (req, res) => {
+  // Strict snapshot schema — bounds size + shape, prevents token-cost abuse
+  const aiSnapshotSchema = z.object({
+    totals: z.object({
+      totalEmployees: z.number().int().nonnegative().max(100000),
+      activeEmployees: z.number().int().nonnegative().max(100000),
+      inactiveEmployees: z.number().int().nonnegative().max(100000),
+      totalSalaries: z.number().nonnegative().max(1e12),
+      avgSalary: z.number().nonnegative().max(1e9),
+    }),
+    recruitment: z.object({
+      pendingApplications: z.number().int().nonnegative().max(100000),
+      pendingOffers: z.number().int().nonnegative().max(100000),
+    }),
+    documents: z.object({
+      expired: z.number().int().nonnegative().max(100000),
+      expiredIqama: z.number().int().nonnegative().max(100000),
+      expiredHealth: z.number().int().nonnegative().max(100000),
+      expiringSoon: z.number().int().nonnegative().max(100000),
+    }),
+    warnings: z.object({ active: z.number().int().nonnegative().max(100000) }),
+    advances: z.object({ total: z.number().int().nonnegative().max(100000) }),
+    leaves: z.object({ pending: z.number().int().nonnegative().max(100000) }),
+    attendanceToday: z.object({
+      attendanceRate: z.number().min(0).max(100),
+      present: z.number().int().nonnegative().max(100000),
+      absent: z.number().int().nonnegative().max(100000),
+      late: z.number().int().nonnegative().max(100000),
+      total: z.number().int().nonnegative().max(100000),
+    }).nullable(),
+    branches: z.array(z.object({
+      name: z.string().max(100),
+      employees: z.number().int().nonnegative().max(100000),
+    })).max(20),
+    comparisons: z.any().optional().nullable(),
+    branchFilter: z.string().max(100).optional(),
+    generatedAt: z.string().max(40).optional(),
+  });
+
+  // Allowed action hrefs returned by the AI (defense-in-depth against prompt-injected links)
+  const ALLOWED_AI_HREFS = new Set([
+    "/hr/applications", "/hr/job-offers", "/branch-employees", "/attendance-dashboard",
+    "/hr/employee-documents", "/hr/warnings", "/employee-reports", "/organizational-structure",
+    "/hr/leaves", "/hr/advances", "/hr/eos",
+    "/hr/employee-documents?type=iqama&status=expired",
+    "/hr/employee-documents?type=health_certificate&status=expired",
+  ]);
+
+  app.post("/api/hr/ai-insights", isAuthenticated, requirePermission("hr_management"), async (req, res) => {
     try {
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
@@ -1313,10 +1360,21 @@ export function registerHrRoutes(app: Express) {
         });
       }
 
-      const snapshot = req.body?.snapshot;
-      if (!snapshot || typeof snapshot !== "object") {
-        return res.status(400).json({ error: "INVALID_SNAPSHOT", message: "snapshot مطلوب" });
+      // Hard payload limit (≤ 30KB JSON) before Zod, to short-circuit huge bodies
+      const rawBodyLen = JSON.stringify(req.body || {}).length;
+      if (rawBodyLen > 30_000) {
+        return res.status(413).json({ error: "PAYLOAD_TOO_LARGE", message: "حجم البيانات كبير جداً" });
       }
+
+      const parsedSnap = aiSnapshotSchema.safeParse(req.body?.snapshot);
+      if (!parsedSnap.success) {
+        return res.status(400).json({
+          error: "INVALID_SNAPSHOT",
+          message: "snapshot غير صالح",
+          details: parsedSnap.error.issues.slice(0, 3),
+        });
+      }
+      const snapshot = parsedSnap.data;
 
       const OpenAI = (await import("openai")).default;
       // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
@@ -1389,6 +1447,7 @@ export function registerHrRoutes(app: Express) {
           detail: String(x.detail).slice(0, 300),
           action:
             x.action && typeof x.action?.label === "string" && typeof x.action?.href === "string"
+              && ALLOWED_AI_HREFS.has(x.action.href)
               ? { label: x.action.label.slice(0, 60), href: x.action.href }
               : undefined,
         }));
