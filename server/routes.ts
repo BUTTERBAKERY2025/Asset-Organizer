@@ -8480,8 +8480,13 @@ export async function registerRoutes(
         const hasAccess = await canAccessBranch(req, req.body.branchId);
         if (!hasAccess) return res.status(403).json({ error: "غير مصرح بتعديل بيانات هذا الفرع" });
       }
+      // منع ازدواج الحساب: هذه الفئات تُدار حصرياً من جدول المصاريف المتكررة
+      // (pnl_recurring_expenses)، فنُجبر قيمها هنا على صفر بصرف النظر عمّا يُرسله العميل
+      // كي لا يُضاف الرقم مرتين عند جمع enhanced-summary.
       const inputs = await storage.upsertPnlMonthlyInputs({
         ...req.body,
+        subscriptionsCost: 0,
+        insuranceCost: 0,
         createdBy: (req as any).user?.id
       });
       res.json(inputs);
@@ -9017,6 +9022,12 @@ export async function registerRoutes(
       if (!body.branchId || !body.effectiveFrom || body.monthlyAmount == null) {
         return res.status(400).json({ error: "branchId, effectiveFrom, monthlyAmount مطلوبة" });
       }
+      if (Number(body.monthlyAmount) < 0) {
+        return res.status(400).json({ error: "قيمة الإيجار يجب أن تكون صفر أو أكبر" });
+      }
+      if (body.effectiveTo && String(body.effectiveTo) < String(body.effectiveFrom)) {
+        return res.status(400).json({ error: "تاريخ انتهاء الصلاحية يجب أن يكون بعد تاريخ البداية" });
+      }
       // For UPDATE: trust the stored record's branchId and verify the user can
       // access it (prevents IDOR where attacker submits a different branchId
       // for someone else's record). Also verify the *new* branchId in case the
@@ -9095,6 +9106,12 @@ export async function registerRoutes(
       const body = req.body || {};
       if (!body.branchId || !body.name || !body.category || !body.effectiveFrom || body.monthlyAmount == null) {
         return res.status(400).json({ error: "branchId, name, category, effectiveFrom, monthlyAmount مطلوبة" });
+      }
+      if (Number(body.monthlyAmount) < 0) {
+        return res.status(400).json({ error: "المبلغ الشهري يجب أن يكون صفر أو أكبر" });
+      }
+      if (body.effectiveTo && String(body.effectiveTo) < String(body.effectiveFrom)) {
+        return res.status(400).json({ error: "تاريخ انتهاء الصلاحية يجب أن يكون بعد تاريخ البداية" });
       }
       // IDOR guard on UPDATE: validate against stored record's branchId.
       if (body.id) {
@@ -9196,8 +9213,11 @@ export async function registerRoutes(
         return res.status(409).json({ error: "يوجد بيانات بالفعل في الشهر الهدف", existing: true });
       }
       const { id, createdAt, updatedAt, year, month, ...rest } = source as any;
+      // منع ازدواج الحساب عند النسخ: نُصفّر الحقول التي تأتي من المصاريف المتكررة.
       const saved = await storage.upsertPnlMonthlyInputs({
         ...rest,
+        subscriptionsCost: 0,
+        insuranceCost: 0,
         branchId,
         year: toYear,
         month: toMonth,

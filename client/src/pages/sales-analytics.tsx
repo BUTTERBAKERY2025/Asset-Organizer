@@ -483,7 +483,7 @@ export default function SalesAnalytics() {
             unit={<Riyal />}
             icon={TrendingUp}
             tone="violet"
-            subLabel={`عن ${targetsVsActuals.length} يوم في الفترة`}
+            subLabel={`من اليوميات المعتمدة فقط • ${targetsVsActuals.length} يوم`}
             data-testid="text-total-sales"
           />
           <KpiCard

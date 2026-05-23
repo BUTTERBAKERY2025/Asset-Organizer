@@ -10,6 +10,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Info } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useLocation, Link } from "wouter";
@@ -89,6 +91,15 @@ interface OperationsReport {
     journalsByStatus: { status: string; count: number }[];
     paymentMethodBreakdown: { method: string; amount: number; count: number }[];
     dailySales: { date: string; sales: number; transactions: number }[];
+    breakdown?: {
+      approvedJournalsSales: number;
+      approvedJournalsCount: number;
+      posSales: number;
+      posTransactions: number;
+      excludedJournalsCount: number;
+      excludedJournalsAmount: number;
+      excludedByStatus: { status: string; count: number; amount: number }[];
+    };
   };
   productionReport: {
     totalOrders: number;
@@ -209,6 +220,144 @@ function KPICard({
   );
 }
 
+// بطاقة إجمالي المبيعات المُحسَّنة — تعرض الإجمالي الكلي (يوميات معتمدة + POS) مع
+// تفصيل شفاف يوضح: عدد اليوميات المعتمدة، مبيعات POS، واليوميات المستبعدة (مسوّدة/معلّقة/مرفوضة)
+function SalesTotalCard({
+  total,
+  breakdown,
+  formatCurrency,
+}: {
+  total: number;
+  breakdown?: {
+    approvedJournalsSales: number;
+    approvedJournalsCount: number;
+    posSales: number;
+    posTransactions: number;
+    excludedJournalsCount: number;
+    excludedJournalsAmount: number;
+    excludedByStatus: { status: string; count: number; amount: number }[];
+  };
+  formatCurrency: (n: number) => string;
+}) {
+  const statusLabelAr: Record<string, string> = {
+    draft: 'مسوّدة',
+    submitted: 'مرسلة (بانتظار الموافقة)',
+    pending: 'معلّقة',
+    rejected: 'مرفوضة',
+  };
+
+  return (
+    <div
+      className="relative rounded-xl border border-emerald-200 dark:border-emerald-900 bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/30 dark:to-background p-4"
+      data-testid="card-sales-total-detailed"
+    >
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2">
+          <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+          <span className="text-sm font-medium text-muted-foreground">إجمالي المبيعات</span>
+        </div>
+        {breakdown && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-full p-1 transition"
+                data-testid="button-sales-breakdown-info"
+                aria-label="تفاصيل احتساب المبيعات"
+              >
+                <Info className="w-4 h-4" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80" align="end" data-testid="popover-sales-breakdown">
+              <div className="space-y-3">
+                <div className="pb-2 border-b">
+                  <h4 className="font-bold text-sm">طريقة احتساب الإجمالي</h4>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    الرقم الرئيسي = يوميات الكاشير المعتمدة + مبيعات POS
+                  </p>
+                </div>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">يوميات معتمدة ({breakdown.approvedJournalsCount})</span>
+                    <span className="font-bold tabular-nums" dir="ltr">
+                      {formatCurrency(breakdown.approvedJournalsSales)}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">
+                      مبيعات POS / فعاليات ({breakdown.posTransactions})
+                    </span>
+                    <span className="font-bold tabular-nums" dir="ltr">
+                      {formatCurrency(breakdown.posSales)}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-2 border-t font-bold">
+                    <span>الإجمالي</span>
+                    <span className="text-emerald-600 dark:text-emerald-400 tabular-nums" dir="ltr">
+                      {formatCurrency(total)}
+                    </span>
+                  </div>
+                </div>
+
+                {breakdown.excludedJournalsCount > 0 && (
+                  <div className="pt-2 border-t">
+                    <div className="flex items-start gap-1.5">
+                      <span className="text-amber-600 dark:text-amber-400 text-xs">⚠️</span>
+                      <div className="flex-1">
+                        <p className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-1">
+                          {breakdown.excludedJournalsCount} يومية مستبعدة ({formatCurrency(breakdown.excludedJournalsAmount)})
+                        </p>
+                        <ul className="text-xs text-muted-foreground space-y-0.5">
+                          {breakdown.excludedByStatus.map(s => (
+                            <li key={s.status} className="flex justify-between" dir="rtl">
+                              <span>{statusLabelAr[s.status] || s.status}</span>
+                              <span className="tabular-nums" dir="ltr">{s.count} يومية</span>
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="text-[10px] text-muted-foreground mt-1.5">
+                          لا تُحسب في الإجمالي حتى تُعتمد، لتطابق تقارير التحليلات والأرباح.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
+      </div>
+
+      <p
+        className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums leading-tight"
+        dir="ltr"
+        data-testid="text-sales-total-value"
+      >
+        {formatCurrency(total)}
+      </p>
+
+      {breakdown && (
+        <div className="mt-2 pt-2 border-t border-emerald-100 dark:border-emerald-900/50 space-y-0.5">
+          <p className="text-[11px] text-muted-foreground flex justify-between">
+            <span>معتمدة: {breakdown.approvedJournalsCount}</span>
+            {breakdown.posSales > 0 && (
+              <span dir="ltr">+ POS: {formatCurrency(breakdown.posSales)}</span>
+            )}
+          </p>
+          {breakdown.excludedJournalsCount > 0 && (
+            <p className="text-[11px] text-amber-600 dark:text-amber-400">
+              ⚠️ {breakdown.excludedJournalsCount} يومية مستبعدة (غير معتمدة)
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AlertBanner({ alerts }: { alerts: { type: 'warning' | 'danger' | 'info'; message: string; count?: number }[] }) {
   if (!alerts || alerts.length === 0) return null;
   
@@ -244,14 +393,23 @@ function QuickStatsRow({ report, cashierJournals, hasActiveFilters }: { report: 
   const { t } = useTranslation('operations');
   const shortageCount = cashierJournals.filter(j => j.discrepancyStatus === 'shortage').length;
   const pendingApproval = cashierJournals.filter(j => j.status === 'submitted').length;
-  
+
+  // التوحيد: عند تطبيق فلاتر محلية، نحتسب اليوميات المعتمدة فقط (posted/approved)
+  // لضمان توافق هذا الرقم مع البطاقة الرئيسية والتحليلات والـ P&L. ملاحظة: مبيعات
+  // POS غير قابلة للفلترة محلياً لذا تُستثنى من الرقم المفلتر — يُوضَّح هذا بالعنوان.
+  const approvedFiltered = hasActiveFilters
+    ? cashierJournals.filter(j => j.status === 'posted' || j.status === 'approved')
+    : [];
   const filteredTotalSales = hasActiveFilters
-    ? cashierJournals.reduce((sum, j) => sum + (j.totalSales || 0), 0)
+    ? approvedFiltered.reduce((sum, j) => sum + (j.totalSales || 0), 0)
     : report.salesReport.totalSales;
   const filteredTransactions = hasActiveFilters
-    ? cashierJournals.reduce((sum, j) => sum + (j.transactionCount || 0), 0)
+    ? approvedFiltered.reduce((sum, j) => sum + (j.transactionCount || 0), 0)
     : report.salesReport.totalTransactions;
-  
+  const salesLabel = hasActiveFilters
+    ? 'مبيعات اليوميات المعتمدة (مفلترة)'
+    : t('quickStats.totalSales');
+
   const formatCurrency = (amount: number) => new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(amount);
   const formatCompact = (amount: number) => new Intl.NumberFormat("en-SA", { notation: "compact", maximumFractionDigits: 1 }).format(amount);
   const statNumberCls = "font-bold text-base sm:text-lg lg:text-xl xl:text-2xl tabular-nums leading-tight truncate";
@@ -259,11 +417,14 @@ function QuickStatsRow({ report, cashierJournals, hasActiveFilters }: { report: 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl bg-card border border-border">
       <div className="text-center min-w-0">
-        <p className={`${statNumberCls} text-emerald-600 dark:text-emerald-400`} title={formatCurrency(filteredTotalSales)}>
+        <p
+          className={`${statNumberCls} text-emerald-600 dark:text-emerald-400`}
+          title={hasActiveFilters ? `${formatCurrency(filteredTotalSales)} (لا يشمل مبيعات POS عند الفلترة)` : formatCurrency(filteredTotalSales)}
+        >
           <span className="hidden xl:inline">{formatCurrency(filteredTotalSales)}</span>
           <span className="xl:hidden">SAR {formatCompact(filteredTotalSales)}</span>
         </p>
-        <p className="text-xs text-muted-foreground truncate">{t('quickStats.totalSales')}</p>
+        <p className="text-xs text-muted-foreground truncate" title={salesLabel}>{salesLabel}</p>
       </div>
       <div className="text-center min-w-0">
         <p className={`${statNumberCls} text-blue-600 dark:text-blue-400`}>{filteredTransactions.toLocaleString('en-US')}</p>
@@ -2306,7 +2467,11 @@ export default function OperationsReportsDashboardPage() {
 
             <TabsContent value="sales" className="space-y-6">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <KPICard title={t('sales.totalSales')} value={formatCurrency(report.salesReport.totalSales)} icon={DollarSign} color="text-green-600" bgColor="bg-green-100" />
+                <SalesTotalCard
+                  total={report.salesReport.totalSales}
+                  breakdown={report.salesReport.breakdown}
+                  formatCurrency={formatCurrency}
+                />
                 <KPICard title={t('sales.cashSales')} value={formatCurrency(report.salesReport.cashSales)} icon={Wallet} color="text-emerald-600" bgColor="bg-emerald-100" />
                 <KPICard title={t('sales.networkSales')} value={formatCurrency(report.salesReport.networkSales)} icon={CreditCard} color="text-blue-600" bgColor="bg-blue-100" />
                 <KPICard title={t('sales.deliverySales')} value={formatCurrency(report.salesReport.deliverySales)} icon={Truck} color="text-purple-600" bgColor="bg-purple-100" />

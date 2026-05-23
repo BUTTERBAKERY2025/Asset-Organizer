@@ -5566,6 +5566,7 @@ export class DatabaseStorage implements IStorage {
     endDate?: string;
   }): Promise<{
     salesReport: {
+      // الرقم الرئيسي: يوميات الكاشير المعتمدة + مبيعات POS
       totalSales: number;
       cashSales: number;
       networkSales: number;
@@ -5579,6 +5580,16 @@ export class DatabaseStorage implements IStorage {
       journalsByStatus: { status: string; count: number }[];
       paymentMethodBreakdown: { method: string; amount: number; count: number }[];
       dailySales: { date: string; sales: number; transactions: number }[];
+      // تفصيل شفاف لحساب الإجمالي (يضمن توافق الأرقام مع التحليلات والـ P&L)
+      breakdown: {
+        approvedJournalsSales: number;       // المبيعات من يوميات posted/approved فقط (تطابق التحليلات/P&L)
+        approvedJournalsCount: number;       // عدد اليوميات المحتسبة
+        posSales: number;                     // مبيعات نقاط البيع (فعاليات EVENT-BB) منفصلة
+        posTransactions: number;
+        excludedJournalsCount: number;       // عدد اليوميات المستبعدة (مسوّدة/معلّق/مرفوض)
+        excludedJournalsAmount: number;      // مجموع قيمتها (للعرض فقط)
+        excludedByStatus: { status: string; count: number; amount: number }[];
+      };
     };
     productionReport: {
       totalOrders: number;
@@ -5692,42 +5703,68 @@ export class DatabaseStorage implements IStorage {
 
     const completedPosSales = allPosSales.filter(s => s.status === 'completed');
 
-    // POS sales aggregation
+    // POS sales aggregation (مبيعات نقاط البيع / فعاليات — منفصلة عن يوميات الكاشير)
     const posTotalSales = completedPosSales.reduce((sum, s) => sum + (s.totalAmount || 0), 0);
     const posCashSales = completedPosSales.filter(s => s.paymentMethod === 'cash').reduce((sum, s) => sum + (s.totalAmount || 0), 0);
     const posNetworkSales = completedPosSales.filter(s => s.paymentMethod === 'network').reduce((sum, s) => sum + (s.totalAmount || 0), 0);
     const posTotalTransactions = completedPosSales.length;
 
-    // Sales Report calculations - combine journal data + POS data
-    const totalSales = allJournals.reduce((sum, j) => sum + j.totalSales, 0) + posTotalSales;
-    const cashSales = allJournals.reduce((sum, j) => sum + j.cashTotal, 0) + posCashSales;
-    const networkSales = allJournals.reduce((sum, j) => sum + (j.networkTotal || 0), 0) + posNetworkSales;
-    const deliverySales = allJournals.reduce((sum, j) => sum + (j.deliveryTotal || 0), 0);
-    const totalTransactions = allJournals.reduce((sum, j) => sum + (j.transactionCount || 0), 0) + posTotalTransactions;
-    const avgTickets = allJournals.filter(j => j.averageTicket && j.averageTicket > 0);
-    const averageTicket = avgTickets.length > 0 
-      ? avgTickets.reduce((sum, j) => sum + (j.averageTicket || 0), 0) / avgTickets.length 
+    // FIX: توحيد منطق احتساب المبيعات عبر كل التقارير
+    // نقسم اليوميات إلى: معتمدة (posted/approved) — تتطابق مع التحليلات والـ P&L
+    // ومستبعدة (مسوّدة/معلّقة/مرفوضة) — تُعرض كتفصيل شفاف فقط لا تُحسب في الإجمالي.
+    const approvedStatuses = new Set(['posted', 'approved']);
+    const approvedJournals = allJournals.filter(j => approvedStatuses.has(j.status));
+    const excludedJournalsArr = allJournals.filter(j => !approvedStatuses.has(j.status));
+
+    // Sales Report calculations - يوميات معتمدة + POS فقط
+    const approvedJournalsSales = approvedJournals.reduce((sum, j) => sum + j.totalSales, 0);
+    const totalSales = approvedJournalsSales + posTotalSales;
+    const cashSales = approvedJournals.reduce((sum, j) => sum + j.cashTotal, 0) + posCashSales;
+    const networkSales = approvedJournals.reduce((sum, j) => sum + (j.networkTotal || 0), 0) + posNetworkSales;
+    const deliverySales = approvedJournals.reduce((sum, j) => sum + (j.deliveryTotal || 0), 0);
+    const approvedJournalsTransactions = approvedJournals.reduce((sum, j) => sum + (j.transactionCount || 0), 0);
+    const totalTransactions = approvedJournalsTransactions + posTotalTransactions;
+    const avgTickets = approvedJournals.filter(j => j.averageTicket && j.averageTicket > 0);
+    const averageTicket = avgTickets.length > 0
+      ? avgTickets.reduce((sum, j) => sum + (j.averageTicket || 0), 0) / avgTickets.length
       : totalTransactions > 0 ? totalSales / totalTransactions : 0;
-    
-    const shortageJournals = allJournals.filter(j => j.discrepancyStatus === 'shortage');
-    const surplusJournals = allJournals.filter(j => j.discrepancyStatus === 'surplus');
+
+    // الفروقات (عجز/زيادة) محسوبة من اليوميات المعتمدة فقط
+    const shortageJournals = approvedJournals.filter(j => j.discrepancyStatus === 'shortage');
+    const surplusJournals = approvedJournals.filter(j => j.discrepancyStatus === 'surplus');
     const totalShortages = shortageJournals.length;
     const shortageAmount = shortageJournals.reduce((sum, j) => sum + Math.abs(j.discrepancyAmount), 0);
     const totalSurpluses = surplusJournals.length;
     const surplusAmount = surplusJournals.reduce((sum, j) => sum + j.discrepancyAmount, 0);
 
-    // Journals by status
+    // Journals by status — نُبقي العد الكامل لكل الحالات (للوحات التفصيل)
     const statusCounts: Record<string, number> = {};
     allJournals.forEach(j => {
       statusCounts[j.status] = (statusCounts[j.status] || 0) + 1;
     });
+
+    // Excluded journals breakdown (للعرض كـ tooltip في الواجهة)
+    const excludedByStatusMap: Record<string, { count: number; amount: number }> = {};
+    excludedJournalsArr.forEach(j => {
+      if (!excludedByStatusMap[j.status]) {
+        excludedByStatusMap[j.status] = { count: 0, amount: 0 };
+      }
+      excludedByStatusMap[j.status].count += 1;
+      excludedByStatusMap[j.status].amount += (j.totalSales || 0);
+    });
+    const excludedByStatus = Object.entries(excludedByStatusMap)
+      .map(([status, v]) => ({ status, count: v.count, amount: v.amount }))
+      .sort((a, b) => b.count - a.count);
+    const excludedJournalsCount = excludedJournalsArr.length;
+    const excludedJournalsAmount = excludedJournalsArr.reduce((s, j) => s + (j.totalSales || 0), 0);
     if (completedPosSales.length > 0) {
       statusCounts['completed'] = (statusCounts['completed'] || 0) + completedPosSales.length;
     }
     const journalsByStatus = Object.entries(statusCounts).map(([status, count]) => ({ status, count }));
 
     // OPTIMIZED: Payment method breakdown with single JOIN query instead of N+1
-    const journalIds = allJournals.map(j => j.id);
+    // نستخدم اليوميات المعتمدة فقط لضمان توافق المبالغ مع الإجمالي الجديد
+    const journalIds = approvedJournals.map(j => j.id);
     let paymentMethodBreakdown: { method: string; amount: number; count: number }[] = [];
     if (journalIds.length > 0) {
       const paymentAggregates = await db.select({
@@ -5765,9 +5802,9 @@ export class DatabaseStorage implements IStorage {
     }
     paymentMethodBreakdown.sort((a, b) => b.amount - a.amount);
 
-    // Daily sales - combine journal data + POS data
+    // Daily sales - combine approved journals + POS data (متطابق مع منطق الإجمالي)
     const dailySalesMap: Record<string, { sales: number; transactions: number }> = {};
-    allJournals.forEach(j => {
+    approvedJournals.forEach(j => {
       if (!dailySalesMap[j.journalDate]) {
         dailySalesMap[j.journalDate] = { sales: 0, transactions: 0 };
       }
@@ -5953,11 +5990,11 @@ export class DatabaseStorage implements IStorage {
       branchesToCompare = allBranches;
     }
     
-    // Pre-group data by branch for efficient comparison
-    const journalsByBranch = new Map<string, typeof allJournals>();
+    // Pre-group data by branch for efficient comparison (يوميات معتمدة فقط)
+    const journalsByBranch = new Map<string, typeof approvedJournals>();
     const ordersByBranch = new Map<string, typeof allOrders>();
-    
-    allJournals.forEach(j => {
+
+    approvedJournals.forEach(j => {
       if (!journalsByBranch.has(j.branchId)) journalsByBranch.set(j.branchId, []);
       journalsByBranch.get(j.branchId)!.push(j);
     });
@@ -6007,6 +6044,15 @@ export class DatabaseStorage implements IStorage {
         journalsByStatus,
         paymentMethodBreakdown,
         dailySales,
+        breakdown: {
+          approvedJournalsSales,
+          approvedJournalsCount: approvedJournals.length,
+          posSales: posTotalSales,
+          posTransactions: posTotalTransactions,
+          excludedJournalsCount,
+          excludedJournalsAmount,
+          excludedByStatus,
+        },
       },
       productionReport: {
         totalOrders,

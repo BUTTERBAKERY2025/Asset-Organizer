@@ -2897,7 +2897,7 @@ export default function PnLDashboard() {
                     <div className="p-3 rounded-lg bg-white border">
                       <div className="text-xs text-muted-foreground">إجمالي المبيعات (شامل الضريبة)</div>
                       <div className="text-lg font-bold text-blue-600">{formatCurrency(enhancedPnL.totals.grossSales)}</div>
-                      <div className="text-xs text-muted-foreground">({enhancedPnL.totals.journalCount} يومية)</div>
+                      <div className="text-xs text-muted-foreground">({enhancedPnL.totals.journalCount} يومية معتمدة)</div>
                     </div>
                     <div className="p-3 rounded-lg bg-white border">
                       <div className="text-xs text-muted-foreground">ضريبة القيمة المضافة 15%</div>
