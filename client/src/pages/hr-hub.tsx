@@ -86,13 +86,15 @@ type EmployeeStats = {
 
 type BranchEmployee = {
   id: number;
+  employeeName?: string;
+  employeeNameEn?: string;
   fullName?: string;
   fullNameArabic?: string;
   phoneNumber?: string;
   mobile?: string;
   gender?: string | null;
   status?: string;
-  branchId?: number;
+  branchId?: number | string;
   jobTitle?: string;
   nationality?: string;
 };
@@ -308,7 +310,7 @@ function WhatsAppQuickSend({ employees }: { employees: BranchEmployee[] }) {
   const [search, setSearch] = useState("");
 
   const employeesWithPhone = useMemo(
-    () => employees.filter((e) => (e.phoneNumber || e.mobile) && (e.status === "active" || !e.status)),
+    () => employees.filter((e) => (e.phoneNumber || e.mobile) && (e.status === "active" || !e.status || e.status === "on_leave")),
     [employees],
   );
 
@@ -317,7 +319,7 @@ function WhatsAppQuickSend({ employees }: { employees: BranchEmployee[] }) {
     const q = search.trim().toLowerCase();
     return employeesWithPhone
       .filter((e) =>
-        (e.fullName || e.fullNameArabic || "").toLowerCase().includes(q) ||
+        (e.employeeName || e.fullNameArabic || e.fullName || "").toLowerCase().includes(q) ||
         (e.phoneNumber || e.mobile || "").includes(q),
       )
       .slice(0, 50);
@@ -325,7 +327,7 @@ function WhatsAppQuickSend({ employees }: { employees: BranchEmployee[] }) {
 
   const selectedEmployee = employees.find((e) => String(e.id) === employeeId);
   const recipientPhone = selectedEmployee?.phoneNumber || selectedEmployee?.mobile || "";
-  const recipientName = selectedEmployee?.fullNameArabic || selectedEmployee?.fullName || "موظفنا الكريم";
+  const recipientName = selectedEmployee?.employeeName || selectedEmployee?.fullNameArabic || selectedEmployee?.fullName || "موظفنا الكريم";
 
   const sendMutation = useMutation({
     mutationFn: async () => {
@@ -407,7 +409,7 @@ function WhatsAppQuickSend({ employees }: { employees: BranchEmployee[] }) {
               {filteredEmployees.map((e) => (
                 <SelectItem key={e.id} value={String(e.id)}>
                   <span className="flex items-center gap-2">
-                    <span className="truncate">{e.fullNameArabic || e.fullName || `#${e.id}`}</span>
+                    <span className="truncate font-medium">{e.employeeName || e.fullNameArabic || e.fullName || `#${e.id}`}</span>
                     <span className="text-[10px] text-muted-foreground" dir="ltr">
                       {e.phoneNumber || e.mobile}
                     </span>
@@ -590,12 +592,12 @@ export default function HRHubPage() {
   });
 
   const { data: applications = [] } = useQuery<EmploymentApplication[]>({
-    queryKey: ["/api/employment-applications"],
+    queryKey: ["/api/hr/applications"],
     staleTime: 60_000,
   });
 
   const { data: jobOffers = [] } = useQuery<JobOffer[]>({
-    queryKey: ["/api/job-offers"],
+    queryKey: ["/api/hr/job-offers"],
     staleTime: 60_000,
   });
 
