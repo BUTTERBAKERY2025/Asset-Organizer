@@ -1111,7 +1111,7 @@ export default function HRHubPage() {
   // ──────────────────────────────────────────────────────────────────────────
   return (
     <Layout>
-      <div className="p-3 sm:p-5 space-y-4" dir="rtl" data-testid="page-hr-hub">
+      <div className="p-3 sm:p-4 lg:p-5 2xl:p-6 space-y-3 sm:space-y-4 max-w-[1920px] mx-auto" dir="rtl" data-testid="page-hr-hub">
         {/* Header */}
         <PageHeader
           icon={UsersRound}
@@ -1134,39 +1134,40 @@ export default function HRHubPage() {
           }
         />
 
-        {/* Filter Row */}
-        <div className="flex flex-wrap items-center gap-2 bg-white dark:bg-card border border-gray-100 dark:border-border rounded-xl p-2.5">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Filter className="w-3.5 h-3.5" />
-            تصفية:
+        {/* Filter Row — responsive: stacks on mobile, inline on tablet+ */}
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-3 bg-white dark:bg-card border border-gray-100 dark:border-border rounded-xl p-2.5 sm:p-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+              <Filter className="w-3.5 h-3.5" />
+              تصفية:
+            </div>
+            <Select value={branchFilter} onValueChange={setBranchFilter}>
+              <SelectTrigger className="h-8 w-full sm:w-[180px] min-w-[140px] text-sm" data-testid="select-branch-filter">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">جميع الفروع</SelectItem>
+                {branches.map((b) => (
+                  <SelectItem key={b.id} value={String(b.id)}>
+                    {b.nameAr || b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <Select value={branchFilter} onValueChange={setBranchFilter}>
-            <SelectTrigger className="h-8 w-[180px] text-sm" data-testid="select-branch-filter">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">جميع الفروع</SelectItem>
-              {branches.map((b) => (
-                <SelectItem key={b.id} value={String(b.id)}>
-                  {b.nameAr || b.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="ms-auto flex items-center gap-2 text-xs">
-            <span className="text-muted-foreground">إجمالي:</span>
-            <span className="font-bold text-gray-900 dark:text-foreground tabular-nums" dir="ltr">{fmt(totalEmployees)}</span>
-            <span className="text-gray-400">|</span>
+          <div className="sm:ms-auto flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs border-t sm:border-t-0 border-gray-100 dark:border-border pt-2 sm:pt-0">
+            <span className="inline-flex items-center gap-1">
+              <span className="text-muted-foreground">إجمالي:</span>
+              <span className="font-bold text-gray-900 dark:text-foreground tabular-nums" dir="ltr">{fmt(totalEmployees)}</span>
+            </span>
             <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
-              <UserCheck className="w-3 h-3" /> نشطون: <span className="font-bold tabular-nums" dir="ltr">{fmt(activeEmployees)}</span>
+              <UserCheck className="w-3 h-3" aria-hidden="true" /> <span className="sr-only sm:not-sr-only">نشطون:</span><span className="font-bold tabular-nums" dir="ltr" aria-label={`عدد النشطين ${fmt(activeEmployees)}`}>{fmt(activeEmployees)}</span>
             </span>
-            <span className="text-gray-400">|</span>
             <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400">
-              <CalendarDays className="w-3 h-3" /> في إجازة: <span className="font-bold tabular-nums" dir="ltr">{fmt(onLeaveCount)}</span>
+              <CalendarDays className="w-3 h-3" aria-hidden="true" /> <span className="sr-only sm:not-sr-only">في إجازة:</span><span className="font-bold tabular-nums" dir="ltr" aria-label={`في إجازة ${fmt(onLeaveCount)}`}>{fmt(onLeaveCount)}</span>
             </span>
-            <span className="text-gray-400">|</span>
             <span className="inline-flex items-center gap-1 text-indigo-700 dark:text-indigo-400">
-              <UsersRound className="w-3 h-3" /> جنسيات: <span className="font-bold tabular-nums" dir="ltr">{fmt(nationalitiesCount)}</span>
+              <UsersRound className="w-3 h-3" aria-hidden="true" /> <span className="sr-only sm:not-sr-only">جنسيات:</span><span className="font-bold tabular-nums" dir="ltr" aria-label={`عدد الجنسيات ${fmt(nationalitiesCount)}`}>{fmt(nationalitiesCount)}</span>
             </span>
           </div>
         </div>
@@ -1178,8 +1179,8 @@ export default function HRHubPage() {
           </div>
         )}
 
-        {/* Dense KPI Grid (ExactFlow style) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5">
+        {/* Dense KPI Grid — 2 cols mobile → 3 sm → 4 md → 5 lg → 6 xl → 7 2xl */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2 sm:gap-2.5">
           <StatTile testId="tile-active"          value={activeEmployees}        label="الموظفون النشطون"        icon={UserCheck}      tone="teal"     href="/branch-employees" />
           <StatTile testId="tile-inactive"        value={inactiveEmployees}      label="غير نشطين / موقوفون"     icon={UserX}          tone="slate"    href="/terminated-employees" />
           <StatTile testId="tile-salaries"        value={fmtMoney(stats?.totalSalaries || 0)} suffix="ر.س" label="فاتورة الرواتب الشهرية" icon={Wallet}         tone="emerald"  href="/employee-reports" />
@@ -1196,8 +1197,8 @@ export default function HRHubPage() {
           <StatTile testId="tile-branches"        value={branches.length}        label="عدد الفروع النشطة"      icon={Building}       tone="teal"     href="/branches" />
         </div>
 
-        {/* Row 1: 3 donut charts (full width) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
+        {/* Row 1: 3 donut charts — 1 col mobile, 2 cols tablet, 3 cols laptop+ */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
           <DonutCard
             testId="chart-branches"
             title="التوزيع حسب الفرع"
@@ -1221,8 +1222,8 @@ export default function HRHubPage() {
           />
         </div>
 
-        {/* Row 2: 3 action widgets — equal width, aligned tops */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
+        {/* Row 2: 3 action widgets — 1 col mobile, 2 cols tablet, 3 cols laptop+ */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
           <SalaryClosingCard data={salaryClosing} />
           <WhatsAppQuickSend employees={employees} branches={branches} />
           <AIInsightsCard insights={insights} onRefresh={() => setRefreshTick((t) => t + 1)} />
@@ -1237,7 +1238,7 @@ export default function HRHubPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-6 xl:grid-cols-12 gap-2">
               {[
                 { href: "/branch-employees",       label: "موظفو الفروع",         icon: Users,          tone: "teal" as TileTone },
                 { href: "/attendance-dashboard",   label: "الحضور والورديات",     icon: Clock,          tone: "blue" as TileTone },
@@ -1258,13 +1259,13 @@ export default function HRHubPage() {
                   <button
                     key={item.href}
                     onClick={() => navigate(item.href)}
-                    className="group flex flex-col items-center gap-1.5 p-3 rounded-xl border border-gray-100 dark:border-border hover:border-gray-200 hover:shadow-sm hover:-translate-y-0.5 transition-all bg-white dark:bg-card"
+                    className="group flex flex-col items-center gap-1.5 p-2 sm:p-2.5 lg:p-3 rounded-xl border border-gray-100 dark:border-border hover:border-gray-200 hover:shadow-sm hover:-translate-y-0.5 transition-all bg-white dark:bg-card min-h-[80px] justify-center"
                     data-testid={`quick-${item.href.replace(/[\/:]/g, "-")}`}
                   >
-                    <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center ring-1", t.iconBg, t.iconColor, t.ring)}>
-                      <Icon className="w-5 h-5" />
+                    <div className={cn("w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center ring-1 shrink-0", t.iconBg, t.iconColor, t.ring)}>
+                      <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
-                    <span className="text-[11px] text-gray-700 dark:text-foreground/90 text-center leading-tight group-hover:text-primary transition-colors">
+                    <span className="text-[10px] sm:text-[11px] text-gray-700 dark:text-foreground/90 text-center leading-tight group-hover:text-primary transition-colors line-clamp-2">
                       {item.label}
                     </span>
                   </button>
