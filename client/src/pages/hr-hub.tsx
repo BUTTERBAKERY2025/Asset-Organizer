@@ -1196,39 +1196,36 @@ export default function HRHubPage() {
           <StatTile testId="tile-branches"        value={branches.length}        label="عدد الفروع النشطة"      icon={Building}       tone="teal"     href="/branches" />
         </div>
 
-        {/* Two-column area: charts + side widgets */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-          {/* Left: 3 donut charts (2/3 width) */}
-          <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-3 auto-rows-min items-start">
-            <DonutCard
-              testId="chart-branches"
-              title="التوزيع حسب الفرع"
-              icon={Building}
-              data={branchData}
-              emptyText="لا توجد بيانات فروع"
-            />
-            <DonutCard
-              testId="chart-jobs"
-              title="التوزيع حسب المسمى الوظيفي"
-              icon={Briefcase}
-              data={jobTitleData}
-              emptyText="لا توجد مسميات"
-            />
-            <DonutCard
-              testId="chart-nationalities"
-              title="التوزيع حسب الجنسية"
-              icon={UsersRound}
-              data={nationalityData}
-              emptyText="لا توجد بيانات"
-            />
-          </div>
+        {/* Row 1: 3 donut charts (full width) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
+          <DonutCard
+            testId="chart-branches"
+            title="التوزيع حسب الفرع"
+            icon={Building}
+            data={branchData}
+            emptyText="لا توجد بيانات فروع"
+          />
+          <DonutCard
+            testId="chart-jobs"
+            title="التوزيع حسب المسمى الوظيفي"
+            icon={Briefcase}
+            data={jobTitleData}
+            emptyText="لا توجد مسميات"
+          />
+          <DonutCard
+            testId="chart-nationalities"
+            title="التوزيع حسب الجنسية"
+            icon={UsersRound}
+            data={nationalityData}
+            emptyText="لا توجد بيانات"
+          />
+        </div>
 
-          {/* Right: Salary Closing + WhatsApp + AI widgets */}
-          <div className="space-y-3">
-            <SalaryClosingCard data={salaryClosing} />
-            <WhatsAppQuickSend employees={employees} branches={branches} />
-            <AIInsightsCard insights={insights} onRefresh={() => setRefreshTick((t) => t + 1)} />
-          </div>
+        {/* Row 2: 3 action widgets — equal width, aligned tops */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
+          <SalaryClosingCard data={salaryClosing} />
+          <WhatsAppQuickSend employees={employees} branches={branches} />
+          <AIInsightsCard insights={insights} onRefresh={() => setRefreshTick((t) => t + 1)} />
         </div>
 
         {/* Quick Access Grid (compact) */}
