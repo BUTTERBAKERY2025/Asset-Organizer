@@ -250,7 +250,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         label: t("sidebar.hr"),
         icon: UsersRound,
         items: [
-          { href: "/hr-hub", label: "مركز الموارد البشرية", icon: Sparkles, module: "hr_management", isHeader: true },
+          { href: "/hr-hub", label: "مركز الموارد البشرية", icon: Sparkles, module: "branch_employees", isHeader: true },
           { href: "/branch-employees", label: t("sidebar.branchEmployees"), icon: Users, module: "branch_employees", indent: true },
           { href: "/terminated-employees", label: "الموظفون المستقيلون", icon: Users, module: "branch_employees", indent: true },
           { href: "/operations-employees", label: t("sidebar.operationsEmployees"), icon: Users, module: "operations", indent: true, adminOnly: true },

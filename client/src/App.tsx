@@ -281,7 +281,7 @@ const Router = React.memo(function Router() {
       <Route path="/hr/applications">{() => <ModulePage component={EmploymentApplicationsPage} module="hr_employment_applications" />}</Route>
       
       {/* HR - الموارد البشرية */}
-      <Route path="/hr-hub">{() => <ModulePage component={HRHubPage} module="hr_management" />}</Route>
+      <Route path="/hr-hub">{() => <ModulePage component={HRHubPage} module="branch_employees" />}</Route>
       <Route path="/branch-employees">{() => <ModulePage component={BranchEmployeesPage} module="branch_employees" />}</Route>
       <Route path="/terminated-employees">{() => <ModulePage component={TerminatedEmployeesPage} module="branch_employees" />}</Route>
       <Route path="/organizational-structure">{() => <ModulePage component={OrganizationalStructurePage} module="organizational_structure" />}</Route>
