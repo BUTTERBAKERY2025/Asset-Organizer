@@ -2086,53 +2086,45 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getHistoricalCategoryAverages(): Promise<{ categoryId: number; categoryName: string; avgCost: number; projectCount: number; totalCost: number }[]> {
-    const categories = await db.select().from(constructionCategories);
-    const workItems = await db.select().from(projectWorkItems);
-    
-    const categoryStats: Record<number, { totalCost: number; projectIds: Set<number>; itemCount: number }> = {};
-    
-    for (const item of workItems) {
-      if (!item.categoryId) continue;
-      
-      const cost = item.actualCost !== null && item.actualCost > 0 
-        ? item.actualCost 
-        : (item.costEstimate !== null && item.costEstimate > 0 ? item.costEstimate : 0);
-      
-      if (cost <= 0) continue;
-      
-      if (!categoryStats[item.categoryId]) {
-        categoryStats[item.categoryId] = { totalCost: 0, projectIds: new Set(), itemCount: 0 };
-      }
-      
-      categoryStats[item.categoryId].totalCost += cost;
-      categoryStats[item.categoryId].projectIds.add(item.projectId);
-      categoryStats[item.categoryId].itemCount++;
+    // PERF: aggregate in SQL (single grouped query) instead of pulling every
+    // projectWorkItems row into Node and reducing in JS. The previous version
+    // loaded the entire work-items table on every dashboard render.
+    const [categories, aggRows] = await Promise.all([
+      db.select().from(constructionCategories),
+      db.select({
+        categoryId: projectWorkItems.categoryId,
+        totalCost: sql<number>`coalesce(sum(case when ${projectWorkItems.actualCost} > 0 then ${projectWorkItems.actualCost} when ${projectWorkItems.costEstimate} > 0 then ${projectWorkItems.costEstimate} else 0 end), 0)::numeric`,
+        projectCount: sql<number>`count(distinct ${projectWorkItems.projectId}) filter (where ${projectWorkItems.actualCost} > 0 or ${projectWorkItems.costEstimate} > 0)::int`,
+        itemCount: sql<number>`count(*) filter (where ${projectWorkItems.actualCost} > 0 or ${projectWorkItems.costEstimate} > 0)::int`,
+      })
+        .from(projectWorkItems)
+        .where(sql`${projectWorkItems.categoryId} is not null`)
+        .groupBy(projectWorkItems.categoryId),
+    ]);
+
+    const statsByCat = new Map<number, { totalCost: number; projectCount: number; itemCount: number }>();
+    for (const r of aggRows) {
+      if (r.categoryId == null) continue;
+      statsByCat.set(r.categoryId, {
+        totalCost: Number(r.totalCost) || 0,
+        projectCount: Number(r.projectCount) || 0,
+        itemCount: Number(r.itemCount) || 0,
+      });
     }
-    
-    const result: { categoryId: number; categoryName: string; avgCost: number; projectCount: number; totalCost: number }[] = [];
-    
-    for (const category of categories) {
-      const stats = categoryStats[category.id];
-      if (stats && stats.itemCount > 0) {
-        result.push({
+
+    return categories.map(category => {
+      const stats = statsByCat.get(category.id);
+      if (stats && stats.itemCount > 0 && stats.projectCount > 0) {
+        return {
           categoryId: category.id,
           categoryName: category.name,
-          avgCost: stats.totalCost / stats.projectIds.size,
-          projectCount: stats.projectIds.size,
-          totalCost: stats.totalCost
-        });
-      } else {
-        result.push({
-          categoryId: category.id,
-          categoryName: category.name,
-          avgCost: 0,
-          projectCount: 0,
-          totalCost: 0
-        });
+          avgCost: stats.totalCost / stats.projectCount,
+          projectCount: stats.projectCount,
+          totalCost: stats.totalCost,
+        };
       }
-    }
-    
-    return result;
+      return { categoryId: category.id, categoryName: category.name, avgCost: 0, projectCount: 0, totalCost: 0 };
+    });
   }
 
   // Construction Contracts
@@ -6461,19 +6453,37 @@ export class DatabaseStorage implements IStorage {
       return { targetAmount: 0, achievedAmount: 0, achievementPercent: 0, dailyPerformance: [] };
     }
 
-    const dailyAllocations = await this.getTargetDailyAllocationsByMonth(target.id);
-    const journals = await this.getCashierJournalsByBranch(branchId);
-    
     const startDate = `${yearMonth}-01`;
     const endDate = `${yearMonth}-31`;
-    const monthJournals = journals.filter((j: CashierSalesJournal) => 
-      j.journalDate >= startDate && j.journalDate <= endDate && (j.status === 'approved' || j.status === 'posted')
-    );
+
+    // PERF: pull only the relevant rows aggregated per date — instead of loading
+    // every journal the branch has ever produced (could be tens of thousands of
+    // rows for active branches) and filtering in JS.
+    const [dailyAllocations, dailyRows] = await Promise.all([
+      this.getTargetDailyAllocationsByMonth(target.id),
+      db.select({
+        date: cashierSalesJournals.journalDate,
+        total: sql<number>`coalesce(sum(${cashierSalesJournals.totalSales}), 0)::numeric`,
+      }).from(cashierSalesJournals)
+        .where(and(
+          eq(cashierSalesJournals.branchId, branchId),
+          gte(cashierSalesJournals.journalDate, startDate),
+          lte(cashierSalesJournals.journalDate, endDate),
+          or(
+            eq(cashierSalesJournals.status, 'approved'),
+            eq(cashierSalesJournals.status, 'posted')
+          )
+        ))
+        .groupBy(cashierSalesJournals.journalDate),
+    ]);
 
     const dailySalesMap: Record<string, number> = {};
-    monthJournals.forEach((j: CashierSalesJournal) => {
-      dailySalesMap[j.journalDate] = (dailySalesMap[j.journalDate] || 0) + j.totalSales;
-    });
+    let achievedAmountSql = 0;
+    for (const row of dailyRows) {
+      const v = Number(row.total) || 0;
+      dailySalesMap[row.date] = v;
+      achievedAmountSql += v;
+    }
 
     const dailyPerformance = dailyAllocations.map(alloc => {
       const achieved = dailySalesMap[alloc.targetDate] || 0;
@@ -6486,7 +6496,7 @@ export class DatabaseStorage implements IStorage {
       };
     });
 
-    const achievedAmount = monthJournals.reduce((sum: number, j: CashierSalesJournal) => sum + j.totalSales, 0);
+    const achievedAmount = achievedAmountSql;
     const achievementPercent = target.targetAmount > 0 ? (achievedAmount / target.targetAmount) * 100 : 0;
 
     return {
