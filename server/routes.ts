@@ -5683,6 +5683,118 @@ export async function registerRoutes(
     }
   });
 
+  // Bulk WhatsApp/SMS send — queues + dispatches messages in parallel with per-recipient status
+  app.post("/api/notifications/send-bulk", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const { recipients, message, channel, relatedModule, relatedEntityId, personalize } = req.body || {};
+      if (!Array.isArray(recipients) || recipients.length === 0) {
+        return res.status(400).json({ error: "قائمة المستلمين فارغة" });
+      }
+      if (!message || typeof message !== "string" || !message.trim()) {
+        return res.status(400).json({ error: "نص الرسالة مطلوب" });
+      }
+      if (!["sms", "whatsapp"].includes(channel)) {
+        return res.status(400).json({ error: "قناة الإرسال يجب أن تكون sms أو whatsapp" });
+      }
+      if (recipients.length > 200) {
+        return res.status(400).json({ error: "لا يمكن الإرسال لأكثر من 200 مستلم في عملية واحدة" });
+      }
+
+      // SECURITY: validate every phone belongs to an employee in the user's accessible branches
+      const { getEffectiveBranchFilter } = await import("./auth");
+      const filter = await getEffectiveBranchFilter(req);
+      if (!filter.hasAccess) {
+        return res.status(403).json({ error: "ليس لديك صلاحية الإرسال" });
+      }
+      const normalize = (p: string) => String(p || "").replace(/[\s\-()]/g, "").trim();
+      const requestedPhones = recipients.map((r: any) => normalize(r?.phone)).filter(Boolean);
+      const dedupedRequested = Array.from(new Set(requestedPhones));
+      // Fetch allowed employee phones (branchEmployees) for the user's scope
+      const { branchEmployees } = await import("@shared/schema");
+      const { db } = await import("./db");
+      const { inArray, sql } = await import("drizzle-orm");
+      let allowedRows: any[] = [];
+      if (filter.branchIds === null) {
+        allowedRows = await db.select({ phone: branchEmployees.phoneNumber, mobile: branchEmployees.mobile }).from(branchEmployees);
+      } else if (filter.branchIds.length > 0) {
+        allowedRows = await db.select({ phone: branchEmployees.phoneNumber, mobile: branchEmployees.mobile })
+          .from(branchEmployees).where(inArray(branchEmployees.branchId, filter.branchIds));
+      }
+      const allowedSet = new Set<string>();
+      allowedRows.forEach((r: any) => {
+        if (r.phone) allowedSet.add(normalize(r.phone));
+        if (r.mobile) allowedSet.add(normalize(r.mobile));
+      });
+      const rejected = dedupedRequested.filter((p) => !allowedSet.has(p));
+      if (rejected.length > 0) {
+        return res.status(403).json({
+          error: `${rejected.length} رقم(أرقام) خارج نطاق صلاحياتك`,
+          rejectedCount: rejected.length,
+        });
+      }
+
+      const { sendSMS, sendWhatsAppMessage, isTwilioConfigured } = await import("./twilio-service");
+      const twilioReady = isTwilioConfigured();
+
+      const results: Array<{ recipientPhone: string; recipientName?: string; status: "sent" | "failed"; errorMessage?: string }> = [];
+
+      // Deduplicate recipients by normalized phone to avoid duplicate sends
+      const seen = new Set<string>();
+      const uniqueRecipients = recipients.filter((r: any) => {
+        const p = normalize(r?.phone);
+        if (!p || seen.has(p)) return false;
+        seen.add(p);
+        return true;
+      });
+
+      const tasks = uniqueRecipients.map(async (r: any) => {
+        const phone = String(r?.phone || "").trim();
+        const name = r?.name ? String(r.name) : undefined;
+        if (!phone) {
+          results.push({ recipientPhone: "", recipientName: name, status: "failed", errorMessage: "رقم الهاتف مفقود" });
+          return;
+        }
+        const personalMessage = personalize && name ? message.replace(/\{name\}/g, name) : message;
+        const notif = await storage.createNotification({
+          recipientPhone: phone,
+          recipientName: name,
+          channel,
+          message: personalMessage,
+          status: "pending",
+          relatedModule,
+          relatedEntityId,
+        });
+        if (!twilioReady) {
+          await storage.updateNotificationStatus(notif.id, "failed", "Twilio غير مكوّن");
+          results.push({ recipientPhone: phone, recipientName: name, status: "failed", errorMessage: "Twilio غير مكوّن" });
+          return;
+        }
+        try {
+          const send = channel === "whatsapp" ? sendWhatsAppMessage : sendSMS;
+          const r2 = await send(phone, personalMessage);
+          if (r2.success) {
+            await storage.updateNotificationStatus(notif.id, "sent");
+            results.push({ recipientPhone: phone, recipientName: name, status: "sent" });
+          } else {
+            await storage.updateNotificationStatus(notif.id, "failed", r2.error || "فشل في الإرسال");
+            results.push({ recipientPhone: phone, recipientName: name, status: "failed", errorMessage: r2.error });
+          }
+        } catch (e: any) {
+          await storage.updateNotificationStatus(notif.id, "failed", e?.message || "خطأ في الإرسال");
+          results.push({ recipientPhone: phone, recipientName: name, status: "failed", errorMessage: e?.message });
+        }
+      });
+
+      await Promise.all(tasks);
+      const sent = results.filter((r) => r.status === "sent").length;
+      const failed = results.length - sent;
+      res.status(201).json({ total: results.length, sent, failed, results });
+    } catch (error: any) {
+      console.error("Error in bulk notifications send:", error);
+      res.status(500).json({ error: error?.message || "فشل في الإرسال الجماعي" });
+    }
+  });
+
   // Twilio Status - GET endpoint for checking connection status
   app.get("/api/integrations/twilio/status", isAuthenticated, async (req, res) => {
     try {

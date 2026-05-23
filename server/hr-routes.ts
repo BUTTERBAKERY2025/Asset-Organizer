@@ -15,6 +15,7 @@ import {
   employmentApplications,
   onboardingNotifications,
   attendanceRecords,
+  financialPeriods,
   insertEmployeeDocumentSchema,
   insertLeaveRequestSchema,
   insertEmployeeWarningSchema,
@@ -961,6 +962,52 @@ export function registerHrRoutes(app: Express) {
         pending: eosRows.filter((e: any) => e.status === "pending").length,
       };
 
+      // Monthly Salary Closing — current month status across scoped branches
+      const now = new Date();
+      const curMonth = now.getMonth() + 1;
+      const curYear = now.getFullYear();
+      const periodMonthCond = and(eq(financialPeriods.month, curMonth), eq(financialPeriods.year, curYear));
+      const periodCond = branchIds === null
+        ? periodMonthCond
+        : (branchIds.length === 0 ? sql`false` : and(periodMonthCond, inArray(financialPeriods.branchId, branchIds)));
+      const periods = await safe(
+        db.select({
+          id: financialPeriods.id,
+          branchId: financialPeriods.branchId,
+          status: financialPeriods.status,
+          updatedAt: financialPeriods.updatedAt,
+        }).from(financialPeriods).where(periodCond),
+        [] as any[],
+      );
+      const totalScopedBranches = branchIds === null ? branchesList.length : branchIds.length;
+      const openCount = periods.filter((p: any) => p.status === "draft" || p.status === "open").length;
+      const closedCount = periods.filter((p: any) => p.status === "closed").length;
+      const lockedCount = periods.filter((p: any) => p.status === "locked").length;
+      const notStartedCount = Math.max(0, totalScopedBranches - periods.length);
+      const lastUpdated = periods.reduce((acc: Date | null, p: any) => {
+        const t = p.updatedAt ? new Date(p.updatedAt) : null;
+        return !acc || (t && t > acc) ? t : acc;
+      }, null as Date | null);
+      // Monthly salary bill = sum from employees (basic + allowances)
+      const totalMonthlySalaries = employees.reduce((s: number, e: any) =>
+        s + (Number(e.basicSalary) || 0) + (Number(e.housingAllowance) || 0)
+          + (Number(e.transportAllowance) || 0) + (Number(e.otherAllowances) || 0), 0);
+      const salaryClosing = {
+        month: curMonth,
+        year: curYear,
+        totalBranches: totalScopedBranches,
+        openCount,
+        closedCount,
+        lockedCount,
+        notStartedCount,
+        lastUpdated: lastUpdated ? lastUpdated.toISOString() : null,
+        totalMonthlySalaries,
+        employeesCount: employees.filter((e: any) => (e.status || "active") === "active").length,
+        progressPercent: totalScopedBranches > 0
+          ? Math.round(((closedCount + lockedCount) / totalScopedBranches) * 100)
+          : 0,
+      };
+
       // Branches list — minimal payload
       const branchesList2 = branchesList.map((b: any) => ({ id: b.id, name: b.name, nameAr: b.nameAr || null }));
 
@@ -1000,6 +1047,7 @@ export function registerHrRoutes(app: Express) {
         onboardingStats,
         attendanceToday,
         eosStats,
+        salaryClosing,
       });
     } catch (e: any) {
       console.error("[hr/hub-bundle] error:", e);

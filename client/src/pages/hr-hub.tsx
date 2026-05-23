@@ -61,6 +61,10 @@ import {
   Lightbulb,
   RefreshCw,
   Filter,
+  Lock,
+  Unlock,
+  CircleDot,
+  CalendarClock,
 } from "lucide-react";
 
 // ============================================================================
@@ -299,13 +303,19 @@ const MESSAGE_TEMPLATES: { id: string; label: string; body: (name: string) => st
   },
 ];
 
-function WhatsAppQuickSend({ employees }: { employees: BranchEmployee[] }) {
+function WhatsAppQuickSend({ employees, branches }: { employees: BranchEmployee[]; branches: Branch[] }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [mode, setMode] = useState<"single" | "bulk">("single");
   const [employeeId, setEmployeeId] = useState<string>("");
   const [templateId, setTemplateId] = useState<string>("custom");
   const [message, setMessage] = useState<string>("");
   const [search, setSearch] = useState("");
+  // bulk state
+  const [bulkAudience, setBulkAudience] = useState<"all_active" | "by_branch" | "by_nationality">("all_active");
+  const [bulkBranch, setBulkBranch] = useState<string>("");
+  const [bulkNationality, setBulkNationality] = useState<string>("");
+  const [bulkPersonalize, setBulkPersonalize] = useState(true);
 
   const employeesWithPhone = useMemo(
     () => employees.filter((e) => (e.phoneNumber || e.mobile) && (e.status === "active" || !e.status || e.status === "on_leave")),
@@ -326,6 +336,35 @@ function WhatsAppQuickSend({ employees }: { employees: BranchEmployee[] }) {
   const selectedEmployee = employees.find((e) => String(e.id) === employeeId);
   const recipientPhone = selectedEmployee?.phoneNumber || selectedEmployee?.mobile || "";
   const recipientName = selectedEmployee?.employeeName || selectedEmployee?.fullNameArabic || selectedEmployee?.fullName || "موظفنا الكريم";
+
+  // Nationalities for bulk dropdown
+  const nationalities = useMemo(() => {
+    const set = new Set<string>();
+    employeesWithPhone.forEach((e) => e.nationality && set.add(e.nationality));
+    return Array.from(set).sort();
+  }, [employeesWithPhone]);
+
+  // Bulk recipients list (computed from current filter) — dedupe by normalized phone
+  const bulkRecipients = useMemo(() => {
+    let list = employeesWithPhone;
+    if (bulkAudience === "by_branch" && bulkBranch) list = list.filter((e) => String(e.branchId) === bulkBranch);
+    if (bulkAudience === "by_nationality" && bulkNationality) list = list.filter((e) => e.nationality === bulkNationality);
+    const seen = new Set<string>();
+    const out: { phone: string; name: string }[] = [];
+    for (const e of list) {
+      const phone = (e.phoneNumber || e.mobile || "").replace(/[\s\-()]/g, "").trim();
+      if (!phone || seen.has(phone)) continue;
+      seen.add(phone);
+      out.push({
+        phone,
+        name: e.employeeName || e.fullNameArabic || e.fullName || `#${e.id}`,
+      });
+    }
+    return out;
+  }, [employeesWithPhone, bulkAudience, bulkBranch, bulkNationality]);
+
+  const BULK_MAX = 200;
+  const bulkOverLimit = bulkRecipients.length > BULK_MAX;
 
   const sendMutation = useMutation({
     mutationFn: async () => {
@@ -363,15 +402,47 @@ function WhatsAppQuickSend({ employees }: { employees: BranchEmployee[] }) {
     },
   });
 
+  const bulkSendMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/notifications/send-bulk", {
+        recipients: bulkRecipients,
+        channel: "whatsapp",
+        message,
+        personalize: bulkPersonalize,
+        relatedModule: "hr_management",
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      const sent = data?.sent || 0;
+      const failed = data?.failed || 0;
+      if (sent > 0 && failed === 0) {
+        toast({ title: "تم الإرسال بنجاح", description: `أُرسلت ${fmt(sent)} رسالة عبر الواتساب` });
+        setMessage("");
+      } else if (sent > 0 && failed > 0) {
+        toast({ title: "إرسال جزئي", description: `نجح: ${fmt(sent)} — فشل: ${fmt(failed)}`, variant: "destructive" });
+      } else {
+        toast({ title: "فشل الإرسال", description: data?.error || `فشل إرسال جميع الرسائل (${fmt(failed)})`, variant: "destructive" });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+    },
+    onError: (err: any) => {
+      toast({ title: "خطأ في الإرسال الجماعي", description: err?.message || "حدث خطأ غير متوقع", variant: "destructive" });
+    },
+  });
+
   const applyTemplate = (tid: string) => {
     setTemplateId(tid);
     const tpl = MESSAGE_TEMPLATES.find((t) => t.id === tid);
     if (tpl && tid !== "custom") {
-      setMessage(tpl.body(recipientName));
+      // For bulk personalize, keep the placeholder {name} so server replaces per recipient
+      setMessage(mode === "bulk" && bulkPersonalize ? tpl.body("{name}") : tpl.body(mode === "bulk" ? "" : recipientName));
     }
   };
 
-  const canSend = !!recipientPhone && message.trim().length > 0 && !sendMutation.isPending;
+  const canSend = mode === "single"
+    ? (!!recipientPhone && message.trim().length > 0 && !sendMutation.isPending)
+    : (bulkRecipients.length > 0 && !bulkOverLimit && message.trim().length > 0 && !bulkSendMutation.isPending);
 
   return (
     <Card className="border-emerald-100 dark:border-emerald-900/40" data-testid="card-whatsapp-quick-send">
@@ -387,36 +458,136 @@ function WhatsAppQuickSend({ employees }: { employees: BranchEmployee[] }) {
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-gray-700 dark:text-foreground/90">المستلم</label>
-          <Input
-            placeholder="ابحث بالاسم أو رقم الجوال..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-9 text-sm"
-            data-testid="input-whatsapp-search"
-          />
-          <Select value={employeeId} onValueChange={setEmployeeId}>
-            <SelectTrigger className="h-9 text-sm" data-testid="select-whatsapp-recipient">
-              <SelectValue placeholder="اختر موظفاً" />
-            </SelectTrigger>
-            <SelectContent>
-              {filteredEmployees.length === 0 && (
-                <div className="py-2 px-3 text-xs text-muted-foreground">لا توجد نتائج</div>
-              )}
-              {filteredEmployees.map((e) => (
-                <SelectItem key={e.id} value={String(e.id)}>
-                  <span className="flex items-center gap-2">
-                    <span className="truncate font-medium">{e.employeeName || e.fullNameArabic || e.fullName || `#${e.id}`}</span>
-                    <span className="text-[10px] text-muted-foreground" dir="ltr">
-                      {e.phoneNumber || e.mobile}
-                    </span>
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {/* Mode toggle: single vs bulk */}
+        <div className="grid grid-cols-2 gap-1 p-0.5 bg-gray-100 dark:bg-muted rounded-lg" data-testid="toggle-whatsapp-mode">
+          <button
+            type="button"
+            onClick={() => setMode("single")}
+            className={cn(
+              "text-xs font-medium py-1.5 rounded-md transition-colors",
+              mode === "single" ? "bg-white dark:bg-card shadow-sm text-emerald-700 dark:text-emerald-400" : "text-muted-foreground",
+            )}
+            data-testid="tab-whatsapp-single"
+          >
+            موظف واحد
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("bulk")}
+            className={cn(
+              "text-xs font-medium py-1.5 rounded-md transition-colors flex items-center justify-center gap-1",
+              mode === "bulk" ? "bg-white dark:bg-card shadow-sm text-emerald-700 dark:text-emerald-400" : "text-muted-foreground",
+            )}
+            data-testid="tab-whatsapp-bulk"
+          >
+            <Users className="w-3 h-3" /> إرسال جماعي
+          </button>
         </div>
+
+        {mode === "single" ? (
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-gray-700 dark:text-foreground/90">المستلم</label>
+            <Input
+              placeholder="ابحث بالاسم أو رقم الجوال..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-9 text-sm"
+              data-testid="input-whatsapp-search"
+            />
+            <Select value={employeeId} onValueChange={setEmployeeId}>
+              <SelectTrigger className="h-9 text-sm" data-testid="select-whatsapp-recipient">
+                <SelectValue placeholder="اختر موظفاً" />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredEmployees.length === 0 && (
+                  <div className="py-2 px-3 text-xs text-muted-foreground">لا توجد نتائج</div>
+                )}
+                {filteredEmployees.map((e) => (
+                  <SelectItem key={e.id} value={String(e.id)}>
+                    <span className="flex items-center gap-2">
+                      <span className="truncate font-medium">{e.employeeName || e.fullNameArabic || e.fullName || `#${e.id}`}</span>
+                      <span className="text-[10px] text-muted-foreground" dir="ltr">
+                        {e.phoneNumber || e.mobile}
+                      </span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-gray-700 dark:text-foreground/90">الفئة المستهدفة</label>
+              <Select value={bulkAudience} onValueChange={(v) => setBulkAudience(v as any)}>
+                <SelectTrigger className="h-9 text-sm" data-testid="select-bulk-audience">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all_active">كل الموظفين النشطين</SelectItem>
+                  <SelectItem value="by_branch">حسب الفرع</SelectItem>
+                  <SelectItem value="by_nationality">حسب الجنسية</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {bulkAudience === "by_branch" && (
+              <Select value={bulkBranch} onValueChange={setBulkBranch}>
+                <SelectTrigger className="h-9 text-sm" data-testid="select-bulk-branch">
+                  <SelectValue placeholder="اختر الفرع" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map((b) => (
+                    <SelectItem key={b.id} value={String(b.id)}>{b.nameAr || b.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {bulkAudience === "by_nationality" && (
+              <Select value={bulkNationality} onValueChange={setBulkNationality}>
+                <SelectTrigger className="h-9 text-sm" data-testid="select-bulk-nationality">
+                  <SelectValue placeholder="اختر الجنسية" />
+                </SelectTrigger>
+                <SelectContent>
+                  {nationalities.map((n) => (
+                    <SelectItem key={n} value={n}>{n}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <div className={cn(
+              "flex items-center justify-between p-2 rounded-md border",
+              bulkOverLimit
+                ? "bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/40"
+                : "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-900/40",
+            )}>
+              <span className={cn(
+                "text-[11px] font-medium",
+                bulkOverLimit ? "text-rose-800 dark:text-rose-300" : "text-emerald-800 dark:text-emerald-300",
+              )} data-testid="text-bulk-count">
+                {bulkOverLimit ? (
+                  <>تجاوز الحد: <span className="font-bold tabular-nums" dir="ltr">{fmt(bulkRecipients.length)}</span> / {BULK_MAX}</>
+                ) : (
+                  <>سيُرسل إلى <span className="font-bold tabular-nums" dir="ltr">{fmt(bulkRecipients.length)}</span> مستلم</>
+                )}
+              </span>
+              <label className="flex items-center gap-1 text-[11px] text-gray-700 dark:text-foreground/80 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={bulkPersonalize}
+                  onChange={(e) => setBulkPersonalize(e.target.checked)}
+                  className="rounded"
+                  data-testid="checkbox-bulk-personalize"
+                />
+                استبدال {"{name}"}
+              </label>
+            </div>
+            {bulkOverLimit && (
+              <p className="text-[10px] text-rose-700 dark:text-rose-400 px-1" data-testid="text-bulk-over-limit">
+                الحد الأقصى {BULK_MAX} مستلم في عملية واحدة — قلّص النطاق أو قسّم على دفعات.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-gray-700 dark:text-foreground/90">قالب جاهز</label>
@@ -437,7 +608,7 @@ function WhatsAppQuickSend({ employees }: { employees: BranchEmployee[] }) {
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-gray-700 dark:text-foreground/90">الرسالة</label>
           <Textarea
-            placeholder="اكتب نص الرسالة..."
+            placeholder={mode === "bulk" && bulkPersonalize ? "استخدم {name} لإدراج اسم كل مستلم..." : "اكتب نص الرسالة..."}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             rows={4}
@@ -449,14 +620,16 @@ function WhatsAppQuickSend({ employees }: { employees: BranchEmployee[] }) {
 
         <Button
           className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-          onClick={() => sendMutation.mutate()}
+          onClick={() => (mode === "single" ? sendMutation.mutate() : bulkSendMutation.mutate())}
           disabled={!canSend}
           data-testid="button-send-whatsapp"
         >
-          {sendMutation.isPending ? (
+          {(mode === "single" ? sendMutation.isPending : bulkSendMutation.isPending) ? (
             <><Loader2 className="w-4 h-4 animate-spin" /> جاري الإرسال...</>
-          ) : (
+          ) : mode === "single" ? (
             <><Send className="w-4 h-4" /> إرسال عبر واتساب</>
+          ) : (
+            <><Send className="w-4 h-4" /> إرسال جماعي ({fmt(bulkRecipients.length)})</>
           )}
         </Button>
 
@@ -466,6 +639,142 @@ function WhatsAppQuickSend({ employees }: { employees: BranchEmployee[] }) {
             data-testid="link-notifications-center"
           >
             فتح مركز الإشعارات الكامل ←
+          </a>
+        </Link>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================================
+// Monthly Salary Closing Card
+// ============================================================================
+
+type SalaryClosing = {
+  month: number;
+  year: number;
+  totalBranches: number;
+  openCount: number;
+  closedCount: number;
+  lockedCount: number;
+  notStartedCount: number;
+  lastUpdated: string | null;
+  totalMonthlySalaries: number;
+  employeesCount: number;
+  progressPercent: number;
+};
+
+const AR_MONTHS = ["", "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+
+function SalaryClosingCard({ data }: { data?: SalaryClosing }) {
+  if (!data) {
+    return (
+      <Card className="border-amber-100 dark:border-amber-900/40" data-testid="card-salary-closing">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+              <Wallet className="w-5 h-5" />
+            </div>
+            <div>
+              <CardTitle className="text-sm font-bold">إغلاق الراتب الشهري</CardTitle>
+              <p className="text-[11px] text-muted-foreground">جارٍ التحميل...</p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="h-20 flex items-center justify-center">
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+  const lastUpdatedTxt = data.lastUpdated
+    ? new Intl.DateTimeFormat("ar-SA-u-nu-latn", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(data.lastUpdated))
+    : "لم يبدأ بعد";
+  return (
+    <Card className="border-amber-100 dark:border-amber-900/40 bg-gradient-to-br from-amber-50/40 to-orange-50/30 dark:from-amber-950/10 dark:to-orange-950/10" data-testid="card-salary-closing">
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 flex items-center justify-center">
+            <Wallet className="w-5 h-5" />
+          </div>
+          <div className="flex-1">
+            <CardTitle className="text-sm font-bold">إغلاق الراتب الشهري</CardTitle>
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+              <CalendarClock className="w-3 h-3" /> {AR_MONTHS[data.month]} {data.year}
+            </p>
+          </div>
+          <Badge variant="outline" className="text-[10px] tabular-nums" data-testid="badge-closing-progress">
+            {data.progressPercent}%
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {/* Progress bar */}
+        <div className="space-y-1">
+          <div className="h-2 bg-gray-100 dark:bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 transition-all"
+              style={{ width: `${data.progressPercent}%` }}
+              data-testid="bar-closing-progress"
+            />
+          </div>
+          <p className="text-[10px] text-muted-foreground text-left">
+            {fmt(data.closedCount + data.lockedCount)} / {fmt(data.totalBranches)} فرع
+          </p>
+        </div>
+
+        {/* Status grid */}
+        <div className="grid grid-cols-4 gap-1.5">
+          <div className="text-center p-1.5 rounded-md bg-white dark:bg-card border border-slate-100 dark:border-border" data-testid="stat-not-started">
+            <CircleDot className="w-3 h-3 mx-auto text-slate-400" />
+            <p className="text-[10px] text-muted-foreground mt-0.5">لم يبدأ</p>
+            <p className="text-sm font-bold text-slate-700 dark:text-foreground tabular-nums" dir="ltr">{fmt(data.notStartedCount)}</p>
+          </div>
+          <div className="text-center p-1.5 rounded-md bg-white dark:bg-card border border-blue-100 dark:border-blue-900/40" data-testid="stat-open">
+            <Unlock className="w-3 h-3 mx-auto text-blue-500" />
+            <p className="text-[10px] text-muted-foreground mt-0.5">مفتوح</p>
+            <p className="text-sm font-bold text-blue-700 dark:text-blue-400 tabular-nums" dir="ltr">{fmt(data.openCount)}</p>
+          </div>
+          <div className="text-center p-1.5 rounded-md bg-white dark:bg-card border border-emerald-100 dark:border-emerald-900/40" data-testid="stat-closed">
+            <CheckCircle2 className="w-3 h-3 mx-auto text-emerald-500" />
+            <p className="text-[10px] text-muted-foreground mt-0.5">مغلق</p>
+            <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400 tabular-nums" dir="ltr">{fmt(data.closedCount)}</p>
+          </div>
+          <div className="text-center p-1.5 rounded-md bg-white dark:bg-card border border-violet-100 dark:border-violet-900/40" data-testid="stat-locked">
+            <Lock className="w-3 h-3 mx-auto text-violet-500" />
+            <p className="text-[10px] text-muted-foreground mt-0.5">مقفل</p>
+            <p className="text-sm font-bold text-violet-700 dark:text-violet-400 tabular-nums" dir="ltr">{fmt(data.lockedCount)}</p>
+          </div>
+        </div>
+
+        {/* Totals */}
+        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-gray-100 dark:border-border">
+          <div>
+            <p className="text-[10px] text-muted-foreground">إجمالي الفاتورة</p>
+            <p className="text-sm font-bold text-gray-900 dark:text-foreground tabular-nums" dir="ltr" data-testid="text-total-salaries">
+              {fmtMoney(data.totalMonthlySalaries)} <span className="text-[10px] text-muted-foreground">ر.س</span>
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] text-muted-foreground">موظفون نشطون</p>
+            <p className="text-sm font-bold text-gray-900 dark:text-foreground tabular-nums" dir="ltr" data-testid="text-active-count">
+              {fmt(data.employeesCount)}
+            </p>
+          </div>
+        </div>
+
+        <p className="text-[10px] text-muted-foreground" data-testid="text-last-updated">
+          آخر تحديث: <span dir="ltr">{lastUpdatedTxt}</span>
+        </p>
+
+        <Link href="/employee-reports">
+          <a
+            className="flex items-center justify-center gap-1 text-xs text-amber-700 dark:text-amber-400 hover:underline font-medium pt-1"
+            data-testid="link-salary-closing"
+          >
+            فتح تقارير الرواتب وإغلاق الشهر <ArrowUpRight className="w-3 h-3" />
           </a>
         </Link>
       </CardContent>
@@ -597,6 +906,7 @@ export default function HRHubPage() {
   const attendanceToday = bundle?.attendanceToday;
   const onboardingStats = bundle?.onboardingStats;
   const eosStats = bundle?.eosStats ?? { total: 0 };
+  const salaryClosing: SalaryClosing | undefined = bundle?.salaryClosing;
 
   // Global refresh — invalidates the bundle + any peripheral HR caches
   const handleGlobalRefresh = () => {
@@ -913,9 +1223,10 @@ export default function HRHubPage() {
             />
           </div>
 
-          {/* Right: WhatsApp + AI widgets */}
+          {/* Right: Salary Closing + WhatsApp + AI widgets */}
           <div className="space-y-3">
-            <WhatsAppQuickSend employees={employees} />
+            <SalaryClosingCard data={salaryClosing} />
+            <WhatsAppQuickSend employees={employees} branches={branches} />
             <AIInsightsCard insights={insights} onRefresh={() => setRefreshTick((t) => t + 1)} />
           </div>
         </div>
