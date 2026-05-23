@@ -31,6 +31,9 @@ function isTransientError(q: Query): boolean {
   if (q.state.fetchStatus === "fetching") return false;
   // Skip queries the user already dismissed during this session.
   if (getDismissedSet().has(keySig(q))) return false;
+  // Skip queries that opted out (e.g. manual-trigger AI calls whose own UI
+  // already shows an inline error message — no need to nag with a banner too).
+  if ((q.meta as any)?.silentError === true) return false;
   const err = q.state.error;
   const msg = err instanceof Error ? err.message : String(err || "");
   if (/^(400|401|403|404|409|410|422):/.test(msg)) return false;

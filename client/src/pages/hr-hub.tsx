@@ -1402,6 +1402,9 @@ export default function HRHubPage() {
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     retry: false,
+    // Inline error UI ("تعذّر الاتصال بالمساعد الذكي") already shown by the AI card —
+    // suppress the global DataErrorBanner so the user isn't nagged twice.
+    meta: { silentError: true },
     queryFn: async () => {
       const res = await apiRequest("POST", "/api/hr/ai-insights", { snapshot: aiSnapshot });
       return res.json();
