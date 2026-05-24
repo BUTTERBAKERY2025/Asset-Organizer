@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { db } from "./db";
 import { eq, and, desc, sql, inArray, gte, lte, lt } from "drizzle-orm";
-import { isAuthenticated, requirePermission, getEffectiveBranchFilter } from "./auth";
+import { isAuthenticated, requirePermission, getEffectiveBranchFilter, getCachedPermissionsForUser } from "./auth";
 import {
   employeeDocuments,
   leaveRequests,
@@ -33,10 +33,49 @@ function isAdmin(req: any): boolean {
 }
 
 /**
- * Returns branch IDs the user can access, or null for all-access (admin).
+ * HR is inherently a cross-branch function in this org. Users granted
+ * `hr_management` permission are treated as cross-branch for HR routes
+ * even when they have no explicit branch assignments — otherwise they
+ * would see zero data on every HR page despite holding the permission.
+ * Admin still bypasses everything via getEffectiveBranchFilter.
+ */
+function hasCrossBranchHrAccess(req: any): boolean {
+  const user = (req as any).currentUser;
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  const perms = getCachedPermissionsForUser(user.id) || [];
+  const hr = perms.find((p: any) => p.module === "hr_management");
+  if (!hr) return false;
+  const raw = hr.actions as unknown;
+  const actions: string[] = Array.isArray(raw)
+    ? (raw as string[])
+    : typeof raw === "string"
+      ? (raw as string).replace(/[{}]/g, "").split(",").map((a) => a.trim())
+      : [];
+  return actions.includes("view");
+}
+
+/**
+ * Returns branch IDs the user can access, or null for all-access (admin
+ * or cross-branch HR manager — READ-only elevation).
+ *
+ * IMPORTANT: elevation only applies to safe HTTP methods (GET/HEAD). Write
+ * methods (POST/PATCH/PUT/DELETE) never elevate, so an HR manager without
+ * explicit branch assignments cannot mutate records across branches —
+ * `applyBranchScope` will return `sql\`false\`` and per-route
+ * `branchIds.includes(...)` guards will fail closed for writes.
  */
 function getBranchScope(req: any): { branchIds: string[] | null; hasAccess: boolean } {
   const f = getEffectiveBranchFilter(req);
+  const isSafeMethod = req.method === "GET" || req.method === "HEAD";
+  if (
+    isSafeMethod &&
+    f.branchIds &&
+    f.branchIds.length === 0 &&
+    hasCrossBranchHrAccess(req)
+  ) {
+    return { branchIds: null, hasAccess: true };
+  }
   return { branchIds: f.branchIds, hasAccess: f.hasAccess };
 }
 
@@ -822,10 +861,18 @@ export function registerHrRoutes(app: Express) {
     try {
       const queryBranchId = (req.query.branchId as string | undefined) || undefined;
       const filter = getEffectiveBranchFilter(req, queryBranchId);
-      if (!filter.hasAccess) {
+      let branchIds = filter.branchIds; // null = all, [] = none
+      let hasAccess = filter.hasAccess;
+      // Cross-branch HR managers (no branch assignment but hr_management:view)
+      // are elevated to all-branches for this read endpoint — same rule as
+      // getBranchScope() applies to the rest of /api/hr/* GETs.
+      if (!hasAccess && branchIds && branchIds.length === 0 && hasCrossBranchHrAccess(req)) {
+        branchIds = null;
+        hasAccess = true;
+      }
+      if (!hasAccess) {
         return res.status(403).json({ error: "ليس لديك صلاحية الوصول" });
       }
-      const branchIds = filter.branchIds; // null = all, [] = none
       const scopedBranchId = filter.singleBranchId || queryBranchId || null;
       // All date math is anchored to Saudi Arabia (Asia/Riyadh, UTC+3, no DST).
       // toISOString() returns UTC dates which, between 21:00 UTC and midnight,
