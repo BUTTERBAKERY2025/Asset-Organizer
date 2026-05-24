@@ -681,20 +681,81 @@ function WhatsAppQuickSend({ employees, branches }: { employees: BranchEmployee[
           <p className="text-[10px] text-muted-foreground">{message.length}/1000 حرف</p>
         </div>
 
-        <Button
-          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-          onClick={() => (mode === "single" ? sendMutation.mutate() : bulkSendMutation.mutate())}
-          disabled={!canSend}
-          data-testid="button-send-whatsapp"
-        >
-          {(mode === "single" ? sendMutation.isPending : bulkSendMutation.isPending) ? (
-            <><Loader2 className="w-4 h-4 animate-spin" /> جاري الإرسال...</>
-          ) : mode === "single" ? (
-            <><Send className="w-4 h-4" /> إرسال عبر واتساب</>
-          ) : (
-            <><Send className="w-4 h-4" /> إرسال جماعي ({fmt(bulkRecipients.length)})</>
-          )}
-        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+            onClick={() => {
+              const text = message.trim();
+              if (!text) return;
+              // wa.me requires E.164 digits-only with country code (no '+').
+              // Saudi-aware normalization: handles +966xxxxxxxxx, 00966xxxxxxxxx,
+              // 0xxxxxxxxx (local), and 5xxxxxxxx (mobile without leading 0).
+              const normalize = (raw: string): string => {
+                let d = (raw || "").replace(/[\s\-()]/g, "").replace(/^\+/, "");
+                if (d.startsWith("00")) d = d.slice(2);
+                if (d.startsWith("966")) return d;
+                if (d.startsWith("0")) return "966" + d.slice(1);
+                if (/^5\d{8}$/.test(d)) return "966" + d;
+                return d; // already international (non-Saudi) or unknown — pass through
+              };
+              if (mode === "single") {
+                const phone = normalize(recipientPhone);
+                if (!phone) {
+                  toast({ title: "لا يوجد رقم", description: "اختر موظفًا لديه رقم جوال أولاً", variant: "destructive" });
+                  return;
+                }
+                window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+              } else {
+                if (bulkRecipients.length === 0 || bulkOverLimit) return;
+                if (bulkRecipients.length > 10 && !window.confirm(`سيُفتح ${bulkRecipients.length} تبويبات واتساب — قد يحجبها المتصفح. اسمح بالنوافذ المنبثقة لهذا الموقع. هل تريد المتابعة؟`)) return;
+                let opened = 0;
+                bulkRecipients.forEach((r, i) => {
+                  setTimeout(() => {
+                    const phone = normalize(r.phone);
+                    if (!phone) return;
+                    const body = bulkPersonalize ? text.replace(/\{name\}/g, r.name) : text;
+                    const w = window.open(`https://wa.me/${phone}?text=${encodeURIComponent(body)}`, "_blank", "noopener,noreferrer");
+                    if (w) opened++;
+                    if (i === bulkRecipients.length - 1) {
+                      toast({
+                        title: opened > 0 ? "تم فتح المحادثات" : "تم حجب النوافذ",
+                        description: opened > 0
+                          ? `فُتح ${opened} من ${bulkRecipients.length} — اضغط زر الإرسال داخل كل محادثة`
+                          : "سمح بالنوافذ المنبثقة لهذا الموقع ثم أعد المحاولة",
+                        variant: opened > 0 ? "default" : "destructive",
+                      });
+                    }
+                  }, i * 350);
+                });
+              }
+            }}
+            disabled={!message.trim() || (mode === "single" ? !recipientPhone : (bulkRecipients.length === 0 || bulkOverLimit))}
+            data-testid="button-send-whatsapp-direct"
+            title="يفتح محادثة واتساب على جهازك (مجاني، من رقمك الشخصي)"
+          >
+            <MessageCircle className="w-4 h-4" />
+            {mode === "single" ? "واتساب مباشر" : `فتح ${fmt(bulkRecipients.length)} محادثة`}
+          </Button>
+          <Button
+            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            onClick={() => (mode === "single" ? sendMutation.mutate() : bulkSendMutation.mutate())}
+            disabled={!canSend}
+            data-testid="button-send-whatsapp"
+            title="إرسال آلي عبر Twilio (مدفوع، من رقم الشركة)"
+          >
+            {(mode === "single" ? sendMutation.isPending : bulkSendMutation.isPending) ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> جارٍ...</>
+            ) : (
+              <><Send className="w-4 h-4" /> إرسال آلي</>
+            )}
+          </Button>
+        </div>
+        <p className="text-[10px] text-muted-foreground text-center px-2">
+          <span className="font-medium text-emerald-700 dark:text-emerald-400">واتساب مباشر</span>: مجاني من رقمك الشخصي ·
+          <span className="font-medium text-gray-700 dark:text-foreground/80"> إرسال آلي</span>: عبر Twilio من رقم الشركة
+        </p>
 
         <Link href="/notifications-center">
           <a
