@@ -142,6 +142,7 @@ const pageImports: Record<string, () => Promise<any>> = {
   "job-offer-public": () => import("@/pages/job-offer-public"),
   "onboarding": () => import("@/pages/onboarding"),
   "onboarding-public": () => import("@/pages/onboarding-public"),
+  "warning-public": () => import("@/pages/warning-public"),
   "employment-applications": () => import("@/pages/employment-applications"),
   "employment-application-public": () => import("@/pages/employment-application-public"),
   "vacancy-public": () => import("@/pages/vacancy-public"),
