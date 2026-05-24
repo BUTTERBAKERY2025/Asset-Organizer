@@ -830,7 +830,17 @@ export default function BranchEmployeesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNationality, setSelectedNationality] = useState<string>("all");
   const [selectedJobTitle, setSelectedJobTitle] = useState<string>("all");
-  const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  // Read initial status filter from URL (?status=inactive|terminated|suspended|on_leave|active)
+  // so deep-links from HR Hub tiles land on the correct filtered view.
+  const initialStatus = (() => {
+    try {
+      const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+      const s = params.get("status");
+      const allowed = ["active", "inactive", "terminated", "suspended", "on_leave"];
+      return s && allowed.includes(s) ? s : "all";
+    } catch { return "all"; }
+  })();
+  const [selectedStatus, setSelectedStatus] = useState<string>(initialStatus);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<BranchEmployee | null>(null);
