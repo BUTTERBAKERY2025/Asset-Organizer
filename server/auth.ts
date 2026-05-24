@@ -892,7 +892,19 @@ export const requirePermission = (module: string, action: string): RequestHandle
     if (!modulePerm && module === 'attendance_check') {
       modulePerm = permissions.find((p: any) => p.module === 'attendance');
     }
-    
+
+    // Backward compatibility: `pnl` and `pnl_dashboard` are two historical
+    // names for the same Profit & Loss module. The page route is guarded by
+    // `pnl_dashboard` (visible in the permissions UI) while many API endpoints
+    // were written against `pnl`. Accept either grant to avoid 403 on users
+    // who were given one name but not the other.
+    if (!modulePerm && module === 'pnl') {
+      modulePerm = permissions.find((p: any) => p.module === 'pnl_dashboard');
+    }
+    if (!modulePerm && module === 'pnl_dashboard') {
+      modulePerm = permissions.find((p: any) => p.module === 'pnl');
+    }
+
     if (!modulePerm) {
       return res.status(403).json({ message: "غير مسموح - ليس لديك صلاحية على هذه الوحدة" });
     }
@@ -961,8 +973,19 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
     
     // Use cached permissions (pre-fetched by isAuthenticated middleware)
     const permissions = getCachedPermissions(user.id) || await storage.getUserPermissions(user.id);
-    const modulePerm = permissions.find((p: any) => p.module === module);
-    
+    let modulePerm = permissions.find((p: any) => p.module === module);
+
+    // Backward compatibility synonyms (mirrors requirePermission above).
+    if (!modulePerm && module === 'attendance_check') {
+      modulePerm = permissions.find((p: any) => p.module === 'attendance');
+    }
+    if (!modulePerm && module === 'pnl') {
+      modulePerm = permissions.find((p: any) => p.module === 'pnl_dashboard');
+    }
+    if (!modulePerm && module === 'pnl_dashboard') {
+      modulePerm = permissions.find((p: any) => p.module === 'pnl');
+    }
+
     if (!modulePerm) {
       return res.status(403).json({ message: "غير مسموح - ليس لديك صلاحية على هذه الوحدة" });
     }
