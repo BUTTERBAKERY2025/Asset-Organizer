@@ -7544,6 +7544,16 @@ export async function registerRoutes(
     }
   });
 
+  // Helper: parse number defensively. Treats NaN/Infinity/null/undefined/"" as 0.
+  // This prevents corrupt numeric values from ever reaching the database (e.g. a
+  // typo or a non-numeric paste in the cashier form would otherwise turn into NaN
+  // which Postgres `real` columns silently accept as NULL in some drivers).
+  const safeNum = (v: any): number => {
+    if (v === null || v === undefined || v === "") return 0;
+    const n = typeof v === "number" ? v : parseFloat(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
   // Create new cashier journal
   app.post("/api/cashier-journals", isAuthenticated, requirePermission("cashier_journal", "create"), requireBranchAccess, async (req, res) => {
     try {
@@ -7557,11 +7567,87 @@ export async function registerRoutes(
           return res.status(403).json({ error: "ليس لديك صلاحية لإنشاء يومية لهذا الفرع" });
         }
       }
+
+      // Required-field guard (defence in depth even if UI bypassed)
+      if (!journalData.branchId || !journalData.cashierId || !journalData.cashierName || !journalData.journalDate) {
+        return res.status(400).json({ error: "بيانات اليومية ناقصة (الفرع/الكاشير/التاريخ مطلوبة)" });
+      }
+
+      // DUPLICATE-SHIFT GUARD (application-level idempotency until DB UNIQUE migration runs):
+      // Block creating a second journal for the same branch + cashier + date + shift-type.
+      // Without this a cashier who double-clicks "Save" — or who opens two tabs — could
+      // create two independent journals for the same shift, which is a real risk in stores.
+      try {
+        const dupConds: any[] = [
+          eq(cashierSalesJournals.branchId, journalData.branchId),
+          eq(cashierSalesJournals.cashierId, journalData.cashierId),
+          eq(cashierSalesJournals.journalDate, journalData.journalDate),
+        ];
+        if (journalData.shiftType) {
+          dupConds.push(eq(cashierSalesJournals.shiftType, journalData.shiftType));
+        } else {
+          dupConds.push(isNull(cashierSalesJournals.shiftType));
+        }
+        const existingDup = await db.select({ id: cashierSalesJournals.id, status: cashierSalesJournals.status })
+          .from(cashierSalesJournals)
+          .where(and(...dupConds))
+          .limit(1);
+        if (existingDup.length > 0) {
+          return res.status(409).json({
+            error: "توجد يومية محفوظة مسبقًا لنفس الفرع والكاشير والتاريخ والوردية",
+            existingJournalId: existingDup[0].id,
+            existingStatus: existingDup[0].status,
+          });
+        }
+      } catch (dupErr) {
+        console.error("Duplicate-shift check failed (continuing):", dupErr);
+      }
       
+      // Sanitize all numeric fields on the journal payload up-front so no NaN/Infinity
+      // can ever reach Postgres.
+      const NUMERIC_JOURNAL_FIELDS = [
+        'openingBalance','totalSales','cashTotal','networkTotal','deliveryTotal',
+        'expectedCash','actualCashDrawer','discrepancyAmount',
+        'totalBankPosAmount','totalBankTerminalAmount','bankDiscrepancyTotal',
+        'inputErrorAmount','netDiscrepancy','returnAmount','averageTicket',
+      ];
+      for (const f of NUMERIC_JOURNAL_FIELDS) {
+        if (journalData[f] !== undefined) journalData[f] = safeNum(journalData[f]);
+      }
+      if (journalData.transactionCount !== undefined) {
+        const tc = safeNum(journalData.transactionCount);
+        journalData.transactionCount = Math.max(0, Math.floor(tc));
+      }
+      if (journalData.customerCount !== undefined) {
+        const cc = safeNum(journalData.customerCount);
+        journalData.customerCount = Math.max(0, Math.floor(cc));
+      }
+
       // Server-side validation: payment breakdown totals must match total sales (only for posting, not drafts)
       if (paymentBreakdowns && Array.isArray(paymentBreakdowns) && paymentBreakdowns.length > 0) {
-        const breakdownTotal = paymentBreakdowns.reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
-        const totalSales = parseFloat(journalData.totalSales) || 0;
+        // Fail-fast: reject duplicate payment methods inside the same payload
+        const methodSeen = new Set<string>();
+        for (const b of paymentBreakdowns) {
+          const m = String(b.paymentMethod || '').trim();
+          if (!m) {
+            return res.status(400).json({ error: "كل صف من تفصيل الدفع يجب أن يحتوي على وسيلة دفع" });
+          }
+          if (methodSeen.has(m)) {
+            return res.status(409).json({ error: `وسيلة الدفع "${m}" مكررة في التفصيل` });
+          }
+          methodSeen.add(m);
+        }
+        // Sanitize breakdown numeric fields in-place
+        for (const b of paymentBreakdowns) {
+          b.amount = safeNum(b.amount);
+          if (b.posAmount !== undefined) b.posAmount = safeNum(b.posAmount);
+          if (b.terminalAmount !== undefined) b.terminalAmount = safeNum(b.terminalAmount);
+          if (b.bankDiscrepancy !== undefined) b.bankDiscrepancy = safeNum(b.bankDiscrepancy);
+          if (b.terminalTransactionCount !== undefined) b.terminalTransactionCount = Math.max(0, Math.floor(safeNum(b.terminalTransactionCount)));
+          if (b.transactionCount !== undefined) b.transactionCount = Math.max(0, Math.floor(safeNum(b.transactionCount)));
+        }
+        const breakdownTotal = paymentBreakdowns.reduce((sum: number, b: any) => sum + b.amount, 0);
+        const totalSales = safeNum(journalData.totalSales);
         const tolerance = 1.0; // Allow 1 SAR tolerance for rounding errors
         
         // Only reject if explicitly posting (status is 'posted') - drafts can be saved with mismatches
@@ -7578,35 +7664,32 @@ export async function registerRoutes(
         
         journalData.networkTotal = paymentBreakdowns
           .filter((b: any) => cardMethods.includes(b.paymentMethod))
-          .reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
+          .reduce((sum: number, b: any) => sum + b.amount, 0);
         
         journalData.deliveryTotal = paymentBreakdowns
           .filter((b: any) => deliveryMethods.includes(b.paymentMethod))
-          .reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
+          .reduce((sum: number, b: any) => sum + b.amount, 0);
         
-        // Calculate total bank terminal amount (sum of all terminal amounts from card payments)
         journalData.totalBankTerminalAmount = paymentBreakdowns
           .filter((b: any) => cardMethods.includes(b.paymentMethod))
-          .reduce((sum: number, b: any) => sum + (parseFloat(b.terminalAmount) || 0), 0);
+          .reduce((sum: number, b: any) => sum + safeNum(b.terminalAmount), 0);
         
-        // Calculate total bank POS amount (sum of all POS amounts from card payments)
         journalData.totalBankPosAmount = paymentBreakdowns
           .filter((b: any) => cardMethods.includes(b.paymentMethod))
-          .reduce((sum: number, b: any) => sum + (parseFloat(b.posAmount) || parseFloat(b.amount) || 0), 0);
+          .reduce((sum: number, b: any) => sum + (b.posAmount > 0 ? b.posAmount : b.amount), 0);
         
-        // Calculate bank discrepancy total (terminal - POS)
         journalData.bankDiscrepancyTotal = journalData.totalBankTerminalAmount - journalData.totalBankPosAmount;
         journalData.bankDiscrepancyStatus = journalData.bankDiscrepancyTotal > 0.5 ? 'surplus' : journalData.bankDiscrepancyTotal < -0.5 ? 'shortage' : 'balanced';
       }
       
       // Calculate average ticket from transaction count (with explicit zero guard)
-      const transactionCount = parseInt(journalData.transactionCount) || 0;
-      const totalSalesAmount = parseFloat(journalData.totalSales) || 0;
+      const transactionCount = safeNum(journalData.transactionCount);
+      const totalSalesAmount = safeNum(journalData.totalSales);
       journalData.averageTicket = transactionCount > 0 ? totalSalesAmount / transactionCount : 0;
 
       // Compute cash discrepancy inline (don't rely on storage helper to recompute)
-      const expectedCashCalc = parseFloat(journalData.cashTotal) || 0;
-      const actualCashCalc = parseFloat(journalData.actualCashDrawer) || 0;
+      const expectedCashCalc = safeNum(journalData.cashTotal);
+      const actualCashCalc = safeNum(journalData.actualCashDrawer);
       const cashDiff = actualCashCalc - expectedCashCalc;
       journalData.expectedCash = expectedCashCalc;
       journalData.discrepancyAmount = Math.abs(cashDiff);
@@ -7663,7 +7746,16 @@ export async function registerRoutes(
       }
       
       res.status(201).json({ ...journal, paymentBreakdowns: createdBreakdowns, signatures });
-    } catch (error) {
+    } catch (error: any) {
+      // Map Postgres unique-violation to 409 (race-safe duplicate prevention once UNIQUE
+      // indexes from migrations/add_cashier_journal_integrity_constraints.sql are deployed).
+      if (error?.code === '23505') {
+        const constraint: string = error?.constraint || '';
+        if (constraint.includes('breakdown')) {
+          return res.status(409).json({ error: "تم إدخال نفس وسيلة الدفع مرتين في نفس اليومية" });
+        }
+        return res.status(409).json({ error: "توجد يومية محفوظة مسبقًا لنفس الفرع والكاشير والتاريخ والوردية" });
+      }
       console.error("Error creating cashier journal:", error);
       res.status(500).json({ error: "Failed to create cashier journal" });
     }
@@ -7696,13 +7788,52 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Cannot edit posted, submitted or approved journal" });
       }
       
+      // Sanitize numeric fields on update payload (NaN/Infinity-safe)
+      const NUMERIC_JOURNAL_FIELDS_U = [
+        'openingBalance','totalSales','cashTotal','networkTotal','deliveryTotal',
+        'expectedCash','actualCashDrawer','discrepancyAmount',
+        'totalBankPosAmount','totalBankTerminalAmount','bankDiscrepancyTotal',
+        'inputErrorAmount','netDiscrepancy','returnAmount','averageTicket',
+      ];
+      for (const f of NUMERIC_JOURNAL_FIELDS_U) {
+        if (journalData[f] !== undefined) journalData[f] = safeNum(journalData[f]);
+      }
+      if (journalData.transactionCount !== undefined) {
+        journalData.transactionCount = Math.max(0, Math.floor(safeNum(journalData.transactionCount)));
+      }
+      if (journalData.customerCount !== undefined) {
+        journalData.customerCount = Math.max(0, Math.floor(safeNum(journalData.customerCount)));
+      }
+
       // Server-side validation + recompute breakdown-derived aggregates whenever
       // paymentBreakdowns is provided (including empty array — so totals reset to 0).
       if (paymentBreakdowns && Array.isArray(paymentBreakdowns)) {
-        const breakdownTotal = paymentBreakdowns.reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
+        // Fail-fast duplicate-method check (same as POST)
+        if (paymentBreakdowns.length > 0) {
+          const methodSeenU = new Set<string>();
+          for (const b of paymentBreakdowns) {
+            const m = String(b.paymentMethod || '').trim();
+            if (!m) {
+              return res.status(400).json({ error: "كل صف من تفصيل الدفع يجب أن يحتوي على وسيلة دفع" });
+            }
+            if (methodSeenU.has(m)) {
+              return res.status(409).json({ error: `وسيلة الدفع "${m}" مكررة في التفصيل` });
+            }
+            methodSeenU.add(m);
+          }
+        }
+        for (const b of paymentBreakdowns) {
+          b.amount = safeNum(b.amount);
+          if (b.posAmount !== undefined) b.posAmount = safeNum(b.posAmount);
+          if (b.terminalAmount !== undefined) b.terminalAmount = safeNum(b.terminalAmount);
+          if (b.bankDiscrepancy !== undefined) b.bankDiscrepancy = safeNum(b.bankDiscrepancy);
+          if (b.terminalTransactionCount !== undefined) b.terminalTransactionCount = Math.max(0, Math.floor(safeNum(b.terminalTransactionCount)));
+          if (b.transactionCount !== undefined) b.transactionCount = Math.max(0, Math.floor(safeNum(b.transactionCount)));
+        }
+        const breakdownTotal = paymentBreakdowns.reduce((sum: number, b: any) => sum + b.amount, 0);
         const totalSalesForCheck = journalData.totalSales !== undefined
-          ? (parseFloat(journalData.totalSales) || 0)
-          : (existing.totalSales || 0);
+          ? safeNum(journalData.totalSales)
+          : safeNum(existing.totalSales);
         const diff = Math.abs(totalSalesForCheck - breakdownTotal);
         const tolerance = 1.0; // Allow 1 SAR tolerance for rounding errors
         // Only reject if explicitly posting - drafts can be saved with mismatches
@@ -7716,23 +7847,20 @@ export async function registerRoutes(
         
         journalData.networkTotal = paymentBreakdowns
           .filter((b: any) => cardMethods.includes(b.paymentMethod))
-          .reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
+          .reduce((sum: number, b: any) => sum + b.amount, 0);
         
         journalData.deliveryTotal = paymentBreakdowns
           .filter((b: any) => deliveryMethods.includes(b.paymentMethod))
-          .reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
+          .reduce((sum: number, b: any) => sum + b.amount, 0);
         
-        // Calculate total bank terminal amount (sum of all terminal amounts from card payments)
         journalData.totalBankTerminalAmount = paymentBreakdowns
           .filter((b: any) => cardMethods.includes(b.paymentMethod))
-          .reduce((sum: number, b: any) => sum + (parseFloat(b.terminalAmount) || 0), 0);
+          .reduce((sum: number, b: any) => sum + safeNum(b.terminalAmount), 0);
         
-        // Calculate total bank POS amount (sum of all POS amounts from card payments)
         journalData.totalBankPosAmount = paymentBreakdowns
           .filter((b: any) => cardMethods.includes(b.paymentMethod))
-          .reduce((sum: number, b: any) => sum + (parseFloat(b.posAmount) || parseFloat(b.amount) || 0), 0);
+          .reduce((sum: number, b: any) => sum + (b.posAmount > 0 ? b.posAmount : b.amount), 0);
         
-        // Calculate bank discrepancy total (terminal - POS)
         journalData.bankDiscrepancyTotal = journalData.totalBankTerminalAmount - journalData.totalBankPosAmount;
         journalData.bankDiscrepancyStatus = journalData.bankDiscrepancyTotal > 0.5 ? 'surplus' : journalData.bankDiscrepancyTotal < -0.5 ? 'shortage' : 'balanced';
       }
@@ -7745,10 +7873,10 @@ export async function registerRoutes(
       if (hasTransactionCount || hasTotalSales) {
         // Use provided values or fall back to existing values
         const transactionCount = hasTransactionCount 
-          ? (parseInt(journalData.transactionCount) || 0)
-          : (existing.transactionCount || 0);
+          ? safeNum(journalData.transactionCount)
+          : safeNum(existing.transactionCount);
         const totalSalesAmount = hasTotalSales 
-          ? (parseFloat(journalData.totalSales) || 0)
+          ? safeNum(journalData.totalSales)
           : (existing.totalSales || 0);
         journalData.averageTicket = transactionCount > 0 ? totalSalesAmount / transactionCount : 0;
       }
@@ -7758,11 +7886,11 @@ export async function registerRoutes(
       // Inline cash-discrepancy recomputation (don't depend on storage helper inside tx).
       if (journalData.cashTotal !== undefined || journalData.actualCashDrawer !== undefined) {
         const expectedCashU = journalData.cashTotal !== undefined
-          ? (parseFloat(journalData.cashTotal) || 0)
-          : (existing.cashTotal || 0);
+          ? safeNum(journalData.cashTotal)
+          : safeNum(existing.cashTotal);
         const actualCashU = journalData.actualCashDrawer !== undefined
-          ? (parseFloat(journalData.actualCashDrawer) || 0)
-          : (existing.actualCashDrawer || 0);
+          ? safeNum(journalData.actualCashDrawer)
+          : safeNum(existing.actualCashDrawer);
         const diffU = actualCashU - expectedCashU;
         journalData.expectedCash = expectedCashU;
         journalData.discrepancyAmount = Math.abs(diffU);
@@ -7770,11 +7898,23 @@ export async function registerRoutes(
       }
       journalData.updatedAt = new Date();
 
-      // ATOMIC UPDATE: journal + delete-old-breakdowns + insert-new-breakdowns + signature
-      // all succeed together or roll back together. Previously, if the breakdown re-insert
-      // failed after the delete, the cashier was left with totals updated but NO breakdowns
-      // — which matches the "saves but data is not stored correctly" report.
+      // ATOMIC UPDATE with row-level lock to serialize concurrent edits.
+      // SELECT FOR UPDATE prevents two simultaneous PATCH requests (e.g. two tabs)
+      // from silently overwriting each other's changes. We also re-check the status
+      // INSIDE the transaction in case another request transitioned the journal
+      // between the initial check above and now.
       const { journal, updatedBreakdowns, signatures } = await db.transaction(async (tx) => {
+        const lockedRows = await tx.execute(
+          sql`SELECT id, status FROM ${cashierSalesJournals} WHERE id = ${id} FOR UPDATE`
+        );
+        const lockedRow: any = (lockedRows as any).rows?.[0] ?? (Array.isArray(lockedRows) ? (lockedRows as any)[0] : undefined);
+        if (!lockedRow) {
+          throw new Error("__JOURNAL_NOT_FOUND__");
+        }
+        if (lockedRow.status !== 'draft') {
+          throw new Error("__JOURNAL_NOT_DRAFT__");
+        }
+
         const [updatedJournal] = await tx.update(cashierSalesJournals)
           .set(journalData)
           .where(eq(cashierSalesJournals.id, id))
@@ -7816,7 +7956,20 @@ export async function registerRoutes(
         details: { previousStatus: existing.status, newStatus: journal?.status ?? existing.status, branchId: existing.branchId },
       });
       res.json({ ...journal, paymentBreakdowns: updatedBreakdowns, signatures });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.message === "__JOURNAL_NOT_FOUND__") {
+        return res.status(404).json({ error: "Cashier journal not found" });
+      }
+      if (error?.message === "__JOURNAL_NOT_DRAFT__") {
+        return res.status(409).json({ error: "تم اعتماد/ترحيل اليومية من جلسة أخرى. أعد التحميل وحاول مجددًا." });
+      }
+      if (error?.code === '23505') {
+        const constraint: string = error?.constraint || '';
+        if (constraint.includes('breakdown')) {
+          return res.status(409).json({ error: "تم إدخال نفس وسيلة الدفع مرتين في نفس اليومية" });
+        }
+        return res.status(409).json({ error: "تعارض في حفظ اليومية (قيد فريد). أعد التحميل وحاول مجددًا." });
+      }
       console.error("Error updating cashier journal:", error);
       res.status(500).json({ error: "Failed to update cashier journal" });
     }
