@@ -5446,10 +5446,17 @@ export class DatabaseStorage implements IStorage {
     return true;
   }
 
+  // All status transitions below use atomic conditional UPDATEs (WHERE id=? AND status IN (...))
+  // to serialize concurrent transitions (e.g. two managers approving simultaneously, or a
+  // cashier submitting while a manager is approving). Returns undefined when no row matched
+  // the expected-status guard — caller maps that to HTTP 409.
   async submitCashierJournal(id: number): Promise<CashierSalesJournal | undefined> {
     const [updated] = await db.update(cashierSalesJournals)
       .set({ status: 'submitted', submittedAt: new Date(), updatedAt: new Date() })
-      .where(eq(cashierSalesJournals.id, id))
+      .where(and(
+        eq(cashierSalesJournals.id, id),
+        eq(cashierSalesJournals.status, 'draft'),
+      ))
       .returning();
     return updated || undefined;
   }
@@ -5457,7 +5464,10 @@ export class DatabaseStorage implements IStorage {
   async postCashierJournal(id: number): Promise<CashierSalesJournal | undefined> {
     const [updated] = await db.update(cashierSalesJournals)
       .set({ status: 'posted', updatedAt: new Date() })
-      .where(eq(cashierSalesJournals.id, id))
+      .where(and(
+        eq(cashierSalesJournals.id, id),
+        eq(cashierSalesJournals.status, 'draft'),
+      ))
       .returning();
     return updated || undefined;
   }
@@ -5465,7 +5475,10 @@ export class DatabaseStorage implements IStorage {
   async approveCashierJournal(id: number, approvedBy: string): Promise<CashierSalesJournal | undefined> {
     const [updated] = await db.update(cashierSalesJournals)
       .set({ status: 'approved', approvedBy, approvedAt: new Date(), updatedAt: new Date() })
-      .where(eq(cashierSalesJournals.id, id))
+      .where(and(
+        eq(cashierSalesJournals.id, id),
+        eq(cashierSalesJournals.status, 'submitted'),
+      ))
       .returning();
     return updated || undefined;
   }
@@ -5473,7 +5486,10 @@ export class DatabaseStorage implements IStorage {
   async rejectCashierJournal(id: number, notes?: string): Promise<CashierSalesJournal | undefined> {
     const [updated] = await db.update(cashierSalesJournals)
       .set({ status: 'rejected', notes, updatedAt: new Date() })
-      .where(eq(cashierSalesJournals.id, id))
+      .where(and(
+        eq(cashierSalesJournals.id, id),
+        eq(cashierSalesJournals.status, 'submitted'),
+      ))
       .returning();
     return updated || undefined;
   }

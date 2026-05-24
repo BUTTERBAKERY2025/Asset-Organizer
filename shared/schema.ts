@@ -2719,7 +2719,9 @@ export const branchDailyClosures = pgTable("branch_daily_closures", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
-  index("idx_daily_closure_branch_date").on(table.branchId, table.closureDate),
+  // UNIQUE constraint: only one closure per branch+date (DB-level race guard).
+  // Maps to error code 23505 → handled as 409 in the route.
+  uniqueIndex("uq_daily_closure_branch_date").on(table.branchId, table.closureDate),
   index("idx_daily_closure_status").on(table.status),
 ]);
 

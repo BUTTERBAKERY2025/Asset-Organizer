@@ -7761,6 +7761,22 @@ export async function registerRoutes(
     }
   });
 
+  // Helper: returns the closureId locking this journal (or null). Used to block
+  // edit/delete/unpost when a daily closure has already aggregated the journal
+  // — preventing silent drift between the closure snapshot and live data.
+  const getClosureLockForJournal = async (journalId: number): Promise<number | null> => {
+    try {
+      const rows = await db.select({ closureId: branchDailyClosureJournals.closureId })
+        .from(branchDailyClosureJournals)
+        .where(eq(branchDailyClosureJournals.journalId, journalId))
+        .limit(1);
+      return rows[0]?.closureId ?? null;
+    } catch (e) {
+      console.warn('[closureLock] check failed for journal', journalId, e);
+      return null;
+    }
+  };
+
   // Update cashier journal
   app.patch("/api/cashier-journals/:id", isAuthenticated, requirePermission("cashier_journal", "edit"), async (req, res) => {
     try {
@@ -7787,6 +7803,7 @@ export async function registerRoutes(
       if (existing.status !== 'draft') {
         return res.status(400).json({ error: "Cannot edit posted, submitted or approved journal" });
       }
+      // Note: closure-lock re-check happens INSIDE the transaction below (TOCTOU-safe).
       
       // Sanitize numeric fields on update payload (NaN/Infinity-safe)
       const NUMERIC_JOURNAL_FIELDS_U = [
@@ -7914,6 +7931,15 @@ export async function registerRoutes(
         if (lockedRow.status !== 'draft') {
           throw new Error("__JOURNAL_NOT_DRAFT__");
         }
+        // CLOSURE-LOCK re-check inside tx (TOCTOU-safe): if a daily closure was finalized
+        // between the precheck and now, refuse to mutate so the closure snapshot stays valid.
+        const lockRows = await tx.select({ closureId: branchDailyClosureJournals.closureId })
+          .from(branchDailyClosureJournals)
+          .where(eq(branchDailyClosureJournals.journalId, id))
+          .limit(1);
+        if (lockRows[0]) {
+          throw new Error(`__JOURNAL_IN_CLOSURE__${lockRows[0].closureId}`);
+        }
 
         const [updatedJournal] = await tx.update(cashierSalesJournals)
           .set(journalData)
@@ -7963,6 +7989,10 @@ export async function registerRoutes(
       if (error?.message === "__JOURNAL_NOT_DRAFT__") {
         return res.status(409).json({ error: "تم اعتماد/ترحيل اليومية من جلسة أخرى. أعد التحميل وحاول مجددًا." });
       }
+      if (typeof error?.message === 'string' && error.message.startsWith("__JOURNAL_IN_CLOSURE__")) {
+        const cid = error.message.replace("__JOURNAL_IN_CLOSURE__", "");
+        return res.status(409).json({ error: `لا يمكن تعديل اليومية لأنها مُضمَّنة في إقفال يومي رقم ${cid}. ألغِ ربط الإقفال أولًا.`, closureId: Number(cid) });
+      }
       if (error?.code === '23505') {
         const constraint: string = error?.constraint || '';
         if (constraint.includes('breakdown')) {
@@ -7993,8 +8023,37 @@ export async function registerRoutes(
       if (existing.status === 'approved') {
         return res.status(400).json({ error: "Cannot delete approved journal" });
       }
-      
-      await storage.deleteCashierJournal(id);
+      // DATA INTEGRITY: Lock the journal row + re-check status + closure link inside one transaction
+      try {
+        await db.transaction(async (tx) => {
+          const lockedRows = await tx.execute(
+            sql`SELECT id, status FROM ${cashierSalesJournals} WHERE id = ${id} FOR UPDATE`
+          );
+          const lockedRow: any = (lockedRows as any).rows?.[0] ?? (Array.isArray(lockedRows) ? (lockedRows as any)[0] : undefined);
+          if (!lockedRow) throw new Error("__JOURNAL_NOT_FOUND__");
+          // Re-check status under lock (status may have flipped to 'approved' since precheck)
+          if (lockedRow.status === 'approved') throw new Error("__JOURNAL_APPROVED__");
+          const linkRows = await tx.select({ closureId: branchDailyClosureJournals.closureId })
+            .from(branchDailyClosureJournals)
+            .where(eq(branchDailyClosureJournals.journalId, id))
+            .limit(1);
+          if (linkRows[0]) throw new Error(`__JOURNAL_IN_CLOSURE__${linkRows[0].closureId}`);
+          // Cascade FK on breakdowns/signatures handles child rows in DB.
+          await tx.delete(cashierSalesJournals).where(eq(cashierSalesJournals.id, id));
+        });
+      } catch (txErr: any) {
+        if (txErr?.message === "__JOURNAL_NOT_FOUND__") {
+          return res.status(404).json({ error: "Cashier journal not found" });
+        }
+        if (txErr?.message === "__JOURNAL_APPROVED__") {
+          return res.status(409).json({ error: "تم اعتماد اليومية من جلسة أخرى، لا يمكن حذفها" });
+        }
+        if (typeof txErr?.message === 'string' && txErr.message.startsWith("__JOURNAL_IN_CLOSURE__")) {
+          const cid = txErr.message.replace("__JOURNAL_IN_CLOSURE__", "");
+          return res.status(409).json({ error: `لا يمكن حذف اليومية لأنها مُضمَّنة في إقفال يومي رقم ${cid}. ألغِ ربط الإقفال أولًا.`, closureId: Number(cid) });
+        }
+        throw txErr;
+      }
       await auditEvent({
         req, module: "cashier_journal", entityId: id, action: "delete",
         entityName: `${existing.cashierName} - ${existing.journalDate}`,
@@ -8049,8 +8108,11 @@ export async function registerRoutes(
         });
       }
       
-      // Submit the journal
+      // Submit the journal (atomic — returns undefined if status changed under us)
       const journal = await storage.submitCashierJournal(id);
+      if (!journal) {
+        return res.status(409).json({ error: "تغيّرت حالة اليومية. أعد التحميل وحاول مجددًا." });
+      }
       
       // Auto-calculate incentive points when journal is submitted
       try {
@@ -8115,8 +8177,11 @@ export async function registerRoutes(
         });
       }
       
-      // Post the journal (change status to 'posted')
+      // Post the journal (atomic — returns undefined if status changed under us)
       const journal = await storage.postCashierJournal(id);
+      if (!journal) {
+        return res.status(409).json({ error: "تغيّرت حالة اليومية. أعد التحميل وحاول مجددًا." });
+      }
       const signatures = await storage.getCashierSignatures(id);
       await auditEvent({
         req, module: "cashier_journal", entityId: id, action: "post",
@@ -8177,6 +8242,9 @@ export async function registerRoutes(
       }
       
       const journal = await storage.approveCashierJournal(id, getCurrentUser(req).id);
+      if (!journal) {
+        return res.status(409).json({ error: "تغيّرت حالة اليومية (ربما اعتمدها/رفضها مشرف آخر). أعد التحميل." });
+      }
       await auditEvent({
         req, module: "cashier_journal", entityId: id, action: "approve",
         entityName: `${existing.cashierName} - ${existing.journalDate}`,
@@ -8219,6 +8287,9 @@ export async function registerRoutes(
       }
       
       const journal = await storage.rejectCashierJournal(id, notes);
+      if (!journal) {
+        return res.status(409).json({ error: "تغيّرت حالة اليومية. أعد التحميل." });
+      }
       await auditEvent({
         req, module: "cashier_journal", entityId: id, action: "reject",
         entityName: `${existing.cashierName} - ${existing.journalDate}`,
@@ -8247,10 +8318,53 @@ export async function registerRoutes(
       if (existing.status !== 'posted' && existing.status !== 'submitted') {
         return res.status(400).json({ error: "يمكن إلغاء ترحيل اليوميات المُرحَّلة أو المُرسَلة فقط" });
       }
-      const journal = await storage.unpostCashierJournal(id);
-      if (!journal) {
-        // Atomic guard matched no rows — status changed between read and write
-        return res.status(409).json({ error: "تغيّرت حالة اليومية، أعد المحاولة" });
+      // DATA INTEGRITY: One atomic transaction does:
+      //   (a) lock journal row, (b) re-check closure link, (c) revert status,
+      //   (d) clear only journal-derived incentive ledger entries.
+      // If anything fails, everything rolls back — no half-state.
+      let journal: any;
+      try {
+        journal = await db.transaction(async (tx) => {
+          const lockedRows = await tx.execute(
+            sql`SELECT id, status FROM ${cashierSalesJournals} WHERE id = ${id} FOR UPDATE`
+          );
+          const lockedRow: any = (lockedRows as any).rows?.[0] ?? (Array.isArray(lockedRows) ? (lockedRows as any)[0] : undefined);
+          if (!lockedRow) throw new Error("__JOURNAL_NOT_FOUND__");
+          if (lockedRow.status !== 'posted' && lockedRow.status !== 'submitted') {
+            throw new Error("__JOURNAL_NOT_UNPOSTABLE__");
+          }
+          const linkRows = await tx.select({ closureId: branchDailyClosureJournals.closureId })
+            .from(branchDailyClosureJournals)
+            .where(eq(branchDailyClosureJournals.journalId, id))
+            .limit(1);
+          if (linkRows[0]) throw new Error(`__JOURNAL_IN_CLOSURE__${linkRows[0].closureId}`);
+          const [updated] = await tx.update(cashierSalesJournals)
+            .set({ status: 'draft', submittedAt: null, approvedBy: null, approvedAt: null, updatedAt: new Date() })
+            .where(eq(cashierSalesJournals.id, id))
+            .returning();
+          // Narrow incentive cleanup to challenge-derived points only (not manual
+          // adjustments, product commissions, branch bonuses, etc.)
+          const journalChallengeTypes = ['challenge_avg_ticket', 'challenge_customer_count', 'challenge_shift_sales'];
+          await tx.delete(cashierPointsLedger).where(and(
+            eq(cashierPointsLedger.cashierId, existing.cashierId),
+            eq(cashierPointsLedger.branchId, existing.branchId),
+            eq(cashierPointsLedger.transactionDate, existing.journalDate),
+            inArray(cashierPointsLedger.pointsType, journalChallengeTypes),
+          ));
+          return updated;
+        });
+      } catch (txErr: any) {
+        if (txErr?.message === "__JOURNAL_NOT_FOUND__") {
+          return res.status(404).json({ error: "Cashier journal not found" });
+        }
+        if (txErr?.message === "__JOURNAL_NOT_UNPOSTABLE__") {
+          return res.status(409).json({ error: "تغيّرت حالة اليومية، أعد المحاولة" });
+        }
+        if (typeof txErr?.message === 'string' && txErr.message.startsWith("__JOURNAL_IN_CLOSURE__")) {
+          const cid = txErr.message.replace("__JOURNAL_IN_CLOSURE__", "");
+          return res.status(409).json({ error: `لا يمكن إلغاء الترحيل لأن اليومية مُضمَّنة في إقفال يومي رقم ${cid}. ألغِ ربط الإقفال أولًا.`, closureId: Number(cid) });
+        }
+        throw txErr;
       }
       await auditEvent({
         req, module: "cashier_journal", entityId: id, action: "unpost",
@@ -8367,8 +8481,14 @@ export async function registerRoutes(
       }
       if (startDate && typeof startDate === 'string') pbFilters.startDate = startDate;
       if (endDate && typeof endDate === 'string') pbFilters.endDate = endDate;
+      // DATA INTEGRITY: by default exclude draft/rejected journals from breakdown reports
+      // (callers can pass ?includeAllStatuses=true to override for admin review)
+      const includeAllStatuses = String(req.query.includeAllStatuses || '') === 'true';
       
-      const { journals } = await storage.getCashierJournalsFiltered(pbFilters);
+      const { journals: allJournals } = await storage.getCashierJournalsFiltered(pbFilters);
+      const journals = includeAllStatuses
+        ? allJournals
+        : allJournals.filter(j => j.status === 'submitted' || j.status === 'posted' || j.status === 'approved');
       
       // Get payment breakdowns for all matching journals
       const journalIds = journals.map(j => j.id);
@@ -10051,7 +10171,6 @@ export async function registerRoutes(
 
   // Create branch daily closure
   app.post("/api/branch-daily-closures", isAuthenticated, requirePermission("daily_closures", "create"), async (req, res) => {
-    try {
       const user = getCurrentUser(req);
       const { branchId, closureDate, journalIds, notes } = req.body;
       
@@ -10094,163 +10213,149 @@ export async function registerRoutes(
         return res.status(400).json({ error: "عدد اليوميات يتجاوز الحد المسموح" });
       }
       
-      // Get journals
-      const journals = await db.select()
+      // Pre-check existence/ownership outside tx (cheap; final checks happen inside tx under lock).
+      const preJournals = await db.select()
         .from(cashierSalesJournals)
         .where(inArray(cashierSalesJournals.id, journalIds));
-      
-      // SECURITY: Verify ALL journals belong to the same branch and date
-      const invalidJournals = journals.filter(
-        j => j.branchId !== branchId || j.journalDate !== closureDate
-      );
-      if (invalidJournals.length > 0) {
-        return res.status(403).json({ error: "بعض اليوميات لا تنتمي لهذا الفرع أو التاريخ المحدد" });
-      }
-      
-      // SECURITY: Verify all requested journals were found (prevent ID guessing)
-      if (journals.length !== journalIds.length) {
+      if (preJournals.length !== journalIds.length) {
         return res.status(400).json({ error: "بعض اليوميات المحددة غير موجودة" });
       }
-      
-      // SECURITY: Check if any journals are already linked to another closure (prevent journal hijacking)
-      const existingLinks = await db.select()
-        .from(branchDailyClosureJournals)
-        .where(inArray(branchDailyClosureJournals.journalId, journalIds));
-      if (existingLinks.length > 0) {
-        return res.status(400).json({ error: "بعض اليوميات مرتبطة بإغلاق يومي آخر بالفعل" });
+      const preInvalid = preJournals.filter(j => j.branchId !== branchId || j.journalDate !== closureDate);
+      if (preInvalid.length > 0) {
+        return res.status(403).json({ error: "بعض اليوميات لا تنتمي لهذا الفرع أو التاريخ المحدد" });
       }
-      
-      // Check if closure already exists for this date/branch
-      const [existingClosure] = await db.select()
-        .from(branchDailyClosures)
-        .where(
-          and(
-            eq(branchDailyClosures.branchId, branchId),
-            eq(branchDailyClosures.closureDate, closureDate),
-          )
-        );
-      
-      if (existingClosure) {
-        return res.status(400).json({ error: "يوجد إغلاق يومي لهذا التاريخ بالفعل" });
-      }
-      
-      // Get payment breakdowns
-      const paymentBreakdowns = await db.select()
-        .from(cashierPaymentBreakdowns)
-        .where(inArray(cashierPaymentBreakdowns.journalId, journalIds));
-      
-      // Calculate totals
-      const totalSales = journals.reduce((sum, j) => sum + (j.totalSales || 0), 0);
-      const cashTotal = journals.reduce((sum, j) => sum + (j.cashTotal || 0), 0);
-      const networkTotal = journals.reduce((sum, j) => sum + (j.networkTotal || 0), 0);
-      const deliveryTotal = journals.reduce((sum, j) => sum + (j.deliveryTotal || 0), 0);
-      const totalExpectedCash = journals.reduce((sum, j) => {
-        const expected = j.expectedCash || ((j.openingBalance || 0) + (j.cashTotal || 0));
-        return sum + expected;
-      }, 0);
-      const totalActualCash = journals.reduce((sum, j) => sum + (j.actualCashDrawer || 0), 0);
-      const totalCashDiscrepancy = totalActualCash - totalExpectedCash;
-      
-      const cashDiscrepancyStatus = totalCashDiscrepancy > 0.5 ? 'surplus' : totalCashDiscrepancy < -0.5 ? 'shortage' : 'balanced';
-      
-      // Aggregate payment breakdowns first (needed for bank discrepancy)
-      const closureCardMethods = ['mada', 'visa', 'mastercard', 'amex', 'card_other', 'card', 'apple_pay', 'stc_pay'];
-      const paymentMethodTotals: Record<string, {
-        totalAmount: number;
-        totalPosAmount: number;
-        totalTerminalAmount: number;
-        totalBankDiscrepancy: number;
-        totalTransactionCount: number;
-        totalTerminalTransactionCount: number;
-      }> = {};
-      
-      for (const pb of paymentBreakdowns) {
-        const method = pb.paymentMethod;
-        if (!paymentMethodTotals[method]) {
-          paymentMethodTotals[method] = {
-            totalAmount: 0,
-            totalPosAmount: 0,
-            totalTerminalAmount: 0,
-            totalBankDiscrepancy: 0,
-            totalTransactionCount: 0,
-            totalTerminalTransactionCount: 0,
-          };
-        }
-        const posAmt = pb.posAmount || pb.amount || 0;
-        const termAmt = pb.terminalAmount || 0;
-        paymentMethodTotals[method].totalAmount += pb.amount || 0;
-        paymentMethodTotals[method].totalPosAmount += posAmt;
-        paymentMethodTotals[method].totalTerminalAmount += termAmt;
-        paymentMethodTotals[method].totalBankDiscrepancy += (termAmt - posAmt);
-        paymentMethodTotals[method].totalTransactionCount += pb.transactionCount || 0;
-        paymentMethodTotals[method].totalTerminalTransactionCount += pb.terminalTransactionCount || 0;
-      }
-      
-      // Compute bank discrepancy from card methods only (consistent with frontend)
-      // If no payment breakdowns exist, fall back to journal-level bank discrepancy totals
-      const totalBankDiscrepancy = paymentBreakdowns.length > 0
-        ? Object.entries(paymentMethodTotals)
-            .filter(([method]) => closureCardMethods.includes(method))
-            .reduce((sum, [, data]) => sum + data.totalBankDiscrepancy, 0)
-        : journals.reduce((sum, j) => sum + (j.bankDiscrepancyTotal || 0), 0);
-      const bankDiscrepancyStatus = totalBankDiscrepancy > 0.5 ? 'surplus' : totalBankDiscrepancy < -0.5 ? 'shortage' : 'balanced';
-      
-      // SECURITY: Use transaction for atomic closure creation
+
+    try {
+      // SNAPSHOT-SAFE: all reads + computation + inserts happen in one tx with row locks
+      // on the selected journals (FOR UPDATE) so no concurrent edit/post/unpost can race
+      // and make the closure snapshot drift.
       const newClosure = await db.transaction(async (tx) => {
+        // Lock the selected journal rows; concurrent PATCH/DELETE/UNPOST will queue behind us.
+        const lockedRows = await tx.execute(
+          sql`SELECT * FROM ${cashierSalesJournals} WHERE id IN (${sql.join(journalIds.map((id: number) => sql`${id}`), sql`, `)}) FOR UPDATE`
+        );
+        const journals: any[] = (lockedRows as any).rows ?? (Array.isArray(lockedRows) ? lockedRows as any : []);
+        if (journals.length !== journalIds.length) {
+          throw new Error("__JOURNALS_MISSING__");
+        }
+        const invalid = journals.filter(j => j.branch_id !== branchId || j.journal_date !== closureDate);
+        if (invalid.length > 0) throw new Error("__JOURNALS_WRONG_SCOPE__");
+        // Re-check links inside tx
+        const linksInTx = await tx.select()
+          .from(branchDailyClosureJournals)
+          .where(inArray(branchDailyClosureJournals.journalId, journalIds));
+        if (linksInTx.length > 0) throw new Error("__JOURNALS_ALREADY_LINKED__");
+        // Re-check no closure exists for branch+date
+        const [existingClosureTx] = await tx.select()
+          .from(branchDailyClosures)
+          .where(and(eq(branchDailyClosures.branchId, branchId), eq(branchDailyClosures.closureDate, closureDate)));
+        if (existingClosureTx) throw new Error("__CLOSURE_EXISTS__");
+        // Read breakdowns + recompute totals INSIDE the tx using the locked snapshot
+        const paymentBreakdowns = await tx.select()
+          .from(cashierPaymentBreakdowns)
+          .where(inArray(cashierPaymentBreakdowns.journalId, journalIds));
+        // Map snake_case row → expected camelCase fields used below
+        const journalsNorm = journals.map((j: any) => ({
+          id: j.id,
+          branchId: j.branch_id,
+          journalDate: j.journal_date,
+          totalSales: Number(j.total_sales) || 0,
+          cashTotal: Number(j.cash_total) || 0,
+          networkTotal: Number(j.network_total) || 0,
+          deliveryTotal: Number(j.delivery_total) || 0,
+          openingBalance: Number(j.opening_balance) || 0,
+          expectedCash: j.expected_cash != null ? Number(j.expected_cash) : null,
+          actualCashDrawer: Number(j.actual_cash_drawer) || 0,
+          totalBankPosAmount: Number(j.total_bank_pos_amount) || 0,
+          totalBankTerminalAmount: Number(j.total_bank_terminal_amount) || 0,
+          bankDiscrepancyTotal: Number(j.bank_discrepancy_total) || 0,
+          customerCount: Number(j.customer_count) || 0,
+          transactionCount: Number(j.transaction_count) || 0,
+        }));
+        const totalSalesTx = journalsNorm.reduce((s, j) => s + j.totalSales, 0);
+        const cashTotalTx = journalsNorm.reduce((s, j) => s + j.cashTotal, 0);
+        const networkTotalTx = journalsNorm.reduce((s, j) => s + j.networkTotal, 0);
+        const deliveryTotalTx = journalsNorm.reduce((s, j) => s + j.deliveryTotal, 0);
+        const totalExpectedCashTx = journalsNorm.reduce((s, j) => s + ((j.expectedCash ?? (j.openingBalance + j.cashTotal))), 0);
+        const totalActualCashTx = journalsNorm.reduce((s, j) => s + j.actualCashDrawer, 0);
+        const totalCashDiscrepancyTx = totalActualCashTx - totalExpectedCashTx;
+        const cashDiscrepancyStatusTx = totalCashDiscrepancyTx > 0.5 ? 'surplus' : totalCashDiscrepancyTx < -0.5 ? 'shortage' : 'balanced';
+        const pmTotals: Record<string, any> = {};
+        for (const pb of paymentBreakdowns) {
+          const m = pb.paymentMethod;
+          if (!pmTotals[m]) pmTotals[m] = { totalAmount: 0, totalPosAmount: 0, totalTerminalAmount: 0, totalBankDiscrepancy: 0, totalTransactionCount: 0, totalTerminalTransactionCount: 0 };
+          const posAmt = pb.posAmount || pb.amount || 0;
+          const termAmt = pb.terminalAmount || 0;
+          pmTotals[m].totalAmount += pb.amount || 0;
+          pmTotals[m].totalPosAmount += posAmt;
+          pmTotals[m].totalTerminalAmount += termAmt;
+          pmTotals[m].totalBankDiscrepancy += (termAmt - posAmt);
+          pmTotals[m].totalTransactionCount += pb.transactionCount || 0;
+          pmTotals[m].totalTerminalTransactionCount += pb.terminalTransactionCount || 0;
+        }
+        const closureCardMethodsTx = ['mada','visa','mastercard','amex','card_other','card','apple_pay','stc_pay'];
+        const totalBankDiscrepancyTx = paymentBreakdowns.length > 0
+          ? Object.entries(pmTotals).filter(([m]) => closureCardMethodsTx.includes(m)).reduce((s, [, d]) => s + (d as any).totalBankDiscrepancy, 0)
+          : journalsNorm.reduce((s, j) => s + j.bankDiscrepancyTotal, 0);
+        const bankDiscrepancyStatusTx = totalBankDiscrepancyTx > 0.5 ? 'surplus' : totalBankDiscrepancyTx < -0.5 ? 'shortage' : 'balanced';
+        const totalCustomerCountTx = journalsNorm.reduce((s, j) => s + j.customerCount, 0);
+
         const [closure] = await tx.insert(branchDailyClosures).values({
           branchId,
           closureDate,
-          totalSales,
-          cashTotal,
-          networkTotal,
-          deliveryTotal,
-          totalOpeningBalance: journals.reduce((sum, j) => sum + (j.openingBalance || 0), 0),
-          totalExpectedCash,
-          totalActualCash,
-          totalCashDiscrepancy,
-          cashDiscrepancyStatus,
-          totalBankPosAmount: journals.reduce((sum, j) => sum + (j.totalBankPosAmount || 0), 0),
-          totalBankTerminalAmount: journals.reduce((sum, j) => sum + (j.totalBankTerminalAmount || 0), 0),
-          totalBankDiscrepancy,
-          bankDiscrepancyStatus,
-          totalCustomerCount: journals.reduce((sum, j) => sum + (j.customerCount || 0), 0),
-          totalTransactionCount: journals.reduce((sum, j) => sum + (j.transactionCount || 0), 0),
-          averageTicket: totalSales / Math.max(journals.reduce((sum, j) => sum + (j.customerCount || 0), 0), 1),
-          journalsCount: journals.length,
+          totalSales: totalSalesTx,
+          cashTotal: cashTotalTx,
+          networkTotal: networkTotalTx,
+          deliveryTotal: deliveryTotalTx,
+          totalOpeningBalance: journalsNorm.reduce((s, j) => s + j.openingBalance, 0),
+          totalExpectedCash: totalExpectedCashTx,
+          totalActualCash: totalActualCashTx,
+          totalCashDiscrepancy: totalCashDiscrepancyTx,
+          cashDiscrepancyStatus: cashDiscrepancyStatusTx,
+          totalBankPosAmount: journalsNorm.reduce((s, j) => s + j.totalBankPosAmount, 0),
+          totalBankTerminalAmount: journalsNorm.reduce((s, j) => s + j.totalBankTerminalAmount, 0),
+          totalBankDiscrepancy: totalBankDiscrepancyTx,
+          bankDiscrepancyStatus: bankDiscrepancyStatusTx,
+          totalCustomerCount: totalCustomerCountTx,
+          totalTransactionCount: journalsNorm.reduce((s, j) => s + j.transactionCount, 0),
+          averageTicket: totalSalesTx / Math.max(totalCustomerCountTx, 1),
+          journalsCount: journalsNorm.length,
           status: 'open',
           notes,
           createdBy: user.id,
         }).returning();
-        
+
         for (const journalId of journalIds) {
-          await tx.insert(branchDailyClosureJournals).values({
-            closureId: closure.id,
-            journalId,
-          });
+          await tx.insert(branchDailyClosureJournals).values({ closureId: closure.id, journalId });
         }
-        
-        for (const [method, totals] of Object.entries(paymentMethodTotals)) {
-          const discType = totals.totalBankDiscrepancy > 0.5 ? 'surplus' : totals.totalBankDiscrepancy < -0.5 ? 'shortage' : 'balanced';
+        for (const [method, totals] of Object.entries(pmTotals)) {
+          const t = totals as any;
+          const discType = t.totalBankDiscrepancy > 0.5 ? 'surplus' : t.totalBankDiscrepancy < -0.5 ? 'shortage' : 'balanced';
           await tx.insert(branchDailyClosurePayments).values({
             closureId: closure.id,
             paymentMethod: method,
-            totalAmount: totals.totalAmount,
-            totalPosAmount: totals.totalPosAmount,
-            totalTerminalAmount: totals.totalTerminalAmount,
-            totalBankDiscrepancy: totals.totalBankDiscrepancy,
+            totalAmount: t.totalAmount,
+            totalPosAmount: t.totalPosAmount,
+            totalTerminalAmount: t.totalTerminalAmount,
+            totalBankDiscrepancy: t.totalBankDiscrepancy,
             bankDiscrepancyType: discType,
-            totalTransactionCount: totals.totalTransactionCount,
-            totalTerminalTransactionCount: totals.totalTerminalTransactionCount,
+            totalTransactionCount: t.totalTransactionCount,
+            totalTerminalTransactionCount: t.totalTerminalTransactionCount,
           });
         }
-        
         return closure;
       });
-      
       res.json(newClosure);
-    } catch (error: any) {
-      console.error("Error creating branch daily closure:", error);
-      res.status(500).json({ error: "فشل في إنشاء الإغلاق اليومي" });
+      return;
+    } catch (txErr: any) {
+      const msg = txErr?.message || '';
+      if (msg === "__JOURNALS_MISSING__") return res.status(400).json({ error: "بعض اليوميات المحددة غير موجودة" });
+      if (msg === "__JOURNALS_WRONG_SCOPE__") return res.status(403).json({ error: "بعض اليوميات لا تنتمي لهذا الفرع أو التاريخ المحدد" });
+      if (msg === "__JOURNALS_ALREADY_LINKED__") return res.status(409).json({ error: "بعض اليوميات مرتبطة بإغلاق يومي آخر بالفعل" });
+      if (msg === "__CLOSURE_EXISTS__") return res.status(409).json({ error: "يوجد إغلاق يومي لهذا التاريخ بالفعل" });
+      if (txErr?.code === '23505') return res.status(409).json({ error: "تعارض أثناء إنشاء الإغلاق اليومي. أعد المحاولة." });
+      console.error("Error creating branch daily closure (tx):", txErr);
+      return res.status(500).json({ error: "فشل في إنشاء الإغلاق اليومي" });
     }
   });
 
