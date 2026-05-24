@@ -404,9 +404,12 @@ function WhatsAppQuickSend({ employees, branches }: { employees: BranchEmployee[
     return Array.from(set).sort();
   }, [employeesWithPhone]);
 
-  // Bulk recipients list (computed from current filter) — dedupe by normalized phone
+  // Bulk recipients list (computed from current filter) — dedupe by normalized phone.
+  // For bulk audiences we always exclude on-leave employees to avoid disturbing
+  // them during their leave; single send still allows targeting an on-leave
+  // employee explicitly if the user picks them from the dropdown.
   const bulkRecipients = useMemo(() => {
-    let list = employeesWithPhone;
+    let list = employeesWithPhone.filter((e) => !e.status || e.status === "active");
     if (bulkAudience === "by_branch" && bulkBranch) list = list.filter((e) => String(e.branchId) === bulkBranch);
     if (bulkAudience === "by_nationality" && bulkNationality) list = list.filter((e) => e.nationality === bulkNationality);
     const seen = new Set<string>();
@@ -1073,18 +1076,28 @@ type FunnelData = {
 const HiringFunnelChart = React.memo(function HiringFunnelChart({ data }: { data?: FunnelData }) {
   const steps = data?.steps ?? [];
   const totals = data?.totals;
-  const total = steps.reduce((s, r) => s + r.value, 0);
+  // Badge shows the *top* of the funnel (this month's applications) not the
+  // sum of every stage — summing stages double-counts the same candidate as
+  // they advance through invited → interviewed → offer → onboarding.
+  const badgeTotal = totals?.applicationsThisMonth ?? steps.reduce((s, r) => s + r.value, 0);
+  const hasData = steps.some((s) => s.value > 0);
   return (
     <Card className="border-gray-100" data-testid="chart-hiring-funnel">
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
           <UserPlus className="w-4 h-4 text-gray-500" />
           <CardTitle className="text-sm font-semibold">قمع التوظيف وتوقعات الشهر القادم</CardTitle>
-          <Badge variant="secondary" className="ms-auto h-5 text-[10px]">{fmt(total)}</Badge>
+          <Badge
+            variant="secondary"
+            className="ms-auto h-5 text-[10px]"
+            title="طلبات التوظيف الجديدة لهذا الشهر"
+          >
+            {fmt(badgeTotal)}
+          </Badge>
         </div>
       </CardHeader>
       <CardContent className="pt-2">
-        {total === 0 ? (
+        {!hasData ? (
           <div className="h-[180px] flex items-center justify-center text-xs text-muted-foreground">لا توجد بيانات توظيف هذا الشهر</div>
         ) : (
           <div className="h-[180px]" dir="ltr">
