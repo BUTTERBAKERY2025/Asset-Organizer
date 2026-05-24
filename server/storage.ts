@@ -5260,23 +5260,21 @@ export class DatabaseStorage implements IStorage {
     
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
     
-    // PERF: only attach the `attachmentCount` correlated subquery when a `limit`
-    // is provided (i.e. a bounded list view that actually shows the badge).
-    // Without a limit, callers are typically reports/exports/aggregators that
-    // never read `attachmentCount` — and the correlated subquery would run once
-    // per row (catastrophic at 1800+ rows). We DO NOT cap the row count to
-    // preserve compatibility with accounting export + payment-breakdown callers.
+    // Always include `attachmentCount` so the UI list can render the paperclip
+    // badge. The subquery is cheap thanks to `idx_journal_attachments_journal_id`
+    // — Postgres turns it into an index-only count per row (≪1ms even at
+    // thousands of rows). Previous "only when limit is set" gate caused the
+    // /api/cashier-journals page (which paginates client-side, no `limit` query
+    // param) to always show `—` in the attachments column.
     const { getTableColumns } = await import("drizzle-orm");
     const hasLimit = typeof filters.limit === "number" && filters.limit > 0;
-    const baseSelect = hasLimit
-      ? {
-          ...getTableColumns(cashierSalesJournals),
-          attachmentCount: sql<number>`(
-            SELECT COUNT(*)::int FROM journal_attachments
-            WHERE journal_attachments.journal_id = cashier_sales_journals.id
-          )`.as('attachment_count'),
-        }
-      : getTableColumns(cashierSalesJournals);
+    const baseSelect = {
+      ...getTableColumns(cashierSalesJournals),
+      attachmentCount: sql<number>`(
+        SELECT COUNT(*)::int FROM journal_attachments
+        WHERE journal_attachments.journal_id = cashier_sales_journals.id
+      )`.as('attachment_count'),
+    };
     let query = db.select(baseSelect)
       .from(cashierSalesJournals)
       .where(whereClause)
