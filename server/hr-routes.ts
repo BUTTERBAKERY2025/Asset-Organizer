@@ -1173,9 +1173,12 @@ export function registerHrRoutes(app: Express) {
         absenceDeduction: Math.round(salaryAbsenceDeduction),
         net: Math.round(salaryNet),
       };
+      // Distribution charts: count ACTIVE employees only so they match the
+      // "Active Employees" tile, salary calculations, and the per-branch donut.
+      // Non-active rows (inactive/terminated/suspended/on_leave) are excluded.
       const byNationalityMap: Record<string, number> = {};
       const byJobTitleMap: Record<string, number> = {};
-      employees.forEach((e: any) => {
+      activeEmployeesList.forEach((e: any) => {
         if (e.nationality) byNationalityMap[e.nationality] = (byNationalityMap[e.nationality] || 0) + 1;
         if (e.jobTitle) byJobTitleMap[e.jobTitle] = (byJobTitleMap[e.jobTitle] || 0) + 1;
       });

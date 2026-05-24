@@ -1597,7 +1597,7 @@ export default function HRHubPage() {
 
         {/* Dense KPI Grid — 2 cols mobile → 3 sm → 4 md → 5 lg → 6 xl → 7 2xl */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2 sm:gap-2.5">
-          <StatTile testId="tile-active"          value={activeEmployees}        label="الموظفون النشطون"        icon={UserCheck}      tone="teal"     href="/branch-employees"
+          <StatTile testId="tile-active"          value={activeEmployees}        label="الموظفون النشطون"        icon={UserCheck}      tone="teal"     href="/branch-employees?status=active"
             delta={comparisons?.hires?.delta} deltaLabel="تعيينات الشهر" />
           <StatTile testId="tile-inactive"        value={inactiveEmployees}      label="غير نشطين / موقوفون"     icon={UserX}          tone="slate"    href="/branch-employees?status=inactive" />
           <StatTile
