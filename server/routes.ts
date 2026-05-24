@@ -43,6 +43,7 @@ import {
   branchDailyClosurePayments, 
   branchDailyClosureJournals,
   cashierSalesJournals,
+  cashierSignatures,
   productionOrders,
   cashierPaymentBreakdowns,
   dailySalesData,
@@ -7602,38 +7603,47 @@ export async function registerRoutes(
       const transactionCount = parseInt(journalData.transactionCount) || 0;
       const totalSalesAmount = parseFloat(journalData.totalSales) || 0;
       journalData.averageTicket = transactionCount > 0 ? totalSalesAmount / transactionCount : 0;
-      
+
+      // Compute cash discrepancy inline (don't rely on storage helper to recompute)
+      const expectedCashCalc = parseFloat(journalData.cashTotal) || 0;
+      const actualCashCalc = parseFloat(journalData.actualCashDrawer) || 0;
+      const cashDiff = actualCashCalc - expectedCashCalc;
+      journalData.expectedCash = expectedCashCalc;
+      journalData.discrepancyAmount = Math.abs(cashDiff);
+      journalData.discrepancyStatus = cashDiff === 0 ? 'balanced' : (cashDiff < 0 ? 'shortage' : 'surplus');
+
       // Add creator info
       journalData.createdBy = req.currentUser?.id;
-      
-      // Create the journal
-      const journal = await storage.createCashierJournal(journalData);
-      
-      // Create payment breakdowns if provided
-      if (paymentBreakdowns && Array.isArray(paymentBreakdowns) && paymentBreakdowns.length > 0) {
-        const breakdownsWithJournalId = paymentBreakdowns.map((b: any) => ({
-          ...b,
-          journalId: journal.id,
-        }));
-        await storage.createPaymentBreakdowns(breakdownsWithJournalId);
-      }
-      
-      // Save cashier signature if provided
-      if (signatureData && signerName) {
-        await storage.createCashierSignature({
-          journalId: journal.id,
-          signatureType: 'cashier',
-          signerName: signerName,
-          signatureData: signatureData,
-          signerId: req.currentUser?.id,
-        });
-      }
-      
-      // Get the complete journal with breakdowns and signatures
-      const [createdBreakdowns, signatures] = await Promise.all([
-        storage.getPaymentBreakdowns(journal.id),
-        storage.getCashierSignatures(journal.id),
-      ]);
+
+      // ATOMIC SAVE: journal + breakdowns + signature must all succeed or all roll back.
+      // Without this, a failure between inserts would leave a corrupt journal
+      // (e.g. totals without breakdowns) which is what cashiers were experiencing.
+      const { journal, createdBreakdowns, signatures } = await db.transaction(async (tx) => {
+        const [created] = await tx.insert(cashierSalesJournals).values(journalData).returning();
+
+        let breakdownsCreated: any[] = [];
+        if (paymentBreakdowns && Array.isArray(paymentBreakdowns) && paymentBreakdowns.length > 0) {
+          const breakdownsWithJournalId = paymentBreakdowns.map((b: any) => ({
+            ...b,
+            journalId: created.id,
+          }));
+          breakdownsCreated = await tx.insert(cashierPaymentBreakdowns).values(breakdownsWithJournalId).returning();
+        }
+
+        let sigs: any[] = [];
+        if (signatureData && signerName) {
+          const [sig] = await tx.insert(cashierSignatures).values({
+            journalId: created.id,
+            signatureType: 'cashier',
+            signerName: signerName,
+            signatureData: signatureData,
+            signerId: req.currentUser?.id,
+          }).returning();
+          sigs = [sig];
+        }
+
+        return { journal: created, createdBreakdowns: breakdownsCreated, signatures: sigs };
+      });
       
       // Create notification for cashier journal
       try {
@@ -7686,10 +7696,14 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Cannot edit posted, submitted or approved journal" });
       }
       
-      // Server-side validation: totals must match (only for posting, not drafts)
-      if (paymentBreakdowns && Array.isArray(paymentBreakdowns) && journalData.totalSales !== undefined) {
+      // Server-side validation + recompute breakdown-derived aggregates whenever
+      // paymentBreakdowns is provided (including empty array — so totals reset to 0).
+      if (paymentBreakdowns && Array.isArray(paymentBreakdowns)) {
         const breakdownTotal = paymentBreakdowns.reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
-        const diff = Math.abs(journalData.totalSales - breakdownTotal);
+        const totalSalesForCheck = journalData.totalSales !== undefined
+          ? (parseFloat(journalData.totalSales) || 0)
+          : (existing.totalSales || 0);
+        const diff = Math.abs(totalSalesForCheck - breakdownTotal);
         const tolerance = 1.0; // Allow 1 SAR tolerance for rounding errors
         // Only reject if explicitly posting - drafts can be saved with mismatches
         if (journalData.status === 'posted' && diff > tolerance) {
@@ -7741,40 +7755,60 @@ export async function registerRoutes(
       // If neither is provided, journalData.averageTicket remains undefined
       // and will not overwrite the existing value in the database
       
-      const journal = await storage.updateCashierJournal(id, journalData);
-      
-      // Update payment breakdowns if provided
-      if (paymentBreakdowns && Array.isArray(paymentBreakdowns)) {
-        await storage.deletePaymentBreakdowns(id);
-        if (paymentBreakdowns.length > 0) {
-          const breakdownsWithJournalId = paymentBreakdowns.map((b: any) => ({
-            ...b,
-            journalId: id,
-          }));
-          await storage.createPaymentBreakdowns(breakdownsWithJournalId);
-        }
+      // Inline cash-discrepancy recomputation (don't depend on storage helper inside tx).
+      if (journalData.cashTotal !== undefined || journalData.actualCashDrawer !== undefined) {
+        const expectedCashU = journalData.cashTotal !== undefined
+          ? (parseFloat(journalData.cashTotal) || 0)
+          : (existing.cashTotal || 0);
+        const actualCashU = journalData.actualCashDrawer !== undefined
+          ? (parseFloat(journalData.actualCashDrawer) || 0)
+          : (existing.actualCashDrawer || 0);
+        const diffU = actualCashU - expectedCashU;
+        journalData.expectedCash = expectedCashU;
+        journalData.discrepancyAmount = Math.abs(diffU);
+        journalData.discrepancyStatus = diffU === 0 ? 'balanced' : (diffU < 0 ? 'shortage' : 'surplus');
       }
-      
-      // Update/create cashier signature if provided
-      if (signatureData && signerName) {
-        // Check if cashier signature already exists
-        const existingSigs = await storage.getCashierSignatures(id);
-        const existingCashierSig = existingSigs.find(s => s.signatureType === 'cashier');
-        if (!existingCashierSig) {
-          await storage.createCashierSignature({
-            journalId: id,
-            signatureType: 'cashier',
-            signerName: signerName,
-            signatureData: signatureData,
-            signerId: req.currentUser?.id,
-          });
+      journalData.updatedAt = new Date();
+
+      // ATOMIC UPDATE: journal + delete-old-breakdowns + insert-new-breakdowns + signature
+      // all succeed together or roll back together. Previously, if the breakdown re-insert
+      // failed after the delete, the cashier was left with totals updated but NO breakdowns
+      // — which matches the "saves but data is not stored correctly" report.
+      const { journal, updatedBreakdowns, signatures } = await db.transaction(async (tx) => {
+        const [updatedJournal] = await tx.update(cashierSalesJournals)
+          .set(journalData)
+          .where(eq(cashierSalesJournals.id, id))
+          .returning();
+
+        if (paymentBreakdowns && Array.isArray(paymentBreakdowns)) {
+          await tx.delete(cashierPaymentBreakdowns).where(eq(cashierPaymentBreakdowns.journalId, id));
+          if (paymentBreakdowns.length > 0) {
+            const breakdownsWithJournalId = paymentBreakdowns.map((b: any) => ({
+              ...b,
+              journalId: id,
+            }));
+            await tx.insert(cashierPaymentBreakdowns).values(breakdownsWithJournalId);
+          }
         }
-      }
-      
-      const [updatedBreakdowns, signatures] = await Promise.all([
-        storage.getPaymentBreakdowns(id),
-        storage.getCashierSignatures(id),
-      ]);
+
+        if (signatureData && signerName) {
+          const existingSigs = await tx.select().from(cashierSignatures).where(eq(cashierSignatures.journalId, id));
+          const existingCashierSig = existingSigs.find((s: any) => s.signatureType === 'cashier');
+          if (!existingCashierSig) {
+            await tx.insert(cashierSignatures).values({
+              journalId: id,
+              signatureType: 'cashier',
+              signerName: signerName,
+              signatureData: signatureData,
+              signerId: req.currentUser?.id,
+            });
+          }
+        }
+
+        const breakdownsAfter = await tx.select().from(cashierPaymentBreakdowns).where(eq(cashierPaymentBreakdowns.journalId, id));
+        const signaturesAfter = await tx.select().from(cashierSignatures).where(eq(cashierSignatures.journalId, id));
+        return { journal: updatedJournal, updatedBreakdowns: breakdownsAfter, signatures: signaturesAfter };
+      });
       await auditEvent({
         req, module: "cashier_journal", entityId: id, action: "update",
         entityName: `${existing.cashierName} - ${existing.journalDate}`,
