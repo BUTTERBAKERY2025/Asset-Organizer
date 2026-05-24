@@ -29690,7 +29690,10 @@ export async function registerRoutes(
   });
 
   // Get branch ranking - يستخدم البيانات المحسوبة تلقائياً من enhanced-summary
-  app.get("/api/financials/ranking", isAuthenticated, requirePermission("dashboard", "view"), async (req, res) => {
+  // NOTE: must match the parent page's permission (`pnl`) — previously this
+  // required `dashboard` which prevented non-admin users granted only `pnl`
+  // from loading the ranking tab on the P&L dashboard.
+  app.get("/api/financials/ranking", isAuthenticated, requirePermission("pnl", "view"), async (req, res) => {
     try {
       const { year, month, metric } = req.query;
       const yearNum = parseInt(year as string) || new Date().getFullYear();
