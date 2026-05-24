@@ -827,20 +827,32 @@ export function registerHrRoutes(app: Express) {
       }
       const branchIds = filter.branchIds; // null = all, [] = none
       const scopedBranchId = filter.singleBranchId || queryBranchId || null;
-      const todayDate = new Date();
-      const today = todayDate.toISOString().slice(0, 10);
-      const thirtyOut = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+      // All date math is anchored to Saudi Arabia (Asia/Riyadh, UTC+3, no DST).
+      // toISOString() returns UTC dates which, between 21:00 UTC and midnight,
+      // are already "tomorrow" in Riyadh — and conversely between 00:00 and
+      // 03:00 Riyadh local time, UTC is still "yesterday". Without this shift,
+      // attendance for early-morning bakers would be queried against the wrong
+      // date and the day boundary on month-over-month comparisons would skew.
+      const SAUDI_OFFSET_MS = 3 * 60 * 60 * 1000;
+      const riyadhNow = new Date(Date.now() + SAUDI_OFFSET_MS);
+      const today = riyadhNow.toISOString().slice(0, 10);
+      const thirtyOut = new Date(riyadhNow.getTime() + 30 * 86400000).toISOString().slice(0, 10);
       const thisMonth = today.slice(0, 7);
-      // Previous month YYYY-MM (e.g., 2026-04 if today is 2026-05-23)
-      const prevMonthDate = new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1);
+      // Use Riyadh-local Y/M to derive previous month; getUTC* on the shifted
+      // date gives us the Riyadh calendar fields directly.
+      const riyadhYear = riyadhNow.getUTCFullYear();
+      const riyadhMonth0 = riyadhNow.getUTCMonth(); // 0-based
+      const prevMonthDate = new Date(Date.UTC(riyadhYear, riyadhMonth0 - 1, 1));
       const prevMonth = prevMonthDate.toISOString().slice(0, 7);
-      const prevMonthNum = prevMonthDate.getMonth() + 1;
-      const prevMonthYear = prevMonthDate.getFullYear();
-      // Last 7 days range
-      const sevenDaysAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
-      // Current month start date (for hires-this-month vs prev-month)
+      const prevMonthNum = prevMonthDate.getUTCMonth() + 1;
+      const prevMonthYear = prevMonthDate.getUTCFullYear();
+      // Last 7 days range (Riyadh-local)
+      const sevenDaysAgo = new Date(riyadhNow.getTime() - 6 * 86400000).toISOString().slice(0, 10);
+      // Current/previous month boundaries — compute the true last day of the
+      // previous month (handles 28/29/30/31) instead of always using "-31".
       const thisMonthStart = `${thisMonth}-01`;
       const prevMonthStart = `${prevMonth}-01`;
+      const prevMonthEnd = new Date(Date.UTC(riyadhYear, riyadhMonth0, 0)).toISOString().slice(0, 10);
 
       const empCond = applyBranchScope(branchEmployees, branchIds);
       const docCond = applyBranchScope(employeeDocuments, branchIds);
@@ -909,7 +921,7 @@ export function registerHrRoutes(app: Express) {
       );
       const prevMonthAttCond = and(
         gte(attendanceRecords.attendanceDate, prevMonthStart),
-        lte(attendanceRecords.attendanceDate, `${prevMonth}-31`),
+        lte(attendanceRecords.attendanceDate, prevMonthEnd),
         scopedBranchId
           ? eq(attendanceRecords.branchId, scopedBranchId)
           : (branchIds === null ? sql`true` : (branchIds.length === 0 ? sql`false` : inArray(attendanceRecords.branchId, branchIds))),
@@ -1182,10 +1194,11 @@ export function registerHrRoutes(app: Express) {
         pending: eosRows.filter((e: any) => e.status === "pending").length,
       };
 
-      // Monthly Salary Closing — current month status across scoped branches
-      const now = new Date();
-      const curMonth = now.getMonth() + 1;
-      const curYear = now.getFullYear();
+      // Monthly Salary Closing — current month status across scoped branches.
+      // Riyadh-anchored so the period doesn't roll back to last month during
+      // the 00:00–02:59 Riyadh window on the 1st of each month.
+      const curMonth = riyadhMonth0 + 1;
+      const curYear = riyadhYear;
       const periodMonthCond = and(eq(financialPeriods.month, curMonth), eq(financialPeriods.year, curYear));
       const periodCond = branchIds === null
         ? periodMonthCond
@@ -1300,7 +1313,8 @@ export function registerHrRoutes(app: Express) {
       // Weekly attendance: build last 7 days array with present/late/absent counts
       const weeklyAttendance: { date: string; present: number; late: number; absent: number; total: number }[] = [];
       for (let i = 6; i >= 0; i--) {
-        const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+        // Riyadh-anchored so labels match the queried day buckets.
+        const d = new Date(riyadhNow.getTime() - i * 86400000).toISOString().slice(0, 10);
         const dayRows = weeklyAttRows.filter((r: any) => r.d === d);
         const present = dayRows.filter((r: any) => r.status === "present").reduce((s, r: any) => s + Number(r.c), 0);
         const late = dayRows.filter((r: any) => r.status === "late").reduce((s, r: any) => s + Number(r.c), 0);
