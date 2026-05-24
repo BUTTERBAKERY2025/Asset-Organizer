@@ -1,7 +1,16 @@
 import type { Express } from "express";
+import crypto from "node:crypto";
 import { db } from "./db";
 import { eq, and, desc, sql, inArray, gte, lte, lt } from "drizzle-orm";
 import { isAuthenticated, requirePermission, getEffectiveBranchFilter, getCachedPermissionsForUser } from "./auth";
+import {
+  WARNING_TEMPLATES,
+  WARNING_REASON_CATEGORIES,
+  getWarningTemplate,
+  getWarningReasonCategory,
+  renderWarningBody,
+  WARNING_LEGAL_NOTICE,
+} from "@shared/warning-templates";
 import {
   employeeDocuments,
   leaveRequests,
@@ -455,11 +464,14 @@ export function registerHrRoutes(app: Express) {
         return res.status(403).json({ error: "ليس لديك صلاحية على فرع الموظف" });
       }
       const safeBranchId = emp.branchId;
+      // Generate a random URL-safe token used for the public WhatsApp signing link.
+      const publicToken = crypto.randomBytes(24).toString("base64url");
       const [created] = await db.insert(employeeWarnings).values({
         ...parsed,
         branchId: safeBranchId,
         issuedBy: parsed.issuedBy || getUserId(req) || undefined,
-      }).returning();
+        publicToken,
+      } as any).returning();
 
       // إذا فيه deductionAmount → ينشئ خصم في salary_deductions تلقائياً (شهر إصدار الإنذار)
       if (parsed.deductionAmount && parsed.deductionAmount > 0) {
@@ -544,6 +556,155 @@ export function registerHrRoutes(app: Express) {
     } catch (e: any) {
       console.error("[hr/warnings] delete error:", e);
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ---- Templates & reason categories (static catalog, served from server
+  //      to keep one source of truth and avoid bundling for non-HR users) ----
+  app.get("/api/hr/warnings/templates", isAuthenticated, requirePermission("hr_warnings"), (_req, res) => {
+    res.json({ templates: WARNING_TEMPLATES, reasons: WARNING_REASON_CATEGORIES });
+  });
+
+  // ---- Regenerate the public signing token (e.g. if the old link leaked) ----
+  app.post("/api/hr/warnings/:id/regenerate-token", isAuthenticated, requirePermission("hr_warnings"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const { branchIds } = getBranchScope(req);
+      const [existing] = await db.select().from(employeeWarnings).where(eq(employeeWarnings.id, id));
+      if (!existing) return res.status(404).json({ error: "الإنذار غير موجود" });
+      if (branchIds !== null && !branchIds.includes(existing.branchId)) {
+        return res.status(403).json({ error: "ليس لديك صلاحية" });
+      }
+      const publicToken = crypto.randomBytes(24).toString("base64url");
+      const [updated] = await db.update(employeeWarnings)
+        .set({ publicToken, signedAt: null, signatureData: null, signedIp: null, signedUserAgent: null, updatedAt: new Date() } as any)
+        .where(eq(employeeWarnings.id, id))
+        .returning();
+      res.json(updated);
+    } catch (e: any) {
+      console.error("[hr/warnings/regenerate-token] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ---- Per-employee disciplinary record (account statement) ----
+  app.get("/api/hr/employees/:branchEmployeeId/disciplinary-record",
+    isAuthenticated, requirePermission("hr_warnings"), async (req, res) => {
+    try {
+      const branchEmployeeId = parseInt(req.params.branchEmployeeId, 10);
+      const { branchIds } = getBranchScope(req);
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, branchEmployeeId));
+      if (!emp) return res.status(404).json({ error: "الموظف غير موجود" });
+      if (branchIds !== null && !branchIds.includes(emp.branchId || "")) {
+        return res.status(403).json({ error: "ليس لديك صلاحية على فرع الموظف" });
+      }
+      const rows = await db.select()
+        .from(employeeWarnings)
+        .where(eq(employeeWarnings.branchEmployeeId, branchEmployeeId))
+        .orderBy(desc(employeeWarnings.issuedDate));
+      const totalWarnings = rows.length;
+      const activeWarnings = rows.filter(r => r.status === "active").length;
+      const signedWarnings = rows.filter(r => r.signedAt).length;
+      const totalDeductions = rows.reduce((s, r) => s + (r.deductionAmount || 0), 0);
+      const byLevel: Record<string, number> = {};
+      rows.forEach(r => { byLevel[r.level] = (byLevel[r.level] || 0) + 1; });
+      res.json({
+        employee: {
+          id: emp.id, employeeName: emp.employeeName, jobTitle: emp.jobTitle,
+          branchId: emp.branchId, nationalId: (emp as any).nationalId,
+        },
+        summary: { totalWarnings, activeWarnings, signedWarnings, totalDeductions, byLevel },
+        warnings: rows,
+      });
+    } catch (e: any) {
+      console.error("[hr/warnings/disciplinary-record] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ====================================================================
+  // PUBLIC endpoints (NO auth) — accessed via WhatsApp link by employee
+  // ====================================================================
+  app.get("/api/public/warning/:token", async (req, res) => {
+    try {
+      const token = String(req.params.token || "").slice(0, 128);
+      if (!token) return res.status(404).json({ error: "رابط غير صالح" });
+      const [w] = await db.select().from(employeeWarnings).where(eq(employeeWarnings.publicToken, token));
+      if (!w) return res.status(404).json({ error: "الإنذار غير موجود أو الرابط منتهي" });
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, w.branchEmployeeId));
+      const [br] = w.branchId ? await db.select().from(branches).where(eq(branches.id, w.branchId)) : [null];
+      const template = getWarningTemplate(w.templateId);
+      const reason = getWarningReasonCategory(w.reasonCategory);
+      const renderedBody = template
+        ? renderWarningBody(template.body, { name: emp?.employeeName, date: w.issuedDate })
+        : null;
+      res.json({
+        warning: {
+          id: w.id, level: w.level, reason: w.reason, description: w.description,
+          issuedDate: w.issuedDate, deductionAmount: w.deductionAmount,
+          templateId: w.templateId, reasonCategory: w.reasonCategory,
+          attachments: w.attachments || [],
+          signedAt: w.signedAt, signatureData: w.signatureData,
+          status: w.status,
+        },
+        employee: emp ? {
+          id: emp.id, employeeName: emp.employeeName, jobTitle: emp.jobTitle,
+          nationalId: (emp as any).nationalId,
+        } : null,
+        branch: br ? { id: br.id, name: br.name, nameAr: (br as any).nameAr } : null,
+        template: template ? { id: template.id, label: template.label, body: renderedBody } : null,
+        reasonCategoryLabel: reason?.label || null,
+        legalNotice: WARNING_LEGAL_NOTICE,
+      });
+    } catch (e: any) {
+      console.error("[public/warning/get] error:", e);
+      res.status(500).json({ error: "تعذّر تحميل الإنذار" });
+    }
+  });
+
+  app.post("/api/public/warning/:token/sign", async (req, res) => {
+    try {
+      const token = String(req.params.token || "").slice(0, 128);
+      if (!token) return res.status(404).json({ error: "رابط غير صالح" });
+      const body = z.object({
+        signatureData: z.string().min(50, "التوقيع مطلوب").max(500_000, "التوقيع كبير جدًا"),
+      }).parse(req.body);
+      // Audit metadata. We rely on Express `trust proxy` (set to 1 in
+      // server/index.ts) so req.ip returns the real client IP from the first
+      // proxy hop (Render's edge) rather than a spoofed x-forwarded-for value
+      // sent by the client directly.
+      const ip = String(req.ip || req.socket.remoteAddress || "").slice(0, 64);
+      const ua = String(req.headers["user-agent"] || "").slice(0, 256);
+      // Atomic single-sign guarantee: the WHERE clause also requires
+      // signed_at IS NULL, so two concurrent signing requests for the same
+      // token can never both succeed — only the first conditional update
+      // matches, the second returns zero rows and we respond 409.
+      const updated = await db.update(employeeWarnings).set({
+        signedAt: new Date(),
+        signatureData: body.signatureData,
+        signedIp: ip || null,
+        signedUserAgent: ua || null,
+        acknowledgedAt: new Date(), // mirror for back-compat
+        updatedAt: new Date(),
+      } as any).where(
+        and(
+          eq(employeeWarnings.publicToken, token),
+          sql`${employeeWarnings.signedAt} IS NULL`,
+        ),
+      ).returning();
+      if (updated.length === 0) {
+        // Either the token doesn't exist, or the warning is already signed.
+        const [existing] = await db.select({ id: employeeWarnings.id, signedAt: employeeWarnings.signedAt })
+          .from(employeeWarnings)
+          .where(eq(employeeWarnings.publicToken, token));
+        if (!existing) return res.status(404).json({ error: "الإنذار غير موجود" });
+        return res.status(409).json({ error: "تم التوقيع على هذا الإنذار مسبقًا" });
+      }
+      res.json({ success: true, signedAt: updated[0].signedAt });
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
+      console.error("[public/warning/sign] error:", e);
+      res.status(500).json({ error: "تعذّر حفظ التوقيع" });
     }
   });
 

@@ -10644,6 +10644,16 @@ export const employeeWarnings = pgTable("employee_warnings", {
   acknowledgedSignature: text("acknowledged_signature"),
   deductionAmount: real("deduction_amount").default(0),
   attachmentUrl: text("attachment_url"),
+  // NEW (Phase 12) — template + categorized reason + attachments + public signing
+  templateId: text("template_id"), // key from shared/warning-templates.ts
+  reasonCategory: text("reason_category"), // key from WARNING_REASON_CATEGORIES
+  attachments: jsonb("attachments").$type<Array<{ url: string; name: string; mimeType?: string; size?: number }>>().default([]),
+  publicToken: text("public_token"), // random URL token for WhatsApp signing link
+  signedAt: timestamp("signed_at"),
+  signatureData: text("signature_data"), // base64 PNG data URL captured from SignaturePad
+  signedIp: text("signed_ip"),
+  signedUserAgent: text("signed_user_agent"),
+  companyNameSnapshot: text("company_name_snapshot"),
   status: text("status").notNull().default("active"), // active | appealed | cancelled | expired
   expiresAt: text("expires_at"), // YYYY-MM-DD
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -10654,6 +10664,8 @@ export const employeeWarnings = pgTable("employee_warnings", {
   index("idx_employee_warnings_status").on(table.status),
   index("idx_employee_warnings_level").on(table.level),
   index("idx_employee_warnings_date").on(table.issuedDate),
+  index("idx_employee_warnings_employee_date").on(table.branchEmployeeId, table.issuedDate),
+  uniqueIndex("idx_employee_warnings_public_token").on(table.publicToken),
 ]);
 
 export const insertEmployeeWarningSchema = createInsertSchema(employeeWarnings, {
@@ -10661,7 +10673,20 @@ export const insertEmployeeWarningSchema = createInsertSchema(employeeWarnings, 
   status: z.enum(["active", "appealed", "cancelled", "expired"]).optional(),
   deductionAmount: z.number().min(0).optional(),
   issuedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "تاريخ غير صحيح"),
-}).omit({ id: true, createdAt: true, updatedAt: true, acknowledgedAt: true, acknowledgedSignature: true });
+  templateId: z.string().optional(),
+  reasonCategory: z.string().optional(),
+  attachments: z.array(z.object({
+    url: z.string(),
+    name: z.string(),
+    mimeType: z.string().optional(),
+    size: z.number().optional(),
+  })).optional(),
+}).omit({
+  id: true, createdAt: true, updatedAt: true,
+  acknowledgedAt: true, acknowledgedSignature: true,
+  publicToken: true, signedAt: true, signatureData: true,
+  signedIp: true, signedUserAgent: true, companyNameSnapshot: true,
+});
 
 export type EmployeeWarning = typeof employeeWarnings.$inferSelect;
 export type InsertEmployeeWarning = z.infer<typeof insertEmployeeWarningSchema>;
