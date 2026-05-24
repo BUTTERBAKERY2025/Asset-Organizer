@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SignaturePad } from "@/components/signature-pad";
-import { WarningDocument } from "@/components/warning-document";
+import { WarningDocument, COMPANY_NAME_AR, COMPANY_CR_NUMBER, COMPANY_LOGO_URL } from "@/components/warning-document";
 import { useToast } from "@/hooks/use-toast";
 import { AlertOctagon, Loader2, CheckCircle2, FileDown, Paperclip, ShieldAlert } from "lucide-react";
 
@@ -112,7 +112,7 @@ export default function WarningPublicPage() {
 
   const w = data.warning;
   const isSigned = !!w.signedAt;
-  const companyName = "شركة باتر بيكري";
+  const companyName = COMPANY_NAME_AR;
   const branchName = data.branch?.nameAr || data.branch?.name || null;
   const templateBody = data.template?.body || null;
 
@@ -122,12 +122,21 @@ export default function WarningPublicPage() {
         {/* Header banner */}
         <Card className="border-amber-200">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="rounded-full bg-amber-100 p-2.5">
-              <AlertOctagon className="h-6 w-6 text-amber-700" />
-            </div>
+            <img
+              src={COMPANY_LOGO_URL}
+              alt={companyName}
+              className="h-12 w-12 object-contain rounded-md bg-white border border-amber-100 p-1"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+              data-testid="img-company-logo"
+            />
             <div className="flex-1">
               <div className="text-lg font-bold">{companyName}</div>
-              <div className="text-xs text-muted-foreground">إشعار رسمي بالإجراء التأديبي</div>
+              <div className="text-[11px] text-muted-foreground">
+                سجل تجاري: <span dir="ltr" className="inline-block">{COMPANY_CR_NUMBER}</span>
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                <AlertOctagon className="h-3.5 w-3.5 text-amber-700" /> إشعار رسمي بالإجراء التأديبي
+              </div>
             </div>
             {isSigned ? (
               <Badge className="bg-emerald-100 text-emerald-700 gap-1" data-testid="badge-signed">
@@ -246,7 +255,7 @@ export default function WarningPublicPage() {
         )}
 
         <div className="text-center text-[11px] text-muted-foreground py-2">
-          {companyName} — جميع الحقوق محفوظة. للاستفسار يُرجى التواصل مع إدارة الموارد البشرية.
+          {companyName} (سجل تجاري <span dir="ltr" className="inline-block">{COMPANY_CR_NUMBER}</span>) — جميع الحقوق محفوظة. للاستفسار يُرجى التواصل مع إدارة الموارد البشرية.
         </div>
       </div>
     </div>

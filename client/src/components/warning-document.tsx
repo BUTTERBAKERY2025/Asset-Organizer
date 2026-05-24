@@ -1,8 +1,18 @@
 import { forwardRef } from "react";
 import { WARNING_LEVEL_LABELS } from "@shared/schema";
 
+// Official company identity — single source of truth for the disciplinary
+// document. Kept inline here (rather than imported from a settings store)
+// so the printed PDF is fully self-contained and never falls back to a
+// generic label if a remote config fails to load.
+export const COMPANY_NAME_AR = "شركة الزبد الأفضل التجارية";
+export const COMPANY_CR_NUMBER = "7026155296";
+export const COMPANY_LOGO_URL = "/company-logo.png";
+
 export type WarningDocumentProps = {
   companyName?: string;
+  companyCrNumber?: string;
+  companyLogoUrl?: string;
   branchName?: string | null;
   warning: {
     id: number;
@@ -25,7 +35,17 @@ export type WarningDocumentProps = {
 };
 
 export const WarningDocument = forwardRef<HTMLDivElement, WarningDocumentProps>(function WarningDocument(
-  { companyName = "شركة باتر بيكري", branchName, warning, employee, templateBody, reasonCategoryLabel, legalNotice },
+  {
+    companyName = COMPANY_NAME_AR,
+    companyCrNumber = COMPANY_CR_NUMBER,
+    companyLogoUrl = COMPANY_LOGO_URL,
+    branchName,
+    warning,
+    employee,
+    templateBody,
+    reasonCategoryLabel,
+    legalNotice,
+  },
   ref,
 ) {
   const fmtMoney = (n?: number | null) =>
@@ -58,15 +78,54 @@ export const WarningDocument = forwardRef<HTMLDivElement, WarningDocumentProps>(
         fontSize: "13px",
         lineHeight: 1.85,
         boxSizing: "border-box",
+        position: "relative",
+        overflow: "hidden",
       }}
       data-testid="warning-document"
     >
+      {/* Watermark — printed at low opacity behind all content. position:absolute
+          inside a position:relative parent (the outer wrapper below has it). */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          pointerEvents: "none",
+          opacity: 0.06,
+          zIndex: 0,
+        }}
+      >
+        <img
+          src={companyLogoUrl}
+          alt=""
+          style={{ width: "140mm", height: "auto", objectFit: "contain" }}
+          // Watermark should never block printing if it fails to load.
+          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+        />
+      </div>
+
+      {/* All real content sits above the watermark via z-index. */}
+      <div style={{ position: "relative", zIndex: 1 }}>
       {/* Header */}
-      <div style={{ borderBottom: "2px solid #b45309", paddingBottom: "10mm", marginBottom: "8mm" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
-            <div style={{ fontSize: "20px", fontWeight: 800, color: "#b45309" }}>{companyName}</div>
-            {branchName && <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>فرع: {branchName}</div>}
+      <div style={{ borderBottom: "2px solid #b45309", paddingBottom: "8mm", marginBottom: "8mm" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "6mm" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "4mm", flex: 1 }}>
+            <img
+              src={companyLogoUrl}
+              alt={companyName}
+              style={{ width: "22mm", height: "22mm", objectFit: "contain" }}
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+            />
+            <div>
+              <div style={{ fontSize: "20px", fontWeight: 800, color: "#b45309", lineHeight: 1.2 }}>{companyName}</div>
+              <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
+                سجل تجاري: <span style={{ direction: "ltr", display: "inline-block" }}>{companyCrNumber}</span>
+              </div>
+              {branchName && <div style={{ fontSize: "11px", color: "#64748b", marginTop: "1px" }}>فرع: {branchName}</div>}
+            </div>
           </div>
           <div style={{ textAlign: "left" as const, fontSize: "11px", color: "#64748b" }}>
             <div>المرجع: <span style={{ direction: "ltr", display: "inline-block" }}>WRN-{String(warning.id).padStart(6, "0")}</span></div>
@@ -174,8 +233,9 @@ export const WarningDocument = forwardRef<HTMLDivElement, WarningDocumentProps>(
 
       {/* Footer */}
       <div style={{ marginTop: "10mm", paddingTop: "4mm", borderTop: "1px solid #e2e8f0", fontSize: "10px", color: "#94a3b8", textAlign: "center" as const }}>
-        وثيقة رسمية صادرة من {companyName} — لأي استفسار يُرجى التواصل مع إدارة الموارد البشرية.
+        وثيقة رسمية صادرة من {companyName} (سجل تجاري <span style={{ direction: "ltr", display: "inline-block" }}>{companyCrNumber}</span>) — لأي استفسار يُرجى التواصل مع إدارة الموارد البشرية.
       </div>
+      </div>{/* /content wrapper above watermark */}
     </div>
   );
 });

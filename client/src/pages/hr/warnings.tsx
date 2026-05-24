@@ -538,7 +538,7 @@ function ViewDialog({
     : null;
   const phone = (employee?.phoneNumber || employee?.mobile || "").replace(/\D/g, "");
   const waMessage = encodeURIComponent(
-    `إشعار رسمي من شركة باتر بيكري:\n\nصدر بحقكم ${WARNING_LEVEL_LABELS[warning.level] || ""} بشأن: ${warning.reason}\n\nيرجى فتح الرابط أدناه للاطلاع والتوقيع إلكترونيًا:\n${publicUrl}`,
+    `إشعار رسمي من شركة الزبد الأفضل التجارية:\n\nصدر بحقكم ${WARNING_LEVEL_LABELS[warning.level] || ""} بشأن: ${warning.reason}\n\nيرجى فتح الرابط أدناه للاطلاع والتوقيع إلكترونيًا:\n${publicUrl}`,
   );
   const waUrl = phone
     ? `https://wa.me/${phone.startsWith("00") ? phone.slice(2) : phone}?text=${waMessage}`
@@ -616,7 +616,7 @@ function ViewDialog({
           <div style={{ transform: "scale(0.85)", transformOrigin: "top center" }}>
             <WarningDocument
               ref={printRef}
-              companyName="شركة باتر بيكري"
+              companyName="شركة الزبد الأفضل التجارية"
               branchName={branch?.nameAr || branch?.name || null}
               warning={{
                 id: warning.id,
