@@ -1151,17 +1151,28 @@ export function registerHrRoutes(app: Express) {
       }
 
       // Attendance today (already filtered)
+      // `total` = attendance rows recorded today (any status)
+      // `expectedToday` = active employees in scope (the realistic denominator
+      //   for "كم حضر اليوم من أصل المتوقع"). Using `total` alone is
+      //   misleading when many employees simply have no row yet today.
+      // `attendanceRate` uses the larger of (expectedToday, total) so the
+      //   percentage reflects coverage against the active workforce, not
+      //   just the partial set that has any record.
       const attTotal = attRows.length;
       const attPresent = attRows.filter((r: any) => r.status === "present").length;
       const attLate = attRows.filter((r: any) => r.status === "late").length;
       const attAbsent = attRows.filter((r: any) => r.status === "absent").length;
+      const attExpected = Math.max(activeEmployees, attTotal);
       const attendanceToday = {
         date: today,
         total: attTotal,
+        expectedToday: attExpected,
         present: attPresent,
         late: attLate,
         absent: attAbsent,
-        attendanceRate: attTotal > 0 ? Math.round((attPresent / attTotal) * 100) : 0,
+        attendanceRate: attExpected > 0
+          ? Math.round(((attPresent + attLate) / attExpected) * 100)
+          : 0,
       };
 
       // EOS list (lightweight — count + draft count)

@@ -1538,7 +1538,20 @@ export default function HRHubPage() {
             delta={comparisons?.applications?.deltaPct ?? null} deltaIsPercent deltaLabel="مقارنة بالشهر السابق" />
           <StatTile testId="tile-offers"          value={pendingOffers}          label="عروض عمل بانتظار رد"    icon={UserPlus}       tone="indigo"   href="/hr/job-offers" />
           <StatTile testId="tile-onboarding"      value={(onboardingStats?.pending || 0) + (onboardingStats?.sent || 0)} label="مباشرة عمل قيد التنفيذ" icon={ClipboardCheck} tone="cyan"     href="/hr/onboarding" />
-          <StatTile testId="tile-attendance"      value={attendanceToday?.present ?? 0} suffix={attendanceToday ? `/ ${fmt(attendanceToday.total || 0)}` : undefined} label="حضور اليوم" icon={Clock} tone="blue" href="/attendance-dashboard" />
+          <StatTile
+            testId="tile-attendance"
+            value={attendanceToday?.present ?? 0}
+            suffix={attendanceToday
+              ? `/ ${fmt((attendanceToday as any).expectedToday ?? attendanceToday.total ?? 0)}`
+              : undefined}
+            label="حضور اليوم (من النشطين)"
+            icon={Clock}
+            tone="blue"
+            href="/attendance-dashboard"
+            tooltip={attendanceToday
+              ? `حاضر: ${fmt(attendanceToday.present || 0)} — متأخر: ${fmt(attendanceToday.late || 0)} — غائب: ${fmt(attendanceToday.absent || 0)} — مسجّل اليوم: ${fmt(attendanceToday.total || 0)} — المتوقع (النشطون): ${fmt((attendanceToday as any).expectedToday ?? 0)}`
+              : undefined}
+          />
           <StatTile testId="tile-attendance-rate" value={`${attendanceToday?.attendanceRate ?? 0}%`} label="نسبة الحضور اليوم"      icon={TrendingUp}     tone="emerald"  href="/attendance-dashboard"
             delta={comparisons?.attendanceRate?.delta} deltaIsPercent target={comparisons?.attendanceRate?.target} />
           <StatTile testId="tile-doc-expired"     value={(docStats?.expired || 0) + (docStats?.expiringSoon || 0)} label="وثائق منتهية / قاربت" icon={AlertTriangle}  tone="rose"     href="/hr/employee-documents" />
@@ -1547,7 +1560,7 @@ export default function HRHubPage() {
           <StatTile testId="tile-advances"        value={advanceStats?.total || 0} label="سلف مسجّلة"             icon={TrendingDown}   tone="orange"   href="/hr/advances"
             delta={comparisons?.advances?.deltaPct ?? null} deltaIsPercent deltaInverted deltaLabel="مقارنة بالشهر السابق" />
           <StatTile testId="tile-eos"             value={eosStats.total}         label="حسابات نهاية الخدمة"    icon={FileText}       tone="lime"     href="/hr/eos" />
-          <StatTile testId="tile-branches"        value={branches.length}        label="عدد الفروع النشطة"      icon={Building}       tone="teal"     href="/branches" />
+          <StatTile testId="tile-branches"        value={branches.length}        label="إجمالي الفروع"          icon={Building}       tone="teal"     href="/branches" />
         </div>
 
         {/* Row 1: 3 donut charts — 1 col mobile, 2 cols tablet, 3 cols laptop+ */}
