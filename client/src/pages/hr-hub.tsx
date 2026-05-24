@@ -87,9 +87,18 @@ const fmtMoney = (n: number) =>
     Math.round(n || 0),
   );
 
+type SalaryInvoice = {
+  activeEmployees: number;
+  gross: number;
+  manualDeductions: number;
+  absenceDeduction: number;
+  net: number;
+};
+
 type EmployeeStats = {
   totalEmployees: number;
-  totalSalaries: number;
+  totalSalaries: number; // net payable invoice (active employees, after deductions)
+  salaryInvoice?: SalaryInvoice;
   byStatus?: { status: string; count: number }[];
   byNationality?: { nationality: string; count: number }[];
   byJobTitle?: { jobTitle: string; count: number }[];
@@ -157,9 +166,10 @@ interface StatTileProps {
   deltaIsPercent?: boolean;         // render delta as percentage
   deltaInverted?: boolean;          // true = up is BAD (e.g., advances, absences); false = up is GOOD
   target?: number;                  // optional target line (e.g., 90 for attendance rate)
+  tooltip?: string;                 // native HTML tooltip on hover (breakdown details)
 }
 
-const StatTile = React.memo(function StatTile({ value, label, icon: Icon, tone, suffix, href, comingSoon, testId, delta, deltaLabel, deltaIsPercent, deltaInverted, target }: StatTileProps) {
+const StatTile = React.memo(function StatTile({ value, label, icon: Icon, tone, suffix, href, comingSoon, testId, delta, deltaLabel, deltaIsPercent, deltaInverted, target, tooltip }: StatTileProps) {
   const [, navigate] = useLocation();
   const t = TONE_MAP[tone];
   const clickable = !!href && !comingSoon;
@@ -175,6 +185,7 @@ const StatTile = React.memo(function StatTile({ value, label, icon: Icon, tone, 
         !clickable && "cursor-default opacity-95",
       )}
       data-testid={testId}
+      title={tooltip}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
@@ -1312,14 +1323,14 @@ export default function HRHubPage() {
       });
     }
 
-    if (stats?.totalSalaries && stats.totalSalaries > 0 && totalEmployees > 0) {
-      const avg = stats.totalSalaries / totalEmployees;
+    if (stats?.totalSalaries && stats.totalSalaries > 0 && activeEmployees > 0) {
+      const avg = stats.totalSalaries / activeEmployees;
       result.push({
         id: "avg-salary",
         icon: Wallet,
         tone: "info",
-        title: `متوسط الراتب: ${fmtMoney(avg)} ر.س`,
-        detail: "قيمة فاتورة الرواتب الإجمالية مقسومة على عدد الموظفين الحاليين.",
+        title: `متوسط صافي الراتب: ${fmtMoney(avg)} ر.س`,
+        detail: "صافي فاتورة الرواتب (بعد الغياب والخصومات) مقسومة على عدد الموظفين النشطين.",
         action: { label: "فتح تقرير الرواتب", href: "/employee-reports" },
       });
     }
@@ -1360,7 +1371,7 @@ export default function HRHubPage() {
         activeEmployees,
         inactiveEmployees,
         totalSalaries: stats?.totalSalaries || 0,
-        avgSalary: totalEmployees > 0 ? Math.round((stats?.totalSalaries || 0) / totalEmployees) : 0,
+        avgSalary: activeEmployees > 0 ? Math.round((stats?.totalSalaries || 0) / activeEmployees) : 0,
       },
       recruitment: {
         pendingApplications,
@@ -1511,7 +1522,18 @@ export default function HRHubPage() {
           <StatTile testId="tile-active"          value={activeEmployees}        label="الموظفون النشطون"        icon={UserCheck}      tone="teal"     href="/branch-employees"
             delta={comparisons?.hires?.delta} deltaLabel="تعيينات الشهر" />
           <StatTile testId="tile-inactive"        value={inactiveEmployees}      label="غير نشطين / موقوفون"     icon={UserX}          tone="slate"    href="/terminated-employees" />
-          <StatTile testId="tile-salaries"        value={fmtMoney(stats?.totalSalaries || 0)} suffix="ر.س" label="فاتورة الرواتب الشهرية" icon={Wallet}         tone="emerald"  href="/employee-reports" />
+          <StatTile
+            testId="tile-salaries"
+            value={fmtMoney(stats?.salaryInvoice?.net ?? stats?.totalSalaries ?? 0)}
+            suffix="ر.س"
+            label="صافي فاتورة الرواتب (النشطون)"
+            icon={Wallet}
+            tone="emerald"
+            href="/employee-reports"
+            tooltip={stats?.salaryInvoice
+              ? `الإجمالي: ${fmtMoney(stats.salaryInvoice.gross)} ر.س — خصومات: ${fmtMoney(stats.salaryInvoice.manualDeductions)} ر.س — غياب: ${fmtMoney(stats.salaryInvoice.absenceDeduction)} ر.س — موظفون نشطون: ${fmt(stats.salaryInvoice.activeEmployees)}`
+              : undefined}
+          />
           <StatTile testId="tile-applications"    value={pendingApplications}    label="طلبات توظيف معلّقة"     icon={Briefcase}      tone="violet"   href="/hr/applications"
             delta={comparisons?.applications?.deltaPct ?? null} deltaIsPercent deltaLabel="مقارنة بالشهر السابق" />
           <StatTile testId="tile-offers"          value={pendingOffers}          label="عروض عمل بانتظار رد"    icon={UserPlus}       tone="indigo"   href="/hr/job-offers" />

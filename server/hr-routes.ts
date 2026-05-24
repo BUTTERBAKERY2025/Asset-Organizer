@@ -932,6 +932,8 @@ export function registerHrRoutes(app: Express) {
         prevMonthAppsAgg,
         prevMonthAdvAgg,
         appsByStatusRows,
+        thisMonthDeductionsByEmp,
+        thisMonthAbsenceDaysByEmp,
       ] = await Promise.all([
         // Weekly attendance grouped by date + status
         safe(
@@ -1012,16 +1014,86 @@ export function registerHrRoutes(app: Express) {
             .groupBy(employmentApplications.status),
           [] as any[],
         ),
+        // Current-month salary deductions of ALL types, summed per employee.
+        // Used to deduct from the gross monthly salary invoice for active staff.
+        safe(
+          db.select({
+            empId: salaryDeductions.branchEmployeeId,
+            amt: sql<number>`coalesce(sum(${salaryDeductions.amount}),0)::numeric`,
+          }).from(salaryDeductions)
+            .where(and(
+              advCond ?? sql`true`,
+              eq(salaryDeductions.month, thisMonth),
+            ))
+            .groupBy(salaryDeductions.branchEmployeeId),
+          [] as any[],
+        ),
+        // Current-month absent days per employee (status='absent') — used to
+        // compute automatic absence deduction = absent_days × (gross / 30).
+        safe(
+          db.select({
+            empId: attendanceRecords.branchEmployeeId,
+            absentDays: sql<number>`count(*)::int`,
+          }).from(attendanceRecords)
+            .where(and(thisMonthAttCond, eq(attendanceRecords.status, "absent")))
+            .groupBy(attendanceRecords.branchEmployeeId),
+          [] as any[],
+        ),
       ]);
       void prevMonthNum; void prevMonthYear;
 
       // Employees aggregates
       const totalEmployees = employees.length;
-      const activeEmployees = employees.filter((e: any) => (e.status || "active") === "active").length;
+      const activeEmployeesList = employees.filter((e: any) => (e.status || "active") === "active");
+      const activeEmployees = activeEmployeesList.length;
       const inactiveEmployees = totalEmployees - activeEmployees;
       const onLeaveCount = employees.filter((e: any) => e.status === "on_leave").length;
       const nationalitiesCount = new Set(employees.map((e: any) => e.nationality).filter(Boolean)).size;
-      const totalSalaries = employees.reduce((s: number, e: any) => s + (Number(e.salary) || 0), 0);
+
+      // ── Monthly Salary Invoice (active employees only, net after deductions) ──
+      // gross = basic + housing + transport + food + other allowances
+      // manualDeductions = sum of salary_deductions rows for current month
+      //   (advance / loan_installment / deduction / penalty / other)
+      // absenceDeduction = Σ (absent_days × gross_monthly / 30) for each active emp
+      // net = max(0, gross − manualDeductions − absenceDeduction)
+      const grossByEmp = new Map<number, number>();
+      let salaryGross = 0;
+      for (const e of activeEmployeesList) {
+        const g = (Number(e.basicSalary ?? e.salary) || 0)
+          + (Number(e.housingAllowance) || 0)
+          + (Number(e.transportAllowance) || 0)
+          + (Number(e.foodAllowance) || 0)
+          + (Number(e.otherAllowances) || 0);
+        grossByEmp.set(e.id, g);
+        salaryGross += g;
+      }
+      const activeIdSet = new Set<number>(activeEmployeesList.map((e: any) => e.id));
+      let salaryManualDeductions = 0;
+      for (const r of thisMonthDeductionsByEmp as any[]) {
+        if (r.empId != null && activeIdSet.has(Number(r.empId))) {
+          salaryManualDeductions += Number(r.amt) || 0;
+        }
+      }
+      let salaryAbsenceDeduction = 0;
+      for (const r of thisMonthAbsenceDaysByEmp as any[]) {
+        const eid = r.empId != null ? Number(r.empId) : null;
+        if (eid != null && activeIdSet.has(eid)) {
+          const gross = grossByEmp.get(eid) || 0;
+          const days = Number(r.absentDays) || 0;
+          salaryAbsenceDeduction += (gross / 30) * days;
+        }
+      }
+      const salaryNet = Math.max(0, salaryGross - salaryManualDeductions - salaryAbsenceDeduction);
+      // Backward-compat: `totalSalaries` now reflects the NET payable invoice
+      // for active employees after all deductions (was: gross of all employees).
+      const totalSalaries = Math.round(salaryNet);
+      const salaryInvoice = {
+        activeEmployees,
+        gross: Math.round(salaryGross),
+        manualDeductions: Math.round(salaryManualDeductions),
+        absenceDeduction: Math.round(salaryAbsenceDeduction),
+        net: Math.round(salaryNet),
+      };
       const byNationalityMap: Record<string, number> = {};
       const byJobTitleMap: Record<string, number> = {};
       employees.forEach((e: any) => {
@@ -1288,6 +1360,7 @@ export function registerHrRoutes(app: Express) {
           onLeaveCount,
           nationalitiesCount,
           totalSalaries,
+          salaryInvoice,
           byNationality: Object.entries(byNationalityMap).map(([nationality, count]) => ({ nationality, count })).sort((a, b) => b.count - a.count),
           byJobTitle: Object.entries(byJobTitleMap).map(([jobTitle, count]) => ({ jobTitle, count })).sort((a, b) => b.count - a.count),
         },
