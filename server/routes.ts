@@ -670,7 +670,7 @@ export async function registerRoutes(
       }
       
       if (role !== undefined) {
-        if (!["admin", "financial_accountant", "employee", "viewer", "attendance_clerk"].includes(role)) {
+        if (!["admin", "hr_manager", "financial_accountant", "employee", "viewer", "attendance_clerk"].includes(role)) {
           return res.status(400).json({ error: "Invalid role" });
         }
         // SECURITY: Only admins can change user roles to prevent privilege escalation
