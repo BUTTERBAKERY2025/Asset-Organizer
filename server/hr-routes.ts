@@ -148,9 +148,12 @@ export function registerHrRoutes(app: Express) {
       if (branchIds !== null && (!emp.branchId || !branchIds.includes(emp.branchId))) {
         return res.status(403).json({ error: "ليس لديك صلاحية لإدارة وثائق هذا الموظف" });
       }
+      // SECURITY: branchId is server-authoritative — derived from the employee
+      // record, never trusted from the client payload (prevents cross-branch injection).
+      const { branchId: _ignoredBranchId, ...safeParsed } = parsed as any;
       const [created] = await db.insert(employeeDocuments).values({
-        ...parsed,
-        branchId: parsed.branchId || emp.branchId,
+        ...safeParsed,
+        branchId: emp.branchId,
         createdBy: getUserId(req) || undefined,
       }).returning();
       res.status(201).json(created);
@@ -170,7 +173,10 @@ export function registerHrRoutes(app: Express) {
       if (branchIds !== null && (!existing.branchId || !branchIds.includes(existing.branchId))) {
         return res.status(403).json({ error: "ليس لديك صلاحية" });
       }
-      const partial = insertEmployeeDocumentSchema.partial().parse(req.body);
+      // SECURITY: strip branchId/branchEmployeeId from client payload — they
+      // anchor the record's branch scope and must not be mutable via PATCH.
+      const { branchId: _bId, branchEmployeeId: _eId, ...partial } =
+        insertEmployeeDocumentSchema.partial().parse(req.body) as any;
       const [updated] = await db.update(employeeDocuments)
         .set({ ...partial, updatedAt: new Date() })
         .where(eq(employeeDocuments.id, id))
@@ -338,7 +344,10 @@ export function registerHrRoutes(app: Express) {
       if (existing.status === "approved" && !isAdmin(req)) {
         return res.status(400).json({ error: "لا يمكن تعديل طلب معتمد" });
       }
-      const partial = insertLeaveRequestSchema.partial().parse(req.body);
+      // SECURITY: strip branchId/branchEmployeeId from client payload — they
+      // anchor the record's branch scope and must not be mutable via PATCH.
+      const { branchId: _bId, branchEmployeeId: _eId, ...partial } =
+        insertLeaveRequestSchema.partial().parse(req.body) as any;
       const [updated] = await db.update(leaveRequests)
         .set({ ...partial, updatedAt: new Date() })
         .where(eq(leaveRequests.id, id))
@@ -483,7 +492,10 @@ export function registerHrRoutes(app: Express) {
       if (branchIds !== null && !branchIds.includes(existing.branchId)) {
         return res.status(403).json({ error: "ليس لديك صلاحية" });
       }
-      const partial = insertEmployeeWarningSchema.partial().parse(req.body);
+      // SECURITY: strip branchId/branchEmployeeId from client payload — they
+      // anchor the record's branch scope and must not be mutable via PATCH.
+      const { branchId: _bId, branchEmployeeId: _eId, ...partial } =
+        insertEmployeeWarningSchema.partial().parse(req.body) as any;
       const [updated] = await db.update(employeeWarnings)
         .set({ ...partial, updatedAt: new Date() })
         .where(eq(employeeWarnings.id, id))

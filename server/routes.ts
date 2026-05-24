@@ -586,6 +586,18 @@ export async function registerRoutes(
         return res.status(400).json({ error: "اسم المستخدم مسجل مسبقاً" });
       }
       
+      // SECURITY: Only admins may assign privileged roles. Non-admins can only
+      // create "viewer" or "employee" accounts. This prevents privilege escalation
+      // via the users:create permission (e.g., creating an admin or hr_manager).
+      const PRIVILEGED_ROLES = new Set(["admin", "hr_manager", "financial_accountant", "attendance_clerk"]);
+      const requestedRole = (role as string | undefined) || "viewer";
+      if (PRIVILEGED_ROLES.has(requestedRole) && (req as any).currentUser?.role !== "admin") {
+        return res.status(403).json({ error: "فقط المسؤولين يمكنهم منح هذا الدور" });
+      }
+      if (!["admin", "hr_manager", "financial_accountant", "employee", "viewer", "attendance_clerk"].includes(requestedRole)) {
+        return res.status(400).json({ error: "دور غير صالح" });
+      }
+      
       // Handle branch assignment: branchIds array (new), branchId string (legacy), or "all_branches"
       let validBranchIds: string[] = [];
       let assignedBranchId: string | null = null;
@@ -611,7 +623,7 @@ export async function registerRoutes(
         password,
         firstName,
         lastName,
-        role: role || "viewer",
+        role: requestedRole,
         branchId: assignedBranchId,
       });
       
@@ -7254,6 +7266,17 @@ export async function registerRoutes(
         return res.status(400).json({ error: "اسم المستخدم مسجل مسبقاً" });
       }
       
+      // SECURITY: Only admins may assign privileged roles via this endpoint.
+      // Non-admins with operations:create can only create regular "employee" accounts.
+      const OP_PRIVILEGED_ROLES = new Set(["admin", "hr_manager", "financial_accountant", "attendance_clerk"]);
+      const opRequestedRole = (role as string | undefined) || "employee";
+      if (OP_PRIVILEGED_ROLES.has(opRequestedRole) && !isUserAdmin(req)) {
+        return res.status(403).json({ error: "فقط المسؤولين يمكنهم منح هذا الدور" });
+      }
+      if (!["admin", "hr_manager", "financial_accountant", "employee", "viewer", "attendance_clerk"].includes(opRequestedRole)) {
+        return res.status(400).json({ error: "دور غير صالح" });
+      }
+      
       const user = await storage.createUser({
         username,
         password,
@@ -7263,7 +7286,7 @@ export async function registerRoutes(
         email,
         branchId,
         jobTitle,
-        role: role || "employee",
+        role: opRequestedRole,
         isActive: "active",
       });
       
