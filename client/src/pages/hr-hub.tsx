@@ -1190,10 +1190,12 @@ export default function HRHubPage() {
     [jobOffers],
   );
 
-  // Per-branch breakdown for donut
+  // Per-branch breakdown for donut — ACTIVE employees only so it matches
+  // the "Active Employees" tile and the cost/salary calculations.
   const branchData = useMemo(() => {
     const map = new Map<string, number>();
     employees.forEach((e) => {
+      if ((e.status || "active") !== "active") return;
       const b = branches.find((br) => br.id === e.branchId);
       const name = b?.nameAr || b?.name || `فرع #${e.branchId ?? "—"}`;
       map.set(name, (map.get(name) || 0) + 1);
@@ -1262,7 +1264,7 @@ export default function HRHubPage() {
       });
     }
 
-    if (attendanceToday && attendanceToday.total > 0) {
+    if (attendanceToday && (((attendanceToday as any).expectedToday ?? attendanceToday.total) > 0)) {
       const rate = attendanceToday.attendanceRate || 0;
       if (rate < 90) {
         result.push({
@@ -1392,7 +1394,9 @@ export default function HRHubPage() {
             present: attendanceToday.present || 0,
             absent: attendanceToday.absent || 0,
             late: attendanceToday.late || 0,
-            total: attendanceToday.total || 0,
+            // Prefer the realistic expected denominator (active workforce) for
+            // AI prompting; fall back to `total` for older payloads.
+            total: (attendanceToday as any).expectedToday ?? attendanceToday.total ?? 0,
           }
         : null,
       branches: branchData.slice(0, 10).map((b) => ({ name: b.name, employees: b.value })),

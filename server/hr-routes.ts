@@ -1244,6 +1244,10 @@ export function registerHrRoutes(app: Express) {
       }));
 
       // ── Build comparisons (current vs prev period) ──
+      // Both rates use the SAME formula: present/total of *recorded* rows so
+      // the delta is apples-to-apples. (The today-only tile uses a different
+      // denominator — expectedToday — which is fine for a snapshot but would
+      // distort month-over-month trends when the workforce size shifts.)
       const prevAttTotal = Number((prevMonthAttAgg[0] as any)?.total || 0);
       const prevAttPresent = Number((prevMonthAttAgg[0] as any)?.present || 0);
       const prevAttRate = prevAttTotal > 0 ? Math.round((prevAttPresent / prevAttTotal) * 100) : 0;
@@ -1301,13 +1305,14 @@ export function registerHrRoutes(app: Express) {
         weeklyAttendance.push({ date: d, present, late, absent, total: present + late + absent });
       }
 
-      // Cost breakdown: sum of salary components from employees (real schema fields)
-      // branchEmployees.salary = الراتب الأساسي ; allowances are separate columns
-      const basicTotal = employees.reduce((s: number, e: any) => s + (Number(e.salary) || 0), 0);
-      const housingTotal = employees.reduce((s: number, e: any) => s + (Number(e.housingAllowance) || 0), 0);
-      const transportTotal = employees.reduce((s: number, e: any) => s + (Number(e.transportAllowance) || 0), 0);
-      const foodTotal = employees.reduce((s: number, e: any) => s + (Number(e.foodAllowance) || 0), 0);
-      const otherTotal = employees.reduce((s: number, e: any) => s + (Number(e.otherAllowances) || 0), 0);
+      // Cost breakdown: sum of salary components for ACTIVE employees ONLY
+      // (consistent with the salary invoice tile). Including inactive/terminated
+      // employees previously inflated the monthly cost picture.
+      const basicTotal = activeEmployeesList.reduce((s: number, e: any) => s + (Number(e.basicSalary ?? e.salary) || 0), 0);
+      const housingTotal = activeEmployeesList.reduce((s: number, e: any) => s + (Number(e.housingAllowance) || 0), 0);
+      const transportTotal = activeEmployeesList.reduce((s: number, e: any) => s + (Number(e.transportAllowance) || 0), 0);
+      const foodTotal = activeEmployeesList.reduce((s: number, e: any) => s + (Number(e.foodAllowance) || 0), 0);
+      const otherTotal = activeEmployeesList.reduce((s: number, e: any) => s + (Number(e.otherAllowances) || 0), 0);
       const costBreakdown = [
         { name: "الراتب الأساسي", value: Math.round(basicTotal) },
         { name: "بدل السكن", value: Math.round(housingTotal) },
@@ -1315,6 +1320,7 @@ export function registerHrRoutes(app: Express) {
         { name: "بدل الطعام", value: Math.round(foodTotal) },
         { name: "بدلات أخرى", value: Math.round(otherTotal) },
         { name: "سلف وأقساط (شهر حالي)", value: Math.round(advanceStats.thisMonthAmount) },
+        { name: "خصم غياب (شهر حالي)", value: Math.round(salaryAbsenceDeduction) },
       ].filter((c) => c.value > 0);
 
       // Hiring funnel: applications by status this month + offers (sent/accepted) + onboarding
