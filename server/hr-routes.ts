@@ -1208,10 +1208,13 @@ export function registerHrRoutes(app: Express) {
         const t = p.updatedAt ? new Date(p.updatedAt) : null;
         return !acc || (t && t > acc) ? t : acc;
       }, null as Date | null);
-      // Monthly salary bill = sum from employees (basic + allowances)
-      const totalMonthlySalaries = employees.reduce((s: number, e: any) =>
-        s + (Number(e.basicSalary) || 0) + (Number(e.housingAllowance) || 0)
-          + (Number(e.transportAllowance) || 0) + (Number(e.otherAllowances) || 0), 0);
+      // Monthly salary bill = GROSS sum from ACTIVE employees only (to match
+      // the employeesCount displayed alongside it) — includes the full
+      // allowance stack: basic + housing + transport + food + other.
+      const totalMonthlySalaries = activeEmployeesList.reduce((s: number, e: any) =>
+        s + (Number(e.basicSalary ?? e.salary) || 0) + (Number(e.housingAllowance) || 0)
+          + (Number(e.transportAllowance) || 0) + (Number(e.foodAllowance) || 0)
+          + (Number(e.otherAllowances) || 0), 0);
       const salaryClosing = {
         month: curMonth,
         year: curYear,
