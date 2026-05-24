@@ -53,6 +53,18 @@ export function getCachedPermissionsForUser(userId: string): any[] | null {
   return getCachedPermissions(userId);
 }
 
+// HR modules auto-granted to users with role === "hr_manager". Strictly HR —
+// finance, inventory, sales, etc. are NOT included and stay branch-isolated.
+// Shared between requirePermission and requireAnyPermission to prevent drift.
+export const HR_MANAGER_MODULES: ReadonlySet<string> = new Set([
+  "hr_management",
+  "hr_documents",
+  "hr_leaves",
+  "hr_warnings",
+  "hr_advances",
+  "hr_eos",
+]);
+
 function setCachedAuth(userId: string, user: any, branchAccess: any[], permissions: any[]) {
   authCache.set(userId, { user, branchAccess, permissions, timestamp: Date.now() });
 }
@@ -865,6 +877,13 @@ export const requirePermission = (module: string, action: string): RequestHandle
       }
     }
     
+    // HR Manager role: auto-grants access to all HR modules across all branches.
+    // Strictly scoped to HR — financial, inventory, sales, etc. still go through
+    // the standard permission check below and remain branch-isolated.
+    if (user.role === "hr_manager" && HR_MANAGER_MODULES.has(module)) {
+      return next();
+    }
+    
     // Use cached permissions (pre-fetched by isAuthenticated middleware)
     const permissions = getCachedPermissions(user.id) || await storage.getUserPermissions(user.id);
     let modulePerm = permissions.find((p: any) => p.module === module);
@@ -933,6 +952,11 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
       if (!actions.includes("view")) {
         return res.status(403).json({ message: "غير مسموح - المشاهد يمكنه العرض فقط" });
       }
+    }
+    
+    // HR Manager auto-grants HR modules (shared constant w/ requirePermission)
+    if (user.role === "hr_manager" && HR_MANAGER_MODULES.has(module)) {
+      return next();
     }
     
     // Use cached permissions (pre-fetched by isAuthenticated middleware)

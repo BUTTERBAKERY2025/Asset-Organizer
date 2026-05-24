@@ -43,6 +43,10 @@ function hasCrossBranchHrAccess(req: any): boolean {
   const user = (req as any).currentUser;
   if (!user) return false;
   if (user.role === "admin") return true;
+  // Dedicated HR Manager role implies cross-branch HR visibility by design,
+  // without breaking branch isolation for finance/inventory (those modules
+  // never call this helper and continue to use the standard branch scope).
+  if (user.role === "hr_manager") return true;
   const perms = getCachedPermissionsForUser(user.id) || [];
   const hr = perms.find((p: any) => p.module === "hr_management");
   if (!hr) return false;
@@ -68,12 +72,10 @@ function hasCrossBranchHrAccess(req: any): boolean {
 function getBranchScope(req: any): { branchIds: string[] | null; hasAccess: boolean } {
   const f = getEffectiveBranchFilter(req);
   const isSafeMethod = req.method === "GET" || req.method === "HEAD";
-  if (
-    isSafeMethod &&
-    f.branchIds &&
-    f.branchIds.length === 0 &&
-    hasCrossBranchHrAccess(req)
-  ) {
+  // Elevate cross-branch HR users (hr_manager role, or non-assigned hr_management
+  // permission holders) to all-branches on reads — unconditionally, so even if an
+  // hr_manager has a default branchId, they still see HR data org-wide.
+  if (isSafeMethod && hasCrossBranchHrAccess(req)) {
     return { branchIds: null, hasAccess: true };
   }
   return { branchIds: f.branchIds, hasAccess: f.hasAccess };
@@ -863,17 +865,23 @@ export function registerHrRoutes(app: Express) {
       const filter = getEffectiveBranchFilter(req, queryBranchId);
       let branchIds = filter.branchIds; // null = all, [] = none
       let hasAccess = filter.hasAccess;
-      // Cross-branch HR managers (no branch assignment but hr_management:view)
-      // are elevated to all-branches for this read endpoint — same rule as
-      // getBranchScope() applies to the rest of /api/hr/* GETs.
-      if (!hasAccess && branchIds && branchIds.length === 0 && hasCrossBranchHrAccess(req)) {
-        branchIds = null;
+      let scopedBranchId = filter.singleBranchId || queryBranchId || null;
+      // Cross-branch HR users (hr_manager role, or hr_management:view holders)
+      // see HR data org-wide on this read endpoint — same rule as getBranchScope().
+      if (hasCrossBranchHrAccess(req)) {
+        if (queryBranchId && queryBranchId !== "all") {
+          // Honor explicit branch filter requested from UI
+          branchIds = [queryBranchId];
+          scopedBranchId = queryBranchId;
+        } else {
+          branchIds = null;
+          scopedBranchId = null;
+        }
         hasAccess = true;
       }
       if (!hasAccess) {
         return res.status(403).json({ error: "ليس لديك صلاحية الوصول" });
       }
-      const scopedBranchId = filter.singleBranchId || queryBranchId || null;
       // All date math is anchored to Saudi Arabia (Asia/Riyadh, UTC+3, no DST).
       // toISOString() returns UTC dates which, between 21:00 UTC and midnight,
       // are already "tomorrow" in Riyadh — and conversely between 00:00 and

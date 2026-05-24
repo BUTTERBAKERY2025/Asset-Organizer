@@ -36,6 +36,7 @@ const GlobalSearch = lazy(() => import("@/components/global-search").then(m => (
 
 const ROLE_KEYS: Record<string, string> = {
   admin: "roles.admin",
+  hr_manager: "roles.hrManager",
   employee: "roles.employee",
   viewer: "roles.viewer",
   attendance_clerk: "roles.attendanceClerk",

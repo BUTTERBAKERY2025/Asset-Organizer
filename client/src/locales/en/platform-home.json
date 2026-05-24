@@ -194,6 +194,7 @@
   },
   "roles": {
     "admin": "Admin",
+    "hrManager": "HR Manager",
     "employee": "Employee",
     "viewer": "Viewer",
     "attendanceClerk": "Attendance Clerk"

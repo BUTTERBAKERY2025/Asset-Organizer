@@ -194,6 +194,7 @@
   },
   "roles": {
     "admin": "مدير",
+    "hrManager": "مدير الموارد البشرية",
     "employee": "موظف",
     "viewer": "مشاهد",
     "attendanceClerk": "مسجل الحضور"
