@@ -550,22 +550,30 @@ function WhatsAppQuickSend({ employees, branches }: { employees: BranchEmployee[
         {mode === "single" ? (
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-gray-700 dark:text-foreground/90">المستلم</label>
-            <Input
-              placeholder="ابحث بالاسم أو رقم الجوال..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-9 text-sm"
-              data-testid="input-whatsapp-search"
-            />
+            <div className="relative">
+              <Input
+                placeholder="ابحث بالاسم أو رقم الجوال..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-9 text-sm pe-16"
+                data-testid="input-whatsapp-search"
+              />
+              <span
+                className="absolute inset-y-0 end-2 flex items-center text-[10px] text-muted-foreground tabular-nums pointer-events-none"
+                data-testid="text-whatsapp-search-count"
+              >
+                {fmt(filteredEmployees.length)} نتيجة
+              </span>
+            </div>
             <Select value={employeeId} onValueChange={setEmployeeId}>
               <SelectTrigger className="h-9 text-sm" data-testid="select-whatsapp-recipient">
                 <SelectValue placeholder="اختر موظفاً" />
               </SelectTrigger>
               <SelectContent>
                 {filteredEmployees.length === 0 && (
-                  <div className="py-2 px-3 text-xs text-muted-foreground">لا توجد نتائج</div>
+                  <div className="py-2 px-3 text-xs text-muted-foreground">لا توجد نتائج — جرّب كلمة بحث أخرى</div>
                 )}
-                {filteredEmployees.map((e) => (
+                {filteredEmployees.slice(0, 200).map((e) => (
                   <SelectItem key={e.id} value={String(e.id)}>
                     <span className="flex items-center gap-2">
                       <span className="truncate font-medium">{e.employeeName || e.fullNameArabic || e.fullName || `#${e.id}`}</span>
@@ -575,6 +583,11 @@ function WhatsAppQuickSend({ employees, branches }: { employees: BranchEmployee[
                     </span>
                   </SelectItem>
                 ))}
+                {filteredEmployees.length > 200 && (
+                  <div className="py-1.5 px-3 text-[10px] text-muted-foreground border-t mt-1">
+                    يُعرض أول 200 — ابحث لتضييق النتائج ({fmt(filteredEmployees.length - 200)} مخفي)
+                  </div>
+                )}
               </SelectContent>
             </Select>
           </div>
