@@ -324,6 +324,18 @@ export default function CashierJournalFormPage() {
 
   const isEdit = !!id;
 
+  // Session heartbeat — pings /api/auth/me every 10 minutes while this form
+  // is open so a cashier filling out the close-of-shift form (signature +
+  // attachments) doesn't get logged out by the server-side inactivity timer
+  // and lose their work to a 401 on upload.
+  useEffect(() => {
+    const tick = () => {
+      fetch("/api/auth/me", { credentials: "include", cache: "no-store" }).catch(() => {});
+    };
+    const interval = setInterval(tick, 10 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const getUserDisplayName = () => {
     if (!user) return "";
     if (user.firstName && user.lastName) {
@@ -774,7 +786,10 @@ export default function CashierJournalFormPage() {
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          throw new Error(err.error || `Upload failed (HTTP ${res.status})`);
+          if (res.status === 401) {
+            throw new Error("انتهت جلستك. يُرجى إعادة تسجيل الدخول في تبويب جديد ثم العودة لرفع المرفق");
+          }
+          throw new Error(err.error || err.message || `Upload failed (HTTP ${res.status})`);
         }
         const result = await res.json() as { filePath: string; downloadUrl: string };
         if (!result.filePath || !result.downloadUrl) {

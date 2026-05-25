@@ -695,7 +695,7 @@ export async function setupAuth(app: Express) {
   });
 }
 
-const SERVER_INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes server-side inactivity timeout
+const SERVER_INACTIVITY_TIMEOUT = 60 * 60 * 1000; // 60 minutes server-side inactivity timeout — long enough for cashier shift-close forms (signature + attachments)
 const MAX_SESSION_AGE = 12 * 60 * 60 * 1000; // 12 hours absolute max session lifetime
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
