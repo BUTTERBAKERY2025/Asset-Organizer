@@ -33,7 +33,7 @@ export function SalesTotalsHero({
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
-        <InnerCell label="المبيعات (ر.س) *">
+        <InnerCell label="المبيعات (SAR) *">
           <input
             type="number"
             inputMode="decimal"

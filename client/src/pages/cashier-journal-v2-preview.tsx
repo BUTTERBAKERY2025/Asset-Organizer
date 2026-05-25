@@ -18,6 +18,8 @@ import {
   type AttachmentItem,
   type DifferenceItem,
   type ChannelStatus,
+  fmtDate,
+  fmtDateTime,
 } from "@/components/cashier-journal-v2";
 import type { AttachmentType } from "@shared/schema";
 
@@ -190,7 +192,7 @@ export default function CashierJournalV2PreviewPage() {
 
   return (
     <Layout>
-      <div className="mx-auto max-w-[1200px] space-y-4 p-4 pb-24" dir="rtl">
+      <div className="mx-auto max-w-[1200px] space-y-3 p-3 pb-28 sm:space-y-4 sm:p-4" dir="rtl">
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           <strong>وضع المعاينة</strong> — هذه صفحة لاختبار التصميم الجديد لنموذج يومية الكاشير. البيانات وهمية ولا تُحفظ.
         </div>
@@ -264,7 +266,7 @@ export default function CashierJournalV2PreviewPage() {
                 <div>
                   <div className="text-sm font-semibold text-[#173404]">تم توقيع اليومية</div>
                   <div className="mt-0.5 text-xs text-[#173404]/80">
-                    وقّع: <span className="font-medium">{signature.signerName}</span> — {new Date(signature.signedAt).toLocaleString("ar-SA")}
+                    وقّع: <span className="font-medium">{signature.signerName}</span> — {fmtDateTime(signature.signedAt)}
                   </div>
                 </div>
               </div>
@@ -284,7 +286,7 @@ export default function CashierJournalV2PreviewPage() {
         <SummaryDashboard
           branchName="فرع الرياض"
           shiftLabel="الوردية الصباحية"
-          dateLabel={new Date(journalDate).toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" })}
+          dateLabel={fmtDate(journalDate)}
           cashierName={cashierName}
           status={signature ? "approved" : "submitted"}
           totalSales={netSales}

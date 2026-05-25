@@ -78,7 +78,7 @@ export function PaymentTabs(props: PaymentTabsProps) {
         </span>
       </div>
 
-      <div className="mb-4 flex gap-1 border-b border-gray-200">
+      <div className="mb-4 flex gap-1 overflow-x-auto border-b border-gray-200">
         <TabButton
           active={tab === "cash"}
           onClick={() => setTab("cash")}
@@ -170,7 +170,7 @@ function TabButton({
       type="button"
       onClick={onClick}
       data-testid={testId}
-      className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs transition-colors ${
+      className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-xs transition-colors ${
         active
           ? "border-[#534AB7] font-medium text-[#534AB7]"
           : "border-transparent text-gray-500 hover:text-gray-700"
@@ -294,7 +294,7 @@ function CashTab({
         <span>الفرق النقدي</span>
         <span className="flex items-center gap-1 font-medium">
           {diff >= 0 ? "+" : ""}
-          {diff.toFixed(2)} ر.س
+          {diff.toFixed(2)} SAR
           {Math.abs(diff) < 0.01 ? <Check className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
         </span>
       </div>
@@ -326,7 +326,7 @@ function CardsTab({
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-[1.2fr_1fr_1fr_0.8fr_32px] gap-2 px-2 text-[11px] text-gray-500">
+      <div className="hidden grid-cols-[1.2fr_1fr_1fr_0.8fr_32px] gap-2 px-2 text-[11px] text-gray-500 md:grid">
         <span>الشبكة</span>
         <span className="text-center">المسجل (POS)</span>
         <span className="text-center">الفعلي (التقرير)</span>
@@ -341,27 +341,49 @@ function CardsTab({
         return (
           <div
             key={`${row.method}-${idx}`}
-            className="grid grid-cols-[1.2fr_1fr_1fr_0.8fr_32px] items-center gap-2 rounded-lg bg-[#F1EFE8] p-2.5"
+            className="grid grid-cols-2 items-center gap-2 rounded-lg bg-[#F1EFE8] p-2.5 md:grid-cols-[1.2fr_1fr_1fr_0.8fr_32px]"
             data-testid={`row-card-${row.method}`}
           >
-            <div className="flex items-center gap-2">
-              <span
-                className="flex h-6 w-9 items-center justify-center rounded text-[10px] font-medium"
-                style={{ background: network?.bg ?? "#666", color: network?.text ?? "#fff" }}
+            <div className="col-span-2 flex items-center justify-between gap-2 md:col-span-1 md:justify-start">
+              <div className="flex items-center gap-2">
+                <span
+                  className="flex h-6 w-9 items-center justify-center rounded text-[10px] font-medium"
+                  style={{ background: network?.bg ?? "#666", color: network?.text ?? "#fff" }}
+                >
+                  {network?.abbr ?? row.label}
+                </span>
+                <span className="text-sm text-gray-900">{row.label}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeRow(idx)}
+                disabled={disabled}
+                data-testid={`button-remove-card-${row.method}`}
+                className="flex h-7 w-7 items-center justify-center rounded text-gray-400 hover:bg-white hover:text-gray-700 md:hidden"
+                aria-label="حذف"
               >
-                {network?.abbr ?? row.label}
-              </span>
-              <span className="text-sm text-gray-900">{row.label}</span>
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
-            <NumInput value={row.pos} onChange={(v) => updateRow(idx, { pos: v })} disabled={disabled} testId={`input-card-pos-${row.method}`} ariaLabel={`المسجل ${row.label}`} />
-            <NumInput value={row.actual} onChange={(v) => updateRow(idx, { actual: v })} disabled={disabled} testId={`input-card-actual-${row.method}`} highlight={highlight} ariaLabel={`الفعلي ${row.label}`} />
-            <div className="flex justify-center"><DiffPill diff={diff} /></div>
+            <label className="block">
+              <span className="mb-0.5 block text-[10px] text-gray-500 md:hidden">المسجل (POS)</span>
+              <NumInput value={row.pos} onChange={(v) => updateRow(idx, { pos: v })} disabled={disabled} testId={`input-card-pos-${row.method}`} ariaLabel={`المسجل ${row.label}`} />
+            </label>
+            <label className="block">
+              <span className="mb-0.5 block text-[10px] text-gray-500 md:hidden">الفعلي (التقرير)</span>
+              <NumInput value={row.actual} onChange={(v) => updateRow(idx, { actual: v })} disabled={disabled} testId={`input-card-actual-${row.method}`} highlight={highlight} ariaLabel={`الفعلي ${row.label}`} />
+            </label>
+            <div className="col-span-2 flex items-center justify-between md:col-span-1 md:justify-center">
+              <span className="text-[10px] text-gray-500 md:hidden">الفرق</span>
+              <DiffPill diff={diff} />
+            </div>
             <button
               type="button"
               onClick={() => removeRow(idx)}
               disabled={disabled}
-              data-testid={`button-remove-card-${row.method}`}
-              className="flex h-7 w-7 items-center justify-center rounded text-gray-400 hover:bg-white hover:text-gray-700"
+              data-testid={`button-remove-card-desktop-${row.method}`}
+              className="hidden h-7 w-7 items-center justify-center rounded text-gray-400 hover:bg-white hover:text-gray-700 md:flex"
+              aria-label="حذف"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -385,7 +407,7 @@ function CardsTab({
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-3 rounded-lg bg-[#EEEDFE] p-3 text-xs">
+      <div className="grid grid-cols-3 gap-2 rounded-lg bg-[#EEEDFE] p-3 text-xs sm:gap-3">
         <div>
           <div className="text-gray-500">مجموع المسجل</div>
           <div className="font-medium text-gray-900" data-testid="text-cards-total-pos">{fmt(totalPos)}</div>
@@ -430,7 +452,7 @@ function DeliveryTab({
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-[1.3fr_0.6fr_1fr_0.9fr_1fr_32px] gap-2 px-2 text-[11px] text-gray-500">
+      <div className="hidden grid-cols-[1.3fr_0.6fr_1fr_0.9fr_1fr_32px] gap-2 px-2 text-[11px] text-gray-500 md:grid">
         <span>الشركة</span>
         <span className="text-center">عدد الطلبات</span>
         <span className="text-center">إجمالي المبلغ</span>
@@ -446,49 +468,74 @@ function DeliveryTab({
         return (
           <div
             key={`${row.method}-${idx}`}
-            className={`grid grid-cols-[1.3fr_0.6fr_1fr_0.9fr_1fr_32px] items-center gap-2 rounded-lg bg-[#F1EFE8] p-2.5 ${inactive ? "opacity-60" : ""}`}
+            className={`grid grid-cols-2 items-center gap-2 rounded-lg bg-[#F1EFE8] p-2.5 md:grid-cols-[1.3fr_0.6fr_1fr_0.9fr_1fr_32px] ${inactive ? "opacity-60" : ""}`}
             data-testid={`row-delivery-${row.method}`}
           >
-            <div className="flex items-center gap-2">
-              <span
-                className={`flex h-8 w-8 items-center justify-center rounded text-[10px] font-medium text-white ${
-                  company?.bg === "transparent" ? "border border-dashed border-gray-400 text-gray-500" : ""
-                }`}
-                style={company?.bg !== "transparent" ? { background: company?.bg ?? "#666" } : {}}
-              >
-                {company?.abbr ?? row.label}
-              </span>
-              <div className="flex flex-col">
-                <span className="text-sm font-medium text-gray-900">{row.label}</span>
-                {row.latin && <span className="text-[10px] text-gray-500">{row.latin}</span>}
+            <div className="col-span-2 flex items-center justify-between gap-2 md:col-span-1">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`flex h-8 w-8 items-center justify-center rounded text-[10px] font-medium text-white ${
+                    company?.bg === "transparent" ? "border border-dashed border-gray-400 text-gray-500" : ""
+                  }`}
+                  style={company?.bg !== "transparent" ? { background: company?.bg ?? "#666" } : {}}
+                >
+                  {company?.abbr ?? row.label}
+                </span>
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-gray-900">{row.label}</span>
+                  {row.latin && <span className="text-[10px] text-gray-500">{row.latin}</span>}
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => removeRow(idx)}
+                disabled={disabled}
+                data-testid={`button-remove-delivery-mobile-${row.method}`}
+                className="flex h-7 w-7 items-center justify-center rounded text-gray-400 hover:bg-white hover:text-gray-700 md:hidden"
+                aria-label="حذف"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
-            <input
-              type="number"
-              inputMode="numeric"
-              min="0"
-              value={row.orders || ""}
-              onChange={(e) => updateRow(idx, { orders: parseInt(e.target.value) || 0 })}
-              disabled={disabled}
-              placeholder="0"
-              data-testid={`input-delivery-orders-${row.method}`}
-              aria-label={`عدد طلبات ${row.label}`}
-              className="w-full rounded-lg border border-black/[0.08] bg-white px-2 py-1.5 text-center text-sm focus:border-[#534AB7] focus:outline-none disabled:bg-gray-50"
-            />
-            <NumInput value={row.amount} onChange={(v) => updateRow(idx, { amount: v })} disabled={disabled} testId={`input-delivery-amount-${row.method}`} ariaLabel={`إجمالي مبلغ ${row.label}`} />
-            <div className="flex items-center gap-1">
-              <NumInput value={row.commissionPct} onChange={(v) => updateRow(idx, { commissionPct: v })} disabled={disabled} testId={`input-delivery-commission-${row.method}`} placeholder="0" ariaLabel={`عمولة ${row.label} بالنسبة المئوية`} />
-              <span className="text-xs text-gray-500">%</span>
+            <label className="block">
+              <span className="mb-0.5 block text-[10px] text-gray-500 md:hidden">عدد الطلبات</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min="0"
+                value={row.orders || ""}
+                onChange={(e) => updateRow(idx, { orders: parseInt(e.target.value) || 0 })}
+                disabled={disabled}
+                placeholder="0"
+                data-testid={`input-delivery-orders-${row.method}`}
+                aria-label={`عدد طلبات ${row.label}`}
+                className="w-full rounded-lg border border-black/[0.08] bg-white px-2 py-1.5 text-center text-sm focus:border-[#534AB7] focus:outline-none disabled:bg-gray-50"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-0.5 block text-[10px] text-gray-500 md:hidden">إجمالي المبلغ</span>
+              <NumInput value={row.amount} onChange={(v) => updateRow(idx, { amount: v })} disabled={disabled} testId={`input-delivery-amount-${row.method}`} ariaLabel={`إجمالي مبلغ ${row.label}`} />
+            </label>
+            <label className="block">
+              <span className="mb-0.5 block text-[10px] text-gray-500 md:hidden">العمولة (%)</span>
+              <div className="flex items-center gap-1">
+                <NumInput value={row.commissionPct} onChange={(v) => updateRow(idx, { commissionPct: v })} disabled={disabled} testId={`input-delivery-commission-${row.method}`} placeholder="0" ariaLabel={`عمولة ${row.label} بالنسبة المئوية`} />
+                <span className="text-xs text-gray-500">%</span>
+              </div>
+            </label>
+            <div className="col-span-2 flex items-center justify-between rounded bg-white/60 px-2 py-1 md:col-span-1 md:justify-center md:bg-transparent md:px-0 md:py-0">
+              <span className="text-[10px] text-gray-500 md:hidden">الصافي</span>
+              <span className="text-sm font-medium text-[#173404]" data-testid={`text-delivery-net-${row.method}`}>
+                {row.amount > 0 ? fmt(net) : "—"}
+              </span>
             </div>
-            <span className="text-center text-sm font-medium text-[#173404]" data-testid={`text-delivery-net-${row.method}`}>
-              {row.amount > 0 ? fmt(net) : "—"}
-            </span>
             <button
               type="button"
               onClick={() => removeRow(idx)}
               disabled={disabled}
               data-testid={`button-remove-delivery-${row.method}`}
-              className="flex h-7 w-7 items-center justify-center rounded text-gray-400 hover:bg-white hover:text-gray-700"
+              className="hidden h-7 w-7 items-center justify-center rounded text-gray-400 hover:bg-white hover:text-gray-700 md:flex"
+              aria-label="حذف"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -512,7 +559,7 @@ function DeliveryTab({
         ))}
       </div>
 
-      <div className="grid grid-cols-4 gap-3 rounded-lg bg-[#EEEDFE] p-3 text-xs">
+      <div className="grid grid-cols-2 gap-3 rounded-lg bg-[#EEEDFE] p-3 text-xs sm:grid-cols-4">
         <div>
           <div className="text-gray-500">عدد الطلبات</div>
           <div className="font-medium text-gray-900" data-testid="text-delivery-total-orders">{totalOrders} طلب</div>
@@ -557,7 +604,7 @@ function CreditTab({
         </div>
       )}
       {rows.map((row, idx) => (
-        <div key={idx} className="grid grid-cols-[1.5fr_1fr_1fr_32px] gap-2 rounded-lg bg-[#F1EFE8] p-2.5" data-testid={`row-credit-${idx}`}>
+        <div key={idx} className="grid grid-cols-2 gap-2 rounded-lg bg-[#F1EFE8] p-2.5 md:grid-cols-[1.5fr_1fr_1fr_32px]" data-testid={`row-credit-${idx}`}>
           <input
             type="text"
             value={row.customer}
@@ -565,7 +612,7 @@ function CreditTab({
             disabled={disabled}
             placeholder="اسم العميل"
             data-testid={`input-credit-customer-${idx}`}
-            className="w-full rounded-lg border border-black/[0.08] bg-white px-2 py-1.5 text-sm focus:border-[#534AB7] focus:outline-none"
+            className="col-span-2 w-full rounded-lg border border-black/[0.08] bg-white px-2 py-1.5 text-sm focus:border-[#534AB7] focus:outline-none md:col-span-1"
           />
           <NumInput value={row.amount} onChange={(v) => updateRow(idx, { amount: v })} disabled={disabled} testId={`input-credit-amount-${idx}`} />
           <input

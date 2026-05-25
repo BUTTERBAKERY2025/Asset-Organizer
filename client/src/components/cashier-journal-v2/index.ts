@@ -10,6 +10,7 @@ export { SummaryDashboard } from "./SummaryDashboard";
 export type { DifferenceItem, ChannelStatus } from "./SummaryDashboard";
 export { StickyFooter } from "./StickyFooter";
 export { SignaturePadModal } from "./SignaturePadModal";
+export { fmt, fmtInt, fmtDate, fmtDateTime } from "./constants";
 export {
   CARD_NETWORKS,
   DELIVERY_COMPANIES,
@@ -18,5 +19,4 @@ export {
   CHANNEL_COLORS,
   TOLERANCE_SAR,
   STEPS,
-  fmt,
 } from "./constants";

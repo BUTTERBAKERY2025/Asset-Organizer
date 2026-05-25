@@ -55,7 +55,24 @@ export const STEPS = [
 ] as const;
 
 export const fmt = (n: number, opts: { decimals?: number; suffix?: string } = {}) => {
-  const { decimals = 2, suffix = " ر.س" } = opts;
+  const { decimals = 2, suffix = " SAR" } = opts;
   const v = Number.isFinite(n) ? n : 0;
-  return `${v.toLocaleString("ar-SA", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}${suffix}`;
+  return `${v.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}${suffix}`;
+};
+
+export const fmtInt = (n: number) => {
+  const v = Number.isFinite(n) ? Math.round(n) : 0;
+  return v.toLocaleString("en-US");
+};
+
+export const fmtDate = (iso: string) => {
+  try {
+    return new Date(iso).toLocaleDateString("en-GB", { year: "numeric", month: "short", day: "2-digit" });
+  } catch { return iso; }
+};
+
+export const fmtDateTime = (iso: string) => {
+  try {
+    return new Date(iso).toLocaleString("en-GB", { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  } catch { return iso; }
 };

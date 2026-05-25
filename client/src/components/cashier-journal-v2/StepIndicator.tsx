@@ -8,14 +8,14 @@ interface StepIndicatorProps {
 export function StepIndicator({ activeStep, onStepClick }: StepIndicatorProps) {
   return (
     <div
-      className="flex items-center justify-between gap-2 rounded-xl bg-[#F1EFE8] px-4 py-3"
+      className="flex items-center justify-between gap-1 overflow-x-auto rounded-xl bg-[#F1EFE8] px-3 py-3 sm:gap-2 sm:px-4"
       data-testid="step-indicator"
     >
       {STEPS.map((s, idx) => {
         const isActive = activeStep === s.id;
         const isDone = activeStep > s.id;
         return (
-          <div key={s.id} className="flex flex-1 items-center gap-2">
+          <div key={s.id} className="flex flex-1 items-center gap-1.5 sm:gap-2">
             <button
               type="button"
               onClick={() => onStepClick?.(s.id as 1 | 2 | 3)}
@@ -31,9 +31,9 @@ export function StepIndicator({ activeStep, onStepClick }: StepIndicatorProps) {
               {s.id}
             </button>
             <span
-              className={`text-xs ${
+              className={`whitespace-nowrap text-[11px] sm:text-xs ${
                 isActive ? "font-medium text-[#26215C]" : "text-gray-600"
-              }`}
+              } ${isActive ? "" : "hidden sm:inline"}`}
               data-testid={`step-label-${s.id}`}
             >
               {s.label}

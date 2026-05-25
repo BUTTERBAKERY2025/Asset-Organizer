@@ -1,5 +1,5 @@
 import { PieChart, Scale, AlertCircle, Clock, Check, ArrowDown, ArrowUp } from "lucide-react";
-import { CHANNEL_COLORS, TOLERANCE_SAR, fmt } from "./constants";
+import { CHANNEL_COLORS, TOLERANCE_SAR, fmt, fmtInt } from "./constants";
 
 export interface ChannelStatus {
   amount: number;
@@ -60,26 +60,26 @@ export function SummaryDashboard(props: SummaryDashboardProps) {
 
   return (
     <div className="space-y-3">
-      <div className="rounded-xl bg-[#26215C] p-5 text-white" data-testid="hero-summary">
-        <div className="mb-4 flex items-start justify-between">
-          <div>
+      <div className="rounded-xl bg-[#26215C] p-4 text-white sm:p-5" data-testid="hero-summary">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
             <div className="text-xs text-white/70">ملخص اليومية</div>
-            <h2 className="text-lg font-medium">
+            <h2 className="truncate text-base font-medium sm:text-lg">
               {props.branchName} — {props.shiftLabel}
             </h2>
             <div className="text-xs text-white/70">
               {props.dateLabel} · الكاشير {props.cashierName}
             </div>
           </div>
-          <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 text-xs">
+          <span className="inline-flex w-fit items-center gap-1 rounded-full bg-white/10 px-3 py-1 text-xs">
             <Clock className="h-3 w-3" />
             {STATUS_LABELS[props.status]}
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
-          <HeroCard label="إجمالي المبيعات" value={fmt(props.totalSales)} valueClass="text-2xl" context={`${props.invoiceCount} فاتورة · متوسط ${fmt(props.avgInvoice)}`} />
-          <HeroCard label="إجمالي المحصل" value={fmt(props.collectedTotal)} context={`من ${props.channelsUsed} قنوات`} />
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+          <HeroCard label="إجمالي المبيعات" value={fmt(props.totalSales)} valueClass="text-xl sm:text-2xl" context={`${fmtInt(props.invoiceCount)} فاتورة · متوسط ${fmt(props.avgInvoice)}`} />
+          <HeroCard label="إجمالي المحصل" value={fmt(props.collectedTotal)} context={`من ${fmtInt(props.channelsUsed)} قنوات`} />
           <HeroCard label="العهدة" value={fmt(props.openingBalance)} context="رصيد ابتدائي" />
           <HeroCard
             label="صافي العجز"
@@ -121,7 +121,7 @@ export function SummaryDashboard(props: SummaryDashboardProps) {
           <span className="text-sm font-medium">معادلة المطابقة</span>
         </div>
 
-        <div className="grid grid-cols-[1fr_24px_1fr_24px_1fr] items-stretch gap-2 rounded-lg bg-[#F1EFE8] p-3">
+        <div className="grid grid-cols-[1fr_20px_1fr_20px_1fr] items-stretch gap-1 rounded-lg bg-[#F1EFE8] p-2 sm:gap-2 sm:p-3">
           <EqCell label="المبيعات" value={fmt(props.totalSales)} />
           <EqOp op="−" />
           <EqCell label="المحصل" value={fmt(props.collectedTotal)} />
@@ -135,7 +135,7 @@ export function SummaryDashboard(props: SummaryDashboardProps) {
 
         <div className="mt-3">
           <div className="mb-1 flex items-center justify-between text-xs">
-            <span className="text-gray-500">الحد المسموح: ±{TOLERANCE_SAR} ر.س</span>
+            <span className="text-gray-500">الحد المسموح: ±{TOLERANCE_SAR} SAR</span>
             <span className={`flex items-center gap-1 ${Math.abs(props.netDifference) > TOLERANCE_SAR ? "text-[#791F1F]" : "text-[#633806]"}`}>
               <AlertCircle className="h-3 w-3" />
               {Math.abs(props.netDifference) > TOLERANCE_SAR ? "خارج الحد" : "ضمن الحد"}
@@ -242,9 +242,9 @@ function ChannelRow({
 
 function EqCell({ label, value, bgClass }: { label: string; value: string; bgClass?: string }) {
   return (
-    <div className={`flex flex-col items-center justify-center rounded-lg px-2 py-3 ${bgClass ?? "bg-white"}`}>
+    <div className={`flex min-w-0 flex-col items-center justify-center rounded-lg px-1 py-2 text-center sm:px-2 sm:py-3 ${bgClass ?? "bg-white"}`}>
       <span className="text-[10px] opacity-70">{label}</span>
-      <span className="text-lg font-medium">{value}</span>
+      <span className="break-all text-xs font-medium sm:text-base md:text-lg">{value}</span>
     </div>
   );
 }
@@ -273,8 +273,8 @@ function DiffRow({ item }: { item: DifferenceItem }) {
   const bgClass = isPending ? "bg-[#FAEEDA] text-[#412402]" : "bg-[#F1EFE8] text-gray-900";
 
   return (
-    <div className={`grid grid-cols-[1.5fr_1fr_1fr_0.8fr] items-center gap-2 rounded-lg p-2.5 text-xs ${bgClass}`} data-testid={`diff-row-${item.key}`}>
-      <div>
+    <div className={`grid grid-cols-2 items-center gap-2 rounded-lg p-2.5 text-xs sm:grid-cols-[1.5fr_1fr_1fr_0.8fr] ${bgClass}`} data-testid={`diff-row-${item.key}`}>
+      <div className="col-span-2 sm:col-span-1">
         <div className="font-medium">{item.source}</div>
         <div className="text-[10px] opacity-70">{item.descriptor}</div>
       </div>
@@ -282,7 +282,7 @@ function DiffRow({ item }: { item: DifferenceItem }) {
         <div>{item.posLabel}</div>
         <div>{item.actualLabel}</div>
       </div>
-      <div>
+      <div className="text-end sm:text-start">
         {item.diff === null ? (
           <span className="text-gray-500">في الانتظار</span>
         ) : Math.abs(item.diff) < 0.01 ? (
@@ -297,7 +297,7 @@ function DiffRow({ item }: { item: DifferenceItem }) {
         type="button"
         onClick={item.onAction}
         data-testid={`button-diff-action-${item.key}`}
-        className="rounded-lg border border-current/30 bg-white/50 px-2 py-1 text-[11px] hover:bg-white"
+        className="col-span-2 rounded-lg border border-current/30 bg-white/50 px-2 py-1 text-[11px] hover:bg-white sm:col-span-1"
       >
         {item.status === "pending" ? "إكمال" : item.status === "justified" ? "✓ مبرر" : "إضافة سبب"}
       </button>
