@@ -51,10 +51,24 @@ type ThemeConfig = {
   tagline: string;
   accent: string;
   pattern: "stars" | "geometric" | "hearts" | "circles" | "diamonds";
+  slideshow?: string[];
+  defaultAudio?: string;
 };
 
+// Eid Al-Adha slideshow frames (cute sheep characters extracted from video)
+const EID_ADHA_FRAMES = [
+  "/eid-adha/frame_03.jpg",
+  "/eid-adha/frame_08.jpg",
+  "/eid-adha/frame_15.jpg",
+  "/eid-adha/frame_22.jpg",
+  "/eid-adha/frame_29.jpg",
+  "/eid-adha/frame_36.jpg",
+  "/eid-adha/frame_43.jpg",
+  "/eid-adha/frame_50.jpg",
+];
+
 const THEME_CONFIG: Record<Theme, ThemeConfig> = {
-  eid_adha:    { decorations: ["🐑","🕋","🎈","🌙","✨","🐏","🎊","☪️","💫"], bg: "linear-gradient(135deg,#fef3c7 0%,#fde68a 40%,#fbbf24 100%)", bigEmoji: "🕋", tagline: "عيد أضحى مبارك", accent: "#b8860b", pattern: "geometric" },
+  eid_adha:    { decorations: ["🐑","🕋","🎈","🌙","✨","🐏","🎊","☪️","💫"], bg: "linear-gradient(135deg,#fef3c7 0%,#fde68a 40%,#fbbf24 100%)", bigEmoji: "🕋", tagline: "عيد أضحى مبارك", accent: "#b8860b", pattern: "geometric", slideshow: EID_ADHA_FRAMES, defaultAudio: "/eid-adha/song.mp3" },
   eid_fitr:    { decorations: ["🌙","🏮","✨","🎈","⭐","🕌","🎊","💫","☪️"], bg: "linear-gradient(135deg,#fef3c7 0%,#fcd34d 50%,#f59e0b 100%)", bigEmoji: "🌙", tagline: "عيد فطر سعيد", accent: "#d97706", pattern: "stars" },
   ramadan:     { decorations: ["🌙","🏮","⭐","✨","🕌","💫"], bg: "linear-gradient(135deg,#1e1b4b 0%,#4c1d95 50%,#7c3aed 100%)", bigEmoji: "🌙", tagline: "رمضان كريم", accent: "#fbbf24", pattern: "stars" },
   national:    { decorations: ["🇸🇦","🌴","🎆","✨","💚","⭐","🐪"], bg: "linear-gradient(135deg,#064e3b 0%,#065f46 50%,#047857 100%)", bigEmoji: "🇸🇦", tagline: "هي لنا دار", accent: "#fbbf24", pattern: "diamonds" },
@@ -234,9 +248,13 @@ function playBuiltinTune(type: string): { ok: boolean; durationMs: number } {
   }
 }
 
-// Validate that a sound URL is safe to play: https only + known audio extension.
+// Validate that a sound URL is safe to play: https or same-origin relative + known audio extension.
 function isValidAudioUrl(url: string | null | undefined): boolean {
   if (!url) return false;
+  // Same-origin relative path (starts with / and not //) is always safe
+  if (url.startsWith("/") && !url.startsWith("//")) {
+    return /\.(mp3|ogg|wav|m4a|aac|webm)(\?|$)/i.test(url);
+  }
   try {
     const u = new URL(url);
     if (u.protocol !== "https:") return false;
@@ -244,6 +262,62 @@ function isValidAudioUrl(url: string | null | undefined): boolean {
   } catch {
     return false;
   }
+}
+
+// Animated slideshow component — cycles through frames with fade transition.
+// Used for richer theme cards (e.g. eid_adha shows cute sheep characters).
+function ThemeSlideshow({ frames, accent, intervalMs = 2500 }: { frames: string[]; accent: string; intervalMs?: number }) {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    if (frames.length < 2) return;
+    const t = setInterval(() => setIdx(i => (i + 1) % frames.length), intervalMs);
+    return () => clearInterval(t);
+  }, [frames.length, intervalMs]);
+  return (
+    <div
+      className="relative mx-auto mb-4 rounded-2xl overflow-hidden shadow-2xl border-4"
+      style={{
+        borderColor: accent,
+        width: "min(85vw, 320px)",
+        aspectRatio: "400/520",
+        boxShadow: `0 20px 60px ${accent}55, 0 0 0 2px ${accent}33`,
+      }}
+      data-testid="theme-slideshow"
+    >
+      <AnimatePresence mode="popLayout">
+        <motion.img
+          key={idx}
+          src={frames[idx]}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+          initial={{ opacity: 0, scale: 1.08 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={{ duration: 0.8, ease: "easeInOut" }}
+        />
+      </AnimatePresence>
+      {/* Soft gradient overlay so text/decorations remain readable */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{ background: `linear-gradient(180deg, ${accent}11 0%, transparent 30%, transparent 70%, ${accent}22 100%)` }}
+      />
+      {/* Frame counter dots */}
+      <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 z-10">
+        {frames.map((_, i) => (
+          <span
+            key={i}
+            className="rounded-full transition-all"
+            style={{
+              width: i === idx ? 18 : 6,
+              height: 6,
+              backgroundColor: i === idx ? "#ffffff" : "rgba(255,255,255,0.5)",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function PublicGreetingPage() {
@@ -309,7 +383,13 @@ export default function PublicGreetingPage() {
     return () => clearTimeout(t);
   }, [data]);
 
-  const validCustomSound = useMemo(() => isValidAudioUrl(data?.customSoundUrl), [data]);
+  // Pick effective audio URL: user-provided customSoundUrl wins; otherwise theme default.
+  const themeCfg = useMemo(() => data ? THEME_CONFIG[detectTheme(data)] : null, [data]);
+  const effectiveAudioUrl = useMemo(() => {
+    const url = data?.customSoundUrl || themeCfg?.defaultAudio || null;
+    return isValidAudioUrl(url) ? url : null;
+  }, [data, themeCfg]);
+  const validCustomSound = effectiveAudioUrl !== null;
 
   // Auto-play audio (handle browser autoplay restrictions)
   useEffect(() => {
@@ -445,12 +525,13 @@ export default function PublicGreetingPage() {
       {/* Confetti burst */}
       <AnimatePresence>{confettiVisible && <ConfettiBurst accent={accent} viewportH={viewportH} />}</AnimatePresence>
 
-      {/* Hidden audio element (for custom validated https audio file) */}
-      {validCustomSound && data.customSoundUrl && (
+      {/* Hidden audio element (custom validated URL or theme default) */}
+      {effectiveAudioUrl && (
         <audio
           ref={audioRef}
-          src={data.customSoundUrl}
+          src={effectiveAudioUrl}
           preload="auto"
+          loop
           onEnded={() => setAudioPlaying(false)}
           onPause={() => setAudioPlaying(false)}
           onError={() => { setAudioPlaying(false); setAudioBlocked(true); }}
@@ -509,26 +590,37 @@ export default function PublicGreetingPage() {
                 />
               </motion.div>
 
-              {/* Sparkle rays behind emoji */}
+              {/* Sparkle rays behind emoji/slideshow */}
               <div className="relative">
                 <SparkleRays accent={accent} />
 
-                {/* Big themed emoji */}
-                <motion.div
-                  className="text-center mb-3 sm:mb-4 relative z-10"
-                  initial={{ scale: 0, rotate: -180 }}
-                  animate={{ scale: [0, 1.3, 1], rotate: [180, 0, 0] }}
-                  transition={{ delay: 0.6, duration: 0.9 }}
-                >
-                  <motion.span
-                    className="text-6xl sm:text-7xl md:text-9xl inline-block"
-                    animate={{ y: [0, -8, 0] }}
-                    transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-                    data-testid="big-emoji"
+                {/* Theme slideshow (e.g. eid_adha) OR big themed emoji */}
+                {cfg.slideshow && cfg.slideshow.length > 0 ? (
+                  <motion.div
+                    className="relative z-10"
+                    initial={{ scale: 0.5, opacity: 0, y: 30 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    transition={{ delay: 0.6, duration: 0.8, type: "spring" }}
                   >
-                    {data.emoji || cfg.bigEmoji}
-                  </motion.span>
-                </motion.div>
+                    <ThemeSlideshow frames={cfg.slideshow} accent={accent} />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    className="text-center mb-3 sm:mb-4 relative z-10"
+                    initial={{ scale: 0, rotate: -180 }}
+                    animate={{ scale: [0, 1.3, 1], rotate: [180, 0, 0] }}
+                    transition={{ delay: 0.6, duration: 0.9 }}
+                  >
+                    <motion.span
+                      className="text-6xl sm:text-7xl md:text-9xl inline-block"
+                      animate={{ y: [0, -8, 0] }}
+                      transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+                      data-testid="big-emoji"
+                    >
+                      {data.emoji || cfg.bigEmoji}
+                    </motion.span>
+                  </motion.div>
+                )}
               </div>
 
               {/* Personal name greeting */}
