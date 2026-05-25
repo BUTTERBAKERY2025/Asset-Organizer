@@ -510,7 +510,7 @@ html.vt-active .page-ready {
 }
 
 .skeleton-shimmer {
-  background: linear-gradient(135deg, #d4c8b0 0%, #e2d6bd 100%);
+  background: hsl(35 12% 91%);
   border-radius: 8px;
   position: relative;
   overflow: hidden;
@@ -518,15 +518,65 @@ html.vt-active .page-ready {
   contain: layout paint;
   animation: skeletonFadeIn 120ms ease-out both;
 }
+.dark .skeleton-shimmer {
+  background: hsl(30 6% 18%);
+}
+
+/* Professional skeleton — subtle, neutral, on-brand. Used by the generic
+   <Skeleton> component throughout the app. Replaces the previous loud
+   cream block + pulse animation with a soft warm-gray base + sliding
+   shine, matching the visual language of Linear / Notion / Stripe. */
+.skeleton-pro {
+  position: relative;
+  overflow: hidden;
+  background: hsl(35 12% 91%);
+  isolation: isolate;
+  contain: layout paint;
+}
+.dark .skeleton-pro {
+  background: hsl(30 6% 18%);
+}
+.skeleton-pro::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: skeletonSlide 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform;
+}
+.dark .skeleton-pro::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    transparent 100%
+  );
+}
+@keyframes skeletonSlide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-pro::after { animation: none; }
+}
 
 .skeleton-shimmer::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 15%, rgba(255,255,255,0.5) 45%, rgba(255,255,255,0.6) 55%, rgba(255,255,255,0.15) 85%, transparent 100%);
-  animation: skeletonShimmer 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  background-size: 250% 100%;
-  will-change: background-position;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%);
+  transform: translateX(-100%);
+  animation: skeletonSlide 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform;
+}
+.dark .skeleton-shimmer::after {
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%);
 }
 
 @keyframes nav-active-slide {
