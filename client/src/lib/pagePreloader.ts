@@ -146,6 +146,7 @@ const pageImports: Record<string, () => Promise<any>> = {
   "employment-applications": () => import("@/pages/employment-applications"),
   "employment-application-public": () => import("@/pages/employment-application-public"),
   "vacancy-public": () => import("@/pages/vacancy-public"),
+  "public-greeting": () => import("@/pages/public-greeting"),
 };
 
 const preloadedChunks = new Set<string>();
