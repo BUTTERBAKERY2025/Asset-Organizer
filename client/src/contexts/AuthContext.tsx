@@ -40,33 +40,20 @@ export function AuthGate({ children }: AuthGateProps) {
     }
   }, [canShowApp, hasResolved, isLoading, isAuthenticated]);
 
+  // Dismiss the static #initial-loader exactly when the authenticated app
+  // shell is ready to paint — guarantees no blank/skeleton flash between
+  // React's first commit and the real UI.
+  useEffect(() => {
+    if (hasResolved) {
+      window.dispatchEvent(new Event("app-ready"));
+    }
+  }, [hasResolved]);
+
   if (!hasResolved) {
-    // Unified skeleton instead of a centered spinner. Matches PageLoadingFallback's
-    // visual language so the very first paint feels like the app is already loading
-    // its layout, not "trying to connect" from scratch. Removes the dark blank flash.
-    return (
-      <div
-        className="min-h-screen bg-[#F5F0E6] p-6 space-y-5 skeleton-delayed"
-        dir="rtl"
-        style={{ fontFamily: "'Cairo', sans-serif" }}
-        data-testid="auth-gate-skeleton"
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 skeleton-shimmer rounded-full" style={{ animationDelay: '0ms' }} />
-            <div className="h-7 skeleton-shimmer w-40 rounded-lg" style={{ animationDelay: '40ms' }} />
-          </div>
-          <div className="h-9 skeleton-shimmer w-28 rounded-lg opacity-40" style={{ animationDelay: '80ms' }} />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          <div className="h-[88px] skeleton-shimmer rounded-xl" style={{ animationDelay: '0ms' }} />
-          <div className="h-[88px] skeleton-shimmer rounded-xl opacity-85" style={{ animationDelay: '40ms' }} />
-          <div className="h-[88px] skeleton-shimmer rounded-xl opacity-75" style={{ animationDelay: '80ms' }} />
-          <div className="h-[88px] skeleton-shimmer rounded-xl opacity-65 hidden lg:block" style={{ animationDelay: '120ms' }} />
-        </div>
-        <div className="h-64 skeleton-shimmer rounded-xl" style={{ animationDelay: '40ms' }} />
-      </div>
-    );
+    // Render nothing while auth resolves. The static loader (rendered as a
+    // fixed overlay outside #root in index.html) remains visible until the
+    // app-ready event above fires, so the user never sees an empty page.
+    return null;
   }
 
   return (

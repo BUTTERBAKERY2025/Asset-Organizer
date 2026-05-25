@@ -28,7 +28,10 @@ export function useAppInit() {
           const result = await pending;
           return result;
         }
-        const res = await fetch("/api/auth/init", { credentials: "include", priority: "high" as any });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 7000);
+        const res = await fetch("/api/auth/init", { credentials: "include", priority: "high" as any, signal: controller.signal });
+        clearTimeout(timeoutId);
         if (!res.ok) return { user: null, branches: [], permissions: [] };
         const data = await res.json();
         if (data.user) {

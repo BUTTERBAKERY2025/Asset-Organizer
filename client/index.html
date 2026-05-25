@@ -42,7 +42,7 @@
       @keyframes loaderSpinnerEntry{from{opacity:0;transform:scale(0.85)}to{opacity:1;transform:scale(1)}}
       @keyframes loaderProgress{0%{width:0}20%{width:30%}50%{width:55%}80%{width:75%}100%{width:85%}}
       .sk{background:linear-gradient(90deg,#d4c8b0 25%,#e2d6bd 50%,#d4c8b0 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
-      #initial-loader{min-height:100vh;background:#F5F0E6;font-family:'Cairo',system-ui,sans-serif;direction:rtl;transition:opacity .12s ease-out;contain:strict}
+      #initial-loader{position:fixed;inset:0;z-index:9999;background:#F5F0E6;font-family:'Cairo',system-ui,sans-serif;direction:rtl;transition:opacity .25s ease-out;contain:strict}
       #initial-loader.fade-out{animation:loaderFadeOut .15s ease-out forwards}
       .il-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:14px}
       .il-spin{width:28px;height:28px;border:2.5px solid #d4a853;border-top-color:transparent;border-radius:50%;animation:loaderSpinnerEntry .1s ease-out,spin .45s linear .1s infinite;will-change:transform;contain:strict}
@@ -53,15 +53,14 @@
   </head>
   <body>
     <div id="nav-progress-bar"></div>
-    <div id="root">
-      <div id="initial-loader">
-        <div class="il-wrap">
-          <div class="il-spin"></div>
-          <div class="il-text" id="il-msg"></div>
-          <div class="il-bar" id="il-bar"><div class="il-bar-fill"></div></div>
-        </div>
+    <div id="initial-loader">
+      <div class="il-wrap">
+        <div class="il-spin"></div>
+        <div class="il-text" id="il-msg"></div>
+        <div class="il-bar" id="il-bar"><div class="il-bar-fill"></div></div>
       </div>
     </div>
+    <div id="root"></div>
     <script>
       setTimeout(function(){var m=document.getElementById('il-msg');if(m){m.textContent='جاري تحميل النظام...';m.style.opacity='1'}var b=document.getElementById('il-bar');if(b)b.style.opacity='1'},150);
       setTimeout(function(){var m=document.getElementById('il-msg');if(m)m.textContent='جاري الاتصال بالخادم...'},3000);
