@@ -633,7 +633,7 @@ export default function TargetsDashboard() {
                     {alertsLoading ? (
                       <div className="space-y-2">
                         {Array.from({ length: 3 }).map((_, i) => (
-                          <div key={i} className="h-20 rounded-lg bg-gray-100 animate-pulse" />
+                          <div key={i} className="h-20 rounded-lg skeleton-pro" />
                         ))}
                       </div>
                     ) : alerts.length === 0 ? (
@@ -781,7 +781,7 @@ export default function TargetsDashboard() {
                   {leaderboardLoading ? (
                     <div className="space-y-2">
                       {Array.from({ length: 4 }).map((_, i) => (
-                        <div key={i} className="h-16 rounded-lg bg-gray-100 animate-pulse" />
+                        <div key={i} className="h-16 rounded-lg skeleton-pro" />
                       ))}
                     </div>
                   ) : !leaderboard?.branches.length ? (
@@ -871,7 +871,7 @@ export default function TargetsDashboard() {
                 {leaderboardLoading ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                     {Array.from({ length: 8 }).map((_, i) => (
-                      <div key={i} className="h-20 rounded-xl bg-gray-100 animate-pulse" />
+                      <div key={i} className="h-20 rounded-xl skeleton-pro" />
                     ))}
                   </div>
                 ) : !leaderboard?.cashiers.length ? (
@@ -947,9 +947,9 @@ export default function TargetsDashboard() {
                   ) : progressLoading ? (
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                        {Array.from({ length: 5 }).map((_, i) => (<div key={i} className="h-16 rounded-xl bg-gray-100 animate-pulse" />))}
+                        {Array.from({ length: 5 }).map((_, i) => (<div key={i} className="h-16 rounded-xl skeleton-pro" />))}
                       </div>
-                      <div className="h-64 rounded-xl bg-gray-100 animate-pulse" />
+                      <div className="h-64 rounded-xl skeleton-pro" />
                     </div>
                   ) : !branchProgress ? (
                     <div className="text-center py-10 text-gray-500 text-sm">لا توجد أهداف مسجلة لهذا الفرع</div>
@@ -1196,7 +1196,7 @@ export default function TargetsDashboard() {
                 {pointsLeaderboardLoading ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                     {Array.from({ length: 8 }).map((_, i) => (
-                      <div key={i} className="h-24 rounded-xl bg-gray-100 animate-pulse" />
+                      <div key={i} className="h-24 rounded-xl skeleton-pro" />
                     ))}
                   </div>
                 ) : topCashiersByPoints.length === 0 ? (

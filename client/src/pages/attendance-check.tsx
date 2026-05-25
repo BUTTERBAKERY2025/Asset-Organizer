@@ -743,13 +743,13 @@ export default function AttendanceCheckPage() {
               {loadingEmployees ? (
                 <div className="space-y-3 py-4">
                   {[1,2,3,4,5].map(i => (
-                    <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 animate-pulse">
-                      <div className="w-10 h-10 rounded-full bg-muted" />
+                    <div key={i} className="flex items-center gap-3 p-3 rounded-lg">
+                      <div className="w-10 h-10 rounded-full skeleton-pro" />
                       <div className="flex-1 space-y-2">
-                        <div className="h-4 bg-muted rounded w-1/3" />
-                        <div className="h-3 bg-muted rounded w-1/4" />
+                        <div className="h-4 skeleton-pro rounded w-1/3" />
+                        <div className="h-3 skeleton-pro rounded w-1/4" />
                       </div>
-                      <div className="h-8 w-20 bg-muted rounded" />
+                      <div className="h-8 w-20 skeleton-pro rounded" />
                     </div>
                   ))}
                 </div>

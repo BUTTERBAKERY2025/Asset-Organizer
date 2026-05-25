@@ -2157,7 +2157,7 @@ export default function BranchEmployeesPage() {
                   <div className="min-w-0">
                     <p className="text-sm text-muted-foreground truncate">{kpi.label}</p>
                     {isLoading ? (
-                      <div className="h-7 w-20 bg-muted animate-pulse rounded mt-1" />
+                      <div className="h-7 w-20 skeleton-pro rounded mt-1" />
                     ) : (
                       <p className="text-2xl font-bold" data-testid={kpi.testid}>{kpi.value}</p>
                     )}
@@ -2368,7 +2368,7 @@ export default function BranchEmployeesPage() {
             ) : isLoading ? (
               <div className="space-y-2">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="h-12 bg-muted/50 animate-pulse rounded" />
+                  <div key={i} className="h-12 skeleton-pro rounded" />
                 ))}
               </div>
             ) : filteredEmployees.length === 0 ? (

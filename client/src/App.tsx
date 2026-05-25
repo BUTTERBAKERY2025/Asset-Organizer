@@ -171,12 +171,10 @@ const HRAdvancesPage = makeLazy("hr/advances");
 const HREosPage = makeLazy("hr/eos");
 
 function AppLoadingFallback() {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#F5F0E6]" dir="rtl">
-      <Loader2 className="w-10 h-10 text-[#e67e22] animate-spin" />
-      <p className="mt-4 text-[#1a3a2f] text-sm">جاري تحميل النظام...</p>
-    </div>
-  );
+  // Render nothing: the static #initial-loader in index.html stays visible
+  // until AuthGate dispatches 'app-ready'. Avoids any flash of a second
+  // spinner on top of the existing one.
+  return null;
 }
 
 function DelayedFallback() {

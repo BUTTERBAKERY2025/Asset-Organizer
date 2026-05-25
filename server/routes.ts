@@ -205,15 +205,16 @@ export async function registerRoutes(
         prodConds.push(inArray(productionOrders.branchId, branchIds));
       }
 
-      const [salesRow] = await db
-        .select({ total: sql<number>`COALESCE(SUM(${cashierSalesJournals.totalSales}), 0)::float` })
-        .from(cashierSalesJournals)
-        .where(and(...salesConds));
-
-      const [prodRow] = await db
-        .select({ count: sql<number>`COUNT(*)::int` })
-        .from(productionOrders)
-        .where(and(...prodConds));
+      const [[salesRow], [prodRow]] = await Promise.all([
+        db
+          .select({ total: sql<number>`COALESCE(SUM(${cashierSalesJournals.totalSales}), 0)::float` })
+          .from(cashierSalesJournals)
+          .where(and(...salesConds)),
+        db
+          .select({ count: sql<number>`COUNT(*)::int` })
+          .from(productionOrders)
+          .where(and(...prodConds)),
+      ]);
 
       res.json({
         todaySales: Number(salesRow?.total ?? 0),
