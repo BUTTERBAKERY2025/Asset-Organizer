@@ -71,7 +71,7 @@ ${recipientName} المحترم/ة
   return message;
 }
 
-export async function sendWhatsAppMessage(to: string, message: string): Promise<{ success: boolean; error?: string; messageId?: string }> {
+export async function sendWhatsAppMessage(to: string, message: string, mediaUrl?: string | null): Promise<{ success: boolean; error?: string; messageId?: string }> {
   if (!client || !twilioPhone) {
     console.log('Twilio not configured, skipping WhatsApp message');
     return { success: false, error: 'Twilio not configured' };
@@ -80,11 +80,15 @@ export async function sendWhatsAppMessage(to: string, message: string): Promise<
   try {
     const formattedPhone = formatPhoneNumber(to);
     const fromNumber = whatsappSandboxNumber;
-    const result = await client.messages.create({
+    const createParams: any = {
       body: message,
       from: `whatsapp:${fromNumber}`,
       to: `whatsapp:${formattedPhone}`,
-    });
+    };
+    if (mediaUrl && /^https?:\/\//i.test(mediaUrl)) {
+      createParams.mediaUrl = [mediaUrl];
+    }
+    const result = await client.messages.create(createParams);
 
     // Redact phone numbers in logs — keep only last 4 digits for debugging.
     // Never log fromNumber (sandbox/sender) or the Twilio auth response payload.

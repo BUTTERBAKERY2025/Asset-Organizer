@@ -24,9 +24,10 @@ import {
   Monitor, Maximize, LayoutDashboard, PanelRightOpen,
   Volume2, VolumeX, Palette, Target, Calendar, Music,
   FileText, Send, X, CheckCircle, Ban, Timer,
-  Users, BarChart3, PlayCircle, XCircle
+  Users, BarChart3, PlayCircle, XCircle, MessageSquare, Wand2, Gift, Bot, Loader2
 } from "lucide-react";
 import { NotificationContent } from "@/components/NotificationDisplay";
+import { NOTIFICATION_TEMPLATES, TEMPLATE_CATEGORIES, TARGET_ROLES, applyTemplate, type NotificationTemplate } from "@/lib/notification-templates";
 
 const MESSAGE_TYPES = [
   { value: "announcement", label: "إعلان", icon: Megaphone, color: "bg-blue-100 text-blue-700 border-blue-200", dotColor: "bg-blue-500" },
@@ -83,6 +84,7 @@ const DEFAULT_FORM: Partial<SystemNotification> = {
   isActive: true,
   targetAllBranches: true,
   targetBranchIds: null,
+  targetRoleIds: null,
   startDate: null,
   endDate: null,
   displayTimeStart: null,
@@ -195,6 +197,12 @@ export default function NotificationsManagement() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [previewNotification, setPreviewNotification] = useState<SystemNotification | null>(null);
   const [statsDialogId, setStatsDialogId] = useState<number | null>(null);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [templateCategoryFilter, setTemplateCategoryFilter] = useState<string>("all");
+  const [whatsappTarget, setWhatsappTarget] = useState<SystemNotification | null>(null);
+  const [waRecipientsText, setWaRecipientsText] = useState("");
+  const [waIncludeMedia, setWaIncludeMedia] = useState(true);
+  const [waLoadingPicker, setWaLoadingPicker] = useState(false);
 
   const { data: notifications = [], isLoading } = useQuery<SystemNotification[]>({
     queryKey: ["/api/system-notifications"],
@@ -285,6 +293,91 @@ export default function NotificationsManagement() {
     },
   });
 
+  const sendWhatsAppMutation = useMutation({
+    mutationFn: async ({ id, recipients, includeMedia }: { id: number; recipients: { phone: string; name?: string }[]; includeMedia: boolean }) => {
+      const res = await apiRequest("POST", `/api/system-notifications/${id}/send-whatsapp`, { recipients, includeMedia });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: "تم الإرسال للطابور", description: `${data.queued} رسالة في طابور WhatsApp` });
+      setWhatsappTarget(null);
+      setWaRecipientsText("");
+    },
+    onError: (err: Error) => toast({ title: "خطأ", description: err.message, variant: "destructive" }),
+  });
+
+  const generateAnniversariesMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/system-notifications/generate-anniversaries", {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/system-notifications"] });
+      toast({
+        title: data.created > 0 ? "تم إنشاء تهاني الذكرى" : "لا توجد ذكرى اليوم",
+        description: `تم إنشاء ${data.created} تهنئة، تخطّي ${data.skipped}`,
+      });
+    },
+    onError: (err: Error) => toast({ title: "خطأ", description: err.message, variant: "destructive" }),
+  });
+
+  const useTemplate = (tpl: NotificationTemplate) => {
+    setForm((prev) => applyTemplate(tpl, { ...prev, createdBy: user?.id || null }));
+    setTemplatesOpen(false);
+    if (!dialogOpen) setDialogOpen(true);
+    toast({ title: "تم تطبيق القالب", description: tpl.label });
+  };
+
+  const filteredTemplates = useMemo(() => {
+    if (templateCategoryFilter === "all") return NOTIFICATION_TEMPLATES;
+    return NOTIFICATION_TEMPLATES.filter(t => t.category === templateCategoryFilter);
+  }, [templateCategoryFilter]);
+
+  const loadEmployeesFromTargetedBranches = useCallback(async () => {
+    if (!whatsappTarget) return;
+    setWaLoadingPicker(true);
+    try {
+      const branchIds = whatsappTarget.targetAllBranches
+        ? branches.map(b => b.id)
+        : (whatsappTarget.targetBranchIds || []);
+      if (branchIds.length === 0) {
+        toast({ title: "لا توجد فروع", description: "لم يتم تحديد فروع مستهدفة", variant: "destructive" });
+        return;
+      }
+      const res = await fetch(`/api/system-notifications/recipients-from-branches?branchIds=${encodeURIComponent(branchIds.join(","))}`, { credentials: "include" });
+      if (!res.ok) throw new Error("فشل في جلب الموظفين");
+      const list = await res.json() as { name: string; phone: string }[];
+      if (list.length === 0) {
+        toast({ title: "لا يوجد موظفون", description: "لا يوجد موظفون نشطون لديهم أرقام جوال", variant: "destructive" });
+        return;
+      }
+      const lines = list.map(r => `${r.phone}${r.name ? " | " + r.name : ""}`).join("\n");
+      setWaRecipientsText(prev => prev ? `${prev}\n${lines}` : lines);
+      toast({ title: "تم", description: `أضيف ${list.length} مستلم من الفروع` });
+    } catch (e: any) {
+      toast({ title: "خطأ", description: e.message, variant: "destructive" });
+    } finally {
+      setWaLoadingPicker(false);
+    }
+  }, [whatsappTarget, branches, toast]);
+
+  const submitWhatsApp = () => {
+    if (!whatsappTarget) return;
+    const lines = waRecipientsText.split("\n").map(l => l.trim()).filter(Boolean);
+    const recipients: { phone: string; name?: string }[] = [];
+    for (const line of lines) {
+      const [phoneRaw, ...nameParts] = line.split("|").map(s => s.trim());
+      const phone = phoneRaw.replace(/[^\d+]/g, "");
+      if (phone.length < 6) continue;
+      recipients.push({ phone, name: nameParts.join(" ") || undefined });
+    }
+    if (recipients.length === 0) {
+      toast({ title: "لا يوجد مستلمون", description: "أضف رقم جوال واحد على الأقل", variant: "destructive" });
+      return;
+    }
+    sendWhatsAppMutation.mutate({ id: whatsappTarget.id, recipients, includeMedia: waIncludeMedia });
+  };
+
   const closeDialog = () => {
     setDialogOpen(false);
     setEditingId(null);
@@ -355,14 +448,37 @@ export default function NotificationsManagement() {
             </h1>
             <p className="text-gray-500 mt-1 text-sm">إدارة الإشعارات والرسائل الموجهة للفروع والموظفين</p>
           </div>
-          <Button
-            data-testid="button-create-notification"
-            onClick={openCreate}
-            className="bg-gradient-to-r from-[#d4a017] to-[#b8860b] hover:from-[#b8860b] hover:to-[#9a7209] text-white shadow-lg"
-          >
-            <Plus className="w-4 h-4 ml-2" />
-            إشعار جديد
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              data-testid="button-templates"
+              variant="outline"
+              onClick={() => setTemplatesOpen(true)}
+              className="border-[#d4a017] text-[#b8860b] hover:bg-[#fff8e1]"
+              title="اختر من القوالب الجاهزة (عيد الفطر، عيد الأضحى، رمضان، ...)"
+            >
+              <Wand2 className="w-4 h-4 ml-2" />
+              قوالب جاهزة
+            </Button>
+            <Button
+              data-testid="button-generate-anniversaries"
+              variant="outline"
+              onClick={() => generateAnniversariesMutation.mutate()}
+              disabled={generateAnniversariesMutation.isPending}
+              className="border-purple-300 text-purple-700 hover:bg-purple-50"
+              title="فحص الموظفين وإنشاء تهاني ذكرى الانضمام لمن لديهم ذكرى اليوم"
+            >
+              {generateAnniversariesMutation.isPending ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : <Gift className="w-4 h-4 ml-2" />}
+              تهاني ذكرى التوظيف
+            </Button>
+            <Button
+              data-testid="button-create-notification"
+              onClick={openCreate}
+              className="bg-gradient-to-r from-[#d4a017] to-[#b8860b] hover:from-[#b8860b] hover:to-[#9a7209] text-white shadow-lg"
+            >
+              <Plus className="w-4 h-4 ml-2" />
+              إشعار جديد
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -479,6 +595,11 @@ export default function NotificationsManagement() {
                         <div className="flex items-center gap-2 flex-wrap mb-1">
                           <h3 className="font-bold text-gray-800 text-lg">{n.title}</h3>
                           {n.emoji && <span className="text-xl">{n.emoji}</span>}
+                          {(n as any).autoGenerated && (
+                            <Badge data-testid={`badge-auto-${n.id}`} variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-xs gap-1">
+                              <Bot className="w-3 h-3" /> مُولَّد آلياً
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-sm text-gray-500 line-clamp-2 mb-3">{n.content}</p>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -530,12 +651,22 @@ export default function NotificationsManagement() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <Button
+                          data-testid={`button-send-whatsapp-${n.id}`}
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => { setWhatsappTarget(n); setWaRecipientsText(""); setWaIncludeMedia(!!n.imageUrl); }}
+                          className="text-emerald-600 hover:text-emerald-700"
+                          title="أرسل عبر WhatsApp"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                        </Button>
+                        <Button
                           data-testid={`button-preview-${n.id}`}
                           variant="ghost"
                           size="sm"
                           onClick={() => setPreviewNotification(n)}
                           className="text-purple-600 hover:text-purple-700"
-                          title="إرسال تجريبي"
+                          title="معاينة"
                         >
                           <PlayCircle className="w-4 h-4" />
                         </Button>
@@ -774,6 +905,52 @@ export default function NotificationsManagement() {
                         </div>
                       </div>
                     )}
+
+                    <div className="border-t pt-4 mt-2">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <Label className="text-sm font-medium">استهداف حسب الدور (اختياري)</Label>
+                          <p className="text-xs text-gray-500 mt-1">إن لم تختر أي دور، سيظهر الإشعار لجميع المستخدمين في الفروع المستهدفة</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {TARGET_ROLES.map(role => {
+                          const isSelected = (form.targetRoleIds || []).includes(role.value);
+                          return (
+                            <label
+                              key={role.value}
+                              data-testid={`checkbox-role-${role.value}`}
+                              className={`flex items-center gap-2 p-2.5 rounded-lg border-2 cursor-pointer transition-all text-xs ${
+                                isSelected ? "border-purple-400 bg-purple-50" : "border-gray-200 hover:border-gray-300"
+                              }`}
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={checked => {
+                                  const ids = form.targetRoleIds || [];
+                                  updateForm({
+                                    targetRoleIds: checked
+                                      ? [...ids, role.value]
+                                      : ids.filter((id: string) => id !== role.value),
+                                  });
+                                }}
+                              />
+                              <span className="font-medium">{role.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      {(form.targetRoleIds || []).length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => updateForm({ targetRoleIds: null })}
+                          className="mt-2 text-xs text-gray-500"
+                        >
+                          <X className="w-3 h-3 ml-1" /> إزالة جميع الأدوار
+                        </Button>
+                      )}
+                    </div>
                   </TabsContent>
 
                   <TabsContent value="scheduling" className="mt-4 space-y-4">
@@ -1179,6 +1356,147 @@ export default function NotificationsManagement() {
           />
         </>
       )}
+
+      {/* Templates Library Dialog */}
+      <Dialog open={templatesOpen} onOpenChange={setTemplatesOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col" data-testid="dialog-templates">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wand2 className="w-5 h-5 text-[#d4a017]" />
+              مكتبة القوالب الجاهزة
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center gap-2 flex-wrap py-2 border-b">
+            <Button
+              variant={templateCategoryFilter === "all" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTemplateCategoryFilter("all")}
+              data-testid="filter-tpl-all"
+            >
+              الكل ({NOTIFICATION_TEMPLATES.length})
+            </Button>
+            {TEMPLATE_CATEGORIES.map(cat => (
+              <Button
+                key={cat.value}
+                variant={templateCategoryFilter === cat.value ? "default" : "outline"}
+                size="sm"
+                onClick={() => setTemplateCategoryFilter(cat.value)}
+                data-testid={`filter-tpl-${cat.value}`}
+              >
+                {cat.label}
+              </Button>
+            ))}
+          </div>
+          <ScrollArea className="flex-1 mt-3 pr-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {filteredTemplates.map(tpl => (
+                <Card
+                  key={tpl.id}
+                  data-testid={`template-card-${tpl.id}`}
+                  className="cursor-pointer hover:border-[#d4a017] hover:shadow-md transition-all"
+                  onClick={() => useTemplate(tpl)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="text-3xl shrink-0">{tpl.emoji}</div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-gray-800 text-sm mb-1">{tpl.label}</h4>
+                        <p className="text-xs text-gray-600 line-clamp-2 mb-2 whitespace-pre-line">{tpl.content}</p>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <Badge variant="outline" className="text-[10px]">
+                            {MESSAGE_TYPES.find(m => m.value === tpl.messageType)?.label || tpl.messageType}
+                          </Badge>
+                          {tpl.priority && tpl.priority >= 3 && (
+                            <Badge variant="outline" className="text-[10px] bg-red-50 text-red-600 border-red-200">
+                              أولوية عالية
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <Button size="sm" variant="ghost" className="text-[#d4a017] shrink-0" data-testid={`button-use-tpl-${tpl.id}`}>
+                        استخدام
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* WhatsApp Send Dialog */}
+      <Dialog open={!!whatsappTarget} onOpenChange={(o) => !o && setWhatsappTarget(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="dialog-whatsapp">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-emerald-600" />
+              إرسال عبر WhatsApp
+            </DialogTitle>
+          </DialogHeader>
+          {whatsappTarget && (
+            <div className="space-y-4">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                <div className="font-semibold text-sm text-emerald-900 mb-1 flex items-center gap-2">
+                  {whatsappTarget.emoji && <span>{whatsappTarget.emoji}</span>}
+                  {whatsappTarget.title}
+                </div>
+                <p className="text-xs text-emerald-800 whitespace-pre-line line-clamp-4">{whatsappTarget.content}</p>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-sm font-semibold">المستلمون</Label>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={loadEmployeesFromTargetedBranches}
+                    disabled={waLoadingPicker}
+                    data-testid="button-load-from-branches"
+                  >
+                    {waLoadingPicker ? <Loader2 className="w-3 h-3 ml-1 animate-spin" /> : <Users className="w-3 h-3 ml-1" />}
+                    إضافة موظفي الفروع المستهدفة
+                  </Button>
+                </div>
+                <Textarea
+                  data-testid="textarea-recipients"
+                  value={waRecipientsText}
+                  onChange={(e) => setWaRecipientsText(e.target.value)}
+                  placeholder={"رقم لكل سطر، صيغة دولية مثل +966xxxxxxxxx\nيمكن إضافة الاسم بعد |\n+966500000000 | محمد"}
+                  rows={8}
+                  className="font-mono text-xs"
+                  dir="ltr"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {waRecipientsText.split("\n").filter(l => l.trim()).length} مستلم
+                </p>
+              </div>
+
+              {whatsappTarget.imageUrl && (
+                <label className="flex items-center gap-2 cursor-pointer" data-testid="checkbox-include-media">
+                  <Checkbox checked={waIncludeMedia} onCheckedChange={(c) => setWaIncludeMedia(!!c)} />
+                  <span className="text-sm">إرفاق الصورة مع الرسالة</span>
+                </label>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                <Button variant="outline" onClick={() => setWhatsappTarget(null)} data-testid="button-cancel-wa">
+                  إلغاء
+                </Button>
+                <Button
+                  onClick={submitWhatsApp}
+                  disabled={sendWhatsAppMutation.isPending}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  data-testid="button-submit-wa"
+                >
+                  {sendWhatsAppMutation.isPending ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : <Send className="w-4 h-4 ml-2" />}
+                  إضافة للطابور
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
     </Layout>
   );

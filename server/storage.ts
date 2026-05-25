@@ -16954,6 +16954,9 @@ export class DatabaseStorage implements IStorage {
 
   async getActiveNotificationsForUser(userId: string, branchId: string): Promise<SystemNotification[]> {
     const now = new Date();
+    const [userRow] = await db.select({ role: users.role }).from(users).where(eq(users.id, userId));
+    const userRole = userRow?.role || null;
+
     const allActive = await db.select().from(systemNotifications)
       .where(and(
         eq(systemNotifications.isActive, true),
@@ -16971,6 +16974,11 @@ export class DatabaseStorage implements IStorage {
       if (dismissedIds.has(n.id)) return false;
       if (n.showOnce && readOnceIds.has(n.id)) return false;
       if (!n.targetAllBranches && n.targetBranchIds && !n.targetBranchIds.includes(branchId)) return false;
+      // Phase 4: role-based targeting — if targetRoleIds is set and non-empty, only show to matching roles
+      const roleIds = (n as any).targetRoleIds as string[] | null | undefined;
+      if (roleIds && roleIds.length > 0) {
+        if (!userRole || !roleIds.includes(userRole)) return false;
+      }
       if (n.displayTimeStart || n.displayTimeEnd) {
         const nowTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
         if (n.displayTimeStart && nowTime < n.displayTimeStart) return false;

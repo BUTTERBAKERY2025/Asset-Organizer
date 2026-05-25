@@ -79,6 +79,7 @@ import {
   branchEmployees,
   biometricCredentials,
   employeeSchedules,
+  notificationQueue,
 } from "@shared/schema";
 import { 
   generateSalaryClosingPdf, type SalaryClosingPdfData,
@@ -34877,6 +34878,101 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error dismissing notification:", error);
       res.status(500).json({ error: "فشل في إخفاء الإشعار" });
+    }
+  });
+
+  // ============================================
+  // Phase 2: Send broadcast notification via WhatsApp
+  // ============================================
+  app.post("/api/system-notifications/:id/send-whatsapp", isAuthenticated, requirePermission("settings", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const notification = await storage.getSystemNotification(id);
+      if (!notification) return res.status(404).json({ error: "الإشعار غير موجود" });
+
+      const bodySchema = z.object({
+        recipients: z.array(z.object({
+          phone: z.string().min(6).max(20),
+          name: z.string().optional(),
+          channel: z.enum(["whatsapp", "sms"]).optional(),
+        })).min(1).max(200),
+        includeMedia: z.boolean().optional(),
+      });
+      const parsed = bodySchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "بيانات المستلمين غير صالحة", details: parsed.error.flatten() });
+
+      const { recipients, includeMedia } = parsed.data;
+      const messageBody = `${notification.emoji ? notification.emoji + " " : ""}*${notification.title}*\n\n${notification.content}\n\n— Butter Bakery`;
+      const mediaUrl = includeMedia && notification.imageUrl ? notification.imageUrl : null;
+
+      // Server-side phone validation: must look like E.164 (+ optional, digits 7..15)
+      const phoneRe = /^\+?\d{7,15}$/;
+      const valid = recipients.filter(r => phoneRe.test(r.phone.replace(/\s|-/g, "")));
+      if (valid.length === 0) return res.status(400).json({ error: "لا يوجد رقم جوال صالح. استخدم الصيغة الدولية مثل +9665XXXXXXXX" });
+
+      let queued = 0;
+      for (const r of valid) {
+        await db.insert(notificationQueue).values({
+          recipientPhone: r.phone.replace(/\s|-/g, ""),
+          recipientName: r.name || null,
+          channel: r.channel || "whatsapp",
+          message: messageBody,
+          mediaUrl,
+          status: "pending",
+          relatedModule: "system_notification",
+          relatedEntityId: String(id),
+        });
+        queued++;
+      }
+      res.json({ success: true, queued, skipped: recipients.length - valid.length });
+    } catch (error: any) {
+      console.error("Error queuing whatsapp send:", error?.message || error);
+      res.status(500).json({ error: "فشل في إضافة الإشعار للطابور: " + (error?.message || "خطأ غير معروف") });
+    }
+  });
+
+  // Phase 3: Manual trigger to generate today's work-anniversary greetings now
+  app.post("/api/system-notifications/generate-anniversaries", isAuthenticated, requirePermission("settings", "create"), async (_req, res) => {
+    try {
+      const { processAnniversaryGreetings } = await import("./scheduler");
+      const result = await processAnniversaryGreetings(true);
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      console.error("Error generating anniversary greetings:", error?.message || error);
+      res.status(500).json({ error: "فشل في توليد تهاني الذكرى: " + (error?.message || "خطأ غير معروف") });
+    }
+  });
+
+  // Helper: list active employees with phone numbers from given branches (for WhatsApp picker)
+  app.get("/api/system-notifications/recipients-from-branches", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
+    try {
+      const branchIdsParam = String(req.query.branchIds || "").trim();
+      if (!branchIdsParam) return res.json([]);
+      const requested = branchIdsParam.split(",").map(s => s.trim()).filter(Boolean);
+
+      // Branch-level authorization: non-admin users restricted to their accessible branches
+      const me = getCurrentUser(req);
+      let allowedBranchIds = requested;
+      if (me.role !== "admin" && me.role !== "manager") {
+        const access = await storage.getUserBranchAccess(me.id);
+        const accessibleSet = new Set(access.map(a => a.branchId));
+        allowedBranchIds = requested.filter(id => accessibleSet.has(id));
+        if (allowedBranchIds.length === 0) return res.json([]);
+      }
+
+      const rows: any = await db.execute(sql`
+        SELECT employee_name AS full_name, phone_number, branch_id
+        FROM branch_employees
+        WHERE status = 'active'
+          AND phone_number IS NOT NULL
+          AND phone_number <> ''
+          AND branch_id = ANY(${allowedBranchIds})
+      `);
+      const list = (rows.rows || rows) as any[];
+      res.json(list.map((r: any) => ({ name: r.full_name, phone: r.phone_number, branchId: r.branch_id })));
+    } catch (error: any) {
+      console.error("Error fetching recipients-from-branches:", error?.message || error);
+      res.status(500).json({ error: "فشل في جلب المستلمين" });
     }
   });
 
