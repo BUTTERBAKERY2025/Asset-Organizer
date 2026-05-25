@@ -31,9 +31,6 @@ import {
 import type { Branch, CashierSalesJournal, CashierPaymentBreakdown, JournalAttachment } from "@shared/schema";
 import { ATTACHMENT_TYPE_LABELS, ATTACHMENT_TYPES, type AttachmentType } from "@shared/schema";
 import { printHtmlContent } from "@/lib/print-utils";
-import { useV2Skin } from "@/lib/cashier-v2-skin";
-import { StepIndicator, StickyFooter } from "@/components/cashier-journal-v2";
-import { Sparkles } from "lucide-react";
 
 // Type for an attachment that hasn't been persisted to the server yet.
 // After the Supabase migration the file is already uploaded to storage at
@@ -324,7 +321,6 @@ export default function CashierJournalFormPage() {
   const [varianceConfirmed, setVarianceConfirmed] = useState(false);
   const [pendingSaveAction, setPendingSaveAction] = useState<(() => void) | null>(null);
   const [activeTab, setActiveTab] = useState("shift");
-  const [v2Skin, setV2Skin] = useV2Skin();
 
   const isEdit = !!id;
 
@@ -1655,7 +1651,7 @@ export default function CashierJournalFormPage() {
   return (
     <Layout>
       {/* iPad-optimized: compact padding & spacing for 10.9" screens */}
-      <div className={`page-container space-y-2 ${v2Skin ? "pb-28" : ""}`} dir="rtl">
+      <div className="page-container space-y-2" dir="rtl">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Link href="/cashier-journals">
@@ -1663,39 +1659,17 @@ export default function CashierJournalFormPage() {
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
-            <h1 className={`text-base sm:text-lg font-bold ${v2Skin ? "text-[#26215C]" : "text-primary"}`} data-testid="page-title">
+            <h1 className="text-base sm:text-lg font-bold text-primary" data-testid="page-title">
               {isEdit ? "تعديل يومية المبيعات" : "يومية مبيعات جديدة"}
             </h1>
           </div>
-          <div className="flex items-center gap-1.5">
-            <Button
-              type="button"
-              variant={v2Skin ? "default" : "outline"}
-              size="sm"
-              onClick={() => setV2Skin(!v2Skin)}
-              className={`gap-1 h-8 text-[11px] px-2 ${v2Skin ? "bg-[#534AB7] hover:bg-[#26215C] text-white" : ""}`}
-              data-testid="button-toggle-v2-skin"
-              title={v2Skin ? "العودة للتصميم الكلاسيكي" : "تجربة التصميم الجديد"}
-            >
-              <Sparkles className="w-3 h-3" />
-              {v2Skin ? "تصميم جديد" : "تجربة v2"}
+          {isEdit && (
+            <Button onClick={handleExportPDF} className="gap-1.5 bg-amber-600 hover:bg-amber-700 h-8 text-xs px-2" data-testid="button-export-pdf">
+              <FileDown className="w-3.5 h-3.5" />
+              PDF
             </Button>
-            {isEdit && (
-              <Button onClick={handleExportPDF} className="gap-1.5 bg-amber-600 hover:bg-amber-700 h-8 text-xs px-2" data-testid="button-export-pdf">
-                <FileDown className="w-3.5 h-3.5" />
-                PDF
-              </Button>
-            )}
-          </div>
+          )}
         </div>
-
-        {v2Skin && (
-          <div className="rounded-xl border border-[#534AB7]/15 bg-gradient-to-l from-[#F1EFE8] to-white p-2.5" data-testid="v2-skin-header">
-            <StepIndicator
-              activeStep={(!canSave ? 1 : !hasSignature ? 2 : 3) as 1 | 2 | 3}
-            />
-          </div>
-        )}
 
         {/* iPad-optimized grid: 2 columns on tablet */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
@@ -3140,25 +3114,6 @@ export default function CashierJournalFormPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {v2Skin && (() => {
-        const vs = getVarianceSummary();
-        return (
-          <div className="fixed bottom-0 left-0 right-0 z-40 mx-auto max-w-7xl px-2 pb-2" dir="rtl" data-testid="v2-skin-sticky-footer-wrap">
-            <StickyFooter
-              totalSales={vs.netSales}
-              collectedTotal={vs.totalActualCollected}
-              netDifference={vs.netVariance}
-              signatureMissing={!hasSignature}
-              onPrint={handleExportPDF}
-              onSaveDraft={handleSave}
-              onSignAndFinalize={isEdit ? handleSaveAndPost : handleSave}
-              saving={createMutation.isPending || updateMutation.isPending || postMutation.isPending || submitMutation.isPending}
-              disabled={isReadOnly || !canSave}
-            />
-          </div>
-        );
-      })()}
 
       {lightboxOpen && allAttachmentImages.length > 0 && (
         <div
