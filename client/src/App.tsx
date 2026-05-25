@@ -182,13 +182,24 @@ function AppLoadingFallback() {
 function DelayedFallback() {
   const [show, setShow] = useState(false);
   useEffect(() => {
-    // 350ms threshold — already-cached chunks render in <50ms and never trigger
+    // 120ms threshold — already-cached chunks render in <50ms and never trigger
     // the skeleton, eliminating the flash on every navigation. Only genuinely
     // slow loads (first-time chunk fetch) will show the skeleton.
-    const t = setTimeout(() => setShow(true), 350);
+    const t = setTimeout(() => setShow(true), 120);
     return () => clearTimeout(t);
   }, []);
-  if (!show) return <div className="min-h-[60vh]" />;
+  if (!show) return (
+    <div className="min-h-[60vh] p-6 space-y-4" dir="rtl" aria-hidden="true">
+      <div className="h-8 w-44 rounded-lg bg-[#e8dec9]" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="h-[88px] rounded-xl bg-[#ece2cd]" />
+        <div className="h-[88px] rounded-xl bg-[#ece2cd]" />
+        <div className="h-[88px] rounded-xl bg-[#ece2cd] hidden md:block" />
+        <div className="h-[88px] rounded-xl bg-[#ece2cd] hidden lg:block" />
+      </div>
+      <div className="h-64 rounded-xl bg-[#ece2cd]" />
+    </div>
+  );
   return (
     <div className="min-h-[60vh] p-6 space-y-5 skeleton-delayed" dir="rtl">
       <div className="flex items-center justify-between">
