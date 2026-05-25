@@ -28,7 +28,7 @@ type Theme =
 
 function detectTheme(d: GreetingData): Theme {
   const haystack = `${d.title} ${d.content} ${d.emoji || ""}`.toLowerCase();
-  if (haystack.includes("أضحى") || haystack.includes("🐑") || haystack.includes("🐏") || haystack.includes("🕋")) return "eid_adha";
+  if (haystack.includes("أضحى") || haystack.includes("اضحى") || haystack.includes("الأضحى") || haystack.includes("الاضحى") || haystack.includes("🐑") || haystack.includes("🐏") || haystack.includes("🕋")) return "eid_adha";
   if (haystack.includes("فطر") || (haystack.includes("عيد") && !haystack.includes("أضحى") && !haystack.includes("ميلاد"))) return "eid_fitr";
   if (haystack.includes("رمضان") || haystack.includes("🌙")) return "ramadan";
   if (haystack.includes("اليوم الوطني") || haystack.includes("🇸🇦")) return "national";
@@ -55,16 +55,16 @@ type ThemeConfig = {
   defaultAudio?: string;
 };
 
-// Eid Al-Adha slideshow frames (cute sheep characters extracted from video)
+// Eid Al-Adha slideshow scenes (Butter Bakery branded sheep illustrations)
 const EID_ADHA_FRAMES = [
-  "/eid-adha/frame_03.jpg",
-  "/eid-adha/frame_08.jpg",
-  "/eid-adha/frame_15.jpg",
-  "/eid-adha/frame_22.jpg",
-  "/eid-adha/frame_29.jpg",
-  "/eid-adha/frame_36.jpg",
-  "/eid-adha/frame_43.jpg",
-  "/eid-adha/frame_50.jpg",
+  "/eid-adha/scene_01.jpg",
+  "/eid-adha/scene_02.jpg",
+  "/eid-adha/scene_03.jpg",
+  "/eid-adha/scene_04.jpg",
+  "/eid-adha/scene_05.jpg",
+  "/eid-adha/scene_06.jpg",
+  "/eid-adha/scene_07.jpg",
+  "/eid-adha/scene_08.jpg",
 ];
 
 const THEME_CONFIG: Record<Theme, ThemeConfig> = {
@@ -265,8 +265,8 @@ function isValidAudioUrl(url: string | null | undefined): boolean {
 }
 
 // Animated slideshow component — cycles through frames with fade transition.
-// Used for richer theme cards (e.g. eid_adha shows cute sheep characters).
-function ThemeSlideshow({ frames, accent, intervalMs = 2500 }: { frames: string[]; accent: string; intervalMs?: number }) {
+// Used for richer theme cards (e.g. eid_adha shows Butter Bakery sheep scenes).
+function ThemeSlideshow({ frames, accent, intervalMs = 3500 }: { frames: string[]; accent: string; intervalMs?: number }) {
   const [idx, setIdx] = useState(0);
   useEffect(() => {
     if (frames.length < 2) return;
@@ -278,8 +278,8 @@ function ThemeSlideshow({ frames, accent, intervalMs = 2500 }: { frames: string[
       className="relative mx-auto mb-4 rounded-2xl overflow-hidden shadow-2xl border-4"
       style={{
         borderColor: accent,
-        width: "min(85vw, 320px)",
-        aspectRatio: "400/520",
+        width: "min(92vw, 520px)",
+        aspectRatio: "632/255",
         boxShadow: `0 20px 60px ${accent}55, 0 0 0 2px ${accent}33`,
       }}
       data-testid="theme-slideshow"
@@ -293,25 +293,24 @@ function ThemeSlideshow({ frames, accent, intervalMs = 2500 }: { frames: string[
           initial={{ opacity: 0, scale: 1.08 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
-          transition={{ duration: 0.8, ease: "easeInOut" }}
+          transition={{ duration: 0.9, ease: "easeInOut" }}
+          loading="eager"
         />
       </AnimatePresence>
-      {/* Soft gradient overlay so text/decorations remain readable */}
       <div
         className="absolute inset-0 pointer-events-none"
-        style={{ background: `linear-gradient(180deg, ${accent}11 0%, transparent 30%, transparent 70%, ${accent}22 100%)` }}
+        style={{ background: `linear-gradient(180deg, transparent 0%, transparent 70%, ${accent}33 100%)` }}
       />
-      {/* Frame counter dots */}
       <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 z-10">
         {frames.map((_, i) => (
           <span
             key={i}
             className="rounded-full transition-all"
             style={{
-              width: i === idx ? 18 : 6,
+              width: i === idx ? 20 : 6,
               height: 6,
-              backgroundColor: i === idx ? "#ffffff" : "rgba(255,255,255,0.5)",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
+              backgroundColor: i === idx ? "#ffffff" : "rgba(255,255,255,0.55)",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.5)",
             }}
           />
         ))}
@@ -575,17 +574,32 @@ export default function PublicGreetingPage() {
               <div className="absolute top-0 right-0 w-32 h-32 sm:w-40 sm:h-40 rounded-full opacity-20 -translate-y-1/2 translate-x-1/2 blur-2xl" style={{ background: accent }} />
               <div className="absolute bottom-0 left-0 w-32 h-32 sm:w-40 sm:h-40 rounded-full opacity-20 translate-y-1/2 -translate-x-1/2 blur-2xl" style={{ background: accent }} />
 
-              {/* Butter Bakery Logo */}
+              {/* Butter Bakery Logo — dances when music is playing (transform-only for perf) */}
               <motion.div
-                className="flex justify-center mb-3 sm:mb-4 relative z-10"
+                className="flex justify-center mb-4 sm:mb-5 relative z-10"
                 initial={{ y: -30, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.4, duration: 0.6 }}
+                animate={
+                  audioPlaying
+                    ? {
+                        y: [0, -10, 0, -6, 0],
+                        rotate: [0, -6, 6, -4, 4, 0],
+                        scale: [1, 1.08, 1, 1.05, 1],
+                        opacity: 1,
+                      }
+                    : { y: 0, rotate: 0, scale: 1, opacity: 1 }
+                }
+                transition={
+                  audioPlaying
+                    ? { duration: 0.9, repeat: Infinity, ease: "easeInOut" }
+                    : { duration: 0.3, ease: "easeOut" }
+                }
+                style={{ willChange: audioPlaying ? "transform" : "auto" }}
               >
                 <img
                   src="/butter-logo.png"
                   alt="Butter Bakery"
-                  className="h-16 sm:h-20 md:h-24 w-auto object-contain drop-shadow-lg"
+                  className="h-24 sm:h-32 md:h-40 w-auto object-contain"
+                  style={{ filter: `drop-shadow(0 8px 16px ${accent}66)` }}
                   data-testid="img-logo"
                 />
               </motion.div>

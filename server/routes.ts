@@ -35023,8 +35023,22 @@ export async function registerRoutes(
           const cleanContent = personalize(notif.content).replace(/\s+/g, " ").trim().slice(0, 180);
           title = `${notif.emoji || "🎁"} ${personalize(notif.title)}${recipientName ? ` — ${recipientName}` : ""}`;
           description = cleanContent || description;
+          // Image priority: notif.imageUrl → theme-specific OG image → default
           if (notif.imageUrl) {
             imageUrl = notif.imageUrl.startsWith("http") ? notif.imageUrl : `${baseUrl}${notif.imageUrl}`;
+          } else {
+            const haystack = `${notif.title} ${notif.content} ${notif.emoji || ""}`.toLowerCase();
+            if (
+              haystack.includes("أضحى") ||
+              haystack.includes("اضحى") ||
+              haystack.includes("الأضحى") ||
+              haystack.includes("الاضحى") ||
+              haystack.includes("🐑") ||
+              haystack.includes("🐏") ||
+              haystack.includes("🕋")
+            ) {
+              imageUrl = `${baseUrl}/eid-adha/hero.png`;
+            }
           }
         }
       }
