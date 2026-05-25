@@ -9,6 +9,7 @@ export type { AttachmentItem } from "./AttachmentsGrid";
 export { SummaryDashboard } from "./SummaryDashboard";
 export type { DifferenceItem, ChannelStatus } from "./SummaryDashboard";
 export { StickyFooter } from "./StickyFooter";
+export { SignaturePadModal } from "./SignaturePadModal";
 export {
   CARD_NETWORKS,
   DELIVERY_COMPANIES,

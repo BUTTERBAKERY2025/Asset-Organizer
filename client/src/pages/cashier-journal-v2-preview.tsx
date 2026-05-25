@@ -9,6 +9,7 @@ import {
   AttachmentsGrid,
   SummaryDashboard,
   StickyFooter,
+  SignaturePadModal,
   CARD_NETWORKS,
   DELIVERY_COMPANIES,
   type CardRow,
@@ -67,6 +68,9 @@ export default function CashierJournalV2PreviewPage() {
 
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [uploading] = useState<Set<AttachmentType>>(new Set());
+
+  const [signatureOpen, setSignatureOpen] = useState(false);
+  const [signature, setSignature] = useState<{ dataUrl: string; signerName: string; signedAt: string } | null>(null);
 
   const netSales = totalSales - (hasReturn ? returnAmount : 0);
 
@@ -250,12 +254,39 @@ export default function CashierJournalV2PreviewPage() {
           onRemove={handleRemoveAttachment}
         />
 
+        {signature && (
+          <div className="rounded-xl border border-[#173404]/20 bg-[#EAF3DE] p-4" data-testid="card-signed-confirmation">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="rounded-full bg-[#173404]/10 p-2">
+                  <svg className="h-4 w-4 text-[#173404]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-[#173404]">تم توقيع اليومية</div>
+                  <div className="mt-0.5 text-xs text-[#173404]/80">
+                    وقّع: <span className="font-medium">{signature.signerName}</span> — {new Date(signature.signedAt).toLocaleString("ar-SA")}
+                  </div>
+                </div>
+              </div>
+              <img src={signature.dataUrl} alt="التوقيع" data-testid="img-signature" className="h-16 w-32 rounded border border-[#173404]/20 bg-white object-contain" />
+            </div>
+            <button
+              type="button"
+              onClick={() => setSignature(null)}
+              data-testid="button-clear-signature-preview"
+              className="mt-2 text-[11px] text-[#173404]/70 underline hover:text-[#173404]"
+            >
+              (معاينة فقط) إلغاء التوقيع لإعادة الاختبار
+            </button>
+          </div>
+        )}
+
         <SummaryDashboard
           branchName="فرع الرياض"
           shiftLabel="الوردية الصباحية"
           dateLabel={new Date(journalDate).toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" })}
           cashierName={cashierName}
-          status="submitted"
+          status={signature ? "approved" : "submitted"}
           totalSales={netSales}
           invoiceCount={invoiceCount}
           avgInvoice={invoiceCount > 0 ? netSales / invoiceCount : 0}
@@ -271,10 +302,20 @@ export default function CashierJournalV2PreviewPage() {
           totalSales={netSales}
           collectedTotal={collectedTotal}
           netDifference={netDifference}
-          signatureMissing={true}
-          onPrint={() => alert("طباعة الملخص — معاينة فقط")}
+          signatureMissing={!signature}
+          onPrint={() => window.print()}
           onSaveDraft={() => alert("حفظ كمسودة — معاينة فقط")}
-          onSignAndFinalize={() => alert("توقيع وإنهاء — معاينة فقط")}
+          onSignAndFinalize={() => setSignatureOpen(true)}
+        />
+
+        <SignaturePadModal
+          open={signatureOpen}
+          onClose={() => setSignatureOpen(false)}
+          defaultName={cashierName}
+          onConfirm={(dataUrl, signerName) => {
+            setSignature({ dataUrl, signerName, signedAt: new Date().toISOString() });
+            setSignatureOpen(false);
+          }}
         />
       </div>
     </Layout>
