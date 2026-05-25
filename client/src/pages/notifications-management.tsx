@@ -92,6 +92,7 @@ const DEFAULT_FORM: Partial<SystemNotification> = {
   displayTimeEnd: null,
   soundEnabled: false,
   soundType: "default",
+  customSoundUrl: null as string | null,
   backgroundColor: "#ffffff",
   textColor: "#1a1a1a",
   accentColor: "#d4a017",
@@ -1282,26 +1283,54 @@ export default function NotificationsManagement() {
                       />
                     </div>
                     {form.soundEnabled && (
-                      <div>
-                        <Label className="text-sm font-medium mb-3 block">نوع الصوت</Label>
-                        <div className="grid grid-cols-1 gap-2">
-                          {SOUND_TYPES.map(s => (
-                            <button
-                              key={s.value}
-                              data-testid={`button-sound-${s.value}`}
-                              onClick={() => updateForm({ soundType: s.value })}
-                              className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all text-right ${
-                                form.soundType === s.value
-                                  ? "border-[#d4a017] bg-[#d4a017]/10"
-                                  : "border-gray-200 hover:border-gray-300"
-                              }`}
-                            >
-                              <Music className={`w-4 h-4 ${form.soundType === s.value ? "text-[#d4a017]" : "text-gray-400"}`} />
-                              <span className="text-sm font-medium">{s.label}</span>
-                            </button>
-                          ))}
+                      <>
+                        <div>
+                          <Label className="text-sm font-medium mb-3 block">نوع الصوت الافتراضي</Label>
+                          <div className="grid grid-cols-1 gap-2">
+                            {SOUND_TYPES.map(s => (
+                              <button
+                                key={s.value}
+                                data-testid={`button-sound-${s.value}`}
+                                onClick={() => updateForm({ soundType: s.value })}
+                                className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all text-right ${
+                                  form.soundType === s.value
+                                    ? "border-[#d4a017] bg-[#d4a017]/10"
+                                    : "border-gray-200 hover:border-gray-300"
+                                }`}
+                              >
+                                <Music className={`w-4 h-4 ${form.soundType === s.value ? "text-[#d4a017]" : "text-gray-400"}`} />
+                                <span className="text-sm font-medium">{s.label}</span>
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                      </div>
+                        <div className="border-t pt-4">
+                          <Label className="text-sm font-medium mb-2 block flex items-center gap-2">
+                            <Music className="w-4 h-4 text-[#d4a017]" />
+                            صوت مخصص (URL)
+                          </Label>
+                          <Input
+                            data-testid="input-custom-sound-url"
+                            type="url"
+                            value={form.customSoundUrl || ""}
+                            onChange={e => updateForm({ customSoundUrl: e.target.value || null })}
+                            placeholder="https://...mp3 أو ogg أو wav"
+                            dir="ltr"
+                            className="text-xs"
+                          />
+                          <p className="text-[10px] text-gray-500 mt-1">
+                            ارفع الملف على Supabase Storage أو أي مضيف، والصق الرابط هنا. سيُشغَّل تلقائياً عند فتح اللينك المشاركة.
+                          </p>
+                          {form.customSoundUrl && (
+                            <audio
+                              src={form.customSoundUrl}
+                              controls
+                              className="w-full mt-2"
+                              data-testid="audio-preview"
+                            />
+                          )}
+                        </div>
+                      </>
                     )}
                   </TabsContent>
                 </ScrollArea>

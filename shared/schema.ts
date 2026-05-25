@@ -9621,6 +9621,7 @@ export const systemNotifications = pgTable("system_notifications", {
   displayTimeEnd: text("display_time_end"),
   soundEnabled: boolean("sound_enabled").default(false).notNull(),
   soundType: text("sound_type").default("default"),
+  customSoundUrl: text("custom_sound_url"),
   backgroundColor: text("background_color").default("#ffffff"),
   textColor: text("text_color").default("#1a1a1a"),
   accentColor: text("accent_color").default("#d4a017"),

@@ -34793,6 +34793,18 @@ export async function registerRoutes(
     }
   });
 
+  // Helper: validate that a custom sound URL is safe to render publicly.
+  // Requires https + known audio extension. Otherwise nulled out.
+  const sanitizeCustomSoundUrl = (val: any): string | null => {
+    if (!val || typeof val !== "string") return null;
+    try {
+      const u = new URL(val);
+      if (u.protocol !== "https:") return null;
+      if (!/\.(mp3|ogg|wav|m4a|aac|webm)(\?|$)/i.test(u.pathname)) return null;
+      return val.slice(0, 2000);
+    } catch { return null; }
+  };
+
   app.post("/api/system-notifications", isAuthenticated, requirePermission("settings", "create"), async (req, res) => {
     try {
       const data = { ...req.body };
@@ -34806,6 +34818,7 @@ export async function registerRoutes(
       delete data.updatedAt;
       if (data.autoCloseSeconds === null || data.autoCloseSeconds === '' || data.autoCloseSeconds === undefined) delete data.autoCloseSeconds;
       if (data.designConfig === null || data.designConfig === undefined) delete data.designConfig;
+      if ("customSoundUrl" in data) data.customSoundUrl = sanitizeCustomSoundUrl(data.customSoundUrl);
       console.log("Creating notification with data:", JSON.stringify(data, null, 2));
       const notification = await storage.createSystemNotification(data);
       console.log("Notification created successfully:", notification.id);
@@ -34827,6 +34840,7 @@ export async function registerRoutes(
       delete data.createdAt;
       delete data.updatedAt;
       delete data.createdBy;
+      if ("customSoundUrl" in data) data.customSoundUrl = sanitizeCustomSoundUrl(data.customSoundUrl);
       const notification = await storage.updateSystemNotification(parseInt(req.params.id), data);
       if (!notification) return res.status(404).json({ error: "الإشعار غير موجود" });
       res.json(notification);
@@ -34981,6 +34995,73 @@ export async function registerRoutes(
   // Phase 5: Notification Share Links (special animated greeting pages)
   // ============================================
 
+  // OG/Twitter meta tags middleware for /g/:slug — intercepts crawlers
+  // (WhatsApp, Telegram, Facebook, Twitter, LinkedIn, Slack) and returns
+  // HTML with rich preview metadata. Regular browsers fall through to SPA.
+  app.get("/g/:slug", async (req, res, next) => {
+    const ua = String(req.headers["user-agent"] || "").toLowerCase();
+    // Use precise patterns: WhatsApp/Facebook in-app browsers contain "whatsapp" too,
+    // so we match the crawler signature only (e.g. "WhatsApp/2.x" without a normal browser token).
+    // Real in-app browsers also have "Mozilla/" + "Mobile" tokens — exclude those.
+    const hasBrowser = /mozilla\/.*(?:chrome|safari|firefox|edge)/i.test(ua) && /mobile|x11|windows|macintosh/i.test(ua);
+    const isBot = !hasBrowser && /whatsapp\/|telegrambot|facebookexternalhit|facebot|twitterbot|linkedinbot|slackbot-linkexpanding|slack-imgproxy|discordbot|skypeuripreview|googlebot|bingbot|embedly|pinterestbot|vkshare|w3c_validator|redditbot/.test(ua);
+    if (!isBot) return next();
+    try {
+      const slug = String(req.params.slug || "").trim();
+      const [link] = await db.select().from(notificationShareLinks).where(eq(notificationShareLinks.slug, slug)).limit(1);
+      let title = "🎉 تهنئة من Butter Bakery";
+      let description = "افتح هذه البطاقة الخاصة لمشاهدة تهنئتك المميزة بأنيميشن.";
+      const proto = (req.headers["x-forwarded-proto"] as string) || req.protocol || "https";
+      const host = req.headers["x-forwarded-host"] || req.headers.host || "thebutterbakery.com";
+      const baseUrl = `${proto}://${host}`;
+      let imageUrl = `${baseUrl}/opengraph.jpg`;
+      if (link) {
+        const notif = await storage.getSystemNotification(link.notificationId);
+        if (notif) {
+          const recipientName = String(req.query.name || link.defaultRecipientName || "").trim();
+          const personalize = (s: string) => s.replace(/\{\{name\}\}/g, recipientName).replace(/\{\{years\}\}/g, "");
+          const cleanContent = personalize(notif.content).replace(/\s+/g, " ").trim().slice(0, 180);
+          title = `${notif.emoji || "🎁"} ${personalize(notif.title)}${recipientName ? ` — ${recipientName}` : ""}`;
+          description = cleanContent || description;
+          if (notif.imageUrl) {
+            imageUrl = notif.imageUrl.startsWith("http") ? notif.imageUrl : `${baseUrl}${notif.imageUrl}`;
+          }
+        }
+      }
+      const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+      const pageUrl = `${baseUrl}${req.originalUrl}`;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "public, max-age=300");
+      res.send(`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${escapeHtml(title)}</title>
+  <meta name="description" content="${escapeHtml(description)}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="${escapeHtml(pageUrl)}" />
+  <meta property="og:title" content="${escapeHtml(title)}" />
+  <meta property="og:description" content="${escapeHtml(description)}" />
+  <meta property="og:image" content="${escapeHtml(imageUrl)}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:site_name" content="Butter Bakery — باتر بيكري" />
+  <meta property="og:locale" content="ar_SA" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${escapeHtml(title)}" />
+  <meta name="twitter:description" content="${escapeHtml(description)}" />
+  <meta name="twitter:image" content="${escapeHtml(imageUrl)}" />
+</head>
+<body><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></body>
+</html>`);
+    } catch (e: any) {
+      console.error("OG handler error:", e?.message || e);
+      return next();
+    }
+  });
+
+
   // List share links for a notification
   app.get("/api/system-notifications/:id/share-links", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
     try {
@@ -35082,6 +35163,9 @@ export async function registerRoutes(
         textColor: notif.textColor,
         accentColor: notif.accentColor,
         imageUrl: notif.imageUrl,
+        customSoundUrl: notif.customSoundUrl,
+        soundEnabled: notif.soundEnabled,
+        soundType: notif.soundType,
         defaultRecipientName: link.defaultRecipientName,
         expiresAt: link.expiresAt,
       });
