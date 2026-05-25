@@ -334,7 +334,7 @@ const Router = React.memo(function Router() {
       {/* Sales - المبيعات والكاشير */}
       <Route path="/cashier-journals">{() => <ModulePage component={CashierJournalsPage} module="cashier_journal" />}</Route>
       <Route path="/cashier-journals/new">{() => <ModulePage component={CashierJournalFormPage} module="cashier_journal" />}</Route>
-      <Route path="/cashier-journals/v2-preview">{() => <ModulePage component={CashierJournalV2PreviewPage} module="cashier_journal" />}</Route>
+      <Route path="/cashier-journals/v2-preview">{() => <ProtectedPage component={CashierJournalV2PreviewPage} />}</Route>
       <Route path="/cashier-journals/:id">{() => <ModulePage component={CashierJournalFormPage} module="cashier_journal" />}</Route>
       <Route path="/branch-daily-closures/:id">{() => <ModulePage component={BranchDailyClosureDetailPage} module="daily_closures" />}</Route>
       <Route path="/branch-daily-closures">{() => <ModulePage component={BranchDailyClosuresPage} module="daily_closures" />}</Route>
