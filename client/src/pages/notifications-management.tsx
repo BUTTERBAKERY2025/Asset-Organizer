@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -24,7 +24,8 @@ import {
   Monitor, Maximize, LayoutDashboard, PanelRightOpen,
   Volume2, VolumeX, Palette, Target, Calendar, Music,
   FileText, Send, X, CheckCircle, Ban, Timer,
-  Users, BarChart3, PlayCircle, XCircle, MessageSquare, Wand2, Gift, Bot, Loader2
+  Users, BarChart3, PlayCircle, XCircle, MessageSquare, Wand2, Gift, Bot, Loader2,
+  Link2, Copy, ExternalLink
 } from "lucide-react";
 import { NotificationContent } from "@/components/NotificationDisplay";
 import { NOTIFICATION_TEMPLATES, TEMPLATE_CATEGORIES, TARGET_ROLES, applyTemplate, type NotificationTemplate } from "@/lib/notification-templates";
@@ -203,6 +204,13 @@ export default function NotificationsManagement() {
   const [waRecipientsText, setWaRecipientsText] = useState("");
   const [waIncludeMedia, setWaIncludeMedia] = useState(true);
   const [waLoadingPicker, setWaLoadingPicker] = useState(false);
+  // Phase 5: Share Links state
+  const [shareTarget, setShareTarget] = useState<SystemNotification | null>(null);
+  const [shareExpiresDays, setShareExpiresDays] = useState<number>(30);
+  const [shareDefaultName, setShareDefaultName] = useState("");
+  const [shareLinks, setShareLinks] = useState<any[]>([]);
+  const [shareLinksLoading, setShareLinksLoading] = useState(false);
+  const [sharePersonalizeName, setSharePersonalizeName] = useState("");
 
   const { data: notifications = [], isLoading } = useQuery<SystemNotification[]>({
     queryKey: ["/api/system-notifications"],
@@ -305,6 +313,57 @@ export default function NotificationsManagement() {
     },
     onError: (err: Error) => toast({ title: "خطأ", description: err.message, variant: "destructive" }),
   });
+
+  // Phase 5: Share link mutations
+  // Use a ref-style counter + AbortController to prevent race conditions
+  // when user switches between notifications quickly.
+  const loadShareLinks = useCallback(async (notificationId: number, signal?: AbortSignal) => {
+    setShareLinksLoading(true);
+    try {
+      const res = await fetch(`/api/system-notifications/${notificationId}/share-links`, { credentials: "include", signal });
+      if (!res.ok) throw new Error("فشل في جلب الروابط");
+      const data = await res.json();
+      if (!signal?.aborted) setShareLinks(data);
+    } catch (e: any) {
+      if (e?.name === "AbortError") return;
+      toast({ title: "خطأ", description: e.message, variant: "destructive" });
+    } finally {
+      if (!signal?.aborted) setShareLinksLoading(false);
+    }
+  }, [toast]);
+
+  const createShareLinkMutation = useMutation({
+    mutationFn: async ({ id, expiresInDays, defaultRecipientName }: { id: number; expiresInDays?: number; defaultRecipientName?: string }) => {
+      const res = await apiRequest("POST", `/api/system-notifications/${id}/share-links`, { expiresInDays, defaultRecipientName: defaultRecipientName || undefined });
+      return res.json();
+    },
+    onSuccess: () => {
+      if (shareTarget) loadShareLinks(shareTarget.id);
+      toast({ title: "تم إنشاء الرابط", description: "رابط مميز جاهز للمشاركة" });
+    },
+    onError: (err: Error) => toast({ title: "خطأ", description: err.message, variant: "destructive" }),
+  });
+
+  const deleteShareLinkMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/notification-share-links/${id}`);
+    },
+    onSuccess: () => {
+      if (shareTarget) loadShareLinks(shareTarget.id);
+      toast({ title: "تم الحذف", description: "تم إلغاء الرابط" });
+    },
+  });
+
+  // Auto-load links when share dialog opens (race-safe via AbortController)
+  useEffect(() => {
+    if (!shareTarget) {
+      setShareLinks([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    loadShareLinks(shareTarget.id, ctrl.signal);
+    return () => ctrl.abort();
+  }, [shareTarget, loadShareLinks]);
 
   const generateAnniversariesMutation = useMutation({
     mutationFn: async () => {
@@ -659,6 +718,16 @@ export default function NotificationsManagement() {
                           title="أرسل عبر WhatsApp"
                         >
                           <MessageSquare className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          data-testid={`button-share-link-${n.id}`}
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => { setShareTarget(n); setShareDefaultName(""); setSharePersonalizeName(""); setShareExpiresDays(30); }}
+                          className="text-amber-600 hover:text-amber-700"
+                          title="إنشاء لينك تهنئة مميز بأنيميشن"
+                        >
+                          <Link2 className="w-4 h-4" />
                         </Button>
                         <Button
                           data-testid={`button-preview-${n.id}`}
@@ -1426,6 +1495,199 @@ export default function NotificationsManagement() {
       </Dialog>
 
       {/* WhatsApp Send Dialog */}
+      {/* Phase 5: Share Link Dialog */}
+      <Dialog open={!!shareTarget} onOpenChange={(o) => !o && setShareTarget(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Link2 className="w-5 h-5 text-amber-600" />
+              لينك تهنئة مميز بأنيميشن
+            </DialogTitle>
+          </DialogHeader>
+          {shareTarget && (
+            <div className="space-y-4 pt-2">
+              <div className="bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-200 rounded-lg p-3">
+                <div className="flex items-center gap-2 text-sm font-bold text-amber-800 mb-1">
+                  {shareTarget.emoji && <span>{shareTarget.emoji}</span>}
+                  {shareTarget.title}
+                </div>
+                <p className="text-xs text-amber-700 line-clamp-2">{shareTarget.content}</p>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800 leading-relaxed">
+                <p className="font-bold mb-1">💡 كيف تعمل؟</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>أنشئ رابط لمرة واحدة، ثم شاركه على واتساب أو SMS أو إيميل</li>
+                  <li>عند فتحه، يظهر بأنيميشن مميز حسب الحدث (بلالين، خروف، ألعاب نارية، إلخ)</li>
+                  <li>أضف <span dir="ltr" className="font-mono">?name=محمد</span> في نهاية الرابط لكي يظهر اسم المستلم</li>
+                  <li>الرابط آمن — لا يحتوي على تسجيل دخول، فقط محتوى التهنئة</li>
+                </ul>
+              </div>
+
+              {/* Create new link section */}
+              <div className="border rounded-lg p-4 space-y-3 bg-gray-50">
+                <p className="text-sm font-bold text-gray-700">إنشاء رابط جديد</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">مدة الصلاحية (أيام)</Label>
+                    <Select value={String(shareExpiresDays)} onValueChange={(v) => setShareExpiresDays(parseInt(v))}>
+                      <SelectTrigger data-testid="select-share-expires"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">يوم واحد</SelectItem>
+                        <SelectItem value="3">3 أيام</SelectItem>
+                        <SelectItem value="7">7 أيام (أسبوع)</SelectItem>
+                        <SelectItem value="14">14 يوم</SelectItem>
+                        <SelectItem value="30">30 يوم (شهر)</SelectItem>
+                        <SelectItem value="90">90 يوم (3 شهور)</SelectItem>
+                        <SelectItem value="365">سنة كاملة</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">اسم افتراضي (اختياري)</Label>
+                    <Input
+                      data-testid="input-share-default-name"
+                      value={shareDefaultName}
+                      onChange={(e) => setShareDefaultName(e.target.value)}
+                      placeholder="مثلاً: فريق العمل"
+                      className="text-sm"
+                    />
+                    <p className="text-[10px] text-gray-500 mt-1">يظهر إذا لم تُحدد اسماً في الرابط</p>
+                  </div>
+                </div>
+                <Button
+                  onClick={() => createShareLinkMutation.mutate({ id: shareTarget.id, expiresInDays: shareExpiresDays, defaultRecipientName: shareDefaultName })}
+                  disabled={createShareLinkMutation.isPending}
+                  className="w-full bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-white"
+                  data-testid="button-create-share-link"
+                >
+                  {createShareLinkMutation.isPending ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : <Sparkles className="w-4 h-4 ml-2" />}
+                  أنشئ رابطاً مميزاً
+                </Button>
+              </div>
+
+              {/* Existing links */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-bold text-gray-700">الروابط الحالية ({shareLinks.length})</p>
+                  {shareLinksLoading && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
+                </div>
+                {shareLinks.length === 0 && !shareLinksLoading && (
+                  <div className="text-center py-6 text-gray-400 text-sm border-2 border-dashed rounded-lg">
+                    لا توجد روابط بعد. أنشئ أول رابط من الأعلى ⬆
+                  </div>
+                )}
+                {shareLinks.map((link) => {
+                  const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+                  const url = `${baseUrl}/g/${link.slug}`;
+                  const personalizedUrl = sharePersonalizeName ? `${url}?name=${encodeURIComponent(sharePersonalizeName)}` : url;
+                  const expired = link.expiresAt && new Date(link.expiresAt) < new Date();
+                  return (
+                    <div key={link.id} className={`border rounded-lg p-3 space-y-2 ${expired ? "bg-red-50 border-red-200 opacity-70" : "bg-white"}`} data-testid={`share-link-${link.id}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+                            <Eye className="w-3 h-3" />
+                            <span data-testid={`text-view-count-${link.id}`}>{link.viewCount} مشاهدة</span>
+                            <span>•</span>
+                            {link.expiresAt ? (
+                              <span className={expired ? "text-red-600 font-bold" : ""}>
+                                {expired ? "منتهي" : `ينتهي ${new Date(link.expiresAt).toLocaleDateString("ar-SA")}`}
+                              </span>
+                            ) : (
+                              <span className="text-green-600">دائم</span>
+                            )}
+                            {link.defaultRecipientName && (
+                              <>
+                                <span>•</span>
+                                <span>الاسم الافتراضي: {link.defaultRecipientName}</span>
+                              </>
+                            )}
+                          </div>
+                          <code className="text-xs bg-gray-100 px-2 py-1 rounded block break-all" dir="ltr">{personalizedUrl}</code>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteShareLinkMutation.mutate(link.id)}
+                          className="text-red-500 hover:text-red-700 shrink-0"
+                          data-testid={`button-delete-share-${link.id}`}
+                          title="إلغاء الرابط"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(personalizedUrl);
+                              toast({ title: "تم النسخ ✅", description: "تم نسخ الرابط للحافظة" });
+                            } catch {
+                              toast({ title: "خطأ", description: "تعذّر النسخ", variant: "destructive" });
+                            }
+                          }}
+                          data-testid={`button-copy-${link.id}`}
+                        >
+                          <Copy className="w-3 h-3 ml-1" />
+                          نسخ
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(personalizedUrl, "_blank")}
+                          data-testid={`button-open-${link.id}`}
+                        >
+                          <ExternalLink className="w-3 h-3 ml-1" />
+                          فتح
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-emerald-600 border-emerald-300 hover:bg-emerald-50"
+                          onClick={() => {
+                            const text = `${shareTarget.emoji || "✨"} ${shareTarget.title}\n\n${personalizedUrl}`;
+                            const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+                            window.open(waUrl, "_blank");
+                          }}
+                          data-testid={`button-share-wa-${link.id}`}
+                        >
+                          <MessageSquare className="w-3 h-3 ml-1" />
+                          شارك واتساب
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Personalize helper */}
+              {shareLinks.length > 0 && (
+                <div className="border-t pt-3">
+                  <Label className="text-xs">اسم المستلم في الرابط (يُضاف لكل الروابط أعلاه):</Label>
+                  <Input
+                    data-testid="input-personalize-name"
+                    value={sharePersonalizeName}
+                    onChange={(e) => setSharePersonalizeName(e.target.value)}
+                    placeholder="مثلاً: محمد العنزي"
+                    className="text-sm mt-1"
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">اتركه فارغاً لاستخدام الاسم الافتراضي</p>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                <Button variant="outline" onClick={() => setShareTarget(null)} data-testid="button-close-share">
+                  إغلاق
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!whatsappTarget} onOpenChange={(o) => !o && setWhatsappTarget(null)}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="dialog-whatsapp">
           <DialogHeader>

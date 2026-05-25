@@ -9691,6 +9691,30 @@ export const insertNotificationReadSchema = createInsertSchema(notificationReads
 export type NotificationRead = typeof notificationReads.$inferSelect;
 export type InsertNotificationRead = z.infer<typeof insertNotificationReadSchema>;
 
+// Notification Share Links - روابط المشاركة المميزة (Phase 5)
+export const notificationShareLinks = pgTable("notification_share_links", {
+  id: serial("id").primaryKey(),
+  notificationId: integer("notification_id").notNull().references(() => systemNotifications.id, { onDelete: "cascade" }),
+  slug: text("slug").notNull().unique(),
+  expiresAt: timestamp("expires_at"),
+  viewCount: integer("view_count").default(0).notNull(),
+  defaultRecipientName: text("default_recipient_name"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_notif_share_slug").on(table.slug),
+  index("idx_notif_share_notif").on(table.notificationId),
+]);
+
+export const insertNotificationShareLinkSchema = createInsertSchema(notificationShareLinks).omit({
+  id: true,
+  createdAt: true,
+  viewCount: true,
+});
+
+export type NotificationShareLink = typeof notificationShareLinks.$inferSelect;
+export type InsertNotificationShareLink = z.infer<typeof insertNotificationShareLinkSchema>;
+
 // ============================================
 // نقطة البيع - Event POS
 // ============================================

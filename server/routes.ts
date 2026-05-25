@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { db, pool } from "./db";
 import * as NotificationService from "./notification-service";
 import type { AuthenticatedRequest } from "./types/express";
-import { eq, and, desc, inArray, gte, lte, sql, or, isNull, type SQL } from "drizzle-orm";
+import { eq, and, desc, inArray, gte, lte, gt, sql, or, isNull, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
 import { shifts as shiftsTable, cashierPointsLedger, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable } from "@shared/schema";
 import { auditEvent, getApprovalThresholds, APPROVAL_THRESHOLDS } from "./audit-helpers";
@@ -80,6 +80,7 @@ import {
   biometricCredentials,
   employeeSchedules,
   notificationQueue,
+  notificationShareLinks,
 } from "@shared/schema";
 import { 
   generateSalaryClosingPdf, type SalaryClosingPdfData,
@@ -34973,6 +34974,143 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error fetching recipients-from-branches:", error?.message || error);
       res.status(500).json({ error: "فشل في جلب المستلمين" });
+    }
+  });
+
+  // ============================================
+  // Phase 5: Notification Share Links (special animated greeting pages)
+  // ============================================
+
+  // List share links for a notification
+  app.get("/api/system-notifications/:id/share-links", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const rows = await db.select().from(notificationShareLinks).where(eq(notificationShareLinks.notificationId, id)).orderBy(desc(notificationShareLinks.createdAt));
+      res.json(rows);
+    } catch (error: any) {
+      console.error("Error listing share links:", error?.message || error);
+      res.status(500).json({ error: "فشل في جلب روابط المشاركة" });
+    }
+  });
+
+  // Create a share link for a notification
+  app.post("/api/system-notifications/:id/share-links", isAuthenticated, requirePermission("settings", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const notif = await storage.getSystemNotification(id);
+      if (!notif) return res.status(404).json({ error: "الإشعار غير موجود" });
+
+      const bodySchema = z.object({
+        expiresInDays: z.number().int().min(1).max(365).optional(),
+        defaultRecipientName: z.string().max(100).optional(),
+      });
+      const parsed = bodySchema.safeParse(req.body || {});
+      if (!parsed.success) return res.status(400).json({ error: "بيانات غير صالحة" });
+
+      const { expiresInDays, defaultRecipientName } = parsed.data;
+      const crypto = await import("crypto");
+      const expiresAt = expiresInDays ? new Date(Date.now() + expiresInDays * 86400000) : null;
+      const me = getCurrentUser(req);
+
+      // Retry slug generation on rare unique-constraint collision (up to 5 attempts)
+      let row: any = null;
+      let lastErr: any = null;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const slug = crypto.randomBytes(6).toString("base64url").slice(0, 8);
+        try {
+          const result = await db.insert(notificationShareLinks).values({
+            notificationId: id,
+            slug,
+            expiresAt,
+            defaultRecipientName: defaultRecipientName || null,
+            createdBy: me?.id || null,
+          }).returning();
+          row = result[0];
+          break;
+        } catch (e: any) {
+          // Postgres unique-violation code = 23505
+          if (e?.code === "23505") { lastErr = e; continue; }
+          throw e;
+        }
+      }
+      if (!row) {
+        console.error("Slug collision after 5 attempts:", lastErr?.message);
+        return res.status(500).json({ error: "تعذّر إنشاء رابط فريد، حاول مرة أخرى" });
+      }
+      res.status(201).json(row);
+    } catch (error: any) {
+      console.error("Error creating share link:", error?.message || error);
+      res.status(500).json({ error: "فشل في إنشاء رابط المشاركة" });
+    }
+  });
+
+  // Delete (revoke) a share link
+  app.delete("/api/notification-share-links/:id", isAuthenticated, requirePermission("settings", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      await db.delete(notificationShareLinks).where(eq(notificationShareLinks.id, id));
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting share link:", error?.message || error);
+      res.status(500).json({ error: "فشل في حذف الرابط" });
+    }
+  });
+
+  // PUBLIC endpoint - greeting page data (no auth)
+  app.get("/api/public/greetings/:slug", async (req, res) => {
+    try {
+      const slug = String(req.params.slug || "").trim();
+      if (!slug || slug.length > 32) return res.status(400).json({ error: "رابط غير صالح" });
+      const [link] = await db.select().from(notificationShareLinks).where(eq(notificationShareLinks.slug, slug)).limit(1);
+      if (!link) return res.status(404).json({ error: "الرابط غير موجود" });
+      if (link.expiresAt && new Date(link.expiresAt) < new Date()) {
+        return res.status(410).json({ error: "انتهت صلاحية هذا الرابط" });
+      }
+      const notif = await storage.getSystemNotification(link.notificationId);
+      if (!notif) return res.status(404).json({ error: "الإشعار غير موجود" });
+      // Return only what's safe to display publicly (no targeting/internal fields)
+      res.json({
+        title: notif.title,
+        content: notif.content,
+        messageType: notif.messageType,
+        emoji: notif.emoji,
+        effectType: notif.effectType,
+        backgroundColor: notif.backgroundColor,
+        textColor: notif.textColor,
+        accentColor: notif.accentColor,
+        imageUrl: notif.imageUrl,
+        defaultRecipientName: link.defaultRecipientName,
+        expiresAt: link.expiresAt,
+      });
+    } catch (error: any) {
+      console.error("Error fetching public greeting:", error?.message || error);
+      res.status(500).json({ error: "فشل في جلب التهنئة" });
+    }
+  });
+
+  // PUBLIC endpoint - track view count (no auth, fire-and-forget)
+  // Only increments for existing, non-expired links to keep analytics accurate.
+  app.post("/api/public/greetings/:slug/view", async (req, res) => {
+    try {
+      const slug = String(req.params.slug || "").trim();
+      if (!slug || slug.length > 32) return res.json({ success: false });
+      const updated = await db.update(notificationShareLinks)
+        .set({ viewCount: sql`${notificationShareLinks.viewCount} + 1` })
+        .where(and(
+          eq(notificationShareLinks.slug, slug),
+          or(
+            isNull(notificationShareLinks.expiresAt),
+            gt(notificationShareLinks.expiresAt, new Date()),
+          ),
+        ))
+        .returning({ id: notificationShareLinks.id });
+      res.json({ success: updated.length > 0 });
+    } catch (error: any) {
+      // Swallow errors so view tracking never breaks the public page
+      res.json({ success: false });
     }
   });
 
