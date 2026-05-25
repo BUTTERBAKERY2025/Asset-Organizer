@@ -62,6 +62,7 @@ const ProductionPage = makeLazy("production");
 const QualityControlPage = makeLazy("quality-control");
 const CashierJournalsPage = makeLazy("cashier-journals");
 const CashierJournalFormPage = makeLazy("cashier-journal-form");
+const CashierJournalV2PreviewPage = makeLazy("cashier-journal-v2-preview");
 const BranchDailyClosingPage = makeLazy("branch-daily-closing");
 const BranchDailyClosuresPage = makeLazy("branch-daily-closures");
 const BranchDailyClosureDetailPage = makeLazy("branch-daily-closure-detail");
@@ -333,6 +334,7 @@ const Router = React.memo(function Router() {
       {/* Sales - المبيعات والكاشير */}
       <Route path="/cashier-journals">{() => <ModulePage component={CashierJournalsPage} module="cashier_journal" />}</Route>
       <Route path="/cashier-journals/new">{() => <ModulePage component={CashierJournalFormPage} module="cashier_journal" />}</Route>
+      <Route path="/cashier-journals/v2-preview">{() => <ModulePage component={CashierJournalV2PreviewPage} module="cashier_journal" />}</Route>
       <Route path="/cashier-journals/:id">{() => <ModulePage component={CashierJournalFormPage} module="cashier_journal" />}</Route>
       <Route path="/branch-daily-closures/:id">{() => <ModulePage component={BranchDailyClosureDetailPage} module="daily_closures" />}</Route>
       <Route path="/branch-daily-closures">{() => <ModulePage component={BranchDailyClosuresPage} module="daily_closures" />}</Route>
