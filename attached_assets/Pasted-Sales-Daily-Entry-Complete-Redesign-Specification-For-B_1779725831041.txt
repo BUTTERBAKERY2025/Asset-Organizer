@@ -1,0 +1,481 @@
+Sales Daily Entry — Complete Redesign Specification
+For: Butter Bakery POS System
+Direction: RTL (Arabic)
+Stack suggestion: React + Tailwind CSS (or any modern stack)
+
+1. Design System & Foundations
+Color Palette
+PurposeColorHexPrimary brandPurple#534AB7Primary darkDeep purple#26215CPrimary light bgLight purple#EEEDFESuccess / MatchGreen dark#173404Success bgLight green#EAF3DEWarning / DiffAmber dark#633806 / #412402Warning bgLight amber#FAEEDADanger / ShortageRed dark#791F1F / #501313Danger bgLight red#FCEBEBVisa blueBlue#185FA5MastercardCoral dark#993C1DMada / brandPurple#534AB7Surface whiteWhite#FFFFFFSurface grayLight gray#F1EFE8Border lightSubtlergba(0,0,0,0.08)Text primaryBlack#1A1A1AText secondaryGray#6B6B6BText tertiaryLight gray#9B9B9B
+Typography
+
+Font: Sans-serif (Tajawal / IBM Plex Sans Arabic recommended for Arabic)
+Two weights only: 400 regular, 500 medium
+Sentence case everywhere — never ALL CAPS, never Title Case
+Sizes: h1 22px / h2 18px / h3 16px / body 14px / small 12px / tiny 10px
+Line height: 1.5 for body, 1.3 for headings
+
+Spacing & Radius
+
+Border radius: 8px (md) for inputs/small, 12px (lg) for cards
+Card padding: 16px
+Section gap: 16px (1rem)
+Internal gap: 8px to 12px
+Borders: 0.5px solid rgba(0,0,0,0.08) — always thin
+
+Direction & Layout
+
+dir="rtl" on root container
+Container max-width: 1200px
+Responsive: collapse to single column under 768px
+
+
+2. Page Structure (Top to Bottom)
+┌─────────────────────────────────────────────┐
+│  STEP INDICATOR (3 steps)                    │
+├─────────────────────────────────────────────┤
+│  SECTION 1: Shift Info (4-column row)        │
+├─────────────────────────────────────────────┤
+│  SECTION 2: Sales Totals (purple hero card)  │
+├─────────────────────────────────────────────┤
+│  SECTION 3: Payment Methods (tabbed)         │
+│  ├─ Tab: Cash                                │
+│  ├─ Tab: Cards                               │
+│  ├─ Tab: Delivery                            │
+│  └─ Tab: Credit / Deferred                   │
+├─────────────────────────────────────────────┤
+│  SECTION 4: Returns + Notes (2-column)       │
+├─────────────────────────────────────────────┤
+│  SECTION 5: Attachments (3-column)           │
+├─────────────────────────────────────────────┤
+│  SECTION 6: Final Summary Dashboard          │
+│  ├─ Hero summary (dark)                      │
+│  ├─ Channel breakdown (stacked bar)          │
+│  ├─ Reconciliation equation                  │
+│  └─ Differences analysis                     │
+├─────────────────────────────────────────────┤
+│  STICKY FOOTER: Sign + Save buttons          │
+└─────────────────────────────────────────────┘
+
+3. Section Specifications
+Section 0: Step Indicator
+
+Container: light gray background #F1EFE8, padding 12px 16px, radius 12px
+3 circular badges (24px) connected by 1px gray lines
+Active step: purple #534AB7 bg, white number
+Inactive: white bg, light gray border, gray text
+Steps:
+
+معلومات الوردية (Shift info)
+المبيعات والدفع (Sales & payments)
+المراجعة والحفظ (Review & save)
+
+
+
+Section 1: Shift Info Card
+
+White card, light border, radius 12px, padding 14px 16px
+Header row: clipboard icon (purple) + label "معلومات اليومية" (medium 14px)
+Grid: 4 equal columns (collapse to 2 on mobile)
+Fields:
+
+الفرع (Branch) — <select> — required
+التاريخ (Date) — <input type="date"> — required, default today
+الوردية (Shift) — <select> (صباحي / مسائي) — required
+الكاشير (Cashier) — readonly text, auto-filled from logged user, gray bg
+
+
+Field labels: tiny 11px, gray, above input
+
+Section 2: Sales Totals (Hero)
+
+Card background: light purple #EEEDFE (the visual hero of the page)
+Radius 12px, padding 16px
+Header: cash icon (purple) + label "إجمالي المبيعات" in dark purple #26215C
+Grid: 4 columns, ratio 1.5fr 1fr 1fr 1fr
+Each cell = white inner card (radius 8px, padding 12px) with:
+
+Label (tiny 11px gray)
+Big value (18px medium)
+
+
+Fields:
+
+المبيعات (ر.س) — required, large input
+عدد الفواتير — number input
+متوسط الفاتورة — computed (auto, readonly, gray text)
+العهدة — currency input (opening balance)
+
+
+
+Auto-calculation: average = sales ÷ invoice_count (live)
+Section 3: Payment Methods (Tabbed)
+Container
+
+White card, padding 16px, radius 12px
+Header: credit-card icon + label "طرق الدفع" + right-aligned subtotal "المجموع: 0.00 ر.س"
+
+Tab Bar
+
+Horizontal flex, bottom border light gray
+Each tab: padding 8px 14px, font 13px, icon + label + status badge
+Active tab: 2px purple bottom border, purple text, medium weight
+Inactive: gray text, no border
+Status badge next to label:
+
+✓ green pill if completed
+Count number purple pill if has entries (e.g., "3")
+No badge if untouched
+
+
+Tabs:
+
+نقدي (Cash) — icon coin
+البطاقات (Cards) — icon credit-card
+التوصيل (Delivery) — icon truck
+آجل (Credit) — icon clock
+
+
+
+Tab Content: Cash
+
+2-column grid:
+
+النقد المسجل (POS) — currency input
+الفعلي في الصندوق — currency input
+
+
+Below: status bar with computed difference
+
+Green bg #EAF3DE if match: "الفرق النقدي: +0.00 ر.س ✓"
+Red bg #FCEBEB if shortage: "−10.00 ر.س ⚠"
+Amber bg #FAEEDA if surplus
+
+
+
+Tab Content: Cards
+
+Column headers row (tiny 11px gray): الشبكة / المسجل (POS) / الفعلي (التقرير) / الفرق / [delete]
+Pre-loaded rows for: مدى, فيزا, ماستركارد
+Each row layout (grid 1.2fr 1fr 1fr 0.8fr 32px, gap 10px, light gray bg, radius 8px, padding 10px 12px):
+
+Network cell: colored badge (36×24px) with abbreviation + name
+
+Mada: purple #534AB7 bg, "مدى"
+Visa: blue #185FA5 bg, "VISA"
+Mastercard: coral #993C1D bg, "MC"
+
+
+POS input: number
+Actual input: number; if differs from POS, add border-color: amber
+Diff pill (computed):
+
+Match (=0): green pill ✓ 0.00
+Small diff (within tolerance): amber pill ⚠ +2.50
+Empty actual: gray text "في الانتظار"
+
+
+Delete X button (light, 28×28)
+
+
+Quick-add chips row: "إضافة سريعة:" + chips for Apple Pay, STC Pay, أخرى
+Subtotal summary bar (light purple #EEEDFE, 3 columns):
+
+مجموع المسجل / مجموع الفعلي / صافي الفرق
+
+
+
+Tab Content: Delivery
+
+Column headers (5 cols): الشركة / عدد الطلبات / إجمالي المبلغ / العمولة (%) / الصافي / [delete]
+Grid template: 1.3fr 0.6fr 1fr 0.9fr 1fr 32px
+Pre-loaded rows for: جاهز, هنقرستيشن, ToYou, كيتا, مرسل
+Each row:
+
+Company cell: 32×32 colored square logo + Arabic name + Latin name below
+
+Jahez: #185FA5
+HungerStation: #BA7517
+ToYou: #D4537E
+Keeta: #1D9E75
+Mursil: dashed border (placeholder)
+
+
+Order count input: centered
+Total amount input: currency
+Commission %: number + "%" suffix; default value preloaded per company (Jahez 20, HungerStation 22, ToYou 18, Keeta 19, Mursil 20)
+Net (computed): green text, total × (100 − commission) / 100, e.g., "784.00 ر.س"
+
+
+Inactive row pattern: if order count = 0, apply opacity: 0.6 and dashed logo border
+Quick-add chips: "ذا شيفز", "طلبات", "أخرى"
+Subtotal summary bar (light purple, 4 columns):
+
+عدد الطلبات (count "35 طلب")
+إجمالي المبيعات (purple)
+إجمالي العمولات (red #791F1F)
+صافي التحويل (green #173404)
+
+
+
+Tab Content: Credit / Deferred (Skeleton)
+
+Similar table pattern: customer / amount / due date / notes
+(Detailed spec deferred — implement as simple list table for now)
+
+Section 4: Returns + Notes
+
+2-column grid, gap 12px
+Each: white card, light border, radius 12px, padding 14px 16px
+Returns (right card):
+
+Icon arrow-back-up + label "المرتجعات"
+Full-width button: + إضافة مرتجع
+When clicked: opens row with amount + invoice ref + reason
+
+
+Notes (left card):
+
+Icon note + label "ملاحظات"
+Textarea placeholder "أي ملاحظات إضافية..."
+
+
+
+Section 5: Attachments
+
+White card, light border, radius 12px, padding 14px 16px
+Header: paperclip icon + label "المرفقات والصور" + count pill "0 ملفات"
+3-column grid of upload buttons:
+
+تقرير فوديكس (Foodics report)
+تقرير الشبكة (Network/POS report)
+أخرى (Other)
+
+
+Each button: camera icon (20px) above label, padding 16px 8px, vertical layout
+On upload: show thumbnail grid below
+
+Section 6: Final Summary Dashboard
+6A: Hero Summary Bar (Dark)
+
+Background: dark navy #26215C, white text, radius 12px, padding 18px 20px
+Header row:
+
+Left: title + branch/shift/date in opacity 0.7
+Right: status pill "قيد المراجعة" with clock icon, semi-transparent bg
+
+
+Grid: 4 cards 1.4fr 1fr 1fr 1fr, gap 12px
+Each card: rgba(255,255,255,0.08) bg, radius 8px, padding 12px 14px
+
+إجمالي المبيعات — 24px value + context "78 فاتورة · متوسط 65.74 ر.س"
+إجمالي المحصل — 18px value + "من 3 قنوات"
+العهدة — 18px value + "رصيد ابتدائي"
+صافي العجز — red bg #791F1F (override) — 18px value with arrow icon + percentage context
+
+
+
+6B: Channel Breakdown
+
+White card, padding 16px
+Header: pie-chart icon + label + "100% من المبيعات"
+Stacked horizontal bar (height 28px, radius 8px):
+
+Cash (purple #534AB7): 32%
+Cards (teal #1D9E75): 24%
+Delivery (blue #185FA5): 39%
+Credit (amber #BA7517): 5%
+Each segment shows percentage inside in white
+
+
+Below: 2-column grid of channel detail rows
+Each row: light gray bg, radius 8px, padding 8px 10px
+
+Color square (10×10) + channel name
+Right side: amount + status pill (✓ matched / ⚠ diff / context label)
+
+
+
+6C: Reconciliation Equation
+
+White card, padding 16px
+Header: scale icon + label "معادلة المطابقة"
+Equation visual (light gray inner bg, padding 14px):
+
+5-column grid: 1fr 24px 1fr 24px 1fr
+[المبيعات] − [المحصل] = [العجز/الفائض]
+Result cell: light red bg if shortage, light green if match/surplus
+
+
+Tolerance gauge below:
+
+Label row: "الحد المسموح: ±10 ر.س" / status "ضمن الحد ⚠"
+Horizontal bar (6px tall) with center marker (zero) and current position dot
+Color: amber when within tolerance, red when exceeded
+
+
+
+6D: Differences Analysis
+
+White card, padding 16px
+Header: alert-circle icon (amber) + label + count "3 فروقات مرصودة"
+Stack of difference rows; each row:
+
+Grid: 1.5fr 1fr 1fr 0.8fr cols, light gray bg, radius 8px, padding 10px 12px
+Col 1: icon + source name + descriptor ("POS مقابل الصندوق")
+Col 2: original values stacked ("المسجل 1,640.00" / "الفعلي 1,630.00")
+Col 3: diff pill — red for shortage, amber for surplus, gray "في الانتظار"
+Col 4: action button — "إضافة سبب" (if missing reason), "✓ مبرر" (if resolved), "إكمال" (if pending input)
+
+
+Special: pending row (e.g., Mastercard not entered):
+
+Full row background: amber #FAEEDA
+Text colors override to amber dark tones
+Forces user attention before completion
+
+
+
+Sticky Footer
+
+Fixed bottom or sticky, full-width
+3 buttons in grid 1fr 1fr 1.5fr:
+
+طباعة الملخص (Print summary) — secondary, printer icon
+حفظ كمسودة (Save draft) — secondary, floppy icon
+توقيع وإنهاء اليومية (Sign & finalize) — primary purple #534AB7, white text, signature icon
+
+
+The third button opens a signature modal (canvas drawing pad) before submitting
+
+
+4. Validation & Business Rules
+Required Fields
+
+Branch, Date, Shift, Cashier, Total Sales
+Cash POS and Cash Actual (or at least one payment method entered)
+Electronic signature before final save
+
+Auto-Calculations
+
+average_invoice = total_sales / invoice_count
+cash_diff = cash_actual - cash_pos
+card_diff = card_actual - card_pos (per network)
+delivery_net = total × (100 − commission_pct) / 100
+total_collected = cash_actual + Σ(card_actual) + Σ(delivery_total) + credit_total
+final_difference = total_collected − total_sales
+
+Tolerance Logic
+
+Default tolerance: ±10 ر.س (configurable per branch)
+If |final_difference| ≤ tolerance → allow save with note
+If |final_difference| > tolerance → require manager approval or written reason
+Cannot finalize while any "pending" entry exists (e.g., card POS without actual)
+
+Status States per Day
+
+Draft (مسودة): saved but not signed
+Pending review (قيد المراجعة): signed by cashier, awaiting manager
+Approved (معتمد): manager approved
+Disputed (محل خلاف): difference exceeds tolerance, requires resolution
+
+
+5. UX Micro-interactions
+
+Live calculation: every number updates instantly on input
+Color-coded diff feedback: green=match, amber=small diff, red=large diff
+Tab badges: update in real-time as user fills sections
+Inactive rows: opacity 0.6 + dashed border for unused networks/companies
+Auto-save draft: every 30 seconds
+Confirmation modal before "Sign & finalize" — show summary, then signature pad
+Print view: simplified single-page layout of Section 6 only
+
+
+6. Iconography (Tabler Icons recommended)
+SectionIconShift infoclipboard-listSales totalscashPayment methodscredit-cardCash tabcoinCards tabcredit-cardDelivery tabtruck / truck-deliveryCredit tabclockReturnsarrow-back-upNotesnoteAttachmentspaperclipCamera buttonscameraChannel breakdownchart-pieReconciliationscaleDifferencesalert-circle / alert-triangleSignaturesignatureSavedevice-floppyPrintprinterSuccesscheckWarningalert-triangleShortagearrow-downSurplusarrow-upDelete rowxAddplus
+
+7. Data Model (for Backend)
+json{
+  "daily_id": "uuid",
+  "branch_id": "uuid",
+  "date": "2026-05-25",
+  "shift": "morning | evening",
+  "cashier_id": "uuid",
+  "status": "draft | pending | approved | disputed",
+
+  "totals": {
+    "sales": 5127.50,
+    "invoice_count": 78,
+    "average_invoice": 65.74,
+    "opening_balance": 500.00
+  },
+
+  "cash": {
+    "pos_recorded": 1640.00,
+    "actual_in_drawer": 1630.00,
+    "difference": -10.00
+  },
+
+  "cards": [
+    { "network": "mada", "pos": 650.00, "actual": 650.00, "diff": 0.00 },
+    { "network": "visa", "pos": 425.00, "actual": 427.50, "diff": 2.50 },
+    { "network": "mastercard", "pos": 172.00, "actual": null, "diff": null }
+  ],
+
+  "delivery": [
+    { "company": "jahez", "orders": 12, "total": 980.00, "commission_pct": 20, "net": 784.00 },
+    { "company": "hungerstation", "orders": 8, "total": 640.00, "commission_pct": 22, "net": 499.20 },
+    { "company": "toyou", "orders": 5, "total": 420.00, "commission_pct": 18, "net": 344.40 },
+    { "company": "keeta", "orders": 10, "total": 800.00, "commission_pct": 19, "net": 648.00 }
+  ],
+
+  "credit": [
+    { "customer": "...", "amount": 255.00, "due_date": "...", "notes": "..." }
+  ],
+
+  "returns": [
+    { "amount": 0.00, "invoice_ref": "...", "reason": "..." }
+  ],
+
+  "attachments": {
+    "foodics_report": "url",
+    "network_report": "url",
+    "other": ["url1", "url2"]
+  },
+
+  "notes": "...",
+  "signature": "base64_canvas_data",
+  "signed_at": "2026-05-25T18:30:00Z",
+  "tolerance_limit": 10.00,
+  "final_difference": -7.50
+}
+
+8. Replit Build Instructions
+Goal: Build a single-page React app that replicates the design above.
+Recommended setup:
+
+React 18 + Vite
+Tailwind CSS (configure direction: rtl globally)
+lucide-react or @tabler/icons-react for icons
+A signature pad library: react-signature-canvas
+Date picker: native <input type="date"> is fine
+State management: useState is sufficient for a single form; can lift to Context if needed
+Form: build as one controlled form, store all values in a single state object matching the data model
+
+Build order:
+
+Set up Tailwind with RTL + color tokens from Section 1
+Build the 6 sections as separate components, top-down
+Add live calculations as derived values (not stored state)
+Add tab logic for payment methods
+Add the dynamic Summary Dashboard (Section 6) that recomputes from form state
+Add validation rules from Section 4
+Add sticky footer with signature modal
+
+Accessibility:
+
+All inputs must have <label> (visually or sr-only)
+Tab order must follow RTL reading order
+Color is not the only indicator — always pair with icon + text
+
+
+End of specification.
