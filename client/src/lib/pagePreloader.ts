@@ -194,19 +194,24 @@ export function startAggressivePreload() {
   const idle = (window as any).requestIdleCallback || ((cb: Function) => setTimeout(cb, 500));
 
   idle(() => {
-    // Wave 1: only the truly first-impression pages
+    // Wave 1: truly first-impression pages — preload immediately
     PRIORITY_WAVE_1.forEach(p => preloadPage(p));
 
-    // Skip secondary preloading on slow networks/low-end devices/mobile
-    // — adjacent prefetch on hover/navigation will cover the rest just-in-time
-    if (lowEnd || mobile) return;
+    // Only skip secondary preloading on very slow networks / low-end devices.
+    // Modern mobile devices on 4G/5G handle Wave 2 fine — the previous "skip
+    // on any mobile" rule was overly conservative and forced an avoidable
+    // chunk-fetch delay on every mobile navigation.
+    if (lowEnd) return;
 
-    // Desktop only: gentle Wave 2 after 2.5s of idle time
+    // Wave 2 after a brief delay so it never competes with first-paint work.
+    // Reduced from 2500ms → 600ms so popular secondary pages are ready by the
+    // time the user finishes scanning the landing screen.
+    const wave2Delay = mobile ? 1500 : 600;
     setTimeout(() => {
       idle(() => {
         PRIORITY_WAVE_2.forEach(p => preloadPage(p));
       });
-    }, 2500);
+    }, wave2Delay);
   });
 }
 

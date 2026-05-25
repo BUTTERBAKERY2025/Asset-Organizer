@@ -59,7 +59,10 @@ export function useAppInit() {
     staleTime: FIVE_MINUTES,
     gcTime: 1000 * 60 * 30,
     refetchOnWindowFocus: false,
-    refetchOnMount: true,
+    // Was true — caused a duplicate /api/auth/init request on every AuthGate
+    // mount even though main.tsx already prefetched it. Setting to false means
+    // we trust the staleTime window (5min) and skip the redundant network round-trip.
+    refetchOnMount: false,
     refetchOnReconnect: true,
     retry: 1,
   });

@@ -153,7 +153,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     const prefetchTimer = setTimeout(() => {
       if (typeof document !== "undefined" && document.hidden) return;
       prefetchAdjacentPages(location);
-    }, 500);
+    }, 150);
     requestAnimationFrame(() => {
       const bar = document.getElementById("nav-progress-bar");
       if (bar && bar.classList.contains("loading")) {
@@ -537,6 +537,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         )}
         data-testid={`nav-link-${item.href.replace(/\//g, '') || 'home'}`}
         onMouseEnter={() => handleLinkHover(item.href)}
+        onMouseDown={(e) => { if (e.button === 0) handleLinkHover(item.href); }}
+        onTouchStart={() => handleLinkHover(item.href)}
       >
         <div className={cn(
           "p-1.5 rounded-md transition-colors",
