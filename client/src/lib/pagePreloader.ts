@@ -48,6 +48,7 @@ const pageImports: Record<string, () => Promise<any>> = {
   "quality-control": () => import("@/pages/quality-control"),
   "cashier-journals": () => import("@/pages/cashier-journals"),
   "cashier-journal-form": () => import("@/pages/cashier-journal-form"),
+  "cashier-journal-v2-preview": () => import("@/pages/cashier-journal-v2-preview"),
   "branch-daily-closing": () => import("@/pages/branch-daily-closing"),
   "branch-daily-closures": () => import("@/pages/branch-daily-closures"),
   "branch-daily-closure-detail": () => import("@/pages/branch-daily-closure-detail"),
