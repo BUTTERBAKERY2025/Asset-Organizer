@@ -89,7 +89,7 @@ function InlineSkeleton() {
   // by DelayedFallback in App.tsx so the user sees a stable, flicker-free UI.
   const [show, setShow] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setShow(true), 350);
+    const t = setTimeout(() => setShow(true), 800);
     return () => clearTimeout(t);
   }, []);
   if (!show) return <div className="min-h-[200px]" data-testid="inline-skeleton-placeholder" />;

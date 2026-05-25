@@ -62,7 +62,6 @@ export function useAuth() {
       clearPersistentCache();
       setCurrentUser(userData?.id?.toString() || null);
       queryClient.setQueryData(["/api/auth/me"], userData);
-      queryClient.invalidateQueries();
     },
   });
 
