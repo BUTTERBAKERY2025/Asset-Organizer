@@ -7560,10 +7560,50 @@ export async function registerRoutes(
   // Create new cashier journal
   app.post("/api/cashier-journals", isAuthenticated, requirePermission("cashier_journal", "create"), requireBranchAccess, async (req, res) => {
     try {
-      const { paymentBreakdowns, signatureData, signerName, ...journalData } = req.body;
-      
-      // Verify user has access to the target branch
+      const { paymentBreakdowns, signatureData, signerName, ...rawJournalData } = req.body;
+
+      // SECURITY (mass-assignment): strip server-controlled / privileged fields
+      // from the client payload. Without this a regular cashier could POST
+      // {"status":"posted"} or {"approvedBy":"x"} and bypass the entire
+      // approval/posting workflow. These fields MUST only be mutated by the
+      // dedicated state-transition endpoints (/submit, /post, /approve, /reject).
+      const PROTECTED_JOURNAL_FIELDS = [
+        'id', 'status', 'createdBy', 'createdAt', 'updatedAt',
+        'submittedBy', 'submittedAt',
+        'approvedBy', 'approvedAt', 'approvalNotes',
+        'rejectedBy', 'rejectedAt', 'rejectionReason',
+        'postedBy', 'postedAt',
+        'unpostedBy', 'unpostedAt', 'unpostReason',
+        'closureId', 'closedAt',
+      ] as const;
+      const journalData: Record<string, any> = { ...rawJournalData };
+      for (const f of PROTECTED_JOURNAL_FIELDS) {
+        if (f in journalData) delete journalData[f];
+      }
+
       const user = getCurrentUser(req);
+
+      // SECURITY (impersonation): non-manager cashiers MUST NOT be able to
+      // attribute a journal to another cashier. Force BOTH cashierId AND
+      // cashierName to the authenticated user's trusted server-side values
+      // for them. Managers/admins keep the ability to enter journals on
+      // behalf of staff (canUserViewAllCashiers === true).
+      //
+      // NOTE: this User schema has no `name` column — names live in
+      // firstName/lastName, with username as a guaranteed-non-null fallback.
+      // A previous version of this guard only set cashierName when user.name
+      // was truthy, which silently left attacker-supplied names intact.
+      const canActOnBehalf = await canUserViewAllCashiers(req);
+      if (!canActOnBehalf) {
+        const trustedName = [
+          (user as any).firstName,
+          (user as any).lastName,
+        ].filter(Boolean).join(' ').trim() || (user as any).username || String(user.id);
+        journalData.cashierId = String(user.id);
+        journalData.cashierName = trustedName;
+      }
+
+      // Verify user has access to the target branch
       if (user?.role !== "admin" && journalData.branchId) {
         const hasAccess = await canAccessBranch(req, journalData.branchId);
         if (!hasAccess) {
@@ -7784,8 +7824,28 @@ export async function registerRoutes(
   app.patch("/api/cashier-journals/:id", isAuthenticated, requirePermission("cashier_journal", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
-      const { paymentBreakdowns, signatureData, signerName, ...journalData } = req.body;
-      
+      const { paymentBreakdowns, signatureData, signerName, ...rawJournalData } = req.body;
+
+      // SECURITY (mass-assignment): strip server-controlled / privileged fields
+      // — same protection as POST. Additionally strip cashierId/cashierName here
+      // so PATCH can never re-attribute a journal to a different person; if the
+      // wrong cashier was selected at creation, the journal should be deleted
+      // and re-created, not silently transferred.
+      const PROTECTED_JOURNAL_FIELDS_U = [
+        'id', 'status', 'createdBy', 'createdAt', 'updatedAt',
+        'submittedBy', 'submittedAt',
+        'approvedBy', 'approvedAt', 'approvalNotes',
+        'rejectedBy', 'rejectedAt', 'rejectionReason',
+        'postedBy', 'postedAt',
+        'unpostedBy', 'unpostedAt', 'unpostReason',
+        'closureId', 'closedAt',
+        'cashierId', 'cashierName',
+      ] as const;
+      const journalData: Record<string, any> = { ...rawJournalData };
+      for (const f of PROTECTED_JOURNAL_FIELDS_U) {
+        if (f in journalData) delete journalData[f];
+      }
+
       // Check if journal is already submitted/approved/posted
       const existing = await storage.getCashierJournal(id);
       if (!existing) {
@@ -7796,6 +7856,22 @@ export async function registerRoutes(
         const hasAccess = await canAccessBranch(req, existing.branchId);
         if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بتعديل سجل هذا الفرع" });
+        }
+      }
+      // SECURITY (branch-move): if the payload tries to change branchId, the
+      // user must have access to BOTH the source branch (checked above) and
+      // the destination branch. Without this a user could "hide" a journal
+      // by moving it into a branch they don't normally see, disrupting
+      // reporting/audit for that branch.
+      if (
+        journalData.branchId !== undefined &&
+        String(journalData.branchId) !== String(existing.branchId)
+      ) {
+        if (!isUserAdmin(req)) {
+          const hasNewAccess = await canAccessBranch(req, String(journalData.branchId));
+          if (!hasNewAccess) {
+            return res.status(403).json({ error: "غير مصرح بنقل اليومية إلى فرع لا تصل إليه" });
+          }
         }
       }
       // SECURITY: Non-admin/manager can only edit their own journals
