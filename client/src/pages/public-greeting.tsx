@@ -694,9 +694,6 @@ export default function PublicGreetingPage() {
                   transition={{ delay: 0.9, duration: 0.5 }}
                   data-testid="text-recipient-greeting"
                 >
-                  <p className="text-xs sm:text-sm md:text-base font-medium opacity-70">
-                    إلى الزميل/ـة
-                  </p>
                   <motion.p
                     className="text-2xl sm:text-3xl md:text-5xl font-extrabold mt-1 break-words"
                     style={{ color: accent, textShadow: `0 2px 10px ${accent}33` }}
