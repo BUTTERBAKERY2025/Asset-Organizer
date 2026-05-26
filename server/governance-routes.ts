@@ -14,6 +14,14 @@ import {
   boardResolutions,
   resolutionVotes,
   resolutionSignatures,
+  assemblyResolutions,
+  assemblyResolutionVotes,
+  assemblyResolutionSignatures,
+  insiderRegister,
+  insiderBlackoutPeriods,
+  insertAssemblyResolutionSchema,
+  insertInsiderRegisterSchema,
+  insertInsiderBlackoutPeriodSchema,
   votingTokens,
   capitalTransactions,
   dividendDistributions,
@@ -52,6 +60,59 @@ const updateGovernanceMeetingSchema = insertGovernanceMeetingSchema.partial().om
 const updateMeetingAttendanceSchema = insertMeetingAttendanceSchema.partial();
 const updateMeetingMinutesSchema = insertMeetingMinutesSchema.partial().omit({ createdBy: true, minutesNumber: true });
 const updateBoardResolutionSchema = insertBoardResolutionSchema.partial().omit({ createdBy: true, resolutionNumber: true });
+const updateAssemblyResolutionSchema = insertAssemblyResolutionSchema.partial().omit({ createdBy: true, resolutionNumber: true });
+const updateInsiderRegisterSchema = insertInsiderRegisterSchema.partial().omit({ createdBy: true });
+const updateInsiderBlackoutPeriodSchema = insertInsiderBlackoutPeriodSchema.partial().omit({ createdBy: true });
+
+// =====================================================
+// GOVERNANCE COMPLIANCE HELPERS (Saudi Companies Law M/132 + CMA Nomu)
+// =====================================================
+const THREE_YEARS_MS = 3 * 365 * 24 * 60 * 60 * 1000 + 24 * 60 * 60 * 1000; // tiny leap-year buffer
+const BOARD_MEETING_NOTICE_DAYS = 7;
+const ASSEMBLY_MEETING_NOTICE_DAYS = 21;
+
+function daysBetween(a: Date, b: Date): number {
+  return Math.floor((b.getTime() - a.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+/** Validate a board member's term does not exceed 3 years (Companies Law). */
+function validateBoardMemberTerm(appointmentDate: any, termEndDate: any): string | null {
+  if (!appointmentDate || !termEndDate) return null;
+  const a = new Date(appointmentDate);
+  const e = new Date(termEndDate);
+  if (isNaN(a.getTime()) || isNaN(e.getTime())) return null;
+  if (e <= a) return "تاريخ نهاية العضوية يجب أن يكون بعد تاريخ التعيين";
+  if (e.getTime() - a.getTime() > THREE_YEARS_MS) {
+    return "مدة عضوية مجلس الإدارة لا يجوز أن تتجاوز 3 سنوات (نظام الشركات المادة 68)";
+  }
+  return null;
+}
+
+/** Compute independence ratio of active board (≥ ⅓ recommended per CMA). */
+async function computeIndependenceRatio(): Promise<{ total: number; independent: number; ratio: number; meetsMinimum: boolean }> {
+  const active = await db.select().from(boardMembers).where(eq(boardMembers.status, "active"));
+  const total = active.length;
+  const independent = active.filter((m: any) => m.memberType === "independent").length;
+  const ratio = total > 0 ? independent / total : 0;
+  return { total, independent, ratio, meetsMinimum: total === 0 || (ratio >= (1 / 3) && independent >= 2) };
+}
+
+/** Validate notice period for board vs assembly meetings. */
+function validateMeetingNoticePeriod(meetingType: string, meetingDate: any): string | null {
+  if (!meetingDate) return null;
+  const md = new Date(meetingDate);
+  if (isNaN(md.getTime())) return null;
+  const days = daysBetween(new Date(), md);
+  const isAssembly = meetingType === "ordinary_assembly" || meetingType === "extraordinary_assembly"
+    || meetingType === "ordinary" || meetingType === "extraordinary";
+  const required = isAssembly ? ASSEMBLY_MEETING_NOTICE_DAYS : BOARD_MEETING_NOTICE_DAYS;
+  if (days < required) {
+    return isAssembly
+      ? `الجمعية العمومية تتطلب إشعاراً مسبقاً ≥ ${required} يوماً (متبقي ${days} يوماً). يمكن التجاوز فقط بإجماع المساهمين.`
+      : `اجتماع مجلس الإدارة يتطلب إشعاراً مسبقاً ≥ ${required} أيام (متبقي ${days} يوماً).`;
+  }
+  return null;
+}
 const updateDisclosureSchema = insertDisclosureSchema.partial().omit({ createdBy: true, disclosureNumber: true });
 const updateComplianceRequirementSchema = insertComplianceRequirementSchema.partial().omit({ createdBy: true, requirementCode: true });
 const updateDividendDistributionSchema = insertDividendDistributionSchema.partial().omit({ createdBy: true, distributionNumber: true });
@@ -140,8 +201,13 @@ export function registerGovernanceRoutes(app: Express) {
         ...req.body,
         createdBy: getCurrentUserId(req),
       });
+      // COMPLIANCE: max 3-year term per Saudi Companies Law M/132.
+      const termErr = validateBoardMemberTerm(data.appointmentDate, data.termEndDate);
+      if (termErr) return res.status(400).json({ error: termErr });
       const [member] = await db.insert(boardMembers).values(data).returning();
-      res.status(201).json(member);
+      // COMPLIANCE WARNING: ≥ ⅓ independent directors (advisory, not blocking).
+      const indep = await computeIndependenceRatio();
+      res.status(201).json({ ...member, _governance: { independence: indep } });
     } catch (error) {
       console.error("Error creating board member:", error);
       res.status(500).json({ error: "فشل في إضافة عضو المجلس" });
@@ -151,17 +217,37 @@ export function registerGovernanceRoutes(app: Express) {
   app.patch("/api/governance/board-members/:id", isAuthenticated, requirePermission("governance_board", "edit"), async (req, res) => {
     try {
       const validatedData = updateBoardMemberSchema.parse(req.body);
+      // COMPLIANCE: re-validate term if either date is being changed.
+      if (validatedData.appointmentDate !== undefined || validatedData.termEndDate !== undefined) {
+        const [existing] = await db.select().from(boardMembers).where(eq(boardMembers.id, parseInt(req.params.id)));
+        const appointmentDate = validatedData.appointmentDate ?? existing?.appointmentDate;
+        const termEndDate = validatedData.termEndDate ?? existing?.termEndDate;
+        const termErr = validateBoardMemberTerm(appointmentDate, termEndDate);
+        if (termErr) return res.status(400).json({ error: termErr });
+      }
       const [member] = await db.update(boardMembers)
         .set({ ...validatedData, updatedAt: new Date() })
         .where(eq(boardMembers.id, parseInt(req.params.id)))
         .returning();
-      res.json(member);
+      const indep = await computeIndependenceRatio();
+      res.json({ ...member, _governance: { independence: indep } });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
       }
       console.error("Error updating board member:", error);
       res.status(500).json({ error: "فشل في تحديث بيانات عضو المجلس" });
+    }
+  });
+
+  // Read-only endpoint for the independence-ratio dashboard tile.
+  app.get("/api/governance/board-members/_compliance/independence", isAuthenticated, requirePermission("governance_board", "view"), async (_req, res) => {
+    try {
+      const indep = await computeIndependenceRatio();
+      res.json(indep);
+    } catch (error) {
+      console.error("Error computing independence ratio:", error);
+      res.status(500).json({ error: "فشل في حساب نسبة الاستقلالية" });
     }
   });
 
@@ -466,7 +552,46 @@ export function registerGovernanceRoutes(app: Express) {
         createdBy: getCurrentUserId(req),
       };
 
+      // COMPLIANCE: notice-period check (7 days board / 21 days assembly).
+      // `?force=1` lets ADMINS (only) record an emergency meeting after-the-fact.
+      // Any forced creation is audit-logged below.
+      const isAdmin = (req as any).currentUser?.role === "admin";
+      const force = String(req.query.force ?? "") === "1" && isAdmin;
+      const noticeErr = validateMeetingNoticePeriod(resolvedMeetingType, insertData.meetingDate);
+      if (noticeErr && !force) {
+        return res.status(400).json({
+          error: noticeErr,
+          code: "NOTICE_PERIOD_VIOLATION",
+          canForce: isAdmin, // only tell admins they can override
+        });
+      }
+      const forcedNoticeOverride = !!noticeErr && force;
+
       const [meeting] = await db.insert(governanceMeetings).values(insertData).returning();
+
+      // AUDIT: log any forced notice-period override so the secretariat can
+      // explain it to the auditor later.
+      if (forcedNoticeOverride) {
+        try {
+          await db.insert(systemAuditLogs).values({
+            module: "governance_meetings",
+            entityId: String(meeting.id),
+            entityName: meeting.title,
+            action: "force_create_short_notice",
+            details: JSON.stringify({
+              meetingId: meeting.id,
+              meetingType: resolvedMeetingType,
+              meetingDate: insertData.meetingDate,
+              noticeViolation: noticeErr,
+            }),
+            userId: getCurrentUserId(req),
+            userName: (req as any).currentUser?.username || "system",
+            ipAddress: req.ip || req.socket.remoteAddress || "unknown",
+          });
+        } catch (auditErr) {
+          console.error("Failed to audit forced notice override:", auditErr);
+        }
+      }
 
       let invitationResults = null;
       if (sendWhatsApp || sendSMS) {
@@ -807,10 +932,25 @@ export function registerGovernanceRoutes(app: Express) {
 
   app.patch("/api/governance/minutes/:id", isAuthenticated, requirePermission("governance_meetings", "edit"), async (req, res) => {
     try {
+      const minutesId = parseInt(req.params.id);
       const validatedData = updateMeetingMinutesSchema.parse(req.body);
+
+      // IMMUTABILITY: a locked minutes record MUST NOT be modified — the only
+      // exception is an explicit admin "unlock" workflow (a separate endpoint,
+      // not present yet). Even the lock flag itself cannot be cleared via PATCH.
+      const [existing] = await db.select().from(meetingMinutes).where(eq(meetingMinutes.id, minutesId));
+      if (!existing) return res.status(404).json({ error: "المحضر غير موجود" });
+      if ((existing as any).isLocked) {
+        return res.status(423).json({ error: "المحضر مقفل ولا يمكن تعديله بعد توقيعه/اعتماده", code: "MINUTES_LOCKED" });
+      }
+      // Strip any attempt to flip lock state via this endpoint.
+      delete (validatedData as any).isLocked;
+      delete (validatedData as any).lockedAt;
+      delete (validatedData as any).lockedBy;
+
       const [minutes] = await db.update(meetingMinutes)
         .set({ ...validatedData, updatedAt: new Date() })
-        .where(eq(meetingMinutes.id, parseInt(req.params.id)))
+        .where(eq(meetingMinutes.id, minutesId))
         .returning();
       res.json(minutes);
     } catch (error) {
@@ -819,6 +959,25 @@ export function registerGovernanceRoutes(app: Express) {
       }
       console.error("Error updating minutes:", error);
       res.status(500).json({ error: "فشل في تحديث المحضر" });
+    }
+  });
+
+  // IMMUTABILITY: dedicated "lock" endpoint — admin/secretary stamps the minutes
+  // as final. After this, PATCH/DELETE return 423.
+  app.post("/api/governance/minutes/:id/lock", isAuthenticated, requirePermission("governance_meetings", "edit"), async (req, res) => {
+    try {
+      const minutesId = parseInt(req.params.id);
+      const [existing] = await db.select().from(meetingMinutes).where(eq(meetingMinutes.id, minutesId));
+      if (!existing) return res.status(404).json({ error: "المحضر غير موجود" });
+      if ((existing as any).isLocked) return res.status(409).json({ error: "المحضر مقفل بالفعل" });
+      const [locked] = await db.update(meetingMinutes)
+        .set({ isLocked: true, lockedAt: new Date(), lockedBy: getCurrentUserId(req), updatedAt: new Date() } as any)
+        .where(eq(meetingMinutes.id, minutesId))
+        .returning();
+      res.json(locked);
+    } catch (error) {
+      console.error("Error locking minutes:", error);
+      res.status(500).json({ error: "فشل في قفل المحضر" });
     }
   });
 
@@ -832,6 +991,10 @@ export function registerGovernanceRoutes(app: Express) {
       const [existing] = await db.select().from(meetingMinutes).where(eq(meetingMinutes.id, minutesId));
       if (!existing) {
         return res.status(404).json({ error: "المحضر غير موجود" });
+      }
+      // IMMUTABILITY: locked minutes cannot be deleted (corporate-record retention).
+      if ((existing as any).isLocked) {
+        return res.status(423).json({ error: "المحضر مقفل ولا يمكن حذفه — السجلات الرسمية محفوظة بحكم النظام", code: "MINUTES_LOCKED" });
       }
       await db.delete(meetingMinutes).where(eq(meetingMinutes.id, minutesId));
       res.json({ message: "تم حذف المحضر بنجاح" });
@@ -918,10 +1081,22 @@ export function registerGovernanceRoutes(app: Express) {
 
   app.patch("/api/governance/resolutions/:id", isAuthenticated, requirePermission("governance_resolutions", "edit"), async (req, res) => {
     try {
+      const resolutionId = parseInt(req.params.id);
       const validatedData = updateBoardResolutionSchema.parse(req.body);
+
+      // IMMUTABILITY: locked resolutions cannot be modified.
+      const [existing] = await db.select().from(boardResolutions).where(eq(boardResolutions.id, resolutionId));
+      if (!existing) return res.status(404).json({ error: "القرار غير موجود" });
+      if ((existing as any).isLocked) {
+        return res.status(423).json({ error: "القرار مقفل ولا يمكن تعديله بعد اعتماده/توقيعه", code: "RESOLUTION_LOCKED" });
+      }
+      delete (validatedData as any).isLocked;
+      delete (validatedData as any).lockedAt;
+      delete (validatedData as any).lockedBy;
+
       const [resolution] = await db.update(boardResolutions)
         .set({ ...validatedData, updatedAt: new Date() })
-        .where(eq(boardResolutions.id, parseInt(req.params.id)))
+        .where(eq(boardResolutions.id, resolutionId))
         .returning();
       res.json(resolution);
     } catch (error) {
@@ -933,6 +1108,24 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
+  // IMMUTABILITY: dedicated "lock" endpoint for board resolutions.
+  app.post("/api/governance/resolutions/:id/lock", isAuthenticated, requirePermission("governance_resolutions", "edit"), async (req, res) => {
+    try {
+      const resolutionId = parseInt(req.params.id);
+      const [existing] = await db.select().from(boardResolutions).where(eq(boardResolutions.id, resolutionId));
+      if (!existing) return res.status(404).json({ error: "القرار غير موجود" });
+      if ((existing as any).isLocked) return res.status(409).json({ error: "القرار مقفل بالفعل" });
+      const [locked] = await db.update(boardResolutions)
+        .set({ isLocked: true, lockedAt: new Date(), lockedBy: getCurrentUserId(req), updatedAt: new Date() } as any)
+        .where(eq(boardResolutions.id, resolutionId))
+        .returning();
+      res.json(locked);
+    } catch (error) {
+      console.error("Error locking resolution:", error);
+      res.status(500).json({ error: "فشل في قفل القرار" });
+    }
+  });
+
   app.delete("/api/governance/resolutions/:id", isAuthenticated, async (req, res) => {
     try {
       const user = (req as any).currentUser;
@@ -941,7 +1134,14 @@ export function registerGovernanceRoutes(app: Express) {
       }
       
       const resolutionId = parseInt(req.params.id);
-      
+
+      // IMMUTABILITY: locked resolutions cannot be deleted.
+      const [existing] = await db.select().from(boardResolutions).where(eq(boardResolutions.id, resolutionId));
+      if (!existing) return res.status(404).json({ error: "القرار غير موجود" });
+      if ((existing as any).isLocked) {
+        return res.status(423).json({ error: "القرار مقفل ولا يمكن حذفه — السجلات الرسمية محفوظة بحكم النظام", code: "RESOLUTION_LOCKED" });
+      }
+
       await db.delete(votingTokens).where(eq(votingTokens.resolutionId, resolutionId));
       await db.delete(resolutionSignatures).where(eq(resolutionSignatures.resolutionId, resolutionId));
       await db.delete(resolutionVotes).where(eq(resolutionVotes.resolutionId, resolutionId));
@@ -958,6 +1158,244 @@ export function registerGovernanceRoutes(app: Express) {
     } catch (error) {
       console.error("Error deleting resolution:", error);
       res.status(500).json({ error: "فشل في حذف القرار" });
+    }
+  });
+
+  // =====================================================
+  // Assembly Resolutions - قرارات الجمعية العمومية (OGM + EGM)
+  // Distinct from board resolutions; share-weighted voting + special quorums.
+  // =====================================================
+  app.get("/api/governance/assembly-resolutions", isAuthenticated, requirePermission("governance_resolutions", "view"), async (req, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const assemblyType = req.query.assemblyType as string | undefined;
+      const conditions: any[] = [];
+      if (status) conditions.push(eq(assemblyResolutions.status, status));
+      if (assemblyType) conditions.push(eq(assemblyResolutions.assemblyType, assemblyType));
+      let q = db.select().from(assemblyResolutions) as any;
+      if (conditions.length) q = q.where(and(...conditions));
+      const rows = await q.orderBy(desc(assemblyResolutions.proposedAt));
+      res.json(rows);
+    } catch (error) {
+      console.error("Error fetching assembly resolutions:", error);
+      res.status(500).json({ error: "فشل في جلب قرارات الجمعية" });
+    }
+  });
+
+  app.get("/api/governance/assembly-resolutions/:id", isAuthenticated, requirePermission("governance_resolutions", "view"), async (req, res) => {
+    try {
+      const [row] = await db.select().from(assemblyResolutions).where(eq(assemblyResolutions.id, parseInt(req.params.id)));
+      if (!row) return res.status(404).json({ error: "قرار الجمعية غير موجود" });
+      res.json(row);
+    } catch (error) {
+      console.error("Error fetching assembly resolution:", error);
+      res.status(500).json({ error: "فشل في جلب قرار الجمعية" });
+    }
+  });
+
+  app.post("/api/governance/assembly-resolutions", isAuthenticated, requirePermission("governance_resolutions", "create"), async (req, res) => {
+    try {
+      const year = new Date().getFullYear();
+      const at = (req.body.assemblyType === "extraordinary") ? "EGM" : "OGM";
+      const maxRes = await db.select({ maxNum: sql<string>`MAX(resolution_number)` })
+        .from(assemblyResolutions)
+        .where(sql`resolution_number LIKE ${`AR-${year}-${at}-%`}`);
+      const lastNum = maxRes[0]?.maxNum
+        ? parseInt(String(maxRes[0].maxNum).split('-').pop() || '0', 10) || 0
+        : 0;
+      const resolutionNumber = `AR-${year}-${at}-${String(lastNum + 1).padStart(4, '0')}`;
+      // Default required majority per Saudi law: EGM needs ⅔ for several types.
+      const defaultMajority =
+        req.body.assemblyType === "extraordinary"
+          ? (["capital_change", "statute_amendment", "merger", "dissolution"].includes(req.body.resolutionType) ? "two_thirds" : "simple")
+          : "simple";
+      const data = insertAssemblyResolutionSchema.parse({
+        ...req.body,
+        resolutionNumber,
+        majorityType: req.body.majorityType ?? defaultMajority,
+        proposedBy: getCurrentUserId(req),
+        proposedAt: new Date(),
+        createdBy: getCurrentUserId(req),
+      });
+      const [row] = await db.insert(assemblyResolutions).values(data).returning();
+      res.status(201).json(row);
+    } catch (error: any) {
+      console.error("Error creating assembly resolution:", error);
+      const message = error?.code === '23505'
+        ? `رقم القرار مستخدم بالفعل: ${error?.detail || ''}`
+        : error?.issues
+          ? `بيانات غير صالحة: ${error.issues.map((i: any) => `${i.path?.join('.')}: ${i.message}`).join(' | ')}`
+          : error?.message || 'فشل في إنشاء قرار الجمعية';
+      res.status(500).json({ error: message });
+    }
+  });
+
+  app.patch("/api/governance/assembly-resolutions/:id", isAuthenticated, requirePermission("governance_resolutions", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const validated = updateAssemblyResolutionSchema.parse(req.body);
+      const [existing] = await db.select().from(assemblyResolutions).where(eq(assemblyResolutions.id, id));
+      if (!existing) return res.status(404).json({ error: "قرار الجمعية غير موجود" });
+      if ((existing as any).isLocked) {
+        return res.status(423).json({ error: "قرار الجمعية مقفل ولا يمكن تعديله", code: "RESOLUTION_LOCKED" });
+      }
+      delete (validated as any).isLocked;
+      delete (validated as any).lockedAt;
+      delete (validated as any).lockedBy;
+      const [row] = await db.update(assemblyResolutions)
+        .set({ ...validated, updatedAt: new Date() })
+        .where(eq(assemblyResolutions.id, id))
+        .returning();
+      res.json(row);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      console.error("Error updating assembly resolution:", error);
+      res.status(500).json({ error: "فشل في تحديث قرار الجمعية" });
+    }
+  });
+
+  app.post("/api/governance/assembly-resolutions/:id/lock", isAuthenticated, requirePermission("governance_resolutions", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [existing] = await db.select().from(assemblyResolutions).where(eq(assemblyResolutions.id, id));
+      if (!existing) return res.status(404).json({ error: "قرار الجمعية غير موجود" });
+      if ((existing as any).isLocked) return res.status(409).json({ error: "قرار الجمعية مقفل بالفعل" });
+      const [row] = await db.update(assemblyResolutions)
+        .set({ isLocked: true, lockedAt: new Date(), lockedBy: getCurrentUserId(req), updatedAt: new Date() } as any)
+        .where(eq(assemblyResolutions.id, id))
+        .returning();
+      res.json(row);
+    } catch (error) {
+      console.error("Error locking assembly resolution:", error);
+      res.status(500).json({ error: "فشل في قفل قرار الجمعية" });
+    }
+  });
+
+  app.delete("/api/governance/assembly-resolutions/:id", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).currentUser;
+      if (user?.role !== 'admin') return res.status(403).json({ error: "فقط المسؤول يمكنه حذف القرارات" });
+      const id = parseInt(req.params.id);
+      const [existing] = await db.select().from(assemblyResolutions).where(eq(assemblyResolutions.id, id));
+      if (!existing) return res.status(404).json({ error: "قرار الجمعية غير موجود" });
+      if ((existing as any).isLocked) {
+        return res.status(423).json({ error: "قرار الجمعية مقفل ولا يمكن حذفه — السجلات الرسمية محفوظة بحكم النظام", code: "RESOLUTION_LOCKED" });
+      }
+      await db.delete(assemblyResolutionSignatures).where(eq(assemblyResolutionSignatures.resolutionId, id));
+      await db.delete(assemblyResolutionVotes).where(eq(assemblyResolutionVotes.resolutionId, id));
+      await db.delete(assemblyResolutions).where(eq(assemblyResolutions.id, id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting assembly resolution:", error);
+      res.status(500).json({ error: "فشل في حذف قرار الجمعية" });
+    }
+  });
+
+  // =====================================================
+  // Insider Register & Blackout Periods - سجل المطلعين وفترات الحظر
+  // (CMA / Nomu listing requirement)
+  // =====================================================
+  app.get("/api/governance/insiders", isAuthenticated, requirePermission("governance_compliance", "view"), async (req, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const conds: any[] = [];
+      if (status) conds.push(eq(insiderRegister.status, status));
+      let q = db.select().from(insiderRegister) as any;
+      if (conds.length) q = q.where(and(...conds));
+      res.json(await q.orderBy(desc(insiderRegister.startDate)));
+    } catch (error) {
+      console.error("Error fetching insiders:", error);
+      res.status(500).json({ error: "فشل في جلب سجل المطلعين" });
+    }
+  });
+
+  app.post("/api/governance/insiders", isAuthenticated, requirePermission("governance_compliance", "create"), async (req, res) => {
+    try {
+      const data = insertInsiderRegisterSchema.parse({ ...req.body, createdBy: getCurrentUserId(req) });
+      const [row] = await db.insert(insiderRegister).values(data).returning();
+      res.status(201).json(row);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      console.error("Error creating insider:", error);
+      res.status(500).json({ error: "فشل في إضافة المطّلع" });
+    }
+  });
+
+  app.patch("/api/governance/insiders/:id", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req, res) => {
+    try {
+      const validated = updateInsiderRegisterSchema.parse(req.body);
+      const [row] = await db.update(insiderRegister)
+        .set({ ...validated, updatedAt: new Date() })
+        .where(eq(insiderRegister.id, parseInt(req.params.id)))
+        .returning();
+      if (!row) return res.status(404).json({ error: "السجل غير موجود" });
+      res.json(row);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      console.error("Error updating insider:", error);
+      res.status(500).json({ error: "فشل في تحديث المطّلع" });
+    }
+  });
+
+  app.delete("/api/governance/insiders/:id", isAuthenticated, requirePermission("governance_compliance", "delete"), async (req, res) => {
+    try {
+      await db.delete(insiderRegister).where(eq(insiderRegister.id, parseInt(req.params.id)));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting insider:", error);
+      res.status(500).json({ error: "فشل في حذف المطّلع" });
+    }
+  });
+
+  app.get("/api/governance/blackout-periods", isAuthenticated, requirePermission("governance_compliance", "view"), async (req, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const conds: any[] = [];
+      if (status) conds.push(eq(insiderBlackoutPeriods.status, status));
+      let q = db.select().from(insiderBlackoutPeriods) as any;
+      if (conds.length) q = q.where(and(...conds));
+      res.json(await q.orderBy(desc(insiderBlackoutPeriods.startDate)));
+    } catch (error) {
+      console.error("Error fetching blackout periods:", error);
+      res.status(500).json({ error: "فشل في جلب فترات الحظر" });
+    }
+  });
+
+  app.post("/api/governance/blackout-periods", isAuthenticated, requirePermission("governance_compliance", "create"), async (req, res) => {
+    try {
+      const data = insertInsiderBlackoutPeriodSchema.parse({ ...req.body, createdBy: getCurrentUserId(req) });
+      const [row] = await db.insert(insiderBlackoutPeriods).values(data).returning();
+      res.status(201).json(row);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      console.error("Error creating blackout period:", error);
+      res.status(500).json({ error: "فشل في إضافة فترة الحظر" });
+    }
+  });
+
+  app.patch("/api/governance/blackout-periods/:id", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req, res) => {
+    try {
+      const validated = updateInsiderBlackoutPeriodSchema.parse(req.body);
+      const [row] = await db.update(insiderBlackoutPeriods)
+        .set({ ...validated, updatedAt: new Date() })
+        .where(eq(insiderBlackoutPeriods.id, parseInt(req.params.id)))
+        .returning();
+      if (!row) return res.status(404).json({ error: "فترة الحظر غير موجودة" });
+      res.json(row);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      console.error("Error updating blackout period:", error);
+      res.status(500).json({ error: "فشل في تحديث فترة الحظر" });
+    }
+  });
+
+  app.delete("/api/governance/blackout-periods/:id", isAuthenticated, requirePermission("governance_compliance", "delete"), async (req, res) => {
+    try {
+      await db.delete(insiderBlackoutPeriods).where(eq(insiderBlackoutPeriods.id, parseInt(req.params.id)));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting blackout period:", error);
+      res.status(500).json({ error: "فشل في حذف فترة الحظر" });
     }
   });
 
@@ -979,6 +1417,13 @@ export function registerGovernanceRoutes(app: Express) {
   app.post("/api/governance/resolutions/:resolutionId/votes", isAuthenticated, requirePermission("governance_voting", "create"), async (req, res) => {
     try {
       const resolutionId = parseInt(req.params.resolutionId);
+      // IMMUTABILITY: no new votes can be cast on a locked resolution — the
+      // tally is frozen at lock time.
+      const [target] = await db.select().from(boardResolutions).where(eq(boardResolutions.id, resolutionId));
+      if (!target) return res.status(404).json({ error: "القرار غير موجود" });
+      if ((target as any).isLocked) {
+        return res.status(423).json({ error: "القرار مقفل ولا يمكن التصويت عليه", code: "RESOLUTION_LOCKED" });
+      }
       const data = insertResolutionVoteSchema.parse({
         ...req.body,
         resolutionId,
@@ -1479,6 +1924,12 @@ export function registerGovernanceRoutes(app: Express) {
         ...req.body,
         votedAt: new Date(),
       });
+      // IMMUTABILITY: refuse votes on locked resolutions.
+      const [target] = await db.select().from(boardResolutions).where(eq(boardResolutions.id, data.resolutionId));
+      if (!target) return res.status(404).json({ error: "القرار غير موجود" });
+      if ((target as any).isLocked) {
+        return res.status(423).json({ error: "القرار مقفل ولا يمكن التصويت عليه", code: "RESOLUTION_LOCKED" });
+      }
       const [vote] = await db.insert(resolutionVotes).values(data).returning();
       
       // Update resolution vote counts
@@ -2271,6 +2722,13 @@ export function registerGovernanceRoutes(app: Express) {
       const userAgent = req.get('User-Agent');
       const voteWeight = voteRecord.voteWeight || 1;
 
+      // IMMUTABILITY: refuse public token votes on locked resolutions.
+      const [targetRes] = await db.select().from(boardResolutions).where(eq(boardResolutions.id, voteRecord.resolutionId));
+      if (!targetRes) return res.status(404).json({ error: "القرار غير موجود" });
+      if ((targetRes as any).isLocked) {
+        return res.status(423).json({ error: "القرار مقفل ولا يمكن التصويت عليه", code: "RESOLUTION_LOCKED" });
+      }
+
       // Atomically claim the token: only update if still pending. Prevents double-voting under concurrency.
       const claimed = await db.update(votingTokens)
         .set({
@@ -2363,7 +2821,7 @@ export function registerGovernanceRoutes(app: Express) {
   });
 
   // Get voting audit log
-  app.get("/api/governance/voting-audit-log", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/voting-audit-log", isAuthenticated, requirePermission("governance_voting", "view"), async (req, res) => {
     try {
       let auditLogs = await db
         .select({

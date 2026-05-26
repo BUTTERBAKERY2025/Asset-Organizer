@@ -8435,6 +8435,11 @@ export const meetingMinutes = pgTable("meeting_minutes", {
   archiveReference: text("archive_reference"),
   pdfUrl: text("pdf_url"),
   notes: text("notes"),
+  // IMMUTABILITY (Saudi Companies Law M/132): once a minutes record is locked
+  // (signed/approved) it MUST NOT be silently editable. Server enforces.
+  isLocked: boolean("is_locked").default(false).notNull(),
+  lockedAt: timestamp("locked_at"),
+  lockedBy: varchar("locked_by").references(() => users.id),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -8483,6 +8488,10 @@ export const boardResolutions = pgTable("board_resolutions", {
   relatedResolutions: integer("related_resolutions").array(),
   expiryDate: date("expiry_date"),
   notes: text("notes"),
+  // IMMUTABILITY — see meetingMinutes note above.
+  isLocked: boolean("is_locked").default(false).notNull(),
+  lockedAt: timestamp("locked_at"),
+  lockedBy: varchar("locked_by").references(() => users.id),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -8502,6 +8511,184 @@ export const insertBoardResolutionSchema = createInsertSchema(boardResolutions).
 
 export type BoardResolution = typeof boardResolutions.$inferSelect;
 export type InsertBoardResolution = z.infer<typeof insertBoardResolutionSchema>;
+
+// ============================================================================
+// قرارات الجمعية العمومية - Assembly Resolutions (OGM + EGM)
+// SEPARATED FROM Board Resolutions: assembly resolutions have legally distinct
+// quorums (¼/½ capital), majority requirements (simple vs ⅔ for EGM), and
+// disclosure obligations. Saudi Companies Law M/132 + CMA Nomu rules.
+// ============================================================================
+export const assemblyResolutions = pgTable("assembly_resolutions", {
+  id: serial("id").primaryKey(),
+  resolutionNumber: text("resolution_number").notNull().unique(),
+  meetingId: integer("meeting_id").references(() => governanceMeetings.id),
+  assemblyType: text("assembly_type").notNull(), // 'ordinary' | 'extraordinary'
+  resolutionType: text("resolution_type").notNull(), // regular | dividend | capital_change | statute_amendment | merger | dissolution | board_election
+  majorityType: text("majority_type").default("simple").notNull(), // 'simple' | 'two_thirds' | 'three_quarters'
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  category: text("category"),
+  priority: text("priority").default("normal"),
+  proposedBy: varchar("proposed_by").references(() => users.id),
+  proposedAt: timestamp("proposed_at").notNull(),
+  votingRequired: boolean("voting_required").default(true),
+  votingDeadline: timestamp("voting_deadline"),
+  forVotes: integer("for_votes").default(0),
+  againstVotes: integer("against_votes").default(0),
+  abstainVotes: integer("abstain_votes").default(0),
+  totalVotes: integer("total_votes").default(0),
+  // Share-weighted tallies (assemblies vote by shares, not heads)
+  forShares: numeric("for_shares", { precision: 18, scale: 4 }).default("0"),
+  againstShares: numeric("against_shares", { precision: 18, scale: 4 }).default("0"),
+  abstainShares: numeric("abstain_shares", { precision: 18, scale: 4 }).default("0"),
+  requiredMajority: numeric("required_majority", { precision: 5, scale: 2 }).default("50.00"),
+  quorumCapitalPct: numeric("quorum_capital_pct", { precision: 5, scale: 2 }), // % of capital present
+  status: text("status").default("draft"),
+  approvedAt: timestamp("approved_at"),
+  implementationDeadline: date("implementation_deadline"),
+  implementationStatus: text("implementation_status").default("pending"),
+  implementedAt: timestamp("implemented_at"),
+  responsiblePerson: varchar("responsible_person").references(() => users.id),
+  financialImpact: numeric("financial_impact", { precision: 15, scale: 2 }),
+  attachments: jsonb("attachments"),
+  relatedResolutions: integer("related_resolutions").array(),
+  expiryDate: date("expiry_date"),
+  notes: text("notes"),
+  isLocked: boolean("is_locked").default(false).notNull(),
+  lockedAt: timestamp("locked_at"),
+  lockedBy: varchar("locked_by").references(() => users.id),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_assembly_resolutions_meeting").on(table.meetingId),
+  index("idx_assembly_resolutions_assembly_type").on(table.assemblyType),
+  index("idx_assembly_resolutions_status").on(table.status),
+  index("idx_assembly_resolutions_type").on(table.resolutionType),
+]);
+export const insertAssemblyResolutionSchema = createInsertSchema(assemblyResolutions).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type AssemblyResolution = typeof assemblyResolutions.$inferSelect;
+export type InsertAssemblyResolution = z.infer<typeof insertAssemblyResolutionSchema>;
+
+export const assemblyResolutionVotes = pgTable("assembly_resolution_votes", {
+  id: serial("id").primaryKey(),
+  resolutionId: integer("resolution_id").notNull().references(() => assemblyResolutions.id, { onDelete: "cascade" }),
+  shareholderId: integer("shareholder_id").references(() => shareholders.id),
+  voterName: text("voter_name").notNull(),
+  vote: text("vote").notNull(),
+  sharesVoted: numeric("shares_voted", { precision: 18, scale: 4 }),
+  votedAt: timestamp("voted_at").defaultNow().notNull(),
+  voteMethod: text("vote_method").default("in_meeting"),
+  proxyVoteId: integer("proxy_vote_id"),
+  ipAddress: text("ip_address"),
+  deviceInfo: text("device_info"),
+  signatureUrl: text("signature_url"),
+  comments: text("comments"),
+  isValid: boolean("is_valid").default(true),
+  invalidationReason: text("invalidation_reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_assembly_votes_resolution").on(table.resolutionId),
+  index("idx_assembly_votes_shareholder").on(table.shareholderId),
+]);
+export const insertAssemblyResolutionVoteSchema = createInsertSchema(assemblyResolutionVotes).omit({
+  id: true, createdAt: true,
+});
+export type AssemblyResolutionVote = typeof assemblyResolutionVotes.$inferSelect;
+export type InsertAssemblyResolutionVote = z.infer<typeof insertAssemblyResolutionVoteSchema>;
+
+export const assemblyResolutionSignatures = pgTable("assembly_resolution_signatures", {
+  id: serial("id").primaryKey(),
+  resolutionId: integer("resolution_id").notNull().references(() => assemblyResolutions.id, { onDelete: "cascade" }),
+  shareholderId: integer("shareholder_id").references(() => shareholders.id, { onDelete: "cascade" }),
+  signerName: text("signer_name"),
+  signatureToken: text("signature_token").notNull().unique(),
+  signatureData: text("signature_data"),
+  signatureType: text("signature_type").default("draw"),
+  status: text("status").default("pending").notNull(),
+  signedAt: timestamp("signed_at"),
+  declinedAt: timestamp("declined_at"),
+  declineReason: text("decline_reason"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  expiresAt: timestamp("expires_at"),
+  reminderSentAt: timestamp("reminder_sent_at"),
+  reminderCount: integer("reminder_count").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_assembly_sigs_resolution").on(table.resolutionId),
+  index("idx_assembly_sigs_shareholder").on(table.shareholderId),
+]);
+export const insertAssemblyResolutionSignatureSchema = createInsertSchema(assemblyResolutionSignatures).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type AssemblyResolutionSignature = typeof assemblyResolutionSignatures.$inferSelect;
+export type InsertAssemblyResolutionSignature = z.infer<typeof insertAssemblyResolutionSignatureSchema>;
+
+// ============================================================================
+// سجل المطلعين - Insider Register (CMA / Nomu listing requirement)
+// ============================================================================
+export const insiderRegister = pgTable("insider_register", {
+  id: serial("id").primaryKey(),
+  fullName: text("full_name").notNull(),
+  nationalId: text("national_id"),
+  position: text("position").notNull(), // board_member | senior_executive | auditor | consultant | relative_of_insider | other
+  relationshipTo: integer("relationship_to"), // FK loop → another insider_register row
+  relatedBoardMemberId: integer("related_board_member_id").references(() => boardMembers.id),
+  relatedUserId: varchar("related_user_id").references(() => users.id),
+  email: text("email"),
+  phone: text("phone"),
+  notificationMethod: text("notification_method").default("email"),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date"),
+  reasonAdded: text("reason_added"),
+  reasonRemoved: text("reason_removed"),
+  acknowledgmentSigned: boolean("acknowledgment_signed").default(false).notNull(),
+  acknowledgmentDate: date("acknowledgment_date"),
+  acknowledgmentDocUrl: text("acknowledgment_doc_url"),
+  status: text("status").default("active").notNull(),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_insider_register_status").on(table.status),
+  index("idx_insider_register_position").on(table.position),
+  index("idx_insider_register_member").on(table.relatedBoardMemberId),
+]);
+export const insertInsiderRegisterSchema = createInsertSchema(insiderRegister).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type InsiderRegister = typeof insiderRegister.$inferSelect;
+export type InsertInsiderRegister = z.infer<typeof insertInsiderRegisterSchema>;
+
+export const insiderBlackoutPeriods = pgTable("insider_blackout_periods", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  periodType: text("period_type").notNull(), // pre_earnings | pre_disclosure | event_specific | other
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  relatedDisclosureId: integer("related_disclosure_id"),
+  description: text("description"),
+  appliesToAll: boolean("applies_to_all").default(true).notNull(),
+  specificInsiderIds: integer("specific_insider_ids").array(),
+  notificationSentAt: timestamp("notification_sent_at"),
+  status: text("status").default("active").notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_blackout_status").on(table.status),
+  index("idx_blackout_dates").on(table.startDate, table.endDate),
+]);
+export const insertInsiderBlackoutPeriodSchema = createInsertSchema(insiderBlackoutPeriods).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type InsiderBlackoutPeriod = typeof insiderBlackoutPeriods.$inferSelect;
+export type InsertInsiderBlackoutPeriod = z.infer<typeof insertInsiderBlackoutPeriodSchema>;
 
 // التصويت على القرارات - Resolution Votes
 export const resolutionVotes = pgTable("resolution_votes", {
