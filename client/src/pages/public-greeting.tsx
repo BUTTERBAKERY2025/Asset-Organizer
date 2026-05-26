@@ -399,31 +399,71 @@ export default function PublicGreetingPage() {
   const validCustomSound = effectiveAudioUrl !== null;
 
   // Auto-play audio (handle browser autoplay restrictions)
+  // Strategy: try immediately, and if blocked, register a one-time global
+  // interaction listener (pointerdown/touchstart/keydown) so the FIRST user
+  // gesture anywhere on the page unlocks playback — no need to find the
+  // small audio button.
   useEffect(() => {
     if (!data || !revealed || !data.soundEnabled) return;
     let stopTimer: ReturnType<typeof setTimeout> | null = null;
-    const tryAutoplay = async () => {
+    let disposed = false;
+    const playNow = async (): Promise<boolean> => {
       if (validCustomSound && audioRef.current) {
         try {
+          audioRef.current.currentTime = 0;
           await audioRef.current.play();
+          if (disposed) return true;
           setAudioPlaying(true);
+          setAudioBlocked(false);
+          return true;
         } catch {
-          setAudioBlocked(true);
+          return false;
         }
       } else {
         const r = playBuiltinTune(data.soundType || "default");
         if (r.ok) {
+          if (disposed) return true;
           setAudioPlaying(true);
+          setAudioBlocked(false);
           stopTimer = setTimeout(() => setAudioPlaying(false), r.durationMs);
-        } else {
-          setAudioBlocked(true);
+          return true;
         }
+        return false;
       }
     };
-    const t = setTimeout(tryAutoplay, 800);
+    const removeListeners = () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("touchstart", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+    const unlock = async () => {
+      if (disposed) return;
+      const ok = await playNow();
+      if (ok) removeListeners();
+    };
+    const bootstrap = async () => {
+      const ok = await playNow();
+      if (disposed) return;
+      if (!ok) {
+        setAudioBlocked(true);
+        // Listeners are idempotent — adding twice is harmless because the
+        // handler reference is stable. Cleanup removes them unconditionally.
+        window.addEventListener("pointerdown", unlock);
+        window.addEventListener("touchstart", unlock);
+        window.addEventListener("keydown", unlock);
+      }
+    };
+    bootstrap();
+    const t = setTimeout(() => {
+      if (disposed) return;
+      if (audioRef.current && audioRef.current.paused) bootstrap();
+    }, 600);
     return () => {
+      disposed = true;
       clearTimeout(t);
       if (stopTimer) clearTimeout(stopTimer);
+      // Always remove (no-op if never added) to harden against async races.
+      removeListeners();
     };
   }, [data, revealed, validCustomSound]);
 
@@ -759,28 +799,44 @@ export default function PublicGreetingPage() {
                 <p className="text-xs opacity-60 flex items-center gap-1">
                   صُنعت بـ <Heart className="w-3 h-3 fill-current" style={{ color: accent }} /> خصيصاً لك
                 </p>
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  <Button
-                    onClick={handleShare}
-                    variant="outline"
-                    size="sm"
-                    className="rounded-full border-2 hover:scale-105 transition-transform"
-                    style={{ borderColor: accent, color: accent, backgroundColor: "transparent" }}
-                    data-testid="button-share"
-                  >
-                    <Share2 className="w-4 h-4 ml-2" />
-                    مشاركة
-                  </Button>
+                {/* Prominent WhatsApp share — primary call to action */}
+                <motion.div
+                  className="flex flex-col items-center gap-2 w-full"
+                  animate={{ scale: [1, 1.04, 1] }}
+                  transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                >
                   <Button
                     onClick={handleWhatsappShare}
-                    size="sm"
-                    className="rounded-full hover:scale-105 transition-transform bg-emerald-500 hover:bg-emerald-600 text-white"
+                    className="rounded-full px-7 py-6 text-base sm:text-lg font-bold text-white shadow-2xl flex items-center gap-3 hover:scale-105 transition-transform border-2 border-white/40"
+                    style={{
+                      background: "linear-gradient(135deg,#25D366 0%,#128C7E 100%)",
+                      boxShadow: "0 12px 32px rgba(37,211,102,0.5), 0 0 0 4px rgba(37,211,102,0.18)",
+                    }}
                     data-testid="button-share-whatsapp"
                   >
-                    <Share2 className="w-4 h-4 ml-2" />
-                    واتساب
+                    {/* WhatsApp brand glyph */}
+                    <svg viewBox="0 0 32 32" className="w-6 h-6 sm:w-7 sm:h-7 fill-current" aria-hidden="true">
+                      <path d="M19.11 17.205c-.372 0-1.088 1.39-1.518 1.39a.63.63 0 0 1-.315-.1c-.802-.402-1.504-.817-2.163-1.447-.545-.516-1.146-1.29-1.46-1.963a.426.426 0 0 1-.073-.215c0-.33.99-.945.99-1.49 0-.143-.73-2.09-.832-2.335-.143-.372-.214-.487-.6-.487-.187 0-.36-.043-.53-.043-.302 0-.53.115-.746.315-.688.645-1.032 1.318-1.06 2.264v.114c-.015.99.472 1.977 1.017 2.78 1.23 1.82 2.506 3.41 4.554 4.34.616.287 2.035.888 2.722.888.817 0 2.15-.515 2.478-1.318.13-.33.244-.99.244-1.348 0-.082-.014-.214-.063-.328-.15-.36-1.776-1.026-2.105-1.026zm-2.91 7.515c-1.747 0-3.48-.53-4.942-1.49l-3.453 1.118 1.132-3.355A8.961 8.961 0 0 1 7.245 16c0-4.955 4.005-8.96 8.957-8.96S25.16 11.045 25.16 16s-4.006 8.72-8.957 8.72zm0-19.7C10.097 5.02 5.18 9.937 5.18 16c0 1.964.514 3.92 1.49 5.625L5 27.04l5.55-1.796a10.97 10.97 0 0 0 16.59-9.244c0-6.062-4.92-10.98-10.98-10.98z"/>
+                    </svg>
+                    شارك على واتساب
                   </Button>
-                </div>
+                  <p className="text-sm font-semibold text-center" style={{ color: accent }}>
+                    شارك فرحة العيد 🎉
+                  </p>
+                </motion.div>
+
+                {/* Secondary: native share / copy link */}
+                <Button
+                  onClick={handleShare}
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full border-2 hover:scale-105 transition-transform"
+                  style={{ borderColor: accent, color: accent, backgroundColor: "transparent" }}
+                  data-testid="button-share"
+                >
+                  <Share2 className="w-4 h-4 ml-2" />
+                  مشاركة أخرى أو نسخ الرابط
+                </Button>
               </motion.div>
             </div>
           </motion.div>
