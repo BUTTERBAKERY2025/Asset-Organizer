@@ -55,8 +55,7 @@ type ThemeConfig = {
   defaultAudio?: string;
 };
 
-// Eid Al-Adha slideshow scenes (Butter Bakery branded sheep illustrations
-// + cinematic café scenes extracted from second video)
+// Eid Al-Adha slideshow scenes (10 Butter Bakery cinematic 16:9 frames)
 const EID_ADHA_FRAMES = [
   "/eid-adha/scene_01.jpg",
   "/eid-adha/scene_02.jpg",
@@ -68,16 +67,10 @@ const EID_ADHA_FRAMES = [
   "/eid-adha/scene_08.jpg",
   "/eid-adha/scene_09.jpg",
   "/eid-adha/scene_10.jpg",
-  "/eid-adha/scene_11.jpg",
-  "/eid-adha/scene_12.jpg",
-  "/eid-adha/scene_13.jpg",
-  "/eid-adha/scene_14.jpg",
-  "/eid-adha/scene_15.jpg",
-  "/eid-adha/scene_16.jpg",
 ];
 
 const THEME_CONFIG: Record<Theme, ThemeConfig> = {
-  eid_adha:    { decorations: ["🐑","🕋","🎈","🌙","✨","🐏","🎊","☪️","💫"], bg: "linear-gradient(135deg,#fef3c7 0%,#fde68a 40%,#fbbf24 100%)", bigEmoji: "🕋", tagline: "عيد أضحى مبارك", accent: "#b8860b", pattern: "geometric", slideshow: EID_ADHA_FRAMES, defaultAudio: "/eid-adha/combined.mp3" },
+  eid_adha:    { decorations: ["🐑","🕋","🎈","🌙","✨","🐏","🎊","☪️","💫"], bg: "linear-gradient(135deg,#fef3c7 0%,#fde68a 40%,#fbbf24 100%)", bigEmoji: "🕋", tagline: "عيد أضحى مبارك", accent: "#b8860b", pattern: "geometric", slideshow: EID_ADHA_FRAMES, defaultAudio: "/eid-adha/song.mp3" },
   eid_fitr:    { decorations: ["🌙","🏮","✨","🎈","⭐","🕌","🎊","💫","☪️"], bg: "linear-gradient(135deg,#fef3c7 0%,#fcd34d 50%,#f59e0b 100%)", bigEmoji: "🌙", tagline: "عيد فطر سعيد", accent: "#d97706", pattern: "stars" },
   ramadan:     { decorations: ["🌙","🏮","⭐","✨","🕌","💫"], bg: "linear-gradient(135deg,#1e1b4b 0%,#4c1d95 50%,#7c3aed 100%)", bigEmoji: "🌙", tagline: "رمضان كريم", accent: "#fbbf24", pattern: "stars" },
   national:    { decorations: ["🇸🇦","🌴","🎆","✨","💚","⭐","🐪"], bg: "linear-gradient(135deg,#064e3b 0%,#065f46 50%,#047857 100%)", bigEmoji: "🇸🇦", tagline: "هي لنا دار", accent: "#fbbf24", pattern: "diamonds" },
@@ -275,8 +268,12 @@ function isValidAudioUrl(url: string | null | undefined): boolean {
 
 // Animated slideshow component — cycles through frames with fade transition.
 // Used for richer theme cards (e.g. eid_adha shows Butter Bakery sheep scenes).
-function ThemeSlideshow({ frames, accent, intervalMs = 3200 }: { frames: string[]; accent: string; intervalMs?: number }) {
+function ThemeSlideshow({ frames, accent, intervalMs = 4000 }: { frames: string[]; accent: string; intervalMs?: number }) {
   const [idx, setIdx] = useState(0);
+  // Preload all frames once so transitions are instant (avoids first-render flicker)
+  useEffect(() => {
+    frames.forEach(src => { const img = new Image(); img.src = src; });
+  }, [frames]);
   useEffect(() => {
     if (frames.length < 2) return;
     const t = setInterval(() => setIdx(i => (i + 1) % frames.length), intervalMs);
@@ -284,12 +281,12 @@ function ThemeSlideshow({ frames, accent, intervalMs = 3200 }: { frames: string[
   }, [frames.length, intervalMs]);
   return (
     <div
-      className="relative mx-auto mb-4 rounded-2xl overflow-hidden shadow-2xl border-4"
+      className="relative mx-auto mb-5 rounded-3xl overflow-hidden shadow-2xl"
       style={{
-        borderColor: accent,
-        width: "min(96vw, 760px)",
+        width: "min(96vw, 820px)",
         aspectRatio: "16/9",
-        boxShadow: `0 24px 70px ${accent}66, 0 0 0 2px ${accent}33`,
+        border: `5px solid ${accent}`,
+        boxShadow: `0 30px 90px ${accent}77, 0 0 0 2px #ffffff66, inset 0 0 0 1px #ffffff33`,
       }}
       data-testid="theme-slideshow"
     >
@@ -299,24 +296,26 @@ function ThemeSlideshow({ frames, accent, intervalMs = 3200 }: { frames: string[
           src={frames[idx]}
           alt=""
           className="absolute inset-0 w-full h-full object-cover"
-          initial={{ opacity: 0, scale: 1.08 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          transition={{ duration: 0.9, ease: "easeInOut" }}
+          initial={{ opacity: 0, scale: 1.12 }}
+          animate={{ opacity: 1, scale: 1.02 }}
+          exit={{ opacity: 0, scale: 0.96 }}
+          transition={{ opacity: { duration: 1.0, ease: "easeInOut" }, scale: { duration: intervalMs / 1000, ease: "linear" } }}
           loading="eager"
         />
       </AnimatePresence>
+      {/* Subtle vignette + bottom gradient for dot legibility */}
       <div
         className="absolute inset-0 pointer-events-none"
-        style={{ background: `linear-gradient(180deg, transparent 0%, transparent 70%, ${accent}33 100%)` }}
+        style={{ background: `radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.18) 100%), linear-gradient(180deg, transparent 0%, transparent 65%, rgba(0,0,0,0.45) 100%)` }}
       />
-      <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 z-10">
+      {/* Frame counter dots */}
+      <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5 z-10">
         {frames.map((_, i) => (
           <span
             key={i}
             className="rounded-full transition-all"
             style={{
-              width: i === idx ? 20 : 6,
+              width: i === idx ? 22 : 6,
               height: 6,
               backgroundColor: i === idx ? "#ffffff" : "rgba(255,255,255,0.55)",
               boxShadow: "0 1px 3px rgba(0,0,0,0.5)",

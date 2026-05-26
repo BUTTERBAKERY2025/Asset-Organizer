@@ -35037,7 +35037,7 @@ export async function registerRoutes(
               haystack.includes("🐏") ||
               haystack.includes("🕋")
             ) {
-              imageUrl = `${baseUrl}/eid-adha/hero.png`;
+              imageUrl = `${baseUrl}/eid-adha/hero.jpg`;
             }
           }
         }
