@@ -112,6 +112,27 @@ function clearPendingFromStorage(journalId: number | string) {
   }
 }
 
+// apiRequest throws `Error("<status>: <body>")` on non-2xx responses. Most of
+// our endpoints return JSON like `{ error: "..." }`. Pull that human message
+// out so the user sees the actual reason (e.g. duplicate-journal 409) instead
+// of a generic "فشل في إنشاء اليومية".
+function extractServerError(err: unknown): string | null {
+  if (!err) return null;
+  const msg = err instanceof Error ? err.message : String(err);
+  // Strip leading "<status>: " prefix from apiRequest
+  const stripped = msg.replace(/^\d{3}:\s*/, "");
+  // Try parsing JSON body
+  try {
+    const parsed = JSON.parse(stripped);
+    if (parsed && typeof parsed === "object") {
+      return parsed.error || parsed.message || null;
+    }
+  } catch {
+    // not JSON — fall through and return the raw text
+  }
+  return stripped || null;
+}
+
 const PAYMENT_CATEGORIES = {
   cash: { label: "نقدي", color: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300" },
   cards: { label: "بطاقات وشبكة", color: "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300" },
@@ -651,8 +672,12 @@ export default function CashierJournalFormPage() {
         setLocation("/cashier-journals");
       }
     },
-    onError: () => {
-      toast({ title: "خطأ", description: "فشل في إنشاء اليومية", variant: "destructive" });
+    onError: (err: any) => {
+      toast({
+        title: "تعذّر حفظ اليومية",
+        description: extractServerError(err) || "فشل في إنشاء اليومية. تحقق من الاتصال وحاول مجدداً.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -664,8 +689,12 @@ export default function CashierJournalFormPage() {
       toast({ title: "تم تحديث اليومية بنجاح" });
       setLocation("/cashier-journals");
     },
-    onError: () => {
-      toast({ title: "خطأ", description: "فشل في تحديث اليومية", variant: "destructive" });
+    onError: (err: any) => {
+      toast({
+        title: "تعذّر تحديث اليومية",
+        description: extractServerError(err) || "فشل في تحديث اليومية. تحقق من الاتصال وحاول مجدداً.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -924,6 +953,24 @@ export default function CashierJournalFormPage() {
   };
 
   const handleSave = () => {
+    // Field-by-field validation with explicit, actionable error messages so the
+    // user knows EXACTLY which field to fill. Previously the Save button was
+    // simply disabled when these failed, leaving the user with a dead button
+    // and no feedback — the single most-reported bug on this form.
+    const missing: string[] = [];
+    if (!formData.branchId) missing.push("الفرع");
+    if (!formData.cashierName || !formData.cashierName.trim()) missing.push("اسم الكاشير");
+    if (!formData.journalDate) missing.push("التاريخ");
+    if (!(formData.totalSales > 0)) missing.push("إجمالي المبيعات (يجب أن يكون أكبر من صفر)");
+    if (missing.length > 0) {
+      toast({
+        title: "بيانات ناقصة",
+        description: `يرجى استكمال: ${missing.join("، ")}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!hasSignature && !isEdit) {
       toast({ 
         title: "التوقيع الإلكتروني مطلوب", 
@@ -2814,7 +2861,7 @@ export default function CashierJournalFormPage() {
                   <Button
                     className="w-full gap-2 h-12"
                     onClick={handleSave}
-                    disabled={createMutation.isPending || updateMutation.isPending || !canSave}
+                    disabled={createMutation.isPending || updateMutation.isPending}
                     data-testid="button-save"
                   >
                     <Save className="w-4 h-4" />
@@ -2982,7 +3029,7 @@ export default function CashierJournalFormPage() {
                     size="default"
                     className="gap-1.5 h-9 px-4 text-sm"
                     onClick={handleSave}
-                    disabled={createMutation.isPending || updateMutation.isPending || !canSave}
+                    disabled={createMutation.isPending || updateMutation.isPending}
                     data-testid="button-save-sticky"
                   >
                     <Save className="w-4 h-4" />
