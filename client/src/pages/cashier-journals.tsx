@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -72,11 +72,25 @@ export default function CashierJournalsPage() {
   const [dateTo, setDateTo] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
 
+  // Initialize the branch filter ONCE per mount. Previously this effect would
+  // re-run any time userBranchId/canSelectBranch resolved (auth race) and
+  // OVERWRITE a user's manual selection — silently hiding journals from the
+  // branch they had explicitly picked. We now set it once, then never again.
+  //
+  // For users who CAN select branches (admins/multi-branch managers) we
+  // default to "all" so a freshly-created journal for ANY branch is visible
+  // immediately. This was the #1 root cause of the "saved but doesn't show
+  // up" complaint: an admin would create a journal for branch B, but the
+  // list defaulted to branch A (their primary) and the journal vanished.
+  const branchFilterInitialized = useRef(false);
   useEffect(() => {
-    if (userBranchId) {
-      setBranchFilter(userBranchId);
-    } else if (canSelectBranch) {
+    if (branchFilterInitialized.current) return;
+    if (canSelectBranch) {
       setBranchFilter("all");
+      branchFilterInitialized.current = true;
+    } else if (userBranchId) {
+      setBranchFilter(userBranchId);
+      branchFilterInitialized.current = true;
     }
   }, [userBranchId, canSelectBranch]);
 

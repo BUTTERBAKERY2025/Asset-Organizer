@@ -641,7 +641,18 @@ export default function CashierJournalFormPage() {
         }
       }
 
-      queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals"] });
+      // Force a hard refetch (not just invalidation) so the list page sees the
+      // new journal even if its query is within staleTime. Without this, users
+      // were saving journals and immediately not seeing them because the list's
+      // 30s stale cache served stale data on remount.
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/cashier-journals"],
+        refetchType: "all",
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/cashier-journals/stats/summary"],
+        refetchType: "all",
+      });
 
       if (failedAttachments.length > 0 && persistenceFailed) {
         // Worst case: uploads failed AND we can't persist. Keep them in
@@ -668,8 +679,16 @@ export default function CashierJournalFormPage() {
         });
         setLocation(`/cashier-journals/${createdJournal.id}`);
       } else {
-        toast({ title: "تم إنشاء اليومية بنجاح" });
-        setLocation("/cashier-journals");
+        // CRITICAL: Navigate to the detail page (not the list) so the user gets
+        // INSTANT proof the journal saved — independent of any list-page filters
+        // (branch, cashier, date) that may hide it. Previously users were
+        // redirected to the list, and admins who created a journal for a branch
+        // different from their default branchFilter would see "اليومية لا تظهر".
+        toast({
+          title: "تم إنشاء اليومية بنجاح",
+          description: `رقم اليومية: ${createdJournal.id} — يمكنك الآن تعديلها أو ترحيلها`,
+        });
+        setLocation(`/cashier-journals/${createdJournal.id}`);
       }
     },
     onError: (err: any) => {
