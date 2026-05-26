@@ -55,7 +55,8 @@ type ThemeConfig = {
   defaultAudio?: string;
 };
 
-// Eid Al-Adha slideshow scenes (Butter Bakery branded sheep illustrations)
+// Eid Al-Adha slideshow scenes (Butter Bakery branded sheep illustrations
+// + cinematic café scenes extracted from second video)
 const EID_ADHA_FRAMES = [
   "/eid-adha/scene_01.jpg",
   "/eid-adha/scene_02.jpg",
@@ -65,10 +66,18 @@ const EID_ADHA_FRAMES = [
   "/eid-adha/scene_06.jpg",
   "/eid-adha/scene_07.jpg",
   "/eid-adha/scene_08.jpg",
+  "/eid-adha/scene_09.jpg",
+  "/eid-adha/scene_10.jpg",
+  "/eid-adha/scene_11.jpg",
+  "/eid-adha/scene_12.jpg",
+  "/eid-adha/scene_13.jpg",
+  "/eid-adha/scene_14.jpg",
+  "/eid-adha/scene_15.jpg",
+  "/eid-adha/scene_16.jpg",
 ];
 
 const THEME_CONFIG: Record<Theme, ThemeConfig> = {
-  eid_adha:    { decorations: ["🐑","🕋","🎈","🌙","✨","🐏","🎊","☪️","💫"], bg: "linear-gradient(135deg,#fef3c7 0%,#fde68a 40%,#fbbf24 100%)", bigEmoji: "🕋", tagline: "عيد أضحى مبارك", accent: "#b8860b", pattern: "geometric", slideshow: EID_ADHA_FRAMES, defaultAudio: "/eid-adha/song.mp3" },
+  eid_adha:    { decorations: ["🐑","🕋","🎈","🌙","✨","🐏","🎊","☪️","💫"], bg: "linear-gradient(135deg,#fef3c7 0%,#fde68a 40%,#fbbf24 100%)", bigEmoji: "🕋", tagline: "عيد أضحى مبارك", accent: "#b8860b", pattern: "geometric", slideshow: EID_ADHA_FRAMES, defaultAudio: "/eid-adha/combined.mp3" },
   eid_fitr:    { decorations: ["🌙","🏮","✨","🎈","⭐","🕌","🎊","💫","☪️"], bg: "linear-gradient(135deg,#fef3c7 0%,#fcd34d 50%,#f59e0b 100%)", bigEmoji: "🌙", tagline: "عيد فطر سعيد", accent: "#d97706", pattern: "stars" },
   ramadan:     { decorations: ["🌙","🏮","⭐","✨","🕌","💫"], bg: "linear-gradient(135deg,#1e1b4b 0%,#4c1d95 50%,#7c3aed 100%)", bigEmoji: "🌙", tagline: "رمضان كريم", accent: "#fbbf24", pattern: "stars" },
   national:    { decorations: ["🇸🇦","🌴","🎆","✨","💚","⭐","🐪"], bg: "linear-gradient(135deg,#064e3b 0%,#065f46 50%,#047857 100%)", bigEmoji: "🇸🇦", tagline: "هي لنا دار", accent: "#fbbf24", pattern: "diamonds" },
@@ -266,7 +275,7 @@ function isValidAudioUrl(url: string | null | undefined): boolean {
 
 // Animated slideshow component — cycles through frames with fade transition.
 // Used for richer theme cards (e.g. eid_adha shows Butter Bakery sheep scenes).
-function ThemeSlideshow({ frames, accent, intervalMs = 3500 }: { frames: string[]; accent: string; intervalMs?: number }) {
+function ThemeSlideshow({ frames, accent, intervalMs = 3200 }: { frames: string[]; accent: string; intervalMs?: number }) {
   const [idx, setIdx] = useState(0);
   useEffect(() => {
     if (frames.length < 2) return;
@@ -278,9 +287,9 @@ function ThemeSlideshow({ frames, accent, intervalMs = 3500 }: { frames: string[
       className="relative mx-auto mb-4 rounded-2xl overflow-hidden shadow-2xl border-4"
       style={{
         borderColor: accent,
-        width: "min(92vw, 520px)",
-        aspectRatio: "632/255",
-        boxShadow: `0 20px 60px ${accent}55, 0 0 0 2px ${accent}33`,
+        width: "min(96vw, 760px)",
+        aspectRatio: "16/9",
+        boxShadow: `0 24px 70px ${accent}66, 0 0 0 2px ${accent}33`,
       }}
       data-testid="theme-slideshow"
     >
