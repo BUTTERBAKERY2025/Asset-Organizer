@@ -48,6 +48,7 @@ import {
   Loader2,
   Share2,
   Trash2,
+  Lock,
 } from "lucide-react";
 import type { BoardResolution, BoardMember } from "@shared/schema";
 import { exportToExcel, exportToCSV, printAsPDF } from "@/lib/export-utils";
@@ -249,6 +250,29 @@ export default function ResolutionsPage() {
     },
   });
 
+  const [lockResolutionId, setLockResolutionId] = useState<number | null>(null);
+  const lockMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/governance/resolutions/${id}/lock`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || "Failed to lock resolution");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/resolutions"] });
+      setLockResolutionId(null);
+      toast({ title: "تم قفل القرار نهائياً", description: "أصبح غير قابل للتعديل أو الحذف أو التصويت" });
+    },
+    onError: (e: any) => {
+      toast({ title: "فشل قفل القرار", description: e?.message, variant: "destructive" });
+    },
+  });
+
   const handleEditSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editingResolution) return;
@@ -263,6 +287,11 @@ export default function ResolutionsPage() {
       status: formData.get("status") as string,
       implementationDeadline: deadlineStr || undefined,
     };
+    if ((editingResolution as any).isLocked) {
+      toast({ title: "القرار مقفل ولا يمكن تعديله", variant: "destructive" });
+      setShowEditDialog(false);
+      return;
+    }
     updateMutation.mutate({ id: editingResolution.id, data });
   };
 
@@ -581,6 +610,11 @@ export default function ResolutionsPage() {
                             <Badge variant="outline">
                               {categories.find(c => c.value === resolution.category)?.label}
                             </Badge>
+                            {(resolution as any).isLocked && (
+                              <Badge className="bg-amber-100 text-amber-800 gap-1" data-testid={`badge-locked-${resolution.id}`}>
+                                <Lock className="h-3 w-3" /> مقفل
+                              </Badge>
+                            )}
                           </div>
                           <h3 className="font-semibold text-lg mb-2">{resolution.title}</h3>
                           <p className="text-sm text-gray-600 line-clamp-2 mb-3">{resolution.description}</p>
@@ -1252,15 +1286,55 @@ export default function ResolutionsPage() {
                             variant="outline"
                             size="sm"
                             className="gap-1"
+                            disabled={(resolution as any).isLocked}
+                            title={(resolution as any).isLocked ? "القرار مقفل ولا يمكن تعديله" : ""}
                             onClick={() => {
                               setEditingResolution(resolution);
                               setShowEditDialog(true);
                             }}
+                            data-testid={`btn-edit-${resolution.id}`}
                           >
                             <Edit className="h-4 w-4" />
                             تعديل
                           </Button>
-                          {isAdmin && (
+                          {isAdmin && !(resolution as any).isLocked && (resolution.status === "approved" || resolution.status === "implemented") && (
+                            <AlertDialog open={lockResolutionId === resolution.id} onOpenChange={(open) => !open && setLockResolutionId(null)}>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-1 text-amber-700 border-amber-300 hover:bg-amber-50"
+                                  onClick={() => setLockResolutionId(resolution.id)}
+                                  data-testid={`btn-lock-${resolution.id}`}
+                                >
+                                  <Lock className="h-4 w-4" />
+                                  قفل نهائي
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent dir="rtl">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle className="flex items-center gap-2">
+                                    <Lock className="h-5 w-5 text-amber-600" /> قفل القرار {resolution.resolutionNumber}
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    بعد القفل لن يتمكن أي مستخدم — حتى المدير — من تعديل القرار أو حذفه أو تعديل أصوات التصويت عليه.
+                                    هذا إجراء مطلوب نظاماً للقرارات المعتمدة (الامتثال لهيئة السوق المالية ونظام الشركات).
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>تراجع</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    className="bg-amber-600 hover:bg-amber-700"
+                                    onClick={() => lockMutation.mutate(resolution.id)}
+                                    disabled={lockMutation.isPending}
+                                  >
+                                    {lockMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin ml-2" />جاري القفل…</> : "نعم، اقفل نهائياً"}
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                          {isAdmin && !(resolution as any).isLocked && (
                             <AlertDialog open={deleteResolutionId === resolution.id} onOpenChange={(open) => !open && setDeleteResolutionId(null)}>
                               <AlertDialogTrigger asChild>
                                 <Button
@@ -1439,6 +1513,15 @@ export default function ResolutionsPage() {
                   </CardContent>
                 </Card>
 
+                {(selectedResolution as any).isLocked ? (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-2" data-testid="locked-notice-workflow">
+                    <Lock className="h-5 w-5 text-amber-700 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm">
+                      <p className="font-semibold text-amber-900">القرار مقفل نهائياً</p>
+                      <p className="text-amber-800 mt-1">لا يمكن تغيير حالة القرار أو إعادة فتح التصويت بعد القفل النظامي.</p>
+                    </div>
+                  </div>
+                ) : (
                 <div className="flex gap-2 flex-wrap">
                   {selectedResolution.status === "draft" && (
                     <Button 
@@ -1522,6 +1605,7 @@ export default function ResolutionsPage() {
                     </Button>
                   )}
                 </div>
+                )}
               </div>
             )}
             <DialogFooter>
@@ -1540,6 +1624,14 @@ export default function ResolutionsPage() {
             </DialogHeader>
             {selectedResolution && (
               <div className="space-y-4">
+                {(selectedResolution as any).isLocked && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2" data-testid="locked-notice-signatures">
+                    <Lock className="h-5 w-5 text-amber-700 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-amber-900">
+                      القرار مقفل نهائياً — يمكن عرض التوقيعات القائمة فقط، ولا يمكن إنشاء طلبات توقيع جديدة.
+                    </p>
+                  </div>
+                )}
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
                   <AlertTriangle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
                   <p className="text-sm text-blue-800">
@@ -1557,7 +1649,8 @@ export default function ResolutionsPage() {
                     <Button
                       className="bg-emerald-600 hover:bg-emerald-700 gap-2"
                       onClick={() => createSignatureRequestsMutation.mutate(selectedResolution.id)}
-                      disabled={createSignatureRequestsMutation.isPending}
+                      disabled={createSignatureRequestsMutation.isPending || (selectedResolution as any).isLocked}
+                      title={(selectedResolution as any).isLocked ? "القرار مقفل ولا يمكن إنشاء طلبات توقيع جديدة" : ""}
                     >
                       {createSignatureRequestsMutation.isPending ? (
                         <Loader2 className="h-4 w-4 animate-spin" />

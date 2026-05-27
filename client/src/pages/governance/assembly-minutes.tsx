@@ -45,6 +45,7 @@ import {
   Archive,
   FileCheck,
   FilePen,
+  Lock,
 } from "lucide-react";
 
 interface Shareholder {
@@ -69,6 +70,9 @@ interface MeetingMinutes {
   preparedBy: string | null;
   preparedAt: string | null;
   createdAt: string;
+  isLocked?: boolean;
+  lockedAt?: string | null;
+  lockedBy?: string | null;
 }
 
 interface BoardResolution {
@@ -153,6 +157,29 @@ export default function AssemblyMinutesPage() {
   });
 
   const totalShares = shareholders.reduce((sum, s) => sum + (s.numberOfShares || 0), 0);
+
+  const [lockMinutesId, setLockMinutesId] = useState<number | null>(null);
+  const lockMinutesMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/governance/minutes/${id}/lock`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || "Failed to lock minutes");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/minutes"] });
+      setLockMinutesId(null);
+      toast({ title: "تم قفل المحضر نهائياً", description: "أصبح غير قابل للتعديل أو الحذف" });
+    },
+    onError: (e: any) => {
+      toast({ title: "فشل قفل المحضر", description: e?.message, variant: "destructive" });
+    },
+  });
 
   const deleteMinutesMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -921,6 +948,11 @@ export default function AssemblyMinutesPage() {
                                   {getAssemblyTypeLabel(meeting.meetingType)}
                                 </Badge>
                               )}
+                              {m.isLocked && (
+                                <Badge className="bg-amber-100 text-amber-800 gap-1" data-testid={`badge-locked-${m.id}`}>
+                                  <Lock className="h-3 w-3" /> مقفل
+                                </Badge>
+                              )}
                             </div>
                             <h3 className="font-semibold text-lg">{m.summary || meeting?.title || "محضر جمعية"}</h3>
                             <div className="flex items-center gap-4 text-sm text-gray-500 mt-2">
@@ -985,6 +1017,14 @@ export default function AssemblyMinutesPage() {
                                   (r.resolutionType === "general_assembly" || r.resolutionType === "extraordinary_assembly")
                                 );
                                 if (linkedRes) {
+                                  if ((linkedRes as any).isLocked) {
+                                    toast({ title: "القرار المرتبط مقفل نهائياً", description: "لا يمكن إعادة فتح التصويت", variant: "destructive" });
+                                    return;
+                                  }
+                                  if (m.isLocked) {
+                                    toast({ title: "المحضر مقفل ولا يمكن تعديل القرار المرتبط", variant: "destructive" });
+                                    return;
+                                  }
                                   if (linkedRes.status !== 'voting' && linkedRes.status !== 'approved' && linkedRes.status !== 'rejected') {
                                     await fetch(`/api/governance/resolutions/${linkedRes.id}`, {
                                       method: 'PATCH',
@@ -1004,6 +1044,18 @@ export default function AssemblyMinutesPage() {
                               <Vote className="h-4 w-4" />
                               التصويت
                             </Button>
+                            {isAdmin && !m.isLocked && (m.status === "signed" || m.status === "archived") && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-1 text-amber-700 border-amber-300 hover:bg-amber-50"
+                                onClick={() => setLockMinutesId(m.id)}
+                                data-testid={`btn-lock-minutes-${m.id}`}
+                              >
+                                <Lock className="h-4 w-4" />
+                                قفل نهائي
+                              </Button>
+                            )}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="outline" size="sm" className="px-2" data-testid={`actions-minutes-${m.id}`}>
@@ -1011,7 +1063,7 @@ export default function AssemblyMinutesPage() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-48">
-                                {m.status === "draft" && (
+                                {m.status === "draft" && !m.isLocked && (
                                   <DropdownMenuItem
                                     onClick={() => updateMinutesStatusMutation.mutate({ id: m.id, status: "pending_review" })}
                                     data-testid={`status-review-${m.id}`}
@@ -1020,7 +1072,7 @@ export default function AssemblyMinutesPage() {
                                     إرسال للمراجعة
                                   </DropdownMenuItem>
                                 )}
-                                {m.status === "pending_review" && (
+                                {m.status === "pending_review" && !m.isLocked && (
                                   <DropdownMenuItem
                                     onClick={() => updateMinutesStatusMutation.mutate({ id: m.id, status: "pending_signature" })}
                                     data-testid={`status-sign-${m.id}`}
@@ -1029,7 +1081,7 @@ export default function AssemblyMinutesPage() {
                                     جاهز للتوقيع
                                   </DropdownMenuItem>
                                 )}
-                                {m.status === "pending_signature" && (
+                                {m.status === "pending_signature" && !m.isLocked && (
                                   <DropdownMenuItem
                                     onClick={() => updateMinutesStatusMutation.mutate({ id: m.id, status: "signed" })}
                                     data-testid={`status-signed-${m.id}`}
@@ -1038,7 +1090,7 @@ export default function AssemblyMinutesPage() {
                                     تم التوقيع
                                   </DropdownMenuItem>
                                 )}
-                                {m.status !== "archived" && m.status !== "draft" && (
+                                {m.status !== "archived" && m.status !== "draft" && !m.isLocked && (
                                   <DropdownMenuItem
                                     onClick={() => updateMinutesStatusMutation.mutate({ id: m.id, status: "archived" })}
                                     data-testid={`status-archive-${m.id}`}
@@ -1047,7 +1099,7 @@ export default function AssemblyMinutesPage() {
                                     أرشفة
                                   </DropdownMenuItem>
                                 )}
-                                {m.status !== "draft" && (
+                                {m.status !== "draft" && !m.isLocked && (
                                   <DropdownMenuItem
                                     onClick={() => updateMinutesStatusMutation.mutate({ id: m.id, status: "draft" })}
                                     data-testid={`status-draft-${m.id}`}
@@ -1056,7 +1108,13 @@ export default function AssemblyMinutesPage() {
                                     إعادة لمسودة
                                   </DropdownMenuItem>
                                 )}
-                                {isAdmin && (
+                                {m.isLocked && (
+                                  <DropdownMenuItem disabled className="text-amber-700">
+                                    <Lock className="h-4 w-4 ml-2" />
+                                    المحضر مقفل نهائياً
+                                  </DropdownMenuItem>
+                                )}
+                                {isAdmin && !m.isLocked && (
                                   <>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
@@ -1385,11 +1443,19 @@ export default function AssemblyMinutesPage() {
                       variant="outline"
                       size="sm"
                       className="gap-1 border-purple-300 text-purple-700 hover:bg-purple-50"
-                      onClick={() => setLocation(`/governance/resolutions?meetingId=${selectedMinutes.meetingId}`)}
+                      onClick={() => {
+                        if (selectedMinutes.isLocked) {
+                          toast({ title: "المحضر مقفل نهائياً", description: "لا يمكن إرسال طلبات توقيع جديدة", variant: "destructive" });
+                          return;
+                        }
+                        setLocation(`/governance/resolutions?meetingId=${selectedMinutes.meetingId}`);
+                      }}
+                      disabled={!!selectedMinutes.isLocked}
+                      title={selectedMinutes.isLocked ? "المحضر مقفل نهائياً" : ""}
                       data-testid="detail-send-signatures"
                     >
-                      <Send className="h-4 w-4" />
-                      إرسال طلبات توقيع
+                      {selectedMinutes.isLocked ? <Lock className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+                      {selectedMinutes.isLocked ? "مقفل" : "إرسال طلبات توقيع"}
                     </Button>
                   </div>
 
@@ -1474,20 +1540,21 @@ export default function AssemblyMinutesPage() {
                                             variant="outline"
                                             size="sm"
                                             className="h-7 px-2 text-xs"
-                                            disabled={!isPresent}
-                                            onClick={() => setSigningAttendeeIndex(i)}
+                                            disabled={!isPresent || !!selectedMinutes?.isLocked}
+                                            title={selectedMinutes?.isLocked ? "المحضر مقفل ولا يمكن تعديل التواقيع" : ""}
+                                            onClick={() => { if (selectedMinutes?.isLocked) return; setSigningAttendeeIndex(i); }}
                                             data-testid={`button-sign-attendee-${i}`}
                                           >
                                             {hasSig ? 'تعديل' : 'توقيع'}
                                           </Button>
-                                          {hasSig && (
+                                          {hasSig && !selectedMinutes?.isLocked && (
                                             <Button
                                               type="button"
                                               variant="ghost"
                                               size="sm"
                                               className="h-7 px-2 text-xs text-red-600 hover:text-red-700"
                                               onClick={() => {
-                                                if (!selectedMinutes) return;
+                                                if (!selectedMinutes || selectedMinutes.isLocked) return;
                                                 const next = (selectedMinutes.attendanceList as any[]).map((x, idx) =>
                                                   idx === i ? { ...x, signatureUrl: null, signedAt: null } : x
                                                 );
@@ -1571,6 +1638,10 @@ export default function AssemblyMinutesPage() {
                     return;
                   }
                   if (!selectedMinutes || signingAttendeeIndex === null) return;
+                  if (selectedMinutes.isLocked) {
+                    toast({ title: "المحضر مقفل ولا يمكن تعديل التواقيع", variant: "destructive" });
+                    return;
+                  }
                   const dataUrl = sigPadRef.current.toDataURL("image/png");
                   const next = (selectedMinutes.attendanceList as any[]).map((x, idx) =>
                     idx === signingAttendeeIndex ? { ...x, signatureUrl: dataUrl, signedAt: new Date().toISOString() } : x
@@ -1588,6 +1659,30 @@ export default function AssemblyMinutesPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <AlertDialog open={lockMinutesId !== null} onOpenChange={(open) => !open && setLockMinutesId(null)}>
+          <AlertDialogContent dir="rtl">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <Lock className="h-5 w-5 text-amber-600" /> قفل المحضر نهائياً
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                بعد القفل لن يتمكن أي مستخدم — حتى المدير — من تعديل المحضر أو حذفه أو تغيير حالته.
+                هذا إجراء مطلوب نظاماً لمحاضر الجمعية الموقعة (الامتثال لهيئة السوق المالية ونظام الشركات).
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="gap-2">
+              <AlertDialogCancel>تراجع</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-amber-600 hover:bg-amber-700"
+                onClick={() => lockMinutesId && lockMinutesMutation.mutate(lockMinutesId)}
+                disabled={lockMinutesMutation.isPending}
+              >
+                {lockMinutesMutation.isPending ? "جاري القفل…" : "نعم، اقفل نهائياً"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <AlertDialog open={deleteMinutesId !== null} onOpenChange={(open) => !open && setDeleteMinutesId(null)}>
           <AlertDialogContent>

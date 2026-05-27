@@ -276,6 +276,10 @@ export default function VotingPage() {
   });
 
   const openVotingLinksDialog = (resolution: BoardResolution) => {
+    if ((resolution as any).isLocked) {
+      toast({ title: "القرار مقفل نهائياً", description: "لا يمكن إنشاء روابط تصويت جديدة", variant: "destructive" });
+      return;
+    }
     setSelectedResolutionForLinks(resolution);
     setShowVotingLinks(true);
     createVotingTokensMutation.mutate(resolution.id);
@@ -576,6 +580,10 @@ export default function VotingPage() {
 
   const handleSubmitVote = () => {
     if (!selectedResolution || !selectedVote) return;
+    if ((selectedResolution as any).isLocked) {
+      toast({ title: "القرار مقفل نهائياً", description: "لا يمكن التصويت على قرار مقفل", variant: "destructive" });
+      return;
+    }
     if (isProxyVote && !proxyHolderName) {
       toast({ title: "يرجى إدخال اسم حامل الوكالة", variant: "destructive" });
       return;
@@ -851,11 +859,19 @@ export default function VotingPage() {
                             <div className="flex flex-col gap-2">
                               <Button 
                                 className="bg-pink-600 hover:bg-pink-700"
-                                onClick={() => setSelectedResolution(resolution)}
+                                onClick={() => {
+                                  if ((resolution as any).isLocked) {
+                                    toast({ title: "القرار مقفل نهائياً", description: "لا يمكن التصويت", variant: "destructive" });
+                                    return;
+                                  }
+                                  setSelectedResolution(resolution);
+                                }}
+                                disabled={!!(resolution as any).isLocked}
+                                title={(resolution as any).isLocked ? "القرار مقفل نهائياً" : ""}
                                 data-testid={`vote-btn-${resolution.id}`}
                               >
-                                <Vote className="h-4 w-4 ml-2" />
-                                صوّت الآن
+                                {(resolution as any).isLocked ? <Lock className="h-4 w-4 ml-2" /> : <Vote className="h-4 w-4 ml-2" />}
+                                {(resolution as any).isLocked ? "مقفل" : "صوّت الآن"}
                               </Button>
                               <Button
                                 variant="outline"
@@ -891,7 +907,7 @@ export default function VotingPage() {
                                     <Share2 className="h-4 w-4 ml-2" />
                                     مشاركة الروابط
                                   </DropdownMenuItem>
-                                  {isAdmin && (
+                                  {isAdmin && !(resolution as any).isLocked && (
                                     <>
                                       <DropdownMenuSeparator />
                                       <DropdownMenuItem
@@ -903,6 +919,12 @@ export default function VotingPage() {
                                         حذف القرار
                                       </DropdownMenuItem>
                                     </>
+                                  )}
+                                  {(resolution as any).isLocked && (
+                                    <DropdownMenuItem disabled className="text-amber-700">
+                                      <Lock className="h-4 w-4 ml-2" />
+                                      مقفل نهائياً
+                                    </DropdownMenuItem>
                                   )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -1005,10 +1027,18 @@ export default function VotingPage() {
                         <Button 
                           variant="outline"
                           className="border-amber-500 text-amber-700 hover:bg-amber-50"
-                          onClick={() => setSelectedResolution(resolution)}
+                          onClick={() => {
+                            if ((resolution as any).isLocked) {
+                              toast({ title: "القرار مقفل نهائياً", description: "لا يمكن التصويت", variant: "destructive" });
+                              return;
+                            }
+                            setSelectedResolution(resolution);
+                          }}
+                          disabled={!!(resolution as any).isLocked}
+                          title={(resolution as any).isLocked ? "القرار مقفل نهائياً" : ""}
                         >
-                          <Clock className="h-4 w-4 ml-2" />
-                          تصويت مسبق
+                          {(resolution as any).isLocked ? <Lock className="h-4 w-4 ml-2" /> : <Clock className="h-4 w-4 ml-2" />}
+                          {(resolution as any).isLocked ? "مقفل" : "تصويت مسبق"}
                         </Button>
                       </div>
                     </CardContent>
@@ -1583,7 +1613,16 @@ export default function VotingPage() {
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700"
-              onClick={() => deleteResolutionId && deleteResolutionMutation.mutate(deleteResolutionId)}
+              onClick={() => {
+                if (!deleteResolutionId) return;
+                const target = resolutions.find((r: any) => r.id === deleteResolutionId) as any;
+                if (target?.isLocked) {
+                  toast({ title: "القرار مقفل ولا يمكن حذفه", variant: "destructive" });
+                  setDeleteResolutionId(null);
+                  return;
+                }
+                deleteResolutionMutation.mutate(deleteResolutionId);
+              }}
               disabled={deleteResolutionMutation.isPending}
             >
               {deleteResolutionMutation.isPending ? (

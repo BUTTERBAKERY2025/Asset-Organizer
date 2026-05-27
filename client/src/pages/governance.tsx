@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +27,8 @@ import {
   ChevronLeft,
   Clock,
   AlertTriangle,
+  Ban,
+  ShieldCheck,
 } from "lucide-react";
 
 interface GovernanceModule {
@@ -148,7 +151,43 @@ const governanceModules: GovernanceModule[] = [
     bgColor: "bg-red-100",
     href: "/governance/compliance",
   },
+  {
+    id: "assembly-resolutions",
+    title: "قرارات الجمعية العمومية",
+    description: "قرارات الجمعية العادية وغير العادية مع أغلبيات نظامية",
+    icon: Building2,
+    color: "text-blue-700",
+    bgColor: "bg-blue-100",
+    href: "/governance/assembly-resolutions",
+  },
+  {
+    id: "insiders",
+    title: "سجل المطلعين",
+    description: "إدارة المطلعين على المعلومات الجوهرية (CMA)",
+    icon: UserCheck,
+    color: "text-fuchsia-600",
+    bgColor: "bg-fuchsia-100",
+    href: "/governance/insiders",
+  },
+  {
+    id: "blackout-periods",
+    title: "فترات حظر التداول",
+    description: "منع تداول المطلعين قبل الإعلانات الجوهرية",
+    icon: Ban,
+    color: "text-rose-600",
+    bgColor: "bg-rose-100",
+    href: "/governance/blackout-periods",
+  },
 ];
+
+interface IndependenceData {
+  totalActive: number;
+  independent: number;
+  ratio: number;
+  meetsThreshold: boolean;
+  thresholdPct: number;
+  message?: string;
+}
 
 const upcomingItems = [
   { title: "اجتماع مجلس الإدارة الربعي", date: "2026-02-15", type: "meeting" },
@@ -158,6 +197,9 @@ const upcomingItems = [
 
 export default function GovernancePage() {
   const [activeTab, setActiveTab] = useState("overview");
+  const { data: independence } = useQuery<IndependenceData>({
+    queryKey: ["/api/governance/board-members/_compliance/independence"],
+  });
 
   return (
     <Layout>
@@ -189,7 +231,64 @@ export default function GovernancePage() {
             <TabsTrigger value="upcoming">المواعيد القادمة</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview" className="mt-6">
+          <TabsContent value="overview" className="mt-6 space-y-6">
+            {/* KPI: نسبة استقلالية مجلس الإدارة */}
+            {independence && (
+              <Card
+                className={
+                  independence.meetsThreshold
+                    ? "border-green-300 bg-green-50/30"
+                    : "border-amber-300 bg-amber-50/30"
+                }
+                data-testid="card-independence-ratio"
+              >
+                <CardContent className="p-5 flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex items-center gap-4">
+                    <div
+                      className={`p-3 rounded-full ${
+                        independence.meetsThreshold ? "bg-green-100" : "bg-amber-100"
+                      }`}
+                    >
+                      {independence.meetsThreshold ? (
+                        <ShieldCheck className="h-7 w-7 text-green-700" />
+                      ) : (
+                        <AlertTriangle className="h-7 w-7 text-amber-700" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">نسبة استقلالية مجلس الإدارة</p>
+                      <div className="flex items-baseline gap-2">
+                        <span
+                          className={`text-3xl font-bold ${
+                            independence.meetsThreshold ? "text-green-700" : "text-amber-700"
+                          }`}
+                          data-testid="text-independence-ratio"
+                        >
+                          {independence.ratio.toFixed(1)}%
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          ({independence.independent} مستقل من {independence.totalActive} عضو)
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        الحد الأدنى نظاماً: {independence.thresholdPct}%
+                      </p>
+                    </div>
+                  </div>
+                  <Badge
+                    className={
+                      independence.meetsThreshold
+                        ? "bg-green-600 text-white"
+                        : "bg-amber-600 text-white"
+                    }
+                    data-testid="badge-independence-status"
+                  >
+                    {independence.meetsThreshold ? "مطابق للنظام" : "غير مطابق — مطلوب تعديل"}
+                  </Badge>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {governanceModules.map((module) => (
                 <Link href={module.href} key={module.id}>

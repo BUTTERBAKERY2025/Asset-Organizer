@@ -148,6 +148,9 @@ const DividendsPage = makeLazy("governance-dividends");
 const CapitalPage = makeLazy("governance-capital");
 const VotingPage = makeLazy("governance-voting");
 const GeneralAssemblyPage = makeLazy("governance-general-assembly");
+const AssemblyResolutionsPage = makeLazy("governance-assembly-resolutions");
+const InsidersPage = makeLazy("governance-insiders");
+const BlackoutPeriodsPage = makeLazy("governance-blackout-periods");
 const SecurityPage = makeLazy("security");
 const VisitorsPage = makeLazy("visitors");
 const TravelRequestsPage = makeLazy("travel-requests");
@@ -454,6 +457,9 @@ const Router = React.memo(function Router() {
       <Route path="/governance/capital">{() => <ModulePage component={CapitalPage} module="governance_capital" />}</Route>
       <Route path="/governance/voting">{() => <ModulePage component={VotingPage} module="governance_voting" />}</Route>
       <Route path="/governance/general-assembly">{() => <ModulePage component={GeneralAssemblyPage} module="governance_meetings" />}</Route>
+      <Route path="/governance/assembly-resolutions">{() => <ModulePage component={AssemblyResolutionsPage} module="governance_resolutions" />}</Route>
+      <Route path="/governance/insiders">{() => <ModulePage component={InsidersPage} module="governance_compliance" />}</Route>
+      <Route path="/governance/blackout-periods">{() => <ModulePage component={BlackoutPeriodsPage} module="governance_compliance" />}</Route>
       
       {/* Security - الأمان */}
       <Route path="/security">{() => <ModulePage component={SecurityPage} module="rbac_management" />}</Route>
