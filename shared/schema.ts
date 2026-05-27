@@ -16,6 +16,7 @@ import {
   doublePrecision,
   date,
   numeric,
+  bigint,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -11004,3 +11005,278 @@ export const EOS_STATUS_LABELS: Record<string, string> = {
   approved: "معتمد",
   paid: "مدفوع",
 };
+
+// ============================================================================
+// PHASE 3 — NOMU READINESS (Audit Committee | Prospectus | IR | Material
+// Disclosures | Internal Audit)
+// ============================================================================
+
+// 1) Audit Committee
+export const auditCommittees = pgTable("audit_committees", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  charter: text("charter"),
+  charterDocUrl: text("charter_doc_url"),
+  formationDate: date("formation_date").notNull(),
+  status: text("status").default("active").notNull(),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertAuditCommitteeSchema = createInsertSchema(auditCommittees).omit({ id: true, createdAt: true, updatedAt: true });
+export type AuditCommittee = typeof auditCommittees.$inferSelect;
+export type InsertAuditCommittee = z.infer<typeof insertAuditCommitteeSchema>;
+
+export const auditCommitteeMembers = pgTable("audit_committee_members", {
+  id: serial("id").primaryKey(),
+  committeeId: integer("committee_id").notNull().references(() => auditCommittees.id, { onDelete: "cascade" }),
+  boardMemberId: integer("board_member_id").references(() => boardMembers.id),
+  fullName: text("full_name").notNull(),
+  role: text("role").default("member").notNull(),
+  isIndependent: boolean("is_independent").default(false).notNull(),
+  isFinancialExpert: boolean("is_financial_expert").default(false).notNull(),
+  appointmentDate: date("appointment_date").notNull(),
+  endDate: date("end_date"),
+  status: text("status").default("active").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertAuditCommitteeMemberSchema = createInsertSchema(auditCommitteeMembers).omit({ id: true, createdAt: true, updatedAt: true });
+export type AuditCommitteeMember = typeof auditCommitteeMembers.$inferSelect;
+export type InsertAuditCommitteeMember = z.infer<typeof insertAuditCommitteeMemberSchema>;
+
+export const auditCommitteeReports = pgTable("audit_committee_reports", {
+  id: serial("id").primaryKey(),
+  committeeId: integer("committee_id").notNull().references(() => auditCommittees.id, { onDelete: "cascade" }),
+  reportType: text("report_type").notNull(),
+  fiscalYear: text("fiscal_year").notNull(),
+  period: text("period").notNull(),
+  title: text("title").notNull(),
+  summary: text("summary"),
+  findings: jsonb("findings"),
+  recommendations: text("recommendations"),
+  attachments: jsonb("attachments"),
+  status: text("status").default("draft").notNull(),
+  submittedAt: timestamp("submitted_at"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  isLocked: boolean("is_locked").default(false).notNull(),
+  lockedAt: timestamp("locked_at"),
+  lockedBy: varchar("locked_by").references(() => users.id),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertAuditCommitteeReportSchema = createInsertSchema(auditCommitteeReports).omit({ id: true, createdAt: true, updatedAt: true });
+export type AuditCommitteeReport = typeof auditCommitteeReports.$inferSelect;
+export type InsertAuditCommitteeReport = z.infer<typeof insertAuditCommitteeReportSchema>;
+
+// 2) Prospectus
+export const prospectuses = pgTable("prospectuses", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  issueType: text("issue_type").default("ipo").notNull(),
+  targetMarket: text("target_market").default("nomu").notNull(),
+  version: text("version").default("v1.0").notNull(),
+  status: text("status").default("draft").notNull(),
+  offeringSize: numeric("offering_size", { precision: 20, scale: 2 }),
+  sharePrice: numeric("share_price", { precision: 12, scale: 4 }),
+  totalShares: bigint("total_shares", { mode: "number" }),
+  offeringStartDate: date("offering_start_date"),
+  offeringEndDate: date("offering_end_date"),
+  leadManager: text("lead_manager"),
+  legalAdvisor: text("legal_advisor"),
+  auditor: text("auditor"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  publishedAt: timestamp("published_at"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertProspectusSchema = createInsertSchema(prospectuses).omit({ id: true, createdAt: true, updatedAt: true });
+export type Prospectus = typeof prospectuses.$inferSelect;
+export type InsertProspectus = z.infer<typeof insertProspectusSchema>;
+
+export const prospectusSections = pgTable("prospectus_sections", {
+  id: serial("id").primaryKey(),
+  prospectusId: integer("prospectus_id").notNull().references(() => prospectuses.id, { onDelete: "cascade" }),
+  sectionKey: text("section_key").notNull(),
+  title: text("title").notNull(),
+  content: text("content"),
+  orderIndex: integer("order_index").default(0).notNull(),
+  requiredByCma: boolean("required_by_cma").default(true).notNull(),
+  status: text("status").default("pending").notNull(),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertProspectusSectionSchema = createInsertSchema(prospectusSections).omit({ id: true, createdAt: true, updatedAt: true });
+export type ProspectusSection = typeof prospectusSections.$inferSelect;
+export type InsertProspectusSection = z.infer<typeof insertProspectusSectionSchema>;
+
+// 3) Investor Relations
+export const irEvents = pgTable("ir_events", {
+  id: serial("id").primaryKey(),
+  eventType: text("event_type").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  eventDate: date("event_date").notNull(),
+  eventTime: text("event_time"),
+  endDate: date("end_date"),
+  location: text("location"),
+  isVirtual: boolean("is_virtual").default(false).notNull(),
+  meetingLink: text("meeting_link"),
+  registrationLink: text("registration_link"),
+  fiscalYear: text("fiscal_year"),
+  fiscalQuarter: text("fiscal_quarter"),
+  status: text("status").default("scheduled").notNull(),
+  attendeesExpected: integer("attendees_expected"),
+  attendeesActual: integer("attendees_actual"),
+  materials: jsonb("materials"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertIrEventSchema = createInsertSchema(irEvents).omit({ id: true, createdAt: true, updatedAt: true });
+export type IrEvent = typeof irEvents.$inferSelect;
+export type InsertIrEvent = z.infer<typeof insertIrEventSchema>;
+
+export const irContacts = pgTable("ir_contacts", {
+  id: serial("id").primaryKey(),
+  fullName: text("full_name").notNull(),
+  institution: text("institution"),
+  institutionType: text("institution_type"),
+  position: text("position"),
+  email: text("email"),
+  phone: text("phone"),
+  country: text("country"),
+  city: text("city"),
+  languagePreference: text("language_preference").default("ar"),
+  subscribedChannels: jsonb("subscribed_channels"),
+  lastContactedAt: timestamp("last_contacted_at"),
+  notes: text("notes"),
+  status: text("status").default("active").notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertIrContactSchema = createInsertSchema(irContacts).omit({ id: true, createdAt: true, updatedAt: true });
+export type IrContact = typeof irContacts.$inferSelect;
+export type InsertIrContact = z.infer<typeof insertIrContactSchema>;
+
+// 4) Material Disclosures
+export const materialDisclosures = pgTable("material_disclosures", {
+  id: serial("id").primaryKey(),
+  disclosureNumber: text("disclosure_number").notNull().unique(),
+  category: text("category").notNull(),
+  severity: text("severity").default("medium").notNull(),
+  titleAr: text("title_ar").notNull(),
+  titleEn: text("title_en"),
+  contentAr: text("content_ar").notNull(),
+  contentEn: text("content_en"),
+  eventDate: date("event_date").notNull(),
+  discoveryDate: date("discovery_date"),
+  requiresImmediateDisclosure: boolean("requires_immediate_disclosure").default(false).notNull(),
+  status: text("status").default("draft").notNull(),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  publishedToTadawul: boolean("published_to_tadawul").default(false).notNull(),
+  tadawulReference: text("tadawul_reference"),
+  tadawulPublishedAt: timestamp("tadawul_published_at"),
+  publicationChannels: jsonb("publication_channels"),
+  attachments: jsonb("attachments"),
+  regulatoryReference: text("regulatory_reference"),
+  relatedDisclosureId: integer("related_disclosure_id"),
+  isLocked: boolean("is_locked").default(false).notNull(),
+  lockedAt: timestamp("locked_at"),
+  lockedBy: varchar("locked_by").references(() => users.id),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertMaterialDisclosureSchema = createInsertSchema(materialDisclosures).omit({ id: true, createdAt: true, updatedAt: true });
+export type MaterialDisclosure = typeof materialDisclosures.$inferSelect;
+export type InsertMaterialDisclosure = z.infer<typeof insertMaterialDisclosureSchema>;
+
+// 5) Internal Audit
+export const internalAuditPlans = pgTable("internal_audit_plans", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  fiscalYear: text("fiscal_year").notNull(),
+  scope: text("scope"),
+  objectives: text("objectives"),
+  status: text("status").default("draft").notNull(),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  totalEngagements: integer("total_engagements").default(0).notNull(),
+  completedEngagements: integer("completed_engagements").default(0).notNull(),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertInternalAuditPlanSchema = createInsertSchema(internalAuditPlans).omit({ id: true, createdAt: true, updatedAt: true });
+export type InternalAuditPlan = typeof internalAuditPlans.$inferSelect;
+export type InsertInternalAuditPlan = z.infer<typeof insertInternalAuditPlanSchema>;
+
+export const internalAuditEngagements = pgTable("internal_audit_engagements", {
+  id: serial("id").primaryKey(),
+  planId: integer("plan_id").references(() => internalAuditPlans.id, { onDelete: "set null" }),
+  reference: text("reference").notNull().unique(),
+  title: text("title").notNull(),
+  area: text("area").notNull(),
+  branchId: integer("branch_id"),
+  scope: text("scope"),
+  objectives: text("objectives"),
+  leadAuditor: text("lead_auditor"),
+  teamMembers: jsonb("team_members"),
+  plannedStart: date("planned_start"),
+  plannedEnd: date("planned_end"),
+  actualStart: date("actual_start"),
+  actualEnd: date("actual_end"),
+  status: text("status").default("planned").notNull(),
+  totalFindings: integer("total_findings").default(0).notNull(),
+  openFindings: integer("open_findings").default(0).notNull(),
+  reportUrl: text("report_url"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertInternalAuditEngagementSchema = createInsertSchema(internalAuditEngagements).omit({ id: true, createdAt: true, updatedAt: true });
+export type InternalAuditEngagement = typeof internalAuditEngagements.$inferSelect;
+export type InsertInternalAuditEngagement = z.infer<typeof insertInternalAuditEngagementSchema>;
+
+export const internalAuditFindings = pgTable("internal_audit_findings", {
+  id: serial("id").primaryKey(),
+  engagementId: integer("engagement_id").notNull().references(() => internalAuditEngagements.id, { onDelete: "cascade" }),
+  findingRef: text("finding_ref").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  severity: text("severity").default("medium").notNull(),
+  category: text("category"),
+  recommendation: text("recommendation"),
+  managementResponse: text("management_response"),
+  ownerName: text("owner_name"),
+  ownerUserId: varchar("owner_user_id").references(() => users.id),
+  dueDate: date("due_date"),
+  status: text("status").default("open").notNull(),
+  resolvedAt: timestamp("resolved_at"),
+  resolutionNotes: text("resolution_notes"),
+  attachments: jsonb("attachments"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertInternalAuditFindingSchema = createInsertSchema(internalAuditFindings).omit({ id: true, createdAt: true, updatedAt: true });
+export type InternalAuditFinding = typeof internalAuditFindings.$inferSelect;
+export type InsertInternalAuditFinding = z.infer<typeof insertInternalAuditFindingSchema>;

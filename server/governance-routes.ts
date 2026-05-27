@@ -48,6 +48,28 @@ import {
   insertComplianceRequirementSchema,
   insertComplianceHistorySchema,
   meetingRsvps,
+  auditCommittees,
+  auditCommitteeMembers,
+  auditCommitteeReports,
+  prospectuses,
+  prospectusSections,
+  irEvents,
+  irContacts,
+  materialDisclosures,
+  internalAuditPlans,
+  internalAuditEngagements,
+  internalAuditFindings,
+  insertAuditCommitteeSchema,
+  insertAuditCommitteeMemberSchema,
+  insertAuditCommitteeReportSchema,
+  insertProspectusSchema,
+  insertProspectusSectionSchema,
+  insertIrEventSchema,
+  insertIrContactSchema,
+  insertMaterialDisclosureSchema,
+  insertInternalAuditPlanSchema,
+  insertInternalAuditEngagementSchema,
+  insertInternalAuditFindingSchema,
 } from "@shared/schema";
 import crypto from "crypto";
 import { z } from "zod";
@@ -2966,5 +2988,470 @@ export function registerGovernanceRoutes(app: Express) {
       console.error("Error processing RSVP:", error);
       res.status(500).json({ error: "حدث خطأ أثناء معالجة الطلب" });
     }
+  });
+
+  // ==========================================================================
+  // PHASE 3 — NOMU READINESS
+  // ==========================================================================
+
+  const getUid = (req: Request) => (req as any).currentUser?.id || null;
+
+  // Phase 3 partial-update allowlist schemas (block mass-assignment of workflow fields)
+  const updateAuditCommitteeSchema = insertAuditCommitteeSchema.partial().omit({ createdBy: true });
+  const updateAuditCommitteeMemberSchema = insertAuditCommitteeMemberSchema.partial();
+  const updateAuditCommitteeReportSchema = insertAuditCommitteeReportSchema.partial().omit({ createdBy: true, isLocked: true, lockedAt: true, lockedBy: true, approvedBy: true, approvedAt: true });
+  const updateProspectusSchema = insertProspectusSchema.partial().omit({ createdBy: true, approvedBy: true, approvedAt: true, publishedAt: true });
+  const updateProspectusSectionSchema = insertProspectusSectionSchema.partial().omit({ prospectusId: true });
+  const updateIrEventSchema = insertIrEventSchema.partial().omit({ createdBy: true });
+  const updateIrContactSchema = insertIrContactSchema.partial().omit({ createdBy: true });
+  const updateMaterialDisclosureSchema = insertMaterialDisclosureSchema.partial().omit({ createdBy: true, disclosureNumber: true, isLocked: true, lockedAt: true, lockedBy: true, publishedToTadawul: true, tadawulReference: true, tadawulPublishedAt: true, approvedBy: true, approvedAt: true, reviewedBy: true, reviewedAt: true });
+  const updateInternalAuditPlanSchema = insertInternalAuditPlanSchema.partial().omit({ createdBy: true, approvedBy: true, approvedAt: true });
+  const updateInternalAuditEngagementSchema = insertInternalAuditEngagementSchema.partial().omit({ createdBy: true, reference: true, totalFindings: true, openFindings: true });
+  const updateInternalAuditFindingSchema = insertInternalAuditFindingSchema.partial().omit({ createdBy: true, engagementId: true });
+
+  // ---- Audit Committee ----
+  app.get("/api/governance/audit-committees", isAuthenticated, requirePermission("governance_compliance", "view"), async (_req, res) => {
+    try {
+      const rows = await db.select().from(auditCommittees).orderBy(desc(auditCommittees.createdAt));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+  app.post("/api/governance/audit-committees", isAuthenticated, requirePermission("governance_compliance", "create"), async (req, res) => {
+    try {
+      const data = insertAuditCommitteeSchema.parse({ ...req.body, createdBy: getUid(req) });
+      const [row] = await db.insert(auditCommittees).values(data).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.patch("/api/governance/audit-committees/:id", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const data = updateAuditCommitteeSchema.parse(req.body);
+      const [row] = await db.update(auditCommittees).set({ ...data, updatedAt: new Date() }).where(eq(auditCommittees.id, id)).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.delete("/api/governance/audit-committees/:id", isAuthenticated, requirePermission("governance_compliance", "delete"), async (req, res) => {
+    try {
+      await db.delete(auditCommittees).where(eq(auditCommittees.id, parseInt(req.params.id)));
+      res.json({ success: true });
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+
+  app.get("/api/governance/audit-committee-members", isAuthenticated, requirePermission("governance_compliance", "view"), async (req, res) => {
+    try {
+      const committeeId = req.query.committeeId ? parseInt(req.query.committeeId as string) : null;
+      const rows = committeeId
+        ? await db.select().from(auditCommitteeMembers).where(eq(auditCommitteeMembers.committeeId, committeeId)).orderBy(asc(auditCommitteeMembers.appointmentDate))
+        : await db.select().from(auditCommitteeMembers).orderBy(asc(auditCommitteeMembers.appointmentDate));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+  app.post("/api/governance/audit-committee-members", isAuthenticated, requirePermission("governance_compliance", "create"), async (req, res) => {
+    try {
+      const data = insertAuditCommitteeMemberSchema.parse(req.body);
+      const [row] = await db.insert(auditCommitteeMembers).values(data).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.patch("/api/governance/audit-committee-members/:id", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req, res) => {
+    try {
+      const data = updateAuditCommitteeMemberSchema.parse(req.body);
+      const [row] = await db.update(auditCommitteeMembers).set({ ...data, updatedAt: new Date() }).where(eq(auditCommitteeMembers.id, parseInt(req.params.id))).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.delete("/api/governance/audit-committee-members/:id", isAuthenticated, requirePermission("governance_compliance", "delete"), async (req, res) => {
+    try {
+      await db.delete(auditCommitteeMembers).where(eq(auditCommitteeMembers.id, parseInt(req.params.id)));
+      res.json({ success: true });
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+
+  app.get("/api/governance/audit-committee-reports", isAuthenticated, requirePermission("governance_compliance", "view"), async (req, res) => {
+    try {
+      const committeeId = req.query.committeeId ? parseInt(req.query.committeeId as string) : null;
+      const rows = committeeId
+        ? await db.select().from(auditCommitteeReports).where(eq(auditCommitteeReports.committeeId, committeeId)).orderBy(desc(auditCommitteeReports.createdAt))
+        : await db.select().from(auditCommitteeReports).orderBy(desc(auditCommitteeReports.createdAt));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+  app.post("/api/governance/audit-committee-reports", isAuthenticated, requirePermission("governance_compliance", "create"), async (req, res) => {
+    try {
+      const data = insertAuditCommitteeReportSchema.parse({ ...req.body, createdBy: getUid(req) });
+      const [row] = await db.insert(auditCommitteeReports).values(data).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.patch("/api/governance/audit-committee-reports/:id", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [existing] = await db.select().from(auditCommitteeReports).where(eq(auditCommitteeReports.id, id));
+      if (!existing) return res.status(404).json({ error: "غير موجود" });
+      if (existing.isLocked) return res.status(403).json({ error: "التقرير مقفل ولا يمكن تعديله" });
+      const data = updateAuditCommitteeReportSchema.parse(req.body);
+      const [row] = await db.update(auditCommitteeReports).set({ ...data, updatedAt: new Date() }).where(eq(auditCommitteeReports.id, id)).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.post("/api/governance/audit-committee-reports/:id/lock", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [row] = await db.update(auditCommitteeReports)
+        .set({ isLocked: true, lockedAt: new Date(), lockedBy: getUid(req), updatedAt: new Date() })
+        .where(eq(auditCommitteeReports.id, id)).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.delete("/api/governance/audit-committee-reports/:id", isAuthenticated, requirePermission("governance_compliance", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [existing] = await db.select().from(auditCommitteeReports).where(eq(auditCommitteeReports.id, id));
+      if (existing?.isLocked) return res.status(403).json({ error: "التقرير مقفل ولا يمكن حذفه" });
+      await db.delete(auditCommitteeReports).where(eq(auditCommitteeReports.id, id));
+      res.json({ success: true });
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+
+  // ---- Prospectus ----
+  const DEFAULT_PROSPECTUS_SECTIONS = [
+    { key: "executive_summary", title: "الملخص التنفيذي" },
+    { key: "company_overview", title: "نظرة عامة على الشركة" },
+    { key: "business_description", title: "وصف الأعمال" },
+    { key: "risk_factors", title: "عوامل المخاطر" },
+    { key: "financial_statements", title: "القوائم المالية" },
+    { key: "use_of_proceeds", title: "استخدام متحصلات الطرح" },
+    { key: "management", title: "الإدارة وحوكمة الشركة" },
+    { key: "major_shareholders", title: "كبار المساهمين" },
+    { key: "dividend_policy", title: "سياسة توزيع الأرباح" },
+    { key: "legal_matters", title: "الأمور القانونية والقضائية" },
+    { key: "subscription_terms", title: "شروط وأحكام الطرح" },
+    { key: "underwriting", title: "الالتزامات وتعهدات التغطية" },
+    { key: "tax_considerations", title: "الاعتبارات الضريبية والزكوية" },
+    { key: "additional_info", title: "معلومات إضافية" },
+  ];
+
+  app.get("/api/governance/prospectuses", isAuthenticated, requirePermission("governance_compliance", "view"), async (_req, res) => {
+    try {
+      const rows = await db.select().from(prospectuses).orderBy(desc(prospectuses.createdAt));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+  app.post("/api/governance/prospectuses", isAuthenticated, requirePermission("governance_compliance", "create"), async (req, res) => {
+    try {
+      const data = insertProspectusSchema.parse({ ...req.body, createdBy: getUid(req) });
+      const [row] = await db.insert(prospectuses).values(data).returning();
+      // Seed standard CMA sections
+      await db.insert(prospectusSections).values(
+        DEFAULT_PROSPECTUS_SECTIONS.map((s, i) => ({
+          prospectusId: row.id,
+          sectionKey: s.key,
+          title: s.title,
+          orderIndex: i,
+          requiredByCma: true,
+          status: "pending",
+        }))
+      );
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.patch("/api/governance/prospectuses/:id", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req, res) => {
+    try {
+      const data = updateProspectusSchema.parse(req.body);
+      const [row] = await db.update(prospectuses).set({ ...data, updatedAt: new Date() }).where(eq(prospectuses.id, parseInt(req.params.id))).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.delete("/api/governance/prospectuses/:id", isAuthenticated, requirePermission("governance_compliance", "delete"), async (req, res) => {
+    try {
+      await db.delete(prospectuses).where(eq(prospectuses.id, parseInt(req.params.id)));
+      res.json({ success: true });
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+
+  app.get("/api/governance/prospectuses/:id/sections", isAuthenticated, requirePermission("governance_compliance", "view"), async (req, res) => {
+    try {
+      const rows = await db.select().from(prospectusSections)
+        .where(eq(prospectusSections.prospectusId, parseInt(req.params.id)))
+        .orderBy(asc(prospectusSections.orderIndex));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+  app.patch("/api/governance/prospectus-sections/:id", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req, res) => {
+    try {
+      const data = updateProspectusSectionSchema.parse(req.body);
+      const [row] = await db.update(prospectusSections).set({ ...data, updatedAt: new Date() }).where(eq(prospectusSections.id, parseInt(req.params.id))).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+
+  // ---- IR Events ----
+  app.get("/api/governance/ir-events", isAuthenticated, requirePermission("governance_compliance", "view"), async (_req, res) => {
+    try {
+      const rows = await db.select().from(irEvents).orderBy(desc(irEvents.eventDate));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+  app.post("/api/governance/ir-events", isAuthenticated, requirePermission("governance_compliance", "create"), async (req, res) => {
+    try {
+      const data = insertIrEventSchema.parse({ ...req.body, createdBy: getUid(req) });
+      const [row] = await db.insert(irEvents).values(data).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.patch("/api/governance/ir-events/:id", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req, res) => {
+    try {
+      const data = updateIrEventSchema.parse(req.body);
+      const [row] = await db.update(irEvents).set({ ...data, updatedAt: new Date() }).where(eq(irEvents.id, parseInt(req.params.id))).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.delete("/api/governance/ir-events/:id", isAuthenticated, requirePermission("governance_compliance", "delete"), async (req, res) => {
+    try {
+      await db.delete(irEvents).where(eq(irEvents.id, parseInt(req.params.id)));
+      res.json({ success: true });
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+
+  // ---- IR Contacts ----
+  app.get("/api/governance/ir-contacts", isAuthenticated, requirePermission("governance_compliance", "view"), async (_req, res) => {
+    try {
+      const rows = await db.select().from(irContacts).orderBy(desc(irContacts.createdAt));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+  app.post("/api/governance/ir-contacts", isAuthenticated, requirePermission("governance_compliance", "create"), async (req, res) => {
+    try {
+      const data = insertIrContactSchema.parse({ ...req.body, createdBy: getUid(req) });
+      const [row] = await db.insert(irContacts).values(data).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.patch("/api/governance/ir-contacts/:id", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req, res) => {
+    try {
+      const data = updateIrContactSchema.parse(req.body);
+      const [row] = await db.update(irContacts).set({ ...data, updatedAt: new Date() }).where(eq(irContacts.id, parseInt(req.params.id))).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.delete("/api/governance/ir-contacts/:id", isAuthenticated, requirePermission("governance_compliance", "delete"), async (req, res) => {
+    try {
+      await db.delete(irContacts).where(eq(irContacts.id, parseInt(req.params.id)));
+      res.json({ success: true });
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+
+  // ---- Material Disclosures ----
+  app.get("/api/governance/material-disclosures", isAuthenticated, requirePermission("governance_disclosures", "view"), async (_req, res) => {
+    try {
+      const rows = await db.select().from(materialDisclosures).orderBy(desc(materialDisclosures.eventDate));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+  app.post("/api/governance/material-disclosures", isAuthenticated, requirePermission("governance_disclosures", "create"), async (req, res) => {
+    try {
+      // Auto-generate disclosure number if not provided
+      let disclosureNumber = req.body.disclosureNumber;
+      if (!disclosureNumber) {
+        const year = new Date().getFullYear();
+        const countRows = await db.select({ c: sql<number>`count(*)::int` }).from(materialDisclosures)
+          .where(sql`extract(year from ${materialDisclosures.eventDate}) = ${year}`);
+        const seq = (countRows[0]?.c || 0) + 1;
+        disclosureNumber = `MD-${year}-${String(seq).padStart(4, "0")}`;
+      }
+      const data = insertMaterialDisclosureSchema.parse({ ...req.body, disclosureNumber, createdBy: getUid(req) });
+      const [row] = await db.insert(materialDisclosures).values(data).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.patch("/api/governance/material-disclosures/:id", isAuthenticated, requirePermission("governance_disclosures", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [existing] = await db.select().from(materialDisclosures).where(eq(materialDisclosures.id, id));
+      if (!existing) return res.status(404).json({ error: "غير موجود" });
+      if (existing.isLocked) return res.status(403).json({ error: "الإفصاح مقفل ولا يمكن تعديله" });
+      const data = updateMaterialDisclosureSchema.parse(req.body);
+      const [row] = await db.update(materialDisclosures).set({ ...data, updatedAt: new Date() }).where(eq(materialDisclosures.id, id)).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.post("/api/governance/material-disclosures/:id/lock", isAuthenticated, requirePermission("governance_disclosures", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [row] = await db.update(materialDisclosures)
+        .set({ isLocked: true, lockedAt: new Date(), lockedBy: getUid(req), updatedAt: new Date() })
+        .where(eq(materialDisclosures.id, id)).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.post("/api/governance/material-disclosures/:id/publish-tadawul", isAuthenticated, requirePermission("governance_disclosures", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [existing] = await db.select().from(materialDisclosures).where(eq(materialDisclosures.id, id));
+      if (!existing) return res.status(404).json({ error: "غير موجود" });
+      if (existing.isLocked) return res.status(403).json({ error: "الإفصاح مقفل ولا يمكن نشره" });
+      if (existing.publishedToTadawul) return res.status(409).json({ error: "الإفصاح منشور مسبقاً في تداول" });
+      const tadawulReference = req.body.tadawulReference || `TDW-${Date.now()}`;
+      const [row] = await db.update(materialDisclosures)
+        .set({
+          publishedToTadawul: true,
+          tadawulReference,
+          tadawulPublishedAt: new Date(),
+          status: "published",
+          updatedAt: new Date(),
+        })
+        .where(eq(materialDisclosures.id, id)).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.delete("/api/governance/material-disclosures/:id", isAuthenticated, requirePermission("governance_disclosures", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [existing] = await db.select().from(materialDisclosures).where(eq(materialDisclosures.id, id));
+      if (existing?.isLocked) return res.status(403).json({ error: "الإفصاح مقفل ولا يمكن حذفه" });
+      await db.delete(materialDisclosures).where(eq(materialDisclosures.id, id));
+      res.json({ success: true });
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+
+  // ---- Internal Audit Plans ----
+  app.get("/api/governance/audit-plans", isAuthenticated, requirePermission("governance_compliance", "view"), async (_req, res) => {
+    try {
+      const rows = await db.select().from(internalAuditPlans).orderBy(desc(internalAuditPlans.fiscalYear));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+  app.post("/api/governance/audit-plans", isAuthenticated, requirePermission("governance_compliance", "create"), async (req, res) => {
+    try {
+      const data = insertInternalAuditPlanSchema.parse({ ...req.body, createdBy: getUid(req) });
+      const [row] = await db.insert(internalAuditPlans).values(data).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.patch("/api/governance/audit-plans/:id", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req, res) => {
+    try {
+      const data = updateInternalAuditPlanSchema.parse(req.body);
+      const [row] = await db.update(internalAuditPlans).set({ ...data, updatedAt: new Date() }).where(eq(internalAuditPlans.id, parseInt(req.params.id))).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.delete("/api/governance/audit-plans/:id", isAuthenticated, requirePermission("governance_compliance", "delete"), async (req, res) => {
+    try {
+      await db.delete(internalAuditPlans).where(eq(internalAuditPlans.id, parseInt(req.params.id)));
+      res.json({ success: true });
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+
+  // ---- Internal Audit Engagements ----
+  app.get("/api/governance/audit-engagements", isAuthenticated, requirePermission("governance_compliance", "view"), async (req, res) => {
+    try {
+      const planId = req.query.planId ? parseInt(req.query.planId as string) : null;
+      const rows = planId
+        ? await db.select().from(internalAuditEngagements).where(eq(internalAuditEngagements.planId, planId)).orderBy(desc(internalAuditEngagements.createdAt))
+        : await db.select().from(internalAuditEngagements).orderBy(desc(internalAuditEngagements.createdAt));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+  app.post("/api/governance/audit-engagements", isAuthenticated, requirePermission("governance_compliance", "create"), async (req, res) => {
+    try {
+      let reference = req.body.reference;
+      if (!reference) {
+        const year = new Date().getFullYear();
+        const countRows = await db.select({ c: sql<number>`count(*)::int` }).from(internalAuditEngagements);
+        const seq = (countRows[0]?.c || 0) + 1;
+        reference = `IA-${year}-${String(seq).padStart(4, "0")}`;
+      }
+      const data = insertInternalAuditEngagementSchema.parse({ ...req.body, reference, createdBy: getUid(req) });
+      const [row] = await db.insert(internalAuditEngagements).values(data).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.patch("/api/governance/audit-engagements/:id", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req, res) => {
+    try {
+      const data = updateInternalAuditEngagementSchema.parse(req.body);
+      const [row] = await db.update(internalAuditEngagements).set({ ...data, updatedAt: new Date() }).where(eq(internalAuditEngagements.id, parseInt(req.params.id))).returning();
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.delete("/api/governance/audit-engagements/:id", isAuthenticated, requirePermission("governance_compliance", "delete"), async (req, res) => {
+    try {
+      await db.delete(internalAuditEngagements).where(eq(internalAuditEngagements.id, parseInt(req.params.id)));
+      res.json({ success: true });
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+
+  // ---- Internal Audit Findings ----
+  app.get("/api/governance/audit-findings", isAuthenticated, requirePermission("governance_compliance", "view"), async (req, res) => {
+    try {
+      const engagementId = req.query.engagementId ? parseInt(req.query.engagementId as string) : null;
+      const rows = engagementId
+        ? await db.select().from(internalAuditFindings).where(eq(internalAuditFindings.engagementId, engagementId)).orderBy(desc(internalAuditFindings.createdAt))
+        : await db.select().from(internalAuditFindings).orderBy(desc(internalAuditFindings.createdAt));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+  app.post("/api/governance/audit-findings", isAuthenticated, requirePermission("governance_compliance", "create"), async (req, res) => {
+    try {
+      const data = insertInternalAuditFindingSchema.parse({ ...req.body, createdBy: getUid(req) });
+      const [row] = await db.insert(internalAuditFindings).values(data).returning();
+      // Recount findings on engagement
+      const all = await db.select().from(internalAuditFindings).where(eq(internalAuditFindings.engagementId, data.engagementId));
+      const open = all.filter(f => f.status === "open" || f.status === "in_progress" || f.status === "overdue").length;
+      await db.update(internalAuditEngagements)
+        .set({ totalFindings: all.length, openFindings: open, updatedAt: new Date() })
+        .where(eq(internalAuditEngagements.id, data.engagementId));
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.patch("/api/governance/audit-findings/:id", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const data = updateInternalAuditFindingSchema.parse(req.body);
+      const updates: any = { ...data, updatedAt: new Date() };
+      if (data.status === "resolved" && !data.resolvedAt) updates.resolvedAt = new Date();
+      const [row] = await db.update(internalAuditFindings).set(updates).where(eq(internalAuditFindings.id, id)).returning();
+      if (row?.engagementId) {
+        const all = await db.select().from(internalAuditFindings).where(eq(internalAuditFindings.engagementId, row.engagementId));
+        const open = all.filter(f => f.status === "open" || f.status === "in_progress" || f.status === "overdue").length;
+        await db.update(internalAuditEngagements)
+          .set({ totalFindings: all.length, openFindings: open, updatedAt: new Date() })
+          .where(eq(internalAuditEngagements.id, row.engagementId));
+      }
+      res.json(row);
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+  app.delete("/api/governance/audit-findings/:id", isAuthenticated, requirePermission("governance_compliance", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [existing] = await db.select().from(internalAuditFindings).where(eq(internalAuditFindings.id, id));
+      await db.delete(internalAuditFindings).where(eq(internalAuditFindings.id, id));
+      if (existing?.engagementId) {
+        const all = await db.select().from(internalAuditFindings).where(eq(internalAuditFindings.engagementId, existing.engagementId));
+        const open = all.filter(f => f.status === "open" || f.status === "in_progress" || f.status === "overdue").length;
+        await db.update(internalAuditEngagements)
+          .set({ totalFindings: all.length, openFindings: open, updatedAt: new Date() })
+          .where(eq(internalAuditEngagements.id, existing.engagementId));
+      }
+      res.json({ success: true });
+    } catch (e: any) { res.status(400).json({ error: e.message }); }
+  });
+
+  // Aggregate KPI for findings dashboard
+  app.get("/api/governance/audit-findings/_kpi", isAuthenticated, requirePermission("governance_compliance", "view"), async (_req, res) => {
+    try {
+      const all = await db.select().from(internalAuditFindings);
+      const total = all.length;
+      const open = all.filter(f => f.status === "open").length;
+      const inProgress = all.filter(f => f.status === "in_progress").length;
+      const resolved = all.filter(f => f.status === "resolved").length;
+      const critical = all.filter(f => f.severity === "critical").length;
+      const high = all.filter(f => f.severity === "high").length;
+      const overdue = all.filter(f => {
+        if (!f.dueDate || f.status === "resolved" || f.status === "accepted_risk") return false;
+        return new Date(f.dueDate) < new Date();
+      }).length;
+      res.json({ total, open, inProgress, resolved, critical, high, overdue });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 }

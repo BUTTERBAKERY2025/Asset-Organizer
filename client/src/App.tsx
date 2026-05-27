@@ -151,6 +151,11 @@ const GeneralAssemblyPage = makeLazy("governance-general-assembly");
 const AssemblyResolutionsPage = makeLazy("governance-assembly-resolutions");
 const InsidersPage = makeLazy("governance-insiders");
 const BlackoutPeriodsPage = makeLazy("governance-blackout-periods");
+const AuditCommitteePage = makeLazy("governance-audit-committee");
+const ProspectusPage = makeLazy("governance-prospectus");
+const InvestorRelationsPage = makeLazy("governance-investor-relations");
+const MaterialDisclosuresPage = makeLazy("governance-material-disclosures");
+const InternalAuditPage = makeLazy("governance-internal-audit");
 const SecurityPage = makeLazy("security");
 const VisitorsPage = makeLazy("visitors");
 const TravelRequestsPage = makeLazy("travel-requests");
@@ -460,6 +465,11 @@ const Router = React.memo(function Router() {
       <Route path="/governance/assembly-resolutions">{() => <ModulePage component={AssemblyResolutionsPage} module="governance_resolutions" />}</Route>
       <Route path="/governance/insiders">{() => <ModulePage component={InsidersPage} module="governance_compliance" />}</Route>
       <Route path="/governance/blackout-periods">{() => <ModulePage component={BlackoutPeriodsPage} module="governance_compliance" />}</Route>
+      <Route path="/governance/audit-committee">{() => <ModulePage component={AuditCommitteePage} module="governance_compliance" />}</Route>
+      <Route path="/governance/prospectus">{() => <ModulePage component={ProspectusPage} module="governance_compliance" />}</Route>
+      <Route path="/governance/investor-relations">{() => <ModulePage component={InvestorRelationsPage} module="governance_compliance" />}</Route>
+      <Route path="/governance/material-disclosures">{() => <ModulePage component={MaterialDisclosuresPage} module="governance_disclosures" />}</Route>
+      <Route path="/governance/internal-audit">{() => <ModulePage component={InternalAuditPage} module="governance_compliance" />}</Route>
       
       {/* Security - الأمان */}
       <Route path="/security">{() => <ModulePage component={SecurityPage} module="rbac_management" />}</Route>
