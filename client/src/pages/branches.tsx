@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { Plus, Loader2, Building2, ArrowRight, MapPin, Settings } from "lucide-react";
+import { Plus, Loader2, Building2, ArrowRight, MapPin, Settings, Pencil } from "lucide-react";
 import { Link } from "wouter";
 import { Textarea } from "@/components/ui/textarea";
 import type { Branch, InventoryItem } from "@shared/schema";
@@ -44,6 +44,8 @@ type BranchFormData = z.infer<typeof branchFormSchema>;
 export default function BranchesPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingBranchName, setEditingBranchName] = useState("");
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
   const [locationData, setLocationData] = useState({
     latitude: "",
@@ -100,6 +102,29 @@ export default function BranchesPage() {
       toast({ title: "خطأ", description: error.message, variant: "destructive" });
     },
   });
+
+  const updateNameMutation = useMutation({
+    mutationFn: async ({ branchId, name }: { branchId: string; name: string }) => {
+      const res = await apiRequest("PATCH", `/api/branches/${branchId}`, { name });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/branches"] });
+      toast({ title: "تم تحديث اسم الفرع بنجاح" });
+      setIsEditDialogOpen(false);
+      setSelectedBranch(null);
+      setEditingBranchName("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "خطأ", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const openEditDialog = (branch: Branch) => {
+    setSelectedBranch(branch);
+    setEditingBranchName(branch.name);
+    setIsEditDialogOpen(true);
+  };
 
   const updateLocationMutation = useMutation({
     mutationFn: async ({ branchId, data }: { branchId: string; data: typeof locationData }) => {
@@ -314,15 +339,28 @@ export default function BranchesPage() {
                           </TableCell>
                           {isAdmin && (
                           <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openLocationDialog(branch)}
-                              className="h-8 w-8 p-0"
-                              data-testid={`btn-location-${branch.id}`}
-                            >
-                              <Settings className="w-4 h-4" />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openEditDialog(branch)}
+                                className="h-8 w-8 p-0"
+                                title="تعديل اسم الفرع"
+                                data-testid={`btn-edit-${branch.id}`}
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openLocationDialog(branch)}
+                                className="h-8 w-8 p-0"
+                                title="إعدادات الموقع"
+                                data-testid={`btn-location-${branch.id}`}
+                              >
+                                <Settings className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                           )}
                         </TableRow>
@@ -334,6 +372,52 @@ export default function BranchesPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Edit Branch Name Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Pencil className="w-5 h-5" />
+                تعديل اسم الفرع
+              </DialogTitle>
+              <DialogDescription>
+                المعرف: <span className="font-mono">{selectedBranch?.id}</span> (لا يمكن تغييره)
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>اسم الفرع</Label>
+                <Input
+                  value={editingBranchName}
+                  onChange={(e) => setEditingBranchName(e.target.value)}
+                  placeholder="أدخل الاسم الجديد للفرع"
+                  className="h-11"
+                  data-testid="input-edit-branch-name"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="h-11">
+                إلغاء
+              </Button>
+              <Button
+                onClick={() => {
+                  if (selectedBranch && editingBranchName.trim()) {
+                    updateNameMutation.mutate({ branchId: selectedBranch.id, name: editingBranchName.trim() });
+                  }
+                }}
+                disabled={updateNameMutation.isPending || !editingBranchName.trim() || editingBranchName.trim() === selectedBranch?.name}
+                className="h-11"
+                data-testid="button-save-branch-name"
+              >
+                {updateNameMutation.isPending && <Loader2 className="w-4 h-4 animate-spin ml-2" />}
+                حفظ
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Location Settings Dialog */}
         <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>

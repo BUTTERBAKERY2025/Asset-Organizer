@@ -1125,6 +1125,27 @@ export async function registerRoutes(
     }
   });
 
+  // Update branch name - Admin only
+  app.patch("/api/branches/:id", isAuthenticated, requirePermission("branches", "edit"), async (req, res) => {
+    try {
+      if (!isUserAdmin(req)) {
+        return res.status(403).json({ error: "غير مصرح - هذه الميزة متاحة للمدير فقط" });
+      }
+      const { id } = req.params;
+      const { name } = req.body;
+      if (!name || typeof name !== "string" || !name.trim()) {
+        return res.status(400).json({ error: "اسم الفرع مطلوب" });
+      }
+      await db.update(branches).set({ name: name.trim() }).where(eq(branches.id, id));
+      const [updated] = await db.select().from(branches).where(eq(branches.id, id));
+      if (!updated) return res.status(404).json({ error: "الفرع غير موجود" });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating branch name:", error);
+      res.status(500).json({ error: "Failed to update branch" });
+    }
+  });
+
   // Update branch location - Admin only
   app.patch("/api/branches/:id/location", isAuthenticated, requirePermission("branches", "edit"), async (req, res) => {
     try {
