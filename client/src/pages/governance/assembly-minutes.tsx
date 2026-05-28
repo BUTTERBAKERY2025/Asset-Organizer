@@ -488,14 +488,28 @@ export default function AssemblyMinutesPage() {
         for (const resolution of meetingResolutions) {
           try {
             const sigRes = await fetch(`/api/governance/resolutions/${resolution.id}/signatures`, { credentials: 'include' });
-            if (!sigRes.ok) continue;
-            const sigs = await sigRes.json();
-            for (const s of (Array.isArray(sigs) ? sigs : [])) {
-              if (s.status !== 'signed' || !isSafeSig(s.signatureData)) continue;
-              const entry = { url: s.signatureData as string, signedAt: s.signedAt };
-              const name = s.memberName || s.signerName;
-              if (name && !sigByName.has(normName(name))) sigByName.set(normName(name), entry);
-              if (s.shareholderId && !sigByShareholderId.has(Number(s.shareholderId))) sigByShareholderId.set(Number(s.shareholderId), entry);
+            if (sigRes.ok) {
+              const sigs = await sigRes.json();
+              for (const s of (Array.isArray(sigs) ? sigs : [])) {
+                if (s.status !== 'signed' || !isSafeSig(s.signatureData)) continue;
+                const entry = { url: s.signatureData as string, signedAt: s.signedAt };
+                const name = s.memberName || s.signerName;
+                if (name && !sigByName.has(normName(name))) sigByName.set(normName(name), entry);
+                if (s.shareholderId && !sigByShareholderId.has(Number(s.shareholderId))) sigByShareholderId.set(Number(s.shareholderId), entry);
+              }
+            }
+          } catch {}
+          // التواقيع الإلكترونية من بطاقات التصويت (المصدر الأكثر شيوعاً لتوقيع المساهمين)
+          try {
+            const tokRes = await fetch(`/api/governance/resolutions/${resolution.id}/voting-tokens`, { credentials: 'include' });
+            if (tokRes.ok) {
+              const toks = await tokRes.json();
+              for (const t of (Array.isArray(toks) ? toks : [])) {
+                if (!isSafeSig(t.signatureData)) continue;
+                const entry = { url: t.signatureData as string, signedAt: t.votedAt || t.signedAt };
+                if (t.shareholderName && !sigByName.has(normName(t.shareholderName))) sigByName.set(normName(t.shareholderName), entry);
+                if (t.shareholderId && !sigByShareholderId.has(Number(t.shareholderId))) sigByShareholderId.set(Number(t.shareholderId), entry);
+              }
             }
           } catch {}
         }
@@ -604,7 +618,7 @@ export default function AssemblyMinutesPage() {
       </table>
     </div>`);
 
-              const signed = votedTokens.filter((t: any) => t.signatureData);
+              const signed = votedTokens.filter((t: any) => isSafeSig(t.signatureData));
               allSignedTokens = [...allSignedTokens, ...signed];
             } catch {}
           }
@@ -625,7 +639,7 @@ export default function AssemblyMinutesPage() {
               <div style="border:1px solid #e5e5e5;border-radius:8px;padding:12px;text-align:center;background:#fafafa;">
                 <div style="font-size:11px;font-weight:600;color:#333;margin-bottom:5px;">${sanitize(t.shareholderName)}</div>
                 <div style="font-size:9px;color:#888;margin-bottom:8px;">عدد الأسهم: ${(t.voteWeight || 0).toLocaleString()} | التصويت: ${t.vote === 'for' ? 'موافق' : t.vote === 'against' ? 'معارض' : 'ممتنع'}</div>
-                <img src="${t.signatureData}" alt="توقيع ${sanitize(t.shareholderName)}" style="max-width:180px;max-height:80px;border:1px solid #ddd;border-radius:4px;background:white;padding:4px;" />
+                <img src="${isSafeSig(t.signatureData) ? t.signatureData : ''}" alt="توقيع ${sanitize(t.shareholderName)}" style="max-width:180px;max-height:80px;border:1px solid #ddd;border-radius:4px;background:white;padding:4px;" />
                 <div style="font-size:8px;color:#aaa;margin-top:5px;">تم التوقيع: ${t.votedAt ? new Date(t.votedAt).toLocaleDateString('ar-SA-u-ca-gregory') + ' ' + new Date(t.votedAt).toLocaleTimeString('ar-SA-u-nu-latn') : '-'}</div>
               </div>
             `).join('');
