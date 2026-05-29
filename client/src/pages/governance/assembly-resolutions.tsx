@@ -18,6 +18,7 @@ import { apiRequest, queryClient as qc } from "@/lib/queryClient";
 import {
   Building2, Plus, Search, Eye, Edit, Trash2, Lock, LockOpen,
   ThumbsUp, ThumbsDown, Loader2, Scale, AlertTriangle, FileDown,
+  Printer, FileText,
 } from "lucide-react";
 import type { AssemblyResolution } from "@shared/schema";
 
@@ -143,6 +144,182 @@ export default function AssemblyResolutionsPage() {
       URL.revokeObjectURL(url);
     } catch (e: any) {
       toast({ title: "فشل تحميل المستند الموقّع", description: e?.message, variant: "destructive" });
+    }
+  };
+
+  // ===== Official document: print + PDF export for ANY assembly resolution =====
+  const escapeHtml = (v: any) =>
+    String(v ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+  const labelOf = (arr: { value: string; label: string }[], v?: string | null) =>
+    arr.find(x => x.value === v)?.label || v || "—";
+
+  const buildResolutionDocContent = (r: AssemblyResolution) => {
+    const fmt = (n: any) => (n == null || n === "" ? "0" : Number(n).toLocaleString("en-US"));
+    const dateAr = (d: any) =>
+      d ? new Date(d).toLocaleDateString("ar-SA-u-nu-latn", { year: "numeric", month: "long", day: "numeric" }) : "—";
+    const statusLabel = escapeHtml(labelOf(statuses, r.status));
+    const assemblyLabel = escapeHtml(labelOf(assemblyTypes.map(a => ({ value: a.value, label: a.label })), r.assemblyType));
+    const typeLabel = escapeHtml(labelOf(resolutionTypes.map(a => ({ value: a.value, label: a.label })), r.resolutionType));
+    const majorityLabel = escapeHtml(labelOf(majorityTypes, r.majorityType));
+    const resolutionNumber = escapeHtml(r.resolutionNumber);
+    const approved = r.status === "approved" || r.status === "implemented";
+    const resultBadge = approved
+      ? "✓ تم اعتماد القرار"
+      : r.status === "rejected"
+      ? "✗ تم رفض القرار"
+      : "⏳ " + statusLabel;
+    const resultColor = approved ? "#15803d" : r.status === "rejected" ? "#b91c1c" : "#a16207";
+    const sharesRow = (Number(r.forShares) || Number(r.againstShares) || Number(r.abstainShares))
+      ? `<div class="vote-box">
+           <div class="vote-item"><div class="vote-num" style="color:#15803d">${fmt(r.forShares)}</div><div class="vote-lbl">أسهم موافقة</div></div>
+           <div class="vote-item"><div class="vote-num" style="color:#b91c1c">${fmt(r.againstShares)}</div><div class="vote-lbl">أسهم معارضة</div></div>
+           <div class="vote-item"><div class="vote-num" style="color:#a16207">${fmt(r.abstainShares)}</div><div class="vote-lbl">أسهم ممتنعة</div></div>
+         </div>`
+      : "";
+    return `
+    <div id="res-doc">
+      <style>
+        #res-doc { font-family: 'Cairo','Segoe UI',sans-serif; direction: rtl; color:#1a1a1a; background:#fff; width:190mm; margin:0 auto; padding:4mm; box-sizing:border-box; font-size:12px; }
+        #res-doc * { box-sizing: border-box; }
+        #res-doc .doc-header { display:flex; justify-content:space-between; align-items:center; background:linear-gradient(135deg,#1a3a2f,#2d5a47); color:#fff; padding:16px 20px; border-radius:8px; }
+        #res-doc .brand { display:flex; align-items:center; gap:12px; }
+        #res-doc .logo { width:54px; height:54px; background:linear-gradient(135deg,#f5a623,#e67e22); border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; color:#1a3a2f; }
+        #res-doc .brand h1 { margin:0; font-size:17px; font-weight:700; }
+        #res-doc .brand .en { margin:3px 0 0; font-size:10px; color:#f5a623; }
+        #res-doc .brand .reg { margin:3px 0 0; font-size:9px; opacity:.85; }
+        #res-doc .doc-type { text-align:left; }
+        #res-doc .doc-type .badge { background:#f5a623; color:#1a3a2f; font-weight:700; padding:4px 12px; border-radius:6px; font-size:12px; }
+        #res-doc .doc-type .num { margin-top:6px; font-size:12px; font-family:monospace; }
+        #res-doc .meta { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:16px 0; }
+        #res-doc .meta .m { background:#f8f9fa; border-right:3px solid #f5a623; border-radius:0 6px 6px 0; padding:8px 12px; }
+        #res-doc .meta .m .l { font-size:9px; color:#666; }
+        #res-doc .meta .m .v { font-size:12px; font-weight:700; color:#1a3a2f; margin-top:2px; }
+        #res-doc .sec-title { display:flex; align-items:center; gap:8px; margin:16px 0 8px; }
+        #res-doc .sec-title .ic { width:22px; height:22px; background:#1a3a2f; color:#fff; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; }
+        #res-doc .sec-title span { font-size:14px; font-weight:700; color:#1a3a2f; }
+        #res-doc .title-box { background:#fff5eb; border:1px solid #f5a623; border-radius:8px; padding:12px 16px; }
+        #res-doc .title-box h2 { margin:0; font-size:16px; color:#1a3a2f; }
+        #res-doc .desc { white-space:pre-wrap; line-height:1.7; font-size:12px; padding:10px 4px; }
+        #res-doc .vote-box { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:6px; }
+        #res-doc .vote-item { background:#fafbfc; border:1px solid #eee; border-radius:8px; padding:12px; text-align:center; }
+        #res-doc .vote-num { font-size:20px; font-weight:800; }
+        #res-doc .vote-lbl { font-size:10px; color:#666; margin-top:2px; }
+        #res-doc .result { margin-top:12px; text-align:center; font-weight:700; font-size:14px; color:${resultColor}; border:2px dashed ${resultColor}; border-radius:8px; padding:8px; }
+        #res-doc .req { text-align:center; font-size:11px; color:#666; margin-top:6px; }
+        #res-doc .foot { margin-top:20px; padding-top:10px; border-top:2px solid #1a3a2f; display:flex; justify-content:space-between; font-size:9px; color:#666; }
+      </style>
+      <div class="doc-header">
+        <div class="brand">
+          <div class="logo">B</div>
+          <div>
+            <h1>شركة الزبد الأفضل التجارية</h1>
+            <div class="en">THE BUTTER BEST TRADING COMPANY</div>
+            <div class="reg">شركة مساهمة | سجل تجاري: 7026155296 | المملكة العربية السعودية</div>
+          </div>
+        </div>
+        <div class="doc-type">
+          <div class="badge">قرار جمعية عمومية</div>
+          <div class="num">رقم: ${resolutionNumber}</div>
+        </div>
+      </div>
+      <div class="meta">
+        <div class="m"><div class="l">نوع الجمعية</div><div class="v">${assemblyLabel}</div></div>
+        <div class="m"><div class="l">نوع القرار</div><div class="v">${typeLabel}</div></div>
+        <div class="m"><div class="l">الأغلبية المطلوبة</div><div class="v">${majorityLabel}</div></div>
+        <div class="m"><div class="l">التاريخ</div><div class="v">${dateAr(r.approvedAt || r.proposedAt || r.createdAt)}</div></div>
+      </div>
+      <div class="sec-title"><div class="ic">١</div><span>نص القرار</span></div>
+      <div class="title-box"><h2>${escapeHtml(r.title)}</h2></div>
+      <div class="desc">${escapeHtml(r.description)}</div>
+      <div class="sec-title"><div class="ic">٢</div><span>نتيجة التصويت</span></div>
+      <div class="vote-box">
+        <div class="vote-item"><div class="vote-num" style="color:#15803d">${fmt(r.forVotes)}</div><div class="vote-lbl">موافق</div></div>
+        <div class="vote-item"><div class="vote-num" style="color:#b91c1c">${fmt(r.againstVotes)}</div><div class="vote-lbl">معارض</div></div>
+        <div class="vote-item"><div class="vote-num" style="color:#a16207">${fmt(r.abstainVotes)}</div><div class="vote-lbl">ممتنع</div></div>
+      </div>
+      ${sharesRow}
+      ${r.requiredMajority ? `<div class="req">النسبة المطلوبة للاعتماد: ${Number(r.requiredMajority)}%</div>` : ""}
+      <div class="result">${resultBadge}</div>
+      <div class="foot">
+        <div>شركة الزبد الأفضل التجارية (شركة مساهمة) | سجل تجاري: 7026155296</div>
+        <div>تاريخ الطباعة: ${new Date().toLocaleDateString("ar-SA-u-nu-latn")} | وثيقة رسمية</div>
+      </div>
+    </div>`;
+  };
+
+  const printResolution = (r: AssemblyResolution) => {
+    try {
+      const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>قرار ${escapeHtml(r.resolutionNumber)}</title>
+      <style>@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');@page{size:A4 portrait;margin:12mm}body{margin:0}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style>
+      </head><body>${buildResolutionDocContent(r)}</body></html>`;
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "fixed";
+      iframe.style.right = "-9999px";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "none";
+
+      let cleaned = false;
+      const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      };
+      const triggerPrint = () => {
+        setTimeout(() => {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+          setTimeout(cleanup, 2000);
+        }, 350);
+      };
+
+      iframe.onload = triggerPrint;
+      document.body.appendChild(iframe);
+      const doc = iframe.contentWindow?.document;
+      if (!doc) {
+        cleanup();
+        throw new Error("تعذّر تجهيز نافذة الطباعة");
+      }
+      doc.open();
+      doc.write(html);
+      doc.close();
+      // Fallback in case the load event does not fire after document.write
+      setTimeout(() => { if (!cleaned) triggerPrint(); }, 800);
+    } catch (e: any) {
+      toast({ title: "تعذّر طباعة القرار", description: e?.message, variant: "destructive" });
+    }
+  };
+
+  const exportResolutionPdf = async (r: AssemblyResolution) => {
+    let container: HTMLDivElement | null = null;
+    try {
+      const html2pdf = (await import("html2pdf.js")).default;
+      container = document.createElement("div");
+      container.style.position = "fixed";
+      container.style.right = "-9999px";
+      container.style.top = "0";
+      container.innerHTML = buildResolutionDocContent(r);
+      document.body.appendChild(container);
+      await html2pdf()
+        .set({
+          margin: [8, 8, 8, 8],
+          filename: `قرار_جمعية_${r.resolutionNumber}.pdf`,
+          image: { type: "jpeg", quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        })
+        .from(container)
+        .save();
+    } catch (e: any) {
+      toast({ title: "تعذّر تصدير القرار", description: e?.message, variant: "destructive" });
+    } finally {
+      if (container && container.parentNode) container.parentNode.removeChild(container);
     }
   };
 
@@ -299,6 +476,21 @@ export default function AssemblyResolutionsPage() {
                           )}
                           <Button variant="outline" size="sm" onClick={() => setViewing(r)} data-testid={`btn-view-${r.id}`}>
                             <Eye className="h-4 w-4 ml-1" /> عرض
+                          </Button>
+                          <Button
+                            variant="outline" size="sm"
+                            onClick={() => printResolution(r)}
+                            data-testid={`btn-print-${r.id}`}
+                          >
+                            <Printer className="h-4 w-4 ml-1" /> طباعة
+                          </Button>
+                          <Button
+                            variant="outline" size="sm"
+                            className="text-blue-700 border-blue-300 hover:bg-blue-50"
+                            onClick={() => exportResolutionPdf(r)}
+                            data-testid={`btn-export-${r.id}`}
+                          >
+                            <FileText className="h-4 w-4 ml-1" /> تصدير PDF
                           </Button>
                           <Button
                             variant="outline" size="sm"
@@ -499,6 +691,23 @@ export default function AssemblyResolutionsPage() {
                     <FileDown className="h-4 w-4 ml-1" /> تحميل القرار الموقع سابقاً (PDF)
                   </Button>
                 )}
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => printResolution(viewing)}
+                    data-testid={`btn-print-view-${viewing.id}`}
+                  >
+                    <Printer className="h-4 w-4 ml-1" /> طباعة القرار
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="text-blue-700 border-blue-300 hover:bg-blue-50"
+                    onClick={() => exportResolutionPdf(viewing)}
+                    data-testid={`btn-export-view-${viewing.id}`}
+                  >
+                    <FileText className="h-4 w-4 ml-1" /> تصدير PDF
+                  </Button>
+                </div>
                 {viewing.isLocked && (
                   <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm">
                     <p className="font-medium text-amber-900 flex items-center gap-1">
