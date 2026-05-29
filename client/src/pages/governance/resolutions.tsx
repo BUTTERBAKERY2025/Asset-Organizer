@@ -49,6 +49,7 @@ import {
   Share2,
   Trash2,
   Lock,
+  RotateCcw,
 } from "lucide-react";
 import type { BoardResolution, BoardMember } from "@shared/schema";
 import { exportToExcel, exportToCSV, printAsPDF } from "@/lib/export-utils";
@@ -233,20 +234,57 @@ export default function ResolutionsPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
+    mutationFn: async ({ id, reason }: { id: number; reason?: string }) => {
       const res = await fetch(`/api/governance/resolutions/${id}`, {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ reason: reason || "" }),
       });
-      if (!res.ok) throw new Error("Failed to delete resolution");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || "فشل في حذف القرار");
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/governance/resolutions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/resolutions-trash"] });
       setDeleteResolutionId(null);
-      toast({ title: "تم حذف القرار بنجاح" });
+      setDeleteReason("");
+      toast({ title: "تم نقل القرار إلى سلة المحذوفات", description: "يمكنك استرجاعه من سلة المحذوفات في أي وقت" });
     },
-    onError: () => {
-      toast({ title: "فشل في حذف القرار", variant: "destructive" });
+    onError: (e: any) => {
+      toast({ title: "تعذّر الحذف", description: e?.message, variant: "destructive" });
+    },
+  });
+
+  // Recycle bin (سلة المحذوفات) — soft-deleted resolutions, restorable.
+  const [showTrash, setShowTrash] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
+  const { data: trashedResolutions = [], isLoading: trashLoading } = useQuery<BoardResolution[]>({
+    queryKey: ["/api/governance/resolutions-trash"],
+    enabled: showTrash,
+  });
+  const restoreMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/governance/resolutions/${id}/restore`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || "فشل في استرجاع القرار");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/resolutions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/resolutions-trash"] });
+      toast({ title: "تم استرجاع القرار بنجاح" });
+    },
+    onError: (e: any) => {
+      toast({ title: "فشل الاسترجاع", description: e?.message, variant: "destructive" });
     },
   });
 
@@ -422,6 +460,17 @@ export default function ResolutionsPage() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            {isAdmin && (
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => setShowTrash(true)}
+                data-testid="button-open-trash"
+              >
+                <Trash2 className="h-4 w-4" />
+                سلة المحذوفات
+              </Button>
+            )}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="gap-2 bg-emerald-600 hover:bg-emerald-700" data-testid="btn-add-resolution">
@@ -1353,20 +1402,33 @@ export default function ResolutionsPage() {
                                   <AlertDialogDescription className="text-right">
                                     هل أنت متأكد من حذف القرار رقم <strong>{resolution.resolutionNumber}</strong>؟
                                     <br />
-                                    <span className="text-red-600">هذا الإجراء لا يمكن التراجع عنه وسيتم حذف جميع البيانات المرتبطة بالقرار.</span>
+                                    <span className="text-amber-600">سيتم نقل القرار إلى سلة المحذوفات ويمكنك استرجاعه لاحقاً. لن يتم فقدان أي بيانات.</span>
+                                    <br />
+                                    <span className="text-muted-foreground text-xs">ملاحظة: القرارات التي تم التصويت عليها أو توقيعها محمية ولا يمكن حذفها نهائياً.</span>
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
+                                <div className="px-1 py-2">
+                                  <Label className="text-right block mb-1 text-sm">سبب الحذف (اختياري)</Label>
+                                  <Textarea
+                                    value={deleteReason}
+                                    onChange={(e) => setDeleteReason(e.target.value)}
+                                    placeholder="مثال: تم إنشاؤه بالخطأ"
+                                    className="text-right"
+                                    data-testid="input-delete-reason"
+                                  />
+                                </div>
                                 <AlertDialogFooter className="flex gap-2">
-                                  <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                                  <AlertDialogCancel onClick={() => setDeleteReason("")}>إلغاء</AlertDialogCancel>
                                   <AlertDialogAction
                                     className="bg-red-600 hover:bg-red-700"
-                                    onClick={() => deleteMutation.mutate(resolution.id)}
+                                    onClick={() => deleteMutation.mutate({ id: resolution.id, reason: deleteReason })}
                                     disabled={deleteMutation.isPending}
+                                    data-testid="button-confirm-delete"
                                   >
                                     {deleteMutation.isPending ? (
                                       <><Loader2 className="h-4 w-4 animate-spin ml-2" /> جاري الحذف...</>
                                     ) : (
-                                      "نعم، احذف القرار"
+                                      "نقل إلى سلة المحذوفات"
                                     )}
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
@@ -1895,6 +1957,58 @@ export default function ResolutionsPage() {
                   </Button>
                 </DialogFooter>
               </form>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Recycle bin (سلة المحذوفات) */}
+        <Dialog open={showTrash} onOpenChange={setShowTrash}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-right flex items-center gap-2">
+                <Trash2 className="h-5 w-5" /> سلة المحذوفات
+              </DialogTitle>
+              <DialogDescription className="text-right">
+                القرارات المحذوفة محفوظة هنا ويمكن استرجاعها. لا يتم فقدان أي قرار نهائياً.
+              </DialogDescription>
+            </DialogHeader>
+            {trashLoading ? (
+              <div className="flex items-center justify-center py-10 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin ml-2" /> جاري التحميل...
+              </div>
+            ) : trashedResolutions.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground" data-testid="text-trash-empty">
+                سلة المحذوفات فارغة
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {trashedResolutions.map((r) => (
+                  <div
+                    key={r.id}
+                    className="flex items-center justify-between gap-3 border rounded-lg p-3"
+                    data-testid={`row-trash-${r.id}`}
+                  >
+                    <div className="text-right">
+                      <div className="font-semibold">{r.resolutionNumber}</div>
+                      <div className="text-sm text-muted-foreground">{r.title}</div>
+                      {(r as any).deletionReason && (
+                        <div className="text-xs text-muted-foreground mt-1">السبب: {(r as any).deletionReason}</div>
+                      )}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1 text-emerald-700 border-emerald-200 hover:bg-emerald-50 shrink-0"
+                      onClick={() => restoreMutation.mutate(r.id)}
+                      disabled={restoreMutation.isPending}
+                      data-testid={`button-restore-${r.id}`}
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      استرجاع
+                    </Button>
+                  </div>
+                ))}
+              </div>
             )}
           </DialogContent>
         </Dialog>

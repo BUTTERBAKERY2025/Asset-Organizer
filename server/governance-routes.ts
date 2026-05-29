@@ -1037,6 +1037,8 @@ export function registerGovernanceRoutes(app: Express) {
       
       let query = db.select().from(boardResolutions);
       const conditions: any[] = [];
+      // Hide soft-deleted resolutions from the normal list (they live in the recycle bin).
+      conditions.push(isNull(boardResolutions.deletedAt));
       
       if (status) conditions.push(eq(boardResolutions.status, status));
       if (type) conditions.push(eq(boardResolutions.resolutionType, type));
@@ -1056,7 +1058,7 @@ export function registerGovernanceRoutes(app: Express) {
   app.get("/api/governance/resolutions/:id", isAuthenticated, requirePermission("governance_resolutions", "view"), async (req, res) => {
     try {
       const [resolution] = await db.select().from(boardResolutions).where(eq(boardResolutions.id, parseInt(req.params.id)));
-      if (!resolution) {
+      if (!resolution || (resolution as any).deletedAt) {
         return res.status(404).json({ error: "القرار غير موجود" });
       }
       res.json(resolution);
@@ -1115,6 +1117,11 @@ export function registerGovernanceRoutes(app: Express) {
       delete (validatedData as any).isLocked;
       delete (validatedData as any).lockedAt;
       delete (validatedData as any).lockedBy;
+      // SAFEGUARD: never allow soft-delete fields to be changed via the edit route.
+      // Deletion/restore must go through the dedicated admin-only endpoints.
+      delete (validatedData as any).deletedAt;
+      delete (validatedData as any).deletedBy;
+      delete (validatedData as any).deletionReason;
 
       const [resolution] = await db.update(boardResolutions)
         .set({ ...validatedData, updatedAt: new Date() })
@@ -1157,29 +1164,125 @@ export function registerGovernanceRoutes(app: Express) {
       
       const resolutionId = parseInt(req.params.id);
 
+      const reason = (req.body?.reason || '').toString().trim();
+
       // IMMUTABILITY: locked resolutions cannot be deleted.
       const [existing] = await db.select().from(boardResolutions).where(eq(boardResolutions.id, resolutionId));
       if (!existing) return res.status(404).json({ error: "القرار غير موجود" });
+      if ((existing as any).deletedAt) {
+        return res.status(409).json({ error: "القرار محذوف بالفعل وموجود في سلة المحذوفات" });
+      }
       if ((existing as any).isLocked) {
         return res.status(423).json({ error: "القرار مقفل ولا يمكن حذفه — السجلات الرسمية محفوظة بحكم النظام", code: "RESOLUTION_LOCKED" });
       }
 
-      await db.delete(votingTokens).where(eq(votingTokens.resolutionId, resolutionId));
-      await db.delete(resolutionSignatures).where(eq(resolutionSignatures.resolutionId, resolutionId));
-      await db.delete(resolutionVotes).where(eq(resolutionVotes.resolutionId, resolutionId));
-      
-      const [deleted] = await db.delete(boardResolutions)
-        .where(eq(boardResolutions.id, resolutionId))
-        .returning();
-      
+      // PROTECTION ("محكمة"): a resolution that has been voted on or signed can NEVER be
+      // deleted — not even softly. It must be cancelled (change status) instead. This
+      // guarantees voted/signed decisions are never lost, even by an admin mistake.
+      const [{ votes = 0 } = {}] = await db
+        .select({ votes: sql<number>`count(*)::int` })
+        .from(resolutionVotes)
+        .where(eq(resolutionVotes.resolutionId, resolutionId));
+      const [{ signed = 0 } = {}] = await db
+        .select({ signed: sql<number>`count(*)::int` })
+        .from(resolutionSignatures)
+        .where(and(eq(resolutionSignatures.resolutionId, resolutionId), eq(resolutionSignatures.status, 'signed')));
+      const [{ casts = 0 } = {}] = await db
+        .select({ casts: sql<number>`count(*)::int` })
+        .from(votingTokens)
+        .where(and(eq(votingTokens.resolutionId, resolutionId), sql`vote IS NOT NULL`));
+      const protectedStatuses = ['voting', 'approved', 'rejected', 'implemented'];
+      if (votes > 0 || signed > 0 || casts > 0 || protectedStatuses.includes(String((existing as any).status))) {
+        return res.status(423).json({
+          error: "لا يمكن حذف هذا القرار لأنه تم التصويت عليه أو توقيعه. لحمايته من الفقدان، غيّر حالته إلى \"ملغي\" بدلاً من الحذف.",
+          code: "RESOLUTION_HAS_VOTES",
+        });
+      }
+
+      // SOFT DELETE: move to recycle bin. Child rows (tokens/signatures/votes) are kept intact.
+      // Wrapped in a transaction so the soft-delete and its audit record always commit together.
+      const deleted = await db.transaction(async (tx) => {
+        const [row] = await tx.update(boardResolutions)
+          .set({
+            deletedAt: new Date(),
+            deletedBy: getCurrentUserId(req),
+            deletionReason: reason || null,
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(boardResolutions.id, resolutionId))
+          .returning();
+
+        // Audit trail: every deletion is permanently recorded.
+        await tx.insert(systemAuditLogs).values({
+          module: 'governance',
+          entityId: String(resolutionId),
+          entityName: (existing as any).resolutionNumber || (existing as any).title,
+          action: 'delete',
+          details: JSON.stringify({ resolutionNumber: (existing as any).resolutionNumber, title: (existing as any).title, reason: reason || null, type: 'soft_delete' }),
+          userId: getCurrentUserId(req),
+          userName: (req as any).currentUser?.username || 'system',
+          ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
+        });
+        return row;
+      });
+
       if (!deleted) {
         return res.status(404).json({ error: "القرار غير موجود" });
       }
-      
-      res.json({ success: true, message: "تم حذف القرار بنجاح" });
+
+      res.json({ success: true, message: "تم نقل القرار إلى سلة المحذوفات ويمكن استرجاعه" });
     } catch (error) {
       console.error("Error deleting resolution:", error);
       res.status(500).json({ error: "فشل في حذف القرار" });
+    }
+  });
+
+  // Recycle bin: list soft-deleted board resolutions (admin only).
+  app.get("/api/governance/resolutions-trash", isAuthenticated, requirePermission("governance_resolutions", "delete"), async (req, res) => {
+    try {
+      const rows = await db.select().from(boardResolutions)
+        .where(sql`deleted_at IS NOT NULL`)
+        .orderBy(desc(boardResolutions.deletedAt));
+      res.json(rows);
+    } catch (error) {
+      console.error("Error fetching deleted resolutions:", error);
+      res.status(500).json({ error: "فشل في جلب سلة المحذوفات" });
+    }
+  });
+
+  // Restore a soft-deleted board resolution (admin only).
+  app.post("/api/governance/resolutions/:id/restore", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).currentUser;
+      if (user?.role !== 'admin') return res.status(403).json({ error: "فقط المسؤول يمكنه استرجاع القرارات" });
+      const resolutionId = parseInt(req.params.id);
+      const [existing] = await db.select().from(boardResolutions).where(eq(boardResolutions.id, resolutionId));
+      if (!existing) return res.status(404).json({ error: "القرار غير موجود" });
+      if (!(existing as any).deletedAt) return res.status(409).json({ error: "القرار غير محذوف" });
+
+      const restored = await db.transaction(async (tx) => {
+        const [row] = await tx.update(boardResolutions)
+          .set({ deletedAt: null, deletedBy: null, deletionReason: null, updatedAt: new Date() } as any)
+          .where(eq(boardResolutions.id, resolutionId))
+          .returning();
+
+        await tx.insert(systemAuditLogs).values({
+          module: 'governance',
+          entityId: String(resolutionId),
+          entityName: (existing as any).resolutionNumber || (existing as any).title,
+          action: 'restore',
+          details: JSON.stringify({ resolutionNumber: (existing as any).resolutionNumber, title: (existing as any).title }),
+          userId: getCurrentUserId(req),
+          userName: (req as any).currentUser?.username || 'system',
+          ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
+        });
+        return row;
+      });
+
+      res.json({ success: true, message: "تم استرجاع القرار", resolution: restored });
+    } catch (error) {
+      console.error("Error restoring resolution:", error);
+      res.status(500).json({ error: "فشل في استرجاع القرار" });
     }
   });
 
@@ -1192,6 +1295,7 @@ export function registerGovernanceRoutes(app: Express) {
       const status = req.query.status as string | undefined;
       const assemblyType = req.query.assemblyType as string | undefined;
       const conditions: any[] = [];
+      conditions.push(isNull(assemblyResolutions.deletedAt));
       if (status) conditions.push(eq(assemblyResolutions.status, status));
       if (assemblyType) conditions.push(eq(assemblyResolutions.assemblyType, assemblyType));
       let q = db.select().from(assemblyResolutions) as any;
@@ -1207,7 +1311,7 @@ export function registerGovernanceRoutes(app: Express) {
   app.get("/api/governance/assembly-resolutions/:id", isAuthenticated, requirePermission("governance_resolutions", "view"), async (req, res) => {
     try {
       const [row] = await db.select().from(assemblyResolutions).where(eq(assemblyResolutions.id, parseInt(req.params.id)));
-      if (!row) return res.status(404).json({ error: "قرار الجمعية غير موجود" });
+      if (!row || (row as any).deletedAt) return res.status(404).json({ error: "قرار الجمعية غير موجود" });
       res.json(row);
     } catch (error) {
       console.error("Error fetching assembly resolution:", error);
@@ -1264,6 +1368,10 @@ export function registerGovernanceRoutes(app: Express) {
       delete (validated as any).isLocked;
       delete (validated as any).lockedAt;
       delete (validated as any).lockedBy;
+      // SAFEGUARD: never allow soft-delete fields to be changed via the edit route.
+      delete (validated as any).deletedAt;
+      delete (validated as any).deletedBy;
+      delete (validated as any).deletionReason;
       const [row] = await db.update(assemblyResolutions)
         .set({ ...validated, updatedAt: new Date() })
         .where(eq(assemblyResolutions.id, id))
@@ -1298,18 +1406,98 @@ export function registerGovernanceRoutes(app: Express) {
       const user = (req as any).currentUser;
       if (user?.role !== 'admin') return res.status(403).json({ error: "فقط المسؤول يمكنه حذف القرارات" });
       const id = parseInt(req.params.id);
+      const reason = (req.body?.reason || '').toString().trim();
       const [existing] = await db.select().from(assemblyResolutions).where(eq(assemblyResolutions.id, id));
       if (!existing) return res.status(404).json({ error: "قرار الجمعية غير موجود" });
+      if ((existing as any).deletedAt) {
+        return res.status(409).json({ error: "القرار محذوف بالفعل وموجود في سلة المحذوفات" });
+      }
       if ((existing as any).isLocked) {
         return res.status(423).json({ error: "قرار الجمعية مقفل ولا يمكن حذفه — السجلات الرسمية محفوظة بحكم النظام", code: "RESOLUTION_LOCKED" });
       }
-      await db.delete(assemblyResolutionSignatures).where(eq(assemblyResolutionSignatures.resolutionId, id));
-      await db.delete(assemblyResolutionVotes).where(eq(assemblyResolutionVotes.resolutionId, id));
-      await db.delete(assemblyResolutions).where(eq(assemblyResolutions.id, id));
-      res.json({ success: true });
+
+      // PROTECTION ("محكمة"): voted/signed assembly resolutions can never be deleted.
+      const [{ votes = 0 } = {}] = await db
+        .select({ votes: sql<number>`count(*)::int` })
+        .from(assemblyResolutionVotes)
+        .where(eq(assemblyResolutionVotes.resolutionId, id));
+      const [{ signed = 0 } = {}] = await db
+        .select({ signed: sql<number>`count(*)::int` })
+        .from(assemblyResolutionSignatures)
+        .where(eq(assemblyResolutionSignatures.resolutionId, id));
+      const protectedStatuses = ['voting', 'approved', 'rejected', 'implemented'];
+      if (votes > 0 || signed > 0 || protectedStatuses.includes(String((existing as any).status))) {
+        return res.status(423).json({
+          error: "لا يمكن حذف هذا القرار لأنه تم التصويت عليه أو توقيعه. لحمايته من الفقدان، غيّر حالته إلى \"ملغي\" بدلاً من الحذف.",
+          code: "RESOLUTION_HAS_VOTES",
+        });
+      }
+
+      await db.transaction(async (tx) => {
+        await tx.update(assemblyResolutions)
+          .set({ deletedAt: new Date(), deletedBy: getCurrentUserId(req), deletionReason: reason || null, updatedAt: new Date() } as any)
+          .where(eq(assemblyResolutions.id, id));
+
+        await tx.insert(systemAuditLogs).values({
+          module: 'governance',
+          entityId: String(id),
+          entityName: (existing as any).resolutionNumber || (existing as any).title,
+          action: 'delete',
+          details: JSON.stringify({ resolutionNumber: (existing as any).resolutionNumber, title: (existing as any).title, reason: reason || null, type: 'soft_delete', kind: 'assembly' }),
+          userId: getCurrentUserId(req),
+          userName: (req as any).currentUser?.username || 'system',
+          ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
+        });
+      });
+
+      res.json({ success: true, message: "تم نقل القرار إلى سلة المحذوفات ويمكن استرجاعه" });
     } catch (error) {
       console.error("Error deleting assembly resolution:", error);
       res.status(500).json({ error: "فشل في حذف قرار الجمعية" });
+    }
+  });
+
+  app.get("/api/governance/assembly-resolutions-trash", isAuthenticated, requirePermission("governance_resolutions", "delete"), async (req, res) => {
+    try {
+      const rows = await db.select().from(assemblyResolutions)
+        .where(sql`deleted_at IS NOT NULL`)
+        .orderBy(desc(assemblyResolutions.deletedAt));
+      res.json(rows);
+    } catch (error) {
+      console.error("Error fetching deleted assembly resolutions:", error);
+      res.status(500).json({ error: "فشل في جلب سلة المحذوفات" });
+    }
+  });
+
+  app.post("/api/governance/assembly-resolutions/:id/restore", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).currentUser;
+      if (user?.role !== 'admin') return res.status(403).json({ error: "فقط المسؤول يمكنه استرجاع القرارات" });
+      const id = parseInt(req.params.id);
+      const [existing] = await db.select().from(assemblyResolutions).where(eq(assemblyResolutions.id, id));
+      if (!existing) return res.status(404).json({ error: "قرار الجمعية غير موجود" });
+      if (!(existing as any).deletedAt) return res.status(409).json({ error: "القرار غير محذوف" });
+      const restored = await db.transaction(async (tx) => {
+        const [row] = await tx.update(assemblyResolutions)
+          .set({ deletedAt: null, deletedBy: null, deletionReason: null, updatedAt: new Date() } as any)
+          .where(eq(assemblyResolutions.id, id))
+          .returning();
+        await tx.insert(systemAuditLogs).values({
+          module: 'governance',
+          entityId: String(id),
+          entityName: (existing as any).resolutionNumber || (existing as any).title,
+          action: 'restore',
+          details: JSON.stringify({ resolutionNumber: (existing as any).resolutionNumber, kind: 'assembly' }),
+          userId: getCurrentUserId(req),
+          userName: (req as any).currentUser?.username || 'system',
+          ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
+        });
+        return row;
+      });
+      res.json({ success: true, message: "تم استرجاع القرار", resolution: restored });
+    } catch (error) {
+      console.error("Error restoring assembly resolution:", error);
+      res.status(500).json({ error: "فشل في استرجاع قرار الجمعية" });
     }
   });
 

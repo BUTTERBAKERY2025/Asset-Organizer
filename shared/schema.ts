@@ -8493,6 +8493,11 @@ export const boardResolutions = pgTable("board_resolutions", {
   isLocked: boolean("is_locked").default(false).notNull(),
   lockedAt: timestamp("locked_at"),
   lockedBy: varchar("locked_by").references(() => users.id),
+  // SOFT DELETE — resolutions are never hard-deleted; they move to the recycle bin
+  // so a voted/signed decision can never be permanently lost. See delete route.
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: varchar("deleted_by").references(() => users.id),
+  deletionReason: text("deletion_reason"),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -8558,6 +8563,10 @@ export const assemblyResolutions = pgTable("assembly_resolutions", {
   isLocked: boolean("is_locked").default(false).notNull(),
   lockedAt: timestamp("locked_at"),
   lockedBy: varchar("locked_by").references(() => users.id),
+  // SOFT DELETE — see boardResolutions note above.
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: varchar("deleted_by").references(() => users.id),
+  deletionReason: text("deletion_reason"),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
