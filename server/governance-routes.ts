@@ -1319,6 +1319,40 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
+  // Download the previously-signed original document (PDF) attached to a specific
+  // assembly resolution. The attachment is stored in Supabase under
+  // attachments[] with type === "signed_original". Only resolutions that actually
+  // have such a document expose the download button on the client.
+  app.get("/api/governance/assembly-resolutions/:id/signed-document", isAuthenticated, requirePermission("governance_resolutions", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [row] = await db.select().from(assemblyResolutions).where(eq(assemblyResolutions.id, id));
+      if (!row || (row as any).deletedAt) return res.status(404).json({ error: "قرار الجمعية غير موجود" });
+      const atts = Array.isArray((row as any).attachments) ? (row as any).attachments : [];
+      const signed = atts.find((a: any) => a?.type === "signed_original" && a?.path);
+      if (!signed) return res.status(404).json({ error: "لا يوجد مستند موقّع مرفق لهذا القرار" });
+      // SECURITY: only allow our own controlled object-key convention (no slashes,
+      // no traversal) so a tampered path can never exfiltrate an arbitrary file
+      // from the shared documents bucket. Signed originals are uploaded as
+      // `assembly_<...>.pdf` at the bucket root.
+      const safePath = String(signed.path);
+      if (!/^assembly_[A-Za-z0-9._-]+\.pdf$/.test(safePath)) {
+        return res.status(400).json({ error: "مسار المستند غير صالح" });
+      }
+      const { downloadFromSupabase } = await import("./supabase-storage");
+      const file = await downloadFromSupabase(signed.path);
+      if (!file) return res.status(404).json({ error: "تعذّر العثور على الملف في التخزين" });
+      const buffer = Buffer.from(await file.data.arrayBuffer());
+      const fileName = signed.name || `resolution-${(row as any).resolutionNumber}.pdf`;
+      res.setHeader("Content-Type", signed.mime || "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+      res.send(buffer);
+    } catch (e: any) {
+      console.error("[governance] signed-document download error:", e);
+      res.status(500).json({ error: e?.message || "فشل تحميل المستند الموقّع" });
+    }
+  });
+
   app.post("/api/governance/assembly-resolutions", isAuthenticated, requirePermission("governance_resolutions", "create"), async (req, res) => {
     try {
       const year = new Date().getFullYear();
@@ -1372,6 +1406,11 @@ export function registerGovernanceRoutes(app: Express) {
       delete (validated as any).deletedAt;
       delete (validated as any).deletedBy;
       delete (validated as any).deletionReason;
+      // SECURITY: attachments reference Supabase storage paths consumed by the
+      // signed-document download endpoint. Allowing them through the generic edit
+      // route would let an editor point the download at ANY object in the shared
+      // bucket. Attachments must only be managed by controlled upload flows.
+      delete (validated as any).attachments;
       const [row] = await db.update(assemblyResolutions)
         .set({ ...validated, updatedAt: new Date() })
         .where(eq(assemblyResolutions.id, id))

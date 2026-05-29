@@ -17,7 +17,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient as qc } from "@/lib/queryClient";
 import {
   Building2, Plus, Search, Eye, Edit, Trash2, Lock, LockOpen,
-  ThumbsUp, ThumbsDown, Loader2, Scale, AlertTriangle,
+  ThumbsUp, ThumbsDown, Loader2, Scale, AlertTriangle, FileDown,
 } from "lucide-react";
 import type { AssemblyResolution } from "@shared/schema";
 
@@ -120,6 +120,31 @@ export default function AssemblyResolutionsPage() {
     },
     onError: (e: any) => toast({ title: "فشل القفل", description: e?.message, variant: "destructive" }),
   });
+
+  const hasSignedDoc = (r: AssemblyResolution) =>
+    Array.isArray((r as any).attachments) &&
+    (r as any).attachments.some((a: any) => a?.type === "signed_original");
+
+  const downloadSignedDoc = async (r: AssemblyResolution) => {
+    try {
+      const res = await fetch(`/api/governance/assembly-resolutions/${r.id}/signed-document`, { credentials: "include" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || "تعذّر تحميل المستند");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `قرار_موقّع_${r.resolutionNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast({ title: "فشل تحميل المستند الموقّع", description: e?.message, variant: "destructive" });
+    }
+  };
 
   const filtered = useMemo(() => {
     return resolutions.filter(r => {
@@ -262,6 +287,16 @@ export default function AssemblyResolutionsPage() {
                           )}
                         </div>
                         <div className="flex flex-wrap gap-2 items-start">
+                          {hasSignedDoc(r) && (
+                            <Button
+                              variant="outline" size="sm"
+                              className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 font-medium"
+                              onClick={() => downloadSignedDoc(r)}
+                              data-testid={`btn-download-signed-${r.id}`}
+                            >
+                              <FileDown className="h-4 w-4 ml-1" /> تحميل القرار الموقع سابقاً
+                            </Button>
+                          )}
                           <Button variant="outline" size="sm" onClick={() => setViewing(r)} data-testid={`btn-view-${r.id}`}>
                             <Eye className="h-4 w-4 ml-1" /> عرض
                           </Button>
@@ -454,6 +489,16 @@ export default function AssemblyResolutionsPage() {
                   <Label className="text-gray-500">الوصف</Label>
                   <p className="text-sm whitespace-pre-wrap">{viewing.description}</p>
                 </div>
+                {hasSignedDoc(viewing) && (
+                  <Button
+                    variant="outline"
+                    className="w-full text-emerald-700 border-emerald-300 hover:bg-emerald-50 font-medium"
+                    onClick={() => downloadSignedDoc(viewing)}
+                    data-testid={`btn-download-signed-view-${viewing.id}`}
+                  >
+                    <FileDown className="h-4 w-4 ml-1" /> تحميل القرار الموقع سابقاً (PDF)
+                  </Button>
+                )}
                 {viewing.isLocked && (
                   <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm">
                     <p className="font-medium text-amber-900 flex items-center gap-1">
