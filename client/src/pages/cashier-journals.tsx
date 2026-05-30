@@ -71,6 +71,14 @@ export default function CashierJournalsPage() {
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 20;
+
+  // Debounce free-text search so we don't fire a request on every keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 350);
+    return () => clearTimeout(id);
+  }, [searchTerm]);
 
   // Initialize the branch filter ONCE per mount. Previously this effect would
   // re-run any time userBranchId/canSelectBranch resolved (auth race) and
@@ -107,28 +115,37 @@ export default function CashierJournalsPage() {
 
   const isBranchFilterReady = branchFilter !== "";
 
-  // ===== Journals list: pass server-side filters (branch, status, discrepancy, dates) =====
-  const { data: journals, isLoading } = useQuery<CashierSalesJournal[]>({
-    queryKey: ["/api/cashier-journals", branchFilter, statusFilter, discrepancyFilter, dateFrom, dateTo],
+  // ===== Journals list: ALL filters server-side + server-side pagination =====
+  // Previously this fetched every matching journal (~1000+ rows) and paginated
+  // on the client. Now we request only the current page and let the server
+  // filter by branch/status/discrepancy/dates/cashier-name/free-text search.
+  const { data: journalsResponse, isLoading } = useQuery<{ journals: CashierSalesJournal[]; totalCount: number }>({
+    queryKey: ["/api/cashier-journals", branchFilter, statusFilter, discrepancyFilter, cashierFilter, debouncedSearch, dateFrom, dateTo, currentPage],
     queryFn: async ({ queryKey }) => {
-      const [, branch, status, discrepancy, from, to] = queryKey as string[];
+      const [, branch, status, discrepancy, cashier, search, from, to, page] = queryKey as any[];
       const params = new URLSearchParams();
       if (branch && branch !== "all") params.set("branchId", branch);
       if (status && status !== "all") params.set("status", status);
       if (discrepancy && discrepancy !== "all") params.set("discrepancyStatus", discrepancy);
+      if (cashier && cashier !== "all") params.set("cashierName", cashier);
+      if (search) params.set("search", search);
       if (from) params.set("startDate", from);
       if (to) params.set("endDate", to);
-      const qs = params.toString();
-      const url = `/api/cashier-journals${qs ? `?${qs}` : ""}`;
-      const res = await fetch(url, { credentials: "include" });
+      params.set("limit", String(PAGE_SIZE));
+      params.set("offset", String((Number(page) - 1) * PAGE_SIZE));
+      const res = await fetch(`/api/cashier-journals?${params.toString()}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch cashier journals");
       const data = await res.json();
-      return Array.isArray(data) ? data : (data.journals || []);
+      if (Array.isArray(data)) return { journals: data, totalCount: data.length };
+      return { journals: data.journals || [], totalCount: data.totalCount || 0 };
     },
     enabled: isBranchFilterReady,
     staleTime: 30_000,
     gcTime: 5 * 60_000,
+    placeholderData: (prev) => prev,
   });
+  const journals = journalsResponse?.journals;
+  const totalCount = journalsResponse?.totalCount ?? 0;
   
   const { data: stats, refetch: refetchStats } = useQuery<{
     totalJournals: number;
@@ -139,13 +156,14 @@ export default function CashierJournalsPage() {
     surplusAmount: number;
     averageTicket: number;
   }>({
-    queryKey: ["/api/cashier-journals/stats/summary", branchFilter, statusFilter, cashierFilter, dateFrom, dateTo],
+    queryKey: ["/api/cashier-journals/stats/summary", branchFilter, statusFilter, cashierFilter, debouncedSearch, dateFrom, dateTo],
     queryFn: async ({ queryKey }) => {
-      const [, branch, status, cashier, from, to] = queryKey as string[];
+      const [, branch, status, cashier, search, from, to] = queryKey as string[];
       const params = new URLSearchParams();
       if (branch && branch !== "all") params.set("branchId", branch);
       if (status && status !== "all") params.set("status", status);
-      if (cashier && cashier !== "all") params.set("cashierId", cashier);
+      if (cashier && cashier !== "all") params.set("cashierName", cashier);
+      if (search) params.set("search", search);
       if (from) params.set("dateFrom", from);
       if (to) params.set("dateTo", to);
       params.set("_t", Date.now().toString());
@@ -243,15 +261,30 @@ export default function CashierJournalsPage() {
     return branch?.name || branchId;
   };
 
-  const uniqueCashiers = journals ? Array.from(new Set(journals.map(j => j.cashierName))).filter(Boolean).sort() : [];
-  
+  // Cashier names for the dropdown come from a dedicated endpoint (branch +
+  // permission scoped) instead of being derived from the current page — with
+  // server-side pagination the page no longer contains every cashier.
+  const { data: cashierNames } = useQuery<string[]>({
+    queryKey: ["/api/cashier-journals/filters/cashiers", branchFilter],
+    queryFn: async ({ queryKey }) => {
+      const [, branch] = queryKey as string[];
+      const params = new URLSearchParams();
+      if (branch && branch !== "all") params.set("branchId", branch);
+      const res = await fetch(`/api/cashier-journals/filters/cashiers?${params.toString()}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: isBranchFilterReady,
+    staleTime: 60_000,
+  });
+
   const currentUserName = user?.firstName && user?.lastName 
     ? `${user.firstName} ${user.lastName}`.trim() 
     : user?.username || "";
 
   const dropdownCashiers = canViewAllCashiers 
-    ? uniqueCashiers 
-    : (uniqueCashiers.length > 0 ? uniqueCashiers : (currentUserName ? [currentUserName] : []));
+    ? (cashierNames || [])
+    : ((cashierNames && cashierNames.length > 0) ? cashierNames : (currentUserName ? [currentUserName] : []));
 
   useEffect(() => {
     if (userPermissions !== undefined && !canViewAllCashiers && cashierFilter === "all" && dropdownCashiers.length > 0) {
@@ -259,20 +292,28 @@ export default function CashierJournalsPage() {
     }
   }, [userPermissions, canViewAllCashiers, cashierFilter, dropdownCashiers]);
 
-  // Server already filters by branch/status/discrepancy/dates.
-  // Client only refines by free-text search and cashier-name (server filters by ID).
-  const filteredJournals = journals?.filter((journal) => {
-    const matchesSearch =
-      !searchTerm ||
-      journal.cashierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getBranchName(journal.branchId).toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCashier = cashierFilter === "all" || journal.cashierName === cashierFilter;
-    return matchesSearch && matchesCashier;
-  });
-
+  // Server now does ALL filtering (branch/status/discrepancy/dates/cashier/search)
+  // and pagination, so the page renders `journals` directly.
   useEffect(() => {
     setCurrentPage(1);
-  }, [branchFilter, statusFilter, discrepancyFilter, cashierFilter, dateFrom, dateTo, searchTerm]);
+  }, [branchFilter, statusFilter, discrepancyFilter, cashierFilter, dateFrom, dateTo, debouncedSearch]);
+
+  // Fetch ALL rows matching the current filters (no pagination) for export/print.
+  const fetchAllMatchingJournals = async (): Promise<CashierSalesJournal[]> => {
+    const params = new URLSearchParams();
+    if (branchFilter && branchFilter !== "all") params.set("branchId", branchFilter);
+    if (statusFilter && statusFilter !== "all") params.set("status", statusFilter);
+    if (discrepancyFilter && discrepancyFilter !== "all") params.set("discrepancyStatus", discrepancyFilter);
+    if (cashierFilter && cashierFilter !== "all") params.set("cashierName", cashierFilter);
+    if (debouncedSearch) params.set("search", debouncedSearch);
+    if (dateFrom) params.set("startDate", dateFrom);
+    if (dateTo) params.set("endDate", dateTo);
+    const qs = params.toString();
+    const res = await fetch(`/api/cashier-journals${qs ? `?${qs}` : ""}`, { credentials: "include" });
+    if (!res.ok) throw new Error("Failed to fetch cashier journals");
+    const data = await res.json();
+    return Array.isArray(data) ? data : (data.journals || []);
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR" }).format(amount);
@@ -297,15 +338,22 @@ export default function CashierJournalsPage() {
     { header: t("export.status"), key: "status", width: 10 },
   ];
 
-  const handlePrintList = () => {
-    if (!filteredJournals || filteredJournals.length === 0) {
+  const handlePrintList = async () => {
+    let printJournals: CashierSalesJournal[] = [];
+    try {
+      printJournals = await fetchAllMatchingJournals();
+    } catch {
+      toast({ title: t("toasts.error"), variant: "destructive" });
+      return;
+    }
+    if (!printJournals || printJournals.length === 0) {
       toast({ title: t("journalList.noPrintData"), variant: "destructive" });
       return;
     }
 
-    const totalSales = filteredJournals.reduce((sum, j) => sum + (j.totalSales || 0), 0);
-    const totalShortage = filteredJournals.filter(j => j.discrepancyStatus === 'shortage').reduce((sum, j) => sum + Math.abs(j.discrepancyAmount || 0), 0);
-    const totalSurplus = filteredJournals.filter(j => j.discrepancyStatus === 'surplus').reduce((sum, j) => sum + (j.discrepancyAmount || 0), 0);
+    const totalSales = printJournals.reduce((sum, j) => sum + (j.totalSales || 0), 0);
+    const totalShortage = printJournals.filter(j => j.discrepancyStatus === 'shortage').reduce((sum, j) => sum + Math.abs(j.discrepancyAmount || 0), 0);
+    const totalSurplus = printJournals.filter(j => j.discrepancyStatus === 'surplus').reduce((sum, j) => sum + (j.discrepancyAmount || 0), 0);
 
     const htmlContent = `
 <!DOCTYPE html>
@@ -365,7 +413,7 @@ export default function CashierJournalsPage() {
   <div class="header">
     <div>
       <div class="title">${t("printTemplate.title")}</div>
-      <div class="info">${branchFilter !== 'all' ? getBranchName(branchFilter) : t("filters.allBranches")} | ${filteredJournals.length} ${t("printTemplate.journal")}</div>
+      <div class="info">${branchFilter !== 'all' ? getBranchName(branchFilter) : t("filters.allBranches")} | ${printJournals.length} ${t("printTemplate.journal")}</div>
     </div>
     <div style="font-size:10px;font-weight:bold;color:#d4a853;">BUTTER BAKERY</div>
   </div>
@@ -374,7 +422,7 @@ export default function CashierJournalsPage() {
     <div class="summary-card"><div class="value">${formatCurrency(totalSales)}</div><div class="label">${t("printTemplate.totalSales")}</div></div>
     <div class="summary-card"><div class="value negative">-${formatCurrency(totalShortage)}</div><div class="label">${t("printTemplate.totalShortage")}</div></div>
     <div class="summary-card"><div class="value positive">+${formatCurrency(totalSurplus)}</div><div class="label">${t("printTemplate.totalSurplus")}</div></div>
-    <div class="summary-card"><div class="value">${filteredJournals.length}</div><div class="label">${t("printTemplate.journalCount")}</div></div>
+    <div class="summary-card"><div class="value">${printJournals.length}</div><div class="label">${t("printTemplate.journalCount")}</div></div>
   </div>
 
   <table>
@@ -393,7 +441,7 @@ export default function CashierJournalsPage() {
       </tr>
     </thead>
     <tbody>
-      ${filteredJournals.map((j, i) => `
+      ${printJournals.map((j, i) => `
         <tr>
           <td>${i + 1}</td>
           <td>${j.journalDate}</td>
@@ -494,16 +542,28 @@ export default function CashierJournalsPage() {
                 <div>
                   <CardTitle className="text-base sm:text-lg">{t("journalList.title")}</CardTitle>
                   <CardDescription className="text-xs sm:text-sm">
-                    {t("journalList.total", { count: filteredJournals?.length || 0 })}
+                    {t("journalList.total", { count: totalCount })}
                   </CardDescription>
                 </div>
                 <ExportButtons
-                  data={filteredJournals || []}
+                  data={journals || []}
+                  fetchData={fetchAllMatchingJournals}
+                  disabled={totalCount === 0}
                   columns={exportColumns}
                   fileName={`${t("export.fileName")}-${new Date().toISOString().split('T')[0]}`}
                   title={t("export.reportTitle")}
                   subtitle={`${t("export.period")} ${branchFilter !== 'all' ? getBranchName(branchFilter) : t("filters.allBranches")}`}
                   sheetName={t("export.sheetName")}
+                />
+              </div>
+              <div className="relative">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder={t("filters.search")}
+                  className="h-11 sm:h-10 text-sm pr-9"
+                  data-testid="input-search"
                 />
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
@@ -571,7 +631,7 @@ export default function CashierJournalsPage() {
                   <Skeleton key={i} className="h-16 sm:h-20 w-full" />
                 ))}
               </div>
-            ) : filteredJournals?.length === 0 ? (
+            ) : journals?.length === 0 ? (
               <div className="text-center py-8 sm:py-12 text-muted-foreground">
                 <Wallet className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 opacity-50" />
                 <p className="text-sm sm:text-base">{t("journalList.noMatch")}</p>
@@ -595,7 +655,7 @@ export default function CashierJournalsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredJournals?.slice((currentPage - 1) * 20, currentPage * 20).map((journal) => {
+                      {journals?.map((journal) => {
                         const discrepancy = DISCREPANCY_ICONS[journal.discrepancyStatus];
                         const status = STATUS_ICONS[journal.status];
                         const DiscrepancyIcon = discrepancy?.icon || Minus;
@@ -744,8 +804,8 @@ export default function CashierJournalsPage() {
                 </div>
                 <TablePagination
                   currentPage={currentPage}
-                  totalItems={filteredJournals?.length || 0}
-                  itemsPerPage={20}
+                  totalItems={totalCount}
+                  itemsPerPage={PAGE_SIZE}
                   onPageChange={setCurrentPage}
                 />
               </div>

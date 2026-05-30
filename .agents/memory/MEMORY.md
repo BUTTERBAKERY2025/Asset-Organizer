@@ -1,0 +1,1 @@
+- [Cashier journal filtering & pagination](cashier-journal-filtering.md) — filter by free-text cashierName not cashierId; gate arbitrary cashier query params behind manager check; export/print fetch all rows (no limit).

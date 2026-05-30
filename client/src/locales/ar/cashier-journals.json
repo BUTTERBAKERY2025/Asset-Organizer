@@ -26,7 +26,8 @@
     "branch": "الفرع",
     "allBranches": "جميع الفروع",
     "status": "الحالة",
-    "allStatuses": "جميع الحالات"
+    "allStatuses": "جميع الحالات",
+    "search": "ابحث باسم الكاشير..."
   },
   "statuses": {
     "draft": "مسودة",

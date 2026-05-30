@@ -26,7 +26,8 @@
     "branch": "Branch",
     "allBranches": "All Branches",
     "status": "Status",
-    "allStatuses": "All Statuses"
+    "allStatuses": "All Statuses",
+    "search": "Search by cashier name..."
   },
   "statuses": {
     "draft": "Draft",

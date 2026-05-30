@@ -12,6 +12,10 @@ interface ExportButtonsProps {
   sheetName?: string;
   disabled?: boolean;
   headerInfo?: { label: string; value: string }[];
+  // When provided, the rows to export are fetched on demand (e.g. ALL rows
+  // matching the current filters when the visible list is server-paginated).
+  // Falls back to `data` if not provided.
+  fetchData?: () => Promise<any[]>;
 }
 
 export function ExportButtons({
@@ -23,17 +27,35 @@ export function ExportButtons({
   sheetName = "البيانات",
   disabled = false,
   headerInfo,
+  fetchData,
 }: ExportButtonsProps) {
-  const handleExcelExport = () => {
-    exportToExcel(data, columns, fileName, sheetName, headerInfo);
+  const resolveRows = async (): Promise<any[]> => {
+    if (fetchData) {
+      try {
+        return await fetchData();
+      } catch {
+        return [];
+      }
+    }
+    return data;
   };
 
-  const handleCSVExport = () => {
-    exportToCSV(data, columns, fileName);
+  const handleExcelExport = async () => {
+    const rows = await resolveRows();
+    if (rows.length === 0) return;
+    exportToExcel(rows, columns, fileName, sheetName, headerInfo);
   };
 
-  const handlePDFExport = () => {
-    downloadAsPDF(data, columns, fileName, title, subtitle, headerInfo);
+  const handleCSVExport = async () => {
+    const rows = await resolveRows();
+    if (rows.length === 0) return;
+    exportToCSV(rows, columns, fileName);
+  };
+
+  const handlePDFExport = async () => {
+    const rows = await resolveRows();
+    if (rows.length === 0) return;
+    downloadAsPDF(rows, columns, fileName, title, subtitle, headerInfo);
   };
 
   return (
@@ -42,7 +64,7 @@ export function ExportButtons({
         <Button 
           variant="outline" 
           size="sm" 
-          disabled={disabled || data.length === 0}
+          disabled={disabled || (!fetchData && data.length === 0)}
           className="gap-2"
           data-testid="btn-export"
         >

@@ -5242,6 +5242,8 @@ export class DatabaseStorage implements IStorage {
     endDate?: string; 
     status?: string;
     cashierId?: string;
+    cashierName?: string;
+    search?: string;
     discrepancyStatus?: string;
     limit?: number;
     offset?: number;
@@ -5256,6 +5258,8 @@ export class DatabaseStorage implements IStorage {
     if (filters.endDate) conditions.push(lte(cashierSalesJournals.journalDate, filters.endDate));
     if (filters.status) conditions.push(eq(cashierSalesJournals.status, filters.status));
     if (filters.cashierId) conditions.push(eq(cashierSalesJournals.cashierId, filters.cashierId));
+    if (filters.cashierName) conditions.push(eq(cashierSalesJournals.cashierName, filters.cashierName));
+    if (filters.search) conditions.push(ilike(cashierSalesJournals.cashierName, `%${filters.search}%`));
     if (filters.discrepancyStatus) conditions.push(eq(cashierSalesJournals.discrepancyStatus, filters.discrepancyStatus));
     
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -5299,6 +5303,26 @@ export class DatabaseStorage implements IStorage {
     return { journals, totalCount };
   }
 
+  // Distinct cashier names for the filter dropdown. Scoped by branch (and by
+  // cashierId for non-managers who may only see their own). Sourced from the
+  // journals themselves (cashierName is free-text), NOT the users table.
+  async getDistinctCashierNames(filters: { branchId?: string; branchIds?: string[]; cashierId?: string }): Promise<string[]> {
+    const conditions: any[] = [];
+    if (filters.branchId) {
+      conditions.push(eq(cashierSalesJournals.branchId, filters.branchId));
+    } else if (filters.branchIds && filters.branchIds.length > 0) {
+      conditions.push(inArray(cashierSalesJournals.branchId, filters.branchIds));
+    }
+    if (filters.cashierId) conditions.push(eq(cashierSalesJournals.cashierId, filters.cashierId));
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    const rows = await db
+      .selectDistinct({ cashierName: cashierSalesJournals.cashierName })
+      .from(cashierSalesJournals)
+      .where(whereClause)
+      .orderBy(cashierSalesJournals.cashierName);
+    return rows.map((r) => r.cashierName).filter((n): n is string => !!n);
+  }
+
   // PERF: SQL-aggregated stats — replaces the legacy "load all rows then reduce in JS"
   // approach. Returns identical shape to the old endpoint but runs in <100ms instead
   // of 5-10s on large datasets. Uses CASE inside SUM/COUNT for net variance bucketing.
@@ -5309,6 +5333,8 @@ export class DatabaseStorage implements IStorage {
     endDate?: string;
     status?: string;
     cashierId?: string;
+    cashierName?: string;
+    search?: string;
     discrepancyStatus?: string;
   }): Promise<{
     totalJournals: number;
@@ -5329,6 +5355,8 @@ export class DatabaseStorage implements IStorage {
     if (filters.endDate) conditions.push(lte(cashierSalesJournals.journalDate, filters.endDate));
     if (filters.status) conditions.push(eq(cashierSalesJournals.status, filters.status));
     if (filters.cashierId) conditions.push(eq(cashierSalesJournals.cashierId, filters.cashierId));
+    if (filters.cashierName) conditions.push(eq(cashierSalesJournals.cashierName, filters.cashierName));
+    if (filters.search) conditions.push(ilike(cashierSalesJournals.cashierName, `%${filters.search}%`));
     if (filters.discrepancyStatus) conditions.push(eq(cashierSalesJournals.discrepancyStatus, filters.discrepancyStatus));
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 

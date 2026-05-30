@@ -7463,7 +7463,7 @@ export async function registerRoutes(
   // Get all cashier journals with filters (supports combined filters)
   app.get("/api/cashier-journals", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
     try {
-      const { branchId, date, startDate, endDate, cashierId, status, discrepancyStatus, limit, offset } = req.query;
+      const { branchId, date, startDate, endDate, cashierId, cashierName, search, status, discrepancyStatus, limit, offset } = req.query;
       
       // SECURITY: Use getEffectiveBranchFilter for multi-branch support
       const queryBranchId = branchId as string | undefined;
@@ -7509,6 +7509,8 @@ export async function registerRoutes(
         endDate: (date as string) || (endDate as string) || undefined,
         status: status ? (status as string) : undefined,
         cashierId: effectiveCashierId || (cashierId ? (cashierId as string) : undefined),
+        cashierName: cashierName && cashierName !== "all" ? (cashierName as string) : undefined,
+        search: search ? (search as string) : undefined,
         discrepancyStatus: discrepancyStatus ? (discrepancyStatus as string) : undefined,
         limit: pageLimit,
         offset: pageOffset,
@@ -7529,6 +7531,48 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching cashier journals:", error);
       res.status(500).json({ error: "Failed to fetch cashier journals" });
+    }
+  });
+
+  // Distinct cashier names for the filter dropdown (branch + permission scoped).
+  // Two-segment path so it never collides with the `/:id` route below.
+  app.get("/api/cashier-journals/filters/cashiers", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
+    try {
+      const { branchId } = req.query;
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
+      const user = getCurrentUser(req);
+
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+
+      let effectiveBranchId: string | undefined;
+      let effectiveBranchIds: string[] | undefined;
+      let effectiveCashierId: string | undefined;
+
+      if (!isUserAdmin(req)) {
+        if (branchFilter.singleBranchId) {
+          effectiveBranchId = branchFilter.singleBranchId;
+        } else if (branchFilter.branchIds && branchFilter.branchIds.length > 0) {
+          effectiveBranchIds = branchFilter.branchIds;
+        }
+        const isManagerUser = await canUserViewAllCashiers(req);
+        if (!isManagerUser) {
+          effectiveCashierId = String(user.id);
+        }
+      } else if (branchFilter.singleBranchId) {
+        effectiveBranchId = branchFilter.singleBranchId;
+      }
+
+      const names = await storage.getDistinctCashierNames({
+        branchId: effectiveBranchId,
+        branchIds: effectiveBranchIds,
+        cashierId: effectiveCashierId,
+      });
+      res.json(names);
+    } catch (error) {
+      console.error("Error fetching cashier names:", error);
+      res.status(500).json({ error: "Failed to fetch cashier names" });
     }
   });
 
@@ -8509,38 +8553,38 @@ export async function registerRoutes(
     });
     
     try {
-      const { branchId, status, cashierId, dateFrom, dateTo } = req.query;
+      const { branchId, status, cashierId, cashierName, search, dateFrom, dateTo } = req.query;
       const user = getCurrentUser(req);
-      
-      // DEBUG: Log query parameters
-      console.log("[STATS DEBUG] Query params:", { branchId, status, cashierId, dateFrom, dateTo });
       
       // SECURITY: Use getEffectiveBranchFilter for multi-branch support
       const queryBranchId = branchId as string | undefined;
       const branchFilter = getEffectiveBranchFilter(req, queryBranchId);
-      
-      // DEBUG: Log branch filter result
-      console.log("[STATS DEBUG] Branch filter result:", branchFilter);
       
       if (!branchFilter.hasAccess) {
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
       
       const filters: any = {};
+      // SECURITY: only managers/admins may filter by an arbitrary cashier.
+      // Non-managers are hard-scoped to their OWN journals and any client-
+      // supplied cashierId/cashierName is ignored (prevents reading another
+      // cashier's aggregate stats via ?cashierId=<otherId>).
+      const canViewAllCashiers = isUserAdmin(req) || (await canUserViewAllCashiers(req));
       if (!isUserAdmin(req)) {
         const allowedBranches = branchFilter.branchIds || (branchFilter.singleBranchId ? [branchFilter.singleBranchId] : []);
-        const isManagerUser = await canUserViewAllCashiers(req);
-        if (isManagerUser) {
-          filters.branchIds = allowedBranches;
-        } else {
-          filters.branchIds = allowedBranches;
+        filters.branchIds = allowedBranches;
+        if (!canViewAllCashiers) {
           filters.cashierId = String(user.id);
         }
       } else if (branchFilter.singleBranchId) {
         filters.branchId = branchFilter.singleBranchId;
       }
       if (status && status !== "all") filters.status = status as string;
-      if (cashierId && cashierId !== "all") filters.cashierId = String(cashierId);
+      if (canViewAllCashiers) {
+        if (cashierId && cashierId !== "all") filters.cashierId = String(cashierId);
+        if (cashierName && cashierName !== "all") filters.cashierName = String(cashierName);
+      }
+      if (search) filters.search = String(search);
       if (dateFrom) filters.startDate = String(dateFrom);
       if (dateTo) filters.endDate = String(dateTo);
       
