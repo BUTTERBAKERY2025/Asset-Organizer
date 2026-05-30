@@ -34,6 +34,14 @@ via a `BRAND_BADGE` map. These are deliberate, recognizable brand marks (like lo
 the random rainbow. Keep them tiny (badge pills only); everything around them stays on
 tokens/status colors.
 
+## Delivery-app logos (cashier-journal-form)
+The delivery section uses real app **logos** (a `DELIVERY_BRANDS` map → image files in
+`client/public/delivery-logos/*.png`) inside white rounded avatars, plus per-app brand
+colors for the active-row ring + text fallback. 6 logos sourced from the web
+(HungerStation, Jahez, Mrsool, Keeta, The Chefz, Talabat). **ToYou has no clean public
+logo** — it intentionally falls back to a colored brand badge (navy `#2b2e83` + "ToYou").
+Rows are collapsible (click header to expand inputs); default-open = `amount>0`.
+
 **Why:** the cashier-journal-form page had ~14 hardcoded palette families (rainbow) that
 ignored the theme and broke dark mode. Restyled to the buckets above. Later the payment
 cards were redesigned (brand badge + stacked POS/الجهاز rows + a rounded "الفرق" banner +

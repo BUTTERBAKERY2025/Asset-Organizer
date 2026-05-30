@@ -189,6 +189,17 @@ const BRAND_BADGE: Record<string, { short: string; cls: string }> = {
   other: { short: "أخرى", cls: "bg-muted-foreground/20 text-foreground" },
 };
 
+// Delivery app brands: real logos (served from /public) + brand colors for fallback/accent
+const DELIVERY_BRANDS: Record<string, { logo?: string; short: string; cls: string; ring: string }> = {
+  hunger_station: { logo: "/delivery-logos/hunger_station.png", short: "هنقر", cls: "bg-[#FFD200] text-[#5a4410]", ring: "border-[#FFD200]" },
+  jahez: { logo: "/delivery-logos/jahez.png", short: "جاهز", cls: "bg-[#E2211C] text-white", ring: "border-[#E2211C]" },
+  toyou: { short: "ToYou", cls: "bg-[#2b2e83] text-white", ring: "border-[#2b2e83]" },
+  marsool: { logo: "/delivery-logos/marsool.png", short: "مرسول", cls: "bg-emerald-500 text-white", ring: "border-emerald-400" },
+  keeta: { logo: "/delivery-logos/keeta.png", short: "كيتا", cls: "bg-[#FFD500] text-black", ring: "border-[#FFD500]" },
+  the_chefs: { logo: "/delivery-logos/the_chefs.png", short: "شيفز", cls: "bg-[#3b1f3a] text-white", ring: "border-[#3b1f3a]" },
+  talabat: { logo: "/delivery-logos/talabat.png", short: "طلبات", cls: "bg-[#FF5A00] text-white", ring: "border-[#FF5A00]" },
+};
+
 const SHIFT_TYPES = [
   { value: "morning", label: "صباحي" },
   { value: "evening", label: "مسائي" },
@@ -422,6 +433,9 @@ export default function CashierJournalFormPage() {
   const [paymentBreakdowns, setPaymentBreakdowns] = useState<PaymentBreakdownInput[]>([
     { paymentMethod: "cash", amount: 0, transactionCount: 0 },
   ]);
+
+  // Which delivery apps are expanded (open) in the dedicated section. Active apps open by default.
+  const [openDeliveryApps, setOpenDeliveryApps] = useState<Record<string, boolean>>({});
 
   // Returns state - المرتجع
   const [showReturns, setShowReturns] = useState(false);
@@ -2303,68 +2317,99 @@ export default function CashierJournalFormPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="p-2">
-                    {/* Column headers */}
-                    <div className="flex items-center gap-2 px-1 pb-1.5 text-[10px] font-medium text-muted-foreground">
-                      <span className="w-28 shrink-0">الشركة</span>
-                      <span className="flex-1 text-center">الطلبات</span>
-                      <span className="flex-1 text-center">المبلغ (ر.س)</span>
-                      <span className="w-7 shrink-0" />
-                    </div>
-                    <div className="space-y-1">
+                    <p className="px-1 pb-1.5 text-[10px] text-muted-foreground">
+                      اضغط على التطبيق لإدخال مبيعاته. التطبيقات بدون مبيعات تبقى مطوية.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                       {deliveryRows.map(({ method: m, b }) => {
                         const isActive = (b?.amount || 0) > 0;
-                        const brand = BRAND_BADGE[m.value] || { short: m.label.slice(0, 4), cls: "bg-amber-500 text-white" };
+                        const brand = DELIVERY_BRANDS[m.value] || { short: m.label.slice(0, 4), cls: "bg-amber-500 text-white", ring: "border-amber-400" };
+                        const isOpen = openDeliveryApps[m.value] ?? isActive;
+                        const toggleOpen = () =>
+                          setOpenDeliveryApps((prev) => ({ ...prev, [m.value]: !(prev[m.value] ?? isActive) }));
                         return (
                           <div
                             key={m.value}
-                            className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 transition-colors ${isActive ? 'border-amber-200 dark:border-amber-900 bg-amber-50/40 dark:bg-amber-950/20' : 'border-border bg-transparent opacity-70'}`}
+                            className={`rounded-xl border transition-all ${isActive ? `${brand.ring} bg-card shadow-sm` : 'border-border bg-muted/30'}`}
                             data-testid={`delivery-row-${m.value}`}
                           >
-                            {/* Brand + name */}
-                            <div className="w-28 shrink-0 flex items-center gap-1.5 min-w-0">
-                              <span className={`shrink-0 inline-flex items-center justify-center min-w-[2.25rem] h-5 px-1 rounded text-[9px] font-extrabold tracking-wide ${brand.cls}`}>
-                                {brand.short}
+                            {/* Clickable header */}
+                            <button
+                              type="button"
+                              onClick={toggleOpen}
+                              aria-expanded={isOpen}
+                              aria-controls={`delivery-panel-${m.value}`}
+                              className="w-full flex items-center gap-2 p-2 text-right"
+                              data-testid={`button-toggle-delivery-${m.value}`}
+                            >
+                              {/* Logo / brand badge */}
+                              <span className="shrink-0 w-10 h-10 rounded-lg bg-white border border-border flex items-center justify-center overflow-hidden">
+                                {brand.logo ? (
+                                  <img src={brand.logo} alt={m.label} className="max-w-full max-h-full object-contain" />
+                                ) : (
+                                  <span className={`w-full h-full flex items-center justify-center text-[10px] font-extrabold ${brand.cls}`}>
+                                    {brand.short}
+                                  </span>
+                                )}
                               </span>
-                              <span className="text-xs font-bold truncate">{m.label}</span>
-                            </div>
-                            {/* Orders count */}
-                            <div className="flex-1">
-                              <StableNumericInput
-                                placeholder="0"
-                                value={b?.transactionCount ?? 0}
-                                onChange={(val) => setDeliveryValue(m.value, "transactionCount", val)}
-                                isDecimal={false}
-                                disabled={isReadOnly}
-                                className="h-8 text-xs font-bold text-center"
-                                data-testid={`input-delivery-count-${m.value}`}
-                              />
-                            </div>
-                            {/* Amount */}
-                            <div className="flex-1">
-                              <StableNumericInput
-                                placeholder="0.00"
-                                value={b?.amount ?? 0}
-                                onChange={(val) => setDeliveryValue(m.value, "amount", val)}
-                                isDecimal={true}
-                                disabled={isReadOnly}
-                                className="h-8 text-xs font-bold text-center"
-                                data-testid={`input-delivery-amount-${m.value}`}
-                              />
-                            </div>
-                            {/* Clear */}
-                            <div className="w-7 shrink-0 flex justify-center">
-                              {isActive && !isReadOnly && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                  onClick={() => clearDelivery(m.value)}
-                                  data-testid={`button-clear-delivery-${m.value}`}
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
-                              )}
-                            </div>
+                              {/* Name + status */}
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-bold truncate">{m.label}</div>
+                                {isActive ? (
+                                  <div className="text-[11px] text-muted-foreground truncate">
+                                    {(b?.transactionCount || 0)} طلب · <span className="font-bold text-foreground">{(b?.amount || 0).toFixed(2)} ر.س</span>
+                                  </div>
+                                ) : (
+                                  <div className="text-[11px] text-muted-foreground">لا توجد مبيعات</div>
+                                )}
+                              </div>
+                              {/* Status dot + chevron */}
+                              <span className={`shrink-0 w-2 h-2 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-muted-foreground/30'}`} />
+                              <ChevronLeft className={`shrink-0 w-4 h-4 text-muted-foreground transition-transform ${isOpen ? '-rotate-90' : ''}`} />
+                            </button>
+
+                            {/* Expandable inputs */}
+                            {isOpen && (
+                              <div id={`delivery-panel-${m.value}`} role="region" aria-label={m.label} className="px-2 pb-2 pt-0.5 border-t border-border/60">
+                                <div className="flex items-end gap-2">
+                                  <div className="flex-1 space-y-0.5">
+                                    <Label className="text-[10px] text-muted-foreground">عدد الطلبات</Label>
+                                    <StableNumericInput
+                                      placeholder="0"
+                                      value={b?.transactionCount ?? 0}
+                                      onChange={(val) => setDeliveryValue(m.value, "transactionCount", val)}
+                                      isDecimal={false}
+                                      disabled={isReadOnly}
+                                      className="h-9 text-sm font-bold text-center"
+                                      data-testid={`input-delivery-count-${m.value}`}
+                                    />
+                                  </div>
+                                  <div className="flex-1 space-y-0.5">
+                                    <Label className="text-[10px] text-muted-foreground">المبلغ (ر.س)</Label>
+                                    <StableNumericInput
+                                      placeholder="0.00"
+                                      value={b?.amount ?? 0}
+                                      onChange={(val) => setDeliveryValue(m.value, "amount", val)}
+                                      isDecimal={true}
+                                      disabled={isReadOnly}
+                                      className="h-9 text-sm font-bold text-center"
+                                      data-testid={`input-delivery-amount-${m.value}`}
+                                    />
+                                  </div>
+                                  {isActive && !isReadOnly && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                      onClick={() => clearDelivery(m.value)}
+                                      data-testid={`button-clear-delivery-${m.value}`}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
