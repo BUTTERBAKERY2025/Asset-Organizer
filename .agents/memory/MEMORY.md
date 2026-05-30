@@ -1,1 +1,2 @@
 - [Cashier journal filtering & pagination](cashier-journal-filtering.md) — filter by free-text cashierName not cashierId; gate arbitrary cashier query params behind manager check; export/print fetch all rows (no limit).
+- [Design system / theme](design-system.md) — theme is Royal Violet (replit.md "Butter Gold" is stale); use semantic tokens (primary/muted/card/border/destructive), reserve green=success/surplus, amber=warning, destructive=error.

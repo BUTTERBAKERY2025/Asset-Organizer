@@ -135,31 +135,37 @@ function extractServerError(err: unknown): string | null {
 
 const PAYMENT_CATEGORIES = {
   cash: { label: "نقدي", color: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300" },
-  cards: { label: "بطاقات وشبكة", color: "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300" },
-  apps: { label: "تطبيقات التوصيل (آجل)", color: "bg-violet-100 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300" },
+  cards: { label: "بطاقات وشبكة", color: "bg-primary/10 text-primary" },
+  apps: { label: "تطبيقات التوصيل (آجل)", color: "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300" },
+};
+
+const CATEGORY_COLORS = {
+  cash: { bg: "bg-emerald-50/60 dark:bg-emerald-950/30", border: "border-emerald-200 dark:border-emerald-900", icon: "bg-emerald-100 dark:bg-emerald-900/40", iconText: "text-emerald-600 dark:text-emerald-400", badge: "bg-emerald-400" },
+  cards: { bg: "bg-primary/5", border: "border-primary/20", icon: "bg-primary/10", iconText: "text-primary", badge: "bg-primary/60" },
+  apps: { bg: "bg-amber-50/60 dark:bg-amber-950/30", border: "border-amber-200 dark:border-amber-900", icon: "bg-amber-100 dark:bg-amber-900/40", iconText: "text-amber-600 dark:text-amber-400", badge: "bg-amber-400" },
 };
 
 // Payment methods ordered by most commonly used first
 const PAYMENT_METHODS = [
-  { value: "cash", label: "نقداً", icon: Wallet, category: "cash", color: { bg: "bg-amber-50/50", border: "border-amber-200", icon: "bg-amber-100", iconText: "text-amber-600", badge: "bg-amber-400" } },
-  { value: "mada", label: "مدى", icon: CreditCard, category: "cards", color: { bg: "bg-green-50/50", border: "border-green-200", icon: "bg-green-100", iconText: "text-green-600", badge: "bg-green-400" } },
-  { value: "visa", label: "فيزا", icon: CreditCard, category: "cards", color: { bg: "bg-blue-50/50", border: "border-blue-200", icon: "bg-blue-100", iconText: "text-blue-600", badge: "bg-blue-400" } },
-  { value: "mastercard", label: "ماستركارد", icon: CreditCard, category: "cards", color: { bg: "bg-orange-50/50", border: "border-orange-200", icon: "bg-orange-100", iconText: "text-orange-600", badge: "bg-orange-400" } },
-  { value: "amex", label: "أمريكان إكسبريس", icon: CreditCard, category: "cards", color: { bg: "bg-sky-50/50", border: "border-sky-200", icon: "bg-sky-100", iconText: "text-sky-600", badge: "bg-sky-400" } },
-  { value: "card_other", label: "بطاقة أخرى", icon: CreditCard, category: "cards", color: { bg: "bg-slate-50/50", border: "border-slate-200", icon: "bg-slate-100", iconText: "text-slate-600", badge: "bg-slate-400" } },
+  { value: "cash", label: "نقداً", icon: Wallet, category: "cash", color: CATEGORY_COLORS.cash },
+  { value: "mada", label: "مدى", icon: CreditCard, category: "cards", color: CATEGORY_COLORS.cards },
+  { value: "visa", label: "فيزا", icon: CreditCard, category: "cards", color: CATEGORY_COLORS.cards },
+  { value: "mastercard", label: "ماستركارد", icon: CreditCard, category: "cards", color: CATEGORY_COLORS.cards },
+  { value: "amex", label: "أمريكان إكسبريس", icon: CreditCard, category: "cards", color: CATEGORY_COLORS.cards },
+  { value: "card_other", label: "بطاقة أخرى", icon: CreditCard, category: "cards", color: CATEGORY_COLORS.cards },
   // Legacy bank payment methods (for backward compatibility)
-  { value: "card", label: "بطاقة ائتمان (قديم)", icon: CreditCard, category: "cards", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-gray-400" } },
-  { value: "apple_pay", label: "Apple Pay", icon: Smartphone, category: "cards", color: { bg: "bg-zinc-50/50", border: "border-zinc-200", icon: "bg-zinc-100", iconText: "text-zinc-600", badge: "bg-zinc-500" } },
-  { value: "stc_pay", label: "STC Pay", icon: Smartphone, category: "cards", color: { bg: "bg-violet-50/50", border: "border-violet-200", icon: "bg-violet-100", iconText: "text-violet-600", badge: "bg-violet-400" } },
+  { value: "card", label: "بطاقة ائتمان (قديم)", icon: CreditCard, category: "cards", color: CATEGORY_COLORS.cards },
+  { value: "apple_pay", label: "Apple Pay", icon: Smartphone, category: "cards", color: CATEGORY_COLORS.cards },
+  { value: "stc_pay", label: "STC Pay", icon: Smartphone, category: "cards", color: CATEGORY_COLORS.cards },
   // Delivery apps - distinct text colors for each app
-  { value: "hunger_station", label: "هنقرستيشن", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-pink-100", iconText: "text-pink-600", badge: "bg-pink-400" } },
-  { value: "jahez", label: "جاهز", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-purple-100", iconText: "text-purple-600", badge: "bg-purple-400" } },
-  { value: "toyou", label: "ToYou", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-fuchsia-100", iconText: "text-fuchsia-600", badge: "bg-fuchsia-400" } },
-  { value: "marsool", label: "مرسول", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-yellow-100", iconText: "text-yellow-600", badge: "bg-yellow-400" } },
-  { value: "keeta", label: "كيتا", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-indigo-100", iconText: "text-indigo-600", badge: "bg-indigo-400" } },
-  { value: "the_chefs", label: "ذا شيفز", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-teal-100", iconText: "text-teal-600", badge: "bg-teal-400" } },
-  { value: "talabat", label: "طلبات", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-red-100", iconText: "text-red-600", badge: "bg-red-400" } },
-  { value: "other", label: "أخرى", icon: Wallet, category: "cash", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-gray-300" } },
+  { value: "hunger_station", label: "هنقرستيشن", icon: Truck, category: "apps", color: CATEGORY_COLORS.apps },
+  { value: "jahez", label: "جاهز", icon: Truck, category: "apps", color: CATEGORY_COLORS.apps },
+  { value: "toyou", label: "ToYou", icon: Truck, category: "apps", color: CATEGORY_COLORS.apps },
+  { value: "marsool", label: "مرسول", icon: Truck, category: "apps", color: CATEGORY_COLORS.apps },
+  { value: "keeta", label: "كيتا", icon: Truck, category: "apps", color: CATEGORY_COLORS.apps },
+  { value: "the_chefs", label: "ذا شيفز", icon: Truck, category: "apps", color: CATEGORY_COLORS.apps },
+  { value: "talabat", label: "طلبات", icon: Truck, category: "apps", color: CATEGORY_COLORS.apps },
+  { value: "other", label: "أخرى", icon: Wallet, category: "cash", color: CATEGORY_COLORS.cash },
 ];
 
 const SHIFT_TYPES = [
@@ -1236,7 +1242,7 @@ export default function CashierJournalFormPage() {
   const getDiscrepancyStatus = () => {
     const diff = calculateDiscrepancy();
     if (diff === 0) return { label: "متوازن", color: "text-green-600 bg-green-50", isShortage: false };
-    if (diff < 0) return { label: `عجز ${Math.abs(diff).toFixed(2)} ر.س`, color: "text-red-600 bg-red-50", isShortage: true };
+    if (diff < 0) return { label: `عجز ${Math.abs(diff).toFixed(2)} ر.س`, color: "text-destructive bg-destructive/10", isShortage: true };
     return { label: `زيادة ${diff.toFixed(2)} ر.س`, color: "text-amber-600 bg-amber-50", isShortage: false };
   };
 
@@ -1730,7 +1736,7 @@ export default function CashierJournalFormPage() {
             </h1>
           </div>
           {isEdit && (
-            <Button onClick={handleExportPDF} className="gap-1.5 bg-amber-600 hover:bg-amber-700 h-8 text-xs px-2" data-testid="button-export-pdf">
+            <Button onClick={handleExportPDF} variant="outline" className="gap-1.5 h-8 text-xs px-2" data-testid="button-export-pdf">
               <FileDown className="w-3.5 h-3.5" />
               PDF
             </Button>
@@ -1887,7 +1893,7 @@ export default function CashierJournalFormPage() {
                   const bankDiscType = bankDisc > 0.5 ? 'surplus' : bankDisc < -0.5 ? 'shortage' : 'balanced';
                   
                   // Use individual method colors for distinct visual identification
-                  const methodColor = method?.color || { bg: "bg-gray-50", border: "border-gray-200", icon: "bg-gray-200", iconText: "text-gray-600", badge: "bg-gray-500" };
+                  const methodColor = method?.color || { bg: "bg-muted", border: "border-border", icon: "bg-muted", iconText: "text-muted-foreground", badge: "bg-muted-foreground" };
                   const rowStyle = `${methodColor.border} ${methodColor.bg}`;
                   const iconBg = methodColor.icon;
                   const iconColor = methodColor.iconText;
@@ -1929,7 +1935,7 @@ export default function CashierJournalFormPage() {
                         </Select>
                         <div className="flex-1" />
                         {paymentBreakdowns.length > 1 && !isReadOnly && (
-                          <Button variant="ghost" size="sm" className="h-6 w-6 text-red-500 hover:text-red-600 hover:bg-red-100 p-0" onClick={() => removePaymentBreakdown(index)}>
+                          <Button variant="ghost" size="sm" className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10 p-0" onClick={() => removePaymentBreakdown(index)}>
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         )}
@@ -1941,7 +1947,7 @@ export default function CashierJournalFormPage() {
                           {/* POS & Terminal Amounts - Side by Side */}
                           <div className="grid grid-cols-2 gap-1">
                             <div className="space-y-0">
-                              <Label className="text-[9px] text-gray-500">POS (الكاشير)</Label>
+                              <Label className="text-[9px] text-muted-foreground">POS (الكاشير)</Label>
                               <StableNumericInput
                                 placeholder="0.00"
                                 value={breakdown.amount}
@@ -1954,13 +1960,13 @@ export default function CashierJournalFormPage() {
                             </div>
                             <div className="space-y-0">
                               <div className="flex items-center justify-between">
-                                <Label className="text-[9px] text-gray-500">Terminal</Label>
+                                <Label className="text-[9px] text-muted-foreground">Terminal</Label>
                                 {!isReadOnly && (
                                   <Button
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    className="h-3 px-0.5 text-[9px] text-gray-500 hover:text-gray-700 p-0"
+                                    className="h-3 px-0.5 text-[9px] text-muted-foreground hover:text-foreground p-0"
                                     onClick={() => updatePaymentBreakdown(index, "terminalAmount", breakdown.amount || 0)}
                                   >
                                     <Copy className="w-2 h-2 ml-0.5" />
@@ -1974,22 +1980,22 @@ export default function CashierJournalFormPage() {
                                 onChange={(val) => updatePaymentBreakdown(index, "terminalAmount", val)}
                                 isDecimal={true}
                                 disabled={isReadOnly}
-                                className="h-7 text-xs font-bold text-center bg-white"
+                                className="h-7 text-xs font-bold text-center bg-card"
                                 data-testid={`input-terminal-amount-${index}`}
                               />
                             </div>
                           </div>
                           {/* Discrepancy & Transaction Counts - Ultra Compact Row */}
                           <div className="flex items-center gap-1 text-[9px]">
-                            <div className={`flex-1 px-1 py-0.5 rounded flex items-center justify-between ${bankDiscType === 'surplus' ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300' : bankDiscType === 'shortage' ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300' : 'bg-muted text-muted-foreground'}`}>
+                            <div className={`flex-1 px-1 py-0.5 rounded flex items-center justify-between ${bankDiscType === 'surplus' ? 'bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300' : bankDiscType === 'shortage' ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}`}>
                               <span>الفرق:</span>
                               <span className="font-bold">
                                 {bankDisc >= 0 ? '+' : ''}{bankDisc.toFixed(2)} {bankDiscType === 'surplus' ? '⬆️' : bankDiscType === 'shortage' ? '⬇️' : '✓'}
                               </span>
                             </div>
-                            <div className="flex items-center gap-1 bg-gray-50 px-1 py-0.5 rounded">
+                            <div className="flex items-center gap-1 bg-muted px-1 py-0.5 rounded">
                               <div className="flex items-center gap-0.5">
-                                <span className="text-gray-400">POS:</span>
+                                <span className="text-muted-foreground">POS:</span>
                                 <StableNumericInput
                                   placeholder="0"
                                   value={breakdown.transactionCount}
@@ -2001,7 +2007,7 @@ export default function CashierJournalFormPage() {
                                 />
                               </div>
                               <div className="flex items-center gap-0.5">
-                                <span className="text-gray-400">جهاز:</span>
+                                <span className="text-muted-foreground">جهاز:</span>
                                 <StableNumericInput
                                   placeholder="0"
                                   value={breakdown.terminalTransactionCount}
@@ -2027,7 +2033,7 @@ export default function CashierJournalFormPage() {
                               {/* Cash POS & Actual Drawer - Side by Side */}
                               <div className="grid grid-cols-2 gap-1">
                                 <div className="space-y-0">
-                                  <Label className="text-[9px] text-gray-500">النقد المسجل (POS)</Label>
+                                  <Label className="text-[9px] text-muted-foreground">النقد المسجل (POS)</Label>
                                   <StableNumericInput
                                     placeholder="0.00"
                                     value={breakdown.amount}
@@ -2039,28 +2045,28 @@ export default function CashierJournalFormPage() {
                                   />
                                 </div>
                                 <div className="space-y-0">
-                                  <Label className="text-[9px] text-gray-500">الفعلي في الصندوق</Label>
+                                  <Label className="text-[9px] text-muted-foreground">الفعلي في الصندوق</Label>
                                   <StableNumericInput
                                     placeholder="0.00"
                                     value={formData.actualCashDrawer}
                                     onChange={(val) => setFormData({ ...formData, actualCashDrawer: val })}
                                     isDecimal={true}
                                     disabled={isReadOnly}
-                                    className="h-7 text-xs font-bold text-center bg-white"
+                                    className="h-7 text-xs font-bold text-center bg-card"
                                     data-testid="input-actual-cash-inline"
                                   />
                                 </div>
                               </div>
                               {/* Cash Discrepancy & Transaction Count - Ultra Compact Row */}
                               <div className="flex items-center gap-1 text-[9px]">
-                                <div className={`flex-1 px-1 py-0.5 rounded flex items-center justify-between ${cashDiscType === 'surplus' ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300' : cashDiscType === 'shortage' ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300' : 'bg-muted text-muted-foreground'}`}>
+                                <div className={`flex-1 px-1 py-0.5 rounded flex items-center justify-between ${cashDiscType === 'surplus' ? 'bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300' : cashDiscType === 'shortage' ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}`}>
                                   <span>الفرق:</span>
                                   <span className="font-bold">
                                     {cashDisc >= 0 ? '+' : ''}{cashDisc.toFixed(2)} {cashDiscType === 'surplus' ? '⬆️' : cashDiscType === 'shortage' ? '⬇️' : '✓'}
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-0.5 bg-gray-50 px-1 py-0.5 rounded">
-                                  <span className="text-gray-400">عمليات:</span>
+                                <div className="flex items-center gap-0.5 bg-muted px-1 py-0.5 rounded">
+                                  <span className="text-muted-foreground">عمليات:</span>
                                   <StableNumericInput
                                     placeholder="0"
                                     value={breakdown.transactionCount}
@@ -2085,7 +2091,7 @@ export default function CashierJournalFormPage() {
                                 {returnData.hasReturn && returnData.returnPaymentMethod === 'cash' && returnData.returnAmount > 0 && (
                                   <>
                                     <span>-</span>
-                                    <span className="font-medium text-red-600">{returnData.returnAmount.toFixed(0)}</span>
+                                    <span className="font-medium text-destructive">{returnData.returnAmount.toFixed(0)}</span>
                                   </>
                                 )}
                                 <span>=</span>
@@ -2098,7 +2104,7 @@ export default function CashierJournalFormPage() {
                         /* Other Non-Bank: Simple Amount + Transaction Count */
                         <div className="flex items-end gap-1">
                           <div className="flex-1 space-y-0">
-                            <Label className="text-[9px] text-gray-500">المبلغ</Label>
+                            <Label className="text-[9px] text-muted-foreground">المبلغ</Label>
                             <StableNumericInput
                               placeholder="0.00"
                               value={breakdown.amount}
@@ -2110,7 +2116,7 @@ export default function CashierJournalFormPage() {
                             />
                           </div>
                           <div className="w-14 space-y-0">
-                            <Label className="text-[9px] text-gray-400">عمليات</Label>
+                            <Label className="text-[9px] text-muted-foreground">عمليات</Label>
                             <StableNumericInput
                               placeholder="0"
                               value={breakdown.transactionCount}
@@ -2166,13 +2172,13 @@ export default function CashierJournalFormPage() {
                             <div className="text-muted-foreground">تيرمنال</div>
                             <div className="font-bold text-xs">{bankSummary.totalTerminalAmount.toFixed(2)}</div>
                           </div>
-                          <div className={`p-1.5 rounded ${bankSummary.type === 'surplus' ? 'bg-amber-200 dark:bg-amber-900/60' : bankSummary.type === 'shortage' ? 'bg-rose-200 dark:bg-rose-900/60' : 'bg-muted'}`}>
+                          <div className={`p-1.5 rounded ${bankSummary.type === 'surplus' ? 'bg-green-200 dark:bg-green-900/60' : bankSummary.type === 'shortage' ? 'bg-destructive/20' : 'bg-muted'}`}>
                             <div className="text-muted-foreground">الفرق</div>
-                            <div className={`font-bold text-xs ${bankSummary.type === 'surplus' ? 'text-amber-800 dark:text-amber-200' : bankSummary.type === 'shortage' ? 'text-rose-800 dark:text-rose-200' : ''}`}>
+                            <div className={`font-bold text-xs ${bankSummary.type === 'surplus' ? 'text-green-800 dark:text-green-200' : bankSummary.type === 'shortage' ? 'text-destructive' : ''}`}>
                               {bankSummary.discrepancy.toFixed(2)}
                             </div>
                           </div>
-                          <div className={`p-1.5 rounded flex items-center justify-center ${bankSummary.type === 'surplus' ? 'bg-amber-200 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200' : bankSummary.type === 'shortage' ? 'bg-rose-200 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200' : 'bg-muted'}`}>
+                          <div className={`p-1.5 rounded flex items-center justify-center ${bankSummary.type === 'surplus' ? 'bg-green-200 dark:bg-green-900/60 text-green-800 dark:text-green-200' : bankSummary.type === 'shortage' ? 'bg-destructive/20 text-destructive' : 'bg-muted'}`}>
                             <span className="font-bold text-[10px]">
                               {bankSummary.type === 'surplus' ? '⬆️ زيادة' : bankSummary.type === 'shortage' ? '⬇️ عجز' : '✓'}
                             </span>
@@ -2191,12 +2197,12 @@ export default function CashierJournalFormPage() {
                                 const diff = termAmt - posAmt;
                                 const diffStatus = diff > 0.5 ? 'surplus' : diff < -0.5 ? 'shortage' : 'balanced';
                                 return (
-                                  <div key={idx} className={`flex items-center justify-between text-xs p-2 rounded border ${diffStatus === 'surplus' ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900' : diffStatus === 'shortage' ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900' : 'bg-background border-border'}`}>
+                                  <div key={idx} className={`flex items-center justify-between text-xs p-2 rounded border ${diffStatus === 'surplus' ? 'bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-900' : diffStatus === 'shortage' ? 'bg-destructive/10 border-destructive/30' : 'bg-background border-border'}`}>
                                     <span className="text-foreground font-medium">{methodLabel}</span>
                                     <div className="flex items-center gap-3">
                                       <span className="text-muted-foreground">POS: {posAmt.toFixed(2)}</span>
                                       <span className="text-muted-foreground">تيرمنال: {termAmt.toFixed(2)}</span>
-                                      <span className={`font-bold px-2 py-0.5 rounded ${diffStatus === 'surplus' ? 'bg-amber-200 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200' : diffStatus === 'shortage' ? 'bg-rose-200 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200' : 'text-muted-foreground'}`}>
+                                      <span className={`font-bold px-2 py-0.5 rounded ${diffStatus === 'surplus' ? 'bg-green-200 dark:bg-green-900/60 text-green-800 dark:text-green-200' : diffStatus === 'shortage' ? 'bg-destructive/20 text-destructive' : 'text-muted-foreground'}`}>
                                         ({diff >= 0 ? '+' : ''}{diff.toFixed(2)})
                                       </span>
                                     </div>
@@ -2236,14 +2242,14 @@ export default function CashierJournalFormPage() {
             </Card>
 
             {/* Returns Section - المرتجع - Compact Design */}
-            <Card className={`border ${showReturns && returnData.hasReturn ? 'border-rose-200 dark:border-rose-900 bg-rose-50/30 dark:bg-rose-950/20' : 'border-border'}`}>
-              <CardHeader className={`py-2 px-3 ${showReturns && returnData.hasReturn ? 'bg-rose-50 dark:bg-rose-950/40' : ''}`}>
+            <Card className={`border ${showReturns && returnData.hasReturn ? 'border-destructive/30 bg-destructive/5' : 'border-border'}`}>
+              <CardHeader className={`py-2 px-3 ${showReturns && returnData.hasReturn ? 'bg-destructive/10' : ''}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className={`p-1.5 rounded ${showReturns ? 'bg-rose-200 dark:bg-rose-900/60' : 'bg-muted'}`}>
-                      <RotateCcw className={`w-4 h-4 ${showReturns ? 'text-rose-700 dark:text-rose-300' : 'text-muted-foreground'}`} />
+                    <div className={`p-1.5 rounded ${showReturns ? 'bg-destructive/20' : 'bg-muted'}`}>
+                      <RotateCcw className={`w-4 h-4 ${showReturns ? 'text-destructive' : 'text-muted-foreground'}`} />
                     </div>
-                    <span className={`text-sm font-medium ${showReturns && returnData.hasReturn ? 'text-rose-700 dark:text-rose-300' : 'text-muted-foreground'}`}>
+                    <span className={`text-sm font-medium ${showReturns && returnData.hasReturn ? 'text-destructive' : 'text-muted-foreground'}`}>
                       المرتجعات
                     </span>
                     {returnData.hasReturn && returnData.returnAmount > 0 && (
@@ -2290,25 +2296,25 @@ export default function CashierJournalFormPage() {
                   {/* Ultra Compact: All 4 fields in one row on larger screens */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                     <div className="space-y-0.5">
-                      <Label className="text-[10px] text-red-700 font-medium">المبلغ</Label>
+                      <Label className="text-[10px] text-destructive font-medium">المبلغ</Label>
                       <StableNumericInput
                         value={returnData.returnAmount}
                         onChange={(val) => setReturnData(prev => ({ ...prev, returnAmount: val }))}
                         isDecimal={true}
-                        className="h-7 border-red-200 text-xs font-bold text-center"
+                        className="h-7 border-destructive/30 text-xs font-bold text-center"
                         placeholder="0.00"
                         disabled={isReadOnly}
                         data-testid="input-return-amount"
                       />
                     </div>
                     <div className="space-y-0.5">
-                      <Label className="text-[10px] text-red-700 font-medium">الاسترداد</Label>
+                      <Label className="text-[10px] text-destructive font-medium">الاسترداد</Label>
                       <Select
                         value={returnData.returnPaymentMethod}
                         onValueChange={(v) => setReturnData(prev => ({ ...prev, returnPaymentMethod: v }))}
                         disabled={isReadOnly}
                       >
-                        <SelectTrigger className="h-7 border-red-200 text-[10px]" data-testid="select-return-method">
+                        <SelectTrigger className="h-7 border-destructive/30 text-[10px]" data-testid="select-return-method">
                           <SelectValue placeholder="اختر" />
                         </SelectTrigger>
                         <SelectContent>
@@ -2322,7 +2328,7 @@ export default function CashierJournalFormPage() {
                       </Select>
                     </div>
                     <div className="space-y-0.5">
-                      <Label className="text-[10px] text-gray-500">الفاتورة</Label>
+                      <Label className="text-[10px] text-muted-foreground">الفاتورة</Label>
                       <Input
                         type="text"
                         value={returnData.returnReference || ""}
@@ -2334,7 +2340,7 @@ export default function CashierJournalFormPage() {
                       />
                     </div>
                     <div className="space-y-0.5">
-                      <Label className="text-[10px] text-gray-500">السبب</Label>
+                      <Label className="text-[10px] text-muted-foreground">السبب</Label>
                       <Input
                         type="text"
                         value={returnData.returnReason || ""}
@@ -2349,16 +2355,16 @@ export default function CashierJournalFormPage() {
                   
                   {/* Compact Impact Summary */}
                   {returnData.returnAmount > 0 && (
-                    <div className="flex items-center gap-1.5 text-[10px] bg-red-100 border border-red-200 rounded px-1.5 py-1">
-                      <AlertCircle className="w-3 h-3 text-red-600 shrink-0" />
+                    <div className="flex items-center gap-1.5 text-[10px] bg-destructive/10 border border-destructive/30 rounded px-1.5 py-1">
+                      <AlertCircle className="w-3 h-3 text-destructive shrink-0" />
                       <div className="flex flex-wrap items-center gap-0.5">
-                        <span className="text-gray-600">{formData.totalSales.toFixed(2)}</span>
+                        <span className="text-muted-foreground">{formData.totalSales.toFixed(2)}</span>
                         <span>-</span>
-                        <span className="text-red-600 font-medium">{returnData.returnAmount.toFixed(2)}</span>
+                        <span className="text-destructive font-medium">{returnData.returnAmount.toFixed(2)}</span>
                         <span>=</span>
-                        <span className="font-bold text-red-700">{getNetSales().toFixed(2)} ر.س</span>
+                        <span className="font-bold text-destructive">{getNetSales().toFixed(2)} ر.س</span>
                         {returnData.returnPaymentMethod === "cash" && (
-                          <span className="text-red-600 bg-red-200 px-0.5 rounded text-[9px]">⚠️ نقد</span>
+                          <span className="text-destructive bg-destructive/20 px-0.5 rounded text-[9px]">⚠️ نقد</span>
                         )}
                       </div>
                     </div>
@@ -2407,15 +2413,15 @@ export default function CashierJournalFormPage() {
               
               // Variance classification
               const varianceType = varianceSummary.varianceType;
-              const varianceColor = varianceType === 'balanced' ? 'bg-emerald-100 border-emerald-300 text-emerald-800' :
-                varianceType === 'warning' ? 'bg-amber-100 border-amber-300 text-amber-800' :
-                'bg-red-100 border-red-300 text-red-800';
+              const varianceColor = varianceType === 'balanced' ? 'bg-green-50 border-green-200 text-green-700' :
+                varianceType === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-700' :
+                'bg-destructive/10 border-destructive/30 text-destructive';
               
               if (bankSummary.bankPayments.length === 0 && actualCash === 0) return null;
               
               return (
-                <Card className="border border-purple-200">
-                  <CardHeader className="bg-purple-50 py-2 px-3">
+                <Card className="border border-primary/20">
+                  <CardHeader className="bg-primary/5 py-2 px-3">
                     <CardTitle className="flex items-center gap-2 text-base">
                       <Calculator className="w-4 h-4" />
                       ملخص التسوية الشاملة
@@ -2425,19 +2431,19 @@ export default function CashierJournalFormPage() {
                     {/* Main Calculation */}
                     <div className="space-y-3">
                       {/* Show sales breakdown with apps deduction */}
-                      <div className="p-3 bg-gray-50 rounded-lg border space-y-2">
+                      <div className="p-3 bg-muted rounded-lg border space-y-2">
                         <div className="flex justify-between items-center">
                           <span className="text-muted-foreground">إجمالي المبيعات (من التفصيل)</span>
                           <span className="font-medium">{getBreakdownTotal().toFixed(2)} ر.س</span>
                         </div>
                         {returnData.hasReturn && returnData.returnAmount > 0 && (
-                          <div className="flex justify-between items-center text-red-600">
+                          <div className="flex justify-between items-center text-destructive">
                             <span>المرتجع</span>
                             <span className="font-medium">-{returnData.returnAmount.toFixed(2)} ر.س</span>
                           </div>
                         )}
                         {appsTotal > 0 && (
-                          <div className="flex justify-between items-center text-purple-600">
+                          <div className="flex justify-between items-center text-amber-600">
                             <span className="flex items-center gap-1">
                               <Truck className="w-3 h-3" />
                               تطبيقات التوصيل (آجل)
@@ -2452,8 +2458,8 @@ export default function CashierJournalFormPage() {
                         </div>
                       </div>
                       
-                      <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                        <div className="text-sm text-blue-600 mb-2 font-medium">المحصل الفعلي:</div>
+                      <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
+                        <div className="text-sm text-primary mb-2 font-medium">المحصل الفعلي:</div>
                         <div className="grid grid-cols-2 gap-2">
                           <div className="flex justify-between items-center">
                             <span className="text-sm text-muted-foreground">النقد الفعلي:</span>
@@ -2467,7 +2473,7 @@ export default function CashierJournalFormPage() {
                         <Separator className="my-2" />
                         <div className="flex justify-between items-center">
                           <span className="font-medium">إجمالي المحصل:</span>
-                          <span className="font-bold text-lg text-blue-700">{totalActualCollected.toFixed(2)} ر.س</span>
+                          <span className="font-bold text-lg text-primary">{totalActualCollected.toFixed(2)} ر.س</span>
                         </div>
                       </div>
                       
@@ -2491,14 +2497,14 @@ export default function CashierJournalFormPage() {
                       </div>
                       
                       {/* Component Breakdown */}
-                      <div className="p-3 bg-gray-50 rounded-lg border">
+                      <div className="p-3 bg-muted rounded-lg border">
                         <div className="text-sm text-muted-foreground mb-2">تفصيل الفروقات:</div>
                         <div className="grid grid-cols-2 gap-3 text-sm">
-                          <div className={`p-2 rounded ${cashDiscrepancy > 0.5 ? 'bg-emerald-100' : cashDiscrepancy < -0.5 ? 'bg-red-100' : 'bg-gray-100'}`}>
+                          <div className={`p-2 rounded ${cashDiscrepancy > 0.5 ? 'bg-green-100' : cashDiscrepancy < -0.5 ? 'bg-destructive/10' : 'bg-muted'}`}>
                             <div className="text-xs text-muted-foreground">فرق الصندوق النقدي:</div>
                             <div className="font-bold">{cashDiscrepancy >= 0 ? '+' : ''}{cashDiscrepancy.toFixed(2)} ر.س</div>
                           </div>
-                          <div className={`p-2 rounded ${bankDiscrepancy > 0.5 ? 'bg-emerald-100' : bankDiscrepancy < -0.5 ? 'bg-red-100' : 'bg-gray-100'}`}>
+                          <div className={`p-2 rounded ${bankDiscrepancy > 0.5 ? 'bg-green-100' : bankDiscrepancy < -0.5 ? 'bg-destructive/10' : 'bg-muted'}`}>
                             <div className="text-xs text-muted-foreground">فرق مطابقة البنك:</div>
                             <div className="font-bold">{bankDiscrepancy >= 0 ? '+' : ''}{bankDiscrepancy.toFixed(2)} ر.س</div>
                           </div>
@@ -2507,10 +2513,10 @@ export default function CashierJournalFormPage() {
                       
                       {/* Misclassification Alert */}
                       {hasMisclassification && (
-                        <Alert className="border-orange-300 bg-orange-50">
-                          <AlertCircle className="h-4 w-4 text-orange-600" />
-                          <AlertTitle className="text-orange-700">احتمال خطأ تصنيف الدفع</AlertTitle>
-                          <AlertDescription className="text-orange-600">
+                        <Alert className="border-amber-200 bg-amber-50">
+                          <AlertCircle className="h-4 w-4 text-amber-600" />
+                          <AlertTitle className="text-amber-700">احتمال خطأ تصنيف الدفع</AlertTitle>
+                          <AlertDescription className="text-amber-600">
                             {cashDiscrepancy > 0 && bankDiscrepancy < 0 ? (
                               <>
                                 زيادة النقد (+{cashDiscrepancy.toFixed(2)} ر.س) تقابل عجز البنك ({bankDiscrepancy.toFixed(2)} ر.س)
@@ -2550,8 +2556,8 @@ export default function CashierJournalFormPage() {
               </CardContent>
             </Card>
 
-            <Card className="border border-orange-200">
-              <CardHeader className="bg-orange-50 py-2 px-3">
+            <Card className="border border-primary/20">
+              <CardHeader className="bg-primary/5 py-2 px-3">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Camera className="w-4 h-4" />
                   المرفقات والصور
@@ -2624,7 +2630,7 @@ export default function CashierJournalFormPage() {
                     <Label className="text-sm font-semibold">مرفقات في انتظار الحفظ</Label>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                       {pendingAttachments.map((attachment, index) => (
-                        <div key={index} className="relative border rounded-lg overflow-hidden group border-dashed border-2 border-orange-300 cursor-pointer" onClick={() => openLightbox(attachments.length + index)} data-testid={`pending-attachment-image-${index}`}>
+                        <div key={index} className="relative border rounded-lg overflow-hidden group border-dashed border-2 border-amber-300 cursor-pointer" onClick={() => openLightbox(attachments.length + index)} data-testid={`pending-attachment-image-${index}`}>
                           <img
                             src={attachment.downloadUrl || attachment.fileData || ''}
                             alt={attachment.fileName}
@@ -2633,7 +2639,7 @@ export default function CashierJournalFormPage() {
                           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
                             <Maximize2 className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
                           </div>
-                          <div className="absolute bottom-0 left-0 right-0 bg-orange-500/80 text-white text-xs p-2">
+                          <div className="absolute bottom-0 left-0 right-0 bg-amber-500/80 text-white text-xs p-2">
                             {ATTACHMENT_TYPE_LABELS[attachment.attachmentType]}
                           </div>
                           <Button
@@ -2663,12 +2669,12 @@ export default function CashierJournalFormPage() {
           </div>
 
           <div className="space-y-3">
-            <Card className={!hasSignature && !isEdit ? "border-red-300 bg-red-50/50" : ""}>
+            <Card className={!hasSignature && !isEdit ? "border-destructive/30 bg-destructive/5" : ""}>
               <CardHeader className="py-2 px-3">
                 <CardTitle className="flex items-center gap-2 text-sm">
                   التوقيع الإلكتروني
                   {!hasSignature && !isEdit && (
-                    <span className="text-[10px] font-normal text-red-600 bg-red-100 px-1.5 py-0.5 rounded">مطلوب</span>
+                    <span className="text-[10px] font-normal text-destructive bg-destructive/10 px-1.5 py-0.5 rounded">مطلوب</span>
                   )}
                   {hasSignature && (
                     <span className="text-[10px] font-normal text-green-600 bg-green-100 px-1.5 py-0.5 rounded">تم ✓</span>
@@ -2677,17 +2683,17 @@ export default function CashierJournalFormPage() {
               </CardHeader>
               <CardContent className="space-y-2 p-3 pt-0">
                 {!hasSignature && !isEdit && (
-                  <div className="bg-red-100 border border-red-300 text-red-700 px-2 py-1.5 rounded text-xs flex items-center gap-1.5">
+                  <div className="bg-destructive/10 border border-destructive/30 text-destructive px-2 py-1.5 rounded text-xs flex items-center gap-1.5">
                     <AlertTriangle className="w-3 h-3" />
                     <span>يجب التوقيع قبل حفظ اليومية</span>
                   </div>
                 )}
-                <div className={`border-2 rounded-lg overflow-hidden ${!hasSignature && !isEdit ? "border-red-300" : "border-amber-400"}`}>
+                <div className={`border-2 rounded-lg overflow-hidden ${!hasSignature && !isEdit ? "border-destructive/30" : "border-amber-400"}`}>
                   <canvas
                     ref={signatureCanvasRef}
                     width={280}
                     height={120}
-                    className="w-full cursor-crosshair bg-white touch-none"
+                    className="w-full cursor-crosshair bg-card touch-none"
                     style={{ touchAction: 'none' }}
                     onMouseDown={startDrawing}
                     onMouseMove={draw}
@@ -2748,7 +2754,7 @@ export default function CashierJournalFormPage() {
                       {getCardBreakdowns().map((b, i) => {
                         const method = PAYMENT_METHODS.find((m) => m.value === b.paymentMethod);
                         return (
-                          <div key={i} className="flex justify-between text-[10px] text-blue-600">
+                          <div key={i} className="flex justify-between text-[10px] text-primary">
                             <span>• {method?.label}</span>
                             <span>{b.amount.toFixed(2)}</span>
                           </div>
@@ -2768,7 +2774,7 @@ export default function CashierJournalFormPage() {
                       {getAppBreakdowns().map((b, i) => {
                         const method = PAYMENT_METHODS.find((m) => m.value === b.paymentMethod);
                         return (
-                          <div key={i} className="flex justify-between text-[10px] text-purple-600">
+                          <div key={i} className="flex justify-between text-[10px] text-amber-600">
                             <span>• {method?.label}</span>
                             <span>{b.amount.toFixed(2)}</span>
                           </div>
@@ -2782,20 +2788,20 @@ export default function CashierJournalFormPage() {
                 {returnData.hasReturn && returnData.returnAmount > 0 && (
                   <>
                     <Separator />
-                    <div className="text-xs font-semibold text-red-600">المرتجع</div>
-                    <div className="p-2 bg-red-50 rounded border border-red-200">
-                      <div className="flex justify-between text-sm text-red-700">
+                    <div className="text-xs font-semibold text-destructive">المرتجع</div>
+                    <div className="p-2 bg-destructive/10 rounded border border-destructive/30">
+                      <div className="flex justify-between text-sm text-destructive">
                         <span className="flex items-center gap-1">
                           <RotateCcw className="w-3 h-3" />
                           مبلغ المرتجع
                         </span>
                         <span className="font-bold">-{returnData.returnAmount.toFixed(2)} ر.س</span>
                       </div>
-                      <div className="flex justify-between text-xs text-red-600 mt-1">
+                      <div className="flex justify-between text-xs text-destructive mt-1">
                         <span>طريقة الاسترداد:</span>
                         <span>{PAYMENT_METHODS.find(m => m.value === returnData.returnPaymentMethod)?.label || returnData.returnPaymentMethod}</span>
                       </div>
-                      <div className="flex justify-between text-sm font-bold mt-2 pt-2 border-t border-red-200">
+                      <div className="flex justify-between text-sm font-bold mt-2 pt-2 border-t border-destructive/30">
                         <span>صافي المبيعات:</span>
                         <span>{getNetSales().toFixed(2)} ر.س</span>
                       </div>
@@ -2808,12 +2814,12 @@ export default function CashierJournalFormPage() {
                   const vs = getVarianceSummary();
                   const netVarColor = vs.varianceType === 'balanced' ? 'text-green-600 bg-green-50 border-green-200' : 
                     vs.varianceType === 'warning' ? 'text-amber-600 bg-amber-50 border-amber-200' : 
-                    'text-red-600 bg-red-50 border-red-200';
+                    'text-destructive bg-destructive/10 border-destructive/30';
                   
                   return (
                     <>
                       <Separator />
-                      <div className="text-xs font-semibold text-purple-700">صافي الفرق النهائي</div>
+                      <div className="text-xs font-semibold text-primary">صافي الفرق النهائي</div>
                       <div className={`p-3 rounded-lg border-2 ${netVarColor}`}>
                         <div className="flex justify-between items-center">
                           <span className="font-medium">الفارق الإجمالي:</span>
@@ -2828,18 +2834,18 @@ export default function CashierJournalFormPage() {
                       
                       {/* Component breakdown - sub-discrepancies */}
                       {(Math.abs(vs.cashDiscrepancy) > 0.01 || Math.abs(vs.bankDiscrepancy) > 0.01) && (
-                        <div className="space-y-2 p-2 bg-gray-50 rounded border text-xs">
+                        <div className="space-y-2 p-2 bg-muted rounded border text-xs">
                           <div className="text-muted-foreground font-medium">تفصيل الفروقات:</div>
                           <div className="flex justify-between">
                             <span>فرق الصندوق النقدي:</span>
-                            <span className={vs.cashDiscrepancy > 0 ? 'text-amber-600' : vs.cashDiscrepancy < 0 ? 'text-red-600' : 'text-green-600'}>
+                            <span className={vs.cashDiscrepancy > 0 ? 'text-amber-600' : vs.cashDiscrepancy < 0 ? 'text-destructive' : 'text-green-600'}>
                               {vs.cashDiscrepancy >= 0 ? '+' : ''}{vs.cashDiscrepancy.toFixed(2)} ر.س
                             </span>
                           </div>
                           {vs.hasBankPayments && (
                             <div className="flex justify-between">
                               <span>فرق مطابقة البنك:</span>
-                              <span className={vs.bankDiscrepancy > 0 ? 'text-amber-600' : vs.bankDiscrepancy < 0 ? 'text-red-600' : 'text-green-600'}>
+                              <span className={vs.bankDiscrepancy > 0 ? 'text-amber-600' : vs.bankDiscrepancy < 0 ? 'text-destructive' : 'text-green-600'}>
                                 {vs.bankDiscrepancy >= 0 ? '+' : ''}{vs.bankDiscrepancy.toFixed(2)} ر.س
                               </span>
                             </div>
@@ -2848,7 +2854,7 @@ export default function CashierJournalFormPage() {
                       )}
                       
                       {discrepancyStatus.isShortage && (
-                        <div className="mt-2 p-2 bg-red-100 rounded text-red-700 text-xs text-center">
+                        <div className="mt-2 p-2 bg-destructive/10 rounded text-destructive text-xs text-center">
                           عجز مُسجَّل على الكاشير ({vs.cashDiscrepancy.toFixed(2)} ر.س)
                         </div>
                       )}
@@ -2889,7 +2895,7 @@ export default function CashierJournalFormPage() {
                   {isEdit && existingJournal?.status === "draft" && (
                     <Button
                       variant="default"
-                      className="w-full gap-2 bg-green-600 hover:bg-green-700 h-12"
+                      className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white h-12"
                       onClick={handleSaveAndPost}
                       disabled={postMutation.isPending || updateMutation.isPending || !canPost}
                       data-testid="button-save-post"
@@ -2921,18 +2927,18 @@ export default function CashierJournalFormPage() {
         </div>
 
         {/* Sticky Bottom Action Bar - iPad Optimized */}
-        <div className="fixed bottom-0 left-0 right-0 md:right-64 bg-white border-t-2 border-amber-200 shadow-lg z-50 p-2 md:p-3">
+        <div className="fixed bottom-0 left-0 right-0 md:right-64 bg-card border-t-2 border-border shadow-lg z-50 p-2 md:p-3">
           <div className="flex flex-col gap-2">
             {/* Quick Add Payment Buttons - Always visible */}
             {!isReadOnly && (
               <div className="flex flex-col gap-1">
                 {/* Bank Cards Row */}
                 <div className="flex flex-wrap items-center justify-center gap-2">
-                  <span className="text-xs text-blue-600 font-medium ml-1">💳 بطاقات:</span>
+                  <span className="text-xs text-primary font-medium ml-1">💳 بطاقات:</span>
                   {[
-                    { value: "mada", label: "مدى", color: "bg-blue-600 hover:bg-blue-700" },
-                    { value: "visa", label: "فيزا", color: "bg-indigo-600 hover:bg-indigo-700" },
-                    { value: "mastercard", label: "ماستركارد", color: "bg-orange-600 hover:bg-orange-700" },
+                    { value: "mada", label: "مدى", color: "bg-primary hover:bg-primary/90" },
+                    { value: "visa", label: "فيزا", color: "bg-primary hover:bg-primary/90" },
+                    { value: "mastercard", label: "ماستركارد", color: "bg-primary hover:bg-primary/90" },
                   ].filter(m => !paymentBreakdowns.some(p => p.paymentMethod === m.value)).map(method => (
                     <Button
                       key={method.value}
@@ -2959,14 +2965,14 @@ export default function CashierJournalFormPage() {
                 
                 {/* Delivery Apps Row */}
                 <div className="flex flex-wrap items-center justify-center gap-2">
-                  <span className="text-xs text-purple-600 font-medium ml-1">🚚 توصيل:</span>
+                  <span className="text-xs text-amber-600 font-medium ml-1">🚚 توصيل:</span>
                   {[
-                    { value: "hunger_station", label: "هنجرستيشن", color: "bg-orange-500 hover:bg-orange-600" },
-                    { value: "keeta", label: "كيتا", color: "bg-green-500 hover:bg-green-600" },
-                    { value: "jahez", label: "جاهز", color: "bg-blue-500 hover:bg-blue-600" },
-                    { value: "marsool", label: "مرسول", color: "bg-purple-500 hover:bg-purple-600" },
-                    { value: "toyou", label: "ToYou", color: "bg-pink-500 hover:bg-pink-600" },
-                    { value: "the_chefs", label: "ذا شيفز", color: "bg-amber-600 hover:bg-amber-700" },
+                    { value: "hunger_station", label: "هنجرستيشن", color: "bg-amber-500 hover:bg-amber-600" },
+                    { value: "keeta", label: "كيتا", color: "bg-amber-500 hover:bg-amber-600" },
+                    { value: "jahez", label: "جاهز", color: "bg-amber-500 hover:bg-amber-600" },
+                    { value: "marsool", label: "مرسول", color: "bg-amber-500 hover:bg-amber-600" },
+                    { value: "toyou", label: "ToYou", color: "bg-amber-500 hover:bg-amber-600" },
+                    { value: "the_chefs", label: "ذا شيفز", color: "bg-amber-500 hover:bg-amber-600" },
                   ].filter(m => !paymentBreakdowns.some(p => p.paymentMethod === m.value)).map(method => (
                     <Button
                       key={method.value}
@@ -3005,16 +3011,16 @@ export default function CashierJournalFormPage() {
             <div className="flex flex-col sm:flex-row items-center justify-between gap-1.5">
             {/* Summary Stats - compact for iPad */}
             <div className="flex flex-wrap items-center justify-center gap-1.5 text-xs">
-              <div className="flex items-center gap-1 bg-gray-100 px-2 py-1.5 rounded">
-                <Receipt className="w-3 h-3 text-gray-500" />
-                <span className="text-gray-600">المبيعات:</span>
+              <div className="flex items-center gap-1 bg-muted px-2 py-1.5 rounded">
+                <Receipt className="w-3 h-3 text-muted-foreground" />
+                <span className="text-muted-foreground">المبيعات:</span>
                 <span className="font-bold text-sm">{formData.totalSales.toLocaleString('en')} ر.س</span>
               </div>
               {returnData.hasReturn && returnData.returnAmount > 0 && (
-                <div className="flex items-center gap-1 bg-red-100 px-2 py-1.5 rounded">
-                  <RotateCcw className="w-3 h-3 text-red-500" />
-                  <span className="text-red-600">مرتجع:</span>
-                  <span className="font-bold text-sm text-red-700">-{returnData.returnAmount.toLocaleString('en')}</span>
+                <div className="flex items-center gap-1 bg-destructive/10 px-2 py-1.5 rounded">
+                  <RotateCcw className="w-3 h-3 text-destructive" />
+                  <span className="text-destructive">مرتجع:</span>
+                  <span className="font-bold text-sm text-destructive">-{returnData.returnAmount.toLocaleString('en')}</span>
                 </div>
               )}
               <div className={`flex items-center gap-1 px-2 py-1.5 rounded ${
@@ -3022,7 +3028,7 @@ export default function CashierJournalFormPage() {
                   const variance = getVarianceSummary();
                   if (variance.varianceType === 'balanced') return 'bg-green-100';
                   if (variance.varianceType === 'warning') return 'bg-amber-100';
-                  return 'bg-red-100';
+                  return 'bg-destructive/10';
                 })()
               }`}>
                 <Calculator className="w-3 h-3" />
@@ -3032,7 +3038,7 @@ export default function CashierJournalFormPage() {
                     const variance = getVarianceSummary();
                     if (variance.varianceType === 'balanced') return 'text-green-700';
                     if (variance.varianceType === 'warning') return 'text-amber-700';
-                    return 'text-red-700';
+                    return 'text-destructive';
                   })()
                 }`}>
                   {getVarianceSummary().netVariance >= 0 ? '+' : ''}{getVarianceSummary().netVariance.toLocaleString('en', {minimumFractionDigits: 2})}
@@ -3057,7 +3063,7 @@ export default function CashierJournalFormPage() {
                   {isEdit && existingJournal?.status === "draft" && (
                     <Button
                       size="default"
-                      className="gap-1.5 bg-green-600 hover:bg-green-700 h-9 px-4 text-sm"
+                      className="gap-1.5 bg-green-600 hover:bg-green-700 text-white h-9 px-4 text-sm"
                       onClick={handleSaveAndPost}
                       disabled={postMutation.isPending || updateMutation.isPending || !canPost}
                       data-testid="button-post-sticky"
@@ -3103,7 +3109,7 @@ export default function CashierJournalFormPage() {
                   {Math.abs(formData.totalSales - getBreakdownTotal()).toFixed(2)} ر.س
                 </span>
               </p>
-              <div className="bg-gray-50 p-3 rounded-md space-y-1 text-sm">
+              <div className="bg-muted p-3 rounded-md space-y-1 text-sm">
                 <div className="flex justify-between">
                   <span>إجمالي المبيعات:</span>
                   <span className="font-medium">{formData.totalSales.toFixed(2)} ر.س</span>
@@ -3114,7 +3120,7 @@ export default function CashierJournalFormPage() {
                 </div>
                 <div className="flex justify-between border-t pt-1 mt-1">
                   <span>الفرق:</span>
-                  <span className={`font-bold ${formData.totalSales > getBreakdownTotal() ? "text-red-600" : "text-green-600"}`}>
+                  <span className={`font-bold ${formData.totalSales > getBreakdownTotal() ? "text-destructive" : "text-green-600"}`}>
                     {formData.totalSales > getBreakdownTotal() ? "-" : "+"}{Math.abs(formData.totalSales - getBreakdownTotal()).toFixed(2)} ر.س
                   </span>
                 </div>
@@ -3149,13 +3155,13 @@ export default function CashierJournalFormPage() {
       <AlertDialog open={showShortageConfirm} onOpenChange={setShowShortageConfirm}>
         <AlertDialogContent className="max-w-md" dir="rtl">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="w-5 h-5" />
               تأكيد حفظ اليومية مع عجز كبير
             </AlertDialogTitle>
             <AlertDialogDescription className="text-right space-y-2">
               <p>
-                تم اكتشاف عجز بقيمة <span className="font-bold text-red-600">{Math.abs(calculateDiscrepancy()).toFixed(2)} ر.س</span> في الصندوق.
+                تم اكتشاف عجز بقيمة <span className="font-bold text-destructive">{Math.abs(calculateDiscrepancy()).toFixed(2)} ر.س</span> في الصندوق.
               </p>
               <p className="text-amber-600">
                 سيُسجَّل هذا العجز على الكاشير. هل أنت متأكد من صحة البيانات؟
@@ -3167,7 +3173,7 @@ export default function CashierJournalFormPage() {
               مراجعة البيانات
             </AlertDialogCancel>
             <AlertDialogAction
-              className="flex-1 bg-red-600 hover:bg-red-700"
+              className="flex-1 bg-destructive hover:bg-destructive/90 text-white"
               onClick={() => {
                 if (pendingSaveAction) {
                   pendingSaveAction();
