@@ -1138,6 +1138,30 @@ export default function CashierJournalFormPage() {
     return paymentBreakdowns.reduce((sum, b) => sum + (b.amount || 0), 0);
   };
 
+  // --- Delivery apps helpers (dedicated table section) ---
+  const DELIVERY_METHODS = PAYMENT_METHODS.filter((m) => m.category === "apps");
+
+  const getDelivery = (methodValue: string) =>
+    paymentBreakdowns.find((b) => b.paymentMethod === methodValue);
+
+  // Upsert a value for a delivery app: create the breakdown entry on first input
+  const setDeliveryValue = (methodValue: string, field: "amount" | "transactionCount", value: number) => {
+    setPaymentBreakdowns((prev) => {
+      const idx = prev.findIndex((b) => b.paymentMethod === methodValue);
+      if (idx === -1) {
+        return [...prev, { paymentMethod: methodValue, amount: 0, transactionCount: 0, [field]: value }];
+      }
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx], [field]: value };
+      return updated;
+    });
+  };
+
+  // Clear a delivery app row (remove its breakdown entry entirely)
+  const clearDelivery = (methodValue: string) => {
+    setPaymentBreakdowns((prev) => prev.filter((b) => b.paymentMethod !== methodValue));
+  };
+
   // Net sales = Total Sales from payment breakdowns - Returns
   // IMPORTANT: Use getBreakdownTotal() instead of formData.totalSales 
   // because formData.totalSales is not automatically updated from payment breakdowns
@@ -1907,6 +1931,8 @@ export default function CashierJournalFormPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {paymentBreakdowns.map((breakdown, index) => {
                   const method = PAYMENT_METHODS.find((m) => m.value === breakdown.paymentMethod);
+                  // Delivery apps are rendered in their own dedicated section below
+                  if (method?.category === "apps") return null;
                   const isBank = isBankPaymentMethod(breakdown.paymentMethod);
                   const bankDisc = (breakdown.terminalAmount || 0) - (breakdown.posAmount || breakdown.amount || 0);
                   const bankDiscType = bankDisc > 0.5 ? 'surplus' : bankDisc < -0.5 ? 'shortage' : 'balanced';
@@ -1944,7 +1970,8 @@ export default function CashierJournalFormPage() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent className="max-h-60 overflow-y-auto">
-                              {PAYMENT_METHODS.map((m) => (
+                              {/* Delivery apps excluded here - they have a dedicated table section */}
+                              {PAYMENT_METHODS.filter((m) => m.category !== "apps").map((m) => (
                                 <SelectItem key={m.value} value={m.value} className="py-1 text-xs font-semibold">
                                   {m.label}
                                 </SelectItem>
@@ -2255,6 +2282,102 @@ export default function CashierJournalFormPage() {
                 })()}
               </CardContent>
             </Card>
+
+            {/* Delivery Apps Section - تطبيقات التوصيل (آجل) - Table Layout */}
+            {(() => {
+              const deliveryRows = DELIVERY_METHODS.map((m) => ({ method: m, b: getDelivery(m.value) }));
+              const activeCount = deliveryRows.filter((r) => (r.b?.amount || 0) > 0).length;
+              const deliveryTotal = deliveryRows.reduce((s, r) => s + (r.b?.amount || 0), 0);
+              const deliveryOrders = deliveryRows.reduce((s, r) => s + (r.b?.transactionCount || 0), 0);
+              return (
+                <Card className="shadow-sm border-amber-200 dark:border-amber-900/60">
+                  <CardHeader className="py-1.5 px-2.5 bg-amber-50/60 dark:bg-amber-950/20 rounded-t-xl">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <Truck className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                        <CardTitle className="text-sm">تطبيقات التوصيل (آجل)</CardTitle>
+                      </div>
+                      <span className="text-[11px] text-muted-foreground" data-testid="text-delivery-summary">
+                        {activeCount} شركات نشطة من {DELIVERY_METHODS.length} · {deliveryTotal.toFixed(2)} ر.س
+                      </span>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-2">
+                    {/* Column headers */}
+                    <div className="flex items-center gap-2 px-1 pb-1.5 text-[10px] font-medium text-muted-foreground">
+                      <span className="w-28 shrink-0">الشركة</span>
+                      <span className="flex-1 text-center">الطلبات</span>
+                      <span className="flex-1 text-center">المبلغ (ر.س)</span>
+                      <span className="w-7 shrink-0" />
+                    </div>
+                    <div className="space-y-1">
+                      {deliveryRows.map(({ method: m, b }) => {
+                        const isActive = (b?.amount || 0) > 0;
+                        const brand = BRAND_BADGE[m.value] || { short: m.label.slice(0, 4), cls: "bg-amber-500 text-white" };
+                        return (
+                          <div
+                            key={m.value}
+                            className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 transition-colors ${isActive ? 'border-amber-200 dark:border-amber-900 bg-amber-50/40 dark:bg-amber-950/20' : 'border-border bg-transparent opacity-70'}`}
+                            data-testid={`delivery-row-${m.value}`}
+                          >
+                            {/* Brand + name */}
+                            <div className="w-28 shrink-0 flex items-center gap-1.5 min-w-0">
+                              <span className={`shrink-0 inline-flex items-center justify-center min-w-[2.25rem] h-5 px-1 rounded text-[9px] font-extrabold tracking-wide ${brand.cls}`}>
+                                {brand.short}
+                              </span>
+                              <span className="text-xs font-bold truncate">{m.label}</span>
+                            </div>
+                            {/* Orders count */}
+                            <div className="flex-1">
+                              <StableNumericInput
+                                placeholder="0"
+                                value={b?.transactionCount ?? 0}
+                                onChange={(val) => setDeliveryValue(m.value, "transactionCount", val)}
+                                isDecimal={false}
+                                disabled={isReadOnly}
+                                className="h-8 text-xs font-bold text-center"
+                                data-testid={`input-delivery-count-${m.value}`}
+                              />
+                            </div>
+                            {/* Amount */}
+                            <div className="flex-1">
+                              <StableNumericInput
+                                placeholder="0.00"
+                                value={b?.amount ?? 0}
+                                onChange={(val) => setDeliveryValue(m.value, "amount", val)}
+                                isDecimal={true}
+                                disabled={isReadOnly}
+                                className="h-8 text-xs font-bold text-center"
+                                data-testid={`input-delivery-amount-${m.value}`}
+                              />
+                            </div>
+                            {/* Clear */}
+                            <div className="w-7 shrink-0 flex justify-center">
+                              {isActive && !isReadOnly && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => clearDelivery(m.value)}
+                                  data-testid={`button-clear-delivery-${m.value}`}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* Footer summary */}
+                    <div className="mt-2 flex items-center justify-between border-t border-border pt-1.5 text-[11px] text-muted-foreground">
+                      <span data-testid="text-delivery-orders">{deliveryOrders} معاملات</span>
+                      <span className="font-bold text-foreground" data-testid="text-delivery-total">{deliveryTotal.toFixed(2)} ر.س</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
             {/* Returns Section - المرتجع - Compact Design */}
             <Card className={`border ${showReturns && returnData.hasReturn ? 'border-destructive/30 bg-destructive/5' : 'border-border'}`}>
@@ -2978,35 +3101,9 @@ export default function CashierJournalFormPage() {
                   ))}
                 </div>
                 
-                {/* Delivery Apps Row */}
+                {/* Other payment + note: delivery apps live in their own table section */}
                 <div className="flex flex-wrap items-center justify-center gap-2">
-                  <span className="text-xs text-amber-600 font-medium ml-1">🚚 توصيل:</span>
-                  {[
-                    { value: "hunger_station", label: "هنجرستيشن", color: "bg-amber-500 hover:bg-amber-600" },
-                    { value: "keeta", label: "كيتا", color: "bg-amber-500 hover:bg-amber-600" },
-                    { value: "jahez", label: "جاهز", color: "bg-amber-500 hover:bg-amber-600" },
-                    { value: "marsool", label: "مرسول", color: "bg-amber-500 hover:bg-amber-600" },
-                    { value: "toyou", label: "ToYou", color: "bg-amber-500 hover:bg-amber-600" },
-                    { value: "the_chefs", label: "ذا شيفز", color: "bg-amber-500 hover:bg-amber-600" },
-                  ].filter(m => !paymentBreakdowns.some(p => p.paymentMethod === m.value)).map(method => (
-                    <Button
-                      key={method.value}
-                      type="button"
-                      size="sm"
-                      className={`h-8 px-2 text-white text-xs ${method.color}`}
-                      onClick={() => {
-                        setPaymentBreakdowns([...paymentBreakdowns, { 
-                          paymentMethod: method.value, 
-                          amount: 0, 
-                          transactionCount: 0 
-                        }]);
-                      }}
-                      data-testid={`quick-add-sticky-${method.value}`}
-                    >
-                      <Truck className="w-3 h-3 ml-1" />
-                      {method.label}
-                    </Button>
-                  ))}
+                  <span className="text-xs text-amber-600 font-medium ml-1">🚚 التوصيل في قسمه الخاص بالأسفل</span>
                   <Button
                     type="button"
                     variant="outline"
@@ -3016,7 +3113,7 @@ export default function CashierJournalFormPage() {
                     data-testid="quick-add-sticky-other"
                   >
                     <Plus className="w-3 h-3 ml-1" />
-                    أخرى
+                    وسيلة أخرى
                   </Button>
                 </div>
               </div>
