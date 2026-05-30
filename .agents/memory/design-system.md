@@ -27,8 +27,17 @@ CSS semantic tokens in `client/src/index.css` under `@theme inline` (light) + `.
 - A whole page using 10+ raw palette families = visual clash. Route every color to one
   of the buckets above.
 
+## Allowed exception: brand badges
+Small per-brand payment badges (VISA navy, Mastercard orange, mada teal, STC violet,
+Apple Pay foreground, delivery apps amber) intentionally use real brand-identity colors
+via a `BRAND_BADGE` map. These are deliberate, recognizable brand marks (like logos), NOT
+the random rainbow. Keep them tiny (badge pills only); everything around them stays on
+tokens/status colors.
+
 **Why:** the cashier-journal-form page had ~14 hardcoded palette families (rainbow) that
-ignored the theme and broke dark mode. Restyled to the buckets above.
+ignored the theme and broke dark mode. Restyled to the buckets above. Later the payment
+cards were redesigned (brand badge + stacked POS/الجهاز rows + a rounded "الفرق" banner +
+count chips, h-9 inputs for iPad) — brand badges are the only sanctioned brand-color use.
 **How to apply:** when styling/restyling any page, prefer tokens; only use green/amber/
 destructive for genuine status meaning. Leave self-contained print/PDF HTML strings
 (inline hex colors) untouched — they're paper documents, separate from the on-screen theme.

@@ -168,6 +168,27 @@ const PAYMENT_METHODS = [
   { value: "other", label: "أخرى", icon: Wallet, category: "cash", color: CATEGORY_COLORS.cash },
 ];
 
+// Compact brand badges for each payment method (intentional brand identity colors)
+const BRAND_BADGE: Record<string, { short: string; cls: string }> = {
+  cash: { short: "كاش", cls: "bg-emerald-500 text-white" },
+  mada: { short: "مدى", cls: "bg-teal-600 text-white" },
+  visa: { short: "VISA", cls: "bg-blue-700 text-white" },
+  mastercard: { short: "MC", cls: "bg-orange-500 text-white" },
+  amex: { short: "AMEX", cls: "bg-sky-600 text-white" },
+  card_other: { short: "بطاقة", cls: "bg-primary/15 text-primary" },
+  card: { short: "بطاقة", cls: "bg-primary/15 text-primary" },
+  apple_pay: { short: "Pay", cls: "bg-foreground text-background" },
+  stc_pay: { short: "STC", cls: "bg-violet-600 text-white" },
+  hunger_station: { short: "هنقر", cls: "bg-amber-500 text-white" },
+  jahez: { short: "جاهز", cls: "bg-amber-500 text-white" },
+  toyou: { short: "ToYou", cls: "bg-amber-500 text-white" },
+  marsool: { short: "مرسول", cls: "bg-amber-500 text-white" },
+  keeta: { short: "كيتا", cls: "bg-amber-500 text-white" },
+  the_chefs: { short: "شيفز", cls: "bg-amber-500 text-white" },
+  talabat: { short: "طلبات", cls: "bg-amber-500 text-white" },
+  other: { short: "أخرى", cls: "bg-muted-foreground/20 text-foreground" },
+};
+
 const SHIFT_TYPES = [
   { value: "morning", label: "صباحي" },
   { value: "evening", label: "مسائي" },
@@ -1883,141 +1904,137 @@ export default function CashierJournalFormPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-2 pt-1.5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {paymentBreakdowns.map((breakdown, index) => {
                   const method = PAYMENT_METHODS.find((m) => m.value === breakdown.paymentMethod);
-                  const Icon = method?.icon || Wallet;
                   const isBank = isBankPaymentMethod(breakdown.paymentMethod);
-                  const isCash = breakdown.paymentMethod === 'cash';
                   const bankDisc = (breakdown.terminalAmount || 0) - (breakdown.posAmount || breakdown.amount || 0);
                   const bankDiscType = bankDisc > 0.5 ? 'surplus' : bankDisc < -0.5 ? 'shortage' : 'balanced';
                   
                   // Use individual method colors for distinct visual identification
                   const methodColor = method?.color || { bg: "bg-muted", border: "border-border", icon: "bg-muted", iconText: "text-muted-foreground", badge: "bg-muted-foreground" };
                   const rowStyle = `${methodColor.border} ${methodColor.bg}`;
-                  const iconBg = methodColor.icon;
-                  const iconColor = methodColor.iconText;
 
+                  const brand = BRAND_BADGE[breakdown.paymentMethod] || { short: (method?.label || "—").slice(0, 4), cls: "bg-muted-foreground/20 text-foreground" };
                   return (
-                    <div key={index} className={`p-1.5 border rounded ${rowStyle}`} data-testid={`payment-row-${index}`}>
-                      {/* Ultra Compact Header Row with subtle color badge */}
-                      <div className="flex items-center gap-0.5 mb-0.5">
-                        <div className={`w-0.5 h-4 rounded-full ${methodColor.badge}`} />
-                        <div className={`p-0.5 rounded ${iconBg}`}>
-                          <Icon className={`w-2.5 h-2.5 ${iconColor}`} />
+                    <div key={index} className={`p-3 border rounded-xl ${rowStyle}`} data-testid={`payment-row-${index}`}>
+                      {/* Header: brand badge + method selector + delete */}
+                      <div className="flex items-center justify-between gap-2 mb-2.5">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`shrink-0 inline-flex items-center justify-center min-w-[2.5rem] h-6 px-1.5 rounded-md text-[10px] font-extrabold tracking-wide ${brand.cls}`}>
+                            {brand.short}
+                          </span>
+                          <Select
+                            value={breakdown.paymentMethod}
+                            onValueChange={(v) => {
+                              if (!isBankPaymentMethod(v)) {
+                                updatePaymentBreakdownMultiple(index, {
+                                  paymentMethod: v,
+                                  terminalAmount: 0,
+                                  posAmount: 0,
+                                  terminalTransactionCount: 0,
+                                });
+                              } else {
+                                updatePaymentBreakdown(index, "paymentMethod", v);
+                              }
+                            }}
+                            disabled={isReadOnly}
+                          >
+                            <SelectTrigger className="h-7 w-auto min-w-[5rem] gap-1 border-0 bg-transparent px-1 text-xs font-bold shadow-none focus:ring-0">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-60 overflow-y-auto">
+                              {PAYMENT_METHODS.map((m) => (
+                                <SelectItem key={m.value} value={m.value} className="py-1 text-xs font-semibold">
+                                  {m.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
-                        <Select
-                          value={breakdown.paymentMethod}
-                          onValueChange={(v) => {
-                            if (!isBankPaymentMethod(v)) {
-                              updatePaymentBreakdownMultiple(index, {
-                                paymentMethod: v,
-                                terminalAmount: 0,
-                                posAmount: 0,
-                                terminalTransactionCount: 0,
-                              });
-                            } else {
-                              updatePaymentBreakdown(index, "paymentMethod", v);
-                            }
-                          }}
-                          disabled={isReadOnly}
-                        >
-                          <SelectTrigger className={`w-24 h-5 text-[10px] font-bold ${methodColor.iconText}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="max-h-60 overflow-y-auto">
-                            {PAYMENT_METHODS.map((m) => (
-                              <SelectItem key={m.value} value={m.value} className={`py-1 text-xs font-semibold ${m.color.iconText}`}>
-                                {m.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <div className="flex-1" />
                         {paymentBreakdowns.length > 1 && !isReadOnly && (
-                          <Button variant="ghost" size="sm" className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10 p-0" onClick={() => removePaymentBreakdown(index)}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => removePaymentBreakdown(index)}>
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         )}
                       </div>
                       
-                      {/* Ultra Compact Input Grid - Bank Methods */}
+                      {/* Bank Methods: POS / Terminal amounts + difference banner */}
                       {isBank ? (
-                        <div className="space-y-1">
-                          {/* POS & Terminal Amounts - Side by Side */}
-                          <div className="grid grid-cols-2 gap-1">
-                            <div className="space-y-0">
-                              <Label className="text-[9px] text-muted-foreground">POS (الكاشير)</Label>
-                              <StableNumericInput
-                                placeholder="0.00"
-                                value={breakdown.amount}
-                                onChange={(val) => updatePaymentBreakdownMultiple(index, { amount: val, posAmount: val })}
-                                isDecimal={true}
-                                disabled={isReadOnly}
-                                className="h-7 text-xs font-bold text-center"
-                                data-testid={`input-payment-amount-${index}`}
-                              />
-                            </div>
-                            <div className="space-y-0">
-                              <div className="flex items-center justify-between">
-                                <Label className="text-[9px] text-muted-foreground">Terminal</Label>
-                                {!isReadOnly && (
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-3 px-0.5 text-[9px] text-muted-foreground hover:text-foreground p-0"
-                                    onClick={() => updatePaymentBreakdown(index, "terminalAmount", breakdown.amount || 0)}
-                                  >
-                                    <Copy className="w-2 h-2 ml-0.5" />
-                                    نسخ
-                                  </Button>
-                                )}
-                              </div>
-                              <StableNumericInput
-                                placeholder="0.00"
-                                value={breakdown.terminalAmount}
-                                onChange={(val) => updatePaymentBreakdown(index, "terminalAmount", val)}
-                                isDecimal={true}
-                                disabled={isReadOnly}
-                                className="h-7 text-xs font-bold text-center bg-card"
-                                data-testid={`input-terminal-amount-${index}`}
-                              />
-                            </div>
+                        <div className="space-y-2">
+                          {/* POS amount */}
+                          <div className="flex items-center gap-2">
+                            <Label className="w-24 shrink-0 text-[11px] font-medium text-muted-foreground">POS (الكاشير)</Label>
+                            <StableNumericInput
+                              placeholder="0.00"
+                              value={breakdown.amount}
+                              onChange={(val) => updatePaymentBreakdownMultiple(index, { amount: val, posAmount: val })}
+                              isDecimal={true}
+                              disabled={isReadOnly}
+                              className="h-9 flex-1 text-sm font-bold text-center"
+                              data-testid={`input-payment-amount-${index}`}
+                            />
                           </div>
-                          {/* Discrepancy & Transaction Counts - Ultra Compact Row */}
-                          <div className="flex items-center gap-1 text-[9px]">
-                            <div className={`flex-1 px-1 py-0.5 rounded flex items-center justify-between ${bankDiscType === 'surplus' ? 'bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300' : bankDiscType === 'shortage' ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}`}>
-                              <span>الفرق:</span>
-                              <span className="font-bold">
-                                {bankDisc >= 0 ? '+' : ''}{bankDisc.toFixed(2)} {bankDiscType === 'surplus' ? '⬆️' : bankDiscType === 'shortage' ? '⬇️' : '✓'}
-                              </span>
+                          {/* Terminal amount */}
+                          <div className="flex items-center gap-2">
+                            <div className="w-24 shrink-0 flex items-center justify-between">
+                              <Label className="text-[11px] font-medium text-muted-foreground">الجهاز</Label>
+                              {!isReadOnly && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-5 px-1 text-[10px] text-muted-foreground hover:text-foreground"
+                                  onClick={() => updatePaymentBreakdown(index, "terminalAmount", breakdown.amount || 0)}
+                                  data-testid={`button-copy-terminal-${index}`}
+                                >
+                                  <Copy className="w-2.5 h-2.5 ml-0.5" />
+                                  نسخ
+                                </Button>
+                              )}
                             </div>
-                            <div className="flex items-center gap-1 bg-muted px-1 py-0.5 rounded">
-                              <div className="flex items-center gap-0.5">
-                                <span className="text-muted-foreground">POS:</span>
-                                <StableNumericInput
-                                  placeholder="0"
-                                  value={breakdown.transactionCount}
-                                  onChange={(val) => updatePaymentBreakdown(index, "transactionCount", val)}
-                                  isDecimal={false}
-                                  disabled={isReadOnly}
-                                  className="h-4 w-7 text-[9px] font-bold text-center p-0"
-                                  data-testid={`input-payment-count-${index}`}
-                                />
-                              </div>
-                              <div className="flex items-center gap-0.5">
-                                <span className="text-muted-foreground">جهاز:</span>
-                                <StableNumericInput
-                                  placeholder="0"
-                                  value={breakdown.terminalTransactionCount}
-                                  onChange={(val) => updatePaymentBreakdown(index, "terminalTransactionCount", val)}
-                                  isDecimal={false}
-                                  disabled={isReadOnly}
-                                  className="h-4 w-7 text-[9px] font-bold text-center p-0"
-                                  data-testid={`input-terminal-count-${index}`}
-                                />
-                              </div>
+                            <StableNumericInput
+                              placeholder="0.00"
+                              value={breakdown.terminalAmount}
+                              onChange={(val) => updatePaymentBreakdown(index, "terminalAmount", val)}
+                              isDecimal={true}
+                              disabled={isReadOnly}
+                              className="h-9 flex-1 text-sm font-bold text-center bg-card"
+                              data-testid={`input-terminal-amount-${index}`}
+                            />
+                          </div>
+                          {/* Difference banner */}
+                          <div className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs ${bankDiscType === 'surplus' ? 'bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300' : bankDiscType === 'shortage' ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}`}>
+                            <span className="font-medium opacity-90">الفرق</span>
+                            <span className="font-bold tabular-nums">
+                              {bankDisc >= 0 ? '+' : ''}{bankDisc.toFixed(2)} {bankDiscType === 'surplus' ? '⬆️' : bankDiscType === 'shortage' ? '⬇️' : '✓'}
+                            </span>
+                          </div>
+                          {/* Transaction counts */}
+                          <div className="flex items-center gap-2">
+                            <div className="flex flex-1 items-center justify-between rounded-md bg-muted/60 px-2 py-1">
+                              <span className="text-[10px] text-muted-foreground">عمليات POS</span>
+                              <StableNumericInput
+                                placeholder="0"
+                                value={breakdown.transactionCount}
+                                onChange={(val) => updatePaymentBreakdown(index, "transactionCount", val)}
+                                isDecimal={false}
+                                disabled={isReadOnly}
+                                className="h-6 w-10 text-[10px] font-bold text-center p-0 bg-background"
+                                data-testid={`input-payment-count-${index}`}
+                              />
+                            </div>
+                            <div className="flex flex-1 items-center justify-between rounded-md bg-muted/60 px-2 py-1">
+                              <span className="text-[10px] text-muted-foreground">عمليات الجهاز</span>
+                              <StableNumericInput
+                                placeholder="0"
+                                value={breakdown.terminalTransactionCount}
+                                onChange={(val) => updatePaymentBreakdown(index, "terminalTransactionCount", val)}
+                                isDecimal={false}
+                                disabled={isReadOnly}
+                                className="h-6 w-10 text-[10px] font-bold text-center p-0 bg-background"
+                                data-testid={`input-terminal-count-${index}`}
+                              />
                             </div>
                           </div>
                         </div>
@@ -2029,57 +2046,55 @@ export default function CashierJournalFormPage() {
                           const cashDisc = actualCash - expectedCash;
                           const cashDiscType = cashDisc > 0.5 ? 'surplus' : cashDisc < -0.5 ? 'shortage' : 'balanced';
                           return (
-                            <div className="space-y-1">
-                              {/* Cash POS & Actual Drawer - Side by Side */}
-                              <div className="grid grid-cols-2 gap-1">
-                                <div className="space-y-0">
-                                  <Label className="text-[9px] text-muted-foreground">النقد المسجل (POS)</Label>
-                                  <StableNumericInput
-                                    placeholder="0.00"
-                                    value={breakdown.amount}
-                                    onChange={(val) => updatePaymentBreakdown(index, "amount", val)}
-                                    isDecimal={true}
-                                    disabled={isReadOnly}
-                                    className="h-7 text-xs font-bold text-center"
-                                    data-testid={`input-payment-amount-${index}`}
-                                  />
-                                </div>
-                                <div className="space-y-0">
-                                  <Label className="text-[9px] text-muted-foreground">الفعلي في الصندوق</Label>
-                                  <StableNumericInput
-                                    placeholder="0.00"
-                                    value={formData.actualCashDrawer}
-                                    onChange={(val) => setFormData({ ...formData, actualCashDrawer: val })}
-                                    isDecimal={true}
-                                    disabled={isReadOnly}
-                                    className="h-7 text-xs font-bold text-center bg-card"
-                                    data-testid="input-actual-cash-inline"
-                                  />
-                                </div>
+                            <div className="space-y-2">
+                              {/* Cash POS amount */}
+                              <div className="flex items-center gap-2">
+                                <Label className="w-24 shrink-0 text-[11px] font-medium text-muted-foreground">النقد المسجل (POS)</Label>
+                                <StableNumericInput
+                                  placeholder="0.00"
+                                  value={breakdown.amount}
+                                  onChange={(val) => updatePaymentBreakdown(index, "amount", val)}
+                                  isDecimal={true}
+                                  disabled={isReadOnly}
+                                  className="h-9 flex-1 text-sm font-bold text-center"
+                                  data-testid={`input-payment-amount-${index}`}
+                                />
                               </div>
-                              {/* Cash Discrepancy & Transaction Count - Ultra Compact Row */}
-                              <div className="flex items-center gap-1 text-[9px]">
-                                <div className={`flex-1 px-1 py-0.5 rounded flex items-center justify-between ${cashDiscType === 'surplus' ? 'bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300' : cashDiscType === 'shortage' ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}`}>
-                                  <span>الفرق:</span>
-                                  <span className="font-bold">
-                                    {cashDisc >= 0 ? '+' : ''}{cashDisc.toFixed(2)} {cashDiscType === 'surplus' ? '⬆️' : cashDiscType === 'shortage' ? '⬇️' : '✓'}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-0.5 bg-muted px-1 py-0.5 rounded">
-                                  <span className="text-muted-foreground">عمليات:</span>
-                                  <StableNumericInput
-                                    placeholder="0"
-                                    value={breakdown.transactionCount}
-                                    onChange={(val) => updatePaymentBreakdown(index, "transactionCount", val)}
-                                    isDecimal={false}
-                                    disabled={isReadOnly}
-                                    className="h-4 w-7 text-[9px] font-bold text-center p-0"
-                                    data-testid={`input-payment-count-${index}`}
-                                  />
-                                </div>
+                              {/* Actual drawer amount */}
+                              <div className="flex items-center gap-2">
+                                <Label className="w-24 shrink-0 text-[11px] font-medium text-muted-foreground">الفعلي في الصندوق</Label>
+                                <StableNumericInput
+                                  placeholder="0.00"
+                                  value={formData.actualCashDrawer}
+                                  onChange={(val) => setFormData({ ...formData, actualCashDrawer: val })}
+                                  isDecimal={true}
+                                  disabled={isReadOnly}
+                                  className="h-9 flex-1 text-sm font-bold text-center bg-card"
+                                  data-testid="input-actual-cash-inline"
+                                />
+                              </div>
+                              {/* Difference banner */}
+                              <div className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs ${cashDiscType === 'surplus' ? 'bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300' : cashDiscType === 'shortage' ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}`}>
+                                <span className="font-medium opacity-90">الفرق</span>
+                                <span className="font-bold tabular-nums">
+                                  {cashDisc >= 0 ? '+' : ''}{cashDisc.toFixed(2)} {cashDiscType === 'surplus' ? '⬆️' : cashDiscType === 'shortage' ? '⬇️' : '✓'}
+                                </span>
+                              </div>
+                              {/* Transaction count */}
+                              <div className="flex items-center justify-between rounded-md bg-muted/60 px-2 py-1">
+                                <span className="text-[10px] text-muted-foreground">عدد العمليات</span>
+                                <StableNumericInput
+                                  placeholder="0"
+                                  value={breakdown.transactionCount}
+                                  onChange={(val) => updatePaymentBreakdown(index, "transactionCount", val)}
+                                  isDecimal={false}
+                                  disabled={isReadOnly}
+                                  className="h-6 w-10 text-[10px] font-bold text-center p-0 bg-background"
+                                  data-testid={`input-payment-count-${index}`}
+                                />
                               </div>
                               {/* Expected Cash Formula Context */}
-                              <div className="text-[9px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded flex flex-wrap items-center gap-0.5">
+                              <div className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1 rounded-md flex flex-wrap items-center gap-0.5">
                                 <span>المتوقع:</span>
                                 {formData.openingBalance > 0 && (
                                   <>
@@ -2102,28 +2117,28 @@ export default function CashierJournalFormPage() {
                         })()
                       ) : (
                         /* Other Non-Bank: Simple Amount + Transaction Count */
-                        <div className="flex items-end gap-1">
-                          <div className="flex-1 space-y-0">
-                            <Label className="text-[9px] text-muted-foreground">المبلغ</Label>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Label className="w-24 shrink-0 text-[11px] font-medium text-muted-foreground">المبلغ</Label>
                             <StableNumericInput
                               placeholder="0.00"
                               value={breakdown.amount}
                               onChange={(val) => updatePaymentBreakdown(index, "amount", val)}
                               isDecimal={true}
                               disabled={isReadOnly}
-                              className="h-7 text-xs font-bold text-center"
+                              className="h-9 flex-1 text-sm font-bold text-center"
                               data-testid={`input-payment-amount-${index}`}
                             />
                           </div>
-                          <div className="w-14 space-y-0">
-                            <Label className="text-[9px] text-muted-foreground">عمليات</Label>
+                          <div className="flex items-center justify-between rounded-md bg-muted/60 px-2 py-1">
+                            <span className="text-[10px] text-muted-foreground">عدد العمليات</span>
                             <StableNumericInput
                               placeholder="0"
                               value={breakdown.transactionCount}
                               onChange={(val) => updatePaymentBreakdown(index, "transactionCount", val)}
                               isDecimal={false}
                               disabled={isReadOnly}
-                              className="h-7 text-[10px] font-medium text-center"
+                              className="h-6 w-10 text-[10px] font-bold text-center p-0 bg-background"
                               data-testid={`input-payment-count-${index}`}
                             />
                           </div>
