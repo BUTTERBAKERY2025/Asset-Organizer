@@ -3193,7 +3193,7 @@ export default function CashierJournalFormPage() {
         </div>
 
         {/* Spacer so page content scrolls clear of the fixed bottom action bar (avoids overlap) */}
-        <div className={isReadOnly ? "h-20 md:h-16" : "h-52 sm:h-40 md:h-32"} aria-hidden="true" />
+        <div className={isReadOnly ? "h-20 md:h-16" : "h-44 sm:h-32 md:h-28"} aria-hidden="true" />
 
         {/* Sticky Bottom Action Bar - iPad Optimized */}
         <div className="fixed bottom-0 left-0 right-0 md:right-64 bg-card border-t-2 border-border shadow-lg z-50 p-2 md:p-3">
@@ -3201,9 +3201,10 @@ export default function CashierJournalFormPage() {
             {/* Quick Add Payment Buttons - Always visible */}
             {!isReadOnly && (
               <div className="flex flex-col gap-1">
-                {/* Bank Cards Row - quick add with real brand logos */}
-                <div className="flex flex-wrap items-center justify-center gap-1.5">
-                  <span className="text-xs text-primary font-medium ml-1">💳 بطاقات:</span>
+                {/* Bank Cards Row - quick add with real brand logos.
+                    Mobile: one swipeable row (horizontal scroll). sm+: wraps & centers. */}
+                <div className="flex items-center gap-1.5 overflow-x-auto sm:flex-wrap sm:justify-center -mx-1 px-1">
+                  <span className="text-xs text-primary font-medium ml-1 shrink-0 whitespace-nowrap">💳 بطاقات:</span>
                   {CARD_METHOD_OPTIONS
                     .filter(v => !paymentBreakdowns.some(p => p.paymentMethod === v))
                     .map(v => {
@@ -3215,7 +3216,7 @@ export default function CashierJournalFormPage() {
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="h-9 pl-2 pr-1.5 gap-1.5 text-xs font-medium"
+                          className="h-9 pl-2 pr-1.5 gap-1.5 text-xs font-medium shrink-0 whitespace-nowrap"
                           onClick={() => addCardPayment(v)}
                           data-testid={`quick-add-sticky-${v}`}
                         >
@@ -3332,9 +3333,6 @@ export default function CashierJournalFormPage() {
             </div>
           </div>
         </div>
-        
-        {/* Spacer for sticky bar - reduced for iPad */}
-        <div className="h-24 md:h-20" />
       </div>
 
       {/* Variance Confirmation Dialog - for posting with mismatch */}

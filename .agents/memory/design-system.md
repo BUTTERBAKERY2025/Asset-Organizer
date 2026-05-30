@@ -34,6 +34,18 @@ via a `BRAND_BADGE` map. These are deliberate, recognizable brand marks (like lo
 the random rainbow. Keep them tiny (badge pills only); everything around them stays on
 tokens/status colors.
 
+## Fixed bottom action bar + spacer (cashier-journal-form)
+The page has a `fixed bottom-0 ... md:right-64` action bar (payment quick-add chips +
+summary stats + save/post buttons). Because it's `position:fixed` it's out of flow, so a
+SINGLE in-flow spacer div inside `.page-container` reserves scroll space so the last
+content (attachments) isn't hidden behind it. Spacer is conditional on `isReadOnly`
+(short when read-only, taller otherwise) and responsive (mobile taller than md).
+**Gotcha:** there used to be TWO spacers (a leftover + a new one) → double empty gap;
+keep exactly one. If the bar's row count changes, re-tune the spacer height.
+**Mobile:** the card-chip row is a single horizontal-scroll row (`overflow-x-auto`,
+chips `shrink-0 whitespace-nowrap`) and only `sm:flex-wrap sm:justify-center` on bigger
+screens — flex-wrap on phones made the bar grow several lines tall.
+
 ## Card-brand logos & add-payment UX (cashier-journal-form)
 Bank cards mirror the delivery pattern: a `CARD_BRANDS` map → `client/public/payment-logos/*.png`
 (mada/visa/mastercard/apple_pay) in white rounded avatars; methods without a logo
