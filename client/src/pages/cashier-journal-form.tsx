@@ -13,7 +13,14 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { useLocation, useParams, Link } from "wouter";
-import { ArrowRight, Save, Send, Plus, Trash2, Wallet, CreditCard, Smartphone, Truck, AlertCircle, AlertTriangle, CheckCircle, Calculator, Users, Receipt, Camera, ImageIcon, X, Upload, FileDown, Copy, RotateCcw, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
+import { ArrowRight, Save, Send, Plus, Trash2, Wallet, CreditCard, Smartphone, Truck, AlertCircle, AlertTriangle, CheckCircle, Calculator, Users, Receipt, Camera, ImageIcon, X, Upload, FileDown, Copy, RotateCcw, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, ChevronDown, Maximize2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -199,6 +206,20 @@ const DELIVERY_BRANDS: Record<string, { logo?: string; short: string; cls: strin
   the_chefs: { logo: "/delivery-logos/the_chefs.png", short: "شيفز", cls: "bg-[#3b1f3a] text-white", ring: "border-[#3b1f3a]" },
   ninja: { logo: "/delivery-logos/ninja.png", short: "نينجا", cls: "bg-[#1b2733] text-white", ring: "border-[#1b2733]" },
 };
+
+// Bank card brands: real logos (served from /public) + brand colors for fallback/accent
+const CARD_BRANDS: Record<string, { logo?: string; short: string; cls: string; ring: string }> = {
+  mada: { logo: "/payment-logos/mada.png", short: "مدى", cls: "bg-teal-600 text-white", ring: "border-teal-500" },
+  visa: { logo: "/payment-logos/visa.png", short: "VISA", cls: "bg-blue-700 text-white", ring: "border-blue-600" },
+  mastercard: { logo: "/payment-logos/mastercard.png", short: "MC", cls: "bg-orange-500 text-white", ring: "border-orange-500" },
+  apple_pay: { logo: "/payment-logos/apple_pay.png", short: "Apple Pay", cls: "bg-foreground text-background", ring: "border-foreground" },
+  stc_pay: { short: "STC Pay", cls: "bg-violet-600 text-white", ring: "border-violet-500" },
+  amex: { short: "AMEX", cls: "bg-sky-600 text-white", ring: "border-sky-500" },
+  card_other: { short: "بطاقة أخرى", cls: "bg-primary/15 text-primary", ring: "border-primary/40" },
+};
+
+// Selectable bank card methods (legacy "card" excluded on purpose)
+const CARD_METHOD_OPTIONS = ["mada", "visa", "mastercard", "apple_pay", "stc_pay", "card_other"];
 
 const SHIFT_TYPES = [
   { value: "morning", label: "صباحي" },
@@ -1102,9 +1123,16 @@ export default function CashierJournalFormPage() {
     });
   };
 
-  const addPaymentBreakdown = () => {
-    setPaymentBreakdowns([...paymentBreakdowns, { paymentMethod: "card", amount: 0, transactionCount: 0 }]);
+  // Add a specific bank card method (skips if it already exists to avoid empty duplicate rows)
+  const addCardPayment = (methodValue: string) => {
+    setPaymentBreakdowns((prev) => {
+      if (prev.some((p) => p.paymentMethod === methodValue)) return prev;
+      return [...prev, { paymentMethod: methodValue, amount: 0, transactionCount: 0, posAmount: 0, terminalAmount: 0, terminalTransactionCount: 0 }];
+    });
   };
+
+  // Generic fallback add — uses the current "other card" method (NOT the legacy "card" type)
+  const addPaymentBreakdown = () => addCardPayment("card_other");
 
   const removePaymentBreakdown = (index: number) => {
     setPaymentBreakdowns(paymentBreakdowns.filter((_, i) => i !== index));
@@ -1934,10 +1962,40 @@ export default function CashierJournalFormPage() {
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle className="text-sm">طرق الدفع</CardTitle>
                   {!isReadOnly && (
-                    <Button variant="outline" size="sm" className="h-7 px-2 gap-1 text-xs" onClick={addPaymentBreakdown} data-testid="button-add-payment">
-                      <Plus className="w-3 h-3" />
-                      إضافة
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-7 px-2 gap-1 text-xs" data-testid="button-add-payment">
+                          <Plus className="w-3 h-3" />
+                          إضافة بطاقة
+                          <ChevronDown className="w-3 h-3 opacity-70" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-48">
+                        {CARD_METHOD_OPTIONS.filter((v) => !paymentBreakdowns.some((p) => p.paymentMethod === v)).map((v) => {
+                          const b = CARD_BRANDS[v];
+                          const m = PAYMENT_METHODS.find((pm) => pm.value === v);
+                          return (
+                            <DropdownMenuItem key={v} onClick={() => addCardPayment(v)} className="gap-2 cursor-pointer" data-testid={`add-payment-${v}`}>
+                              {b?.logo ? (
+                                <span className="inline-flex items-center justify-center w-7 h-7 rounded bg-white border overflow-hidden shrink-0">
+                                  <img src={b.logo} alt="" className="w-full h-full object-contain p-0.5" />
+                                </span>
+                              ) : (
+                                <span className={`inline-flex items-center justify-center min-w-7 h-7 px-1 rounded text-[10px] font-bold shrink-0 ${b?.cls}`}>{b?.short}</span>
+                              )}
+                              <span className="text-sm">{m?.label}</span>
+                            </DropdownMenuItem>
+                          );
+                        })}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={addPaymentBreakdown} className="gap-2 cursor-pointer" data-testid="add-payment-other">
+                          <span className="inline-flex items-center justify-center w-7 h-7 rounded bg-muted shrink-0">
+                            <Plus className="w-4 h-4" />
+                          </span>
+                          <span className="text-sm">وسيلة أخرى</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   )}
                 </div>
               </CardHeader>
@@ -3115,35 +3173,35 @@ export default function CashierJournalFormPage() {
             {/* Quick Add Payment Buttons - Always visible */}
             {!isReadOnly && (
               <div className="flex flex-col gap-1">
-                {/* Bank Cards Row */}
-                <div className="flex flex-wrap items-center justify-center gap-2">
+                {/* Bank Cards Row - quick add with real brand logos */}
+                <div className="flex flex-wrap items-center justify-center gap-1.5">
                   <span className="text-xs text-primary font-medium ml-1">💳 بطاقات:</span>
-                  {[
-                    { value: "mada", label: "مدى", color: "bg-primary hover:bg-primary/90" },
-                    { value: "visa", label: "فيزا", color: "bg-primary hover:bg-primary/90" },
-                    { value: "mastercard", label: "ماستركارد", color: "bg-primary hover:bg-primary/90" },
-                  ].filter(m => !paymentBreakdowns.some(p => p.paymentMethod === m.value)).map(method => (
-                    <Button
-                      key={method.value}
-                      type="button"
-                      size="sm"
-                      className={`h-8 px-2 text-white text-xs ${method.color}`}
-                      onClick={() => {
-                        setPaymentBreakdowns([...paymentBreakdowns, { 
-                          paymentMethod: method.value, 
-                          amount: 0, 
-                          transactionCount: 0,
-                          posAmount: 0,
-                          terminalAmount: 0,
-                          terminalTransactionCount: 0
-                        }]);
-                      }}
-                      data-testid={`quick-add-sticky-${method.value}`}
-                    >
-                      <CreditCard className="w-3 h-3 ml-1" />
-                      {method.label}
-                    </Button>
-                  ))}
+                  {CARD_METHOD_OPTIONS
+                    .filter(v => !paymentBreakdowns.some(p => p.paymentMethod === v))
+                    .map(v => {
+                      const b = CARD_BRANDS[v];
+                      const m = PAYMENT_METHODS.find(pm => pm.value === v);
+                      return (
+                        <Button
+                          key={v}
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-9 pl-2 pr-1.5 gap-1.5 text-xs font-medium"
+                          onClick={() => addCardPayment(v)}
+                          data-testid={`quick-add-sticky-${v}`}
+                        >
+                          {b?.logo ? (
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-white border overflow-hidden shrink-0">
+                              <img src={b.logo} alt="" className="w-full h-full object-contain p-0.5" />
+                            </span>
+                          ) : (
+                            <span className={`inline-flex items-center justify-center min-w-6 h-6 px-1 rounded text-[9px] font-bold shrink-0 ${b?.cls}`}>{b?.short}</span>
+                          )}
+                          {m?.label}
+                        </Button>
+                      );
+                    })}
                 </div>
                 
                 {/* Other payment + note: delivery apps live in their own table section */}

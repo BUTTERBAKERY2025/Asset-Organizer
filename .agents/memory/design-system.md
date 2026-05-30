@@ -34,6 +34,19 @@ via a `BRAND_BADGE` map. These are deliberate, recognizable brand marks (like lo
 the random rainbow. Keep them tiny (badge pills only); everything around them stays on
 tokens/status colors.
 
+## Card-brand logos & add-payment UX (cashier-journal-form)
+Bank cards mirror the delivery pattern: a `CARD_BRANDS` map → `client/public/payment-logos/*.png`
+(mada/visa/mastercard/apple_pay) in white rounded avatars; methods without a logo
+(stc_pay/amex/card_other) fall back to a colored brand badge. `CARD_METHOD_OPTIONS`
+is the selectable list — the legacy `card` method ("بطاقة ائتمان (قديم)") is deliberately
+EXCLUDED from selection but MUST stay in `PAYMENT_METHODS` so historical rows still render/edit.
+Adding a card goes through one deduping helper `addCardPayment(value)` (functional setState,
+skips if method already present); `addPaymentBreakdown` is just `addCardPayment("card_other")`.
+Both the header dropdown and the sticky quick-add row filter out already-added methods.
+**Why:** the old top "إضافة" button silently inserted the legacy `card`; users wanted to pick
+the type. **Gotcha:** when downloading brand logos, white/grayscale versions are invisible on
+the white avatar — always fetch the COLORED variant and verify visually (mastercard especially).
+
 ## Delivery-app logos (cashier-journal-form)
 The delivery section uses real app **logos** (a `DELIVERY_BRANDS` map → image files in
 `client/public/delivery-logos/*.png`) inside white rounded avatars, plus per-app brand
