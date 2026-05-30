@@ -3192,6 +3192,9 @@ export default function CashierJournalFormPage() {
           </div>
         </div>
 
+        {/* Spacer so page content scrolls clear of the fixed bottom action bar (avoids overlap) */}
+        <div className={isReadOnly ? "h-20 md:h-16" : "h-52 sm:h-40 md:h-32"} aria-hidden="true" />
+
         {/* Sticky Bottom Action Bar - iPad Optimized */}
         <div className="fixed bottom-0 left-0 right-0 md:right-64 bg-card border-t-2 border-border shadow-lg z-50 p-2 md:p-3">
           <div className="flex flex-col gap-2">
