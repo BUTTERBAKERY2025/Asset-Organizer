@@ -11,6 +11,7 @@
     "marsool": "Marsool",
     "keeta": "Keeta",
     "the_chefs": "The Chefs",
+    "ninja": "Ninja",
     "other": "Other"
   },
   "statuses": {
@@ -61,7 +62,8 @@
     "jahez": "Jahez",
     "marsool": "Marsool",
     "keeta": "Keeta",
-    "the_chefs": "The Chefs"
+    "the_chefs": "The Chefs",
+    "ninja": "Ninja"
   },
   "destinations": {
     "display_bar": "Display Bar",

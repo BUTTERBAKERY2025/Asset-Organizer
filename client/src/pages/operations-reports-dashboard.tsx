@@ -57,9 +57,10 @@ const DELIVERY_APP_COLORS: Record<string, string> = {
   marsool: "#10B981",
   keeta: "#F59E0B",
   the_chefs: "#EC4899",
+  ninja: "#1b2733",
 };
 
-const DELIVERY_APP_KEYS = ["hunger_station", "toyou", "jahez", "marsool", "keeta", "the_chefs"];
+const DELIVERY_APP_KEYS = ["hunger_station", "toyou", "jahez", "marsool", "keeta", "the_chefs", "ninja"];
 
 const REPORT_TYPE_ICONS: Record<string, React.ElementType> = {
   all: BarChart3,
@@ -601,7 +602,7 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
           `).join('') : ''}
           
           <div class="category-header apps"><span>${t('pdf.deliveryAppsCategory')}</span><span>${(journal.deliveryTotal || 0).toLocaleString('en', {minimumFractionDigits: 2})} ${t('common.sar')}</span></div>
-          ${paymentBreakdowns ? paymentBreakdowns.filter(p => p.amount > 0 && ['hunger_station', 'toyou', 'jahez', 'marsool', 'keeta', 'the_chefs'].includes(p.paymentMethod)).map(p => `
+          ${paymentBreakdowns ? paymentBreakdowns.filter(p => p.amount > 0 && ['hunger_station', 'toyou', 'jahez', 'marsool', 'keeta', 'the_chefs', 'ninja'].includes(p.paymentMethod)).map(p => `
           <div class="sub-row"><span>• ${t(`paymentMethods.${p.paymentMethod}`)}</span><span>${(p.amount || 0).toLocaleString('en', {minimumFractionDigits: 2})} ${t('common.sar')}</span></div>
           `).join('') : ''}
         </div>

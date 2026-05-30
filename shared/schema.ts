@@ -2505,7 +2505,7 @@ export const PAYMENT_METHODS = [
   "marsool",
   "keeta",
   "the_chefs",
-  "talabat",
+  "ninja",
   "other",
 ] as const;
 
@@ -2524,7 +2524,7 @@ export const PAYMENT_CATEGORIES = {
     "marsool",
     "keeta",
     "the_chefs",
-    "talabat",
+    "ninja",
   ],
 } as const;
 
@@ -2569,7 +2569,7 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   marsool: "مرسول",
   keeta: "كيتا",
   the_chefs: "ذا شيفز",
-  talabat: "طلبات",
+  ninja: "نينجا",
   other: "أخرى",
 };
 

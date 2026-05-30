@@ -164,7 +164,7 @@ const PAYMENT_METHODS = [
   { value: "marsool", label: "مرسول", icon: Truck, category: "apps", color: CATEGORY_COLORS.apps },
   { value: "keeta", label: "كيتا", icon: Truck, category: "apps", color: CATEGORY_COLORS.apps },
   { value: "the_chefs", label: "ذا شيفز", icon: Truck, category: "apps", color: CATEGORY_COLORS.apps },
-  { value: "talabat", label: "طلبات", icon: Truck, category: "apps", color: CATEGORY_COLORS.apps },
+  { value: "ninja", label: "نينجا", icon: Truck, category: "apps", color: CATEGORY_COLORS.apps },
   { value: "other", label: "أخرى", icon: Wallet, category: "cash", color: CATEGORY_COLORS.cash },
 ];
 
@@ -185,7 +185,7 @@ const BRAND_BADGE: Record<string, { short: string; cls: string }> = {
   marsool: { short: "مرسول", cls: "bg-amber-500 text-white" },
   keeta: { short: "كيتا", cls: "bg-amber-500 text-white" },
   the_chefs: { short: "شيفز", cls: "bg-amber-500 text-white" },
-  talabat: { short: "طلبات", cls: "bg-amber-500 text-white" },
+  ninja: { short: "نينجا", cls: "bg-[#1b2733] text-white" },
   other: { short: "أخرى", cls: "bg-muted-foreground/20 text-foreground" },
 };
 
@@ -197,7 +197,7 @@ const DELIVERY_BRANDS: Record<string, { logo?: string; short: string; cls: strin
   marsool: { logo: "/delivery-logos/marsool.png", short: "مرسول", cls: "bg-emerald-500 text-white", ring: "border-emerald-400" },
   keeta: { logo: "/delivery-logos/keeta.png", short: "كيتا", cls: "bg-[#FFD500] text-black", ring: "border-[#FFD500]" },
   the_chefs: { logo: "/delivery-logos/the_chefs.png", short: "شيفز", cls: "bg-[#3b1f3a] text-white", ring: "border-[#3b1f3a]" },
-  talabat: { logo: "/delivery-logos/talabat.png", short: "طلبات", cls: "bg-[#FF5A00] text-white", ring: "border-[#FF5A00]" },
+  ninja: { logo: "/delivery-logos/ninja.png", short: "نينجا", cls: "bg-[#1b2733] text-white", ring: "border-[#1b2733]" },
 };
 
 const SHIFT_TYPES = [
@@ -1533,7 +1533,7 @@ export default function CashierJournalFormPage() {
       marsool: "مرسول",
       keeta: "كيتا",
       the_chefs: "ذا شيفز",
-      talabat: "طلبات",
+      ninja: "نينجا",
       other: "أخرى",
     };
 
@@ -1714,7 +1714,7 @@ export default function CashierJournalFormPage() {
         
         ${categoryTotals.apps > 0 ? `
         <div class="cat-row apps"><span>🚗 توصيل</span><span>${categoryTotals.apps.toFixed(2)} ر.س</span></div>
-        ${paymentBreakdowns.filter(p => p.amount > 0 && ['hunger_station', 'toyou', 'jahez', 'marsool', 'keeta', 'the_chefs', 'talabat'].includes(p.paymentMethod)).map(p => `
+        ${paymentBreakdowns.filter(p => p.amount > 0 && ['hunger_station', 'toyou', 'jahez', 'marsool', 'keeta', 'the_chefs', 'ninja'].includes(p.paymentMethod)).map(p => `
         <div class="sub-row"><span>• ${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span><span>${p.amount.toFixed(2)}</span></div>
         `).join('')}
         ` : ''}

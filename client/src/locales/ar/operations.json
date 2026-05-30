@@ -11,6 +11,7 @@
     "marsool": "مرسول",
     "keeta": "كيتا",
     "the_chefs": "ذا شيفز",
+    "ninja": "نينجا",
     "other": "أخرى"
   },
   "statuses": {
@@ -61,7 +62,8 @@
     "jahez": "جاهز",
     "marsool": "مرسول",
     "keeta": "كيتا",
-    "the_chefs": "ذا شيفز"
+    "the_chefs": "ذا شيفز",
+    "ninja": "نينجا"
   },
   "destinations": {
     "display_bar": "بار العرض",

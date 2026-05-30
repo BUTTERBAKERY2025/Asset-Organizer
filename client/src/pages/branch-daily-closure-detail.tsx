@@ -82,6 +82,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   marsool: "مرسول",
   keeta: "كيتا",
   the_chefs: "ذا شيفز",
+  ninja: "نينجا",
   other: "أخرى",
 };
 

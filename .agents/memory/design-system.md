@@ -37,10 +37,28 @@ tokens/status colors.
 ## Delivery-app logos (cashier-journal-form)
 The delivery section uses real app **logos** (a `DELIVERY_BRANDS` map → image files in
 `client/public/delivery-logos/*.png`) inside white rounded avatars, plus per-app brand
-colors for the active-row ring + text fallback. 6 logos sourced from the web
-(HungerStation, Jahez, Mrsool, Keeta, The Chefz, Talabat). **ToYou has no clean public
-logo** — it intentionally falls back to a colored brand badge (navy `#2b2e83` + "ToYou").
-Rows are collapsible (click header to expand inputs); default-open = `amount>0`.
+colors for the active-row ring + text fallback. Logos sourced from the web
+(HungerStation, Jahez, Mrsool, Keeta, The Chefz, Ninja `نينجا`). **ToYou has no clean
+public logo** — it intentionally falls back to a colored brand badge (navy `#2b2e83` +
+"ToYou"). Rows are collapsible (click header to expand inputs); default-open = `amount>0`.
+Ninja (real Saudi app, ananinja.com) replaced the now-defunct Talabat; brand color
+`#1b2733`.
+
+## Adding/removing a delivery-app payment method touches MANY files
+A delivery/payment method key lives in: `shared/schema.ts` (`PAYMENT_METHODS` const
+array → drives the `PaymentMethod` type, `PAYMENT_CATEGORIES.apps`, and the typed
+`PAYMENT_METHOD_LABELS` record — all three must stay in sync or TS breaks), `server/
+routes.ts` (two `deliveryMethods` classification arrays), and client pages: cashier-
+journal-form (PAYMENT_METHODS list, BRAND_BADGE, DELIVERY_BRANDS, an inline label map,
+a print-filter array), branch-daily-closing + branch-daily-closure-detail label maps,
+operations-reports-dashboard (`DELIVERY_APP_COLORS`, `DELIVERY_APP_KEYS`, print filter),
+and both `client/src/locales/{ar,en}/operations.json` (`paymentMethods` + `deliveryApps`).
+**Grep the whole repo for the key before assuming you're done.**
+**Why:** `payment_method` is a plain `text` column (NOT a pgEnum) everywhere, so
+adding/renaming a method needs NO DB migration — but renaming an existing key orphans
+historical rows that stored the old value (classification/labels miss them); back-fill
+with a one-time `UPDATE ... SET payment_method='new' WHERE payment_method='old'` if old
+data exists.
 
 **Why:** the cashier-journal-form page had ~14 hardcoded palette families (rainbow) that
 ignored the theme and broke dark mode. Restyled to the buckets above. Later the payment

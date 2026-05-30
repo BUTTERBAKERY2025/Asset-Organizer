@@ -7768,7 +7768,7 @@ export async function registerRoutes(
         
         // Calculate networkTotal and deliveryTotal from payment breakdowns
         const cardMethods = ['mada', 'visa', 'mastercard', 'amex', 'card_other', 'card', 'apple_pay', 'stc_pay'];
-        const deliveryMethods = ['delivery_app', 'hunger_station', 'hungerstation', 'toyou', 'jahez', 'marsool', 'keeta', 'the_chefs', 'talabat'];
+        const deliveryMethods = ['delivery_app', 'hunger_station', 'hungerstation', 'toyou', 'jahez', 'marsool', 'keeta', 'the_chefs', 'ninja'];
         
         journalData.networkTotal = paymentBreakdowns
           .filter((b: any) => cardMethods.includes(b.paymentMethod))
@@ -8004,7 +8004,7 @@ export async function registerRoutes(
         
         // Calculate networkTotal and deliveryTotal from payment breakdowns
         const cardMethods = ['mada', 'visa', 'mastercard', 'amex', 'card_other', 'card', 'apple_pay', 'stc_pay'];
-        const deliveryMethods = ['delivery_app', 'hunger_station', 'hungerstation', 'toyou', 'jahez', 'marsool', 'keeta', 'the_chefs', 'talabat'];
+        const deliveryMethods = ['delivery_app', 'hunger_station', 'hungerstation', 'toyou', 'jahez', 'marsool', 'keeta', 'the_chefs', 'ninja'];
         
         journalData.networkTotal = paymentBreakdowns
           .filter((b: any) => cardMethods.includes(b.paymentMethod))
