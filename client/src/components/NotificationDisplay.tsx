@@ -454,6 +454,9 @@ export function NotificationDisplay() {
     refetchOnMount: true,
     staleTime: 30000,
     enabled: true,
+    // Background poller: a transient failure self-heals on the next tick, so
+    // suppress the global "تعذّر تحميل بعض البيانات" banner for it.
+    meta: { silentError: true },
   });
 
   useEffect(() => {

@@ -109,6 +109,9 @@ export function NotificationsDropdown() {
     },
     staleTime: 30 * 1000,
     refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 60 * 1000),
+    // Background poller: a transient failure self-heals on the next tick, so
+    // suppress the global "تعذّر تحميل بعض البيانات" banner for it.
+    meta: { silentError: true },
   });
 
   // Optimistic update: flip isRead in the cache immediately so the badge counter
