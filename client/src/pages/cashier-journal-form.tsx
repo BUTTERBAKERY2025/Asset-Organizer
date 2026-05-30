@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { useLocation, useParams, Link } from "wouter";
-import { ArrowRight, Save, Send, Plus, Trash2, Wallet, CreditCard, Smartphone, Truck, AlertCircle, AlertTriangle, CheckCircle, Calculator, Users, Receipt, Camera, ImageIcon, X, Upload, FileDown, Copy, RotateCcw, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, ChevronDown, Maximize2 } from "lucide-react";
+import { ArrowRight, Save, Send, Plus, Trash2, Wallet, CreditCard, Smartphone, Truck, AlertCircle, AlertTriangle, CheckCircle, Calculator, Users, Receipt, Camera, ImageIcon, X, Upload, FileDown, Copy, RotateCcw, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, ChevronDown, Maximize2, Store, CalendarDays, Clock, User, TrendingUp, ClipboardList } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1833,16 +1833,22 @@ export default function CashierJournalFormPage() {
         {/* iPad-optimized grid: 2 columns on tablet */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
           <div className="lg:col-span-2 space-y-2">
-            <Card className="shadow-sm">
-              <CardHeader className="py-1.5 px-2.5 bg-primary/5">
-                <CardTitle className="text-sm font-semibold">معلومات اليومية</CardTitle>
+            <Card className="shadow-sm overflow-hidden">
+              <CardHeader className="py-2 px-3 bg-primary/5 border-b border-primary/10">
+                <CardTitle className="flex items-center gap-1.5 text-sm font-semibold">
+                  <ClipboardList className="w-4 h-4 text-primary" />
+                  معلومات اليومية
+                </CardTitle>
               </CardHeader>
-              <CardContent className="p-2 pt-1.5">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
-                  <div className="space-y-0.5">
-                    <Label className="text-[11px] text-muted-foreground">الفرع *</Label>
+              <CardContent className="p-2.5">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div className="space-y-1">
+                    <Label className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                      <Store className="w-3 h-3 text-primary/70" />
+                      الفرع *
+                    </Label>
                     <Select value={formData.branchId} onValueChange={(v) => setFormData({ ...formData, branchId: v })} disabled={isReadOnly || !canSelectBranch}>
-                      <SelectTrigger className="h-8 text-xs" data-testid="select-branch">
+                      <SelectTrigger className="h-9 text-xs" data-testid="select-branch">
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -1854,21 +1860,27 @@ export default function CashierJournalFormPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-0.5">
-                    <Label className="text-[11px] text-muted-foreground">التاريخ *</Label>
+                  <div className="space-y-1">
+                    <Label className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                      <CalendarDays className="w-3 h-3 text-primary/70" />
+                      التاريخ *
+                    </Label>
                     <Input
                       type="date"
                       value={formData.journalDate}
                       onChange={(e) => setFormData({ ...formData, journalDate: e.target.value })}
                       disabled={isReadOnly}
-                      className="h-8 text-xs"
+                      className="h-9 text-xs"
                       data-testid="input-date"
                     />
                   </div>
-                  <div className="space-y-0.5">
-                    <Label className="text-[11px] text-muted-foreground">الوردية *</Label>
+                  <div className="space-y-1">
+                    <Label className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                      <Clock className="w-3 h-3 text-primary/70" />
+                      الوردية *
+                    </Label>
                     <Select value={formData.shiftType} onValueChange={(v) => setFormData({ ...formData, shiftType: v })} disabled={isReadOnly}>
-                      <SelectTrigger className="h-8 text-xs" data-testid="select-shift">
+                      <SelectTrigger className="h-9 text-xs" data-testid="select-shift">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
@@ -1880,12 +1892,15 @@ export default function CashierJournalFormPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-0.5">
-                    <Label className="text-[11px] text-muted-foreground">الكاشير *</Label>
+                  <div className="space-y-1">
+                    <Label className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                      <User className="w-3 h-3 text-primary/70" />
+                      الكاشير *
+                    </Label>
                     <Input
                       value={formData.cashierName}
                       readOnly
-                      className="bg-muted cursor-not-allowed h-8 text-xs"
+                      className="bg-muted cursor-not-allowed h-9 text-xs font-medium"
                       placeholder="اسم الكاشير"
                       data-testid="input-cashier-name"
                     />
@@ -1894,62 +1909,72 @@ export default function CashierJournalFormPage() {
               </CardContent>
             </Card>
 
-            <Card className="border border-primary/20 shadow-sm">
-              <CardHeader className="bg-primary/5 py-1.5 px-2.5">
-                <CardTitle className="flex items-center gap-1.5 text-sm">
-                  <Receipt className="w-3.5 h-3.5" />
+            <Card className="border border-primary/20 shadow-sm overflow-hidden">
+              <CardHeader className="bg-primary/5 border-b border-primary/10 py-2 px-3">
+                <CardTitle className="flex items-center gap-1.5 text-sm font-semibold">
+                  <TrendingUp className="w-4 h-4 text-primary" />
                   إجمالي المبيعات
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-2 pt-1.5">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                  <div className="space-y-0.5">
-                    <Label className="text-[11px] font-semibold text-primary">المبيعات (ر.س) *</Label>
+              <CardContent className="p-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {/* Hero: total sales */}
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-2 space-y-1">
+                    <Label className="flex items-center gap-1 text-[11px] font-semibold text-primary">
+                      <Receipt className="w-3 h-3" />
+                      المبيعات (ر.س) *
+                    </Label>
                     <StableNumericInput
                       value={formData.totalSales}
                       onChange={(val) => setFormData({ ...formData, totalSales: val })}
                       isDecimal={true}
-                      className="text-sm font-bold h-9"
+                      className="text-base font-bold h-9 bg-card border-primary/30"
                       placeholder="0.00"
                       disabled={isReadOnly}
                       data-testid="input-total-sales"
                     />
                   </div>
-                  <div className="space-y-0.5">
-                    <Label className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
-                      <Users className="w-2.5 h-2.5" />
+                  {/* Invoice count */}
+                  <div className="rounded-lg border border-border bg-card p-2 space-y-1">
+                    <Label className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                      <Users className="w-3 h-3 text-primary/70" />
                       الفواتير *
                     </Label>
                     <StableNumericInput
                       value={formData.transactionCount}
                       onChange={(val) => setFormData({ ...formData, transactionCount: val })}
                       isDecimal={false}
-                      className="h-9 text-xs"
+                      className="h-9 text-sm font-semibold"
                       placeholder="0"
                       disabled={isReadOnly}
                       data-testid="input-transaction-count"
                     />
                   </div>
-                  <div className="space-y-0.5">
-                    <Label className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
-                      <Calculator className="w-2.5 h-2.5" />
+                  {/* Average ticket (computed) */}
+                  <div className="rounded-lg border border-border bg-muted/40 p-2 space-y-1">
+                    <Label className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                      <Calculator className="w-3 h-3 text-primary/70" />
                       المتوسط
                     </Label>
-                    <div className="h-9 flex items-center justify-center bg-muted rounded-md px-1.5">
-                      <span className="text-xs font-bold text-primary" data-testid="text-average-ticket">
-                        {averageTicket.toFixed(2)} ر.س
+                    <div className="h-9 flex items-center px-1.5">
+                      <span className="text-sm font-bold text-primary" data-testid="text-average-ticket">
+                        {averageTicket.toFixed(2)} <span className="text-[10px] font-normal text-muted-foreground">ر.س</span>
                       </span>
                     </div>
                   </div>
-                  <div className="space-y-0.5">
-                    <Label className="text-[11px] text-muted-foreground">العهدة</Label>
+                  {/* Opening balance */}
+                  <div className="rounded-lg border border-border bg-card p-2 space-y-1">
+                    <Label className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                      <Wallet className="w-3 h-3 text-primary/70" />
+                      العهدة
+                    </Label>
                     <StableNumericInput
                       value={formData.openingBalance}
                       onChange={(val) => setFormData({ ...formData, openingBalance: val })}
                       isDecimal={true}
                       placeholder="0.00"
                       disabled={isReadOnly}
-                      className="h-9 text-xs"
+                      className="h-9 text-sm"
                       data-testid="input-opening-balance"
                     />
                   </div>
