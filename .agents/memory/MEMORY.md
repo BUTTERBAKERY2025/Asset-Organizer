@@ -3,3 +3,4 @@
 - [Auth current user & atomic transitions](auth-current-user.md) — logged-in user is on `req.currentUser` (NOT `req.user`); status transitions (approve/reject/cancel) must guard status inside the UPDATE WHERE, not read-then-write.
 - [routes.ts & db:push quirks](routes-and-dbpush-quirks.md) — read-tool line offsets are wrong for routes.ts (use awk/sed); db:push blocked by TTY, use psql for dev schema changes.
 - [بوابتي employee portal](employee-portal.md) — /api/my/* scoped via getMyEmployee; linked_user_id must be unique; attendance id = branch_emp_{id}; portal_settings flags.
+- [Notification write path](notification-write-path.md) — `notifications` table = in-app inbox; storage.createSystemNotification is overloaded & writes to `system_notifications`, so db.insert(notifications) directly; WhatsApp via storage.createNotification → notification_queue.

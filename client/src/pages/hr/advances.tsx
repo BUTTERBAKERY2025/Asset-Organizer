@@ -68,7 +68,7 @@ export default function AdvancesPage() {
       qc.invalidateQueries({ queryKey: ["/api/hr/advance-requests"] });
       qc.invalidateQueries({ queryKey: ["/api/hr/advances"] });
       qc.invalidateQueries({ queryKey: ["/api/hr/advances/stats"] });
-      toast({ title: vars.decision === "approved" ? "تم اعتماد الطلب وإنشاء الخصم" : "تم رفض الطلب" });
+      toast({ title: vars.decision === "approved" ? "تم اعتماد الطلب" : "تم رفض الطلب" });
     },
     onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل تنفيذ الإجراء", variant: "destructive" }),
   });
@@ -173,7 +173,7 @@ export default function AdvancesPage() {
                     </Badge>
                     <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700"
                       disabled={reviewMutation.isPending}
-                      onClick={() => { if (confirm("اعتماد الطلب؟ سيُنشأ خصم على راتب الموظف.")) reviewMutation.mutate({ id: r.id, decision: "approved" }); }}
+                      onClick={() => { if (confirm("اعتماد طلب السلفة؟ سيتم إشعار الموظف بالقرار.")) reviewMutation.mutate({ id: r.id, decision: "approved" }); }}
                       data-testid={`button-approve-${r.id}`}>
                       <CheckCircle2 className="h-4 w-4 ms-1" />اعتماد
                     </Button>

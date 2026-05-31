@@ -14,10 +14,12 @@ import {
   employeeWarnings,
   employeeDocuments,
   incentiveAwards,
+  notifications,
   users,
   PORTAL_SETTING_KEYS,
 } from "@shared/schema";
 import { z } from "zod";
+import { notifyEmployeeOfDecision, notifyHrOfRequest } from "./notify-helpers";
 
 // الشهر الحالي بتوقيت السعودية بصيغة YYYY-MM
 function saudiMonth(): string {
@@ -140,6 +142,13 @@ export function registerSelfServiceRoutes(app: Express) {
         status: "pending",
         createdBy: getUserId(req) || undefined,
       }).returning();
+      // Notify HR/branch managers of the new request (branch-level in-app) — non-blocking.
+      await notifyHrOfRequest(emp, {
+        title: "طلب إجازة جديد",
+        message: `${emp.employeeName} قدّم طلب إجازة (${parsed.startDate} إلى ${parsed.endDate}).`,
+        linkUrl: "/hr/leaves",
+        relatedEntityId: created.id,
+      });
       res.status(201).json(created);
     } catch (e: any) {
       if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
@@ -224,6 +233,13 @@ export function registerSelfServiceRoutes(app: Express) {
         status: "pending",
         createdBy: getUserId(req) || undefined,
       }).returning();
+      // Notify HR/branch managers of the new request (branch-level in-app) — non-blocking.
+      await notifyHrOfRequest(emp, {
+        title: "طلب سلفة جديد",
+        message: `${emp.employeeName} قدّم طلب سلفة بمبلغ ${parsed.amount} ر.س (شهر ${parsed.requestedMonth}).`,
+        linkUrl: "/hr/advances",
+        relatedEntityId: created.id,
+      });
       res.status(201).json(created);
     } catch (e: any) {
       if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
@@ -733,59 +749,93 @@ export function registerSelfServiceRoutes(app: Express) {
 
       const reviewerId = getUserId(req) || undefined;
 
-      if (decision.decision === "rejected") {
-        // Atomic guard: only reject if still pending.
-        const updated = await db.update(advanceRequests).set({
-          status: "rejected",
-          reviewedBy: reviewerId,
-          reviewedAt: new Date(),
-          reviewerNote: decision.note,
-          updatedAt: new Date(),
-        }).where(and(eq(advanceRequests.id, id), eq(advanceRequests.status, "pending"))).returning();
-        if (updated.length === 0) {
-          return res.status(400).json({ error: "تمت معالجة هذا الطلب مسبقاً" });
-        }
-        return res.json(updated[0]);
-      }
-
-      // approved — أنشئ خصم راتب مرتبط داخل معاملة ذرية.
-      // نبدأ بتحديث محروس (status='pending') لضمان عدم اعتماد الطلب مرتين
-      // وإنشاء خصم مكرر عند المعالجة المتزامنة.
-      const result = await db.transaction(async (tx) => {
-        const claimed = await tx.update(advanceRequests).set({
-          status: "approved",
-          reviewedBy: reviewerId,
-          reviewedAt: new Date(),
-          reviewerNote: decision.note,
-          updatedAt: new Date(),
-        }).where(and(eq(advanceRequests.id, id), eq(advanceRequests.status, "pending"))).returning();
-
-        if (claimed.length === 0) return null; // عُولج بالفعل من طلب آخر متزامن
-
-        const [deduction] = await tx.insert(salaryDeductions).values({
-          branchEmployeeId: existing.branchEmployeeId,
-          branchId: existing.branchId,
-          month: existing.requestedMonth,
-          type: "advance",
-          amount: existing.amount,
-          description: `سلفة معتمدة من بوابة الموظف${existing.reason ? ` — ${existing.reason}` : ""}`,
-          createdBy: reviewerId,
-        }).returning();
-
-        const [linked] = await tx.update(advanceRequests).set({
-          linkedDeductionId: deduction.id,
-        }).where(eq(advanceRequests.id, id)).returning();
-
-        return linked;
-      });
-
-      if (!result) {
+      // القرار يغيّر الحالة فقط — لا يُنشأ خصم راتب تلقائياً (قرار المستخدم).
+      // الحارس الذري (status='pending') يمنع المعالجة المزدوجة عند التزامن.
+      const [updated] = await db.update(advanceRequests).set({
+        status: decision.decision,
+        reviewedBy: reviewerId,
+        reviewedAt: new Date(),
+        reviewerNote: decision.note,
+        updatedAt: new Date(),
+      }).where(and(eq(advanceRequests.id, id), eq(advanceRequests.status, "pending"))).returning();
+      if (!updated) {
         return res.status(400).json({ error: "تمت معالجة هذا الطلب مسبقاً" });
       }
-      res.json(result);
+
+      // إشعار الموظف بالقرار (داخل التطبيق + واتساب) — لا يعطّل الاستجابة.
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, existing.branchEmployeeId));
+      if (emp) {
+        const verb = decision.decision === "approved" ? "اعتماد" : "رفض";
+        const noteLine = decision.note ? `\nملاحظة: ${decision.note}` : "";
+        await notifyEmployeeOfDecision({
+          emp,
+          title: `تم ${verb} طلب السلفة`,
+          message: `طلب السلفة بمبلغ ${existing.amount} ر.س (شهر ${existing.requestedMonth}) تم ${verb}ه.${noteLine}`,
+          linkUrl: "/my-portal",
+          relatedEntityId: id,
+        });
+      }
+      res.json(updated);
     } catch (e: any) {
       if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
       console.error("[hr/advance-requests] review error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ========================================================================
+  // إشعارات بوابة الموظف  /api/my/notifications
+  // ========================================================================
+
+  // قائمة إشعارات الموظف الحالي (المرسلة لحسابه عبر userId)
+  app.get("/api/my/notifications", isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) return res.status(401).json({ error: "غير مصرح" });
+      const rows = await db
+        .select()
+        .from(notifications)
+        .where(and(eq(notifications.userId, userId), eq(notifications.isDismissed, false)))
+        .orderBy(desc(notifications.createdAt))
+        .limit(100);
+      const unreadCount = rows.filter(n => !n.isRead).length;
+      res.json({ notifications: rows, unreadCount });
+    } catch (e: any) {
+      console.error("[my/notifications] list error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // تعليم إشعار كمقروء (يجب أن يكون مملوكاً للموظف الحالي)
+  app.post("/api/my/notifications/:id/read", isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) return res.status(401).json({ error: "غير مصرح" });
+      const id = parseInt(req.params.id, 10);
+      const [updated] = await db.update(notifications).set({
+        isRead: true,
+        readAt: new Date(),
+      }).where(and(eq(notifications.id, id), eq(notifications.userId, userId))).returning();
+      if (!updated) return res.status(404).json({ error: "الإشعار غير موجود" });
+      res.json(updated);
+    } catch (e: any) {
+      console.error("[my/notifications] read error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // تعليم كل الإشعارات كمقروءة
+  app.post("/api/my/notifications/read-all", isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) return res.status(401).json({ error: "غير مصرح" });
+      await db.update(notifications).set({
+        isRead: true,
+        readAt: new Date(),
+      }).where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
+      res.json({ ok: true });
+    } catch (e: any) {
+      console.error("[my/notifications] read-all error:", e);
       res.status(500).json({ error: e.message });
     }
   });

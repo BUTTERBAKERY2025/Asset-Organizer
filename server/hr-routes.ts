@@ -32,6 +32,7 @@ import {
   insertSalaryDeductionSchema,
 } from "@shared/schema";
 import { z } from "zod";
+import { notifyEmployeeOfDecision } from "./notify-helpers";
 
 function getUserId(req: any): string | null {
   return (req as any).user?.id || (req as any).user?.claims?.sub || null;
@@ -333,6 +334,20 @@ export function registerHrRoutes(app: Express) {
         reviewerNote: decision.note,
         updatedAt: new Date(),
       }).where(eq(leaveRequests.id, id)).returning();
+
+      // Notify the employee back (in-app + WhatsApp) — non-blocking.
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, existing.branchEmployeeId));
+      if (emp) {
+        const verb = decision.decision === "approved" ? "اعتماد" : "رفض";
+        const noteLine = decision.note ? `\nملاحظة: ${decision.note}` : "";
+        await notifyEmployeeOfDecision({
+          emp,
+          title: `تم ${verb} طلب الإجازة`,
+          message: `طلب إجازتك (${existing.startDate} إلى ${existing.endDate}) تم ${verb}ه.${noteLine}`,
+          linkUrl: "/my-portal",
+          relatedEntityId: id,
+        });
+      }
       res.json(updated);
     } catch (e: any) {
       if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });

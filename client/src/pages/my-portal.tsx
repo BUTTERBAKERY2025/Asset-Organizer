@@ -19,6 +19,7 @@ import {
   Briefcase, Building2, Hash, AlertTriangle, LayoutDashboard, CalendarRange,
   ClipboardCheck, ShieldAlert, FileText, Award, ChevronLeft, ChevronRight,
   MapPin, LogIn, LogOut, Loader2, Fingerprint, Eraser, Languages, Globe, Phone,
+  Bell,
 } from "lucide-react";
 import {
   LEAVE_TYPE_LABELS,
@@ -112,6 +113,25 @@ export default function MyPortalPage() {
     enabled: !!hasEmployee,
   });
 
+  const { data: notifData } = useQuery<{ notifications: any[]; unreadCount: number }>({
+    queryKey: ["/api/my/notifications"],
+    queryFn: async () => (await apiRequest("GET", "/api/my/notifications")).json(),
+    enabled: !!hasEmployee,
+    refetchInterval: 60000,
+  });
+  const myNotifications = notifData?.notifications ?? [];
+  const unreadNotifications = notifData?.unreadCount ?? 0;
+
+  const markNotifRead = useMutation({
+    mutationFn: async (id: number) => (await apiRequest("POST", `/api/my/notifications/${id}/read`)).json(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/my/notifications"] }),
+  });
+  const markAllNotifRead = useMutation({
+    mutationFn: async () => (await apiRequest("POST", "/api/my/notifications/read-all")).json(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/my/notifications"] }),
+  });
+
+  const [notifOpen, setNotifOpen] = useState(false);
   const [schedMonth, setSchedMonth] = useState(todayMonth);
   const [attMonth, setAttMonth] = useState(todayMonth);
 
@@ -380,6 +400,25 @@ export default function MyPortalPage() {
             <h1 className="text-2xl font-bold">{t("title")}</h1>
             <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
           </div>
+          {hasEmployee && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="relative"
+              onClick={() => setNotifOpen(true)}
+              data-testid="button-notifications"
+            >
+              <Bell className="h-4 w-4" />
+              {unreadNotifications > 0 && (
+                <span
+                  className="absolute -top-1.5 -end-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center"
+                  data-testid="badge-unread-count"
+                >
+                  {unreadNotifications}
+                </span>
+              )}
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -390,6 +429,62 @@ export default function MyPortalPage() {
             {t("language")}
           </Button>
         </div>
+
+        <Dialog open={notifOpen} onOpenChange={setNotifOpen}>
+          <DialogContent className="max-w-md" dir={dir}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Bell className="h-5 w-5" />
+                {isRTL ? "الإشعارات" : "Notifications"}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+              {myNotifications.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-8" data-testid="text-no-notifications">
+                  {isRTL ? "لا توجد إشعارات" : "No notifications"}
+                </p>
+              )}
+              {myNotifications.map((n) => (
+                <div
+                  key={n.id}
+                  className={`p-3 rounded-lg border ${n.isRead ? "bg-muted/30" : "bg-primary/5 border-primary/20"}`}
+                  data-testid={`notification-${n.id}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="font-semibold text-sm">{n.title}</div>
+                    {!n.isRead && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => markNotifRead.mutate(n.id)}
+                        data-testid={`button-mark-read-${n.id}`}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground whitespace-pre-line mt-1">{n.message}</p>
+                  <div className="text-[11px] text-muted-foreground mt-1">
+                    {new Date(n.createdAt).toLocaleString(isRTL ? "ar-SA" : "en-US")}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {unreadNotifications > 0 && (
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => markAllNotifRead.mutate()}
+                  data-testid="button-mark-all-read"
+                >
+                  {isRTL ? "تعليم الكل كمقروء" : "Mark all read"}
+                </Button>
+              </DialogFooter>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {profileLoading && (
           <Card><CardContent className="p-8 text-center text-muted-foreground">{t("loading")}</CardContent></Card>
