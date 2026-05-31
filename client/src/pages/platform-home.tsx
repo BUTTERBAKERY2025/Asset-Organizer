@@ -71,8 +71,8 @@ function AppTile({ title, icon: Icon, href, color }: AppTileProps) {
 }
 
 export default function PlatformHomePage() {
-  const { user, isAuthenticated, activeBranch, isAttendanceClerk } = useAuth();
-  const { canView } = usePermissions();
+  const { user, isAuthenticated, activeBranch, isAttendanceClerk, isAdmin } = useAuth();
+  const { canView, isLoading: permsLoading, permissions } = usePermissions();
   const { t, i18n } = useTranslation("platformHome");
   const currentLang = i18n.language as "ar" | "en";
 
@@ -82,11 +82,19 @@ export default function PlatformHomePage() {
 
   const [, navigate] = useLocation();
 
+  // Employee-portal-only users have NO viewable platform module (the portal itself is not a
+  // permission module — it is open to any authenticated employee). Send them straight to /my-portal.
+  const portalOnly =
+    !isAdmin && !isAttendanceClerk && !permsLoading &&
+    !permissions.some((p) => p.actions.includes("view"));
+
   useEffect(() => {
     if (isAttendanceClerk) {
       navigate("/attendance-check");
+    } else if (portalOnly) {
+      navigate("/my-portal");
     }
-  }, [isAttendanceClerk, navigate]);
+  }, [isAttendanceClerk, portalOnly, navigate]);
 
   if (isAttendanceClerk) {
     return null;
@@ -166,6 +174,14 @@ export default function PlatformHomePage() {
 
   const formatNumber = (n: number) =>
     new Intl.NumberFormat("en-US").format(n);
+
+  // Avoid flashing the dashboard for portal-only users (and while we wait for their permissions).
+  if (portalOnly) {
+    return null;
+  }
+  if (!isAdmin && !isAttendanceClerk && permsLoading) {
+    return null;
+  }
 
   return (
     <Layout>

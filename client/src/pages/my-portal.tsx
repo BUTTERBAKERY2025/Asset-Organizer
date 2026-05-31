@@ -410,14 +410,14 @@ export default function MyPortalPage() {
 
   return (
     <Layout>
-      <div className="container mx-auto p-4 space-y-4" dir={dir} data-testid="page-my-portal">
+      <div className="container mx-auto max-w-3xl p-3 sm:p-4 space-y-3 sm:space-y-4 pb-10" dir={dir} data-testid="page-my-portal">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl bg-primary/10">
             <UserCircle className="h-7 w-7 text-primary" />
           </div>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold">{t("title")}</h1>
-            <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold truncate">{t("title")}</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground truncate">{t("subtitle")}</p>
           </div>
           {hasEmployee && (
             <Button
@@ -444,8 +444,8 @@ export default function MyPortalPage() {
             onClick={() => { localStorage.setItem("portal_lang_chosen", "1"); changeLanguage(isRTL ? "en" : "ar"); }}
             data-testid="button-toggle-language"
           >
-            <Languages className="h-4 w-4 me-1" />
-            {t("language")}
+            <Languages className="h-4 w-4 sm:me-1" />
+            <span className="hidden sm:inline">{t("language")}</span>
           </Button>
         </div>
 
@@ -564,7 +564,7 @@ export default function MyPortalPage() {
             </Card>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} dir={dir}>
-              <TabsList className="flex w-full h-auto justify-start gap-1 overflow-x-auto flex-nowrap rounded-xl p-1 [&::-webkit-scrollbar]:hidden [&>button]:shrink-0">
+              <TabsList className="flex w-full h-auto justify-start gap-1 overflow-x-auto flex-nowrap rounded-xl p-1 text-[13px] sm:text-sm [&::-webkit-scrollbar]:hidden [&>button]:shrink-0 [&>button]:px-2.5">
                 <TabsTrigger value="overview" data-testid="tab-overview">
                   <LayoutDashboard className="h-4 w-4 ms-1" />{t("tabs.overview")}
                 </TabsTrigger>
@@ -681,7 +681,7 @@ export default function MyPortalPage() {
                         </div>
                       )}
                       <Card className={`border ${heroBg} shadow-sm`} data-testid="card-checkin-hero">
-                        <CardContent className="p-6 flex flex-col items-center text-center">
+                        <CardContent className="p-5 sm:p-6 flex flex-col items-center text-center">
                           {checkedIn ? (
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-green-600/10 text-green-700 dark:text-green-400 text-xs font-bold px-3 py-1 mb-3">
                               <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />{t("checkin.onShiftNow")}
@@ -774,21 +774,21 @@ export default function MyPortalPage() {
                     ))}
                   </div>
                 )}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <Card data-testid="stat-present"><CardContent className="p-4 text-center">
-                    <div className="text-2xl font-bold text-green-600">{overview?.attendanceSummary?.present ?? 0}</div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+                  <Card data-testid="stat-present"><CardContent className="p-3 sm:p-4 text-center">
+                    <div className="text-xl sm:text-2xl font-bold text-green-600">{overview?.attendanceSummary?.present ?? 0}</div>
                     <div className="text-xs text-muted-foreground mt-1">{t("overview.present")}</div>
                   </CardContent></Card>
-                  <Card data-testid="stat-late"><CardContent className="p-4 text-center">
-                    <div className="text-2xl font-bold text-amber-600">{overview?.attendanceSummary?.late ?? 0}</div>
+                  <Card data-testid="stat-late"><CardContent className="p-3 sm:p-4 text-center">
+                    <div className="text-xl sm:text-2xl font-bold text-amber-600">{overview?.attendanceSummary?.late ?? 0}</div>
                     <div className="text-xs text-muted-foreground mt-1">{t("overview.late")}</div>
                   </CardContent></Card>
-                  <Card data-testid="stat-absent"><CardContent className="p-4 text-center">
-                    <div className="text-2xl font-bold text-destructive">{overview?.attendanceSummary?.absent ?? 0}</div>
+                  <Card data-testid="stat-absent"><CardContent className="p-3 sm:p-4 text-center">
+                    <div className="text-xl sm:text-2xl font-bold text-destructive">{overview?.attendanceSummary?.absent ?? 0}</div>
                     <div className="text-xs text-muted-foreground mt-1">{t("overview.absent")}</div>
                   </CardContent></Card>
-                  <Card data-testid="stat-onleave"><CardContent className="p-4 text-center">
-                    <div className="text-2xl font-bold text-primary">{overview?.attendanceSummary?.onLeave ?? 0}</div>
+                  <Card data-testid="stat-onleave"><CardContent className="p-3 sm:p-4 text-center">
+                    <div className="text-xl sm:text-2xl font-bold text-primary">{overview?.attendanceSummary?.onLeave ?? 0}</div>
                     <div className="text-xs text-muted-foreground mt-1">{t("overview.onLeave")}</div>
                   </CardContent></Card>
                 </div>
