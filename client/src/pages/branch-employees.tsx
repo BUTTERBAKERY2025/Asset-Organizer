@@ -70,7 +70,7 @@ import {
 } from "lucide-react";
 import type { BranchEmployee, EmployeeSetting, EmployeeTransferRequest, Branch } from "@shared/schema";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle, XCircle, ArrowRight, History, TrendingUp } from "lucide-react";
+import { CheckCircle, XCircle, ArrowRight, History, TrendingUp, RefreshCw, Copy } from "lucide-react";
 
 // تمت إزالة JOB_TITLES و NATIONALITIES - الآن يتم استخدام البيانات من قاعدة البيانات
 
@@ -1098,6 +1098,41 @@ export default function BranchEmployeesPage() {
     }
     uploadPhotoMutation.mutate({ employeeId: viewingEmployee.id, file });
     e.target.value = "";
+  };
+
+  // توليد كلمة مرور قوية (حروف كبيرة + صغيرة + أرقام، بدون أحرف ملتبسة)
+  const generatePassword = () => {
+    const U = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+    const L = "abcdefghijkmnpqrstuvwxyz";
+    const D = "23456789";
+    const all = U + L + D;
+    const pick = (s: string) => s[Math.floor(Math.random() * s.length)];
+    const chars = [pick(U), pick(L), pick(D), pick(D)];
+    for (let i = 0; i < 6; i++) chars.push(pick(all));
+    return chars.sort(() => Math.random() - 0.5).join("");
+  };
+
+  // توليد اسم مستخدم من بيانات الموظف (الاسم بالإنجليزية أو الرقم الوظيفي) + لاحقة عشوائية
+  const generateAccountCredentials = () => {
+    const emp = viewingEmployee;
+    const en = (emp as any)?.employeeNameEn as string | undefined;
+    let base = "";
+    if (en) base = en.trim().toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "");
+    if (!base && emp?.employeeNumber) base = `emp${String(emp.employeeNumber).replace(/[^a-zA-Z0-9]/g, "")}`;
+    if (!base) base = "emp";
+    const username = `${base}.${Math.floor(100 + Math.random() * 900)}`.slice(0, 50);
+    setNewAccountUsername(username);
+    setNewAccountPassword(generatePassword());
+  };
+
+  const copyAccountCredentials = async () => {
+    if (!newAccountUsername || !newAccountPassword) return;
+    try {
+      await navigator.clipboard.writeText(`اسم المستخدم: ${newAccountUsername}\nكلمة المرور: ${newAccountPassword}`);
+      toast({ title: isRTL ? "تم نسخ بيانات الدخول" : "Login details copied" });
+    } catch {
+      toast({ title: isRTL ? "تعذّر النسخ" : "Copy failed", variant: "destructive" });
+    }
   };
 
   // Employee Settings Queries and Mutations
@@ -3055,6 +3090,29 @@ export default function BranchEmployeesPage() {
                                 </div>
                               </div>
                               <p className="text-[11px] text-gray-500">كلمة المرور: 8 أحرف على الأقل وتحتوي على حرف كبير وصغير ورقم.</p>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={generateAccountCredentials}
+                                  data-testid="button-generate-account"
+                                >
+                                  <RefreshCw className="w-4 h-4 ms-1" />
+                                  توليد تلقائي
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={!newAccountUsername || !newAccountPassword}
+                                  onClick={copyAccountCredentials}
+                                  data-testid="button-copy-account"
+                                >
+                                  <Copy className="w-4 h-4 ms-1" />
+                                  نسخ البيانات
+                                </Button>
+                              </div>
                               <Button
                                 size="sm"
                                 disabled={!newAccountUsername || !newAccountPassword || createAccountMutation.isPending}
