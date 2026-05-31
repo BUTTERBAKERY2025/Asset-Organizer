@@ -1,0 +1,219 @@
+{
+  "title": "بوابتي",
+  "subtitle": "قدّم طلباتك وتابع حالتها",
+  "loading": "جاري التحميل...",
+  "language": "English",
+  "noEmployee": {
+    "title": "حسابك غير مرتبط بملف موظف",
+    "desc": "لاستخدام بوابة الموظف، يجب ربط حسابك بملفك الوظيفي. الرجاء التواصل مع إدارة الموارد البشرية."
+  },
+  "card": {
+    "branch": "الفرع",
+    "employeeNumber": "الرقم الوظيفي",
+    "nationality": "الجنسية",
+    "phone": "الجوال"
+  },
+  "tabs": {
+    "overview": "نظرة عامة",
+    "checkin": "تسجيل حضوري",
+    "schedule": "جدولي",
+    "attendance": "حضوري",
+    "leaves": "إجازاتي",
+    "advances": "سلفي",
+    "warnings": "إنذاراتي",
+    "documents": "وثائقي",
+    "incentives": "حوافزي",
+    "salary": "راتبي"
+  },
+  "overview": {
+    "present": "أيام الحضور",
+    "late": "أيام التأخير",
+    "absent": "أيام الغياب",
+    "onLeave": "أيام الإجازات",
+    "todayShift": "دوام اليوم",
+    "dayOff": "يوم راحة",
+    "noShift": "لا يوجد دوام مجدول لليوم"
+  },
+  "checkin": {
+    "dayOffBySchedule": "اليوم يوم راحة حسب الجدول",
+    "todayShift": "دوام اليوم",
+    "checkInLabel": "الحضور",
+    "checkOutLabel": "الانصراف",
+    "noBranchLocation": "لم يتم تحديد موقع الفرع. تواصل مع الإدارة لتفعيل التسجيل الذاتي.",
+    "complete": "اكتمل تسجيل حضورك وانصرافك لهذا اليوم",
+    "yourLocation": "موقعك الحالي",
+    "locationSet": "تم تحديد الموقع",
+    "getLocation": "تحديد موقعي",
+    "geoDenied": "تم رفض إذن الموقع. فعّله من إعدادات المتصفح.",
+    "geoUnavailable": "تعذّر تحديد الموقع",
+    "geoUnsupported": "المتصفح لا يدعم تحديد الموقع",
+    "signature": "التوقيع",
+    "clear": "مسح",
+    "signHint": "وقّع بإصبعك داخل المربع أعلاه",
+    "doCheckIn": "تسجيل الحضور",
+    "doCheckOut": "تسجيل الانصراف",
+    "signatureRequired": "التوقيع مطلوب",
+    "locationRequired": "حدد موقعك أولاً",
+    "checkInSuccess": "تم تسجيل حضورك بنجاح",
+    "checkOutSuccess": "تم تسجيل انصرافك بنجاح",
+    "checkInError": "تعذّر تسجيل الحضور",
+    "checkOutError": "تعذّر تسجيل الانصراف"
+  },
+  "schedule": {
+    "empty": "لا يوجد جدول لهذا الشهر",
+    "off": "راحة",
+    "shift": "دوام"
+  },
+  "attendance": {
+    "empty": "لا توجد سجلات حضور لهذا الشهر",
+    "checkIn": "حضور",
+    "checkOut": "انصراف",
+    "lateMinutes": "تأخير {{n}} د"
+  },
+  "warnings": {
+    "empty": "لا توجد إنذارات — أحسنت!",
+    "active": "نشط",
+    "cancelled": "ملغي",
+    "appealed": "معترض عليه",
+    "expired": "منتهٍ",
+    "deduction": "خصم",
+    "signed": "تم التوقيع",
+    "awaitingSignature": "بانتظار التوقيع"
+  },
+  "documents": {
+    "iqamaExpiry": "انتهاء الإقامة",
+    "healthExpiry": "انتهاء الشهادة الصحية",
+    "empty": "لا توجد وثائق مسجلة",
+    "number": "رقم",
+    "expires": "ينتهي",
+    "view": "عرض"
+  },
+  "incentives": {
+    "empty": "لا توجد حوافز مسجلة",
+    "period": "تحقيق",
+    "pending": "بانتظار",
+    "approved": "معتمد",
+    "paid": "مدفوع",
+    "cancelled": "ملغي"
+  },
+  "salary": {
+    "base": "الراتب الأساسي",
+    "housing": "بدل السكن",
+    "transport": "بدل المواصلات",
+    "food": "بدل الطعام",
+    "other": "بدلات أخرى",
+    "insurance": "خصم التأمينات",
+    "monthDeductions": "خصومات الشهر",
+    "total": "إجمالي الراتب",
+    "deductionsTitle": "خصومات شهر"
+  },
+  "leaves": {
+    "new": "طلب إجازة جديد",
+    "empty": "لا توجد طلبات إجازة بعد",
+    "from": "من",
+    "to": "إلى",
+    "days": "يوم",
+    "reviewerNote": "ملاحظة المراجع",
+    "cancel": "إلغاء",
+    "confirmCancel": "إلغاء هذا الطلب؟",
+    "submitted": "تم إرسال طلب الإجازة",
+    "cancelled": "تم إلغاء الطلب",
+    "type": "نوع الإجازة",
+    "startDate": "من تاريخ",
+    "endDate": "إلى تاريخ",
+    "daysCount": "عدد الأيام",
+    "reason": "السبب (اختياري)",
+    "invalidDates": "تواريخ غير صحيحة",
+    "send": "إرسال الطلب",
+    "sending": "جاري الإرسال..."
+  },
+  "advances": {
+    "new": "طلب سلفة جديد",
+    "empty": "لا توجد طلبات سلف بعد",
+    "deductionMonth": "شهر الخصم",
+    "installments": "أقساط",
+    "reviewerNote": "ملاحظة المراجع",
+    "cancel": "إلغاء",
+    "confirmCancel": "إلغاء هذا الطلب؟",
+    "submitted": "تم إرسال طلب السلفة",
+    "cancelled": "تم إلغاء الطلب",
+    "amount": "المبلغ (ر.س)",
+    "month": "شهر الخصم",
+    "installmentsCount": "عدد الأقساط",
+    "reason": "السبب (اختياري)",
+    "invalidAmount": "أدخل مبلغاً صحيحاً",
+    "send": "إرسال الطلب",
+    "sending": "جاري الإرسال..."
+  },
+  "common": {
+    "error": "خطأ",
+    "sendFailed": "فشل الإرسال",
+    "cancelFailed": "فشل الإلغاء",
+    "currency": "ر.س"
+  },
+  "leaveTypes": {
+    "annual": "سنوية",
+    "sick": "مرضية",
+    "emergency": "طارئة",
+    "maternity": "أمومة",
+    "paternity": "أبوة",
+    "unpaid": "بدون راتب",
+    "hajj": "حج",
+    "marriage": "زواج",
+    "bereavement": "وفاة",
+    "other": "أخرى"
+  },
+  "leaveStatus": {
+    "pending": "بانتظار",
+    "approved": "معتمد",
+    "rejected": "مرفوض",
+    "cancelled": "ملغي"
+  },
+  "advanceStatus": {
+    "pending": "بانتظار",
+    "approved": "معتمد",
+    "rejected": "مرفوض",
+    "cancelled": "ملغي",
+    "paid": "مدفوع"
+  },
+  "warningLevels": {
+    "verbal": "إنذار شفهي",
+    "written_1": "إنذار كتابي أول",
+    "written_2": "إنذار كتابي ثانٍ",
+    "written_3": "إنذار كتابي ثالث",
+    "final": "إنذار نهائي",
+    "termination": "إنهاء خدمة"
+  },
+  "docTypes": {
+    "id_card": "بطاقة هوية",
+    "residence": "إقامة",
+    "passport": "جواز سفر",
+    "driving_license": "رخصة قيادة",
+    "health_certificate": "شهادة صحية",
+    "work_permit": "رخصة عمل",
+    "contract": "عقد",
+    "other": "أخرى"
+  },
+  "attStatus": {
+    "present": "حاضر",
+    "late": "متأخر",
+    "absent": "غائب",
+    "early_leave": "خروج مبكر",
+    "on_leave": "إجازة",
+    "pending": "بانتظار"
+  },
+  "shifts": {
+    "morning": "صباحي",
+    "evening": "مسائي",
+    "night": "ليلي"
+  },
+  "days": {
+    "sat": "السبت",
+    "sun": "الأحد",
+    "mon": "الإثنين",
+    "tue": "الثلاثاء",
+    "wed": "الأربعاء",
+    "thu": "الخميس",
+    "fri": "الجمعة"
+  }
+}

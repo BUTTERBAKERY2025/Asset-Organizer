@@ -5569,6 +5569,7 @@ export const branchEmployees = pgTable("branch_employees", {
   passportNumber: text("passport_number"), // رقم الجواز
   passportExpiry: text("passport_expiry"), // تاريخ انتهاء الجواز
   phoneNumber: text("phone_number"), // رقم الجوال
+  photoUrl: text("photo_url"), // الصورة الشخصية للموظف
   emergencyContact: text("emergency_contact"), // رقم الطوارئ
   bankName: text("bank_name"), // اسم البنك
   bankAccountNumber: text("bank_account_number"), // رقم الحساب البنكي

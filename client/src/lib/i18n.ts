@@ -9,6 +9,8 @@ import arOperations from '@/locales/ar/operations.json';
 import enOperations from '@/locales/en/operations.json';
 import arCashierJournals from '@/locales/ar/cashier-journals.json';
 import enCashierJournals from '@/locales/en/cashier-journals.json';
+import arPortal from '@/locales/ar/portal.json';
+import enPortal from '@/locales/en/portal.json';
 
 const savedLanguage = localStorage.getItem('language') || 'ar';
 
@@ -21,17 +23,19 @@ i18n
         hr: arHr,
         operations: arOperations,
         cashierJournals: arCashierJournals,
+        portal: arPortal,
       },
       en: {
         platformHome: enPlatformHome,
         hr: enHr,
         operations: enOperations,
         cashierJournals: enCashierJournals,
+        portal: enPortal,
       },
     },
     lng: savedLanguage,
     fallbackLng: 'ar',
-    ns: ['platformHome', 'hr', 'operations', 'cashierJournals'],
+    ns: ['platformHome', 'hr', 'operations', 'cashierJournals', 'portal'],
     defaultNS: 'platformHome',
     interpolation: {
       escapeValue: false,

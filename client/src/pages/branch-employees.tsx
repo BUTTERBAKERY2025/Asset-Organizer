@@ -1055,6 +1055,51 @@ export default function BranchEmployeesPage() {
     },
   });
 
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const uploadPhotoMutation = useMutation({
+    mutationFn: async ({ employeeId, file }: { employeeId: number; file: File }) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      const uploadRes = await fetch(`/api/uploads?folder=employees`, {
+        method: "POST",
+        credentials: "include",
+        body: fd,
+      });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) throw new Error(uploadData?.error || "فشل في رفع الصورة");
+      const photoUrl = uploadData.downloadUrl as string;
+      const saveRes = await fetch(`/api/branch-employees/${employeeId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ photoUrl }),
+      });
+      const saveData = await saveRes.json();
+      if (!saveRes.ok) throw new Error(saveData?.error || "فشل في حفظ الصورة");
+      return saveData;
+    },
+    onSuccess: (updatedEmployee) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/branch-employees/bundle"] });
+      setViewingEmployee(updatedEmployee);
+      toast({ title: isRTL ? "تم تحديث صورة الموظف" : "Employee photo updated" });
+    },
+    onError: (e: any) => {
+      toast({ title: isRTL ? "تعذّر تحديث الصورة" : "Failed to update photo", description: e?.message, variant: "destructive" });
+    },
+  });
+
+  const handlePhotoSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !viewingEmployee?.id) return;
+    if (!file.type.startsWith("image/")) {
+      toast({ title: isRTL ? "الرجاء اختيار صورة" : "Please choose an image file", variant: "destructive" });
+      e.target.value = "";
+      return;
+    }
+    uploadPhotoMutation.mutate({ employeeId: viewingEmployee.id, file });
+    e.target.value = "";
+  };
+
   // Employee Settings Queries and Mutations
   const { data: employeeSettingsData, isLoading: isLoadingSettings } = useQuery({
     queryKey: ["/api/employee-settings"],
@@ -2856,6 +2901,44 @@ export default function BranchEmployeesPage() {
                 </TabsList>
 
                 <TabsContent value="info" className="space-y-4">
+                  <div className="flex items-center gap-4 p-3 rounded-lg border bg-muted/30">
+                    {(viewingEmployee as any).photoUrl ? (
+                      <img
+                        src={(viewingEmployee as any).photoUrl}
+                        alt={viewingEmployee.employeeName}
+                        className="h-20 w-20 rounded-full object-cover border-2 border-primary/20"
+                        data-testid="img-employee-photo-admin"
+                      />
+                    ) : (
+                      <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-2xl">
+                        {(viewingEmployee.employeeName || "?").slice(0, 1)}
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <div className="font-semibold">{viewingEmployee.employeeName}</div>
+                      <input
+                        ref={photoInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handlePhotoSelected}
+                        data-testid="input-employee-photo"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => photoInputRef.current?.click()}
+                        disabled={uploadPhotoMutation.isPending}
+                        data-testid="button-upload-photo"
+                      >
+                        {uploadPhotoMutation.isPending
+                          ? (isRTL ? "جارٍ الرفع..." : "Uploading...")
+                          : (viewingEmployee as any).photoUrl
+                            ? (isRTL ? "تغيير الصورة" : "Change Photo")
+                            : (isRTL ? "رفع صورة" : "Upload Photo")}
+                      </Button>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <Card>
                       <CardHeader className="pb-2">

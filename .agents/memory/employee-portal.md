@@ -22,3 +22,13 @@ description: Architecture facts for the employee portal (my-portal) feature
   `show_salary` (default false), `allow_self_checkin` (default true).
 - Storage returns string "true"/"false"; admin API (`/api/admin/portal-settings`) converts to
   real booleans both ways so the frontend toggles reflect true persisted state.
+
+## Bilingual (AR/EN) + employee photo
+- Portal page (`client/src/pages/my-portal.tsx`) is bilingual via i18n `portal` namespace
+  (`client/src/locales/{ar,en}/portal.json`, registered in `client/src/lib/i18n.ts`). Toggle
+  calls `changeLanguage(...)`; `dir` follows language (rtl for ar, ltr for en). EN mode prefers
+  `employeeNameEn` when present. Localized label lookups use `t("group.key",{defaultValue:key})`.
+- Employee photo: `branch_employees.photo_url` column. `/api/my/profile` returns `photoUrl`
+  (+ employeeNameEn/nationality/phoneNumber). Admin upload lives in branch-employees details
+  dialog: POST /api/uploads?folder=employees -> PUT /api/branch-employees/:id { photoUrl }.
+  PUT route already enforces branch_employees:edit + canAccessBranch (no IDOR).

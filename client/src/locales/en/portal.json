@@ -1,0 +1,219 @@
+{
+  "title": "My Portal",
+  "subtitle": "Submit your requests and track their status",
+  "loading": "Loading...",
+  "language": "العربية",
+  "noEmployee": {
+    "title": "Your account is not linked to an employee profile",
+    "desc": "To use the employee portal, your account must be linked to your employee profile. Please contact HR."
+  },
+  "card": {
+    "branch": "Branch",
+    "employeeNumber": "Employee No.",
+    "nationality": "Nationality",
+    "phone": "Phone"
+  },
+  "tabs": {
+    "overview": "Overview",
+    "checkin": "Check-in",
+    "schedule": "Schedule",
+    "attendance": "Attendance",
+    "leaves": "Leaves",
+    "advances": "Advances",
+    "warnings": "Warnings",
+    "documents": "Documents",
+    "incentives": "Incentives",
+    "salary": "Salary"
+  },
+  "overview": {
+    "present": "Present days",
+    "late": "Late days",
+    "absent": "Absent days",
+    "onLeave": "Leave days",
+    "todayShift": "Today's shift",
+    "dayOff": "Day off",
+    "noShift": "No shift scheduled for today"
+  },
+  "checkin": {
+    "dayOffBySchedule": "Today is a day off per the schedule",
+    "todayShift": "Today's shift",
+    "checkInLabel": "Check-in",
+    "checkOutLabel": "Check-out",
+    "noBranchLocation": "Branch location is not set. Contact management to enable self check-in.",
+    "complete": "Your check-in and check-out for today are complete",
+    "yourLocation": "Your current location",
+    "locationSet": "Location captured",
+    "getLocation": "Get my location",
+    "geoDenied": "Location permission denied. Enable it in your browser settings.",
+    "geoUnavailable": "Could not determine your location",
+    "geoUnsupported": "Your browser does not support geolocation",
+    "signature": "Signature",
+    "clear": "Clear",
+    "signHint": "Sign with your finger inside the box above",
+    "doCheckIn": "Check in",
+    "doCheckOut": "Check out",
+    "signatureRequired": "Signature is required",
+    "locationRequired": "Capture your location first",
+    "checkInSuccess": "You have checked in successfully",
+    "checkOutSuccess": "You have checked out successfully",
+    "checkInError": "Could not check in",
+    "checkOutError": "Could not check out"
+  },
+  "schedule": {
+    "empty": "No schedule for this month",
+    "off": "Off",
+    "shift": "Shift"
+  },
+  "attendance": {
+    "empty": "No attendance records for this month",
+    "checkIn": "In",
+    "checkOut": "Out",
+    "lateMinutes": "{{n}} min late"
+  },
+  "warnings": {
+    "empty": "No warnings — well done!",
+    "active": "Active",
+    "cancelled": "Cancelled",
+    "appealed": "Appealed",
+    "expired": "Expired",
+    "deduction": "Deduction",
+    "signed": "Signed",
+    "awaitingSignature": "Awaiting signature"
+  },
+  "documents": {
+    "iqamaExpiry": "Iqama expiry",
+    "healthExpiry": "Health certificate expiry",
+    "empty": "No documents on file",
+    "number": "No.",
+    "expires": "Expires",
+    "view": "View"
+  },
+  "incentives": {
+    "empty": "No incentives on file",
+    "period": "Achievement",
+    "pending": "Pending",
+    "approved": "Approved",
+    "paid": "Paid",
+    "cancelled": "Cancelled"
+  },
+  "salary": {
+    "base": "Base salary",
+    "housing": "Housing allowance",
+    "transport": "Transport allowance",
+    "food": "Food allowance",
+    "other": "Other allowances",
+    "insurance": "Insurance deduction",
+    "monthDeductions": "Month deductions",
+    "total": "Total salary",
+    "deductionsTitle": "Deductions for"
+  },
+  "leaves": {
+    "new": "New leave request",
+    "empty": "No leave requests yet",
+    "from": "From",
+    "to": "To",
+    "days": "days",
+    "reviewerNote": "Reviewer note",
+    "cancel": "Cancel",
+    "confirmCancel": "Cancel this request?",
+    "submitted": "Leave request submitted",
+    "cancelled": "Request cancelled",
+    "type": "Leave type",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "daysCount": "Number of days",
+    "reason": "Reason (optional)",
+    "invalidDates": "Invalid dates",
+    "send": "Submit request",
+    "sending": "Sending..."
+  },
+  "advances": {
+    "new": "New advance request",
+    "empty": "No advance requests yet",
+    "deductionMonth": "Deduction month",
+    "installments": "installments",
+    "reviewerNote": "Reviewer note",
+    "cancel": "Cancel",
+    "confirmCancel": "Cancel this request?",
+    "submitted": "Advance request submitted",
+    "cancelled": "Request cancelled",
+    "amount": "Amount (SAR)",
+    "month": "Deduction month",
+    "installmentsCount": "Number of installments",
+    "reason": "Reason (optional)",
+    "invalidAmount": "Enter a valid amount",
+    "send": "Submit request",
+    "sending": "Sending..."
+  },
+  "common": {
+    "error": "Error",
+    "sendFailed": "Failed to send",
+    "cancelFailed": "Failed to cancel",
+    "currency": "SAR"
+  },
+  "leaveTypes": {
+    "annual": "Annual",
+    "sick": "Sick",
+    "emergency": "Emergency",
+    "maternity": "Maternity",
+    "paternity": "Paternity",
+    "unpaid": "Unpaid",
+    "hajj": "Hajj",
+    "marriage": "Marriage",
+    "bereavement": "Bereavement",
+    "other": "Other"
+  },
+  "leaveStatus": {
+    "pending": "Pending",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "cancelled": "Cancelled"
+  },
+  "advanceStatus": {
+    "pending": "Pending",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "cancelled": "Cancelled",
+    "paid": "Paid"
+  },
+  "warningLevels": {
+    "verbal": "Verbal warning",
+    "written_1": "First written warning",
+    "written_2": "Second written warning",
+    "written_3": "Third written warning",
+    "final": "Final warning",
+    "termination": "Termination"
+  },
+  "docTypes": {
+    "id_card": "ID card",
+    "residence": "Residence",
+    "passport": "Passport",
+    "driving_license": "Driving license",
+    "health_certificate": "Health certificate",
+    "work_permit": "Work permit",
+    "contract": "Contract",
+    "other": "Other"
+  },
+  "attStatus": {
+    "present": "Present",
+    "late": "Late",
+    "absent": "Absent",
+    "early_leave": "Early leave",
+    "on_leave": "On leave",
+    "pending": "Pending"
+  },
+  "shifts": {
+    "morning": "Morning",
+    "evening": "Evening",
+    "night": "Night"
+  },
+  "days": {
+    "sat": "Saturday",
+    "sun": "Sunday",
+    "mon": "Monday",
+    "tue": "Tuesday",
+    "wed": "Wednesday",
+    "thu": "Thursday",
+    "fri": "Friday"
+  }
+}
