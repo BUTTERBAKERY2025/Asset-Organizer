@@ -28,6 +28,19 @@ import {
 function fmtMoney(n: any): string {
   return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function parseHmToToday(hm: any, ref: Date): Date | null {
+  if (!hm || typeof hm !== "string") return null;
+  const m = hm.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const d = new Date(ref);
+  d.setHours(parseInt(m[1], 10), parseInt(m[2], 10), 0, 0);
+  return d;
+}
 function addMonth(month: string, delta: number): string {
   const [y, m] = month.split("-").map(Number);
   const d = new Date(y, m - 1 + delta, 1);
@@ -135,6 +148,11 @@ export default function MyPortalPage() {
   const [schedMonth, setSchedMonth] = useState(todayMonth);
   const [attMonth, setAttMonth] = useState(todayMonth);
   const [activeTab, setActiveTab] = useState("overview");
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const { data: portalConfig } = useQuery<{
     showSalary: boolean; showSchedule: boolean; showAttendance: boolean;
@@ -609,49 +627,139 @@ export default function MyPortalPage() {
                   const co = todayStatus?.attendance?.actualCheckOut;
                   const done = !!co;
                   const checkedIn = !!ci && !co;
-                  const grad = done
-                    ? "from-emerald-500 to-green-600"
+                  const sched = todayStatus?.schedule;
+                  const isOff = !!sched?.isOff;
+                  const branchName = todayStatus?.branch?.name || profile?.branch?.name || "";
+
+                  const h = now.getHours();
+                  const mm = now.getMinutes();
+                  const period = h < 12 ? t("checkin.am") : t("checkin.pm");
+                  const clockStr = `${h % 12 || 12}:${pad2(mm)}`;
+
+                  let ciDate = parseHmToToday(ci, now);
+                  if (ciDate && ciDate.getTime() > now.getTime() + 60000) {
+                    // check-in time is in the future => it happened the previous day (overnight)
+                    ciDate = new Date(ciDate.getTime() - 86400000);
+                  }
+                  const elapsedMs = ciDate ? Math.max(0, now.getTime() - ciDate.getTime()) : 0;
+                  const elapsedStr = `${Math.floor(elapsedMs / 3600000)}:${pad2(Math.floor((elapsedMs % 3600000) / 60000))}:${pad2(Math.floor((elapsedMs % 60000) / 1000))}`;
+
+                  // anchor the shift window to the check-in moment so overnight shifts compute correctly
+                  const progRef = checkedIn && ciDate ? ciDate : now;
+                  let startD = parseHmToToday(sched?.startTime, progRef);
+                  let endD = parseHmToToday(sched?.endTime, progRef);
+                  if (startD && endD) {
+                    if (checkedIn && ciDate && startD.getTime() > ciDate.getTime() + 60000) {
+                      // shift started before check-in (overnight) => roll start back a day
+                      startD = new Date(startD.getTime() - 86400000);
+                    }
+                    if (endD.getTime() <= startD.getTime()) {
+                      // overnight shift => end falls on the next day
+                      endD = new Date(endD.getTime() + 86400000);
+                    }
+                  }
+                  let pct = 0;
+                  let remainStr = "0:00";
+                  if (startD && endD && endD.getTime() > startD.getTime()) {
+                    pct = Math.min(100, Math.max(0, ((now.getTime() - startD.getTime()) / (endD.getTime() - startD.getTime())) * 100));
+                    const remMs = Math.max(0, endD.getTime() - now.getTime());
+                    remainStr = `${Math.floor(remMs / 3600000)}:${pad2(Math.floor((remMs % 3600000) / 60000))}`;
+                  }
+
+                  const heroBg = done
+                    ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900"
                     : checkedIn
-                    ? "from-amber-400 to-amber-600"
-                    : "from-primary to-amber-500";
+                    ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900"
+                    : "bg-violet-50 dark:bg-violet-950/30 border-violet-200 dark:border-violet-900";
+
                   return (
-                    <Card className="overflow-hidden border-0 shadow-lg" data-testid="card-checkin-hero">
-                      <CardContent className="p-0">
-                        <div className={`bg-gradient-to-br ${grad} text-white p-5`}>
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="min-w-0">
-                              <div className="text-xs opacity-90">{t("checkin.todayStatusTitle")}</div>
-                              <div className="text-xl font-extrabold leading-tight truncate" data-testid="text-hero-status">
-                                {done ? t("checkin.heroDone") : checkedIn ? t("checkin.heroCheckedIn") : t("checkin.heroNotYet")}
+                    <>
+                      {checkedIn && (
+                        <div className="flex items-center justify-center gap-2 rounded-xl bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 text-sm font-semibold px-3 py-2" data-testid="banner-checked-in">
+                          <CheckCircle2 className="h-4 w-4 shrink-0" />
+                          <span>{t("checkin.bannerCheckedIn")} {ci}</span>
+                        </div>
+                      )}
+                      <Card className={`border ${heroBg} shadow-sm`} data-testid="card-checkin-hero">
+                        <CardContent className="p-6 flex flex-col items-center text-center">
+                          {checkedIn ? (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-green-600/10 text-green-700 dark:text-green-400 text-xs font-bold px-3 py-1 mb-3">
+                              <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />{t("checkin.onShiftNow")}
+                            </span>
+                          ) : (
+                            <div className="text-sm text-muted-foreground mb-1">{done ? t("checkin.heroDone") : t("checkin.currentTime")}</div>
+                          )}
+
+                          {checkedIn ? (
+                            <>
+                              <div className="text-xs text-muted-foreground">{t("checkin.sinceCheckIn")}</div>
+                              <div className="text-4xl font-extrabold tabular-nums tracking-tight text-foreground" data-testid="text-elapsed">{elapsedStr}</div>
+                              <div className="text-[11px] text-muted-foreground mb-4">{t("checkin.hms")}</div>
+                            </>
+                          ) : !done ? (
+                            <div className="mb-4">
+                              <span className="text-4xl font-extrabold text-foreground" data-testid="text-clock">{clockStr}</span>
+                              <span className="text-lg font-bold text-muted-foreground ms-2">{period}</span>
+                            </div>
+                          ) : (
+                            <div className="mb-4" />
+                          )}
+
+                          {!done ? (
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab("checkin")}
+                              data-testid={checkedIn ? "button-hero-check-out" : "button-hero-check-in"}
+                              className={`relative h-40 w-40 rounded-full flex flex-col items-center justify-center text-white font-extrabold shadow-xl active:scale-95 transition-transform bg-gradient-to-br ${checkedIn ? "from-[#a85a3c] to-[#7c3d28]" : "from-emerald-500 to-green-600"}`}
+                            >
+                              {checkedIn ? <LogOut className="h-9 w-9 mb-1" /> : <Fingerprint className="h-9 w-9 mb-1" />}
+                              <span className="text-base leading-tight px-2">{checkedIn ? t("checkin.doCheckOut") : t("checkin.doCheckIn")}</span>
+                            </button>
+                          ) : (
+                            <div className="h-32 w-32 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+                              <CheckCircle2 className="h-14 w-14 text-emerald-600" />
+                            </div>
+                          )}
+
+                          {branchName && (
+                            <div className="mt-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground" data-testid="text-hero-location">
+                              <MapPin className="h-3.5 w-3.5" />
+                              {checkedIn ? `${t("checkin.withinRange")} · ${branchName}` : `${t("checkin.locationVerified")} · ${branchName}`}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      {sched && !isOff && startD && endD ? (
+                        <Card data-testid="card-shift-progress">
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-semibold flex items-center gap-1.5"><CalendarRange className="h-4 w-4 text-primary" />{checkedIn ? t("checkin.shiftProgress") : t("checkin.shiftToday")}</span>
+                              {checkedIn && <span className="text-sm font-bold text-primary" data-testid="text-progress-pct">{Math.round(pct)}%</span>}
+                            </div>
+                            <div className="h-2.5 w-full rounded-full bg-muted overflow-hidden">
+                              <div className="h-full rounded-full bg-gradient-to-l from-emerald-500 to-green-500 transition-all" style={{ width: `${pct}%` }} />
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 mt-3 text-center">
+                              <div>
+                                <div className="text-[11px] text-muted-foreground">{t("checkin.started")}</div>
+                                <div className="text-sm font-bold" data-testid="text-shift-start">{sched.startTime}</div>
+                              </div>
+                              <div>
+                                <div className="text-[11px] text-muted-foreground">{checkedIn ? t("checkin.nowLabel") : t("checkin.to")}</div>
+                                <div className="text-sm font-bold">{checkedIn ? clockStr : sched.endTime}</div>
+                              </div>
+                              <div>
+                                <div className="text-[11px] text-muted-foreground">{checkedIn ? t("checkin.remaining") : t("checkin.checkOutLabel")}</div>
+                                <div className="text-sm font-bold text-amber-600" data-testid="text-shift-remaining">{checkedIn ? `${remainStr} ${t("checkin.hoursShort")}` : sched.endTime}</div>
                               </div>
                             </div>
-                            <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-                              {done ? <CheckCircle2 className="h-6 w-6" /> : checkedIn ? <Clock className="h-6 w-6" /> : <Fingerprint className="h-6 w-6" />}
-                            </div>
-                          </div>
-                          <div className="flex gap-3 mb-4">
-                            <div className="flex-1 rounded-xl bg-white/15 px-3 py-2 text-center">
-                              <div className="text-[11px] opacity-90">{t("checkin.checkInLabel")}</div>
-                              <div className="font-bold text-base" data-testid="text-hero-checkin">{ci || "—"}</div>
-                            </div>
-                            <div className="flex-1 rounded-xl bg-white/15 px-3 py-2 text-center">
-                              <div className="text-[11px] opacity-90">{t("checkin.checkOutLabel")}</div>
-                              <div className="font-bold text-base" data-testid="text-hero-checkout">{co || "—"}</div>
-                            </div>
-                          </div>
-                          {!done && (
-                            <Button
-                              onClick={() => setActiveTab("checkin")}
-                              className="w-full h-14 rounded-xl text-base font-extrabold bg-white text-foreground hover:bg-white/90 shadow-md active:scale-[0.98] transition-transform"
-                              data-testid="button-hero-checkin"
-                            >
-                              {checkedIn ? <LogOut className="h-5 w-5 ms-2" /> : <LogIn className="h-5 w-5 ms-2" />}
-                              {checkedIn ? t("checkin.heroTapToEnd") : t("checkin.heroTapToStart")}
-                            </Button>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
+                          </CardContent>
+                        </Card>
+                      ) : sched && isOff ? (
+                        <Card data-testid="card-shift-progress"><CardContent className="p-4 text-center text-muted-foreground text-sm">{t("overview.dayOff")}</CardContent></Card>
+                      ) : null}
+                    </>
                   );
                 })()}
                 {overview?.alerts?.length > 0 && (
@@ -684,6 +792,7 @@ export default function MyPortalPage() {
                     <div className="text-xs text-muted-foreground mt-1">{t("overview.onLeave")}</div>
                   </CardContent></Card>
                 </div>
+                {!allowSelfCheckin && (
                 <Card data-testid="card-today-shift">
                   <CardContent className="p-4">
                     <div className="text-sm text-muted-foreground mb-1">{t("overview.todayShift")}</div>
@@ -704,6 +813,7 @@ export default function MyPortalPage() {
                     )}
                   </CardContent>
                 </Card>
+                )}
               </TabsContent>
 
               {/* تسجيل حضوري / self check-in */}
