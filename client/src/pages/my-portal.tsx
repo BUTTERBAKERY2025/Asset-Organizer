@@ -134,6 +134,7 @@ export default function MyPortalPage() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [schedMonth, setSchedMonth] = useState(todayMonth);
   const [attMonth, setAttMonth] = useState(todayMonth);
+  const [activeTab, setActiveTab] = useState("overview");
 
   const { data: portalConfig } = useQuery<{
     showSalary: boolean; showSchedule: boolean; showAttendance: boolean;
@@ -544,8 +545,8 @@ export default function MyPortalPage() {
               </CardContent>
             </Card>
 
-            <Tabs defaultValue="overview" dir={dir}>
-              <TabsList className="flex flex-wrap h-auto">
+            <Tabs value={activeTab} onValueChange={setActiveTab} dir={dir}>
+              <TabsList className="flex w-full h-auto justify-start gap-1 overflow-x-auto flex-nowrap rounded-xl p-1 [&::-webkit-scrollbar]:hidden [&>button]:shrink-0">
                 <TabsTrigger value="overview" data-testid="tab-overview">
                   <LayoutDashboard className="h-4 w-4 ms-1" />{t("tabs.overview")}
                 </TabsTrigger>
@@ -603,6 +604,56 @@ export default function MyPortalPage() {
 
               {/* نظرة عامة / overview */}
               <TabsContent value="overview" className="space-y-3">
+                {allowSelfCheckin && (() => {
+                  const ci = todayStatus?.attendance?.actualCheckIn;
+                  const co = todayStatus?.attendance?.actualCheckOut;
+                  const done = !!co;
+                  const checkedIn = !!ci && !co;
+                  const grad = done
+                    ? "from-emerald-500 to-green-600"
+                    : checkedIn
+                    ? "from-amber-400 to-amber-600"
+                    : "from-primary to-amber-500";
+                  return (
+                    <Card className="overflow-hidden border-0 shadow-lg" data-testid="card-checkin-hero">
+                      <CardContent className="p-0">
+                        <div className={`bg-gradient-to-br ${grad} text-white p-5`}>
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="min-w-0">
+                              <div className="text-xs opacity-90">{t("checkin.todayStatusTitle")}</div>
+                              <div className="text-xl font-extrabold leading-tight truncate" data-testid="text-hero-status">
+                                {done ? t("checkin.heroDone") : checkedIn ? t("checkin.heroCheckedIn") : t("checkin.heroNotYet")}
+                              </div>
+                            </div>
+                            <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                              {done ? <CheckCircle2 className="h-6 w-6" /> : checkedIn ? <Clock className="h-6 w-6" /> : <Fingerprint className="h-6 w-6" />}
+                            </div>
+                          </div>
+                          <div className="flex gap-3 mb-4">
+                            <div className="flex-1 rounded-xl bg-white/15 px-3 py-2 text-center">
+                              <div className="text-[11px] opacity-90">{t("checkin.checkInLabel")}</div>
+                              <div className="font-bold text-base" data-testid="text-hero-checkin">{ci || "—"}</div>
+                            </div>
+                            <div className="flex-1 rounded-xl bg-white/15 px-3 py-2 text-center">
+                              <div className="text-[11px] opacity-90">{t("checkin.checkOutLabel")}</div>
+                              <div className="font-bold text-base" data-testid="text-hero-checkout">{co || "—"}</div>
+                            </div>
+                          </div>
+                          {!done && (
+                            <Button
+                              onClick={() => setActiveTab("checkin")}
+                              className="w-full h-14 rounded-xl text-base font-extrabold bg-white text-foreground hover:bg-white/90 shadow-md active:scale-[0.98] transition-transform"
+                              data-testid="button-hero-checkin"
+                            >
+                              {checkedIn ? <LogOut className="h-5 w-5 ms-2" /> : <LogIn className="h-5 w-5 ms-2" />}
+                              {checkedIn ? t("checkin.heroTapToEnd") : t("checkin.heroTapToStart")}
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
                 {overview?.alerts?.length > 0 && (
                   <div className="space-y-2">
                     {overview.alerts.map((a: any, i: number) => (
@@ -753,23 +804,22 @@ export default function MyPortalPage() {
                         <div className="flex gap-2">
                           {!todayStatus?.attendance?.actualCheckIn ? (
                             <Button
-                              className="flex-1"
+                              className="flex-1 h-16 rounded-2xl text-lg font-extrabold bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg active:scale-[0.98] transition-transform"
                               disabled={!coords || !hasSignature || checkInMut.isPending}
                               onClick={() => checkInMut.mutate()}
                               data-testid="button-check-in"
                             >
-                              {checkInMut.isPending ? <Loader2 className="h-4 w-4 ms-1 animate-spin" /> : <LogIn className="h-4 w-4 ms-1" />}
+                              {checkInMut.isPending ? <Loader2 className="h-6 w-6 ms-2 animate-spin" /> : <LogIn className="h-6 w-6 ms-2" />}
                               {t("checkin.doCheckIn")}
                             </Button>
                           ) : (
                             <Button
-                              className="flex-1"
-                              variant="secondary"
+                              className="flex-1 h-16 rounded-2xl text-lg font-extrabold bg-gradient-to-br from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white shadow-lg active:scale-[0.98] transition-transform"
                               disabled={!coords || !hasSignature || checkOutMut.isPending}
                               onClick={() => checkOutMut.mutate()}
                               data-testid="button-check-out"
                             >
-                              {checkOutMut.isPending ? <Loader2 className="h-4 w-4 ms-1 animate-spin" /> : <LogOut className="h-4 w-4 ms-1" />}
+                              {checkOutMut.isPending ? <Loader2 className="h-6 w-6 ms-2 animate-spin" /> : <LogOut className="h-6 w-6 ms-2" />}
                               {t("checkin.doCheckOut")}
                             </Button>
                           )}
