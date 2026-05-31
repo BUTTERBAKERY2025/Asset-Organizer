@@ -113,6 +113,9 @@ export function registerSelfServiceRoutes(app: Express) {
     try {
       const emp = await getMyEmployee(req);
       if (!emp) return res.status(403).json({ error: "حسابك غير مرتبط بملف موظف" });
+      if (!(await portalFlag(PORTAL_SETTING_KEYS.ALLOW_LEAVE_REQUESTS))) {
+        return res.status(403).json({ error: "طلبات الإجازات غير مفعّلة حالياً" });
+      }
       const schema = z.object({
         leaveType: z.enum(["annual", "sick", "emergency", "maternity", "paternity", "unpaid", "hajj", "marriage", "bereavement", "other"]),
         startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "تاريخ غير صحيح"),
@@ -195,6 +198,9 @@ export function registerSelfServiceRoutes(app: Express) {
     try {
       const emp = await getMyEmployee(req);
       if (!emp) return res.status(403).json({ error: "حسابك غير مرتبط بملف موظف" });
+      if (!(await portalFlag(PORTAL_SETTING_KEYS.ALLOW_ADVANCE_REQUESTS))) {
+        return res.status(403).json({ error: "طلبات السلف غير مفعّلة حالياً" });
+      }
       const schema = z.object({
         amount: z.number().positive("المبلغ يجب أن يكون موجب"),
         requestedMonth: z.string().regex(/^\d{4}-\d{2}$/, "صيغة الشهر يجب أن تكون YYYY-MM"),
@@ -202,6 +208,12 @@ export function registerSelfServiceRoutes(app: Express) {
         reason: z.string().optional(),
       });
       const parsed = schema.parse(req.body);
+      const maxAdvance = Number(
+        (await storage.getPortalSetting(PORTAL_SETTING_KEYS.MAX_ADVANCE_AMOUNT)) ?? "0",
+      ) || 0;
+      if (maxAdvance > 0 && parsed.amount > maxAdvance) {
+        return res.status(400).json({ error: `الحد الأقصى المسموح للسلفة هو ${maxAdvance} ريال` });
+      }
       const [created] = await db.insert(advanceRequests).values({
         branchEmployeeId: emp.id,
         branchId: emp.branchId,
@@ -255,11 +267,33 @@ export function registerSelfServiceRoutes(app: Express) {
   // إعدادات البوابة المرئية للموظف (هل تظهر صفحة الراتب / هل يسمح بتسجيل الحضور الذاتي)
   app.get("/api/my/portal-config", isAuthenticated, async (req, res) => {
     try {
-      const [showSalary, allowSelfCheckin] = await Promise.all([
+      const [
+        showSalary, showSchedule, showAttendance, showLeaves, showAdvances,
+        showWarnings, showDocuments, showIncentives, allowSelfCheckin,
+        allowLeaveRequests, allowAdvanceRequests,
+      ] = await Promise.all([
         portalFlag(PORTAL_SETTING_KEYS.SHOW_SALARY),
+        portalFlag(PORTAL_SETTING_KEYS.SHOW_SCHEDULE),
+        portalFlag(PORTAL_SETTING_KEYS.SHOW_ATTENDANCE),
+        portalFlag(PORTAL_SETTING_KEYS.SHOW_LEAVES),
+        portalFlag(PORTAL_SETTING_KEYS.SHOW_ADVANCES),
+        portalFlag(PORTAL_SETTING_KEYS.SHOW_WARNINGS),
+        portalFlag(PORTAL_SETTING_KEYS.SHOW_DOCUMENTS),
+        portalFlag(PORTAL_SETTING_KEYS.SHOW_INCENTIVES),
         portalFlag(PORTAL_SETTING_KEYS.ALLOW_SELF_CHECKIN),
+        portalFlag(PORTAL_SETTING_KEYS.ALLOW_LEAVE_REQUESTS),
+        portalFlag(PORTAL_SETTING_KEYS.ALLOW_ADVANCE_REQUESTS),
       ]);
-      res.json({ showSalary, allowSelfCheckin });
+      const maxAdvanceAmount = Number(
+        (await storage.getPortalSetting(PORTAL_SETTING_KEYS.MAX_ADVANCE_AMOUNT)) ?? "0",
+      ) || 0;
+      const defaultLanguage =
+        (await storage.getPortalSetting(PORTAL_SETTING_KEYS.DEFAULT_LANGUAGE)) === "en" ? "en" : "ar";
+      res.json({
+        showSalary, showSchedule, showAttendance, showLeaves, showAdvances,
+        showWarnings, showDocuments, showIncentives, allowSelfCheckin,
+        allowLeaveRequests, allowAdvanceRequests, maxAdvanceAmount, defaultLanguage,
+      });
     } catch (e: any) {
       console.error("[my/portal-config] error:", e);
       res.status(500).json({ error: e.message });

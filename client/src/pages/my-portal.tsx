@@ -115,12 +115,39 @@ export default function MyPortalPage() {
   const [schedMonth, setSchedMonth] = useState(todayMonth);
   const [attMonth, setAttMonth] = useState(todayMonth);
 
-  const { data: portalConfig } = useQuery<{ showSalary: boolean; allowSelfCheckin: boolean }>({
+  const { data: portalConfig } = useQuery<{
+    showSalary: boolean; showSchedule: boolean; showAttendance: boolean;
+    showLeaves: boolean; showAdvances: boolean; showWarnings: boolean;
+    showDocuments: boolean; showIncentives: boolean; allowSelfCheckin: boolean;
+    allowLeaveRequests: boolean; allowAdvanceRequests: boolean;
+    maxAdvanceAmount: number; defaultLanguage: string;
+  }>({
     queryKey: ["/api/my/portal-config"],
     queryFn: async () => (await apiRequest("GET", "/api/my/portal-config")).json(),
     enabled: !!hasEmployee,
   });
+  // Missing flags default to visible (true) so the portal stays usable before config loads.
+  const cfgFlag = (v: boolean | undefined) => v !== false;
   const showSalary = !!portalConfig?.showSalary;
+  const showSchedule = cfgFlag(portalConfig?.showSchedule);
+  const showAttendance = cfgFlag(portalConfig?.showAttendance);
+  const showLeaves = cfgFlag(portalConfig?.showLeaves);
+  const showAdvances = cfgFlag(portalConfig?.showAdvances);
+  const showWarnings = cfgFlag(portalConfig?.showWarnings);
+  const showDocuments = cfgFlag(portalConfig?.showDocuments);
+  const showIncentives = cfgFlag(portalConfig?.showIncentives);
+  const allowLeaveRequests = cfgFlag(portalConfig?.allowLeaveRequests);
+  const allowAdvanceRequests = cfgFlag(portalConfig?.allowAdvanceRequests);
+  const maxAdvanceAmount = portalConfig?.maxAdvanceAmount ?? 0;
+
+  // Apply the admin-configured default portal language on first visit (until the
+  // employee manually picks one via the toggle).
+  useEffect(() => {
+    const def = portalConfig?.defaultLanguage;
+    if (!def || (def !== "ar" && def !== "en")) return;
+    if (localStorage.getItem("portal_lang_chosen")) return;
+    if (i18n.language !== def) changeLanguage(def);
+  }, [portalConfig?.defaultLanguage]);
 
   const { data: overview } = useQuery<any>({
     queryKey: ["/api/my/overview"],
@@ -308,6 +335,9 @@ export default function MyPortalPage() {
     mutationFn: async () => {
       const amount = parseFloat(advForm.amount);
       if (!amount || amount <= 0) throw new Error(t("advances.invalidAmount"));
+      if (maxAdvanceAmount > 0 && amount > maxAdvanceAmount) {
+        throw new Error(t("advances.maxExceeded", { amount: maxAdvanceAmount, defaultValue: `الحد الأقصى المسموح للسلفة هو ${maxAdvanceAmount} ريال` }));
+      }
       return (await apiRequest("POST", "/api/my/advance-requests", {
         amount,
         requestedMonth: advForm.requestedMonth,
@@ -353,7 +383,7 @@ export default function MyPortalPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => changeLanguage(isRTL ? "en" : "ar")}
+            onClick={() => { localStorage.setItem("portal_lang_chosen", "1"); changeLanguage(isRTL ? "en" : "ar"); }}
             data-testid="button-toggle-language"
           >
             <Languages className="h-4 w-4 me-1" />
@@ -429,32 +459,46 @@ export default function MyPortalPage() {
                     <Fingerprint className="h-4 w-4 ms-1" />{t("tabs.checkin")}
                   </TabsTrigger>
                 )}
-                <TabsTrigger value="schedule" data-testid="tab-schedule">
-                  <CalendarRange className="h-4 w-4 ms-1" />{t("tabs.schedule")}
-                </TabsTrigger>
-                <TabsTrigger value="attendance" data-testid="tab-attendance">
-                  <ClipboardCheck className="h-4 w-4 ms-1" />{t("tabs.attendance")}
-                </TabsTrigger>
-                <TabsTrigger value="leaves" data-testid="tab-leaves">
-                  <CalendarDays className="h-4 w-4 ms-1" />{t("tabs.leaves")}
-                  {pendingLeaves > 0 && <Badge variant="secondary" className="ms-1">{pendingLeaves}</Badge>}
-                </TabsTrigger>
-                <TabsTrigger value="advances" data-testid="tab-advances">
-                  <Wallet className="h-4 w-4 ms-1" />{t("tabs.advances")}
-                  {pendingAdvances > 0 && <Badge variant="secondary" className="ms-1">{pendingAdvances}</Badge>}
-                </TabsTrigger>
-                <TabsTrigger value="warnings" data-testid="tab-warnings">
-                  <ShieldAlert className="h-4 w-4 ms-1" />{t("tabs.warnings")}
-                  {warnings.filter((w) => w.status === "active").length > 0 && (
-                    <Badge variant="secondary" className="ms-1">{warnings.filter((w) => w.status === "active").length}</Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="documents" data-testid="tab-documents">
-                  <FileText className="h-4 w-4 ms-1" />{t("tabs.documents")}
-                </TabsTrigger>
-                <TabsTrigger value="incentives" data-testid="tab-incentives">
-                  <Award className="h-4 w-4 ms-1" />{t("tabs.incentives")}
-                </TabsTrigger>
+                {showSchedule && (
+                  <TabsTrigger value="schedule" data-testid="tab-schedule">
+                    <CalendarRange className="h-4 w-4 ms-1" />{t("tabs.schedule")}
+                  </TabsTrigger>
+                )}
+                {showAttendance && (
+                  <TabsTrigger value="attendance" data-testid="tab-attendance">
+                    <ClipboardCheck className="h-4 w-4 ms-1" />{t("tabs.attendance")}
+                  </TabsTrigger>
+                )}
+                {showLeaves && (
+                  <TabsTrigger value="leaves" data-testid="tab-leaves">
+                    <CalendarDays className="h-4 w-4 ms-1" />{t("tabs.leaves")}
+                    {pendingLeaves > 0 && <Badge variant="secondary" className="ms-1">{pendingLeaves}</Badge>}
+                  </TabsTrigger>
+                )}
+                {showAdvances && (
+                  <TabsTrigger value="advances" data-testid="tab-advances">
+                    <Wallet className="h-4 w-4 ms-1" />{t("tabs.advances")}
+                    {pendingAdvances > 0 && <Badge variant="secondary" className="ms-1">{pendingAdvances}</Badge>}
+                  </TabsTrigger>
+                )}
+                {showWarnings && (
+                  <TabsTrigger value="warnings" data-testid="tab-warnings">
+                    <ShieldAlert className="h-4 w-4 ms-1" />{t("tabs.warnings")}
+                    {warnings.filter((w) => w.status === "active").length > 0 && (
+                      <Badge variant="secondary" className="ms-1">{warnings.filter((w) => w.status === "active").length}</Badge>
+                    )}
+                  </TabsTrigger>
+                )}
+                {showDocuments && (
+                  <TabsTrigger value="documents" data-testid="tab-documents">
+                    <FileText className="h-4 w-4 ms-1" />{t("tabs.documents")}
+                  </TabsTrigger>
+                )}
+                {showIncentives && (
+                  <TabsTrigger value="incentives" data-testid="tab-incentives">
+                    <Award className="h-4 w-4 ms-1" />{t("tabs.incentives")}
+                  </TabsTrigger>
+                )}
                 {showSalary && (
                   <TabsTrigger value="salary" data-testid="tab-salary">
                     <Wallet className="h-4 w-4 ms-1" />{t("tabs.salary")}
@@ -824,11 +868,13 @@ export default function MyPortalPage() {
 
               {/* الإجازات / leaves */}
               <TabsContent value="leaves" className="space-y-3">
-                <div className="flex justify-end">
-                  <Button onClick={() => setLeaveOpen(true)} data-testid="button-new-leave">
-                    <Plus className="h-4 w-4 ms-1" />{t("leaves.new")}
-                  </Button>
-                </div>
+                {allowLeaveRequests && (
+                  <div className="flex justify-end">
+                    <Button onClick={() => setLeaveOpen(true)} data-testid="button-new-leave">
+                      <Plus className="h-4 w-4 ms-1" />{t("leaves.new")}
+                    </Button>
+                  </div>
+                )}
                 {leaves.length === 0 && (
                   <Card><CardContent className="p-8 text-center text-muted-foreground">{t("leaves.empty")}</CardContent></Card>
                 )}
@@ -860,11 +906,18 @@ export default function MyPortalPage() {
 
               {/* السلف / advances */}
               <TabsContent value="advances" className="space-y-3">
-                <div className="flex justify-end">
-                  <Button onClick={() => setAdvOpen(true)} data-testid="button-new-advance">
-                    <Plus className="h-4 w-4 ms-1" />{t("advances.new")}
-                  </Button>
-                </div>
+                {allowAdvanceRequests && (
+                  <div className="flex items-center justify-between gap-2">
+                    {maxAdvanceAmount > 0 ? (
+                      <span className="text-xs text-muted-foreground" data-testid="text-max-advance">
+                        {t("advances.maxHint", { amount: maxAdvanceAmount, defaultValue: `الحد الأقصى للسلفة: ${maxAdvanceAmount} ريال` })}
+                      </span>
+                    ) : <span />}
+                    <Button onClick={() => setAdvOpen(true)} data-testid="button-new-advance">
+                      <Plus className="h-4 w-4 ms-1" />{t("advances.new")}
+                    </Button>
+                  </div>
+                )}
                 {advances.length === 0 && (
                   <Card><CardContent className="p-8 text-center text-muted-foreground">{t("advances.empty")}</CardContent></Card>
                 )}

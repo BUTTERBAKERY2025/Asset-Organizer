@@ -18,10 +18,19 @@ description: Architecture facts for the employee portal (my-portal) feature
   `branch.locationRadius || 200`m) + signature are mandatory; biometric is optional/non-blocking.
 
 ## Portal settings (feature flags)
-- `portal_settings` is a key/value table. Known keys in `PORTAL_SETTING_KEYS`:
-  `show_salary` (default false), `allow_self_checkin` (default true).
-- Storage returns string "true"/"false"; admin API (`/api/admin/portal-settings`) converts to
-  real booleans both ways so the frontend toggles reflect true persisted state.
+- `portal_settings` is a generic key/value table — adding new flags needs NO DB schema change.
+  Boolean keys are listed in `PORTAL_BOOLEAN_KEYS`; value keys (e.g. `max_advance_amount`,
+  `default_language` ar|en) are NOT booleans. Defaults in `PORTAL_SETTING_DEFAULTS`.
+- Admin API (`/api/admin/portal-settings`) GET/PUT uses `buildPortalSettingsResponse`: returns
+  real booleans for boolean keys, raw strings for value keys. PUT validates
+  `max_advance_amount` numeric>=0 and `default_language` in {ar,en}.
+- Self gating: `/api/my/portal-config` exposes all flags; POST `/api/my/leaves` is gated by
+  `allow_leave_requests`, POST `/api/my/advance-requests` by `allow_advance_requests` +
+  `max_advance_amount` — enforce server-side, never trust the client toggle.
+- Admin account-linking: GET `/api/admin/portal-accounts` (users:view, branch-scoped via
+  getEffectiveBranchFilter) + POST `/api/admin/portal-accounts/bulk-generate` (users:create,
+  per-employee canAccessBranch check). **Generate credentials with node:crypto `randomInt`,
+  never `Math.random()`** — it is not cryptographically secure for login passwords.
 
 ## Bilingual (AR/EN) + employee photo
 - Portal page (`client/src/pages/my-portal.tsx`) is bilingual via i18n `portal` namespace

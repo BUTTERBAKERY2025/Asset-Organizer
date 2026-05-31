@@ -5870,13 +5870,53 @@ export type InsertPortalSetting = z.infer<typeof insertPortalSettingSchema>;
 
 // Known portal setting keys + defaults
 export const PORTAL_SETTING_KEYS = {
+  // Feature/tab visibility
   SHOW_SALARY: "show_salary",
+  SHOW_SCHEDULE: "show_schedule",
+  SHOW_ATTENDANCE: "show_attendance",
+  SHOW_LEAVES: "show_leaves",
+  SHOW_ADVANCES: "show_advances",
+  SHOW_WARNINGS: "show_warnings",
+  SHOW_DOCUMENTS: "show_documents",
+  SHOW_INCENTIVES: "show_incentives",
   ALLOW_SELF_CHECKIN: "allow_self_checkin",
+  // Business rules
+  ALLOW_LEAVE_REQUESTS: "allow_leave_requests",
+  ALLOW_ADVANCE_REQUESTS: "allow_advance_requests",
+  MAX_ADVANCE_AMOUNT: "max_advance_amount",
+  DEFAULT_LANGUAGE: "default_language",
 } as const;
+
+// Subset of keys whose values are booleans ("true"/"false").
+// Keys not listed here are stored/returned as raw strings (e.g. numbers, enums).
+export const PORTAL_BOOLEAN_KEYS: string[] = [
+  PORTAL_SETTING_KEYS.SHOW_SALARY,
+  PORTAL_SETTING_KEYS.SHOW_SCHEDULE,
+  PORTAL_SETTING_KEYS.SHOW_ATTENDANCE,
+  PORTAL_SETTING_KEYS.SHOW_LEAVES,
+  PORTAL_SETTING_KEYS.SHOW_ADVANCES,
+  PORTAL_SETTING_KEYS.SHOW_WARNINGS,
+  PORTAL_SETTING_KEYS.SHOW_DOCUMENTS,
+  PORTAL_SETTING_KEYS.SHOW_INCENTIVES,
+  PORTAL_SETTING_KEYS.ALLOW_SELF_CHECKIN,
+  PORTAL_SETTING_KEYS.ALLOW_LEAVE_REQUESTS,
+  PORTAL_SETTING_KEYS.ALLOW_ADVANCE_REQUESTS,
+];
 
 export const PORTAL_SETTING_DEFAULTS: Record<string, string> = {
   show_salary: "false",
+  show_schedule: "true",
+  show_attendance: "true",
+  show_leaves: "true",
+  show_advances: "true",
+  show_warnings: "true",
+  show_documents: "true",
+  show_incentives: "true",
   allow_self_checkin: "true",
+  allow_leave_requests: "true",
+  allow_advance_requests: "true",
+  max_advance_amount: "0",
+  default_language: "ar",
 };
 
 // Employee Setting Categories - فئات الإعدادات

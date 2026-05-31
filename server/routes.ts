@@ -8,8 +8,9 @@ import { evaluateWasteGovernance, checkApprovalGate } from "./waste-governance";
 import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, gt, sql, or, isNull, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
-import { shifts as shiftsTable, cashierPointsLedger, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS } from "@shared/schema";
+import { shifts as shiftsTable, cashierPointsLedger, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS } from "@shared/schema";
 import { auditEvent, getApprovalThresholds, APPROVAL_THRESHOLDS } from "./audit-helpers";
+import { randomInt } from "crypto";
 
 // Helper to safely get current user from authenticated request
 function getCurrentUser(req: Request): User {
@@ -28899,16 +28900,21 @@ export async function registerRoutes(
   });
 
   // ===== Employee Portal Settings (بوابتي) =====
-  const portalSettingsAsBooleans = (settings: Record<string, string>): Record<string, boolean> => {
-    const out: Record<string, boolean> = {};
-    for (const [k, v] of Object.entries(settings)) out[k] = v === "true";
+  // Returns booleans for boolean keys and raw strings for value keys (numbers/enums),
+  // filling in defaults for any key not yet stored.
+  const buildPortalSettingsResponse = (settings: Record<string, string>): Record<string, boolean | string> => {
+    const out: Record<string, boolean | string> = {};
+    for (const key of Object.values(PORTAL_SETTING_KEYS)) {
+      const raw = settings[key] ?? PORTAL_SETTING_DEFAULTS[key] ?? "";
+      out[key] = PORTAL_BOOLEAN_KEYS.includes(key) ? raw === "true" : raw;
+    }
     return out;
   };
 
   app.get("/api/admin/portal-settings", isAuthenticated, requirePermission("settings", "view"), async (_req, res) => {
     try {
       const settings = await storage.getAllPortalSettings();
-      res.json(portalSettingsAsBooleans(settings));
+      res.json(buildPortalSettingsResponse(settings));
     } catch (error) {
       console.error("Error getting portal settings:", error);
       res.status(500).json({ error: "فشل في جلب إعدادات البوابة" });
@@ -28918,22 +28924,140 @@ export async function registerRoutes(
   app.put("/api/admin/portal-settings", isAuthenticated, requirePermission("settings", "edit"), async (req, res) => {
     try {
       const body = req.body as Record<string, unknown>;
-      const allowedKeys = Object.values(PORTAL_SETTING_KEYS);
+      const allowedKeys = Object.values(PORTAL_SETTING_KEYS) as string[];
       const updates: Record<string, string> = {};
       for (const [key, val] of Object.entries(body)) {
-        if (!allowedKeys.includes(key as any)) {
+        if (!allowedKeys.includes(key)) {
           return res.status(400).json({ error: `مفتاح غير صالح: ${key}` });
         }
-        updates[key] = val === true || val === "true" ? "true" : "false";
+        if (key === PORTAL_SETTING_KEYS.MAX_ADVANCE_AMOUNT) {
+          const num = Number(val);
+          if (!Number.isFinite(num) || num < 0) {
+            return res.status(400).json({ error: "الحد الأقصى للسلفة يجب أن يكون رقماً موجباً" });
+          }
+          updates[key] = String(Math.floor(num));
+        } else if (key === PORTAL_SETTING_KEYS.DEFAULT_LANGUAGE) {
+          if (val !== "ar" && val !== "en") {
+            return res.status(400).json({ error: "اللغة يجب أن تكون ar أو en" });
+          }
+          updates[key] = val;
+        } else {
+          updates[key] = val === true || val === "true" ? "true" : "false";
+        }
       }
       for (const [key, val] of Object.entries(updates)) {
         await storage.setPortalSetting(key, val);
       }
       const settings = await storage.getAllPortalSettings();
-      res.json(portalSettingsAsBooleans(settings));
+      res.json(buildPortalSettingsResponse(settings));
     } catch (error) {
       console.error("Error updating portal settings:", error);
       res.status(500).json({ error: "فشل في تحديث إعدادات البوابة" });
+    }
+  });
+
+  // ===== Portal account linking management (ربط الموظفين بالحسابات) =====
+  // List employees with their portal-account status, scoped to accessible branches.
+  app.get("/api/admin/portal-accounts", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const { branchIds, hasAccess } = getEffectiveBranchFilter(req);
+      if (!hasAccess) return res.json([]);
+      const [employees, branches] = await Promise.all([
+        storage.getAllBranchEmployees(branchIds ? { branchIds } : undefined),
+        storage.getAllBranches(),
+      ]);
+      const branchName = new Map(branches.map((b) => [b.id, b.name]));
+      const linkedIds = employees.map((e) => e.linkedUserId).filter(Boolean) as string[];
+      const usernameById = new Map<string, string>();
+      await Promise.all(
+        linkedIds.map(async (uid) => {
+          const u = await storage.getUser(uid);
+          if (u) usernameById.set(uid, u.username);
+        }),
+      );
+      const rows = employees.map((e) => ({
+        id: e.id,
+        employeeName: e.employeeName,
+        employeeNameEn: e.employeeNameEn,
+        branchId: e.branchId,
+        branchName: branchName.get(e.branchId) || e.branchId,
+        status: e.status,
+        hasAccount: !!e.linkedUserId,
+        username: e.linkedUserId ? usernameById.get(e.linkedUserId) || null : null,
+      }));
+      res.json(rows);
+    } catch (error: any) {
+      console.error("Error listing portal accounts:", error);
+      res.status(500).json({ error: "فشل في جلب حالة الحسابات" });
+    }
+  });
+
+  // Bulk-generate portal login accounts for selected employees that don't have one.
+  app.post("/api/admin/portal-accounts/bulk-generate", isAuthenticated, requirePermission("users", "create"), async (req, res) => {
+    try {
+      const ids: number[] = Array.isArray(req.body?.employeeIds)
+        ? req.body.employeeIds.map((n: any) => parseInt(n, 10)).filter((n: number) => !isNaN(n))
+        : [];
+      if (ids.length === 0) {
+        return res.status(400).json({ error: "لم يتم تحديد أي موظف" });
+      }
+      const pick = (s: string): string => s[randomInt(s.length)];
+      const genPassword = (): string => {
+        const U = "ABCDEFGHJKLMNPQRSTUVWXYZ", L = "abcdefghijkmnpqrstuvwxyz", D = "23456789";
+        const all = U + L + D;
+        const chars = [pick(U), pick(L), pick(D)];
+        for (let i = 0; i < 7; i++) chars.push(pick(all));
+        // Fisher-Yates shuffle using crypto RNG
+        for (let i = chars.length - 1; i > 0; i--) {
+          const j = randomInt(i + 1);
+          [chars[i], chars[j]] = [chars[j], chars[i]];
+        }
+        return chars.join("");
+      };
+      const genUsername = async (empId: number): Promise<string> => {
+        let candidate = `emp${empId}`;
+        if (!(await storage.getUserByUsername(candidate))) return candidate;
+        for (let i = 0; i < 20; i++) {
+          candidate = `emp${empId}${100 + randomInt(900)}`;
+          if (!(await storage.getUserByUsername(candidate))) return candidate;
+        }
+        return `emp${empId}${Date.now().toString().slice(-5)}`;
+      };
+
+      const created: { id: number; employeeName: string; username: string; password: string }[] = [];
+      const skipped: { id: number; reason: string }[] = [];
+      for (const id of ids) {
+        const employee = await storage.getBranchEmployee(id);
+        if (!employee) { skipped.push({ id, reason: "غير موجود" }); continue; }
+        if (employee.linkedUserId) { skipped.push({ id, reason: "مرتبط بحساب بالفعل" }); continue; }
+        if (!isUserAdmin(req)) {
+          const ok = await canAccessBranch(req, employee.branchId);
+          if (!ok) { skipped.push({ id, reason: "غير مصرح" }); continue; }
+        }
+        const username = await genUsername(id);
+        const password = genPassword();
+        const fullName = (employee.employeeName || "").trim();
+        const nameParts = fullName.split(/\s+/);
+        const firstName = nameParts[0] || fullName || username;
+        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
+        try {
+          await storage.createBranchEmployeeAccount({
+            branchEmployeeId: id,
+            username,
+            password,
+            firstName,
+            lastName,
+            branchId: employee.branchId || null,
+          });
+          created.push({ id, employeeName: employee.employeeName, username, password });
+        } catch (e: any) {
+          skipped.push({ id, reason: e?.message || "فشل الإنشاء" });
+        }
+      }
+      res.status(201).json({ created, skipped });
+    } catch (error: any) {
+      console.error("Error bulk-generating portal accounts:", error);
+      res.status(500).json({ error: "فشل في توليد الحسابات" });
     }
   });
 
