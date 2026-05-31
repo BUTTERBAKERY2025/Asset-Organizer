@@ -589,7 +589,7 @@ export default function MyPortalPage() {
                     <FileText className="h-4 w-4 ms-1" />{t("tabs.documents")}
                   </TabsTrigger>
                 )}
-                {showIncentives && (
+                {showIncentives && incentives.length > 0 && (
                   <TabsTrigger value="incentives" data-testid="tab-incentives">
                     <Award className="h-4 w-4 ms-1" />{t("tabs.incentives")}
                   </TabsTrigger>
