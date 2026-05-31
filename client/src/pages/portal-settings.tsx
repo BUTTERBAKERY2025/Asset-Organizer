@@ -272,6 +272,8 @@ function AccountsTab() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return accounts.filter((a) => {
+      // الموظفون غير النشطين بدون حساب لا يُعرضون للتوليد (نُبقي فقط من لديه حساب للإدارة)
+      if (!a.hasAccount && a.status !== "active") return false;
       if (filter === "linked" && !a.hasAccount) return false;
       if (filter === "unlinked" && a.hasAccount) return false;
       if (!q) return true;

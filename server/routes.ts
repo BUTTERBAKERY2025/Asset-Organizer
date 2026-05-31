@@ -29059,6 +29059,7 @@ export async function registerRoutes(
       const suggestions: any[] = [];
       for (const emp of employees) {
         if (emp.linkedUserId) continue; // already linked
+        if (emp.status !== "active") continue; // اقترح فقط الموظفين النشطين
         const pool = candidates.filter((u) => !claimed.has(u.id));
         const match = matchUserForEmployee(emp, pool as any);
         if (!match) continue;
@@ -29098,6 +29099,7 @@ export async function registerRoutes(
       for (const { employeeId, userId } of links) {
         const emp = await storage.getBranchEmployee(employeeId);
         if (!emp) { skipped.push({ employeeId, reason: "الموظف غير موجود" }); continue; }
+        if (emp.status !== "active") { skipped.push({ employeeId, reason: "موظف غير نشط" }); continue; }
         if (emp.linkedUserId) { skipped.push({ employeeId, reason: "مرتبط بحساب بالفعل" }); continue; }
         if (!isUserAdmin(req)) {
           const ok = await canAccessBranch(req, emp.branchId);
@@ -29175,6 +29177,7 @@ export async function registerRoutes(
       for (const id of ids) {
         const employee = await storage.getBranchEmployee(id);
         if (!employee) { skipped.push({ id, reason: "غير موجود" }); continue; }
+        if (employee.status !== "active") { skipped.push({ id, reason: "موظف غير نشط" }); continue; }
         if (employee.linkedUserId) { skipped.push({ id, reason: "مرتبط بحساب بالفعل" }); continue; }
         if (!isUserAdmin(req)) {
           const ok = await canAccessBranch(req, employee.branchId);
