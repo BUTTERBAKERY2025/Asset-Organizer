@@ -2,6 +2,7 @@ const pageImports: Record<string, () => Promise<any>> = {
   "platform-home": () => import("@/pages/platform-home"),
   "floor-plan": () => import("@/pages/floor-plan"),
   "hr-hub": () => import("@/pages/hr-hub"),
+  "my-portal": () => import("@/pages/my-portal"),
   "hr/employee-documents": () => import("@/pages/hr/employee-documents"),
   "hr/leaves": () => import("@/pages/hr/leaves"),
   "hr/warnings": () => import("@/pages/hr/warnings"),
