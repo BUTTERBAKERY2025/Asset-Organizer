@@ -4,6 +4,7 @@ import memoize from "memoizee";
 import { storage } from "./storage";
 import { db, pool } from "./db";
 import * as NotificationService from "./notification-service";
+import { evaluateWasteGovernance, checkApprovalGate } from "./waste-governance";
 import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, gt, sql, or, isNull, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
@@ -15429,6 +15430,34 @@ export async function registerRoutes(
       const partialData = insertWasteReportSchema.partial().parse(req.body);
       
       if (newStatus === 'approved') {
+        // Manager-approval gate: if the branch's daily waste exceeds the configured
+        // gate threshold, approval requires a written justification from the manager.
+        const justification = typeof req.body.approvalJustification === 'string'
+          ? req.body.approvalJustification.trim()
+          : '';
+        try {
+          const gate = await checkApprovalGate({
+            branchId: existingReport.branchId,
+            date: existingReport.reportDate,
+          });
+          if (gate.required && !justification) {
+            return res.status(409).json({
+              error: "هذا التقرير يتجاوز الحد المسموح للهدر ويتطلب تبرير المدير قبل الاعتماد",
+              requiresJustification: true,
+              threshold: gate.threshold,
+              currentPercent: gate.currentPercent,
+            });
+          }
+          if (gate.required && justification) {
+            const stamp = `[موافقة استثنائية — تجاوز ${gate.currentPercent}% / الحد ${gate.threshold}%: ${justification.slice(0, 500)} — ${user?.id || ''} ${new Date().toISOString().split('T')[0]}]`;
+            (partialData as any).notes = `${existingReport.notes ? existingReport.notes + '\n' : ''}${stamp}`;
+          }
+        } catch (gateErr) {
+          // Fail closed: never auto-approve a high-waste report if the gate check
+          // itself fails — block the approval and ask the user to retry.
+          console.error("Approval gate check failed (blocking approval):", gateErr);
+          return res.status(503).json({ error: "تعذّر التحقق من حد الموافقة، يرجى المحاولة مرة أخرى" });
+        }
         (partialData as any).approvedBy = user?.id;
         (partialData as any).approvedAt = new Date();
       }
@@ -15439,6 +15468,16 @@ export async function registerRoutes(
       }
       
       const report = await storage.updateWasteReport(id, partialData);
+
+      // Run the governance engine after a report is submitted or approved so any
+      // breached thresholds raise alerts + notify managers. Non-blocking.
+      if (newStatus === 'submitted' || newStatus === 'approved') {
+        evaluateWasteGovernance({
+          branchId: existingReport.branchId,
+          date: existingReport.reportDate,
+        }).catch((e) => console.error("[waste-governance] post-status hook failed:", e));
+      }
+
       res.json(report);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -17979,7 +18018,8 @@ export async function registerRoutes(
   app.patch("/api/waste-risk-rules/:id", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
     try {
       const { id } = req.params;
-      const updates = req.body;
+      const body = req.body || {};
+      const admin = isUserAdmin(req);
       
       // Verify rule belongs to user's branch (for non-admins)
       const [rule] = await db.select().from(wasteRiskRules).where(eq(wasteRiskRules.id, parseInt(id)));
@@ -17987,12 +18027,47 @@ export async function registerRoutes(
         return res.status(404).json({ error: "القاعدة غير موجودة" });
       }
       
-      // Branch isolation check for non-admins
-      if (!isUserAdmin(req) && rule.branchId) {
+      // Branch isolation: non-admins may only touch rules scoped to a branch they
+      // can access. Global rules (branchId = null) are admin-only.
+      if (!admin) {
+        if (!rule.branchId) {
+          return res.status(403).json({ error: "غير مسموح بتعديل قاعدة عامة" });
+        }
         const hasAccess = await canAccessBranch(req, rule.branchId);
         if (!hasAccess) {
-          return res.status(403).json({ error: "غير مسموح بتعديل قاعدة عامة أو فرع آخر" });
+          return res.status(403).json({ error: "غير مسموح بتعديل قاعدة فرع آخر" });
         }
+      }
+      
+      // Whitelist updatable fields (never trust raw req.body — prevents scope escalation).
+      const updates: Record<string, any> = {};
+      if (typeof body.name === 'string') updates.name = body.name;
+      if ('category' in body) updates.category = body.category || null;
+      if ('productName' in body) updates.productName = body.productName || null;
+      if (typeof body.thresholdType === 'string') updates.thresholdType = body.thresholdType;
+      if (body.thresholdValue !== undefined) {
+        const tv = parseFloat(body.thresholdValue);
+        if (isNaN(tv)) return res.status(400).json({ error: "قيمة الحد غير صحيحة" });
+        updates.thresholdValue = tv;
+      }
+      if (body.periodDays !== undefined) updates.periodDays = parseInt(body.periodDays, 10) || 1;
+      if (typeof body.severity === 'string') updates.severity = body.severity;
+      if (typeof body.isActive === 'boolean') updates.isActive = body.isActive;
+      
+      // branchId change: only admins may move a rule (incl. to/from global). Non-admins
+      // must keep it within a branch they can access.
+      if ('branchId' in body) {
+        const targetBranchId = body.branchId || null;
+        if (!admin) {
+          if (!targetBranchId) {
+            return res.status(403).json({ error: "غير مسموح بجعل القاعدة عامة" });
+          }
+          const hasTargetAccess = await canAccessBranch(req, targetBranchId);
+          if (!hasTargetAccess) {
+            return res.status(403).json({ error: "غير مسموح بنقل القاعدة لفرع آخر" });
+          }
+        }
+        updates.branchId = targetBranchId;
       }
       
       const [updated] = await db
@@ -18023,11 +18098,14 @@ export async function registerRoutes(
         return res.status(404).json({ error: "القاعدة غير موجودة" });
       }
       
-      // Branch isolation check for non-admins
-      if (!isUserAdmin(req) && rule.branchId) {
+      // Branch isolation: global rules (branchId = null) are admin-only.
+      if (!isUserAdmin(req)) {
+        if (!rule.branchId) {
+          return res.status(403).json({ error: "غير مسموح بحذف قاعدة عامة" });
+        }
         const hasAccess = await canAccessBranch(req, rule.branchId);
         if (!hasAccess) {
-          return res.status(403).json({ error: "غير مسموح بحذف قاعدة عامة أو فرع آخر" });
+          return res.status(403).json({ error: "غير مسموح بحذف قاعدة فرع آخر" });
         }
       }
       

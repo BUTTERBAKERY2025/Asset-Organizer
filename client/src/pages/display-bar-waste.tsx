@@ -21,13 +21,14 @@ import {
   Package, AlertTriangle, Plus, Camera, Trash2, Check, X, 
   FileText, TrendingDown, Clock, Building2, Calendar, CheckCircle2, User,
   Eye, Printer, FileDown, Hash, Image, Save, Search, RefreshCw, ArrowRight,
-  ChevronDown, ChevronUp, Calculator, ExternalLink, BarChart3, Upload, Factory
+  ChevronDown, ChevronUp, Calculator, ExternalLink, BarChart3, Upload, Factory, ShieldAlert
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Link } from "wouter";
 import { TablePagination } from "@/components/ui/pagination";
 import { ExportButtons } from "@/components/export-buttons";
 import { ProductSelector } from "@/components/product-selector";
+import { WasteGovernanceTab } from "@/components/waste-governance-tab";
 import { exportToExcel } from "@/lib/export-utils";
 import { WASTE_REASON_LABELS, DISPLAY_BAR_CATEGORY_LABELS } from "@shared/schema";
 import type { Branch, Product, WasteReport, WasteItem } from "@shared/schema";
@@ -70,6 +71,8 @@ export default function DisplayBarWastePage() {
   const [receiptBranch, setReceiptBranch] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [activeTab, setActiveTab] = useState("receipts");
+  const [gateDialog, setGateDialog] = useState<{ id: number; threshold: number | null; currentPercent: number } | null>(null);
+  const [gateJustification, setGateJustification] = useState("");
   const [showReceiptDialog, setShowReceiptDialog] = useState(false);
   const [showWasteDialog, setShowWasteDialog] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -1034,17 +1037,37 @@ export default function DisplayBarWastePage() {
   });
 
   const approveReportMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: number; status: string }) => {
-      const response = await apiRequest("PATCH", `/api/waste-reports/${id}`, { status });
+    mutationFn: async ({ id, status, approvalJustification }: { id: number; status: string; approvalJustification?: string }) => {
+      const payload: any = { status };
+      if (approvalJustification) payload.approvalJustification = approvalJustification;
+      const response = await apiRequest("PATCH", `/api/waste-reports/${id}`, payload);
       return response.json();
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         predicate: (q) => typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/waste-reports"),
       });
+      setGateDialog(null);
+      setGateJustification("");
       toast({ title: variables.status === "approved" ? "تم اعتماد التقرير بنجاح" : "تم رفض التقرير" });
     },
-    onError: (err: any) => toast({ title: err.message || "حدث خطأ", variant: "destructive" }),
+    onError: (err: any, variables) => {
+      // Approval gate: high-waste reports require a manager justification (409).
+      const match = typeof err?.message === "string" ? err.message.match(/^(\d+):\s*([\s\S]*)$/) : null;
+      if (match && match[1] === "409") {
+        try {
+          const body = JSON.parse(match[2]);
+          if (body.requiresJustification) {
+            setGateDialog({ id: variables.id, threshold: body.threshold, currentPercent: body.currentPercent });
+            setGateJustification("");
+            return;
+          }
+        } catch {
+          /* fall through to generic toast */
+        }
+      }
+      toast({ title: err.message || "حدث خطأ", variant: "destructive" });
+    },
   });
 
   const receiptExportColumns = [
@@ -1273,6 +1296,10 @@ export default function DisplayBarWastePage() {
               <TabsTrigger value="reports" className="gap-1" data-testid="tab-reports">
                 <TrendingDown className="w-4 h-4" />
                 تقارير تفصيلية
+              </TabsTrigger>
+              <TabsTrigger value="governance" className="gap-1" data-testid="tab-governance">
+                <ShieldAlert className="w-4 h-4" />
+                الحوكمة
               </TabsTrigger>
             </TabsList>
             <div className="flex gap-2">
@@ -3211,8 +3238,53 @@ export default function DisplayBarWastePage() {
               </>
             )}
           </TabsContent>
+
+          <TabsContent value="governance" className="mt-4">
+            <WasteGovernanceTab
+              branches={branches as any}
+              selectedBranch={selectedBranch}
+              getBranchName={getBranchName}
+              canManage={canApprove}
+            />
+          </TabsContent>
         </Tabs>
       </div>
+
+      {/* Approval Gate Justification Dialog */}
+      <Dialog open={!!gateDialog} onOpenChange={(open) => { if (!open) { setGateDialog(null); setGateJustification(""); } }}>
+        <DialogContent className="max-w-md" data-testid="dialog-approval-gate">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <ShieldAlert className="w-5 h-5" /> اعتماد يتطلب تبرير المدير
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm">
+              نسبة الهدر لهذا اليوم <span className="font-bold">{gateDialog?.currentPercent}%</span> تجاوزت الحد المسموح
+              {gateDialog?.threshold != null ? <> (<span className="font-bold">{gateDialog.threshold}%</span>)</> : null}.
+              يرجى كتابة سبب الاعتماد الاستثنائي ليتم تسجيله في التقرير.
+            </div>
+            <Textarea
+              value={gateJustification}
+              onChange={(e) => setGateJustification(e.target.value)}
+              placeholder="مثال: تلف بسبب انقطاع التيار الكهربائي، تمت معالجة السبب"
+              data-testid="input-gate-justification"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => { setGateDialog(null); setGateJustification(""); }} data-testid="button-cancel-gate">
+              إلغاء
+            </Button>
+            <Button
+              disabled={gateJustification.trim().length === 0 || approveReportMutation.isPending}
+              onClick={() => gateDialog && approveReportMutation.mutate({ id: gateDialog.id, status: "approved", approvalJustification: gateJustification.trim() })}
+              data-testid="button-confirm-gate"
+            >
+              {approveReportMutation.isPending ? "جاري الاعتماد..." : "اعتماد مع التبرير"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Report Details Dialog */}
       <Dialog open={showReportDetailsDialog} onOpenChange={(open) => !open && handleCloseReportDialog()}>
