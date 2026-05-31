@@ -12021,9 +12021,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async linkBranchEmployeeToUser(branchEmployeeId: number, userId: string): Promise<BranchEmployee | undefined> {
+    // Atomic: only link when the employee is still unlinked (prevents last-write-wins overwrite races).
     const [updated] = await db.update(branchEmployees)
       .set({ linkedUserId: userId, updatedAt: new Date() })
-      .where(eq(branchEmployees.id, branchEmployeeId))
+      .where(and(eq(branchEmployees.id, branchEmployeeId), isNull(branchEmployees.linkedUserId)))
       .returning();
     return updated;
   }

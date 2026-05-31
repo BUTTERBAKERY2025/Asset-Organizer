@@ -28957,6 +28957,46 @@ export async function registerRoutes(
   });
 
   // ===== Portal account linking management (ربط الموظفين بالحسابات) =====
+  // --- Helpers for matching employees to existing user accounts (phone first, then name) ---
+  const normalizePhone = (p?: string | null): string => {
+    if (!p) return "";
+    let d = String(p).replace(/\D/g, "");
+    if (d.startsWith("966")) d = d.slice(3);
+    d = d.replace(/^0+/, "");
+    return d.length >= 9 ? d.slice(-9) : d;
+  };
+  const normalizeName = (n?: string | null): string => {
+    if (!n) return "";
+    return String(n)
+      .replace(/[\u064B-\u0652\u0670\u0640]/g, "") // Arabic diacritics + tatweel
+      .replace(/[إأآا]/g, "ا")
+      .replace(/ى/g, "ي")
+      .replace(/ة/g, "ه")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  };
+  // Returns a matching user for an employee, or null. matchType: "phone" | "name".
+  const matchUserForEmployee = (
+    emp: { phoneNumber?: string | null; employeeName?: string | null },
+    candidates: { id: string; username: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null }[],
+  ): { user: (typeof candidates)[number]; matchType: "phone" | "name" } | null => {
+    const empPhone = normalizePhone(emp.phoneNumber);
+    if (empPhone && empPhone.length >= 9) {
+      const byPhone = candidates.find((u) => normalizePhone(u.phone) === empPhone);
+      if (byPhone) return { user: byPhone, matchType: "phone" };
+    }
+    const empName = normalizeName(emp.employeeName);
+    if (empName) {
+      const byName = candidates.find((u) => {
+        const full = normalizeName(`${u.firstName || ""} ${u.lastName || ""}`);
+        return full && full === empName;
+      });
+      if (byName) return { user: byName, matchType: "name" };
+    }
+    return null;
+  };
+
   // List employees with their portal-account status, scoped to accessible branches.
   app.get("/api/admin/portal-accounts", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {
@@ -28992,6 +29032,106 @@ export async function registerRoutes(
     }
   });
 
+  // Suggest links between unlinked employees and EXISTING user accounts (phone first, then name).
+  app.get("/api/admin/portal-accounts/suggestions", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const { branchIds, hasAccess } = getEffectiveBranchFilter(req);
+      if (!hasAccess) return res.json([]);
+      const [employees, allEmployees, branches, users] = await Promise.all([
+        storage.getAllBranchEmployees(branchIds ? { branchIds } : undefined),
+        storage.getAllBranchEmployees(), // global, to exclude users linked in ANY branch
+        storage.getAllBranches(),
+        storage.getAllUsers(),
+      ]);
+      const branchName = new Map(branches.map((b) => [b.id, b.name]));
+      // Candidate users = not linked to ANY employee globally, AND within the requester's branch scope.
+      const linkedUserIds = new Set(
+        allEmployees.map((e) => e.linkedUserId).filter(Boolean) as string[],
+      );
+      const allowedBranches = branchIds ? new Set(branchIds) : null; // null = admin/all
+      const candidates = users.filter(
+        (u) =>
+          u.id &&
+          !linkedUserIds.has(u.id) &&
+          (allowedBranches ? !!u.branchId && allowedBranches.has(u.branchId) : true),
+      );
+      const claimed = new Set<string>(); // avoid suggesting the same user for two employees
+      const suggestions: any[] = [];
+      for (const emp of employees) {
+        if (emp.linkedUserId) continue; // already linked
+        const pool = candidates.filter((u) => !claimed.has(u.id));
+        const match = matchUserForEmployee(emp, pool as any);
+        if (!match) continue;
+        claimed.add(match.user.id);
+        suggestions.push({
+          employeeId: emp.id,
+          employeeName: emp.employeeName,
+          employeeNameEn: emp.employeeNameEn,
+          branchId: emp.branchId,
+          branchName: branchName.get(emp.branchId) || emp.branchId,
+          userId: match.user.id,
+          username: match.user.username,
+          userFullName: `${match.user.firstName || ""} ${match.user.lastName || ""}`.trim(),
+          matchType: match.matchType,
+        });
+      }
+      res.json(suggestions);
+    } catch (error: any) {
+      console.error("Error building portal-account suggestions:", error);
+      res.status(500).json({ error: "فشل في جلب اقتراحات الربط" });
+    }
+  });
+
+  // Confirm and apply selected employee↔user links (admin reviewed).
+  app.post("/api/admin/portal-accounts/confirm-links", isAuthenticated, requirePermission("branch_employees", "edit"), async (req, res) => {
+    try {
+      const links: { employeeId: number; userId: string }[] = Array.isArray(req.body?.links)
+        ? req.body.links
+            .map((l: any) => ({ employeeId: parseInt(l?.employeeId, 10), userId: String(l?.userId || "") }))
+            .filter((l: any) => !isNaN(l.employeeId) && l.userId)
+        : [];
+      if (links.length === 0) {
+        return res.status(400).json({ error: "لم يتم تحديد أي ارتباط" });
+      }
+      const linked: { employeeId: number; userId: string }[] = [];
+      const skipped: { employeeId: number; reason: string }[] = [];
+      for (const { employeeId, userId } of links) {
+        const emp = await storage.getBranchEmployee(employeeId);
+        if (!emp) { skipped.push({ employeeId, reason: "الموظف غير موجود" }); continue; }
+        if (emp.linkedUserId) { skipped.push({ employeeId, reason: "مرتبط بحساب بالفعل" }); continue; }
+        if (!isUserAdmin(req)) {
+          const ok = await canAccessBranch(req, emp.branchId);
+          if (!ok) { skipped.push({ employeeId, reason: "غير مصرح" }); continue; }
+        }
+        const user = await storage.getUser(userId);
+        if (!user) { skipped.push({ employeeId, reason: "الحساب غير موجود" }); continue; }
+        // SECURITY: a branch-limited operator may only link to a user within their own branch scope.
+        if (!isUserAdmin(req)) {
+          if (!user.branchId || !(await canAccessBranch(req, user.branchId))) {
+            skipped.push({ employeeId, reason: "الحساب خارج نطاق صلاحيتك" });
+            continue;
+          }
+        }
+        const alreadyLinked = await storage.getBranchEmployeeByLinkedUserId(userId);
+        if (alreadyLinked && alreadyLinked.id !== employeeId) {
+          skipped.push({ employeeId, reason: "الحساب مرتبط بموظف آخر" });
+          continue;
+        }
+        try {
+          const result = await storage.linkBranchEmployeeToUser(employeeId, userId);
+          if (!result) { skipped.push({ employeeId, reason: "تعذّر الربط (تم ربطه للتو)" }); continue; }
+          linked.push({ employeeId, userId });
+        } catch (e: any) {
+          skipped.push({ employeeId, reason: e?.message || "فشل الربط" });
+        }
+      }
+      res.json({ linked, skipped });
+    } catch (error: any) {
+      console.error("Error confirming portal-account links:", error);
+      res.status(500).json({ error: "فشل في تنفيذ الربط" });
+    }
+  });
+
   // Bulk-generate portal login accounts for selected employees that don't have one.
   app.post("/api/admin/portal-accounts/bulk-generate", isAuthenticated, requirePermission("users", "create"), async (req, res) => {
     try {
@@ -29024,6 +29164,12 @@ export async function registerRoutes(
         return `emp${empId}${Date.now().toString().slice(-5)}`;
       };
 
+      // Load existing accounts once to prevent creating a duplicate when a matching user already exists.
+      const allEmployees = await storage.getAllBranchEmployees();
+      const allUsers = await storage.getAllUsers();
+      const linkedUserIds = new Set(allEmployees.map((e) => e.linkedUserId).filter(Boolean) as string[]);
+      const unlinkedUsers = allUsers.filter((u) => u.id && !linkedUserIds.has(u.id));
+
       const created: { id: number; employeeName: string; username: string; password: string }[] = [];
       const skipped: { id: number; reason: string }[] = [];
       for (const id of ids) {
@@ -29033,6 +29179,12 @@ export async function registerRoutes(
         if (!isUserAdmin(req)) {
           const ok = await canAccessBranch(req, employee.branchId);
           if (!ok) { skipped.push({ id, reason: "غير مصرح" }); continue; }
+        }
+        // No-duplicate rule: if an existing user account matches this employee, link it instead.
+        const existingMatch = matchUserForEmployee(employee, unlinkedUsers as any);
+        if (existingMatch) {
+          skipped.push({ id, reason: "يوجد حساب مطابق — اربطه بدلاً من الإنشاء" });
+          continue;
         }
         const username = await genUsername(id);
         const password = genPassword();

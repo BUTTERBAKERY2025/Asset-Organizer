@@ -32,6 +32,27 @@ description: Architecture facts for the employee portal (my-portal) feature
   per-employee canAccessBranch check). **Generate credentials with node:crypto `randomInt`,
   never `Math.random()`** — it is not cryptographically secure for login passwords.
 
+## Auto-linking employees to EXISTING user accounts (no-duplicate rule)
+- Managers/cashiers often already have a `users` account; portal-only employees don't. Rule:
+  if an employee matches an existing account → LINK it (no new account); else bulk-generate.
+- Matching (`matchUserForEmployee` in routes.ts): **phone first** (`normalizePhone`: strip
+  non-digits, drop 966/leading 0, compare last 9), **then exact normalized name**
+  (`normalizeName`: strip Arabic diacritics/tatweel, unify alef/ya/ta-marbuta). Only shared
+  fields between `users` and `branchEmployees` are phone & name (no national-id/empNumber on users).
+- Flow is **suggest-then-confirm**, never blind auto-link: GET `/suggestions` lists matches,
+  POST `/confirm-links` applies admin-selected ones. **Why:** a wrong link = cross-employee
+  data exposure (getMyEmployee resolves by linkedUserId).
+- Security invariants for the linking endpoints (all three were caught in review):
+  1. Suggestions must exclude users linked in ANY branch (build linkedUserIds from a GLOBAL
+     getAllBranchEmployees(), not the branch-scoped list) AND restrict candidate users to the
+     requester's branch scope (`users.branchId` ∈ allowed set; null=admin).
+  2. confirm-links must authz the TARGET user too (non-admin: user.branchId set + canAccessBranch),
+     not just the employee's branch.
+  3. `linkBranchEmployeeToUser` updates `WHERE id=? AND linked_user_id IS NULL` (atomic) and
+     returns row only on success; caller treats falsy as a conflict skip.
+- Why linking matters beyond logins: portal leaves/advances/attendance already share HR tables,
+  but **attendance only appears in HR (`/hr-hub`) if the employee is linked** (linkedUserId).
+
 ## Bilingual (AR/EN) + employee photo
 - Portal page (`client/src/pages/my-portal.tsx`) is bilingual via i18n `portal` namespace
   (`client/src/locales/{ar,en}/portal.json`, registered in `client/src/lib/i18n.ts`). Toggle

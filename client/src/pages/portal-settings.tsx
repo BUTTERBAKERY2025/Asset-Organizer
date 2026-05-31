@@ -44,6 +44,18 @@ interface GeneratedCredential {
   password: string;
 }
 
+interface PortalSuggestion {
+  employeeId: number;
+  employeeName: string;
+  employeeNameEn: string | null;
+  branchId: string;
+  branchName: string;
+  userId: string;
+  username: string | null;
+  userFullName: string;
+  matchType: "phone" | "name";
+}
+
 export default function PortalSettingsPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -245,9 +257,16 @@ function AccountsTab() {
   const [results, setResults] = useState<GeneratedCredential[] | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
+  const [selectedSug, setSelectedSug] = useState<Set<number>>(new Set());
+
   const { data: accounts = [], isLoading } = useQuery<PortalAccount[]>({
     queryKey: ["/api/admin/portal-accounts"],
     queryFn: async () => (await apiRequest("GET", "/api/admin/portal-accounts")).json(),
+  });
+
+  const { data: suggestions = [] } = useQuery<PortalSuggestion[]>({
+    queryKey: ["/api/admin/portal-accounts/suggestions"],
+    queryFn: async () => (await apiRequest("GET", "/api/admin/portal-accounts/suggestions")).json(),
   });
 
   const filtered = useMemo(() => {
@@ -299,6 +318,42 @@ function AccountsTab() {
     onError: (e: any) => toast({ title: "تعذّر التوليد", description: e?.message, variant: "destructive" }),
   });
 
+  const confirmLinks = useMutation({
+    mutationFn: async (links: { employeeId: number; userId: string }[]) =>
+      (await apiRequest("POST", "/api/admin/portal-accounts/confirm-links", { links })).json(),
+    onSuccess: (data: { linked: any[]; skipped: { employeeId: number; reason: string }[] }) => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/portal-accounts"] });
+      qc.invalidateQueries({ queryKey: ["/api/admin/portal-accounts/suggestions"] });
+      setSelectedSug(new Set());
+      toast({
+        title: `تم ربط ${data.linked.length} حساب`,
+        description: data.skipped.length ? `تم تخطي ${data.skipped.length}` : undefined,
+      });
+    },
+    onError: (e: any) => toast({ title: "تعذّر الربط", description: e?.message, variant: "destructive" }),
+  });
+
+  const toggleSug = (employeeId: number) => {
+    setSelectedSug((prev) => {
+      const next = new Set(prev);
+      next.has(employeeId) ? next.delete(employeeId) : next.add(employeeId);
+      return next;
+    });
+  };
+  const allSugSelected = suggestions.length > 0 && suggestions.every((s) => selectedSug.has(s.employeeId));
+  const toggleAllSug = () => {
+    setSelectedSug((prev) => {
+      if (allSugSelected) return new Set();
+      return new Set(suggestions.map((s) => s.employeeId));
+    });
+  };
+  const submitConfirm = () => {
+    const links = suggestions
+      .filter((s) => selectedSug.has(s.employeeId))
+      .map((s) => ({ employeeId: s.employeeId, userId: s.userId }));
+    if (links.length) confirmLinks.mutate(links);
+  };
+
   const copyAll = () => {
     if (!results) return;
     const text = results.map((r) => `${r.employeeName}\tاسم المستخدم: ${r.username}\tكلمة المرور: ${r.password}`).join("\n");
@@ -326,6 +381,68 @@ function AccountsTab() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {suggestions.length > 0 && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-4 space-y-3" data-testid="section-suggestions">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-semibold">
+                <ShieldCheck className="h-5 w-5" />
+                اقتراحات ربط تلقائي ({suggestions.length})
+              </div>
+              <Button
+                size="sm"
+                disabled={selectedSug.size === 0 || confirmLinks.isPending}
+                onClick={submitConfirm}
+                data-testid="button-confirm-links"
+              >
+                {confirmLinks.isPending ? <Loader2 className="h-4 w-4 ms-1 animate-spin" /> : <KeyRound className="h-4 w-4 ms-1" />}
+                ربط المحدد ({selectedSug.size})
+              </Button>
+            </div>
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              هؤلاء الموظفون لديهم حساب موجود في إدارة المستخدمين يطابق بياناتهم. راجِع الاقتراحات وأكّد الربط لتجنّب إنشاء حسابات مكررة.
+            </p>
+            <div className="rounded-md border bg-background overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox checked={allSugSelected} onCheckedChange={toggleAllSug} data-testid="checkbox-select-all-suggestions" />
+                    </TableHead>
+                    <TableHead>الموظف</TableHead>
+                    <TableHead>الفرع</TableHead>
+                    <TableHead>الحساب المطابق</TableHead>
+                    <TableHead>سبب المطابقة</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {suggestions.map((s) => (
+                    <TableRow key={s.employeeId} data-testid={`row-suggestion-${s.employeeId}`}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedSug.has(s.employeeId)}
+                          onCheckedChange={() => toggleSug(s.employeeId)}
+                          data-testid={`checkbox-suggestion-${s.employeeId}`}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">{s.employeeName}</TableCell>
+                      <TableCell className="text-muted-foreground">{s.branchName}</TableCell>
+                      <TableCell className="text-sm">
+                        <span className="font-mono">{s.username || "—"}</span>
+                        {s.userFullName ? <span className="text-muted-foreground"> · {s.userFullName}</span> : null}
+                      </TableCell>
+                      <TableCell>
+                        {s.matchType === "phone"
+                          ? <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">رقم الجوال</Badge>
+                          : <Badge variant="outline">الاسم</Badge>}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
