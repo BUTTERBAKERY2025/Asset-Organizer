@@ -10,9 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Wallet, Plus, Trash2, TrendingDown, Calendar, ArrowRight } from "lucide-react";
+import { Wallet, Plus, Trash2, TrendingDown, Calendar, ArrowRight, Clock, CheckCircle2, XCircle, Inbox } from "lucide-react";
 import { Layout } from "@/components/layout";
 import { Link } from "wouter";
+import { ADVANCE_REQUEST_STATUS_LABELS } from "@shared/schema";
 
 type Adv = any;
 type Emp = { id: number; employeeName: string; jobTitle: string; branchId: string };
@@ -53,6 +54,23 @@ export default function AdvancesPage() {
   const { data: employees = [] } = useQuery<Emp[]>({
     queryKey: ["/api/branch-employees"],
     queryFn: async () => (await apiRequest("GET", "/api/branch-employees")).json(),
+  });
+
+  const { data: pendingRequests = [] } = useQuery<any[]>({
+    queryKey: ["/api/hr/advance-requests", "pending"],
+    queryFn: async () => (await apiRequest("GET", "/api/hr/advance-requests?status=pending")).json(),
+  });
+
+  const reviewMutation = useMutation({
+    mutationFn: async ({ id, decision, note }: { id: number; decision: "approved" | "rejected"; note?: string }) =>
+      (await apiRequest("POST", `/api/hr/advance-requests/${id}/review`, { decision, note })).json(),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["/api/hr/advance-requests"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/advances"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/advances/stats"] });
+      toast({ title: vars.decision === "approved" ? "تم اعتماد الطلب وإنشاء الخصم" : "تم رفض الطلب" });
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل تنفيذ الإجراء", variant: "destructive" }),
   });
 
   const filtered = useMemo(() => {
@@ -125,6 +143,53 @@ export default function AdvancesPage() {
         <StatCard label="إجمالي المبالغ (ر.س)" value={Number(stats?.totalAmount || 0).toFixed(2)} icon={<TrendingDown className="h-5 w-5" />} accent="amber" />
         <StatCard label="هذا الشهر (ر.س)" value={Number(stats?.thisMonthAmount || 0).toFixed(2)} icon={<Calendar className="h-5 w-5" />} accent="blue" />
       </div>
+
+      {pendingRequests.length > 0 && (
+        <Card className="border-amber-300 dark:border-amber-800">
+          <CardContent className="pt-6 space-y-3">
+            <div className="flex items-center gap-2">
+              <Inbox className="h-5 w-5 text-amber-600" />
+              <h2 className="text-lg font-bold">طلبات سلف بانتظار المراجعة</h2>
+              <Badge className="bg-amber-100 text-amber-700">{pendingRequests.length}</Badge>
+            </div>
+            <div className="space-y-2">
+              {pendingRequests.map((r: any) => (
+                <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg border bg-card" data-testid={`row-request-${r.id}`}>
+                  <div className="space-y-0.5">
+                    <div className="font-semibold flex items-center gap-2">
+                      {r.employeeName || "-"}
+                      <span className="text-xs text-muted-foreground font-normal">{r.branchName || ""}</span>
+                    </div>
+                    <div className="text-sm">
+                      <span className="font-bold tabular-nums">{Number(r.amount).toLocaleString("ar-SA-u-nu-latn")} ر.س</span>
+                      <span className="text-muted-foreground"> · شهر الخصم {r.requestedMonth}</span>
+                      {r.installments > 1 && <span className="text-muted-foreground"> · {r.installments} أقساط</span>}
+                    </div>
+                    {r.reason && <div className="text-xs text-muted-foreground">{r.reason}</div>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="gap-1 bg-amber-50 text-amber-700 border-amber-200">
+                      <Clock className="h-3 w-3" />{ADVANCE_REQUEST_STATUS_LABELS[r.status] || r.status}
+                    </Badge>
+                    <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700"
+                      disabled={reviewMutation.isPending}
+                      onClick={() => { if (confirm("اعتماد الطلب؟ سيُنشأ خصم على راتب الموظف.")) reviewMutation.mutate({ id: r.id, decision: "approved" }); }}
+                      data-testid={`button-approve-${r.id}`}>
+                      <CheckCircle2 className="h-4 w-4 ms-1" />اعتماد
+                    </Button>
+                    <Button size="sm" variant="outline" className="text-destructive border-destructive/30"
+                      disabled={reviewMutation.isPending}
+                      onClick={() => { const note = prompt("سبب الرفض (اختياري):") ?? undefined; reviewMutation.mutate({ id: r.id, decision: "rejected", note }); }}
+                      data-testid={`button-reject-${r.id}`}>
+                      <XCircle className="h-4 w-4 ms-1" />رفض
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="space-y-3 pt-6">

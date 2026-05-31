@@ -5677,6 +5677,59 @@ export const SALARY_DEDUCTION_TYPE_LABELS: Record<string, string> = {
   other: "أخرى",
 };
 
+// =====================================================
+// Advance Requests - طلبات السلف من الموظف (بوابة الموظف الذاتية)
+// =====================================================
+// الموظف يقدّم طلب سلفة من بوابته الذاتية، والمدير يعتمد/يرفض. عند الاعتماد
+// يُنشأ سجل خصم (salary_deductions) تلقائياً ليُخصم من الراتب الشهري.
+export const advanceRequests = pgTable("advance_requests", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  amount: real("amount").notNull(), // المبلغ المطلوب بالريال
+  reason: text("reason"), // سبب الطلب
+  requestedMonth: text("requested_month").notNull(), // YYYY-MM الشهر المطلوب الخصم فيه
+  installments: integer("installments").default(1), // عدد الأقساط (للعلم فقط)
+  status: text("status").notNull().default("pending"), // pending | approved | rejected | cancelled
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewerNote: text("reviewer_note"),
+  linkedDeductionId: integer("linked_deduction_id").references(() => salaryDeductions.id), // الخصم المُنشأ عند الاعتماد
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_advance_requests_employee").on(table.branchEmployeeId),
+  index("idx_advance_requests_branch").on(table.branchId),
+  index("idx_advance_requests_status").on(table.status),
+]);
+
+export const insertAdvanceRequestSchema = createInsertSchema(advanceRequests, {
+  amount: z.number().positive("المبلغ يجب أن يكون موجب"),
+  requestedMonth: z.string().regex(/^\d{4}-\d{2}$/, "صيغة الشهر يجب أن تكون YYYY-MM"),
+  installments: z.number().int().positive().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  status: true,
+  reviewedBy: true,
+  reviewedAt: true,
+  reviewerNote: true,
+  linkedDeductionId: true,
+  createdBy: true,
+});
+
+export type AdvanceRequest = typeof advanceRequests.$inferSelect;
+export type InsertAdvanceRequest = z.infer<typeof insertAdvanceRequestSchema>;
+
+export const ADVANCE_REQUEST_STATUS_LABELS: Record<string, string> = {
+  pending: "قيد المراجعة",
+  approved: "معتمدة",
+  rejected: "مرفوضة",
+  cancelled: "ملغاة",
+};
+
 // Branch Job Titles - وظائف موظفي الفروع
 export const BRANCH_JOB_TITLES = [
   "كاشير",

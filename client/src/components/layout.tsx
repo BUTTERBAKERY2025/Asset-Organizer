@@ -16,7 +16,7 @@ import {
   Shield, MapPin, Megaphone, UserCheck, Calendar, UsersRound, Building, Briefcase,
   Receipt, PieChart, Lock, Layers, PieChartIcon, Share2, Languages, Warehouse,
   PackageCheck, Send, ShoppingCart, FolderOpen, Landmark, Scale, Vote, FileCheck,
-  Sparkles, Crown, Handshake, DoorOpen, Bell, Store, ShieldAlert, MessageCircle, LayoutGrid, Camera
+  Sparkles, Crown, Handshake, DoorOpen, Bell, Store, ShieldAlert, MessageCircle, LayoutGrid, Camera, UserCircle
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
@@ -244,6 +244,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const allStandaloneItems: NavItem[] = useMemo(() => [
     { href: "/", label: t("sidebar.home"), icon: Home, module: "dashboard" },
+    { href: "/my-portal", label: "بوابتي", icon: UserCircle },
   ], [t]);
 
   const allNavGroups: { key: string; group: NavGroup }[] = useMemo(() => [
