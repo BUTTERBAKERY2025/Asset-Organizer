@@ -1,3 +1,5 @@
 - [Cashier journal filtering & pagination](cashier-journal-filtering.md) — filter by free-text cashierName not cashierId; gate arbitrary cashier query params behind manager check; export/print fetch all rows (no limit).
 - [Design system / theme](design-system.md) — theme is Royal Violet (replit.md "Butter Gold" is stale); use semantic tokens (primary/muted/card/border/destructive), reserve green=success/surplus, amber=warning, destructive=error.
 - [Auth current user & atomic transitions](auth-current-user.md) — logged-in user is on `req.currentUser` (NOT `req.user`); status transitions (approve/reject/cancel) must guard status inside the UPDATE WHERE, not read-then-write.
+- [routes.ts & db:push quirks](routes-and-dbpush-quirks.md) — read-tool line offsets are wrong for routes.ts (use awk/sed); db:push blocked by TTY, use psql for dev schema changes.
+- [بوابتي employee portal](employee-portal.md) — /api/my/* scoped via getMyEmployee; linked_user_id must be unique; attendance id = branch_emp_{id}; portal_settings flags.

@@ -847,6 +847,11 @@ export default function BranchEmployeesPage() {
   const [viewingEmployee, setViewingEmployee] = useState<BranchEmployee | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [selectedUserToLink, setSelectedUserToLink] = useState<string>("");
+  const [accountMode, setAccountMode] = useState<"create" | "link">("create");
+  const [newAccountUsername, setNewAccountUsername] = useState<string>("");
+  const [newAccountPassword, setNewAccountPassword] = useState<string>("");
+  const [resetPasswordValue, setResetPasswordValue] = useState<string>("");
+  const [showResetPassword, setShowResetPassword] = useState<boolean>(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importPreview, setImportPreview] = useState<any[]>([]);
@@ -954,6 +959,11 @@ export default function BranchEmployeesPage() {
   const handleViewDetails = (employee: BranchEmployee) => {
     setViewingEmployee(employee);
     setSelectedUserToLink("");
+    setAccountMode("create");
+    setNewAccountUsername("");
+    setNewAccountPassword("");
+    setResetPasswordValue("");
+    setShowResetPassword(false);
     setIsDetailsDialogOpen(true);
   };
 
@@ -971,6 +981,77 @@ export default function BranchEmployeesPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/branch-employees/bundle"] });
       setViewingEmployee(updatedEmployee);
       setSelectedUserToLink("");
+      toast({ title: "تم ربط الموظف بالحساب بنجاح" });
+    },
+    onError: (e: any) => {
+      toast({ title: "فشل في ربط الموظف", description: e?.message, variant: "destructive" });
+    },
+  });
+
+  const createAccountMutation = useMutation({
+    mutationFn: async ({ employeeId, username, password }: { employeeId: number; username: string; password: string }) => {
+      const res = await fetch(`/api/branch-employees/${employeeId}/create-account`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "فشل في إنشاء الحساب");
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/branch-employees/bundle"] });
+      setViewingEmployee((prev) => prev ? { ...prev, linkedUserId: "linked" } as BranchEmployee : prev);
+      setNewAccountUsername("");
+      setNewAccountPassword("");
+      toast({ title: "تم إنشاء حساب الدخول للموظف بنجاح" });
+    },
+    onError: (e: any) => {
+      toast({ title: "تعذّر إنشاء الحساب", description: e?.message, variant: "destructive" });
+    },
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ employeeId, password }: { employeeId: number; password: string }) => {
+      const res = await fetch(`/api/branch-employees/${employeeId}/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "فشل في إعادة تعيين كلمة المرور");
+      return data;
+    },
+    onSuccess: () => {
+      setResetPasswordValue("");
+      setShowResetPassword(false);
+      toast({ title: "تم تحديث كلمة المرور بنجاح" });
+    },
+    onError: (e: any) => {
+      toast({ title: "تعذّر تحديث كلمة المرور", description: e?.message, variant: "destructive" });
+    },
+  });
+
+  const unlinkUserMutation = useMutation({
+    mutationFn: async (employeeId: number) => {
+      const res = await fetch(`/api/branch-employees/${employeeId}/unlink-user`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "فشل في فك الارتباط");
+      return data;
+    },
+    onSuccess: (updatedEmployee) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/branch-employees/bundle"] });
+      setViewingEmployee(updatedEmployee);
+      toast({ title: "تم فك ارتباط الموظف بالحساب" });
+    },
+    onError: (e: any) => {
+      toast({ title: "تعذّر فك الارتباط", description: e?.message, variant: "destructive" });
     },
   });
 
@@ -2842,45 +2923,164 @@ export default function BranchEmployeesPage() {
                         <div className="space-y-3">
                           <div className="flex items-center gap-2 text-amber-800">
                             <Link className="w-4 h-4" />
-                            <span className="text-sm">هذا الموظف غير مرتبط بحساب مستخدم في النظام. لتفعيل سجلات الحضور التلقائية، يجب ربطه بحساب مستخدم.</span>
+                            <span className="text-sm">هذا الموظف غير مرتبط بحساب مستخدم. أنشئ له حساب دخول ليتابع بياناته من بوابة الموظف، أو اربطه بحساب موجود.</span>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <Select value={selectedUserToLink} onValueChange={setSelectedUserToLink}>
-                              <SelectTrigger className="w-64 bg-white">
-                                <SelectValue placeholder="اختر مستخدم للربط" />
-                              </SelectTrigger>
-                              <SelectContent className="max-h-60 overflow-y-auto">
-                                {systemUsers?.map((user: any) => (
-                                  <SelectItem key={user.id} value={user.id}>
-                                    {user.displayName || user.username || user.id}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                          <div className="flex items-center gap-2">
                             <Button
+                              type="button"
                               size="sm"
-                              disabled={!selectedUserToLink || linkUserMutation.isPending}
-                              onClick={() => {
-                                if (viewingEmployee && selectedUserToLink) {
-                                  linkUserMutation.mutate({ employeeId: viewingEmployee.id, userId: selectedUserToLink });
-                                }
-                              }}
-                              data-testid="button-link-user"
+                              variant={accountMode === "create" ? "default" : "outline"}
+                              onClick={() => setAccountMode("create")}
+                              data-testid="button-mode-create"
                             >
-                              {linkUserMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "ربط المستخدم"}
+                              إنشاء حساب جديد
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={accountMode === "link" ? "default" : "outline"}
+                              onClick={() => setAccountMode("link")}
+                              data-testid="button-mode-link"
+                            >
+                              ربط بحساب موجود
                             </Button>
                           </div>
+
+                          {accountMode === "create" ? (
+                            <div className="space-y-2 bg-white rounded-md p-3 border">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-xs">اسم المستخدم</Label>
+                                  <Input
+                                    value={newAccountUsername}
+                                    onChange={(e) => setNewAccountUsername(e.target.value)}
+                                    placeholder="مثال: amro.ali"
+                                    autoComplete="off"
+                                    data-testid="input-account-username"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs">كلمة المرور</Label>
+                                  <Input
+                                    type="text"
+                                    value={newAccountPassword}
+                                    onChange={(e) => setNewAccountPassword(e.target.value)}
+                                    placeholder="8 أحرف: كبيرة وصغيرة وأرقام"
+                                    autoComplete="off"
+                                    data-testid="input-account-password"
+                                  />
+                                </div>
+                              </div>
+                              <p className="text-[11px] text-gray-500">كلمة المرور: 8 أحرف على الأقل وتحتوي على حرف كبير وصغير ورقم.</p>
+                              <Button
+                                size="sm"
+                                disabled={!newAccountUsername || !newAccountPassword || createAccountMutation.isPending}
+                                onClick={() => {
+                                  if (viewingEmployee) {
+                                    createAccountMutation.mutate({
+                                      employeeId: viewingEmployee.id,
+                                      username: newAccountUsername.trim(),
+                                      password: newAccountPassword,
+                                    });
+                                  }
+                                }}
+                                data-testid="button-create-account"
+                              >
+                                {createAccountMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "إنشاء الحساب وربطه"}
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-3">
+                              <Select value={selectedUserToLink} onValueChange={setSelectedUserToLink}>
+                                <SelectTrigger className="w-64 bg-white">
+                                  <SelectValue placeholder="اختر مستخدم للربط" />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-60 overflow-y-auto">
+                                  {systemUsers?.map((user: any) => (
+                                    <SelectItem key={user.id} value={user.id}>
+                                      {user.displayName || user.username || user.id}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                size="sm"
+                                disabled={!selectedUserToLink || linkUserMutation.isPending}
+                                onClick={() => {
+                                  if (viewingEmployee && selectedUserToLink) {
+                                    linkUserMutation.mutate({ employeeId: viewingEmployee.id, userId: selectedUserToLink });
+                                  }
+                                }}
+                                data-testid="button-link-user"
+                              >
+                                {linkUserMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "ربط المستخدم"}
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
                   )}
                   {viewingEmployee.linkedUserId && (
                     <Card className="bg-green-50 border-green-200">
-                      <CardContent className="py-4">
+                      <CardContent className="py-4 space-y-3">
                         <div className="flex items-center gap-2 text-green-800">
                           <UserCheck className="w-4 h-4" />
-                          <span className="text-sm">هذا الموظف مرتبط بحساب مستخدم في النظام. سجلات الحضور والدوام ستظهر تلقائياً.</span>
+                          <span className="text-sm">هذا الموظف مرتبط بحساب مستخدم في النظام. يمكنه الدخول إلى بوابة الموظف ومتابعة بياناته.</span>
                         </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setShowResetPassword((v) => !v)}
+                            data-testid="button-toggle-reset-password"
+                          >
+                            إعادة تعيين كلمة المرور
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="text-red-600 border-red-200 hover:bg-red-50"
+                            disabled={unlinkUserMutation.isPending}
+                            onClick={() => {
+                              if (viewingEmployee && window.confirm("سيتم فك ارتباط الموظف بحسابه (لن يُحذف الحساب). متابعة؟")) {
+                                unlinkUserMutation.mutate(viewingEmployee.id);
+                              }
+                            }}
+                            data-testid="button-unlink-user"
+                          >
+                            {unlinkUserMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "فك الارتباط"}
+                          </Button>
+                        </div>
+                        {showResetPassword && (
+                          <div className="flex items-end gap-2 bg-white rounded-md p-3 border">
+                            <div className="flex-1">
+                              <Label className="text-xs">كلمة المرور الجديدة</Label>
+                              <Input
+                                type="text"
+                                value={resetPasswordValue}
+                                onChange={(e) => setResetPasswordValue(e.target.value)}
+                                placeholder="8 أحرف: كبيرة وصغيرة وأرقام"
+                                autoComplete="off"
+                                data-testid="input-reset-password"
+                              />
+                            </div>
+                            <Button
+                              size="sm"
+                              disabled={!resetPasswordValue || resetPasswordMutation.isPending}
+                              onClick={() => {
+                                if (viewingEmployee) {
+                                  resetPasswordMutation.mutate({ employeeId: viewingEmployee.id, password: resetPasswordValue });
+                                }
+                              }}
+                              data-testid="button-save-reset-password"
+                            >
+                              {resetPasswordMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "حفظ"}
+                            </Button>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   )}

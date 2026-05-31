@@ -232,6 +232,17 @@ const settingsSections: SettingSection[] = [
         requiredModule: "biometric_settings",
         keywords: ["بصمة", "وجه", "حضور", "جهاز", "موبايل", "biometric", "fingerprint"],
       },
+      {
+        id: "portal-settings",
+        title: "إعدادات بوابة الموظف",
+        description: "التحكم في تسجيل الحضور الذاتي وإظهار الراتب في بوابتي",
+        icon: UserCheck,
+        path: "/portal-settings",
+        badge: "جديد",
+        badgeVariant: "default",
+        adminOnly: true,
+        keywords: ["بوابة", "موظف", "بوابتي", "راتب", "حضور ذاتي", "portal", "self"],
+      },
     ],
   },
   {

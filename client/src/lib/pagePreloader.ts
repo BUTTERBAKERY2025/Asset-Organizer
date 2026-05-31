@@ -88,6 +88,7 @@ const pageImports: Record<string, () => Promise<any>> = {
   "social-responsibility": () => import("@/pages/marketing/social-responsibility"),
   "settings-dashboard": () => import("@/pages/settings-dashboard"),
   "biometric-settings": () => import("@/pages/biometric-settings"),
+  "portal-settings": () => import("@/pages/portal-settings"),
   "notifications-management": () => import("@/pages/notifications-management"),
   "shift-management": () => import("@/pages/shift-management"),
   "attendance-check": () => import("@/pages/attendance-check"),

@@ -8,7 +8,7 @@ import { evaluateWasteGovernance, checkApprovalGate } from "./waste-governance";
 import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, gt, sql, or, isNull, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
-import { shifts as shiftsTable, cashierPointsLedger, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable } from "@shared/schema";
+import { shifts as shiftsTable, cashierPointsLedger, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS } from "@shared/schema";
 import { auditEvent, getApprovalThresholds, APPROVAL_THRESHOLDS } from "./audit-helpers";
 
 // Helper to safely get current user from authenticated request
@@ -28752,6 +28752,14 @@ export async function registerRoutes(
         }
       }
       
+      if (existingEmp.linkedUserId) {
+        return res.status(400).json({ error: "هذا الموظف مرتبط بحساب بالفعل" });
+      }
+      const alreadyLinked = await storage.getBranchEmployeeByLinkedUserId(userId);
+      if (alreadyLinked && alreadyLinked.id !== id) {
+        return res.status(400).json({ error: "هذا الحساب مرتبط بموظف آخر بالفعل" });
+      }
+
       const employee = await storage.linkBranchEmployeeToUser(id, userId);
       if (!employee) {
         return res.status(404).json({ error: "الموظف غير موجود" });
@@ -28760,6 +28768,172 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error linking branch employee to user:", error);
       res.status(500).json({ error: "فشل في ربط الموظف بالمستخدم" });
+    }
+  });
+
+  // إنشاء حساب دخول جديد لموظف وربطه به (بوابة الموظف)
+  app.post("/api/branch-employees/:id/create-account", isAuthenticated, requirePermission("users", "create"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+
+      const { username, password } = req.body;
+      if (!username || !password) {
+        return res.status(400).json({ error: "اسم المستخدم وكلمة المرور مطلوبان" });
+      }
+      if (username.length < 3 || username.length > 50) {
+        return res.status(400).json({ error: "اسم المستخدم يجب أن يكون بين 3 و 50 حرفاً" });
+      }
+      if (password.length < 8 || password.length > 128) {
+        return res.status(400).json({ error: "كلمة المرور يجب أن تكون بين 8 و 128 حرفاً" });
+      }
+      if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+        return res.status(400).json({ error: "كلمة المرور يجب أن تحتوي على حروف كبيرة وصغيرة وأرقام" });
+      }
+
+      const employee = await storage.getBranchEmployee(id);
+      if (!employee) {
+        return res.status(404).json({ error: "الموظف غير موجود" });
+      }
+      if (employee.linkedUserId) {
+        return res.status(400).json({ error: "هذا الموظف مرتبط بحساب بالفعل" });
+      }
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, employee.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بإنشاء حساب لموظف من هذا الفرع" });
+        }
+      }
+
+      const existingUser = await storage.getUserByUsername(username);
+      if (existingUser) {
+        return res.status(400).json({ error: "اسم المستخدم مسجل مسبقاً" });
+      }
+
+      // استنتاج الاسم الأول والأخير من اسم الموظف
+      const fullName = (employee.employeeName || "").trim();
+      const nameParts = fullName.split(/\s+/);
+      const firstName = nameParts[0] || fullName || username;
+      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
+
+      // إنشاء الحساب ومنح الصلاحية والربط بشكل ذري
+      const user = await storage.createBranchEmployeeAccount({
+        branchEmployeeId: id,
+        username,
+        password,
+        firstName,
+        lastName,
+        branchId: employee.branchId || null,
+      });
+
+      const { password: _pw, ...safeUser } = user as any;
+      res.status(201).json({ user: safeUser });
+    } catch (error: any) {
+      console.error("Error creating employee account:", error);
+      if (error?.message === "هذا الموظف مرتبط بحساب بالفعل") {
+        return res.status(400).json({ error: error.message });
+      }
+      res.status(500).json({ error: "فشل في إنشاء حساب الموظف" });
+    }
+  });
+
+  // إعادة تعيين كلمة مرور حساب الموظف المرتبط
+  app.post("/api/branch-employees/:id/reset-password", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+
+      const { password } = req.body;
+      if (!password || password.length < 8 || password.length > 128) {
+        return res.status(400).json({ error: "كلمة المرور يجب أن تكون بين 8 و 128 حرفاً" });
+      }
+      if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+        return res.status(400).json({ error: "كلمة المرور يجب أن تحتوي على حروف كبيرة وصغيرة وأرقام" });
+      }
+
+      const employee = await storage.getBranchEmployee(id);
+      if (!employee) {
+        return res.status(404).json({ error: "الموظف غير موجود" });
+      }
+      if (!employee.linkedUserId) {
+        return res.status(400).json({ error: "هذا الموظف غير مرتبط بحساب" });
+      }
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, employee.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح" });
+        }
+      }
+
+      await storage.updateUser(employee.linkedUserId, { password });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error resetting employee password:", error);
+      res.status(500).json({ error: "فشل في إعادة تعيين كلمة المرور" });
+    }
+  });
+
+  // فك ارتباط الموظف بحسابه (لا يحذف الحساب)
+  app.post("/api/branch-employees/:id/unlink-user", isAuthenticated, requirePermission("branch_employees", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+
+      const employee = await storage.getBranchEmployee(id);
+      if (!employee) {
+        return res.status(404).json({ error: "الموظف غير موجود" });
+      }
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, employee.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح" });
+        }
+      }
+
+      const updated = await storage.unlinkBranchEmployeeUser(id);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error unlinking branch employee:", error);
+      res.status(500).json({ error: "فشل في فك الارتباط" });
+    }
+  });
+
+  // ===== Employee Portal Settings (بوابتي) =====
+  const portalSettingsAsBooleans = (settings: Record<string, string>): Record<string, boolean> => {
+    const out: Record<string, boolean> = {};
+    for (const [k, v] of Object.entries(settings)) out[k] = v === "true";
+    return out;
+  };
+
+  app.get("/api/admin/portal-settings", isAuthenticated, requirePermission("settings", "view"), async (_req, res) => {
+    try {
+      const settings = await storage.getAllPortalSettings();
+      res.json(portalSettingsAsBooleans(settings));
+    } catch (error) {
+      console.error("Error getting portal settings:", error);
+      res.status(500).json({ error: "فشل في جلب إعدادات البوابة" });
+    }
+  });
+
+  app.put("/api/admin/portal-settings", isAuthenticated, requirePermission("settings", "edit"), async (req, res) => {
+    try {
+      const body = req.body as Record<string, unknown>;
+      const allowedKeys = Object.values(PORTAL_SETTING_KEYS);
+      const updates: Record<string, string> = {};
+      for (const [key, val] of Object.entries(body)) {
+        if (!allowedKeys.includes(key as any)) {
+          return res.status(400).json({ error: `مفتاح غير صالح: ${key}` });
+        }
+        updates[key] = val === true || val === "true" ? "true" : "false";
+      }
+      for (const [key, val] of Object.entries(updates)) {
+        await storage.setPortalSetting(key, val);
+      }
+      const settings = await storage.getAllPortalSettings();
+      res.json(portalSettingsAsBooleans(settings));
+    } catch (error) {
+      console.error("Error updating portal settings:", error);
+      res.status(500).json({ error: "فشل في تحديث إعدادات البوابة" });
     }
   });
 

@@ -1,16 +1,41 @@
 import type { Express } from "express";
 import { db } from "./db";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, like } from "drizzle-orm";
 import { isAuthenticated, requirePermission, getEffectiveBranchFilter } from "./auth";
+import { storage } from "./storage";
 import {
   branchEmployees,
   branches,
   leaveRequests,
   advanceRequests,
   salaryDeductions,
+  employeeSchedules,
+  attendanceRecords,
+  employeeWarnings,
+  employeeDocuments,
+  incentiveAwards,
   users,
+  PORTAL_SETTING_KEYS,
 } from "@shared/schema";
 import { z } from "zod";
+
+// الشهر الحالي بتوقيت السعودية بصيغة YYYY-MM
+function saudiMonth(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit" }).format(new Date());
+}
+function saudiDate(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+function isValidMonth(m: unknown): m is string {
+  return typeof m === "string" && /^\d{4}-\d{2}$/.test(m);
+}
+async function portalFlag(key: string): Promise<boolean> {
+  try {
+    return (await storage.getPortalSetting(key)) === "true";
+  } catch {
+    return false;
+  }
+}
 
 function getUserId(req: any): string | null {
   return (req as any).currentUser?.id || (req as any).user?.id || (req as any).user?.claims?.sub || null;
@@ -216,6 +241,390 @@ export function registerSelfServiceRoutes(app: Express) {
     } catch (e: any) {
       console.error("[my/advance-requests] cancel error:", e);
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ========================================================================
+  // بوابة الموظف (للقراءة فقط) — Phase 2
+  // ========================================================================
+
+  // إعدادات البوابة المرئية للموظف (هل تظهر صفحة الراتب / هل يسمح بتسجيل الحضور الذاتي)
+  app.get("/api/my/portal-config", isAuthenticated, async (req, res) => {
+    try {
+      const [showSalary, allowSelfCheckin] = await Promise.all([
+        portalFlag(PORTAL_SETTING_KEYS.SHOW_SALARY),
+        portalFlag(PORTAL_SETTING_KEYS.ALLOW_SELF_CHECKIN),
+      ]);
+      res.json({ showSalary, allowSelfCheckin });
+    } catch (e: any) {
+      console.error("[my/portal-config] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // نظرة عامة: ملخص الحضور للشهر + التنبيهات + العدادات
+  app.get("/api/my/overview", isAuthenticated, async (req, res) => {
+    try {
+      const emp = await getMyEmployee(req);
+      if (!emp) return res.json({ hasEmployee: false });
+      const month = saudiMonth();
+      const today = saudiDate();
+
+      const [monthAttendance, todaySchedule, pendingLeaves, pendingAdvances, activeWarnings] = await Promise.all([
+        db.select().from(attendanceRecords)
+          .where(and(eq(attendanceRecords.branchEmployeeId, emp.id), like(attendanceRecords.attendanceDate, `${month}%`))),
+        db.select().from(employeeSchedules)
+          .where(and(eq(employeeSchedules.branchEmployeeId, emp.id), eq(employeeSchedules.scheduleDate, today)))
+          .limit(1),
+        db.select().from(leaveRequests)
+          .where(and(eq(leaveRequests.branchEmployeeId, emp.id), eq(leaveRequests.status, "pending"))),
+        db.select().from(advanceRequests)
+          .where(and(eq(advanceRequests.branchEmployeeId, emp.id), eq(advanceRequests.status, "pending"))),
+        db.select().from(employeeWarnings)
+          .where(and(eq(employeeWarnings.branchEmployeeId, emp.id), eq(employeeWarnings.status, "active"))),
+      ]);
+
+      const attendanceSummary = {
+        present: monthAttendance.filter(a => a.status === "present").length,
+        late: monthAttendance.filter(a => a.status === "late").length,
+        absent: monthAttendance.filter(a => a.status === "absent").length,
+        onLeave: monthAttendance.filter(a => a.status === "on_leave").length,
+        total: monthAttendance.length,
+      };
+
+      // تنبيهات انتهاء الوثائق (الإقامة / الشهادة الصحية)
+      const alerts: Array<{ type: string; label: string; date: string }> = [];
+      const daysUntil = (d?: string | null) => {
+        if (!d) return null;
+        const diff = Math.ceil((new Date(d).getTime() - new Date(today).getTime()) / 86400000);
+        return diff;
+      };
+      const iqamaDays = daysUntil(emp.iqamaExpiry);
+      if (iqamaDays !== null && iqamaDays <= 60) alerts.push({ type: "iqama", label: "انتهاء الإقامة", date: emp.iqamaExpiry! });
+      const healthDays = daysUntil(emp.healthCertificateExpiry);
+      if (healthDays !== null && healthDays <= 60) alerts.push({ type: "health", label: "انتهاء الشهادة الصحية", date: emp.healthCertificateExpiry! });
+
+      res.json({
+        hasEmployee: true,
+        month,
+        todayShift: todaySchedule[0] ? {
+          isOff: todaySchedule[0].isOff,
+          startTime: todaySchedule[0].startTime,
+          endTime: todaySchedule[0].endTime,
+          shiftType: todaySchedule[0].shiftType,
+          status: todaySchedule[0].status,
+        } : null,
+        attendanceSummary,
+        counts: {
+          pendingLeaves: pendingLeaves.length,
+          pendingAdvances: pendingAdvances.length,
+          activeWarnings: activeWarnings.length,
+        },
+        alerts,
+      });
+    } catch (e: any) {
+      console.error("[my/overview] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // جدولي (الشهر الحالي أو شهر محدد)
+  app.get("/api/my/schedule", isAuthenticated, async (req, res) => {
+    try {
+      const emp = await getMyEmployee(req);
+      if (!emp) return res.json([]);
+      const month = isValidMonth(req.query.month) ? req.query.month : saudiMonth();
+      const rows = await db.select().from(employeeSchedules)
+        .where(and(eq(employeeSchedules.branchEmployeeId, emp.id), like(employeeSchedules.scheduleDate, `${month}%`)))
+        .orderBy(employeeSchedules.scheduleDate)
+        .limit(400);
+      res.json(rows);
+    } catch (e: any) {
+      console.error("[my/schedule] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // حضوري (الشهر الحالي أو شهر محدد)
+  app.get("/api/my/attendance", isAuthenticated, async (req, res) => {
+    try {
+      const emp = await getMyEmployee(req);
+      if (!emp) return res.json([]);
+      const month = isValidMonth(req.query.month) ? req.query.month : saudiMonth();
+      const rows = await db.select().from(attendanceRecords)
+        .where(and(eq(attendanceRecords.branchEmployeeId, emp.id), like(attendanceRecords.attendanceDate, `${month}%`)))
+        .orderBy(desc(attendanceRecords.attendanceDate))
+        .limit(400);
+      res.json(rows);
+    } catch (e: any) {
+      console.error("[my/attendance] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // إنذاراتي
+  app.get("/api/my/warnings", isAuthenticated, async (req, res) => {
+    try {
+      const emp = await getMyEmployee(req);
+      if (!emp) return res.json([]);
+      const rows = await db.select({
+        id: employeeWarnings.id,
+        level: employeeWarnings.level,
+        reason: employeeWarnings.reason,
+        description: employeeWarnings.description,
+        reasonCategory: employeeWarnings.reasonCategory,
+        issuedDate: employeeWarnings.issuedDate,
+        status: employeeWarnings.status,
+        acknowledgedAt: employeeWarnings.acknowledgedAt,
+        signedAt: employeeWarnings.signedAt,
+        deductionAmount: employeeWarnings.deductionAmount,
+        attachmentUrl: employeeWarnings.attachmentUrl,
+        expiresAt: employeeWarnings.expiresAt,
+      }).from(employeeWarnings)
+        .where(eq(employeeWarnings.branchEmployeeId, emp.id))
+        .orderBy(desc(employeeWarnings.issuedDate))
+        .limit(200);
+      res.json(rows);
+    } catch (e: any) {
+      console.error("[my/warnings] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // وثائقي + تواريخ انتهاء من ملف الموظف
+  app.get("/api/my/documents", isAuthenticated, async (req, res) => {
+    try {
+      const emp = await getMyEmployee(req);
+      if (!emp) return res.json({ documents: [], expiry: null });
+      const documents = await db.select().from(employeeDocuments)
+        .where(eq(employeeDocuments.branchEmployeeId, emp.id))
+        .orderBy(desc(employeeDocuments.createdAt))
+        .limit(200);
+      res.json({
+        documents,
+        expiry: {
+          iqamaExpiry: emp.iqamaExpiry,
+          healthCertificateExpiry: emp.healthCertificateExpiry,
+        },
+      });
+    } catch (e: any) {
+      console.error("[my/documents] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // حوافزي (مرتبطة بحساب المستخدم كـ كاشير)
+  app.get("/api/my/incentives", isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) return res.json([]);
+      const rows = await db.select().from(incentiveAwards)
+        .where(eq(incentiveAwards.cashierId, userId))
+        .orderBy(desc(incentiveAwards.periodEnd))
+        .limit(200);
+      res.json(rows);
+    } catch (e: any) {
+      console.error("[my/incentives] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // راتبي — محجوب خلف إعداد show_salary
+  app.get("/api/my/salary", isAuthenticated, async (req, res) => {
+    try {
+      const showSalary = await portalFlag(PORTAL_SETTING_KEYS.SHOW_SALARY);
+      if (!showSalary) return res.status(403).json({ error: "عرض الراتب غير مفعّل", disabled: true });
+      const emp = await getMyEmployee(req);
+      if (!emp) return res.status(403).json({ error: "حسابك غير مرتبط بملف موظف" });
+      const month = isValidMonth(req.query.month) ? req.query.month : saudiMonth();
+      const deductions = await db.select().from(salaryDeductions)
+        .where(and(eq(salaryDeductions.branchEmployeeId, emp.id), eq(salaryDeductions.month, month)))
+        .orderBy(desc(salaryDeductions.createdAt));
+      const totalDeductions = deductions.reduce((s, d) => s + (d.amount || 0), 0);
+      res.json({
+        month,
+        components: {
+          salary: emp.salary,
+          housingAllowance: emp.housingAllowance || 0,
+          transportAllowance: emp.transportAllowance || 0,
+          foodAllowance: emp.foodAllowance || 0,
+          otherAllowances: emp.otherAllowances || 0,
+          socialInsuranceDeduction: emp.socialInsuranceDeduction || 0,
+          totalSalary: emp.totalSalary,
+        },
+        deductions: deductions.map(d => ({ id: d.id, type: d.type, amount: d.amount, description: d.description, month: d.month })),
+        totalDeductions,
+      });
+    } catch (e: any) {
+      console.error("[my/salary] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ========================================================================
+  // تسجيل الحضور الذاتي من الجوال — Phase 3
+  // ========================================================================
+
+  // حالة اليوم: سجل الحضور + جدول اليوم + هل مسموح التسجيل الذاتي
+  app.get("/api/my/attendance/today", isAuthenticated, async (req, res) => {
+    try {
+      const emp = await getMyEmployee(req);
+      if (!emp) return res.json({ hasEmployee: false });
+      const allowSelfCheckin = await portalFlag(PORTAL_SETTING_KEYS.ALLOW_SELF_CHECKIN);
+      const today = saudiDate();
+      const empId = `branch_emp_${emp.id}`;
+
+      const [todaySchedule] = await db.select().from(employeeSchedules)
+        .where(and(eq(employeeSchedules.branchEmployeeId, emp.id), eq(employeeSchedules.scheduleDate, today)))
+        .limit(1);
+
+      const [record] = await db.select().from(attendanceRecords)
+        .where(and(eq(attendanceRecords.employeeId, empId), eq(attendanceRecords.attendanceDate, today)))
+        .limit(1);
+
+      const [branch] = await db.select().from(branches).where(eq(branches.id, emp.branchId));
+
+      res.json({
+        hasEmployee: true,
+        allowSelfCheckin,
+        today,
+        schedule: todaySchedule ? {
+          id: todaySchedule.id,
+          isOff: todaySchedule.isOff,
+          startTime: todaySchedule.startTime,
+          endTime: todaySchedule.endTime,
+          shiftType: todaySchedule.shiftType,
+        } : null,
+        attendance: record ? {
+          id: record.id,
+          actualCheckIn: record.actualCheckIn,
+          actualCheckOut: record.actualCheckOut,
+          status: record.status,
+          lateMinutes: record.lateMinutes,
+        } : null,
+        branch: branch ? {
+          name: branch.name,
+          hasLocation: !!(branch.latitude && branch.longitude),
+          locationRadius: branch.locationRadius || 200,
+        } : null,
+      });
+    } catch (e: any) {
+      console.error("[my/attendance/today] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  const selfCheckinSchema = z.object({
+    signature: z.string().min(100, "التوقيع مطلوب").max(500000, "التوقيع كبير جداً"),
+    userLatitude: z.number({ required_error: "الموقع مطلوب" }),
+    userLongitude: z.number({ required_error: "الموقع مطلوب" }),
+    biometricVerified: z.boolean().optional(),
+  });
+
+  // مسافة Haversine بالأمتار
+  function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371000;
+    const p1 = (lat1 * Math.PI) / 180;
+    const p2 = (lat2 * Math.PI) / 180;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  // تسجيل حضوري
+  app.post("/api/my/attendance/check-in", isAuthenticated, async (req, res) => {
+    try {
+      const allowSelfCheckin = await portalFlag(PORTAL_SETTING_KEYS.ALLOW_SELF_CHECKIN);
+      if (!allowSelfCheckin) return res.status(403).json({ error: "تسجيل الحضور الذاتي غير مفعّل" });
+
+      const emp = await getMyEmployee(req);
+      if (!emp) return res.status(403).json({ error: "حسابك غير مرتبط بملف موظف" });
+      if (!emp.branchId) return res.status(400).json({ error: "ملف الموظف غير مرتبط بفرع" });
+
+      const parsed = selfCheckinSchema.parse(req.body);
+
+      const [branch] = await db.select().from(branches).where(eq(branches.id, emp.branchId));
+      if (!branch) return res.status(400).json({ error: "الفرع غير موجود" });
+      if (!branch.latitude || !branch.longitude) {
+        return res.status(400).json({ error: "لم يتم تحديد موقع الفرع. تواصل مع الإدارة." });
+      }
+      const allowedRadius = branch.locationRadius || 200;
+      const distance = distanceMeters(parsed.userLatitude, parsed.userLongitude, branch.latitude, branch.longitude);
+      if (distance > allowedRadius) {
+        return res.status(400).json({
+          error: `الموقع خارج النطاق المسموح (${Math.round(distance)} متر من الفرع، المسموح: ${allowedRadius} متر)`,
+        });
+      }
+
+      const today = saudiDate();
+      const [todaySchedule] = await db.select().from(employeeSchedules)
+        .where(and(eq(employeeSchedules.branchEmployeeId, emp.id), eq(employeeSchedules.scheduleDate, today)))
+        .limit(1);
+
+      const record = await storage.checkInEmployee(
+        `branch_emp_${emp.id}`,
+        emp.branchId,
+        parsed.signature,
+        todaySchedule?.id,
+        todaySchedule?.startTime || undefined,
+        todaySchedule?.endTime || undefined,
+        emp.employeeName,
+        today,
+      );
+
+      if (parsed.biometricVerified && record?.id) {
+        try {
+          await storage.updateAttendanceRecord(record.id, { biometricVerified: true, biometricCheckIn: true });
+        } catch {}
+      }
+
+      res.status(201).json(record);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: e.errors[0]?.message || "بيانات غير صحيحة" });
+      const msg = e?.message || "فشل تسجيل الحضور";
+      console.error("[my/attendance/check-in] error:", msg);
+      res.status(400).json({ error: msg });
+    }
+  });
+
+  // تسجيل انصرافي
+  app.post("/api/my/attendance/check-out", isAuthenticated, async (req, res) => {
+    try {
+      const allowSelfCheckin = await portalFlag(PORTAL_SETTING_KEYS.ALLOW_SELF_CHECKIN);
+      if (!allowSelfCheckin) return res.status(403).json({ error: "تسجيل الحضور الذاتي غير مفعّل" });
+
+      const emp = await getMyEmployee(req);
+      if (!emp) return res.status(403).json({ error: "حسابك غير مرتبط بملف موظف" });
+
+      const parsed = selfCheckinSchema.parse(req.body);
+
+      if (emp.branchId) {
+        const [branch] = await db.select().from(branches).where(eq(branches.id, emp.branchId));
+        if (branch?.latitude && branch?.longitude) {
+          const allowedRadius = branch.locationRadius || 200;
+          const distance = distanceMeters(parsed.userLatitude, parsed.userLongitude, branch.latitude, branch.longitude);
+          if (distance > allowedRadius) {
+            return res.status(400).json({
+              error: `الموقع خارج النطاق المسموح (${Math.round(distance)} متر من الفرع، المسموح: ${allowedRadius} متر)`,
+            });
+          }
+        }
+      }
+
+      const today = saudiDate();
+      const [todaySchedule] = await db.select().from(employeeSchedules)
+        .where(and(eq(employeeSchedules.branchEmployeeId, emp.id), eq(employeeSchedules.scheduleDate, today)))
+        .limit(1);
+
+      const record = await storage.checkOutEmployee(`branch_emp_${emp.id}`, parsed.signature, todaySchedule?.id, today);
+      if (!record) return res.status(400).json({ error: "لا يوجد تسجيل حضور لهذا اليوم" });
+      res.json(record);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: e.errors[0]?.message || "بيانات غير صحيحة" });
+      const msg = e?.message || "فشل تسجيل الانصراف";
+      console.error("[my/attendance/check-out] error:", msg);
+      res.status(400).json({ error: msg });
     }
   });
 

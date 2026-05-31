@@ -5588,7 +5588,7 @@ export const branchEmployees = pgTable("branch_employees", {
   index("idx_branch_employees_nationality").on(table.nationality),
   index("idx_branch_employees_status").on(table.status),
   index("idx_branch_employees_job").on(table.jobTitle),
-  index("idx_branch_employees_linked_user").on(table.linkedUserId),
+  uniqueIndex("idx_branch_employees_linked_user").on(table.linkedUserId),
   index("idx_branch_employees_branch_status").on(table.branchId, table.status),
   index("idx_branch_employees_terminated_at").on(table.terminatedAt),
 ]);
@@ -5850,6 +5850,33 @@ export const insertEmployeeSettingSchema = createInsertSchema(employeeSettings).
 
 export type EmployeeSetting = typeof employeeSettings.$inferSelect;
 export type InsertEmployeeSetting = z.infer<typeof insertEmployeeSettingSchema>;
+
+// Portal Settings - إعدادات بوابة الموظف (key/value)
+export const portalSettings = pgTable("portal_settings", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertPortalSettingSchema = createInsertSchema(portalSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type PortalSetting = typeof portalSettings.$inferSelect;
+export type InsertPortalSetting = z.infer<typeof insertPortalSettingSchema>;
+
+// Known portal setting keys + defaults
+export const PORTAL_SETTING_KEYS = {
+  SHOW_SALARY: "show_salary",
+  ALLOW_SELF_CHECKIN: "allow_self_checkin",
+} as const;
+
+export const PORTAL_SETTING_DEFAULTS: Record<string, string> = {
+  show_salary: "false",
+  allow_self_checkin: "true",
+};
 
 // Employee Setting Categories - فئات الإعدادات
 export const EMPLOYEE_SETTING_CATEGORIES = [

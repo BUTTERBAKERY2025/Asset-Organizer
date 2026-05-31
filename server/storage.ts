@@ -357,6 +357,9 @@ import {
   employeeSettings,
   type EmployeeSetting,
   type InsertEmployeeSetting,
+  portalSettings,
+  type PortalSetting,
+  PORTAL_SETTING_DEFAULTS,
   employeeTransferRequests,
   transferApprovalSteps,
   transferHistory,
@@ -1345,6 +1348,9 @@ export interface IStorage {
   deleteBranchEmployee(id: number): Promise<boolean>;
   getEmployeeStatusHistory(branchEmployeeId: number): Promise<EmployeeStatusHistory[]>;
   linkBranchEmployeeToUser(branchEmployeeId: number, userId: string): Promise<BranchEmployee | undefined>;
+  unlinkBranchEmployeeUser(branchEmployeeId: number): Promise<BranchEmployee | undefined>;
+  getBranchEmployeeByLinkedUserId(userId: string): Promise<BranchEmployee | undefined>;
+  createBranchEmployeeAccount(params: { branchEmployeeId: number; username: string; password: string; firstName: string; lastName: string; branchId: string | null; }): Promise<User>;
   getBranchEmployeeStats(branchId?: string): Promise<{
     totalEmployees: number;
     totalSalaries: number;
@@ -1366,6 +1372,9 @@ export interface IStorage {
   deleteOrgJobRole(id: number): Promise<boolean>;
 
   // Employee Settings - إعدادات بيانات الموظفين
+  getAllPortalSettings(): Promise<Record<string, string>>;
+  getPortalSetting(key: string): Promise<string>;
+  setPortalSetting(key: string, value: string): Promise<void>;
   getAllEmployeeSettings(): Promise<EmployeeSetting[]>;
   getEmployeeSettingsByCategory(category: string): Promise<EmployeeSetting[]>;
   getEmployeeSetting(id: number): Promise<EmployeeSetting | undefined>;
@@ -12019,6 +12028,62 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async unlinkBranchEmployeeUser(branchEmployeeId: number): Promise<BranchEmployee | undefined> {
+    const [updated] = await db.update(branchEmployees)
+      .set({ linkedUserId: null, updatedAt: new Date() })
+      .where(eq(branchEmployees.id, branchEmployeeId))
+      .returning();
+    return updated;
+  }
+
+  async getBranchEmployeeByLinkedUserId(userId: string): Promise<BranchEmployee | undefined> {
+    const [row] = await db.select().from(branchEmployees)
+      .where(eq(branchEmployees.linkedUserId, userId))
+      .limit(1);
+    return row;
+  }
+
+  // إنشاء حساب دخول لموظف وربطه به بشكل ذري (transaction)
+  async createBranchEmployeeAccount(params: {
+    branchEmployeeId: number;
+    username: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    branchId: string | null;
+  }): Promise<User> {
+    const hashedPassword = await bcrypt.hash(params.password, 10);
+    return await db.transaction(async (tx) => {
+      const [user] = await tx.insert(users).values({
+        username: params.username,
+        password: hashedPassword,
+        firstName: params.firstName,
+        lastName: params.lastName,
+        role: "employee",
+        branchId: params.branchId,
+      }).returning();
+
+      if (params.branchId) {
+        await tx.insert(userBranchAccess).values({
+          userId: user.id,
+          branchId: params.branchId,
+          accessLevel: "full",
+          isDefault: true,
+        });
+      }
+
+      const [updated] = await tx.update(branchEmployees)
+        .set({ linkedUserId: user.id, updatedAt: new Date() })
+        .where(and(eq(branchEmployees.id, params.branchEmployeeId), isNull(branchEmployees.linkedUserId)))
+        .returning();
+      if (!updated) {
+        throw new Error("هذا الموظف مرتبط بحساب بالفعل");
+      }
+
+      return user;
+    });
+  }
+
   // Branch Employee Integration - ربط موظفي الفروع بالحضور والدوام
   async getAttendanceByBranchEmployeeId(branchEmployeeId: number): Promise<AttendanceRecord[]> {
     try {
@@ -12086,7 +12151,31 @@ export class DatabaseStorage implements IStorage {
     return !!deleted;
   }
 
-  // Employee Settings - إعدادات بيانات الموظفين
+  // Portal Settings - إعدادات بوابة الموظف
+  async getAllPortalSettings(): Promise<Record<string, string>> {
+    const rows = await db.select().from(portalSettings);
+    const result: Record<string, string> = { ...PORTAL_SETTING_DEFAULTS };
+    for (const row of rows) {
+      result[row.key] = row.value;
+    }
+    return result;
+  }
+
+  async getPortalSetting(key: string): Promise<string> {
+    const [row] = await db.select().from(portalSettings).where(eq(portalSettings.key, key));
+    if (row) return row.value;
+    return PORTAL_SETTING_DEFAULTS[key] ?? "";
+  }
+
+  async setPortalSetting(key: string, value: string): Promise<void> {
+    await db.insert(portalSettings)
+      .values({ key, value })
+      .onConflictDoUpdate({
+        target: portalSettings.key,
+        set: { value, updatedAt: new Date() },
+      });
+  }
+
   async getAllEmployeeSettings(): Promise<EmployeeSetting[]> {
     return await db.select().from(employeeSettings)
       .where(eq(employeeSettings.isActive, true))
