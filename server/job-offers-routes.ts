@@ -354,7 +354,7 @@ export function registerJobOfferRoutes(app: Express) {
         await db.delete(jobOfferAuditLog).where(eq(jobOfferAuditLog.offerId, id));
         await db.delete(jobOffers).where(eq(jobOffers.id, id));
 
-        console.log(`[job-offers] DELETED by user=${user?.username || user?.id} role=${user?.role} offer=${existing.offerNumber}`);
+        console.log(`[job-offers] DELETED by userId=${user?.id} role=${user?.role} offer=${existing.offerNumber}`);
         res.json({ success: true });
       } catch (e: any) {
         console.error("[job-offers] delete error:", e);

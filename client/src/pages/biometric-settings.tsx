@@ -381,7 +381,6 @@ export default function BiometricSettingsPage() {
 
       console.log("[Biometric] Creating credential with options:", JSON.stringify({
         rpId: createOptions.rp.id,
-        userName: createOptions.user.name,
         excludeCount: excludeCredentials.length,
       }));
 

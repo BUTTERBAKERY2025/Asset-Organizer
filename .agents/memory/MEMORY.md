@@ -1,2 +1,3 @@
 - [Notification surfaces](notification-surfaces.md) — bell/popup read `systemNotifications` (branch+role targeting); the `notifications` table is invisible to users.
 - [Targeted position messaging](targeted-position-messaging.md) — position/role broadcasts must re-resolve recipients server-side; never trust client userId/phone/branch (IDOR).
+- [Security scan notes](security-scan-notes.md) — recurring scan findings: xlsx patched build only on SheetJS CDN (firewall-blocked, manual on Render); scheduler/media-team flags are false positives; uuid is transitive.

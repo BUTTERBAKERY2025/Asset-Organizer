@@ -1317,7 +1317,7 @@ export class DatabaseStorage implements IStorage {
     const template = JOB_ROLE_PERMISSION_TEMPLATES[jobTitle as keyof typeof JOB_ROLE_PERMISSION_TEMPLATES];
     
     if (!template) {
-      console.warn(`No permission template found for job title: ${jobTitle}, applying minimal access`);
+      console.warn(`No permission template found for the provided job title, applying minimal access`);
       // If no template exists, apply minimal dashboard access
       return this.updateUserPermissionsWithAudit(
         userId,

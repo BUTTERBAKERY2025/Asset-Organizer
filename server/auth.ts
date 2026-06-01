@@ -1104,7 +1104,7 @@ export function getMandatoryBranchFilter(req: any): string | null {
   
   // If somehow no branch is assigned, this is a security issue - log it
   if (!branchFilter) {
-    console.error(`SECURITY: User ${user.id} (${user.username}) has no branch assigned!`);
+    console.error(`SECURITY: User ${user.id} has no branch assigned!`);
   }
   
   return branchFilter || null;
