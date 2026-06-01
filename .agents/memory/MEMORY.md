@@ -4,3 +4,4 @@
 - [routes.ts & db:push quirks](routes-and-dbpush-quirks.md) — read-tool line offsets are wrong for routes.ts (use awk/sed); db:push blocked by TTY, use psql for dev schema changes.
 - [بوابتي employee portal](employee-portal.md) — /api/my/* scoped via getMyEmployee; linked_user_id must be unique; attendance id = branch_emp_{id}; portal_settings flags.
 - [Notification write path](notification-write-path.md) — `notifications` table = in-app inbox; storage.createSystemNotification is overloaded & writes to `system_notifications`, so db.insert(notifications) directly; WhatsApp via storage.createNotification → notification_queue.
+- [Timesheet report → employee linkage](timesheet-employee-linkage.md) — reports tie to a person via varchar employeeId (userId or branch_emp_<id>), not branchEmployeeId (null on generate); status is varchar so new values need no migration.

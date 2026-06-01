@@ -5496,7 +5496,7 @@ export type TimesheetReportEntry = typeof timesheetReportEntries.$inferSelect;
 export type InsertTimesheetReportEntry = z.infer<typeof insertTimesheetReportEntrySchema>;
 
 // Timesheet Status Labels
-export const TIMESHEET_STATUS = ["pending", "pending_employee_signature", "pending_manager_signature", "finalized"] as const;
+export const TIMESHEET_STATUS = ["pending", "pending_employee_signature", "pending_manager_signature", "finalized", "rejected"] as const;
 export type TimesheetStatus = (typeof TIMESHEET_STATUS)[number];
 
 export const TIMESHEET_STATUS_LABELS: Record<TimesheetStatus, string> = {
@@ -5504,12 +5504,13 @@ export const TIMESHEET_STATUS_LABELS: Record<TimesheetStatus, string> = {
   pending_employee_signature: "بانتظار توقيع الموظف",
   pending_manager_signature: "بانتظار توقيع المدير",
   finalized: "مكتمل",
+  rejected: "مرفوض - بحاجة لمراجعة",
 };
 
 // Phase 3: Audit Log - سجل تدقيق تقارير الدوام
 export const TIMESHEET_AUDIT_ACTIONS = [
   "created", "updated", "signed_employee", "signed_manager",
-  "locked", "unlocked", "reissued", "deleted", "pdf_generated"
+  "locked", "unlocked", "reissued", "deleted", "pdf_generated", "rejected"
 ] as const;
 export type TimesheetAuditAction = (typeof TIMESHEET_AUDIT_ACTIONS)[number];
 

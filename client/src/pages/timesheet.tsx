@@ -140,6 +140,7 @@ export default function TimesheetPage() {
     pending_employee_signature: { label: t("timesheet.reportStatusLabels.pendingEmployee"), color: "bg-amber-100 text-amber-700" },
     pending_manager_signature: { label: t("timesheet.reportStatusLabels.pendingManager"), color: "bg-blue-100 text-blue-700" },
     finalized: { label: t("timesheet.reportStatusLabels.finalized"), color: "bg-green-100 text-green-700" },
+    rejected: { label: "مرفوض - بحاجة لمراجعة", color: "bg-red-100 text-red-700" },
   };
 
   const NOT_GENERATED_BADGE = { label: t("timesheet.dashboard.notGenerated"), color: "bg-rose-50 text-rose-700 border border-rose-200" };
@@ -445,6 +446,53 @@ export default function TimesheetPage() {
       toast({ title: t("common.error"), description: error.message, variant: "destructive" });
     },
   });
+
+  // ====== Reject (manager) mutation ======
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectingFor, setRejectingFor] = useState<TimesheetReport | null>(null);
+
+  const rejectMutation = useMutation({
+    mutationFn: async (data: { id: number; reason: string }) => {
+      const res = await fetch(`/api/timesheet-reports/${data.id}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: data.reason }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "فشل في رفض التقرير");
+      }
+      return res.json();
+    },
+    onSuccess: (data: TimesheetReport) => {
+      toast({ title: "تم رفض التقرير وإعادته للموظف للمراجعة" });
+      setShowRejectDialog(false);
+      setRejectReason("");
+      setRejectingFor(null);
+      setSelectedReport(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/timesheet-reports"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/timesheet-reports", data.id, "audit-log"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleOpenReject = (report: TimesheetReport) => {
+    setRejectingFor(report);
+    setRejectReason("");
+    setShowRejectDialog(true);
+  };
+
+  const handleConfirmReject = () => {
+    if (!rejectingFor) return;
+    if (rejectReason.trim().length < 3) {
+      toast({ title: t("common.alert"), description: "يجب كتابة سبب الرفض (3 أحرف على الأقل)", variant: "destructive" });
+      return;
+    }
+    rejectMutation.mutate({ id: rejectingFor.id, reason: rejectReason.trim() });
+  };
 
   const handleOpenReissue = (report: TimesheetReport) => {
     setReissuingFor(report);
@@ -1082,6 +1130,19 @@ export default function TimesheetPage() {
                                             {t("timesheet.dashboard.actionSign")}
                                           </Button>
                                         )}
+                                        {r!.status === "pending_manager_signature" && !r!.isLocked && (
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handleOpenReject(r!)}
+                                            className="h-8 gap-1 border-red-300 text-red-700"
+                                            data-testid={`btn-reject-${row.id}`}
+                                            title="رفض وإعادة للموظف"
+                                          >
+                                            <XCircle className="w-3 h-3" />
+                                            رفض
+                                          </Button>
+                                        )}
                                         {isCurrentUserAdmin && r!.isLocked && !r!.supersededBy && (
                                           <Button
                                             size="sm"
@@ -1265,6 +1326,17 @@ export default function TimesheetPage() {
                       <Button onClick={() => handleOpenSignature("manager", selectedReport)} className="gap-2 h-11 sm:h-9" data-testid="btn-sign-manager">
                         <Pen className="w-4 h-4" />
                         {t("timesheet.signManager")}
+                      </Button>
+                    )}
+                    {selectedReport.status === "pending_manager_signature" && !selectedReport.isLocked && (
+                      <Button
+                        variant="outline"
+                        onClick={() => handleOpenReject(selectedReport)}
+                        className="gap-2 h-11 sm:h-9 border-red-300 text-red-700 hover:bg-red-50"
+                        data-testid="btn-reject"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        رفض وإعادة للموظف
                       </Button>
                     )}
                     {isCurrentUserAdmin && selectedReport.isLocked && !selectedReport.supersededBy && (
@@ -1633,6 +1705,50 @@ export default function TimesheetPage() {
               >
                 {reissueMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                 {t("timesheet.reissue.confirmButton")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Reject dialog — manager rejects with reason, returns report to employee */}
+        <Dialog open={showRejectDialog} onOpenChange={(open) => { if (!rejectMutation.isPending) setShowRejectDialog(open); }}>
+          <DialogContent className="max-w-lg" data-testid="dialog-reject">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <XCircle className="w-5 h-5 text-red-600" />
+                رفض تقرير الدوام
+              </DialogTitle>
+              <DialogDescription>سيُعاد التقرير للموظف ليراجعه ويوقّع عليه مجدداً. اكتب سبب الرفض بوضوح.</DialogDescription>
+            </DialogHeader>
+            {rejectingFor && (
+              <div className="text-sm text-muted-foreground border rounded p-2 bg-muted/40">
+                <div>{getEmployeeName(rejectingFor.employeeId)}</div>
+                <div className="text-xs">{rejectingFor.startDate} → {rejectingFor.endDate}</div>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">سبب الرفض / الملاحظات</Label>
+              <Textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="مثال: يوجد خطأ في أيام الحضور بتاريخ ... يرجى المراجعة"
+                rows={4}
+                className="text-sm resize-none"
+                data-testid="textarea-reject-reason"
+              />
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setShowRejectDialog(false)} disabled={rejectMutation.isPending} data-testid="btn-cancel-reject">
+                {t("common.cancel")}
+              </Button>
+              <Button
+                onClick={handleConfirmReject}
+                disabled={rejectMutation.isPending || rejectReason.trim().length < 3}
+                className="gap-2 bg-red-600 hover:bg-red-700"
+                data-testid="btn-confirm-reject"
+              >
+                {rejectMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                تأكيد الرفض
               </Button>
             </DialogFooter>
           </DialogContent>

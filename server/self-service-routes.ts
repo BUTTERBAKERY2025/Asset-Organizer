@@ -416,6 +416,123 @@ export function registerSelfServiceRoutes(app: Express) {
     }
   });
 
+  // ========================================================================
+  // تايم شيت الموظف الشهري — يطّلع الموظف على تقاريره ويوقّع عليها
+  // التقارير تُربط بالموظف عبر employeeId (UUID الحساب أو صيغة branch_emp_X)
+  // ========================================================================
+
+  // قائمة تقاريري (أحدثها أولاً، بدون الإصدارات المُستبدَلة)
+  app.get("/api/my/timesheet-reports", isAuthenticated, async (req, res) => {
+    try {
+      const emp = await getMyEmployee(req);
+      const userId = getUserId(req);
+      if (!emp || !userId) return res.json([]);
+      const candidateIds = [userId, `branch_emp_${emp.id}`];
+      const lists = await Promise.all(candidateIds.map((eid) => storage.getTimesheetReports({ employeeId: eid })));
+      const byId = new Map<number, any>();
+      for (const r of lists.flat()) {
+        if (!r.supersededBy) byId.set(r.id, r);
+      }
+      const reports = Array.from(byId.values()).sort((a, b) =>
+        a.startDate < b.startDate ? 1 : a.startDate > b.startDate ? -1 : b.id - a.id,
+      );
+      res.json(reports);
+    } catch (e: any) {
+      console.error("[my/timesheet-reports] list error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // تفاصيل تقريري + سطوره اليومية (مع تحقق ملكية صارم)
+  app.get("/api/my/timesheet-reports/:id", isAuthenticated, async (req, res) => {
+    try {
+      const emp = await getMyEmployee(req);
+      const userId = getUserId(req);
+      if (!emp || !userId) return res.status(403).json({ error: "حسابك غير مرتبط بملف موظف" });
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const report = await storage.getTimesheetReport(id);
+      const owns = report && (report.employeeId === userId || report.employeeId === `branch_emp_${emp.id}`);
+      if (!report || !owns) return res.status(404).json({ error: "التقرير غير موجود" });
+      const entries = await storage.getTimesheetReportEntries(id);
+      res.json({ report, entries });
+    } catch (e: any) {
+      console.error("[my/timesheet-reports/:id] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // توقيع الموظف على تقريره (لا يحتاج صلاحية وحدة — محصور على صاحب التقرير)
+  app.post("/api/my/timesheet-reports/:id/sign", isAuthenticated, async (req, res) => {
+    try {
+      const emp = await getMyEmployee(req);
+      const userId = getUserId(req);
+      if (!emp || !userId) return res.status(403).json({ error: "حسابك غير مرتبط بملف موظف" });
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const { signature, acknowledgment } = req.body || {};
+      if (!signature || typeof signature !== "string") {
+        return res.status(400).json({ error: "التوقيع مطلوب" });
+      }
+      if (signature.length > 500000) {
+        return res.status(400).json({ error: "حجم التوقيع كبير جداً" });
+      }
+      const report = await storage.getTimesheetReport(id);
+      const owns = report && (report.employeeId === userId || report.employeeId === `branch_emp_${emp.id}`);
+      if (!report || !owns) return res.status(404).json({ error: "التقرير غير موجود" });
+      if (report.isLocked || report.status === "finalized") {
+        return res.status(400).json({ error: "هذا التقرير مكتمل/مقفل ولا يمكن التوقيع عليه" });
+      }
+      if (report.status === "pending_manager_signature" && report.employeeSignature) {
+        return res.status(400).json({ error: "سبق أن وقّعت على هذا التقرير، وهو الآن بانتظار توقيع المدير" });
+      }
+
+      const signed = await storage.signTimesheetReport(id, "employee", signature, userId, acknowledgment);
+      if (!signed) return res.status(404).json({ error: "التقرير غير موجود" });
+
+      const performerName = emp.employeeName || userId;
+      try {
+        await storage.createTimesheetAuditLog({
+          reportId: id,
+          action: "signed_employee",
+          performedBy: userId,
+          performedByName: performerName,
+          ipAddress: (req.ip || (req.headers["x-forwarded-for"] as string) || "").toString().slice(0, 100),
+          userAgent: (req.headers["user-agent"] || "").toString().slice(0, 500),
+          notes: acknowledgment ? String(acknowledgment).slice(0, 500) : null,
+        });
+        const branchUsers = await storage.getAllUsers().catch(() => [] as any[]);
+        const branchManagers = branchUsers.filter(
+          (u: any) => u.branchId === signed.branchId && (u.role === "manager" || u.role === "admin"),
+        );
+        await Promise.all(
+          branchManagers.map((m: any) =>
+            storage.createSystemNotification({
+              userId: m.id,
+              branchId: signed.branchId,
+              title: "تقرير دوام بانتظار توقيعك",
+              message: `وقّع الموظف ${performerName} على تقرير دوام للفترة ${signed.startDate} - ${signed.endDate}`,
+              type: "info",
+              category: "system",
+              priority: "normal",
+              linkType: "meeting",
+              linkId: id,
+              linkUrl: `/timesheet?reportId=${id}`,
+              createdBy: userId,
+            }).catch(() => null),
+          ),
+        );
+      } catch (auditErr) {
+        console.error("[my/timesheet sign] side-effect failed (non-blocking):", auditErr);
+      }
+
+      res.json(signed);
+    } catch (e: any) {
+      console.error("[my/timesheet-reports/:id/sign] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // إنذاراتي
   app.get("/api/my/warnings", isAuthenticated, async (req, res) => {
     try {

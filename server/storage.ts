@@ -1315,6 +1315,7 @@ export interface IStorage {
   updateTimesheetReport(id: number, report: Partial<InsertTimesheetReport>): Promise<TimesheetReport | undefined>;
   deleteTimesheetReport(id: number): Promise<boolean>;
   signTimesheetReport(id: number, signatureType: 'employee' | 'manager', signature: string, signerId: string, acknowledgment?: string): Promise<TimesheetReport | undefined>;
+  rejectTimesheetReport(id: number, reason: string, managerId: string): Promise<TimesheetReport | undefined>;
   // Phase 3: lock / reissue / audit
   lockTimesheetReport(id: number, lockedBy: string): Promise<TimesheetReport | undefined>;
   unlockTimesheetReport(id: number): Promise<TimesheetReport | undefined>;
@@ -11543,7 +11544,7 @@ export class DatabaseStorage implements IStorage {
       updates.employeeSignature = signature;
       updates.employeeSignedAt = new Date();
       updates.employeeAcknowledgment = acknowledgment || 'أقر بصحة بيانات الحضور والانصراف المذكورة أعلاه';
-      if (report.status === 'pending' || report.status === 'pending_employee_signature') {
+      if (report.status === 'pending' || report.status === 'pending_employee_signature' || report.status === 'rejected') {
         updates.status = 'pending_manager_signature';
       }
     } else if (signatureType === 'manager') {
@@ -11563,6 +11564,14 @@ export class DatabaseStorage implements IStorage {
     }
 
     return await this.updateTimesheetReport(id, updates);
+  }
+
+  async rejectTimesheetReport(id: number, reason: string, managerId: string): Promise<TimesheetReport | undefined> {
+    return await this.updateTimesheetReport(id, {
+      status: 'rejected',
+      notes: reason,
+      managerId,
+    } as any);
   }
 
   // Phase 3: lock / unlock / reissue / audit log

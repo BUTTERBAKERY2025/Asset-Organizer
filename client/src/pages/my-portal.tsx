@@ -19,11 +19,12 @@ import {
   Briefcase, Building2, Hash, AlertTriangle, LayoutDashboard, CalendarRange,
   ClipboardCheck, ShieldAlert, FileText, Award, ChevronLeft, ChevronRight,
   MapPin, LogIn, LogOut, Loader2, Fingerprint, Eraser, Languages, Globe, Phone,
-  Bell,
+  Bell, FileSignature,
 } from "lucide-react";
 import {
   LEAVE_TYPE_LABELS,
 } from "@shared/schema";
+import { PortalTimesheet } from "@/components/portal-timesheet";
 
 function fmtMoney(n: any): string {
   return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -583,6 +584,9 @@ export default function MyPortalPage() {
                     <ClipboardCheck className="h-4 w-4 ms-1" />{t("tabs.attendance")}
                   </TabsTrigger>
                 )}
+                <TabsTrigger value="timesheet" data-testid="tab-timesheet">
+                  <FileSignature className="h-4 w-4 ms-1" />تايم شيت
+                </TabsTrigger>
                 {showLeaves && (
                   <TabsTrigger value="leaves" data-testid="tab-leaves">
                     <CalendarDays className="h-4 w-4 ms-1" />{t("tabs.leaves")}
@@ -994,6 +998,11 @@ export default function MyPortalPage() {
                     </CardContent>
                   </Card>
                 ))}
+              </TabsContent>
+
+              {/* تايم شيت الشهري / monthly timesheet */}
+              <TabsContent value="timesheet" className="space-y-3">
+                <PortalTimesheet />
               </TabsContent>
 
               {/* إنذاراتي / warnings */}

@@ -27945,6 +27945,75 @@ export async function registerRoutes(
     }
   });
 
+  // Reject a timesheet report (manager/HR) with notes - رفض التقرير مع ملاحظات
+  app.post("/api/timesheet-reports/:id/reject", isAuthenticated, requirePermission("attendance", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+
+      const { reason } = req.body || {};
+      if (!reason || typeof reason !== 'string' || reason.trim().length < 3) {
+        return res.status(400).json({ error: "يجب كتابة سبب الرفض (3 أحرف على الأقل)" });
+      }
+
+      const rejecterId = req.currentUser?.id;
+      if (!rejecterId) return res.status(401).json({ error: "المستخدم غير موجود" });
+
+      const existingReport = await storage.getTimesheetReport(id);
+      if (!existingReport) return res.status(404).json({ error: "التقرير غير موجود" });
+      if (existingReport.isLocked || existingReport.status === 'finalized') {
+        return res.status(400).json({ error: "لا يمكن رفض تقرير مكتمل أو مقفل - استخدم إعادة الإصدار" });
+      }
+      if (existingReport.status !== 'pending_manager_signature') {
+        return res.status(400).json({ error: "لا يمكن الرفض إلا عندما يكون التقرير بانتظار توقيع المدير" });
+      }
+      // SECURITY: branch access for non-admin users
+      if (!isUserAdmin(req) && existingReport.branchId) {
+        const hasAccess = await canAccessBranch(req, existingReport.branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح" });
+      }
+
+      const report = await storage.rejectTimesheetReport(id, reason.trim().slice(0, 1000), rejecterId);
+      if (!report) return res.status(404).json({ error: "التقرير غير موجود" });
+
+      const performerName = `${req.currentUser?.firstName || ""} ${req.currentUser?.lastName || ""}`.trim() || req.currentUser?.username || rejecterId;
+      try {
+        await storage.createTimesheetAuditLog({
+          reportId: id,
+          action: 'rejected',
+          performedBy: rejecterId,
+          performedByName: performerName,
+          ipAddress: (req.ip || req.headers['x-forwarded-for'] as string || '').toString().slice(0, 100),
+          userAgent: (req.headers['user-agent'] || '').toString().slice(0, 500),
+          notes: reason.trim().slice(0, 500),
+        });
+        // Notify the employee (only if has user account)
+        if (!report.employeeId.startsWith('branch_emp_')) {
+          await storage.createSystemNotification({
+            userId: report.employeeId,
+            branchId: report.branchId,
+            title: 'تم رفض تقرير دوامك',
+            message: `رُفض تقرير الفترة ${report.startDate} - ${report.endDate}. الملاحظات: ${reason.trim().slice(0, 200)}`,
+            type: 'warning',
+            category: 'system',
+            priority: 'high',
+            linkType: 'meeting',
+            linkId: id,
+            linkUrl: `/my-portal`,
+            createdBy: rejecterId,
+          }).catch(() => null);
+        }
+      } catch (auditErr) {
+        console.error("Reject audit/notification side-effect failed (non-blocking):", auditErr);
+      }
+
+      res.json(report);
+    } catch (error) {
+      console.error("Error rejecting timesheet report:", error);
+      res.status(500).json({ error: "فشل في رفض التقرير" });
+    }
+  });
+
   // Delete timesheet report
   app.delete("/api/timesheet-reports/:id", isAuthenticated, requirePermission("attendance", "delete"), async (req, res) => {
     try {
