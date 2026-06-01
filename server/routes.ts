@@ -35526,9 +35526,14 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/system-notifications/:id", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
+  app.get("/api/system-notifications/:id", isAuthenticated, requirePermission("settings", "view"), async (req, res, next) => {
+    // Only handle numeric ids. Non-numeric segments (e.g. "targets-by-position",
+    // "branch-issues", "recipients-from-branches") must fall through to their own
+    // specific GET routes registered later, otherwise this param route swallows them.
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return next();
     try {
-      const notification = await storage.getSystemNotification(parseInt(req.params.id));
+      const notification = await storage.getSystemNotification(id);
       if (!notification) return res.status(404).json({ error: "الإشعار غير موجود" });
       res.json(notification);
     } catch (error) {
