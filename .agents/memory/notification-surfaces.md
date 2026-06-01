@@ -21,9 +21,16 @@ There are TWO separate notification surfaces:
   - Bell rows are raw systemNotifications shape: `content` (not message), `messageType`
     (not type), integer `priority`, `buttonText`/`buttonAction`. Clicking opens a detail
     Dialog (full content) — there is no `linkUrl`; navigation is optional via buttonAction.
-  - Targeting is by **branch + role only**: `targetAllBranches` / `targetBranchIds` /
-    `targetRoleIds` (matched against `users.role`). There is NO per-user/targetUserIds
-    column — individual targeting requires a schema change.
+  - Targeting: `targetAllBranches` / `targetBranchIds` / `targetRoleIds` (vs `users.role`),
+    PLUS `targetUserIds` (text[]) for per-person targeting. **When `targetUserIds` is set &
+    non-empty it OVERRIDES branch+role** in `getActiveNotificationsForUser` — only those
+    user ids see it, regardless of active branch/role. Empty/null → legacy branch+role.
+  - `send-targeted` has `targetMode` ("position" | "individuals") + `displayStyle`
+    (modal/fullscreen/banner/slide_in, rendered by `NotificationDisplay`). In-app delivery
+    ALWAYS writes `targetUserIds` (exact selected linked users, per branch) — no more
+    role+branch broadcast. Individuals are re-resolved server-side from the DB
+    (`resolveTargetsByIdentifiers`: users by id + branch_employees by phone, branch-scoped)
+    — client identifiers are never trusted. Picker: `GET .../search-people` (settings:view).
 - **`notifications` table** = a separate per-user surface, read only by `/api/notifications`
   (`users:view`). The bell does NOT read it. Writing here (e.g. via
   `NotificationService.createBulkNotifications`) will NOT show the user any alert.

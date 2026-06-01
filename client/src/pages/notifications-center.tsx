@@ -529,12 +529,15 @@ function TargetedTab({ branches, twilioConfigured }: { branches: Branch[]; twili
   const { toast } = useToast();
   const branchName = (id: string) => branches.find(b => b.id === id)?.name || id;
 
+  const [targetMode, setTargetMode] = useState<"position" | "individuals">("position");
   const [jobTitle, setJobTitle] = useState("branch_manager");
+  const [personQuery, setPersonQuery] = useState("");
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [targets, setTargets] = useState<TargetPerson[]>([]);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [messageMode, setMessageMode] = useState<"free" | "smart" | "both">("free");
   const [freeText, setFreeText] = useState("");
+  const [displayStyle, setDisplayStyle] = useState<"banner" | "modal" | "fullscreen" | "slide_in">("banner");
   const [channelInapp, setChannelInapp] = useState(true);
   const [channelWhatsapp, setChannelWhatsapp] = useState(false);
   const [previewIssues, setPreviewIssues] = useState<BranchIssue[] | null>(null);
@@ -552,14 +555,23 @@ function TargetedTab({ branches, twilioConfigured }: { branches: Branch[]; twili
   const searchMut = useMutation({
     mutationFn: async () => {
       if (selectedBranches.length === 0) throw new Error("اختر فرعاً واحداً على الأقل");
-      const qs = `jobTitle=${encodeURIComponent(jobTitle)}&branchIds=${encodeURIComponent(selectedBranches.join(","))}`;
-      return api<TargetPerson[]>("GET", `/api/system-notifications/targets-by-position?${qs}`);
+      const bq = encodeURIComponent(selectedBranches.join(","));
+      if (targetMode === "individuals") {
+        return api<TargetPerson[]>("GET", `/api/system-notifications/search-people?q=${encodeURIComponent(personQuery)}&branchIds=${bq}`);
+      }
+      return api<TargetPerson[]>("GET", `/api/system-notifications/targets-by-position?jobTitle=${encodeURIComponent(jobTitle)}&branchIds=${bq}`);
     },
     onSuccess: (data) => {
       setTargets(data);
-      setSelectedKeys(new Set(data.map(keyOf)));
+      // By position: pre-select everyone found. Specific people: admin picks who, so start empty.
+      setSelectedKeys(targetMode === "individuals" ? new Set() : new Set(data.map(keyOf)));
       if (data.length === 0) {
-        toast({ title: "لا يوجد مستهدفون", description: "لم يتم العثور على أحد بهذا المنصب في الفروع المحددة" });
+        toast({
+          title: "لا يوجد مستهدفون",
+          description: targetMode === "individuals"
+            ? "لم يتم العثور على أشخاص مطابقين في الفروع المحددة"
+            : "لم يتم العثور على أحد بهذا المنصب في الفروع المحددة",
+        });
       }
     },
     onError: (e: any) => toast({ title: "فشل البحث", description: e.message, variant: "destructive" }),
@@ -590,7 +602,9 @@ function TargetedTab({ branches, twilioConfigured }: { branches: Branch[]; twili
       }
       return api("POST", "/api/system-notifications/send-targeted", {
         title: "رسالة من الإدارة",
-        jobTitle,
+        targetMode,
+        jobTitle: targetMode === "position" ? jobTitle : undefined,
+        displayStyle,
         messageMode,
         freeText: freeText.trim() || undefined,
         channels,
@@ -624,23 +638,53 @@ function TargetedTab({ branches, twilioConfigured }: { branches: Branch[]; twili
     <div className="space-y-4">
       {/* Step 1: Position + branches */}
       <Card>
-        <CardHeader><CardTitle className="text-lg">١. اختر المنصب والفروع</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-lg">١. اختر طريقة الاستهداف والفروع</CardTitle></CardHeader>
         <CardContent className="space-y-4">
+          <div>
+            <Label>طريقة الاستهداف</Label>
+            <RadioGroup
+              value={targetMode}
+              onValueChange={(v) => { setTargetMode(v as any); setTargets([]); setSelectedKeys(new Set()); }}
+              className="flex flex-wrap gap-4 mt-2"
+            >
+              <label className="flex items-center gap-2 cursor-pointer text-sm" data-testid="radio-target-position">
+                <RadioGroupItem value="position" /> حسب المنصب (كل من يحمل الوظيفة)
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer text-sm" data-testid="radio-target-individuals">
+                <RadioGroupItem value="individuals" /> شخص بعينه (اختيار أفراد محددين)
+              </label>
+            </RadioGroup>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <Label>المنصب</Label>
-              <Select value={jobTitle} onValueChange={setJobTitle}>
-                <SelectTrigger data-testid="select-job-title"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(JOB_TITLE_LABELS).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>{v}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {targetMode === "position" ? (
+                <>
+                  <Label>المنصب</Label>
+                  <Select value={jobTitle} onValueChange={setJobTitle}>
+                    <SelectTrigger data-testid="select-job-title"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(JOB_TITLE_LABELS).map(([k, v]) => (
+                        <SelectItem key={k} value={k}>{v}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </>
+              ) : (
+                <>
+                  <Label>بحث بالاسم أو الجوال</Label>
+                  <Input
+                    value={personQuery}
+                    onChange={(e) => setPersonQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && selectedBranches.length > 0) searchMut.mutate(); }}
+                    placeholder="اكتب اسم الموظف أو رقم جواله..."
+                    data-testid="input-person-query"
+                  />
+                </>
+              )}
             </div>
             <div className="flex items-end">
               <Button onClick={() => searchMut.mutate()} disabled={searchMut.isPending || selectedBranches.length === 0} data-testid="button-search-targets" className="w-full">
-                <Search className="h-4 w-4 ml-2" />{searchMut.isPending ? "جارِ البحث..." : "بحث عن المستهدفين"}
+                <Search className="h-4 w-4 ml-2" />{searchMut.isPending ? "جارِ البحث..." : (targetMode === "individuals" ? "بحث عن الأشخاص" : "بحث عن المستهدفين")}
               </Button>
             </div>
           </div>
@@ -728,6 +772,20 @@ function TargetedTab({ branches, twilioConfigured }: { branches: Branch[]; twili
                 </AlertDescription>
               </Alert>
             )}
+
+            <div>
+              <Label>طريقة ظهور الإشعار للموظف</Label>
+              <Select value={displayStyle} onValueChange={(v) => setDisplayStyle(v as any)}>
+                <SelectTrigger data-testid="select-display-style" className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="banner">شريط علوي (تنبيه بسيط في الأعلى)</SelectItem>
+                  <SelectItem value="modal">نافذة منبثقة في المنتصف</SelectItem>
+                  <SelectItem value="fullscreen">صفحة كاملة (تملأ الشاشة)</SelectItem>
+                  <SelectItem value="slide_in">بطاقة منزلقة من الجانب</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">تحدّد كيف يظهر الإشعار للموظف داخل النظام (يطبّق على قناة «داخل النظام» فقط).</p>
+            </div>
 
             <div>
               <Label>قنوات الإرسال</Label>

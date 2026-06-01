@@ -17100,11 +17100,18 @@ export class DatabaseStorage implements IStorage {
     return allActive.filter(n => {
       if (dismissedIds.has(n.id)) return false;
       if (n.showOnce && readOnceIds.has(n.id)) return false;
-      if (!n.targetAllBranches && n.targetBranchIds && !n.targetBranchIds.includes(branchId)) return false;
-      // Phase 4: role-based targeting — if targetRoleIds is set and non-empty, only show to matching roles
-      const roleIds = (n as any).targetRoleIds as string[] | null | undefined;
-      if (roleIds && roleIds.length > 0) {
-        if (!userRole || !roleIds.includes(userRole)) return false;
+      // Per-user targeting — if targetUserIds is set & non-empty, ONLY those users see it,
+      // regardless of their active branch or role (used for "specific person" messages).
+      const userIdsTarget = (n as any).targetUserIds as string[] | null | undefined;
+      if (userIdsTarget && userIdsTarget.length > 0) {
+        if (!userIdsTarget.includes(userId)) return false;
+      } else {
+        if (!n.targetAllBranches && n.targetBranchIds && !n.targetBranchIds.includes(branchId)) return false;
+        // Phase 4: role-based targeting — if targetRoleIds is set and non-empty, only show to matching roles
+        const roleIds = (n as any).targetRoleIds as string[] | null | undefined;
+        if (roleIds && roleIds.length > 0) {
+          if (!userRole || !roleIds.includes(userRole)) return false;
+        }
       }
       if (n.displayTimeStart || n.displayTimeEnd) {
         const nowTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;

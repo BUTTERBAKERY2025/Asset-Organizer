@@ -35846,6 +35846,120 @@ export async function registerRoutes(
     return Array.from(byKey.values());
   }
 
+  // Authoritative resolver for "specific people" mode: re-looks up each selected person
+  // from the DB (users by id, branch_employees by phone) within already-authorized
+  // branches. The client cannot inject an arbitrary person — we only build targets from
+  // rows the server itself reads in an allowed branch.
+  async function resolveTargetsByIdentifiers(
+    recipients: { userId?: string | null; phone?: string | null; branchId: string }[],
+    allowedBranchIds: string[],
+  ): Promise<PositionTarget[]> {
+    if (recipients.length === 0 || allowedBranchIds.length === 0) return [];
+    const userIds = Array.from(new Set(recipients.map((r) => r.userId).filter(Boolean))) as string[];
+    const rawPhones = Array.from(new Set(recipients.map((r) => r.phone).filter(Boolean))) as string[];
+
+    const byKey = new Map<string, PositionTarget>();
+    const addTarget = (t: PositionTarget) => {
+      const key = targetKey(t);
+      const existing = byKey.get(key);
+      if (existing) {
+        if (!existing.userId && t.userId) existing.userId = t.userId;
+        if (!existing.phone && t.phone) existing.phone = t.phone;
+      } else {
+        byKey.set(key, t);
+      }
+    };
+
+    if (userIds.length > 0) {
+      const userRows: any = await db.execute(sql`
+        SELECT id, first_name, last_name, username, phone, branch_id
+        FROM users
+        WHERE id IN (${inList(userIds)})
+          AND is_active = 'active'
+          AND branch_id IN (${inList(allowedBranchIds)})
+      `);
+      const list = (userRows.rows || userRows) as any[];
+      for (const u of list) {
+        const name = [u.first_name, u.last_name].filter(Boolean).join(" ").trim() || u.username || "مستخدم";
+        addTarget({ name, phone: u.phone || null, branchId: u.branch_id, userId: u.id, source: "user_direct" });
+      }
+    }
+    if (rawPhones.length > 0) {
+      const empRows: any = await db.execute(sql`
+        SELECT employee_name, phone_number, branch_id, linked_user_id
+        FROM branch_employees
+        WHERE status = 'active'
+          AND phone_number IN (${inList(rawPhones)})
+          AND branch_id IN (${inList(allowedBranchIds)})
+      `);
+      const list = (empRows.rows || empRows) as any[];
+      for (const e of list) {
+        addTarget({
+          name: e.employee_name,
+          phone: e.phone_number || null,
+          branchId: e.branch_id,
+          userId: e.linked_user_id || null,
+          source: "employee_direct",
+        });
+      }
+    }
+    return Array.from(byKey.values());
+  }
+
+  // Search individual people (users + branch employees) within authorized branches.
+  // Powers the "specific person" picker in the targeted-message tab.
+  app.get("/api/system-notifications/search-people", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
+    try {
+      const q = String(req.query.q || "").trim();
+      const branchIdsParam = String(req.query.branchIds || "").trim();
+      if (!branchIdsParam) return res.json([]);
+      const requested = branchIdsParam.split(",").map((s) => s.trim()).filter(Boolean);
+      const allowed = await restrictBranchesForUser(req, requested);
+      if (allowed.length === 0) return res.json([]);
+      const like = `%${q}%`;
+      const userRows: any = await db.execute(sql`
+        SELECT id, first_name, last_name, username, phone, branch_id
+        FROM users
+        WHERE is_active = 'active'
+          AND branch_id IN (${inList(allowed)})
+          ${q ? sql`AND (first_name ILIKE ${like} OR last_name ILIKE ${like} OR username ILIKE ${like} OR phone ILIKE ${like})` : sql``}
+        ORDER BY first_name NULLS LAST
+        LIMIT 60
+      `);
+      const empRows: any = await db.execute(sql`
+        SELECT employee_name, phone_number, branch_id, linked_user_id
+        FROM branch_employees
+        WHERE status = 'active'
+          AND branch_id IN (${inList(allowed)})
+          ${q ? sql`AND (employee_name ILIKE ${like} OR phone_number ILIKE ${like})` : sql``}
+        ORDER BY employee_name NULLS LAST
+        LIMIT 60
+      `);
+      const uList = (userRows.rows || userRows) as any[];
+      const eList = (empRows.rows || empRows) as any[];
+      const byKey = new Map<string, PositionTarget>();
+      const add = (t: PositionTarget) => {
+        const key = targetKey(t);
+        const ex = byKey.get(key);
+        if (ex) {
+          if (!ex.userId && t.userId) ex.userId = t.userId;
+          if (!ex.phone && t.phone) ex.phone = t.phone;
+        } else byKey.set(key, t);
+      };
+      for (const u of uList) {
+        const name = [u.first_name, u.last_name].filter(Boolean).join(" ").trim() || u.username || "مستخدم";
+        add({ name, phone: u.phone || null, branchId: u.branch_id, userId: u.id, source: "user_direct" });
+      }
+      for (const e of eList) {
+        add({ name: e.employee_name, phone: e.phone_number || null, branchId: e.branch_id, userId: e.linked_user_id || null, source: "employee_direct" });
+      }
+      res.json(Array.from(byKey.values()));
+    } catch (error: any) {
+      console.error("Error searching people:", error?.message || error);
+      res.status(500).json({ error: "فشل في البحث عن الأشخاص" });
+    }
+  });
+
   app.get("/api/system-notifications/targets-by-position", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
     try {
       const jobTitle = String(req.query.jobTitle || "").trim();
@@ -35886,7 +36000,11 @@ export async function registerRoutes(
     try {
       const bodySchema = z.object({
         title: z.string().min(1).max(200),
-        jobTitle: z.string().min(1).max(60),
+        // "position" = target everyone holding a job title; "individuals" = specific people.
+        targetMode: z.enum(["position", "individuals"]).default("position"),
+        jobTitle: z.string().max(60).optional(),
+        // How the in-app alert is shown to the recipient (matches NotificationDisplay).
+        displayStyle: z.enum(["modal", "fullscreen", "banner", "slide_in"]).default("banner"),
         messageMode: z.enum(["free", "smart", "both"]),
         freeText: z.string().max(4000).optional(),
         channels: z.array(z.enum(["inapp", "whatsapp", "sms"])).min(1),
@@ -35901,8 +36019,11 @@ export async function registerRoutes(
       });
       const parsed = bodySchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten() });
-      const { title, jobTitle, messageMode, freeText, channels, recipients } = parsed.data;
+      const { title, targetMode, jobTitle, displayStyle, messageMode, freeText, channels, recipients } = parsed.data;
 
+      if (targetMode === "position" && !jobTitle?.trim()) {
+        return res.status(400).json({ error: "المنصب مطلوب" });
+      }
       if ((messageMode === "free" || messageMode === "both") && !freeText?.trim()) {
         return res.status(400).json({ error: "نص الرسالة مطلوب" });
       }
@@ -35912,10 +36033,12 @@ export async function registerRoutes(
       const allowed = await restrictBranchesForUser(req, requestedBranches);
       if (allowed.length === 0) return res.status(403).json({ error: "لا يوجد فروع ضمن صلاحياتك" });
 
-      // SECURITY: re-resolve the authoritative position-holders server-side. The client
-      // cannot inject an arbitrary userId/phone/branch — we only deliver to people the
-      // server itself resolves as holding this position in an authorized branch.
-      const authoritative = await resolveTargetsByPosition(jobTitle, allowed);
+      // SECURITY: re-resolve the authoritative targets server-side. The client cannot
+      // inject an arbitrary userId/phone/branch — we only deliver to people the server
+      // itself reads from the DB in an authorized branch (by position OR by identity).
+      const authoritative = targetMode === "individuals"
+        ? await resolveTargetsByIdentifiers(recipients, allowed)
+        : await resolveTargetsByPosition(jobTitle as string, allowed);
       // Index by userId and normalized phone so a client selection matches even if
       // it only carried one of the two identifiers.
       const byUserId = new Map<string, PositionTarget>();
@@ -35978,22 +36101,14 @@ export async function registerRoutes(
       // a target resolved via job_title may have a different users.role and would
       // otherwise never see the alert.
       if (channels.includes("inapp")) {
+        // Precise per-user delivery: only the EXACT selected users (who have a linked
+        // account) will see the alert, via targetUserIds — not their whole role+branch.
+        // Each branch still gets its own body (its own smart issues).
         const inappTargets = finalTargets.filter((t) => t.userId);
-        const userIds = Array.from(new Set(inappTargets.map((t) => t.userId as string)));
-        const rolesByBranch = new Map<string, Set<string>>();
-        if (userIds.length > 0) {
-          const roleRows: any = await db.execute(sql`
-            SELECT id, role, branch_id FROM users WHERE id IN (${inList(userIds)})
-          `);
-          const list = (roleRows.rows || roleRows) as any[];
-          const roleByUserId = new Map<string, string>();
-          for (const u of list) { if (u.role) roleByUserId.set(u.id, u.role); }
-          for (const t of inappTargets) {
-            const role = roleByUserId.get(t.userId as string);
-            if (!role) continue;
-            if (!rolesByBranch.has(t.branchId)) rolesByBranch.set(t.branchId, new Set());
-            rolesByBranch.get(t.branchId)!.add(role);
-          }
+        const usersByBranch = new Map<string, Set<string>>();
+        for (const t of inappTargets) {
+          if (!usersByBranch.has(t.branchId)) usersByBranch.set(t.branchId, new Set());
+          usersByBranch.get(t.branchId)!.add(t.userId as string);
         }
 
         const branchIds = Array.from(new Set(finalTargets.map((t) => t.branchId)));
@@ -36001,19 +36116,19 @@ export async function registerRoutes(
           const body = buildBody(branchId);
           // Smart-only message with no issues for this branch → nothing to say
           if (!body.trim()) { skippedNoTarget++; continue; }
-          const roles = Array.from(rolesByBranch.get(branchId) || []);
+          const branchUserIds = Array.from(usersByBranch.get(branchId) || []);
           // No in-app-capable recipient (no linked user account) in this branch.
-          if (roles.length === 0) { skippedNoTarget++; continue; }
+          if (branchUserIds.length === 0) { skippedNoTarget++; continue; }
           await storage.createSystemNotification({
             title,
             content: body,
             messageType: "announcement",
-            displayStyle: "banner",
+            displayStyle,
             priority: 2,
             isActive: true,
             targetAllBranches: false,
             targetBranchIds: [branchId],
-            targetRoleIds: roles,
+            targetUserIds: branchUserIds,
             createdBy: me.id,
           } as any);
           inappCount++;
