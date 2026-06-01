@@ -48,3 +48,8 @@ saw nothing. Fix was to write `systemNotifications` rows instead.
 - Two admin pages exist: `/notifications-management` ("الإشعارات والرسائل العامة", manual
   create button "إشعار جديد") and `/notifications-center` ("مركز الإشعارات والتقارير",
   schedules + targeted-by-position message). Both gated by `settings` module, adminOnly.
+
+## Schema drift breaks ALL in-app notifications (silent)
+- `getActiveNotificationsForUser` uses `db.select().from(systemNotifications)`, which enumerates EVERY column defined in `shared/schema.ts`. If the DB is missing ANY of those columns, the whole query throws → NO in-app notification reaches ANYONE.
+- The dev DB (helium) drifted behind the schema and was missing `target_role_ids`, `auto_generated`, `auto_source` (Phase 3/4 cols). Prod Supabase can drift the same way.
+- **How to apply:** after adding any column to `systemNotifications`, run the matching `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` on BOTH dev (psql "$DATABASE_URL") and prod Supabase (manual). Verify with `information_schema.columns`.
