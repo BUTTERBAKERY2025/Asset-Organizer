@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useReactToPrint } from "react-to-print";
 import { apiRequest } from "@/lib/queryClient";
@@ -34,6 +35,7 @@ export function PortalWarningSigner({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  const { t, i18n } = useTranslation("portal");
   const { toast } = useToast();
   const qc = useQueryClient();
   const [signature, setSignature] = useState<string | null>(null);
@@ -63,7 +65,7 @@ export function PortalWarningSigner({
     mutationFn: async () =>
       (await apiRequest("POST", `/api/my/warnings/${warningId}/sign`, { signatureData: signature })).json(),
     onSuccess: () => {
-      toast({ title: "تم التوقيع بنجاح", description: "تم تسجيل توقيعك إلكترونيًا. يمكنك حفظ نسخة من الإنذار الآن." });
+      toast({ title: t("warningSigner.signSuccessToast"), description: t("warningSigner.signSuccessToastDesc") });
       setConfirmRead(false);
       setSignature(null);
       qc.invalidateQueries({ queryKey: ["/api/my/warnings", warningId] });
@@ -71,17 +73,17 @@ export function PortalWarningSigner({
       qc.invalidateQueries({ queryKey: ["/api/my/overview"] });
     },
     onError: (e: any) => {
-      toast({ title: "خطأ", description: e?.message || "تعذّر حفظ التوقيع", variant: "destructive" });
+      toast({ title: t("warningSigner.error"), description: e?.message || t("warningSigner.saveError"), variant: "destructive" });
     },
   });
 
   const submitSign = () => {
     if (!signature) {
-      toast({ title: "التوقيع مطلوب", description: "يرجى التوقيع في المربع المخصص قبل التأكيد.", variant: "destructive" });
+      toast({ title: t("warningSigner.signatureRequired"), description: t("warningSigner.signatureRequiredDesc"), variant: "destructive" });
       return;
     }
     if (!confirmRead) {
-      toast({ title: "الإقرار مطلوب", description: "يرجى تأكيد قراءة الإنذار قبل التوقيع.", variant: "destructive" });
+      toast({ title: t("warningSigner.ackRequired"), description: t("warningSigner.ackRequiredDesc"), variant: "destructive" });
       return;
     }
     signMut.mutate();
@@ -94,11 +96,11 @@ export function PortalWarningSigner({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto p-0" dir="rtl">
+      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto p-0" dir={i18n.language === "ar" ? "rtl" : "ltr"}>
         <DialogHeader className="p-4 pb-0">
           <DialogTitle className="flex items-center gap-2">
             <FileDown className="h-5 w-5 text-amber-600" />
-            الإنذار الرسمي
+            {t("warningSigner.title")}
           </DialogTitle>
         </DialogHeader>
 
@@ -109,18 +111,18 @@ export function PortalWarningSigner({
         ) : isError || !data || !w ? (
           <div className="flex flex-col items-center justify-center gap-3 py-12 px-4 text-center">
             <div className="text-sm text-muted-foreground" data-testid="text-warning-error">
-              {(error as any)?.message || "تعذّر تحميل الإنذار"}
+              {(error as any)?.message || t("warningSigner.loadError")}
             </div>
             <Button variant="outline" size="sm" onClick={() => refetch()} data-testid="button-retry-warning">
-              إعادة المحاولة
+              {t("warningSigner.retry")}
             </Button>
           </div>
         ) : (
           <div className="space-y-4 p-4">
-            {/* Official document preview on company letterhead */}
+            {/* Official document preview on company letterhead — always Arabic RTL */}
             <Card className="overflow-hidden">
               <CardContent className="p-0 overflow-auto bg-slate-100">
-                <div style={{ transform: "scale(0.92)", transformOrigin: "top center" }} className="origin-top">
+                <div dir="rtl" style={{ transform: "scale(0.92)", transformOrigin: "top center" }} className="origin-top">
                   <WarningDocument
                     ref={printRef}
                     companyName={COMPANY_NAME_AR}
@@ -140,7 +142,7 @@ export function PortalWarningSigner({
               <Card>
                 <CardContent className="p-4 space-y-2">
                   <div className="text-sm font-semibold flex items-center gap-2">
-                    <Paperclip className="h-4 w-4" /> المرفقات ({w.attachments.length})
+                    <Paperclip className="h-4 w-4" /> {t("warningSigner.attachments")} ({w.attachments.length})
                   </div>
                   {w.attachments.map((att, i) => (
                     <a
@@ -164,29 +166,29 @@ export function PortalWarningSigner({
                 <CardContent className="p-5 text-center space-y-3">
                   <CheckCircle2 className="h-10 w-10 text-emerald-600 mx-auto" />
                   <div>
-                    <div className="font-bold text-emerald-800">تم استلام توقيعك بنجاح</div>
+                    <div className="font-bold text-emerald-800">{t("warningSigner.signedSuccess")}</div>
                     <div className="text-xs text-emerald-700 mt-1">
-                      بتاريخ:{" "}
-                      {new Date(w.signedAt!).toLocaleString("ar-SA-u-nu-latn", {
+                      {t("warningSigner.signedAtLabel")}{" "}
+                      {new Date(w.signedAt!).toLocaleString(i18n.language === "ar" ? "ar-SA-u-nu-latn" : "en-US", {
                         year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
                       })}
                     </div>
                   </div>
                   <Button onClick={() => handlePrint()} className="gap-2" data-testid="button-download-warning-pdf">
-                    <FileDown className="h-4 w-4" /> حفظ / طباعة نسخة PDF
+                    <FileDown className="h-4 w-4" /> {t("warningSigner.downloadPdf")}
                   </Button>
                 </CardContent>
               </Card>
             ) : w.status !== "active" ? (
               <Card>
                 <CardContent className="p-5 text-center text-sm text-muted-foreground">
-                  هذا الإنذار غير متاح للتوقيع في حالته الحالية.
+                  {t("warningSigner.notAvailable")}
                 </CardContent>
               </Card>
             ) : (
               <Card>
                 <CardContent className="p-4 space-y-3">
-                  <div className="text-base font-semibold">إقرار وتوقيع</div>
+                  <div className="text-base font-semibold">{t("warningSigner.ackTitle")}</div>
                   <label className="flex items-start gap-2 text-sm cursor-pointer">
                     <input
                       type="checkbox"
@@ -195,20 +197,16 @@ export function PortalWarningSigner({
                       className="mt-1"
                       data-testid="checkbox-confirm-read-warning"
                     />
-                    <span>
-                      أُقرّ أنا الموظف <strong>{data.employee?.employeeName || ""}</strong> بأنني قرأت الإنذار الموضّح أعلاه
-                      واطّلعت على مضمونه وعلى النص النظامي الوارد فيه. علمًا بأن التوقيع لا يعني الموافقة على المخالفة
-                      وأنه يحقّ لي الاعتراض وفقًا للأنظمة المعمول بها.
-                    </span>
+                    <span>{t("warningSigner.ackText", { name: data.employee?.employeeName || "" })}</span>
                   </label>
 
                   <div>
-                    <div className="text-sm font-medium mb-2">التوقيع</div>
+                    <div className="text-sm font-medium mb-2">{t("warningSigner.signatureLabel")}</div>
                     <SignaturePad
                       onSignatureChange={setSignature}
                       width={520}
                       height={160}
-                      label="ارسم توقيعك بإصبعك أو بمؤشّر الفأرة"
+                      label={t("warningSigner.signaturePadLabel")}
                     />
                   </div>
 
@@ -219,7 +217,7 @@ export function PortalWarningSigner({
                     data-testid="button-submit-warning-signature"
                   >
                     {signMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                    {signMut.isPending ? "جاري الحفظ..." : "تأكيد التوقيع وإرسال"}
+                    {signMut.isPending ? t("warningSigner.saving") : t("warningSigner.confirmAndSubmit")}
                   </Button>
                 </CardContent>
               </Card>

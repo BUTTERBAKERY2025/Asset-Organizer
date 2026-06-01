@@ -3,6 +3,13 @@
   "subtitle": "قدّم طلباتك وتابع حالتها",
   "loading": "جاري التحميل...",
   "language": "English",
+  "refresh": "تحديث",
+  "refreshAria": "تحديث الصفحة",
+  "notifications": {
+    "title": "الإشعارات",
+    "empty": "لا توجد إشعارات",
+    "markAllRead": "تعليم الكل كمقروء"
+  },
   "noEmployee": {
     "title": "حسابك غير مرتبط بملف موظف",
     "desc": "لاستخدام بوابة الموظف، يجب ربط حسابك بملفك الوظيفي. الرجاء التواصل مع إدارة الموارد البشرية."
@@ -18,6 +25,7 @@
     "checkin": "تسجيل حضوري",
     "schedule": "جدولي",
     "attendance": "حضوري",
+    "timesheet": "كشف الدوام",
     "leaves": "إجازاتي",
     "advances": "سلفي",
     "warnings": "إنذاراتي",
@@ -92,6 +100,82 @@
     "checkOut": "انصراف",
     "lateMinutes": "تأخير {{n}} د"
   },
+  "timesheet": {
+    "empty": "لا توجد تقارير دوام متاحة لك حتى الآن",
+    "version": "إصدار {{n}}",
+    "rejectNotes": "ملاحظات الرفض: {{notes}}",
+    "reviewAndSign": "مراجعة وتوقيع",
+    "viewDetails": "عرض التفاصيل",
+    "reportTitle": "تقرير الدوام",
+    "locked": "مقفل",
+    "rejectedTitle": "تم رفض التقرير من الإدارة",
+    "scheduledDays": "أيام مجدولة",
+    "presentDays": "أيام حضور",
+    "absentDays": "أيام غياب",
+    "lateDays": "أيام تأخير",
+    "actualHours": "ساعات فعلية",
+    "overtimeMinutes": "دقائق إضافي",
+    "lateMinutes": "دقائق تأخير",
+    "colDate": "التاريخ",
+    "colStatus": "الحالة",
+    "colScheduled": "مجدول",
+    "colActual": "فعلي",
+    "colLate": "تأخير",
+    "colOvertime": "إضافي",
+    "awaitingManager": "وقّعت على هذا التقرير. أصبح الآن بانتظار اعتماد المدير.",
+    "finalized": "تم اعتماد التقرير وقفله نهائياً.",
+    "eSignTitle": "التوقيع الإلكتروني",
+    "clearSignature": "مسح التوقيع",
+    "acknowledge": "أقرّ بأن بيانات الحضور والانصراف المذكورة أعلاه صحيحة وأوافق عليها.",
+    "close": "إغلاق",
+    "signAndApprove": "توقيع واعتماد",
+    "confirmRequired": "تأكيد مطلوب",
+    "confirmRequiredDesc": "يرجى تأكيد إقرارك بصحة البيانات أولاً",
+    "signatureRequired": "التوقيع مطلوب",
+    "signatureRequiredDesc": "يرجى التوقيع في المربع المخصص",
+    "signSuccess": "تم توقيع التقرير بنجاح",
+    "signSuccessDesc": "أصبح التقرير بانتظار اعتماد المدير",
+    "signError": "تعذّر التوقيع",
+    "genericError": "حدث خطأ",
+    "entryStatus": {
+      "present": "حاضر",
+      "absent": "غائب",
+      "late": "متأخر",
+      "day_off": "إجازة أسبوعية",
+      "pending": "—"
+    },
+    "status": {
+      "pending": "بانتظار",
+      "pending_employee_signature": "بانتظار توقيع الموظف",
+      "pending_manager_signature": "بانتظار اعتماد المدير",
+      "finalized": "معتمد ومقفل",
+      "rejected": "مرفوض"
+    }
+  },
+  "warningSigner": {
+    "title": "الإنذار الرسمي",
+    "loadError": "تعذّر تحميل الإنذار",
+    "retry": "إعادة المحاولة",
+    "attachments": "المرفقات",
+    "signedSuccess": "تم استلام توقيعك بنجاح",
+    "signedAtLabel": "بتاريخ:",
+    "downloadPdf": "حفظ / طباعة نسخة PDF",
+    "notAvailable": "هذا الإنذار غير متاح للتوقيع في حالته الحالية.",
+    "ackTitle": "إقرار وتوقيع",
+    "ackText": "أُقرّ أنا الموظف {{name}} بأنني قرأت الإنذار الموضّح أعلاه واطّلعت على مضمونه وعلى النص النظامي الوارد فيه. علمًا بأن التوقيع لا يعني الموافقة على المخالفة وأنه يحقّ لي الاعتراض وفقًا للأنظمة المعمول بها.",
+    "signatureLabel": "التوقيع",
+    "signaturePadLabel": "ارسم توقيعك بإصبعك أو بمؤشّر الفأرة",
+    "saving": "جاري الحفظ...",
+    "confirmAndSubmit": "تأكيد التوقيع وإرسال",
+    "signSuccessToast": "تم التوقيع بنجاح",
+    "signSuccessToastDesc": "تم تسجيل توقيعك إلكترونيًا. يمكنك حفظ نسخة من الإنذار الآن.",
+    "error": "خطأ",
+    "saveError": "تعذّر حفظ التوقيع",
+    "signatureRequired": "التوقيع مطلوب",
+    "signatureRequiredDesc": "يرجى التوقيع في المربع المخصص قبل التأكيد.",
+    "ackRequired": "الإقرار مطلوب",
+    "ackRequiredDesc": "يرجى تأكيد قراءة الإنذار قبل التوقيع."
+  },
   "warnings": {
     "empty": "لا توجد إنذارات — أحسنت!",
     "active": "نشط",
@@ -100,7 +184,9 @@
     "expired": "منتهٍ",
     "deduction": "خصم",
     "signed": "تم التوقيع",
-    "awaitingSignature": "بانتظار التوقيع"
+    "awaitingSignature": "بانتظار التوقيع",
+    "viewDocument": "عرض المستند",
+    "reviewAndSign": "عرض وتوقيع"
   },
   "documents": {
     "iqamaExpiry": "انتهاء الإقامة",
@@ -165,7 +251,9 @@
     "reason": "السبب (اختياري)",
     "invalidAmount": "أدخل مبلغاً صحيحاً",
     "send": "إرسال الطلب",
-    "sending": "جاري الإرسال..."
+    "sending": "جاري الإرسال...",
+    "maxExceeded": "الحد الأقصى المسموح للسلفة هو {{amount}} ريال",
+    "maxHint": "الحد الأقصى للسلفة: {{amount}} ريال"
   },
   "common": {
     "error": "خطأ",

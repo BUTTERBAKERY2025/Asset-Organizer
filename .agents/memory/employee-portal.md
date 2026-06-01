@@ -62,3 +62,11 @@ description: Architecture facts for the employee portal (my-portal) feature
   (+ employeeNameEn/nationality/phoneNumber). Admin upload lives in branch-employees details
   dialog: POST /api/uploads?folder=employees -> PUT /api/branch-employees/:id { photoUrl }.
   PUT route already enforces branch_employees:edit + canAccessBranch (no IDOR).
+
+## Portal i18n (AR/EN)
+- All portal UI strings live under the `portal` i18n namespace in
+  `client/src/locales/{ar,en}/portal.json`; every child component (e.g. portal-timesheet,
+  portal-warning-signer) must use `useTranslation("portal")` — keep AR/EN key parity.
+- **The official warning letterhead (`WarningDocument`) stays Arabic RTL regardless of UI
+  language** (deliberate: it is a legal company document). Its wrapper forces `dir="rtl"` even
+  when the surrounding dialog switches dir by language. Don't "fix" this to follow the locale.

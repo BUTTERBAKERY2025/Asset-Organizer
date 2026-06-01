@@ -464,10 +464,10 @@ export default function MyPortalPage() {
             onClick={handleRefresh}
             disabled={refreshing}
             data-testid="button-refresh"
-            aria-label={isRTL ? "تحديث الصفحة" : "Refresh"}
+            aria-label={t("refreshAria")}
           >
             <RefreshCw className={`h-4 w-4 sm:me-1 ${refreshing ? "animate-spin" : ""}`} />
-            <span className="hidden sm:inline">{isRTL ? "تحديث" : "Refresh"}</span>
+            <span className="hidden sm:inline">{t("refresh")}</span>
           </Button>
           <Button
             variant="outline"
@@ -485,13 +485,13 @@ export default function MyPortalPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Bell className="h-5 w-5" />
-                {isRTL ? "الإشعارات" : "Notifications"}
+                {t("notifications.title")}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-2 max-h-[60vh] overflow-y-auto">
               {myNotifications.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-8" data-testid="text-no-notifications">
-                  {isRTL ? "لا توجد إشعارات" : "No notifications"}
+                  {t("notifications.empty")}
                 </p>
               )}
               {myNotifications.map((n) => (
@@ -529,7 +529,7 @@ export default function MyPortalPage() {
                   onClick={() => markAllNotifRead.mutate()}
                   data-testid="button-mark-all-read"
                 >
-                  {isRTL ? "تعليم الكل كمقروء" : "Mark all read"}
+                  {t("notifications.markAllRead")}
                 </Button>
               </DialogFooter>
             )}
@@ -595,7 +595,7 @@ export default function MyPortalPage() {
             </Card>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} dir={dir}>
-              <TabsList className="flex w-full h-auto justify-start gap-1 overflow-x-auto flex-nowrap rounded-xl p-1 text-[13px] sm:text-sm [&::-webkit-scrollbar]:hidden [&>button]:shrink-0 [&>button]:px-2.5">
+              <TabsList className="flex w-full h-auto justify-start gap-1.5 overflow-x-auto flex-nowrap rounded-xl bg-muted/60 p-1.5 text-[13px] sm:text-sm [&::-webkit-scrollbar]:hidden [&>button]:shrink-0 [&>button]:gap-1 [&>button]:rounded-lg [&>button]:px-3 [&>button]:py-2 [&>button]:font-medium [&>button]:transition-colors [&>button]:data-[state=active]:bg-primary [&>button]:data-[state=active]:text-primary-foreground [&>button]:data-[state=active]:shadow-sm">
                 <TabsTrigger value="overview" data-testid="tab-overview">
                   <LayoutDashboard className="h-4 w-4 ms-1" />{t("tabs.overview")}
                 </TabsTrigger>
@@ -615,7 +615,7 @@ export default function MyPortalPage() {
                   </TabsTrigger>
                 )}
                 <TabsTrigger value="timesheet" data-testid="tab-timesheet">
-                  <FileSignature className="h-4 w-4 ms-1" />تايم شيت
+                  <FileSignature className="h-4 w-4 ms-1" />{t("tabs.timesheet")}
                 </TabsTrigger>
                 {showLeaves && (
                   <TabsTrigger value="leaves" data-testid="tab-leaves">
