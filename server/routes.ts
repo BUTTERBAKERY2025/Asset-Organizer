@@ -4,6 +4,7 @@ import memoize from "memoizee";
 import { storage } from "./storage";
 import { db, pool } from "./db";
 import * as NotificationService from "./notification-service";
+import { computeBranchIssues, formatBranchIssuesMessage } from "./branch-issues";
 import { evaluateWasteGovernance, checkApprovalGate } from "./waste-governance";
 import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, gt, sql, or, isNull, type SQL } from "drizzle-orm";
@@ -35731,6 +35732,266 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error fetching recipients-from-branches:", error?.message || error);
       res.status(500).json({ error: "فشل في جلب المستلمين" });
+    }
+  });
+
+  // ============================================
+  // Targeted Messages by Position (رسالة موجّهة بالمنصب)
+  // ============================================
+
+  // Helper: restrict requested branches to those the current user can access
+  async function restrictBranchesForUser(req: Request, requested: string[]): Promise<string[]> {
+    const me = getCurrentUser(req);
+    if (me.role === "admin" || me.role === "manager") return requested;
+    const access = await storage.getUserBranchAccess(me.id);
+    const accessibleSet = new Set(access.map((a: any) => a.branchId));
+    return requested.filter((id) => accessibleSet.has(id));
+  }
+
+  type PositionTarget = { name: string; phone: string | null; branchId: string; userId: string | null; source: string };
+  const targetKey = (t: { userId: string | null; phone: string | null; name: string; branchId: string }) =>
+    t.userId ? `u:${t.userId}` : t.phone ? `p:${normalizePhoneSimple(t.phone)}` : `n:${t.name}:${t.branchId}`;
+
+  function normalizePhoneSimple(p?: string | null): string {
+    return (p || "").replace(/\s|-/g, "");
+  }
+
+  // Authoritative resolver: people who hold a given position (job title) within the
+  // given (already-authorized) branches. Combines BOTH branch_employees.job_title AND
+  // users.role/job_title, de-duplicated by user account (when linked) or by phone.
+  async function resolveTargetsByPosition(jobTitle: string, allowedBranchIds: string[]): Promise<PositionTarget[]> {
+    if (!jobTitle || allowedBranchIds.length === 0) return [];
+
+    const empRows: any = await db.execute(sql`
+      SELECT employee_name, phone_number, branch_id, linked_user_id
+      FROM branch_employees
+      WHERE status = 'active'
+        AND job_title = ${jobTitle}
+        AND branch_id = ANY(${allowedBranchIds})
+    `);
+    const userRows: any = await db.execute(sql`
+      SELECT id, first_name, last_name, username, phone, branch_id
+      FROM users
+      WHERE (role = ${jobTitle} OR job_title = ${jobTitle})
+        AND is_active = 'active'
+        AND branch_id = ANY(${allowedBranchIds})
+    `);
+
+    const empList = (empRows.rows || empRows) as any[];
+    const userList = (userRows.rows || userRows) as any[];
+
+    const byKey = new Map<string, PositionTarget>();
+    const addTarget = (t: PositionTarget) => {
+      const key = targetKey(t);
+      const existing = byKey.get(key);
+      if (existing) {
+        if (!existing.userId && t.userId) existing.userId = t.userId;
+        if (!existing.phone && t.phone) existing.phone = t.phone;
+      } else {
+        byKey.set(key, t);
+      }
+    };
+
+    for (const u of userList) {
+      const name = [u.first_name, u.last_name].filter(Boolean).join(" ").trim() || u.username || "مستخدم";
+      addTarget({ name, phone: u.phone || null, branchId: u.branch_id, userId: u.id, source: "user_role" });
+    }
+    for (const e of empList) {
+      addTarget({
+        name: e.employee_name,
+        phone: e.phone_number || null,
+        branchId: e.branch_id,
+        userId: e.linked_user_id || null,
+        source: "job_title",
+      });
+    }
+
+    return Array.from(byKey.values());
+  }
+
+  app.get("/api/system-notifications/targets-by-position", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
+    try {
+      const jobTitle = String(req.query.jobTitle || "").trim();
+      if (!jobTitle) return res.status(400).json({ error: "المنصب مطلوب" });
+      const branchIdsParam = String(req.query.branchIds || "").trim();
+      if (!branchIdsParam) return res.json([]);
+      const requested = branchIdsParam.split(",").map((s) => s.trim()).filter(Boolean);
+      const allowed = await restrictBranchesForUser(req, requested);
+      if (allowed.length === 0) return res.json([]);
+      const targets = await resolveTargetsByPosition(jobTitle, allowed);
+      res.json(targets);
+    } catch (error: any) {
+      console.error("Error resolving targets-by-position:", error?.message || error);
+      res.status(500).json({ error: "فشل في جلب المستهدفين" });
+    }
+  });
+
+  // Compute per-branch data-quality issues (incomplete employees, expiring docs)
+  app.get("/api/system-notifications/branch-issues", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
+    try {
+      const branchIdsParam = String(req.query.branchIds || "").trim();
+      if (!branchIdsParam) return res.json([]);
+      const requested = branchIdsParam.split(",").map((s) => s.trim()).filter(Boolean);
+      const allowed = await restrictBranchesForUser(req, requested);
+      if (allowed.length === 0) return res.json([]);
+      const issues = await computeBranchIssues(allowed);
+      res.json(issues);
+    } catch (error: any) {
+      console.error("Error computing branch-issues:", error?.message || error);
+      res.status(500).json({ error: "فشل في حساب مشاكل الفروع" });
+    }
+  });
+
+  // Send a targeted message to selected position-holders.
+  // Delivers in-app (per linked user) and/or queues WhatsApp/SMS.
+  // Supports a "smart" mode that appends each recipient's OWN branch issues.
+  app.post("/api/system-notifications/send-targeted", isAuthenticated, requirePermission("settings", "create"), async (req, res) => {
+    try {
+      const bodySchema = z.object({
+        title: z.string().min(1).max(200),
+        jobTitle: z.string().min(1).max(60),
+        messageMode: z.enum(["free", "smart", "both"]),
+        freeText: z.string().max(4000).optional(),
+        channels: z.array(z.enum(["inapp", "whatsapp", "sms"])).min(1),
+        // Client-selected identifiers — used ONLY to filter the server-resolved
+        // authoritative list. Never trusted for delivery target/branch by themselves.
+        recipients: z.array(z.object({
+          name: z.string().optional(),
+          phone: z.string().optional().nullable(),
+          branchId: z.string().min(1),
+          userId: z.string().optional().nullable(),
+        })).min(1).max(500),
+      });
+      const parsed = bodySchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten() });
+      const { title, jobTitle, messageMode, freeText, channels, recipients } = parsed.data;
+
+      if ((messageMode === "free" || messageMode === "both") && !freeText?.trim()) {
+        return res.status(400).json({ error: "نص الرسالة مطلوب" });
+      }
+
+      // Authorize branches the caller is asking about
+      const requestedBranches = Array.from(new Set(recipients.map((r) => r.branchId)));
+      const allowed = await restrictBranchesForUser(req, requestedBranches);
+      if (allowed.length === 0) return res.status(403).json({ error: "لا يوجد فروع ضمن صلاحياتك" });
+
+      // SECURITY: re-resolve the authoritative position-holders server-side. The client
+      // cannot inject an arbitrary userId/phone/branch — we only deliver to people the
+      // server itself resolves as holding this position in an authorized branch.
+      const authoritative = await resolveTargetsByPosition(jobTitle, allowed);
+      // Index by userId and normalized phone so a client selection matches even if
+      // it only carried one of the two identifiers.
+      const byUserId = new Map<string, PositionTarget>();
+      const byPhone = new Map<string, PositionTarget>();
+      for (const t of authoritative) {
+        if (t.userId) byUserId.set(t.userId, t);
+        if (t.phone) byPhone.set(normalizePhoneSimple(t.phone), t);
+      }
+
+      // Map client selections → authoritative targets, de-duplicated.
+      const selected = new Map<string, PositionTarget>();
+      let rejectedSpoof = 0;
+      for (const r of recipients) {
+        let match: PositionTarget | undefined;
+        if (r.userId && byUserId.has(r.userId)) match = byUserId.get(r.userId);
+        else if (r.phone && byPhone.has(normalizePhoneSimple(r.phone))) match = byPhone.get(normalizePhoneSimple(r.phone));
+        if (!match) { rejectedSpoof++; continue; }
+        selected.set(targetKey(match), match);
+      }
+      const finalTargets = Array.from(selected.values());
+      if (finalTargets.length === 0) {
+        return res.status(400).json({ error: "لا يوجد مستلمون صالحون ضمن المنصب والفروع المحددة" });
+      }
+
+      // Precompute branch issues if smart mode is requested (only authorized branches)
+      let issuesByBranch = new Map<string, ReturnType<typeof formatBranchIssuesMessage>>();
+      if (messageMode === "smart" || messageMode === "both") {
+        const branchIssues = await computeBranchIssues(allowed);
+        for (const bi of branchIssues) {
+          issuesByBranch.set(bi.branchId, formatBranchIssuesMessage(bi));
+        }
+      }
+
+      const buildBody = (branchId: string): string => {
+        const parts: string[] = [];
+        if ((messageMode === "free" || messageMode === "both") && freeText?.trim()) {
+          parts.push(freeText.trim());
+        }
+        if (messageMode === "smart" || messageMode === "both") {
+          const smart = issuesByBranch.get(branchId);
+          if (smart) parts.push(smart);
+        }
+        return parts.join("\n\n———\n\n");
+      };
+
+      const me = getCurrentUser(req);
+      const phoneRe = /^\+?\d{7,15}$/;
+      let inappCount = 0;
+      let queuedCount = 0;
+      let skippedNoTarget = 0;
+
+      const inappPayloads: any[] = [];
+
+      for (const t of finalTargets) {
+        const body = buildBody(t.branchId);
+        // Smart-only message with no issues for this branch → nothing to say
+        if (!body.trim()) { skippedNoTarget++; continue; }
+
+        // In-app delivery (requires a linked user account)
+        if (channels.includes("inapp")) {
+          if (t.userId) {
+            inappPayloads.push({
+              type: "system",
+              category: "hr",
+              title,
+              message: body,
+              priority: "normal",
+              userId: t.userId,
+              branchId: t.branchId,
+              linkUrl: "/notifications-center",
+              createdBy: me.id,
+            });
+          } else {
+            skippedNoTarget++;
+          }
+        }
+
+        // WhatsApp / SMS delivery (requires a valid phone)
+        const wantsWhatsapp = channels.includes("whatsapp");
+        const wantsSms = channels.includes("sms");
+        if (wantsWhatsapp || wantsSms) {
+          const cleanPhone = normalizePhoneSimple(t.phone);
+          if (cleanPhone && phoneRe.test(cleanPhone)) {
+            const messageBody = `*${title}*\n\n${body}\n\n— Butter Bakery`;
+            await db.insert(notificationQueue).values({
+              recipientPhone: cleanPhone,
+              recipientName: t.name || null,
+              channel: wantsWhatsapp ? "whatsapp" : "sms",
+              message: messageBody,
+              status: "pending",
+              relatedModule: "targeted_message",
+            });
+            queuedCount++;
+          }
+        }
+      }
+
+      if (inappPayloads.length > 0) {
+        const created = await NotificationService.createBulkNotifications(inappPayloads);
+        inappCount = created.length;
+      }
+
+      res.json({
+        success: true,
+        inappCount,
+        queuedCount,
+        skippedNoTarget,
+        rejectedSpoof,
+        totalRecipients: finalTargets.length,
+      });
+    } catch (error: any) {
+      console.error("Error sending targeted message:", error?.message || error);
+      res.status(500).json({ error: "فشل في إرسال الرسالة: " + (error?.message || "خطأ غير معروف") });
     }
   });
 

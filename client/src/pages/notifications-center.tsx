@@ -10,15 +10,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { JOB_TITLE_LABELS } from "@shared/schema";
 
 async function api<T = any>(method: string, url: string, data?: any): Promise<T> {
   const res = await apiRequest(method, url, data);
   return res.json();
 }
-import { MessageCircle, Send, Calendar, Play, RefreshCw, Trash2, Plus, AlertTriangle, FileText } from "lucide-react";
+import { MessageCircle, Send, Calendar, Play, RefreshCw, Trash2, Plus, AlertTriangle, FileText, UserCheck, Users, Search } from "lucide-react";
 
 type Schedule = {
   id: number;
@@ -112,6 +115,9 @@ export default function NotificationsCenterPage() {
           <TabsTrigger value="queue" data-testid="tab-queue">
             <Send className="h-4 w-4 ml-2" />قائمة الإرسال ({queue.length})
           </TabsTrigger>
+          <TabsTrigger value="targeted" data-testid="tab-targeted">
+            <UserCheck className="h-4 w-4 ml-2" />رسالة موجّهة بالمنصب
+          </TabsTrigger>
           <TabsTrigger value="test" data-testid="tab-test">
             <MessageCircle className="h-4 w-4 ml-2" />اختبار واتساب
           </TabsTrigger>
@@ -130,6 +136,10 @@ export default function NotificationsCenterPage() {
 
         <TabsContent value="queue">
           <QueueTab queue={queue} loading={loadingQueue} />
+        </TabsContent>
+
+        <TabsContent value="targeted">
+          <TargetedTab branches={branches} twilioConfigured={!!status?.twilioConfigured} />
         </TabsContent>
 
         <TabsContent value="test">
@@ -501,5 +511,297 @@ function TestTab() {
         </Button>
       </CardContent>
     </Card>
+  );
+}
+
+type TargetPerson = { name: string; phone: string | null; branchId: string; userId: string | null; source: string };
+type BranchIssue = {
+  branchId: string;
+  branchName: string;
+  totalActive: number;
+  incompleteCount: number;
+  expiredCount: number;
+  expiringCount: number;
+  employees: { employeeName: string; status: "incomplete" | "expired" | "expiring"; issues: string[] }[];
+};
+
+function TargetedTab({ branches, twilioConfigured }: { branches: Branch[]; twilioConfigured: boolean }) {
+  const { toast } = useToast();
+  const branchName = (id: string) => branches.find(b => b.id === id)?.name || id;
+
+  const [jobTitle, setJobTitle] = useState("branch_manager");
+  const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
+  const [targets, setTargets] = useState<TargetPerson[]>([]);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [messageMode, setMessageMode] = useState<"free" | "smart" | "both">("free");
+  const [freeText, setFreeText] = useState("");
+  const [channelInapp, setChannelInapp] = useState(true);
+  const [channelWhatsapp, setChannelWhatsapp] = useState(false);
+  const [previewIssues, setPreviewIssues] = useState<BranchIssue[] | null>(null);
+
+  const keyOf = (t: TargetPerson) => t.userId ? `u:${t.userId}` : t.phone ? `p:${t.phone}` : `n:${t.name}:${t.branchId}`;
+
+  const allBranchesSelected = selectedBranches.length === branches.length && branches.length > 0;
+  const toggleBranch = (id: string) => {
+    setSelectedBranches(prev => prev.includes(id) ? prev.filter(b => b !== id) : [...prev, id]);
+  };
+  const toggleAllBranches = () => {
+    setSelectedBranches(allBranchesSelected ? [] : branches.map(b => b.id));
+  };
+
+  const searchMut = useMutation({
+    mutationFn: async () => {
+      if (selectedBranches.length === 0) throw new Error("اختر فرعاً واحداً على الأقل");
+      const qs = `jobTitle=${encodeURIComponent(jobTitle)}&branchIds=${encodeURIComponent(selectedBranches.join(","))}`;
+      return api<TargetPerson[]>("GET", `/api/system-notifications/targets-by-position?${qs}`);
+    },
+    onSuccess: (data) => {
+      setTargets(data);
+      setSelectedKeys(new Set(data.map(keyOf)));
+      if (data.length === 0) {
+        toast({ title: "لا يوجد مستهدفون", description: "لم يتم العثور على أحد بهذا المنصب في الفروع المحددة" });
+      }
+    },
+    onError: (e: any) => toast({ title: "فشل البحث", description: e.message, variant: "destructive" }),
+  });
+
+  const previewMut = useMutation({
+    mutationFn: async () => {
+      const branchIds = Array.from(new Set(selectedTargets.map(t => t.branchId)));
+      if (branchIds.length === 0) throw new Error("اختر مستهدفاً واحداً على الأقل");
+      const qs = `branchIds=${encodeURIComponent(branchIds.join(","))}`;
+      return api<BranchIssue[]>("GET", `/api/system-notifications/branch-issues?${qs}`);
+    },
+    onSuccess: (data) => setPreviewIssues(data),
+    onError: (e: any) => toast({ title: "فشل المعاينة", description: e.message, variant: "destructive" }),
+  });
+
+  const selectedTargets = targets.filter(t => selectedKeys.has(keyOf(t)));
+
+  const sendMut = useMutation({
+    mutationFn: async () => {
+      const channels: string[] = [];
+      if (channelInapp) channels.push("inapp");
+      if (channelWhatsapp) channels.push("whatsapp");
+      if (channels.length === 0) throw new Error("اختر قناة إرسال واحدة على الأقل");
+      if (selectedTargets.length === 0) throw new Error("اختر مستهدفاً واحداً على الأقل");
+      if ((messageMode === "free" || messageMode === "both") && !freeText.trim()) {
+        throw new Error("اكتب نص الرسالة");
+      }
+      return api("POST", "/api/system-notifications/send-targeted", {
+        title: "رسالة من الإدارة",
+        jobTitle,
+        messageMode,
+        freeText: freeText.trim() || undefined,
+        channels,
+        recipients: selectedTargets.map(t => ({ name: t.name, phone: t.phone, branchId: t.branchId, userId: t.userId })),
+      });
+    },
+    onSuccess: (r: any) => {
+      toast({
+        title: "تم الإرسال",
+        description: `داخل النظام: ${r.inappCount} • واتساب/SMS: ${r.queuedCount}${r.skippedNoTarget ? ` • تم تخطي: ${r.skippedNoTarget}` : ""}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/notification-queue"] });
+    },
+    onError: (e: any) => toast({ title: "فشل الإرسال", description: e.message, variant: "destructive" }),
+  });
+
+  const toggleTarget = (k: string) => {
+    setSelectedKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+  };
+
+  const statusBadge = (s: string) =>
+    s === "expired" ? { cls: "bg-red-100 text-red-800", label: "منتهي" }
+    : s === "expiring" ? { cls: "bg-orange-100 text-orange-800", label: "يقترب الانتهاء" }
+    : { cls: "bg-yellow-100 text-yellow-800", label: "ناقص" };
+
+  return (
+    <div className="space-y-4">
+      {/* Step 1: Position + branches */}
+      <Card>
+        <CardHeader><CardTitle className="text-lg">١. اختر المنصب والفروع</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <Label>المنصب</Label>
+              <Select value={jobTitle} onValueChange={setJobTitle}>
+                <SelectTrigger data-testid="select-job-title"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(JOB_TITLE_LABELS).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>{v}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end">
+              <Button onClick={() => searchMut.mutate()} disabled={searchMut.isPending || selectedBranches.length === 0} data-testid="button-search-targets" className="w-full">
+                <Search className="h-4 w-4 ml-2" />{searchMut.isPending ? "جارِ البحث..." : "بحث عن المستهدفين"}
+              </Button>
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <Label>الفروع</Label>
+              <Button variant="ghost" size="sm" onClick={toggleAllBranches} data-testid="button-toggle-all-branches">
+                {allBranchesSelected ? "إلغاء تحديد الكل" : "تحديد كل الفروع"}
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {branches.map(b => (
+                <label key={b.id} className="flex items-center gap-2 border rounded p-2 cursor-pointer text-sm" data-testid={`label-branch-${b.id}`}>
+                  <Checkbox checked={selectedBranches.includes(b.id)} onCheckedChange={() => toggleBranch(b.id)} data-testid={`checkbox-branch-${b.id}`} />
+                  {b.name}
+                </label>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Step 2: Resolved people */}
+      {targets.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-lg flex items-center gap-2"><Users className="h-5 w-5" />٢. المستهدفون ({selectedTargets.length}/{targets.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {targets.map(t => {
+                const k = keyOf(t);
+                return (
+                  <label key={k} className="flex items-start gap-2 border rounded p-3 cursor-pointer" data-testid={`card-target-${k}`}>
+                    <Checkbox checked={selectedKeys.has(k)} onCheckedChange={() => toggleTarget(k)} data-testid={`checkbox-target-${k}`} className="mt-1" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium" data-testid={`text-target-name-${k}`}>{t.name}</div>
+                      <div className="text-xs text-muted-foreground flex flex-wrap gap-2 mt-1">
+                        <span>{branchName(t.branchId)}</span>
+                        {t.phone && <span dir="ltr">{t.phone}</span>}
+                        {!t.userId && <Badge variant="outline" className="text-[10px]">لا يوجد حساب نظام</Badge>}
+                        {!t.phone && <Badge variant="outline" className="text-[10px]">لا يوجد جوال</Badge>}
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 3: Message + channels */}
+      {targets.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-lg">٣. الرسالة وقنوات الإرسال</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label>نوع الرسالة</Label>
+              <RadioGroup value={messageMode} onValueChange={(v) => setMessageMode(v as any)} className="flex flex-col gap-2 mt-2">
+                <label className="flex items-center gap-2 cursor-pointer text-sm" data-testid="radio-mode-free">
+                  <RadioGroupItem value="free" /> رسالة حرة موحّدة
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-sm" data-testid="radio-mode-smart">
+                  <RadioGroupItem value="smart" /> رسالة ذكية (مشاكل كل فرع تلقائياً)
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-sm" data-testid="radio-mode-both">
+                  <RadioGroupItem value="both" /> الاثنان معاً (نص حر + المشاكل)
+                </label>
+              </RadioGroup>
+            </div>
+
+            {(messageMode === "free" || messageMode === "both") && (
+              <div>
+                <Label>نص الرسالة</Label>
+                <Textarea value={freeText} onChange={(e) => setFreeText(e.target.value)} rows={4} placeholder="اكتب رسالتك الموحّدة لكل المستهدفين..." data-testid="input-free-text" />
+              </div>
+            )}
+
+            {(messageMode === "smart" || messageMode === "both") && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  سيتم إرفاق مشاكل وبيانات كل فرع الناقصة تلقائياً، ويستلم كل مدير مشاكل فرعه فقط. اضغط "معاينة المشاكل" للاطلاع قبل الإرسال.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <div>
+              <Label>قنوات الإرسال</Label>
+              <div className="flex flex-wrap gap-4 mt-2">
+                <label className="flex items-center gap-2 cursor-pointer text-sm" data-testid="label-channel-inapp">
+                  <Checkbox checked={channelInapp} onCheckedChange={(v) => setChannelInapp(!!v)} data-testid="checkbox-channel-inapp" /> داخل النظام (جرس الإشعارات)
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-sm" data-testid="label-channel-whatsapp">
+                  <Checkbox checked={channelWhatsapp} onCheckedChange={(v) => setChannelWhatsapp(!!v)} data-testid="checkbox-channel-whatsapp" /> واتساب / SMS
+                </label>
+              </div>
+              {channelWhatsapp && !twilioConfigured && (
+                <p className="text-xs text-destructive mt-1">تنبيه: Twilio غير مهيأ، لن تُرسل رسائل واتساب فعلياً حتى تتم تهيئته.</p>
+              )}
+              {channelInapp && selectedTargets.some(t => !t.userId) && (
+                <p className="text-xs text-muted-foreground mt-1">بعض المستهدفين لا يملكون حساب نظام، لن يصلهم إشعار داخل النظام (لكن يصلهم واتساب إن فُعّل).</p>
+              )}
+            </div>
+
+            <div className="flex gap-2 flex-wrap">
+              {(messageMode === "smart" || messageMode === "both") && (
+                <Button variant="outline" onClick={() => previewMut.mutate()} disabled={previewMut.isPending} data-testid="button-preview-issues">
+                  <FileText className="h-4 w-4 ml-2" />{previewMut.isPending ? "جارِ التحميل..." : "معاينة المشاكل"}
+                </Button>
+              )}
+              <Button onClick={() => sendMut.mutate()} disabled={sendMut.isPending || selectedTargets.length === 0} data-testid="button-send-targeted">
+                <Send className="h-4 w-4 ml-2" />{sendMut.isPending ? "جارِ الإرسال..." : `إرسال إلى ${selectedTargets.length}`}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Preview dialog */}
+      <Dialog open={!!previewIssues} onOpenChange={() => setPreviewIssues(null)}>
+        <DialogContent dir="rtl" className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>معاينة مشاكل الفروع</DialogTitle></DialogHeader>
+          {previewIssues && previewIssues.length === 0 && (
+            <p className="text-center text-muted-foreground p-4">لا توجد مشاكل في الفروع المحددة 🎉</p>
+          )}
+          <div className="space-y-4">
+            {previewIssues?.map(bi => (
+              <div key={bi.branchId} className="border rounded-lg p-3" data-testid={`preview-branch-${bi.branchId}`}>
+                <div className="font-semibold flex items-center justify-between flex-wrap gap-2">
+                  <span>{bi.branchName}</span>
+                  <span className="text-xs text-muted-foreground">
+                    نشط: {bi.totalActive} • ناقص: {bi.incompleteCount} • منتهي: {bi.expiredCount} • يقترب: {bi.expiringCount}
+                  </span>
+                </div>
+                {bi.employees.length === 0 ? (
+                  <p className="text-sm text-green-700 mt-2">لا توجد مشاكل في هذا الفرع ✅</p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    {bi.employees.map((e, i) => {
+                      const b = statusBadge(e.status);
+                      return (
+                        <div key={i} className="text-sm border-t pt-2">
+                          <div className="flex items-center gap-2">
+                            <Badge className={b.cls}>{b.label}</Badge>
+                            <span className="font-medium">{e.employeeName}</span>
+                          </div>
+                          <ul className="list-disc mr-6 text-xs text-muted-foreground mt-1">
+                            {e.issues.map((iss, j) => <li key={j}>{iss}</li>)}
+                          </ul>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
