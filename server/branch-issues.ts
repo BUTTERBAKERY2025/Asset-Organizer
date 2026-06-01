@@ -36,6 +36,10 @@ function daysUntil(dateStr: string, today: Date): number {
 export async function computeBranchIssues(branchIds: string[]): Promise<BranchIssues[]> {
   if (!branchIds || branchIds.length === 0) return [];
 
+  // drizzle serializes a bare JS array as a record tuple (a, b), which breaks
+  // `= ANY(${arr})`. Expand into individual bound params and use `IN (...)`.
+  const branchList = sql.join(branchIds.map((v) => sql`${v}`), sql`, `);
+
   const rows: any = await db.execute(sql`
     SELECT
       be.branch_id,
@@ -54,7 +58,7 @@ export async function computeBranchIssues(branchIds: string[]): Promise<BranchIs
     FROM branch_employees be
     LEFT JOIN branches b ON b.id = be.branch_id
     WHERE be.status = 'active'
-      AND be.branch_id = ANY(${branchIds})
+      AND be.branch_id IN (${branchList})
     ORDER BY be.branch_id, be.employee_name
   `);
 
