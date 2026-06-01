@@ -25,6 +25,7 @@ import {
   LEAVE_TYPE_LABELS,
 } from "@shared/schema";
 import { PortalTimesheet } from "@/components/portal-timesheet";
+import { PortalWarningSigner } from "@/components/portal-warning-signer";
 
 function fmtMoney(n: any): string {
   return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -88,6 +89,7 @@ export default function MyPortalPage() {
   const qc = useQueryClient();
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [advOpen, setAdvOpen] = useState(false);
+  const [warningId, setWarningId] = useState<number | null>(null);
 
   // localized lookups (fall back to raw key if a translation is missing)
   const tl = (group: string, key?: string | null) =>
@@ -1011,7 +1013,15 @@ export default function MyPortalPage() {
                   <Card><CardContent className="p-8 text-center text-muted-foreground">{t("warnings.empty")}</CardContent></Card>
                 )}
                 {warnings.map((w) => (
-                  <Card key={w.id} data-testid={`row-warning-${w.id}`}>
+                  <Card
+                    key={w.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setWarningId(w.id)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setWarningId(w.id); } }}
+                    className="cursor-pointer transition-colors hover:border-amber-300 hover:bg-amber-50/40 dark:hover:bg-amber-950/20"
+                    data-testid={`row-warning-${w.id}`}
+                  >
                     <CardContent className="p-4 space-y-1">
                       <div className="flex items-center justify-between gap-3">
                         <div className="font-semibold">{tl("warningLevels", w.level)}</div>
@@ -1022,11 +1032,17 @@ export default function MyPortalPage() {
                       <div className="text-sm text-muted-foreground">{w.issuedDate} · {w.reason}</div>
                       {w.description && <div className="text-xs text-muted-foreground">{w.description}</div>}
                       {w.deductionAmount > 0 && <div className="text-xs text-destructive">{t("warnings.deduction")}: {fmtMoney(w.deductionAmount)} {currency}</div>}
-                      {w.signedAt ? (
-                        <div className="text-xs text-green-600 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" />{t("warnings.signed")}</div>
-                      ) : (
-                        <div className="text-xs text-amber-600 flex items-center gap-1"><Clock className="h-3 w-3" />{t("warnings.awaitingSignature")}</div>
-                      )}
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        {w.signedAt ? (
+                          <div className="text-xs text-green-600 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" />{t("warnings.signed")}</div>
+                        ) : (
+                          <div className="text-xs text-amber-600 flex items-center gap-1"><Clock className="h-3 w-3" />{t("warnings.awaitingSignature")}</div>
+                        )}
+                        <span className="text-xs font-medium text-amber-700 flex items-center gap-1">
+                          <FileSignature className="h-3.5 w-3.5" />
+                          {w.signedAt ? t("warnings.viewDocument", { defaultValue: "عرض المستند" }) : t("warnings.reviewAndSign", { defaultValue: "عرض وتوقيع" })}
+                        </span>
+                      </div>
                     </CardContent>
                   </Card>
                 ))}
@@ -1213,6 +1229,13 @@ export default function MyPortalPage() {
             </Tabs>
           </>
         )}
+
+        {/* عرض وتوقيع الإنذار الرسمي / warning signer */}
+        <PortalWarningSigner
+          warningId={warningId}
+          open={warningId !== null}
+          onOpenChange={(v) => { if (!v) setWarningId(null); }}
+        />
 
         {/* نموذج طلب إجازة / leave dialog */}
         <Dialog open={leaveOpen} onOpenChange={setLeaveOpen}>

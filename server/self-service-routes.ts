@@ -19,7 +19,14 @@ import {
   PORTAL_SETTING_KEYS,
 } from "@shared/schema";
 import { z } from "zod";
+import { sql } from "drizzle-orm";
 import { notifyEmployeeOfDecision, notifyHrOfRequest } from "./notify-helpers";
+import {
+  getWarningTemplate,
+  getWarningReasonCategory,
+  renderWarningBody,
+  WARNING_LEGAL_NOTICE,
+} from "@shared/warning-templates";
 
 // الشهر الحالي بتوقيت السعودية بصيغة YYYY-MM
 function saudiMonth(): string {
@@ -559,6 +566,102 @@ export function registerSelfServiceRoutes(app: Express) {
     } catch (e: any) {
       console.error("[my/warnings] error:", e);
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  // تفاصيل إنذار واحد للموظف الحالي — على ترويسة الشركة الرسمية
+  app.get("/api/my/warnings/:id", isAuthenticated, async (req, res) => {
+    try {
+      const emp = await getMyEmployee(req);
+      if (!emp) return res.status(403).json({ error: "حسابك غير مرتبط بملف موظف" });
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "معرّف غير صحيح" });
+      const [w] = await db.select().from(employeeWarnings).where(eq(employeeWarnings.id, id));
+      // Ownership guard: the warning must belong to the logged-in employee.
+      if (!w || w.branchEmployeeId !== emp.id) {
+        return res.status(404).json({ error: "الإنذار غير موجود" });
+      }
+      const [br] = w.branchId ? await db.select().from(branches).where(eq(branches.id, w.branchId)) : [null];
+      const template = getWarningTemplate(w.templateId);
+      const reason = getWarningReasonCategory(w.reasonCategory);
+      const renderedBody = template
+        ? renderWarningBody(template.body, { name: emp.employeeName, date: w.issuedDate })
+        : null;
+      res.json({
+        warning: {
+          id: w.id, level: w.level, reason: w.reason, description: w.description,
+          issuedDate: w.issuedDate, deductionAmount: w.deductionAmount,
+          templateId: w.templateId, reasonCategory: w.reasonCategory,
+          attachments: w.attachments || [],
+          signedAt: w.signedAt, signatureData: w.signatureData,
+          status: w.status,
+        },
+        employee: {
+          id: emp.id, employeeName: emp.employeeName, jobTitle: emp.jobTitle,
+          nationalId: (emp as any).nationalId,
+        },
+        branch: br ? { id: br.id, name: br.name, nameAr: (br as any).nameAr } : null,
+        template: template ? { id: template.id, label: template.label, body: renderedBody } : null,
+        reasonCategoryLabel: reason?.label || null,
+        legalNotice: WARNING_LEGAL_NOTICE,
+      });
+    } catch (e: any) {
+      console.error("[my/warnings/:id] error:", e);
+      res.status(500).json({ error: "تعذّر تحميل الإنذار" });
+    }
+  });
+
+  // توقيع الموظف على إنذاره إلكترونيًا من داخل البوابة
+  app.post("/api/my/warnings/:id/sign", isAuthenticated, async (req, res) => {
+    try {
+      const emp = await getMyEmployee(req);
+      if (!emp) return res.status(403).json({ error: "حسابك غير مرتبط بملف موظف" });
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "معرّف غير صحيح" });
+      const body = z.object({
+        signatureData: z.string().min(50, "التوقيع مطلوب").max(500_000, "التوقيع كبير جدًا"),
+      }).parse(req.body);
+
+      // Ownership guard before any write.
+      const [w] = await db.select().from(employeeWarnings).where(eq(employeeWarnings.id, id));
+      if (!w || w.branchEmployeeId !== emp.id) {
+        return res.status(404).json({ error: "الإنذار غير موجود" });
+      }
+      // Only active warnings can be signed (not cancelled/expired/appealed).
+      if (w.status !== "active") {
+        return res.status(400).json({ error: "لا يمكن توقيع هذا الإنذار في حالته الحالية" });
+      }
+
+      const ip = String(req.ip || req.socket.remoteAddress || "").slice(0, 64);
+      const ua = String(req.headers["user-agent"] || "").slice(0, 256);
+      // Atomic single-sign guarantee: the WHERE clause also requires
+      // signed_at IS NULL so two concurrent requests can never both succeed.
+      const updated = await db.update(employeeWarnings).set({
+        signedAt: new Date(),
+        signatureData: body.signatureData,
+        signedIp: ip || null,
+        signedUserAgent: ua || null,
+        acknowledgedAt: new Date(), // mirror for back-compat
+        updatedAt: new Date(),
+      } as any).where(
+        and(
+          eq(employeeWarnings.id, id),
+          eq(employeeWarnings.branchEmployeeId, emp.id),
+          eq(employeeWarnings.status, "active"),
+          sql`${employeeWarnings.signedAt} IS NULL`,
+        ),
+      ).returning();
+      if (updated.length === 0) {
+        const [latest] = await db.select({ signedAt: employeeWarnings.signedAt, status: employeeWarnings.status })
+          .from(employeeWarnings).where(eq(employeeWarnings.id, id));
+        if (latest?.signedAt) return res.status(409).json({ error: "تم التوقيع على هذا الإنذار مسبقًا" });
+        return res.status(400).json({ error: "لا يمكن توقيع هذا الإنذار في حالته الحالية" });
+      }
+      res.json({ success: true, signedAt: updated[0].signedAt });
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: e.errors[0]?.message || "بيانات غير صحيحة" });
+      console.error("[my/warnings/:id/sign] error:", e);
+      res.status(500).json({ error: "تعذّر حفظ التوقيع" });
     }
   });
 
