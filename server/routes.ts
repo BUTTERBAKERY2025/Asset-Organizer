@@ -35526,6 +35526,21 @@ export async function registerRoutes(
     }
   });
 
+  // Per-user read state for the notification bell. Available to ANY authenticated
+  // user (not just settings admins) so each user can compute their own unread
+  // count from /api/active-notifications. Must be registered BEFORE the numeric
+  // "/:id" route below, otherwise that route's settings:view middleware blocks it.
+  app.get("/api/system-notifications/my-reads", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.session.userId as string;
+      const reads = await storage.getNotificationReadsByUser(userId);
+      res.json(reads.map(r => ({ notificationId: r.notificationId, dismissed: r.dismissed })));
+    } catch (error) {
+      console.error("Error fetching user notification reads:", error);
+      res.status(500).json({ error: "فشل في جلب حالة القراءة" });
+    }
+  });
+
   app.get("/api/system-notifications/:id", isAuthenticated, requirePermission("settings", "view"), async (req, res, next) => {
     // Only handle numeric ids. Non-numeric segments (e.g. "targets-by-position",
     // "branch-issues", "recipients-from-branches") must fall through to their own

@@ -564,7 +564,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <h1 className="text-base font-bold text-primary leading-tight">{t("platformName")}</h1>
               <p className="text-[10px] text-primary/70 font-medium">{t("systemSubtitle")}</p>
             </div>
-            {isAuthenticated && isAdmin && <Suspense fallback={<div className="w-8 h-8" />}><NotificationsDropdown /></Suspense>}
+            {isAuthenticated && <Suspense fallback={<div className="w-8 h-8" />}><NotificationsDropdown /></Suspense>}
           </div>
           {isAuthenticated && <Suspense fallback={<div className="h-9 bg-muted/30 rounded-lg animate-pulse" />}><GlobalSearch /></Suspense>}
         </div>
@@ -818,7 +818,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
           <div className="flex items-center gap-1 md:gap-2 shrink-0">
             {isAuthenticated && <div className="hidden md:block w-56"><Suspense fallback={<div className="h-9 bg-muted/30 rounded-lg animate-pulse" />}><GlobalSearch /></Suspense></div>}
-            {isAuthenticated && isAdmin && <Suspense fallback={<div className="w-8 h-8" />}><NotificationsDropdown /></Suspense>}
+            {isAuthenticated && <Suspense fallback={<div className="w-8 h-8" />}><NotificationsDropdown /></Suspense>}
           </div>
         </header>
 

@@ -8,10 +8,19 @@ description: Critical distinction between the `notifications` table and the `sys
 There are TWO separate notification surfaces:
 
 - **`systemNotifications` table** = the REAL user-facing alerts. Shown via:
-  - `/api/active-notifications` -> `getActiveNotificationsForUser` (popup banner/modal,
-    mounted for ALL authenticated users in layout.tsx). No permission gate.
-  - `/api/system-notifications` -> `getAllSystemNotifications` (the bell dropdown;
-    requires `settings:view`).
+  - `/api/active-notifications` -> `getActiveNotificationsForUser` (per-user, filtered by
+    branch+role, no permission gate). This now feeds BOTH the popup banner/modal AND the
+    bell dropdown (`NotificationsDropdown`), mounted for ALL authenticated users.
+  - `/api/system-notifications` -> `getAllSystemNotifications` is the ADMIN list only
+    (`settings:view`); do NOT use it for the user-facing bell — it leaks all branches'
+    notifications and 403s for non-admins (was the root cause of "bell missing/empty").
+  - Bell unread count is computed client-side: active list minus per-user read ids from
+    `/api/system-notifications/my-reads` (isAuthenticated; MUST be registered before the
+    settings-gated `/:id` route or it gets shadowed/blocked). Read/dismiss go through
+    `/api/system-notifications/:id/read` and `/dismiss` (both isAuthenticated only).
+  - Bell rows are raw systemNotifications shape: `content` (not message), `messageType`
+    (not type), integer `priority`, `buttonText`/`buttonAction`. Clicking opens a detail
+    Dialog (full content) — there is no `linkUrl`; navigation is optional via buttonAction.
   - Targeting is by **branch + role only**: `targetAllBranches` / `targetBranchIds` /
     `targetRoleIds` (matched against `users.role`). There is NO per-user/targetUserIds
     column — individual targeting requires a schema change.
