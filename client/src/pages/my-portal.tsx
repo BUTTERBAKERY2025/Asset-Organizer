@@ -19,7 +19,7 @@ import {
   Briefcase, Building2, Hash, AlertTriangle, LayoutDashboard, CalendarRange,
   ClipboardCheck, ShieldAlert, FileText, Award, ChevronLeft, ChevronRight,
   MapPin, LogIn, LogOut, Loader2, Fingerprint, Eraser, Languages, Globe, Phone,
-  Bell, FileSignature,
+  Bell, FileSignature, RefreshCw,
 } from "lucide-react";
 import {
   LEAVE_TYPE_LABELS,
@@ -90,6 +90,23 @@ export default function MyPortalPage() {
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [advOpen, setAdvOpen] = useState(false);
   const [warningId, setWarningId] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Refresh all portal data: refetch every /api/my/* query.
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await qc.invalidateQueries({
+        predicate: (q) => {
+          const k = q.queryKey?.[0];
+          return typeof k === "string" && k.startsWith("/api/my");
+        },
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // localized lookups (fall back to raw key if a translation is missing)
   const tl = (group: string, key?: string | null) =>
@@ -441,6 +458,17 @@ export default function MyPortalPage() {
               )}
             </Button>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            data-testid="button-refresh"
+            aria-label={isRTL ? "تحديث الصفحة" : "Refresh"}
+          >
+            <RefreshCw className={`h-4 w-4 sm:me-1 ${refreshing ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline">{isRTL ? "تحديث" : "Refresh"}</span>
+          </Button>
           <Button
             variant="outline"
             size="sm"
