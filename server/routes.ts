@@ -35930,36 +35930,66 @@ export async function registerRoutes(
       let queuedCount = 0;
       let skippedNoTarget = 0;
 
-      const inappPayloads: any[] = [];
-
-      for (const t of finalTargets) {
-        const body = buildBody(t.branchId);
-        // Smart-only message with no issues for this branch → nothing to say
-        if (!body.trim()) { skippedNoTarget++; continue; }
-
-        // In-app delivery (requires a linked user account)
-        if (channels.includes("inapp")) {
-          if (t.userId) {
-            inappPayloads.push({
-              type: "system",
-              category: "hr",
-              title,
-              message: body,
-              priority: "normal",
-              userId: t.userId,
-              branchId: t.branchId,
-              linkUrl: "/notifications-center",
-              createdBy: me.id,
-            });
-          } else {
-            skippedNoTarget++;
+      // ---- In-app delivery: one system notification PER BRANCH, targeted by
+      // (branch + the recipients' ACTUAL roles). This routes through the SAME
+      // notification center / popup that recipients already see via
+      // /api/active-notifications. The per-user `notifications` table is a separate
+      // surface the bell does NOT read, so we must write here instead. Each branch
+      // gets its OWN body (its own employee issues).
+      // NOTE: active-notification visibility filters on users.role, so we must derive
+      // targetRoleIds from each recipient's real users.role — NOT from jobTitle, since
+      // a target resolved via job_title may have a different users.role and would
+      // otherwise never see the alert.
+      if (channels.includes("inapp")) {
+        const inappTargets = finalTargets.filter((t) => t.userId);
+        const userIds = Array.from(new Set(inappTargets.map((t) => t.userId as string)));
+        const rolesByBranch = new Map<string, Set<string>>();
+        if (userIds.length > 0) {
+          const roleRows: any = await db.execute(sql`
+            SELECT id, role, branch_id FROM users WHERE id = ANY(${userIds})
+          `);
+          const list = (roleRows.rows || roleRows) as any[];
+          const roleByUserId = new Map<string, string>();
+          for (const u of list) { if (u.role) roleByUserId.set(u.id, u.role); }
+          for (const t of inappTargets) {
+            const role = roleByUserId.get(t.userId as string);
+            if (!role) continue;
+            if (!rolesByBranch.has(t.branchId)) rolesByBranch.set(t.branchId, new Set());
+            rolesByBranch.get(t.branchId)!.add(role);
           }
         }
 
-        // WhatsApp / SMS delivery (requires a valid phone)
-        const wantsWhatsapp = channels.includes("whatsapp");
-        const wantsSms = channels.includes("sms");
-        if (wantsWhatsapp || wantsSms) {
+        const branchIds = Array.from(new Set(finalTargets.map((t) => t.branchId)));
+        for (const branchId of branchIds) {
+          const body = buildBody(branchId);
+          // Smart-only message with no issues for this branch → nothing to say
+          if (!body.trim()) { skippedNoTarget++; continue; }
+          const roles = Array.from(rolesByBranch.get(branchId) || []);
+          // No in-app-capable recipient (no linked user account) in this branch.
+          if (roles.length === 0) { skippedNoTarget++; continue; }
+          await storage.createSystemNotification({
+            title,
+            content: body,
+            messageType: "announcement",
+            displayStyle: "banner",
+            priority: 2,
+            isActive: true,
+            targetAllBranches: false,
+            targetBranchIds: [branchId],
+            targetRoleIds: roles,
+            createdBy: me.id,
+          } as any);
+          inappCount++;
+        }
+      }
+
+      // ---- WhatsApp / SMS delivery: per individual target (exact selected people).
+      const wantsWhatsapp = channels.includes("whatsapp");
+      const wantsSms = channels.includes("sms");
+      if (wantsWhatsapp || wantsSms) {
+        for (const t of finalTargets) {
+          const body = buildBody(t.branchId);
+          if (!body.trim()) continue;
           const cleanPhone = normalizePhoneSimple(t.phone);
           if (cleanPhone && phoneRe.test(cleanPhone)) {
             const messageBody = `*${title}*\n\n${body}\n\n— Butter Bakery`;
@@ -35974,11 +36004,6 @@ export async function registerRoutes(
             queuedCount++;
           }
         }
-      }
-
-      if (inappPayloads.length > 0) {
-        const created = await NotificationService.createBulkNotifications(inappPayloads);
-        inappCount = created.length;
       }
 
       res.json({
