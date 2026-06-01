@@ -35707,6 +35707,15 @@ export async function registerRoutes(
     }
   });
 
+  // Helper: build a parameterized list from a string array for raw sql`` queries.
+  // drizzle serializes a bare JS array as a record tuple (a, b), which breaks
+  // `= ANY(${arr})` ("requires array on right side"). Expand into individual
+  // params and use `IN (${inList(arr)})` instead. Caller must ensure non-empty.
+  function inList(values: string[]) {
+    if (values.length === 0) throw new Error("inList requires a non-empty array (IN () is invalid SQL)");
+    return sql.join(values.map((v) => sql`${v}`), sql`, `);
+  }
+
   // Helper: list active employees with phone numbers from given branches (for WhatsApp picker)
   app.get("/api/system-notifications/recipients-from-branches", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
     try {
@@ -35724,13 +35733,14 @@ export async function registerRoutes(
         if (allowedBranchIds.length === 0) return res.json([]);
       }
 
+      if (allowedBranchIds.length === 0) return res.json([]);
       const rows: any = await db.execute(sql`
         SELECT employee_name AS full_name, phone_number, branch_id
         FROM branch_employees
         WHERE status = 'active'
           AND phone_number IS NOT NULL
           AND phone_number <> ''
-          AND branch_id = ANY(${allowedBranchIds})
+          AND branch_id IN (${inList(allowedBranchIds)})
       `);
       const list = (rows.rows || rows) as any[];
       res.json(list.map((r: any) => ({ name: r.full_name, phone: r.phone_number, branchId: r.branch_id })));
@@ -35767,19 +35777,26 @@ export async function registerRoutes(
   async function resolveTargetsByPosition(jobTitle: string, allowedBranchIds: string[]): Promise<PositionTarget[]> {
     if (!jobTitle || allowedBranchIds.length === 0) return [];
 
+    // The dropdown sends the English KEY (e.g. "branch_manager"), but
+    // branch_employees.job_title (and sometimes users.job_title/role) store the
+    // ARABIC LABEL ("مدير فرع"). Match against BOTH so detection works regardless
+    // of how the value was saved.
+    const label = JOB_TITLE_LABELS[jobTitle as keyof typeof JOB_TITLE_LABELS];
+    const titleCandidates = Array.from(new Set([jobTitle, label].filter(Boolean))) as string[];
+
     const empRows: any = await db.execute(sql`
       SELECT employee_name, phone_number, branch_id, linked_user_id
       FROM branch_employees
       WHERE status = 'active'
-        AND job_title = ${jobTitle}
-        AND branch_id = ANY(${allowedBranchIds})
+        AND job_title IN (${inList(titleCandidates)})
+        AND branch_id IN (${inList(allowedBranchIds)})
     `);
     const userRows: any = await db.execute(sql`
       SELECT id, first_name, last_name, username, phone, branch_id
       FROM users
-      WHERE (role = ${jobTitle} OR job_title = ${jobTitle})
+      WHERE (role IN (${inList(titleCandidates)}) OR job_title IN (${inList(titleCandidates)}))
         AND is_active = 'active'
-        AND branch_id = ANY(${allowedBranchIds})
+        AND branch_id IN (${inList(allowedBranchIds)})
     `);
 
     const empList = (empRows.rows || empRows) as any[];
@@ -35951,7 +35968,7 @@ export async function registerRoutes(
         const rolesByBranch = new Map<string, Set<string>>();
         if (userIds.length > 0) {
           const roleRows: any = await db.execute(sql`
-            SELECT id, role, branch_id FROM users WHERE id = ANY(${userIds})
+            SELECT id, role, branch_id FROM users WHERE id IN (${inList(userIds)})
           `);
           const list = (roleRows.rows || roleRows) as any[];
           const roleByUserId = new Map<string, string>();
