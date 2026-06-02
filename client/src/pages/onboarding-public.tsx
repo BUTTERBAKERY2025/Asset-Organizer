@@ -6,6 +6,7 @@ import { Loader2, MapPin, Camera, CheckCircle2, AlertTriangle, Briefcase } from 
 import { useToast } from "@/hooks/use-toast";
 import { GPSPhotoCapture, PhotoThumb, type CapturedPhoto } from "@/components/gps-photo-capture";
 import { SignaturePad } from "@/components/signature-pad";
+import { COMPANY_INFO } from "@/components/company-header";
 
 export default function OnboardingPublicPage() {
   const { token } = useParams<{ token: string }>();
@@ -113,6 +114,30 @@ export default function OnboardingPublicPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white p-4" dir="rtl">
       <div className="max-w-md mx-auto space-y-4">
+        {/* الترويس الرسمي للشركة */}
+        <Card className="overflow-hidden border-2" style={{ borderColor: "#1a3a2f" }} data-testid="company-letterhead">
+          <div className="h-1.5 w-full" style={{ background: "linear-gradient(90deg, #1a3a2f 0%, #2d5a47 50%, #1a3a2f 100%)" }} />
+          <CardContent className="p-3">
+            <div className="flex items-center gap-3">
+              <img
+                src={COMPANY_INFO.logo}
+                alt="Company Logo"
+                className="h-16 w-auto object-contain flex-shrink-0"
+                onError={(e) => { e.currentTarget.style.display = "none"; }}
+                data-testid="img-company-logo"
+              />
+              <div className="flex-1 text-center">
+                <h1 className="text-base font-bold leading-tight" style={{ color: "#1a3a2f" }} data-testid="text-company-name">
+                  {COMPANY_INFO.name}
+                </h1>
+                <h2 className="text-xs font-semibold" style={{ color: "#1a3a2f" }}>{COMPANY_INFO.nameEn}</h2>
+                <p className="text-[11px] text-slate-600" data-testid="text-company-cr">سجل تجاري / C.R: {COMPANY_INFO.cr}</p>
+              </div>
+            </div>
+          </CardContent>
+          <div className="h-0.5 w-full" style={{ background: "linear-gradient(90deg, transparent 0%, #1a3a2f 20%, #1a3a2f 80%, transparent 100%)" }} />
+        </Card>
+
         {/* Header */}
         <Card className="border-2 border-amber-300 overflow-hidden">
           <div className="bg-gradient-to-l from-amber-600 to-amber-700 text-white p-4 text-center">
@@ -121,6 +146,17 @@ export default function OnboardingPublicPage() {
             <p className="text-xs opacity-90">إشعار مباشرة العمل | Work Commencement</p>
           </div>
           <CardContent className="p-4 space-y-2 text-sm">
+            {n.personalPhotoUrl && (
+              <div className="flex justify-center pt-1">
+                <img
+                  src={n.personalPhotoUrl}
+                  alt="صورة الموظف"
+                  className="h-24 w-24 rounded-full object-cover border-2 border-amber-400 shadow-sm"
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
+                  data-testid="img-employee-photo"
+                />
+              </div>
+            )}
             <div className="text-center text-base font-bold text-amber-800">
               أهلاً وسهلاً بك، {n.candidateName} 🎉
             </div>

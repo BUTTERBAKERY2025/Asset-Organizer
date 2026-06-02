@@ -6,6 +6,7 @@ import {
   onboardingNotifications,
   onboardingTokens,
   jobOffers,
+  employmentApplications,
   branches,
   users,
   branchEmployees,
@@ -802,6 +803,46 @@ export function registerOnboardingRoutes(app: Express) {
         if (b) branch = { id: b.id, name: b.name, latitude: b.latitude, longitude: b.longitude, locationRadius: b.locationRadius, address: b.address };
       }
 
+      // جلب الصورة الشخصية للموظف من طلب التوظيف (مطابقة دقيقة لتفادي إظهار صورة شخص آخر)
+      // ملاحظة: نستخدم photoUrl (الصورة الشخصية) فقط، وليس idCopyUrl (صورة الهوية/الإقامة)
+      // الأولوية: رقم الهوية (مطابقة قاطعة) ثم الجوال مع تطابق الاسم كحارس أمان
+      let personalPhotoUrl: string | null = null;
+      try {
+        const [offer] = await db
+          .select({ idNumber: jobOffers.idNumber, phone: jobOffers.phone, candidateName: jobOffers.candidateName })
+          .from(jobOffers)
+          .where(eq(jobOffers.id, n.jobOfferId))
+          .limit(1);
+        const idNumber = offer?.idNumber?.trim() || null;
+        const phone = (offer?.phone || n.phone)?.trim() || null;
+        const expectedName = (offer?.candidateName || n.candidateName || "").replace(/\s+/g, " ").trim();
+        const norm = (s: string | null | undefined) => (s || "").replace(/\s+/g, " ").trim();
+
+        // (1) المطابقة برقم الهوية أولاً — أدق معرّف
+        if (idNumber) {
+          const [app] = await db
+            .select({ photoUrl: employmentApplications.photoUrl })
+            .from(employmentApplications)
+            .where(eq(employmentApplications.idNumber, idNumber))
+            .orderBy(desc(employmentApplications.id))
+            .limit(1);
+          if (app?.photoUrl) personalPhotoUrl = app.photoUrl;
+        }
+
+        // (2) احتياط: المطابقة بالجوال + تطابق الاسم (لتفادي إظهار صورة شخص آخر يشارك نفس الرقم)
+        if (!personalPhotoUrl && phone && expectedName) {
+          const candidates = await db
+            .select({ photoUrl: employmentApplications.photoUrl, fullNameAr: employmentApplications.fullNameAr })
+            .from(employmentApplications)
+            .where(eq(employmentApplications.phone, phone))
+            .orderBy(desc(employmentApplications.id));
+          const matched = candidates.find((c) => c.photoUrl && norm(c.fullNameAr) === expectedName);
+          if (matched?.photoUrl) personalPhotoUrl = matched.photoUrl;
+        }
+      } catch (lookupErr) {
+        console.error("[onboarding] personal photo lookup failed:", lookupErr);
+      }
+
       res.json({
         notification: {
           notificationNumber: n.notificationNumber,
@@ -813,6 +854,7 @@ export function registerOnboardingRoutes(app: Express) {
           reportingTo: n.reportingTo,
           notes: n.notes,
           status: n.status,
+          personalPhotoUrl,
         },
         branch,
       });
