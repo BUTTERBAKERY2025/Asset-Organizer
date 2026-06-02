@@ -25,7 +25,7 @@ export default function OnboardingPublicPage() {
         const r = await fetch(`/api/public/onboarding/${token}`);
         const j = await r.json();
         if (!r.ok) {
-          setError(j.error || "تعذّر تحميل الإشعار");
+          setError(j.error || "تعذّر تحميل الإشعار / Unable to load the notice");
         } else {
           setData(j);
         }
@@ -38,8 +38,8 @@ export default function OnboardingPublicPage() {
   }, [token]);
 
   const submit = async () => {
-    if (!photo) return toast({ title: "صورة الإثبات في الفرع مطلوبة", variant: "destructive" });
-    if (!signature) return toast({ title: "التوقيع مطلوب", variant: "destructive" });
+    if (!photo) return toast({ title: "صورة الإثبات في الفرع مطلوبة / Branch photo required", variant: "destructive" });
+    if (!signature) return toast({ title: "التوقيع مطلوب / Signature required", variant: "destructive" });
 
     setSubmitting(true);
     try {
@@ -55,10 +55,10 @@ export default function OnboardingPublicPage() {
         }),
       });
       const j = await r.json();
-      if (!r.ok) throw new Error(j.error || "فشل التوقيع");
+      if (!r.ok) throw new Error(j.error || "فشل التوقيع / Signing failed");
       setDone({ withinRadius: j.withinRadius, distanceM: j.distanceM });
     } catch (e: any) {
-      toast({ title: "خطأ", description: e.message, variant: "destructive" });
+      toast({ title: "خطأ / Error", description: e.message, variant: "destructive" });
     } finally {
       setSubmitting(false);
     }
@@ -79,8 +79,9 @@ export default function OnboardingPublicPage() {
           <CardContent className="p-6 text-center space-y-3">
             <AlertTriangle className="w-12 h-12 text-red-500 mx-auto" />
             <h2 className="text-lg font-bold text-red-700">تعذّر فتح الرابط</h2>
+            <h3 className="text-sm font-bold text-red-600">Unable to open the link</h3>
             <p className="text-sm text-slate-600">{error}</p>
-            <p className="text-xs text-slate-500">يرجى التواصل مع إدارة الموارد البشرية</p>
+            <p className="text-xs text-slate-500">يرجى التواصل مع إدارة الموارد البشرية<br />Please contact the HR Department</p>
           </CardContent>
         </Card>
       </div>
@@ -94,13 +95,17 @@ export default function OnboardingPublicPage() {
           <CardContent className="p-6 text-center space-y-3">
             <CheckCircle2 className="w-16 h-16 text-green-600 mx-auto" />
             <h2 className="text-xl font-bold text-green-800">تم تأكيد مباشرتك بنجاح! 🎉</h2>
+            <p className="text-sm font-semibold text-green-700">Your commencement has been confirmed successfully!</p>
             <p className="text-sm text-slate-700">مرحباً بك في عائلة <strong>Butter Bakery</strong></p>
+            <p className="text-xs text-slate-600">Welcome to the Butter Bakery family</p>
             {done.distanceM != null && (
               <p className={`text-xs ${done.withinRadius ? "text-green-700" : "text-amber-700"}`}>
-                {done.withinRadius ? "✓ موقعك مؤكّد داخل نطاق الفرع" : `⚠ موقعك على بُعد ${done.distanceM} متر من الفرع — سيتم مراجعته`}
+                {done.withinRadius
+                  ? "✓ موقعك مؤكّد داخل نطاق الفرع / Location confirmed inside the branch"
+                  : `⚠ موقعك على بُعد ${done.distanceM} متر من الفرع — سيتم مراجعته / You are ${done.distanceM}m from the branch — under review`}
               </p>
             )}
-            <p className="text-xs text-slate-500 pt-3">سيتم إكمال إجراءاتك من قبل إدارة الموارد البشرية قريباً.</p>
+            <p className="text-xs text-slate-500 pt-3">سيتم إكمال إجراءاتك من قبل إدارة الموارد البشرية قريباً.<br />HR will complete your procedures soon.</p>
           </CardContent>
         </Card>
       </div>
@@ -141,16 +146,20 @@ export default function OnboardingPublicPage() {
         {/* Header */}
         <Card className="border-2 border-amber-300 overflow-hidden">
           <div className="bg-gradient-to-l from-amber-600 to-amber-700 text-white p-4 text-center">
-            <div className="text-3xl mb-1">🥐</div>
+            <div className="flex justify-center mb-2">
+              <div className="bg-white rounded-full p-2 shadow-md">
+                <img src="/butter-bakery-logo.png" alt="Butter Bakery" className="h-12 w-auto object-contain" data-testid="img-bakery-logo" />
+              </div>
+            </div>
             <h1 className="text-xl font-bold">BUTTER BAKERY</h1>
-            <p className="text-xs opacity-90">إشعار مباشرة العمل | Work Commencement</p>
+            <p className="text-xs opacity-90">إشعار مباشرة العمل | Work Commencement Notice</p>
           </div>
           <CardContent className="p-4 space-y-2 text-sm">
             {n.personalPhotoUrl && (
               <div className="flex justify-center pt-1">
                 <img
                   src={n.personalPhotoUrl}
-                  alt="صورة الموظف"
+                  alt="صورة الموظف / Employee photo"
                   className="h-24 w-24 rounded-full object-cover border-2 border-amber-400 shadow-sm"
                   onError={(e) => { e.currentTarget.style.display = "none"; }}
                   data-testid="img-employee-photo"
@@ -160,14 +169,15 @@ export default function OnboardingPublicPage() {
             <div className="text-center text-base font-bold text-amber-800">
               أهلاً وسهلاً بك، {n.candidateName} 🎉
             </div>
-            <div className="text-center text-xs text-slate-600">Welcome to the team!</div>
+            <div className="text-center text-sm font-semibold text-amber-700">Welcome, {n.candidateName}!</div>
+            <div className="text-center text-xs text-slate-600">مرحباً بك في الفريق / Welcome to the team!</div>
             <div className="border-t pt-2 grid grid-cols-1 gap-1.5 text-xs">
-              <Row label="رقم الإشعار" value={n.notificationNumber} mono />
-              <Row label="الوظيفة" value={n.position} />
-              <Row label="الفرع" value={n.branchName || "-"} />
-              <Row label="تاريخ المباشرة" value={n.actualStartDate} />
-              {n.workingHours && <Row label="ساعات الدوام" value={n.workingHours} />}
-              {n.reportingTo && <Row label="المسؤول المباشر" value={n.reportingTo} />}
+              <Row label="رقم الإشعار" labelEn="Notice No." value={n.notificationNumber} mono />
+              <Row label="الوظيفة" labelEn="Position" value={n.position} />
+              <Row label="الفرع" labelEn="Branch" value={n.branchName || "-"} />
+              <Row label="تاريخ المباشرة" labelEn="Start Date" value={n.actualStartDate} />
+              {n.workingHours && <Row label="ساعات الدوام" labelEn="Working Hours" value={n.workingHours} />}
+              {n.reportingTo && <Row label="المسؤول المباشر" labelEn="Reporting To" value={n.reportingTo} />}
             </div>
           </CardContent>
         </Card>
@@ -177,7 +187,8 @@ export default function OnboardingPublicPage() {
             <CardContent className="p-4 text-center space-y-2">
               <CheckCircle2 className="w-10 h-10 text-green-600 mx-auto" />
               <p className="font-semibold text-green-800">تم توقيع مباشرتك مسبقاً</p>
-              <p className="text-xs text-slate-600">سيتم التواصل معك من قبل إدارة الموارد البشرية.</p>
+              <p className="text-sm font-medium text-green-700">You have already signed your commencement</p>
+              <p className="text-xs text-slate-600">سيتم التواصل معك من قبل إدارة الموارد البشرية.<br />The HR Department will contact you.</p>
             </CardContent>
           </Card>
         ) : (
@@ -186,7 +197,7 @@ export default function OnboardingPublicPage() {
             {b && (
               <Card>
                 <CardContent className="p-3 text-xs space-y-1">
-                  <p className="font-semibold flex items-center gap-1"><MapPin className="w-3 h-3 text-blue-600" /> موقع الفرع</p>
+                  <p className="font-semibold flex items-center gap-1"><MapPin className="w-3 h-3 text-blue-600" /> موقع الفرع / Branch Location</p>
                   {b.address && <p className="text-slate-600">{b.address}</p>}
                   {b.latitude != null && b.longitude != null && (
                     <a
@@ -195,7 +206,7 @@ export default function OnboardingPublicPage() {
                       rel="noreferrer"
                       className="text-blue-600 underline"
                     >
-                      فتح الموقع على الخريطة
+                      فتح الموقع على الخريطة / Open in Maps
                     </a>
                   )}
                 </CardContent>
@@ -208,15 +219,18 @@ export default function OnboardingPublicPage() {
                 <div className="flex items-center gap-2 text-sm font-semibold">
                   <Camera className="w-4 h-4 text-indigo-600" /> ١. التقط صورة لنفسك داخل الفرع
                 </div>
+                <div className="text-xs font-medium text-slate-500">1. Take a photo of yourself inside the branch</div>
                 <p className="text-xs text-slate-500">
                   يجب التقاط الصورة من جوالك وأنت داخل الفرع، مع تفعيل الموقع الجغرافي (GPS).
+                  <br />
+                  Take the photo from your phone while inside the branch, with GPS location enabled.
                 </p>
                 {photo ? (
                   <PhotoThumb photo={photo} onRemove={() => setPhoto(null)} />
                 ) : (
                   <GPSPhotoCapture
                     folder="onboarding"
-                    buttonLabel="📸 التقط صورة في الفرع"
+                    buttonLabel="📸 التقط صورة في الفرع / Take photo"
                     required
                     onUpload={setPhoto}
                     uploadUrl={`/api/public/onboarding/${token}/upload`}
@@ -231,7 +245,8 @@ export default function OnboardingPublicPage() {
                 <div className="flex items-center gap-2 text-sm font-semibold">
                   <Briefcase className="w-4 h-4 text-amber-600" /> ٢. التوقيع الإلكتروني
                 </div>
-                <p className="text-xs text-slate-500">وقّع بإصبعك في المربع أدناه:</p>
+                <div className="text-xs font-medium text-slate-500">2. Electronic Signature</div>
+                <p className="text-xs text-slate-500">وقّع بإصبعك في المربع أدناه: / Sign with your finger below:</p>
                 <SignaturePad onSignatureChange={(s) => setSignature(s)} label="" />
               </CardContent>
             </Card>
@@ -244,11 +259,13 @@ export default function OnboardingPublicPage() {
               data-testid="btn-submit-sign"
             >
               {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-              تأكيد المباشرة
+              تأكيد المباشرة / Confirm
             </Button>
 
             <p className="text-[10px] text-center text-slate-400 pt-2">
               بضغطك على زر التأكيد فإنك تُقرّ بمباشرتك للعمل في فرع <strong>{n.branchName}</strong> بتاريخ <strong>{n.actualStartDate}</strong>.
+              <br />
+              By confirming, you acknowledge commencing work at <strong>{n.branchName}</strong> branch on <strong>{n.actualStartDate}</strong>.
             </p>
           </>
         )}
@@ -257,10 +274,10 @@ export default function OnboardingPublicPage() {
   );
 }
 
-function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function Row({ label, labelEn, value, mono }: { label: string; labelEn?: string; value: string; mono?: boolean }) {
   return (
     <div className="flex justify-between gap-2">
-      <span className="text-slate-500">{label}:</span>
+      <span className="text-slate-500">{label}{labelEn ? ` / ${labelEn}` : ""}:</span>
       <span className={`font-medium ${mono ? "font-mono" : ""}`}>{value}</span>
     </div>
   );
