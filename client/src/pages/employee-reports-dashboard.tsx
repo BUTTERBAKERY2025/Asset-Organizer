@@ -22,6 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Popover,
@@ -38,9 +39,10 @@ import {
 } from "@/components/ui/table";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { getQueryFn, queryClient } from "@/lib/queryClient";
+import { getQueryFn, queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useAuth } from "@/hooks/useAuth";
 import { Textarea } from "@/components/ui/textarea";
 import { useBranches } from "@/hooks/useBranches";
 import {
@@ -74,6 +76,7 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  CheckCircle2,
   Loader2,
   Building2,
   CalendarDays,
@@ -334,8 +337,11 @@ export default function EmployeeReportsDashboardPage() {
   const isRTL = i18n.language === "ar";
   const [, navigate] = useLocation();
   const printRef = useRef<HTMLDivElement>(null);
-  const { canView: canViewModule } = usePermissions();
+  const { canView: canViewModule, canEdit: canEditModule } = usePermissions();
+  const { isAdmin } = useAuth();
+  const { toast } = useToast();
   const canCloseSalary = canViewModule("salary_closing");
+  const canApproveSalaryClosing = canEditModule("salary_closing");
   
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
@@ -345,6 +351,14 @@ export default function EmployeeReportsDashboardPage() {
   const [activeOnly, setActiveOnly] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState("overview");
   const [showSalaryClosingDialog, setShowSalaryClosingDialog] = useState(false);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [closeNotes, setCloseNotes] = useState("");
+  const [acknowledgeClose, setAcknowledgeClose] = useState(false);
+  const [showReopenDialog, setShowReopenDialog] = useState(false);
+  const [reopenReason, setReopenReason] = useState("");
+  const [showLinkDialog, setShowLinkDialog] = useState(false);
+  const [linkRecord, setLinkRecord] = useState<AttendanceRecord | null>(null);
+  const [linkEmployeeId, setLinkEmployeeId] = useState<string>("");
   const [salaryClosingBranch, setSalaryClosingBranch] = useState<string>("");
   const [salaryClosingMonth, setSalaryClosingMonth] = useState<string>(new Date().toISOString().slice(0, 7));
   const [salarySearchQuery, setSalarySearchQuery] = useState<string>("");
@@ -428,8 +442,54 @@ export default function EmployeeReportsDashboardPage() {
   const salaryClosingDeductions: SalaryDeduction[] = (salaryDialogActive
     ? salaryClosingBundle?.salaryDeductions
     : salaryClosingBundle?.salaryDeductions) ?? [];
-  // مؤشر "البيانات جاهزة للإغلاق" - إما النافذة غير نشطة، أو الـ bundle المخصص اكتمل تحميله
-  const salaryClosingReady = !salaryDialogActive || (!!salaryClosingBundle && !salaryClosingBundleLoading);
+  // الاحتساب المركزي على الخادم (مصدر الحقيقة) — يُستخدم للعرض والإغلاق
+  const salaryClosingPreviewQuery = useQuery<{
+    lines: any[];
+    totals: any;
+    unlinked: AttendanceRecord[];
+    unlinkedSummary: { totalRecords: number; presentRecords: number; totalHours: number };
+    warnings: Array<{ branchEmployeeId: number | null; employeeName: string; code: string; message: string }>;
+    closure: any | null;
+    isLocked: boolean;
+  }>({
+    queryKey: ["/api/salary-closing/preview", salaryClosingBranch, salaryClosingMonth],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("branchId", salaryClosingBranch);
+      params.set("month", salaryClosingMonth);
+      const res = await fetch(`/api/salary-closing/preview?${params.toString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch salary closing preview");
+      return res.json();
+    },
+    enabled: !!salaryClosingBranch && salaryClosingBranch !== "all" && showSalaryClosingDialog,
+    staleTime: 30_000,
+  });
+  const salaryClosingPreview = salaryClosingPreviewQuery.data;
+  // اللقطة المحفوظة (للحصول على معرفات السطور لطباعة قسائم الراتب بعد الإغلاق)
+  const savedClosureQuery = useQuery<{ closure: any | null; lines: any[] }>({
+    queryKey: ["/api/salary-closing", salaryClosingBranch, salaryClosingMonth],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("branchId", salaryClosingBranch);
+      params.set("month", salaryClosingMonth);
+      const res = await fetch(`/api/salary-closing?${params.toString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch saved closure");
+      return res.json();
+    },
+    enabled: !!salaryClosingBranch && salaryClosingBranch !== "all" && showSalaryClosingDialog && !!salaryClosingPreview?.isLocked,
+    staleTime: 30_000,
+  });
+  // خريطة: معرف الموظف بالفرع -> معرف سطر اللقطة المحفوظة
+  const closureLineIdByBranchEmployee = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const l of savedClosureQuery.data?.lines ?? []) {
+      if (l.branchEmployeeId != null) map.set(Number(l.branchEmployeeId), Number(l.id));
+    }
+    return map;
+  }, [savedClosureQuery.data]);
+  const savedClosureId = savedClosureQuery.data?.closure?.id ?? null;
+  // مؤشر "البيانات جاهزة للإغلاق" - النافذة غير نشطة، أو الاحتساب على الخادم اكتمل
+  const salaryClosingReady = !salaryDialogActive || (!!salaryClosingPreview && !salaryClosingPreviewQuery.isLoading);
   const employeesLoading = bundleLoading;
   const attendanceLoading = bundleLoading;
 
@@ -999,315 +1059,89 @@ export default function EmployeeReportsDashboardPage() {
     ].filter(item => item.value > 0);
   }, [filteredEmployees, isRTL]);
 
-  const { salaryClosingData, salaryClosingUnlinkedCount, salaryClosingUnlinkedRecords, salaryClosingUnlinkedSummary } = useMemo(() => {
-    if (!salaryClosingBranch || salaryClosingBranch === "all") return { salaryClosingData: [], salaryClosingUnlinkedCount: 0, salaryClosingUnlinkedRecords: [] as AttendanceRecord[], salaryClosingUnlinkedSummary: { totalRecords: 0, presentRecords: 0, totalHours: 0 } };
-    
-    const branchEmployees = salaryClosingEmployees?.filter(emp => emp.branchId === salaryClosingBranch && emp.status === "active") || [];
-    const monthStart = `${salaryClosingMonth}-01`;
-    // Compute proper last day of selected month (instead of always 31)
-    const [yearNum, monthNum] = salaryClosingMonth.split("-").map(Number);
-    const lastDay = new Date(yearNum, monthNum, 0).getDate();
-    const monthEnd = `${salaryClosingMonth}-${String(lastDay).padStart(2, "0")}`;
+  // البيانات معروضة من الاحتساب المركزي على الخادم (مصدر الحقيقة).
+  // عند وجود لقطة مغلقة محفوظة، يعرض الخادم نفس الأرقام المجمّدة.
+  const salaryClosingData: any[] = salaryClosingPreview?.lines ?? [];
+  const salaryClosingUnlinkedRecords: AttendanceRecord[] = salaryClosingPreview?.unlinked ?? [];
+  const salaryClosingUnlinkedSummary = salaryClosingPreview?.unlinkedSummary ?? { totalRecords: 0, presentRecords: 0, totalHours: 0 };
+  const salaryClosingUnlinkedCount = salaryClosingUnlinkedSummary.totalRecords;
+  const salaryClosingWarnings = salaryClosingPreview?.warnings ?? [];
+  const salaryClosingClosure = salaryClosingPreview?.closure ?? null;
+  const salaryClosingIsLocked = !!salaryClosingPreview?.isLocked;
+  const salaryClosingBlockingWarnings = salaryClosingWarnings.filter((w: any) => w.code === "no_work_at_all");
 
-    const monthAttendance = salaryClosingAttendance?.filter(rec => 
-      rec.branchId === salaryClosingBranch && 
-      rec.attendanceDate >= monthStart && 
-      rec.attendanceDate <= monthEnd
-    ) || [];
+  const refreshSalaryClosing = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/salary-closing/preview"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/salary-closing/list"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/employee-reports/bundle", "salary-closing"] });
+  };
 
-    const monthSchedules = (salaryClosingSchedules || []).filter((s: any) =>
-      s.branchId === salaryClosingBranch &&
-      s.scheduleDate >= monthStart &&
-      s.scheduleDate <= monthEnd
-    );
+  const closeSalaryMutation = useMutation({
+    mutationFn: async (payload: { acknowledgeWarnings?: boolean; notes?: string }) => {
+      const res = await apiRequest("POST", "/api/salary-closing/close", {
+        branchId: salaryClosingBranch,
+        month: salaryClosingMonth,
+        acknowledgeWarnings: payload.acknowledgeWarnings ?? false,
+        notes: payload.notes,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "تم إغلاق الشهر", description: "تم حفظ لقطة ثابتة للرواتب وقفل الشهر." });
+      refreshSalaryClosing();
+    },
+    onError: (err: any) => {
+      toast({ title: "تعذّر الإغلاق", description: err?.message || "حدث خطأ", variant: "destructive" });
+    },
+  });
 
-    // Index signed (finalized) timesheet entries by employee match keys
-    const signedByEmpId = new Map<number, { report: any; entries: any[] }>();
-    const signedReports = (salaryClosingSignedTimesheets || []).filter((r: any) =>
-      r.report && r.report.branchId === salaryClosingBranch && r.report.status === "finalized"
-    );
+  const reopenSalaryMutation = useMutation({
+    mutationFn: async (payload: { id: number; reason: string }) => {
+      const res = await apiRequest("POST", `/api/salary-closing/${payload.id}/reopen`, { reason: payload.reason });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "تم إعادة الفتح", description: "أصبح بإمكانك التعديل ثم الإغلاق من جديد." });
+      refreshSalaryClosing();
+    },
+    onError: (err: any) => {
+      toast({ title: "تعذّر إعادة الفتح", description: err?.message || "حدث خطأ", variant: "destructive" });
+    },
+  });
 
-    const employeeLookup = new Map<string, number>();
-    const normalizeName = (s: any) => String(s || "").trim().replace(/\s+/g, " ").toLowerCase();
-    const nameLookup = new Map<string, number>();
-    branchEmployees.forEach(emp => {
-      employeeLookup.set(`bid:${emp.id}`, emp.id);
-      employeeLookup.set(`bid:${String(emp.id)}`, emp.id);
-      employeeLookup.set(`eid:${emp.id.toString()}`, emp.id);
-      employeeLookup.set(`eid:branch_emp_${emp.id}`, emp.id);
-      if (emp.employeeNumber) {
-        employeeLookup.set(`enum:${emp.employeeNumber}`, emp.id);
-        employeeLookup.set(`enum:${String(emp.employeeNumber).trim()}`, emp.id);
+  const linkAttendanceMutation = useMutation({
+    mutationFn: async (payload: { attendanceId: number; branchEmployeeId: number }) => {
+      const res = await apiRequest("POST", "/api/salary-closing/link-attendance", payload);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "تم الربط", description: "تم ربط سجل الحضور بالموظف." });
+      refreshSalaryClosing();
+    },
+    onError: (err: any) => {
+      toast({ title: "تعذّر الربط", description: err?.message || "حدث خطأ", variant: "destructive" });
+    },
+  });
+
+  const downloadFile = async (url: string, fallbackName: string) => {
+    try {
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.error || "فشل التنزيل");
       }
-      if ((emp as any).linkedUserId) {
-        employeeLookup.set(`eid:${(emp as any).linkedUserId}`, emp.id);
-      }
-      if (emp.employeeName) {
-        nameLookup.set(normalizeName(emp.employeeName), emp.id);
-      }
-    });
-    
-    const matchEmployee = (rec: AttendanceRecord): number | null => {
-      if (rec.branchEmployeeId !== null && rec.branchEmployeeId !== undefined) {
-        const k = `bid:${rec.branchEmployeeId}`;
-        if (employeeLookup.has(k)) return employeeLookup.get(k)!;
-      }
-      if (rec.employeeId) {
-        const k = `eid:${rec.employeeId}`;
-        if (employeeLookup.has(k)) return employeeLookup.get(k)!;
-      }
-      const employeeNumber = (rec as any).employeeNumber;
-      if (employeeNumber) {
-        const k = `enum:${String(employeeNumber).trim()}`;
-        if (employeeLookup.has(k)) return employeeLookup.get(k)!;
-      }
-      if (rec.employeeName) {
-        const k = normalizeName(rec.employeeName);
-        if (nameLookup.has(k)) return nameLookup.get(k)!;
-      }
-      return null;
-    };
-
-    // Now resolve signed timesheet reports → employee id, keep latest report per employee
-    signedReports.forEach((r: any) => {
-      const rep = r.report;
-      let empId: number | null = null;
-      if (rep.branchEmployeeId !== null && rep.branchEmployeeId !== undefined) {
-        const k = `bid:${rep.branchEmployeeId}`;
-        if (employeeLookup.has(k)) empId = employeeLookup.get(k)!;
-      }
-      if (empId === null && rep.employeeId) {
-        const k = `eid:${rep.employeeId}`;
-        if (employeeLookup.has(k)) empId = employeeLookup.get(k)!;
-      }
-      if (empId === null) return;
-      const existing = signedByEmpId.get(empId);
-      // Prefer the most recent signed report (by managerSignedAt or createdAt)
-      if (!existing) {
-        signedByEmpId.set(empId, r);
-      } else {
-        const ts = (rep.managerSignedAt || rep.updatedAt || rep.createdAt || "");
-        const tsExisting = (existing.report.managerSignedAt || existing.report.updatedAt || existing.report.createdAt || "");
-        if (ts > tsExisting) signedByEmpId.set(empId, r);
-      }
-    });
-
-    // Match a schedule row to an employee using the same lookup map
-    const matchScheduleEmployee = (s: any): number | null => {
-      if (s.branchEmployeeId !== null && s.branchEmployeeId !== undefined) {
-        const k = `bid:${s.branchEmployeeId}`;
-        if (employeeLookup.has(k)) return employeeLookup.get(k)!;
-      }
-      if (s.employeeId) {
-        const k = `eid:${s.employeeId}`;
-        if (employeeLookup.has(k)) return employeeLookup.get(k)!;
-      }
-      if (s.employeeName) {
-        const k = normalizeName(s.employeeName);
-        if (nameLookup.has(k)) return nameLookup.get(k)!;
-      }
-      return null;
-    };
-
-    // Helper: compute scheduled hours for a single schedule row (HH:MM start/end minus break)
-    const scheduledHoursOf = (s: any): number => {
-      if (!s.startTime || !s.endTime || s.isOff) return 0;
-      const [sh, sm] = String(s.startTime).split(":").map(Number);
-      const [eh, em] = String(s.endTime).split(":").map(Number);
-      let mins = (eh * 60 + em) - (sh * 60 + sm);
-      if (mins < 0) mins += 24 * 60; // overnight shift
-      const breakMin = Number(s.breakDuration) || 0;
-      mins = Math.max(0, mins - breakMin);
-      return mins / 60;
-    };
-    
-    const unlinkedList: AttendanceRecord[] = [];
-    monthAttendance.forEach(rec => {
-      if (matchEmployee(rec) === null) {
-        unlinkedList.push(rec);
-      }
-    });
-    
-    const unlinkedSummary = {
-      totalRecords: unlinkedList.length,
-      presentRecords: unlinkedList.filter(r => r.status === "present" || r.status === "late").length,
-      totalHours: unlinkedList.reduce((sum, r) => sum + (Number(r.workingHours) || 0), 0),
-    };
-
-    const data = branchEmployees.map(emp => {
-      // Schedule-based metrics (planned)
-      const empSchedules = monthSchedules.filter((s: any) => matchScheduleEmployee(s) === emp.id);
-      const empAttendance = monthAttendance.filter(a => matchEmployee(a) === emp.id);
-      const attendanceByDate = new Map<string, AttendanceRecord>();
-      empAttendance.forEach(a => attendanceByDate.set(a.attendanceDate, a));
-
-      const lateDays = empAttendance.filter(a => a.status === "late").length;
-
-      const presentDates: string[] = [];
-      const absentDatesExplicit: string[] = [];
-      const absentDatesMissing: string[] = [];
-      const offDates: string[] = [];
-
-      let presentDays = 0;
-      let absentDays = 0;
-      let offDays = 0;
-      let scheduledWorkDays = 0;
-      let scheduledHoursTotal = 0;
-      let totalHours = 0;
-      // dataSource: "signed_timesheet" (موقّع), "schedule_attendance" (جدول+بصمة), "attendance_only" (بصمة فقط)
-      let dataSource: "signed_timesheet" | "schedule_attendance" | "attendance_only" = "attendance_only";
-      let signedReportInfo: { id: number; managerSignedAt: string | null; employeeSignedAt: string | null } | null = null;
-
-      const signed = signedByEmpId.get(emp.id);
-
-      if (signed && signed.entries.length > 0) {
-        // ✅ مصدر الحقيقة: التايم شيت الموقّع من الموظف والمدير
-        dataSource = "signed_timesheet";
-        signedReportInfo = {
-          id: signed.report.id,
-          managerSignedAt: signed.report.managerSignedAt || null,
-          employeeSignedAt: signed.report.employeeSignedAt || null,
-        };
-        const entries = signed.entries.filter((e: any) => e.date >= monthStart && e.date <= monthEnd);
-        entries.forEach((e: any) => {
-          if (e.isOff || e.status === "day_off") {
-            offDays++;
-            offDates.push(e.date);
-            return;
-          }
-          scheduledWorkDays++;
-          scheduledHoursTotal += Number(e.scheduledHours) || 0;
-          if (e.status === "present" || e.status === "late") {
-            presentDays++;
-            presentDates.push(e.date);
-            totalHours += Number(e.actualHours) || Number(e.scheduledHours) || 0;
-          } else if (e.status === "absent") {
-            absentDays++;
-            absentDatesExplicit.push(e.date);
-          } else {
-            // pending or unknown — لا نحسبها (التقرير الموقّع نهائي)
-          }
-        });
-      } else if (empSchedules.length > 0) {
-        // المسار القديم: جدول + بصمة
-        dataSource = "schedule_attendance";
-        offDays = empSchedules.filter((s: any) => s.isOff === true).length;
-        scheduledWorkDays = empSchedules.filter((s: any) => s.isOff !== true).length;
-        scheduledHoursTotal = empSchedules.reduce((sum: number, s: any) => sum + scheduledHoursOf(s), 0);
-        empSchedules.forEach((s: any) => { if (s.isOff) offDates.push(s.scheduleDate); });
-
-        empSchedules.forEach((s: any) => {
-          if (s.isOff) return;
-          const att = attendanceByDate.get(s.scheduleDate);
-          if (att && (att.status === "present" || att.status === "late")) {
-            presentDays++;
-            totalHours += Number(att.workingHours) || scheduledHoursOf(s);
-            presentDates.push(s.scheduleDate);
-          } else if (att && att.status === "absent") {
-            absentDays++;
-            absentDatesExplicit.push(s.scheduleDate);
-          } else if (!att) {
-            const todayLocal = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
-            if (s.scheduleDate <= todayLocal) {
-              absentDays++;
-              absentDatesMissing.push(s.scheduleDate);
-            }
-          }
-        });
-
-        empAttendance.forEach(a => {
-          const isScheduled = empSchedules.some((s: any) => s.scheduleDate === a.attendanceDate);
-          if (!isScheduled && (a.status === "present" || a.status === "late")) {
-            presentDays++;
-            totalHours += Number(a.workingHours) || 0;
-            presentDates.push(a.attendanceDate);
-          }
-        });
-      } else {
-        // المسار الاحتياطي: بصمة فقط (لا جدول ولا تايم شيت موقّع)
-        dataSource = "attendance_only";
-        presentDays = empAttendance.filter(a => a.status === "present" || a.status === "late").length;
-        absentDays = empAttendance.filter(a => a.status === "absent").length;
-        totalHours = empAttendance.reduce((sum, a) => sum + (Number(a.workingHours) || 0), 0);
-        empAttendance.forEach(a => {
-          if (a.status === "present" || a.status === "late") presentDates.push(a.attendanceDate);
-          else if (a.status === "absent") absentDatesExplicit.push(a.attendanceDate);
-        });
-      }
-
-      presentDates.sort();
-      absentDatesExplicit.sort();
-      absentDatesMissing.sort();
-      offDates.sort();
-
-      const baseSalary = emp.salary || 0;
-      const allowances = (emp.housingAllowance || 0) + (emp.transportAllowance || 0) + (emp.foodAllowance || 0) + (emp.otherAllowances || 0);
-      const grossSalary = baseSalary + allowances;
-      const storedInsurance = emp.socialInsuranceDeduction || 0;
-      const socialInsurance = emp.nationality === "سعودي" 
-        ? (storedInsurance > 0 ? storedInsurance : Math.round(baseSalary * 0.0975))
-        : 0;
-      // خصم الغياب: قيمة اليوم = الراتب الإجمالي (شامل البدلات) ÷ 30 (نظام العمل السعودي)
-      // ثم خصم الغياب = عدد أيام الغياب × قيمة اليوم
-      const dailyRate = grossSalary / 30;
-
-      // ⚠️ قاعدة مهمة: إذا الموظف ما داوم ولا يوم في الشهر (صفر حضور + صفر جدول + صفر تايم شيت موقّع)
-      // فهذا يعني إما أنه لم يلتحق بالعمل، أو منقطع، أو في إجازة بدون راتب → الراتب = 0
-      // ونحسب الشهر كله غياب (30 يوم) لتظهر المعادلة شفافة في التقرير.
-      const noWorkAtAll = presentDays === 0 && scheduledWorkDays === 0 && offDays === 0 && empAttendance.length === 0;
-      const effectiveAbsentDays = noWorkAtAll ? 30 : absentDays;
-      const absenceDeduction = noWorkAtAll
-        ? Math.round((grossSalary - socialInsurance) * 100) / 100  // كامل الراتب يُخصم بعد التأمينات
-        : Math.round(absentDays * dailyRate * 100) / 100;
-
-      // السُلف والخصومات اليدوية لهذا الموظف في هذا الشهر
-      const empDeductions = salaryClosingDeductions.filter(d => d.branchEmployeeId === emp.id);
-      const manualDeductionsTotal = Math.round(
-        empDeductions.reduce((sum, d) => sum + (d.amount || 0), 0) * 100
-      ) / 100;
-
-      // الصافي بعد كل الخصومات (لا يقل عن صفر)
-      const netBeforeManual = noWorkAtAll
-        ? 0
-        : Math.round((grossSalary - socialInsurance - absenceDeduction) * 100) / 100;
-      const netSalary = Math.max(0, Math.round((netBeforeManual - manualDeductionsTotal) * 100) / 100);
-
-      return {
-        id: emp.id,
-        employeeNumber: emp.employeeNumber,
-        employeeName: emp.employeeName,
-        jobTitle: emp.jobTitle,
-        nationality: emp.nationality,
-        bankName: (emp as any).bankName || "",
-        bankAccountNumber: (emp as any).bankAccountNumber || "",
-        presentDays,
-        absentDays: effectiveAbsentDays,
-        offDays,
-        scheduledWorkDays,
-        scheduledHours: Math.round(scheduledHoursTotal * 10) / 10,
-        lateDays,
-        totalHours: Math.round(totalHours * 10) / 10,
-        baseSalary,
-        allowances,
-        grossSalary,
-        dailyRate: Math.round(dailyRate * 100) / 100,
-        absenceDeduction,
-        socialInsurance,
-        manualDeductions: empDeductions,
-        manualDeductionsTotal,
-        netSalary,
-        dataSource,
-        signedReportInfo,
-        noWorkAtAll,
-        presentDates,
-        absentDatesExplicit,
-        absentDatesMissing,
-        offDates,
-      };
-    });
-    
-    return { salaryClosingData: data, salaryClosingUnlinkedCount: unlinkedList.length, salaryClosingUnlinkedRecords: unlinkedList, salaryClosingUnlinkedSummary: unlinkedSummary };
-  }, [salaryClosingBranch, salaryClosingMonth, salaryClosingEmployees, salaryClosingAttendance, salaryClosingSchedules, salaryClosingSignedTimesheets, salaryClosingDeductions]);
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = fallbackName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+    } catch (err: any) {
+      toast({ title: "تعذّر التنزيل", description: err?.message || "حدث خطأ", variant: "destructive" });
+    }
+  };
 
   const exportUnlinkedRecordsToExcel = async () => {
     const XLSX = await import("xlsx");
@@ -7149,6 +6983,75 @@ export default function EmployeeReportsDashboardPage() {
 
               {salaryClosingBranch && salaryClosingData.length > 0 && (
                 <>
+                  {salaryClosingClosure && (
+                    <Card className={salaryClosingIsLocked ? "border-emerald-300 bg-emerald-50" : "border-amber-300 bg-amber-50"} data-testid="card-closure-status">
+                      <CardContent className="py-3">
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div className="flex items-start gap-3">
+                            {salaryClosingIsLocked
+                              ? <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5" />
+                              : <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />}
+                            <div>
+                              <p className={salaryClosingIsLocked ? "font-bold text-emerald-800" : "font-bold text-amber-800"}>
+                                {salaryClosingIsLocked ? "✓ هذا الشهر مغلق نهائياً (لقطة ثابتة)" : "⚠ تم إعادة فتح هذا الإغلاق"}
+                              </p>
+                              <div className="text-xs text-gray-600 mt-1 space-y-0.5">
+                                {salaryClosingClosure.closedByName && (
+                                  <div>اعتمد الإغلاق: <strong>{salaryClosingClosure.closedByName}</strong>{salaryClosingClosure.closedAt ? ` — ${new Date(salaryClosingClosure.closedAt).toLocaleString("ar-SA")}` : ""}</div>
+                                )}
+                                {salaryClosingClosure.reopenedByName && (
+                                  <div className="text-amber-700">أعاد الفتح: <strong>{salaryClosingClosure.reopenedByName}</strong>{salaryClosingClosure.reopenReason ? ` — السبب: ${salaryClosingClosure.reopenReason}` : ""}</div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => downloadFile(`/api/salary-closing/${salaryClosingClosure.id}/bank-file`, `bank_transfer_${salaryClosingMonth}.csv`)}
+                              data-testid="button-bank-file"
+                            >
+                              <Download className="w-4 h-4 ml-1" />
+                              ملف التحويل البنكي
+                            </Button>
+                            {salaryClosingIsLocked && isAdmin && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-amber-700 border-amber-300"
+                                onClick={() => { setReopenReason(""); setShowReopenDialog(true); }}
+                                data-testid="button-reopen-closure"
+                              >
+                                إعادة فتح
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {!salaryClosingIsLocked && salaryClosingBlockingWarnings.length > 0 && (
+                    <Card className="border-red-200 bg-red-50" data-testid="card-blocking-warnings">
+                      <CardContent className="py-3">
+                        <div className="flex items-start gap-3">
+                          <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="font-bold text-red-800">
+                              تحذير: {formatNumber(salaryClosingBlockingWarnings.length)} موظف بدون أي بيانات حضور لهذا الشهر
+                            </p>
+                            <ul className="text-sm text-red-700 mt-1 list-disc pr-5 space-y-0.5 max-h-32 overflow-y-auto">
+                              {salaryClosingBlockingWarnings.map((w: any, i: number) => (
+                                <li key={i}>{w.employeeName} — سيُحتسب الشهر كاملاً غياباً (الراتب = 0)</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
                   {salaryClosingUnlinkedCount > 0 && (
                     <Card className="border-orange-200 bg-orange-50">
                       <CardContent className="py-3">
@@ -7163,8 +7066,19 @@ export default function EmployeeReportsDashboardPage() {
                               <span>إجمالي الساعات: {formatNumber(Math.round(salaryClosingUnlinkedSummary.totalHours * 10) / 10)}</span>
                             </div>
                             <p className="text-sm text-orange-600 mt-1">
-                              هذه السجلات غير مضمنة في حساب الرواتب - ملف Excel يحتوي على تفاصيل كاملة للمراجعة
+                              هذه السجلات غير مضمنة في حساب الرواتب - اربطها بالموظف الصحيح قبل الإغلاق.
                             </p>
+                            {!salaryClosingIsLocked && canApproveSalaryClosing && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="mt-2 text-orange-700 border-orange-300"
+                                onClick={() => setShowLinkDialog(true)}
+                                data-testid="button-open-link-dialog"
+                              >
+                                ربط السجلات بالموظفين
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </CardContent>
@@ -7197,6 +7111,21 @@ export default function EmployeeReportsDashboardPage() {
                       <Download className="w-4 h-4 ml-2" />
                       تصدير PDF
                     </Button>
+                    {!salaryClosingIsLocked && canApproveSalaryClosing && (
+                      <Button
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        onClick={() => {
+                          setCloseNotes("");
+                          setAcknowledgeClose(false);
+                          setShowCloseConfirm(true);
+                        }}
+                        disabled={!salaryClosingReady || salaryClosingData.length === 0 || closeSalaryMutation.isPending}
+                        data-testid="button-close-month"
+                      >
+                        <CheckCircle2 className="w-4 h-4 ml-2" />
+                        إغلاق الشهر نهائياً
+                      </Button>
+                    )}
                   </div>
 
                   <Card>
@@ -7355,6 +7284,7 @@ export default function EmployeeReportsDashboardPage() {
                             <TableHead className="text-center">{isRTL ? "التأمينات" : "Insurance"}</TableHead>
                             <TableHead className="text-center bg-orange-50" title={isRTL ? "السُلف والخصومات اليدوية الشهرية — اضغط للإضافة/التعديل" : "Manual advances & deductions — click to edit"}>{isRTL ? "سُلف/خصومات" : "Advances/Deductions"}</TableHead>
                             <TableHead className="text-center">{isRTL ? "الصافي" : "Net"}</TableHead>
+                            <TableHead className="text-center">{isRTL ? "قسيمة" : "Payslip"}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -7440,7 +7370,7 @@ export default function EmployeeReportsDashboardPage() {
                                       <p className="text-xs text-gray-500">لا توجد أيام حضور.</p>
                                     ) : (
                                       <div className="grid grid-cols-2 gap-1 text-[11px]">
-                                        {emp.presentDates.map(d => (
+                                        {emp.presentDates.map((d: string) => (
                                           <div key={d} className="bg-green-50 px-2 py-1 rounded text-center font-mono">{d}</div>
                                         ))}
                                       </div>
@@ -7469,7 +7399,7 @@ export default function EmployeeReportsDashboardPage() {
                                               مسجل كغياب صريح ({emp.absentDatesExplicit.length}):
                                             </div>
                                             <div className="grid grid-cols-2 gap-1 text-[11px]">
-                                              {emp.absentDatesExplicit.map(d => (
+                                              {emp.absentDatesExplicit.map((d: string) => (
                                                 <div key={d} className="bg-red-50 px-2 py-1 rounded text-center font-mono">{d}</div>
                                               ))}
                                             </div>
@@ -7481,7 +7411,7 @@ export default function EmployeeReportsDashboardPage() {
                                               يوم مجدول بدون سجل حضور ({emp.absentDatesMissing.length}):
                                             </div>
                                             <div className="grid grid-cols-2 gap-1 text-[11px]">
-                                              {emp.absentDatesMissing.map(d => (
+                                              {emp.absentDatesMissing.map((d: string) => (
                                                 <div key={d} className="bg-orange-50 px-2 py-1 rounded text-center font-mono">{d}</div>
                                               ))}
                                             </div>
@@ -7510,7 +7440,7 @@ export default function EmployeeReportsDashboardPage() {
                                       <p className="text-xs text-gray-500">لا توجد أيام إجازة.</p>
                                     ) : (
                                       <div className="grid grid-cols-2 gap-1 text-[11px]">
-                                        {emp.offDates.map(d => (
+                                        {emp.offDates.map((d: string) => (
                                           <div key={d} className="bg-amber-50 px-2 py-1 rounded text-center font-mono">{d}</div>
                                         ))}
                                       </div>
@@ -7529,17 +7459,46 @@ export default function EmployeeReportsDashboardPage() {
                                 {emp.socialInsurance > 0 ? `- ${formatCurrency(emp.socialInsurance, isRTL)}` : "-"}
                               </TableCell>
                               <TableCell className="text-center bg-orange-50/40">
-                                <DeductionsPopover
-                                  branchEmployeeId={emp.id}
-                                  branchId={salaryClosingBranch}
-                                  month={salaryClosingMonth}
-                                  employeeName={emp.employeeName}
-                                  initialDeductions={emp.manualDeductions || []}
-                                  totalAmount={emp.manualDeductionsTotal || 0}
-                                  onChanged={() => {}}
-                                />
+                                {salaryClosingIsLocked ? (
+                                  <span className="text-red-600" data-testid={`text-locked-deductions-${emp.id}`}>
+                                    {(emp.manualDeductionsTotal || 0) > 0 ? `- ${formatCurrency(emp.manualDeductionsTotal || 0, isRTL)}` : "-"}
+                                  </span>
+                                ) : (
+                                  <DeductionsPopover
+                                    branchEmployeeId={emp.id}
+                                    branchId={salaryClosingBranch}
+                                    month={salaryClosingMonth}
+                                    employeeName={emp.employeeName}
+                                    initialDeductions={emp.manualDeductions || []}
+                                    totalAmount={emp.manualDeductionsTotal || 0}
+                                    onChanged={() => {}}
+                                  />
+                                )}
                               </TableCell>
                               <TableCell className="text-center font-bold">{formatCurrency(emp.netSalary, isRTL)}</TableCell>
+                              <TableCell className="text-center">
+                                {salaryClosingIsLocked && savedClosureId && closureLineIdByBranchEmployee.has(Number(emp.branchEmployeeId ?? emp.id)) ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2 text-blue-700"
+                                    onClick={() => {
+                                      const lineId = closureLineIdByBranchEmployee.get(Number(emp.branchEmployeeId ?? emp.id))!;
+                                      downloadFile(
+                                        `/api/salary-closing/${savedClosureId}/payslip/${lineId}`,
+                                        `payslip_${salaryClosingMonth}_${emp.employeeNumber || emp.id}.pdf`
+                                      );
+                                    }}
+                                    data-testid={`button-payslip-${emp.id}`}
+                                    title="تحميل قسيمة الراتب"
+                                  >
+                                    <Download className="w-3.5 h-3.5 ml-1" />
+                                    قسيمة
+                                  </Button>
+                                ) : (
+                                  <span className="text-gray-300 text-xs">—</span>
+                                )}
+                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -7556,6 +7515,173 @@ export default function EmployeeReportsDashboardPage() {
                 </div>
               )}
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* تأكيد إغلاق الشهر */}
+        <Dialog open={showCloseConfirm} onOpenChange={setShowCloseConfirm}>
+          <DialogContent className="max-w-md" data-testid="dialog-close-confirm">
+            <DialogHeader>
+              <DialogTitle>تأكيد إغلاق الشهر نهائياً</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 text-sm">
+              <p>
+                سيتم حفظ لقطة ثابتة لرواتب <strong>{getBranchName(salaryClosingBranch)}</strong> لشهر{" "}
+                <strong>{salaryClosingMonth}</strong> وقفل الشهر. لن يمكن التعديل بعد الإغلاق إلا بإعادة فتحه (مدير فقط).
+              </p>
+              {salaryClosingBlockingWarnings.length > 0 && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg space-y-2">
+                  <p className="font-bold text-red-800">
+                    تحذير: {formatNumber(salaryClosingBlockingWarnings.length)} موظف بدون أي بيانات حضور (الراتب = 0).
+                  </p>
+                  <label className="flex items-center gap-2 text-red-700">
+                    <input
+                      type="checkbox"
+                      checked={acknowledgeClose}
+                      onChange={(e) => setAcknowledgeClose(e.target.checked)}
+                      data-testid="checkbox-acknowledge-warnings"
+                    />
+                    أؤكد أنني راجعت هذه الحالات وأرغب في المتابعة
+                  </label>
+                </div>
+              )}
+              <div>
+                <label className="text-sm font-medium">ملاحظات (اختياري)</label>
+                <Textarea
+                  value={closeNotes}
+                  onChange={(e) => setCloseNotes(e.target.value)}
+                  placeholder="أي ملاحظات على هذا الإغلاق..."
+                  data-testid="input-close-notes"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowCloseConfirm(false)} data-testid="button-cancel-close">
+                إلغاء
+              </Button>
+              <Button
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={
+                  closeSalaryMutation.isPending ||
+                  (salaryClosingBlockingWarnings.length > 0 && !acknowledgeClose)
+                }
+                onClick={() => {
+                  closeSalaryMutation.mutate(
+                    { acknowledgeWarnings: acknowledgeClose, notes: closeNotes || undefined },
+                    { onSuccess: () => setShowCloseConfirm(false) }
+                  );
+                }}
+                data-testid="button-confirm-close"
+              >
+                {closeSalaryMutation.isPending ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 ml-2" />}
+                تأكيد الإغلاق
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* إعادة فتح الإغلاق */}
+        <Dialog open={showReopenDialog} onOpenChange={setShowReopenDialog}>
+          <DialogContent className="max-w-md" data-testid="dialog-reopen">
+            <DialogHeader>
+              <DialogTitle>إعادة فتح الإغلاق</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 text-sm">
+              <p>سيتم فتح الشهر للتعديل من جديد. هذا الإجراء مسجّل في سجل التدقيق.</p>
+              <div>
+                <label className="text-sm font-medium">سبب إعادة الفتح <span className="text-red-600">*</span></label>
+                <Textarea
+                  value={reopenReason}
+                  onChange={(e) => setReopenReason(e.target.value)}
+                  placeholder="اذكر سبب إعادة الفتح..."
+                  data-testid="input-reopen-reason"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowReopenDialog(false)} data-testid="button-cancel-reopen">
+                إلغاء
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={reopenSalaryMutation.isPending || reopenReason.trim().length === 0 || !salaryClosingClosure}
+                onClick={() => {
+                  if (!salaryClosingClosure) return;
+                  reopenSalaryMutation.mutate(
+                    { id: salaryClosingClosure.id, reason: reopenReason.trim() },
+                    { onSuccess: () => setShowReopenDialog(false) }
+                  );
+                }}
+                data-testid="button-confirm-reopen"
+              >
+                {reopenSalaryMutation.isPending ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : null}
+                إعادة الفتح
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ربط سجلات الحضور غير المرتبطة */}
+        <Dialog open={showLinkDialog} onOpenChange={setShowLinkDialog}>
+          <DialogContent className="max-w-2xl" data-testid="dialog-link-attendance">
+            <DialogHeader>
+              <DialogTitle>ربط سجلات الحضور غير المرتبطة</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 text-sm max-h-[60vh] overflow-y-auto">
+              <p className="text-gray-600">
+                اختر الموظف الصحيح لكل سجل حضور غير مرتبط ثم اضغط "ربط". سيُعاد احتساب الرواتب تلقائياً.
+              </p>
+              {salaryClosingUnlinkedRecords.length === 0 && (
+                <p className="text-center text-gray-500 py-6">لا توجد سجلات غير مرتبطة.</p>
+              )}
+              {salaryClosingUnlinkedRecords.map((rec: any) => (
+                <div key={rec.id} className="flex items-center gap-2 border rounded-lg p-2" data-testid={`row-unlinked-${rec.id}`}>
+                  <div className="flex-1 text-xs">
+                    <div className="font-medium">{rec.employeeName || rec.name || `سجل #${rec.id}`}</div>
+                    <div className="text-gray-500">
+                      {rec.date || rec.attendanceDate} · {rec.status || ""} · {rec.checkIn || rec.clockIn || ""}
+                    </div>
+                  </div>
+                  <Select
+                    value={linkRecord?.id === rec.id ? linkEmployeeId : ""}
+                    onValueChange={(v) => { setLinkRecord(rec); setLinkEmployeeId(v); }}
+                  >
+                    <SelectTrigger className="w-56" data-testid={`select-link-employee-${rec.id}`}>
+                      <SelectValue placeholder="اختر الموظف" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(salaryClosingBundle?.employees ?? []).map((emp: any) => (
+                        <SelectItem key={emp.id} value={String(emp.id)}>
+                          {emp.name}{emp.employeeNumber ? ` (${emp.employeeNumber})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="sm"
+                    disabled={
+                      linkAttendanceMutation.isPending ||
+                      linkRecord?.id !== rec.id ||
+                      !linkEmployeeId
+                    }
+                    onClick={() => {
+                      linkAttendanceMutation.mutate({
+                        attendanceId: rec.id,
+                        branchEmployeeId: Number(linkEmployeeId),
+                      });
+                    }}
+                    data-testid={`button-link-${rec.id}`}
+                  >
+                    ربط
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowLinkDialog(false)} data-testid="button-close-link-dialog">
+                إغلاق
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

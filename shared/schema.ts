@@ -5680,6 +5680,98 @@ export const SALARY_DEDUCTION_TYPE_LABELS: Record<string, string> = {
 };
 
 // =====================================================
+// Salary Closures - إغلاق الرواتب الشهري (لقطة ثابتة + قفل)
+// =====================================================
+// عند إغلاق رواتب شهر/فرع، نحفظ "لقطة" ثابتة من الأرقام المحسوبة على الخادم
+// حتى لا تتغيّر بأثر رجعي لو تغيّرت بيانات الحضور لاحقاً. كل إغلاق له سجل تدقيق
+// (من أغلق ومتى)، وقابل لإعادة الفتح من المدير فقط مع تسجيل السبب.
+export const salaryClosures = pgTable("salary_closures", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  month: text("month").notNull(), // YYYY-MM
+  status: text("status").default("closed").notNull(), // closed | reopened
+  // إجماليات اللقطة (محسوبة على الخادم وقت الإغلاق)
+  employeeCount: integer("employee_count").default(0).notNull(),
+  totalBase: real("total_base").default(0).notNull(),
+  totalAllowances: real("total_allowances").default(0).notNull(),
+  totalGross: real("total_gross").default(0).notNull(),
+  totalAbsenceDeduction: real("total_absence_deduction").default(0).notNull(),
+  totalSocialInsurance: real("total_social_insurance").default(0).notNull(),
+  totalManualDeductions: real("total_manual_deductions").default(0).notNull(),
+  totalNet: real("total_net").default(0).notNull(),
+  unlinkedCount: integer("unlinked_count").default(0).notNull(),
+  warningsCount: integer("warnings_count").default(0).notNull(),
+  warnings: jsonb("warnings"), // لقطة من التحذيرات وقت الإغلاق (مصفوفة نصوص)
+  notes: text("notes"),
+  // سجل التدقيق
+  closedBy: varchar("closed_by").references(() => users.id),
+  closedByName: text("closed_by_name"),
+  closedAt: timestamp("closed_at").defaultNow().notNull(),
+  reopenedBy: varchar("reopened_by").references(() => users.id),
+  reopenedByName: text("reopened_by_name"),
+  reopenedAt: timestamp("reopened_at"),
+  reopenReason: text("reopen_reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_salary_closures_branch").on(table.branchId),
+  index("idx_salary_closures_month").on(table.month),
+  // قفل: إغلاق واحد فعّال لكل فرع/شهر (نمنع التكرار على مستوى التطبيق أيضاً)
+  uniqueIndex("idx_salary_closures_branch_month").on(table.branchId, table.month),
+]);
+
+// سطور اللقطة: صف لكل موظف وقت الإغلاق
+export const salaryClosureLines = pgTable("salary_closure_lines", {
+  id: serial("id").primaryKey(),
+  closureId: integer("closure_id").notNull().references(() => salaryClosures.id, { onDelete: "cascade" }),
+  branchEmployeeId: integer("branch_employee_id"),
+  employeeNumber: text("employee_number"),
+  employeeName: text("employee_name").notNull(),
+  jobTitle: text("job_title"),
+  nationality: text("nationality"),
+  bankName: text("bank_name"),
+  bankAccountNumber: text("bank_account_number"),
+  presentDays: integer("present_days").default(0).notNull(),
+  absentDays: integer("absent_days").default(0).notNull(),
+  offDays: integer("off_days").default(0).notNull(),
+  scheduledWorkDays: integer("scheduled_work_days").default(0).notNull(),
+  scheduledHours: real("scheduled_hours").default(0).notNull(),
+  lateDays: integer("late_days").default(0).notNull(),
+  totalHours: real("total_hours").default(0).notNull(),
+  baseSalary: real("base_salary").default(0).notNull(),
+  allowances: real("allowances").default(0).notNull(),
+  grossSalary: real("gross_salary").default(0).notNull(),
+  dailyRate: real("daily_rate").default(0).notNull(),
+  absenceDeduction: real("absence_deduction").default(0).notNull(),
+  socialInsurance: real("social_insurance").default(0).notNull(),
+  manualDeductionsTotal: real("manual_deductions_total").default(0).notNull(),
+  netSalary: real("net_salary").default(0).notNull(),
+  dataSource: text("data_source"), // signed_timesheet | schedule_attendance | attendance_only
+  noWorkAtAll: boolean("no_work_at_all").default(false).notNull(),
+  manualDeductions: jsonb("manual_deductions"), // [{type, amount, description}]
+  presentDates: jsonb("present_dates"),
+  absentDates: jsonb("absent_dates"),
+  offDates: jsonb("off_dates"),
+}, (table) => [
+  index("idx_salary_closure_lines_closure").on(table.closureId),
+  index("idx_salary_closure_lines_employee").on(table.branchEmployeeId),
+]);
+
+export const insertSalaryClosureSchema = createInsertSchema(salaryClosures).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type SalaryClosure = typeof salaryClosures.$inferSelect;
+export type InsertSalaryClosure = z.infer<typeof insertSalaryClosureSchema>;
+
+export const insertSalaryClosureLineSchema = createInsertSchema(salaryClosureLines).omit({
+  id: true,
+});
+export type SalaryClosureLine = typeof salaryClosureLines.$inferSelect;
+export type InsertSalaryClosureLine = z.infer<typeof insertSalaryClosureLineSchema>;
+
+// =====================================================
 // Advance Requests - طلبات السلف من الموظف (بوابة الموظف الذاتية)
 // =====================================================
 // الموظف يقدّم طلب سلفة من بوابته الذاتية، والمدير يعتمد/يرفض. عند الاعتماد

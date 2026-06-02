@@ -348,6 +348,12 @@ import {
   salaryDeductions,
   type SalaryDeduction,
   type InsertSalaryDeduction,
+  salaryClosures,
+  type SalaryClosure,
+  type InsertSalaryClosure,
+  salaryClosureLines,
+  type SalaryClosureLine,
+  type InsertSalaryClosureLine,
   branchShiftProfiles,
   type BranchShiftProfile,
   type InsertBranchShiftProfile,
@@ -1338,6 +1344,15 @@ export interface IStorage {
   createSalaryDeduction(deduction: InsertSalaryDeduction): Promise<SalaryDeduction>;
   updateSalaryDeduction(id: number, deduction: Partial<InsertSalaryDeduction>): Promise<SalaryDeduction | undefined>;
   deleteSalaryDeduction(id: number): Promise<boolean>;
+
+  // Salary Closures - إغلاق الرواتب الشهري (لقطة ثابتة + قفل)
+  getSalaryClosureByBranchAndMonth(branchId: string, month: string): Promise<SalaryClosure | undefined>;
+  getSalaryClosureById(id: number): Promise<SalaryClosure | undefined>;
+  getSalaryClosureLines(closureId: number): Promise<SalaryClosureLine[]>;
+  listSalaryClosures(branchIds: string[] | null): Promise<SalaryClosure[]>;
+  createSalaryClosureWithLines(closure: InsertSalaryClosure, lines: InsertSalaryClosureLine[]): Promise<SalaryClosure>;
+  replaceSalaryClosureWithLines(id: number, closure: Partial<InsertSalaryClosure>, lines: InsertSalaryClosureLine[]): Promise<SalaryClosure>;
+  reopenSalaryClosure(id: number, data: { reopenedBy?: string; reopenedByName?: string; reopenReason?: string }): Promise<SalaryClosure | undefined>;
 
   // Branch Employees - موظفي الفروع
   getAllBranchEmployees(opts?: { status?: string; branchIds?: string[] }): Promise<BranchEmployee[]>;
@@ -11774,6 +11789,75 @@ export class DatabaseStorage implements IStorage {
   async deleteSalaryDeduction(id: number): Promise<boolean> {
     const result = await db.delete(salaryDeductions).where(eq(salaryDeductions.id, id));
     return (result.rowCount ?? 0) > 0;
+  }
+
+  // ===== Salary Closures - إغلاق الرواتب الشهري (لقطة ثابتة + قفل) =====
+  async getSalaryClosureByBranchAndMonth(branchId: string, month: string): Promise<SalaryClosure | undefined> {
+    const [row] = await db.select().from(salaryClosures)
+      .where(and(eq(salaryClosures.branchId, branchId), eq(salaryClosures.month, month)));
+    return row;
+  }
+
+  async getSalaryClosureById(id: number): Promise<SalaryClosure | undefined> {
+    const [row] = await db.select().from(salaryClosures).where(eq(salaryClosures.id, id));
+    return row;
+  }
+
+  async getSalaryClosureLines(closureId: number): Promise<SalaryClosureLine[]> {
+    return await db.select().from(salaryClosureLines)
+      .where(eq(salaryClosureLines.closureId, closureId))
+      .orderBy(salaryClosureLines.employeeName);
+  }
+
+  async listSalaryClosures(branchIds: string[] | null): Promise<SalaryClosure[]> {
+    if (branchIds === null) {
+      return await db.select().from(salaryClosures).orderBy(desc(salaryClosures.month), desc(salaryClosures.closedAt));
+    }
+    if (branchIds.length === 0) return [];
+    return await db.select().from(salaryClosures)
+      .where(inArray(salaryClosures.branchId, branchIds))
+      .orderBy(desc(salaryClosures.month), desc(salaryClosures.closedAt));
+  }
+
+  async createSalaryClosureWithLines(closure: InsertSalaryClosure, lines: InsertSalaryClosureLine[]): Promise<SalaryClosure> {
+    return await db.transaction(async (tx) => {
+      const [header] = await tx.insert(salaryClosures).values(closure).returning();
+      if (lines.length > 0) {
+        const withClosureId = lines.map((l) => ({ ...l, closureId: header.id }));
+        await tx.insert(salaryClosureLines).values(withClosureId);
+      }
+      return header;
+    });
+  }
+
+  async replaceSalaryClosureWithLines(id: number, closure: Partial<InsertSalaryClosure>, lines: InsertSalaryClosureLine[]): Promise<SalaryClosure> {
+    return await db.transaction(async (tx) => {
+      const [header] = await tx.update(salaryClosures)
+        .set({ ...closure, status: "closed", updatedAt: new Date() } as any)
+        .where(eq(salaryClosures.id, id))
+        .returning();
+      await tx.delete(salaryClosureLines).where(eq(salaryClosureLines.closureId, id));
+      if (lines.length > 0) {
+        const withClosureId = lines.map((l) => ({ ...l, closureId: id }));
+        await tx.insert(salaryClosureLines).values(withClosureId);
+      }
+      return header;
+    });
+  }
+
+  async reopenSalaryClosure(id: number, data: { reopenedBy?: string; reopenedByName?: string; reopenReason?: string }): Promise<SalaryClosure | undefined> {
+    const [row] = await db.update(salaryClosures)
+      .set({
+        status: "reopened",
+        reopenedBy: data.reopenedBy,
+        reopenedByName: data.reopenedByName,
+        reopenReason: data.reopenReason,
+        reopenedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(salaryClosures.id, id))
+      .returning();
+    return row;
   }
 
   // Branch Employees - موظفي الفروع

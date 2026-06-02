@@ -85,8 +85,10 @@ import {
   notificationQueue,
   notificationShareLinks,
 } from "@shared/schema";
+import { computeSalaryClosing, type SalaryClosingRaw } from "./salary-closing-calc";
 import { 
   generateSalaryClosingPdf, type SalaryClosingPdfData,
+  generatePayslipPdf, type PayslipPdfData,
   generateBranchComparisonPdf, type BranchComparisonPdfData,
   generateJobComparisonPdf, type JobComparisonPdfData,
   generateSalariesTablePdf, type SalaryTablePdfData,
@@ -28435,6 +28437,10 @@ export async function registerRoutes(
       }
       const hasAccess = await canAccessBranch(req, parsed.data.branchId);
       if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
+      const lock = await storage.getSalaryClosureByBranchAndMonth(parsed.data.branchId, parsed.data.month);
+      if (lock && lock.status === "closed") {
+        return res.status(423).json({ error: "هذا الشهر مغلق للرواتب — لا يمكن إضافة سلف/خصومات. أعد فتح الإغلاق أولاً." });
+      }
       const row = await storage.createSalaryDeduction(parsed.data);
       res.status(201).json(row);
     } catch (error) {
@@ -28451,6 +28457,10 @@ export async function registerRoutes(
       if (!existing) return res.status(404).json({ error: "السجل غير موجود" });
       const hasAccess = await canAccessBranch(req, existing.branchId);
       if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
+      const lockPut = await storage.getSalaryClosureByBranchAndMonth(existing.branchId, existing.month);
+      if (lockPut && lockPut.status === "closed") {
+        return res.status(423).json({ error: "هذا الشهر مغلق للرواتب — لا يمكن تعديل السلف/الخصومات. أعد فتح الإغلاق أولاً." });
+      }
       // Lock down: only allow editing safe fields. Immutable: branchId, branchEmployeeId, createdBy, month, id, timestamps.
       const { z } = await import("zod");
       const updateSchema = z.object({
@@ -28478,11 +28488,297 @@ export async function registerRoutes(
       if (!existing) return res.status(404).json({ error: "السجل غير موجود" });
       const hasAccess = await canAccessBranch(req, existing.branchId);
       if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
+      const lockDel = await storage.getSalaryClosureByBranchAndMonth(existing.branchId, existing.month);
+      if (lockDel && lockDel.status === "closed") {
+        return res.status(423).json({ error: "هذا الشهر مغلق للرواتب — لا يمكن حذف السلف/الخصومات. أعد فتح الإغلاق أولاً." });
+      }
       await storage.deleteSalaryDeduction(id);
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting salary deduction:", error);
       res.status(500).json({ error: "فشل في حذف السلفة/الخصم" });
+    }
+  });
+
+  // =====================================================
+  // Salary Closures - إغلاق الرواتب الشهري (احتساب على الخادم + لقطة ثابتة + قفل)
+  // =====================================================
+  // يجلب البيانات الخام لفرع/شهر واحد ثم يحسبها مركزياً على الخادم.
+  const fetchSalaryClosingRaw = async (branchId: string, month: string): Promise<SalaryClosingRaw> => {
+    const monthStart = `${month}-01`;
+    const [y, m] = month.split("-").map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    const monthEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
+    const [employees, attendance, schedules, signedTimesheets, deductions] = await Promise.all([
+      storage.getBranchEmployeesByBranch(branchId).catch(() => []),
+      storage.getAllAttendanceRecords({ branchId, startDate: monthStart, endDate: monthEnd }).catch(() => []),
+      storage.getEmployeeSchedulesByBranchAndDateRange(branchId, monthStart, monthEnd).catch(() => []),
+      storage.getFinalizedTimesheetEntriesByBranchAndDateRange(branchId, monthStart, monthEnd).catch(() => []),
+      storage.getSalaryDeductionsByBranchAndMonth(branchId, month).catch(() => []),
+    ]);
+    return { branchId, month, employees, attendance, schedules, signedTimesheets, deductions };
+  };
+
+  const currentUserName = (req: any): string => {
+    const u = req.currentUser;
+    if (!u) return "غير معروف";
+    return [u.firstName, u.lastName].filter(Boolean).join(" ") || u.username || "غير معروف";
+  };
+
+  const isValidMonth = (m: any): m is string => typeof m === "string" && /^\d{4}-\d{2}$/.test(m);
+
+  // معاينة (احتساب حيّ على الخادم — غير محفوظ) قبل الإغلاق
+  app.get("/api/salary-closing/preview", isAuthenticated, requirePermission("salary_closing", "view"), async (req, res) => {
+    try {
+      const branchId = req.query.branchId as string | undefined;
+      const month = req.query.month as string | undefined;
+      if (!branchId || branchId === "all") return res.status(400).json({ error: "اختر فرعاً محدداً" });
+      if (!isValidMonth(month)) return res.status(400).json({ error: "صيغة الشهر يجب أن تكون YYYY-MM" });
+      const hasAccess = await canAccessBranch(req, branchId);
+      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+
+      const existing = await storage.getSalaryClosureByBranchAndMonth(branchId, month);
+      const isLocked = !!existing && existing.status === "closed";
+
+      // عند القفل: نعيد اللقطة الثابتة المحفوظة (مصدر الحقيقة) بدل إعادة الحساب الحي
+      if (isLocked && existing) {
+        const savedLines = await storage.getSalaryClosureLines(existing.id);
+        const lines = savedLines.map((l: any) => ({
+          ...l,
+          presentDates: l.presentDates ?? [],
+          absentDates: l.absentDates ?? [],
+          // اللقطة تخزّن أيام الغياب مجمّعة؛ نعرضها كأيام صريحة للعرض فقط
+          absentDatesExplicit: l.absentDates ?? [],
+          absentDatesMissing: [],
+          offDates: l.offDates ?? [],
+          manualDeductions: l.manualDeductions ?? [],
+        }));
+        return res.json({
+          lines,
+          totals: {
+            employeeCount: existing.employeeCount,
+            totalBase: existing.totalBase,
+            totalAllowances: existing.totalAllowances,
+            totalGross: existing.totalGross,
+            totalAbsenceDeduction: existing.totalAbsenceDeduction,
+            totalSocialInsurance: existing.totalSocialInsurance,
+            totalManualDeductions: existing.totalManualDeductions,
+            totalNet: existing.totalNet,
+          },
+          unlinked: [],
+          unlinkedSummary: { totalRecords: existing.unlinkedCount || 0, presentRecords: 0, totalHours: 0 },
+          warnings: (existing.warnings as any) || [],
+          closure: existing,
+          isLocked: true,
+        });
+      }
+
+      const raw = await fetchSalaryClosingRaw(branchId, month);
+      const result = computeSalaryClosing(raw);
+      res.json({ ...result, closure: existing || null, isLocked });
+    } catch (error) {
+      console.error("Error computing salary closing preview:", error);
+      res.status(500).json({ error: "فشل في حساب معاينة الإغلاق" });
+    }
+  });
+
+  // اللقطة المحفوظة (إن وُجدت) لفرع/شهر
+  app.get("/api/salary-closing", isAuthenticated, requirePermission("salary_closing", "view"), async (req, res) => {
+    try {
+      const branchId = req.query.branchId as string | undefined;
+      const month = req.query.month as string | undefined;
+      if (!branchId || branchId === "all") return res.status(400).json({ error: "اختر فرعاً محدداً" });
+      if (!isValidMonth(month)) return res.status(400).json({ error: "صيغة الشهر يجب أن تكون YYYY-MM" });
+      const hasAccess = await canAccessBranch(req, branchId);
+      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      const closure = await storage.getSalaryClosureByBranchAndMonth(branchId, month);
+      if (!closure) return res.json({ closure: null, lines: [] });
+      const lines = await storage.getSalaryClosureLines(closure.id);
+      res.json({ closure, lines });
+    } catch (error) {
+      console.error("Error fetching salary closure:", error);
+      res.status(500).json({ error: "فشل في جلب اللقطة المحفوظة" });
+    }
+  });
+
+  // قائمة الإغلاقات (سجل تاريخي)
+  app.get("/api/salary-closing/list", isAuthenticated, requirePermission("salary_closing", "view"), async (req, res) => {
+    try {
+      const allowed = getAllowedBranchIds(req);
+      const closures = await storage.listSalaryClosures(allowed);
+      res.json(closures);
+    } catch (error) {
+      console.error("Error listing salary closures:", error);
+      res.status(500).json({ error: "فشل في جلب سجل الإغلاقات" });
+    }
+  });
+
+  // إغلاق الشهر: يعيد الحساب على الخادم ويحفظ لقطة ثابتة ويقفل
+  app.post("/api/salary-closing/close", isAuthenticated, requirePermission("salary_closing", "edit"), async (req, res) => {
+    try {
+      const { branchId, month, acknowledgeWarnings, notes } = req.body || {};
+      if (!branchId || branchId === "all") return res.status(400).json({ error: "اختر فرعاً محدداً" });
+      if (!isValidMonth(month)) return res.status(400).json({ error: "صيغة الشهر يجب أن تكون YYYY-MM" });
+      const hasAccess = await canAccessBranch(req, branchId);
+      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بإغلاق هذا الفرع" });
+
+      const existing = await storage.getSalaryClosureByBranchAndMonth(branchId, month);
+      if (existing && existing.status === "closed") {
+        return res.status(409).json({ error: "هذا الشهر مغلق بالفعل لهذا الفرع. أعد فتحه أولاً للتعديل." });
+      }
+
+      const raw = await fetchSalaryClosingRaw(branchId, month);
+      const result = computeSalaryClosing(raw);
+
+      if (result.lines.length === 0) {
+        return res.status(400).json({ error: "لا يوجد موظفون فعّالون لهذا الفرع/الشهر." });
+      }
+
+      // حماية من الإغلاق الخاطئ: تحذيرات صفر بيانات لموظف نشط تتطلب تأكيداً صريحاً
+      const blockingWarnings = result.warnings.filter((w) => w.code === "no_work_at_all");
+      if (blockingWarnings.length > 0 && !acknowledgeWarnings) {
+        return res.status(422).json({
+          error: "توجد تحذيرات تتطلب المراجعة قبل الإغلاق",
+          requiresAcknowledgement: true,
+          warnings: result.warnings,
+        });
+      }
+
+      const userId = req.currentUser?.id;
+      const userName = currentUserName(req);
+      const closurePayload = {
+        branchId,
+        month,
+        status: "closed",
+        employeeCount: result.totals.employeeCount,
+        totalBase: result.totals.totalBase,
+        totalAllowances: result.totals.totalAllowances,
+        totalGross: result.totals.totalGross,
+        totalAbsenceDeduction: result.totals.totalAbsenceDeduction,
+        totalSocialInsurance: result.totals.totalSocialInsurance,
+        totalManualDeductions: result.totals.totalManualDeductions,
+        totalNet: result.totals.totalNet,
+        unlinkedCount: result.unlinkedSummary.totalRecords,
+        warningsCount: result.warnings.length,
+        warnings: result.warnings as any,
+        notes: notes || null,
+        closedBy: userId,
+        closedByName: userName,
+        closedAt: new Date(),
+        // مسح بيانات إعادة الفتح عند الإغلاق من جديد
+        reopenedBy: null,
+        reopenedByName: null,
+        reopenedAt: null,
+        reopenReason: null,
+      };
+      const linePayloads = result.lines.map((l) => ({
+        branchEmployeeId: l.branchEmployeeId,
+        employeeNumber: l.employeeNumber,
+        employeeName: l.employeeName,
+        jobTitle: l.jobTitle,
+        nationality: l.nationality,
+        bankName: l.bankName,
+        bankAccountNumber: l.bankAccountNumber,
+        presentDays: l.presentDays,
+        absentDays: l.absentDays,
+        offDays: l.offDays,
+        scheduledWorkDays: l.scheduledWorkDays,
+        scheduledHours: l.scheduledHours,
+        lateDays: l.lateDays,
+        totalHours: l.totalHours,
+        baseSalary: l.baseSalary,
+        allowances: l.allowances,
+        grossSalary: l.grossSalary,
+        dailyRate: l.dailyRate,
+        absenceDeduction: l.absenceDeduction,
+        socialInsurance: l.socialInsurance,
+        manualDeductionsTotal: l.manualDeductionsTotal,
+        netSalary: l.netSalary,
+        dataSource: l.dataSource,
+        noWorkAtAll: l.noWorkAtAll,
+        manualDeductions: l.manualDeductions as any,
+        presentDates: l.presentDates as any,
+        absentDates: l.absentDates as any,
+        offDates: l.offDates as any,
+      }));
+
+      // إذا كان هناك إغلاق سابق تمت إعادة فتحه، نعيد استخدام نفس الصف (نمنع تعارض المفتاح الفريد)
+      let closure;
+      if (existing && existing.status === "reopened") {
+        closure = await storage.replaceSalaryClosureWithLines(existing.id, closurePayload as any, linePayloads as any);
+      } else {
+        closure = await storage.createSalaryClosureWithLines(closurePayload as any, linePayloads as any);
+      }
+      res.status(201).json({ success: true, closure });
+    } catch (error: any) {
+      console.error("Error closing salary month:", error);
+      if (String(error?.message || "").includes("duplicate") || error?.code === "23505") {
+        return res.status(409).json({ error: "هذا الشهر مغلق بالفعل لهذا الفرع." });
+      }
+      res.status(500).json({ error: "فشل في إغلاق الشهر" });
+    }
+  });
+
+  // إعادة فتح إغلاق (للمدير فقط) مع تسجيل السبب
+  app.post("/api/salary-closing/:id/reopen", isAuthenticated, requirePermission("salary_closing", "edit"), async (req, res) => {
+    try {
+      if (!isUserAdmin(req)) return res.status(403).json({ error: "إعادة الفتح متاحة للمدير فقط" });
+      const id = parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ error: "رقم غير صحيح" });
+      const { reason } = req.body || {};
+      if (!reason || String(reason).trim().length < 3) {
+        return res.status(400).json({ error: "يجب إدخال سبب إعادة الفتح" });
+      }
+      const closure = await storage.getSalaryClosureById(id);
+      if (!closure) return res.status(404).json({ error: "الإغلاق غير موجود" });
+      const hasAccess = await canAccessBranch(req, closure.branchId);
+      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      const updated = await storage.reopenSalaryClosure(id, {
+        reopenedBy: req.currentUser?.id,
+        reopenedByName: currentUserName(req),
+        reopenReason: String(reason).trim(),
+      });
+      res.json({ success: true, closure: updated });
+    } catch (error) {
+      console.error("Error reopening salary closure:", error);
+      res.status(500).json({ error: "فشل في إعادة فتح الإغلاق" });
+    }
+  });
+
+  // ربط سجل حضور يتيم بموظف (قبل الإغلاق) — IDOR-safe
+  app.post("/api/salary-closing/link-attendance", isAuthenticated, requirePermission("salary_closing", "edit"), async (req, res) => {
+    try {
+      const { attendanceId, branchEmployeeId } = req.body || {};
+      const aId = parseInt(attendanceId, 10);
+      const beId = parseInt(branchEmployeeId, 10);
+      if (Number.isNaN(aId) || Number.isNaN(beId)) return res.status(400).json({ error: "بيانات غير صحيحة" });
+      const record = await storage.getAttendanceRecord(aId);
+      if (!record) return res.status(404).json({ error: "سجل الحضور غير موجود" });
+      const employee = await storage.getBranchEmployee(beId);
+      if (!employee) return res.status(404).json({ error: "الموظف غير موجود" });
+      // يجب أن يكون السجل والموظف في نفس الفرع، وللمستخدم صلاحية على هذا الفرع
+      if (record.branchId !== employee.branchId) {
+        return res.status(400).json({ error: "الموظف من فرع مختلف عن سجل الحضور" });
+      }
+      const hasAccess = await canAccessBranch(req, record.branchId);
+      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      // منع تعديل الربط على شهر مغلق (تثبيت اللقطة)
+      const recDate = (record as any).attendanceDate || (record as any).date;
+      const recMonth = typeof recDate === "string" ? recDate.slice(0, 7) : "";
+      if (recMonth) {
+        const lock = await storage.getSalaryClosureByBranchAndMonth(record.branchId, recMonth);
+        if (lock && lock.status === "closed") {
+          return res.status(423).json({ error: "هذا الشهر مغلق للرواتب — لا يمكن ربط سجلات الحضور. أعد فتح الإغلاق أولاً." });
+        }
+      }
+      const updated = await storage.updateAttendanceRecord(aId, {
+        branchEmployeeId: beId,
+        employeeId: employee.linkedUserId || record.employeeId,
+      });
+      res.json({ success: true, record: updated });
+    } catch (error) {
+      console.error("Error linking attendance record:", error);
+      res.status(500).json({ error: "فشل في ربط سجل الحضور" });
     }
   });
 
@@ -29913,6 +30209,95 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error generating salary closing PDF:", error);
       res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
+    }
+  });
+
+  // قسيمة راتب فردية (PDF) — تُبنى من بيانات اللقطة المحفوظة (مصدر موثوق)
+  app.get("/api/salary-closing/:id/payslip/:lineId", isAuthenticated, requirePermission("salary_closing", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const lineId = parseInt(req.params.lineId, 10);
+      if (Number.isNaN(id) || Number.isNaN(lineId)) return res.status(400).json({ error: "رقم غير صحيح" });
+      const closure = await storage.getSalaryClosureById(id);
+      if (!closure) return res.status(404).json({ error: "الإغلاق غير موجود" });
+      const hasAccess = await canAccessBranch(req, closure.branchId);
+      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      const lines = await storage.getSalaryClosureLines(id);
+      const line = lines.find((l: any) => l.id === lineId);
+      if (!line) return res.status(404).json({ error: "بيانات الموظف غير موجودة في هذا الإغلاق" });
+      const branch = await storage.getBranch(closure.branchId).catch(() => null);
+
+      const pdfBuffer = await generatePayslipPdf({
+        branchName: branch?.name || closure.branchId,
+        month: closure.month,
+        employee: {
+          employeeName: line.employeeName,
+          employeeNumber: line.employeeNumber,
+          nationality: line.nationality,
+          jobTitle: line.jobTitle,
+          bankName: line.bankName || undefined,
+          bankAccountNumber: line.bankAccountNumber || undefined,
+          manualDeductions: (line.manualDeductions as any) || [],
+          manualDeductionsTotal: Number(line.manualDeductionsTotal) || 0,
+          scheduledWorkDays: Number(line.scheduledWorkDays) || 0,
+          offDays: Number(line.offDays) || 0,
+          presentDays: Number(line.presentDays) || 0,
+          absentDays: Number(line.absentDays) || 0,
+          totalHours: Number(line.totalHours) || 0,
+          baseSalary: Number(line.baseSalary) || 0,
+          allowances: Number(line.allowances) || 0,
+          dailyRate: Number(line.dailyRate) || 0,
+          absenceDeduction: Number(line.absenceDeduction) || 0,
+          socialInsurance: Number(line.socialInsurance) || 0,
+          netSalary: Number(line.netSalary) || 0,
+          dataSource: line.dataSource as any,
+        },
+        issuedByName: currentUserName(req),
+        documentNumber: `PAY-${closure.month}-${closure.branchId}-${line.employeeNumber || lineId}`,
+        closureStatus: closure.status as any,
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename=payslip_${closure.month}_${line.employeeNumber || lineId}.pdf`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating payslip PDF:", error);
+      res.status(500).json({ error: "فشل في إنشاء قسيمة الراتب" });
+    }
+  });
+
+  // ملف التحويل البنكي (CSV بصيغة WPS مبسّطة) من اللقطة المحفوظة
+  app.get("/api/salary-closing/:id/bank-file", isAuthenticated, requirePermission("salary_closing", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ error: "رقم غير صحيح" });
+      const closure = await storage.getSalaryClosureById(id);
+      if (!closure) return res.status(404).json({ error: "الإغلاق غير موجود" });
+      const hasAccess = await canAccessBranch(req, closure.branchId);
+      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      const lines = await storage.getSalaryClosureLines(id);
+
+      const esc = (v: any) => {
+        const s = v == null ? "" : String(v);
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const header = ["الرقم الوظيفي", "اسم الموظف", "البنك", "رقم الحساب/الآيبان", "صافي الراتب", "الشهر"];
+      const rows = lines.map((l: any) => [
+        l.employeeNumber || "",
+        l.employeeName || "",
+        l.bankName || "",
+        l.bankAccountNumber || "",
+        Number(l.netSalary) || 0,
+        closure.month,
+      ].map(esc).join(","));
+      const csv = "\uFEFF" + [header.join(","), ...rows].join("\r\n");
+
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename=bank_transfer_${closure.month}_${closure.branchId}.csv`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Error generating bank transfer file:", error);
+      res.status(500).json({ error: "فشل في إنشاء ملف التحويل البنكي" });
     }
   });
 

@@ -42,6 +42,15 @@ export interface SalaryClosingPdfData {
     schedule: number;
     attendanceOnly: number;
   };
+  // بيانات الإصدار الرسمي (تظهر عند الإغلاق النهائي)
+  issueMetadata?: {
+    status?: "closed" | "reopened" | "draft";
+    closedByName?: string | null;
+    closedAt?: string | null;
+    issuedByName?: string | null;
+    issuedAt?: string | null;
+    documentNumber?: string | null;
+  };
 }
 
 function formatNumber(num: number): string {
@@ -106,6 +115,21 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
     </tr>
   `;
   }).join('');
+
+  const im = data.issueMetadata;
+  const issueMetadataHtml = (im && (im.status === "closed" || im.closedByName || im.documentNumber))
+    ? `<div style="margin: 10px 0; padding: 10px 12px; border: 2px solid ${im.status === "reopened" ? "#f59e0b" : "#059669"}; border-radius: 8px; background: ${im.status === "reopened" ? "#fffbeb" : "#ecfdf5"}; font-size: 10px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+        <div>
+          <div style="font-weight: 800; color: ${im.status === "reopened" ? "#b45309" : "#065f46"}; font-size:12px;">${im.status === "reopened" ? "⚠ تم إعادة فتح هذا الإغلاق" : "✓ مستند إغلاق نهائي معتمد"}</div>
+          ${im.documentNumber ? `<div style="color:#374151;">رقم المستند: <strong>${im.documentNumber}</strong></div>` : ''}
+        </div>
+        <div style="text-align:left;">
+          ${im.closedByName ? `<div>اعتمد الإغلاق: <strong>${im.closedByName}</strong></div>` : ''}
+          ${im.closedAt ? `<div style="color:#6b7280;">بتاريخ: ${im.closedAt}</div>` : ''}
+          ${im.issuedByName ? `<div>أصدر التقرير: <strong>${im.issuedByName}</strong></div>` : ''}
+        </div>
+      </div>`
+    : '';
 
   const dsSummary = data.dataSourceSummary;
   const dataSourceSummaryHtml = dsSummary
@@ -185,6 +209,7 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
 <body>
   ${getPdfHeaderHtml('تقرير إغلاق الرواتب الشهرية', `الفرع: ${data.branchName} | الشهر: ${data.month}`)}
   <div class="info-row">عدد الموظفين: ${data.employees.length} | إجمالي الرواتب: ${formatNumber(totals.grossSalary)} ريال | صافي المستحق: ${formatNumber(totals.netSalary)} ريال</div>
+  ${issueMetadataHtml}
   ${dataSourceSummaryHtml}
   
   <table>
@@ -241,6 +266,139 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
   `;
 
   return await generatePdfFromHtml(html, { landscape: true });
+}
+
+// =====================================================
+// قسيمة راتب فردية (A4 عمودي) مع ختم وتوقيع وبيانات الإصدار
+// =====================================================
+export interface PayslipPdfData {
+  branchName: string;
+  month: string;
+  employee: SalaryClosingEmployee & {
+    employeeNumber?: string | null;
+    nationality?: string | null;
+  };
+  issuedByName?: string | null;
+  issuedAt?: string | null;
+  documentNumber?: string | null;
+  closureStatus?: "closed" | "reopened" | "draft";
+}
+
+export async function generatePayslipPdf(data: PayslipPdfData): Promise<Buffer> {
+  const e = data.employee;
+  const gross = e.baseSalary + e.allowances;
+  const dailyRate = e.dailyRate ?? (gross / 30);
+  const absenceDeduction = e.absenceDeduction ?? 0;
+  const manualTotal = e.manualDeductionsTotal ?? 0;
+  const totalDeductions = absenceDeduction + e.socialInsurance + manualTotal;
+
+  const row = (label: string, value: string, opts: { bold?: boolean; color?: string; bg?: string } = {}) => `
+    <tr>
+      <td style="text-align:right; padding:7px 10px; border:1px solid #e5e7eb; ${opts.bg ? `background:${opts.bg};` : ''} ${opts.bold ? 'font-weight:700;' : ''}">${label}</td>
+      <td style="text-align:left; padding:7px 10px; border:1px solid #e5e7eb; direction:ltr; ${opts.bg ? `background:${opts.bg};` : ''} ${opts.bold ? 'font-weight:700;' : ''} ${opts.color ? `color:${opts.color};` : ''}">${value}</td>
+    </tr>`;
+
+  const manualRows = (e.manualDeductions || []).map(d =>
+    row(`&nbsp;&nbsp;• ${d.type}${d.description ? ` (${d.description})` : ''}`, `- ${formatNumber(d.amount)} ريال`, { color: '#9a3412' })
+  ).join('');
+
+  const printedAt = formatPrintDate();
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; padding: 24px; font-size: 12px; color:#111827; }
+    ${getPdfHeaderStyles()}
+    ${getPdfFooterStyles()}
+    table { width: 100%; border-collapse: collapse; }
+    .meta { display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; margin:14px 0; font-size:11px; color:#374151; }
+    .section-title { font-weight:800; color:#92400e; margin:18px 0 6px; font-size:13px; border-bottom:2px solid #fcd34d; padding-bottom:4px; }
+    .net-box { margin-top:18px; padding:14px; border:2px solid #059669; border-radius:8px; background:#ecfdf5; display:flex; justify-content:space-between; align-items:center; }
+    .net-box .label { font-weight:800; color:#065f46; font-size:14px; }
+    .net-box .value { font-weight:800; color:#065f46; font-size:20px; direction:ltr; }
+    .sign-area { margin-top:40px; display:flex; justify-content:space-between; gap:30px; }
+    .sign-box { flex:1; text-align:center; }
+    .sign-line { margin-top:46px; border-top:1.5px solid #374151; padding-top:6px; color:#374151; font-size:11px; }
+    .stamp { width:130px; height:130px; border:2px dashed #9ca3af; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#9ca3af; font-size:11px; text-align:center; }
+  </style>
+</head>
+<body>
+  ${getPdfHeaderHtml('قسيمة راتب', `الفرع: ${data.branchName} | الشهر: ${data.month}`)}
+
+  <div class="meta">
+    <div>
+      <div>الاسم: <strong>${e.employeeName}</strong></div>
+      ${e.employeeNumber ? `<div>الرقم الوظيفي: <strong>${e.employeeNumber}</strong></div>` : ''}
+      <div>الوظيفة: <strong>${e.jobTitle}</strong></div>
+      ${e.nationality ? `<div>الجنسية: ${e.nationality}</div>` : ''}
+    </div>
+    <div style="text-align:left;">
+      ${data.documentNumber ? `<div>رقم المستند: <strong>${data.documentNumber}</strong></div>` : ''}
+      ${data.issuedByName ? `<div>أصدرها: <strong>${data.issuedByName}</strong></div>` : ''}
+      <div style="color:#6b7280;">تاريخ الإصدار: ${data.issuedAt || printedAt}</div>
+      ${data.closureStatus === 'reopened' ? '<div style="color:#b45309; font-weight:700;">⚠ إغلاق مُعاد فتحه</div>' : ''}
+    </div>
+  </div>
+
+  <div class="section-title">بيانات الحضور</div>
+  <table>
+    ${row('أيام العمل المجدولة', `${e.scheduledWorkDays ?? '-'}`, { bg:'#eff6ff' })}
+    ${row('أيام الحضور', `${e.presentDays}`, { bg:'#ecfdf5' })}
+    ${row('أيام الغياب', `${e.absentDays}`, { bg:'#fef2f2' })}
+    ${row('أيام الإجازات', `${e.offDays ?? '-'}`, { bg:'#fffbeb' })}
+    ${row('إجمالي الساعات', `${e.totalHours}`)}
+  </table>
+
+  <div class="section-title">المستحقات</div>
+  <table>
+    ${row('الراتب الأساسي', `${formatNumber(e.baseSalary)} ريال`)}
+    ${row('البدلات', `${formatNumber(e.allowances)} ريال`)}
+    ${row('إجمالي المستحقات', `${formatNumber(gross)} ريال`, { bold:true, bg:'#f9fafb' })}
+  </table>
+
+  <div class="section-title">الاستقطاعات</div>
+  <table>
+    ${row('قيمة اليوم', `${formatNumber(Math.round(dailyRate * 100) / 100)} ريال`, { color:'#6b7280' })}
+    ${row('خصم الغياب', absenceDeduction > 0 ? `- ${formatNumber(absenceDeduction)} ريال` : '-', { color: absenceDeduction > 0 ? '#dc2626' : '#6b7280' })}
+    ${row('التأمينات الاجتماعية', e.socialInsurance > 0 ? `- ${formatNumber(e.socialInsurance)} ريال` : '-', { color: e.socialInsurance > 0 ? '#dc2626' : '#6b7280' })}
+    ${row('السُلف والخصومات اليدوية', manualTotal > 0 ? `- ${formatNumber(manualTotal)} ريال` : '-', { color: manualTotal > 0 ? '#9a3412' : '#6b7280' })}
+    ${manualRows}
+    ${row('إجمالي الاستقطاعات', `- ${formatNumber(totalDeductions)} ريال`, { bold:true, bg:'#fef2f2', color:'#dc2626' })}
+  </table>
+
+  <div class="net-box">
+    <span class="label">صافي الراتب المستحق</span>
+    <span class="value">${formatNumber(e.netSalary)} ريال</span>
+  </div>
+
+  <div class="section-title">بيانات التحويل البنكي</div>
+  <table>
+    ${row('البنك', e.bankName || '<span style="color:#b45309;">غير مسجّل</span>')}
+    ${row('رقم الحساب / الآيبان', e.bankAccountNumber ? `<span style="font-family:monospace;">${e.bankAccountNumber}</span>` : '<span style="color:#b45309;">غير مسجّل</span>')}
+  </table>
+
+  <div class="sign-area">
+    <div class="sign-box">
+      <div class="sign-line">توقيع الموظف</div>
+    </div>
+    <div class="sign-box">
+      <div class="stamp">ختم الشركة</div>
+    </div>
+    <div class="sign-box">
+      <div class="sign-line">المدير المالي / المعتمد</div>
+    </div>
+  </div>
+
+  ${getPdfFooterHtml(data.issuedByName || 'النظام', printedAt)}
+</body>
+</html>`;
+
+  return await generatePdfFromHtml(html, { landscape: false });
 }
 
 export interface BranchComparisonData {
