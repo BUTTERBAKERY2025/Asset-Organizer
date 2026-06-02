@@ -3035,7 +3035,7 @@ export default function BranchEmployeesPage() {
                       </CardContent>
                     </Card>
                   </div>
-                  {!viewingEmployee.linkedUserId && (
+                  {!viewingEmployee.linkedUserId && (user?.role === "admin" || user?.role === "hr_manager") && (
                     <Card className="bg-amber-50 border-amber-200">
                       <CardContent className="py-4">
                         <div className="space-y-3">
