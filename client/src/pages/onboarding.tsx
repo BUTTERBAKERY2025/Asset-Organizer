@@ -25,7 +25,7 @@ import { z } from "zod";
 import {
   UserPlus, ArrowRight, Send, CheckCircle2, Loader2, MapPin, Camera, Eye, Copy,
   ClipboardCheck, Users, Briefcase, Phone, FileText, MessageCircle, XCircle, AlertTriangle,
-  Printer, Download,
+  Printer, Download, Pencil,
 } from "lucide-react";
 import type { JobOffer, OnboardingNotification, Branch } from "@shared/schema";
 
@@ -121,6 +121,7 @@ export default function OnboardingPage() {
   const [createFor, setCreateFor] = useState<Row | null>(null);
   const [viewRow, setViewRow] = useState<Row | null>(null);
   const [convertRow, setConvertRow] = useState<Row | null>(null);
+  const [editRow, setEditRow] = useState<Row | null>(null);
   const [shareLink, setShareLink] = useState<{ link: string; phone?: string } | null>(null);
 
   const { data: rows = [], isLoading } = useQuery<Row[]>({ queryKey: ["/api/hr/onboarding"] });
@@ -332,6 +333,18 @@ export default function OnboardingPage() {
                             {n && ["pending", "sent"].includes(n.status) && (
                               <Button
                                 size="sm"
+                                variant="outline"
+                                className="border-amber-500 text-amber-700 hover:bg-amber-50 gap-1"
+                                onClick={() => setEditRow(r)}
+                                data-testid={`btn-edit-${n.id}`}
+                                title="تعديل قبل الإرسال"
+                              >
+                                <Pencil className="w-3.5 h-3.5" /> تعديل
+                              </Button>
+                            )}
+                            {n && ["pending", "sent"].includes(n.status) && (
+                              <Button
+                                size="sm"
                                 className="bg-blue-600 hover:bg-blue-700 gap-1"
                                 onClick={() => sendMutation.mutate(n.id)}
                                 disabled={sendMutation.isPending}
@@ -394,6 +407,9 @@ export default function OnboardingPage() {
 
         {/* Convert to Employee Dialog */}
         <ConvertDialog row={convertRow} onClose={() => setConvertRow(null)} onSuccess={invalidate} />
+
+        {/* Edit Notification Dialog */}
+        <EditDialog row={editRow} onClose={() => setEditRow(null)} onSuccess={invalidate} />
 
         {/* Share Link Dialog */}
         <Dialog open={!!shareLink} onOpenChange={(o) => !o && setShareLink(null)}>
@@ -555,6 +571,105 @@ function CreateDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: (
             data-testid="btn-create-submit"
           >
             {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "إنشاء الإشعار"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: () => void; onSuccess: () => void }) {
+  const { toast } = useToast();
+  const n = row?.notification || null;
+  const [actualStartDate, setActualStartDate] = useState("");
+  const [workingHours, setWorkingHours] = useState("");
+  const [reportingTo, setReportingTo] = useState("");
+  const [notes, setNotes] = useState("");
+  const [validityDays, setValidityDays] = useState(7);
+
+  useEffect(() => {
+    if (n) {
+      setActualStartDate(n.actualStartDate || "");
+      setWorkingHours(n.workingHours || "");
+      setReportingTo(n.reportingTo || "");
+      setNotes(n.notes || "");
+      setValidityDays(n.validityDays || 7);
+    }
+  }, [n?.id]);
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const safeValidity = Math.min(30, Math.max(1, Number(validityDays) || 7));
+      const r = await apiRequest("PATCH", `/api/hr/onboarding/${n!.id}`, {
+        actualStartDate,
+        workingHours,
+        reportingTo,
+        notes,
+        validityDays: safeValidity,
+      });
+      return await r.json();
+    },
+    onSuccess: () => {
+      toast({ title: "تم حفظ التعديلات", description: "يمكنك الآن إرسال الإشعار للموظف" });
+      onSuccess();
+      onClose();
+    },
+    onError: (e: any) => toast({ title: "فشل التعديل", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>تعديل إشعار مباشرة العمل</DialogTitle></DialogHeader>
+        {n && (
+          <div className="space-y-3 text-sm">
+            <div className="bg-amber-50 border border-amber-200 rounded p-3 space-y-1">
+              <div><strong>الموظف:</strong> {n.candidateName}</div>
+              <div><strong>الوظيفة:</strong> {n.position}</div>
+              <div><strong>الفرع:</strong> {n.branchName || "-"}</div>
+              {n.status === "sent" && (
+                <div className="text-xs text-blue-700 pt-1">
+                  ملاحظة: تم إرسال هذا الإشعار سابقاً — بعد التعديل اضغط «إعادة إرسال» ليصل الموظف النسخة المحدّثة.
+                </div>
+              )}
+            </div>
+            <div className="space-y-1">
+              <Label>تاريخ المباشرة الفعلي *</Label>
+              <Input type="date" value={actualStartDate} onChange={(e) => setActualStartDate(e.target.value)} data-testid="input-edit-start-date" />
+            </div>
+            <div className="space-y-1">
+              <Label>ساعات الدوام</Label>
+              <Input value={workingHours} onChange={(e) => setWorkingHours(e.target.value)} placeholder="مثال: 8 ساعات / 6 أيام" data-testid="input-edit-working-hours" />
+            </div>
+            <div className="space-y-1">
+              <Label>المسؤول المباشر</Label>
+              <Input value={reportingTo} onChange={(e) => setReportingTo(e.target.value)} placeholder="اسم مدير الفرع" data-testid="input-edit-reporting-to" />
+            </div>
+            <div className="space-y-1">
+              <Label>ملاحظات</Label>
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} data-testid="input-edit-notes" />
+            </div>
+            <div className="space-y-1">
+              <Label>صلاحية الرابط (أيام)</Label>
+              <Input type="number" min={1} max={30} value={validityDays} onChange={(e) => setValidityDays(Number(e.target.value))} data-testid="input-edit-validity-days" />
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>إلغاء</Button>
+          <Button
+            className="bg-amber-600 hover:bg-amber-700"
+            onClick={() => {
+              if (!actualStartDate) {
+                toast({ title: "تاريخ المباشرة مطلوب", variant: "destructive" });
+                return;
+              }
+              mutation.mutate();
+            }}
+            disabled={mutation.isPending}
+            data-testid="btn-edit-submit"
+          >
+            {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "حفظ التعديلات"}
           </Button>
         </DialogFooter>
       </DialogContent>
