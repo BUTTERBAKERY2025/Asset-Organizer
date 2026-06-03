@@ -115,7 +115,7 @@ import { sendWhatsAppMessage, isTwilioConfigured } from "./twilio-service";
 import { recipientsSchema as reportRecipientsSchema } from "./scheduler";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertContractMilestoneSchema, insertContractVariationSchema, insertContractGuaranteeSchema, insertContractTemplateSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
-import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache } from "./auth";
+import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache, HR_MANAGER_MODULES, hasCrossBranchHrReadAccess } from "./auth";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
 import { registerJobOfferRoutes } from "./job-offers-routes";
@@ -1047,10 +1047,30 @@ export async function registerRoutes(
       // Use auth cache first, then fall back to route-level cache
       const { getCachedPermissionsForUser } = await import("./auth");
       const authCachedPerms = getCachedPermissionsForUser(currentUser.id);
-      if (authCachedPerms && authCachedPerms.length > 0) {
-        return res.json(authCachedPerms);
+      let permissions: any[] = (authCachedPerms && authCachedPerms.length > 0)
+        ? authCachedPerms
+        : (await getCachedPermissions(currentUser.id)) || [];
+
+      // HR Manager: merge the server-side auto-granted HR modules into the
+      // returned set so the frontend (canView/canEdit) matches what the backend
+      // actually authorizes. Without this, the HR Hub opens but employees /
+      // attendance / recruitment sections are hidden and render empty.
+      if (currentUser.role === "hr_manager") {
+        const merged = new Map<string, Set<string>>();
+        for (const p of permissions) {
+          merged.set(p.module, new Set(p.actions || []));
+        }
+        for (const m of HR_MANAGER_MODULES) {
+          const set = merged.get(m) || new Set<string>();
+          for (const a of MODULE_ACTIONS) set.add(a);
+          merged.set(m, set);
+        }
+        permissions = Array.from(merged.entries()).map(([module, actions]) => ({
+          module,
+          actions: Array.from(actions),
+        }));
       }
-      const permissions = await getCachedPermissions(currentUser.id);
+
       res.json(permissions);
     } catch (error) {
       console.error("Error fetching my permissions:", error);
@@ -25392,7 +25412,12 @@ export async function registerRoutes(
       
       // SECURITY: Apply branch filter
       const queryBranchId = branchId as string | undefined;
-      const branchFilter = getEffectiveBranchFilter(req, queryBranchId);
+      // HR is cross-branch by design: HR managers (and hr_management:view) get
+      // READ access across all branches on this GET, matching the HR Hub bundle.
+      let branchFilter = getEffectiveBranchFilter(req, queryBranchId);
+      if (hasCrossBranchHrReadAccess(req)) {
+        branchFilter = { ...branchFilter, hasAccess: true, singleBranchId: queryBranchId || null, branchIds: null };
+      }
 
       if (!branchFilter.hasAccess) {
         return res.status(403).json({ error: "غير مصرح بالوصول" });
@@ -25429,8 +25454,10 @@ export async function registerRoutes(
       const record = await storage.getAttendanceRecord(id);
       if (!record) return res.status(404).json({ error: "السجل غير موجود" });
       
-      // SECURITY: Verify branch access for non-admin users
-      if (!isUserAdmin(req) && record.branchId) {
+      // SECURITY: Verify branch access for non-admin users.
+      // HR is cross-branch by design: HR managers (and hr_management:view) get
+      // READ access to records across all branches (GET only).
+      if (!isUserAdmin(req) && !hasCrossBranchHrReadAccess(req) && record.branchId) {
         const hasAccess = await canAccessBranch(req, record.branchId);
         if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا السجل" });
@@ -28883,7 +28910,9 @@ export async function registerRoutes(
       // SECURITY: Enforce branch filtering for non-admin users
       const queryBranchId = req.query.branchId as string | undefined;
       const countOnly = req.query.countOnly === 'true';
-      const allowedBranches = getAllowedBranchIds(req);
+      // HR is cross-branch by design: HR managers (and hr_management:view) get
+      // READ access across all branches on this GET, matching the HR Hub bundle.
+      const allowedBranches = hasCrossBranchHrReadAccess(req) ? null : getAllowedBranchIds(req);
       
       // Fast count path - uses cached data or lightweight query
       if (countOnly) {
@@ -28950,7 +28979,8 @@ export async function registerRoutes(
     try {
       // SECURITY: Enforce branch filtering for non-admin users
       const queryBranchId = req.query.branchId as string | undefined;
-      const allowedBranches = getAllowedBranchIds(req);
+      // HR cross-branch READ elevation (GET) — see /api/branch-employees above.
+      const allowedBranches = hasCrossBranchHrReadAccess(req) ? null : getAllowedBranchIds(req);
       
       // Admin or user with all branches access
       if (allowedBranches === null) {
@@ -29007,8 +29037,10 @@ export async function registerRoutes(
         return res.status(404).json({ error: "الموظف غير موجود" });
       }
       
-      // SECURITY: Verify branch access for non-admin users
-      if (!isUserAdmin(req) && employee.branchId) {
+      // SECURITY: Verify branch access for non-admin users.
+      // HR is cross-branch by design: HR managers (and hr_management:view) get
+      // READ access to records across all branches (GET only).
+      if (!isUserAdmin(req) && !hasCrossBranchHrReadAccess(req) && employee.branchId) {
         const hasAccess = await canAccessBranch(req, employee.branchId);
         if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا الموظف" });

@@ -53,9 +53,39 @@ export function getCachedPermissionsForUser(userId: string): any[] | null {
   return getCachedPermissions(userId);
 }
 
+/**
+ * HR is a cross-branch function in this org. Admins, the dedicated `hr_manager`
+ * role, and any user holding `hr_management` with the `view` action are treated
+ * as cross-branch for HR READ access — otherwise they see zero data on HR pages
+ * (employees / attendance) when they have no explicit branch assignment.
+ *
+ * READ-ONLY elevation: callers must gate this to safe (GET/HEAD) requests.
+ * Finance/inventory/sales endpoints never call this helper and keep their
+ * standard branch isolation. Single source of truth to avoid drift.
+ */
+export function hasCrossBranchHrReadAccess(req: any): boolean {
+  const user = (req as any).currentUser;
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  if (user.role === "hr_manager") return true;
+  const perms = getCachedPermissionsForUser(user.id) || [];
+  const hr = perms.find((p: any) => p.module === "hr_management");
+  if (!hr) return false;
+  const raw = hr.actions as unknown;
+  const actions: string[] = Array.isArray(raw)
+    ? (raw as string[])
+    : typeof raw === "string"
+      ? (raw as string).replace(/[{}]/g, "").split(",").map((a) => a.trim())
+      : [];
+  return actions.includes("view");
+}
+
 // HR modules auto-granted to users with role === "hr_manager". Strictly HR —
 // finance, inventory, sales, etc. are NOT included and stay branch-isolated.
 // Shared between requirePermission and requireAnyPermission to prevent drift.
+// NOTE: this set must cover everything an HR manager needs to actually do HR
+// work — employees, attendance, and recruitment included — otherwise the HR
+// Hub renders empty (data endpoints 403) even though the page itself opens.
 export const HR_MANAGER_MODULES: ReadonlySet<string> = new Set([
   "hr_management",
   "hr_documents",
@@ -64,6 +94,20 @@ export const HR_MANAGER_MODULES: ReadonlySet<string> = new Set([
   "hr_advances",
   "hr_eos",
   "salary_closing",
+  // Employees & org
+  "branch_employees",
+  "employee_reports",
+  "employee_transfers",
+  "organizational_structure",
+  // Attendance & shifts
+  "shifts",
+  "attendance",
+  "attendance_check",
+  "timesheet",
+  // Recruitment / onboarding
+  "hr_employment_applications",
+  "hr_job_offers",
+  "hr_onboarding",
 ]);
 
 function setCachedAuth(userId: string, user: any, branchAccess: any[], permissions: any[]) {

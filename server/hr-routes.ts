@@ -2,7 +2,7 @@ import type { Express } from "express";
 import crypto from "node:crypto";
 import { db } from "./db";
 import { eq, and, desc, sql, inArray, gte, lte, lt } from "drizzle-orm";
-import { isAuthenticated, requirePermission, getEffectiveBranchFilter, getCachedPermissionsForUser } from "./auth";
+import { isAuthenticated, requirePermission, getEffectiveBranchFilter, getCachedPermissionsForUser, hasCrossBranchHrReadAccess } from "./auth";
 import {
   WARNING_TEMPLATES,
   WARNING_REASON_CATEGORIES,
@@ -49,24 +49,9 @@ function isAdmin(req: any): boolean {
  * would see zero data on every HR page despite holding the permission.
  * Admin still bypasses everything via getEffectiveBranchFilter.
  */
+// Delegates to the shared single-source-of-truth helper in ./auth to avoid drift.
 function hasCrossBranchHrAccess(req: any): boolean {
-  const user = (req as any).currentUser;
-  if (!user) return false;
-  if (user.role === "admin") return true;
-  // Dedicated HR Manager role implies cross-branch HR visibility by design,
-  // without breaking branch isolation for finance/inventory (those modules
-  // never call this helper and continue to use the standard branch scope).
-  if (user.role === "hr_manager") return true;
-  const perms = getCachedPermissionsForUser(user.id) || [];
-  const hr = perms.find((p: any) => p.module === "hr_management");
-  if (!hr) return false;
-  const raw = hr.actions as unknown;
-  const actions: string[] = Array.isArray(raw)
-    ? (raw as string[])
-    : typeof raw === "string"
-      ? (raw as string).replace(/[{}]/g, "").split(",").map((a) => a.trim())
-      : [];
-  return actions.includes("view");
+  return hasCrossBranchHrReadAccess(req);
 }
 
 /**
