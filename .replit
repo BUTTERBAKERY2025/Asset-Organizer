@@ -57,3 +57,7 @@ integrations = ["javascript_database:1.0.0", "javascript_log_in_with_replit:1.0.
 USE_SUPABASE = "false"
 PUBLIC_SITE_URL = ""
 VITE_PUBLIC_SITE_URL = "https://www.thebutterbakery.com"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 180000
