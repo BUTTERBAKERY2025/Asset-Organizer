@@ -1529,7 +1529,7 @@ export interface IStorage {
   incrementInvoiceNumber(branchId: string): Promise<number>;
 
   // Event POS - Sales
-  createPosSale(sale: InsertPosSale, items: InsertPosSaleItem[]): Promise<PosSale>;
+  createPosSale(sale: InsertPosSale, items: InsertPosSaleItem[], afterInsert?: (tx: any, newSale: PosSale) => Promise<void>): Promise<PosSale>;
   getPosSales(branchId: string, dateFrom?: string, dateTo?: string): Promise<PosSale[]>;
   getPosSaleById(id: number): Promise<PosSale | undefined>;
   getPosSaleItems(saleId: number): Promise<PosSaleItem[]>;
@@ -17363,12 +17363,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Event POS - Sales
-  async createPosSale(sale: InsertPosSale, items: InsertPosSaleItem[]): Promise<PosSale> {
+  async createPosSale(
+    sale: InsertPosSale,
+    items: InsertPosSaleItem[],
+    afterInsert?: (tx: any, newSale: PosSale) => Promise<void>
+  ): Promise<PosSale> {
     return await db.transaction(async (tx) => {
       const [newSale] = await tx.insert(posSales).values(sale).returning();
       if (items && items.length > 0) {
         const saleItems = items.map(item => ({ ...item, saleId: newSale.id }));
         await tx.insert(posSaleItems).values(saleItems);
+      }
+      if (afterInsert) {
+        await afterInsert(tx, newSale);
       }
       return newSale;
     });

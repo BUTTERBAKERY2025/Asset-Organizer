@@ -135,6 +135,9 @@ const ExecutiveOrgStructurePage = makeLazy("executive-org-structure");
 const DocumentsPage = makeLazy("documents");
 const SharedDocumentPage = makeLazy("shared-document");
 const DiscountCardPage = makeLazy("discount-card");
+const LoyaltyCampaignsPage = makeLazy("loyalty-campaigns");
+const CampaignJoinPage = makeLazy("campaign-join");
+const LoyaltyCardPage = makeLazy("loyalty-card");
 const RsvpPage = makeLazy("rsvp-page");
 const GovernancePage = makeLazy("governance");
 const BoardMembersPage = makeLazy("governance-board-members");
@@ -286,6 +289,10 @@ const Router = React.memo(function Router() {
       
       {/* Public discount card page - no auth required */}
       <Route path="/discount/:code">{() => <Suspense fallback={<PageLoadingFallback />}><DiscountCardPage /></Suspense>}</Route>
+
+      {/* Public loyalty campaign join + personal card pages - no auth required */}
+      <Route path="/join/:slug">{() => <Suspense fallback={<PageLoadingFallback />}><CampaignJoinPage /></Suspense>}</Route>
+      <Route path="/card/:code">{() => <Suspense fallback={<PageLoadingFallback />}><LoyaltyCardPage /></Suspense>}</Route>
       
       {/* Public RSVP confirmation page - no auth required */}
       <Route path="/rsvp/:token">{() => <Suspense fallback={<PageLoadingFallback />}><RsvpPage /></Suspense>}</Route>
@@ -405,6 +412,7 @@ const Router = React.memo(function Router() {
       <Route path="/social-responsibility">{() => <ModulePage component={SocialResponsibilityPage} module="social_responsibility" />}</Route>
       <Route path="/marketing-influencers">{() => <ModulePage component={MarketingInfluencersPage} module="marketing_influencers" />}</Route>
       <Route path="/influencer-contracts">{() => <ModulePage component={InfluencerContractsPage} module="marketing_influencers" />}</Route>
+      <Route path="/loyalty-campaigns">{() => <ModulePage component={LoyaltyCampaignsPage} module="marketing" />}</Route>
       <Route path="/marketing-calendar">{() => <ModulePage component={MarketingCalendarPage} module="marketing" />}</Route>
       <Route path="/marketing-tasks">{() => <ModulePage component={MarketingTasksPage} module="marketing_tasks" />}</Route>
       <Route path="/marketing-reports">{() => <ModulePage component={MarketingReportsPage} module="marketing" />}</Route>

@@ -14,7 +14,7 @@ import {
   Sparkles, TrendingUp, Hash, Clock, Loader2,
   ListOrdered, Zap, Coffee, Pause, Play, Ban,
   RotateCcw, FileText, Download, Filter, AlertTriangle,
-  SplitSquareHorizontal, Calendar
+  SplitSquareHorizontal, Calendar, Gift
 } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
 import { QRCodeSVG } from "qrcode.react";
@@ -109,6 +109,11 @@ export default function EventPosPage() {
   const [discountType, setDiscountType] = useState<string | null>(null);
   const [discountValue, setDiscountValue] = useState<string>("");
   const [showDiscount, setShowDiscount] = useState(false);
+
+  const [loyaltyCode, setLoyaltyCode] = useState<string>("");
+  const [loyaltyMember, setLoyaltyMember] = useState<any>(null);
+  const [loyaltyChecking, setLoyaltyChecking] = useState(false);
+  const [loyaltyError, setLoyaltyError] = useState<string | null>(null);
 
   const [splitMode, setSplitMode] = useState(false);
   const [cashSplitAmount, setCashSplitAmount] = useState<string>("");
@@ -307,6 +312,48 @@ export default function EventPosPage() {
     setDiscountValue("");
     setSplitMode(false);
     setCashSplitAmount("");
+    setLoyaltyCode("");
+    setLoyaltyMember(null);
+    setLoyaltyError(null);
+  }, []);
+
+  const validateLoyaltyCode = useCallback(async () => {
+    const code = loyaltyCode.trim();
+    if (!code) return;
+    setLoyaltyChecking(true);
+    setLoyaltyError(null);
+    try {
+      const res = await apiRequest("POST", "/api/loyalty/validate", { code, branchId: EVENT_BRANCH_ID });
+      const data = await res.json();
+      const member = data.member ?? data;
+      setLoyaltyMember(member);
+      setDiscountType(member.discountType === "fixed_amount" ? "fixed" : "percentage");
+      setDiscountValue(String(member.discountValue));
+      toast({ title: "تم تطبيق بطاقة الولاء", description: `${member.customerName} — متبقٍ ${member.remainingUses}` });
+    } catch (err: any) {
+      setLoyaltyMember(null);
+      let msg = err?.message || "رمز غير صالح";
+      const m = msg.match(/^\d+:\s*(.*)$/s);
+      if (m) {
+        try {
+          const parsed = JSON.parse(m[1]);
+          msg = parsed.error || m[1];
+        } catch {
+          msg = m[1];
+        }
+      }
+      setLoyaltyError(msg);
+    } finally {
+      setLoyaltyChecking(false);
+    }
+  }, [loyaltyCode, toast]);
+
+  const removeLoyalty = useCallback(() => {
+    setLoyaltyMember(null);
+    setLoyaltyCode("");
+    setLoyaltyError(null);
+    setDiscountType(null);
+    setDiscountValue("");
   }, []);
 
   const createSaleMutation = useMutation({
@@ -336,6 +383,7 @@ export default function EventPosPage() {
         discountType: discountType || undefined,
         discountValue: discountType ? (parseFloat(discountValue) || 0) : 0,
         discountAmount: cartTotal.discount,
+        loyaltyMemberId: loyaltyMember?.memberId || undefined,
         paymentMethod: finalPaymentMethod,
         cardType: (finalPaymentMethod === "network" || finalPaymentMethod === "split") ? cardType : null,
         cashAmount: cashAmt,
@@ -1051,6 +1099,45 @@ export default function EventPosPage() {
               <div className="text-sm text-gray-500 mb-2">الإجمالي المطلوب</div>
               <div className="text-[42px] font-black text-orange-600 leading-tight">{cartTotal.total.toFixed(2)} <span className="text-lg">ر.س</span></div>
               {cartTotal.discount > 0 && <div className="text-xs text-red-500 mt-1">شامل خصم {cartTotal.discount.toFixed(2)} ر.س</div>}
+            </div>
+
+            {/* Loyalty card code */}
+            <div className="bg-yellow-50 rounded-2xl p-4 border border-yellow-200">
+              <label className="text-sm font-bold text-yellow-700 mb-2 flex items-center gap-1">
+                <Gift className="w-4 h-4" /> بطاقة الولاء (اختياري)
+              </label>
+              {loyaltyMember ? (
+                <div className="flex items-center justify-between bg-white rounded-xl p-3 border border-yellow-200">
+                  <div className="text-right">
+                    <div className="text-sm font-bold text-gray-800" data-testid="text-loyalty-customer">{loyaltyMember.customerName}</div>
+                    <div className="text-xs text-emerald-600">متبقٍ {loyaltyMember.remainingUses} — {loyaltyMember.code}</div>
+                  </div>
+                  <Button size="sm" variant="ghost" className="text-red-500" onClick={removeLoyalty} data-testid="button-remove-loyalty">إزالة</Button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-2">
+                    <Input
+                      value={loyaltyCode}
+                      onChange={e => { setLoyaltyCode(e.target.value.toUpperCase()); setLoyaltyError(null); }}
+                      onKeyDown={e => { if (e.key === "Enter") validateLoyaltyCode(); }}
+                      placeholder="أدخل رمز البطاقة"
+                      className="h-11 rounded-xl border-2 border-yellow-200 focus:border-yellow-400 text-center font-bold"
+                      dir="ltr"
+                      data-testid="input-loyalty-code"
+                    />
+                    <Button
+                      onClick={validateLoyaltyCode}
+                      disabled={loyaltyChecking || !loyaltyCode.trim()}
+                      className="h-11 rounded-xl bg-yellow-500 hover:bg-yellow-600 text-white px-4 shrink-0"
+                      data-testid="button-apply-loyalty"
+                    >
+                      {loyaltyChecking ? "..." : "تطبيق"}
+                    </Button>
+                  </div>
+                  {loyaltyError && <div className="text-xs text-red-500 mt-1" data-testid="text-loyalty-error">{loyaltyError}</div>}
+                </>
+              )}
             </div>
 
             {splitMode ? (

@@ -294,6 +294,7 @@ export default function MarketingDashboardPage() {
     { title: "التنبيهات", href: "/marketing-alerts", icon: Bell, tint: "bg-red-50 text-red-700 border-red-200 hover:bg-red-100", iconColor: "text-red-600", count: null },
     { title: "السوشيال ميديا", href: "/marketing-social", icon: Share2, tint: "bg-pink-50 text-pink-700 border-pink-200 hover:bg-pink-100", iconColor: "text-pink-600", count: null },
     { title: "المسؤولية الاجتماعية", href: "/social-responsibility", icon: Handshake, tint: "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100", iconColor: "text-orange-600", count: null },
+    { title: "حملات الولاء و QR", href: "/loyalty-campaigns", icon: Gift, tint: "bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100", iconColor: "text-yellow-600", count: null },
   ];
 
   // Trend semantics: derived from actual data signals, not hard-coded

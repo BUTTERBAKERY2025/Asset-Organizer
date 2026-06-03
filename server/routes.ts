@@ -126,6 +126,7 @@ import { registerBranchOpeningRoutes } from "./branch-opening-routes";
 import { registerMediaTeamRoutes } from "./media-team-routes";
 import { registerEmploymentApplicationRoutes } from "./employment-applications-routes";
 import { registerSocialResponsibilityRoutes } from "./social-responsibility-routes";
+import { registerLoyaltyRoutes, redeemLoyaltyInTx } from "./loyalty-routes";
 import { registerSecurityRoutes } from "./security-routes";
 import { apiCacheMiddleware, invalidateCacheForPath, invalidateCache, jsonSlimMiddleware } from "./api-cache";
 import { registerBatchRoute } from "./batch-api";
@@ -415,6 +416,7 @@ export async function registerRoutes(
   registerMediaTeamRoutes(app);
   registerEmploymentApplicationRoutes(app);
   registerSocialResponsibilityRoutes(app);
+  registerLoyaltyRoutes(app);
   registerSecurityRoutes(app);
 
   // Cached data fetchers
@@ -36973,7 +36975,7 @@ export async function registerRoutes(
   // POS Sales
   app.post("/api/pos/sales", isAuthenticated, requirePermission("event_pos", "create"), async (req, res) => {
     try {
-      const { items, ...saleData } = req.body;
+      const { items, loyaltyMemberId, ...saleData } = req.body;
       if (!saleData.branchId || !items || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ error: "بيانات البيع غير مكتملة" });
       }
@@ -36997,9 +36999,26 @@ export async function registerRoutes(
       saleData.invoiceNumber = `${prefix}-${String(invoiceNum).padStart(6, '0')}`;
       saleData.cashierId = (req as any).currentUser?.id || req.session?.userId;
 
-      const sale = await storage.createPosSale(saleData, items);
+      const parsedMemberId = loyaltyMemberId != null ? parseInt(String(loyaltyMemberId)) : null;
+      const afterInsert = parsedMemberId && !isNaN(parsedMemberId)
+        ? async (tx: any, newSale: any) => {
+            await redeemLoyaltyInTx(tx, {
+              memberId: parsedMemberId,
+              posSaleId: newSale.id,
+              branchId: saleData.branchId,
+              orderAmount: Number(saleData.subtotal) || Number(saleData.totalAmount) || 0,
+              redeemedBy: saleData.cashierId,
+            });
+          }
+        : undefined;
+
+      const sale = await storage.createPosSale(saleData, items, afterInsert);
       res.status(201).json(sale);
     } catch (error: any) {
+      // Loyalty redemption failures are validation errors (Arabic message) — surface to cashier
+      if (error?.message && /بطاقة|الولاء|استنفاد|الحملة|الفرع/.test(error.message)) {
+        return res.status(400).json({ error: error.message });
+      }
       console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
   });

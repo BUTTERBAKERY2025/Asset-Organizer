@@ -9947,6 +9947,113 @@ export const insertDiscountUsageLogSchema = createInsertSchema(discountUsageLogs
 export type DiscountUsageLog = typeof discountUsageLogs.$inferSelect;
 export type InsertDiscountUsageLog = z.infer<typeof insertDiscountUsageLogSchema>;
 
+// =====================================================
+// نظام حملات الولاء وبطاقات QR - Loyalty / QR Campaign System
+// General reusable digital discount-card engine. Each campaign issues a
+// unique personal code per customer, usable a configurable number of times,
+// redeemable at the POS.
+// =====================================================
+
+// حملة الولاء - reusable campaign definition (public /join/:slug page)
+export const loyaltyCampaigns = pgTable("loyalty_campaigns", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(), // public URL slug, e.g. "military-hospital"
+  name: text("name").notNull(),
+  description: text("description"),
+  discountType: text("discount_type").notNull(), // percentage, fixed_amount
+  discountValue: numeric("discount_value", { precision: 10, scale: 2 }).notNull(),
+  maxUsesPerCustomer: integer("max_uses_per_customer").default(1).notNull(), // configurable per-customer usage limit
+  minimumOrder: numeric("minimum_order", { precision: 10, scale: 2 }),
+  maximumDiscount: numeric("maximum_discount", { precision: 10, scale: 2 }),
+  codePrefix: text("code_prefix"), // prefix for generated member codes, e.g. "MIL"
+  applicableBranches: text("applicable_branches").array(), // null = all branches
+  validFrom: date("valid_from"),
+  validTo: date("valid_to"),
+  status: text("status").default("active").notNull(), // active, inactive, expired
+  terms: text("terms"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_loyalty_campaign_slug").on(table.slug),
+  index("idx_loyalty_campaign_status").on(table.status),
+]);
+
+export const insertLoyaltyCampaignSchema = createInsertSchema(loyaltyCampaigns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type LoyaltyCampaign = typeof loyaltyCampaigns.$inferSelect;
+export type InsertLoyaltyCampaign = z.infer<typeof insertLoyaltyCampaignSchema>;
+
+// عميل الولاء - central CRM, one row per phone number across all campaigns
+export const loyaltyCustomers = pgTable("loyalty_customers", {
+  id: serial("id").primaryKey(),
+  phone: text("phone").notNull().unique(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_loyalty_customer_phone").on(table.phone),
+]);
+
+export const insertLoyaltyCustomerSchema = createInsertSchema(loyaltyCustomers).omit({
+  id: true,
+  createdAt: true,
+});
+export type LoyaltyCustomer = typeof loyaltyCustomers.$inferSelect;
+export type InsertLoyaltyCustomer = z.infer<typeof insertLoyaltyCustomerSchema>;
+
+// عضوية الولاء - per customer per campaign, holds the unique personal code
+export const loyaltyMembers = pgTable("loyalty_members", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").notNull().references(() => loyaltyCampaigns.id, { onDelete: "cascade" }),
+  customerId: integer("customer_id").notNull().references(() => loyaltyCustomers.id, { onDelete: "cascade" }),
+  code: text("code").notNull().unique(), // unique personal discount code
+  maxUses: integer("max_uses").notNull(), // snapshot of campaign maxUsesPerCustomer at issue time
+  usedCount: integer("used_count").default(0).notNull(),
+  status: text("status").default("active").notNull(), // active, exhausted, disabled
+  appleSerial: text("apple_serial"), // reserved for Apple Wallet (Task #2)
+  googleObjectId: text("google_object_id"), // reserved for Google Wallet (Task #2)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_loyalty_member_campaign_customer").on(table.campaignId, table.customerId),
+  index("idx_loyalty_member_code").on(table.code),
+  index("idx_loyalty_member_campaign").on(table.campaignId),
+]);
+
+export const insertLoyaltyMemberSchema = createInsertSchema(loyaltyMembers).omit({
+  id: true,
+  usedCount: true,
+  createdAt: true,
+});
+export type LoyaltyMember = typeof loyaltyMembers.$inferSelect;
+export type InsertLoyaltyMember = z.infer<typeof insertLoyaltyMemberSchema>;
+
+// استخدام بطاقة الولاء - one row per POS redemption
+export const loyaltyRedemptions = pgTable("loyalty_redemptions", {
+  id: serial("id").primaryKey(),
+  memberId: integer("member_id").notNull().references(() => loyaltyMembers.id, { onDelete: "cascade" }),
+  campaignId: integer("campaign_id").notNull().references(() => loyaltyCampaigns.id, { onDelete: "cascade" }),
+  posSaleId: integer("pos_sale_id").references(() => posSales.id, { onDelete: "set null" }),
+  branchId: varchar("branch_id").references(() => branches.id),
+  orderAmount: numeric("order_amount", { precision: 12, scale: 2 }),
+  discountAmount: numeric("discount_amount", { precision: 10, scale: 2 }),
+  redeemedBy: varchar("redeemed_by").references(() => users.id),
+  redeemedAt: timestamp("redeemed_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_loyalty_redemption_member").on(table.memberId),
+  index("idx_loyalty_redemption_campaign").on(table.campaignId),
+  index("idx_loyalty_redemption_date").on(table.redeemedAt),
+]);
+
+export const insertLoyaltyRedemptionSchema = createInsertSchema(loyaltyRedemptions).omit({
+  id: true,
+  redeemedAt: true,
+});
+export type LoyaltyRedemption = typeof loyaltyRedemptions.$inferSelect;
+export type InsertLoyaltyRedemption = z.infer<typeof insertLoyaltyRedemptionSchema>;
+
 export const meetingRsvps = pgTable("meeting_rsvps", {
   id: serial("id").primaryKey(),
   meetingId: integer("meeting_id").notNull().references(() => governanceMeetings.id, { onDelete: "cascade" }),
