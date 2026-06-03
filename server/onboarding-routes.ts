@@ -381,7 +381,7 @@ export function registerOnboardingRoutes(app: Express) {
           waResult = await sendWhatsAppMessage(n.phone, message);
         }
 
-        res.json({ link, whatsapp: waResult, channel: "whatsapp" });
+        res.json({ link, phone: n.phone, whatsapp: waResult, channel: "whatsapp" });
       } catch (e: any) {
         console.error("[onboarding] send error:", e);
         res.status(500).json({ error: e.message });

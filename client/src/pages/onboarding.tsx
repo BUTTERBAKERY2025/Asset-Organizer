@@ -96,6 +96,22 @@ const STATUS: Record<string, { label: string; color: string }> = {
 
 const rowStatus = (r: Row): string => r.notification?.status || "pending";
 
+// تطبيع رقم الجوال السعودي إلى صيغة دولية لـ wa.me ثم التحقق من صحته.
+// يدعم: 05x, 5x, 9665x, +9665x, 96605x, 00966... — ويعيد "" لأي رقم غير صالح.
+const normalizeSaudiPhone = (raw: string): string => {
+  let digits = (raw || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("00")) digits = digits.slice(2);
+  let normalized = "";
+  if (digits.startsWith("9660")) normalized = "966" + digits.slice(4);
+  else if (digits.startsWith("966")) normalized = digits;
+  else if (digits.startsWith("0")) normalized = "966" + digits.slice(1);
+  else if (digits.length === 9 && digits.startsWith("5")) normalized = "966" + digits;
+  else normalized = digits;
+  // جوال سعودي صالح فقط: 966 + 5 + 8 أرقام
+  return /^9665\d{8}$/.test(normalized) ? normalized : "";
+};
+
 export default function OnboardingPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -105,7 +121,7 @@ export default function OnboardingPage() {
   const [createFor, setCreateFor] = useState<Row | null>(null);
   const [viewRow, setViewRow] = useState<Row | null>(null);
   const [convertRow, setConvertRow] = useState<Row | null>(null);
-  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [shareLink, setShareLink] = useState<{ link: string; phone?: string } | null>(null);
 
   const { data: rows = [], isLoading } = useQuery<Row[]>({ queryKey: ["/api/hr/onboarding"] });
   const { data: stats } = useQuery<Record<string, number>>({ queryKey: ["/api/hr/onboarding/stats"] });
@@ -141,7 +157,7 @@ export default function OnboardingPage() {
         title: data.whatsapp?.success ? "تم الإرسال عبر واتساب" : "تم توليد الرابط",
         description: data.whatsapp?.success ? "وصل الإشعار للموظف" : "اضغط نسخ الرابط لإرساله يدوياً",
       });
-      setShareLink(data.link);
+      setShareLink({ link: data.link, phone: data.phone });
       invalidate();
     },
     onError: (e: any) => toast({ title: "فشل الإرسال", description: e.message, variant: "destructive" }),
@@ -384,24 +400,37 @@ export default function OnboardingPage() {
           <DialogContent>
             <DialogHeader><DialogTitle>رابط إشعار المباشرة جاهز</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              <div className="bg-slate-50 border rounded p-3 break-all text-sm" dir="ltr">{shareLink}</div>
-              <div className="flex gap-2">
-                <Button onClick={() => shareLink && copy(shareLink)} className="flex-1 gap-2">
-                  <Copy className="w-4 h-4" /> نسخ الرابط
-                </Button>
-                {shareLink && (
-                  <a
-                    href={`https://wa.me/?text=${encodeURIComponent(`🥐 *Butter Bakery* — إشعار مباشرة العمل\n\nرابط التوقيع (يفتح داخل الفرع):\n${shareLink}`)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex-1"
-                  >
-                    <Button className="w-full gap-2 bg-green-600 hover:bg-green-700">
-                      <MessageCircle className="w-4 h-4" /> فتح واتساب
-                    </Button>
-                  </a>
-                )}
-              </div>
+              <div className="bg-slate-50 border rounded p-3 break-all text-sm" dir="ltr">{shareLink?.link}</div>
+              {(() => {
+                const waPhone = normalizeSaudiPhone(shareLink?.phone || "");
+                return (
+                  <>
+                    {!waPhone && (
+                      <p className="text-xs text-amber-600">
+                        لا يوجد رقم جوال صالح لهذا الموظف — سيُفتح واتساب بدون تحديد المستلم. أضف رقم الجوال في بيانات الموظف لفتح المحادثة معه مباشرة.
+                      </p>
+                    )}
+                    <div className="flex gap-2">
+                      <Button onClick={() => shareLink && copy(shareLink.link)} className="flex-1 gap-2">
+                        <Copy className="w-4 h-4" /> نسخ الرابط
+                      </Button>
+                      {shareLink && (
+                        <a
+                          href={`https://wa.me/${waPhone}?text=${encodeURIComponent(`🥐 *Butter Bakery* — إشعار مباشرة العمل\n\nرابط التوقيع (يفتح داخل الفرع):\n${shareLink.link}`)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex-1"
+                          data-testid="link-open-whatsapp"
+                        >
+                          <Button className="w-full gap-2 bg-green-600 hover:bg-green-700">
+                            <MessageCircle className="w-4 h-4" /> فتح واتساب
+                          </Button>
+                        </a>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </DialogContent>
         </Dialog>
