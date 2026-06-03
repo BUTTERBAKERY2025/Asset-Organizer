@@ -379,7 +379,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/social-responsibility", label: t("sidebar.socialResponsibility"), icon: Handshake, module: "social_responsibility", indent: true },
           { href: "/marketing-influencers", label: t("sidebar.influencers"), icon: UserCheck, module: "marketing_influencers", indent: true },
           { href: "/influencer-contracts", label: t("sidebar.influencerContracts"), icon: FileText, module: "marketing_influencers", indent: true },
-          { href: "/loyalty-campaigns", label: "حملات الولاء و QR", icon: Gift, module: "marketing", indent: true },
+          { href: "/loyalty-campaigns", label: "حملات الولاء و QR", icon: Gift, module: "marketing", indent: true, adminOnly: true },
           { href: "/marketing-calendar", label: t("sidebar.marketingCalendar"), icon: Calendar, module: "marketing", indent: true },
           { href: "/marketing-tasks", label: t("sidebar.marketingTasks"), icon: ClipboardCheck, module: "marketing_tasks", indent: true },
           { href: "/marketing-reports", label: t("sidebar.performanceReports"), icon: BarChart3, module: "marketing", indent: true },

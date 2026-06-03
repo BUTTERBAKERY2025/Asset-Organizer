@@ -1,7 +1,7 @@
 import type { Express, Request } from "express";
 import { db } from "./db";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import { isAuthenticated, requirePermission } from "./auth";
+import { isAuthenticated, requirePermission, requireRole } from "./auth";
 import {
   loyaltyCampaigns,
   loyaltyCustomers,
@@ -13,7 +13,6 @@ import { z } from "zod";
 import { randomInt } from "crypto";
 import { isAppleWalletConfigured, isGoogleWalletConfigured } from "./wallet-service";
 
-const LOYALTY_MODULE = "marketing";
 
 // ---- Rate limiting for public endpoints (per IP) ----
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
@@ -185,7 +184,7 @@ export function registerLoyaltyRoutes(app: Express) {
   app.get(
     "/api/loyalty/campaigns",
     isAuthenticated,
-    requirePermission(LOYALTY_MODULE, "view"),
+    requireRole(["admin"]),
     async (_req, res) => {
       try {
         const campaigns = await db
@@ -236,7 +235,7 @@ export function registerLoyaltyRoutes(app: Express) {
   app.get(
     "/api/loyalty/campaigns/:id",
     isAuthenticated,
-    requirePermission(LOYALTY_MODULE, "view"),
+    requireRole(["admin"]),
     async (req, res) => {
       try {
         const id = parseInt(req.params.id);
@@ -263,7 +262,7 @@ export function registerLoyaltyRoutes(app: Express) {
   app.post(
     "/api/loyalty/campaigns",
     isAuthenticated,
-    requirePermission(LOYALTY_MODULE, "create"),
+    requireRole(["admin"]),
     async (req, res) => {
       try {
         const userId = (req as any).currentUser?.id || (req as any).user?.id;
@@ -298,7 +297,7 @@ export function registerLoyaltyRoutes(app: Express) {
   app.patch(
     "/api/loyalty/campaigns/:id",
     isAuthenticated,
-    requirePermission(LOYALTY_MODULE, "edit"),
+    requireRole(["admin"]),
     async (req, res) => {
       try {
         const id = parseInt(req.params.id);
@@ -333,7 +332,7 @@ export function registerLoyaltyRoutes(app: Express) {
   app.get(
     "/api/loyalty/campaigns/:id/members",
     isAuthenticated,
-    requirePermission(LOYALTY_MODULE, "view"),
+    requireRole(["admin"]),
     async (req, res) => {
       try {
         const campaignId = parseInt(req.params.id);
@@ -367,7 +366,7 @@ export function registerLoyaltyRoutes(app: Express) {
   app.patch(
     "/api/loyalty/members/:id/status",
     isAuthenticated,
-    requirePermission(LOYALTY_MODULE, "edit"),
+    requireRole(["admin"]),
     async (req, res) => {
       try {
         const id = parseInt(req.params.id);
@@ -394,7 +393,7 @@ export function registerLoyaltyRoutes(app: Express) {
   app.get(
     "/api/loyalty/campaigns/:id/redemptions",
     isAuthenticated,
-    requirePermission(LOYALTY_MODULE, "view"),
+    requireRole(["admin"]),
     async (req, res) => {
       try {
         const campaignId = parseInt(req.params.id);

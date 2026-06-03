@@ -2,6 +2,7 @@ import { Layout } from "../components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { useAuth } from "@/hooks/useAuth";
 import {
   Megaphone, Users, Target, Calendar, FileBarChart, Clock, DollarSign,
   ChevronLeft, CheckCircle2, AlertCircle, BarChart3, Award, FolderOpen, Bell,
@@ -84,6 +85,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function MarketingDashboardPage() {
+  const { isAdmin } = useAuth();
   // Fetch all campaigns
   const { data: allCampaigns = [], isLoading: campaignsLoading } = useQuery<MarketingCampaign[]>({
     queryKey: ["/api/marketing/campaigns"],
@@ -294,7 +296,7 @@ export default function MarketingDashboardPage() {
     { title: "التنبيهات", href: "/marketing-alerts", icon: Bell, tint: "bg-red-50 text-red-700 border-red-200 hover:bg-red-100", iconColor: "text-red-600", count: null },
     { title: "السوشيال ميديا", href: "/marketing-social", icon: Share2, tint: "bg-pink-50 text-pink-700 border-pink-200 hover:bg-pink-100", iconColor: "text-pink-600", count: null },
     { title: "المسؤولية الاجتماعية", href: "/social-responsibility", icon: Handshake, tint: "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100", iconColor: "text-orange-600", count: null },
-    { title: "حملات الولاء و QR", href: "/loyalty-campaigns", icon: Gift, tint: "bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100", iconColor: "text-yellow-600", count: null },
+    ...(isAdmin ? [{ title: "حملات الولاء و QR", href: "/loyalty-campaigns", icon: Gift, tint: "bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100", iconColor: "text-yellow-600", count: null }] : []),
   ];
 
   // Trend semantics: derived from actual data signals, not hard-coded

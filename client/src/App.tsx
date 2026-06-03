@@ -412,7 +412,7 @@ const Router = React.memo(function Router() {
       <Route path="/social-responsibility">{() => <ModulePage component={SocialResponsibilityPage} module="social_responsibility" />}</Route>
       <Route path="/marketing-influencers">{() => <ModulePage component={MarketingInfluencersPage} module="marketing_influencers" />}</Route>
       <Route path="/influencer-contracts">{() => <ModulePage component={InfluencerContractsPage} module="marketing_influencers" />}</Route>
-      <Route path="/loyalty-campaigns">{() => <ModulePage component={LoyaltyCampaignsPage} module="marketing" />}</Route>
+      <Route path="/loyalty-campaigns">{() => <AdminPage component={LoyaltyCampaignsPage} module="marketing" />}</Route>
       <Route path="/marketing-calendar">{() => <ModulePage component={MarketingCalendarPage} module="marketing" />}</Route>
       <Route path="/marketing-tasks">{() => <ModulePage component={MarketingTasksPage} module="marketing_tasks" />}</Route>
       <Route path="/marketing-reports">{() => <ModulePage component={MarketingReportsPage} module="marketing" />}</Route>
