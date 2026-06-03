@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Gift, Loader2, Phone, User, MapPin, ShieldCheck, ArrowRight } from "lucide-react";
+import { Gift, Loader2, Phone, User, MapPin } from "lucide-react";
 
 interface CampaignInfo {
   name: string;
@@ -31,34 +31,6 @@ export default function CampaignJoinPage() {
   const [city, setCity] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-
-  // OTP step state
-  const [step, setStep] = useState<"form" | "otp">("form");
-  const [otp, setOtp] = useState("");
-  const [otpError, setOtpError] = useState<string | null>(null);
-  const [verifying, setVerifying] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
-  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const startCooldown = (seconds: number) => {
-    setResendCooldown(seconds);
-    if (cooldownRef.current) clearInterval(cooldownRef.current);
-    cooldownRef.current = setInterval(() => {
-      setResendCooldown((s) => {
-        if (s <= 1) {
-          if (cooldownRef.current) clearInterval(cooldownRef.current);
-          return 0;
-        }
-        return s - 1;
-      });
-    }, 1000);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (cooldownRef.current) clearInterval(cooldownRef.current);
-    };
-  }, []);
 
   useEffect(() => {
     if (!slug) return;
@@ -107,7 +79,7 @@ export default function CampaignJoinPage() {
     }
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/public/loyalty/${slug}/request-otp`, {
+      const res = await fetch(`/api/public/loyalty/${slug}/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -118,77 +90,16 @@ export default function CampaignJoinPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "تعذر إرسال رمز التحقق");
-      setStep("otp");
-      setOtp("");
-      setOtpError(null);
-      startCooldown(60);
-    } catch (err: any) {
-      setFormError(err.message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleVerify = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setOtpError(null);
-    if (!/^\d{6}$/.test(otp.trim())) {
-      setOtpError("الرجاء إدخال رمز التحقق المكون من 6 أرقام");
-      return;
-    }
-    setVerifying(true);
-    try {
-      const res = await fetch(`/api/public/loyalty/${slug}/verify-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phone.trim(), code: otp.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "رمز التحقق غير صحيح");
+      if (!res.ok) throw new Error(data.error || "تعذر إصدار البطاقة");
       const dest = data.alreadyRegistered
         ? `/card/${data.code}?existing=1`
         : `/card/${data.code}?welcome=1`;
       navigate(dest);
     } catch (err: any) {
-      setOtpError(err.message);
-      setVerifying(false);
+      setFormError(err.message);
+      setSubmitting(false);
     }
   };
-
-  const handleResend = async () => {
-    if (resendCooldown > 0) return;
-    setOtpError(null);
-    setVerifying(true);
-    try {
-      const res = await fetch(`/api/public/loyalty/${slug}/request-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          phone: phone.trim(),
-          gender,
-          city: city.trim(),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        if (data.retryAfter) startCooldown(data.retryAfter);
-        throw new Error(data.error || "تعذر إعادة إرسال الرمز");
-      }
-      startCooldown(60);
-    } catch (err: any) {
-      setOtpError(err.message);
-    } finally {
-      setVerifying(false);
-    }
-  };
-
-  const maskedPhone = (() => {
-    const digits = phone.replace(/\D/g, "");
-    if (digits.length < 4) return phone;
-    return `${"*".repeat(Math.max(0, digits.length - 3))}${digits.slice(-3)}`;
-  })();
 
   if (loading) {
     return (
@@ -250,7 +161,6 @@ export default function CampaignJoinPage() {
               </p>
             </div>
 
-            {step === "form" ? (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <Label htmlFor="join-name" className="text-slate-200 mb-1.5 block">الاسم</Label>
@@ -342,70 +252,6 @@ export default function CampaignJoinPage() {
                 احصل على بطاقتك
               </Button>
             </form>
-            ) : (
-            <form onSubmit={handleVerify} className="space-y-4">
-              <div className="text-center mb-1">
-                <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-orange-500/15 border border-orange-500/30 mb-3">
-                  <ShieldCheck className="h-7 w-7 text-orange-400" />
-                </div>
-                <h2 className="text-lg font-bold text-white">تأكيد رقم الجوال</h2>
-                <p className="text-slate-300 text-sm mt-1.5">
-                  أرسلنا رمز تحقق عبر رسالة نصية إلى الرقم
-                  <span className="block font-medium text-orange-300 mt-1" dir="ltr" data-testid="text-masked-phone">{maskedPhone}</span>
-                </p>
-              </div>
-
-              <div>
-                <Label htmlFor="join-otp" className="text-slate-200 mb-1.5 block">رمز التحقق</Label>
-                <Input
-                  id="join-otp"
-                  data-testid="input-otp"
-                  type="tel"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder="------"
-                  dir="ltr"
-                  className="bg-slate-900/50 border-slate-600 text-white text-center text-2xl tracking-[0.5em] placeholder:text-slate-600"
-                />
-              </div>
-
-              {otpError && (
-                <p className="text-red-400 text-sm text-center" data-testid="text-otp-error">{otpError}</p>
-              )}
-
-              <Button
-                type="submit"
-                disabled={verifying}
-                data-testid="button-verify-otp"
-                className="w-full gap-2 bg-orange-600 hover:bg-orange-700 text-white py-6 text-lg rounded-xl"
-              >
-                {verifying ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShieldCheck className="h-5 w-5" />}
-                تأكيد وعرض البطاقة
-              </Button>
-
-              <div className="flex items-center justify-between text-sm">
-                <button
-                  type="button"
-                  data-testid="button-edit-phone"
-                  onClick={() => { setStep("form"); setOtpError(null); }}
-                  className="text-slate-400 hover:text-slate-200 inline-flex items-center gap-1"
-                >
-                  <ArrowRight className="h-4 w-4" /> تعديل البيانات
-                </button>
-                <button
-                  type="button"
-                  data-testid="button-resend-otp"
-                  onClick={handleResend}
-                  disabled={resendCooldown > 0 || verifying}
-                  className="text-orange-400 hover:text-orange-300 disabled:text-slate-500 disabled:cursor-not-allowed"
-                >
-                  {resendCooldown > 0 ? `إعادة الإرسال خلال ${resendCooldown}ث` : "إعادة إرسال الرمز"}
-                </button>
-              </div>
-            </form>
-            )}
 
             {campaign.terms && (
               <p className="mt-4 text-center text-xs text-slate-400 bg-slate-700/30 rounded-lg p-3 border border-slate-700">

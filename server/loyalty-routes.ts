@@ -7,13 +7,11 @@ import {
   loyaltyCustomers,
   loyaltyMembers,
   loyaltyRedemptions,
-  loyaltyOtpCodes,
   insertLoyaltyCampaignSchema,
 } from "@shared/schema";
 import { z } from "zod";
-import { randomInt, createHash, timingSafeEqual } from "crypto";
+import { randomInt } from "crypto";
 import { isAppleWalletConfigured, isGoogleWalletConfigured } from "./wallet-service";
-import { sendSMS, isTwilioConfigured } from "./twilio-service";
 
 const LOYALTY_MODULE = "marketing";
 
@@ -93,33 +91,8 @@ function campaignAvailabilityError(campaign: typeof loyaltyCampaigns.$inferSelec
   return null;
 }
 
-// ---- OTP (phone-ownership) verification settings ----
-const OTP_TTL_MS = 10 * 60 * 1000; // codes expire after 10 minutes
-const OTP_RESEND_COOLDOWN_MS = 60 * 1000; // min 60s between SMS sends
-const OTP_MAX_SENDS = 5; // max SMS sends within a single OTP lifetime
-const OTP_MAX_ATTEMPTS = 5; // max wrong-code attempts before the code is burned
-
-// Generate a 6-digit numeric one-time code (cryptographically random).
-function generateOtp(): string {
-  return String(randomInt(0, 1_000_000)).padStart(6, "0");
-}
-
-// Hash an OTP bound to the phone so the same code for different phones differs.
-// Codes are short (6 digits) — we never store them in plaintext.
-function hashOtp(code: string, phone: string): string {
-  return createHash("sha256").update(`${code}:${phone}`).digest("hex");
-}
-
-function otpMatches(code: string, phone: string, storedHash: string): boolean {
-  const candidate = hashOtp(code, phone);
-  const a = Buffer.from(candidate, "hex");
-  const b = Buffer.from(storedHash, "hex");
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
-
 // Atomically upsert the customer + issue (or reuse) the member code for a
-// campaign. Shared by the OTP verification step. Returns the member + customer.
+// campaign. Shared by the public registration route. Returns the member + customer.
 async function issueCardForVerifiedPhone(params: {
   campaign: typeof loyaltyCampaigns.$inferSelect;
   storedPhone: string;
@@ -496,9 +469,8 @@ export function registerLoyaltyRoutes(app: Express) {
     }
   });
 
-  // Public registration data captured at the OTP-request step. We keep the
-  // pending name/gender/city server-side so the verify step never has to trust
-  // (and an attacker can never tamper with) the registration payload.
+  // Public registration — issues (or returns) the member card immediately.
+  // Phone messaging/verification is intentionally NOT used here (postponed).
   const registerSchema = z.object({
     name: z.string().trim().min(2, "الاسم قصير جداً").max(100),
     phone: z.string().trim().min(7).max(20),
@@ -508,10 +480,7 @@ export function registerLoyaltyRoutes(app: Express) {
     city: z.string().trim().min(2, "الرجاء إدخال اسم المدينة").max(50),
   });
 
-  // Step 1 — request an SMS OTP. Sends a one-time code to the phone and stores
-  // its hash + the pending registration data. The card code is NEVER returned
-  // here, so knowing a phone number alone never reveals an existing card.
-  app.post("/api/public/loyalty/:slug/request-otp", async (req, res) => {
+  app.post("/api/public/loyalty/:slug/register", async (req, res) => {
     try {
       const clientIp = req.ip || req.socket.remoteAddress || "unknown";
       if (!checkRateLimit(clientIp)) {
@@ -542,182 +511,18 @@ export function registerLoyaltyRoutes(app: Express) {
       const availErr = campaignAvailabilityError(campaign);
       if (availErr) return res.status(410).json({ error: availErr });
 
-      if (!isTwilioConfigured()) {
-        return res.status(503).json({ error: "خدمة الرسائل غير متاحة حالياً، حاول لاحقاً" });
-      }
-
-      // Per-phone rate limiting via the existing pending record (if any).
-      const now = Date.now();
-      const [existing] = await db
-        .select()
-        .from(loyaltyOtpCodes)
-        .where(
-          and(
-            eq(loyaltyOtpCodes.phone, storedPhone),
-            eq(loyaltyOtpCodes.campaignId, campaign.id)
-          )
-        );
-
-      const existingActive =
-        existing && new Date(existing.expiresAt).getTime() > now ? existing : null;
-      if (existingActive) {
-        const sinceLastSent = now - new Date(existingActive.lastSentAt).getTime();
-        if (sinceLastSent < OTP_RESEND_COOLDOWN_MS) {
-          const retryAfter = Math.ceil((OTP_RESEND_COOLDOWN_MS - sinceLastSent) / 1000);
-          return res
-            .status(429)
-            .json({ error: `الرجاء الانتظار ${retryAfter} ثانية قبل طلب رمز جديد`, retryAfter });
-        }
-        if (existingActive.sendCount >= OTP_MAX_SENDS) {
-          return res.status(429).json({
-            error: "تجاوزت الحد المسموح لطلب الرموز، حاول بعد قليل",
-          });
-        }
-      }
-
-      const code = generateOtp();
-      const codeHash = hashOtp(code, storedPhone);
-      const expiresAt = new Date(now + OTP_TTL_MS);
-      const payload = {
-        name: parsed.data.name,
-        gender: parsed.data.gender,
-        city: parsed.data.city,
-      };
-
-      // Send the SMS first — only persist if delivery to Twilio succeeded so we
-      // never leave a code the customer cannot receive.
-      const message = `رمز التحقق الخاص بك في بطر هو: ${code}\nصالح لمدة 10 دقائق. لا تشاركه مع أحد.`;
-      const smsResult = await sendSMS(storedPhone, message);
-      if (!smsResult.success) {
-        return res.status(503).json({ error: "تعذر إرسال رمز التحقق، تأكد من رقم جوالك وحاول مرة أخرى" });
-      }
-
-      const nextSendCount = existingActive ? existingActive.sendCount + 1 : 1;
-      await db
-        .insert(loyaltyOtpCodes)
-        .values({
-          phone: storedPhone,
-          campaignId: campaign.id,
-          codeHash,
-          payload,
-          attempts: 0,
-          sendCount: nextSendCount,
-          expiresAt,
-          lastSentAt: new Date(now),
-        })
-        .onConflictDoUpdate({
-          target: [loyaltyOtpCodes.phone, loyaltyOtpCodes.campaignId],
-          set: {
-            codeHash,
-            payload,
-            attempts: 0,
-            sendCount: nextSendCount,
-            expiresAt,
-            lastSentAt: new Date(now),
-          },
-        });
-
-      // Reveal only that an OTP was sent — never whether the phone is registered.
-      res.json({ otpRequired: true, expiresInSeconds: Math.floor(OTP_TTL_MS / 1000) });
-    } catch (error) {
-      console.error("Error requesting loyalty OTP:", error);
-      res.status(500).json({ error: "فشل في إرسال رمز التحقق، حاول مرة أخرى" });
-    }
-  });
-
-  // Step 2 — verify the OTP and only then issue/return the card. Covers both
-  // new registrations and "already registered" lookups (both go through OTP).
-  const verifyOtpSchema = z.object({
-    phone: z.string().trim().min(7).max(20),
-    code: z.string().trim().regex(/^\d{6}$/, "رمز التحقق يجب أن يكون 6 أرقام"),
-  });
-
-  app.post("/api/public/loyalty/:slug/verify-otp", async (req, res) => {
-    try {
-      const clientIp = req.ip || req.socket.remoteAddress || "unknown";
-      if (!checkRateLimit(clientIp)) {
-        return res.status(429).json({ error: "عدد الطلبات كثير جداً، حاول لاحقاً" });
-      }
-
-      const slug = req.params.slug;
-      if (!slug || !/^[a-z0-9-]{2,60}$/.test(slug)) {
-        return res.status(400).json({ error: "رابط غير صالح" });
-      }
-
-      const parsed = verifyOtpSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ error: parsed.error.errors[0]?.message || "بيانات غير صالحة" });
-      }
-
-      const normalizedPhone = normalizePhone(parsed.data.phone);
-      if (!isValidSaudiPhone(normalizedPhone)) {
-        return res.status(400).json({ error: "رقم الجوال غير صحيح" });
-      }
-      const storedPhone = `0${normalizedPhone}`;
-
-      const [campaign] = await db
-        .select()
-        .from(loyaltyCampaigns)
-        .where(eq(loyaltyCampaigns.slug, slug));
-      if (!campaign) return res.status(404).json({ error: "الحملة غير موجودة" });
-      const availErr = campaignAvailabilityError(campaign);
-      if (availErr) return res.status(410).json({ error: availErr });
-
-      const [otp] = await db
-        .select()
-        .from(loyaltyOtpCodes)
-        .where(
-          and(
-            eq(loyaltyOtpCodes.phone, storedPhone),
-            eq(loyaltyOtpCodes.campaignId, campaign.id)
-          )
-        );
-
-      if (!otp) {
-        return res.status(400).json({ error: "لم يتم طلب رمز تحقق، ابدأ التسجيل من جديد" });
-      }
-
-      const now = Date.now();
-      if (new Date(otp.expiresAt).getTime() <= now) {
-        await db.delete(loyaltyOtpCodes).where(eq(loyaltyOtpCodes.id, otp.id));
-        return res.status(400).json({ error: "انتهت صلاحية رمز التحقق، اطلب رمزاً جديداً" });
-      }
-
-      if (otp.attempts >= OTP_MAX_ATTEMPTS) {
-        await db.delete(loyaltyOtpCodes).where(eq(loyaltyOtpCodes.id, otp.id));
-        return res.status(429).json({ error: "تجاوزت عدد المحاولات المسموح بها، اطلب رمزاً جديداً" });
-      }
-
-      if (!otpMatches(parsed.data.code, storedPhone, otp.codeHash)) {
-        await db
-          .update(loyaltyOtpCodes)
-          .set({ attempts: otp.attempts + 1 })
-          .where(eq(loyaltyOtpCodes.id, otp.id));
-        const remaining = Math.max(0, OTP_MAX_ATTEMPTS - (otp.attempts + 1));
-        return res.status(400).json({
-          error: remaining > 0
-            ? `رمز التحقق غير صحيح، المحاولات المتبقية: ${remaining}`
-            : "رمز التحقق غير صحيح، اطلب رمزاً جديداً",
-        });
-      }
-
-      // Verified — issue/return the card from the server-stored payload.
-      const pending = (otp.payload as { name?: string; gender?: string; city?: string }) || {};
       const issued = await issueCardForVerifiedPhone({
         campaign,
         storedPhone,
-        name: pending.name || "",
-        gender: pending.gender || "",
-        city: pending.city || "",
+        name: parsed.data.name,
+        gender: parsed.data.gender,
+        city: parsed.data.city,
       });
-
-      // One-time use — burn the OTP record once a card has been issued/returned.
-      await db.delete(loyaltyOtpCodes).where(eq(loyaltyOtpCodes.id, otp.id));
 
       res.json(issued);
     } catch (error) {
-      console.error("Error verifying loyalty OTP:", error);
-      res.status(500).json({ error: "فشل في التحقق، حاول مرة أخرى" });
+      console.error("Error registering loyalty member:", error);
+      res.status(500).json({ error: "فشل في التسجيل، حاول مرة أخرى" });
     }
   });
 
