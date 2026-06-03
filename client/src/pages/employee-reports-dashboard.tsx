@@ -338,10 +338,12 @@ export default function EmployeeReportsDashboardPage() {
   const [, navigate] = useLocation();
   const printRef = useRef<HTMLDivElement>(null);
   const { canView: canViewModule, canEdit: canEditModule } = usePermissions();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const { toast } = useToast();
-  const canCloseSalary = canViewModule("salary_closing");
-  const canApproveSalaryClosing = canEditModule("salary_closing");
+  // إغلاق الرواتب الشهري متاح فقط لمدير الموارد البشرية والمدير العام (الأدمن)
+  const isHrManager = user?.role === "hr_manager";
+  const canCloseSalary = isAdmin || isHrManager;
+  const canApproveSalaryClosing = isAdmin || isHrManager;
   
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));

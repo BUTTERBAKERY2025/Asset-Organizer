@@ -63,6 +63,7 @@ export const HR_MANAGER_MODULES: ReadonlySet<string> = new Set([
   "hr_warnings",
   "hr_advances",
   "hr_eos",
+  "salary_closing",
 ]);
 
 function setCachedAuth(userId: string, user: any, branchAccess: any[], permissions: any[]) {
