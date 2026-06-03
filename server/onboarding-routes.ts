@@ -234,6 +234,56 @@ export function registerOnboardingRoutes(app: Express) {
     }
   );
 
+  // ===== Full consolidated employee file (application → offer → onboarding → employee) =====
+  app.get(
+    "/api/hr/onboarding/:id/full-file",
+    isAuthenticated,
+    requirePermission(PERMISSION_MODULE, "view"),
+    async (req, res) => {
+      try {
+        const id = Number(req.params.id);
+        const [n] = await db.select().from(onboardingNotifications).where(eq(onboardingNotifications.id, id)).limit(1);
+        if (!n) return res.status(404).json({ error: "غير موجود" });
+        if (!checkBranchAccess(req, n.branchId)) return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
+
+        const [offer] = await db.select().from(jobOffers).where(eq(jobOffers.id, n.jobOfferId)).limit(1);
+
+        // طلب التوظيف المرتبط بهذا العرض (إن وُجد)
+        let application: any = null;
+        if (offer) {
+          const [app] = await db
+            .select()
+            .from(employmentApplications)
+            .where(eq(employmentApplications.convertedToOfferId, offer.id))
+            .limit(1);
+          application = app || null;
+        }
+
+        // سجل الموظف النهائي في موظفي الفرع (إن تم التحويل)
+        let employee: any = null;
+        if (n.convertedBranchEmployeeId) {
+          const [emp] = await db
+            .select()
+            .from(branchEmployees)
+            .where(eq(branchEmployees.id, n.convertedBranchEmployeeId))
+            .limit(1);
+          employee = emp || null;
+        }
+
+        // حماية دفاعية: لا نُرجع سجلات مرتبطة تتبع فرعاً مختلفاً عن فرع الإشعار (منع تسريب بيانات بين الفروع)
+        const safeOffer = offer && offer.branchId && offer.branchId !== n.branchId ? null : offer || null;
+        const safeEmployee = employee && employee.branchId && employee.branchId !== n.branchId ? null : employee;
+        const safeApplication =
+          application && application.targetBranchId && application.targetBranchId !== n.branchId ? null : application;
+
+        res.json({ application: safeApplication, offer: safeOffer, notification: n, employee: safeEmployee });
+      } catch (e: any) {
+        console.error("[onboarding] full-file error:", e);
+        res.status(500).json({ error: e.message });
+      }
+    }
+  );
+
   // ===== Create notification from accepted offer =====
   app.post(
     "/api/hr/onboarding",

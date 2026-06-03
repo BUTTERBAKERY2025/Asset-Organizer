@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useReactToPrint } from "react-to-print";
 import { CompanyHeader } from "@/components/company-header";
+import { EmployeeFileDialog } from "@/components/employee-full-file";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Layout } from "@/components/layout";
@@ -122,6 +123,7 @@ export default function OnboardingPage() {
   const [viewRow, setViewRow] = useState<Row | null>(null);
   const [convertRow, setConvertRow] = useState<Row | null>(null);
   const [editRow, setEditRow] = useState<Row | null>(null);
+  const [fileRow, setFileRow] = useState<Row | null>(null);
   const [shareLink, setShareLink] = useState<{ link: string; phone?: string } | null>(null);
 
   const { data: rows = [], isLoading } = useQuery<Row[]>({ queryKey: ["/api/hr/onboarding"] });
@@ -129,7 +131,8 @@ export default function OnboardingPage() {
 
   const filtered = useMemo(() => {
     let r = rows;
-    if (tab !== "all") r = r.filter((x) => rowStatus(x) === tab);
+    if (tab === "employee-file") r = r.filter((x) => rowStatus(x) === "converted");
+    else if (tab !== "all") r = r.filter((x) => rowStatus(x) === tab);
     if (search.trim()) {
       const s = search.trim().toLowerCase();
       r = r.filter(
@@ -246,6 +249,7 @@ export default function OnboardingPage() {
                   <TabsTrigger value="signed">وقّع</TabsTrigger>
                   <TabsTrigger value="confirmed">مؤكد</TabsTrigger>
                   <TabsTrigger value="converted">محوّل</TabsTrigger>
+                  <TabsTrigger value="employee-file" data-testid="tab-employee-file">طباعة ملف موظف</TabsTrigger>
                 </TabsList>
               </Tabs>
               <Input
@@ -374,6 +378,17 @@ export default function OnboardingPage() {
                                 <Users className="w-3.5 h-3.5" /> تحويل لموظف
                               </Button>
                             )}
+                            {n && n.status === "converted" && (
+                              <Button
+                                size="sm"
+                                className="bg-[#1a3a2f] hover:bg-[#2d5a47] gap-1 text-white"
+                                onClick={() => setFileRow(r)}
+                                data-testid={`btn-employee-file-${n.id}`}
+                                title="تحميل الملف الكامل للموظف"
+                              >
+                                <Download className="w-3.5 h-3.5" /> الملف الكامل
+                              </Button>
+                            )}
                             {n && !["converted", "cancelled"].includes(n.status) && (
                               <Button
                                 size="sm"
@@ -410,6 +425,13 @@ export default function OnboardingPage() {
 
         {/* Edit Notification Dialog */}
         <EditDialog row={editRow} onClose={() => setEditRow(null)} onSuccess={invalidate} />
+
+        {/* Full Employee File Dialog */}
+        <EmployeeFileDialog
+          notificationId={fileRow?.notification?.id ?? null}
+          candidateName={fileRow?.offer?.candidateName || ""}
+          onClose={() => setFileRow(null)}
+        />
 
         {/* Share Link Dialog */}
         <Dialog open={!!shareLink} onOpenChange={(o) => !o && setShareLink(null)}>
