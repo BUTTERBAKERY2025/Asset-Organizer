@@ -11,6 +11,7 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import { randomInt } from "crypto";
+import { isAppleWalletConfigured, isGoogleWalletConfigured } from "./wallet-service";
 
 const LOYALTY_MODULE = "marketing";
 
@@ -523,7 +524,12 @@ export function registerLoyaltyRoutes(app: Express) {
       if (!row) return res.status(404).json({ error: "البطاقة غير موجودة" });
 
       const remainingUses = Math.max(0, row.maxUses - row.usedCount);
-      res.json({ ...row, remainingUses });
+      res.json({
+        ...row,
+        remainingUses,
+        appleWalletAvailable: isAppleWalletConfigured(),
+        googleWalletAvailable: isGoogleWalletConfigured(),
+      });
     } catch (error) {
       console.error("Error fetching loyalty card:", error);
       res.status(500).json({ error: "فشل في جلب البطاقة" });

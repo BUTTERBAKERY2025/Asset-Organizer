@@ -127,6 +127,7 @@ import { registerMediaTeamRoutes } from "./media-team-routes";
 import { registerEmploymentApplicationRoutes } from "./employment-applications-routes";
 import { registerSocialResponsibilityRoutes } from "./social-responsibility-routes";
 import { registerLoyaltyRoutes, redeemLoyaltyInTx } from "./loyalty-routes";
+import { registerWalletRoutes } from "./wallet-routes";
 import { registerSecurityRoutes } from "./security-routes";
 import { apiCacheMiddleware, invalidateCacheForPath, invalidateCache, jsonSlimMiddleware } from "./api-cache";
 import { registerBatchRoute } from "./batch-api";
@@ -417,6 +418,7 @@ export async function registerRoutes(
   registerEmploymentApplicationRoutes(app);
   registerSocialResponsibilityRoutes(app);
   registerLoyaltyRoutes(app);
+  registerWalletRoutes(app);
   registerSecurityRoutes(app);
 
   // Cached data fetchers

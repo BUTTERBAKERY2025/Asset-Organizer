@@ -20,6 +20,8 @@ interface CardData {
   terms?: string;
   validTo?: string;
   campaignStatus: string;
+  appleWalletAvailable?: boolean;
+  googleWalletAvailable?: boolean;
 }
 
 export default function LoyaltyCardPage() {
@@ -55,8 +57,28 @@ export default function LoyaltyCardPage() {
       : `${Number(card.discountValue).toLocaleString()} ر.س`
     : "";
 
-  const handleAddToWallet = () => {
-    alert("ميزة إضافة المحفظة (آبل/جوجل) قيد التطوير");
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const handleAddToAppleWallet = () => {
+    if (!code) return;
+    window.location.href = `/api/public/loyalty/card/${code}/apple.pkpass`;
+  };
+
+  const handleAddToGoogleWallet = async () => {
+    if (!code || googleLoading) return;
+    setGoogleLoading(true);
+    try {
+      const res = await fetch(`/api/public/loyalty/card/${code}/google`);
+      const data = await res.json();
+      if (!res.ok || !data.saveUrl) {
+        throw new Error(data.error || "تعذّر إنشاء رابط جوجل");
+      }
+      window.open(data.saveUrl, "_blank");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "تعذّر إنشاء رابط جوجل");
+    } finally {
+      setGoogleLoading(false);
+    }
   };
 
   const shareViaWhatsApp = () => {
@@ -217,14 +239,32 @@ export default function LoyaltyCardPage() {
             مشاركة عبر واتساب
           </Button>
 
-          <Button
-            className="w-full gap-2 bg-slate-700 hover:bg-slate-600 text-white py-5 rounded-xl border border-slate-600"
-            onClick={handleAddToWallet}
-            data-testid="button-add-wallet"
-          >
-            <Wallet className="h-5 w-5" />
-            إضافة إلى المحفظة
-          </Button>
+          {card.appleWalletAvailable && (
+            <Button
+              className="w-full gap-2 bg-black hover:bg-slate-900 text-white py-5 rounded-xl border border-slate-600"
+              onClick={handleAddToAppleWallet}
+              data-testid="button-add-apple-wallet"
+            >
+              <Wallet className="h-5 w-5" />
+              إضافة إلى محفظة آبل
+            </Button>
+          )}
+
+          {card.googleWalletAvailable && (
+            <Button
+              className="w-full gap-2 bg-slate-700 hover:bg-slate-600 text-white py-5 rounded-xl border border-slate-600"
+              onClick={handleAddToGoogleWallet}
+              disabled={googleLoading}
+              data-testid="button-add-google-wallet"
+            >
+              {googleLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Wallet className="h-5 w-5" />
+              )}
+              حفظ في محفظة جوجل
+            </Button>
+          )}
 
           <Button
             variant="outline"
