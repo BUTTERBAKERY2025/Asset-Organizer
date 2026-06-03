@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Gift, Loader2, Phone, User } from "lucide-react";
+import { Gift, Loader2, Phone, User, MapPin } from "lucide-react";
 
 interface CampaignInfo {
   name: string;
@@ -27,6 +27,8 @@ export default function CampaignJoinPage() {
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [gender, setGender] = useState<"male" | "female" | "">("");
+  const [city, setCity] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -67,16 +69,32 @@ export default function CampaignJoinPage() {
       setFormError("الرجاء إدخال رقم جوال صحيح");
       return;
     }
+    if (gender !== "male" && gender !== "female") {
+      setFormError("الرجاء اختيار الجنس (ذكر / أنثى)");
+      return;
+    }
+    if (city.trim().length < 2) {
+      setFormError("الرجاء إدخال اسم المدينة");
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await fetch(`/api/public/loyalty/${slug}/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), phone: phone.trim() }),
+        body: JSON.stringify({
+          name: name.trim(),
+          phone: phone.trim(),
+          gender,
+          city: city.trim(),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "فشل في التسجيل");
-      navigate(`/card/${data.code}`);
+      const dest = data.alreadyRegistered
+        ? `/card/${data.code}?existing=1`
+        : `/card/${data.code}?welcome=1`;
+      navigate(dest);
     } catch (err: any) {
       setFormError(err.message);
       setSubmitting(false);
@@ -170,6 +188,51 @@ export default function CampaignJoinPage() {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="05XXXXXXXX"
+                    className="pr-9 bg-slate-900/50 border-slate-600 text-white placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-slate-200 mb-1.5 block">الجنس</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    data-testid="button-gender-male"
+                    onClick={() => setGender("male")}
+                    className={`py-3 rounded-xl border text-center font-medium transition ${
+                      gender === "male"
+                        ? "bg-orange-600 border-orange-500 text-white shadow-lg shadow-orange-600/20"
+                        : "bg-slate-900/50 border-slate-600 text-slate-300 hover:border-slate-500"
+                    }`}
+                  >
+                    ذكر
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="button-gender-female"
+                    onClick={() => setGender("female")}
+                    className={`py-3 rounded-xl border text-center font-medium transition ${
+                      gender === "female"
+                        ? "bg-orange-600 border-orange-500 text-white shadow-lg shadow-orange-600/20"
+                        : "bg-slate-900/50 border-slate-600 text-slate-300 hover:border-slate-500"
+                    }`}
+                  >
+                    أنثى
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="join-city" className="text-slate-200 mb-1.5 block">المدينة</Label>
+                <div className="relative">
+                  <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input
+                    id="join-city"
+                    data-testid="input-city"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="اكتب اسم مدينتك"
                     className="pr-9 bg-slate-900/50 border-slate-600 text-white placeholder:text-slate-500"
                   />
                 </div>

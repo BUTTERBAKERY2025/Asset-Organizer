@@ -53,12 +53,22 @@ function isValidSaudiPhone(normalized: string): boolean {
   return /^5\d{8}$/.test(normalized);
 }
 
-// Generate a unique member code: PREFIX-XXXXXX (digits only after prefix)
+// Unambiguous alphabet (no 0/O/1/I/L) for a hard-to-guess, easy-to-read code body.
+const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+function randomCodeBody(len: number): string {
+  let body = "";
+  for (let i = 0; i < len; i++) {
+    body += CODE_ALPHABET[randomInt(0, CODE_ALPHABET.length)];
+  }
+  return body;
+}
+
+// Generate a unique member code: PREFIX-XXXXXXXX (8 random unambiguous chars).
+// 31^8 ≈ 8.5e11 combinations → effectively unguessable even with rate limiting.
 async function generateUniqueCode(prefix: string): Promise<string> {
   const clean = (prefix || "BB").replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 6) || "BB";
   for (let attempt = 0; attempt < 12; attempt++) {
-    const num = String(randomInt(0, 1_000_000)).padStart(6, "0");
-    const code = `${clean}-${num}`;
+    const code = `${clean}-${randomCodeBody(8)}`;
     const [existing] = await db
       .select({ id: loyaltyMembers.id })
       .from(loyaltyMembers)
@@ -377,6 +387,10 @@ export function registerLoyaltyRoutes(app: Express) {
   const registerSchema = z.object({
     name: z.string().trim().min(2, "الاسم قصير جداً").max(100),
     phone: z.string().trim().min(7).max(20),
+    gender: z.enum(["male", "female"], {
+      errorMap: () => ({ message: "الرجاء اختيار الجنس (ذكر / أنثى)" }),
+    }),
+    city: z.string().trim().min(2, "الرجاء إدخال اسم المدينة").max(50),
   });
 
   app.post("/api/public/loyalty/:slug/register", async (req, res) => {
@@ -414,7 +428,13 @@ export function registerLoyaltyRoutes(app: Express) {
       const candidateCode = await generateUniqueCode(campaign.codePrefix || "BB");
 
       const result = await db.transaction(async (tx) => {
-        // Upsert customer by phone (central CRM)
+        // Upsert customer by phone (central CRM). Phone is UNIQUE → one
+        // customer record per number; returning customers refresh their info.
+        const customerInfo = {
+          name: parsed.data.name,
+          gender: parsed.data.gender,
+          city: parsed.data.city,
+        };
         let [customer] = await tx
           .select()
           .from(loyaltyCustomers)
@@ -422,11 +442,17 @@ export function registerLoyaltyRoutes(app: Express) {
         if (!customer) {
           [customer] = await tx
             .insert(loyaltyCustomers)
-            .values({ phone: storedPhone, name: parsed.data.name })
+            .values({ phone: storedPhone, ...customerInfo })
             .onConflictDoUpdate({
               target: loyaltyCustomers.phone,
-              set: { name: parsed.data.name },
+              set: customerInfo,
             })
+            .returning();
+        } else {
+          [customer] = await tx
+            .update(loyaltyCustomers)
+            .set(customerInfo)
+            .where(eq(loyaltyCustomers.id, customer.id))
             .returning();
         }
 

@@ -9992,6 +9992,8 @@ export const loyaltyCustomers = pgTable("loyalty_customers", {
   id: serial("id").primaryKey(),
   phone: text("phone").notNull().unique(),
   name: text("name").notNull(),
+  gender: text("gender"), // "male" | "female" — collected at registration
+  city: text("city"), // free-text city name
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_loyalty_customer_phone").on(table.phone),
