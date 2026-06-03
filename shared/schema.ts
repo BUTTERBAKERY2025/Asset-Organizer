@@ -10056,6 +10056,26 @@ export const insertLoyaltyRedemptionSchema = createInsertSchema(loyaltyRedemptio
 export type LoyaltyRedemption = typeof loyaltyRedemptions.$inferSelect;
 export type InsertLoyaltyRedemption = z.infer<typeof insertLoyaltyRedemptionSchema>;
 
+// رموز التحقق (OTP) لإثبات ملكية رقم الجوال قبل إصدار/إظهار بطاقة الولاء.
+// One pending OTP per (phone, campaign). The 6-digit code is stored hashed only.
+export const loyaltyOtpCodes = pgTable("loyalty_otp_codes", {
+  id: serial("id").primaryKey(),
+  phone: text("phone").notNull(), // canonical stored phone, e.g. 05XXXXXXXX
+  campaignId: integer("campaign_id").notNull().references(() => loyaltyCampaigns.id, { onDelete: "cascade" }),
+  codeHash: text("code_hash").notNull(), // sha256(code:phone) — never store the code itself
+  payload: jsonb("payload"), // pending registration data { name, gender, city } collected at request time
+  attempts: integer("attempts").default(0).notNull(), // wrong-code attempts on the current code
+  sendCount: integer("send_count").default(1).notNull(), // SMS sends within the current OTP lifetime
+  expiresAt: timestamp("expires_at").notNull(),
+  lastSentAt: timestamp("last_sent_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_loyalty_otp_phone_campaign").on(table.phone, table.campaignId),
+  index("idx_loyalty_otp_expires").on(table.expiresAt),
+]);
+
+export type LoyaltyOtpCode = typeof loyaltyOtpCodes.$inferSelect;
+
 export const meetingRsvps = pgTable("meeting_rsvps", {
   id: serial("id").primaryKey(),
   meetingId: integer("meeting_id").notNull().references(() => governanceMeetings.id, { onDelete: "cascade" }),

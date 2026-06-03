@@ -356,6 +356,21 @@ export async function runStartupMigrations() {
         uploaded_at timestamp NOT NULL DEFAULT now()
       )`,
       `CREATE INDEX IF NOT EXISTS idx_project_daily_log_photos_log ON project_daily_log_photos(daily_log_id)`,
+      // Loyalty OTP: prove phone ownership before issuing/returning a card
+      `CREATE TABLE IF NOT EXISTS loyalty_otp_codes (
+        id serial PRIMARY KEY,
+        phone text NOT NULL,
+        campaign_id integer NOT NULL REFERENCES loyalty_campaigns(id) ON DELETE CASCADE,
+        code_hash text NOT NULL,
+        payload jsonb,
+        attempts integer DEFAULT 0 NOT NULL,
+        send_count integer DEFAULT 1 NOT NULL,
+        expires_at timestamp NOT NULL,
+        last_sent_at timestamp DEFAULT now() NOT NULL,
+        created_at timestamp DEFAULT now() NOT NULL
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_loyalty_otp_phone_campaign ON loyalty_otp_codes(phone, campaign_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_loyalty_otp_expires ON loyalty_otp_codes(expires_at)`,
     ];
     for (const mig of migrations) {
       try { await pool.query(mig); } catch (e) { /* index may already exist or table not found */ }
