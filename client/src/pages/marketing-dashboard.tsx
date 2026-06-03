@@ -5,7 +5,7 @@ import { Link } from "wouter";
 import {
   Megaphone, Users, Target, Calendar, FileBarChart, Clock, DollarSign,
   ChevronLeft, CheckCircle2, AlertCircle, BarChart3, Award, FolderOpen, Bell,
-  ArrowUpRight, ArrowDownRight, Percent, Star, UserCheck, Activity, Share2, FileText, Handshake
+  ArrowUpRight, ArrowDownRight, Percent, Star, UserCheck, Activity, Share2, FileText, Handshake, Gift
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/dashboard/page-header";
