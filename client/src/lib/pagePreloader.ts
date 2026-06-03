@@ -83,6 +83,8 @@ const pageImports: Record<string, () => Promise<any>> = {
   "marketing-expenses": () => import("@/pages/marketing-expenses"),
   "loyalty-campaigns": () => import("@/pages/loyalty-campaigns"),
   "loyalty-card": () => import("@/pages/loyalty-card"),
+  "campaign-join": () => import("@/pages/campaign-join"),
+  "terminated-employees": () => import("@/pages/terminated-employees"),
   "marketing-social": () => import("@/pages/marketing-social"),
   "marketing-opening-campaigns": () => import("@/pages/marketing-opening-campaigns"),
   "marketing-media-team": () => import("@/pages/marketing-media-team"),
