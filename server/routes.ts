@@ -37000,13 +37000,23 @@ export async function registerRoutes(
       saleData.cashierId = (req as any).currentUser?.id || req.session?.userId;
 
       const parsedMemberId = loyaltyMemberId != null ? parseInt(String(loyaltyMemberId)) : null;
+      // Authoritative pre-discount gross computed server-side from the persisted
+      // line items (VAT-inclusive line totals), NOT from a client-supplied field.
+      // Inflating item totals would inflate the recorded sale itself, so this is
+      // safe for the minimum-order check inside redeemLoyaltyInTx.
+      const loyaltyGross = items.reduce(
+        (sum: number, it: any) => sum + (Number(it.totalPrice) || 0),
+        0,
+      );
       const afterInsert = parsedMemberId && !isNaN(parsedMemberId)
         ? async (tx: any, newSale: any) => {
             await redeemLoyaltyInTx(tx, {
               memberId: parsedMemberId,
               posSaleId: newSale.id,
               branchId: saleData.branchId,
-              orderAmount: Number(saleData.subtotal) || Number(saleData.totalAmount) || 0,
+              orderAmount:
+                Math.round(loyaltyGross * 100) / 100 ||
+                (Number(saleData.totalAmount) || 0) + (Number(saleData.discountAmount) || 0),
               redeemedBy: saleData.cashierId,
             });
           }

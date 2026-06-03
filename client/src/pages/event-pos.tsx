@@ -327,8 +327,14 @@ export default function EventPosPage() {
       const data = await res.json();
       const member = data.member ?? data;
       setLoyaltyMember(member);
-      setDiscountType(member.discountType === "fixed_amount" ? "fixed" : "percentage");
-      setDiscountValue(String(member.discountValue));
+      if (member.discountType === "gift") {
+        // Gift cards carry no monetary discount; the reward is handled separately
+        setDiscountType(null);
+        setDiscountValue("");
+      } else {
+        setDiscountType(member.discountType === "fixed_amount" ? "fixed" : "percentage");
+        setDiscountValue(String(member.discountValue));
+      }
       toast({ title: "تم تطبيق بطاقة الولاء", description: `${member.customerName} — متبقٍ ${member.remainingUses}` });
     } catch (err: any) {
       setLoyaltyMember(null);

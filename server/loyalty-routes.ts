@@ -110,11 +110,23 @@ export function registerLoyaltyRoutes(app: Express) {
           memberCounts.map((m) => [m.campaignId, { members: m.members, totalUses: m.totalUses }])
         );
 
+        // Total discount actually given per campaign (from redemptions log)
+        const discountSums = await db
+          .select({
+            campaignId: loyaltyRedemptions.campaignId,
+            totalDiscount: sql<number>`COALESCE(SUM(${loyaltyRedemptions.discountAmount}), 0)::float8`,
+          })
+          .from(loyaltyRedemptions)
+          .groupBy(loyaltyRedemptions.campaignId);
+
+        const discountMap = new Map(discountSums.map((d) => [d.campaignId, d.totalDiscount]));
+
         res.json(
           campaigns.map((c) => ({
             ...c,
             memberCount: countMap.get(c.id)?.members ?? 0,
             totalRedemptions: countMap.get(c.id)?.totalUses ?? 0,
+            totalDiscount: discountMap.get(c.id) ?? 0,
           }))
         );
       } catch (error) {
@@ -495,6 +507,7 @@ export function registerLoyaltyRoutes(app: Express) {
           status: loyaltyMembers.status,
           customerName: loyaltyCustomers.name,
           campaignName: loyaltyCampaigns.name,
+          description: loyaltyCampaigns.description,
           discountType: loyaltyCampaigns.discountType,
           discountValue: loyaltyCampaigns.discountValue,
           minimumOrder: loyaltyCampaigns.minimumOrder,
@@ -559,14 +572,13 @@ export function registerLoyaltyRoutes(app: Express) {
           return res.status(400).json({ valid: false, error: "تم استنفاد عدد مرات الاستخدام" });
         }
 
-        // Branch restriction
-        if (
-          campaign.applicableBranches &&
-          campaign.applicableBranches.length > 0 &&
-          branchId &&
-          !campaign.applicableBranches.includes(branchId)
-        ) {
-          return res.status(400).json({ valid: false, error: "البطاقة غير صالحة في هذا الفرع" });
+        // Branch restriction — enforced unconditionally (defense in depth).
+        // Redemption re-checks this server-side, but the preview must not be
+        // bypassable by omitting branchId.
+        if (campaign.applicableBranches && campaign.applicableBranches.length > 0) {
+          if (!branchId || !campaign.applicableBranches.includes(branchId)) {
+            return res.status(400).json({ valid: false, error: "البطاقة غير صالحة في هذا الفرع" });
+          }
         }
 
         const amount = Number(orderAmount) || 0;
@@ -582,6 +594,9 @@ export function registerLoyaltyRoutes(app: Express) {
           if (campaign.maximumDiscount && discountAmount > parseFloat(campaign.maximumDiscount)) {
             discountAmount = parseFloat(campaign.maximumDiscount);
           }
+        } else if (campaign.discountType === "gift") {
+          // Gift campaigns carry no monetary discount; the reward is the gift itself
+          discountAmount = 0;
         } else {
           discountAmount = parseFloat(campaign.discountValue);
         }
@@ -661,6 +676,9 @@ export async function redeemLoyaltyInTx(
     if (campaign.maximumDiscount && discountAmount > parseFloat(campaign.maximumDiscount)) {
       discountAmount = parseFloat(campaign.maximumDiscount);
     }
+  } else if (campaign.discountType === "gift") {
+    // Gift campaigns carry no monetary discount; the reward is the gift itself
+    discountAmount = 0;
   } else {
     discountAmount = parseFloat(campaign.discountValue);
   }

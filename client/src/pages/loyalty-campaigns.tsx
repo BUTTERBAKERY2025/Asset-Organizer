@@ -67,6 +67,12 @@ interface Campaign {
   terms?: string;
   memberCount: number;
   totalRedemptions: number;
+  totalDiscount?: number;
+}
+
+interface Branch {
+  id: string;
+  name: string;
 }
 
 interface Member {
@@ -106,6 +112,7 @@ const emptyForm = {
   validTo: "",
   terms: "",
   status: "active",
+  applicableBranches: [] as string[],
 };
 
 function getSiteOrigin() {
@@ -128,21 +135,36 @@ export default function LoyaltyCampaignsPage() {
     queryKey: ["/api/loyalty/campaigns"],
   });
 
+  const { data: branches = [] } = useQuery<Branch[]>({
+    queryKey: ["/api/branches"],
+  });
+
+  const toggleBranch = (id: string) => {
+    setForm((f) => ({
+      ...f,
+      applicableBranches: f.applicableBranches.includes(id)
+        ? f.applicableBranches.filter((b) => b !== id)
+        : [...f.applicableBranches, id],
+    }));
+  };
+
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const isGift = form.discountType === "gift";
       const payload: any = {
         name: form.name.trim(),
         description: form.description.trim() || undefined,
         discountType: form.discountType,
-        discountValue: form.discountValue,
+        discountValue: isGift ? "0" : form.discountValue,
         maxUsesPerCustomer: parseInt(form.maxUsesPerCustomer) || 1,
         minimumOrder: form.minimumOrder ? form.minimumOrder : undefined,
-        maximumDiscount: form.maximumDiscount ? form.maximumDiscount : undefined,
+        maximumDiscount: isGift ? undefined : (form.maximumDiscount ? form.maximumDiscount : undefined),
         codePrefix: form.codePrefix.trim() || undefined,
         validFrom: form.validFrom || undefined,
         validTo: form.validTo || undefined,
         terms: form.terms.trim() || undefined,
         status: form.status,
+        applicableBranches: form.applicableBranches.length > 0 ? form.applicableBranches : null,
       };
       if (editingId) {
         const res = await apiRequest("PATCH", `/api/loyalty/campaigns/${editingId}`, payload);
@@ -184,6 +206,7 @@ export default function LoyaltyCampaignsPage() {
       validTo: c.validTo || "",
       terms: c.terms || "",
       status: c.status,
+      applicableBranches: c.applicableBranches || [],
     });
     setFormOpen(true);
   };
@@ -206,8 +229,9 @@ export default function LoyaltyCampaignsPage() {
   const stats = useMemo(() => {
     const totalMembers = campaigns.reduce((s, c) => s + (c.memberCount || 0), 0);
     const totalRedemptions = campaigns.reduce((s, c) => s + (c.totalRedemptions || 0), 0);
+    const totalDiscount = campaigns.reduce((s, c) => s + (Number(c.totalDiscount) || 0), 0);
     const active = campaigns.filter((c) => c.status === "active").length;
-    return { totalMembers, totalRedemptions, active, total: campaigns.length };
+    return { totalMembers, totalRedemptions, totalDiscount, active, total: campaigns.length };
   }, [campaigns]);
 
   return (
@@ -226,7 +250,7 @@ export default function LoyaltyCampaignsPage() {
         />
 
         {/* KPI cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <Card><CardContent className="p-4">
             <p className="text-sm text-muted-foreground">الحملات</p>
             <p className="text-2xl font-bold" data-testid="stat-total">{stats.total}</p>
@@ -242,6 +266,12 @@ export default function LoyaltyCampaignsPage() {
           <Card><CardContent className="p-4">
             <p className="text-sm text-muted-foreground">مرات الاستخدام</p>
             <p className="text-2xl font-bold" data-testid="stat-redemptions">{stats.totalRedemptions}</p>
+          </CardContent></Card>
+          <Card><CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">إجمالي الخصم الممنوح</p>
+            <p className="text-2xl font-bold text-amber-600" data-testid="stat-discount">
+              {stats.totalDiscount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ر.س
+            </p>
           </CardContent></Card>
         </div>
 
@@ -276,6 +306,8 @@ export default function LoyaltyCampaignsPage() {
                       <TableCell>
                         {c.discountType === "percentage"
                           ? `${Number(c.discountValue)}%`
+                          : c.discountType === "gift"
+                          ? "هدية 🎁"
                           : `${Number(c.discountValue).toLocaleString()} ر.س`}
                       </TableCell>
                       <TableCell>{c.maxUsesPerCustomer} لكل عميل</TableCell>
@@ -344,12 +376,17 @@ export default function LoyaltyCampaignsPage() {
                   <SelectContent>
                     <SelectItem value="percentage">نسبة مئوية %</SelectItem>
                     <SelectItem value="fixed_amount">مبلغ ثابت ر.س</SelectItem>
+                    <SelectItem value="gift">هدية 🎁</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>قيمة الخصم</Label>
-                <Input type="number" value={form.discountValue} onChange={(e) => setForm({ ...form, discountValue: e.target.value })} data-testid="input-discount-value" />
+                <Label>{form.discountType === "gift" ? "وصف الهدية" : "قيمة الخصم"}</Label>
+                {form.discountType === "gift" ? (
+                  <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="مثال: قهوة مجانية" data-testid="input-gift-description" />
+                ) : (
+                  <Input type="number" value={form.discountValue} onChange={(e) => setForm({ ...form, discountValue: e.target.value })} data-testid="input-discount-value" />
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -383,6 +420,29 @@ export default function LoyaltyCampaignsPage() {
               </div>
             </div>
             <div>
+              <Label>الفروع المسموح بها (اتركه فارغاً لكل الفروع)</Label>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {branches.map((b) => {
+                  const selected = form.applicableBranches.includes(b.id);
+                  return (
+                    <button
+                      type="button"
+                      key={b.id}
+                      onClick={() => toggleBranch(b.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                        selected
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted text-muted-foreground border-transparent hover:bg-muted/70"
+                      }`}
+                      data-testid={`button-branch-${b.id}`}
+                    >
+                      {b.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
               <Label>الشروط (اختياري)</Label>
               <Textarea value={form.terms} onChange={(e) => setForm({ ...form, terms: e.target.value })} rows={2} data-testid="input-terms" />
             </div>
@@ -401,7 +461,7 @@ export default function LoyaltyCampaignsPage() {
             <Button variant="outline" onClick={() => setFormOpen(false)}>إلغاء</Button>
             <Button
               onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending || !form.name || !form.discountValue || (!editingId && !form.slug)}
+              disabled={saveMutation.isPending || !form.name || (form.discountType === "gift" ? !form.description.trim() : !form.discountValue) || (!editingId && !form.slug)}
               data-testid="button-save-campaign"
             >
               {saveMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}

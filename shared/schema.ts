@@ -9959,8 +9959,8 @@ export const loyaltyCampaigns = pgTable("loyalty_campaigns", {
   id: serial("id").primaryKey(),
   slug: text("slug").notNull().unique(), // public URL slug, e.g. "military-hospital"
   name: text("name").notNull(),
-  description: text("description"),
-  discountType: text("discount_type").notNull(), // percentage, fixed_amount
+  description: text("description"), // also holds the gift text for gift-type campaigns
+  discountType: text("discount_type").notNull(), // percentage, fixed_amount, gift
   discountValue: numeric("discount_value", { precision: 10, scale: 2 }).notNull(),
   maxUsesPerCustomer: integer("max_uses_per_customer").default(1).notNull(), // configurable per-customer usage limit
   minimumOrder: numeric("minimum_order", { precision: 10, scale: 2 }),
@@ -10013,8 +10013,8 @@ export const loyaltyMembers = pgTable("loyalty_members", {
   maxUses: integer("max_uses").notNull(), // snapshot of campaign maxUsesPerCustomer at issue time
   usedCount: integer("used_count").default(0).notNull(),
   status: text("status").default("active").notNull(), // active, exhausted, disabled
-  appleSerial: text("apple_serial"), // reserved for Apple Wallet (Task #2)
-  googleObjectId: text("google_object_id"), // reserved for Google Wallet (Task #2)
+  appleSerial: text("apple_serial"), // reserved for future Apple Wallet pass
+  googleObjectId: text("google_object_id"), // reserved for future Google Wallet pass
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   uniqueIndex("idx_loyalty_member_campaign_customer").on(table.campaignId, table.customerId),

@@ -49,7 +49,9 @@ export default function CampaignJoinPage() {
   }, [slug]);
 
   const discountText = campaign
-    ? campaign.discountType === "percentage"
+    ? campaign.discountType === "gift"
+      ? (campaign.description || "هدية مجانية")
+      : campaign.discountType === "percentage"
       ? `${Number(campaign.discountValue)}%`
       : `${Number(campaign.discountValue).toLocaleString()} ر.س`
     : "";

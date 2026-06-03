@@ -13,6 +13,7 @@ interface CardData {
   status: string;
   customerName: string;
   campaignName: string;
+  description?: string;
   discountType: string;
   discountValue: string;
   minimumOrder?: string;
@@ -47,7 +48,9 @@ export default function LoyaltyCardPage() {
   }, [code]);
 
   const discountText = card
-    ? card.discountType === "percentage"
+    ? card.discountType === "gift"
+      ? (card.description || "هدية مجانية")
+      : card.discountType === "percentage"
       ? `${Number(card.discountValue)}%`
       : `${Number(card.discountValue).toLocaleString()} ر.س`
     : "";
