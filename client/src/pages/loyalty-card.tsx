@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRoute } from "wouter";
 import { QRCodeSVG } from "qrcode.react";
 import { Card } from "@/components/ui/card";
@@ -10,10 +10,10 @@ import {
   MessageCircle,
   Loader2,
   CheckCircle2,
-  Home,
   Sparkles,
-  X,
-  Smartphone,
+  Crown,
+  QrCode,
+  RotateCcw,
 } from "lucide-react";
 
 interface CardData {
@@ -49,13 +49,13 @@ function launchConfetti() {
     canvas.remove();
     return;
   }
-  const colors = ["#f97316", "#fb923c", "#fbbf24", "#ffffff", "#34d399", "#f43f5e"];
-  const parts = Array.from({ length: 150 }, () => ({
-    x: canvas.width / 2 + (Math.random() - 0.5) * 120,
-    y: canvas.height * 0.32,
-    vx: (Math.random() - 0.5) * 13,
-    vy: Math.random() * -13 - 4,
-    size: Math.random() * 8 + 4,
+  const colors = ["#f97316", "#fb923c", "#fbbf24", "#fde68a", "#ffffff", "#f59e0b"];
+  const parts = Array.from({ length: 160 }, () => ({
+    x: canvas.width / 2 + (Math.random() - 0.5) * 140,
+    y: canvas.height * 0.3,
+    vx: (Math.random() - 0.5) * 14,
+    vy: Math.random() * -14 - 4,
+    size: Math.random() * 9 + 4,
     color: colors[Math.floor(Math.random() * colors.length)],
     rot: Math.random() * Math.PI,
     vr: (Math.random() - 0.5) * 0.35,
@@ -88,11 +88,6 @@ function launchConfetti() {
   raf = requestAnimationFrame(tick);
 }
 
-function isIOSDevice() {
-  const ua = navigator.userAgent || "";
-  return /iPad|iPhone|iPod/.test(ua) || (ua.includes("Macintosh") && "ontouchend" in document);
-}
-
 export default function LoyaltyCardPage() {
   const [, params] = useRoute("/card/:code");
   const code = params?.code;
@@ -105,31 +100,14 @@ export default function LoyaltyCardPage() {
   const [welcome, setWelcome] = useState(false);
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
 
-  // add-to-home-screen
-  const installEvtRef = useRef<any>(null);
-  const [canInstall, setCanInstall] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
-  const [showInstallHelp, setShowInstallHelp] = useState(false);
-
-  // interactive 3D tilt
+  // interactive flip + 3D tilt
+  const [flipped, setFlipped] = useState(false);
   const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
 
   useEffect(() => {
     const search = new URLSearchParams(window.location.search);
     if (search.get("welcome") === "1") setWelcome(true);
     if (search.get("existing") === "1") setAlreadyRegistered(true);
-
-    const onBeforeInstall = (e: any) => {
-      e.preventDefault();
-      installEvtRef.current = e;
-      setCanInstall(true);
-    };
-    window.addEventListener("beforeinstallprompt", onBeforeInstall);
-    setIsStandalone(
-      window.matchMedia("(display-mode: standalone)").matches ||
-        (navigator as any).standalone === true
-    );
-    return () => window.removeEventListener("beforeinstallprompt", onBeforeInstall);
   }, []);
 
   useEffect(() => {
@@ -188,22 +166,6 @@ export default function LoyaltyCardPage() {
     }
   };
 
-  const handleAddToHome = async () => {
-    const evt = installEvtRef.current;
-    if (evt) {
-      evt.prompt();
-      try {
-        await evt.userChoice;
-      } catch {
-        /* ignore */
-      }
-      installEvtRef.current = null;
-      setCanInstall(false);
-    } else {
-      setShowInstallHelp(true);
-    }
-  };
-
   const shareViaWhatsApp = () => {
     if (!card) return;
     const cardUrl = window.location.origin + `/card/${card.code}`;
@@ -237,22 +199,22 @@ export default function LoyaltyCardPage() {
     const r = e.currentTarget.getBoundingClientRect();
     const px = (e.clientX - r.left) / r.width - 0.5;
     const py = (e.clientY - r.top) / r.height - 0.5;
-    setTilt({ rx: -py * 7, ry: px * 7 });
+    setTilt({ rx: -py * 8, ry: px * 8 });
   };
   const onCardLeave = () => setTilt({ rx: 0, ry: 0 });
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center" dir="rtl">
-        <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+      <div className="min-h-screen bg-gradient-to-br from-[#1a1206] via-[#0f0a04] to-black flex items-center justify-center" dir="rtl">
+        <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
       </div>
     );
   }
 
   if (error || !card) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4" dir="rtl">
-        <Card className="p-8 text-center bg-slate-800 border-slate-700 max-w-md">
+      <div className="min-h-screen bg-gradient-to-br from-[#1a1206] via-[#0f0a04] to-black flex items-center justify-center p-4" dir="rtl">
+        <Card className="p-8 text-center bg-slate-900 border-slate-700 max-w-md">
           <h1 className="text-2xl font-bold text-white mb-2">البطاقة غير موجودة</h1>
           <p className="text-slate-400" data-testid="text-card-error">{error || "الرمز غير صالح"}</p>
         </Card>
@@ -262,10 +224,25 @@ export default function LoyaltyCardPage() {
 
   const exhausted = card.remainingUses <= 0 || card.status === "exhausted";
   const disabled = card.status === "disabled";
+  const usedPct = card.maxUses > 0 ? Math.min(100, (card.usedCount / card.maxUses) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4 overflow-x-hidden" dir="rtl">
-      <div className="w-full max-w-md">
+    <div
+      className="min-h-screen relative flex items-center justify-center p-4 overflow-x-hidden bg-gradient-to-br from-[#1c1407] via-[#0f0a04] to-black"
+      dir="rtl"
+    >
+      {/* component-scoped keyframes */}
+      <style>{`
+        @keyframes butterShimmer { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+        @keyframes butterFloat { 0%,100%{transform:translateY(0) rotate(0deg);opacity:.5} 50%{transform:translateY(-14px) rotate(12deg);opacity:1} }
+        @keyframes butterGlow { 0%,100%{opacity:.35} 50%{opacity:.7} }
+      `}</style>
+
+      {/* ambient golden glow blobs */}
+      <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-amber-500/20 blur-3xl" style={{ animation: "butterGlow 6s ease-in-out infinite" }} />
+      <div className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-orange-600/20 blur-3xl" style={{ animation: "butterGlow 7s ease-in-out infinite" }} />
+
+      <div className="w-full max-w-md relative z-10">
         {welcome && (
           <div
             className="mb-4 rounded-2xl bg-gradient-to-r from-emerald-600/90 to-emerald-500/90 px-4 py-3 text-center shadow-lg shadow-emerald-900/30 animate-in fade-in slide-in-from-top-2 duration-500"
@@ -275,7 +252,7 @@ export default function LoyaltyCardPage() {
               <Sparkles className="h-5 w-5" />
               مبروك! تم تفعيل بطاقتك بنجاح 🎉
             </p>
-            <p className="text-emerald-50 text-xs mt-1">احفظها على شاشتك الرئيسية لتستخدمها بسهولة</p>
+            <p className="text-emerald-50 text-xs mt-1">استمتع بمزاياك الحصرية لدى BUTTER BAKERY</p>
           </div>
         )}
 
@@ -288,8 +265,8 @@ export default function LoyaltyCardPage() {
           </div>
         )}
 
-        {/* Interactive card with 3D tilt + shine */}
-        <div style={{ perspective: "1200px" }}>
+        {/* Interactive flip card with 3D tilt */}
+        <div style={{ perspective: "1500px" }} className="select-none">
           <div
             onPointerMove={onCardMove}
             onPointerLeave={onCardLeave}
@@ -297,118 +274,182 @@ export default function LoyaltyCardPage() {
               transform: `rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`,
               transition: tilt.rx === 0 && tilt.ry === 0 ? "transform 0.4s ease" : "transform 0.05s linear",
             }}
-            className="bg-gradient-to-br from-slate-800 via-slate-700 to-slate-800 rounded-3xl shadow-2xl relative overflow-hidden border border-slate-600/50 will-change-transform animate-in fade-in zoom-in-95 duration-500"
-            data-testid="card-loyalty"
+            className="will-change-transform"
           >
-            {/* moving shine */}
             <div
-              className="pointer-events-none absolute inset-0 z-20 opacity-60"
-              style={{
-                background: `radial-gradient(circle at ${50 + tilt.ry * 4}% ${50 - tilt.rx * 4}%, rgba(255,255,255,0.18), transparent 45%)`,
-              }}
-            />
-            <div className="h-2 bg-gradient-to-r from-orange-500 via-orange-400 to-orange-500" />
-            <div className="relative z-10 p-4 sm:p-6">
-              <div className="text-center mb-4">
-                <div className="inline-block bg-white rounded-2xl p-3 shadow-xl">
-                  <img
-                    src="/butter-logo.png"
-                    alt="BUTTER BAKERY"
-                    className="h-12 mx-auto"
-                    onError={(e) => {
-                      e.currentTarget.style.display = "none";
-                      const next = e.currentTarget.nextElementSibling as HTMLElement;
-                      if (next) next.classList.remove("hidden");
-                    }}
-                  />
-                  <div className="hidden text-xl font-black text-orange-500 tracking-wider">BUTTER BAKERY</div>
-                </div>
-              </div>
+              onClick={() => setFlipped((f) => !f)}
+              className="relative cursor-pointer transition-transform duration-700 ease-out animate-in fade-in zoom-in-95"
+              style={{ transformStyle: "preserve-3d", transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}
+              data-testid="card-loyalty"
+              role="button"
+              aria-label="اقلب البطاقة"
+            >
+              {/* ===================== FRONT ===================== */}
+              <div style={{ backfaceVisibility: "hidden" }}>
+                <div
+                  className="rounded-[28px] p-[2px] shadow-2xl shadow-amber-950/50"
+                  style={{
+                    background: "linear-gradient(120deg,#fde68a,#f59e0b,#b45309,#fbbf24,#fde68a)",
+                    backgroundSize: "300% 300%",
+                    animation: "butterShimmer 6s ease infinite",
+                  }}
+                >
+                  <div className="relative overflow-hidden rounded-[26px] bg-gradient-to-br from-[#26190a] via-[#1a1206] to-[#0d0903] p-6">
+                    {/* moving holographic shine */}
+                    <div
+                      className="pointer-events-none absolute inset-0 z-20"
+                      style={{
+                        background: `radial-gradient(circle at ${50 + tilt.ry * 5}% ${50 - tilt.rx * 5}%, rgba(255,236,179,0.22), transparent 42%)`,
+                      }}
+                    />
+                    {/* floating sparkles */}
+                    <Sparkles className="absolute top-6 left-6 h-4 w-4 text-amber-300/70" style={{ animation: "butterFloat 4s ease-in-out infinite" }} />
+                    <Sparkles className="absolute bottom-24 left-10 h-3 w-3 text-orange-300/60" style={{ animation: "butterFloat 5s ease-in-out infinite .8s" }} />
+                    <Sparkles className="absolute top-28 right-8 h-3.5 w-3.5 text-amber-200/60" style={{ animation: "butterFloat 6s ease-in-out infinite .4s" }} />
 
-              <div className="text-center mb-2">
-                <p className="text-slate-300 text-sm">مرحباً</p>
-                <h2 className="text-lg font-bold text-white" data-testid="text-customer-name">{card.customerName}</h2>
-                <p className="text-orange-300 text-sm mt-1">{card.campaignName}</p>
-              </div>
+                    <div className="relative z-10">
+                      {/* header: brand + tier */}
+                      <div className="flex items-center justify-between">
+                        <div className="bg-white rounded-2xl p-2.5 shadow-lg">
+                          <img
+                            src="/butter-logo.png"
+                            alt="BUTTER BAKERY"
+                            className="h-9"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                              const next = e.currentTarget.nextElementSibling as HTMLElement;
+                              if (next) next.classList.remove("hidden");
+                            }}
+                          />
+                          <div className="hidden text-base font-black text-orange-500 tracking-wider">BUTTER</div>
+                        </div>
+                        <div className="flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1.5">
+                          <Crown className="h-4 w-4 text-amber-300" />
+                          <span className="text-xs font-bold text-amber-200">عضوية ذهبية</span>
+                        </div>
+                      </div>
 
-              <div className="text-center my-4">
-                <div className="inline-block relative">
-                  <div className="absolute inset-0 bg-orange-500 rounded-2xl blur-xl opacity-40" />
-                  <div className="relative bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl px-10 py-5 shadow-2xl border border-orange-400/30">
-                    <p className="text-orange-100 text-xs mb-1 font-medium">خصم حصري</p>
-                    <p className="text-4xl font-black text-white drop-shadow-lg" data-testid="text-discount-value">{discountText}</p>
+                      {/* discount hero */}
+                      <div className="text-center my-7">
+                        <p className="text-amber-200/80 text-xs font-semibold tracking-wider mb-2">خصمك الحصري</p>
+                        <div className="relative inline-block">
+                          <div className="absolute inset-0 bg-amber-400 rounded-2xl blur-2xl opacity-30" />
+                          <p
+                            className="relative text-6xl font-black tracking-tight bg-gradient-to-b from-amber-100 via-amber-300 to-orange-400 bg-clip-text text-transparent drop-shadow"
+                            data-testid="text-discount-value"
+                          >
+                            {discountText}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* holder name */}
+                      <div className="mb-5">
+                        <p className="text-amber-200/60 text-[11px] tracking-wider mb-1">حامل البطاقة</p>
+                        <h2 className="text-xl font-bold text-white tracking-wide" data-testid="text-customer-name">
+                          {card.customerName}
+                        </h2>
+                        <p className="text-amber-300/80 text-xs mt-0.5">{card.campaignName}</p>
+                      </div>
+
+                      {/* usage meter */}
+                      <div>
+                        <div className="flex items-center justify-between text-[11px] mb-1.5">
+                          <span className="text-amber-200/70">الاستخدامات</span>
+                          {disabled ? (
+                            <span className="text-red-300 font-semibold" data-testid="status-card">موقوفة</span>
+                          ) : exhausted ? (
+                            <span className="text-red-300 font-semibold" data-testid="status-card">انتهت</span>
+                          ) : (
+                            <span className="text-emerald-300 font-semibold" data-testid="status-card">
+                              متبقٍ {card.remainingUses} من {card.maxUses}
+                            </span>
+                          )}
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-black/40 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${exhausted || disabled ? "bg-red-500/70" : "bg-gradient-to-r from-amber-300 to-orange-500"}`}
+                            style={{ width: `${100 - usedPct}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* flip hint */}
+                      <div className="mt-6 flex items-center justify-center gap-2 text-amber-200/70 text-xs">
+                        <QrCode className="h-4 w-4" />
+                        <span>اضغط لعرض الباركود</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="flex justify-center my-4">
-                <div className={`bg-white p-4 rounded-2xl shadow-xl ${exhausted || disabled ? "opacity-40 grayscale" : ""}`}>
-                  <QRCodeSVG value={card.code} size={140} level="H" includeMargin={false} fgColor="#1e293b" />
+              {/* ===================== BACK ===================== */}
+              <div
+                className="absolute inset-0"
+                style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
+              >
+                <div
+                  className="h-full rounded-[28px] p-[2px] shadow-2xl shadow-amber-950/50"
+                  style={{
+                    background: "linear-gradient(120deg,#fde68a,#f59e0b,#b45309,#fbbf24,#fde68a)",
+                    backgroundSize: "300% 300%",
+                    animation: "butterShimmer 6s ease infinite",
+                  }}
+                >
+                  <div className="h-full overflow-hidden rounded-[26px] bg-gradient-to-br from-[#26190a] via-[#1a1206] to-[#0d0903] p-6 flex flex-col items-center justify-center">
+                    <p className="text-amber-200/80 text-xs font-semibold tracking-wider mb-4">امسح الباركود عند الدفع</p>
+                    <div className={`bg-white p-4 rounded-2xl shadow-xl ${exhausted || disabled ? "opacity-40 grayscale" : ""}`}>
+                      <QRCodeSVG value={card.code} size={150} level="H" includeMargin={false} fgColor="#1a1206" />
+                    </div>
+
+                    <div className="mt-4 text-center">
+                      <p className="text-amber-200/60 text-[11px] mb-1">رمز البطاقة</p>
+                      <code className="text-lg font-black tracking-[0.2em] text-white" data-testid="text-card-code">
+                        {card.code}
+                      </code>
+                    </div>
+
+                    <div className="mt-4 w-full space-y-1.5 text-center text-xs text-amber-100/80">
+                      {card.validTo && (
+                        <p className="flex items-center justify-center gap-2">
+                          <Calendar className="h-3.5 w-3.5 text-amber-400" />
+                          <span>صالحة حتى: <strong className="text-white">{card.validTo}</strong></span>
+                        </p>
+                      )}
+                      {card.minimumOrder && (
+                        <p className="text-amber-200/60">الحد الأدنى للطلب: {Number(card.minimumOrder).toLocaleString()} ر.س</p>
+                      )}
+                    </div>
+
+                    {card.terms && (
+                      <p className="mt-3 text-center text-[11px] text-amber-200/50 leading-relaxed line-clamp-3">{card.terms}</p>
+                    )}
+
+                    <div className="mt-5 flex items-center justify-center gap-2 text-amber-200/70 text-xs">
+                      <RotateCcw className="h-4 w-4" />
+                      <span>اضغط للرجوع</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-
-              <div className="text-center my-3">
-                <p className="text-slate-400 text-xs mb-2">رمز البطاقة</p>
-                <div className="inline-block bg-slate-700/50 rounded-xl px-8 py-3 border border-slate-600">
-                  <code className="text-xl font-black tracking-widest text-white" data-testid="text-card-code">{card.code}</code>
-                </div>
-              </div>
-
-              {/* Usage status */}
-              <div className="text-center mt-4">
-                {disabled ? (
-                  <div className="bg-red-500/20 border border-red-500/40 rounded-lg py-2 px-4 inline-block">
-                    <span className="text-red-300 font-medium" data-testid="status-card">البطاقة موقوفة</span>
-                  </div>
-                ) : exhausted ? (
-                  <div className="bg-red-500/20 border border-red-500/40 rounded-lg py-2 px-4 inline-block">
-                    <span className="text-red-300 font-medium" data-testid="status-card">تم استخدام جميع مرات الخصم</span>
-                  </div>
-                ) : (
-                  <div className="bg-emerald-500/15 border border-emerald-500/40 rounded-lg py-2 px-4 inline-flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                    <span className="text-emerald-300 font-medium" data-testid="status-card">
-                      متبقٍ {card.remainingUses} من {card.maxUses}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              <div className="text-center text-slate-300 text-sm mt-4 space-y-1">
-                {card.validTo && (
-                  <p className="flex items-center justify-center gap-2">
-                    <Calendar className="h-4 w-4 text-orange-400" />
-                    <span>صالح حتى: <strong className="text-white">{card.validTo}</strong></span>
-                  </p>
-                )}
-                {card.minimumOrder && (
-                  <p className="text-slate-400">الحد الأدنى للطلب: {Number(card.minimumOrder).toLocaleString()} ر.س</p>
-                )}
-              </div>
-
-              {card.terms && (
-                <div className="mt-4 text-center text-xs text-slate-400 bg-slate-700/30 rounded-lg p-3 border border-slate-700">
-                  {card.terms}
-                </div>
-              )}
             </div>
           </div>
         </div>
 
+        {/* actions */}
         <div className="mt-6 space-y-3">
-          {!isStandalone && (
-            <Button
-              className="w-full gap-2 bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-700 hover:to-orange-600 text-white py-6 text-lg rounded-xl shadow-lg shadow-orange-900/30"
-              onClick={handleAddToHome}
-              data-testid="button-add-home"
-            >
-              <Home className="h-5 w-5" />
-              أضف البطاقة إلى شاشة الجوال
-            </Button>
-          )}
+          <Button
+            className="w-full gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-6 text-base font-bold rounded-2xl shadow-lg shadow-orange-900/30"
+            onClick={() => setFlipped((f) => !f)}
+            data-testid="button-flip-card"
+          >
+            <RotateCcw className="h-5 w-5" />
+            {flipped ? "عرض تفاصيل البطاقة" : "عرض الباركود"}
+          </Button>
 
           <Button
-            className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white py-6 text-lg rounded-xl"
+            className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white py-6 text-base rounded-2xl"
             onClick={shareViaWhatsApp}
             data-testid="button-share-whatsapp"
           >
@@ -418,7 +459,7 @@ export default function LoyaltyCardPage() {
 
           {card.appleWalletAvailable && (
             <Button
-              className="w-full gap-2 bg-black hover:bg-slate-900 text-white py-5 rounded-xl border border-slate-600"
+              className="w-full gap-2 bg-black hover:bg-slate-900 text-white py-5 rounded-2xl border border-slate-600"
               onClick={handleAddToAppleWallet}
               data-testid="button-add-apple-wallet"
             >
@@ -429,7 +470,7 @@ export default function LoyaltyCardPage() {
 
           {card.googleWalletAvailable && (
             <Button
-              className="w-full gap-2 bg-slate-700 hover:bg-slate-600 text-white py-5 rounded-xl border border-slate-600"
+              className="w-full gap-2 bg-slate-700 hover:bg-slate-600 text-white py-5 rounded-2xl border border-slate-600"
               onClick={handleAddToGoogleWallet}
               disabled={googleLoading}
               data-testid="button-add-google-wallet"
@@ -441,7 +482,7 @@ export default function LoyaltyCardPage() {
 
           <Button
             variant="outline"
-            className="w-full gap-2 py-5 rounded-xl bg-slate-800 border-slate-600 text-white hover:bg-slate-700"
+            className="w-full gap-2 py-5 rounded-2xl bg-white/5 border-amber-500/30 text-amber-100 hover:bg-white/10"
             onClick={handleShare}
             data-testid="button-share"
           >
@@ -450,61 +491,11 @@ export default function LoyaltyCardPage() {
           </Button>
         </div>
 
-        <div className="text-center mt-8 text-slate-500 text-sm">
-          <p className="text-orange-400 font-medium">BUTTER BAKERY</p>
+        <div className="text-center mt-8 text-amber-200/40 text-sm">
+          <p className="text-amber-400 font-bold tracking-wide">BUTTER BAKERY</p>
           <p className="text-xs mt-1">شركة الزبد الأفضل التجارية</p>
         </div>
       </div>
-
-      {/* Add-to-home-screen instructions (fallback when no native prompt) */}
-      {showInstallHelp && (
-        <div
-          className="fixed inset-0 z-[100] bg-black/70 flex items-end sm:items-center justify-center p-4"
-          onClick={() => setShowInstallHelp(false)}
-          data-testid="modal-install-help"
-        >
-          <div
-            className="bg-slate-800 border border-slate-600 rounded-3xl p-6 w-full max-w-md shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-            dir="rtl"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Smartphone className="h-5 w-5 text-orange-400" />
-                أضف البطاقة إلى الشاشة الرئيسية
-              </h3>
-              <button
-                onClick={() => setShowInstallHelp(false)}
-                className="text-slate-400 hover:text-white"
-                data-testid="button-close-install-help"
-                aria-label="إغلاق"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            {isIOSDevice() ? (
-              <ol className="text-slate-200 space-y-3 text-sm list-decimal pr-5">
-                <li>اضغط على زر المشاركة <span className="text-orange-300">(المربع مع السهم لأعلى)</span> في شريط Safari بالأسفل.</li>
-                <li>اختر <strong className="text-white">«إضافة إلى الشاشة الرئيسية»</strong>.</li>
-                <li>اضغط <strong className="text-white">«إضافة»</strong> — ستظهر أيقونة البطاقة على شاشتك.</li>
-              </ol>
-            ) : (
-              <ol className="text-slate-200 space-y-3 text-sm list-decimal pr-5">
-                <li>افتح قائمة المتصفح <span className="text-orange-300">(النقاط الثلاث ⋮)</span> بالأعلى.</li>
-                <li>اختر <strong className="text-white">«إضافة إلى الشاشة الرئيسية»</strong> أو <strong className="text-white">«تثبيت التطبيق»</strong>.</li>
-                <li>أكّد الإضافة — ستظهر أيقونة البطاقة على شاشتك.</li>
-              </ol>
-            )}
-            <Button
-              className="w-full mt-5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl py-5"
-              onClick={() => setShowInstallHelp(false)}
-              data-testid="button-install-help-ok"
-            >
-              تمام، فهمت
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
