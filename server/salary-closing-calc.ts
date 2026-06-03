@@ -121,8 +121,19 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
 
   // ===== Lookup maps for matching =====
   const employeeLookup = new Map<string, number>();
-  const normalizeName = (s: any) => String(s || "").trim().replace(/\s+/g, " ").toLowerCase();
-  const nameLookup = new Map<string, number>();
+  const normalizeName = (s: any) =>
+    String(s || "")
+      .replace(/[\u064B-\u0652\u0670]/g, "") // إزالة التشكيل
+      .replace(/\u0640/g, "") // إزالة التطويل ـ
+      .replace(/[\u0623\u0625\u0622\u0671]/g, "\u0627") // أ إ آ ٱ -> ا
+      .replace(/\u0629/g, "\u0647") // ة -> ه
+      .replace(/\u0649/g, "\u064A") // ى -> ي
+      .replace(/\u0624/g, "\u0648") // ؤ -> و
+      .replace(/\u0626/g, "\u064A") // ئ -> ي
+      .replace(/\s+/g, "") // إزالة كل المسافات (عبد الله = عبدالله)
+      .toLowerCase();
+  // اسم مُوحَّد -> قائمة معرّفات الموظفين (للكشف عن التطابقات المتعددة الغامضة)
+  const nameLookup = new Map<string, number[]>();
   branchEmployees.forEach((emp) => {
     employeeLookup.set(`bid:${emp.id}`, emp.id);
     employeeLookup.set(`bid:${String(emp.id)}`, emp.id);
@@ -136,9 +147,25 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
       employeeLookup.set(`eid:${emp.linkedUserId}`, emp.id);
     }
     if (emp.employeeName) {
-      nameLookup.set(normalizeName(emp.employeeName), emp.id);
+      const nk = normalizeName(emp.employeeName);
+      if (nk) {
+        const arr = nameLookup.get(nk);
+        if (arr) {
+          if (!arr.includes(emp.id)) arr.push(emp.id);
+        } else {
+          nameLookup.set(nk, [emp.id]);
+        }
+      }
     }
   });
+
+  // مطابقة بالاسم فقط عند وجود موظف واحد مطابق (تجنّب الإسناد الخاطئ عند تشابه الأسماء)
+  const matchByName = (name: any): number | null => {
+    const k = normalizeName(name);
+    if (!k) return null;
+    const arr = nameLookup.get(k);
+    return arr && arr.length === 1 ? arr[0] : null;
+  };
 
   const matchEmployee = (rec: any): number | null => {
     if (rec.branchEmployeeId !== null && rec.branchEmployeeId !== undefined) {
@@ -155,8 +182,8 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
       if (employeeLookup.has(k)) return employeeLookup.get(k)!;
     }
     if (rec.employeeName) {
-      const k = normalizeName(rec.employeeName);
-      if (nameLookup.has(k)) return nameLookup.get(k)!;
+      const id = matchByName(rec.employeeName);
+      if (id !== null) return id;
     }
     return null;
   };
@@ -171,8 +198,8 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
       if (employeeLookup.has(k)) return employeeLookup.get(k)!;
     }
     if (s.employeeName) {
-      const k = normalizeName(s.employeeName);
-      if (nameLookup.has(k)) return nameLookup.get(k)!;
+      const id = matchByName(s.employeeName);
+      if (id !== null) return id;
     }
     return null;
   };

@@ -28782,6 +28782,55 @@ export async function registerRoutes(
     }
   });
 
+  // ربط مجموعة سجلات حضور بموظف واحد دفعة واحدة (زر "ربط الكل")
+  app.post("/api/salary-closing/link-attendance-bulk", isAuthenticated, requirePermission("salary_closing", "edit"), async (req, res) => {
+    try {
+      const { attendanceIds, branchEmployeeId } = req.body || {};
+      const beId = parseInt(branchEmployeeId, 10);
+      if (Number.isNaN(beId) || !Array.isArray(attendanceIds) || attendanceIds.length === 0) {
+        return res.status(400).json({ error: "بيانات غير صحيحة" });
+      }
+      const ids = Array.from(
+        new Set(attendanceIds.map((x: any) => parseInt(x, 10)).filter((n: number) => !Number.isNaN(n)))
+      );
+      if (ids.length === 0) return res.status(400).json({ error: "لا توجد سجلات صالحة" });
+      const employee = await storage.getBranchEmployee(beId);
+      if (!employee) return res.status(404).json({ error: "الموظف غير موجود" });
+      const hasAccess = await canAccessBranch(req, employee.branchId);
+      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+
+      let linked = 0;
+      const skipped: Array<{ id: number; reason: string }> = [];
+      const lockCache = new Map<string, boolean>();
+      for (const aId of ids) {
+        const record = await storage.getAttendanceRecord(aId);
+        if (!record) { skipped.push({ id: aId, reason: "السجل غير موجود" }); continue; }
+        if (record.branchId !== employee.branchId) { skipped.push({ id: aId, reason: "فرع مختلف" }); continue; }
+        const recDate = (record as any).attendanceDate || (record as any).date;
+        const recMonth = typeof recDate === "string" ? recDate.slice(0, 7) : "";
+        if (recMonth) {
+          const cacheKey = `${record.branchId}|${recMonth}`;
+          let locked = lockCache.get(cacheKey);
+          if (locked === undefined) {
+            const lock = await storage.getSalaryClosureByBranchAndMonth(record.branchId, recMonth);
+            locked = !!lock && lock.status === "closed";
+            lockCache.set(cacheKey, locked);
+          }
+          if (locked) { skipped.push({ id: aId, reason: "الشهر مغلق" }); continue; }
+        }
+        await storage.updateAttendanceRecord(aId, {
+          branchEmployeeId: beId,
+          employeeId: employee.linkedUserId || record.employeeId,
+        });
+        linked++;
+      }
+      res.json({ success: true, linked, skipped });
+    } catch (error) {
+      console.error("Error bulk linking attendance records:", error);
+      res.status(500).json({ error: "فشل في ربط سجلات الحضور" });
+    }
+  });
+
   // Shift management bundle - combines multiple queries into one
   app.get("/api/shift-management/bundle", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
     try {

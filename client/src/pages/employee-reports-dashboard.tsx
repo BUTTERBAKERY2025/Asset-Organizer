@@ -332,6 +332,66 @@ function formatTime(timeStr: string | null | undefined): string {
   return timeStr;
 }
 
+// توحيد الأسماء العربية للمطابقة الذكية (يطابق منطق الخادم في salary-closing-calc.ts)
+function normalizeArabicName(s: any): string {
+  return String(s || "")
+    .replace(/[\u064B-\u0652\u0670]/g, "") // إزالة التشكيل
+    .replace(/\u0640/g, "") // إزالة التطويل
+    .replace(/[\u0623\u0625\u0622\u0671]/g, "\u0627") // أ إ آ ٱ -> ا
+    .replace(/\u0629/g, "\u0647") // ة -> ه
+    .replace(/\u0649/g, "\u064A") // ى -> ي
+    .replace(/\u0624/g, "\u0648") // ؤ -> و
+    .replace(/\u0626/g, "\u064A") // ئ -> ي
+    .toLowerCase();
+}
+
+// اقتراح أقرب موظف لمجموعة سجلات غير مرتبطة
+// confidence: "high" = رقم وظيفي أو اسم مُوحَّد فريد مطابق تماماً (آمن للربط الجماعي بنقرة واحدة)
+//             "low"  = تطابق تقريبي بالكلمات المشتركة (يتطلب مراجعة يدوية)
+function suggestEmployeeForGroup(
+  group: { employeeNumber?: string; name?: string },
+  employees: any[],
+): { employee: any; confidence: "high" | "low" } | null {
+  if (!employees || employees.length === 0) return null;
+  const num = String(group.employeeNumber || "").trim();
+  if (num) {
+    const byNum = employees.find((e) => String(e.employeeNumber || "").trim() === num);
+    if (byNum) return { employee: byNum, confidence: "high" };
+  }
+  const recNorm = normalizeArabicName(group.name);
+  if (!recNorm) return null;
+  const recNoSpace = recNorm.replace(/\s+/g, "");
+  // تطابق تام بعد إزالة المسافات — فقط إذا كان فريداً (موظف واحد) يُعتبر عالي الثقة
+  const exactMatches = employees.filter((e) => {
+    const en = normalizeArabicName(e.employeeName || e.name);
+    return en && en.replace(/\s+/g, "") === recNoSpace;
+  });
+  if (exactMatches.length === 1) return { employee: exactMatches[0], confidence: "high" };
+  if (exactMatches.length > 1) return null; // غامض — لا اقتراح
+  // أفضل تطابق حسب عدد الكلمات المشتركة (منخفض الثقة)
+  const recTokens = recNorm.split(/\s+/).filter(Boolean);
+  let best: any = null;
+  let bestScore = 0;
+  let tie = false;
+  for (const e of employees) {
+    const en = normalizeArabicName(e.employeeName || e.name);
+    if (!en) continue;
+    const enTokens = new Set(en.split(/\s+/).filter(Boolean));
+    let score = 0;
+    for (const t of recTokens) if (enTokens.has(t)) score++;
+    if (score > bestScore) {
+      bestScore = score;
+      best = e;
+      tie = false;
+    } else if (score === bestScore && score > 0) {
+      tie = true;
+    }
+  }
+  const threshold = recTokens.length >= 2 ? 2 : 1;
+  if (best && bestScore >= threshold && !tie) return { employee: best, confidence: "low" };
+  return null;
+}
+
 export default function EmployeeReportsDashboardPage() {
   const { i18n } = useTranslation();
   const isRTL = i18n.language === "ar";
@@ -361,6 +421,7 @@ export default function EmployeeReportsDashboardPage() {
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [linkRecord, setLinkRecord] = useState<AttendanceRecord | null>(null);
   const [linkEmployeeId, setLinkEmployeeId] = useState<string>("");
+  const [groupSel, setGroupSel] = useState<Record<string, string>>({});
   const [salaryClosingBranch, setSalaryClosingBranch] = useState<string>("");
   const [salaryClosingMonth, setSalaryClosingMonth] = useState<string>(new Date().toISOString().slice(0, 7));
   const [salarySearchQuery, setSalarySearchQuery] = useState<string>("");
@@ -1065,6 +1126,29 @@ export default function EmployeeReportsDashboardPage() {
   // عند وجود لقطة مغلقة محفوظة، يعرض الخادم نفس الأرقام المجمّدة.
   const salaryClosingData: any[] = salaryClosingPreview?.lines ?? [];
   const salaryClosingUnlinkedRecords: AttendanceRecord[] = salaryClosingPreview?.unlinked ?? [];
+
+  // تجميع السجلات غير المرتبطة حسب الموظف مع اقتراح أقرب موظف لكل مجموعة
+  const unlinkedGroups = useMemo(() => {
+    const emps = salaryClosingBundle?.employees ?? [];
+    const groups = new Map<
+      string,
+      { key: string; name: string; employeeNumber: string; records: any[]; suggestion: any | null }
+    >();
+    for (const rec of salaryClosingUnlinkedRecords as any[]) {
+      const name = rec.employeeName || (rec as any).name || "";
+      const num = String(rec.employeeNumber || "").trim();
+      const norm = normalizeArabicName(name);
+      const key = num ? `num:${num}` : norm ? `name:${norm}` : `id:${rec.id}`;
+      let g = groups.get(key);
+      if (!g) {
+        g = { key, name, employeeNumber: num, records: [], suggestion: null };
+        groups.set(key, g);
+      }
+      g.records.push(rec);
+    }
+    for (const g of groups.values()) g.suggestion = suggestEmployeeForGroup(g, emps);
+    return Array.from(groups.values()).sort((a, b) => b.records.length - a.records.length);
+  }, [salaryClosingUnlinkedRecords, salaryClosingBundle]);
   const salaryClosingUnlinkedSummary = salaryClosingPreview?.unlinkedSummary ?? { totalRecords: 0, presentRecords: 0, totalHours: 0 };
   const salaryClosingUnlinkedCount = salaryClosingUnlinkedSummary.totalRecords;
   const salaryClosingWarnings = salaryClosingPreview?.warnings ?? [];
@@ -1118,6 +1202,25 @@ export default function EmployeeReportsDashboardPage() {
     },
     onSuccess: () => {
       toast({ title: "تم الربط", description: "تم ربط سجل الحضور بالموظف." });
+      refreshSalaryClosing();
+    },
+    onError: (err: any) => {
+      toast({ title: "تعذّر الربط", description: err?.message || "حدث خطأ", variant: "destructive" });
+    },
+  });
+
+  const bulkLinkMutation = useMutation({
+    mutationFn: async (payload: { attendanceIds: number[]; branchEmployeeId: number }) => {
+      const res = await apiRequest("POST", "/api/salary-closing/link-attendance-bulk", payload);
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      const linked = data?.linked ?? 0;
+      const skipped = data?.skipped?.length ?? 0;
+      toast({
+        title: "تم الربط",
+        description: `تم ربط ${linked} سجل${skipped ? ` (تم تخطّي ${skipped})` : ""}.`,
+      });
       refreshSalaryClosing();
     },
     onError: (err: any) => {
@@ -7631,53 +7734,91 @@ export default function EmployeeReportsDashboardPage() {
             </DialogHeader>
             <div className="space-y-3 text-sm max-h-[60vh] overflow-y-auto">
               <p className="text-gray-600">
-                اختر الموظف الصحيح لكل سجل حضور غير مرتبط ثم اضغط "ربط". سيُعاد احتساب الرواتب تلقائياً.
+                تم تجميع السجلات حسب الموظف. النظام يقترح أقرب موظف تلقائياً — تأكّد من الاختيار ثم اضغط "ربط الكل". سيُعاد احتساب الرواتب تلقائياً.
               </p>
-              {salaryClosingUnlinkedRecords.length === 0 && (
+              {unlinkedGroups.length === 0 && (
                 <p className="text-center text-gray-500 py-6">لا توجد سجلات غير مرتبطة.</p>
               )}
-              {salaryClosingUnlinkedRecords.map((rec: any) => (
-                <div key={rec.id} className="flex items-center gap-2 border rounded-lg p-2" data-testid={`row-unlinked-${rec.id}`}>
-                  <div className="flex-1 text-xs">
-                    <div className="font-medium">{rec.employeeName || rec.name || `سجل #${rec.id}`}</div>
-                    <div className="text-gray-500">
-                      {rec.date || rec.attendanceDate} · {rec.status || ""} · {rec.checkIn || rec.clockIn || ""}
-                    </div>
-                  </div>
-                  <Select
-                    value={linkRecord?.id === rec.id ? linkEmployeeId : ""}
-                    onValueChange={(v) => { setLinkRecord(rec); setLinkEmployeeId(v); }}
-                  >
-                    <SelectTrigger className="w-56" data-testid={`select-link-employee-${rec.id}`}>
-                      <SelectValue placeholder="اختر الموظف" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(salaryClosingBundle?.employees ?? []).map((emp: any) => (
-                        <SelectItem key={emp.id} value={String(emp.id)}>
-                          {emp.name}{emp.employeeNumber ? ` (${emp.employeeNumber})` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              {unlinkedGroups.length > 0 && (
+                <div className="flex justify-end">
                   <Button
                     size="sm"
+                    variant="secondary"
                     disabled={
-                      linkAttendanceMutation.isPending ||
-                      linkRecord?.id !== rec.id ||
-                      !linkEmployeeId
+                      bulkLinkMutation.isPending ||
+                      !unlinkedGroups.some(
+                        (g) => groupSel[g.key] ?? (g.suggestion?.confidence === "high" ? String(g.suggestion.employee.id) : ""),
+                      )
                     }
-                    onClick={() => {
-                      linkAttendanceMutation.mutate({
-                        attendanceId: rec.id,
-                        branchEmployeeId: Number(linkEmployeeId),
-                      });
+                    onClick={async () => {
+                      // الربط الجماعي يطبّق فقط الاقتراحات عالية الثقة أو الاختيارات اليدوية الصريحة
+                      for (const g of unlinkedGroups) {
+                        const sel = groupSel[g.key] ?? (g.suggestion?.confidence === "high" ? String(g.suggestion.employee.id) : "");
+                        if (!sel) continue;
+                        await bulkLinkMutation.mutateAsync({
+                          attendanceIds: g.records.map((r: any) => r.id),
+                          branchEmployeeId: Number(sel),
+                        });
+                      }
                     }}
-                    data-testid={`button-link-${rec.id}`}
+                    data-testid="button-link-all-suggested"
                   >
-                    ربط
+                    {bulkLinkMutation.isPending ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : null}
+                    ربط المطابقات المؤكدة
                   </Button>
                 </div>
-              ))}
+              )}
+              {unlinkedGroups.map((g) => {
+                const sel = groupSel[g.key] ?? (g.suggestion ? String(g.suggestion.employee.id) : "");
+                return (
+                  <div key={g.key} className="flex items-center gap-2 border rounded-lg p-2" data-testid={`row-unlinked-group-${g.key}`}>
+                    <div className="flex-1 text-xs">
+                      <div className="font-medium">
+                        {g.name || `سجل #${g.records[0]?.id}`}
+                        {g.employeeNumber ? ` (${g.employeeNumber})` : ""}
+                      </div>
+                      <div className="text-gray-500">
+                        {g.records.length} يوم/سجل
+                        {g.suggestion ? (
+                          <span className={g.suggestion.confidence === "high" ? "text-emerald-600" : "text-amber-600"}>
+                            {" "}· {g.suggestion.confidence === "high" ? "مطابقة مؤكدة" : "اقتراح تقريبي — راجعه"}: {g.suggestion.employee.employeeName || g.suggestion.employee.name}
+                          </span>
+                        ) : (
+                          <span className="text-amber-600"> · لا يوجد اقتراح — اختر يدوياً</span>
+                        )}
+                      </div>
+                    </div>
+                    <Select
+                      value={sel}
+                      onValueChange={(v) => setGroupSel((prev) => ({ ...prev, [g.key]: v }))}
+                    >
+                      <SelectTrigger className="w-56" data-testid={`select-link-employee-${g.key}`}>
+                        <SelectValue placeholder="اختر الموظف" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(salaryClosingBundle?.employees ?? []).map((emp: any) => (
+                          <SelectItem key={emp.id} value={String(emp.id)}>
+                            {emp.employeeName || emp.name}{emp.employeeNumber ? ` (${emp.employeeNumber})` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      disabled={bulkLinkMutation.isPending || !sel}
+                      onClick={() =>
+                        bulkLinkMutation.mutate({
+                          attendanceIds: g.records.map((r: any) => r.id),
+                          branchEmployeeId: Number(sel),
+                        })
+                      }
+                      data-testid={`button-link-group-${g.key}`}
+                    >
+                      ربط الكل ({g.records.length})
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowLinkDialog(false)} data-testid="button-close-link-dialog">
