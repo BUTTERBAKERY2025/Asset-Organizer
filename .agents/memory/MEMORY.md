@@ -3,3 +3,4 @@
 - [Security scan notes](security-scan-notes.md) — recurring scan findings: xlsx patched build only on SheetJS CDN (firewall-blocked, manual on Render); scheduler/media-team flags are false positives; uuid is transitive.
 - [HR manager access](hr-manager-access.md) — hr_manager needs HR_MANAGER_MODULES + /api/my-permissions merge + read-only cross-branch elevation (hasCrossBranchHrReadAccess), all in sync or HR pages render empty.
 - [Salary closing snapshot/lock](salary-closing-lock.md) — closed month = immutable snapshot; mutations & re-close lifecycle have non-obvious constraints.
+- [Lazy page registration](lazy-page-registration.md) — every makeLazy("x") page MUST also be added to pageImports in client/src/lib/pagePreloader.ts or hover/aggressive preload throws "Unknown page: x".
