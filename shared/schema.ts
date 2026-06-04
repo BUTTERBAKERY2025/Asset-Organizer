@@ -5186,7 +5186,15 @@ export const employeeSchedules = pgTable("employee_schedules", {
   // window. The composite makes those queries an index range scan instead of
   // a full table scan.
   index("idx_employee_schedules_branch_date").on(table.branchId, table.scheduleDate),
-  uniqueIndex("idx_unique_schedule_per_employee_date_branch").on(table.branchEmployeeId, table.scheduleDate, table.branchId),
+  // PARTIAL unique indexes — these mirror exactly what server/db.ts creates at
+  // startup and what the bulk-save ON CONFLICT clauses target. Keeping the schema
+  // in sync prevents drift between the Drizzle definition and the live database.
+  uniqueIndex("idx_unique_schedule_per_employee_date_branch")
+    .on(table.branchEmployeeId, table.scheduleDate, table.branchId)
+    .where(sql`branch_employee_id IS NOT NULL AND branch_id IS NOT NULL`),
+  uniqueIndex("idx_unique_schedule_per_empid_date_branch")
+    .on(table.employeeId, table.scheduleDate, table.branchId)
+    .where(sql`branch_employee_id IS NULL AND branch_id IS NOT NULL`),
 ]);
 
 export const insertEmployeeScheduleSchema = createInsertSchema(employeeSchedules).omit({

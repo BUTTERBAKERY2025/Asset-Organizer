@@ -25022,6 +25022,52 @@ export async function registerRoutes(
   });
 
   // Employee Schedules - جداول الموظفين
+  // ── Weekly-lock enforcement helpers (shared by all schedule write routes) ──
+  // The app's weeks start on Saturday (client uses weekStartsOn:6). For a given
+  // YYYY-MM-DD date, return the Saturday that starts its week — this matches the
+  // weekStartDate stored in weekly_schedule_locks.
+  // Only canonical YYYY-MM-DD is accepted. Returning null (instead of the raw
+  // string) on any non-canonical/invalid input is deliberate: it prevents a
+  // lock-bypass where a crafted date string (e.g. "20260606" or a datetime
+  // variant) fails to match a stored lock yet still inserts into the locked week.
+  // Write routes validate the format with CANONICAL_DATE and reject (400) first.
+  const CANONICAL_DATE = /^\d{4}-\d{2}-\d{2}$/;
+  const getScheduleWeekStart = (dateStr: string): string | null => {
+    if (!CANONICAL_DATE.test(String(dateStr || ""))) return null;
+    const d = new Date(dateStr + "T12:00:00");
+    if (isNaN(d.getTime())) return null;
+    const offset = (d.getDay() - 6 + 7) % 7; // days since the most recent Saturday
+    d.setDate(d.getDate() - offset);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  // Given a list of schedule items, return the distinct locked weekStartDates among
+  // them (empty array = nothing locked). Used to block writes to finalized weeks.
+  const getLockedScheduleWeeks = async (
+    items: { branchId?: string | null; scheduleDate?: string | null }[],
+  ): Promise<string[]> => {
+    const branchIds = Array.from(
+      new Set(items.map((i) => i.branchId).filter(Boolean)),
+    ) as string[];
+    if (branchIds.length === 0) return [];
+    const locks = await db
+      .select()
+      .from(weeklyScheduleLocks)
+      .where(inArray(weeklyScheduleLocks.branchId, branchIds));
+    if (locks.length === 0) return [];
+    const lockedSet = new Set(locks.map((l) => `${l.branchId}__${l.weekStartDate}`));
+    const conflicts = new Set<string>();
+    for (const it of items) {
+      if (!it.branchId || !it.scheduleDate) continue;
+      const ws = getScheduleWeekStart(it.scheduleDate);
+      if (ws && lockedSet.has(`${it.branchId}__${ws}`)) conflicts.add(ws);
+    }
+    return Array.from(conflicts);
+  };
+
   app.get("/api/employee-schedules", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
     try {
       const { periodId, employeeId, date, branchId, startDate, endDate } = req.query;
@@ -25091,6 +25137,19 @@ export async function registerRoutes(
         const hasAccess = await canAccessBranch(req, req.body.branchId);
         if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بإنشاء جداول لهذا الفرع" });
+        }
+      }
+
+      // LOCK ENFORCEMENT: non-admins cannot write to a locked week.
+      if (!isUserAdmin(req) && req.body.branchId && req.body.scheduleDate) {
+        if (!CANONICAL_DATE.test(String(req.body.scheduleDate))) {
+          return res.status(400).json({ error: "صيغة تاريخ الجدول غير صحيحة، المتوقع YYYY-MM-DD" });
+        }
+        const lockedWeeks = await getLockedScheduleWeeks([
+          { branchId: req.body.branchId, scheduleDate: req.body.scheduleDate },
+        ]);
+        if (lockedWeeks.length > 0) {
+          return res.status(423).json({ error: "الجدول مقفل لهذا الأسبوع - لا يمكن الحفظ", lockedWeeks });
         }
       }
       
@@ -25164,6 +25223,24 @@ export async function registerRoutes(
       if (validatedSchedules.length === 0) {
         return res.status(400).json({ error: "لا توجد بيانات صالحة للحفظ" });
       }
+
+      // LOCK ENFORCEMENT: a locked week cannot be overwritten via bulk save (this
+      // also covers "copy to next week" and any direct API call). Admins may bypass
+      // — there is no separate unlock screen, so admin acts as the override path.
+      if (!isUserAdmin(req)) {
+        const invalidDate = validatedSchedules.find((s: any) => !CANONICAL_DATE.test(String(s.scheduleDate)));
+        if (invalidDate) {
+          return res.status(400).json({ error: "صيغة تاريخ الجدول غير صحيحة، المتوقع YYYY-MM-DD" });
+        }
+        const lockedWeeks = await getLockedScheduleWeeks(validatedSchedules);
+        if (lockedWeeks.length > 0) {
+          console.warn(`[LOCK] Blocked bulk save into locked week(s): ${lockedWeeks.join(", ")}`);
+          return res.status(423).json({
+            error: "الجدول مقفل لهذا الأسبوع - لا يمكن الحفظ أو الكتابة فوقه",
+            lockedWeeks,
+          });
+        }
+      }
       
       console.log(`[BULK SCHEDULES] Saving ${validatedSchedules.length} schedules for branch ${validatedSchedules[0]?.branchId}`);
       const { results: created, errors: saveErrors } = await storage.createBulkEmployeeSchedules(validatedSchedules);
@@ -25216,6 +25293,17 @@ export async function registerRoutes(
             return res.status(403).json({ error: "غير مصرح بنقل الجدول لهذا الفرع" });
           }
         }
+        // LOCK ENFORCEMENT: block edits that touch a locked week (existing or target).
+        if (req.body.scheduleDate && !CANONICAL_DATE.test(String(req.body.scheduleDate))) {
+          return res.status(400).json({ error: "صيغة تاريخ الجدول غير صحيحة، المتوقع YYYY-MM-DD" });
+        }
+        const lockedWeeks = await getLockedScheduleWeeks([
+          { branchId: existingSchedule?.branchId, scheduleDate: existingSchedule?.scheduleDate },
+          { branchId: req.body.branchId || existingSchedule?.branchId, scheduleDate: req.body.scheduleDate || existingSchedule?.scheduleDate },
+        ]);
+        if (lockedWeeks.length > 0) {
+          return res.status(423).json({ error: "الجدول مقفل لهذا الأسبوع - لا يمكن التعديل", lockedWeeks });
+        }
       }
       
       const partialData = insertEmployeeScheduleSchema.partial().parse(req.body);
@@ -25244,6 +25332,15 @@ export async function registerRoutes(
           const hasAccess = await canAccessBranch(req, existingSchedule.branchId);
           if (!hasAccess) {
             return res.status(403).json({ error: "غير مصرح بحذف هذا الجدول" });
+          }
+        }
+        // LOCK ENFORCEMENT: block deletion of a schedule inside a locked week.
+        if (existingSchedule?.branchId && existingSchedule?.scheduleDate) {
+          const lockedWeeks = await getLockedScheduleWeeks([
+            { branchId: existingSchedule.branchId, scheduleDate: existingSchedule.scheduleDate },
+          ]);
+          if (lockedWeeks.length > 0) {
+            return res.status(423).json({ error: "الجدول مقفل لهذا الأسبوع - لا يمكن الحذف", lockedWeeks });
           }
         }
       }

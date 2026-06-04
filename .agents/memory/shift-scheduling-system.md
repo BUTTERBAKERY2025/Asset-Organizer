@@ -24,9 +24,24 @@ the second at all. The ON CONFLICT ... WHERE clauses in storage require the PART
 PG 42P10 — and the catch only falls back on 42704, so it surfaces as a total save failure, not
 a graceful per-row fallback.
 
-**Known gaps (as of this audit, no fix applied — user wanted report only):**
-- Weekly lock is enforced ONLY in the frontend. `POST /api/employee-schedules/bulk` does NOT
-  check `weekly_schedule_locks`, so copyToNextWeek and any direct API call can write to a locked week.
+**Weekly lock MUST be enforced server-side, not just in the UI.** All 4 schedule write
+routes (single/bulk POST, PATCH, DELETE) check `weekly_schedule_locks` and return HTTP 423
+for non-admins; admins bypass (acts as the override path — there is no unlock screen).
+**Why:** UI-only locking let copyToNextWeek and direct API calls overwrite finalized weeks.
+**How to apply:** the lock key is `branchId__weekStartDate` where weekStartDate is the SATURDAY
+of the week (client `startOfWeek(weekStartsOn:6)`); the server recomputes it from each row's date.
+**Lock-bypass trap:** the week-start helper must REJECT non-canonical date strings (only
+`^\d{4}-\d{2}-\d{2}$`) and routes must 400 on bad format BEFORE the lock check — otherwise a
+crafted date (e.g. "20260606") fails lock matching yet still inserts into the locked week.
+
+**Bulk-save fallback must catch BOTH 42704 and 42P10** (+ "no unique or exclusion constraint"
+message) and fall back to per-row SELECT-then-insert. **Why:** if the partial unique indexes
+aren't present, ON CONFLICT throws 42P10; catching only 42704 turned a recoverable case into a
+total silent save failure. shared/schema.ts now declares both PARTIAL indexes to match db.ts.
+
+**Still-open gaps (not yet fixed):**
+- DUAL employee identity (employeeId string vs branchEmployeeId int) — still the root of dedup
+  fragility; a careful data-preserving backfill is the remaining critical fix (issue #2).
 - "all" branch mode can't schedule: bundle returns empty for branchId="all" and save sends
   branchId="all" → server 400 (branch not found). No UI guard on save/apply for "all" (copy/export do guard).
 - No optimistic/row versioning → concurrent editors of same branch+week silently overwrite (last-write-wins) until locked.

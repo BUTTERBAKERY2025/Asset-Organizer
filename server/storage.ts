@@ -10545,8 +10545,17 @@ export class DatabaseStorage implements IStorage {
       await client.query('ROLLBACK').catch(() => {});
       console.error(`[BULK SCHEDULE] UPSERT failed, rolling back:`, batchError?.message);
       
-      if (batchError?.code === '42704' || batchError?.message?.includes('does not exist')) {
-        console.log(`[BULK SCHEDULE] Constraint/index not found, falling back to individual saves`);
+      // Fall back to per-row saves whenever the ON CONFLICT target is unusable.
+      // 42704 = undefined_object (index/constraint missing), 42P10 = there is no
+      // unique/exclusion constraint matching the ON CONFLICT specification. The
+      // individual path uses SELECT-then-insert/update (no ON CONFLICT) so it works
+      // even if the partial unique indexes were never created in this database.
+      const conflictTargetUnusable =
+        batchError?.code === '42704' ||
+        batchError?.code === '42P10' ||
+        /does not exist|no unique or exclusion constraint/i.test(batchError?.message || '');
+      if (conflictTargetUnusable) {
+        console.log(`[BULK SCHEDULE] Constraint/index not found (code ${batchError?.code}), falling back to individual saves`);
         for (const s of deduplicatedSchedules) {
           try {
             const saved = await this.createEmployeeSchedule(s);
