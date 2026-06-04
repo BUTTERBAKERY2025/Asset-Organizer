@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   UserCircle, CalendarDays, Wallet, Plus, Clock, CheckCircle2, XCircle, Ban,
   Briefcase, Building2, Hash, AlertTriangle, LayoutDashboard, CalendarRange,
-  ClipboardCheck, ShieldAlert, FileText, Award, ChevronLeft, ChevronRight,
+  ClipboardCheck, ShieldAlert, FileText, ChevronLeft, ChevronRight,
   MapPin, LogIn, LogOut, Loader2, Fingerprint, Eraser, Languages, Globe, Phone,
   Bell, FileSignature, RefreshCw,
 } from "lucide-react";
@@ -194,7 +194,6 @@ export default function MyPortalPage() {
   const showAdvances = cfgFlag(portalConfig?.showAdvances);
   const showWarnings = cfgFlag(portalConfig?.showWarnings);
   const showDocuments = cfgFlag(portalConfig?.showDocuments);
-  const showIncentives = cfgFlag(portalConfig?.showIncentives);
   const allowLeaveRequests = cfgFlag(portalConfig?.allowLeaveRequests);
   const allowAdvanceRequests = cfgFlag(portalConfig?.allowAdvanceRequests);
   const maxAdvanceAmount = portalConfig?.maxAdvanceAmount ?? 0;
@@ -235,12 +234,6 @@ export default function MyPortalPage() {
   const { data: docsData } = useQuery<{ documents: any[]; expiry: any }>({
     queryKey: ["/api/my/documents"],
     queryFn: async () => (await apiRequest("GET", "/api/my/documents")).json(),
-    enabled: !!hasEmployee,
-  });
-
-  const { data: incentives = [] } = useQuery<any[]>({
-    queryKey: ["/api/my/incentives"],
-    queryFn: async () => (await apiRequest("GET", "/api/my/incentives")).json(),
     enabled: !!hasEmployee,
   });
 
@@ -640,11 +633,6 @@ export default function MyPortalPage() {
                 {showDocuments && (
                   <TabsTrigger value="documents" data-testid="tab-documents">
                     <FileText className="h-4 w-4 ms-1" />{t("tabs.documents")}
-                  </TabsTrigger>
-                )}
-                {showIncentives && incentives.length > 0 && (
-                  <TabsTrigger value="incentives" data-testid="tab-incentives">
-                    <Award className="h-4 w-4 ms-1" />{t("tabs.incentives")}
                   </TabsTrigger>
                 )}
                 {showSalary && (
@@ -1110,26 +1098,6 @@ export default function MyPortalPage() {
                           </a>
                         )}
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </TabsContent>
-
-              {/* حوافزي / incentives */}
-              <TabsContent value="incentives" className="space-y-3">
-                {incentives.length === 0 && (
-                  <Card><CardContent className="p-8 text-center text-muted-foreground">{t("incentives.empty")}</CardContent></Card>
-                )}
-                {incentives.map((inc) => (
-                  <Card key={inc.id} data-testid={`row-incentive-${inc.id}`}>
-                    <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
-                      <div className="space-y-1">
-                        <div className="font-semibold flex items-center gap-2"><Award className="h-4 w-4 text-primary" />{fmtMoney(inc.finalReward)} {currency}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {inc.periodStart} → {inc.periodEnd} · {t("incentives.period")} {Math.round(inc.achievementPercent)}%
-                        </div>
-                      </div>
-                      <StatusBadge status={inc.status === "paid" ? "approved" : inc.status} labels={{ pending: t("incentives.pending"), approved: t("incentives.approved"), paid: t("incentives.paid"), cancelled: t("incentives.cancelled") }} />
                     </CardContent>
                   </Card>
                 ))}
