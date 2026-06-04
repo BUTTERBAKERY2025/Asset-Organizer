@@ -25130,6 +25130,23 @@ export async function registerRoutes(
     }
   });
 
+  // #6: returns the employee name if a schedule target is an INACTIVE (terminated)
+  // branch employee (whose schedules are read-only), otherwise null (write allowed).
+  // Schedules for user accounts not linked to any branch employee are allowed.
+  async function resolveInactiveScheduleTarget(branchEmployeeId: any, employeeId: any): Promise<string | null> {
+    let emp: any;
+    if (branchEmployeeId) {
+      emp = await storage.getBranchEmployee(Number(branchEmployeeId));
+    } else if (typeof employeeId === "string" && employeeId.startsWith("branch_emp_")) {
+      const n = parseInt(employeeId.replace("branch_emp_", ""), 10);
+      if (!isNaN(n)) emp = await storage.getBranchEmployee(n);
+    } else if (typeof employeeId === "string" && employeeId) {
+      emp = await storage.getBranchEmployeeByLinkedUserId(employeeId);
+    }
+    if (emp && emp.status !== "active") return emp.employeeName || "موظف غير نشط";
+    return null;
+  }
+
   app.post("/api/employee-schedules", isAuthenticated, requirePermission("shifts", "create"), async (req, res) => {
     try {
       // SECURITY: Verify branch access for non-admin users
@@ -25163,6 +25180,11 @@ export async function registerRoutes(
         if (validatedData.endTime && !__timeRe.test(validatedData.endTime)) {
           return res.status(400).json({ error: `وقت النهاية غير صالح "${validatedData.endTime}" - الصيغة الصحيحة HH:MM` });
         }
+      }
+      // #6: block creating/overwriting a schedule for an inactive (terminated) employee.
+      const __inactiveName = await resolveInactiveScheduleTarget(validatedData.branchEmployeeId, validatedData.employeeId);
+      if (__inactiveName) {
+        return res.status(409).json({ error: `لا يمكن حفظ جدول لموظف غير نشط (${__inactiveName}) - جدوله للعرض فقط` });
       }
       const schedule = await storage.createEmployeeSchedule(validatedData);
       res.status(201).json(schedule);
@@ -25254,6 +25276,24 @@ export async function registerRoutes(
         });
       }
 
+      // #6: block bulk writes targeting inactive (terminated) employees (read-only).
+      const __inactiveTargets: string[] = [];
+      const __targetCache = new Map<string, string | null>();
+      for (const s of validatedSchedules) {
+        const key = s.branchEmployeeId ? `be:${s.branchEmployeeId}` : `e:${s.employeeId}`;
+        if (!__targetCache.has(key)) {
+          __targetCache.set(key, await resolveInactiveScheduleTarget(s.branchEmployeeId, s.employeeId));
+        }
+        const nm = __targetCache.get(key);
+        if (nm && !__inactiveTargets.includes(nm)) __inactiveTargets.push(nm);
+      }
+      if (__inactiveTargets.length > 0) {
+        return res.status(409).json({
+          error: "لا يمكن حفظ جداول لموظفين غير نشطين (جداولهم للعرض فقط):",
+          details: __inactiveTargets.slice(0, 10),
+        });
+      }
+
       // LOCK ENFORCEMENT: a locked week cannot be overwritten via bulk save (this
       // also covers "copy to next week" and any direct API call). Admins may bypass
       // — there is no separate unlock screen, so admin acts as the override path.
@@ -25336,6 +25376,16 @@ export async function registerRoutes(
         }
       }
       
+      // #6: block editing a schedule that belongs to an inactive (terminated) employee.
+      const __patchExisting = await storage.getEmployeeScheduleById(id);
+      const __patchInactive = await resolveInactiveScheduleTarget(
+        req.body.branchEmployeeId ?? __patchExisting?.branchEmployeeId,
+        req.body.employeeId ?? __patchExisting?.employeeId
+      );
+      if (__patchInactive) {
+        return res.status(409).json({ error: `لا يمكن تعديل جدول موظف غير نشط (${__patchInactive}) - جدوله للعرض فقط` });
+      }
+
       const partialData = insertEmployeeScheduleSchema.partial().parse(req.body);
       const schedule = await storage.updateEmployeeSchedule(id, partialData);
       if (!schedule) return res.status(404).json({ error: "الجدول غير موجود" });
@@ -25375,6 +25425,13 @@ export async function registerRoutes(
         }
       }
       
+      // #6: block deleting a schedule that belongs to an inactive (terminated) employee.
+      const __delExisting = await storage.getEmployeeScheduleById(id);
+      const __delInactive = await resolveInactiveScheduleTarget(__delExisting?.branchEmployeeId, __delExisting?.employeeId);
+      if (__delInactive) {
+        return res.status(409).json({ error: `لا يمكن حذف جدول موظف غير نشط (${__delInactive}) - جدوله للعرض فقط` });
+      }
+
       await storage.deleteEmployeeSchedule(id);
       invalidateCache("schedules");
       res.status(204).send();
@@ -29007,11 +29064,9 @@ export async function registerRoutes(
         }
       }
 
-      const [shiftProfiles, employees, schedules, attendance, weeklyLock] = await Promise.all([
+      const [shiftProfiles, allBranchEmployees, schedules, attendance, weeklyLock] = await Promise.all([
         storage.getBranchShiftProfiles(branchId).catch(() => []),
-        storage.getBranchEmployeesByBranch(branchId).then(
-          emps => emps.filter((e: any) => e.status === "active")
-        ).catch(() => []),
+        storage.getBranchEmployeesByBranch(branchId).catch(() => []),
         (startDate && endDate)
           ? storage.getEmployeeSchedulesByBranchAndDateRange(branchId, startDate, endDate).catch(() => [])
           : Promise.resolve([]),
@@ -29027,6 +29082,27 @@ export async function registerRoutes(
             ).catch(() => [])
           : Promise.resolve([]),
       ]);
+
+      // #6: return active employees + inactive employees that already have schedules
+      // in this range, so terminated staff stay visible (read-only) in the grid.
+      const scheduledEmpIds = new Set<number>();
+      const empByLinkedUser = new Map<string, any>();
+      for (const e of (allBranchEmployees as any[])) {
+        if (e.linkedUserId) empByLinkedUser.set(e.linkedUserId, e);
+      }
+      for (const s of (schedules as any[])) {
+        if (s.branchEmployeeId) { scheduledEmpIds.add(s.branchEmployeeId); continue; }
+        if (typeof s.employeeId === "string" && s.employeeId.startsWith("branch_emp_")) {
+          const n = parseInt(s.employeeId.replace("branch_emp_", ""), 10);
+          if (!isNaN(n)) scheduledEmpIds.add(n);
+          continue;
+        }
+        const linked = empByLinkedUser.get(s.employeeId);
+        if (linked) scheduledEmpIds.add(linked.id);
+      }
+      const employees = (allBranchEmployees as any[]).filter(
+        (e: any) => e.status === "active" || scheduledEmpIds.has(e.id)
+      );
 
       res.json({ shiftProfiles, employees, schedules, attendance, weeklyLock });
     } catch (error) {

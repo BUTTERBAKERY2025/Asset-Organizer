@@ -283,9 +283,12 @@ export default function ShiftManagementPage() {
 
   const filteredEmployees = useMemo(() => {
     if (!branchEmployees) return [];
-    const activeEmployees = branchEmployees.filter(e => e.status === "active");
-    if (selectedBranch === "all") return activeEmployees;
-    return activeEmployees.filter(e => e.branchId === selectedBranch);
+    // #6: bundle returns active employees + inactive employees that already have
+    // schedules in range (shown read-only). Keep active first, inactive at the bottom.
+    const list = selectedBranch === "all"
+      ? branchEmployees
+      : branchEmployees.filter(e => e.branchId === selectedBranch);
+    return [...list].sort((a, b) => (a.status === "active" ? 0 : 1) - (b.status === "active" ? 0 : 1));
   }, [branchEmployees, selectedBranch]);
 
   const reportFilteredEmployees = useMemo(() => {
@@ -356,6 +359,11 @@ export default function ShiftManagementPage() {
       toast({ title: "تنبيه", description: "اختر فرعاً محدداً أولاً - لا يمكن التعديل في وضع \"كل الفروع\"", variant: "destructive" });
       return;
     }
+    const targetEmp = filteredEmployees.find(e => String(e.id) === employeeId);
+    if (targetEmp && targetEmp.status !== "active") {
+      toast({ title: "موظف غير نشط", description: "جدول هذا الموظف للعرض فقط - لا يمكن تعديله", variant: "destructive" });
+      return;
+    }
     if (isScheduleLocked) {
       toast({ title: "الجدول مقفل", description: "لا يمكن التعديل - الجدول مقفل لهذا الأسبوع", variant: "destructive" });
       return;
@@ -413,6 +421,7 @@ export default function ShiftManagementPage() {
           console.warn(`[SAVE] Skipping unknown key: ${empKey}`);
           return;
         }
+        if (employee.status !== "active") return; // #6: inactive employees are read-only, never saved
         Object.entries(dates).forEach(([dateStr, data]) => {
           if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
           const shiftType = data.isOff ? null : normalizeShiftType(data.shiftType, data.startTime || "08:00");
@@ -590,6 +599,7 @@ export default function ShiftManagementPage() {
     const normalizedCode = normalizeShiftType(rawShiftCode, startTime);
     const newScheduleData: Record<string, Record<string, ScheduleCell>> = {};
     filteredEmployees.forEach(emp => {
+      if (emp.status !== "active") return; // #6: skip read-only inactive employees
       newScheduleData[String(emp.id)] = {};
       weekDates.forEach((date, index) => {
         const dateStr = format(date, "yyyy-MM-dd");
@@ -602,7 +612,13 @@ export default function ShiftManagementPage() {
         };
       });
     });
-    setScheduleData(newScheduleData);
+    // #6: keep existing inactive employees' read-only schedules visible in the grid.
+    const inactiveIds = new Set(filteredEmployees.filter(e => e.status !== "active").map(e => String(e.id)));
+    setScheduleData(prev => {
+      const preserved: Record<string, Record<string, ScheduleCell>> = {};
+      for (const k of inactiveIds) if (prev[k]) preserved[k] = prev[k];
+      return { ...preserved, ...newScheduleData };
+    });
     setHasUnsavedChanges(true);
     
     toast({ title: "تم تطبيق الجدول", description: `${profileName} (${startTime} - ${endTime})، الجمعة إجازة - اضغط حفظ لتأكيد التغييرات` });
@@ -619,6 +635,11 @@ export default function ShiftManagementPage() {
   const applyShiftToEmployee = (empId: string) => {
     if (selectedBranch === "all") {
       toast({ title: "تنبيه", description: "اختر فرعاً محدداً أولاً - لا يمكن التطبيق في وضع \"كل الفروع\"", variant: "destructive" });
+      return;
+    }
+    const targetEmp = filteredEmployees.find(e => String(e.id) === empId);
+    if (targetEmp && targetEmp.status !== "active") {
+      toast({ title: "موظف غير نشط", description: "لا يمكن تطبيق وردية لموظف غير نشط", variant: "destructive" });
       return;
     }
     const rawCode = getEmployeeShiftSelection(empId);
@@ -702,6 +723,7 @@ export default function ShiftManagementPage() {
     const schedulesToSave: any[] = [];
     
     filteredEmployees.forEach(employee => {
+      if (employee.status !== "active") return; // #6: don't copy inactive employees' schedules
       const empIdStr = String(employee.id);
       const empSchedule = scheduleData[empIdStr];
       if (!empSchedule) return;
@@ -1974,11 +1996,17 @@ export default function ShiftManagementPage() {
                           {filteredEmployees.map(employee => {
                             const empIdStr = String(employee.id);
                             const linkedUserId = employee.linkedUserId || empIdStr;
+                            const isInactive = employee.status !== "active";
                             return (
-                            <TableRow key={employee.id} data-testid={`row-employee-${employee.id}`}>
+                            <TableRow key={employee.id} data-testid={`row-employee-${employee.id}`} className={isInactive ? "opacity-70" : ""}>
                               <TableCell className={`font-medium ${isRTL ? 'sticky right-0 border-l' : 'sticky left-0 border-r'} bg-background z-10 min-w-[280px]`}>
                                 <div className="flex items-center justify-between">
-                                  <div className="font-semibold">{employee.employeeName}</div>
+                                  <div className="flex items-center gap-2">
+                                    <div className="font-semibold">{employee.employeeName}</div>
+                                    {isInactive && (
+                                      <Badge variant="outline" className="text-[10px] px-1 py-0 border-orange-400 text-orange-600" data-testid={`badge-inactive-${employee.id}`}>غير نشط</Badge>
+                                    )}
+                                  </div>
                                   <div className="flex gap-1">
                                     {!hasOffDays(empIdStr) && Object.keys(scheduleData[empIdStr] || {}).length > 0 && (
                                       <Badge variant="destructive" className="text-[10px] px-1 py-0">{isRTL ? 'بدون إجازة' : 'No Off'}</Badge>
@@ -1991,6 +2019,7 @@ export default function ShiftManagementPage() {
                                 <div className="text-xs text-muted-foreground mb-2">{employee.jobTitle || t("shiftManagement.employee")}</div>
                                 <div className="flex gap-1 items-center">
                                   <Select 
+                                    disabled={isInactive}
                                     value={getEmployeeShiftSelection(empIdStr)} 
                                     onValueChange={(val) => setEmployeeShiftSelection(empIdStr, val)}
                                   >
@@ -2017,6 +2046,7 @@ export default function ShiftManagementPage() {
                                     variant="outline" 
                                     size="sm" 
                                     className="h-7 text-xs px-2"
+                                    disabled={isInactive}
                                     onClick={() => applyShiftToEmployee(empIdStr)}
                                     data-testid={`btn-apply-shift-${employee.id}`}
                                   >
@@ -2035,6 +2065,7 @@ export default function ShiftManagementPage() {
                                       <div className="flex items-center justify-center gap-2">
                                         <Checkbox
                                           checked={cellData.isOff}
+                                          disabled={isInactive}
                                           onCheckedChange={(checked) => handleScheduleChange(empIdStr, dateStr, "isOff", checked as boolean)}
                                           data-testid={`checkbox-off-${employee.id}-${dateStr}`}
                                         />
@@ -2047,6 +2078,7 @@ export default function ShiftManagementPage() {
                                             <Input
                                               type="time"
                                               value={cellData.startTime}
+                                              disabled={isInactive}
                                               onChange={(e) => handleScheduleChange(empIdStr, dateStr, "startTime", e.target.value)}
                                               className="h-7 text-xs"
                                               data-testid={`input-start-${employee.id}-${dateStr}`}
@@ -2057,6 +2089,7 @@ export default function ShiftManagementPage() {
                                             <Input
                                               type="time"
                                               value={cellData.endTime}
+                                              disabled={isInactive}
                                               onChange={(e) => handleScheduleChange(empIdStr, dateStr, "endTime", e.target.value)}
                                               className="h-7 text-xs"
                                               data-testid={`input-end-${employee.id}-${dateStr}`}

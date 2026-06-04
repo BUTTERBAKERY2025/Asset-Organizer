@@ -10278,6 +10278,9 @@ export class DatabaseStorage implements IStorage {
     const activeBranchEmpIds = new Set(
       allBranchEmps.filter(e => e.status === "active").map(e => e.id)
     );
+    // #6: include ALL branch employees (active + inactive) so terminated employees'
+    // existing schedules stay visible (read-only) instead of disappearing.
+    const branchEmpIds = new Set(allBranchEmps.map(e => e.id));
     // Map from linkedUserId → branchEmployee for terminated-employee detection
     const linkedUserToEmp = new Map<string, typeof allBranchEmps[0]>();
     for (const emp of allBranchEmps) {
@@ -10289,15 +10292,14 @@ export class DatabaseStorage implements IStorage {
     
     const filteredSchedules = branchSchedules.filter(schedule => {
       if (schedule.branchEmployeeId) {
-        return activeBranchEmpIds.has(schedule.branchEmployeeId);
+        return branchEmpIds.has(schedule.branchEmployeeId);
       }
       if (schedule.employeeId.startsWith("branch_emp_")) {
         const empId = parseInt(schedule.employeeId.replace("branch_emp_", ""), 10);
-        return !isNaN(empId) && activeBranchEmpIds.has(empId);
+        return !isNaN(empId) && branchEmpIds.has(empId);
       }
-      // For user-UUID schedules, reject if the user is linked to a terminated branch employee
-      const linkedEmp = linkedUserToEmp.get(schedule.employeeId);
-      if (linkedEmp && linkedEmp.status !== 'active') return false;
+      // #6: keep user-UUID schedules linked to any branch employee (active or inactive)
+      if (linkedUserToEmp.has(schedule.employeeId)) return true;
       return activeUserIds.has(schedule.employeeId);
     });
     
@@ -10315,9 +10317,7 @@ export class DatabaseStorage implements IStorage {
       for (const schedule of userSchedules) {
         if (!allSchedules.some(s => s.id === schedule.id)) {
           if (!schedule.branchId || schedule.branchId === branchId) {
-            // Skip if the user is linked to a terminated branch employee
-            const linkedEmp = linkedUserToEmp.get(schedule.employeeId);
-            if (linkedEmp && linkedEmp.status !== 'active') continue;
+            // #6: include schedules even for terminated employees (read-only display)
             allSchedules.push(schedule);
           }
         }

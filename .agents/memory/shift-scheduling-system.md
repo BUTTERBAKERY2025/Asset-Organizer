@@ -53,3 +53,14 @@ total silent save failure. shared/schema.ts now declares both PARTIAL indexes to
 - No optimistic/row versioning → concurrent editors of same branch+week silently overwrite (last-write-wins) until locked.
 - Invalid times silently coerced to 08:00/16:00 in storage (console.warn only).
 - Friday (week starts Saturday, index===6) hardcoded as the off day in apply-profile helpers.
+
+**Inactive (terminated) employees are READ-ONLY, not hidden (decision 2026-06-04, Option A).**
+Their existing schedules stay VISIBLE in the grid + reports/exports, but cannot be created/edited/deleted.
+**Why:** users complained terminated staff's schedules silently vanished from view AND silent-skip on save.
+**How to apply (3 layers, keep in sync):** (1) read fn includes all branch emps (active+inactive) not just active;
+(2) bundle returns active emps + inactive emps that have schedules in range; (3) frontend shows them with a
+"غير نشط" badge, disabled controls, blocked edit handlers, and skips them in save/copy/applyDefault.
+**CRITICAL — UI guards are NOT enough:** immutability MUST be enforced server-side on ALL FOUR schedule write
+routes (POST single, POST bulk, PATCH, DELETE) via a shared helper that resolves the target's status from
+branchEmployeeId / `branch_emp_<id>` / linkedUserId and returns 409 — applied to admins too. A script could
+otherwise overwrite a terminated employee's schedule.
