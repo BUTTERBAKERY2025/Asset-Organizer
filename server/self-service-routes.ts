@@ -892,19 +892,21 @@ export function registerSelfServiceRoutes(app: Express) {
       const emp = await getMyEmployee(req);
       if (!emp) return res.status(403).json({ error: "حسابك غير مرتبط بملف موظف" });
 
+      if (!emp.branchId) return res.status(400).json({ error: "ملف الموظف غير مرتبط بفرع" });
+
       const parsed = selfCheckinSchema.parse(req.body);
 
-      if (emp.branchId) {
-        const [branch] = await db.select().from(branches).where(eq(branches.id, emp.branchId));
-        if (branch?.latitude && branch?.longitude) {
-          const allowedRadius = branch.locationRadius || 200;
-          const distance = distanceMeters(parsed.userLatitude, parsed.userLongitude, branch.latitude, branch.longitude);
-          if (distance > allowedRadius) {
-            return res.status(400).json({
-              error: `الموقع خارج النطاق المسموح (${Math.round(distance)} متر من الفرع، المسموح: ${allowedRadius} متر)`,
-            });
-          }
-        }
+      const [branch] = await db.select().from(branches).where(eq(branches.id, emp.branchId));
+      if (!branch) return res.status(400).json({ error: "الفرع غير موجود" });
+      if (!branch.latitude || !branch.longitude) {
+        return res.status(400).json({ error: "لم يتم تحديد موقع الفرع. تواصل مع الإدارة." });
+      }
+      const allowedRadius = branch.locationRadius || 200;
+      const distance = distanceMeters(parsed.userLatitude, parsed.userLongitude, branch.latitude, branch.longitude);
+      if (distance > allowedRadius) {
+        return res.status(400).json({
+          error: `الموقع خارج النطاق المسموح (${Math.round(distance)} متر من الفرع، المسموح: ${allowedRadius} متر)`,
+        });
       }
 
       const today = saudiDate();
