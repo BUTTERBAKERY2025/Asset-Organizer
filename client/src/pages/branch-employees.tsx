@@ -1153,7 +1153,14 @@ export default function BranchEmployeesPage() {
       `🔗 رابط الدخول: https://www.thebutterbakery.com\n` +
       `👤 اسم المستخدم: ${username || ""}\n` +
       `🔑 كلمة المرور: ${password || ""}\n\n` +
-      `ادخل على الرابط وسجّل الدخول بهذه البيانات. يُفضّل تغيير كلمة المرور بعد أول دخول.`;
+      `ادخل على الرابط وسجّل الدخول بهذه البيانات. يُفضّل تغيير كلمة المرور بعد أول دخول.\n\n` +
+      `――――――――――\n\n` +
+      `Hello 👋\n` +
+      `Your login account for the Butter Bakery system is ready.\n\n` +
+      `🔗 Login link: https://www.thebutterbakery.com\n` +
+      `👤 Username: ${username || ""}\n` +
+      `🔑 Password: ${password || ""}\n\n` +
+      `Open the link and sign in with these details. Please change your password after your first login.`;
     return `https://wa.me/${intl}?text=${encodeURIComponent(text)}`;
   };
 
