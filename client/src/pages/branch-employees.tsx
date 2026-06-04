@@ -1007,13 +1007,17 @@ export default function BranchEmployeesPage() {
       setNewAccountPassword("");
       if (variables?.sendWhatsapp) {
         if (data?.whatsappSent) {
-          toast({ title: "تم إنشاء الحساب وإرسال بيانات الدخول للموظف على الواتساب" });
+          toast({
+            title: data?.whatsappChannel === "sms"
+              ? "تم إنشاء الحساب وإرسال بيانات الدخول للموظف عبر رسالة نصية (SMS)"
+              : "تم إنشاء الحساب وإرسال بيانات الدخول للموظف على الواتساب",
+          });
         } else {
           toast({
             title: "تم إنشاء الحساب",
             description: data?.whatsappError === "no_phone"
               ? "لا يوجد رقم جوال مسجّل للموظف لإرسال البيانات عليه"
-              : "تعذّر إرسال البيانات على الواتساب، يمكنك نسخها وإرسالها يدوياً",
+              : `تعذّر إرسال البيانات (${data?.whatsappError || "خطأ غير معروف"}). يمكنك نسخها وإرسالها يدوياً`,
             variant: "destructive",
           });
         }
@@ -1043,13 +1047,17 @@ export default function BranchEmployeesPage() {
       setShowResetPassword(false);
       if (variables?.sendWhatsapp) {
         if (data?.whatsappSent) {
-          toast({ title: "تم تحديث كلمة المرور وإرسالها للموظف على الواتساب" });
+          toast({
+            title: data?.whatsappChannel === "sms"
+              ? "تم تحديث كلمة المرور وإرسالها للموظف عبر رسالة نصية (SMS)"
+              : "تم تحديث كلمة المرور وإرسالها للموظف على الواتساب",
+          });
         } else {
           toast({
             title: "تم تحديث كلمة المرور",
             description: data?.whatsappError === "no_phone"
               ? "لا يوجد رقم جوال مسجّل للموظف لإرسال البيانات عليه"
-              : "تعذّر إرسال البيانات على الواتساب، يمكنك إرسالها يدوياً",
+              : `تعذّر إرسال البيانات (${data?.whatsappError || "خطأ غير معروف"}). يمكنك إرسالها يدوياً`,
             variant: "destructive",
           });
         }
