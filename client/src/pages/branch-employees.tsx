@@ -989,41 +989,23 @@ export default function BranchEmployeesPage() {
   });
 
   const createAccountMutation = useMutation({
-    mutationFn: async ({ employeeId, username, password, sendWhatsapp }: { employeeId: number; username: string; password: string; sendWhatsapp?: boolean }) => {
+    mutationFn: async ({ employeeId, username, password }: { employeeId: number; username: string; password: string }) => {
       const res = await fetch(`/api/branch-employees/${employeeId}/create-account`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ username, password, sendWhatsapp: !!sendWhatsapp }),
+        body: JSON.stringify({ username, password }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "فشل في إنشاء الحساب");
       return data;
     },
-    onSuccess: (data: any, variables: any) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/branch-employees/bundle"] });
       setViewingEmployee((prev) => prev ? { ...prev, linkedUserId: "linked" } as BranchEmployee : prev);
       setNewAccountUsername("");
       setNewAccountPassword("");
-      if (variables?.sendWhatsapp) {
-        if (data?.whatsappSent) {
-          toast({
-            title: data?.whatsappChannel === "sms"
-              ? "تم إنشاء الحساب وإرسال بيانات الدخول للموظف عبر رسالة نصية (SMS)"
-              : "تم إنشاء الحساب وإرسال بيانات الدخول للموظف على الواتساب",
-          });
-        } else {
-          toast({
-            title: "تم إنشاء الحساب",
-            description: data?.whatsappError === "no_phone"
-              ? "لا يوجد رقم جوال مسجّل للموظف لإرسال البيانات عليه"
-              : `تعذّر إرسال البيانات (${data?.whatsappError || "خطأ غير معروف"}). يمكنك نسخها وإرسالها يدوياً`,
-            variant: "destructive",
-          });
-        }
-      } else {
-        toast({ title: "تم إنشاء حساب الدخول للموظف بنجاح" });
-      }
+      toast({ title: "تم إنشاء حساب الدخول للموظف بنجاح" });
     },
     onError: (e: any) => {
       toast({ title: "تعذّر إنشاء الحساب", description: e?.message, variant: "destructive" });
@@ -1031,39 +1013,21 @@ export default function BranchEmployeesPage() {
   });
 
   const resetPasswordMutation = useMutation({
-    mutationFn: async ({ employeeId, password, sendWhatsapp }: { employeeId: number; password: string; sendWhatsapp?: boolean }) => {
+    mutationFn: async ({ employeeId, password }: { employeeId: number; password: string }) => {
       const res = await fetch(`/api/branch-employees/${employeeId}/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ password, sendWhatsapp: !!sendWhatsapp }),
+        body: JSON.stringify({ password }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "فشل في إعادة تعيين كلمة المرور");
       return data;
     },
-    onSuccess: (data: any, variables: any) => {
+    onSuccess: () => {
       setResetPasswordValue("");
       setShowResetPassword(false);
-      if (variables?.sendWhatsapp) {
-        if (data?.whatsappSent) {
-          toast({
-            title: data?.whatsappChannel === "sms"
-              ? "تم تحديث كلمة المرور وإرسالها للموظف عبر رسالة نصية (SMS)"
-              : "تم تحديث كلمة المرور وإرسالها للموظف على الواتساب",
-          });
-        } else {
-          toast({
-            title: "تم تحديث كلمة المرور",
-            description: data?.whatsappError === "no_phone"
-              ? "لا يوجد رقم جوال مسجّل للموظف لإرسال البيانات عليه"
-              : `تعذّر إرسال البيانات (${data?.whatsappError || "خطأ غير معروف"}). يمكنك إرسالها يدوياً`,
-            variant: "destructive",
-          });
-        }
-      } else {
-        toast({ title: "تم تحديث كلمة المرور بنجاح" });
-      }
+      toast({ title: "تم تحديث كلمة المرور بنجاح" });
     },
     onError: (e: any) => {
       toast({ title: "تعذّر تحديث كلمة المرور", description: e?.message, variant: "destructive" });
@@ -1169,6 +1133,28 @@ export default function BranchEmployeesPage() {
     } catch {
       toast({ title: isRTL ? "تعذّر النسخ" : "Copy failed", variant: "destructive" });
     }
+  };
+
+  // تحويل رقم الجوال إلى الصيغة الدولية (السعودية 966) لرابط واتساب المباشر
+  const toIntlPhone = (phone?: string | null) => {
+    let d = String(phone || "").replace(/\D/g, "");
+    if (d.startsWith("00")) d = d.slice(2);
+    if (d.startsWith("0")) d = "966" + d.slice(1);
+    else if (d.length === 9) d = "966" + d;
+    return d;
+  };
+
+  // بناء رابط واتساب مباشر يفتح محادثة مع الموظف وبه بيانات الدخول جاهزة
+  const buildEmployeeWhatsappLink = (phone?: string | null, username?: string, password?: string) => {
+    const intl = toIntlPhone(phone);
+    const text =
+      `مرحباً 👋\n` +
+      `تم تجهيز حساب الدخول الخاص بك في نظام باتر (Butter Bakery).\n\n` +
+      `🔗 رابط الدخول: https://www.thebutterbakery.com\n` +
+      `👤 اسم المستخدم: ${username || ""}\n` +
+      `🔑 كلمة المرور: ${password || ""}\n\n` +
+      `ادخل على الرابط وسجّل الدخول بهذه البيانات. يُفضّل تغيير كلمة المرور بعد أول دخول.`;
+    return `https://wa.me/${intl}?text=${encodeURIComponent(text)}`;
   };
 
   // Employee Settings Queries and Mutations
@@ -3171,23 +3157,34 @@ export default function BranchEmployeesPage() {
                                   className="bg-green-600 hover:bg-green-700 text-white"
                                   disabled={!newAccountUsername || !newAccountPassword || createAccountMutation.isPending || !viewingEmployee?.phoneNumber}
                                   onClick={() => {
-                                    if (viewingEmployee) {
-                                      createAccountMutation.mutate({
+                                    if (!viewingEmployee) return;
+                                    const link = buildEmployeeWhatsappLink(
+                                      viewingEmployee.phoneNumber,
+                                      newAccountUsername.trim(),
+                                      newAccountPassword,
+                                    );
+                                    // نفتح تبويب واتساب فوراً (داخل نقرة المستخدم) لتفادي حظر النوافذ المنبثقة
+                                    const win = window.open("about:blank", "_blank");
+                                    createAccountMutation.mutate(
+                                      {
                                         employeeId: viewingEmployee.id,
                                         username: newAccountUsername.trim(),
                                         password: newAccountPassword,
-                                        sendWhatsapp: true,
-                                      });
-                                    }
+                                      },
+                                      {
+                                        onSuccess: () => { if (win) win.location.href = link; },
+                                        onError: () => { if (win) win.close(); },
+                                      },
+                                    );
                                   }}
                                   data-testid="button-create-account-whatsapp"
                                 >
                                   <MessageCircle className="w-4 h-4 ms-1" />
-                                  {createAccountMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "إنشاء وإرسال على الواتساب"}
+                                  {createAccountMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "إنشاء وفتح واتساب الموظف"}
                                 </Button>
                               </div>
                               {!viewingEmployee?.phoneNumber && (
-                                <p className="text-[11px] text-amber-600">لإرسال البيانات على الواتساب، أضِف رقم جوال للموظف في بياناته الأساسية.</p>
+                                <p className="text-[11px] text-amber-600">لفتح محادثة واتساب، أضِف رقم جوال للموظف في بياناته الأساسية.</p>
                               )}
                             </div>
                           ) : (
@@ -3285,14 +3282,22 @@ export default function BranchEmployeesPage() {
                               className="bg-green-600 hover:bg-green-700 text-white"
                               disabled={!resetPasswordValue || resetPasswordMutation.isPending || !viewingEmployee?.phoneNumber}
                               onClick={() => {
-                                if (viewingEmployee) {
-                                  resetPasswordMutation.mutate({ employeeId: viewingEmployee.id, password: resetPasswordValue, sendWhatsapp: true });
-                                }
+                                if (!viewingEmployee) return;
+                                const uname = systemUsers?.find((u: any) => u.id === viewingEmployee.linkedUserId)?.username || "";
+                                const link = buildEmployeeWhatsappLink(viewingEmployee.phoneNumber, uname, resetPasswordValue);
+                                const win = window.open("about:blank", "_blank");
+                                resetPasswordMutation.mutate(
+                                  { employeeId: viewingEmployee.id, password: resetPasswordValue },
+                                  {
+                                    onSuccess: () => { if (win) win.location.href = link; },
+                                    onError: () => { if (win) win.close(); },
+                                  },
+                                );
                               }}
                               data-testid="button-save-reset-password-whatsapp"
                             >
                               <MessageCircle className="w-4 h-4 ms-1" />
-                              {resetPasswordMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "حفظ وإرسال واتساب"}
+                              {resetPasswordMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "حفظ وفتح واتساب"}
                             </Button>
                           </div>
                         )}

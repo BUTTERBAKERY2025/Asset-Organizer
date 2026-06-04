@@ -111,7 +111,7 @@ import { insertFieldChecklistTemplateSchema, insertFieldChecklistTemplateItemSch
 import { insertReportScheduleSchema } from "@shared/schema";
 import { generateReport, REPORT_TYPE_LABELS, type ReportType } from "./report-generator";
 import { executeSchedule, computeNextRun } from "./scheduler";
-import { sendWhatsAppMessage, sendSMS, isTwilioConfigured } from "./twilio-service";
+import { sendWhatsAppMessage, isTwilioConfigured } from "./twilio-service";
 import { recipientsSchema as reportRecipientsSchema } from "./scheduler";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertContractMilestoneSchema, insertContractVariationSchema, insertContractGuaranteeSchema, insertContractTemplateSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
@@ -29456,34 +29456,6 @@ export async function registerRoutes(
     }
   });
 
-  // إرسال بيانات الدخول للموظف عبر الواتساب (يستخدم الهاتف المخزّن للموظف فقط)
-  async function sendEmployeeCredentialsWhatsapp(
-    phone: string | null | undefined,
-    name: string,
-    username: string,
-    password: string,
-  ): Promise<{ sent: boolean; channel?: "whatsapp" | "sms"; error?: string }> {
-    const cleanPhone = String(phone || "").trim();
-    if (!cleanPhone) return { sent: false, error: "no_phone" };
-    const msg =
-      `مرحباً ${name || ""} 👋\n` +
-      `تم تجهيز حساب الدخول الخاص بك في نظام باتر (Butter Bakery).\n\n` +
-      `🔗 رابط الدخول: https://www.thebutterbakery.com\n` +
-      `👤 اسم المستخدم: ${username}\n` +
-      `🔑 كلمة المرور: ${password}\n\n` +
-      `ادخل على الرابط وسجّل الدخول بهذه البيانات. يُفضّل تغيير كلمة المرور بعد أول دخول.`;
-
-    // نحاول الإرسال عبر واتساب أولاً، وإن فشل (مثلاً لعدم انضمام الرقم لساندبوكس
-    // واتساب) نتحوّل تلقائياً إلى رسالة نصية SMS لضمان وصول البيانات للموظف.
-    const wa = await sendWhatsAppMessage(cleanPhone, msg);
-    if (wa.success) return { sent: true, channel: "whatsapp" };
-
-    const sms = await sendSMS(cleanPhone, msg);
-    if (sms.success) return { sent: true, channel: "sms" };
-
-    return { sent: false, error: sms.error || wa.error };
-  }
-
   // إنشاء حساب دخول جديد لموظف وربطه به (بوابة الموظف)
   app.post("/api/branch-employees/:id/create-account", isAuthenticated, requirePermission("users", "create"), async (req, res) => {
     try {
@@ -29540,23 +29512,7 @@ export async function registerRoutes(
       });
 
       const { password: _pw, ...safeUser } = user as any;
-
-      let whatsappSent = false;
-      let whatsappChannel: "whatsapp" | "sms" | undefined;
-      let whatsappError: string | undefined;
-      if (req.body?.sendWhatsapp) {
-        const r = await sendEmployeeCredentialsWhatsapp(
-          employee.phoneNumber,
-          employee.employeeName || username,
-          username,
-          password,
-        );
-        whatsappSent = r.sent;
-        whatsappChannel = r.channel;
-        whatsappError = r.error;
-      }
-
-      res.status(201).json({ user: safeUser, whatsappSent, whatsappChannel, whatsappError });
+      res.status(201).json({ user: safeUser });
     } catch (error: any) {
       console.error("Error creating employee account:", error);
       if (error?.message === "هذا الموظف مرتبط بحساب بالفعل") {
@@ -29595,25 +29551,7 @@ export async function registerRoutes(
       }
 
       await storage.updateUser(employee.linkedUserId, { password });
-
-      let whatsappSent = false;
-      let whatsappChannel: "whatsapp" | "sms" | undefined;
-      let whatsappError: string | undefined;
-      if (req.body?.sendWhatsapp) {
-        const linkedUser = await storage.getUser(employee.linkedUserId);
-        const uname = (linkedUser as any)?.username || "";
-        const r = await sendEmployeeCredentialsWhatsapp(
-          employee.phoneNumber,
-          employee.employeeName || uname,
-          uname,
-          password,
-        );
-        whatsappSent = r.sent;
-        whatsappChannel = r.channel;
-        whatsappError = r.error;
-      }
-
-      res.json({ success: true, whatsappSent, whatsappChannel, whatsappError });
+      res.json({ success: true });
     } catch (error) {
       console.error("Error resetting employee password:", error);
       res.status(500).json({ error: "فشل في إعادة تعيين كلمة المرور" });
