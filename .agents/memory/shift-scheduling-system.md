@@ -13,6 +13,14 @@ Storage: `createBulkEmployeeSchedules` / `getEmployeeSchedulesByBranchAndDateRan
 user UUID *or* `branch_emp_<id>`) and `branchEmployeeId` (int). This duality is the root of
 all historical duplicate/"schedule reverts on reload" bugs. Dedup logic is duplicated in THREE
 places (read in storage, bulk-save in storage, startup migration in db.ts). Touch one, keep all in sync.
+**CANONICAL identity is `branchEmployeeId` (int).** The `employeeId` string is the legacy/alt form
+of the same person. The frontend grid ALWAYS sends `branchEmployeeId: employee.id` (shift-management.tsx),
+so NEW rows are never created with a NULL branchEmployeeId from that page — remaining NULLs are legacy only.
+**RESOLVED (prod backfill, 2026-06-04):** all 16,986 prod rows backfilled so 100% carry branchEmployeeId
+(0 NULL remaining). Method = resolve NULL rows to a branchEmployee id via `branch_emp_<id>` suffix OR
+`branch_employees.linked_user_id` match in same branch; DELETE legacy NULL rows that collided with an
+existing canonical row; UPDATE the rest. Reversible via full snapshot table `employee_schedules_backup_20260604`.
+Run on Supabase (prod). Data-only migration — NO code/schema change was needed (runtime already handles both).
 
 **Upsert depends on TWO PARTIAL unique indexes created at app startup in `server/db.ts`**
 (not by drizzle push): `idx_unique_schedule_per_employee_date_branch` (branch_employee_id,
@@ -40,8 +48,6 @@ aren't present, ON CONFLICT throws 42P10; catching only 42704 turned a recoverab
 total silent save failure. shared/schema.ts now declares both PARTIAL indexes to match db.ts.
 
 **Still-open gaps (not yet fixed):**
-- DUAL employee identity (employeeId string vs branchEmployeeId int) — still the root of dedup
-  fragility; a careful data-preserving backfill is the remaining critical fix (issue #2).
 - "all" branch mode can't schedule: bundle returns empty for branchId="all" and save sends
   branchId="all" → server 400 (branch not found). No UI guard on save/apply for "all" (copy/export do guard).
 - No optimistic/row versioning → concurrent editors of same branch+week silently overwrite (last-write-wins) until locked.
