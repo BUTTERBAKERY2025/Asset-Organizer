@@ -27366,8 +27366,33 @@ export async function registerRoutes(
         if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
       }
 
+      // Get employee info - handle both regular users and branch employees
+      // ازدواج الهوية: قد تُحفظ الجداول/الحضور بالـ UUID أو بالرقم (branch_emp_N).
+      // نحلّ المعرّف الرقمي للموظف (branchEmpNumId) لمطابقة كلا الشكلين (نفس منطق التوليد الجماعي).
+      let employeeName = "";
+      let branchEmpNumId: number | undefined;
+      if (employeeId.startsWith("branch_emp_")) {
+        const branchEmployeeId = parseInt(employeeId.replace("branch_emp_", ""));
+        const branchEmployee = await storage.getBranchEmployee(branchEmployeeId);
+        if (!branchEmployee) {
+          return res.status(404).json({ error: "موظف الفرع غير موجود" });
+        }
+        employeeName = branchEmployee.employeeName;
+        branchEmpNumId = branchEmployeeId;
+      } else {
+        const user = await storage.getUser(employeeId);
+        if (!user) {
+          return res.status(404).json({ error: "الموظف غير موجود" });
+        }
+        employeeName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || '';
+        // الموظف المربوط عبر branch_employees.linkedUserId قد يملك حضوراً/جداول بالرقم
+        const linkedBranchEmp = await storage.getBranchEmployeeByLinkedUserId(employeeId);
+        if (linkedBranchEmp) branchEmpNumId = linkedBranchEmp.id;
+      }
+
       // Check if report already exists (Phase 3: include lock status)
-      const existing = await storage.getTimesheetReportByEmployeeAndDates(employeeId, startDate, endDate);
+      // نفحص بأي من شكلي الهوية لمنع تكرار التقرير لنفس الشخص عبر UUID/رقم
+      const existing = await storage.getTimesheetReportForPeriodByAnyIdentity(employeeId, branchEmpNumId, startDate, endDate);
       if (existing) {
         return res.status(400).json({
           error: existing.isLocked
@@ -27378,33 +27403,23 @@ export async function registerRoutes(
         });
       }
 
-      // Get employee info - handle both regular users and branch employees
-      let employeeName = "";
-      if (employeeId.startsWith("branch_emp_")) {
-        const branchEmployeeId = parseInt(employeeId.replace("branch_emp_", ""));
-        const branchEmployee = await storage.getBranchEmployee(branchEmployeeId);
-        if (!branchEmployee) {
-          return res.status(404).json({ error: "موظف الفرع غير موجود" });
-        }
-        employeeName = branchEmployee.employeeName;
-      } else {
-        const user = await storage.getUser(employeeId);
-        if (!user) {
-          return res.status(404).json({ error: "الموظف غير موجود" });
-        }
-        employeeName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || '';
-      }
-
       // Get schedules and attendance for the date range
+      // نطابق بالهويتين: employeeId (نصي) أو branchEmployeeId (رقمي)
       const schedules = await storage.getEmployeeSchedulesByBranchAndDateRange(branchId, startDate, endDate);
-      const employeeSchedules = schedules.filter(s => s.employeeId === employeeId);
-      
-      const attendance = await storage.getAllAttendanceRecords({
-        employeeId,
+      const employeeSchedules = schedules.filter(s =>
+        s.employeeId === employeeId ||
+        (branchEmpNumId !== undefined && s.branchEmployeeId === branchEmpNumId)
+      );
+
+      const allBranchAttendance = await storage.getAllAttendanceRecords({
         branchId,
         startDate,
         endDate
       });
+      const attendance = allBranchAttendance.filter(a =>
+        a.employeeId === employeeId ||
+        (branchEmpNumId !== undefined && a.branchEmployeeId === branchEmpNumId)
+      );
 
       // Calculate totals
       let totalScheduledDays = 0;
@@ -27420,6 +27435,7 @@ export async function registerRoutes(
       const report = await storage.createTimesheetReport({
         employeeId,
         branchId,
+        branchEmployeeId: branchEmpNumId,
         startDate,
         endDate,
         generatedBy: req.currentUser?.id,
@@ -27533,7 +27549,11 @@ export async function registerRoutes(
       });
 
       res.status(201).json({ report: updatedReport, entriesCount: entries.length });
-    } catch (error) {
+    } catch (error: any) {
+      // 23505 = انتهاك القيد الفريد ⇒ نقرة ثانية متزامنة أنشأت التقرير بالفعل
+      if (error?.code === '23505') {
+        return res.status(409).json({ error: "يوجد تقرير مسبق لهذه الفترة" });
+      }
       console.error("Error generating timesheet report:", error);
       res.status(500).json({ error: "فشل في إنشاء التقرير" });
     }
@@ -27609,7 +27629,8 @@ export async function registerRoutes(
 
           // Skip if already exists (after branch validation so out-of-branch IDs always report as failed, not skipped)
           // Phase 3: distinguish locked vs unlocked existing reports
-          const existing = await storage.getTimesheetReportByEmployeeAndDates(employeeId, startDate, endDate);
+          // نفحص بأي من شكلي الهوية لمنع تكرار التقرير لنفس الشخص عبر UUID/رقم
+          const existing = await storage.getTimesheetReportForPeriodByAnyIdentity(employeeId, branchEmpNumId, startDate, endDate);
           if (existing) {
             skipped.push({
               employeeId,
@@ -27633,7 +27654,7 @@ export async function registerRoutes(
 
           // Create the report shell
           const report = await storage.createTimesheetReport({
-            employeeId, branchId, startDate, endDate,
+            employeeId, branchId, branchEmployeeId: branchEmpNumId, startDate, endDate,
             generatedBy: req.currentUser?.id,
             status: "pending_employee_signature",
             totalScheduledDays: 0, totalPresentDays: 0, totalAbsentDays: 0, totalLateDays: 0,
@@ -27712,6 +27733,11 @@ export async function registerRoutes(
 
           created.push({ employeeId, reportId: updatedReport?.id, entriesCount: entries.length });
         } catch (e: any) {
+          // 23505 = القيد الفريد ⇒ تقرير لهذه الفترة أُنشئ بالفعل (سباق) ⇒ نعدّه متخطىً لا فاشلاً
+          if (e?.code === '23505') {
+            skipped.push({ employeeId, reason: "already_exists" });
+            continue;
+          }
           console.error(`Bulk timesheet generation failed for ${employeeId}:`, e);
           failed.push({ employeeId, error: e?.message || "خطأ غير معروف" });
         }

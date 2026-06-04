@@ -5461,6 +5461,14 @@ export const timesheetReports = pgTable("timesheet_reports", {
   index("idx_timesheet_reports_branch_employee").on(table.branchEmployeeId),
   index("idx_timesheet_reports_locked").on(table.isLocked),
   index("idx_timesheet_reports_superseded").on(table.supersededBy),
+  // منع تكرار التقارير: تقرير واحد لكل (موظف + فترة + إصدار).
+  // التوليد ينشئ دائماً version=1 فتتصادم النقرتان المتزامنتان؛ إعادة الإصدار تستخدم version=2,3.. فلا تتعارض.
+  uniqueIndex("uq_timesheet_reports_employee_period_version").on(
+    table.employeeId,
+    table.startDate,
+    table.endDate,
+    table.version,
+  ),
 ]);
 
 export const insertTimesheetReportSchema = createInsertSchema(timesheetReports).omit({

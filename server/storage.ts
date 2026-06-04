@@ -1317,6 +1317,7 @@ export interface IStorage {
   getTimesheetReports(filters?: { employeeId?: string; branchId?: string; status?: string }): Promise<TimesheetReport[]>;
   getTimesheetReport(id: number): Promise<TimesheetReport | undefined>;
   getTimesheetReportByEmployeeAndDates(employeeId: string, startDate: string, endDate: string): Promise<TimesheetReport | undefined>;
+  getTimesheetReportForPeriodByAnyIdentity(employeeId: string, branchEmployeeId: number | undefined, startDate: string, endDate: string): Promise<TimesheetReport | undefined>;
   createTimesheetReport(report: InsertTimesheetReport): Promise<TimesheetReport>;
   updateTimesheetReport(id: number, report: Partial<InsertTimesheetReport>): Promise<TimesheetReport | undefined>;
   deleteTimesheetReport(id: number): Promise<boolean>;
@@ -11709,6 +11710,22 @@ export class DatabaseStorage implements IStorage {
         eq(timesheetReports.startDate, startDate),
         eq(timesheetReports.endDate, endDate)
       ));
+    return report;
+  }
+
+  // يفحص وجود تقرير لنفس الفترة بأيٍّ من شكلي الهوية (UUID نصي أو branchEmployeeId رقمي)
+  // لمنع تكرار التقرير عبر هويتين مختلفتين لنفس الشخص. يُرجع الأحدث إصداراً.
+  async getTimesheetReportForPeriodByAnyIdentity(employeeId: string, branchEmployeeId: number | undefined, startDate: string, endDate: string): Promise<TimesheetReport | undefined> {
+    const identityMatch = branchEmployeeId !== undefined
+      ? or(eq(timesheetReports.employeeId, employeeId), eq(timesheetReports.branchEmployeeId, branchEmployeeId))
+      : eq(timesheetReports.employeeId, employeeId);
+    const [report] = await db.select().from(timesheetReports)
+      .where(and(
+        identityMatch,
+        eq(timesheetReports.startDate, startDate),
+        eq(timesheetReports.endDate, endDate)
+      ))
+      .orderBy(desc(timesheetReports.version), desc(timesheetReports.createdAt), desc(timesheetReports.id));
     return report;
   }
 
