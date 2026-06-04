@@ -26650,8 +26650,12 @@ export async function registerRoutes(
       
       const record = await storage.checkIn(currentUser?.id, effectiveBranchId, signature, deviceInfo);
       res.status(201).json(record);
-    } catch (error) {
-      console.error("Error checking in:", error);
+    } catch (error: any) {
+      console.error("Error checking in:", error?.message || error);
+      const msg: string = error?.message || "";
+      if (msg.includes("جدول") || msg.includes("إجازة") || msg.includes("مسبقاً") || msg.includes("بالفعل") || msg.includes("فرع")) {
+        return res.status(400).json({ error: msg });
+      }
       res.status(500).json({ error: "فشل في تسجيل الحضور" });
     }
   });
@@ -26866,7 +26870,7 @@ export async function registerRoutes(
         record = await storage.checkInEmployee(employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName, targetDate);
       } catch (checkInError: any) {
         console.error("[Check-in] checkInEmployee failed:", checkInError?.message || checkInError);
-        if (checkInError?.message?.includes('مسبقاً') || checkInError?.message?.includes('لا ينتمي') || checkInError?.message?.includes('غير نشط')) {
+        if (checkInError?.message?.includes('مسبقاً') || checkInError?.message?.includes('لا ينتمي') || checkInError?.message?.includes('غير نشط') || checkInError?.message?.includes('جدول') || checkInError?.message?.includes('إجازة')) {
           return res.status(400).json({ error: checkInError.message });
         }
         return res.status(500).json({ error: "فشل في تسجيل الحضور" });

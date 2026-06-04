@@ -10766,6 +10766,26 @@ export class DatabaseStorage implements IStorage {
     
     const employeeName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.username || 'Unknown';
     
+    // ENFORCEMENT: a saved shift-schedule MUST exist for this employee on this date,
+    // and the day must not be marked off, before self check-in is accepted.
+    const scheduleRow = await this.getScheduleForCheckIn(employeeId, branchId, today);
+    if (!scheduleRow) {
+      throw new Error("لا يوجد جدول وردية لك في هذا اليوم - يجب إضافة الجدول أولاً قبل تسجيل الحضور");
+    }
+    if (scheduleRow.isOff) {
+      throw new Error("هذا اليوم إجازة رسمية في جدولك - لا يمكن تسجيل الحضور");
+    }
+
+    let lateMinutes = 0;
+    if (scheduleRow.startTime) {
+      const scheduled = new Date(`1970-01-01T${scheduleRow.startTime}`);
+      const actual = new Date(`1970-01-01T${now}`);
+      if (actual > scheduled) {
+        lateMinutes = Math.round((actual.getTime() - scheduled.getTime()) / (1000 * 60));
+      }
+    }
+    const status = lateMinutes > 0 ? 'late' : 'present';
+    
     let existing = await this.getAttendanceByEmployeeAndDate(employeeId, today);
     
     if (existing && !existing.actualCheckOut) {
@@ -10781,11 +10801,15 @@ export class DatabaseStorage implements IStorage {
         employeeId,
         employeeName,
         branchId,
+        scheduleId: scheduleRow.id,
         attendanceDate: today,
         actualCheckIn: now,
         checkInSignature: signature,
         deviceInfo,
-        status: 'present'
+        scheduledStartTime: scheduleRow.startTime || null,
+        scheduledEndTime: scheduleRow.endTime || null,
+        lateMinutes,
+        status
       }).returning();
       return created;
     } catch (error: any) {
@@ -11249,6 +11273,46 @@ export class DatabaseStorage implements IStorage {
     return uniqueEmployees;
   }
 
+  // Resolves the saved shift-schedule row for an employee on a given date (matching by
+  // employeeId string OR the linked/parsed branchEmployeeId). Returns undefined if no
+  // schedule exists. Used to ENFORCE "a schedule must exist before attendance check-in".
+  async getScheduleForCheckIn(employeeId: string, branchId: string, date: string): Promise<{ id: number; isOff: boolean | null; startTime: string | null; endTime: string | null; shiftType: string | null } | undefined> {
+    let branchEmpId: number | undefined;
+    if (employeeId.startsWith("branch_emp_")) {
+      const n = parseInt(employeeId.replace("branch_emp_", ""), 10);
+      if (!isNaN(n)) branchEmpId = n;
+    } else {
+      const be = await this.getBranchEmployeeByLinkedUserId(employeeId);
+      if (be) branchEmpId = be.id;
+    }
+    const orConds: any[] = [eq(employeeSchedules.employeeId, employeeId)];
+    if (branchEmpId !== undefined) orConds.push(eq(employeeSchedules.branchEmployeeId, branchEmpId));
+    // Fetch all rows that could belong to this person on this date, newest first.
+    const rows = await db.select({
+      id: employeeSchedules.id,
+      isOff: employeeSchedules.isOff,
+      startTime: employeeSchedules.startTime,
+      endTime: employeeSchedules.endTime,
+      shiftType: employeeSchedules.shiftType,
+      branchEmployeeId: employeeSchedules.branchEmployeeId,
+    })
+      .from(employeeSchedules)
+      .where(and(
+        eq(employeeSchedules.branchId, branchId),
+        eq(employeeSchedules.scheduleDate, date),
+        or(...orConds),
+      ))
+      .orderBy(desc(employeeSchedules.id));
+    if (rows.length === 0) return undefined;
+    // DETERMINISTIC selection: prefer the canonical branchEmployeeId match (legacy
+    // dual-identity rows may also match by employeeId string); otherwise newest row.
+    if (branchEmpId !== undefined) {
+      const canonical = rows.find(r => r.branchEmployeeId === branchEmpId);
+      if (canonical) return canonical;
+    }
+    return rows[0];
+  }
+
   async checkInEmployee(employeeId: string, branchId: string, signature?: string, scheduleId?: number, scheduledStartTime?: string, scheduledEndTime?: string, employeeNameParam?: string, attendanceDate?: string): Promise<AttendanceRecord> {
     const saudiTime = getSaudiArabiaTime();
     const today = attendanceDate || saudiTime.date;
@@ -11299,6 +11363,20 @@ export class DatabaseStorage implements IStorage {
       }
     }
     
+    // ENFORCEMENT: a saved shift-schedule MUST exist for this employee on this date,
+    // and the day must not be marked off. The schedule is the authoritative source for
+    // the scheduled times (we ignore client-supplied values to keep late-calc accurate).
+    const scheduleRow = await this.getScheduleForCheckIn(employeeId, branchId, today);
+    if (!scheduleRow) {
+      throw new Error("لا يوجد جدول وردية لهذا الموظف في هذا اليوم - يجب إضافة الجدول أولاً قبل تسجيل الحضور");
+    }
+    if (scheduleRow.isOff) {
+      throw new Error("هذا اليوم إجازة رسمية في جدول الموظف - لا يمكن تسجيل الحضور");
+    }
+    scheduleId = scheduleRow.id;
+    scheduledStartTime = scheduleRow.startTime || undefined;
+    scheduledEndTime = scheduleRow.endTime || undefined;
+
     let existing = await this.getAttendanceByEmployeeAndDate(employeeId, today);
     
     if (existing && existing.actualCheckIn && !existing.actualCheckOut) {

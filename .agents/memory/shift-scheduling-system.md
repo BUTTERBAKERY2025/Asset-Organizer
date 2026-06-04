@@ -64,3 +64,15 @@ Their existing schedules stay VISIBLE in the grid + reports/exports, but cannot 
 routes (POST single, POST bulk, PATCH, DELETE) via a shared helper that resolves the target's status from
 branchEmployeeId / `branch_emp_<id>` / linkedUserId and returns 409 — applied to admins too. A script could
 otherwise overwrite a terminated employee's schedule.
+
+**Attendance check-in REQUIRES a saved schedule (decision 2026-06-04).** Both self check-in
+(`checkIn`) and clerk/biometric check-in (`checkInEmployee`) hard-block (400, Arabic) when no
+`employee_schedules` row exists for that person+branch+date, AND when that day's row is `isOff`.
+Applies to everyone (no admin override). Bulk historical import path is intentionally exempt.
+**Why:** lateness was computed only if the client sent `scheduledStartTime`; missing/edited schedules
+silently produced status='present' with no late-calc, and the server trusted client-supplied times.
+**How to apply:** resolver `getScheduleForCheckIn(employeeId, branchId, date)` is the authoritative
+source — it matches by employeeId string OR canonical branchEmployeeId, and MUST stay deterministic
+(order by id DESC + prefer canonical branchEmployeeId) because dual-identity legacy rows can both match;
+a naive `or(...)+limit(1)` could pick an isOff row and wrongly block a valid employee. The schedule's
+startTime/endTime/id override any client-supplied values on the attendance record.
