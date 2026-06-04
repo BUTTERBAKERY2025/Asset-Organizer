@@ -352,6 +352,10 @@ export default function ShiftManagementPage() {
   }, [currentWeekStart]);
 
   const handleScheduleChange = (employeeId: string, dateStr: string, field: keyof ScheduleCell, value: string | boolean) => {
+    if (selectedBranch === "all") {
+      toast({ title: "تنبيه", description: "اختر فرعاً محدداً أولاً - لا يمكن التعديل في وضع \"كل الفروع\"", variant: "destructive" });
+      return;
+    }
     if (isScheduleLocked) {
       toast({ title: "الجدول مقفل", description: "لا يمكن التعديل - الجدول مقفل لهذا الأسبوع", variant: "destructive" });
       return;
@@ -388,6 +392,9 @@ export default function ShiftManagementPage() {
 
   const saveSchedulesMutation = useMutation({
     mutationFn: async () => {
+      if (selectedBranch === "all") {
+        throw new Error("يرجى اختيار فرع محدد قبل الحفظ - لا يمكن حفظ الجدول في وضع \"كل الفروع\"");
+      }
       const schedules: any[] = [];
       const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
       
@@ -561,6 +568,10 @@ export default function ShiftManagementPage() {
   }, [activeShiftProfiles, selectedShiftProfile]);
 
   const applyDefaultSchedule = () => {
+    if (selectedBranch === "all") {
+      toast({ title: "تنبيه", description: "اختر فرعاً محدداً أولاً - لا يمكن التطبيق في وضع \"كل الفروع\"", variant: "destructive" });
+      return;
+    }
     if (isScheduleLocked) {
       setShowLockedDialog(true);
       return;
@@ -606,6 +617,10 @@ export default function ShiftManagementPage() {
   };
 
   const applyShiftToEmployee = (empId: string) => {
+    if (selectedBranch === "all") {
+      toast({ title: "تنبيه", description: "اختر فرعاً محدداً أولاً - لا يمكن التطبيق في وضع \"كل الفروع\"", variant: "destructive" });
+      return;
+    }
     const rawCode = getEmployeeShiftSelection(empId);
     const profile = activeShiftProfiles.find(p => p.shiftCode === rawCode);
     const startTime = profile?.startTime || "08:00";
@@ -670,7 +685,20 @@ export default function ShiftManagementPage() {
 
     const nextWeekStart = addWeeks(currentWeekStart, 1);
     const nextWeekDates = Array.from({ length: 7 }, (_, i) => addDays(nextWeekStart, i));
-    
+
+    // LOCK CHECK (#9): refuse to copy into a locked target week (clear message before saving)
+    const nextWeekStartStr = format(nextWeekStart, "yyyy-MM-dd");
+    try {
+      const lockRes = await apiRequest("GET", `/api/weekly-schedule-locks?branchId=${encodeURIComponent(selectedBranch)}&weekStartDate=${nextWeekStartStr}`);
+      const nextLocks = await lockRes.json();
+      if (Array.isArray(nextLocks) && nextLocks.length > 0) {
+        toast({ title: "الأسبوع التالي مقفل", description: "لا يمكن نسخ الجدول - جدول الأسبوع التالي مقفل", variant: "destructive" });
+        return;
+      }
+    } catch {
+      // pre-check failed; the server still enforces the lock on save
+    }
+
     const schedulesToSave: any[] = [];
     
     filteredEmployees.forEach(employee => {
@@ -694,6 +722,7 @@ export default function ShiftManagementPage() {
             isOff: cellData.isOff,
             startTime: cellData.startTime,
             endTime: cellData.endTime,
+            shiftType: cellData.isOff ? null : normalizeShiftType(cellData.shiftType, cellData.startTime || "08:00"),
             status: "scheduled"
           });
         }
@@ -708,8 +737,12 @@ export default function ShiftManagementPage() {
       });
       await queryClient.refetchQueries({ queryKey: ["/api/shift-management/bundle", selectedBranch, startDateStr, endDateStr] });
       queryClient.invalidateQueries({ queryKey: ["/api/employee-schedules"] });
-    } catch (error) {
-      toast({ title: "خطأ", description: "فشل في نسخ الجدول", variant: "destructive" });
+    } catch (error: any) {
+      const raw = String(error?.message || "");
+      const msg = raw.includes("423") || raw.includes("مقفل")
+        ? "الأسبوع التالي مقفل - لا يمكن النسخ"
+        : "فشل في نسخ الجدول";
+      toast({ title: "خطأ", description: msg, variant: "destructive" });
     }
   };
 

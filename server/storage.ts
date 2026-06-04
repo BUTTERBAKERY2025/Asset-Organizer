@@ -10420,13 +10420,12 @@ export class DatabaseStorage implements IStorage {
           enriched.branchEmployeeId = parsed;
         }
       }
-      if (enriched.startTime && !timeRegex.test(enriched.startTime)) {
-        console.warn(`[BULK SCHEDULE] Invalid startTime "${enriched.startTime}" for ${enriched.employeeName}, defaulting to 08:00`);
-        enriched.startTime = "08:00";
+      // TIME VALIDATION (#7): reject invalid times instead of silently coercing to defaults.
+      if (!enriched.isOff && enriched.startTime && !timeRegex.test(enriched.startTime)) {
+        throw new Error(`وقت بداية غير صالح "${enriched.startTime}" للموظف ${enriched.employeeName} - الصيغة الصحيحة HH:MM`);
       }
-      if (enriched.endTime && !timeRegex.test(enriched.endTime)) {
-        console.warn(`[BULK SCHEDULE] Invalid endTime "${enriched.endTime}" for ${enriched.employeeName}, defaulting to 16:00`);
-        enriched.endTime = "16:00";
+      if (!enriched.isOff && enriched.endTime && !timeRegex.test(enriched.endTime)) {
+        throw new Error(`وقت نهاية غير صالح "${enriched.endTime}" للموظف ${enriched.employeeName} - الصيغة الصحيحة HH:MM`);
       }
       if (enriched.shiftType && !validShiftTypes.includes(enriched.shiftType)) {
         console.warn(`[BULK SCHEDULE] Non-standard shiftType "${enriched.shiftType}" for ${enriched.employeeName}, normalizing from time`);

@@ -25154,6 +25154,16 @@ export async function registerRoutes(
       }
       
       const validatedData = insertEmployeeScheduleSchema.parse(req.body);
+      // TIME VALIDATION (#7): reject invalid times instead of silently coercing.
+      const __timeRe = /^([01]\d|2[0-3]):[0-5]\d$/;
+      if (!validatedData.isOff) {
+        if (validatedData.startTime && !__timeRe.test(validatedData.startTime)) {
+          return res.status(400).json({ error: `وقت البداية غير صالح "${validatedData.startTime}" - الصيغة الصحيحة HH:MM` });
+        }
+        if (validatedData.endTime && !__timeRe.test(validatedData.endTime)) {
+          return res.status(400).json({ error: `وقت النهاية غير صالح "${validatedData.endTime}" - الصيغة الصحيحة HH:MM` });
+        }
+      }
       const schedule = await storage.createEmployeeSchedule(validatedData);
       res.status(201).json(schedule);
     } catch (error) {
@@ -25222,6 +25232,26 @@ export async function registerRoutes(
       
       if (validatedSchedules.length === 0) {
         return res.status(400).json({ error: "لا توجد بيانات صالحة للحفظ" });
+      }
+
+      // TIME VALIDATION (#7): reject invalid times instead of silently coercing to 08:00/16:00.
+      const __timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+      const __timeErrors: string[] = [];
+      for (const s of validatedSchedules) {
+        if (s.isOff) continue;
+        if (s.startTime && !__timeRegex.test(s.startTime)) {
+          __timeErrors.push(`${s.employeeName} (${s.scheduleDate}): وقت بداية غير صالح "${s.startTime}"`);
+        }
+        if (s.endTime && !__timeRegex.test(s.endTime)) {
+          __timeErrors.push(`${s.employeeName} (${s.scheduleDate}): وقت نهاية غير صالح "${s.endTime}"`);
+        }
+      }
+      if (__timeErrors.length > 0) {
+        return res.status(400).json({
+          error: "بعض الأوقات غير صالحة، يرجى تصحيحها (الصيغة الصحيحة HH:MM):",
+          details: __timeErrors.slice(0, 10),
+          invalidCount: __timeErrors.length,
+        });
       }
 
       // LOCK ENFORCEMENT: a locked week cannot be overwritten via bulk save (this
@@ -25355,7 +25385,7 @@ export async function registerRoutes(
   });
 
   // Weekly Schedule Locks - قفل جدول الدوام الأسبوعي
-  app.get("/api/weekly-schedule-locks", isAuthenticated, async (req, res) => {
+  app.get("/api/weekly-schedule-locks", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
     try {
       const { branchId, weekStartDate } = req.query;
       
