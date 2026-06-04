@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { db } from "./db";
-import { eq, and, desc, inArray, like } from "drizzle-orm";
+import { eq, and, desc, inArray, like, isNotNull } from "drizzle-orm";
 import { isAuthenticated, requirePermission, getEffectiveBranchFilter } from "./auth";
 import { storage } from "./storage";
 import {
@@ -16,6 +16,7 @@ import {
   incentiveAwards,
   notifications,
   users,
+  employmentApplications,
   PORTAL_SETTING_KEYS,
 } from "@shared/schema";
 import { z } from "zod";
@@ -74,6 +75,26 @@ export function registerSelfServiceRoutes(app: Express) {
       const emp = await getMyEmployee(req);
       if (!emp) return res.json({ hasEmployee: false, employee: null, branch: null });
       const [branch] = await db.select().from(branches).where(eq(branches.id, emp.branchId));
+      // الصورة: إن لم تكن محفوظة على ملف الموظف، نستعيدها من طلب التوظيف المطابق برقم الجوال.
+      // مطابقة دقيقة على آخر 9 أرقام بعد التطبيع، ولا نستخدم الصورة إلا إذا كان هناك تطابق واحد لا لبس فيه
+      // (لتفادي تسريب صورة موظف آخر بسبب تشابه الأرقام أو إعادة استخدامها).
+      let photoUrl = emp.photoUrl;
+      if (!photoUrl && emp.phoneNumber) {
+        const last9 = String(emp.phoneNumber).replace(/\D/g, "").slice(-9);
+        if (last9.length === 9) {
+          const candidates = await db
+            .select({ photoUrl: employmentApplications.photoUrl, phone: employmentApplications.phone })
+            .from(employmentApplications)
+            .where(and(isNotNull(employmentApplications.photoUrl), like(employmentApplications.phone, `%${last9}%`)))
+            .orderBy(desc(employmentApplications.createdAt))
+            .limit(10);
+          const matched = candidates.filter(
+            (c) => String(c.phone || "").replace(/\D/g, "").slice(-9) === last9,
+          );
+          const distinctPhotos = Array.from(new Set(matched.map((c) => c.photoUrl).filter(Boolean)));
+          if (distinctPhotos.length === 1) photoUrl = distinctPhotos[0] as string;
+        }
+      }
       res.json({
         hasEmployee: true,
         employee: {
@@ -88,7 +109,7 @@ export function registerSelfServiceRoutes(app: Express) {
           hireDate: emp.hireDate,
           nationality: emp.nationality,
           phoneNumber: emp.phoneNumber,
-          photoUrl: emp.photoUrl,
+          photoUrl,
           iqamaExpiry: emp.iqamaExpiry,
           healthCertificateExpiry: emp.healthCertificateExpiry,
         },

@@ -36276,6 +36276,35 @@ export async function registerRoutes(
     try {
       const data = { ...req.body };
       data.createdBy = req.session.userId;
+      // الاستهداف حسب المنصب/الوظيفة: نحوّله إلى قائمة مستخدمين دقيقة على الخادم
+      // حتى لا يُسرَّب الإشعار لكل موظفي الفرع (الدور = "employee" للجميع).
+      const targetJobTitles = Array.isArray((data as any).targetJobTitles)
+        ? ((data as any).targetJobTitles as string[]).filter(Boolean)
+        : [];
+      delete (data as any).targetJobTitles;
+      if (targetJobTitles.length > 0) {
+        let branchPool: string[];
+        if (data.targetAllBranches) {
+          const all = await db.select({ id: branches.id }).from(branches);
+          branchPool = all.map((b) => b.id);
+        } else {
+          branchPool = Array.isArray(data.targetBranchIds) ? data.targetBranchIds : [];
+        }
+        const allowedBranches = await restrictBranchesForUser(req, branchPool);
+        if (allowedBranches.length === 0) {
+          return res.status(403).json({ error: "لا يوجد فروع ضمن صلاحياتك" });
+        }
+        const userIdSet = new Set<string>();
+        for (const jt of targetJobTitles) {
+          const targets = await resolveTargetsByPosition(jt, allowedBranches);
+          for (const t of targets) if (t.userId) userIdSet.add(t.userId);
+        }
+        if (userIdSet.size === 0) {
+          return res.status(400).json({ error: "لا يوجد موظفون بهذه الوظيفة لديهم حساب في الفروع المحددة" });
+        }
+        data.targetUserIds = Array.from(userIdSet);
+        data.targetRoleIds = null;
+      }
       if (data.startDate && typeof data.startDate === 'string') data.startDate = new Date(data.startDate);
       if (data.endDate && typeof data.endDate === 'string') data.endDate = new Date(data.endDate);
       if (!data.startDate || data.startDate === '') data.startDate = null;

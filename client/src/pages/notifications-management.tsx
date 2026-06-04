@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { Layout } from "@/components/layout";
 import type { SystemNotification, Branch } from "@shared/schema";
+import { JOB_TITLES, JOB_TITLE_LABELS } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,6 +87,7 @@ const DEFAULT_FORM: Partial<SystemNotification> = {
   targetAllBranches: true,
   targetBranchIds: null,
   targetRoleIds: null,
+  targetJobTitles: null,
   startDate: null,
   endDate: null,
   displayTimeStart: null,
@@ -1018,6 +1020,53 @@ export default function NotificationsManagement() {
                           className="mt-2 text-xs text-gray-500"
                         >
                           <X className="w-3 h-3 ml-1" /> إزالة جميع الأدوار
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="border-t pt-4 mt-2">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <Label className="text-sm font-medium">استهداف حسب الوظيفة (اختياري)</Label>
+                          <p className="text-xs text-gray-500 mt-1">عند اختيار وظيفة واحدة أو أكثر، سيصل الإشعار فقط لمن يشغلون هذه الوظيفة في الفروع المحددة (وليس كل موظفي الفرع)</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {JOB_TITLES.map((jt) => {
+                          const isSelected = (form.targetJobTitles || []).includes(jt);
+                          return (
+                            <label
+                              key={jt}
+                              data-testid={`checkbox-jobtitle-${jt}`}
+                              className={`flex items-center gap-2 p-2.5 rounded-lg border-2 cursor-pointer transition-all text-xs ${
+                                isSelected ? "border-amber-400 bg-amber-50" : "border-gray-200 hover:border-gray-300"
+                              }`}
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={checked => {
+                                  const ids = form.targetJobTitles || [];
+                                  updateForm({
+                                    targetJobTitles: checked
+                                      ? [...ids, jt]
+                                      : ids.filter((id: string) => id !== jt),
+                                  });
+                                }}
+                              />
+                              <span className="font-medium">{JOB_TITLE_LABELS[jt] || jt}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      {(form.targetJobTitles || []).length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => updateForm({ targetJobTitles: null })}
+                          className="mt-2 text-xs text-gray-500"
+                          data-testid="button-clear-jobtitles"
+                        >
+                          <X className="w-3 h-3 ml-1" /> إزالة جميع الوظائف
                         </Button>
                       )}
                     </div>

@@ -118,6 +118,25 @@ export default function MyPortalPage() {
   const leaveStatusLabels = (k: string) => t(`leaveStatus.${k}`, { defaultValue: k });
   const advanceStatusLabels = (k: string) => t(`advanceStatus.${k}`, { defaultValue: k });
 
+  // بيانات مخزّنة بالعربية (الوظيفة/الجنسية) — نعرض المقابل الإنجليزي عند تفعيل الإنجليزية
+  const JOB_TITLE_EN: Record<string, string> = {
+    "كاشير": "Cashier", "خباز": "Baker", "مشرف": "Supervisor", "مدير فرع": "Branch Manager",
+    "مدير إنتاج": "Production Manager", "مفتش جودة": "Quality Inspector", "توصيل": "Delivery",
+    "نظافة": "Cleaner", "صيانة": "Maintenance", "سكرتير تنفيذي": "Executive Secretary", "أخرى": "Other",
+  };
+  const NATIONALITY_EN: Record<string, string> = {
+    "سعودي": "Saudi", "سعودية": "Saudi", "مصري": "Egyptian", "يمني": "Yemeni", "سوري": "Syrian",
+    "سوداني": "Sudanese", "باكستاني": "Pakistani", "هندي": "Indian", "بنغلاديشي": "Bangladeshi",
+    "فلبيني": "Filipino", "أردني": "Jordanian", "لبناني": "Lebanese", "نيبالي": "Nepali",
+    "إثيوبي": "Ethiopian", "فلسطيني": "Palestinian", "عراقي": "Iraqi", "مغربي": "Moroccan",
+    "تونسي": "Tunisian", "جزائري": "Algerian", "تركي": "Turkish", "أفغاني": "Afghan",
+    "إندونيسي": "Indonesian", "سريلانكي": "Sri Lankan",
+  };
+  const localizeData = (v?: string | null, map?: Record<string, string>) => {
+    if (!v) return v;
+    return (!isRTL && map && map[v.trim()]) ? map[v.trim()] : v;
+  };
+
   const todayMonth = new Date().toISOString().slice(0, 7);
   const today = new Date().toISOString().slice(0, 10);
 
@@ -566,7 +585,7 @@ export default function MyPortalPage() {
                   <div>
                     <div className="font-bold text-lg" data-testid="text-employee-name">{displayName}</div>
                     <div className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Briefcase className="h-3.5 w-3.5" />{emp?.jobTitle}
+                      <Briefcase className="h-3.5 w-3.5" />{localizeData(emp?.jobTitle, JOB_TITLE_EN)}
                     </div>
                   </div>
                 </div>
@@ -578,7 +597,7 @@ export default function MyPortalPage() {
                     <span className="flex items-center gap-1 text-muted-foreground" data-testid="text-employee-number"><Hash className="h-3.5 w-3.5" />{emp.employeeNumber}</span>
                   )}
                   {emp?.nationality && (
-                    <span className="flex items-center gap-1 text-muted-foreground" data-testid="text-employee-nationality"><Globe className="h-3.5 w-3.5" />{emp.nationality}</span>
+                    <span className="flex items-center gap-1 text-muted-foreground" data-testid="text-employee-nationality"><Globe className="h-3.5 w-3.5" />{localizeData(emp.nationality, NATIONALITY_EN)}</span>
                   )}
                   {emp?.phoneNumber && (
                     <span className="flex items-center gap-1 text-muted-foreground" data-testid="text-employee-phone"><Phone className="h-3.5 w-3.5" />{emp.phoneNumber}</span>
