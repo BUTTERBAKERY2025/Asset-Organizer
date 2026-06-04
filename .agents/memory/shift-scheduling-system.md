@@ -76,3 +76,17 @@ source — it matches by employeeId string OR canonical branchEmployeeId, and MU
 (order by id DESC + prefer canonical branchEmployeeId) because dual-identity legacy rows can both match;
 a naive `or(...)+limit(1)` could pick an isOff row and wrongly block a valid employee. The schedule's
 startTime/endTime/id override any client-supplied values on the attendance record.
+
+**Attendance identity & check-out edge cases.** A person can appear both as a user UUID and
+as `branch_emp_<id>` (bridged by `branchEmployees.linkedUserId`); schedules AND attendance both
+store either form. Therefore: (1) any per-person attendance lookup for a day must resolve BOTH
+identity forms (helper `getAttendanceForAnyIdentityAndDate`) or you get duplicate records / a
+check-out that can't find the open record. (2) Check-out UPDATEs must key on the STORED
+`existing.employeeId`, never the caller-supplied id, or a cross-identity update silently no-ops.
+(3) Schedule lookup for check-in (`getScheduleForCheckIn`) has a last-resort name fallback for
+UNLINKED employees, but it MUST reject ambiguity: if a normalized name maps to >1 distinct
+identity on the same branch+day, return undefined (block) rather than guess.
+**Why:** prefer a false-negative (block, prompt to link identities) over false-positive
+(attaching the wrong person's schedule/attendance). **How to apply:** keep working-hours
+overnight-safe (`if diff<0 add 24h`) and times in HH:MM (`saudiTime.timeShort`) across BOTH
+self and clerk paths so late/early-leave math stays consistent.

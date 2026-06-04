@@ -10753,7 +10753,7 @@ export class DatabaseStorage implements IStorage {
   async checkIn(employeeId: string, branchId: string, signature?: string, deviceInfo?: string): Promise<AttendanceRecord> {
     const saudiTime = getSaudiArabiaTime();
     const today = saudiTime.date;
-    const now = saudiTime.time;
+    const now = saudiTime.timeShort;
     
     const employee = await this.getUser(employeeId);
     if (!employee) {
@@ -10768,7 +10768,7 @@ export class DatabaseStorage implements IStorage {
     
     // ENFORCEMENT: a saved shift-schedule MUST exist for this employee on this date,
     // and the day must not be marked off, before self check-in is accepted.
-    const scheduleRow = await this.getScheduleForCheckIn(employeeId, branchId, today);
+    const scheduleRow = await this.getScheduleForCheckIn(employeeId, branchId, today, employeeName);
     if (!scheduleRow) {
       throw new Error("لا يوجد جدول وردية لك في هذا اليوم - يجب إضافة الجدول أولاً قبل تسجيل الحضور");
     }
@@ -10786,7 +10786,7 @@ export class DatabaseStorage implements IStorage {
     }
     const status = lateMinutes > 0 ? 'late' : 'present';
     
-    let existing = await this.getAttendanceByEmployeeAndDate(employeeId, today);
+    let existing = await this.getAttendanceForAnyIdentityAndDate(employeeId, today);
     
     if (existing && !existing.actualCheckOut) {
       throw new Error("يوجد سجل حضور مفتوح بالفعل لهذا اليوم");
@@ -10824,9 +10824,9 @@ export class DatabaseStorage implements IStorage {
   async checkOut(employeeId: string, signature?: string): Promise<AttendanceRecord | undefined> {
     const saudiTime = getSaudiArabiaTime();
     const today = saudiTime.date;
-    const now = saudiTime.time;
+    const now = saudiTime.timeShort;
     
-    const existing = await this.getAttendanceByEmployeeAndDate(employeeId, today);
+    const existing = await this.getAttendanceForAnyIdentityAndDate(employeeId, today);
     if (!existing) return undefined;
     if (existing.actualCheckOut) return undefined;
     
@@ -10834,7 +10834,18 @@ export class DatabaseStorage implements IStorage {
     const checkOutTime = new Date(`1970-01-01T${now}`);
     let workingHours = 0;
     if (checkInTime) {
-      workingHours = (checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
+      let diffMs = checkOutTime.getTime() - checkInTime.getTime();
+      if (diffMs < 0) diffMs += 24 * 60 * 60 * 1000; // overnight shift crossing midnight
+      workingHours = diffMs / (1000 * 60 * 60);
+    }
+    
+    // Calculate early leave minutes if scheduled end time is known (parity with clerk path).
+    let earlyLeaveMinutes = 0;
+    if (existing.scheduledEndTime) {
+      const scheduled = new Date(`1970-01-01T${existing.scheduledEndTime}`);
+      if (checkOutTime < scheduled) {
+        earlyLeaveMinutes = Math.round((scheduled.getTime() - checkOutTime.getTime()) / (1000 * 60));
+      }
     }
     
     try {
@@ -10842,12 +10853,13 @@ export class DatabaseStorage implements IStorage {
         actualCheckOut: now,
         checkOutSignature: signature,
         workingHours: Math.round(workingHours * 100) / 100,
+        earlyLeaveMinutes,
         updatedAt: new Date()
-      }).where(and(eq(attendanceRecords.id, existing.id), eq(attendanceRecords.employeeId, employeeId))).returning();
+      }).where(and(eq(attendanceRecords.id, existing.id), eq(attendanceRecords.employeeId, existing.employeeId))).returning();
       return updated;
     } catch (error: any) {
       if (error?.code === '42703') {
-        await pool.query(`UPDATE attendance_records SET actual_check_out = $1, check_out_signature = $2, working_hours = $3, updated_at = NOW() WHERE id = $4 AND employee_id = $5`, [now, signature, Math.round(workingHours * 100) / 100, existing.id, employeeId]);
+        await pool.query(`UPDATE attendance_records SET actual_check_out = $1, check_out_signature = $2, working_hours = $3, early_leave_minutes = $4, updated_at = NOW() WHERE id = $5 AND employee_id = $6`, [now, signature, Math.round(workingHours * 100) / 100, earlyLeaveMinutes, existing.id, existing.employeeId]);
         const record = await this.getAttendanceRecord(existing.id);
         return record;
       }
@@ -11273,10 +11285,53 @@ export class DatabaseStorage implements IStorage {
     return uniqueEmployees;
   }
 
-  // Resolves the saved shift-schedule row for an employee on a given date (matching by
-  // employeeId string OR the linked/parsed branchEmployeeId). Returns undefined if no
-  // schedule exists. Used to ENFORCE "a schedule must exist before attendance check-in".
-  async getScheduleForCheckIn(employeeId: string, branchId: string, date: string): Promise<{ id: number; isOff: boolean | null; startTime: string | null; endTime: string | null; shiftType: string | null } | undefined> {
+  // Resolve all identity strings that refer to the same human. A person may appear
+  // both as a user UUID and as `branch_emp_<id>` (linked via branchEmployees.linkedUserId).
+  // Returns the original id plus any linked alternate form (best-effort, never throws).
+  private async resolveEmployeeIdentities(employeeId: string): Promise<string[]> {
+    const ids = new Set<string>([employeeId]);
+    try {
+      if (employeeId.startsWith("branch_emp_")) {
+        const n = parseInt(employeeId.replace("branch_emp_", ""), 10);
+        if (!isNaN(n)) {
+          const be = await this.getBranchEmployee(n);
+          if (be?.linkedUserId) ids.add(be.linkedUserId);
+        }
+      } else {
+        const be = await this.getBranchEmployeeByLinkedUserId(employeeId);
+        if (be) ids.add(`branch_emp_${be.id}`);
+      }
+    } catch {
+      // best-effort: fall back to just the original identity
+    }
+    return Array.from(ids);
+  }
+
+  // Dual-identity-aware attendance lookup for a given date. Avoids duplicate records
+  // and cross-identity check-out failures when a person checked in under one identity
+  // (e.g. branch_emp_N via the clerk) but is looked up under another (e.g. user UUID).
+  async getAttendanceForAnyIdentityAndDate(employeeId: string, date: string): Promise<AttendanceRecord | undefined> {
+    const ids = await this.resolveEmployeeIdentities(employeeId);
+    if (ids.length === 1) {
+      return this.getAttendanceByEmployeeAndDate(employeeId, date);
+    }
+    try {
+      const rows = await db.select().from(attendanceRecords)
+        .where(and(inArray(attendanceRecords.employeeId, ids), eq(attendanceRecords.attendanceDate, date)))
+        .orderBy(desc(attendanceRecords.id));
+      if (rows.length === 0) return undefined;
+      // Prefer an OPEN record (checked-in, not yet checked-out) so check-out finds it.
+      const open = rows.find(r => r.actualCheckIn && !r.actualCheckOut);
+      return open || rows[0];
+    } catch (error: any) {
+      if (error?.code === '42703') {
+        return this.getAttendanceByEmployeeAndDate(employeeId, date);
+      }
+      throw error;
+    }
+  }
+
+  async getScheduleForCheckIn(employeeId: string, branchId: string, date: string, employeeName?: string, preferredStartTime?: string): Promise<{ id: number; isOff: boolean | null; startTime: string | null; endTime: string | null; shiftType: string | null } | undefined> {
     let branchEmpId: number | undefined;
     if (employeeId.startsWith("branch_emp_")) {
       const n = parseInt(employeeId.replace("branch_emp_", ""), 10);
@@ -11285,17 +11340,20 @@ export class DatabaseStorage implements IStorage {
       const be = await this.getBranchEmployeeByLinkedUserId(employeeId);
       if (be) branchEmpId = be.id;
     }
-    const orConds: any[] = [eq(employeeSchedules.employeeId, employeeId)];
-    if (branchEmpId !== undefined) orConds.push(eq(employeeSchedules.branchEmployeeId, branchEmpId));
-    // Fetch all rows that could belong to this person on this date, newest first.
-    const rows = await db.select({
+    const projection = {
       id: employeeSchedules.id,
       isOff: employeeSchedules.isOff,
       startTime: employeeSchedules.startTime,
       endTime: employeeSchedules.endTime,
       shiftType: employeeSchedules.shiftType,
       branchEmployeeId: employeeSchedules.branchEmployeeId,
-    })
+      employeeId: employeeSchedules.employeeId,
+      employeeName: employeeSchedules.employeeName,
+    };
+    const orConds: any[] = [eq(employeeSchedules.employeeId, employeeId)];
+    if (branchEmpId !== undefined) orConds.push(eq(employeeSchedules.branchEmployeeId, branchEmpId));
+    // Fetch all rows that could belong to this person on this date, newest first.
+    let rows = await db.select(projection)
       .from(employeeSchedules)
       .where(and(
         eq(employeeSchedules.branchId, branchId),
@@ -11303,7 +11361,42 @@ export class DatabaseStorage implements IStorage {
         or(...orConds),
       ))
       .orderBy(desc(employeeSchedules.id));
+
+    // FALLBACK (identity not linked): if no id/UUID match was found and the schedule
+    // was saved under the other identity form with no linkedUserId bridge, match by
+    // normalized employee name within the same branch+date as a last resort.
+    if (rows.length === 0 && employeeName) {
+      const norm = (s: string | null) => (s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const target = norm(employeeName);
+      if (target) {
+        const dayRows = await db.select(projection)
+          .from(employeeSchedules)
+          .where(and(
+            eq(employeeSchedules.branchId, branchId),
+            eq(employeeSchedules.scheduleDate, date),
+          ))
+          .orderBy(desc(employeeSchedules.id));
+        const matched = dayRows.filter(r => norm(r.employeeName) === target);
+        // REJECT AMBIGUITY: only trust the name fallback when every matched row refers to
+        // a single logical person. If two different employees share the same name on the
+        // same branch/day, we must NOT guess (would attach the wrong schedule) — return no
+        // match so the caller blocks and the identities can be linked properly.
+        const distinctIdentities = new Set(
+          matched.map(r => r.branchEmployeeId != null ? `be:${r.branchEmployeeId}` : `id:${r.employeeId}`)
+        );
+        rows = distinctIdentities.size === 1 ? matched : [];
+      }
+    }
+
     if (rows.length === 0) return undefined;
+
+    // When an employee has multiple schedule rows the same day (e.g. a morning/evening
+    // swap), prefer the row matching the shift the clerk intended (by start time) so the
+    // lateness is computed against the correct shift.
+    if (preferredStartTime) {
+      const byShift = rows.find(r => r.startTime === preferredStartTime);
+      if (byShift) return byShift;
+    }
     // DETERMINISTIC selection: prefer the canonical branchEmployeeId match (legacy
     // dual-identity rows may also match by employeeId string); otherwise newest row.
     if (branchEmpId !== undefined) {
@@ -11366,7 +11459,7 @@ export class DatabaseStorage implements IStorage {
     // ENFORCEMENT: a saved shift-schedule MUST exist for this employee on this date,
     // and the day must not be marked off. The schedule is the authoritative source for
     // the scheduled times (we ignore client-supplied values to keep late-calc accurate).
-    const scheduleRow = await this.getScheduleForCheckIn(employeeId, branchId, today);
+    const scheduleRow = await this.getScheduleForCheckIn(employeeId, branchId, today, employeeName, scheduledStartTime);
     if (!scheduleRow) {
       throw new Error("لا يوجد جدول وردية لهذا الموظف في هذا اليوم - يجب إضافة الجدول أولاً قبل تسجيل الحضور");
     }
@@ -11377,7 +11470,7 @@ export class DatabaseStorage implements IStorage {
     scheduledStartTime = scheduleRow.startTime || undefined;
     scheduledEndTime = scheduleRow.endTime || undefined;
 
-    let existing = await this.getAttendanceByEmployeeAndDate(employeeId, today);
+    let existing = await this.getAttendanceForAnyIdentityAndDate(employeeId, today);
     
     if (existing && existing.actualCheckIn && !existing.actualCheckOut) {
       throw new Error("تم تسجيل حضور هذا الموظف مسبقاً - لم يسجل انصرافه بعد");
@@ -11452,7 +11545,7 @@ export class DatabaseStorage implements IStorage {
     const today = attendanceDate || saudiTime.date;
     const now = saudiTime.timeShort;
     
-    const existing = await this.getAttendanceByEmployeeAndDate(employeeId, today);
+    const existing = await this.getAttendanceForAnyIdentityAndDate(employeeId, today);
     if (!existing) return undefined;
     if (existing.actualCheckOut) return undefined;
     
@@ -11460,7 +11553,9 @@ export class DatabaseStorage implements IStorage {
     const checkOutTime = new Date(`1970-01-01T${now}`);
     let workingHours = 0;
     if (checkInTime) {
-      workingHours = (checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
+      let diffMs = checkOutTime.getTime() - checkInTime.getTime();
+      if (diffMs < 0) diffMs += 24 * 60 * 60 * 1000; // overnight shift crossing midnight
+      workingHours = diffMs / (1000 * 60 * 60);
     }
     
     // Calculate early leave minutes if scheduled end time is provided
@@ -11479,11 +11574,11 @@ export class DatabaseStorage implements IStorage {
         workingHours: Math.round(workingHours * 100) / 100,
         earlyLeaveMinutes,
         updatedAt: new Date()
-      }).where(and(eq(attendanceRecords.id, existing.id), eq(attendanceRecords.employeeId, employeeId))).returning();
+      }).where(and(eq(attendanceRecords.id, existing.id), eq(attendanceRecords.employeeId, existing.employeeId))).returning();
       return updated;
     } catch (error: any) {
       if (error?.code === '42703') {
-        await pool.query(`UPDATE attendance_records SET actual_check_out = $1, check_out_signature = $2, working_hours = $3, early_leave_minutes = $4, updated_at = NOW() WHERE id = $5 AND employee_id = $6`, [now, signature, Math.round(workingHours * 100) / 100, earlyLeaveMinutes, existing.id, employeeId]);
+        await pool.query(`UPDATE attendance_records SET actual_check_out = $1, check_out_signature = $2, working_hours = $3, early_leave_minutes = $4, updated_at = NOW() WHERE id = $5 AND employee_id = $6`, [now, signature, Math.round(workingHours * 100) / 100, earlyLeaveMinutes, existing.id, existing.employeeId]);
         return await this.getAttendanceRecord(existing.id);
       }
       throw error;
