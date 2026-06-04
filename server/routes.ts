@@ -29456,6 +29456,26 @@ export async function registerRoutes(
     }
   });
 
+  // إرسال بيانات الدخول للموظف عبر الواتساب (يستخدم الهاتف المخزّن للموظف فقط)
+  async function sendEmployeeCredentialsWhatsapp(
+    phone: string | null | undefined,
+    name: string,
+    username: string,
+    password: string,
+  ): Promise<{ sent: boolean; error?: string }> {
+    const cleanPhone = String(phone || "").trim();
+    if (!cleanPhone) return { sent: false, error: "no_phone" };
+    const msg =
+      `مرحباً ${name || ""} 👋\n` +
+      `تم تجهيز حساب الدخول الخاص بك في نظام باتر (Butter Bakery).\n\n` +
+      `🔗 رابط الدخول: https://www.thebutterbakery.com\n` +
+      `👤 اسم المستخدم: ${username}\n` +
+      `🔑 كلمة المرور: ${password}\n\n` +
+      `ادخل على الرابط وسجّل الدخول بهذه البيانات. يُفضّل تغيير كلمة المرور بعد أول دخول.`;
+    const r = await sendWhatsAppMessage(cleanPhone, msg);
+    return { sent: r.success, error: r.error };
+  }
+
   // إنشاء حساب دخول جديد لموظف وربطه به (بوابة الموظف)
   app.post("/api/branch-employees/:id/create-account", isAuthenticated, requirePermission("users", "create"), async (req, res) => {
     try {
@@ -29512,7 +29532,21 @@ export async function registerRoutes(
       });
 
       const { password: _pw, ...safeUser } = user as any;
-      res.status(201).json({ user: safeUser });
+
+      let whatsappSent = false;
+      let whatsappError: string | undefined;
+      if (req.body?.sendWhatsapp) {
+        const r = await sendEmployeeCredentialsWhatsapp(
+          employee.phoneNumber,
+          employee.employeeName || username,
+          username,
+          password,
+        );
+        whatsappSent = r.sent;
+        whatsappError = r.error;
+      }
+
+      res.status(201).json({ user: safeUser, whatsappSent, whatsappError });
     } catch (error: any) {
       console.error("Error creating employee account:", error);
       if (error?.message === "هذا الموظف مرتبط بحساب بالفعل") {
@@ -29551,7 +29585,23 @@ export async function registerRoutes(
       }
 
       await storage.updateUser(employee.linkedUserId, { password });
-      res.json({ success: true });
+
+      let whatsappSent = false;
+      let whatsappError: string | undefined;
+      if (req.body?.sendWhatsapp) {
+        const linkedUser = await storage.getUser(employee.linkedUserId);
+        const uname = (linkedUser as any)?.username || "";
+        const r = await sendEmployeeCredentialsWhatsapp(
+          employee.phoneNumber,
+          employee.employeeName || uname,
+          uname,
+          password,
+        );
+        whatsappSent = r.sent;
+        whatsappError = r.error;
+      }
+
+      res.json({ success: true, whatsappSent, whatsappError });
     } catch (error) {
       console.error("Error resetting employee password:", error);
       res.status(500).json({ error: "فشل في إعادة تعيين كلمة المرور" });

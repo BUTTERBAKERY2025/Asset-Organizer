@@ -70,7 +70,7 @@ import {
 } from "lucide-react";
 import type { BranchEmployee, EmployeeSetting, EmployeeTransferRequest, Branch } from "@shared/schema";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle, XCircle, ArrowRight, History, TrendingUp, RefreshCw, Copy } from "lucide-react";
+import { CheckCircle, XCircle, ArrowRight, History, TrendingUp, RefreshCw, Copy, MessageCircle } from "lucide-react";
 
 // تمت إزالة JOB_TITLES و NATIONALITIES - الآن يتم استخدام البيانات من قاعدة البيانات
 
@@ -989,23 +989,37 @@ export default function BranchEmployeesPage() {
   });
 
   const createAccountMutation = useMutation({
-    mutationFn: async ({ employeeId, username, password }: { employeeId: number; username: string; password: string }) => {
+    mutationFn: async ({ employeeId, username, password, sendWhatsapp }: { employeeId: number; username: string; password: string; sendWhatsapp?: boolean }) => {
       const res = await fetch(`/api/branch-employees/${employeeId}/create-account`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, sendWhatsapp: !!sendWhatsapp }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "فشل في إنشاء الحساب");
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data: any, variables: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/branch-employees/bundle"] });
       setViewingEmployee((prev) => prev ? { ...prev, linkedUserId: "linked" } as BranchEmployee : prev);
       setNewAccountUsername("");
       setNewAccountPassword("");
-      toast({ title: "تم إنشاء حساب الدخول للموظف بنجاح" });
+      if (variables?.sendWhatsapp) {
+        if (data?.whatsappSent) {
+          toast({ title: "تم إنشاء الحساب وإرسال بيانات الدخول للموظف على الواتساب" });
+        } else {
+          toast({
+            title: "تم إنشاء الحساب",
+            description: data?.whatsappError === "no_phone"
+              ? "لا يوجد رقم جوال مسجّل للموظف لإرسال البيانات عليه"
+              : "تعذّر إرسال البيانات على الواتساب، يمكنك نسخها وإرسالها يدوياً",
+            variant: "destructive",
+          });
+        }
+      } else {
+        toast({ title: "تم إنشاء حساب الدخول للموظف بنجاح" });
+      }
     },
     onError: (e: any) => {
       toast({ title: "تعذّر إنشاء الحساب", description: e?.message, variant: "destructive" });
@@ -1013,21 +1027,35 @@ export default function BranchEmployeesPage() {
   });
 
   const resetPasswordMutation = useMutation({
-    mutationFn: async ({ employeeId, password }: { employeeId: number; password: string }) => {
+    mutationFn: async ({ employeeId, password, sendWhatsapp }: { employeeId: number; password: string; sendWhatsapp?: boolean }) => {
       const res = await fetch(`/api/branch-employees/${employeeId}/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password, sendWhatsapp: !!sendWhatsapp }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "فشل في إعادة تعيين كلمة المرور");
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data: any, variables: any) => {
       setResetPasswordValue("");
       setShowResetPassword(false);
-      toast({ title: "تم تحديث كلمة المرور بنجاح" });
+      if (variables?.sendWhatsapp) {
+        if (data?.whatsappSent) {
+          toast({ title: "تم تحديث كلمة المرور وإرسالها للموظف على الواتساب" });
+        } else {
+          toast({
+            title: "تم تحديث كلمة المرور",
+            description: data?.whatsappError === "no_phone"
+              ? "لا يوجد رقم جوال مسجّل للموظف لإرسال البيانات عليه"
+              : "تعذّر إرسال البيانات على الواتساب، يمكنك إرسالها يدوياً",
+            variant: "destructive",
+          });
+        }
+      } else {
+        toast({ title: "تم تحديث كلمة المرور بنجاح" });
+      }
     },
     onError: (e: any) => {
       toast({ title: "تعذّر تحديث كلمة المرور", description: e?.message, variant: "destructive" });
@@ -3113,22 +3141,46 @@ export default function BranchEmployeesPage() {
                                   نسخ البيانات
                                 </Button>
                               </div>
-                              <Button
-                                size="sm"
-                                disabled={!newAccountUsername || !newAccountPassword || createAccountMutation.isPending}
-                                onClick={() => {
-                                  if (viewingEmployee) {
-                                    createAccountMutation.mutate({
-                                      employeeId: viewingEmployee.id,
-                                      username: newAccountUsername.trim(),
-                                      password: newAccountPassword,
-                                    });
-                                  }
-                                }}
-                                data-testid="button-create-account"
-                              >
-                                {createAccountMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "إنشاء الحساب وربطه"}
-                              </Button>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  disabled={!newAccountUsername || !newAccountPassword || createAccountMutation.isPending}
+                                  onClick={() => {
+                                    if (viewingEmployee) {
+                                      createAccountMutation.mutate({
+                                        employeeId: viewingEmployee.id,
+                                        username: newAccountUsername.trim(),
+                                        password: newAccountPassword,
+                                      });
+                                    }
+                                  }}
+                                  data-testid="button-create-account"
+                                >
+                                  {createAccountMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "إنشاء الحساب وربطه"}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                  disabled={!newAccountUsername || !newAccountPassword || createAccountMutation.isPending || !viewingEmployee?.phoneNumber}
+                                  onClick={() => {
+                                    if (viewingEmployee) {
+                                      createAccountMutation.mutate({
+                                        employeeId: viewingEmployee.id,
+                                        username: newAccountUsername.trim(),
+                                        password: newAccountPassword,
+                                        sendWhatsapp: true,
+                                      });
+                                    }
+                                  }}
+                                  data-testid="button-create-account-whatsapp"
+                                >
+                                  <MessageCircle className="w-4 h-4 ms-1" />
+                                  {createAccountMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "إنشاء وإرسال على الواتساب"}
+                                </Button>
+                              </div>
+                              {!viewingEmployee?.phoneNumber && (
+                                <p className="text-[11px] text-amber-600">لإرسال البيانات على الواتساب، أضِف رقم جوال للموظف في بياناته الأساسية.</p>
+                              )}
                             </div>
                           ) : (
                             <div className="flex items-center gap-3">
@@ -3219,6 +3271,20 @@ export default function BranchEmployeesPage() {
                               data-testid="button-save-reset-password"
                             >
                               {resetPasswordMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "حفظ"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="bg-green-600 hover:bg-green-700 text-white"
+                              disabled={!resetPasswordValue || resetPasswordMutation.isPending || !viewingEmployee?.phoneNumber}
+                              onClick={() => {
+                                if (viewingEmployee) {
+                                  resetPasswordMutation.mutate({ employeeId: viewingEmployee.id, password: resetPasswordValue, sendWhatsapp: true });
+                                }
+                              }}
+                              data-testid="button-save-reset-password-whatsapp"
+                            >
+                              <MessageCircle className="w-4 h-4 ms-1" />
+                              {resetPasswordMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "حفظ وإرسال واتساب"}
                             </Button>
                           </div>
                         )}
