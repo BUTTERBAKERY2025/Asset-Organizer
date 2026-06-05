@@ -199,8 +199,10 @@ function DelayedFallback() {
   // preferable to a visible skeleton block.
   const [showSlow, setShowSlow] = useState(false);
   useEffect(() => {
-    // Only show a faint indicator if chunk takes >800ms (slow network).
-    const t = setTimeout(() => setShowSlow(true), 800);
+    // Show a loading skeleton quickly (>200ms) so navigation feels responsive
+    // instead of "frozen". Fast cached chunks still resolve before this fires,
+    // so there is no skeleton flash on the common path.
+    const t = setTimeout(() => setShowSlow(true), 200);
     return () => clearTimeout(t);
   }, []);
   if (!showSlow) return null;
