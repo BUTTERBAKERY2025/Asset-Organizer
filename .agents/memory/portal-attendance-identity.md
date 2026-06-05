@@ -57,3 +57,24 @@ absent. NOTE: this only merges one-person-two-schedule-identities; two genuinely
 `branch_employees` profiles (different be id, e.g. English+Arabic data-entry dupes) still need a
 profile MERGE — detect via shared STRONG ids (iqama/passport/emp_no/phone), excluding junk
 placeholders like '--'/'0'.
+
+## Orphan schedules (deleted-and-recreated profiles) are the most common roster-dup cause
+
+**Why:** when a person's `branch_employees` profile is deleted and re-created with a NEW id
+(e.g. backfill: جو was be 251, recreated as be 272 linked to the login user), their OLD
+`employee_schedules` rows (`branch_emp_251` / `branch_employee_id=251`) stay behind as
+ORPHANS pointing to a now-nonexistent be. The roster shows the orphan (name from the
+schedule's own `employee_name`) NEXT TO the real new profile's row → same person twice. The
+canonical-be dedup does NOT merge them (251 vs 272 are different keys), so this is a DATA
+problem, not a code one. Re-created profiles often carry an English `employee_name`
+(e.g. "Chelo Dacanay") while the orphan kept the Arabic transliteration ("شيلو بيلا داكاني"),
+so name-based twin detection misses them — match old→new by human eyeballing the day's roster.
+
+**How to apply:** detect orphans = scheduled rows where NO branch_employee resolves
+(`NOT EXISTS` over the 3 forms). Cross-reference each orphan against the day's REAL roster
+(schedules whose be exists) to map old_be→real_be. Clean by DELETING the orphan schedule
+ONLY when the mapped real profile already has a schedule for the same branch+date+shift (so
+the person still appears once, zero data loss); wrap in BEGIN/COMMIT, idempotent. Leave
+orphans with no confirmed real twin alone (could be a genuinely deleted employee). Diagnostics
+live in `supabase_duplicate_employee_profiles_diagnose.sql` (E1 = orphan detector) and the
+fix in `supabase_cleanup_orphan_schedules.sql`.
