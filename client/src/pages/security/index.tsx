@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   Shield, AlertTriangle, Users, Activity, 
   FileText, Eye, Clock, CheckCircle, XCircle,
-  Search, Download, RefreshCw
+  Search, Download, RefreshCw, Monitor, Smartphone, Tablet, LogIn
 } from "lucide-react";
 
 interface UserPermissionReport {
@@ -62,6 +62,12 @@ interface SecurityAlerts {
   }>;
 }
 
+interface DeviceInfo {
+  browser: string;
+  os: string;
+  device: string;
+}
+
 interface AuditLogResponse {
   logs: Array<{
     id: number;
@@ -71,12 +77,32 @@ interface AuditLogResponse {
     actionLabel: string;
     entityName?: string;
     description?: string;
+    detailsText?: string | null;
     userName?: string;
     ipAddress?: string;
+    device?: DeviceInfo | null;
     createdAt: string;
   }>;
   pagination: { page: number; limit: number; total: number; totalPages: number };
   filters: { modules: string[]; actions: string[] };
+}
+
+interface LoginSessionsResponse {
+  sessions: Array<{
+    id: number;
+    userId: string;
+    userName: string;
+    role?: string | null;
+    surface: "portal" | "system";
+    surfaceLabel: string;
+    deviceInfo?: DeviceInfo | null;
+    ipAddress?: string | null;
+    isActive: boolean;
+    loginAt: string;
+    lastActivityAt: string;
+    expiresAt: string;
+  }>;
+  summary: { total: number; active: number; portal: number; system: number };
 }
 
 interface SecurityStats {
@@ -97,6 +123,7 @@ export default function SecurityPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [moduleFilter, setModuleFilter] = useState("all");
   const [auditPage, setAuditPage] = useState(1);
+  const [sessionScope, setSessionScope] = useState<"all" | "active">("all");
 
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery<SecurityStats>({
     queryKey: ["/api/security/stats"],
@@ -113,6 +140,17 @@ export default function SecurityPage() {
   const { data: auditLog, isLoading: auditLoading, refetch: refetchAudit } = useQuery<AuditLogResponse>({
     queryKey: ["/api/security/audit-log", { page: auditPage, module: moduleFilter !== 'all' ? moduleFilter : undefined }],
   });
+
+  const { data: loginSessions, isLoading: sessionsLoading, refetch: refetchSessions } = useQuery<LoginSessionsResponse>({
+    queryKey: ["/api/security/login-sessions", { scope: sessionScope }],
+  });
+
+  const getDeviceIcon = (device?: string) => {
+    const d = (device || "").toLowerCase();
+    if (d.includes("mobile") || d.includes("phone")) return <Smartphone className="h-3.5 w-3.5 text-muted-foreground" />;
+    if (d.includes("tablet")) return <Tablet className="h-3.5 w-3.5 text-muted-foreground" />;
+    return <Monitor className="h-3.5 w-3.5 text-muted-foreground" />;
+  };
 
   const getSeverityBadge = (severity: string) => {
     const colors: Record<string, string> = {
@@ -152,14 +190,14 @@ export default function SecurityPage() {
             مراقبة الأمان، تقارير الصلاحيات، وسجل التدقيق
           </p>
         </div>
-        <Button onClick={() => { refetchStats(); refetchAlerts(); refetchAudit(); }} variant="outline" data-testid="button-refresh-all">
+        <Button onClick={() => { refetchStats(); refetchAlerts(); refetchAudit(); refetchSessions(); }} variant="outline" data-testid="button-refresh-all">
           <RefreshCw className="h-4 w-4 ml-2" />
           تحديث
         </Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} data-testid="security-tabs">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto gap-1 p-1">
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 h-auto gap-1 p-1">
           <TabsTrigger value="overview" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-2" data-testid="tab-overview">
             <Activity className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden xs:inline">نظرة عامة</span>
@@ -182,6 +220,11 @@ export default function SecurityPage() {
             <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">سجل التدقيق</span>
             <span className="sm:hidden">السجل</span>
+          </TabsTrigger>
+          <TabsTrigger value="sessions" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-2" data-testid="tab-sessions">
+            <LogIn className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">الدخول والأجهزة</span>
+            <span className="sm:hidden">الدخول</span>
           </TabsTrigger>
         </TabsList>
 
@@ -572,7 +615,7 @@ export default function SecurityPage() {
                       <TableHead className="text-xs sm:text-sm">الوحدة</TableHead>
                       <TableHead className="text-xs sm:text-sm">العملية</TableHead>
                       <TableHead className="text-xs sm:text-sm hidden md:table-cell">الوصف</TableHead>
-                      <TableHead className="text-xs sm:text-sm hidden lg:table-cell">العنصر</TableHead>
+                      <TableHead className="text-xs sm:text-sm hidden lg:table-cell">الجهاز</TableHead>
                       <TableHead className="text-xs sm:text-sm hidden lg:table-cell">IP</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -593,8 +636,15 @@ export default function SecurityPage() {
                         <TableCell>
                           <Badge variant="secondary" className="text-[10px] sm:text-xs">{log.actionLabel}</Badge>
                         </TableCell>
-                        <TableCell className="max-w-xs truncate text-xs sm:text-sm hidden md:table-cell">{log.description || '-'}</TableCell>
-                        <TableCell className="text-xs sm:text-sm hidden lg:table-cell">{log.entityName || '-'}</TableCell>
+                        <TableCell className="max-w-xs truncate text-xs sm:text-sm hidden md:table-cell">{log.description || log.detailsText || '-'}</TableCell>
+                        <TableCell className="text-xs sm:text-sm hidden lg:table-cell">
+                          {log.device ? (
+                            <span className="flex items-center gap-1" dir="ltr">
+                              {getDeviceIcon(log.device.device)}
+                              <span className="text-[10px] sm:text-xs">{log.device.browser} · {log.device.os}</span>
+                            </span>
+                          ) : '-'}
+                        </TableCell>
                         <TableCell dir="ltr" className="text-left text-xs sm:text-sm hidden lg:table-cell">{log.ipAddress || '-'}</TableCell>
                       </TableRow>
                     ))}
@@ -632,6 +682,114 @@ export default function SecurityPage() {
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="sessions" className="space-y-4" data-testid="content-sessions">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+            <Card data-testid="card-sessions-total">
+              <CardContent className="p-3 sm:p-4">
+                <div className="text-xs text-muted-foreground">إجمالي التسجيلات</div>
+                <div className="text-xl sm:text-2xl font-bold">{loginSessions?.summary.total?.toLocaleString('en-US') || 0}</div>
+              </CardContent>
+            </Card>
+            <Card data-testid="card-sessions-active">
+              <CardContent className="p-3 sm:p-4">
+                <div className="text-xs text-muted-foreground">جلسات نشطة</div>
+                <div className="text-xl sm:text-2xl font-bold text-green-600">{loginSessions?.summary.active?.toLocaleString('en-US') || 0}</div>
+              </CardContent>
+            </Card>
+            <Card data-testid="card-sessions-system">
+              <CardContent className="p-3 sm:p-4">
+                <div className="text-xs text-muted-foreground">دخول النظام</div>
+                <div className="text-xl sm:text-2xl font-bold">{loginSessions?.summary.system?.toLocaleString('en-US') || 0}</div>
+              </CardContent>
+            </Card>
+            <Card data-testid="card-sessions-portal">
+              <CardContent className="p-3 sm:p-4">
+                <div className="text-xs text-muted-foreground">دخول بوابتي</div>
+                <div className="text-xl sm:text-2xl font-bold text-amber-600">{loginSessions?.summary.portal?.toLocaleString('en-US') || 0}</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader className="p-3 sm:p-6">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <LogIn className="h-4 w-4 sm:h-5 sm:w-5" />
+                تسجيلات الدخول والأجهزة
+              </CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                من قام بتسجيل الدخول، ومن أي جهاز، ومن دخل بوابة الموظف (بوابتي)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
+              <div className="flex gap-2 sm:gap-4 mb-4">
+                <Select value={sessionScope} onValueChange={(v) => setSessionScope(v as "all" | "active")}>
+                  <SelectTrigger className="w-full sm:w-48 text-xs sm:text-sm" data-testid="select-session-scope">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">كل التسجيلات</SelectItem>
+                    <SelectItem value="active">الجلسات النشطة فقط</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="overflow-x-auto -mx-3 sm:mx-0">
+                <Table className="min-w-[700px] sm:min-w-full">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs sm:text-sm">المستخدم</TableHead>
+                      <TableHead className="text-xs sm:text-sm">النوع</TableHead>
+                      <TableHead className="text-xs sm:text-sm">الجهاز</TableHead>
+                      <TableHead className="text-xs sm:text-sm hidden lg:table-cell">IP</TableHead>
+                      <TableHead className="text-xs sm:text-sm">وقت الدخول</TableHead>
+                      <TableHead className="text-xs sm:text-sm hidden md:table-cell">آخر نشاط</TableHead>
+                      <TableHead className="text-xs sm:text-sm">الحالة</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sessionsLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-sm">جاري التحميل...</TableCell>
+                      </TableRow>
+                    ) : (loginSessions?.sessions.length ? loginSessions.sessions.map((s) => (
+                      <TableRow key={s.id} data-testid={`row-session-${s.id}`}>
+                        <TableCell className="text-xs sm:text-sm font-medium" data-testid={`text-session-user-${s.id}`}>{s.userName}</TableCell>
+                        <TableCell>
+                          <Badge variant={s.surface === 'portal' ? 'default' : 'secondary'} className="text-[10px] sm:text-xs">
+                            {s.surfaceLabel}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {s.deviceInfo ? (
+                            <span className="flex items-center gap-1" dir="ltr">
+                              {getDeviceIcon(s.deviceInfo.device)}
+                              <span className="text-[10px] sm:text-xs">{s.deviceInfo.browser} · {s.deviceInfo.os}</span>
+                            </span>
+                          ) : '-'}
+                        </TableCell>
+                        <TableCell dir="ltr" className="text-left text-xs sm:text-sm hidden lg:table-cell">{s.ipAddress || '-'}</TableCell>
+                        <TableCell dir="ltr" className="text-left whitespace-nowrap text-xs sm:text-sm">{new Date(s.loginAt).toLocaleString('en-GB')}</TableCell>
+                        <TableCell dir="ltr" className="text-left whitespace-nowrap text-xs sm:text-sm hidden md:table-cell">{new Date(s.lastActivityAt).toLocaleString('en-GB')}</TableCell>
+                        <TableCell>
+                          {s.isActive ? (
+                            <Badge className="bg-green-500 text-[10px] sm:text-xs">نشطة</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px] sm:text-xs">منتهية</Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )) : (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-sm text-muted-foreground">لا توجد تسجيلات دخول</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

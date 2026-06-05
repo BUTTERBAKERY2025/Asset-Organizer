@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { db } from "./db";
 import { eq, and, desc, sql, gte, lte, or, count } from "drizzle-orm";
-import { isAuthenticated, requirePermission, getAllowedBranchIds } from "./auth";
+import { isAuthenticated, requirePermission, getAllowedBranchIds, parseUserAgent } from "./auth";
 import { storage } from "./storage";
 import {
   users,
@@ -303,6 +303,15 @@ export function registerSecurityRoutes(app: Express) {
           } catch {}
         }
         
+        // Derive device info: prefer parsing the stored user-agent, fall back
+        // to device fields embedded in the details JSON (login/logout events).
+        let device: { browser: string; os: string; device: string } | null = null;
+        if (log.userAgent) {
+          device = parseUserAgent(log.userAgent);
+        } else if (parsedDetails && parsedDetails.browser) {
+          device = { browser: parsedDetails.browser, os: parsedDetails.os, device: parsedDetails.device };
+        }
+
         return {
           id: log.id,
           module: log.module,
@@ -317,8 +326,11 @@ export function registerSecurityRoutes(app: Express) {
           targetId: log.targetId,
           ipAddress: log.ipAddress,
           userAgent: log.userAgent,
+          device,
           createdAt: log.createdAt,
           details: parsedDetails,
+          // Raw (non-JSON) details string, so plain-text descriptions aren't lost.
+          detailsText: parsedDetails ? null : (log.details || null),
         };
       });
       
@@ -347,6 +359,47 @@ export function registerSecurityRoutes(app: Express) {
     } catch (error) {
       console.error("Error fetching audit log:", error);
       res.status(500).json({ error: "فشل في جلب سجل التدقيق" });
+    }
+  });
+
+  // =====================================================
+  // تسجيلات الدخول والأجهزة — Logins & Devices
+  // =====================================================
+  app.get("/api/security/login-sessions", isAuthenticated, requirePermission("audit_logs", "view"), async (req, res) => {
+    try {
+      const scope = req.query.scope === "active" ? "active" : "all";
+      const limit = Math.min(parseInt((req.query.limit as string) || "100", 10) || 100, 500);
+
+      const sessions = await storage.getLoginSessions(scope, limit);
+
+      const now = Date.now();
+      const formatted = sessions.map((s) => ({
+        id: s.id,
+        userId: s.userId,
+        userName: s.userName || "غير معروف",
+        role: s.role,
+        surface: s.isPortalUser ? "portal" : "system",
+        surfaceLabel: s.isPortalUser ? "بوابتي" : "النظام",
+        deviceInfo: s.deviceInfo || (s.userAgent ? parseUserAgent(s.userAgent) : null),
+        ipAddress: s.ipAddress,
+        isActive: s.isActive && new Date(s.expiresAt).getTime() > now,
+        loginAt: s.createdAt,
+        lastActivityAt: s.lastActivityAt,
+        expiresAt: s.expiresAt,
+      }));
+
+      res.json({
+        sessions: formatted,
+        summary: {
+          total: formatted.length,
+          active: formatted.filter((s) => s.isActive).length,
+          portal: formatted.filter((s) => s.surface === "portal").length,
+          system: formatted.filter((s) => s.surface === "system").length,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching login sessions:", error);
+      res.status(500).json({ error: "فشل في جلب تسجيلات الدخول" });
     }
   });
 
@@ -995,6 +1048,8 @@ function getModuleLabel(module: string): string {
     'governance_voting': 'التصويت',
     'audit_logs': 'سجل التدقيق',
     'security_management': 'إدارة الأمان',
+    'portal': 'بوابتي',
+    'self_service': 'الخدمة الذاتية',
   };
   return labels[module] || module;
 }
@@ -1017,6 +1072,8 @@ function getActionLabel(action: string): string {
     'vote': 'تصويت',
     '2fa_enabled': 'تفعيل المصادقة الثنائية',
     '2fa_disabled': 'إيقاف المصادقة الثنائية',
+    'password_change': 'تغيير كلمة المرور',
+    'portal_open': 'دخول بوابتي',
   };
   return labels[action] || action;
 }

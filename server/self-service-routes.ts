@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { db } from "./db";
 import { eq, and, desc, inArray, like, isNotNull } from "drizzle-orm";
-import { isAuthenticated, requirePermission, getEffectiveBranchFilter } from "./auth";
+import { isAuthenticated, requirePermission, getEffectiveBranchFilter, parseUserAgent } from "./auth";
 import { storage } from "./storage";
 import {
   branchEmployees,
@@ -74,6 +74,34 @@ export function registerSelfServiceRoutes(app: Express) {
     try {
       const emp = await getMyEmployee(req);
       if (!emp) return res.json({ hasEmployee: false, employee: null, branch: null });
+
+      // سجّل دخول الموظف إلى "بوابتي" مرة واحدة لكل جلسة (غير حاجب للطلب).
+      if (!(req.session as any).portalAudited) {
+        (req.session as any).portalAudited = true;
+        const ua = (req.headers["user-agent"] as string) || "";
+        const device = parseUserAgent(ua);
+        const ip = (req.headers["x-forwarded-for"] as string) || req.socket?.remoteAddress || null;
+        storage
+          .createSystemAuditLog({
+            module: "portal",
+            entityId: String(emp.id),
+            entityName: emp.employeeName,
+            action: "portal_open",
+            description: `دخول بوابتي — ${emp.employeeName}`,
+            details: JSON.stringify({
+              branchId: emp.branchId,
+              browser: device.browser,
+              os: device.os,
+              device: device.device,
+            }),
+            userId: getUserId(req) || null,
+            userName: emp.employeeName,
+            ipAddress: ip,
+            userAgent: ua,
+          })
+          .catch((err) => console.error("[my/profile] portal audit failed:", err));
+      }
+
       const [branch] = await db.select().from(branches).where(eq(branches.id, emp.branchId));
       // الصورة: إن لم تكن محفوظة على ملف الموظف، نستعيدها من طلب التوظيف المطابق برقم الجوال.
       // مطابقة دقيقة على آخر 9 أرقام بعد التطبيع، ولا نستخدم الصورة إلا إذا كان هناك تطابق واحد لا لبس فيه

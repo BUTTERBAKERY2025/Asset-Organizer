@@ -9216,6 +9216,78 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(userSessions.lastActivityAt));
   }
 
+  // Login sessions enriched with user name/role and a portal-user flag.
+  // Used by the security "Logins & Devices" view. scope=active returns only
+  // currently-active sessions; scope=all returns recent login history.
+  async getLoginSessions(scope: "active" | "all", limit: number): Promise<Array<{
+    id: number;
+    sessionId: string;
+    userId: string;
+    deviceInfo: { browser: string; os: string; device: string } | null;
+    ipAddress: string | null;
+    userAgent: string | null;
+    isActive: boolean;
+    lastActivityAt: Date;
+    expiresAt: Date;
+    createdAt: Date;
+    userName: string | null;
+    role: string | null;
+    isPortalUser: boolean;
+  }>> {
+    const rows = await db
+      .select({
+        id: userSessions.id,
+        sessionId: userSessions.sessionId,
+        userId: userSessions.userId,
+        deviceInfo: userSessions.deviceInfo,
+        ipAddress: userSessions.ipAddress,
+        userAgent: userSessions.userAgent,
+        isActive: userSessions.isActive,
+        lastActivityAt: userSessions.lastActivityAt,
+        expiresAt: userSessions.expiresAt,
+        createdAt: userSessions.createdAt,
+        username: users.username,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        role: users.role,
+      })
+      .from(userSessions)
+      .leftJoin(users, eq(userSessions.userId, users.id))
+      .where(
+        scope === "active"
+          ? and(eq(userSessions.isActive, true), gte(userSessions.expiresAt, new Date()))
+          : undefined,
+      )
+      .orderBy(desc(userSessions.createdAt))
+      .limit(Math.min(Math.max(limit, 1), 500));
+
+    const userIds = Array.from(new Set(rows.map((r) => r.userId).filter(Boolean))) as string[];
+    let portalSet = new Set<string>();
+    if (userIds.length > 0) {
+      const linked = await db
+        .select({ linkedUserId: branchEmployees.linkedUserId })
+        .from(branchEmployees)
+        .where(inArray(branchEmployees.linkedUserId, userIds));
+      portalSet = new Set(linked.map((l) => l.linkedUserId).filter(Boolean) as string[]);
+    }
+
+    return rows.map((r) => ({
+      id: r.id,
+      sessionId: r.sessionId,
+      userId: r.userId,
+      deviceInfo: r.deviceInfo,
+      ipAddress: r.ipAddress,
+      userAgent: r.userAgent,
+      isActive: r.isActive,
+      lastActivityAt: r.lastActivityAt,
+      expiresAt: r.expiresAt,
+      createdAt: r.createdAt,
+      userName: r.firstName && r.lastName ? `${r.firstName} ${r.lastName}` : (r.username || null),
+      role: r.role || null,
+      isPortalUser: r.userId ? portalSet.has(r.userId) : false,
+    }));
+  }
+
   // ==========================================
   // Security Violation Alerts - تنبيهات الانتهاكات
   // ==========================================

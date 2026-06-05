@@ -144,7 +144,7 @@ function generateSessionFingerprint(req: any): string {
 const isProduction = process.env.NODE_ENV === "production";
 
 // Parse User-Agent to extract device info
-function parseUserAgent(ua: string): { browser: string; os: string; device: string } {
+export function parseUserAgent(ua: string): { browser: string; os: string; device: string } {
   let browser = "Unknown";
   let os = "Unknown";
   let device = "Desktop";
@@ -367,22 +367,29 @@ export async function setupAuth(app: Express) {
               const displayName = user.firstName && user.lastName 
                 ? `${user.firstName} ${user.lastName}` 
                 : user.username || 'غير معروف';
+              // Parse device info once for both audit log and session record
+              const userAgentStr = req.headers['user-agent'] || '';
+              const deviceInfo = parseUserAgent(userAgentStr);
               try {
                 await storage.createSystemAuditLog({
                   module: "users",
                   entityId: user.id,
                   entityName: displayName,
                   action: "login",
-                  details: `تسجيل دخول ناجح${rememberMe ? ' (تذكرني)' : ''}`,
+                  description: `تسجيل دخول ناجح${rememberMe ? ' (تذكرني)' : ''}`,
+                  details: JSON.stringify({
+                    browser: deviceInfo.browser,
+                    os: deviceInfo.os,
+                    device: deviceInfo.device,
+                    rememberMe: !!rememberMe,
+                  }),
                   userId: user.id,
                   userName: displayName,
                   ipAddress: req.ip || req.socket?.remoteAddress,
-                  userAgent: req.headers['user-agent'],
+                  userAgent: userAgentStr,
                 });
                 
                 // Create user session record with device info
-                const userAgentStr = req.headers['user-agent'] || '';
-                const deviceInfo = parseUserAgent(userAgentStr);
                 const sessionExpiry = rememberMe 
                   ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) 
                   : new Date(Date.now() + 8 * 60 * 60 * 1000);
@@ -709,12 +716,18 @@ export async function setupAuth(app: Express) {
         }
         
         // Log logout to audit log
+        const logoutDevice = parseUserAgent(req.headers['user-agent'] || '');
         await storage.createSystemAuditLog({
           module: "users",
           entityId: userId,
           entityName: userName,
           action: "logout",
-          details: "تسجيل خروج",
+          description: "تسجيل خروج",
+          details: JSON.stringify({
+            browser: logoutDevice.browser,
+            os: logoutDevice.os,
+            device: logoutDevice.device,
+          }),
           userId: userId,
           userName: userName,
           ipAddress: req.ip || req.socket?.remoteAddress,
