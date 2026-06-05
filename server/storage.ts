@@ -11033,18 +11033,49 @@ export class DatabaseStorage implements IStorage {
 
     console.log(`[ATTENDANCE-DEBUG] After filter: ${filteredSchedules.length} employees match shiftType=${shiftType}`);
 
-    // BATCH: Get all attendance records for this branch+date in ONE query
+    // BATCH: Get all attendance records for this branch+date in ONE query.
+    // Match by BOTH the textual employeeId AND the numeric branchEmployeeId so that
+    // self check-ins from the employee portal (بوابتي) — which always store
+    // employeeId as `branch_emp_<id>` plus branchEmployeeId — are linked to the
+    // schedule even when the schedule's employeeId uses a different identifier form.
     const allEmployeeIds = filteredSchedules.map(s => s.employeeId);
-    const allAttendance = allEmployeeIds.length > 0
+    const allBranchEmpIds = Array.from(new Set(
+      filteredSchedules.flatMap(s => {
+        const ids: number[] = [];
+        if (s.branchEmployeeId) ids.push(s.branchEmployeeId);
+        if (s.employeeId.startsWith('branch_emp_')) {
+          const parsed = parseInt(s.employeeId.replace('branch_emp_', ''), 10);
+          if (!isNaN(parsed)) ids.push(parsed);
+        }
+        return ids;
+      })
+    ));
+    const attendanceConds = [
+      allEmployeeIds.length > 0 ? inArray(attendanceRecords.employeeId, allEmployeeIds) : undefined,
+      allBranchEmpIds.length > 0 ? inArray(attendanceRecords.branchEmployeeId, allBranchEmpIds) : undefined,
+    ].filter(Boolean) as any[];
+    const allAttendance = attendanceConds.length > 0
       ? await db.select().from(attendanceRecords)
           .where(and(
             eq(attendanceRecords.attendanceDate, date),
-            inArray(attendanceRecords.employeeId, allEmployeeIds)
+            // Branch-scope to avoid attaching a same-person record from another
+            // branch on the same day (e.g. after a transfer).
+            eq(attendanceRecords.branchId, branchId),
+            attendanceConds.length === 1 ? attendanceConds[0] : or(...attendanceConds)
           ))
+          // Most recent record (highest id) wins when duplicates exist for one identity.
+          .orderBy(desc(attendanceRecords.id))
       : [];
     const attendanceMap = new Map<string, any>();
     for (const rec of allAttendance) {
-      attendanceMap.set(rec.employeeId, rec);
+      // Key by every identifier form a schedule might use, so lookup succeeds
+      // regardless of whether the record came from the portal or the shift page.
+      // Records are ordered newest-first, so only the first (most recent) per key is kept.
+      if (rec.employeeId && !attendanceMap.has(rec.employeeId)) attendanceMap.set(rec.employeeId, rec);
+      if (rec.branchEmployeeId) {
+        if (!attendanceMap.has(`be_${rec.branchEmployeeId}`)) attendanceMap.set(`be_${rec.branchEmployeeId}`, rec);
+        if (!attendanceMap.has(`branch_emp_${rec.branchEmployeeId}`)) attendanceMap.set(`branch_emp_${rec.branchEmployeeId}`, rec);
+      }
     }
 
     // BATCH: Collect all branch employee IDs that need lookup
@@ -11081,7 +11112,16 @@ export class DatabaseStorage implements IStorage {
     }
 
     const employeesWithAttendance = filteredSchedules.map(schedule => {
-      const attendance = attendanceMap.get(schedule.employeeId) || null;
+      // Resolve attendance by trying every identifier form: the schedule's own
+      // employeeId, then its branchEmployeeId (covers portal self check-ins).
+      let attendance = attendanceMap.get(schedule.employeeId) || null;
+      if (!attendance && schedule.branchEmployeeId) {
+        attendance = attendanceMap.get(`be_${schedule.branchEmployeeId}`) || null;
+      }
+      if (!attendance && schedule.employeeId.startsWith('branch_emp_')) {
+        const parsedId = parseInt(schedule.employeeId.replace('branch_emp_', ''), 10);
+        if (!isNaN(parsedId)) attendance = attendanceMap.get(`be_${parsedId}`) || null;
+      }
       let resolvedName = schedule.employeeName;
       let resolvedNameEn = '';
 
