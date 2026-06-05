@@ -1,0 +1,169 @@
+-- ============================================================================
+-- إصلاح تزامن الحضور/الانصراف بين بوابة الموظف (بوابتي) وصفحة الحضور المجمعة
+-- Attendance identity sync cleanup
+-- ----------------------------------------------------------------------------
+-- المشكلة: بعض الموظفين سجلاتهم محفوظة بهويّات مختلفة (نص branch_emp_<n> /
+-- رقم branch_employee_id / UUID لحساب المستخدم)، فيصير سجلين لنفس اليوم،
+-- وتظهر بوابتي "في الدوام" رغم تسجيل الانصراف بالصفحة المجمعة.
+--
+-- ترتيب التنفيذ في Supabase SQL Editor:
+--   1) STEP 0  : تشخيص (قراءة فقط — آمن) — شوف المتأثرين قبل أي تعديل.
+--   2) STEP 1  : نسخة احتياطية (إلزامي قبل أي حذف).
+--   3) STEP 2  : تعبئة branch_employee_id (إضافي وآمن).
+--   4) STEP 3  : دمج السجلات المكررة لنفس الموظف ونفس اليوم (يحذف الزائد).
+--   5) STEP 4  : تحقق نهائي (قراءة فقط).
+--
+-- ملاحظة: السكربت idempotent — تقدر تشغّله أكثر من مرة بأمان.
+-- ============================================================================
+
+
+-- ============================================================================
+-- STEP 0 — تشخيص (قراءة فقط، لا يعدّل شيء)
+-- ============================================================================
+
+-- 0.a) سجلات بدون branch_employee_id لكن يمكن ربطها (الهويّة الناقصة):
+SELECT 'missing_branch_employee_id' AS issue, COUNT(*) AS rows
+FROM attendance_records ar
+WHERE ar.branch_employee_id IS NULL
+  AND (
+    ar.employee_id ~ '^branch_emp_[0-9]+$'
+    OR EXISTS (SELECT 1 FROM branch_employees be WHERE be.linked_user_id = ar.employee_id)
+  );
+
+-- 0.b) موظفون لهم أكثر من سجل في نفس اليوم (بعد منطق الربط):
+-- يعرض الحالات اللي تسبّب "عالق في الدوام".
+SELECT
+  COALESCE(ar.branch_employee_id, CAST(substring(ar.employee_id from '^branch_emp_([0-9]+)$') AS integer)) AS resolved_emp,
+  ar.attendance_date,
+  COUNT(*)                                   AS records,
+  COUNT(*) FILTER (WHERE ar.actual_check_in  IS NOT NULL AND ar.actual_check_out IS NULL) AS open_records,
+  string_agg(ar.id::text || ':' || COALESCE(ar.actual_check_in,'-') || '→' || COALESCE(ar.actual_check_out,'-'), ', ' ORDER BY ar.id) AS detail
+FROM attendance_records ar
+GROUP BY 1, ar.attendance_date
+HAVING COUNT(*) > 1
+ORDER BY ar.attendance_date DESC, resolved_emp;
+
+
+-- ============================================================================
+-- STEP 1 — نسخة احتياطية (إلزامي قبل STEP 3) — يحفظ كل السجلات كما هي الآن
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS attendance_records_backup_sync AS
+SELECT * FROM attendance_records;
+-- لو شغّلت السكربت مرة ثانية والنسخة موجودة، حدّثها يدوياً فقط لو احتجت:
+--   DROP TABLE attendance_records_backup_sync; ثم أعد تنفيذ STEP 1.
+
+
+-- ============================================================================
+-- STEP 2 — تعبئة branch_employee_id (إضافي وآمن، لا يحذف شيء)
+-- يجعل العمود الرقمي هو المفتاح الموحّد لكل السجلات.
+-- ============================================================================
+
+-- 2.a) من الصيغة النصية branch_emp_<n>
+UPDATE attendance_records
+SET branch_employee_id = CAST(substring(employee_id from '^branch_emp_([0-9]+)$') AS integer)
+WHERE branch_employee_id IS NULL
+  AND employee_id ~ '^branch_emp_[0-9]+$';
+
+-- 2.b) من UUID حساب المستخدم المربوط
+UPDATE attendance_records ar
+SET branch_employee_id = be.id
+FROM branch_employees be
+WHERE ar.branch_employee_id IS NULL
+  AND ar.employee_id = be.linked_user_id;
+
+
+-- ============================================================================
+-- STEP 3 — دمج السجلات المكررة لنفس الموظف (branch_employee_id) ونفس اليوم
+-- ----------------------------------------------------------------------------
+-- المبدأ: نُبقي أقدم سجل (أصغر id) كـ"محتفظ به"، وندمج فيه:
+--   - أبكر وقت حضور  (actual_check_in)
+--   - آخر وقت انصراف (actual_check_out) + توقيعه
+-- ثم نحذف السجلات الزائدة. (شغّل STEP 1 قبله!)
+-- ============================================================================
+
+-- 3.a) احسب القيم المدمجة لكل مجموعة (موظف + يوم) فيها أكثر من سجل
+WITH grp AS (
+  SELECT branch_employee_id, attendance_date
+  FROM attendance_records
+  WHERE branch_employee_id IS NOT NULL
+  GROUP BY branch_employee_id, attendance_date
+  HAVING COUNT(*) > 1
+),
+keeper AS (
+  SELECT ar.branch_employee_id, ar.attendance_date, MIN(ar.id) AS keeper_id
+  FROM attendance_records ar
+  JOIN grp g USING (branch_employee_id, attendance_date)
+  GROUP BY ar.branch_employee_id, ar.attendance_date
+),
+ci AS (  -- أبكر حضور
+  SELECT branch_employee_id, attendance_date, MIN(actual_check_in) AS ci
+  FROM attendance_records
+  JOIN grp USING (branch_employee_id, attendance_date)
+  WHERE actual_check_in IS NOT NULL
+  GROUP BY branch_employee_id, attendance_date
+),
+co AS (  -- آخر انصراف + توقيعه (نختار صف الانصراف الأحدث)
+  SELECT DISTINCT ON (branch_employee_id, attendance_date)
+    branch_employee_id, attendance_date,
+    actual_check_out AS co, check_out_signature AS co_sig
+  FROM attendance_records
+  JOIN grp USING (branch_employee_id, attendance_date)
+  WHERE actual_check_out IS NOT NULL
+  ORDER BY branch_employee_id, attendance_date, actual_check_out DESC, id DESC
+)
+UPDATE attendance_records t
+SET
+  actual_check_in     = COALESCE(ci.ci, t.actual_check_in),
+  actual_check_out    = COALESCE(co.co, t.actual_check_out),
+  check_out_signature = COALESCE(co.co_sig, t.check_out_signature),
+  working_hours = CASE
+    WHEN COALESCE(ci.ci, t.actual_check_in) IS NOT NULL
+     AND COALESCE(co.co, t.actual_check_out) IS NOT NULL THEN
+      ROUND((
+        (EXTRACT(EPOCH FROM COALESCE(co.co, t.actual_check_out)::time)
+         - EXTRACT(EPOCH FROM COALESCE(ci.ci, t.actual_check_in)::time)
+         + CASE WHEN COALESCE(co.co, t.actual_check_out)::time
+                   < COALESCE(ci.ci, t.actual_check_in)::time
+                THEN 86400 ELSE 0 END) / 3600.0)::numeric, 2)
+    ELSE t.working_hours
+  END,
+  updated_at = NOW()
+FROM keeper k
+LEFT JOIN ci USING (branch_employee_id, attendance_date)
+LEFT JOIN co USING (branch_employee_id, attendance_date)
+WHERE t.id = k.keeper_id
+  AND k.branch_employee_id = t.branch_employee_id
+  AND k.attendance_date = t.attendance_date;
+
+-- 3.b) احذف السجلات الزائدة (كل شيء عدا المحتفظ به في كل مجموعة)
+WITH grp AS (
+  SELECT branch_employee_id, attendance_date
+  FROM attendance_records
+  WHERE branch_employee_id IS NOT NULL
+  GROUP BY branch_employee_id, attendance_date
+  HAVING COUNT(*) > 1
+),
+keeper AS (
+  SELECT ar.branch_employee_id, ar.attendance_date, MIN(ar.id) AS keeper_id
+  FROM attendance_records ar
+  JOIN grp g USING (branch_employee_id, attendance_date)
+  GROUP BY ar.branch_employee_id, ar.attendance_date
+)
+DELETE FROM attendance_records t
+USING keeper k
+WHERE t.branch_employee_id = k.branch_employee_id
+  AND t.attendance_date   = k.attendance_date
+  AND t.id <> k.keeper_id;
+
+
+-- ============================================================================
+-- STEP 4 — تحقق نهائي (قراءة فقط) — لازم يرجع صفر صفوف
+-- ============================================================================
+SELECT branch_employee_id, attendance_date, COUNT(*) AS still_duplicated
+FROM attendance_records
+WHERE branch_employee_id IS NOT NULL
+GROUP BY branch_employee_id, attendance_date
+HAVING COUNT(*) > 1;
+
+-- بعد التأكد إن كل شي تمام لعدة أيام، تقدر تحذف النسخة الاحتياطية:
+--   DROP TABLE attendance_records_backup_sync;

@@ -11407,39 +11407,49 @@ export class DatabaseStorage implements IStorage {
     return uniqueEmployees;
   }
 
-  // Resolve all identity strings that refer to the same human. A person may appear
-  // both as a user UUID and as `branch_emp_<id>` (linked via branchEmployees.linkedUserId).
-  // Returns the original id plus any linked alternate form (best-effort, never throws).
-  private async resolveEmployeeIdentities(employeeId: string): Promise<string[]> {
-    const ids = new Set<string>([employeeId]);
-    try {
-      if (employeeId.startsWith("branch_emp_")) {
-        const n = parseInt(employeeId.replace("branch_emp_", ""), 10);
-        if (!isNaN(n)) {
-          const be = await this.getBranchEmployee(n);
-          if (be?.linkedUserId) ids.add(be.linkedUserId);
-        }
-      } else {
-        const be = await this.getBranchEmployeeByLinkedUserId(employeeId);
-        if (be) ids.add(`branch_emp_${be.id}`);
-      }
-    } catch {
-      // best-effort: fall back to just the original identity
-    }
-    return Array.from(ids);
-  }
-
   // Dual-identity-aware attendance lookup for a given date. Avoids duplicate records
   // and cross-identity check-out failures when a person checked in under one identity
   // (e.g. branch_emp_N via the clerk) but is looked up under another (e.g. user UUID).
   async getAttendanceForAnyIdentityAndDate(employeeId: string, date: string): Promise<AttendanceRecord | undefined> {
-    const ids = await this.resolveEmployeeIdentities(employeeId);
-    if (ids.length === 1) {
-      return this.getAttendanceByEmployeeAndDate(employeeId, date);
+    // Resolve ALL identity forms for this person so BOTH surfaces (employee portal +
+    // aggregated branch page) converge on the same record. This must mirror the portal
+    // matcher exactly: string id (branch_emp_<n>), the numeric branch_employee_id column,
+    // and the linked user UUID. Matching only by the employee_id string column (the old
+    // behavior) made the aggregated check-out miss records the portal could still see,
+    // leaving the employee stuck "on duty" in بوابتي after check-out.
+    let branchEmpId: number | undefined;
+    let linkedUserId: string | undefined;
+    try {
+      if (employeeId.startsWith("branch_emp_")) {
+        const n = parseInt(employeeId.replace("branch_emp_", ""), 10);
+        if (!isNaN(n)) {
+          branchEmpId = n;
+          const be = await this.getBranchEmployee(n);
+          if (be?.linkedUserId) linkedUserId = be.linkedUserId;
+        }
+      } else {
+        const be = await this.getBranchEmployeeByLinkedUserId(employeeId);
+        if (be) {
+          branchEmpId = be.id;
+          linkedUserId = employeeId;
+        }
+      }
+    } catch {
+      // best-effort: fall back to the original identity only
     }
+
+    const idForms = new Set<string>([employeeId]);
+    if (branchEmpId !== undefined) idForms.add(`branch_emp_${branchEmpId}`);
+    if (linkedUserId) idForms.add(linkedUserId);
+
+    const orConds: any[] = [inArray(attendanceRecords.employeeId, Array.from(idForms))];
+    if (branchEmpId !== undefined) {
+      orConds.push(eq(attendanceRecords.branchEmployeeId, branchEmpId));
+    }
+
     try {
       const rows = await db.select().from(attendanceRecords)
-        .where(and(inArray(attendanceRecords.employeeId, ids), eq(attendanceRecords.attendanceDate, date)))
+        .where(and(or(...orConds), eq(attendanceRecords.attendanceDate, date)))
         .orderBy(desc(attendanceRecords.id));
       if (rows.length === 0) return undefined;
       // Prefer an OPEN record (checked-in, not yet checked-out) so check-out finds it.
@@ -11447,7 +11457,14 @@ export class DatabaseStorage implements IStorage {
       return open || rows[0];
     } catch (error: any) {
       if (error?.code === '42703') {
-        return this.getAttendanceByEmployeeAndDate(employeeId, date);
+        // Schema-drift fallback (branch_employee_id column missing): still match ALL
+        // string identity forms so multi-identity convergence is preserved.
+        const rows = await db.select().from(attendanceRecords)
+          .where(and(inArray(attendanceRecords.employeeId, Array.from(idForms)), eq(attendanceRecords.attendanceDate, date)))
+          .orderBy(desc(attendanceRecords.id));
+        if (rows.length === 0) return undefined;
+        const open = rows.find(r => r.actualCheckIn && !r.actualCheckOut);
+        return open || rows[0];
       }
       throw error;
     }

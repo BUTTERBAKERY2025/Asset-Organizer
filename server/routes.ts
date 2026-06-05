@@ -26922,7 +26922,10 @@ export async function registerRoutes(
       // SECURITY: Verify branch access for non-admin users based on employee's branch
       const saudiToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
       const targetDate = attendanceDate || saudiToday;
-      const existingRecord = await storage.getAttendanceByEmployeeAndDate(employeeId, targetDate);
+      // IDENTITY-AWARE: use the same dual-identity matcher the actual check-out uses so the
+      // pre-check and the update converge on the SAME record (avoids false 404 / stale
+      // "on duty" in the employee portal for split-identity employees).
+      const existingRecord = await storage.getAttendanceForAnyIdentityAndDate(employeeId, targetDate);
       
       if (!existingRecord) {
         return res.status(404).json({ error: "لم يتم تسجيل حضور هذا الموظف في هذا التاريخ" });
