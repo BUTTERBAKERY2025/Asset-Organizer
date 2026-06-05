@@ -26870,7 +26870,7 @@ export async function registerRoutes(
         record = await storage.checkInEmployee(employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName, targetDate);
       } catch (checkInError: any) {
         console.error("[Check-in] checkInEmployee failed:", checkInError?.message || checkInError);
-        if (checkInError?.message?.includes('مسبقاً') || checkInError?.message?.includes('لا ينتمي') || checkInError?.message?.includes('غير نشط') || checkInError?.message?.includes('جدول') || checkInError?.message?.includes('إجازة')) {
+        if (checkInError?.message?.includes('مسبقاً') || checkInError?.message?.includes('لا ينتمي') || checkInError?.message?.includes('غير نشط') || checkInError?.message?.includes('جدول') || checkInError?.message?.includes('إجازة') || checkInError?.message?.includes('أمس')) {
           return res.status(400).json({ error: checkInError.message });
         }
         return res.status(500).json({ error: "فشل في تسجيل الحضور" });
@@ -26925,8 +26925,33 @@ export async function registerRoutes(
       // IDENTITY-AWARE: use the same dual-identity matcher the actual check-out uses so the
       // pre-check and the update converge on the SAME record (avoids false 404 / stale
       // "on duty" in the employee portal for split-identity employees).
-      const existingRecord = await storage.getAttendanceForAnyIdentityAndDate(employeeId, targetDate);
-      
+      let existingRecord = await storage.getAttendanceForAnyIdentityAndDate(employeeId, targetDate);
+      let resolvedDate = targetDate;
+
+      // CROSS-MIDNIGHT: if there is no record for today, an overnight shift that started
+      // yesterday may still be open. Auto-resolve the pre-check to that record so the manager
+      // can close it after midnight — but ONLY within the 16h grace window (this auto-resolve
+      // path must enforce grace itself, since storage.checkOutEmployee skips the grace check
+      // when it is handed an explicit date that already has a record).
+      if (!existingRecord && targetDate === saudiToday) {
+        const yd = new Date();
+        yd.setDate(yd.getDate() - 1);
+        const prevDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(yd);
+        const prevRecord = await storage.getAttendanceForAnyIdentityAndDate(employeeId, prevDate);
+        if (prevRecord && prevRecord.actualCheckIn && !prevRecord.actualCheckOut) {
+          const OVERNIGHT_GRACE_HOURS = 16;
+          const nowTime = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date());
+          const norm = (tt: string) => (tt.length === 5 ? `${tt}:00` : tt);
+          const ci = new Date(`${prevDate}T${norm(prevRecord.actualCheckIn)}Z`).getTime();
+          const co = new Date(`${saudiToday}T${norm(nowTime)}Z`).getTime();
+          const elapsed = co - ci;
+          if (!isNaN(elapsed) && elapsed >= 0 && elapsed <= OVERNIGHT_GRACE_HOURS * 3600 * 1000) {
+            existingRecord = prevRecord;
+            resolvedDate = prevDate;
+          }
+        }
+      }
+
       if (!existingRecord) {
         return res.status(404).json({ error: "لم يتم تسجيل حضور هذا الموظف في هذا التاريخ" });
       }
@@ -26971,7 +26996,7 @@ export async function registerRoutes(
       
       let record;
       try {
-        record = await storage.checkOutEmployee(employeeId, signature, scheduleId, targetDate);
+        record = await storage.checkOutEmployee(employeeId, signature, scheduleId, resolvedDate);
       } catch (checkOutError: any) {
         console.error("[Check-out] checkOutEmployee failed:", checkOutError?.message || checkOutError);
         return res.status(500).json({ error: "فشل في تسجيل الانصراف" });

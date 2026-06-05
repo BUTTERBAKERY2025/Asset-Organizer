@@ -30,6 +30,31 @@ function getSaudiArabiaTime(): { date: string; time: string; timeShort: string }
     timeShort: `${hours}:${minutes}`
   };
 }
+
+// نافذة السماح للورديات الليلية العابرة لمنتصف الليل: يبقى الانصراف مرتبطاً بوردية أمس
+// طالما لم يمضِ على وقت الحضور أكثر من هذا العدد من الساعات (يحمي من قفل ورديات "نسي
+// صاحبها ينصرف" من أيام سابقة بالخطأ).
+const OVERNIGHT_GRACE_HOURS = 16;
+
+// التاريخ السابق ليوم معطى (YYYY-MM-DD) باستخدام UTC لتفادي انحراف المناطق الزمنية.
+function prevDateStr(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+// هل ما زال الوقت ضمن نافذة السماح منذ تسجيل الحضور؟ يحسب الفارق بتوقيت السعودية
+// (التاريخ + الوقت معاملان كـ UTC للطرح فقط — كلاهما بنفس مرجع الساعة المحلية).
+function isWithinGraceHours(recordDate: string, checkInHHMM: string | null | undefined, hours: number): boolean {
+  if (!checkInHHMM) return false;
+  const st = getSaudiArabiaTime();
+  const norm = (t: string) => (t.length === 5 ? `${t}:00` : t);
+  const ci = new Date(`${recordDate}T${norm(checkInHHMM)}Z`).getTime();
+  const co = new Date(`${st.date}T${norm(st.time)}Z`).getTime();
+  if (isNaN(ci) || isNaN(co)) return false;
+  const diff = co - ci;
+  return diff >= 0 && diff <= hours * 3600 * 1000;
+}
 import { 
   type Branch, 
   type InsertBranch,
@@ -11639,6 +11664,18 @@ export class DatabaseStorage implements IStorage {
       }
     }
     
+    // CROSS-MIDNIGHT GUARD: if an overnight shift from the previous day is still open
+    // (checked-in, not checked-out) within the grace window, the employee must close it
+    // first — otherwise a second record would fragment the night shift across two days.
+    {
+      const prevDay = prevDateStr(today);
+      const openPrev = await this.getAttendanceForAnyIdentityAndDate(employeeId, prevDay);
+      if (openPrev && openPrev.actualCheckIn && !openPrev.actualCheckOut &&
+          isWithinGraceHours(openPrev.attendanceDate, openPrev.actualCheckIn, OVERNIGHT_GRACE_HOURS)) {
+        throw new Error("لديك وردية مفتوحة من أمس - سجّل انصرافك أولاً");
+      }
+    }
+
     // ENFORCEMENT: a saved shift-schedule MUST exist for this employee on this date,
     // and the day must not be marked off. The schedule is the authoritative source for
     // the scheduled times (we ignore client-supplied values to keep late-calc accurate).
@@ -11728,7 +11765,18 @@ export class DatabaseStorage implements IStorage {
     const today = attendanceDate || saudiTime.date;
     const now = saudiTime.timeShort;
     
-    const existing = await this.getAttendanceForAnyIdentityAndDate(employeeId, today);
+    let existing = await this.getAttendanceForAnyIdentityAndDate(employeeId, today);
+    // CROSS-MIDNIGHT: if there is no record for today, an overnight shift that started
+    // yesterday may still be open. Close THAT record (so the shift stays on the day it
+    // started — no new day is created) as long as it is within the grace window.
+    if (!existing) {
+      const prevDay = prevDateStr(today);
+      const openPrev = await this.getAttendanceForAnyIdentityAndDate(employeeId, prevDay);
+      if (openPrev && openPrev.actualCheckIn && !openPrev.actualCheckOut &&
+          isWithinGraceHours(openPrev.attendanceDate, openPrev.actualCheckIn, OVERNIGHT_GRACE_HOURS)) {
+        existing = openPrev;
+      }
+    }
     if (!existing) return undefined;
     if (existing.actualCheckOut) return undefined;
     

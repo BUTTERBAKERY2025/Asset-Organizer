@@ -36,6 +36,32 @@ function saudiMonth(): string {
 function saudiDate(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
+// نافذة السماح للورديات الليلية العابرة لمنتصف الليل (بالساعات).
+const OVERNIGHT_GRACE_HOURS = 16;
+// تاريخ أمس بتوقيت السعودية (YYYY-MM-DD).
+function saudiYesterday(): string {
+  const d = new Date(`${saudiDate()}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+// وقت السعودية الحالي (التاريخ + الوقت) للمقارنة مع وقت الحضور.
+function saudiNowParts(): { date: string; time: string } {
+  const now = new Date();
+  const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  const time = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Riyadh", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(now);
+  return { date, time };
+}
+// هل ما زال الوقت ضمن نافذة السماح منذ تسجيل الحضور؟
+function withinGraceHours(recordDate: string, checkInHHMM: string | null | undefined, hours: number): boolean {
+  if (!checkInHHMM) return false;
+  const norm = (t: string) => (t.length === 5 ? `${t}:00` : t);
+  const np = saudiNowParts();
+  const ci = new Date(`${recordDate}T${norm(checkInHHMM)}Z`).getTime();
+  const co = new Date(`${np.date}T${norm(np.time)}Z`).getTime();
+  if (isNaN(ci) || isNaN(co)) return false;
+  const diff = co - ci;
+  return diff >= 0 && diff <= hours * 3600 * 1000;
+}
 function isValidMonth(m: unknown): m is string {
   return typeof m === "string" && /^\d{4}-\d{2}$/.test(m);
 }
@@ -838,10 +864,29 @@ export function registerSelfServiceRoutes(app: Express) {
         .limit(1);
 
       // طابق سجل الحضور بأي من صيغتي هوية الموظف (دالة موحّدة) — والأحدث يفوز.
-      const [record] = await db.select().from(attendanceRecords)
+      let [record] = await db.select().from(attendanceRecords)
         .where(and(eq(attendanceRecords.attendanceDate, today), attendanceIdentityMatch(emp.id, emp.linkedUserId)))
         .orderBy(desc(attendanceRecords.id))
         .limit(1);
+
+      // عبور منتصف الليل: لو ما فيه سجل لليوم، قد تكون هناك وردية ليلية بدأت أمس ولم
+      // يُسجَّل انصرافها. أظهرها (ضمن نافذة السماح) ليبقى زر الانصراف فعّالاً بدل أن
+      // تُحتسب يوماً جديداً ويحتار الموظف.
+      let isOvernightFromYesterday = false;
+      let overnightDate: string | null = null;
+      if (!record) {
+        const yday = saudiYesterday();
+        const [y] = await db.select().from(attendanceRecords)
+          .where(and(eq(attendanceRecords.attendanceDate, yday), attendanceIdentityMatch(emp.id, emp.linkedUserId)))
+          .orderBy(desc(attendanceRecords.id))
+          .limit(1);
+        if (y && y.actualCheckIn && !y.actualCheckOut &&
+            withinGraceHours(y.attendanceDate, y.actualCheckIn, OVERNIGHT_GRACE_HOURS)) {
+          record = y;
+          isOvernightFromYesterday = true;
+          overnightDate = yday;
+        }
+      }
 
       const [branch] = await db.select().from(branches).where(eq(branches.id, emp.branchId));
 
@@ -865,6 +910,8 @@ export function registerSelfServiceRoutes(app: Express) {
           // true إذا أنشأ السجلَّ الموظف نفسه من البوابة (employeeId=branch_emp_<id>)؛
           // false عندما سجّله المدير من صفحة الوردية بصيغة هوية مختلفة.
           recordedBySelf: record.employeeId === empId,
+          isOvernightFromYesterday,
+          overnightDate,
         } : null,
         branch: branch ? {
           name: branch.name,

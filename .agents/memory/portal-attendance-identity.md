@@ -61,14 +61,14 @@ placeholders like '--'/'0'.
 ## Orphan schedules (deleted-and-recreated profiles) are the most common roster-dup cause
 
 **Why:** when a person's `branch_employees` profile is deleted and re-created with a NEW id
-(e.g. backfill: جو was be 251, recreated as be 272 linked to the login user), their OLD
-`employee_schedules` rows (`branch_emp_251` / `branch_employee_id=251`) stay behind as
+(e.g. backfill: old be N, recreated as be M linked to the login user), their OLD
+`employee_schedules` rows (`branch_emp_N` / `branch_employee_id=N`) stay behind as
 ORPHANS pointing to a now-nonexistent be. The roster shows the orphan (name from the
 schedule's own `employee_name`) NEXT TO the real new profile's row → same person twice. The
-canonical-be dedup does NOT merge them (251 vs 272 are different keys), so this is a DATA
-problem, not a code one. Re-created profiles often carry an English `employee_name`
-(e.g. "Chelo Dacanay") while the orphan kept the Arabic transliteration ("شيلو بيلا داكاني"),
-so name-based twin detection misses them — match old→new by human eyeballing the day's roster.
+canonical-be dedup does NOT merge them (N vs M are different keys), so this is a DATA
+problem, not a code one. Re-created profiles often carry an English `employee_name` while the
+orphan kept the Arabic transliteration, so name-based twin detection misses them — match
+old→new by human eyeballing the day's roster.
 
 **How to apply:** detect orphans = scheduled rows where NO branch_employee resolves
 (`NOT EXISTS` over the 3 forms). Cross-reference each orphan against the day's REAL roster

@@ -886,6 +886,17 @@ export default function MyPortalPage() {
                     </Card>
                   )}
 
+                  {todayStatus?.attendance?.isOvernightFromYesterday && (
+                    <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/30" data-testid="card-overnight-notice">
+                      <CardContent className="p-3 text-sm text-blue-800 dark:text-blue-300 flex items-center gap-2">
+                        <Clock className="h-4 w-4 shrink-0" />
+                        {i18n.language === "ar"
+                          ? `وردية ليلية مفتوحة منذ أمس (${todayStatus.attendance.overnightDate}) الساعة ${todayStatus.attendance.actualCheckIn} — سجّل انصرافك`
+                          : `Overnight shift still open from yesterday (${todayStatus.attendance.overnightDate}) at ${todayStatus.attendance.actualCheckIn} — please check out`}
+                      </CardContent>
+                    </Card>
+                  )}
+
                   {/* حالة التسجيل اليوم / today's status */}
                   <Card data-testid="card-checkin-status">
                     <CardContent className="p-4 grid grid-cols-2 gap-3 text-center">
