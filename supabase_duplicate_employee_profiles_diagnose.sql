@@ -1,19 +1,68 @@
 -- ============================================================================
--- تشخيص: ملفات موظفين مكررة لنفس الشخص (branch_employees)
+-- تشخيص: ظهور نفس الموظف مرتين في صفحة تسجيل الحضور/الانصراف
 -- ----------------------------------------------------------------------------
--- العَرَض: في صفحة تسجيل الحضور/الانصراف يظهر نفس الموظف مرتين (مثلاً واحد
--- "مكتمل" وواحد "لم يحضر") — مثل "Clemente Sr Carnable Carnable" و"جو سيدي كانتيلا".
--- السبب: وجود ملفّين موظف منفصلين لنفس الشخص (غالباً واحد بالاسم الإنجليزي
--- وواحد بالعربي)، كل ملف له جدول، فيطلع صفّين في القائمة.
+-- في صفحة الحضور يظهر الموظف صفّين (واحد "مكتمل" وواحد "لم يحضر").
+-- في الغالب لأحد سببين:
+--   (أ) نفس الموظف له صفّان في جدول الدوام (employee_schedules) بهويّتين
+--       مختلفتين: واحد canonical (branch_emp_<id>) وواحد قديم (UUID المستخدم).
+--       دالة العرض تجمع على نص المعرّف فما تدمجهم → صفّان.
+--   (ب) نفس الشخص له ملفّان منفصلان (branch_employees) — واحد إنجليزي وواحد عربي.
 --
 -- هذا الملف **قراءة فقط** (تشخيص) — لا يعدّل أي بيانات.
--- شغّل Q1 و Q2 وأرسل النتائج. بعد تحديد الملفّات المكررة، نعطيك سكربت دمج آمن.
+-- شغّل D1 و D2 وأرسل النتائج. بعدها نعطيك سكربت إصلاح آمن مناسب للسبب.
 -- ============================================================================
 
 
 -- ============================================================================
--- Q1) ملفات مكررة بمعرّف قوي مشترك (رقم إقامة / جواز / رقم وظيفي / جوال)
---     داخل نفس الفرع — هذا أدق دليل على أنهم نفس الشخص.
+-- D1) السبب (أ): نفس الموظف (هوية موحّدة be_id) له أكثر من صف في الدوام
+--     بمعرّفات employee_id مختلفة — هذا اللي يسبّب صفّين في صفحة الحضور.
+--     يحلّ الهوية بـ 3 طرق: العمود الرقمي، صيغة branch_emp_<n>، و UUID المربوط.
+-- >>> عدّل التاريخ لتاريخ اليوم اللي تشوف فيه التكرار في الصفحة <<<
+-- ============================================================================
+WITH sched AS (
+  SELECT s.id AS schedule_id, s.branch_id, s.schedule_date, s.shift_type,
+         s.employee_id, s.branch_employee_id, s.employee_name AS sched_name,
+         COALESCE(
+           s.branch_employee_id,
+           CAST(substring(s.employee_id from '^branch_emp_([0-9]+)$') AS integer),
+           be_link.id
+         ) AS be_id
+  FROM employee_schedules s
+  LEFT JOIN branch_employees be_link ON be_link.linked_user_id = s.employee_id
+  WHERE s.is_off = false
+    AND s.status = 'scheduled'
+    AND s.schedule_date = '2026-06-05'      -- <<< بدّل التاريخ هنا
+)
+SELECT branch_id, schedule_date, be_id,
+       COUNT(*)                         AS roster_rows,
+       array_agg(DISTINCT employee_id)  AS employee_ids,
+       array_agg(DISTINCT sched_name)   AS sched_names
+FROM sched
+WHERE be_id IS NOT NULL
+GROUP BY branch_id, schedule_date, be_id
+HAVING COUNT(DISTINCT employee_id) > 1
+ORDER BY branch_id, be_id;
+
+
+-- ============================================================================
+-- D1.x) صفوف دوام بهوية غير قابلة للحل (employee_id = UUID غير مربوط بأي ملف):
+--       هذي قد تظهر باسم منفصل وتسبّب "لم يحضر". للعلم/المراجعة.
+-- >>> نفس التاريخ <<<
+-- ============================================================================
+SELECT s.id AS schedule_id, s.branch_id, s.employee_id, s.employee_name, s.shift_type
+FROM employee_schedules s
+LEFT JOIN branch_employees be_link ON be_link.linked_user_id = s.employee_id
+WHERE s.is_off = false AND s.status = 'scheduled'
+  AND s.schedule_date = '2026-06-05'        -- <<< بدّل التاريخ هنا
+  AND s.branch_employee_id IS NULL
+  AND s.employee_id !~ '^branch_emp_[0-9]+$'
+  AND be_link.id IS NULL
+ORDER BY s.branch_id, s.employee_id;
+
+
+-- ============================================================================
+-- D2) السبب (ب): ملفّان موظف منفصلان لنفس الشخص بمعرّف قوي مشترك
+--     (رقم إقامة / جواز / رقم وظيفي / جوال) داخل نفس الفرع — أدق دليل.
 -- ============================================================================
 SELECT key_type, key_val, branch_id,
        array_agg(id ORDER BY id)            AS profile_ids,
@@ -32,46 +81,20 @@ ORDER BY key_type, key_val;
 
 
 -- ============================================================================
--- Q2) ملفات مكررة بتطابق الاسم (عربي = عربي، أو عربي يطابق الإنجليزي)
---     داخل نفس الفرع. مفيد لما تكون المعرّفات القوية فاضية.
--- ملاحظة: راجع كل زوج يدوياً — قد يتشابه شخصان مختلفان بالاسم.
--- ============================================================================
-WITH n AS (
-  SELECT id, branch_id, status, employee_name,
-         regexp_replace(lower(btrim(employee_name)), '\s+',' ','g')                    AS na,
-         regexp_replace(lower(btrim(coalesce(employee_name_en,''))), '\s+',' ','g')    AS ne
-  FROM branch_employees
-)
-SELECT a.branch_id,
-       a.id AS id1, a.employee_name AS name1, a.status AS st1,
-       b.id AS id2, b.employee_name AS name2, b.status AS st2
-FROM n a
-JOIN n b
-  ON a.branch_id = b.branch_id
- AND a.id < b.id
- AND ( a.na = b.na
-    OR (a.ne <> '' AND a.ne = b.ne)
-    OR (a.ne <> '' AND a.na = b.ne)
-    OR (b.ne <> '' AND a.ne = b.na) )
-ORDER BY a.branch_id, a.id;
-
-
--- ============================================================================
--- Q3) (اختياري) تفاصيل استخدام كل ملف لتحديد "الملف الأساسي" vs "المكرر":
---     عدّل القائمة (1,2,3) بأرقام الملفات اللي طلعت في Q1/Q2.
---     يعرض: عدد الجداول، عدد سجلات الحضور، الربط بحساب مستخدم، تاريخ الإنشاء.
+-- D3) (اختياري) تفاصيل استخدام كل ملف لتحديد "الأساسي" vs "المكرر":
+--     بدّل القائمة (1,2,3) بأرقام be_id من D1 أو profile_ids من D2.
 -- ============================================================================
 SELECT be.id, be.employee_name, be.employee_name_en, be.status, be.branch_id,
-       be.linked_user_id,
-       be.iqama_number, be.phone_number, be.employee_number,
+       be.linked_user_id, be.iqama_number, be.phone_number, be.employee_number,
        be.created_at,
        (SELECT COUNT(*) FROM employee_schedules s
          WHERE s.branch_employee_id = be.id
-            OR s.employee_id = 'branch_emp_' || be.id)                 AS schedules_count,
+            OR s.employee_id = 'branch_emp_' || be.id
+            OR s.employee_id = be.linked_user_id)                  AS schedules_count,
        (SELECT COUNT(*) FROM attendance_records ar
          WHERE ar.branch_employee_id = be.id
             OR ar.employee_id = 'branch_emp_' || be.id
-            OR ar.employee_id = be.linked_user_id)                     AS attendance_count
+            OR ar.employee_id = be.linked_user_id)                 AS attendance_count
 FROM branch_employees be
-WHERE be.id IN (1, 2, 3)   -- <<< بدّلها بأرقام الملفات المكررة من Q1/Q2
+WHERE be.id IN (1, 2, 3)   -- <<< بدّلها بأرقام الملفات من D1/D2
 ORDER BY be.id;
