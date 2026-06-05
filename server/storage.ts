@@ -10351,6 +10351,18 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(employeeSchedules).where(and(...conditions)).orderBy(employeeSchedules.scheduleDate);
   }
 
+  // كل الجداول ضمن فترة زمنية عبر جميع الفروع (بدون تقييد بفرع واحد).
+  // تُستخدم في توليد تقرير التايم شيت حتى لا تُفقد أيام دوام الموظف في فرعه السابق
+  // إذا نُقل بين الفروع خلال الشهر. التصفية حسب هوية الموظف تتم لدى المستدعي.
+  async getEmployeeSchedulesByDateRange(startDate: string, endDate: string): Promise<EmployeeSchedule[]> {
+    return await db.select().from(employeeSchedules)
+      .where(and(
+        gte(employeeSchedules.scheduleDate, startDate),
+        lte(employeeSchedules.scheduleDate, endDate)
+      ))
+      .orderBy(employeeSchedules.employeeId, employeeSchedules.scheduleDate);
+  }
+
   async getEmployeeSchedulesByDate(date: string, branchId?: string): Promise<EmployeeSchedule[]> {
     if (branchId) {
       const periods = await db.select().from(schedulePeriods).where(eq(schedulePeriods.branchId, branchId));

@@ -110,6 +110,8 @@ interface TimesheetEntry {
   notes?: string;
   checkInSignature?: string;
   checkOutSignature?: string;
+  branchId?: string | null;
+  branchName?: string | null;
 }
 
 export default function TimesheetPage() {
@@ -693,6 +695,7 @@ export default function TimesheetPage() {
     const dailyData = reportEntries.map(entry => ({
       [t("timesheet.date")]: entry.date,
       [t("timesheet.day")]: DAY_LABELS[entry.dayOfWeek] || entry.dayOfWeek,
+      [t("timesheet.branch")]: entry.branchName ?? "--",
       [t("timesheet.status")]: STATUS_LABELS[entry.status]?.label || entry.status,
       [t("timesheet.scheduledStart")]: entry.scheduledStartTime ?? "--",
       [t("timesheet.scheduledEnd")]: entry.scheduledEndTime ?? "--",
@@ -741,6 +744,7 @@ export default function TimesheetPage() {
       <tr>
         <td>${entry.date}</td>
         <td>${DAY_LABELS[entry.dayOfWeek] || entry.dayOfWeek}</td>
+        <td>${entry.branchName ?? "--"}</td>
         <td>${STATUS_LABELS[entry.status]?.label || entry.status}</td>
         <td>${entry.scheduledStartTime ?? "--"}</td>
         <td>${entry.scheduledEndTime ?? "--"}</td>
@@ -804,7 +808,7 @@ export default function TimesheetPage() {
         <table>
           <thead>
             <tr>
-              <th>التاريخ</th><th>اليوم</th><th>الحالة</th>
+              <th>التاريخ</th><th>اليوم</th><th>الفرع</th><th>الحالة</th>
               <th>بداية الدوام</th><th>نهاية الدوام</th>
               <th>وقت الحضور</th><th>وقت الانصراف</th>
               <th>ساعات العمل</th><th>دقائق التأخير</th><th>التوقيع</th>
@@ -1358,6 +1362,7 @@ export default function TimesheetPage() {
                         <TableRow>
                           <TableHead className={isRTL ? "text-right" : "text-left"}>{t("timesheet.date")}</TableHead>
                           <TableHead className="text-center">{t("timesheet.day")}</TableHead>
+                          <TableHead className="text-center">{t("timesheet.branch")}</TableHead>
                           <TableHead className="text-center">{t("timesheet.status")}</TableHead>
                           <TableHead className="text-center">{t("timesheet.scheduledStart")}</TableHead>
                           <TableHead className="text-center">{t("timesheet.scheduledEnd")}</TableHead>
@@ -1371,7 +1376,7 @@ export default function TimesheetPage() {
                       <TableBody>
                         {entriesLoading ? (
                           <TableRow>
-                            <TableCell colSpan={10} className="text-center py-8">
+                            <TableCell colSpan={11} className="text-center py-8">
                               <Loader2 className="w-6 h-6 animate-spin mx-auto" />
                             </TableCell>
                           </TableRow>
@@ -1379,6 +1384,7 @@ export default function TimesheetPage() {
                           <TableRow key={entry.id} className={entry.isOff ? "bg-gray-50" : ""}>
                             <TableCell className="font-medium">{entry.date}</TableCell>
                             <TableCell className="text-center">{DAY_LABELS[entry.dayOfWeek] || entry.dayOfWeek}</TableCell>
+                            <TableCell className="text-center" data-testid={`text-branch-${entry.id}`}>{entry.branchName ?? "--"}</TableCell>
                             <TableCell className="text-center">
                               <Badge className={`${STATUS_LABELS[entry.status]?.color || "bg-gray-100"} gap-1`}>
                                 {STATUS_LABELS[entry.status]?.icon}

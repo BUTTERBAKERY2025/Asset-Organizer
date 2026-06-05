@@ -27373,7 +27373,33 @@ export async function registerRoutes(
       }
       
       const entries = await storage.getTimesheetReportEntries(id);
-      res.json(entries);
+
+      // إثراء كل يوم بالفرع الذي داوم فيه الموظف فعلاً (مستنبط من سجل الحضور) لإظهار
+      // عمود "الفرع" دون تغيير قاعدة البيانات — مفيد للموظف المنقول بين الفروع خلال الشهر.
+      // الأيام بلا حضور تعرض فرع التقرير الأساسي كقيمة افتراضية.
+      const branchEmpNumId = report.branchEmployeeId ?? undefined;
+      const [periodAttendance, allBranches] = await Promise.all([
+        storage.getAllAttendanceRecords({ startDate: report.startDate, endDate: report.endDate }),
+        storage.getAllBranches(),
+      ]);
+      const branchNameById = new Map(allBranches.map(b => [b.id, b.name]));
+      const empAttendance = periodAttendance.filter(a =>
+        a.employeeId === report.employeeId ||
+        (branchEmpNumId !== undefined && a.branchEmployeeId === branchEmpNumId)
+      );
+      const branchByDate = new Map<string, string>();
+      for (const a of empAttendance) {
+        if (a.branchId) branchByDate.set(a.attendanceDate, a.branchId);
+      }
+      const enriched = entries.map(e => {
+        const dayBranchId = branchByDate.get(e.date) || report.branchId;
+        return {
+          ...e,
+          branchId: dayBranchId,
+          branchName: branchNameById.get(dayBranchId) || null,
+        };
+      });
+      res.json(enriched);
     } catch (error) {
       console.error("Error fetching timesheet entries:", error);
       res.status(500).json({ error: "فشل في جلب سجلات التقرير" });
@@ -27405,6 +27431,11 @@ export async function registerRoutes(
         if (!branchEmployee) {
           return res.status(404).json({ error: "موظف الفرع غير موجود" });
         }
+        // SECURITY: موظف الفرع يجب أن ينتمي للفرع المحدد. هذا ضروري لأننا نجلب الجدول/الحضور
+        // عبر كل الفروع الآن؛ بدون هذا الفحص يمكن لمستخدم لديه صلاحية فرع أن يستخرج بيانات موظف فرع آخر.
+        if (branchEmployee.branchId !== branchId) {
+          return res.status(403).json({ error: "الموظف لا ينتمي إلى الفرع المحدد" });
+        }
         employeeName = branchEmployee.employeeName;
         branchEmpNumId = branchEmployeeId;
       } else {
@@ -27416,6 +27447,13 @@ export async function registerRoutes(
         // الموظف المربوط عبر branch_employees.linkedUserId قد يملك حضوراً/جداول بالرقم
         const linkedBranchEmp = await storage.getBranchEmployeeByLinkedUserId(employeeId);
         if (linkedBranchEmp) branchEmpNumId = linkedBranchEmp.id;
+        // SECURITY: المستخدم يجب أن يكون عضواً في الفرع المحدد أو مرتبطاً بموظف فرع ينتمي إليه
+        // (نفس منطق الأمان في التوليد الجماعي) لمنع تسريب بيانات فرع آخر بعد توسيع المصادر لكل الفروع.
+        const isBranchUser = user.branchId === branchId;
+        const linkedBelongsToBranch = linkedBranchEmp ? linkedBranchEmp.branchId === branchId : false;
+        if (!isBranchUser && !linkedBelongsToBranch) {
+          return res.status(403).json({ error: "الموظف لا ينتمي إلى الفرع المحدد" });
+        }
       }
 
       // Check if report already exists (Phase 3: include lock status)
@@ -27431,20 +27469,21 @@ export async function registerRoutes(
         });
       }
 
-      // Get schedules and attendance for the date range
-      // نطابق بالهويتين: employeeId (نصي) أو branchEmployeeId (رقمي)
-      const schedules = await storage.getEmployeeSchedulesByBranchAndDateRange(branchId, startDate, endDate);
+      // Get schedules and attendance for the date range — عبر كل الفروع.
+      // نجمع جدول وحضور الموظف من جميع الفروع خلال الفترة (لا نقيّد بالفرع المختار)
+      // حتى لا تُفقد أيام دوامه في فرعه السابق إذا نُقل بين الفروع خلال الشهر.
+      // نطابق بالهويتين: employeeId (نصي) أو branchEmployeeId (رقمي).
+      const schedules = await storage.getEmployeeSchedulesByDateRange(startDate, endDate);
       const employeeSchedules = schedules.filter(s =>
         s.employeeId === employeeId ||
         (branchEmpNumId !== undefined && s.branchEmployeeId === branchEmpNumId)
       );
 
-      const allBranchAttendance = await storage.getAllAttendanceRecords({
-        branchId,
+      const allAttendanceInRange = await storage.getAllAttendanceRecords({
         startDate,
         endDate
       });
-      const attendance = allBranchAttendance.filter(a =>
+      const attendance = allAttendanceInRange.filter(a =>
         a.employeeId === employeeId ||
         (branchEmpNumId !== undefined && a.branchEmployeeId === branchEmpNumId)
       );
@@ -27603,11 +27642,12 @@ export async function registerRoutes(
         if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
       }
 
-      // Pre-fetch schedules, attendance, branch employees, and branch users ONCE for the whole branch+range
-      // (avoid N+1 + build branch-scoped allow-set for security)
+      // Pre-fetch schedules, attendance (عبر كل الفروع), branch employees, and branch users ONCE.
+      // الجدول والحضور يُجلبان من جميع الفروع حتى لا تُفقد أيام الموظف المنقول بين الفروع؛
+      // التصفية لكل موظف حسب هويته تتم بالأسفل، وعضوية الفرع (للأمان) من branchEmps/branchUsers.
       const [allSchedules, allAttendance, branchEmps, allUsers] = await Promise.all([
-        storage.getEmployeeSchedulesByBranchAndDateRange(branchId, startDate, endDate),
-        storage.getAllAttendanceRecords({ branchId, startDate, endDate }),
+        storage.getEmployeeSchedulesByDateRange(startDate, endDate),
+        storage.getAllAttendanceRecords({ startDate, endDate }),
         storage.getBranchEmployeesByBranch(branchId),
         storage.getAllUsers(),
       ]);
@@ -27849,9 +27889,12 @@ export async function registerRoutes(
         return res.status(400).json({ error: "لا يوجد موظفون في هذا الفرع" });
       }
 
-      // Fetch schedules and attendance once for the whole branch+range
-      const allSchedules = await storage.getEmployeeSchedulesByBranchAndDateRange(branchId, startDate, endDate);
-      const allAttendance = await storage.getAllAttendanceRecords({ branchId, startDate, endDate });
+      // Fetch schedules and attendance once عبر كل الفروع (لا نقيّد بالفرع المختار)
+      // حتى لا تُفقد أيام الموظف المنقول بين الفروع؛ التصفية لكل موظف حسب هويته تتم بالأسفل.
+      const allSchedules = await storage.getEmployeeSchedulesByDateRange(startDate, endDate);
+      const allAttendance = await storage.getAllAttendanceRecords({ startDate, endDate });
+      const allBranchesForNames = await storage.getAllBranches();
+      const branchNameById = new Map(allBranchesForNames.map((b: any) => [b.id, b.name]));
 
       const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
       const arDayMap: Record<string, string> = {
@@ -27940,6 +27983,7 @@ export async function registerRoutes(
           entries.push({
             date: dateStr,
             dayName: arDayMap[dayKey] || dayKey,
+            branchName: (attendance?.branchId ? branchNameById.get(attendance.branchId) : null) || branch.name,
             scheduledStart,
             scheduledEnd,
             actualCheckIn: attendance?.actualCheckIn || (isOff ? "-" : "غ"),
@@ -28008,13 +28052,25 @@ export async function registerRoutes(
         if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا التقرير" });
       }
 
-      const [entries, branch, allUsers, branchEmps] = await Promise.all([
+      const [entries, branch, allUsers, branchEmps, periodAttendance, allBranchesForNames] = await Promise.all([
         storage.getTimesheetReportEntries(id),
         storage.getBranch(report.branchId),
         storage.getAllUsers(),
         storage.getBranchEmployeesByBranch(report.branchId),
+        storage.getAllAttendanceRecords({ startDate: report.startDate, endDate: report.endDate }),
+        storage.getAllBranches(),
       ]);
       if (!branch) return res.status(404).json({ error: "الفرع غير موجود" });
+
+      // خريطة الفرع لكل يوم (مستنبطة من سجل الحضور عبر كل الفروع) لعرض عمود الفرع في الـ PDF
+      const pdfBranchEmpNumId = report.branchEmployeeId ?? undefined;
+      const pdfBranchNameById = new Map(allBranchesForNames.map((b: any) => [b.id, b.name]));
+      const pdfBranchByDate = new Map<string, string>();
+      for (const a of periodAttendance) {
+        const isSameEmp = a.employeeId === report.employeeId ||
+          (pdfBranchEmpNumId !== undefined && a.branchEmployeeId === pdfBranchEmpNumId);
+        if (isSameEmp && a.branchId) pdfBranchByDate.set(a.attendanceDate, a.branchId);
+      }
 
       // Resolve employee display info
       let employeeName = "موظف", jobTitle = "-", employeeNumber: string | undefined;
@@ -28050,6 +28106,7 @@ export async function registerRoutes(
       const pdfEntries = sortedEntries.map(e => ({
         date: e.date,
         dayName: arDayMap[e.dayOfWeek] || e.dayOfWeek,
+        branchName: pdfBranchNameById.get(pdfBranchByDate.get(e.date) || report.branchId) || branch.name,
         scheduledStart: e.scheduledStartTime || (e.isOff ? "-" : "08:00"),
         scheduledEnd: e.scheduledEndTime || (e.isOff ? "-" : "16:00"),
         actualCheckIn: e.actualStartTime || (e.isOff ? "-" : "غ"),

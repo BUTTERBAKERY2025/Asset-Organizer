@@ -3458,6 +3458,7 @@ export async function generateAttendanceLogPdf(data: AttendanceLogPdfData): Prom
 export interface BranchTimesheetEntry {
   date: string;
   dayName: string;
+  branchName?: string | null;
   scheduledStart: string;
   scheduledEnd: string;
   actualCheckIn: string;
@@ -3524,6 +3525,7 @@ export async function generateBranchTimesheetPdf(data: BranchTimesheetPdfData): 
         <td class="c">${i + 1}</td>
         <td class="c b">${escapeHtml(e.date)}</td>
         <td class="c">${escapeHtml(e.dayName)}</td>
+        <td class="c">${escapeHtml(e.branchName) || '<span style="color:#d1d5db;">—</span>'}</td>
         <td class="c">${startDisplay}</td>
         <td class="c">${endDisplay}</td>
         <td class="c ci">${checkInDisplay}</td>
@@ -3562,6 +3564,7 @@ export async function generateBranchTimesheetPdf(data: BranchTimesheetPdfData): 
             <th style="width:22px;">#</th>
             <th style="width:68px;">التاريخ</th>
             <th style="width:55px;">اليوم</th>
+            <th style="width:60px;">الفرع</th>
             <th style="width:55px;">بداية الدوام</th>
             <th style="width:55px;">نهاية الدوام</th>
             <th style="width:55px;">الحضور</th>
@@ -3574,7 +3577,7 @@ export async function generateBranchTimesheetPdf(data: BranchTimesheetPdfData): 
         <tbody>${renderEntries(emp.entries)}</tbody>
         <tfoot>
           <tr class="totals-row">
-            <td colspan="7" style="text-align:left;padding-left:8px;">الإجمالي</td>
+            <td colspan="8" style="text-align:left;padding-left:8px;">الإجمالي</td>
             <td class="c b">${emp.totalActualHours.toFixed(1)}</td>
             <td class="c" colspan="2">
               تأخير: ${emp.totalLateMinutes} د • إضافي: ${emp.totalOvertimeMinutes} د
@@ -3673,6 +3676,7 @@ export async function generateBranchTimesheetPdf(data: BranchTimesheetPdfData): 
 export interface SingleTimesheetEntry {
   date: string;
   dayName: string;
+  branchName?: string | null;
   scheduledStart: string;
   scheduledEnd: string;
   actualCheckIn: string;
@@ -3762,6 +3766,7 @@ export async function generateSingleTimesheetPdf(data: SingleTimesheetPdfData): 
         <td class="c">${i + 1}</td>
         <td class="c b">${escapeHtml(e.date)}</td>
         <td class="c">${escapeHtml(e.dayName)}</td>
+        <td class="c">${escapeHtml(e.branchName) || '<span style="color:#d1d5db;">—</span>'}</td>
         <td class="c">${startDisplay}</td>
         <td class="c">${endDisplay}</td>
         <td class="c ci">${checkInDisplay}</td>
@@ -3926,6 +3931,7 @@ export async function generateSingleTimesheetPdf(data: SingleTimesheetPdfData): 
           <th style="width:20px;">#</th>
           <th style="width:62px;">التاريخ</th>
           <th style="width:50px;">اليوم</th>
+          <th style="width:58px;">الفرع</th>
           <th style="width:50px;">بداية الدوام</th>
           <th style="width:50px;">نهاية الدوام</th>
           <th style="width:50px;">الحضور</th>
@@ -3939,7 +3945,7 @@ export async function generateSingleTimesheetPdf(data: SingleTimesheetPdfData): 
       <tbody>${renderEntries}</tbody>
       <tfoot>
         <tr class="totals-row">
-          <td colspan="7" style="text-align:left;padding-left:8px;">الإجمالي</td>
+          <td colspan="8" style="text-align:left;padding-left:8px;">الإجمالي</td>
           <td class="c b">${data.totalActualHours.toFixed(1)}</td>
           <td class="c b">${data.totalLateMinutes}</td>
           <td class="c" colspan="2">إضافي: ${data.totalOvertimeMinutes} د</td>

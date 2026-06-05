@@ -183,6 +183,7 @@
     "dailyDetails": "Daily Details",
     "date": "Date",
     "day": "Day",
+    "branch": "Branch",
     "status": "Status",
     "scheduledStart": "Scheduled Start",
     "scheduledEnd": "Scheduled End",
