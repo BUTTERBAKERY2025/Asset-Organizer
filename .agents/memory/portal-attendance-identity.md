@@ -41,3 +41,19 @@ the SAME OR-of-all-forms matcher (string forms + numeric `branch_employee_id`), 
 OPEN row, else newest. Keep the 42703 missing-column fallback also matching all string forms.
 Backfilling `branch_employee_id` for every row (from `branch_emp_<n>` and from
 `linked_user_id`) makes the numeric column the canonical unifier and prevents future splits.
+
+## Roster dedup must key on canonical be identity, not raw employeeId string
+
+**Why:** the attendance roster showed the same person twice (one "مكتمل" + one "لم يحضر")
+because `employee_schedules` can hold two rows for one person under different identity forms
+(`branch_emp_<id>` vs the linked user UUID), and the dedup keyed on the raw `employeeId`
+string never collapsed them; attendance matched only one form.
+
+**How to apply:** resolve each schedule row to a canonical `be_<id>` (parse `branch_emp_<n>`,
+else `branchEmployeeId` column, else `branchEmployees.linkedUserId === employeeId`; `linkedUserId`
+is UNIQUE so this is deterministic, no branch filter needed). Dedup by that key, and when two
+rows collapse KEEP the one that has an attendance record so a real attendee is never shown
+absent. NOTE: this only merges one-person-two-schedule-identities; two genuinely separate
+`branch_employees` profiles (different be id, e.g. English+Arabic data-entry dupes) still need a
+profile MERGE — detect via shared STRONG ids (iqama/passport/emp_no/phone), excluding junk
+placeholders like '--'/'0'.

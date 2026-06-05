@@ -11120,6 +11120,24 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
+    // BATCH: Map UUID-form schedule identities (a user account) to their branch
+    // employee via linkedUserId, so the SAME person scheduled under both
+    // `branch_emp_<id>` and their user UUID resolves to one canonical identity
+    // (used below to dedupe the roster).
+    const uuidSchedIds = Array.from(new Set(
+      filteredSchedules
+        .filter(s => !s.employeeId.startsWith('branch_emp_') && !/^\d+$/.test(s.employeeId))
+        .map(s => s.employeeId)
+    ));
+    const linkedUserToBe = new Map<string, any>();
+    if (uuidSchedIds.length > 0) {
+      const linkedEmps = await db.select().from(branchEmployees)
+        .where(inArray(branchEmployees.linkedUserId, uuidSchedIds));
+      for (const e of linkedEmps) {
+        if (e.linkedUserId) linkedUserToBe.set(e.linkedUserId, e);
+      }
+    }
+
     const employeesWithAttendance = filteredSchedules.map(schedule => {
       // Resolve attendance by trying every identifier form: the schedule's own
       // employeeId, then its branchEmployeeId (covers portal self check-ins).
@@ -11182,6 +11200,21 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
+      // Canonical identity key: collapse every identity form of the SAME person
+      // (numeric branch_emp_<id>, the branchEmployeeId column, or the linked user
+      // UUID) onto one key so the roster never shows the same employee twice.
+      let _canonicalBeId: number | null = null;
+      if (schedule.employeeId.startsWith('branch_emp_')) {
+        const pid = parseInt(schedule.employeeId.replace('branch_emp_', ''), 10);
+        if (!isNaN(pid)) _canonicalBeId = pid;
+      } else if (schedule.branchEmployeeId) {
+        _canonicalBeId = schedule.branchEmployeeId;
+      } else {
+        const linkedBe = linkedUserToBe.get(schedule.employeeId);
+        if (linkedBe) _canonicalBeId = linkedBe.id;
+      }
+      const _canonicalKey = _canonicalBeId != null ? `be_${_canonicalBeId}` : `uid_${schedule.employeeId}`;
+
       return {
         ...schedule,
         employeeName: finalName,
@@ -11189,17 +11222,28 @@ export class DatabaseStorage implements IStorage {
         attendance,
         _isDeleted,
         _isTransferred,
+        _canonicalKey,
       };
     });
 
-    const seenEmployeeIds = new Set<string>();
-    const uniqueEmployees = employeesWithAttendance.filter(emp => {
-      if (emp._isDeleted) return false;
-      if (emp._isTransferred) return false;
-      if (seenEmployeeIds.has(emp.employeeId)) return false;
-      seenEmployeeIds.add(emp.employeeId);
-      return true;
-    }).map(({ _isDeleted, _isTransferred, ...rest }: any) => rest);
+    // Dedupe by CANONICAL employee identity (not the raw employeeId string) so the
+    // same person scheduled under two identity forms (e.g. `branch_emp_55` and their
+    // user UUID) collapses into ONE row. When both forms exist, keep the one that
+    // actually has an attendance record so a real attendee is never shown as absent.
+    const canonicalSeen = new Map<string, any>();
+    for (const emp of employeesWithAttendance) {
+      if (emp._isDeleted) continue;
+      if (emp._isTransferred) continue;
+      const key = emp._canonicalKey || emp.employeeId;
+      const existing = canonicalSeen.get(key);
+      if (!existing) {
+        canonicalSeen.set(key, emp);
+      } else if (!existing.attendance && emp.attendance) {
+        canonicalSeen.set(key, emp);
+      }
+    }
+    const uniqueEmployees = Array.from(canonicalSeen.values())
+      .map(({ _isDeleted, _isTransferred, _canonicalKey, ...rest }: any) => rest);
 
     if (uniqueEmployees.length === 0) {
       console.log(`[ATTENDANCE-DEBUG] No employees found for today. Trying fallback...`);
