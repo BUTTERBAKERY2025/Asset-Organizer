@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { db } from "./db";
-import { eq, and, desc, inArray, like, isNotNull } from "drizzle-orm";
+import { eq, and, or, desc, inArray, like, isNotNull } from "drizzle-orm";
 import { isAuthenticated, requirePermission, getEffectiveBranchFilter, parseUserAgent } from "./auth";
 import { storage } from "./storage";
 import {
@@ -801,8 +801,17 @@ export function registerSelfServiceRoutes(app: Express) {
         .where(and(eq(employeeSchedules.branchEmployeeId, emp.id), eq(employeeSchedules.scheduleDate, today)))
         .limit(1);
 
+      // طابق سجل الحضور بأي من صيغتي هوية الموظف: النص (branch_emp_<id>) من البوابة
+      // أو الرقم (branch_employee_id) عندما يسجّله المدير من صفحة الوردية — والأحدث يفوز.
       const [record] = await db.select().from(attendanceRecords)
-        .where(and(eq(attendanceRecords.employeeId, empId), eq(attendanceRecords.attendanceDate, today)))
+        .where(and(
+          eq(attendanceRecords.attendanceDate, today),
+          or(
+            eq(attendanceRecords.employeeId, empId),
+            eq(attendanceRecords.branchEmployeeId, emp.id),
+          ),
+        ))
+        .orderBy(desc(attendanceRecords.id))
         .limit(1);
 
       const [branch] = await db.select().from(branches).where(eq(branches.id, emp.branchId));
@@ -1063,14 +1072,51 @@ export function registerSelfServiceRoutes(app: Express) {
     try {
       const userId = getUserId(req);
       if (!userId) return res.status(401).json({ error: "غير مصرح" });
-      const rows = await db
+      const emp = await getMyEmployee(req);
+
+      // (أ) الإشعارات الشخصية الموجّهة لحساب المستخدم (قرارات الإجازات/السلف…)
+      const personalRows = await db
         .select()
         .from(notifications)
         .where(and(eq(notifications.userId, userId), eq(notifications.isDismissed, false)))
         .orderBy(desc(notifications.createdAt))
         .limit(100);
-      const unreadCount = rows.filter(n => !n.isRead).length;
-      res.json({ notifications: rows, unreadCount });
+      const personalItems = personalRows.map((n) => ({
+        id: n.id,
+        source: "personal" as const,
+        title: n.title,
+        message: n.message,
+        isRead: !!n.isRead,
+        createdAt: n.createdAt,
+        linkUrl: n.linkUrl || null,
+      }));
+
+      // (ب) إشعارات النظام العامة/الموجّهة (نفس ما يظهر في الجرس الرئيسي: بث، رسائل موجّهة…)
+      let systemItems: Array<any> = [];
+      try {
+        const active = await storage.getActiveNotificationsForUser(userId, emp?.branchId || "");
+        const reads = await storage.getNotificationReadsByUser(userId);
+        const readIds = new Set(reads.map((r: any) => r.notificationId));
+        systemItems = active.map((n: any) => ({
+          id: n.id,
+          source: "system" as const,
+          title: n.title,
+          message: n.content,
+          isRead: readIds.has(n.id),
+          createdAt: n.createdAt,
+          linkUrl: n.buttonAction || null,
+        }));
+      } catch (err) {
+        console.error("[my/notifications] system merge failed (non-blocking):", err);
+      }
+
+      const merged = [...personalItems, ...systemItems].sort((a, b) => {
+        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return tb - ta;
+      });
+      const unreadCount = merged.filter((n) => !n.isRead).length;
+      res.json({ notifications: merged, unreadCount });
     } catch (e: any) {
       console.error("[my/notifications] list error:", e);
       res.status(500).json({ error: e.message });
@@ -1083,6 +1129,18 @@ export function registerSelfServiceRoutes(app: Express) {
       const userId = getUserId(req);
       if (!userId) return res.status(401).json({ error: "غير مصرح" });
       const id = parseInt(req.params.id, 10);
+      const source = (req.body?.source === "system") ? "system" : "personal";
+      // إشعارات النظام: حالة المقروء محفوظة في جدول notification_reads لكل مستخدم.
+      // نتحقق أولاً أن الإشعار ظاهر فعلاً لهذا المستخدم قبل كتابة سجل القراءة (منع تلويث الحالة).
+      if (source === "system") {
+        const emp = await getMyEmployee(req);
+        const active = await storage.getActiveNotificationsForUser(userId, emp?.branchId || "");
+        if (!active.some((n: any) => n.id === id)) {
+          return res.status(404).json({ error: "الإشعار غير موجود" });
+        }
+        await storage.markNotificationRead(id, userId);
+        return res.json({ ok: true });
+      }
       const [updated] = await db.update(notifications).set({
         isRead: true,
         readAt: new Date(),
@@ -1100,10 +1158,21 @@ export function registerSelfServiceRoutes(app: Express) {
     try {
       const userId = getUserId(req);
       if (!userId) return res.status(401).json({ error: "غير مصرح" });
+      const emp = await getMyEmployee(req);
+      // (أ) الإشعارات الشخصية
       await db.update(notifications).set({
         isRead: true,
         readAt: new Date(),
       }).where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
+      // (ب) إشعارات النظام الظاهرة حالياً لهذا المستخدم
+      try {
+        const active = await storage.getActiveNotificationsForUser(userId, emp?.branchId || "");
+        await Promise.all(
+          active.map((n: any) => storage.markNotificationRead(n.id, userId).catch(() => null)),
+        );
+      } catch (err) {
+        console.error("[my/notifications] read-all system merge failed (non-blocking):", err);
+      }
       res.json({ ok: true });
     } catch (e: any) {
       console.error("[my/notifications] read-all error:", e);

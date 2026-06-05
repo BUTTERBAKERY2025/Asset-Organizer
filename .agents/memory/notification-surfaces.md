@@ -31,9 +31,13 @@ There are TWO separate notification surfaces:
     role+branch broadcast. Individuals are re-resolved server-side from the DB
     (`resolveTargetsByIdentifiers`: users by id + branch_employees by phone, branch-scoped)
     — client identifiers are never trusted. Picker: `GET .../search-people` (settings:view).
-- **`notifications` table** = a separate per-user surface, read only by `/api/notifications`
-  (`users:view`). The bell does NOT read it. Writing here (e.g. via
-  `NotificationService.createBulkNotifications`) will NOT show the user any alert.
+- **`notifications` table** = a separate per-user surface. The MAIN-APP bell does NOT read it
+  (it reads only `systemNotifications`). But the employee PORTAL `/api/my/notifications`
+  surfaces it AND merges it with the targeted `systemNotifications` for that user — each item
+  carries a `source: "personal" | "system"` so the client can route mark-read to the right
+  store (personal → update `notifications`; system → `notification_reads` via
+  `markNotificationRead`). So writing to `notifications` IS visible inside بوابتي, just not in
+  the main bell.
 
 **Why:** A targeted-message feature wrote in-app alerts to `notifications` and recipients
 saw nothing. Fix was to write `systemNotifications` rows instead.

@@ -175,7 +175,8 @@ export default function MyPortalPage() {
   const unreadNotifications = notifData?.unreadCount ?? 0;
 
   const markNotifRead = useMutation({
-    mutationFn: async (id: number) => (await apiRequest("POST", `/api/my/notifications/${id}/read`)).json(),
+    mutationFn: async ({ id, source }: { id: number; source?: string }) =>
+      (await apiRequest("POST", `/api/my/notifications/${id}/read`, { source: source || "personal" })).json(),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/my/notifications"] }),
   });
   const markAllNotifRead = useMutation({
@@ -508,9 +509,9 @@ export default function MyPortalPage() {
               )}
               {myNotifications.map((n) => (
                 <div
-                  key={n.id}
+                  key={`${n.source || "personal"}-${n.id}`}
                   className={`p-3 rounded-lg border ${n.isRead ? "bg-muted/30" : "bg-primary/5 border-primary/20"}`}
-                  data-testid={`notification-${n.id}`}
+                  data-testid={`notification-${n.source || "personal"}-${n.id}`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="font-semibold text-sm">{n.title}</div>
@@ -519,8 +520,8 @@ export default function MyPortalPage() {
                         variant="ghost"
                         size="sm"
                         className="h-6 px-2 text-xs"
-                        onClick={() => markNotifRead.mutate(n.id)}
-                        data-testid={`button-mark-read-${n.id}`}
+                        onClick={() => markNotifRead.mutate({ id: n.id, source: n.source })}
+                        data-testid={`button-mark-read-${n.source || "personal"}-${n.id}`}
                       >
                         <CheckCircle2 className="h-3.5 w-3.5" />
                       </Button>
