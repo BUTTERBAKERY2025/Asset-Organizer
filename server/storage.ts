@@ -10437,6 +10437,14 @@ export class DatabaseStorage implements IStorage {
     return dedupedSchedules;
   }
 
+  // نوع الوردية (صباحي/مسائي/ليلي) يُشتق دائماً من ساعة البداية حتى يطابق التوقيت الفعلي:
+  // 05:00–11:59 صباحي، 12:00–19:59 مسائي، وغير ذلك ليلي.
+  private deriveShiftType(startTime?: string | null): string | null {
+    if (!startTime || !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(startTime))) return null;
+    const hour = parseInt(String(startTime).split(":")[0], 10);
+    return hour >= 5 && hour < 12 ? "morning" : hour >= 12 && hour < 20 ? "evening" : "night";
+  }
+
   async createEmployeeSchedule(schedule: InsertEmployeeSchedule): Promise<EmployeeSchedule> {
     if (!schedule.branchEmployeeId && schedule.employeeId?.startsWith('branch_emp_')) {
       const parsed = parseInt(schedule.employeeId.replace('branch_emp_', ''), 10);
@@ -10444,6 +10452,8 @@ export class DatabaseStorage implements IStorage {
         schedule = { ...schedule, branchEmployeeId: parsed };
       }
     }
+    // الخادم هو المرجع في تحديد نوع الوردية: يُشتق دائماً من وقت البداية (يوم الإجازة بلا نوع).
+    schedule = { ...schedule, shiftType: schedule.isOff ? null : this.deriveShiftType(schedule.startTime) };
 
     const baseConditions = [
       eq(employeeSchedules.scheduleDate, schedule.scheduleDate),
@@ -10483,7 +10493,6 @@ export class DatabaseStorage implements IStorage {
     const errors: string[] = [];
     
     const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
-    const validShiftTypes = ['morning', 'evening', 'night'];
     
     const enrichedSchedules = schedules.map(s => {
       const enriched = { ...s };
@@ -10500,15 +10509,8 @@ export class DatabaseStorage implements IStorage {
       if (!enriched.isOff && enriched.endTime && !timeRegex.test(enriched.endTime)) {
         throw new Error(`وقت نهاية غير صالح "${enriched.endTime}" للموظف ${enriched.employeeName} - الصيغة الصحيحة HH:MM`);
       }
-      if (enriched.shiftType && !validShiftTypes.includes(enriched.shiftType)) {
-        console.warn(`[BULK SCHEDULE] Non-standard shiftType "${enriched.shiftType}" for ${enriched.employeeName}, normalizing from time`);
-        if (enriched.startTime) {
-          const hour = parseInt(enriched.startTime.split(":")[0], 10);
-          enriched.shiftType = hour >= 5 && hour < 12 ? 'morning' : hour >= 12 && hour < 20 ? 'evening' : 'night';
-        } else {
-          enriched.shiftType = 'morning';
-        }
-      }
+      // نوع الوردية يُحسب دائماً من وقت البداية ليطابق التوقيت الفعلي (يوم الإجازة بلا نوع).
+      enriched.shiftType = enriched.isOff ? null : this.deriveShiftType(enriched.startTime);
       return enriched;
     });
 
@@ -10689,7 +10691,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateEmployeeSchedule(id: number, schedule: Partial<InsertEmployeeSchedule>): Promise<EmployeeSchedule | undefined> {
-    const [updated] = await db.update(employeeSchedules).set({ ...schedule, updatedAt: new Date() }).where(eq(employeeSchedules.id, id)).returning();
+    const patch: Partial<InsertEmployeeSchedule> = { ...schedule };
+    // الخادم هو المرجع في نوع الوردية: نحسبه من القيم الفعلية بعد الدمج (التعديل الجزئي + الصف الحالي)
+    // ولا نثق بأي قيمة shiftType قادمة من العميل. يوم الإجازة أو غياب وقت بداية صالح ⇒ بلا نوع.
+    const existing = await this.getEmployeeScheduleById(id);
+    const effIsOff = patch.isOff ?? existing?.isOff ?? false;
+    const effStart = patch.startTime ?? existing?.startTime ?? null;
+    patch.shiftType = effIsOff ? null : this.deriveShiftType(effStart);
+    const [updated] = await db.update(employeeSchedules).set({ ...patch, updatedAt: new Date() }).where(eq(employeeSchedules.id, id)).returning();
     return updated;
   }
 
