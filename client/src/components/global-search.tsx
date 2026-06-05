@@ -177,7 +177,7 @@ export function GlobalSearch() {
         data-testid="button-global-search"
       >
         <Search className="h-4 w-4 xl:ml-2" />
-        <span className="hidden xl:inline-flex">البحث الشامل...</span>
+        <span className="hidden xl:inline-flex">{t("palette.searchTrigger")}</span>
         <kbd className="pointer-events-none absolute left-1.5 top-2 hidden h-6 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 xl:flex">
           <span className="text-xs">⌘</span>K
         </kbd>
@@ -186,14 +186,14 @@ export function GlobalSearch() {
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="max-w-2xl p-0">
           <DialogHeader className="p-4 pb-0">
-            <DialogTitle className="sr-only">البحث الشامل</DialogTitle>
+            <DialogTitle className="sr-only">{t("palette.searchTitle")}</DialogTitle>
             <div className="flex items-center border rounded-lg px-3">
               <Search className="h-4 w-4 text-muted-foreground ml-2" />
               <Input
                 ref={inputRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="ابحث في الموظفين، المنتجات، الفروع، المخزون..."
+                placeholder={t("palette.searchPlaceholder")}
                 className="border-0 focus-visible:ring-0 h-12"
                 data-testid="input-global-search"
               />
@@ -258,7 +258,7 @@ export function GlobalSearch() {
                   <div>
                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
                       <UserCheck className="h-4 w-4 text-blue-500" />
-                      الموظفين ({results.employees.length})
+                      {t("palette.categories.employees")} ({results.employees.length})
                     </div>
                     {results.employees.map((emp) => (
                       <button
@@ -278,7 +278,7 @@ export function GlobalSearch() {
                   <div>
                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
                       <ShoppingBag className="h-4 w-4 text-amber-500" />
-                      المنتجات ({results.products.length})
+                      {t("palette.categories.products")} ({results.products.length})
                     </div>
                     {results.products.map((prod) => (
                       <button
@@ -298,7 +298,7 @@ export function GlobalSearch() {
                   <div>
                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
                       <MapPin className="h-4 w-4 text-green-500" />
-                      الفروع ({results.branches.length})
+                      {t("palette.categories.branches")} ({results.branches.length})
                     </div>
                     {results.branches.map((branch) => (
                       <button
@@ -318,7 +318,7 @@ export function GlobalSearch() {
                   <div>
                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
                       <Warehouse className="h-4 w-4 text-teal-500" />
-                      عناصر المستودع ({results.warehouseItems.length})
+                      {t("palette.categories.warehouseItems")} ({results.warehouseItems.length})
                     </div>
                     {results.warehouseItems.map((item) => (
                       <button
@@ -339,7 +339,7 @@ export function GlobalSearch() {
                   <div>
                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
                       <Megaphone className="h-4 w-4 text-pink-500" />
-                      الحملات التسويقية ({results.campaigns.length})
+                      {t("palette.categories.campaigns")} ({results.campaigns.length})
                     </div>
                     {results.campaigns.map((camp) => (
                       <button
@@ -359,7 +359,7 @@ export function GlobalSearch() {
                   <div>
                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
                       <Package className="h-4 w-4 text-orange-500" />
-                      الأصول والمعدات ({results.inventory.length})
+                      {t("palette.categories.inventory")} ({results.inventory.length})
                     </div>
                     {results.inventory.map((item) => (
                       <button
@@ -379,7 +379,7 @@ export function GlobalSearch() {
                   <div>
                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
                       <Building2 className="h-4 w-4 text-purple-500" />
-                      المشاريع ({results.projects.length})
+                      {t("palette.categories.projects")} ({results.projects.length})
                     </div>
                     {results.projects.map((project) => (
                       <button
@@ -399,7 +399,7 @@ export function GlobalSearch() {
                   <div>
                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
                       <Users className="h-4 w-4 text-cyan-500" />
-                      المقاولين ({results.contractors.length})
+                      {t("palette.categories.contractors")} ({results.contractors.length})
                     </div>
                     {results.contractors.map((contractor) => (
                       <button
@@ -419,7 +419,7 @@ export function GlobalSearch() {
                   <div>
                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
                       <ArrowLeftRight className="h-4 w-4 text-red-500" />
-                      التحويلات ({results.transfers.length})
+                      {t("palette.categories.transfers")} ({results.transfers.length})
                     </div>
                     {results.transfers.map((transfer) => (
                       <button
@@ -439,7 +439,7 @@ export function GlobalSearch() {
                   <div>
                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
                       <Users className="h-4 w-4 text-gray-500" />
-                      المستخدمين ({results.users.length})
+                      {t("palette.categories.users")} ({results.users.length})
                     </div>
                     {results.users.map((user) => (
                       <button
