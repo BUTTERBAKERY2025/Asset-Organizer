@@ -188,6 +188,14 @@ export default function MyPortalPage() {
   const [schedMonth, setSchedMonth] = useState(todayMonth);
   const [attMonth, setAttMonth] = useState(todayMonth);
   const [activeTab, setActiveTab] = useState("overview");
+  const tabsListRef = useRef<HTMLDivElement>(null);
+
+  // على الجوال: التبويبات قائمة أفقية قابلة للتمرير. عند اختيار تبويب اجعله يظهر
+  // في منتصف الشريط حتى لا يبقى مخفياً خارج الشاشة.
+  useEffect(() => {
+    const el = tabsListRef.current?.querySelector<HTMLElement>('[data-state="active"]');
+    el?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }, [activeTab]);
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -608,7 +616,11 @@ export default function MyPortalPage() {
             </Card>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} dir={dir}>
-              <TabsList className="flex w-full h-auto justify-start gap-1.5 overflow-x-auto flex-nowrap rounded-xl bg-muted/60 p-1.5 text-[13px] sm:text-sm [&::-webkit-scrollbar]:hidden [&>button]:shrink-0 [&>button]:gap-1 [&>button]:rounded-lg [&>button]:px-3 [&>button]:py-2 [&>button]:font-medium [&>button]:transition-colors [&>button]:data-[state=active]:bg-primary [&>button]:data-[state=active]:text-primary-foreground [&>button]:data-[state=active]:shadow-sm">
+              <div
+                ref={tabsListRef}
+                className="sticky top-0 z-20 -mx-3 sm:-mx-4 px-3 sm:px-4 pt-1 pb-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40"
+              >
+              <TabsList className="flex w-full h-auto justify-start gap-1.5 overflow-x-auto flex-nowrap rounded-xl bg-muted/60 p-1.5 text-[13px] sm:text-sm [&::-webkit-scrollbar]:hidden [&>button]:shrink-0 [&>button]:gap-1 [&>button]:rounded-lg [&>button]:px-3 [&>button]:py-2.5 sm:[&>button]:py-2 [&>button]:font-medium [&>button]:transition-colors [&>button]:data-[state=active]:bg-primary [&>button]:data-[state=active]:text-primary-foreground [&>button]:data-[state=active]:shadow-sm">
                 <TabsTrigger value="overview" data-testid="tab-overview">
                   <LayoutDashboard className="h-4 w-4 ms-1" />{t("tabs.overview")}
                 </TabsTrigger>
@@ -661,6 +673,7 @@ export default function MyPortalPage() {
                   </TabsTrigger>
                 )}
               </TabsList>
+              </div>
 
               {/* نظرة عامة / overview */}
               <TabsContent value="overview" className="space-y-3">
