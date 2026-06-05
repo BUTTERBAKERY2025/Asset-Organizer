@@ -9,8 +9,43 @@
 --   (ب) نفس الشخص له ملفّان منفصلان (branch_employees) — واحد إنجليزي وواحد عربي.
 --
 -- هذا الملف **قراءة فقط** (تشخيص) — لا يعدّل أي بيانات.
--- شغّل D1 و D2 وأرسل النتائج. بعدها نعطيك سكربت إصلاح آمن مناسب للسبب.
+-- ابدأ بـ D0 (الأهم) — يعيد إنتاج الصفحة بالضبط ويكشف أي اسم متكرر تشوفه.
 -- ============================================================================
+
+
+-- ============================================================================
+-- D0) الأهم: يعيد إنتاج قائمة الحضور ويجمع حسب الاسم الظاهر — يكشف أي موظف
+--     يظهر أكثر من مرة (زي "جو سيدي كانتيلا") مهما كان سبب التكرار.
+--     يفحص آخر 7 أيام تلقائياً (ما يحتاج تبديل تاريخ).
+--     • لو be_ids كلها نفس الرقم (أو فيها NULL) = نفس الشخص بهويّتين  → يصلحه الكود.
+--     • لو be_ids أرقام مختلفة = ملفّان موظف منفصلان              → يحتاج دمج.
+-- ============================================================================
+WITH sched AS (
+  SELECT s.id AS schedule_id, s.branch_id, s.schedule_date,
+         s.employee_id, s.branch_employee_id,
+         COALESCE(
+           s.branch_employee_id,
+           CAST(substring(s.employee_id from '^branch_emp_([0-9]+)$') AS integer),
+           bl.id
+         ) AS be_id,
+         COALESCE(be.employee_name, bl.employee_name, s.employee_name) AS resolved_name
+  FROM employee_schedules s
+  LEFT JOIN branch_employees bl ON bl.linked_user_id = s.employee_id
+  LEFT JOIN branch_employees be ON be.id = COALESCE(
+           s.branch_employee_id,
+           CAST(substring(s.employee_id from '^branch_emp_([0-9]+)$') AS integer))
+  WHERE s.is_off = false AND s.status = 'scheduled'
+    AND s.schedule_date::date >= CURRENT_DATE - 7   -- آخر 7 أيام
+)
+SELECT branch_id, schedule_date, resolved_name,
+       COUNT(*) AS rows,
+       array_agg(schedule_id ORDER BY schedule_id) AS schedule_ids,
+       array_agg(employee_id ORDER BY schedule_id) AS employee_ids,
+       array_agg(be_id ORDER BY schedule_id)       AS be_ids
+FROM sched
+GROUP BY branch_id, schedule_date, resolved_name
+HAVING COUNT(*) > 1
+ORDER BY schedule_date DESC, branch_id, resolved_name;
 
 
 -- ============================================================================
