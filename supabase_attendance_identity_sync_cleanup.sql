@@ -30,18 +30,43 @@ WHERE ar.branch_employee_id IS NULL
     OR EXISTS (SELECT 1 FROM branch_employees be WHERE be.linked_user_id = ar.employee_id)
   );
 
--- 0.b) موظفون لهم أكثر من سجل في نفس اليوم (بعد منطق الربط):
--- يعرض الحالات اللي تسبّب "عالق في الدوام".
+-- 0.b) موظفون لهم أكثر من سجل في نفس اليوم (تكرار حقيقي = نفس الموظف):
+-- يربط الهوية عبر 3 طرق: العمود الرقمي، صيغة branch_emp_<n>، و UUID المربوط
+-- في branch_employees.linked_user_id. ويستبعد السجلات غير القابلة للربط حتى لا
+-- تتجمّع تحت NULL وتظهر كأنها موظف واحد (وهي في الحقيقة موظفون مختلفون).
+WITH resolved AS (
+  SELECT
+    ar.id, ar.attendance_date, ar.actual_check_in, ar.actual_check_out,
+    COALESCE(
+      ar.branch_employee_id,
+      CAST(substring(ar.employee_id from '^branch_emp_([0-9]+)$') AS integer),
+      be.id
+    ) AS resolved_emp
+  FROM attendance_records ar
+  LEFT JOIN branch_employees be ON be.linked_user_id = ar.employee_id
+)
 SELECT
-  COALESCE(ar.branch_employee_id, CAST(substring(ar.employee_id from '^branch_emp_([0-9]+)$') AS integer)) AS resolved_emp,
-  ar.attendance_date,
-  COUNT(*)                                   AS records,
-  COUNT(*) FILTER (WHERE ar.actual_check_in  IS NOT NULL AND ar.actual_check_out IS NULL) AS open_records,
-  string_agg(ar.id::text || ':' || COALESCE(ar.actual_check_in,'-') || '→' || COALESCE(ar.actual_check_out,'-'), ', ' ORDER BY ar.id) AS detail
-FROM attendance_records ar
-GROUP BY 1, ar.attendance_date
+  resolved_emp,
+  attendance_date,
+  COUNT(*)                                                                          AS records,
+  COUNT(*) FILTER (WHERE actual_check_in IS NOT NULL AND actual_check_out IS NULL)  AS open_records,
+  string_agg(id::text || ':' || COALESCE(actual_check_in,'-') || '→' || COALESCE(actual_check_out,'-'), ', ' ORDER BY id) AS detail
+FROM resolved
+WHERE resolved_emp IS NOT NULL          -- تكرار حقيقي فقط (نفس الموظف)
+GROUP BY resolved_emp, attendance_date
 HAVING COUNT(*) > 1
-ORDER BY ar.attendance_date DESC, resolved_emp;
+ORDER BY attendance_date DESC, resolved_emp;
+
+-- 0.c) سجلات غير قابلة للربط نهائياً (employee_id ليس branch_emp_<n> ولا UUID مربوط):
+-- هذه لن تُدمج في STEP 3 (آمنة)، لكن من المفيد معرفتها — قد تكون حسابات قديمة غير مربوطة.
+SELECT ar.id, ar.employee_id, ar.employee_name, ar.attendance_date,
+       ar.actual_check_in, ar.actual_check_out
+FROM attendance_records ar
+LEFT JOIN branch_employees be ON be.linked_user_id = ar.employee_id
+WHERE ar.branch_employee_id IS NULL
+  AND ar.employee_id !~ '^branch_emp_[0-9]+$'
+  AND be.id IS NULL
+ORDER BY ar.attendance_date DESC, ar.id;
 
 
 -- ============================================================================
