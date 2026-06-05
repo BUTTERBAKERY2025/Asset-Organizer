@@ -96,6 +96,60 @@ FROM branch_employees be
 WHERE ar.branch_employee_id IS NULL
   AND ar.employee_id = be.linked_user_id;
 
+-- ----------------------------------------------------------------------------
+-- 2.c) ربط السجلات اليتيمة (UUID غير مربوط) بملف الموظف عبر الاسم
+-- داخل نفس الفرع — وفقط عندما يكون الاسم غير مكرر (تطابق واحد فقط) تجنباً
+-- لأي ربط خاطئ. هذا يعالج حالة مثل "محمد غلام طلعت" المسجّل تحت UUID يتيم.
+-- ----------------------------------------------------------------------------
+
+-- 2.c.1) معاينة (قراءة فقط) — راجعها قبل تنفيذ التحديث في 2.c.2
+WITH att AS (
+  SELECT ar.id AS att_id, ar.branch_id, ar.employee_name,
+         regexp_replace(lower(btrim(ar.employee_name)), '\s+', ' ', 'g') AS nname
+  FROM attendance_records ar
+  LEFT JOIN branch_employees be ON be.linked_user_id = ar.employee_id
+  WHERE ar.branch_employee_id IS NULL
+    AND ar.employee_id !~ '^branch_emp_[0-9]+$'
+    AND be.id IS NULL
+)
+SELECT a.att_id, a.employee_name,
+       COUNT(b.id)        AS name_matches_in_branch,
+       (array_agg(b.id))[1]            AS will_link_to_branch_employee_id,
+       (array_agg(b.employee_name))[1] AS will_link_to_name,
+       CASE WHEN COUNT(b.id) = 1 THEN 'سيُربط ✅'
+            WHEN COUNT(b.id) = 0 THEN 'لا يوجد تطابق — يُترك كما هو'
+            ELSE 'اسم مكرر — لن يُربط (راجع يدوياً)' END AS action
+FROM att a
+LEFT JOIN branch_employees b
+  ON b.branch_id = a.branch_id
+ AND regexp_replace(lower(btrim(b.employee_name)), '\s+', ' ', 'g') = a.nname
+GROUP BY a.att_id, a.employee_name
+ORDER BY a.employee_name;
+
+-- 2.c.2) التنفيذ — يربط فقط الحالات ذات التطابق الواحد (الآمنة)
+WITH att AS (
+  SELECT ar.id AS att_id, ar.branch_id,
+         regexp_replace(lower(btrim(ar.employee_name)), '\s+', ' ', 'g') AS nname
+  FROM attendance_records ar
+  LEFT JOIN branch_employees be ON be.linked_user_id = ar.employee_id
+  WHERE ar.branch_employee_id IS NULL
+    AND ar.employee_id !~ '^branch_emp_[0-9]+$'
+    AND be.id IS NULL
+),
+matched AS (
+  SELECT a.att_id, (array_agg(b.id))[1] AS be_id, COUNT(b.id) AS n
+  FROM att a
+  JOIN branch_employees b
+    ON b.branch_id = a.branch_id
+   AND regexp_replace(lower(btrim(b.employee_name)), '\s+', ' ', 'g') = a.nname
+  GROUP BY a.att_id
+)
+UPDATE attendance_records ar
+SET branch_employee_id = m.be_id, updated_at = NOW()
+FROM matched m
+WHERE ar.id = m.att_id
+  AND m.n = 1;
+
 
 -- ============================================================================
 -- STEP 3 — دمج السجلات المكررة لنفس الموظف (branch_employee_id) ونفس اليوم
