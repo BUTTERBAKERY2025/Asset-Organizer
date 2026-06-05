@@ -181,3 +181,36 @@ SELECT be.id, be.employee_name, be.employee_name_en, be.status, be.branch_id,
 FROM branch_employees be
 WHERE be.id IN (1, 2, 3)   -- <<< بدّلها بأرقام الملفات من D1/D2
 ORDER BY be.id;
+
+
+-- ============================================================================
+-- D4) كاشف شامل: ملفّات موظف نشطة مكررة بنفس الاسم داخل نفس الفرع (السبب ب)
+--     + إحصائيات كل ملف (عدد الدوام/الحضور + الربط بحساب الدخول) لتقرير
+--     أيّهم نبقي (الأساسي) وأيّهم نعطّل (المكرر). هذا اللي يكشف حالة "جو".
+--     القاعدة المقترحة للأساسي: الملف المربوط بحساب الدخول (linked_user_id)
+--     و/أو صاحب أكبر عدد حضور.
+-- ============================================================================
+WITH dups AS (
+  SELECT branch_id, regexp_replace(lower(btrim(employee_name)), '\s+', ' ', 'g') AS nname
+  FROM branch_employees
+  WHERE status = 'active'
+  GROUP BY 1, 2
+  HAVING COUNT(*) > 1
+)
+SELECT be.branch_id, be.id, be.employee_name, be.employee_name_en,
+       be.linked_user_id, be.created_at,
+       (SELECT COUNT(*) FROM employee_schedules s
+          WHERE s.branch_employee_id = be.id
+             OR s.employee_id = 'branch_emp_' || be.id
+             OR s.employee_id = be.linked_user_id) AS sched,
+       (SELECT COUNT(*) FROM attendance_records ar
+          WHERE ar.branch_employee_id = be.id
+             OR ar.employee_id = 'branch_emp_' || be.id
+             OR ar.employee_id = be.linked_user_id) AS att
+FROM branch_employees be
+JOIN dups d ON d.branch_id = be.branch_id
+  AND regexp_replace(lower(btrim(be.employee_name)), '\s+', ' ', 'g') = d.nname
+WHERE be.status = 'active'
+ORDER BY be.branch_id,
+         regexp_replace(lower(btrim(be.employee_name)), '\s+', ' ', 'g'),
+         be.id;
