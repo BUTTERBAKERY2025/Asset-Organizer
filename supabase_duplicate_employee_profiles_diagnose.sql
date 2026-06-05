@@ -64,17 +64,32 @@ ORDER BY s.branch_id, s.employee_id;
 -- D2) السبب (ب): ملفّان موظف منفصلان لنفس الشخص بمعرّف قوي مشترك
 --     (رقم إقامة / جواز / رقم وظيفي / جوال) داخل نفس الفرع — أدق دليل.
 -- ============================================================================
+WITH base AS (
+  SELECT id, branch_id, employee_name, status, 'iqama'    AS key_type, btrim(iqama_number)    AS raw FROM branch_employees
+  UNION ALL SELECT id, branch_id, employee_name, status, 'passport', btrim(passport_number)  FROM branch_employees
+  UNION ALL SELECT id, branch_id, employee_name, status, 'emp_no',   btrim(employee_number)  FROM branch_employees
+  UNION ALL SELECT id, branch_id, employee_name, status, 'phone',    btrim(phone_number)     FROM branch_employees
+),
+clean AS (
+  SELECT id, branch_id, employee_name, status, key_type,
+         -- للجوال: نأخذ الأرقام فقط (نتجاهل المسافات والشرطات)
+         CASE WHEN key_type = 'phone' THEN NULLIF(regexp_replace(COALESCE(raw,''), '\D', '', 'g'), '')
+              ELSE NULLIF(raw, '') END AS key_val
+  FROM base
+)
 SELECT key_type, key_val, branch_id,
        array_agg(id ORDER BY id)            AS profile_ids,
        array_agg(employee_name ORDER BY id) AS names,
        array_agg(status ORDER BY id)        AS statuses
-FROM (
-  SELECT id, branch_id, employee_name, status, 'iqama'    AS key_type, NULLIF(btrim(iqama_number),'')    AS key_val FROM branch_employees
-  UNION ALL SELECT id, branch_id, employee_name, status, 'passport', NULLIF(btrim(passport_number),'')  FROM branch_employees
-  UNION ALL SELECT id, branch_id, employee_name, status, 'emp_no',   NULLIF(btrim(employee_number),'')  FROM branch_employees
-  UNION ALL SELECT id, branch_id, employee_name, status, 'phone',    NULLIF(btrim(phone_number),'')     FROM branch_employees
-) t
+FROM clean
 WHERE key_val IS NOT NULL
+  -- تجاهل القيم الوهمية الشائعة
+  AND lower(key_val) NOT IN ('--','-','—','na','n/a','none','null','لا يوجد','لايوجد','غير معروف','xxx','x')
+  -- تجاهل أي قيمة كلها نفس الحرف/الرقم مكرر (مثل 0000 أو -----)
+  AND key_val !~ '^(.)\1*$'
+  -- حد أدنى للطول: الجوال 9+ أرقام، البقية 5+ خانات
+  AND ( (key_type = 'phone' AND length(key_val) >= 9)
+        OR (key_type <> 'phone' AND length(key_val) >= 5) )
 GROUP BY key_type, key_val, branch_id
 HAVING COUNT(*) > 1
 ORDER BY key_type, key_val;
