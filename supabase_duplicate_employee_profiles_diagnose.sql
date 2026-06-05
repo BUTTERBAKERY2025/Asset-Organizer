@@ -214,3 +214,40 @@ WHERE be.status = 'active'
 ORDER BY be.branch_id,
          regexp_replace(lower(btrim(be.employee_name)), '\s+', ' ', 'g'),
          be.id;
+
+
+-- ============================================================================
+-- E1) السبب الحقيقي (حالة جو): صفوف دوام "يتيمة" تشير لموظف محذوف/غير موجود
+--     (branch_emp_<n> أو UUID) — تظهر في جدول الحضور بجنب الصف الحقيقي = تكرار.
+--     has_valid_twin = true  ->  يوجد صف دوام حقيقي لنفس الشخص نفس اليوم
+--                                => الصف اليتيم مكرر بحت، آمن حذفه.
+--     يفحص من اليوم وما بعده (الصفوف اللي تظهر فعلاً في الجدول).
+-- ============================================================================
+WITH orphan AS (
+  SELECT s.id, s.branch_id, s.schedule_date, s.employee_id, s.branch_employee_id,
+         s.employee_name, s.shift_type,
+         regexp_replace(lower(btrim(s.employee_name)), '\s+', ' ', 'g') AS nname
+  FROM employee_schedules s
+  WHERE s.is_off = false AND s.status = 'scheduled'
+    AND s.schedule_date::date >= CURRENT_DATE
+    AND NOT EXISTS (
+      SELECT 1 FROM branch_employees be
+      WHERE be.id = COALESCE(
+              s.branch_employee_id,
+              CAST(substring(s.employee_id from '^branch_emp_([0-9]+)$') AS integer))
+         OR be.linked_user_id = s.employee_id )
+)
+SELECT o.id AS schedule_id, o.branch_id, o.schedule_date, o.employee_id,
+       o.branch_employee_id, o.employee_name, o.shift_type,
+  EXISTS (
+    SELECT 1 FROM employee_schedules v
+    JOIN branch_employees be2
+      ON ( be2.id = v.branch_employee_id
+        OR be2.id = CAST(substring(v.employee_id from '^branch_emp_([0-9]+)$') AS integer)
+        OR be2.linked_user_id = v.employee_id )
+    WHERE v.branch_id = o.branch_id AND v.schedule_date = o.schedule_date
+      AND v.is_off = false AND v.status = 'scheduled'
+      AND regexp_replace(lower(btrim(be2.employee_name)), '\s+', ' ', 'g') = o.nname
+  ) AS has_valid_twin
+FROM orphan o
+ORDER BY o.branch_id, o.schedule_date, o.employee_name;
