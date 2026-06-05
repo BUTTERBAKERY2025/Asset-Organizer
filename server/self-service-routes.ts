@@ -47,6 +47,31 @@ async function portalFlag(key: string): Promise<boolean> {
   }
 }
 
+// طابق سجلات الحضور بأي من صيغ هوية الموظف الثلاث: النص (branch_emp_<id>) من البوابة،
+// أو الرقم (branch_employee_id)، أو معرّف حساب المستخدم المرتبط (UUID) عندما يسجّله المدير
+// من صفحة الوردية. دالة موحّدة تُستخدم في كل قراءات الحضور حتى لا تختلف نتائج البوابة عن الوردية.
+function attendanceIdentityMatch(branchEmployeeId: number, linkedUserId?: string | null) {
+  const forms = [
+    eq(attendanceRecords.employeeId, `branch_emp_${branchEmployeeId}`),
+    eq(attendanceRecords.branchEmployeeId, branchEmployeeId),
+  ];
+  // عند تسجيل الحضور من صفحة الوردية قد يُخزَّن employeeId كمعرّف حساب المستخدم
+  // المرتبط (UUID) بدل صيغة branch_emp_<id>؛ نطابقه أيضاً (وهو معرّف يخصّ هذا الموظف).
+  if (linkedUserId) forms.push(eq(attendanceRecords.employeeId, linkedUserId));
+  return or(...forms);
+}
+
+// أبقِ سجلاً واحداً لكل يوم (الأحدث = أعلى id) لمنع ازدواج العدّ عند وجود سجلين
+// لنفس اليوم (واحد من البوابة وآخر سجّله المدير).
+function dedupeAttendanceByDate<T extends { attendanceDate: string; id: number }>(rows: T[]): T[] {
+  const byDate = new Map<string, T>();
+  for (const r of rows) {
+    const ex = byDate.get(r.attendanceDate);
+    if (!ex || (r.id ?? 0) > (ex.id ?? 0)) byDate.set(r.attendanceDate, r);
+  }
+  return Array.from(byDate.values());
+}
+
 function getUserId(req: any): string | null {
   return (req as any).currentUser?.id || (req as any).user?.id || (req as any).user?.claims?.sub || null;
 }
@@ -380,9 +405,9 @@ export function registerSelfServiceRoutes(app: Express) {
       const month = saudiMonth();
       const today = saudiDate();
 
-      const [monthAttendance, todaySchedule, pendingLeaves, pendingAdvances, activeWarnings] = await Promise.all([
+      const [monthAttendanceRaw, todaySchedule, pendingLeaves, pendingAdvances, activeWarnings] = await Promise.all([
         db.select().from(attendanceRecords)
-          .where(and(eq(attendanceRecords.branchEmployeeId, emp.id), like(attendanceRecords.attendanceDate, `${month}%`))),
+          .where(and(attendanceIdentityMatch(emp.id, emp.linkedUserId), like(attendanceRecords.attendanceDate, `${month}%`))),
         db.select().from(employeeSchedules)
           .where(and(eq(employeeSchedules.branchEmployeeId, emp.id), eq(employeeSchedules.scheduleDate, today)))
           .limit(1),
@@ -393,6 +418,8 @@ export function registerSelfServiceRoutes(app: Express) {
         db.select().from(employeeWarnings)
           .where(and(eq(employeeWarnings.branchEmployeeId, emp.id), eq(employeeWarnings.status, "active"))),
       ]);
+
+      const monthAttendance = dedupeAttendanceByDate(monthAttendanceRaw);
 
       const attendanceSummary = {
         present: monthAttendance.filter(a => a.status === "present").length,
@@ -441,6 +468,7 @@ export function registerSelfServiceRoutes(app: Express) {
   // جدولي (الشهر الحالي أو شهر محدد)
   app.get("/api/my/schedule", isAuthenticated, async (req, res) => {
     try {
+      if (!(await portalFlag(PORTAL_SETTING_KEYS.SHOW_SCHEDULE))) return res.status(403).json({ error: "عرض الجدول غير مفعّل", disabled: true });
       const emp = await getMyEmployee(req);
       if (!emp) return res.json([]);
       const month = isValidMonth(req.query.month) ? req.query.month : saudiMonth();
@@ -458,14 +486,18 @@ export function registerSelfServiceRoutes(app: Express) {
   // حضوري (الشهر الحالي أو شهر محدد)
   app.get("/api/my/attendance", isAuthenticated, async (req, res) => {
     try {
+      if (!(await portalFlag(PORTAL_SETTING_KEYS.SHOW_ATTENDANCE))) return res.status(403).json({ error: "عرض الحضور غير مفعّل", disabled: true });
       const emp = await getMyEmployee(req);
       if (!emp) return res.json([]);
       const month = isValidMonth(req.query.month) ? req.query.month : saudiMonth();
       const rows = await db.select().from(attendanceRecords)
-        .where(and(eq(attendanceRecords.branchEmployeeId, emp.id), like(attendanceRecords.attendanceDate, `${month}%`)))
+        .where(and(attendanceIdentityMatch(emp.id, emp.linkedUserId), like(attendanceRecords.attendanceDate, `${month}%`)))
         .orderBy(desc(attendanceRecords.attendanceDate))
         .limit(400);
-      res.json(rows);
+      const deduped = dedupeAttendanceByDate(rows).sort((a, b) =>
+        a.attendanceDate < b.attendanceDate ? 1 : a.attendanceDate > b.attendanceDate ? -1 : 0,
+      );
+      res.json(deduped);
     } catch (e: any) {
       console.error("[my/attendance] error:", e);
       res.status(500).json({ error: e.message });
@@ -592,6 +624,7 @@ export function registerSelfServiceRoutes(app: Express) {
   // إنذاراتي
   app.get("/api/my/warnings", isAuthenticated, async (req, res) => {
     try {
+      if (!(await portalFlag(PORTAL_SETTING_KEYS.SHOW_WARNINGS))) return res.status(403).json({ error: "عرض الإنذارات غير مفعّل", disabled: true });
       const emp = await getMyEmployee(req);
       if (!emp) return res.json([]);
       const rows = await db.select({
@@ -621,6 +654,7 @@ export function registerSelfServiceRoutes(app: Express) {
   // تفاصيل إنذار واحد للموظف الحالي — على ترويسة الشركة الرسمية
   app.get("/api/my/warnings/:id", isAuthenticated, async (req, res) => {
     try {
+      if (!(await portalFlag(PORTAL_SETTING_KEYS.SHOW_WARNINGS))) return res.status(403).json({ error: "عرض الإنذارات غير مفعّل", disabled: true });
       const emp = await getMyEmployee(req);
       if (!emp) return res.status(403).json({ error: "حسابك غير مرتبط بملف موظف" });
       const id = parseInt(req.params.id, 10);
@@ -717,6 +751,7 @@ export function registerSelfServiceRoutes(app: Express) {
   // وثائقي + تواريخ انتهاء من ملف الموظف
   app.get("/api/my/documents", isAuthenticated, async (req, res) => {
     try {
+      if (!(await portalFlag(PORTAL_SETTING_KEYS.SHOW_DOCUMENTS))) return res.status(403).json({ error: "عرض الوثائق غير مفعّل", disabled: true });
       const emp = await getMyEmployee(req);
       if (!emp) return res.json({ documents: [], expiry: null });
       const documents = await db.select().from(employeeDocuments)
@@ -739,6 +774,7 @@ export function registerSelfServiceRoutes(app: Express) {
   // حوافزي (مرتبطة بحساب المستخدم كـ كاشير)
   app.get("/api/my/incentives", isAuthenticated, async (req, res) => {
     try {
+      if (!(await portalFlag(PORTAL_SETTING_KEYS.SHOW_INCENTIVES))) return res.status(403).json({ error: "عرض الحوافز غير مفعّل", disabled: true });
       const userId = getUserId(req);
       if (!userId) return res.json([]);
       const rows = await db.select().from(incentiveAwards)
@@ -801,16 +837,9 @@ export function registerSelfServiceRoutes(app: Express) {
         .where(and(eq(employeeSchedules.branchEmployeeId, emp.id), eq(employeeSchedules.scheduleDate, today)))
         .limit(1);
 
-      // طابق سجل الحضور بأي من صيغتي هوية الموظف: النص (branch_emp_<id>) من البوابة
-      // أو الرقم (branch_employee_id) عندما يسجّله المدير من صفحة الوردية — والأحدث يفوز.
+      // طابق سجل الحضور بأي من صيغتي هوية الموظف (دالة موحّدة) — والأحدث يفوز.
       const [record] = await db.select().from(attendanceRecords)
-        .where(and(
-          eq(attendanceRecords.attendanceDate, today),
-          or(
-            eq(attendanceRecords.employeeId, empId),
-            eq(attendanceRecords.branchEmployeeId, emp.id),
-          ),
-        ))
+        .where(and(eq(attendanceRecords.attendanceDate, today), attendanceIdentityMatch(emp.id, emp.linkedUserId)))
         .orderBy(desc(attendanceRecords.id))
         .limit(1);
 
@@ -833,6 +862,9 @@ export function registerSelfServiceRoutes(app: Express) {
           actualCheckOut: record.actualCheckOut,
           status: record.status,
           lateMinutes: record.lateMinutes,
+          // true إذا أنشأ السجلَّ الموظف نفسه من البوابة (employeeId=branch_emp_<id>)؛
+          // false عندما سجّله المدير من صفحة الوردية بصيغة هوية مختلفة.
+          recordedBySelf: record.employeeId === empId,
         } : null,
         branch: branch ? {
           name: branch.name,

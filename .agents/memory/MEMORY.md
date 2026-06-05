@@ -9,3 +9,4 @@
 - [Loyalty card security](loyalty-card-security.md) — public /card/:code must never select phone/gender/city; phone-based re-registration returns the code without ownership proof (IDOR) → fix with OTP.
 - [Lazy page registration](lazy-page-registration.md) — every makeLazy("x") page MUST also be added to pageImports in client/src/lib/pagePreloader.ts or hover/aggressive preload throws "Unknown page: x".
 - [Timesheet duplicate prevention](timesheet-duplicate-prevention.md) — unique index keys on version (not "active") because reissue inserts new version before superseding old; cross-identity dupes guarded at app pre-check.
+- [Portal attendance identity](portal-attendance-identity.md) — /api/my attendance reads must match 3 employee-id forms (branch_emp_<id>, branch_employee_id, linkedUserId UUID) or manager-entered records vanish.

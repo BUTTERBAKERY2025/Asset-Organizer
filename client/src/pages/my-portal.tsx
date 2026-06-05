@@ -236,25 +236,25 @@ export default function MyPortalPage() {
   const { data: schedule = [] } = useQuery<any[]>({
     queryKey: ["/api/my/schedule", schedMonth],
     queryFn: async () => (await apiRequest("GET", `/api/my/schedule?month=${schedMonth}`)).json(),
-    enabled: !!hasEmployee,
+    enabled: !!hasEmployee && showSchedule,
   });
 
   const { data: attendance = [] } = useQuery<any[]>({
     queryKey: ["/api/my/attendance", attMonth],
     queryFn: async () => (await apiRequest("GET", `/api/my/attendance?month=${attMonth}`)).json(),
-    enabled: !!hasEmployee,
+    enabled: !!hasEmployee && showAttendance,
   });
 
   const { data: warnings = [] } = useQuery<any[]>({
     queryKey: ["/api/my/warnings"],
     queryFn: async () => (await apiRequest("GET", "/api/my/warnings")).json(),
-    enabled: !!hasEmployee,
+    enabled: !!hasEmployee && showWarnings,
   });
 
   const { data: docsData } = useQuery<{ documents: any[]; expiry: any }>({
     queryKey: ["/api/my/documents"],
     queryFn: async () => (await apiRequest("GET", "/api/my/documents")).json(),
-    enabled: !!hasEmployee,
+    enabled: !!hasEmployee && showDocuments,
   });
 
   const { data: salary } = useQuery<any>({
@@ -894,6 +894,15 @@ export default function MyPortalPage() {
                       </div>
                     </CardContent>
                   </Card>
+
+                  {todayStatus?.attendance && todayStatus.attendance.recordedBySelf === false && (
+                    <div className="text-center -mt-1">
+                      <Badge variant="secondary" className="text-[11px] font-normal gap-1" data-testid="badge-recorded-by-manager">
+                        <ShieldAlert className="h-3 w-3" />
+                        {i18n.language === "ar" ? "سُجّل بواسطة الإدارة" : "Recorded by management"}
+                      </Badge>
+                    </div>
+                  )}
 
                   {todayStatus?.branch && !todayStatus.branch.hasLocation && (
                     <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/30">
