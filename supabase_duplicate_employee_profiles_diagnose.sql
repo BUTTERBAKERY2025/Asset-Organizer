@@ -49,6 +49,39 @@ ORDER BY schedule_date DESC, branch_id, resolved_name;
 
 
 -- ============================================================================
+-- D0b) مثل D0 لكن يجمع حسب رقم الموظف (be_id) بدل الاسم — يكشف نفس الشخص
+--      حتى لو اسمه مكتوب بصيغتين مختلفتين (إنجليزي/عربي). راجع عمود names:
+--      لو فيه اسمان مختلفان لنفس be_id = نفس الشخص بصيغتي اسم (السبب أ).
+--      يفحص آخر 7 أيام تلقائياً.
+-- ============================================================================
+WITH sched AS (
+  SELECT s.id AS schedule_id, s.branch_id, s.schedule_date, s.employee_id,
+         COALESCE(
+           s.branch_employee_id,
+           CAST(substring(s.employee_id from '^branch_emp_([0-9]+)$') AS integer),
+           bl.id
+         ) AS be_id,
+         COALESCE(be.employee_name, bl.employee_name, s.employee_name) AS resolved_name
+  FROM employee_schedules s
+  LEFT JOIN branch_employees bl ON bl.linked_user_id = s.employee_id
+  LEFT JOIN branch_employees be ON be.id = COALESCE(
+           s.branch_employee_id,
+           CAST(substring(s.employee_id from '^branch_emp_([0-9]+)$') AS integer))
+  WHERE s.is_off = false AND s.status = 'scheduled'
+    AND s.schedule_date::date >= CURRENT_DATE - 7
+)
+SELECT branch_id, schedule_date, be_id,
+       COUNT(*) AS rows,
+       array_agg(DISTINCT resolved_name)           AS names,
+       array_agg(employee_id ORDER BY schedule_id) AS employee_ids
+FROM sched
+WHERE be_id IS NOT NULL
+GROUP BY branch_id, schedule_date, be_id
+HAVING COUNT(*) > 1
+ORDER BY schedule_date DESC, branch_id, be_id;
+
+
+-- ============================================================================
 -- D1) السبب (أ): نفس الموظف (هوية موحّدة be_id) له أكثر من صف في الدوام
 --     بمعرّفات employee_id مختلفة — هذا اللي يسبّب صفّين في صفحة الحضور.
 --     يحلّ الهوية بـ 3 طرق: العمود الرقمي، صيغة branch_emp_<n>، و UUID المربوط.
