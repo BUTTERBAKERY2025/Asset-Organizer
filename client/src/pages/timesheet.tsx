@@ -49,9 +49,22 @@ interface BranchEmployee {
   status?: string;
 }
 
+interface AttendanceEmployee {
+  id: string;
+  name: string;
+  jobTitle: string;
+  branchId: string;
+  branchEmployeeId: number | null;
+  status: string | null;
+  isActive: boolean;
+  canGenerate: boolean;
+  attendanceDays: number;
+}
+
 interface TimesheetReport {
   id: number;
   employeeId: string;
+  branchEmployeeId?: number | null;
   branchId: string;
   startDate: string;
   endDate: string;
@@ -175,6 +188,7 @@ export default function TimesheetPage() {
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedEmployee, setSelectedEmployee] = useState<string>("");
   const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), "yyyy-MM"));
+  const [employeeMode, setEmployeeMode] = useState<"active" | "attendance">("active");
   const [activeTab, setActiveTab] = useState("dashboard");
   const [showSignatureDialog, setShowSignatureDialog] = useState(false);
   const [signatureType, setSignatureType] = useState<"employee" | "manager">("employee");
@@ -231,8 +245,6 @@ export default function TimesheetPage() {
       type: 'branch_employee' as const,
     })),
   ], [allUsers, branchEmployees, selectedBranch]);
-
-  const filteredEmployees = combinedEmployees;
 
   const { data: reports = [], isLoading: reportsLoading } = useQuery<TimesheetReport[]>({
     queryKey: ["/api/timesheet-reports", selectedBranch],
@@ -291,6 +303,62 @@ export default function TimesheetPage() {
     };
   }, [selectedMonth, dateLocale]);
 
+  // ====== Attendance-based employees (mode B): everyone with بصمة in the selected month ======
+  const { data: attendanceEmployees = [], isLoading: attendanceEmployeesLoading } = useQuery<AttendanceEmployee[]>({
+    queryKey: ["/api/timesheet-reports/attendance-employees", selectedBranch, monthBounds.startDate, monthBounds.endDate],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        branchId: selectedBranch,
+        startDate: monthBounds.startDate,
+        endDate: monthBounds.endDate,
+      });
+      const res = await fetch(`/api/timesheet-reports/attendance-employees?${params}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: employeeMode === "attendance" && activeTab === "dashboard" && !!selectedBranch && selectedBranch !== "all",
+  });
+
+  // Effective employee list for the dashboard, depending on the selected mode.
+  // - "active": current behavior (active roster in branch only)
+  // - "attendance": union of active roster + everyone who has attendance in the month
+  const filteredEmployees = useMemo(() => {
+    // Derive numeric branchEmployeeId from a "branch_emp_<n>" id (for cross-identity report matching).
+    const beIdFromId = (id: string): number | null => id.startsWith("branch_emp_") ? (parseInt(id.replace("branch_emp_", "")) || null) : null;
+    type Emp = { id: string; name: string; jobTitle: string; branchId: string; type: 'user' | 'branch_employee'; inRoster: boolean; canGenerate: boolean; branchEmployeeId: number | null; attendanceDays?: number };
+    if (employeeMode === "active") {
+      return combinedEmployees.map(e => ({ ...e, inRoster: true, canGenerate: true, branchEmployeeId: beIdFromId(e.id), attendanceDays: undefined as number | undefined } as Emp));
+    }
+    const byId = new Map<string, Emp>();
+    for (const e of combinedEmployees) {
+      byId.set(e.id, { ...e, inRoster: true, canGenerate: true, branchEmployeeId: beIdFromId(e.id) });
+    }
+    for (const ae of attendanceEmployees) {
+      const existing = byId.get(ae.id);
+      if (existing) {
+        existing.attendanceDays = ae.attendanceDays;
+        if (ae.branchEmployeeId != null) existing.branchEmployeeId = ae.branchEmployeeId;
+      } else {
+        byId.set(ae.id, {
+          id: ae.id,
+          name: ae.name,
+          jobTitle: ae.jobTitle || '',
+          branchId: ae.branchId,
+          type: ae.branchEmployeeId != null ? 'branch_employee' : 'user',
+          inRoster: false,
+          canGenerate: ae.canGenerate,
+          branchEmployeeId: ae.branchEmployeeId,
+          attendanceDays: ae.attendanceDays,
+        });
+      }
+    }
+    return Array.from(byId.values());
+  }, [employeeMode, combinedEmployees, attendanceEmployees]);
+
   // ====== Dashboard rows: combine each employee with their (optional) report for the selected month ======
   const dashboardRows = useMemo(() => {
     if (!selectedBranch || selectedBranch === "all") return [];
@@ -299,12 +367,16 @@ export default function TimesheetPage() {
       r.startDate === monthBounds.startDate &&
       r.endDate === monthBounds.endDate
     );
-    // When duplicates exist for the same employee+period, keep the newest one (by createdAt)
+    // When duplicates exist for the same employee+period, keep the newest one (by createdAt).
+    // Index by both identity forms (string employeeId + numeric branchEmployeeId) for robust matching.
     const reportsByEmp = new Map<string, TimesheetReport>();
+    const reportsByBeId = new Map<number, TimesheetReport>();
+    const isNewer = (r: TimesheetReport, prev?: TimesheetReport) =>
+      !prev || new Date(r.createdAt).getTime() > new Date(prev.createdAt).getTime();
     for (const r of monthReports) {
-      const prev = reportsByEmp.get(r.employeeId);
-      if (!prev || new Date(r.createdAt).getTime() > new Date(prev.createdAt).getTime()) {
-        reportsByEmp.set(r.employeeId, r);
+      if (isNewer(r, reportsByEmp.get(r.employeeId))) reportsByEmp.set(r.employeeId, r);
+      if (r.branchEmployeeId != null && isNewer(r, reportsByBeId.get(r.branchEmployeeId))) {
+        reportsByBeId.set(r.branchEmployeeId, r);
       }
     }
 
@@ -317,7 +389,7 @@ export default function TimesheetPage() {
     };
 
     return filteredEmployees
-      .map(emp => ({ ...emp, report: reportsByEmp.get(emp.id) }))
+      .map(emp => ({ ...emp, report: reportsByEmp.get(emp.id) ?? (emp.branchEmployeeId != null ? reportsByBeId.get(emp.branchEmployeeId) : undefined) }))
       .sort((a, b) => {
         const diff = statusPriority(a.report) - statusPriority(b.report);
         if (diff !== 0) return diff;
@@ -378,7 +450,9 @@ export default function TimesheetPage() {
     const total = dashboardRows.length;
     let signed = 0, pendingMgr = 0, pendingEmp = 0, draft = 0, notGen = 0;
     for (const row of dashboardRows) {
-      if (!row.report) { notGen++; continue; }
+      // Only count missing reports that can actually be generated (employee belongs to this branch).
+      // Attendance-only rows for transferred-out employees are view-only and excluded from "not generated".
+      if (!row.report) { if (row.canGenerate) notGen++; continue; }
       switch (row.report.status) {
         case "finalized": signed++; break;
         case "pending_manager_signature": pendingMgr++; break;
@@ -588,7 +662,7 @@ export default function TimesheetPage() {
       toast({ title: t("common.alert"), description: t("timesheet.dashboard.selectBranchPrompt"), variant: "destructive" });
       return;
     }
-    const missingIds = dashboardRows.filter(r => !r.report).map(r => r.id);
+    const missingIds = dashboardRows.filter(r => !r.report && r.canGenerate).map(r => r.id);
     if (missingIds.length === 0) {
       toast({ title: t("common.alert"), description: t("timesheet.dashboard.bulkGenerateNone") });
       return;
@@ -1079,10 +1153,30 @@ export default function TimesheetPage() {
                 {/* Employee Status Table */}
                 <Card>
                   <CardHeader className="pb-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <CardTitle className="text-base">{t("timesheet.dashboard.headline")} — {monthBounds.label}</CardTitle>
-                        <CardDescription className="text-xs mt-1">{t("timesheet.dashboard.subhead")}</CardDescription>
+                        <CardDescription className="text-xs mt-1">
+                          {employeeMode === "attendance" ? t("timesheet.dashboard.modeAttendanceHint") : t("timesheet.dashboard.subhead")}
+                        </CardDescription>
+                      </div>
+                      <div className="inline-flex items-center rounded-lg border border-amber-200 bg-amber-50/50 p-1 self-start" data-testid="toggle-employee-mode">
+                        <button
+                          type="button"
+                          onClick={() => setEmployeeMode("active")}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${employeeMode === "active" ? "bg-amber-600 text-white shadow-sm" : "text-amber-800 hover:bg-amber-100"}`}
+                          data-testid="btn-mode-active"
+                        >
+                          {t("timesheet.dashboard.modeActive")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEmployeeMode("attendance")}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${employeeMode === "attendance" ? "bg-amber-600 text-white shadow-sm" : "text-amber-800 hover:bg-amber-100"}`}
+                          data-testid="btn-mode-attendance"
+                        >
+                          {t("timesheet.dashboard.modeAttendance")}
+                        </button>
                       </div>
                     </div>
                   </CardHeader>
@@ -1125,8 +1219,24 @@ export default function TimesheetPage() {
                                 <TableCell className="text-center text-xs text-muted-foreground">{idx + 1}</TableCell>
                                 <TableCell className="font-medium">
                                   <div className="flex flex-col">
-                                    <span data-testid={`text-employee-name-${row.id}`}>{row.name}</span>
+                                    <span data-testid={`text-employee-name-${row.id}`} className="flex items-center gap-1.5">
+                                      {row.name}
+                                      {row.inRoster === false && (
+                                        <span
+                                          className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-200"
+                                          title={t("timesheet.dashboard.fromAttendanceHint")}
+                                          data-testid={`badge-from-attendance-${row.id}`}
+                                        >
+                                          {t("timesheet.dashboard.fromAttendanceBadge")}
+                                        </span>
+                                      )}
+                                    </span>
                                     {row.jobTitle && <span className="text-xs text-muted-foreground">{row.jobTitle}</span>}
+                                    {typeof row.attendanceDays === "number" && (
+                                      <span className="text-[10px] text-violet-600" data-testid={`text-attendance-days-${row.id}`}>
+                                        {t("timesheet.dashboard.attendanceDaysLabel", { count: row.attendanceDays })}
+                                      </span>
+                                    )}
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-center">
@@ -1176,19 +1286,29 @@ export default function TimesheetPage() {
                                 <TableCell className="text-center">
                                   <div className="flex items-center justify-center gap-1 flex-wrap">
                                     {isMissing ? (
-                                      <Button
-                                        size="sm"
-                                        variant="default"
-                                        onClick={() => handleGenerateForEmployee(row.id)}
-                                        disabled={generatingFor === row.id || isBulkGenerating}
-                                        className="h-8 gap-1 bg-amber-600 hover:bg-amber-700 text-white"
-                                        data-testid={`btn-generate-${row.id}`}
-                                      >
-                                        {generatingFor === row.id
-                                          ? <Loader2 className="w-3 h-3 animate-spin" />
-                                          : <FilePlus2 className="w-3 h-3" />}
-                                        {t("timesheet.dashboard.actionGenerate")}
-                                      </Button>
+                                      row.canGenerate ? (
+                                        <Button
+                                          size="sm"
+                                          variant="default"
+                                          onClick={() => handleGenerateForEmployee(row.id)}
+                                          disabled={generatingFor === row.id || isBulkGenerating}
+                                          className="h-8 gap-1 bg-amber-600 hover:bg-amber-700 text-white"
+                                          data-testid={`btn-generate-${row.id}`}
+                                        >
+                                          {generatingFor === row.id
+                                            ? <Loader2 className="w-3 h-3 animate-spin" />
+                                            : <FilePlus2 className="w-3 h-3" />}
+                                          {t("timesheet.dashboard.actionGenerate")}
+                                        </Button>
+                                      ) : (
+                                        <span
+                                          className="text-[10px] text-muted-foreground italic px-2"
+                                          title={t("timesheet.dashboard.cannotGenerateHint")}
+                                          data-testid={`text-view-only-${row.id}`}
+                                        >
+                                          {t("timesheet.dashboard.viewOnly")}
+                                        </span>
+                                      )
                                     ) : (
                                       <>
                                         <Button

@@ -27331,6 +27331,93 @@ export async function registerRoutes(
     }
   });
 
+  // Get distinct employees who have attendance (بصمة) records in a given month/branch
+  // Used by the timesheet dashboard "كل من له بصمة" mode to include inactive/transferred employees.
+  app.get("/api/timesheet-reports/attendance-employees", isAuthenticated, requirePermission("timesheet", "view"), async (req, res) => {
+    try {
+      const branchId = req.query.branchId as string | undefined;
+      const startDate = req.query.startDate as string | undefined;
+      const endDate = req.query.endDate as string | undefined;
+      if (!branchId || !startDate || !endDate) {
+        return res.status(400).json({ error: "الحقول مطلوبة: branchId, startDate, endDate" });
+      }
+
+      // SECURITY: branch access for non-admins
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
+
+      const [records, branchEmps, allUsers] = await Promise.all([
+        storage.getAllAttendanceRecords({ branchId, startDate, endDate }),
+        storage.getBranchEmployeesByBranch(branchId),
+        storage.getAllUsers(),
+      ]);
+
+      // Canonicalize identity to match dashboard combinedEmployees ids:
+      // linked branch employee -> linkedUserId (UUID); unlinked -> branch_emp_<id>; otherwise raw employeeId.
+      // Also mirror generate-bulk's branch-membership allow-set to compute `canGenerate`
+      // (a report can only be generated for someone who currently belongs to this branch).
+      const beById = new Map<number, typeof branchEmps[number]>();
+      const linkedUserToBe = new Map<string, typeof branchEmps[number]>();
+      for (const be of branchEmps) {
+        beById.set(be.id, be);
+        if (be.linkedUserId) linkedUserToBe.set(be.linkedUserId, be);
+      }
+      const branchUserIdSet = new Set<string>(allUsers.filter((u: any) => u.branchId === branchId).map((u: any) => u.id));
+
+      const map = new Map<string, { id: string; name: string; jobTitle: string; branchId: string; branchEmployeeId: number | null; status: string | null; isActive: boolean; canGenerate: boolean }>();
+      const daysSeen = new Map<string, Set<string>>();
+
+      for (const rec of records) {
+        let id: string;
+        const beId = rec.branchEmployeeId ?? null;
+        let jobTitle = "";
+        let status: string | null = null;
+        let canGenerate = false;
+        if (beId != null && beById.has(beId)) {
+          const be = beById.get(beId)!;
+          id = be.linkedUserId || `branch_emp_${beId}`;
+          jobTitle = be.jobTitle || "";
+          status = be.status ?? null;
+          canGenerate = true; // belongs to this branch (roster includes all statuses)
+        } else if (beId != null) {
+          id = `branch_emp_${beId}`;
+          canGenerate = false; // branch employee transferred to another branch
+        } else {
+          id = rec.employeeId;
+          // raw user identity: generatable only if user is a member of this branch or linked to a branch employee here
+          canGenerate = branchUserIdSet.has(id) || linkedUserToBe.has(id);
+        }
+
+        if (!map.has(id)) {
+          map.set(id, {
+            id,
+            name: rec.employeeName,
+            jobTitle,
+            branchId: rec.branchId,
+            branchEmployeeId: beId,
+            status,
+            isActive: status === "active",
+            canGenerate,
+          });
+          daysSeen.set(id, new Set());
+        }
+        daysSeen.get(id)!.add(rec.attendanceDate);
+      }
+
+      const result = Array.from(map.values()).map(e => ({
+        ...e,
+        attendanceDays: daysSeen.get(e.id)!.size,
+      }));
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching attendance employees:", error);
+      res.status(500).json({ error: "فشل في جلب الموظفين أصحاب البصمات" });
+    }
+  });
+
   // Get single timesheet report by ID
   app.get("/api/timesheet-reports/:id", isAuthenticated, requirePermission("timesheet", "view"), async (req, res) => {
     try {
