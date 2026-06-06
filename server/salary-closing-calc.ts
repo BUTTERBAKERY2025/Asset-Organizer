@@ -13,6 +13,7 @@ export interface SalaryClosingRaw {
   schedules: any[];
   signedTimesheets: Array<{ report: any; entries: any[] }>;
   deductions: any[];
+  leaveRequests?: any[];
 }
 
 export interface SalaryClosingLine {
@@ -28,6 +29,10 @@ export interface SalaryClosingLine {
   presentDays: number;
   absentDays: number;
   offDays: number;
+  paidLeaveDays: number;
+  unpaidLeaveDays: number;
+  unpaidDays: number;
+  leaveBreakdown: Array<{ type: string; days: number; paid: boolean }>;
   scheduledWorkDays: number;
   scheduledHours: number;
   lateDays: number;
@@ -84,6 +89,18 @@ const GOSI_WAGE_CAP = 45000;
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+// إضافة عدد من الأيام لتاريخ بصيغة YYYY-MM-DD (بتوقيت UTC لتجنّب انزياح المنطقة الزمنية)
+function addDaysISO(iso: string, n: number): string {
+  const dt = new Date(iso + "T00:00:00Z");
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return dt.toISOString().slice(0, 10);
+}
+
+// أنواع الإجازات المدفوعة (تُحتسب ضمن أيام الصرف). الوحيدة غير المدفوعة هي "بدون راتب".
+function isPaidLeaveType(t: string): boolean {
+  return t !== "unpaid";
 }
 
 function todayRiyadh(): string {
@@ -350,6 +367,79 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
     absentDatesMissing.sort();
     offDates.sort();
 
+    // ===== إعادة التصنيف اليومي على مستوى الشهر بالكامل =====
+    // القاعدة (المعتمدة من المستخدم): يُصرف للموظف مقابل أيام الحضور + الراحات
+    // الأسبوعية + الإجازات المدفوعة فقط. أي يوم آخر في الشهر (غياب/بدون تسجيل/
+    // إجازة بدون راتب) يُخصم بقيمة اليوم. نأخذ بعين الاعتبار الأيام حتى تاريخ اليوم
+    // فقط (لا نخصم أياماً مستقبلية ضمن الشهر الجاري).
+    const presentSet = new Set(presentDates);
+    const offSet = new Set(offDates);
+    const absentExplicitSet = new Set(absentDatesExplicit);
+
+    // خريطة الإجازات المصرّح بها (المعتمدة) لكل يوم ضمن الشهر
+    const empLeaves = (raw.leaveRequests || []).filter(
+      (lr: any) => lr.branchEmployeeId === emp.id && lr.status === "approved"
+    );
+    const leaveByDate = new Map<string, string>();
+    empLeaves.forEach((lr: any) => {
+      let d = lr.startDate < monthStart ? monthStart : lr.startDate;
+      const end = lr.endDate > monthEnd ? monthEnd : lr.endDate;
+      let guard = 0;
+      while (d <= end && guard < 400) {
+        if (!leaveByDate.has(d)) leaveByDate.set(d, lr.leaveType);
+        d = addDaysISO(d, 1);
+        guard++;
+      }
+    });
+
+    // آخر يوم يُحتسب: نهاية الشهر إن كان قد انقضى، وإلا تاريخ اليوم
+    const consideredEnd = monthEnd <= todayLocal ? monthEnd : todayLocal;
+
+    let presentDaysCalc = 0;
+    let weeklyRestDays = 0;
+    let paidLeaveDays = 0;
+    let unpaidLeaveDays = 0;
+    let unpaidDays = 0;
+    const leaveCounts = new Map<string, number>();
+    const unpaidNonLeaveDates: string[] = [];
+
+    if (consideredEnd >= monthStart) {
+      let d = monthStart;
+      let guard = 0;
+      while (d <= consideredEnd && guard < 400) {
+        if (presentSet.has(d)) {
+          presentDaysCalc++;
+        } else {
+          const lt = leaveByDate.get(d);
+          if (lt) {
+            leaveCounts.set(lt, (leaveCounts.get(lt) || 0) + 1);
+            if (isPaidLeaveType(lt)) {
+              paidLeaveDays++;
+            } else {
+              unpaidLeaveDays++;
+              unpaidDays++;
+            }
+          } else if (offSet.has(d)) {
+            weeklyRestDays++;
+          } else {
+            // غياب صريح أو يوم غير مُسجّل (لا حضور ولا راحة ولا إجازة) → يُخصم
+            unpaidDays++;
+            unpaidNonLeaveDates.push(d);
+          }
+        }
+        d = addDaysISO(d, 1);
+        guard++;
+      }
+    }
+
+    const leaveBreakdown = Array.from(leaveCounts.entries())
+      .map(([type, days]) => ({ type, days, paid: isPaidLeaveType(type) }))
+      .sort((a, b) => b.days - a.days);
+
+    // فصل الأيام المخصومة (غير الإجازات) إلى: غياب صريح مُسجّل + أيام ناقصة/غير مجدولة
+    const absentDatesExplicitFinal = unpaidNonLeaveDates.filter((d) => absentExplicitSet.has(d)).sort();
+    const absentDatesMissingFinal = unpaidNonLeaveDates.filter((d) => !absentExplicitSet.has(d)).sort();
+
     const baseSalary = emp.salary || 0;
     const housingAllowance = emp.housingAllowance || 0;
     const allowances =
@@ -371,20 +461,24 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
 
     const dailyRate = grossSalary / 30;
 
-    // إذا الموظف ما داوم ولا يوم في الشهر → غياب الشهر كامل (راتب = 0) مع تحذير
+    // الخصم = (أيام غير مدفوعة) × قيمة اليوم. الأيام غير المدفوعة تشمل: الغياب،
+    // الأيام غير المسجّلة (لم يحضرها ولم تكن راحة ولا إجازة مدفوعة)، والإجازات بدون راتب.
+    const absenceDeduction = round2(unpaidDays * dailyRate);
+
+    // غياب صريح/أيام مخصومة (لأغراض العرض فقط — لا يشمل أيام الإجازات)
+    const absentDaysDisplay = unpaidNonLeaveDates.length;
+
+    // إذا الموظف ما عنده أي بيانات لهذا الشهر → ننبّه (سيُحتسب الشهر كاملاً غياباً)
     const noWorkAtAll =
-      presentDays === 0 && scheduledWorkDays === 0 && offDays === 0 && empAttendance.length === 0;
-    const effectiveAbsentDays = noWorkAtAll ? 30 : absentDays;
-    const absenceDeduction = noWorkAtAll
-      ? round2(grossSalary - socialInsurance)
-      : round2(absentDays * dailyRate);
+      empAttendance.length === 0 &&
+      empSchedules.length === 0 &&
+      (!signed || signed.entries.length === 0) &&
+      empLeaves.length === 0;
 
     const empDeductions = deductions.filter((d) => d.branchEmployeeId === emp.id);
     const manualDeductionsTotal = round2(empDeductions.reduce((sum, d) => sum + (d.amount || 0), 0));
 
-    const netBeforeManual = noWorkAtAll
-      ? 0
-      : round2(grossSalary - socialInsurance - absenceDeduction);
+    const netBeforeManual = round2(grossSalary - socialInsurance - absenceDeduction);
     const netSalary = Math.max(0, round2(netBeforeManual - manualDeductionsTotal));
 
     if (noWorkAtAll) {
@@ -414,9 +508,13 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
       iqamaNumber: emp.iqamaNumber ?? null,
       bankName: emp.bankName || "",
       bankAccountNumber: emp.bankAccountNumber || "",
-      presentDays,
-      absentDays: effectiveAbsentDays,
-      offDays,
+      presentDays: presentDaysCalc,
+      absentDays: absentDaysDisplay,
+      offDays: weeklyRestDays,
+      paidLeaveDays,
+      unpaidLeaveDays,
+      unpaidDays,
+      leaveBreakdown,
       scheduledWorkDays,
       scheduledHours: Math.round(scheduledHoursTotal * 10) / 10,
       lateDays,
@@ -438,9 +536,9 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
       dataSource,
       noWorkAtAll,
       presentDates,
-      absentDates: [...absentDatesExplicit, ...absentDatesMissing].sort(),
-      absentDatesExplicit: [...absentDatesExplicit].sort(),
-      absentDatesMissing: [...absentDatesMissing].sort(),
+      absentDates: [...absentDatesExplicitFinal, ...absentDatesMissingFinal].sort(),
+      absentDatesExplicit: absentDatesExplicitFinal,
+      absentDatesMissing: absentDatesMissingFinal,
       offDates,
     };
   });

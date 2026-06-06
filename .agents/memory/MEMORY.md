@@ -10,6 +10,7 @@
 - [Lazy page registration](lazy-page-registration.md) — every makeLazy("x") page MUST also be added to pageImports in client/src/lib/pagePreloader.ts or hover/aggressive preload throws "Unknown page: x".
 - [Timesheet duplicate prevention](timesheet-duplicate-prevention.md) — unique index keys on version (not "active") because reissue inserts new version before superseding old; cross-identity dupes guarded at app pre-check.
 - [Portal attendance identity](portal-attendance-identity.md) — /api/my attendance reads must match 3 employee-id forms (branch_emp_<id>, branch_employee_id, linkedUserId UUID) or manager-entered records vanish.
+- [Salary proration rule](salary-proration-rule.md) — pay = present + weekly rest + PAID leave; all other days deducted at gross/30; current month only counts up to today.
 - [Bank salary export template](bank-export-template.md) — Riyad Bank مدد .xlsx export: row الحالة="نشط" & date DD/MM/YYYY are intentionally matched to template rows (not data-sheet tokens); SWIFT from bankName, no-account rows excluded.
 - [Timesheet employee modes](timesheet-employee-modes.md) — dashboard active-only vs attendance-based list; transferred-out rows are view-only, canGenerate must mirror generate-bulk's branch-membership gate.
 - [Timesheet no-schedule & metric parity](timesheet-no-schedule.md) — never fake 08:00-16:00/absent for unscheduled days (use no_schedule); frontend-derived metrics must reuse backend predicates (late = status==="late").

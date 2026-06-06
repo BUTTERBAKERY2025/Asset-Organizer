@@ -65,7 +65,7 @@ import {
   Minus,
 } from "lucide-react";
 import type { BranchEmployee, AttendanceRecord, SalaryDeduction } from "@shared/schema";
-import { SALARY_DEDUCTION_TYPE_LABELS } from "@shared/schema";
+import { SALARY_DEDUCTION_TYPE_LABELS, LEAVE_TYPE_LABELS } from "@shared/schema";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -415,7 +415,8 @@ const TOGGLEABLE_COLUMNS: { key: string; label: string }[] = [
   { key: "jobTitle", label: "الوظيفة" },
   { key: "bank", label: "البنك / الآيبان" },
   { key: "workDays", label: "أيام العمل" },
-  { key: "off", label: "الإجازات" },
+  { key: "off", label: "الراحات الأسبوعية" },
+  { key: "leaves", label: "الإجازات (بالنوع)" },
   { key: "hours", label: "الساعات" },
   { key: "salary", label: "الراتب" },
   { key: "allowances", label: "البدلات" },
@@ -507,6 +508,7 @@ export default function SalaryClosingPage() {
     bank: true,
     workDays: true,
     off: true,
+    leaves: true,
     hours: true,
     salary: true,
     allowances: true,
@@ -879,10 +881,16 @@ export default function SalaryClosingPage() {
           ? (isRTL ? "جدول + بصمة" : "Schedule + Attendance")
           : (isRTL ? "بصمة فقط" : "Attendance only"),
       [isRTL ? "أيام العمل المجدولة" : "Scheduled Work Days"]: emp.scheduledWorkDays,
-      [isRTL ? "أيام الإجازة" : "Off Days"]: emp.offDays,
+      [isRTL ? "الراحات الأسبوعية" : "Weekly Rest Days"]: emp.offDays,
       [isRTL ? "ساعات الجدول" : "Scheduled Hours"]: emp.scheduledHours,
       [isRTL ? "أيام الحضور" : "Present Days"]: emp.presentDays,
       [isRTL ? "أيام الغياب" : "Absent Days"]: emp.absentDays,
+      [isRTL ? "إجازات مدفوعة" : "Paid Leave Days"]: emp.paidLeaveDays ?? 0,
+      [isRTL ? "إجازات بدون راتب" : "Unpaid Leave Days"]: emp.unpaidLeaveDays ?? 0,
+      [isRTL ? "أيام مخصومة (إجمالي)" : "Deducted Days"]: emp.unpaidDays ?? 0,
+      [isRTL ? "تفصيل الإجازات" : "Leave Breakdown"]: (emp.leaveBreakdown || [])
+        .map((b: any) => `${LEAVE_TYPE_LABELS[b.type] || b.type}: ${b.days} (${b.paid ? "مدفوعة" : "مخصومة"})`)
+        .join("، ") || "-",
       [isRTL ? "أيام التأخير" : "Late Days"]: emp.lateDays,
       [isRTL ? "إجمالي الساعات" : "Total Hours"]: emp.totalHours,
       [isRTL ? "الراتب الأساسي" : "Base Salary"]: emp.baseSalary,
@@ -1552,7 +1560,7 @@ export default function SalaryClosingPage() {
                     <p className="text-xl font-bold text-amber-700">
                       {salaryClosingData.reduce((sum, e) => sum + e.offDays, 0)}
                     </p>
-                    <p className="text-[11px] text-gray-600">إجمالي الإجازات</p>
+                    <p className="text-[11px] text-gray-600">إجمالي الراحات الأسبوعية</p>
                   </div>
                   <div className="text-center p-2 bg-purple-50 rounded-lg border border-purple-100" data-testid="summary-hours">
                     <p className="text-xl font-bold text-purple-700">
@@ -1873,7 +1881,8 @@ export default function SalaryClosingPage() {
                         {cols.workDays && <TableHead className="text-center" title={isRTL ? "أيام العمل المجدولة (من الجدول الموقّع)" : "Scheduled work days"}>{isRTL ? "أيام العمل" : "Work Days"}</TableHead>}
                         <TableHead className="text-center">{isRTL ? "الحضور" : "Present"}</TableHead>
                         <TableHead className="text-center">{isRTL ? "الغياب" : "Absent"}</TableHead>
-                        {cols.off && <TableHead className="text-center" title={isRTL ? "الإجازات (isOff في الجدول الموقّع)" : "Off days"}>{isRTL ? "الإجازات" : "Off"}</TableHead>}
+                        {cols.off && <TableHead className="text-center" title={isRTL ? "الراحات الأسبوعية (تُحتسب ضمن أيام الصرف)" : "Weekly rest days"}>{isRTL ? "الراحات الأسبوعية" : "Weekly Rest"}</TableHead>}
+                        {cols.leaves && <TableHead className="text-center" title={isRTL ? "الإجازات المعتمدة بالنوع (مدفوعة/مخصومة)" : "Approved leaves by type"}>{isRTL ? "الإجازات" : "Leaves"}</TableHead>}
                         {cols.hours && <TableHead className="text-center">{isRTL ? "الساعات" : "Hours"}</TableHead>}
                         {cols.salary && <TableHead className="text-center">{isRTL ? "الراتب" : "Salary"}</TableHead>}
                         {cols.allowances && <TableHead className="text-center">{isRTL ? "البدلات" : "Allowances"}</TableHead>}
@@ -2053,10 +2062,10 @@ export default function SalaryClosingPage() {
                                 </PopoverTrigger>
                                 <PopoverContent className="w-72 max-h-80 overflow-y-auto" side="top">
                                   <div className="text-xs font-semibold mb-2 text-amber-800">
-                                    أيام الإجازة ({emp.offDays})
+                                    الراحات الأسبوعية ({emp.offDays}) — تُحتسب ضمن أيام الصرف
                                   </div>
                                   {emp.offDates.length === 0 ? (
-                                    <p className="text-xs text-gray-500">لا توجد أيام إجازة.</p>
+                                    <p className="text-xs text-gray-500">لا توجد راحات أسبوعية.</p>
                                   ) : (
                                     <div className="grid grid-cols-2 gap-1 text-[11px]">
                                       {emp.offDates.map((d: string) => (
@@ -2066,6 +2075,49 @@ export default function SalaryClosingPage() {
                                   )}
                                 </PopoverContent>
                               </Popover>
+                            </TableCell>
+                          )}
+                          {cols.leaves && (
+                            <TableCell className="text-center">
+                              {(() => {
+                                const breakdown: { type: string; days: number; paid: boolean }[] = emp.leaveBreakdown || [];
+                                const totalLeaveDays = breakdown.reduce((s, b) => s + (b.days || 0), 0);
+                                if (totalLeaveDays === 0) {
+                                  return <span className="text-gray-400 text-xs">-</span>;
+                                }
+                                return (
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <button type="button" data-testid={`btn-leaves-${emp.id}`}>
+                                        <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200 cursor-pointer">{totalLeaveDays}</Badge>
+                                      </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-72 max-h-80 overflow-y-auto" side="top">
+                                      <div className="text-xs font-semibold mb-2 text-blue-800">
+                                        الإجازات المعتمدة بالنوع ({totalLeaveDays})
+                                      </div>
+                                      <div className="space-y-1">
+                                        {breakdown.map((b) => (
+                                          <div key={b.type} className="flex items-center justify-between text-[11px] px-2 py-1 rounded bg-blue-50">
+                                            <span>{LEAVE_TYPE_LABELS[b.type] || b.type}</span>
+                                            <span className="flex items-center gap-2">
+                                              <span className="font-mono">{b.days} يوم</span>
+                                              {b.paid ? (
+                                                <Badge className="bg-green-100 text-green-800 text-[10px]">مدفوعة</Badge>
+                                              ) : (
+                                                <Badge className="bg-red-100 text-red-800 text-[10px]">مخصومة</Badge>
+                                              )}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                      <p className="text-[10px] text-gray-500 mt-2">
+                                        المدفوعة تُحتسب ضمن أيام الصرف؛ الإجازة بدون راتب تُخصم بقيمة اليوم.
+                                      </p>
+                                    </PopoverContent>
+                                  </Popover>
+                                );
+                              })()}
                             </TableCell>
                           )}
                           {cols.hours && <TableCell className="text-center">{emp.totalHours}</TableCell>}

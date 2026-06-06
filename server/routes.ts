@@ -109,6 +109,7 @@ import {
 } from "./pdf-generator";
 import { insertFieldChecklistTemplateSchema, insertFieldChecklistTemplateItemSchema, insertFieldChecklistSchema, insertFieldChecklistItemSchema } from "@shared/schema";
 import { insertReportScheduleSchema } from "@shared/schema";
+import { leaveRequests } from "@shared/schema";
 import { generateReport, REPORT_TYPE_LABELS, type ReportType } from "./report-generator";
 import { executeSchedule, computeNextRun } from "./scheduler";
 import { sendWhatsAppMessage, isTwilioConfigured } from "./twilio-service";
@@ -29035,14 +29036,27 @@ export async function registerRoutes(
     const [y, m] = month.split("-").map(Number);
     const lastDay = new Date(y, m, 0).getDate();
     const monthEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
-    const [employees, attendance, schedules, signedTimesheets, deductions] = await Promise.all([
+    const [employees, attendance, schedules, signedTimesheets, deductions, leaveRequestsData] = await Promise.all([
       storage.getBranchEmployeesByBranch(branchId).catch(() => []),
       storage.getAllAttendanceRecords({ branchId, startDate: monthStart, endDate: monthEnd }).catch(() => []),
       storage.getEmployeeSchedulesByBranchAndDateRange(branchId, monthStart, monthEnd).catch(() => []),
       storage.getFinalizedTimesheetEntriesByBranchAndDateRange(branchId, monthStart, monthEnd).catch(() => []),
       storage.getSalaryDeductionsByBranchAndMonth(branchId, month).catch(() => []),
+      // الإجازات المصرّح بها (المعتمدة) المتقاطعة مع الشهر
+      db
+        .select()
+        .from(leaveRequests)
+        .where(
+          and(
+            eq(leaveRequests.branchId, branchId),
+            eq(leaveRequests.status, "approved"),
+            lte(leaveRequests.startDate, monthEnd),
+            gte(leaveRequests.endDate, monthStart),
+          ),
+        )
+        .catch(() => [] as any[]),
     ]);
-    return { branchId, month, employees, attendance, schedules, signedTimesheets, deductions };
+    return { branchId, month, employees, attendance, schedules, signedTimesheets, deductions, leaveRequests: leaveRequestsData };
   };
 
   const currentUserName = (req: any): string => {
@@ -29078,6 +29092,10 @@ export async function registerRoutes(
           absentDatesMissing: [],
           offDates: l.offDates ?? [],
           manualDeductions: l.manualDeductions ?? [],
+          leaveBreakdown: l.leaveBreakdown ?? [],
+          paidLeaveDays: l.paidLeaveDays ?? 0,
+          unpaidLeaveDays: l.unpaidLeaveDays ?? 0,
+          unpaidDays: l.unpaidDays ?? 0,
         }));
         return res.json({
           lines,
@@ -29208,6 +29226,10 @@ export async function registerRoutes(
         presentDays: l.presentDays,
         absentDays: l.absentDays,
         offDays: l.offDays,
+        paidLeaveDays: l.paidLeaveDays,
+        unpaidLeaveDays: l.unpaidLeaveDays,
+        unpaidDays: l.unpaidDays,
+        leaveBreakdown: l.leaveBreakdown as any,
         scheduledWorkDays: l.scheduledWorkDays,
         scheduledHours: l.scheduledHours,
         lateDays: l.lateDays,

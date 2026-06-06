@@ -5750,6 +5750,10 @@ export const salaryClosureLines = pgTable("salary_closure_lines", {
   presentDays: integer("present_days").default(0).notNull(),
   absentDays: integer("absent_days").default(0).notNull(),
   offDays: integer("off_days").default(0).notNull(),
+  paidLeaveDays: integer("paid_leave_days").default(0).notNull(),
+  unpaidLeaveDays: integer("unpaid_leave_days").default(0).notNull(),
+  unpaidDays: integer("unpaid_days").default(0).notNull(),
+  leaveBreakdown: jsonb("leave_breakdown"), // [{type, days, paid}]
   scheduledWorkDays: integer("scheduled_work_days").default(0).notNull(),
   scheduledHours: real("scheduled_hours").default(0).notNull(),
   lateDays: integer("late_days").default(0).notNull(),
