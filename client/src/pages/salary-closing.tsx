@@ -918,12 +918,33 @@ export default function SalaryClosingPage() {
   // تصدير ملف البنك (نموذج بنك الرياض - نظام مدد) المطابق للتنسيق المعتمد
   const exportBankFile = async (dueDateISO: string) => {
     if (salaryClosingData.length === 0) return;
-    const XLSX = await import("xlsx");
+    const xlsxMod: any = await import("xlsx-js-style");
+    const XLSX: any = xlsxMod.default || xlsxMod;
     // تحويل التاريخ من YYYY-MM-DD إلى DD/MM/YYYY كما في النموذج المعتمد
     const dueDate = dueDateISO
       ? dueDateISO.split("-").reverse().join("/")
       : "";
     const round2 = (n: number) => Math.round((n || 0) * 100) / 100;
+
+    // ===== أنماط الألوان والحدود مطابقة للنموذج المعتمد =====
+    const thin = { style: "thin", color: { rgb: "FF000000" } };
+    const box = { top: thin, bottom: thin, left: thin, right: thin };
+    const GREEN = "FF287A51"; // أخضر داكن لرؤوس الأعمدة
+    const LIGHT = "FFE2EFDA"; // أخضر فاتح لأعمدة مكوّنات الراتب
+    const styGreen = {
+      font: { bold: true, color: { rgb: "FFFFFFFF" }, sz: 11, name: "Calibri" },
+      fill: { patternType: "solid", fgColor: { rgb: GREEN } },
+      border: box,
+      alignment: { horizontal: "center", vertical: "center", wrapText: true },
+    };
+    const styLight = {
+      font: { bold: true, color: { rgb: "FF000000" }, sz: 11, name: "Calibri" },
+      fill: { patternType: "solid", fgColor: { rgb: LIGHT } },
+      border: box,
+      alignment: { horizontal: "center", vertical: "center", wrapText: true },
+    };
+    const styCell = { border: box, alignment: { horizontal: "center", vertical: "center" } };
+    const styText = { border: box, alignment: { horizontal: "center", vertical: "center" }, numFmt: "@" };
 
     // الجزء الأول: ترويسة الشركة (ثابتة) + الجزء الثاني: جدول الموظفين
     const headerLabels = [
@@ -964,10 +985,10 @@ export default function SalaryClosingPage() {
           (emp.manualDeductionsTotal ?? 0),
       );
       return [
-        index + 1,
-        emp.iqamaNumber || emp.employeeNumber || "",
+        String(index + 1).padStart(4, "0"),
+        String(emp.iqamaNumber || emp.employeeNumber || ""),
         emp.employeeName || "",
-        emp.bankAccountNumber || "",
+        String(emp.bankAccountNumber || ""),
         bankNameToSwift(emp.bankName),
         round2(emp.netSalary ?? 0),
         round2(emp.baseSalary ?? 0),
@@ -984,14 +1005,55 @@ export default function SalaryClosingPage() {
 
     const aoa = [headerLabels, headerValues, tableHeaders, ...rows];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+    const NCOLS = 15;
+    const setStyle = (r: number, c: number, s: any) => {
+      const ref = XLSX.utils.encode_cell({ r, c });
+      if (!ws[ref]) ws[ref] = { t: "s", v: "" };
+      ws[ref].s = s;
+    };
+    // صف 0: تسميات ترويسة الشركة (أخضر داكن)
+    for (let c = 0; c < NCOLS; c++) setStyle(0, c, styGreen);
+    // صف 1: قيم الشركة (خلايا محدودة بإطار)
+    for (let c = 0; c < NCOLS; c++) setStyle(1, c, styCell);
+    setStyle(1, 0, styText); // Type كنص
+    setStyle(1, 3, styText); // حساب التمويل كنص
+    // E2 = رقم الفرع كمعادلة LEFT(D2,3) كما في النموذج
+    ws[XLSX.utils.encode_cell({ r: 1, c: 4 })] = {
+      t: "str",
+      f: "LEFT(D2,3)",
+      v: String(headerValues[3] || "").slice(0, 3),
+      s: styText,
+    };
+    // صف 2: رؤوس جدول الموظفين (أخضر داكن، وأخضر فاتح لمكوّنات الراتب G:J)
+    for (let c = 0; c < NCOLS; c++)
+      setStyle(2, c, c >= 6 && c <= 9 ? styLight : styGreen);
+    // صفوف بيانات الموظفين
+    for (let i = 0; i < rows.length; i++) {
+      const r = 3 + i;
+      for (let c = 0; c < NCOLS; c++) {
+        const isTextCol = c === 0 || c === 1 || c === 3 || c === 4; // SN/الهوية/الحساب/رمز البنك
+        setStyle(r, c, isTextCol ? styText : styCell);
+      }
+      // عمود إجمالي المبلغ (F) = الأساسي + السكن + دخل آخر - الخصومات كمعادلة
+      const rn = r + 1;
+      ws[XLSX.utils.encode_cell({ r, c: 5 })] = {
+        t: "n",
+        f: `SUM(G${rn}:I${rn})-J${rn}`,
+        v: Number(rows[i][5]) || 0,
+        s: styCell,
+      };
+    }
+
     ws["!merges"] = [
       { s: { c: 11, r: 0 }, e: { c: 14, r: 0 } },
       { s: { c: 11, r: 1 }, e: { c: 14, r: 1 } },
     ];
     ws["!cols"] = [
-      4.33, 14.17, 21.33, 25.83, 11.33, 14.33, 17.33, 16.67, 9.5, 10.17,
-      11.67, 8.17, 13.17, 36.83, 13.5,
+      5.16, 15, 22.16, 26.66, 12.16, 15.16, 18.16, 17.5, 10.33, 11,
+      8.5, 9, 14, 37.16, 14.33,
     ].map((wch) => ({ wch }));
+    ws["!rows"] = [{ hpt: 32.25 }, { hpt: 19 }, { hpt: 16 }];
 
     // شيت "data" المرجعي (الحالة / العملات / رموز البنوك) - قابل للتعديل في الإكسل
     const maxLen = Math.max(
@@ -1017,7 +1079,8 @@ export default function SalaryClosingPage() {
     const wsData = XLSX.utils.aoa_to_sheet(dataAoa);
 
     const wb = XLSX.utils.book_new();
-    wb.Workbook = { Views: [{ RTL: true }] };
+    // النموذج المعتمد من اليسار لليمين (LTR) وليس RTL
+    wb.Workbook = { Views: [{ RTL: false }] };
     XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
     XLSX.utils.book_append_sheet(wb, wsData, "data");
     XLSX.writeFile(wb, `ملف_البنك_${getBranchName(branch)}_${month}.xlsx`);
