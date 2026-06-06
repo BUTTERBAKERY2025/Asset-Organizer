@@ -56,9 +56,11 @@ import {
   ArrowUpDown,
   SlidersHorizontal,
   ShieldAlert,
+  History,
 } from "lucide-react";
 import type { BranchEmployee, AttendanceRecord, SalaryDeduction } from "@shared/schema";
 import { SALARY_DEDUCTION_TYPE_LABELS } from "@shared/schema";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 // =====================================================
 // مكوّن نافذة إدارة السُلف والخصومات اليدوية للموظف
@@ -357,6 +359,30 @@ const TOGGLEABLE_COLUMNS: { key: string; label: string }[] = [
   { key: "insurance", label: "التأمينات" },
 ];
 
+// =====================================================
+// حفظ تفضيلات الفلاتر والأعمدة في متصفح المستخدم
+// =====================================================
+const LS_PREFIX = "salaryClosing.";
+function loadLS<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(LS_PREFIX + key);
+    return raw != null ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function usePersistedState<T>(key: string, initial: T) {
+  const [state, setState] = useState<T>(() => loadLS(key, initial));
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_PREFIX + key, JSON.stringify(state));
+    } catch {
+      /* تجاهل أخطاء التخزين */
+    }
+  }, [key, state]);
+  return [state, setState] as const;
+}
+
 export default function SalaryClosingPage() {
   const { i18n } = useTranslation();
   const isRTL = i18n.language === "ar";
@@ -387,19 +413,20 @@ export default function SalaryClosingPage() {
   const [reopenReason, setReopenReason] = useState("");
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [groupSel, setGroupSel] = useState<Record<string, string>>({});
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
 
-  // حالة البحث والفلترة المتقدمة (تؤثر على الجدول فقط)
+  // حالة البحث والفلترة المتقدمة (تؤثر على الجدول فقط) — محفوظة في المتصفح
   const [search, setSearch] = useState("");
-  const [jobTitleFilter, setJobTitleFilter] = useState("all");
-  const [nationalityFilter, setNationalityFilter] = useState("all");
-  const [dataSourceFilter, setDataSourceFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [netMin, setNetMin] = useState("");
-  const [netMax, setNetMax] = useState("");
-  const [sortField, setSortField] = useState("employeeName");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
-  const [showFilters, setShowFilters] = useState(true);
-  const [cols, setCols] = useState<Record<string, boolean>>({
+  const [jobTitleFilter, setJobTitleFilter] = usePersistedState("jobTitleFilter", "all");
+  const [nationalityFilter, setNationalityFilter] = usePersistedState("nationalityFilter", "all");
+  const [dataSourceFilter, setDataSourceFilter] = usePersistedState("dataSourceFilter", "all");
+  const [statusFilter, setStatusFilter] = usePersistedState("statusFilter", "all");
+  const [netMin, setNetMin] = usePersistedState("netMin", "");
+  const [netMax, setNetMax] = usePersistedState("netMax", "");
+  const [sortField, setSortField] = usePersistedState("sortField", "employeeName");
+  const [sortOrder, setSortOrder] = usePersistedState<"asc" | "desc">("sortOrder", "asc");
+  const [showFilters, setShowFilters] = usePersistedState("showFilters", true);
+  const [cols, setCols] = usePersistedState<Record<string, boolean>>("cols", {
     jobTitle: true,
     bank: true,
     workDays: true,
@@ -483,6 +510,19 @@ export default function SalaryClosingPage() {
     return map;
   }, [savedClosureQuery.data]);
   const savedClosureId = savedClosureQuery.data?.closure?.id ?? null;
+
+  // سجل الإغلاقات السابقة عبر كل الفروع/الأشهر المسموح بها
+  const closuresHistoryQuery = useQuery<any[]>({
+    queryKey: ["/api/salary-closing/list"],
+    queryFn: async () => {
+      const res = await fetch(`/api/salary-closing/list`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch salary closures history");
+      return res.json();
+    },
+    enabled: showHistoryDialog,
+    staleTime: 30_000,
+  });
+  const closuresHistory = closuresHistoryQuery.data ?? [];
 
   const salaryClosingData: any[] = salaryClosingPreview?.lines ?? [];
   const salaryClosingUnlinkedRecords: AttendanceRecord[] = salaryClosingPreview?.unlinked ?? [];
@@ -918,6 +958,14 @@ export default function SalaryClosingPage() {
                     إعادة فتح
                   </Button>
                 )}
+                <Button
+                  variant="outline"
+                  onClick={() => setShowHistoryDialog(true)}
+                  data-testid="button-closures-history"
+                >
+                  <History className="w-4 h-4 ml-2" />
+                  سجل الإغلاقات
+                </Button>
               </div>
             </div>
           </CardContent>
@@ -1021,7 +1069,7 @@ export default function SalaryClosingPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
+                <div className="grid grid-cols-2 md:grid-cols-7 gap-3 mb-4">
                   <div className="text-center p-3 bg-blue-50 rounded-lg" data-testid="card-employee-count">
                     <p className="text-2xl font-bold text-blue-600">{salaryClosingData.length}</p>
                     <p className="text-sm text-gray-600">عدد الموظفين</p>
@@ -1031,6 +1079,12 @@ export default function SalaryClosingPage() {
                       {formatCurrency(salaryClosingData.reduce((sum, e) => sum + e.grossSalary, 0))}
                     </p>
                     <p className="text-sm text-gray-600">إجمالي الرواتب</p>
+                  </div>
+                  <div className="text-center p-3 bg-teal-50 rounded-lg" data-testid="card-allowances">
+                    <p className="text-2xl font-bold text-teal-600">
+                      {formatCurrency(salaryClosingData.reduce((sum, e) => sum + e.allowances, 0))}
+                    </p>
+                    <p className="text-sm text-gray-600">إجمالي البدلات</p>
                   </div>
                   <div className="text-center p-3 bg-orange-50 rounded-lg" data-testid="card-absence-deduction" title="إجمالي خصومات الغياب: عدد أيام الغياب × (الراتب الإجمالي ÷ 30)">
                     <p className="text-2xl font-bold text-orange-600">
@@ -1774,21 +1828,20 @@ export default function SalaryClosingPage() {
                         )}
                       </div>
                     </div>
-                    <Select
+                    <SearchableSelect
                       value={sel}
                       onValueChange={(v) => setGroupSel((prev) => ({ ...prev, [g.key]: v }))}
-                    >
-                      <SelectTrigger className="w-56" data-testid={`select-link-employee-${g.key}`}>
-                        <SelectValue placeholder="اختر الموظف" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(salaryClosingBundle?.employees ?? []).map((emp: any) => (
-                          <SelectItem key={emp.id} value={String(emp.id)}>
-                            {emp.employeeName || emp.name}{emp.employeeNumber ? ` (${emp.employeeNumber})` : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      className="w-56"
+                      triggerClassName="h-9"
+                      placeholder="اختر الموظف"
+                      searchPlaceholder="ابحث بالاسم أو الرقم..."
+                      dataTestid={`select-link-employee-${g.key}`}
+                      options={(salaryClosingBundle?.employees ?? []).map((emp: any) => ({
+                        value: String(emp.id),
+                        label: emp.employeeName || emp.name,
+                        sublabel: emp.employeeNumber ? `(${emp.employeeNumber})` : undefined,
+                      }))}
+                    />
                     <Button
                       size="sm"
                       disabled={bulkLinkMutation.isPending || !sel}
@@ -1808,6 +1861,83 @@ export default function SalaryClosingPage() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowLinkDialog(false)} data-testid="button-close-link-dialog">
+                إغلاق
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* سجل الإغلاقات السابقة */}
+        <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
+          <DialogContent className="max-w-4xl" data-testid="dialog-closures-history">
+            <DialogHeader>
+              <DialogTitle>سجل الإغلاقات السابقة</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 text-sm max-h-[65vh] overflow-y-auto">
+              {closuresHistoryQuery.isLoading && (
+                <div className="flex items-center justify-center py-8 text-gray-500">
+                  <Loader2 className="w-5 h-5 animate-spin ml-2" />
+                  جاري التحميل...
+                </div>
+              )}
+              {!closuresHistoryQuery.isLoading && closuresHistory.length === 0 && (
+                <p className="text-center text-gray-500 py-8">لا توجد إغلاقات محفوظة بعد.</p>
+              )}
+              {!closuresHistoryQuery.isLoading && closuresHistory.length > 0 && (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-center">الفرع</TableHead>
+                      <TableHead className="text-center">الشهر</TableHead>
+                      <TableHead className="text-center">الحالة</TableHead>
+                      <TableHead className="text-center">الموظفون</TableHead>
+                      <TableHead className="text-center">صافي الرواتب</TableHead>
+                      <TableHead className="text-center">اعتمد الإغلاق</TableHead>
+                      <TableHead className="text-center">إجراء</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {closuresHistory.map((c: any) => (
+                      <TableRow key={c.id} data-testid={`row-closure-${c.id}`}>
+                        <TableCell className="text-center">{getBranchName(c.branchId)}</TableCell>
+                        <TableCell className="text-center">{c.month}</TableCell>
+                        <TableCell className="text-center">
+                          {c.status === "reopened" ? (
+                            <Badge variant="outline" className="text-amber-700 border-amber-300">معاد فتحه</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-emerald-700 border-emerald-300">مغلق</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">{formatNumber(c.employeeCount ?? 0)}</TableCell>
+                        <TableCell className="text-center">{formatCurrency(c.totalNet ?? 0, isRTL)}</TableCell>
+                        <TableCell className="text-center text-xs">
+                          {c.closedByName || "—"}
+                          {c.closedAt ? (
+                            <div className="text-gray-500">{new Date(c.closedAt).toLocaleDateString("ar-SA")}</div>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setBranch(c.branchId);
+                              setMonth(c.month);
+                              setShowHistoryDialog(false);
+                            }}
+                            data-testid={`button-open-closure-${c.id}`}
+                          >
+                            عرض
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowHistoryDialog(false)} data-testid="button-close-history-dialog">
                 إغلاق
               </Button>
             </DialogFooter>
