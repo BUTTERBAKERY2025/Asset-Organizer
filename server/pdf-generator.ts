@@ -14,7 +14,13 @@ import {
 
 export interface SalaryClosingEmployee {
   employeeName: string;
+  employeeNumber?: string | null;
+  nationality?: string | null;
+  iqamaNumber?: string | null;
   jobTitle: string;
+  scheduledHours?: number;
+  lateDays?: number;
+  grossSalary?: number;
   bankName?: string;
   bankAccountNumber?: string;
   manualDeductions?: Array<{ type: string; amount: number; description?: string | null }>;
@@ -97,16 +103,22 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
     return `
     <tr style="${rowBg}">
       <td style="text-align: center;">${index + 1}</td>
+      <td style="text-align: center; font-size:8px;">${emp.employeeNumber || '-'}</td>
       <td style="text-align: right;">${emp.employeeName} ${dataSourceBadge(emp.dataSource)}</td>
+      <td style="text-align: center; font-size:8px;">${emp.nationality || '-'}</td>
+      <td style="text-align: center; font-family:monospace; font-size:8px; direction:ltr;">${emp.iqamaNumber || '-'}</td>
       <td style="text-align: right;">${emp.jobTitle}</td>
       <td style="text-align: right; font-size:8px; max-width:120px; word-break:break-all;">${bankCell}</td>
       <td style="text-align: center; background:#eff6ff;">${emp.scheduledWorkDays ?? '-'}</td>
       <td style="text-align: center; background:#ecfdf5;">${emp.presentDays}</td>
       <td style="text-align: center; background:#fef2f2;">${emp.absentDays}</td>
       <td style="text-align: center; background:#fffbeb;">${emp.offDays ?? '-'}</td>
+      <td style="text-align: center; color:#9a3412; font-size:8px;">${emp.lateDays ?? '-'}</td>
+      <td style="text-align: center;">${emp.scheduledHours ?? '-'}</td>
       <td style="text-align: center;">${emp.totalHours}</td>
       <td style="text-align: center;">${formatNumber(emp.baseSalary)}</td>
       <td style="text-align: center;">${formatNumber(emp.allowances)}</td>
+      <td style="text-align: center; font-weight:600;">${formatNumber(emp.grossSalary ?? (emp.baseSalary + emp.allowances))}</td>
       <td style="text-align: center; color:#6b7280; font-size:8px;">${formatNumber(Math.round(dailyRate * 100) / 100)}</td>
       <td style="text-align: center; color: ${absenceDeduction > 0 ? 'red' : 'inherit'};">${absenceDeduction > 0 ? '- ' + formatNumber(absenceDeduction) : '-'}</td>
       <td style="text-align: center; color: ${emp.socialInsurance > 0 ? 'red' : 'inherit'};">${emp.socialInsurance > 0 ? '- ' + formatNumber(emp.socialInsurance) : '-'}</td>
@@ -216,16 +228,22 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
     <thead>
       <tr>
         <th>م</th>
+        <th>الرقم الوظيفي</th>
         <th>الموظف</th>
+        <th>الجنسية</th>
+        <th>رقم الهوية/الإقامة</th>
         <th>الوظيفة</th>
         <th>البنك / الآيبان</th>
         <th>أيام العمل المجدولة</th>
         <th>الحضور</th>
         <th>الغياب</th>
         <th>الإجازات</th>
+        <th>التأخير</th>
+        <th>ساعات الجدول</th>
         <th>الساعات</th>
         <th>الراتب</th>
         <th>البدلات</th>
+        <th>الإجمالي</th>
         <th>قيمة اليوم</th>
         <th>خصم الغياب</th>
         <th>التأمينات</th>

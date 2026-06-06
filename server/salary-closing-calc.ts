@@ -22,6 +22,7 @@ export interface SalaryClosingLine {
   employeeName: string;
   jobTitle: string;
   nationality: string;
+  iqamaNumber: string | null;
   bankName: string;
   bankAccountNumber: string;
   presentDays: number;
@@ -409,6 +410,7 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
       employeeName: emp.employeeName,
       jobTitle: emp.jobTitle,
       nationality: emp.nationality,
+      iqamaNumber: emp.iqamaNumber ?? null,
       bankName: emp.bankName || "",
       bankAccountNumber: emp.bankAccountNumber || "",
       presentDays,
