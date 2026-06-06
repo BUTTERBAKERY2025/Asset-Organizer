@@ -3738,6 +3738,7 @@ export async function generateSingleTimesheetPdf(data: SingleTimesheetPdfData): 
     'غائب': { bg: '#fee2e2', text: '#991b1b' },
     'إجازة': { bg: '#dbeafe', text: '#1e40af' },
     'معلق': { bg: '#f3f4f6', text: '#374151' },
+    'بدون جدول': { bg: '#f1f5f9', text: '#64748b' },
   };
 
   const reportStatusLabel = (() => {

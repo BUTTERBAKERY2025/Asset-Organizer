@@ -21,6 +21,7 @@ import {
   Calendar, FileText, Pen, Download, Loader2, CheckCircle, Clock,
   AlertCircle, User, Check, XCircle, LayoutDashboard, Users,
   Sparkles, Eye, FilePlus2, AlertTriangle, FileDown, Wand2, Lock, History, RefreshCw,
+  Wallet, TrendingDown, Activity, CalendarOff, MinusCircle,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import SignatureCanvas from "react-signature-canvas";
@@ -114,10 +115,28 @@ interface TimesheetEntry {
   branchName?: string | null;
 }
 
+interface FinancialImpact {
+  hasSalaryData: boolean;
+  message?: string;
+  currency?: string;
+  grossSalary?: number;
+  dailyRate?: number;
+  hourlyRate?: number;
+  absentDays?: number;
+  lateMinutes?: number;
+  overtimeMinutes?: number;
+  absenceDeduction?: number;
+  enforcedDeductionTotal?: number;
+  lateValueEstimate?: number;
+  overtimeValueEstimate?: number;
+}
+
 export default function TimesheetPage() {
   const { t, i18n } = useTranslation("hr");
   const isRTL = i18n.language === "ar";
   const dateLocale = isRTL ? ar : enUS;
+  const fmtMoney = (n?: number | null) =>
+    (Number(n) || 0).toLocaleString(isRTL ? "ar-SA" : "en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
   const DAY_LABELS: Record<string, string> = {
     sat: t("timesheet.days.sat"),
@@ -135,6 +154,7 @@ export default function TimesheetPage() {
     absent: { label: t("timesheet.statusLabels.absent"), color: "bg-red-100 text-red-700", icon: <XCircle className="w-3 h-3" /> },
     late: { label: t("timesheet.statusLabels.late"), color: "bg-amber-100 text-amber-700", icon: <AlertCircle className="w-3 h-3" /> },
     day_off: { label: t("timesheet.statusLabels.dayOff"), color: "bg-blue-100 text-blue-700", icon: <Calendar className="w-3 h-3" /> },
+    no_schedule: { label: t("timesheet.statusLabels.noSchedule"), color: "bg-slate-100 text-slate-500", icon: <MinusCircle className="w-3 h-3" /> },
   };
 
   const TIMESHEET_STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -245,6 +265,21 @@ export default function TimesheetPage() {
     enabled: !!selectedReport,
   });
 
+  // ====== Financial impact (reuses payroll closing rules, server-computed) ======
+  const { data: financialImpact, isLoading: financialLoading } = useQuery<FinancialImpact>({
+    queryKey: ["/api/timesheet-reports", selectedReport?.id, "financial-impact"],
+    queryFn: async () => {
+      if (!selectedReport) return { hasSalaryData: false };
+      const res = await fetch(`/api/timesheet-reports/${selectedReport.id}/financial-impact`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `HTTP ${res.status}`);
+      }
+      return res.json();
+    },
+    enabled: !!selectedReport,
+  });
+
   // ====== Month boundaries (for dashboard filter & bulk generation) ======
   const monthBounds = useMemo(() => {
     const [y, m] = selectedMonth.split("-").map(Number);
@@ -313,6 +348,30 @@ export default function TimesheetPage() {
     items.sort((a, b) => a.date.localeCompare(b.date));
     return { items, lateCount, absentCount, totalLate, totalOvertime };
   }, [reportEntries, selectedReport, t]);
+
+  // ====== Pattern analysis computed from reportEntries ======
+  const patterns = useMemo(() => {
+    let longestAbsenceStreak = 0;
+    let currentStreak = 0;
+    let lateDaysCount = 0;
+    let missingCheckoutCount = 0;
+    let noScheduleCount = 0;
+    const sorted = [...reportEntries].sort((a, b) => a.date.localeCompare(b.date));
+    for (const e of sorted) {
+      if (e.status === "absent" && !e.isOff) {
+        currentStreak++;
+        if (currentStreak > longestAbsenceStreak) longestAbsenceStreak = currentStreak;
+      } else {
+        currentStreak = 0;
+      }
+      if (e.status === "late") lateDaysCount++;
+      if ((e.status === "present" || e.status === "late") && e.actualStartTime && !e.actualEndTime) {
+        missingCheckoutCount++;
+      }
+      if (e.status === "no_schedule") noScheduleCount++;
+    }
+    return { longestAbsenceStreak, lateDaysCount, missingCheckoutCount, noScheduleCount };
+  }, [reportEntries]);
 
   // ====== KPIs ======
   const kpis = useMemo(() => {
@@ -725,10 +784,37 @@ export default function TimesheetPage() {
         }));
     const wsExc = XLSX.utils.json_to_sheet(excData);
 
+    // Sheet 4: Financial impact + patterns
+    const cur = t("timesheet.financial.currencyShort");
+    const analysisRows: (string | number)[][] = [
+      [t("timesheet.financial.title")],
+    ];
+    if (financialImpact?.hasSalaryData) {
+      analysisRows.push(
+        [t("timesheet.financial.grossSalary"), `${fmtMoney(financialImpact.grossSalary)} ${cur}`],
+        [t("timesheet.financial.dailyRate"), `${fmtMoney(financialImpact.dailyRate)} ${cur}`],
+        [t("timesheet.financial.hourlyRate"), `${fmtMoney(financialImpact.hourlyRate)} ${cur}`],
+        [t("timesheet.financial.enforcedTotal"), `${fmtMoney(financialImpact.enforcedDeductionTotal)} ${cur}`],
+        [t("timesheet.financial.lateValue"), `${fmtMoney(financialImpact.lateValueEstimate)} ${cur}`],
+        [t("timesheet.financial.overtimeValue"), `${fmtMoney(financialImpact.overtimeValueEstimate)} ${cur}`],
+      );
+    } else {
+      analysisRows.push([t("timesheet.financial.noData")]);
+    }
+    analysisRows.push([], [t("timesheet.patterns.title")]);
+    analysisRows.push(
+      [t("timesheet.patterns.longestAbsenceStreak"), patterns.longestAbsenceStreak],
+      [t("timesheet.patterns.lateDaysCount"), patterns.lateDaysCount],
+      [t("timesheet.patterns.missingCheckout"), patterns.missingCheckoutCount],
+      [t("timesheet.patterns.noScheduleDays"), patterns.noScheduleCount],
+    );
+    const wsAnalysis = XLSX.utils.aoa_to_sheet(analysisRows);
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, wsSummary, t("timesheet.reportDetails"));
     XLSX.utils.book_append_sheet(wb, wsDaily, t("timesheet.dailyDetails"));
     XLSX.utils.book_append_sheet(wb, wsExc, t("timesheet.exceptions.title"));
+    XLSX.utils.book_append_sheet(wb, wsAnalysis, t("timesheet.financial.title"));
     XLSX.writeFile(wb, `timesheet_${employeeName}_${selectedReport.startDate}_${selectedReport.endDate}.xlsx`);
   };
 
@@ -803,6 +889,25 @@ export default function TimesheetPage() {
             <div class="summary-item"><div class="summary-value">${selectedReport.totalPresentDays}</div><div>أيام الحضور</div></div>
             <div class="summary-item"><div class="summary-value">${selectedReport.totalAbsentDays}</div><div>أيام الغياب</div></div>
             <div class="summary-item"><div class="summary-value">${selectedReport.totalActualHours?.toFixed(1) || 0}</div><div>إجمالي ساعات العمل</div></div>
+          </div>
+        </div>
+        ${financialImpact?.hasSalaryData ? `
+        <div class="summary" style="background:#f5f3ff;">
+          <h3 style="margin:0 0 10px;color:#6d28d9;">${t("timesheet.financial.title")}</h3>
+          <div class="summary-grid">
+            <div class="summary-item"><div class="summary-value" style="color:#6d28d9;">${fmtMoney(financialImpact.dailyRate)}</div><div>${t("timesheet.financial.dailyRate")}</div></div>
+            <div class="summary-item"><div class="summary-value" style="color:#dc2626;">${fmtMoney(financialImpact.enforcedDeductionTotal)}</div><div>${t("timesheet.financial.enforcedTotal")}</div></div>
+            <div class="summary-item"><div class="summary-value" style="color:#d97706;">${fmtMoney(financialImpact.lateValueEstimate)}</div><div>${t("timesheet.financial.lateValue")}</div></div>
+            <div class="summary-item"><div class="summary-value" style="color:#059669;">${fmtMoney(financialImpact.overtimeValueEstimate)}</div><div>${t("timesheet.financial.overtimeValue")}</div></div>
+          </div>
+        </div>` : ''}
+        <div class="summary" style="background:#fff7ed;">
+          <h3 style="margin:0 0 10px;color:#c2410c;">${t("timesheet.patterns.title")}</h3>
+          <div class="summary-grid">
+            <div class="summary-item"><div class="summary-value" style="color:#b91c1c;">${patterns.longestAbsenceStreak}</div><div>${t("timesheet.patterns.longestAbsenceStreak")}</div></div>
+            <div class="summary-item"><div class="summary-value" style="color:#b45309;">${patterns.lateDaysCount}</div><div>${t("timesheet.patterns.lateDaysCount")}</div></div>
+            <div class="summary-item"><div class="summary-value" style="color:#ea580c;">${patterns.missingCheckoutCount}</div><div>${t("timesheet.patterns.missingCheckout")}</div></div>
+            <div class="summary-item"><div class="summary-value" style="color:#475569;">${patterns.noScheduleCount}</div><div>${t("timesheet.patterns.noScheduleDays")}</div></div>
           </div>
         </div>
         <table>
@@ -1223,6 +1328,123 @@ export default function TimesheetPage() {
                     <KpiCard label={t("timesheet.totalWorkHours")} value={Number(selectedReport.totalActualHours?.toFixed(1) ?? 0)} icon={Clock} tone="production" data-testid="kpi-actual-hours" />
                   </div>
 
+                  {/* ====== Financial Impact Card ====== */}
+                  <Card className="mb-6 border-violet-200 bg-violet-50/40" data-testid="card-financial-impact">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center gap-2">
+                        <Wallet className="w-5 h-5 text-violet-600" />
+                        <CardTitle className="text-base">{t("timesheet.financial.title")}</CardTitle>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {financialLoading ? (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>{t("common.loading", { defaultValue: "..." })}</span>
+                        </div>
+                      ) : !financialImpact?.hasSalaryData ? (
+                        <div className="flex items-start gap-2 text-sm text-muted-foreground" data-testid="text-financial-nodata">
+                          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                          <span>{t("timesheet.financial.noData")}</span>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-xs text-muted-foreground mb-3">{t("timesheet.financial.note")}</p>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+                            <div className="rounded-lg bg-white/70 border border-violet-100 p-3" data-testid="fin-gross-salary">
+                              <div className="text-xs text-muted-foreground">{t("timesheet.financial.grossSalary")}</div>
+                              <div className="text-lg font-bold text-violet-900">{fmtMoney(financialImpact.grossSalary)} <span className="text-xs font-normal">{t("timesheet.financial.currencyShort")}</span></div>
+                            </div>
+                            <div className="rounded-lg bg-white/70 border border-violet-100 p-3" data-testid="fin-daily-rate">
+                              <div className="text-xs text-muted-foreground">{t("timesheet.financial.dailyRate")}</div>
+                              <div className="text-lg font-bold text-violet-900">{fmtMoney(financialImpact.dailyRate)} <span className="text-xs font-normal">{t("timesheet.financial.currencyShort")}</span></div>
+                            </div>
+                            <div className="rounded-lg bg-white/70 border border-violet-100 p-3" data-testid="fin-hourly-rate">
+                              <div className="text-xs text-muted-foreground">{t("timesheet.financial.hourlyRate")}</div>
+                              <div className="text-lg font-bold text-violet-900">{fmtMoney(financialImpact.hourlyRate)} <span className="text-xs font-normal">{t("timesheet.financial.currencyShort")}</span></div>
+                            </div>
+                          </div>
+                          <div className="rounded-lg bg-red-50 border border-red-200 p-3 mb-4 flex items-center justify-between flex-wrap gap-2" data-testid="fin-enforced-deduction">
+                            <div className="flex items-center gap-2">
+                              <TrendingDown className="w-5 h-5 text-red-600" />
+                              <span className="text-sm font-medium text-red-800">{t("timesheet.financial.enforcedTotal")} ({financialImpact.absentDays || 0} {t("timesheet.patterns.daysUnit")})</span>
+                            </div>
+                            <span className="text-xl font-extrabold text-red-700">-{fmtMoney(financialImpact.enforcedDeductionTotal)} {t("timesheet.financial.currencyShort")}</span>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="rounded-lg bg-white/70 border border-amber-100 p-3 flex items-center justify-between" data-testid="fin-late-value">
+                              <span className="text-xs text-muted-foreground">{t("timesheet.financial.lateValue")}</span>
+                              <span className="text-sm font-semibold text-amber-700">{fmtMoney(financialImpact.lateValueEstimate)} {t("timesheet.financial.currencyShort")}</span>
+                            </div>
+                            <div className="rounded-lg bg-white/70 border border-emerald-100 p-3 flex items-center justify-between" data-testid="fin-overtime-value">
+                              <span className="text-xs text-muted-foreground">{t("timesheet.financial.overtimeValue")}</span>
+                              <span className="text-sm font-semibold text-emerald-700">{fmtMoney(financialImpact.overtimeValueEstimate)} {t("timesheet.financial.currencyShort")}</span>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-3 flex items-start gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                            <span>{t("timesheet.financial.informationalNote")}</span>
+                          </p>
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* ====== Pattern Analysis Panel ====== */}
+                  {(() => {
+                    const warnings: { key: string; text: string }[] = [];
+                    if (patterns.longestAbsenceStreak >= 2) warnings.push({ key: "absStreak", text: t("timesheet.patterns.consecutiveAbsenceWarning", { count: patterns.longestAbsenceStreak }) });
+                    if (patterns.lateDaysCount >= 3) warnings.push({ key: "late", text: t("timesheet.patterns.frequentLateWarning", { count: patterns.lateDaysCount }) });
+                    if (patterns.missingCheckoutCount > 0) warnings.push({ key: "checkout", text: t("timesheet.patterns.missingCheckoutWarning", { count: patterns.missingCheckoutCount }) });
+                    if (patterns.noScheduleCount > 0) warnings.push({ key: "noSched", text: t("timesheet.patterns.noScheduleWarning", { count: patterns.noScheduleCount }) });
+                    const clean = warnings.length === 0;
+                    return (
+                      <Card className={`mb-6 ${clean ? 'border-emerald-200 bg-emerald-50/40' : 'border-orange-200 bg-orange-50/40'}`} data-testid="card-patterns">
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center gap-2">
+                            <Activity className={`w-5 h-5 ${clean ? 'text-emerald-600' : 'text-orange-600'}`} />
+                            <CardTitle className="text-base">{t("timesheet.patterns.title")}</CardTitle>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                            <div className="rounded-lg bg-white/70 border p-3 text-center" data-testid="pattern-abs-streak">
+                              <div className="text-2xl font-bold text-red-700">{patterns.longestAbsenceStreak}</div>
+                              <div className="text-xs text-muted-foreground">{t("timesheet.patterns.longestAbsenceStreak")}</div>
+                            </div>
+                            <div className="rounded-lg bg-white/70 border p-3 text-center" data-testid="pattern-late-days">
+                              <div className="text-2xl font-bold text-amber-700">{patterns.lateDaysCount}</div>
+                              <div className="text-xs text-muted-foreground">{t("timesheet.patterns.lateDaysCount")}</div>
+                            </div>
+                            <div className="rounded-lg bg-white/70 border p-3 text-center" data-testid="pattern-missing-checkout">
+                              <div className="text-2xl font-bold text-orange-700">{patterns.missingCheckoutCount}</div>
+                              <div className="text-xs text-muted-foreground">{t("timesheet.patterns.missingCheckout")}</div>
+                            </div>
+                            <div className="rounded-lg bg-white/70 border p-3 text-center" data-testid="pattern-no-schedule">
+                              <div className="text-2xl font-bold text-slate-600">{patterns.noScheduleCount}</div>
+                              <div className="text-xs text-muted-foreground">{t("timesheet.patterns.noScheduleDays")}</div>
+                            </div>
+                          </div>
+                          {clean ? (
+                            <div className="flex items-center gap-2 text-sm text-emerald-700" data-testid="pattern-all-good">
+                              <CheckCircle className="w-4 h-4" />
+                              <span>{t("timesheet.patterns.allGood")}</span>
+                            </div>
+                          ) : (
+                            <ul className="space-y-2">
+                              {warnings.map(w => (
+                                <li key={w.key} className="flex items-start gap-2 text-sm text-orange-800" data-testid={`pattern-warning-${w.key}`}>
+                                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-orange-600" />
+                                  <span>{w.text}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })()}
+
                   {/* ====== Exceptions Panel (Phase 2) ====== */}
                   <Card className={`mb-6 ${exceptions.items.length === 0 ? 'border-emerald-200 bg-emerald-50/40' : 'border-amber-200 bg-amber-50/40'}`}>
                     <CardHeader className="pb-3">
@@ -1391,10 +1613,16 @@ export default function TimesheetPage() {
                                 {STATUS_LABELS[entry.status]?.label || entry.status}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-center">{entry.scheduledStartTime ?? "--"}</TableCell>
-                            <TableCell className="text-center">{entry.scheduledEndTime ?? "--"}</TableCell>
-                            <TableCell className="text-center">{entry.actualStartTime ?? "--"}</TableCell>
-                            <TableCell className="text-center">{entry.actualEndTime ?? "--"}</TableCell>
+                            <TableCell className="text-center">{entry.scheduledStartTime ?? "—"}</TableCell>
+                            <TableCell className="text-center">{entry.scheduledEndTime ?? "—"}</TableCell>
+                            <TableCell className="text-center">{entry.actualStartTime ?? "—"}</TableCell>
+                            <TableCell className="text-center">
+                              {entry.actualEndTime ? entry.actualEndTime : (entry.actualStartTime && (entry.status === "present" || entry.status === "late")) ? (
+                                <span className="inline-flex items-center gap-1 text-orange-600" title={t("timesheet.patterns.missingCheckout")} data-testid={`missing-checkout-${entry.id}`}>
+                                  <AlertTriangle className="w-3.5 h-3.5" />—
+                                </span>
+                              ) : "—"}
+                            </TableCell>
                             <TableCell className="text-center">{entry.actualHours != null ? entry.actualHours.toFixed(1) : "--"}</TableCell>
                             <TableCell className="text-center">
                               {entry.lateMinutes != null && entry.lateMinutes > 0 ? (
@@ -1410,6 +1638,17 @@ export default function TimesheetPage() {
                         ))}
                       </TableBody>
                     </Table>
+                  </div>
+
+                  {/* ====== Status Legend ====== */}
+                  <div className="mt-4 flex flex-wrap items-center gap-3 text-xs" data-testid="status-legend">
+                    <span className="font-medium text-muted-foreground">{t("timesheet.legendTitle")}:</span>
+                    {(["present", "late", "absent", "day_off", "no_schedule"] as const).map(s => (
+                      <Badge key={s} className={`${STATUS_LABELS[s]?.color || "bg-gray-100"} gap-1`}>
+                        {STATUS_LABELS[s]?.icon}
+                        {STATUS_LABELS[s]?.label}
+                      </Badge>
+                    ))}
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-6">

@@ -27406,6 +27406,79 @@ export async function registerRoutes(
     }
   });
 
+  // الأثر المالي للتقرير — يعيد استخدام نفس قواعد إغلاق الرواتب (لا اختراع أرقام)
+  // dailyRate = الراتب الإجمالي ÷ 30 ، خصم الغياب = أيام الغياب × dailyRate
+  app.get("/api/timesheet-reports/:id/financial-impact", isAuthenticated, requirePermission("timesheet", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+
+      const report = await storage.getTimesheetReport(id);
+      if (!report) return res.status(404).json({ error: "التقرير غير موجود" });
+
+      if (!isUserAdmin(req) && report.branchId) {
+        const hasAccess = await canAccessBranch(req, report.branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا التقرير" });
+      }
+
+      const round2 = (n: number) => Math.round(n * 100) / 100;
+
+      // جلب بيانات الموظف المالية من branch_employees
+      const branchEmp = report.branchEmployeeId != null
+        ? await storage.getBranchEmployee(report.branchEmployeeId)
+        : undefined;
+
+      if (!branchEmp) {
+        return res.json({
+          hasSalaryData: false,
+          message: "بيانات الراتب غير مرتبطة بهذا الموظف — لا يمكن حساب الأثر المالي تلقائياً.",
+        });
+      }
+
+      const baseSalary = branchEmp.salary || 0;
+      const housingAllowance = branchEmp.housingAllowance || 0;
+      const grossSalary =
+        baseSalary +
+        housingAllowance +
+        (branchEmp.transportAllowance || 0) +
+        (branchEmp.foodAllowance || 0) +
+        (branchEmp.otherAllowances || 0);
+
+      const dailyRate = round2(grossSalary / 30);
+      const hourlyRate = round2(dailyRate / 8);
+
+      const absentDays = report.totalAbsentDays || 0;
+      const lateMinutes = report.totalLateMinutes || 0;
+      const overtimeMinutes = report.totalOvertimeMinutes || 0;
+
+      // خصم الغياب: قاعدة مطبّقة فعلياً (مطابقة لإغلاق الرواتب)
+      const absenceDeduction = round2(absentDays * dailyRate);
+      // قيمة تقديرية للتأخير/الإضافي (غير مطبّقة آلياً — للاسترشاد عند اتخاذ القرار)
+      const lateValueEstimate = round2((lateMinutes / 60) * hourlyRate);
+      const overtimeValueEstimate = round2((overtimeMinutes / 60) * hourlyRate);
+
+      res.json({
+        hasSalaryData: true,
+        currency: "SAR",
+        grossSalary: round2(grossSalary),
+        dailyRate,
+        hourlyRate,
+        absentDays,
+        lateMinutes,
+        overtimeMinutes,
+        // الخصم المطبّق فعلياً على الراتب
+        absenceDeduction,
+        enforcedDeductionTotal: absenceDeduction,
+        // قيم استرشادية فقط (لا تُخصم آلياً) — تساعد المدير في قرار الخصم/الحافز
+        lateValueEstimate,
+        overtimeValueEstimate,
+      });
+    } catch (error) {
+      console.error("Error computing timesheet financial impact:", error);
+      res.status(500).json({ error: "فشل في حساب الأثر المالي" });
+    }
+  });
+
   // Generate timesheet report for an employee
   app.post("/api/timesheet-reports/generate", isAuthenticated, requirePermission("timesheet", "create"), async (req, res) => {
     try {
@@ -27529,53 +27602,64 @@ export async function registerRoutes(
         
         const schedule = employeeSchedules.find(s => s.scheduleDate === dateStr);
         const attendanceRecord = attendance.find(a => a.attendanceDate === dateStr);
-        
-        const isOff = schedule?.isOff || dayOfWeek === 'fri';
-        const scheduledStartTime = schedule?.startTime || "08:00"; // Default start time
-        const scheduledEndTime = schedule?.endTime || "16:00"; // Default end time
+
+        // يوم راحة: نحترم الجدول إن وُجد، وإلا نعتبر الجمعة راحة افتراضياً فقط عند عدم وجود جدول
+        const isOff = schedule ? !!schedule.isOff : (dayOfWeek === 'fri');
+        // يوم عمل مجدول فعلياً = له جدول صريح وليس راحة
+        const hasSchedule = !!schedule && !isOff;
+
+        // أوقات الجدول تظهر فقط عند وجود جدول حقيقي — لا نختلق 08:00-16:00
+        const scheduledStartTime = hasSchedule ? (schedule!.startTime || null) : null;
+        const scheduledEndTime = hasSchedule ? (schedule!.endTime || null) : null;
         const actualStartTime = attendanceRecord?.actualCheckIn || null;
         const actualEndTime = attendanceRecord?.actualCheckOut || null;
-        
-        // Calculate hours (default 8 hours work day)
-        let scheduledHours = 8;
-        if (schedule?.startTime && schedule?.endTime && !isOff) {
-          const startParts = schedule.startTime.split(':').map(Number);
-          const endParts = schedule.endTime.split(':').map(Number);
+
+        // ساعات مجدولة من الجدول الحقيقي فقط (تبقى 0 إذا لا يوجد جدول)
+        let scheduledHours = 0;
+        if (hasSchedule && schedule!.startTime && schedule!.endTime) {
+          const startParts = schedule!.startTime.split(':').map(Number);
+          const endParts = schedule!.endTime.split(':').map(Number);
           scheduledHours = (endParts[0] + endParts[1]/60) - (startParts[0] + startParts[1]/60);
+          if (scheduledHours < 0) scheduledHours += 24;
         }
-        
+
         let actualHours = attendanceRecord?.workingHours || 0;
         let overtimeMinutes = attendanceRecord?.overtimeMinutes || 0;
         let lateMinutes = attendanceRecord?.lateMinutes || 0;
-        
-        // Determine status
+
+        // تحديد الحالة بدقة
         let status = "pending";
         if (isOff) {
           status = "day_off";
-        } else if (attendanceRecord) {
-          if (attendanceRecord.status === "present") status = "present";
-          else if (attendanceRecord.status === "late") status = "late";
-          else if (attendanceRecord.status === "absent") status = "absent";
-          else status = attendanceRecord.status || "pending";
-        } else if (!isOff) {
-          // Count as work day without attendance record
-          status = "absent";
+        } else if (hasSchedule) {
+          // يوم مجدول: يُحتسب غياباً فعلياً إذا لا يوجد حضور
+          if (attendanceRecord?.status === "present") status = "present";
+          else if (attendanceRecord?.status === "late") status = "late";
+          else if (attendanceRecord?.status === "absent") status = "absent";
+          else if (attendanceRecord) status = attendanceRecord.status || "absent";
+          else status = "absent";
+        } else {
+          // لا يوجد جدول لهذا اليوم: لا نحتسبه غياباً إطلاقاً
+          if (attendanceRecord?.status === "present") status = "present";
+          else if (attendanceRecord?.status === "late") status = "late";
+          else status = "no_schedule";
         }
 
-        // Update totals - count all non-off days as scheduled work days
-        if (!isOff) {
-          totalScheduledDays++;
-          totalScheduledHours += scheduledHours;
-          
-          if (status === "present" || status === "late") {
-            totalPresentDays++;
-            totalActualHours += actualHours;
-            totalOvertimeMinutes += overtimeMinutes;
-          }
+        // احتساب الإجماليات:
+        // ساعات وأيام الحضور تُحتسب لأي يوم تم العمل فيه فعلاً (مجدول أو غير مجدول)
+        if (status === "present" || status === "late") {
+          totalPresentDays++;
+          totalActualHours += actualHours;
+          totalOvertimeMinutes += overtimeMinutes;
           if (status === "late") {
             totalLateDays++;
             totalLateMinutes += lateMinutes;
           }
+        }
+        // الأيام المجدولة والغياب تُحتسب فقط للأيام التي لها جدول صريح
+        if (hasSchedule) {
+          totalScheduledDays++;
+          totalScheduledHours += scheduledHours;
           if (status === "absent") {
             totalAbsentDays++;
           }
@@ -27744,17 +27828,19 @@ export async function registerRoutes(
             const schedule = empSchedules.find((s: any) => s.scheduleDate === dateStr);
             const attendanceRecord = empAttendance.find((a: any) => a.attendanceDate === dateStr);
 
-            const isOff = schedule?.isOff || dayOfWeek === 'fri';
-            const scheduledStartTime = schedule?.startTime || "08:00";
-            const scheduledEndTime = schedule?.endTime || "16:00";
+            const isOff = schedule ? !!schedule.isOff : (dayOfWeek === 'fri');
+            const hasSchedule = !!schedule && !isOff;
+            const scheduledStartTime = hasSchedule ? (schedule!.startTime || null) : null;
+            const scheduledEndTime = hasSchedule ? (schedule!.endTime || null) : null;
             const actualStartTime = attendanceRecord?.actualCheckIn || null;
             const actualEndTime = attendanceRecord?.actualCheckOut || null;
 
-            let scheduledHours = 8;
-            if (schedule?.startTime && schedule?.endTime && !isOff) {
-              const sp = schedule.startTime.split(':').map(Number);
-              const ep = schedule.endTime.split(':').map(Number);
+            let scheduledHours = 0;
+            if (hasSchedule && schedule!.startTime && schedule!.endTime) {
+              const sp = schedule!.startTime.split(':').map(Number);
+              const ep = schedule!.endTime.split(':').map(Number);
               scheduledHours = (ep[0] + ep[1]/60) - (sp[0] + sp[1]/60);
+              if (scheduledHours < 0) scheduledHours += 24;
             }
 
             const actualHours = attendanceRecord?.workingHours || 0;
@@ -27763,22 +27849,27 @@ export async function registerRoutes(
 
             let status = "pending";
             if (isOff) status = "day_off";
-            else if (attendanceRecord) {
-              if (attendanceRecord.status === "present") status = "present";
-              else if (attendanceRecord.status === "late") status = "late";
-              else if (attendanceRecord.status === "absent") status = "absent";
-              else status = attendanceRecord.status || "pending";
-            } else status = "absent";
+            else if (hasSchedule) {
+              if (attendanceRecord?.status === "present") status = "present";
+              else if (attendanceRecord?.status === "late") status = "late";
+              else if (attendanceRecord?.status === "absent") status = "absent";
+              else if (attendanceRecord) status = attendanceRecord.status || "absent";
+              else status = "absent";
+            } else {
+              if (attendanceRecord?.status === "present") status = "present";
+              else if (attendanceRecord?.status === "late") status = "late";
+              else status = "no_schedule";
+            }
 
-            if (!isOff) {
+            if (status === "present" || status === "late") {
+              totalPresentDays++;
+              totalActualHours += actualHours;
+              totalOvertimeMinutes += overtimeMinutes;
+              if (status === "late") { totalLateDays++; totalLateMinutes += lateMinutes; }
+            }
+            if (hasSchedule) {
               totalScheduledDays++;
               totalScheduledHours += scheduledHours;
-              if (status === "present" || status === "late") {
-                totalPresentDays++;
-                totalActualHours += actualHours;
-                totalOvertimeMinutes += overtimeMinutes;
-              }
-              if (status === "late") { totalLateDays++; totalLateMinutes += lateMinutes; }
               if (status === "absent") totalAbsentDays++;
             }
 
@@ -27901,7 +27992,7 @@ export async function registerRoutes(
         sat: "السبت", sun: "الأحد", mon: "الاثنين", tue: "الثلاثاء", wed: "الأربعاء", thu: "الخميس", fri: "الجمعة"
       };
       const arStatusMap: Record<string, string> = {
-        present: "حاضر", late: "متأخر", absent: "غائب", day_off: "إجازة", pending: "معلق"
+        present: "حاضر", late: "متأخر", absent: "غائب", day_off: "إجازة", pending: "معلق", no_schedule: "بدون جدول"
       };
       const monthLabel = (() => {
         try {
@@ -27934,29 +28025,30 @@ export async function registerRoutes(
           const schedule = empSchedules.find((s: any) => s.scheduleDate === dateStr);
           const attendance = empAttendance.find((a: any) => a.attendanceDate === dateStr);
 
-          const isOff = schedule?.isOff ?? (dayKey === 'fri' && !schedule);
-          const scheduledStart = schedule?.startTime || (isOff ? "-" : "08:00");
-          const scheduledEnd = schedule?.endTime || (isOff ? "-" : "16:00");
+          const isOff = schedule ? !!schedule.isOff : (dayKey === 'fri');
+          const hasSchedule = !!schedule && !isOff;
+          const scheduledStart = hasSchedule ? (schedule!.startTime || "-") : "-";
+          const scheduledEnd = hasSchedule ? (schedule!.endTime || "-") : "-";
 
           let scheduledHours = 0;
-          if (!isOff && schedule?.startTime && schedule?.endTime) {
-            const sp = schedule.startTime.split(':').map(Number);
-            const ep = schedule.endTime.split(':').map(Number);
+          if (hasSchedule && schedule!.startTime && schedule!.endTime) {
+            const sp = schedule!.startTime.split(':').map(Number);
+            const ep = schedule!.endTime.split(':').map(Number);
             scheduledHours = (ep[0] + ep[1] / 60) - (sp[0] + sp[1] / 60);
             if (scheduledHours < 0) scheduledHours += 24;
-          } else if (!isOff) {
-            scheduledHours = 8;
           }
 
           let statusKey = "pending";
           if (isOff) {
             statusKey = "day_off";
-          } else if (attendance) {
-            statusKey = (attendance.status === "present" || attendance.status === "late" || attendance.status === "absent")
+          } else if (hasSchedule) {
+            statusKey = (attendance?.status === "present" || attendance?.status === "late" || attendance?.status === "absent")
               ? attendance.status
               : "absent";
           } else {
-            statusKey = "absent";
+            statusKey = (attendance?.status === "present" || attendance?.status === "late")
+              ? attendance.status
+              : "no_schedule";
           }
 
           const actualHours = attendance?.workingHours || 0;
@@ -27966,8 +28058,6 @@ export async function registerRoutes(
           if (isOff) {
             offDays++;
           } else {
-            scheduledDays++;
-            totalScheduledHours += scheduledHours;
             if (statusKey === "present" || statusKey === "late") {
               presentDays++;
               totalActualHours += actualHours;
@@ -27977,7 +28067,11 @@ export async function registerRoutes(
               lateDays++;
               totalLateMinutes += lateMin;
             }
-            if (statusKey === "absent") absentDays++;
+            if (hasSchedule) {
+              scheduledDays++;
+              totalScheduledHours += scheduledHours;
+              if (statusKey === "absent") absentDays++;
+            }
           }
 
           entries.push({
@@ -28091,7 +28185,7 @@ export async function registerRoutes(
       }
 
       const arDayMap: Record<string, string> = { sat: "السبت", sun: "الأحد", mon: "الاثنين", tue: "الثلاثاء", wed: "الأربعاء", thu: "الخميس", fri: "الجمعة" };
-      const arStatusMap: Record<string, string> = { present: "حاضر", late: "متأخر", absent: "غائب", day_off: "إجازة", pending: "معلق" };
+      const arStatusMap: Record<string, string> = { present: "حاضر", late: "متأخر", absent: "غائب", day_off: "إجازة", pending: "معلق", no_schedule: "بدون جدول" };
 
       const monthLabel = (() => {
         try {
@@ -28103,21 +28197,24 @@ export async function registerRoutes(
 
       // Build entries + exceptions in one pass (sorted by date)
       const sortedEntries = [...entries].sort((a, b) => a.date.localeCompare(b.date));
-      const pdfEntries = sortedEntries.map(e => ({
-        date: e.date,
-        dayName: arDayMap[e.dayOfWeek] || e.dayOfWeek,
-        branchName: pdfBranchNameById.get(pdfBranchByDate.get(e.date) || report.branchId) || branch.name,
-        scheduledStart: e.scheduledStartTime || (e.isOff ? "-" : "08:00"),
-        scheduledEnd: e.scheduledEndTime || (e.isOff ? "-" : "16:00"),
-        actualCheckIn: e.actualStartTime || (e.isOff ? "-" : "غ"),
-        actualCheckOut: e.actualEndTime || (e.isOff ? "-" : "غ"),
-        workHours: (e.actualHours && e.actualHours > 0) ? e.actualHours.toFixed(1) : "-",
-        status: arStatusMap[e.status || "pending"] || (e.status || "pending"),
-        isOff: !!e.isOff,
-        lateMinutes: e.lateMinutes || 0,
-        overtimeMinutes: e.overtimeMinutes || 0,
-        checkInSignature: e.checkInSignature || null,
-      }));
+      const pdfEntries = sortedEntries.map(e => {
+        const noSchedule = e.status === "no_schedule";
+        return {
+          date: e.date,
+          dayName: arDayMap[e.dayOfWeek] || e.dayOfWeek,
+          branchName: pdfBranchNameById.get(pdfBranchByDate.get(e.date) || report.branchId) || branch.name,
+          scheduledStart: e.scheduledStartTime || "-",
+          scheduledEnd: e.scheduledEndTime || "-",
+          actualCheckIn: e.actualStartTime || ((e.isOff || noSchedule) ? "-" : "غ"),
+          actualCheckOut: e.actualEndTime || ((e.isOff || noSchedule) ? "-" : "غ"),
+          workHours: (e.actualHours && e.actualHours > 0) ? e.actualHours.toFixed(1) : "-",
+          status: arStatusMap[e.status || "pending"] || (e.status || "pending"),
+          isOff: !!e.isOff,
+          lateMinutes: e.lateMinutes || 0,
+          overtimeMinutes: e.overtimeMinutes || 0,
+          checkInSignature: e.checkInSignature || null,
+        };
+      });
 
       const exceptions: Array<{ date: string; dayName: string; type: "late" | "absent" | "overtime"; detail: string }> = [];
       for (const e of sortedEntries) {

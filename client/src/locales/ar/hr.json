@@ -234,7 +234,8 @@
       "present": "حاضر",
       "absent": "غائب",
       "late": "متأخر",
-      "dayOff": "إجازة"
+      "dayOff": "إجازة",
+      "noSchedule": "بدون جدول"
     },
     "reportStatusLabels": {
       "pending": "قيد الإنشاء",
@@ -309,6 +310,34 @@
       "absentDetail": "غياب بدون عذر",
       "overtimeDetail": "{{minutes}} دقيقة عمل إضافي"
     },
+    "financial": {
+      "title": "الأثر المالي",
+      "note": "محسوب من راتب الموظف المسجّل — خصم الغياب مطابق لنظام إغلاق الرواتب.",
+      "noData": "بيانات الراتب غير مرتبطة بهذا الموظف، لا يمكن حساب الأثر المالي تلقائياً.",
+      "grossSalary": "الراتب الإجمالي",
+      "dailyRate": "قيمة اليوم",
+      "hourlyRate": "قيمة الساعة",
+      "absenceDeduction": "خصم الغياب",
+      "enforcedTotal": "إجمالي الخصم المطبّق",
+      "lateValue": "قيمة التأخير (تقديري)",
+      "overtimeValue": "قيمة العمل الإضافي (تقديري)",
+      "informationalNote": "قيم استرشادية فقط — لا تُخصم تلقائياً، تساعدك في قرار الخصم أو الحافز.",
+      "currencyShort": "ر.س"
+    },
+    "patterns": {
+      "title": "تحليل الأنماط",
+      "longestAbsenceStreak": "أطول غياب متتالٍ",
+      "lateDaysCount": "أيام التأخير",
+      "missingCheckout": "بدون تسجيل انصراف",
+      "noScheduleDays": "أيام بدون جدول",
+      "daysUnit": "يوم",
+      "consecutiveAbsenceWarning": "غياب متتالٍ لمدة {{count}} أيام — يستدعي المراجعة",
+      "frequentLateWarning": "تأخر متكرر في {{count}} أيام",
+      "missingCheckoutWarning": "{{count}} يوم حضور بدون تسجيل انصراف — الساعات قد تكون ناقصة",
+      "noScheduleWarning": "{{count}} يوم بدون جدول محدد — تأكد من رفع الجداول",
+      "allGood": "لا توجد أنماط سلبية ملحوظة — أداء منتظم."
+    },
+    "legendTitle": "دليل الحالات",
     "ackTemplates": {
       "employeeClean": "أقر بصحة بيانات الحضور والانصراف المذكورة أعلاه، وأن سجلي خلال هذه الفترة كامل دون أي تأخير أو غياب.",
       "employeeWithIssues": "أقر بصحة بيانات الحضور والانصراف المذكورة أعلاه، وأقر باطلاعي على {{lateDays}} أيام تأخير و{{absentDays}} أيام غياب، وأتحمّل المسؤولية عن أي خصومات قانونية مرتبطة بها.",

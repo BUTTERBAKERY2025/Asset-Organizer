@@ -234,7 +234,8 @@
       "present": "Present",
       "absent": "Absent",
       "late": "Late",
-      "dayOff": "Day Off"
+      "dayOff": "Day Off",
+      "noSchedule": "No Schedule"
     },
     "reportStatusLabels": {
       "pending": "In Progress",
@@ -309,6 +310,34 @@
       "absentDetail": "Absence without notice",
       "overtimeDetail": "{{minutes}} min overtime"
     },
+    "financial": {
+      "title": "Financial Impact",
+      "note": "Calculated from the employee's recorded salary — absence deduction matches the payroll closing system.",
+      "noData": "Salary data is not linked to this employee; financial impact cannot be calculated automatically.",
+      "grossSalary": "Gross Salary",
+      "dailyRate": "Daily Rate",
+      "hourlyRate": "Hourly Rate",
+      "absenceDeduction": "Absence Deduction",
+      "enforcedTotal": "Total Applied Deduction",
+      "lateValue": "Late Value (est.)",
+      "overtimeValue": "Overtime Value (est.)",
+      "informationalNote": "Informational only — not auto-deducted; helps you decide on deductions or incentives.",
+      "currencyShort": "SAR"
+    },
+    "patterns": {
+      "title": "Pattern Analysis",
+      "longestAbsenceStreak": "Longest Absence Streak",
+      "lateDaysCount": "Late Days",
+      "missingCheckout": "Missing Checkout",
+      "noScheduleDays": "No-Schedule Days",
+      "daysUnit": "days",
+      "consecutiveAbsenceWarning": "{{count}} consecutive absent days — needs review",
+      "frequentLateWarning": "Frequent lateness across {{count}} days",
+      "missingCheckoutWarning": "{{count}} present days without checkout — hours may be incomplete",
+      "noScheduleWarning": "{{count}} days without a defined schedule — verify schedules are uploaded",
+      "allGood": "No notable negative patterns — consistent performance."
+    },
+    "legendTitle": "Status Legend",
     "ackTemplates": {
       "employeeClean": "I confirm the accuracy of the attendance data shown above and acknowledge that my record for this period is complete with no late arrivals or absences.",
       "employeeWithIssues": "I confirm the accuracy of the attendance data shown above and acknowledge {{lateDays}} late days and {{absentDays}} absent days; I accept responsibility for any associated legal deductions.",
