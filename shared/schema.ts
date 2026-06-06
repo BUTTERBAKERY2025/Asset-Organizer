@@ -5696,6 +5696,43 @@ export const SALARY_DEDUCTION_TYPE_LABELS: Record<string, string> = {
 };
 
 // =====================================================
+// Salary Attendance Adjustments - تعديل أيام الحضور اليدوي
+// =====================================================
+// عند تعطّل نظام البصمة/التوقيع يوماً ما، يحق للأدمن ومدير الموارد البشرية فقط
+// تعديل عدد أيام حضور الموظف يدوياً (مع ذكر السبب إلزامياً). يُقلّل التعديل خصم
+// الغياب ويزيد الصافي تلقائياً، ويُجمّد داخل لقطة الإغلاق ويظهر في قسيمة الراتب.
+export const salaryAttendanceAdjustments = pgTable("salary_attendance_adjustments", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  month: text("month").notNull(), // YYYY-MM
+  adjustedPresentDays: integer("adjusted_present_days").notNull(), // عدد أيام الحضور المعتمد بعد التعديل
+  reason: text("reason").notNull(), // سبب التعديل (إلزامي)
+  createdBy: varchar("created_by").references(() => users.id),
+  createdByName: text("created_by_name"), // اسم حساب المستخدم الذي قام بالتعديل (للعرض في القسيمة)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_salary_attendance_adj_branch_month").on(table.branchId, table.month),
+  index("idx_salary_attendance_adj_employee").on(table.branchEmployeeId),
+  // تعديل واحد فعّال لكل موظف/شهر
+  uniqueIndex("idx_salary_attendance_adj_emp_month").on(table.branchEmployeeId, table.month),
+]);
+
+export const insertSalaryAttendanceAdjustmentSchema = createInsertSchema(salaryAttendanceAdjustments, {
+  adjustedPresentDays: z.number().int().min(0, "عدد الأيام يجب أن يكون صفراً أو أكثر").max(31, "عدد الأيام غير منطقي"),
+  reason: z.string().trim().min(3, "سبب التعديل إلزامي"),
+  month: z.string().regex(/^\d{4}-\d{2}$/, "صيغة الشهر يجب أن تكون YYYY-MM"),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SalaryAttendanceAdjustment = typeof salaryAttendanceAdjustments.$inferSelect;
+export type InsertSalaryAttendanceAdjustment = z.infer<typeof insertSalaryAttendanceAdjustmentSchema>;
+
+// =====================================================
 // Salary Closures - إغلاق الرواتب الشهري (لقطة ثابتة + قفل)
 // =====================================================
 // عند إغلاق رواتب شهر/فرع، نحفظ "لقطة" ثابتة من الأرقام المحسوبة على الخادم
@@ -5748,6 +5785,9 @@ export const salaryClosureLines = pgTable("salary_closure_lines", {
   bankName: text("bank_name"),
   bankAccountNumber: text("bank_account_number"),
   presentDays: integer("present_days").default(0).notNull(),
+  originalPresentDays: integer("original_present_days"), // أيام الحضور المحتسبة قبل التعديل اليدوي (إن وُجد)
+  attendanceAdjustmentReason: text("attendance_adjustment_reason"), // سبب تعديل أيام الحضور
+  attendanceAdjustmentBy: text("attendance_adjustment_by"), // حساب المستخدم الذي قام بالتعديل
   absentDays: integer("absent_days").default(0).notNull(),
   offDays: integer("off_days").default(0).notNull(),
   paidLeaveDays: integer("paid_leave_days").default(0).notNull(),

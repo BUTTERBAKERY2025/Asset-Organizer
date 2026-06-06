@@ -14,6 +14,7 @@ export interface SalaryClosingRaw {
   signedTimesheets: Array<{ report: any; entries: any[] }>;
   deductions: any[];
   leaveRequests?: any[];
+  attendanceAdjustments?: any[];
 }
 
 export interface SalaryClosingLine {
@@ -27,6 +28,9 @@ export interface SalaryClosingLine {
   bankName: string;
   bankAccountNumber: string;
   presentDays: number;
+  originalPresentDays: number | null;
+  attendanceAdjustmentReason: string | null;
+  attendanceAdjustmentBy: string | null;
   absentDays: number;
   offDays: number;
   paidLeaveDays: number;
@@ -132,6 +136,14 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
   );
 
   const deductions = raw.deductions || [];
+
+  // تعديلات أيام الحضور اليدوية (مفهرسة حسب معرّف الموظف)
+  const adjustmentByEmp = new Map<number, any>();
+  (raw.attendanceAdjustments || []).forEach((a: any) => {
+    if (a && a.branchEmployeeId !== null && a.branchEmployeeId !== undefined) {
+      adjustmentByEmp.set(Number(a.branchEmployeeId), a);
+    }
+  });
 
   // ===== Lookup maps for matching =====
   const employeeLookup = new Map<string, number>();
@@ -435,6 +447,29 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
     const absentDatesExplicitFinal = unpaidNonLeaveDates.filter((d) => absentExplicitSet.has(d)).sort();
     const absentDatesMissingFinal = unpaidNonLeaveDates.filter((d) => !absentExplicitSet.has(d)).sort();
 
+    // ===== تطبيق تعديل أيام الحضور اليدوي (إن وُجد) =====
+    // الأدمن/مدير الموارد البشرية يحدّد إجمالي أيام حضور جديد. الفرق (delta) يُحوّل
+    // أياماً من "مخصومة" إلى "مدفوعة" (أو العكس)، فيتغيّر خصم الغياب والصافي تلقائياً.
+    let effectivePresentDays = presentDaysCalc;
+    let effectiveUnpaidDays = unpaidDays;
+    let absentDaysDisplayCalc = unpaidNonLeaveDates.length;
+    let originalPresentDays: number | null = null;
+    let attendanceAdjustmentReason: string | null = null;
+    let attendanceAdjustmentBy: string | null = null;
+
+    const adj = adjustmentByEmp.get(emp.id);
+    if (adj && adj.adjustedPresentDays !== null && adj.adjustedPresentDays !== undefined) {
+      originalPresentDays = presentDaysCalc;
+      effectivePresentDays = Number(adj.adjustedPresentDays);
+      attendanceAdjustmentReason = adj.reason ?? null;
+      attendanceAdjustmentBy = adj.createdByName ?? null;
+      const delta = effectivePresentDays - presentDaysCalc;
+      // عند الزيادة: نحوّل أياماً مخصومة إلى مدفوعة (لا تقل عن صفر)
+      // عند النقصان: نزيد الأيام المخصومة
+      effectiveUnpaidDays = Math.max(0, unpaidDays - delta);
+      absentDaysDisplayCalc = Math.max(0, absentDaysDisplayCalc - delta);
+    }
+
     const baseSalary = emp.salary || 0;
     const housingAllowance = emp.housingAllowance || 0;
     const allowances =
@@ -453,10 +488,11 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
 
     // الخصم = (أيام غير مدفوعة) × قيمة اليوم. الأيام غير المدفوعة تشمل: الغياب،
     // الأيام غير المسجّلة (لم يحضرها ولم تكن راحة ولا إجازة مدفوعة)، والإجازات بدون راتب.
-    const absenceDeduction = round2(unpaidDays * dailyRate);
+    // نستخدم القيمة بعد تطبيق تعديل أيام الحضور اليدوي (إن وُجد).
+    const absenceDeduction = round2(effectiveUnpaidDays * dailyRate);
 
     // غياب صريح/أيام مخصومة (لأغراض العرض فقط — لا يشمل أيام الإجازات)
-    const absentDaysDisplay = unpaidNonLeaveDates.length;
+    const absentDaysDisplay = absentDaysDisplayCalc;
 
     // إذا الموظف ما عنده أي بيانات لهذا الشهر → ننبّه (سيُحتسب الشهر كاملاً غياباً)
     const noWorkAtAll =
@@ -498,12 +534,15 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
       iqamaNumber: emp.iqamaNumber ?? null,
       bankName: emp.bankName || "",
       bankAccountNumber: emp.bankAccountNumber || "",
-      presentDays: presentDaysCalc,
+      presentDays: effectivePresentDays,
+      originalPresentDays,
+      attendanceAdjustmentReason,
+      attendanceAdjustmentBy,
       absentDays: absentDaysDisplay,
       offDays: weeklyRestDays,
       paidLeaveDays,
       unpaidLeaveDays,
-      unpaidDays,
+      unpaidDays: effectiveUnpaidDays,
       leaveBreakdown,
       scheduledWorkDays,
       scheduledHours: Math.round(scheduledHoursTotal * 10) / 10,

@@ -295,6 +295,9 @@ export interface PayslipPdfData {
   employee: SalaryClosingEmployee & {
     employeeNumber?: string | null;
     nationality?: string | null;
+    originalPresentDays?: number | null;
+    attendanceAdjustmentReason?: string | null;
+    attendanceAdjustmentBy?: string | null;
   };
   issuedByName?: string | null;
   issuedAt?: string | null;
@@ -371,6 +374,13 @@ export async function generatePayslipPdf(data: PayslipPdfData): Promise<Buffer> 
     ${row('أيام الإجازات', `${e.offDays ?? '-'}`, { bg:'#fffbeb' })}
     ${row('إجمالي الساعات', `${e.totalHours}`)}
   </table>
+  ${(e.originalPresentDays !== null && e.originalPresentDays !== undefined) ? `
+  <div style="margin-top:8px; padding:10px 12px; border:1px solid #fcd34d; border-radius:6px; background:#fffbeb; font-size:11px; color:#92400e;">
+    <div style="font-weight:700; margin-bottom:3px;">⚠ تم تعديل أيام الحضور يدوياً</div>
+    <div>القيمة المحتسبة قبل التعديل: <strong>${e.originalPresentDays}</strong> &larr; القيمة بعد التعديل: <strong>${e.presentDays}</strong></div>
+    ${e.attendanceAdjustmentReason ? `<div>السبب: ${e.attendanceAdjustmentReason}</div>` : ''}
+    ${e.attendanceAdjustmentBy ? `<div>قام بالتعديل: ${e.attendanceAdjustmentBy}</div>` : ''}
+  </div>` : ''}
 
   <div class="section-title">المستحقات</div>
   <table>

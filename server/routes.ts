@@ -29036,7 +29036,7 @@ export async function registerRoutes(
     const [y, m] = month.split("-").map(Number);
     const lastDay = new Date(y, m, 0).getDate();
     const monthEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
-    const [employees, attendance, schedules, signedTimesheets, deductions, leaveRequestsData] = await Promise.all([
+    const [employees, attendance, schedules, signedTimesheets, deductions, leaveRequestsData, attendanceAdjustments] = await Promise.all([
       storage.getBranchEmployeesByBranch(branchId).catch(() => []),
       storage.getAllAttendanceRecords({ branchId, startDate: monthStart, endDate: monthEnd }).catch(() => []),
       storage.getEmployeeSchedulesByBranchAndDateRange(branchId, monthStart, monthEnd).catch(() => []),
@@ -29055,8 +29055,9 @@ export async function registerRoutes(
           ),
         )
         .catch(() => [] as any[]),
+      storage.getAttendanceAdjustmentsByBranchAndMonth(branchId, month).catch(() => []),
     ]);
-    return { branchId, month, employees, attendance, schedules, signedTimesheets, deductions, leaveRequests: leaveRequestsData };
+    return { branchId, month, employees, attendance, schedules, signedTimesheets, deductions, leaveRequests: leaveRequestsData, attendanceAdjustments };
   };
 
   const currentUserName = (req: any): string => {
@@ -29224,6 +29225,9 @@ export async function registerRoutes(
         bankName: l.bankName,
         bankAccountNumber: l.bankAccountNumber,
         presentDays: l.presentDays,
+        originalPresentDays: l.originalPresentDays,
+        attendanceAdjustmentReason: l.attendanceAdjustmentReason,
+        attendanceAdjustmentBy: l.attendanceAdjustmentBy,
         absentDays: l.absentDays,
         offDays: l.offDays,
         paidLeaveDays: l.paidLeaveDays,
@@ -29290,6 +29294,99 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error reopening salary closure:", error);
       res.status(500).json({ error: "فشل في إعادة فتح الإغلاق" });
+    }
+  });
+
+  // ===== تعديل أيام الحضور اليدوي (للأدمن ومدير الموارد البشرية فقط، قبل الإغلاق) =====
+  const canEditAttendanceAdjustment = (req: any): boolean => {
+    const role = req.currentUser?.role;
+    return isUserAdmin(req) || role === "hr_manager";
+  };
+
+  // جلب تعديلات أيام الحضور لفرع/شهر
+  app.get("/api/salary-closing/attendance-adjustment", isAuthenticated, requirePermission("salary_closing", "view"), async (req, res) => {
+    try {
+      const branchId = req.query.branchId as string | undefined;
+      const month = req.query.month as string | undefined;
+      if (!branchId || branchId === "all") return res.status(400).json({ error: "اختر فرعاً محدداً" });
+      if (!isValidMonth(month)) return res.status(400).json({ error: "صيغة الشهر يجب أن تكون YYYY-MM" });
+      const hasAccess = await canAccessBranch(req, branchId);
+      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      const rows = await storage.getAttendanceAdjustmentsByBranchAndMonth(branchId, month);
+      res.json(rows);
+    } catch (error) {
+      console.error("Error fetching attendance adjustments:", error);
+      res.status(500).json({ error: "فشل في جلب تعديلات أيام الحضور" });
+    }
+  });
+
+  // إنشاء/تحديث تعديل أيام حضور موظف (إلزامي السبب) — يُحظر بعد الإغلاق
+  app.post("/api/salary-closing/attendance-adjustment", isAuthenticated, requirePermission("salary_closing", "edit"), async (req, res) => {
+    try {
+      if (!canEditAttendanceAdjustment(req)) {
+        return res.status(403).json({ error: "تعديل أيام الحضور متاح للمدير ومدير الموارد البشرية فقط" });
+      }
+      const { branchEmployeeId, month, adjustedPresentDays, reason } = req.body || {};
+      const beId = parseInt(branchEmployeeId, 10);
+      if (Number.isNaN(beId)) return res.status(400).json({ error: "معرف الموظف غير صحيح" });
+      if (!isValidMonth(month)) return res.status(400).json({ error: "صيغة الشهر يجب أن تكون YYYY-MM" });
+      const days = Number(adjustedPresentDays);
+      if (!Number.isInteger(days) || days < 0 || days > 31) {
+        return res.status(400).json({ error: "عدد أيام الحضور غير صالح" });
+      }
+      if (!reason || String(reason).trim().length < 3) {
+        return res.status(400).json({ error: "سبب التعديل إلزامي" });
+      }
+      // التحقق من الموظف والفرع (IDOR-safe)
+      const employee = await storage.getBranchEmployee(beId);
+      if (!employee) return res.status(404).json({ error: "الموظف غير موجود" });
+      const hasAccess = await canAccessBranch(req, employee.branchId);
+      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      // منع التعديل على شهر مغلق
+      const lock = await storage.getSalaryClosureByBranchAndMonth(employee.branchId, month);
+      if (lock && lock.status === "closed") {
+        return res.status(423).json({ error: "هذا الشهر مغلق للرواتب — أعد فتح الإغلاق أولاً للتعديل." });
+      }
+      const saved = await storage.upsertAttendanceAdjustment({
+        branchEmployeeId: beId,
+        branchId: employee.branchId,
+        month,
+        adjustedPresentDays: days,
+        reason: String(reason).trim(),
+        createdBy: req.currentUser?.id ?? null,
+        createdByName: currentUserName(req),
+      } as any);
+      res.status(201).json({ success: true, adjustment: saved });
+    } catch (error) {
+      console.error("Error saving attendance adjustment:", error);
+      res.status(500).json({ error: "فشل في حفظ تعديل أيام الحضور" });
+    }
+  });
+
+  // حذف تعديل أيام حضور موظف — يُحظر بعد الإغلاق
+  app.delete("/api/salary-closing/attendance-adjustment", isAuthenticated, requirePermission("salary_closing", "edit"), async (req, res) => {
+    try {
+      if (!canEditAttendanceAdjustment(req)) {
+        return res.status(403).json({ error: "تعديل أيام الحضور متاح للمدير ومدير الموارد البشرية فقط" });
+      }
+      const branchEmployeeId = req.body?.branchEmployeeId ?? req.query?.branchEmployeeId;
+      const month = req.body?.month ?? req.query?.month;
+      const beId = parseInt(branchEmployeeId, 10);
+      if (Number.isNaN(beId)) return res.status(400).json({ error: "معرف الموظف غير صحيح" });
+      if (!isValidMonth(month)) return res.status(400).json({ error: "صيغة الشهر يجب أن تكون YYYY-MM" });
+      const employee = await storage.getBranchEmployee(beId);
+      if (!employee) return res.status(404).json({ error: "الموظف غير موجود" });
+      const hasAccess = await canAccessBranch(req, employee.branchId);
+      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      const lock = await storage.getSalaryClosureByBranchAndMonth(employee.branchId, month);
+      if (lock && lock.status === "closed") {
+        return res.status(423).json({ error: "هذا الشهر مغلق للرواتب — أعد فتح الإغلاق أولاً للتعديل." });
+      }
+      const deleted = await storage.deleteAttendanceAdjustment(beId, month);
+      res.json({ success: true, deleted });
+    } catch (error) {
+      console.error("Error deleting attendance adjustment:", error);
+      res.status(500).json({ error: "فشل في حذف تعديل أيام الحضور" });
     }
   });
 
@@ -30863,6 +30960,9 @@ export async function registerRoutes(
           scheduledWorkDays: Number(line.scheduledWorkDays) || 0,
           offDays: Number(line.offDays) || 0,
           presentDays: Number(line.presentDays) || 0,
+          originalPresentDays: line.originalPresentDays !== null && line.originalPresentDays !== undefined ? Number(line.originalPresentDays) : null,
+          attendanceAdjustmentReason: line.attendanceAdjustmentReason || null,
+          attendanceAdjustmentBy: line.attendanceAdjustmentBy || null,
           absentDays: Number(line.absentDays) || 0,
           totalHours: Number(line.totalHours) || 0,
           baseSalary: Number(line.baseSalary) || 0,

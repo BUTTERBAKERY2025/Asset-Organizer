@@ -287,6 +287,213 @@ function DeductionsPopover({
   );
 }
 
+// ===== تعديل أيام الحضور اليدوي (للأدمن ومدير الموارد البشرية فقط، قبل الإغلاق) =====
+function AttendanceAdjustmentPopover({
+  branchEmployeeId,
+  month,
+  employeeName,
+  presentDays,
+  presentDates,
+  originalPresentDays,
+  adjustmentReason,
+  adjustmentBy,
+  canEdit,
+  onChanged,
+}: {
+  branchEmployeeId: number;
+  month: string;
+  employeeName: string;
+  presentDays: number;
+  presentDates: string[];
+  originalPresentDays: number | null;
+  adjustmentReason: string | null;
+  adjustmentBy: string | null;
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const isAdjusted = originalPresentDays !== null && originalPresentDays !== undefined;
+  const [days, setDays] = useState<string>(String(presentDays));
+  const [reason, setReason] = useState<string>(adjustmentReason || "");
+
+  useEffect(() => {
+    setDays(String(presentDays));
+    setReason(adjustmentReason || "");
+  }, [presentDays, adjustmentReason, open]);
+
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/employee-reports/bundle", "salary-closing"] });
+    onChanged();
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: async (payload: { adjustedPresentDays: number; reason: string }) => {
+      const res = await fetch("/api/salary-closing/attendance-adjustment", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          branchEmployeeId,
+          month,
+          adjustedPresentDays: payload.adjustedPresentDays,
+          reason: payload.reason,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "فشل الحفظ");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "تم الحفظ", description: "تم تعديل أيام الحضور بنجاح" });
+      setOpen(false);
+      refresh();
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/salary-closing/attendance-adjustment", {
+        method: "DELETE",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branchEmployeeId, month }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "فشل الحذف");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "تم الإلغاء", description: "تمت إعادة أيام الحضور للقيمة المحتسبة" });
+      setOpen(false);
+      refresh();
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
+  });
+
+  const handleSave = () => {
+    const n = parseInt(days, 10);
+    if (!Number.isInteger(n) || n < 0 || n > 31) {
+      toast({ title: "عدد غير صحيح", description: "أدخل عدد أيام بين 0 و 31", variant: "destructive" });
+      return;
+    }
+    if (reason.trim().length < 3) {
+      toast({ title: "السبب إلزامي", description: "اكتب سبب التعديل (3 أحرف على الأقل)", variant: "destructive" });
+      return;
+    }
+    saveMutation.mutate({ adjustedPresentDays: n, reason: reason.trim() });
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" data-testid={`btn-present-${branchEmployeeId}`} className="relative">
+          <Badge
+            className={isAdjusted
+              ? "bg-amber-100 text-amber-900 border border-amber-400 hover:bg-amber-200 cursor-pointer"
+              : "bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer"}
+          >
+            {presentDays}{isAdjusted ? " ✎" : ""}
+          </Badge>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 max-h-[480px] overflow-y-auto" side="top">
+        <div className="space-y-3">
+          <div className="border-b pb-2">
+            <div className="text-sm font-bold text-gray-900">أيام الحضور</div>
+            <div className="text-xs text-gray-600">{employeeName} — {month}</div>
+          </div>
+
+          {isAdjusted && (
+            <div className="rounded border border-amber-300 bg-amber-50 p-2 text-[11px] text-amber-900 space-y-0.5" data-testid={`adjustment-info-${branchEmployeeId}`}>
+              <div className="font-bold">⚠ تم تعديل أيام الحضور يدوياً</div>
+              <div>المحتسبة قبل التعديل: <strong>{originalPresentDays}</strong> ← بعد التعديل: <strong>{presentDays}</strong></div>
+              {adjustmentReason && <div>السبب: {adjustmentReason}</div>}
+              {adjustmentBy && <div>قام بالتعديل: {adjustmentBy}</div>}
+            </div>
+          )}
+
+          <div>
+            <div className="text-xs font-semibold mb-1 text-green-800">
+              أيام الحضور المحتسبة ({presentDates.length})
+            </div>
+            {presentDates.length === 0 ? (
+              <p className="text-xs text-gray-500">لا توجد أيام حضور.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-1 text-[11px]">
+                {presentDates.map((d: string) => (
+                  <div key={d} className="bg-green-50 px-2 py-1 rounded text-center font-mono">{d}</div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {canEdit && (
+            <div className="space-y-2 pt-2 border-t">
+              <div className="text-xs font-semibold text-gray-700">تعديل عدد أيام الحضور المعتمدة:</div>
+              <div className="text-[10px] text-gray-500">
+                يُستخدم عند تعطّل نظام البصمة/التوقيع. التعديل يقلّل خصم الغياب ويرفع الصافي تلقائياً.
+              </div>
+              <div>
+                <Label className="text-[11px]">عدد أيام الحضور المعتمد</Label>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min="0"
+                  max="31"
+                  step="1"
+                  value={days}
+                  onChange={e => setDays(e.target.value)}
+                  className="h-8 text-xs"
+                  data-testid={`input-adjusted-present-${branchEmployeeId}`}
+                />
+              </div>
+              <div>
+                <Label className="text-[11px]">سبب التعديل (إلزامي)</Label>
+                <Textarea
+                  value={reason}
+                  onChange={e => setReason(e.target.value)}
+                  placeholder="مثال: تعطّل جهاز البصمة يومي 3 و 4"
+                  className="text-xs min-h-[56px]"
+                  data-testid={`input-adjustment-reason-${branchEmployeeId}`}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 text-xs flex-1"
+                  onClick={handleSave}
+                  disabled={saveMutation.isPending}
+                  data-testid={`btn-save-adjustment-${branchEmployeeId}`}
+                >
+                  حفظ التعديل
+                </Button>
+                {isAdjusted && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs text-red-600 hover:text-red-700"
+                    onClick={() => {
+                      if (confirm("إلغاء التعديل وإعادة أيام الحضور للقيمة المحتسبة تلقائياً؟")) {
+                        removeMutation.mutate();
+                      }
+                    }}
+                    disabled={removeMutation.isPending}
+                    data-testid={`btn-remove-adjustment-${branchEmployeeId}`}
+                  >
+                    إلغاء التعديل
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function formatCurrency(value: number | null | undefined, isRTL: boolean = true): string {
   if (value == null) return isRTL ? "0 ريال" : "0 SAR";
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value) + (isRTL ? " ريال" : " SAR");
@@ -1983,27 +2190,54 @@ export default function SalaryClosingPage() {
                             </TableCell>
                           )}
                           <TableCell className="text-center">
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <button type="button" data-testid={`btn-present-${emp.id}`}>
-                                  <Badge className="bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer">{emp.presentDays}</Badge>
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-72 max-h-80 overflow-y-auto" side="top">
-                                <div className="text-xs font-semibold mb-2 text-green-800">
-                                  أيام الحضور المحتسبة ({emp.presentDays})
-                                </div>
-                                {emp.presentDates.length === 0 ? (
-                                  <p className="text-xs text-gray-500">لا توجد أيام حضور.</p>
-                                ) : (
-                                  <div className="grid grid-cols-2 gap-1 text-[11px]">
-                                    {emp.presentDates.map((d: string) => (
-                                      <div key={d} className="bg-green-50 px-2 py-1 rounded text-center font-mono">{d}</div>
-                                    ))}
+                            {emp.branchEmployeeId != null && !salaryClosingIsLocked ? (
+                              <AttendanceAdjustmentPopover
+                                branchEmployeeId={Number(emp.branchEmployeeId)}
+                                month={month}
+                                employeeName={emp.employeeName}
+                                presentDays={emp.presentDays}
+                                presentDates={emp.presentDates || []}
+                                originalPresentDays={(emp as any).originalPresentDays ?? null}
+                                adjustmentReason={(emp as any).attendanceAdjustmentReason ?? null}
+                                adjustmentBy={(emp as any).attendanceAdjustmentBy ?? null}
+                                canEdit={canCloseSalary}
+                                onChanged={refreshSalaryClosing}
+                              />
+                            ) : (
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <button type="button" data-testid={`btn-present-${emp.id}`}>
+                                    <Badge className={((emp as any).originalPresentDays !== null && (emp as any).originalPresentDays !== undefined)
+                                      ? "bg-amber-100 text-amber-900 border border-amber-400 hover:bg-amber-200 cursor-pointer"
+                                      : "bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer"}>
+                                      {emp.presentDays}{((emp as any).originalPresentDays !== null && (emp as any).originalPresentDays !== undefined) ? " ✎" : ""}
+                                    </Badge>
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-72 max-h-80 overflow-y-auto" side="top">
+                                  {((emp as any).originalPresentDays !== null && (emp as any).originalPresentDays !== undefined) && (
+                                    <div className="rounded border border-amber-300 bg-amber-50 p-2 mb-2 text-[11px] text-amber-900 space-y-0.5">
+                                      <div className="font-bold">⚠ تم تعديل أيام الحضور يدوياً</div>
+                                      <div>المحتسبة قبل التعديل: <strong>{(emp as any).originalPresentDays}</strong> ← بعد التعديل: <strong>{emp.presentDays}</strong></div>
+                                      {(emp as any).attendanceAdjustmentReason && <div>السبب: {(emp as any).attendanceAdjustmentReason}</div>}
+                                      {(emp as any).attendanceAdjustmentBy && <div>قام بالتعديل: {(emp as any).attendanceAdjustmentBy}</div>}
+                                    </div>
+                                  )}
+                                  <div className="text-xs font-semibold mb-2 text-green-800">
+                                    أيام الحضور المحتسبة ({emp.presentDates.length})
                                   </div>
-                                )}
-                              </PopoverContent>
-                            </Popover>
+                                  {emp.presentDates.length === 0 ? (
+                                    <p className="text-xs text-gray-500">لا توجد أيام حضور.</p>
+                                  ) : (
+                                    <div className="grid grid-cols-2 gap-1 text-[11px]">
+                                      {emp.presentDates.map((d: string) => (
+                                        <div key={d} className="bg-green-50 px-2 py-1 rounded text-center font-mono">{d}</div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </PopoverContent>
+                              </Popover>
+                            )}
                           </TableCell>
                           <TableCell className="text-center">
                             <Popover>

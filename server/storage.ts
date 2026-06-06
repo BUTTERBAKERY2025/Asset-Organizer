@@ -373,6 +373,9 @@ import {
   salaryDeductions,
   type SalaryDeduction,
   type InsertSalaryDeduction,
+  salaryAttendanceAdjustments,
+  type SalaryAttendanceAdjustment,
+  type InsertSalaryAttendanceAdjustment,
   salaryClosures,
   type SalaryClosure,
   type InsertSalaryClosure,
@@ -1364,6 +1367,9 @@ export interface IStorage {
 
   // Salary Deductions - السُلف والخصومات اليدوية الشهرية
   getSalaryDeductionsByBranchAndMonth(branchId: string, month: string): Promise<SalaryDeduction[]>;
+  getAttendanceAdjustmentsByBranchAndMonth(branchId: string, month: string): Promise<SalaryAttendanceAdjustment[]>;
+  upsertAttendanceAdjustment(data: InsertSalaryAttendanceAdjustment): Promise<SalaryAttendanceAdjustment>;
+  deleteAttendanceAdjustment(branchEmployeeId: number, month: string): Promise<boolean>;
   getAllSalaryDeductionsByMonth(month: string): Promise<SalaryDeduction[]>;
   getSalaryDeductionsByEmployeeAndMonth(branchEmployeeId: number, month: string): Promise<SalaryDeduction[]>;
   getSalaryDeduction(id: number): Promise<SalaryDeduction | undefined>;
@@ -12211,6 +12217,41 @@ export class DatabaseStorage implements IStorage {
   async getSalaryDeduction(id: number): Promise<SalaryDeduction | undefined> {
     const [row] = await db.select().from(salaryDeductions).where(eq(salaryDeductions.id, id));
     return row;
+  }
+
+  // ===== Salary Attendance Adjustments - تعديل أيام الحضور اليدوي =====
+  async getAttendanceAdjustmentsByBranchAndMonth(branchId: string, month: string): Promise<SalaryAttendanceAdjustment[]> {
+    return await db.select()
+      .from(salaryAttendanceAdjustments)
+      .where(and(
+        eq(salaryAttendanceAdjustments.branchId, branchId),
+        eq(salaryAttendanceAdjustments.month, month),
+      ));
+  }
+
+  async upsertAttendanceAdjustment(data: InsertSalaryAttendanceAdjustment): Promise<SalaryAttendanceAdjustment> {
+    const [row] = await db.insert(salaryAttendanceAdjustments)
+      .values(data)
+      .onConflictDoUpdate({
+        target: [salaryAttendanceAdjustments.branchEmployeeId, salaryAttendanceAdjustments.month],
+        set: {
+          adjustedPresentDays: data.adjustedPresentDays,
+          reason: data.reason,
+          createdBy: data.createdBy,
+          createdByName: data.createdByName,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return row;
+  }
+
+  async deleteAttendanceAdjustment(branchEmployeeId: number, month: string): Promise<boolean> {
+    const result = await db.delete(salaryAttendanceAdjustments).where(and(
+      eq(salaryAttendanceAdjustments.branchEmployeeId, branchEmployeeId),
+      eq(salaryAttendanceAdjustments.month, month),
+    ));
+    return (result.rowCount ?? 0) > 0;
   }
 
   async createSalaryDeduction(deduction: InsertSalaryDeduction): Promise<SalaryDeduction> {
