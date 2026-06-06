@@ -435,6 +435,7 @@ export default function SalaryClosingPage() {
   const [nationalityFilter, setNationalityFilter] = usePersistedState("nationalityFilter", "all");
   const [dataSourceFilter, setDataSourceFilter] = usePersistedState("dataSourceFilter", "all");
   const [statusFilter, setStatusFilter] = usePersistedState("statusFilter", "all");
+  const [bankFilter, setBankFilter] = usePersistedState("bankFilter", "all");
   const [netMin, setNetMin] = usePersistedState("netMin", "");
   const [netMax, setNetMax] = usePersistedState("netMax", "");
   const [sortField, setSortField] = usePersistedState("sortField", "employeeName");
@@ -453,6 +454,15 @@ export default function SalaryClosingPage() {
     insurance: true,
   });
   const toggleCol = (k: string) => setCols((p) => ({ ...p, [k]: !p[k] }));
+
+  // ترحيل قيمة محفوظة قديمة: خيار "بدون بيانات بنكية" انتقل من فلتر الحالة إلى فلتر الحساب البنكي
+  useEffect(() => {
+    if (statusFilter === "no_bank") {
+      setStatusFilter("all");
+      setBankFilter("no_bank");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const branchActive = !!branch && branch !== "all";
 
@@ -937,7 +947,8 @@ export default function SalaryClosingPage() {
     if (statusFilter === "has_absence") result = result.filter((e) => e.absentDays > 0);
     else if (statusFilter === "has_deductions") result = result.filter((e) => (e.manualDeductionsTotal || 0) > 0);
     else if (statusFilter === "no_work") result = result.filter((e) => e.noWorkAtAll);
-    else if (statusFilter === "no_bank") result = result.filter((e) => !e.bankAccountNumber && !e.bankName);
+    if (bankFilter === "has_bank") result = result.filter((e) => !!(e.bankAccountNumber || e.bankName));
+    else if (bankFilter === "no_bank") result = result.filter((e) => !e.bankAccountNumber && !e.bankName);
     const min = netMin ? parseFloat(netMin) : -Infinity;
     const max = netMax ? parseFloat(netMax) : Infinity;
     result = result.filter((e) => (e.netSalary || 0) >= min && (e.netSalary || 0) <= max);
@@ -960,7 +971,7 @@ export default function SalaryClosingPage() {
       return sortOrder === "asc" ? av - bv : bv - av;
     });
     return result;
-  }, [salaryClosingData, search, jobTitleFilter, nationalityFilter, dataSourceFilter, statusFilter, netMin, netMax, sortField, sortOrder]);
+  }, [salaryClosingData, search, jobTitleFilter, nationalityFilter, dataSourceFilter, statusFilter, bankFilter, netMin, netMax, sortField, sortOrder]);
 
   const hasActiveFilters =
     !!search ||
@@ -968,6 +979,7 @@ export default function SalaryClosingPage() {
     nationalityFilter !== "all" ||
     dataSourceFilter !== "all" ||
     statusFilter !== "all" ||
+    bankFilter !== "all" ||
     !!netMin ||
     !!netMax;
 
@@ -977,6 +989,7 @@ export default function SalaryClosingPage() {
     setNationalityFilter("all");
     setDataSourceFilter("all");
     setStatusFilter("all");
+    setBankFilter("all");
     setNetMin("");
     setNetMax("");
   };
@@ -1440,7 +1453,17 @@ export default function SalaryClosingPage() {
                             <SelectItem value="has_absence">لديه غياب</SelectItem>
                             <SelectItem value="has_deductions">لديه سُلف/خصومات</SelectItem>
                             <SelectItem value="no_work">غائب الشهر كامل</SelectItem>
-                            <SelectItem value="no_bank">بدون بيانات بنكية</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">الحساب البنكي</Label>
+                        <Select value={bankFilter} onValueChange={setBankFilter}>
+                          <SelectTrigger data-testid="select-filter-bank"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">الكل</SelectItem>
+                            <SelectItem value="has_bank">لديه حساب بنكي مسجّل</SelectItem>
+                            <SelectItem value="no_bank">بدون حساب بنكي</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
