@@ -27714,10 +27714,16 @@ export async function registerRoutes(
         let overtimeMinutes = attendanceRecord?.overtimeMinutes || 0;
         let lateMinutes = attendanceRecord?.lateMinutes || 0;
 
+        // حضور فعلي = توجد بصمة دخول فعلية أو حالة حضور/تأخير مسجّلة لليوم
+        const workedActually = !!(attendanceRecord && (attendanceRecord.actualCheckIn || attendanceRecord.status === "present" || attendanceRecord.status === "late"));
+
         // تحديد الحالة بدقة
         let status = "pending";
         if (isOff) {
-          status = "day_off";
+          // يوم راحة/إجازة — لكن إذا كان للموظف حضور فعلي (بصمة) نعتبره عملاً فعلياً (غالباً عمل إضافي)
+          // ولا نعرضه كإجازة، حتى لا يتعارض ظهور التوقيع مع حالة "إجازة"
+          if (workedActually) status = attendanceRecord!.status === "late" ? "late" : "present";
+          else status = "day_off";
         } else if (hasSchedule) {
           // يوم مجدول: يُحتسب غياباً فعلياً إذا لا يوجد حضور
           if (attendanceRecord?.status === "present") status = "present";
@@ -27934,9 +27940,13 @@ export async function registerRoutes(
             const overtimeMinutes = attendanceRecord?.overtimeMinutes || 0;
             const lateMinutes = attendanceRecord?.lateMinutes || 0;
 
+            const workedActually = !!(attendanceRecord && (attendanceRecord.actualCheckIn || attendanceRecord.status === "present" || attendanceRecord.status === "late"));
             let status = "pending";
-            if (isOff) status = "day_off";
-            else if (hasSchedule) {
+            if (isOff) {
+              // حضور فعلي في يوم راحة/إجازة → يُعتبر عملاً فعلياً ولا يظهر كإجازة
+              if (workedActually) status = attendanceRecord!.status === "late" ? "late" : "present";
+              else status = "day_off";
+            } else if (hasSchedule) {
               if (attendanceRecord?.status === "present") status = "present";
               else if (attendanceRecord?.status === "late") status = "late";
               else if (attendanceRecord?.status === "absent") status = "absent";
@@ -28125,9 +28135,11 @@ export async function registerRoutes(
             if (scheduledHours < 0) scheduledHours += 24;
           }
 
+          const workedActually = !!(attendance && (attendance.actualCheckIn || attendance.status === "present" || attendance.status === "late"));
           let statusKey = "pending";
           if (isOff) {
-            statusKey = "day_off";
+            // حضور فعلي في يوم راحة/إجازة → يُحتسب عملاً فعلياً ولا يظهر كإجازة
+            statusKey = workedActually ? (attendance!.status === "late" ? "late" : "present") : "day_off";
           } else if (hasSchedule) {
             statusKey = (attendance?.status === "present" || attendance?.status === "late" || attendance?.status === "absent")
               ? attendance.status
@@ -28142,7 +28154,7 @@ export async function registerRoutes(
           const lateMin = attendance?.lateMinutes || 0;
           const otMin = attendance?.overtimeMinutes || 0;
 
-          if (isOff) {
+          if (isOff && !workedActually) {
             offDays++;
           } else {
             if (statusKey === "present" || statusKey === "late") {

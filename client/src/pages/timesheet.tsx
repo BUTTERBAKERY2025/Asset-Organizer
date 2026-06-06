@@ -1732,6 +1732,14 @@ export default function TimesheetPage() {
                                 {STATUS_LABELS[entry.status]?.icon}
                                 {STATUS_LABELS[entry.status]?.label || entry.status}
                               </Badge>
+                              {entry.isOff && (entry.status === "present" || entry.status === "late") && (
+                                <div className="mt-1">
+                                  <span className="inline-flex items-center gap-1 text-[10px] text-blue-600" data-testid={`note-worked-dayoff-${entry.id}`}>
+                                    <Calendar className="w-2.5 h-2.5" />
+                                    {t("timesheet.workedOnDayOff")}
+                                  </span>
+                                </div>
+                              )}
                             </TableCell>
                             <TableCell className="text-center">{entry.scheduledStartTime ?? "—"}</TableCell>
                             <TableCell className="text-center">{entry.scheduledEndTime ?? "—"}</TableCell>

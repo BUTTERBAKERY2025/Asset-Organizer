@@ -191,6 +191,7 @@
     "actualEnd": "Actual End",
     "workHours": "Work Hours",
     "signature": "Signature",
+    "workedOnDayOff": "Worked on day off",
     "signatureSection": "Signatures",
     "employeeSignature": "Employee Signature",
     "managerSignature": "Manager Signature",
