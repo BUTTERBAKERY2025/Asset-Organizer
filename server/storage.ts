@@ -645,6 +645,8 @@ export interface AuditLogQueryFilters {
   action?: string;
   userId?: string;
   branchId?: string;
+  // Server-enforced branch scoping: null = all branches (admin), array = restrict to these branch ids
+  branchIds?: string[] | null;
   dateFrom?: Date;
   dateTo?: Date;
   q?: string;
@@ -656,7 +658,12 @@ export interface AuditLogAnalyticsFilters {
   dateFrom?: Date;
   dateTo?: Date;
   branchId?: string;
+  branchIds?: string[] | null;
   module?: string;
+  action?: string;
+  userId?: string;
+  q?: string;
+  sensitiveOnly?: boolean;
 }
 export interface AuditLogAnalytics {
   byDay: { day: string; count: number }[];
@@ -4690,7 +4697,16 @@ export class DatabaseStorage implements IStorage {
     if (filters.module && filters.module !== "all") conds.push(eq(systemAuditLogs.module, filters.module));
     if (filters.action && filters.action !== "all") conds.push(eq(systemAuditLogs.action, filters.action));
     if (filters.userId && filters.userId !== "all") conds.push(eq(systemAuditLogs.userId, filters.userId));
-    if (filters.branchId && filters.branchId !== "all") conds.push(eq(systemAuditLogs.branchId, filters.branchId));
+    if (filters.branchId && filters.branchId !== "all") {
+      conds.push(eq(systemAuditLogs.branchId, filters.branchId));
+    } else if (Array.isArray(filters.branchIds)) {
+      // Server-enforced branch scoping (non-admin). Empty array = no access.
+      if (filters.branchIds.length === 0) {
+        conds.push(sql`false`);
+      } else {
+        conds.push(inArray(systemAuditLogs.branchId, filters.branchIds));
+      }
+    }
     if (filters.dateFrom) conds.push(gte(systemAuditLogs.createdAt, filters.dateFrom));
     if (filters.dateTo) conds.push(lte(systemAuditLogs.createdAt, filters.dateTo));
     if (filters.sensitiveOnly) {

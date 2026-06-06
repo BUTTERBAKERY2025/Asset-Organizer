@@ -5144,11 +5144,18 @@ export async function registerRoutes(
         const d = new Date(String(v));
         return isNaN(d.getTime()) ? undefined : d;
       };
+      // Enforce branch scoping server-side (do not trust caller's branchId blindly)
+      const queryBranchId = q.branchId ? String(q.branchId) : undefined;
+      const { branchIds, singleBranchId, hasAccess } = getEffectiveBranchFilter(req, queryBranchId);
+      if (!hasAccess) {
+        return res.json({ rows: [], total: 0 });
+      }
       const result = await storage.querySystemAuditLogs({
         module: q.module ? String(q.module) : undefined,
         action: q.action ? String(q.action) : undefined,
         userId: q.userId ? String(q.userId) : undefined,
-        branchId: q.branchId ? String(q.branchId) : undefined,
+        branchId: singleBranchId ?? undefined,
+        branchIds: singleBranchId ? undefined : branchIds,
         q: q.q ? String(q.q) : undefined,
         dateFrom: parseDate(q.dateFrom),
         dateTo: parseDate(q.dateTo),
@@ -5172,9 +5179,20 @@ export async function registerRoutes(
         const d = new Date(String(v));
         return isNaN(d.getTime()) ? undefined : d;
       };
+      // Enforce branch scoping server-side
+      const queryBranchId = q.branchId ? String(q.branchId) : undefined;
+      const { branchIds, singleBranchId, hasAccess } = getEffectiveBranchFilter(req, queryBranchId);
+      if (!hasAccess) {
+        return res.json({ byDay: [], byModule: [], byAction: [], topUsers: [], total: 0 });
+      }
       const analytics = await storage.getSystemAuditLogAnalytics({
         module: q.module ? String(q.module) : undefined,
-        branchId: q.branchId ? String(q.branchId) : undefined,
+        action: q.action ? String(q.action) : undefined,
+        userId: q.userId ? String(q.userId) : undefined,
+        branchId: singleBranchId ?? undefined,
+        branchIds: singleBranchId ? undefined : branchIds,
+        q: q.q ? String(q.q) : undefined,
+        sensitiveOnly: q.sensitiveOnly === "1" || q.sensitiveOnly === "true",
         dateFrom: parseDate(q.dateFrom),
         dateTo: parseDate(q.dateTo),
       });
