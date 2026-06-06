@@ -385,6 +385,7 @@ export async function setupAuth(app: Express) {
                   }),
                   userId: user.id,
                   userName: displayName,
+                  branchId: req.session.activeBranchId || user.branchId || null,
                   ipAddress: req.ip || req.socket?.remoteAddress,
                   userAgent: userAgentStr,
                 });
@@ -730,6 +731,7 @@ export async function setupAuth(app: Express) {
           }),
           userId: userId,
           userName: userName,
+          branchId: req.session.activeBranchId || null,
           ipAddress: req.ip || req.socket?.remoteAddress,
           userAgent: req.headers['user-agent'],
         });

@@ -636,6 +636,44 @@ import {
 type TransferHistory = typeof transferHistory.$inferSelect;
 import { db, pool } from "./db";
 import { eq, and, gte, lte, desc, or, inArray, sql, isNull, isNotNull, ilike } from "drizzle-orm";
+
+// ============================================================
+// Audit log query / analytics types + sensitivity classification
+// ============================================================
+export interface AuditLogQueryFilters {
+  module?: string;
+  action?: string;
+  userId?: string;
+  branchId?: string;
+  dateFrom?: Date;
+  dateTo?: Date;
+  q?: string;
+  sensitiveOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+export interface AuditLogAnalyticsFilters {
+  dateFrom?: Date;
+  dateTo?: Date;
+  branchId?: string;
+  module?: string;
+}
+export interface AuditLogAnalytics {
+  byDay: { day: string; count: number }[];
+  byModule: { module: string; count: number }[];
+  byAction: { action: string; count: number }[];
+  topUsers: { userId: string | null; userName: string | null; count: number }[];
+  total: number;
+}
+// Modules/actions considered security-sensitive for the "تنبيهات أمنية" tab
+export const SENSITIVE_AUDIT_MODULES = [
+  "users", "roles", "permissions", "rbac_management",
+  "salary_closing", "salary", "backups", "payment_requests", "contracts",
+];
+export const SENSITIVE_AUDIT_ACTIONS = [
+  "delete", "reject", "reopen", "apply_ld", "close",
+  "permission_change", "role_change", "login",
+];
 import bcrypt from "bcrypt";
 
 export type PermissionSource = 'direct' | 'role' | 'override_grant' | 'override_deny';
@@ -908,6 +946,8 @@ export interface IStorage {
   getSystemAuditLogsByUser(userId: string): Promise<SystemAuditLog[]>;
   createSystemAuditLog(log: InsertSystemAuditLog): Promise<SystemAuditLog>;
   searchSystemAuditLogs(query: string): Promise<SystemAuditLog[]>;
+  querySystemAuditLogs(filters: AuditLogQueryFilters): Promise<{ rows: SystemAuditLog[]; total: number }>;
+  getSystemAuditLogAnalytics(filters: AuditLogAnalyticsFilters): Promise<AuditLogAnalytics>;
   
   // Backups
   getAllBackups(): Promise<Backup[]>;
@@ -4643,6 +4683,88 @@ export class DatabaseStorage implements IStorage {
       log.action.toLowerCase().includes(lowerQuery) ||
       log.module.toLowerCase().includes(lowerQuery)
     );
+  }
+
+  private buildAuditConditions(filters: AuditLogQueryFilters): any[] {
+    const conds: any[] = [];
+    if (filters.module && filters.module !== "all") conds.push(eq(systemAuditLogs.module, filters.module));
+    if (filters.action && filters.action !== "all") conds.push(eq(systemAuditLogs.action, filters.action));
+    if (filters.userId && filters.userId !== "all") conds.push(eq(systemAuditLogs.userId, filters.userId));
+    if (filters.branchId && filters.branchId !== "all") conds.push(eq(systemAuditLogs.branchId, filters.branchId));
+    if (filters.dateFrom) conds.push(gte(systemAuditLogs.createdAt, filters.dateFrom));
+    if (filters.dateTo) conds.push(lte(systemAuditLogs.createdAt, filters.dateTo));
+    if (filters.sensitiveOnly) {
+      conds.push(
+        or(
+          inArray(systemAuditLogs.module, SENSITIVE_AUDIT_MODULES),
+          inArray(systemAuditLogs.action, SENSITIVE_AUDIT_ACTIONS),
+        )
+      );
+    }
+    if (filters.q && filters.q.trim()) {
+      const pat = `%${filters.q.trim()}%`;
+      conds.push(
+        or(
+          ilike(systemAuditLogs.entityName, pat),
+          ilike(systemAuditLogs.details, pat),
+          ilike(systemAuditLogs.userName, pat),
+          ilike(systemAuditLogs.action, pat),
+          ilike(systemAuditLogs.module, pat),
+          ilike(systemAuditLogs.description, pat),
+          ilike(systemAuditLogs.entityId, pat),
+          ilike(systemAuditLogs.ipAddress, pat),
+        )
+      );
+    }
+    return conds;
+  }
+
+  async querySystemAuditLogs(filters: AuditLogQueryFilters): Promise<{ rows: SystemAuditLog[]; total: number }> {
+    const conds = this.buildAuditConditions(filters);
+    const whereClause = conds.length ? and(...conds) : undefined;
+    const page = Math.max(1, filters.page || 1);
+    const pageSize = Math.min(200, Math.max(1, filters.pageSize || 25));
+
+    const [countResult, rows] = await Promise.all([
+      db.select({ count: sql<number>`count(*)::int` }).from(systemAuditLogs).where(whereClause as any),
+      db.select().from(systemAuditLogs)
+        .where(whereClause as any)
+        .orderBy(desc(systemAuditLogs.createdAt))
+        .limit(pageSize)
+        .offset((page - 1) * pageSize),
+    ]);
+    return { rows, total: Number(countResult[0]?.count || 0) };
+  }
+
+  async getSystemAuditLogAnalytics(filters: AuditLogAnalyticsFilters): Promise<AuditLogAnalytics> {
+    const conds = this.buildAuditConditions(filters as AuditLogQueryFilters);
+    const whereClause = conds.length ? and(...conds) : undefined;
+    const dayExpr = sql<string>`to_char(${systemAuditLogs.createdAt}, 'YYYY-MM-DD')`;
+
+    const [byDay, byModule, byAction, topUsers, totalRes] = await Promise.all([
+      db.select({ day: dayExpr, count: sql<number>`count(*)::int` })
+        .from(systemAuditLogs).where(whereClause as any)
+        .groupBy(dayExpr).orderBy(dayExpr),
+      db.select({ module: systemAuditLogs.module, count: sql<number>`count(*)::int` })
+        .from(systemAuditLogs).where(whereClause as any)
+        .groupBy(systemAuditLogs.module).orderBy(sql`count(*) desc`),
+      db.select({ action: systemAuditLogs.action, count: sql<number>`count(*)::int` })
+        .from(systemAuditLogs).where(whereClause as any)
+        .groupBy(systemAuditLogs.action).orderBy(sql`count(*) desc`),
+      db.select({ userId: systemAuditLogs.userId, userName: systemAuditLogs.userName, count: sql<number>`count(*)::int` })
+        .from(systemAuditLogs).where(whereClause as any)
+        .groupBy(systemAuditLogs.userId, systemAuditLogs.userName)
+        .orderBy(sql`count(*) desc`).limit(10),
+      db.select({ count: sql<number>`count(*)::int` }).from(systemAuditLogs).where(whereClause as any),
+    ]);
+
+    return {
+      byDay: byDay.map(r => ({ day: r.day, count: Number(r.count) })),
+      byModule: byModule.map(r => ({ module: r.module, count: Number(r.count) })),
+      byAction: byAction.map(r => ({ action: r.action, count: Number(r.count) })),
+      topUsers: topUsers.map(r => ({ userId: r.userId, userName: r.userName, count: Number(r.count) })),
+      total: Number(totalRes[0]?.count || 0),
+    };
   }
 
   // Backups

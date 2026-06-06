@@ -30,9 +30,14 @@ export async function auditEvent(params: {
   description?: string;
   details?: Record<string, any>;
   targetId?: string | number;
+  branchId?: string | null;
 }): Promise<void> {
   try {
     const user: any = (params.req as any).currentUser || null;
+    const branchId =
+      params.branchId !== undefined
+        ? params.branchId
+        : ((params.req as any).session?.activeBranchId || user?.branchId || null);
     await storage.createSystemAuditLog({
       module: params.module,
       entityId: String(params.entityId),
@@ -41,6 +46,7 @@ export async function auditEvent(params: {
       details: params.details ? JSON.stringify(params.details) : null,
       userId: user?.id || null,
       userName: user?.fullName || user?.username || null,
+      branchId: branchId || null,
       targetId: params.targetId != null ? String(params.targetId) : null,
       description: params.description || null,
       ipAddress: (params.req.headers["x-forwarded-for"] as string) || params.req.socket?.remoteAddress || null,

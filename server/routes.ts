@@ -5135,6 +5135,56 @@ export async function registerRoutes(
     }
   });
 
+  // Advanced filtered + paginated query (server-side filtering & pagination)
+  app.get("/api/system-audit-logs/query", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const q = req.query;
+      const parseDate = (v: any) => {
+        if (!v) return undefined;
+        const d = new Date(String(v));
+        return isNaN(d.getTime()) ? undefined : d;
+      };
+      const result = await storage.querySystemAuditLogs({
+        module: q.module ? String(q.module) : undefined,
+        action: q.action ? String(q.action) : undefined,
+        userId: q.userId ? String(q.userId) : undefined,
+        branchId: q.branchId ? String(q.branchId) : undefined,
+        q: q.q ? String(q.q) : undefined,
+        dateFrom: parseDate(q.dateFrom),
+        dateTo: parseDate(q.dateTo),
+        sensitiveOnly: q.sensitiveOnly === "1" || q.sensitiveOnly === "true",
+        page: q.page ? parseInt(String(q.page), 10) : 1,
+        pageSize: q.pageSize ? parseInt(String(q.pageSize), 10) : 25,
+      });
+      res.json(result);
+    } catch (error) {
+      console.error("Error querying audit logs:", error);
+      res.status(500).json({ error: "Failed to query audit logs" });
+    }
+  });
+
+  // Analytics aggregates for the audit dashboard
+  app.get("/api/system-audit-logs/analytics", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const q = req.query;
+      const parseDate = (v: any) => {
+        if (!v) return undefined;
+        const d = new Date(String(v));
+        return isNaN(d.getTime()) ? undefined : d;
+      };
+      const analytics = await storage.getSystemAuditLogAnalytics({
+        module: q.module ? String(q.module) : undefined,
+        branchId: q.branchId ? String(q.branchId) : undefined,
+        dateFrom: parseDate(q.dateFrom),
+        dateTo: parseDate(q.dateTo),
+      });
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching audit analytics:", error);
+      res.status(500).json({ error: "Failed to fetch audit analytics" });
+    }
+  });
+
   app.get("/api/system-audit-logs/module/:module", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {
       const logs = await storage.getSystemAuditLogsByModule(req.params.module);
@@ -29261,6 +29311,23 @@ export async function registerRoutes(
       } else {
         closure = await storage.createSalaryClosureWithLines(closurePayload as any, linePayloads as any);
       }
+      await auditEvent({
+        req,
+        module: "salary_closing",
+        entityId: closure?.id ?? `${branchId}-${month}`,
+        action: "close",
+        entityName: `إغلاق رواتب ${month}`,
+        description: `إغلاق رواتب الفرع لشهر ${month} (${result.totals.employeeCount} موظف، صافي ${result.totals.totalNet})`,
+        branchId,
+        details: {
+          month,
+          employeeCount: result.totals.employeeCount,
+          totalGross: result.totals.totalGross,
+          totalNet: result.totals.totalNet,
+          totalAbsenceDeduction: result.totals.totalAbsenceDeduction,
+          warningsCount: result.warnings.length,
+        },
+      });
       res.status(201).json({ success: true, closure });
     } catch (error: any) {
       console.error("Error closing salary month:", error);
@@ -29289,6 +29356,16 @@ export async function registerRoutes(
         reopenedBy: req.currentUser?.id,
         reopenedByName: currentUserName(req),
         reopenReason: String(reason).trim(),
+      });
+      await auditEvent({
+        req,
+        module: "salary_closing",
+        entityId: id,
+        action: "reopen",
+        entityName: `إعادة فتح رواتب ${closure.month}`,
+        description: `إعادة فتح إغلاق رواتب الفرع لشهر ${closure.month} — السبب: ${String(reason).trim()}`,
+        branchId: closure.branchId,
+        details: { month: closure.month, reason: String(reason).trim() },
       });
       res.json({ success: true, closure: updated });
     } catch (error) {

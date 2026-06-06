@@ -154,6 +154,7 @@ export const systemAuditLogs = pgTable("system_audit_logs", {
   details: text("details"), // JSON string with change details
   userId: varchar("user_id").references(() => users.id),
   userName: text("user_name"),
+  branchId: varchar("branch_id").references(() => branches.id), // Branch context of the action (nullable for legacy rows)
   targetId: text("target_id"), // Target entity ID for security/RBAC actions
   description: text("description"), // Human-readable description of the action
   ipAddress: text("ip_address"),
@@ -163,6 +164,8 @@ export const systemAuditLogs = pgTable("system_audit_logs", {
   index("idx_system_audit_logs_module").on(table.module),
   index("idx_system_audit_logs_entity_id").on(table.entityId),
   index("idx_system_audit_logs_created_at").on(table.createdAt),
+  index("idx_system_audit_logs_branch_id").on(table.branchId),
+  index("idx_system_audit_logs_action").on(table.action),
 ]);
 
 export const insertSystemAuditLogSchema = createInsertSchema(
