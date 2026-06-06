@@ -20,6 +20,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -57,10 +58,15 @@ import {
   SlidersHorizontal,
   ShieldAlert,
   History,
+  Building2,
+  TrendingUp,
+  TrendingDown,
+  Minus,
 } from "lucide-react";
 import type { BranchEmployee, AttendanceRecord, SalaryDeduction } from "@shared/schema";
 import { SALARY_DEDUCTION_TYPE_LABELS } from "@shared/schema";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // =====================================================
 // مكوّن نافذة إدارة السُلف والخصومات اليدوية للموظف
@@ -414,6 +420,14 @@ export default function SalaryClosingPage() {
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [groupSel, setGroupSel] = useState<Record<string, string>>({});
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
+  const [showOverviewDialog, setShowOverviewDialog] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [recordSel, setRecordSel] = useState<Record<number, string>>({});
+  const [selectedEmpIds, setSelectedEmpIds] = useState<Set<number>>(new Set());
+  const [showBulkDeductionDialog, setShowBulkDeductionDialog] = useState(false);
+  const [bulkType, setBulkType] = useState<string>("advance");
+  const [bulkAmount, setBulkAmount] = useState<string>("");
+  const [bulkDescription, setBulkDescription] = useState<string>("");
 
   // حالة البحث والفلترة المتقدمة (تؤثر على الجدول فقط) — محفوظة في المتصفح
   const [search, setSearch] = useState("");
@@ -519,10 +533,62 @@ export default function SalaryClosingPage() {
       if (!res.ok) throw new Error("Failed to fetch salary closures history");
       return res.json();
     },
-    enabled: showHistoryDialog,
+    enabled: showHistoryDialog || showOverviewDialog,
     staleTime: 30_000,
   });
   const closuresHistory = closuresHistoryQuery.data ?? [];
+
+  // مقارنة بالشهر السابق (#6)
+  const prevMonth = useMemo(() => {
+    const [y, m] = month.split("-").map(Number);
+    if (!y || !m) return "";
+    const d = new Date(y, m - 1, 1);
+    d.setMonth(d.getMonth() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  }, [month]);
+
+  const prevPreviewQuery = useQuery<{ lines: any[] }>({
+    queryKey: ["/api/salary-closing/preview", branch, prevMonth],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("branchId", branch);
+      params.set("month", prevMonth);
+      const res = await fetch(`/api/salary-closing/preview?${params.toString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch previous month preview");
+      return res.json();
+    },
+    enabled: branchActive && !!prevMonth,
+    staleTime: 30_000,
+  });
+  const prevTotals = useMemo(() => {
+    const lines = prevPreviewQuery.data?.lines ?? [];
+    return {
+      hasData: lines.length > 0,
+      count: lines.length,
+      gross: lines.reduce((s: number, e: any) => s + (e.grossSalary || 0), 0),
+      net: lines.reduce((s: number, e: any) => s + (e.netSalary || 0), 0),
+    };
+  }, [prevPreviewQuery.data]);
+
+  const renderDelta = (label: string, current: number, prev: number, currency: boolean) => {
+    const diff = current - prev;
+    const pct = prev !== 0 ? (diff / prev) * 100 : 0;
+    const up = diff > 0;
+    const down = diff < 0;
+    const Icon = up ? TrendingUp : down ? TrendingDown : Minus;
+    const color = up ? "text-emerald-600" : down ? "text-red-600" : "text-gray-400";
+    const val = currency ? formatCurrency(Math.abs(diff), isRTL) : formatNumber(Math.abs(diff));
+    return (
+      <span className={`inline-flex items-center gap-1 ${color}`} data-testid={`delta-${label}`}>
+        <Icon className="w-3.5 h-3.5" />
+        <span className="text-gray-600">{label}:</span>
+        <span className="font-semibold">{diff === 0 ? "بدون تغيير" : `${up ? "+" : "-"}${val}`}</span>
+        {prev !== 0 && diff !== 0 && (
+          <span className="text-[10px]">({pct > 0 ? "+" : ""}{pct.toFixed(0)}%)</span>
+        )}
+      </span>
+    );
+  };
 
   const salaryClosingData: any[] = salaryClosingPreview?.lines ?? [];
   const salaryClosingUnlinkedRecords: AttendanceRecord[] = salaryClosingPreview?.unlinked ?? [];
@@ -555,6 +621,12 @@ export default function SalaryClosingPage() {
   const salaryClosingWarnings = salaryClosingPreview?.warnings ?? [];
   const salaryClosingClosure = salaryClosingPreview?.closure ?? null;
   const salaryClosingIsLocked = !!salaryClosingPreview?.isLocked;
+
+  // امسح التحديد عند تغيير الفرع/الشهر/حالة القفل لتجنّب تطبيق خصم على موظفين من سياق سابق
+  useEffect(() => {
+    setSelectedEmpIds(new Set());
+    setShowBulkDeductionDialog(false);
+  }, [branch, month, salaryClosingIsLocked]);
   const salaryClosingBlockingWarnings = salaryClosingWarnings.filter((w: any) => w.code === "no_work_at_all");
 
   const getBranchName = (branchId: string) => {
@@ -617,6 +689,60 @@ export default function SalaryClosingPage() {
     },
     onError: (err: any) => {
       toast({ title: "تعذّر الربط", description: err?.message || "حدث خطأ", variant: "destructive" });
+    },
+  });
+
+  // ربط سجل واحد بموظف محدد (#3)
+  const linkSingleMutation = useMutation({
+    mutationFn: async (payload: { attendanceId: number; branchEmployeeId: number }) => {
+      const res = await apiRequest("POST", "/api/salary-closing/link-attendance", payload);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "تم الربط", description: "تم ربط السجل بالموظف." });
+      refreshSalaryClosing();
+    },
+    onError: (err: any) => {
+      toast({ title: "تعذّر الربط", description: err?.message || "حدث خطأ", variant: "destructive" });
+    },
+  });
+
+  // تطبيق سُلفة/خصم على عدة موظفين دفعة واحدة (#7)
+  const bulkDeductionMutation = useMutation({
+    mutationFn: async (payload: { ids: number[]; type: string; amount: number; description: string }) => {
+      const results = await Promise.allSettled(
+        payload.ids.map((id) =>
+          fetch("/api/salary-deductions", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              branchEmployeeId: id,
+              branchId: branch,
+              month,
+              type: payload.type,
+              amount: payload.amount,
+              description: payload.description || null,
+            }),
+          }).then(async (r) => {
+            if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "فشل");
+            return r.json();
+          }),
+        ),
+      );
+      const ok = results.filter((r) => r.status === "fulfilled").length;
+      return { ok, fail: results.length - ok };
+    },
+    onSuccess: ({ ok, fail }) => {
+      toast({ title: "تم التطبيق", description: `تم تسجيل الخصم لـ ${ok} موظف${fail ? ` (فشل ${fail})` : ""}.` });
+      setSelectedEmpIds(new Set());
+      setShowBulkDeductionDialog(false);
+      setBulkAmount("");
+      setBulkDescription("");
+      refreshSalaryClosing();
+    },
+    onError: (err: any) => {
+      toast({ title: "تعذّر التطبيق", description: err?.message || "حدث خطأ", variant: "destructive" });
     },
   });
 
@@ -960,6 +1086,14 @@ export default function SalaryClosingPage() {
                 )}
                 <Button
                   variant="outline"
+                  onClick={() => setShowOverviewDialog(true)}
+                  data-testid="button-branches-overview"
+                >
+                  <Building2 className="w-4 h-4 ml-2" />
+                  نظرة عامة على الفروع
+                </Button>
+                <Button
+                  variant="outline"
                   onClick={() => setShowHistoryDialog(true)}
                   data-testid="button-closures-history"
                 >
@@ -1111,6 +1245,18 @@ export default function SalaryClosingPage() {
                     <p className="text-sm text-gray-600">صافي الرواتب</p>
                   </div>
                 </div>
+
+                {prevTotals.hasData && (
+                  <div
+                    className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-4 p-2.5 bg-gray-50 border rounded-lg text-xs"
+                    data-testid="row-prev-comparison"
+                  >
+                    <span className="text-gray-500 font-medium">مقارنة بالشهر السابق ({prevMonth}):</span>
+                    {renderDelta("صافي الرواتب", salaryClosingData.reduce((s, e) => s + e.netSalary, 0), prevTotals.net, true)}
+                    {renderDelta("إجمالي الرواتب", salaryClosingData.reduce((s, e) => s + e.grossSalary, 0), prevTotals.gross, true)}
+                    {renderDelta("عدد الموظفين", salaryClosingData.length, prevTotals.count, false)}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-2">
                   <div className="text-center p-2 bg-blue-50 rounded-lg border border-blue-100" data-testid="summary-scheduled-days">
@@ -1386,6 +1532,35 @@ export default function SalaryClosingPage() {
             {/* جدول الرواتب */}
             <Card>
               <CardContent className="py-3 overflow-x-auto">
+                {!salaryClosingIsLocked && selectedEmpIds.size > 0 && (
+                  <div
+                    className="flex flex-wrap items-center justify-between gap-2 mb-3 p-2.5 bg-orange-50 border border-orange-200 rounded-lg"
+                    data-testid="toolbar-bulk-deduction"
+                  >
+                    <span className="text-sm font-medium text-orange-800">
+                      تم تحديد {selectedEmpIds.size} موظف
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        className="bg-orange-600 hover:bg-orange-700"
+                        onClick={() => setShowBulkDeductionDialog(true)}
+                        data-testid="button-open-bulk-deduction"
+                      >
+                        <Plus className="w-3.5 h-3.5 ml-1" />
+                        تطبيق سُلفة/خصم على المحددين
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setSelectedEmpIds(new Set())}
+                        data-testid="button-clear-selection"
+                      >
+                        إلغاء التحديد
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 {filteredLines.length === 0 ? (
                   <div className="text-center py-10 text-gray-500" data-testid="empty-filtered">
                     <Search className="w-10 h-10 mx-auto mb-3 opacity-50" />
@@ -1398,6 +1573,17 @@ export default function SalaryClosingPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        {!salaryClosingIsLocked && (
+                          <TableHead className="text-center w-8">
+                            <Checkbox
+                              checked={filteredLines.length > 0 && filteredLines.every((e: any) => selectedEmpIds.has(e.id))}
+                              onCheckedChange={(v) =>
+                                setSelectedEmpIds(v ? new Set(filteredLines.map((e: any) => e.id)) : new Set())
+                              }
+                              data-testid="checkbox-select-all"
+                            />
+                          </TableHead>
+                        )}
                         <TableHead className={isRTL ? "text-right" : "text-left"}>#</TableHead>
                         <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "رقم الموظف" : "Employee #"}</TableHead>
                         <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الاسم" : "Name"}</TableHead>
@@ -1421,6 +1607,22 @@ export default function SalaryClosingPage() {
                     <TableBody>
                       {filteredLines.map((emp, index) => (
                         <TableRow key={emp.id} className={emp.noWorkAtAll ? "bg-red-50/60" : (emp.dataSource === "signed_timesheet" ? "bg-emerald-50/30" : "")}>
+                          {!salaryClosingIsLocked && (
+                            <TableCell className="text-center">
+                              <Checkbox
+                                checked={selectedEmpIds.has(emp.id)}
+                                onCheckedChange={(v) =>
+                                  setSelectedEmpIds((prev) => {
+                                    const n = new Set(prev);
+                                    if (v) n.add(emp.id);
+                                    else n.delete(emp.id);
+                                    return n;
+                                  })
+                                }
+                                data-testid={`checkbox-emp-${emp.id}`}
+                              />
+                            </TableCell>
+                          )}
                           <TableCell>{index + 1}</TableCell>
                           <TableCell className="font-mono">{emp.employeeNumber}</TableCell>
                           <TableCell className="font-medium">
@@ -1811,50 +2013,107 @@ export default function SalaryClosingPage() {
               {unlinkedGroups.map((g) => {
                 const sel = groupSel[g.key] ?? (g.suggestion ? String(g.suggestion.employee.id) : "");
                 return (
-                  <div key={g.key} className="flex items-center gap-2 border rounded-lg p-2" data-testid={`row-unlinked-group-${g.key}`}>
-                    <div className="flex-1 text-xs">
-                      <div className="font-medium">
-                        {g.name || `سجل #${g.records[0]?.id}`}
-                        {g.employeeNumber ? ` (${g.employeeNumber})` : ""}
+                  <div key={g.key} className="border rounded-lg p-2" data-testid={`row-unlinked-group-${g.key}`}>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 text-xs">
+                        <div className="font-medium">
+                          {g.name || `سجل #${g.records[0]?.id}`}
+                          {g.employeeNumber ? ` (${g.employeeNumber})` : ""}
+                        </div>
+                        <div className="text-gray-500">
+                          {g.records.length} يوم/سجل
+                          {g.suggestion ? (
+                            <span className={g.suggestion.confidence === "high" ? "text-emerald-600" : "text-amber-600"}>
+                              {" "}· {g.suggestion.confidence === "high" ? "مطابقة مؤكدة" : "اقتراح تقريبي — راجعه"}: {g.suggestion.employee.employeeName || g.suggestion.employee.name}
+                            </span>
+                          ) : (
+                            <span className="text-amber-600"> · لا يوجد اقتراح — اختر يدوياً</span>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-gray-500">
-                        {g.records.length} يوم/سجل
-                        {g.suggestion ? (
-                          <span className={g.suggestion.confidence === "high" ? "text-emerald-600" : "text-amber-600"}>
-                            {" "}· {g.suggestion.confidence === "high" ? "مطابقة مؤكدة" : "اقتراح تقريبي — راجعه"}: {g.suggestion.employee.employeeName || g.suggestion.employee.name}
-                          </span>
-                        ) : (
-                          <span className="text-amber-600"> · لا يوجد اقتراح — اختر يدوياً</span>
-                        )}
-                      </div>
+                      <SearchableSelect
+                        value={sel}
+                        onValueChange={(v) => setGroupSel((prev) => ({ ...prev, [g.key]: v }))}
+                        className="w-56"
+                        triggerClassName="h-9"
+                        placeholder="اختر الموظف"
+                        searchPlaceholder="ابحث بالاسم أو الرقم..."
+                        dataTestid={`select-link-employee-${g.key}`}
+                        options={(salaryClosingBundle?.employees ?? []).map((emp: any) => ({
+                          value: String(emp.id),
+                          label: emp.employeeName || emp.name,
+                          sublabel: emp.employeeNumber ? `(${emp.employeeNumber})` : undefined,
+                        }))}
+                      />
+                      <Button
+                        size="sm"
+                        disabled={bulkLinkMutation.isPending || !sel}
+                        onClick={() =>
+                          bulkLinkMutation.mutate({
+                            attendanceIds: g.records.map((r: any) => r.id),
+                            branchEmployeeId: Number(sel),
+                          })
+                        }
+                        data-testid={`button-link-group-${g.key}`}
+                      >
+                        ربط الكل ({g.records.length})
+                      </Button>
+                      {g.records.length > 1 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-9 px-2"
+                          onClick={() => setExpandedGroups((p) => ({ ...p, [g.key]: !p[g.key] }))}
+                          data-testid={`button-expand-group-${g.key}`}
+                          title="ربط سجل واحد بموظف مختلف"
+                        >
+                          {expandedGroups[g.key] ? "▲" : "▼"} سجلات
+                        </Button>
+                      )}
                     </div>
-                    <SearchableSelect
-                      value={sel}
-                      onValueChange={(v) => setGroupSel((prev) => ({ ...prev, [g.key]: v }))}
-                      className="w-56"
-                      triggerClassName="h-9"
-                      placeholder="اختر الموظف"
-                      searchPlaceholder="ابحث بالاسم أو الرقم..."
-                      dataTestid={`select-link-employee-${g.key}`}
-                      options={(salaryClosingBundle?.employees ?? []).map((emp: any) => ({
-                        value: String(emp.id),
-                        label: emp.employeeName || emp.name,
-                        sublabel: emp.employeeNumber ? `(${emp.employeeNumber})` : undefined,
-                      }))}
-                    />
-                    <Button
-                      size="sm"
-                      disabled={bulkLinkMutation.isPending || !sel}
-                      onClick={() =>
-                        bulkLinkMutation.mutate({
-                          attendanceIds: g.records.map((r: any) => r.id),
-                          branchEmployeeId: Number(sel),
-                        })
-                      }
-                      data-testid={`button-link-group-${g.key}`}
-                    >
-                      ربط الكل ({g.records.length})
-                    </Button>
+                    {expandedGroups[g.key] && g.records.length > 1 && (
+                      <div className="mt-2 pt-2 border-t space-y-1.5">
+                        <div className="text-[11px] text-gray-500">
+                          ربط سجل واحد بموظف مختلف (للحالات التي تخص أكثر من موظف):
+                        </div>
+                        {g.records.map((r: any) => {
+                          const rsel = recordSel[r.id] ?? "";
+                          return (
+                            <div key={r.id} className="flex items-center gap-2 text-xs" data-testid={`row-unlinked-record-${r.id}`}>
+                              <span className="font-mono text-gray-600 w-28 shrink-0">
+                                {r.attendanceDate || `#${r.id}`}
+                              </span>
+                              <SearchableSelect
+                                value={rsel}
+                                onValueChange={(v) => setRecordSel((prev) => ({ ...prev, [r.id]: v }))}
+                                className="flex-1"
+                                triggerClassName="h-8"
+                                placeholder="اختر الموظف"
+                                searchPlaceholder="ابحث بالاسم أو الرقم..."
+                                dataTestid={`select-link-record-${r.id}`}
+                                options={(salaryClosingBundle?.employees ?? []).map((emp: any) => ({
+                                  value: String(emp.id),
+                                  label: emp.employeeName || emp.name,
+                                  sublabel: emp.employeeNumber ? `(${emp.employeeNumber})` : undefined,
+                                }))}
+                              />
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 shrink-0"
+                                disabled={linkSingleMutation.isPending || !rsel}
+                                onClick={() =>
+                                  linkSingleMutation.mutate({ attendanceId: r.id, branchEmployeeId: Number(rsel) })
+                                }
+                                data-testid={`button-link-record-${r.id}`}
+                              >
+                                ربط
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1939,6 +2198,169 @@ export default function SalaryClosingPage() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowHistoryDialog(false)} data-testid="button-close-history-dialog">
                 إغلاق
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* نظرة عامة على حالة إغلاق الفروع للشهر المحدد */}
+        <Dialog open={showOverviewDialog} onOpenChange={setShowOverviewDialog}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto" data-testid="dialog-branches-overview">
+            <DialogHeader>
+              <DialogTitle>نظرة عامة على الفروع — شهر {month}</DialogTitle>
+              <DialogDescription>
+                حالة إغلاق الرواتب لكل فرع في الشهر المحدد. اضغط «فتح» للانتقال إلى الفرع لمراجعته وإغلاقه.
+              </DialogDescription>
+            </DialogHeader>
+            {closuresHistoryQuery.isLoading ? (
+              <div className="py-8 text-center text-gray-500">جارٍ التحميل...</div>
+            ) : (
+              <div className="space-y-2">
+                {(branches ?? []).map((b) => {
+                  const closure = closuresHistory.find(
+                    (c: any) => c.branchId === b.id && c.month === month,
+                  );
+                  const status = closure?.status;
+                  const isClosed = status === "closed";
+                  const isReopened = status === "reopened";
+                  return (
+                    <div
+                      key={b.id}
+                      className="flex items-center justify-between gap-2 border rounded-lg p-3"
+                      data-testid={`row-overview-branch-${b.id}`}
+                    >
+                      <div className="flex-1">
+                        <div className="font-medium text-sm">{b.name}</div>
+                        <div className="text-xs text-gray-500">
+                          {isClosed ? (
+                            <span className="text-emerald-600">
+                              مغلق · {closure.employeeCount ?? 0} موظف · صافي {formatCurrency(closure.totalNet ?? 0, isRTL)}
+                            </span>
+                          ) : isReopened ? (
+                            <span className="text-amber-600">معاد فتحه — بحاجة لإعادة إغلاق</span>
+                          ) : (
+                            <span className="text-gray-400">لم يُغلق بعد</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {isClosed ? (
+                          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300">مغلق</Badge>
+                        ) : isReopened ? (
+                          <Badge className="bg-amber-100 text-amber-800 border-amber-300">معاد فتحه</Badge>
+                        ) : (
+                          <Badge className="bg-gray-100 text-gray-700 border-gray-300">مفتوح</Badge>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setBranch(b.id);
+                            setShowOverviewDialog(false);
+                          }}
+                          data-testid={`button-overview-goto-${b.id}`}
+                        >
+                          فتح
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {(branches ?? []).length === 0 && (
+                  <div className="py-8 text-center text-gray-500">لا توجد فروع متاحة.</div>
+                )}
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowOverviewDialog(false)} data-testid="button-close-overview-dialog">
+                إغلاق
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* تطبيق سُلفة/خصم جماعي على الموظفين المحددين */}
+        <Dialog open={showBulkDeductionDialog} onOpenChange={setShowBulkDeductionDialog}>
+          <DialogContent className="max-w-md" data-testid="dialog-bulk-deduction">
+            <DialogHeader>
+              <DialogTitle>تطبيق سُلفة/خصم جماعي</DialogTitle>
+              <DialogDescription>
+                سيُطبَّق نفس المبلغ على {selectedEmpIds.size} موظف محدد لشهر {month}.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs">النوع</Label>
+                <Select value={bulkType} onValueChange={setBulkType}>
+                  <SelectTrigger className="h-9" data-testid="select-bulk-deduction-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(SALARY_DEDUCTION_TYPE_LABELS).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>{v}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">المبلغ (ر.س)</Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={bulkAmount}
+                  onChange={(e) => setBulkAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="h-9"
+                  data-testid="input-bulk-deduction-amount"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">الوصف (اختياري)</Label>
+                <Textarea
+                  value={bulkDescription}
+                  onChange={(e) => setBulkDescription(e.target.value)}
+                  placeholder="مثال: سلفة رمضان، خصم عهدة..."
+                  rows={2}
+                  className="resize-none"
+                  data-testid="input-bulk-deduction-description"
+                />
+              </div>
+              <div className="text-[11px] text-gray-500 bg-orange-50 border border-orange-200 rounded p-2">
+                💡 سيُخصم هذا المبلغ من صافي راتب كل موظف محدد عند إغلاق الشهر.
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowBulkDeductionDialog(false)} data-testid="button-cancel-bulk-deduction">
+                إلغاء
+              </Button>
+              <Button
+                className="bg-orange-600 hover:bg-orange-700"
+                disabled={bulkDeductionMutation.isPending || !bulkAmount}
+                onClick={() => {
+                  const amount = parseFloat(bulkAmount);
+                  if (!Number.isFinite(amount) || amount <= 0) {
+                    toast({ title: "مبلغ غير صحيح", description: "أدخل مبلغ موجب", variant: "destructive" });
+                    return;
+                  }
+                  const validIds = new Set(salaryClosingData.map((e: any) => e.id));
+                  const ids = Array.from(selectedEmpIds).filter((id) => validIds.has(id));
+                  if (ids.length === 0) {
+                    toast({ title: "لا يوجد تحديد صالح", description: "حدّد موظفين من الشهر/الفرع الحالي أولاً", variant: "destructive" });
+                    setSelectedEmpIds(new Set());
+                    return;
+                  }
+                  bulkDeductionMutation.mutate({
+                    ids,
+                    type: bulkType,
+                    amount,
+                    description: bulkDescription.trim(),
+                  });
+                }}
+                data-testid="button-confirm-bulk-deduction"
+              >
+                {bulkDeductionMutation.isPending ? "جارٍ التطبيق..." : `تطبيق على ${selectedEmpIds.size} موظف`}
               </Button>
             </DialogFooter>
           </DialogContent>
