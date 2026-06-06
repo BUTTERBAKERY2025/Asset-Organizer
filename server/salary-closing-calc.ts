@@ -33,6 +33,7 @@ export interface SalaryClosingLine {
   lateDays: number;
   totalHours: number;
   baseSalary: number;
+  housingAllowance: number;
   allowances: number;
   grossSalary: number;
   dailyRate: number;
@@ -421,6 +422,7 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
       lateDays,
       totalHours: Math.round(totalHours * 10) / 10,
       baseSalary,
+      housingAllowance: round2(housingAllowance),
       allowances,
       grossSalary,
       dailyRate: round2(dailyRate),

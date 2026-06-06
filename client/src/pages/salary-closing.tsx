@@ -59,6 +59,7 @@ import {
   ShieldAlert,
   History,
   Building2,
+  Landmark,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -309,6 +310,64 @@ function normalizeArabicName(s: any): string {
     .toLowerCase();
 }
 
+// ===== ملف البنك (نموذج بنك الرياض - نظام مدد) =====
+// قائمة رموز البنوك (SWIFT/BIC) للبنوك السعودية - مطابقة لشيت "data" في النموذج
+const BANK_DATA_CURRENCIES: [string, string][] = [
+  ["AED", "UAE DIRHAM"], ["AUD", "AUSTRALIAN DOLLAR"], ["BHD", "BAHRAINI DINAR"],
+  ["CAD", "CANADIAN DOLLAR"], ["CHF", "SWISS FRANC"], ["DKK", "DANISH KRONE"],
+  ["EGP", "EGYPTIAN POUND"], ["EUR", "EURO CURRENCY"], ["GBP", "POUND STERLING"],
+  ["HKD", "HONG KONG DOLLAR"], ["IDR", "INDONESIAN RUPIAH"], ["INR", "INDIAN RUPEE"],
+  ["JOD", "JORDANIAN DINAR"], ["JPY", "JAPANESE YEN"], ["KWD", "KUWAITI DINAR"],
+  ["MAD", "MOROCCAN DIRHAM"], ["NOK", "NORWEGIAN"], ["NZD", "NEW ZEALAND DOLLAR"],
+  ["OMR", "OMANI RIYAL"], ["PHP", "PHILIPPINE PESO"], ["PKR", "PAKISTAN RUPEE"],
+  ["QAR", "QATARI RIYAL"], ["SAR", "SAUDI RIYAL"], ["SEK", "SWEDISH KRONE"],
+  ["SGD", "SINGAPORE DOLLAR"], ["TRL", "TURKISH LIRA"], ["USD", "US DOLLAR"],
+  ["YER", "YEMENI RIYAL"], ["ZAR", "SOUTH AFRICAN RAND"],
+];
+const BANK_DATA_CODES: [string, string][] = [
+  ["AAALSARIXXX", "SAUDI HOLLANDI BANK"], ["ALBISARIXXX", "BANK AL BILAD"],
+  ["ARNBSARIXXX", "ARAB NATIONAL BANK"], ["BJAZSAJEXXX", "BANK AL-JAZIRA"],
+  ["BMUSSARIXXX", "BANK MUSCAT"], ["BNPASARIXXX", "BNP PARIBAS SAUDI ARABIA"],
+  ["BOTKSARIXXX", "MUFG BANK, LTD. RIYADH BRANCH"], ["BSFRSARIXXX", "BANQUE SAUDI FRANSI"],
+  ["CHASSARIXXX", "JPMORGAN CHASE BANK, N.A. RIYADH"], ["DEUTSARIXXX", "DEUTSCHE BANK"],
+  ["EBILSARIXXX", "EMIRATES BANK INTERNATIONAL PJSC"], ["FABMSARIXXX", "FIRST ABU DHABI BANK"],
+  ["GULFSARIXXX", "GULF INTERNATIONAL BANK B.S.C., RIY"],
+  ["ICBKSARIXXX", "INDUSTRIAL AND COMMERCIAL BANK OF CHINA RIYADH BRANCH, SA"],
+  ["INMASARIXXX", "AL INMA BANK"], ["NBOBSARIXXX", "NATIONAL BANK OF BAHRAIN"],
+  ["NBOKSAJEXXX", "NATIONAL BANK OF KWIT"], ["NBPASARIXXX", "NATIONAL BANK OF PAKISTAN"],
+  ["NCBKSAJEXXX", "NATIONAL COMMERCIAL BANK"], ["RIBLSARIXXX", "RIYAD BANK"],
+  ["RJHISARIXXX", "ALRAJHI BANKING AND INVESTMENT CORP"], ["SABBSARIXXX", "SAUDI BRITISH BANK"],
+  ["SAMASARIXXX", "SAMA"], ["SAMBSARIXXX", "BANK SAMBA"], ["SBINSAJEXXX", "STATE BANK OF INDIA"],
+  ["SIBCSARIXXX", "THE SAUDI INVESTMENT BANK"], ["TCZBSAJEXX", "T.C. ZIRAAT BANKASI A.S."],
+  ["DBAKSARIXXX", "D360 Bank"], ["STCJSARIXXX", "STC Bank"],
+];
+// كلمات مفتاحية (بالعربي والإنجليزي) لمطابقة اسم البنك المسجّل مع رمز SWIFT
+const BANK_SWIFT_KEYWORDS: { swift: string; keys: string[] }[] = [
+  { swift: "RJHISARIXXX", keys: ["راجحي", "rajhi", "rajh"] },
+  { swift: "RIBLSARIXXX", keys: ["رياض", "riyad", "ribl"] },
+  { swift: "NCBKSAJEXXX", keys: ["اهلي", "snb", "ncb", "alahli", "saudi national"] },
+  { swift: "INMASARIXXX", keys: ["انماء", "inma"] },
+  { swift: "BSFRSARIXXX", keys: ["فرنسي", "fransi", "bsf"] },
+  { swift: "SABBSARIXXX", keys: ["ساب", "بريطاني", "sabb", "british"] },
+  { swift: "ARNBSARIXXX", keys: ["عربي", "arab national", "anb", "arnb"] },
+  { swift: "ALBISARIXXX", keys: ["بلاد", "bilad"] },
+  { swift: "BJAZSAJEXXX", keys: ["جزير", "jazira", "bjaz"] },
+  { swift: "SIBCSARIXXX", keys: ["استثمار", "investment", "saib"] },
+  { swift: "STCJSARIXXX", keys: ["stc", "اس تي سي"] },
+  { swift: "DBAKSARIXXX", keys: ["d360", "360", "دي 360"] },
+  { swift: "AAALSARIXXX", keys: ["هولندي", "الاول", "awwal", "hollandi"] },
+  { swift: "SAMBSARIXXX", keys: ["سامبا", "samba"] },
+];
+// استنتاج رمز البنك (SWIFT) من اسم البنك المسجّل للموظف؛ يعيد فراغاً عند عدم التطابق ليُعبَّأ يدوياً
+function bankNameToSwift(name: any): string {
+  const n = normalizeArabicName(name);
+  if (!n.trim()) return "";
+  for (const { swift, keys } of BANK_SWIFT_KEYWORDS) {
+    if (keys.some((k) => n.includes(normalizeArabicName(k)))) return swift;
+  }
+  return "";
+}
+
 // اقتراح أقرب موظف لمجموعة سجلات غير مرتبطة
 function suggestEmployeeForGroup(
   group: { employeeNumber?: string; name?: string },
@@ -417,6 +476,8 @@ export default function SalaryClosingPage() {
   const [acknowledgeClose, setAcknowledgeClose] = useState(false);
   const [showReopenDialog, setShowReopenDialog] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
+  const [bankExportOpen, setBankExportOpen] = useState(false);
+  const [bankDueDate, setBankDueDate] = useState<string>("");
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [groupSel, setGroupSel] = useState<Record<string, string>>({});
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
@@ -854,6 +915,122 @@ export default function SalaryClosingPage() {
     XLSX.writeFile(wb, `${isRTL ? "إغلاق_الرواتب" : "salary_closing"}_${getBranchName(branch)}_${month}.xlsx`);
   };
 
+  // تصدير ملف البنك (نموذج بنك الرياض - نظام مدد) المطابق للتنسيق المعتمد
+  const exportBankFile = async (dueDateISO: string) => {
+    if (salaryClosingData.length === 0) return;
+    const XLSX = await import("xlsx");
+    // تحويل التاريخ من YYYY-MM-DD إلى DD/MM/YYYY كما في النموذج المعتمد
+    const dueDate = dueDateISO
+      ? dueDateISO.split("-").reverse().join("/")
+      : "";
+    const round2 = (n: number) => Math.round((n || 0) * 100) / 100;
+
+    // الجزء الأول: ترويسة الشركة (ثابتة) + الجزء الثاني: جدول الموظفين
+    const headerLabels = [
+      "Type", "اسم العميل ", "رمز الإتفاقية", "حساب التمويل", "رقم الفرع",
+      "تاريخ الإستحقاق (DDMMYYYY)", "رقم  المنشأه في مكتب العمل ",
+      "رقم المنشأه في الغرفة التجارية", "رمز البنك", "العملة",
+      "رقم الدفعة ", "مرجع الملف ", "", "", "",
+    ];
+    const headerValues = [
+      "111", "شركة الزبد الافضل ", "P0023453", "5061555359940", "506",
+      dueDate, "11-2057146", "701011175690", "RIBL", "SAR", "", "", "", "", "",
+    ];
+    const tableHeaders = [
+      "SN", "هوية المستفيد/ المرجع", "المستفيد / اسم الموظف", "رقم الحساب ",
+      "رمز البنك", "إجمالي المبلغ", "الراتب الأساسي", "بدل السكن", "دخل آخر",
+      "الخصومات", "العنوان", "العملة ", "الحالة", "وصف  الدفع", "مرجع  الدفع",
+    ];
+    const paymentDesc = `رواتب شهر ${month}`;
+    // استبعاد الموظفين بلا رقم حساب بنكي (سيرفضها البنك) وإشعار المستخدم بعددهم
+    const eligible = salaryClosingData.filter(
+      (emp) => String(emp.bankAccountNumber || "").trim() !== "",
+    );
+    const excludedCount = salaryClosingData.length - eligible.length;
+    if (eligible.length === 0) {
+      toast({
+        title: "لا يوجد موظفون مؤهلون للتحويل",
+        description: "جميع الموظفين بدون رقم حساب بنكي مسجّل. أضف الحسابات أولاً.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const rows = eligible.map((emp, index) => {
+      const housing = round2(emp.housingAllowance ?? 0);
+      const otherIncome = round2((emp.allowances ?? 0) - housing);
+      const deductions = round2(
+        (emp.absenceDeduction ?? 0) +
+          (emp.socialInsurance ?? 0) +
+          (emp.manualDeductionsTotal ?? 0),
+      );
+      return [
+        index + 1,
+        emp.iqamaNumber || emp.employeeNumber || "",
+        emp.employeeName || "",
+        emp.bankAccountNumber || "",
+        bankNameToSwift(emp.bankName),
+        round2(emp.netSalary ?? 0),
+        round2(emp.baseSalary ?? 0),
+        housing,
+        otherIncome,
+        deductions,
+        "خميس مشيط",
+        "SAR",
+        "نشط",
+        paymentDesc,
+        "",
+      ];
+    });
+
+    const aoa = [headerLabels, headerValues, tableHeaders, ...rows];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!merges"] = [
+      { s: { c: 11, r: 0 }, e: { c: 14, r: 0 } },
+      { s: { c: 11, r: 1 }, e: { c: 14, r: 1 } },
+    ];
+    ws["!cols"] = [
+      4.33, 14.17, 21.33, 25.83, 11.33, 14.33, 17.33, 16.67, 9.5, 10.17,
+      11.67, 8.17, 13.17, 36.83, 13.5,
+    ].map((wch) => ({ wch }));
+
+    // شيت "data" المرجعي (الحالة / العملات / رموز البنوك) - قابل للتعديل في الإكسل
+    const maxLen = Math.max(
+      2,
+      BANK_DATA_CURRENCIES.length + 1,
+      BANK_DATA_CODES.length + 1,
+    );
+    const dataAoa: any[][] = [["Status", "", "Currency", "", "", "Bank code", ""]];
+    const statusList = ["active", "inactive"];
+    for (let i = 0; i < maxLen - 1; i++) {
+      const cur = BANK_DATA_CURRENCIES[i];
+      const code = BANK_DATA_CODES[i];
+      dataAoa.push([
+        statusList[i] || "",
+        "",
+        cur ? cur[0] : "",
+        cur ? cur[1] : "",
+        "",
+        code ? code[0] : "",
+        code ? code[1] : "",
+      ]);
+    }
+    const wsData = XLSX.utils.aoa_to_sheet(dataAoa);
+
+    const wb = XLSX.utils.book_new();
+    wb.Workbook = { Views: [{ RTL: true }] };
+    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+    XLSX.utils.book_append_sheet(wb, wsData, "data");
+    XLSX.writeFile(wb, `ملف_البنك_${getBranchName(branch)}_${month}.xlsx`);
+    toast({
+      title: "تم إنشاء ملف البنك",
+      description:
+        `تم تصدير ${eligible.length} موظف.` +
+        (excludedCount > 0
+          ? ` استُبعد ${excludedCount} موظف بدون رقم حساب بنكي.`
+          : ""),
+    });
+  };
+
   const exportSalaryClosingToPDF = async () => {
     if (salaryClosingData.length === 0) {
       alert(isRTL ? "لا توجد بيانات للتصدير" : "No data to export");
@@ -1067,6 +1244,18 @@ export default function SalaryClosingPage() {
                 >
                   <Download className="w-4 h-4 ml-2" />
                   تصدير PDF
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setBankDueDate("");
+                    setBankExportOpen(true);
+                  }}
+                  disabled={previewLoading || salaryClosingData.length === 0}
+                  data-testid="button-export-bank-file"
+                >
+                  <Landmark className="w-4 h-4 ml-2" />
+                  تصدير ملف البنك
                 </Button>
                 {salaryClosingClosure && (
                   <Button
@@ -1993,6 +2182,48 @@ export default function SalaryClosingPage() {
               >
                 {reopenSalaryMutation.isPending ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : null}
                 إعادة الفتح
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* تصدير ملف البنك (نموذج بنك الرياض - نظام مدد) */}
+        <Dialog open={bankExportOpen} onOpenChange={setBankExportOpen}>
+          <DialogContent className="max-w-md" data-testid="dialog-bank-export">
+            <DialogHeader>
+              <DialogTitle>تصدير ملف البنك (بنك الرياض - مدد)</DialogTitle>
+              <DialogDescription>
+                سيتم إنشاء ملف إكسل بالتنسيق المعتمد لبنك الرياض. حدّد تاريخ الإستحقاق (موعد صرف الرواتب) أولاً.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 text-sm">
+              <div className="space-y-1">
+                <Label>تاريخ الإستحقاق <span className="text-red-600">*</span></Label>
+                <Input
+                  type="date"
+                  value={bankDueDate}
+                  onChange={(e) => setBankDueDate(e.target.value)}
+                  data-testid="input-bank-due-date"
+                />
+              </div>
+              <p className="text-xs text-gray-500">
+                ملاحظة: يُستنتج رمز البنك (SWIFT) من اسم البنك المسجّل لكل موظف. يمكنك تعديل أي قيمة في ملف الإكسل، واستخدام شيت "data" كمرجع لرموز البنوك.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setBankExportOpen(false)} data-testid="button-cancel-bank-export">
+                إلغاء
+              </Button>
+              <Button
+                disabled={!bankDueDate}
+                onClick={async () => {
+                  await exportBankFile(bankDueDate);
+                  setBankExportOpen(false);
+                }}
+                data-testid="button-confirm-bank-export"
+              >
+                <Landmark className="w-4 h-4 ml-2" />
+                تصدير الملف
               </Button>
             </DialogFooter>
           </DialogContent>
