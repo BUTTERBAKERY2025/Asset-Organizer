@@ -112,6 +112,7 @@ const BranchEmployeesPage = makeLazy("branch-employees");
 const TerminatedEmployeesPage = makeLazy("terminated-employees");
 const OrganizationalStructurePage = makeLazy("organizational-structure");
 const EmployeeReportsDashboardPage = makeLazy("employee-reports-dashboard");
+const SalaryClosingPage = makeLazy("salary-closing");
 const PnLDashboardPage = makeLazy("pnl-dashboard");
 const PnLRentHistoryPage = makeLazy("pnl-rent-history");
 const PnLRecurringExpensesPage = makeLazy("pnl-recurring-expenses");
@@ -327,6 +328,7 @@ const Router = React.memo(function Router() {
       <Route path="/attendance-check">{() => <ModulePage component={AttendanceCheckPage} module="attendance_check" />}</Route>
       <Route path="/timesheet">{() => <ModulePage component={TimesheetPage} module="shifts" />}</Route>
       <Route path="/employee-reports">{() => <ModulePage component={EmployeeReportsDashboardPage} module="employee_reports" />}</Route>
+      <Route path="/salary-closing">{() => <ModulePage component={SalaryClosingPage} module="employee_reports" />}</Route>
       <Route path="/floor-plan">{() => <ModulePage component={FloorPlanPage} module="floor_plan" />}</Route>
       
       {/* Production - الإنتاج */}
