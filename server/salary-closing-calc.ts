@@ -82,11 +82,6 @@ export interface SalaryClosingResult {
   warnings: SalaryClosingWarning[];
 }
 
-// النسبة والوعاء وفق التأمينات الاجتماعية السعودية:
-// حصة الموظف 9.75% من (الراتب الأساسي + بدل السكن) بحد أقصى للأجر الخاضع 45,000 ريال.
-const GOSI_EMPLOYEE_RATE = 0.0975;
-const GOSI_WAGE_CAP = 45000;
-
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
@@ -449,15 +444,10 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
       (emp.otherAllowances || 0);
     const grossSalary = baseSalary + allowances;
 
-    // التأمينات الاجتماعية (تصحيح الوعاء): الأساسي + السكن، بحد أقصى 45,000
-    const storedInsurance = emp.socialInsuranceDeduction || 0;
-    const gosiWage = Math.min(baseSalary + housingAllowance, GOSI_WAGE_CAP);
-    const socialInsurance =
-      emp.nationality === "سعودي"
-        ? storedInsurance > 0
-          ? storedInsurance
-          : Math.round(gosiWage * GOSI_EMPLOYEE_RATE)
-        : 0;
+    // التأمينات الاجتماعية: تُؤخذ حصراً من بيانات الموظف (حقل خصم التأمينات الاجتماعية).
+    // لا يتم احتسابها تلقائياً — إن لم تُسجَّل قيمة في ملف الموظف فلا يوجد خصم تأمينات،
+    // حتى لو كان الموظف سعودياً. هذا يضمن تطابق الكشف مع بيانات كل موظف بدقة.
+    const socialInsurance = round2(emp.socialInsuranceDeduction || 0);
 
     const dailyRate = grossSalary / 30;
 

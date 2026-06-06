@@ -18,4 +18,10 @@ Pay is prorated by ACTUAL attendance, NOT a flat gross.
 
 **Why:** Before this, employees who attended only ~half the month still received full gross. User demands extreme payroll precision and confirmed this exact model.
 
-**How to apply:** Any change to closure-line day fields (present/absent/off/paidLeave/unpaidLeave/unpaidDays/leaveBreakdown) must stay in lockstep across the calc engine, the close-route persistence payload, the locked-snapshot read mapping, and the salaryClosureLines schema — or locked snapshots silently lose data.
+## Social insurance (GOSI) is record-only, never auto-computed
+Salary closing takes `socialInsurance` STRICTLY from the employee record's `socialInsuranceDeduction` field. It must NOT auto-calculate GOSI (e.g. 9.75% of base+housing) when the stored value is 0 — not even for Saudis.
+
+**Why:** Production data has `social_insurance_deduction = 0` for ALL active employees (Saudis included). The old auto-compute fabricated a ~9.75% deduction for every Saudi, producing wrong net totals. User requires the sheet to mirror each employee's actual record exactly. GOSI enrollment varies per person, so only HR-entered values are trustworthy.
+**How to apply:** Gross = salary + (housing+transport+food+other) per employee. Insurance = stored value as-is. `onboarding-routes.ts` may still default new Saudi hires to 9.75% when creating the profile (editable) — that sets the record, which is fine; the closing just reflects whatever the record holds. `storage.ts` salary-management path already follows this (stored value, no fabrication).
+
+**How to apply (day fields):** Any change to closure-line day fields (present/absent/off/paidLeave/unpaidLeave/unpaidDays/leaveBreakdown) must stay in lockstep across the calc engine, the close-route persistence payload, the locked-snapshot read mapping, and the salaryClosureLines schema — or locked snapshots silently lose data.
