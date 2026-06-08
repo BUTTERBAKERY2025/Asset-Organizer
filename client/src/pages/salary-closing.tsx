@@ -1046,30 +1046,47 @@ export default function SalaryClosingPage() {
     }
   };
 
+  // يجلب أحدث نسخة من بيانات الكشف من الخادم قبل التصدير، لضمان ظهور آخر التعديلات
+  // (السلف/الخصومات اليدوية وتعديلات أيام الحضور) في الملف المصدَّر حتى على الاتصال البطيء،
+  // إذ قد يُنقر زر التصدير قبل اكتمال إعادة التحميل الخلفية بعد التعديل.
+  const fetchLatestClosing = async (): Promise<any> => {
+    try {
+      const r = await salaryClosingPreviewQuery.refetch();
+      return r.data ?? salaryClosingPreview;
+    } catch {
+      return salaryClosingPreview;
+    }
+  };
+
   const exportSalaryClosingToExcel = async () => {
-    if (salaryClosingData.length === 0) return;
+    const fresh = await fetchLatestClosing();
+    const lines: any[] = fresh?.lines ?? salaryClosingData;
+    const unlinkedRecords: AttendanceRecord[] = fresh?.unlinked ?? salaryClosingUnlinkedRecords;
+    const unlinkedSummary = fresh?.unlinkedSummary ?? salaryClosingUnlinkedSummary;
+    const unlinkedCount = unlinkedSummary?.totalRecords ?? salaryClosingUnlinkedCount;
+    if (lines.length === 0) return;
     const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
 
     const summaryData = [
       { [isRTL ? "البيان" : "Item"]: isRTL ? "الفرع" : "Branch", [isRTL ? "القيمة" : "Value"]: getBranchName(branch) },
       { [isRTL ? "البيان" : "Item"]: isRTL ? "الشهر" : "Month", [isRTL ? "القيمة" : "Value"]: month },
-      { [isRTL ? "البيان" : "Item"]: isRTL ? "عدد الموظفين" : "Employee Count", [isRTL ? "القيمة" : "Value"]: salaryClosingData.length },
-      { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي الرواتب (شامل البدلات)" : "Total Salaries (Incl. Allowances)", [isRTL ? "القيمة" : "Value"]: salaryClosingData.reduce((sum, e) => sum + e.grossSalary, 0) },
-      { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي خصم الغياب" : "Total Absence Deduction", [isRTL ? "القيمة" : "Value"]: salaryClosingData.reduce((sum, e) => sum + e.absenceDeduction, 0) },
-      { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي التأمينات الاجتماعية" : "Total Social Insurance", [isRTL ? "القيمة" : "Value"]: salaryClosingData.reduce((sum, e) => sum + e.socialInsurance, 0) },
-      { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي السُلف والخصومات اليدوية" : "Total Manual Deductions", [isRTL ? "القيمة" : "Value"]: salaryClosingData.reduce((sum, e) => sum + (e.manualDeductionsTotal || 0), 0) },
-      { [isRTL ? "البيان" : "Item"]: isRTL ? "صافي الرواتب المستحقة" : "Net Salaries Due", [isRTL ? "القيمة" : "Value"]: salaryClosingData.reduce((sum, e) => sum + e.netSalary, 0) },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "عدد الموظفين" : "Employee Count", [isRTL ? "القيمة" : "Value"]: lines.length },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي الرواتب (شامل البدلات)" : "Total Salaries (Incl. Allowances)", [isRTL ? "القيمة" : "Value"]: lines.reduce((sum, e) => sum + e.grossSalary, 0) },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي خصم الغياب" : "Total Absence Deduction", [isRTL ? "القيمة" : "Value"]: lines.reduce((sum, e) => sum + e.absenceDeduction, 0) },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي التأمينات الاجتماعية" : "Total Social Insurance", [isRTL ? "القيمة" : "Value"]: lines.reduce((sum, e) => sum + e.socialInsurance, 0) },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي السُلف والخصومات اليدوية" : "Total Manual Deductions", [isRTL ? "القيمة" : "Value"]: lines.reduce((sum, e) => sum + (e.manualDeductionsTotal || 0), 0) },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "صافي الرواتب المستحقة" : "Net Salaries Due", [isRTL ? "القيمة" : "Value"]: lines.reduce((sum, e) => sum + e.netSalary, 0) },
       { [isRTL ? "البيان" : "Item"]: "", [isRTL ? "القيمة" : "Value"]: "" },
-      { [isRTL ? "البيان" : "Item"]: isRTL ? "سجلات حضور غير مرتبطة" : "Unlinked Attendance Records", [isRTL ? "القيمة" : "Value"]: salaryClosingUnlinkedCount },
-      { [isRTL ? "البيان" : "Item"]: isRTL ? "سجلات حضور (غير مرتبطة)" : "Present Records (Unlinked)", [isRTL ? "القيمة" : "Value"]: salaryClosingUnlinkedSummary.presentRecords },
-      { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي ساعات غير مرتبطة" : "Total Unlinked Hours", [isRTL ? "القيمة" : "Value"]: Math.round(salaryClosingUnlinkedSummary.totalHours * 10) / 10 },
-      { [isRTL ? "البيان" : "Item"]: isRTL ? "ملاحظة" : "Note", [isRTL ? "القيمة" : "Value"]: salaryClosingUnlinkedCount > 0 ? (isRTL ? "توجد سجلات حضور غير مرتبطة بموظفين - راجع ورقة السجلات غير المرتبطة للتفاصيل والمراجعة" : "Unlinked attendance records exist - see Unlinked Records sheet for details") : (isRTL ? "جميع السجلات مرتبطة بموظفين" : "All records are linked to employees") },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "سجلات حضور غير مرتبطة" : "Unlinked Attendance Records", [isRTL ? "القيمة" : "Value"]: unlinkedCount },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "سجلات حضور (غير مرتبطة)" : "Present Records (Unlinked)", [isRTL ? "القيمة" : "Value"]: unlinkedSummary.presentRecords },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي ساعات غير مرتبطة" : "Total Unlinked Hours", [isRTL ? "القيمة" : "Value"]: Math.round(unlinkedSummary.totalHours * 10) / 10 },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "ملاحظة" : "Note", [isRTL ? "القيمة" : "Value"]: unlinkedCount > 0 ? (isRTL ? "توجد سجلات حضور غير مرتبطة بموظفين - راجع ورقة السجلات غير المرتبطة للتفاصيل والمراجعة" : "Unlinked attendance records exist - see Unlinked Records sheet for details") : (isRTL ? "جميع السجلات مرتبطة بموظفين" : "All records are linked to employees") },
     ];
     const wsSummary = XLSX.utils.json_to_sheet(summaryData);
     XLSX.utils.book_append_sheet(wb, wsSummary, isRTL ? "ملخص" : "Summary");
 
-    const data = salaryClosingData.map((emp, index) => ({
+    const data = lines.map((emp, index) => ({
       [isRTL ? "م" : "#"]: index + 1,
       [isRTL ? "رقم الموظف" : "Employee #"]: emp.employeeNumber,
       [isRTL ? "الاسم" : "Name"]: emp.employeeName,
@@ -1111,8 +1128,8 @@ export default function SalaryClosingPage() {
     const ws = XLSX.utils.json_to_sheet(data);
     XLSX.utils.book_append_sheet(wb, ws, isRTL ? "تفاصيل الرواتب" : "Salary Details");
 
-    if (salaryClosingUnlinkedRecords.length > 0) {
-      const unlinkedData = salaryClosingUnlinkedRecords.map((rec, index) => ({
+    if (unlinkedRecords.length > 0) {
+      const unlinkedData = unlinkedRecords.map((rec, index) => ({
         [isRTL ? "م" : "#"]: index + 1,
         [isRTL ? "التاريخ" : "Date"]: rec.attendanceDate,
         [isRTL ? "اسم الموظف (غير مرتبط)" : "Employee Name (Unlinked)"]: rec.employeeName,
@@ -1132,7 +1149,9 @@ export default function SalaryClosingPage() {
 
   // تصدير ملف البنك (نموذج بنك الرياض - نظام مدد) المطابق للتنسيق المعتمد
   const exportBankFile = async (dueDateISO: string) => {
-    if (salaryClosingData.length === 0) return;
+    const fresh = await fetchLatestClosing();
+    const lines: any[] = fresh?.lines ?? salaryClosingData;
+    if (lines.length === 0) return;
     const xlsxMod: any = await import("xlsx-js-style");
     const XLSX: any = xlsxMod.default || xlsxMod;
     // تحويل التاريخ من YYYY-MM-DD إلى DD/MM/YYYY كما في النموذج المعتمد
@@ -1179,10 +1198,10 @@ export default function SalaryClosingPage() {
     ];
     const paymentDesc = `رواتب شهر ${month}`;
     // استبعاد الموظفين بلا رقم حساب بنكي (سيرفضها البنك) وإشعار المستخدم بعددهم
-    const eligible = salaryClosingData.filter(
+    const eligible = lines.filter(
       (emp) => String(emp.bankAccountNumber || "").trim() !== "",
     );
-    const excludedCount = salaryClosingData.length - eligible.length;
+    const excludedCount = lines.length - eligible.length;
     if (eligible.length === 0) {
       toast({
         title: "لا يوجد موظفون مؤهلون للتحويل",
@@ -1310,7 +1329,9 @@ export default function SalaryClosingPage() {
   };
 
   const exportSalaryClosingToPDF = async () => {
-    if (salaryClosingData.length === 0) {
+    const fresh = await fetchLatestClosing();
+    const lines: any[] = fresh?.lines ?? salaryClosingData;
+    if (lines.length === 0) {
       alert(isRTL ? "لا توجد بيانات للتصدير" : "No data to export");
       return;
     }
@@ -1318,7 +1339,7 @@ export default function SalaryClosingPage() {
       const requestData = {
         branchName: getBranchName(branch),
         month,
-        employees: salaryClosingData.map(emp => ({
+        employees: lines.map(emp => ({
           employeeName: emp.employeeName,
           employeeNumber: emp.employeeNumber,
           nationality: emp.nationality,
@@ -1349,9 +1370,9 @@ export default function SalaryClosingPage() {
           dataSource: emp.dataSource,
         })),
         dataSourceSummary: {
-          signed: salaryClosingData.filter(e => e.dataSource === "signed_timesheet").length,
-          schedule: salaryClosingData.filter(e => e.dataSource === "schedule_attendance").length,
-          attendanceOnly: salaryClosingData.filter(e => e.dataSource === "attendance_only").length,
+          signed: lines.filter(e => e.dataSource === "signed_timesheet").length,
+          schedule: lines.filter(e => e.dataSource === "schedule_attendance").length,
+          attendanceOnly: lines.filter(e => e.dataSource === "attendance_only").length,
         },
       };
 
