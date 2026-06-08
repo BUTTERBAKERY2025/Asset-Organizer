@@ -29136,59 +29136,124 @@ export async function registerRoutes(
 
   const isValidMonth = (m: any): m is string => typeof m === "string" && /^\d{4}-\d{2}$/.test(m);
 
+  // يبني معاينة فرع واحد: لقطة مقفلة محفوظة إن وُجدت، وإلا احتساب حيّ على الخادم
+  const buildBranchPreview = async (branchId: string, month: string) => {
+    const existing = await storage.getSalaryClosureByBranchAndMonth(branchId, month);
+    const isLocked = !!existing && existing.status === "closed";
+    if (isLocked && existing) {
+      const savedLines = await storage.getSalaryClosureLines(existing.id);
+      const lines = savedLines.map((l: any) => ({
+        ...l,
+        presentDates: l.presentDates ?? [],
+        absentDates: l.absentDates ?? [],
+        // اللقطة تخزّن أيام الغياب مجمّعة؛ نعرضها كأيام صريحة للعرض فقط
+        absentDatesExplicit: l.absentDates ?? [],
+        absentDatesMissing: [],
+        offDates: l.offDates ?? [],
+        manualDeductions: l.manualDeductions ?? [],
+        leaveBreakdown: l.leaveBreakdown ?? [],
+        paidLeaveDays: l.paidLeaveDays ?? 0,
+        unpaidLeaveDays: l.unpaidLeaveDays ?? 0,
+        unpaidDays: l.unpaidDays ?? 0,
+      }));
+      return {
+        lines,
+        totals: {
+          employeeCount: existing.employeeCount,
+          totalBase: existing.totalBase,
+          totalAllowances: existing.totalAllowances,
+          totalGross: existing.totalGross,
+          totalAbsenceDeduction: existing.totalAbsenceDeduction,
+          totalSocialInsurance: existing.totalSocialInsurance,
+          totalManualDeductions: existing.totalManualDeductions,
+          totalNet: existing.totalNet,
+        },
+        unlinked: [] as any[],
+        unlinkedSummary: { totalRecords: existing.unlinkedCount || 0, presentRecords: 0, totalHours: 0 },
+        warnings: ((existing.warnings as any) || []) as any[],
+        closure: existing,
+        isLocked: true,
+      };
+    }
+    const raw = await fetchSalaryClosingRaw(branchId, month);
+    const result = computeSalaryClosing(raw);
+    return { ...result, closure: existing || null, isLocked };
+  };
+
   // معاينة (احتساب حيّ على الخادم — غير محفوظ) قبل الإغلاق
   app.get("/api/salary-closing/preview", isAuthenticated, requirePermission("salary_closing", "view"), async (req, res) => {
     try {
       const branchId = req.query.branchId as string | undefined;
       const month = req.query.month as string | undefined;
-      if (!branchId || branchId === "all") return res.status(400).json({ error: "اختر فرعاً محدداً" });
+      if (!branchId) return res.status(400).json({ error: "اختر فرعاً" });
       if (!isValidMonth(month)) return res.status(400).json({ error: "صيغة الشهر يجب أن تكون YYYY-MM" });
-      const hasAccess = await canAccessBranch(req, branchId);
-      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
 
-      const existing = await storage.getSalaryClosureByBranchAndMonth(branchId, month);
-      const isLocked = !!existing && existing.status === "closed";
+      // "كل الفروع": تجميع البيانات عبر جميع الفروع المصرّح بها (عرض فقط — لا إغلاق)
+      if (branchId === "all") {
+        const allowed = getAllowedBranchIds(req); // null = أدمن (الكل) | [] = لا شيء | [...] = قائمة
+        const all = await storage.getAllBranches();
+        const candidate = allowed === null ? all : all.filter((b) => allowed.includes(b.id));
+        const branchList: typeof all = [];
+        for (const b of candidate) {
+          if (await canAccessBranch(req, b.id)) branchList.push(b);
+        }
+        if (branchList.length === 0) return res.status(403).json({ error: "لا توجد فروع مصرّح بها" });
 
-      // عند القفل: نعيد اللقطة الثابتة المحفوظة (مصدر الحقيقة) بدل إعادة الحساب الحي
-      if (isLocked && existing) {
-        const savedLines = await storage.getSalaryClosureLines(existing.id);
-        const lines = savedLines.map((l: any) => ({
-          ...l,
-          presentDates: l.presentDates ?? [],
-          absentDates: l.absentDates ?? [],
-          // اللقطة تخزّن أيام الغياب مجمّعة؛ نعرضها كأيام صريحة للعرض فقط
-          absentDatesExplicit: l.absentDates ?? [],
-          absentDatesMissing: [],
-          offDates: l.offDates ?? [],
-          manualDeductions: l.manualDeductions ?? [],
-          leaveBreakdown: l.leaveBreakdown ?? [],
-          paidLeaveDays: l.paidLeaveDays ?? 0,
-          unpaidLeaveDays: l.unpaidLeaveDays ?? 0,
-          unpaidDays: l.unpaidDays ?? 0,
-        }));
+        const perBranch = await Promise.all(
+          branchList.map(async (b) => ({ branch: b, ...(await buildBranchPreview(b.id, month)) })),
+        );
+
+        const lines: any[] = [];
+        const unlinked: any[] = [];
+        const warnings: any[] = [];
+        const totals = {
+          employeeCount: 0, totalBase: 0, totalAllowances: 0, totalGross: 0,
+          totalAbsenceDeduction: 0, totalSocialInsurance: 0, totalManualDeductions: 0, totalNet: 0,
+        };
+        let unlinkedRecords = 0, unlinkedPresent = 0, unlinkedHours = 0;
+        const branchBreakdown: any[] = [];
+
+        for (const pb of perBranch) {
+          for (const l of pb.lines) lines.push({ ...l, branchId: pb.branch.id, branchName: pb.branch.name });
+          for (const u of (pb.unlinked || [])) unlinked.push({ ...u, branchId: pb.branch.id, branchName: pb.branch.name });
+          for (const w of (pb.warnings || [])) warnings.push({ ...w, branchName: pb.branch.name });
+          totals.employeeCount += pb.totals?.employeeCount || 0;
+          totals.totalBase += pb.totals?.totalBase || 0;
+          totals.totalAllowances += pb.totals?.totalAllowances || 0;
+          totals.totalGross += pb.totals?.totalGross || 0;
+          totals.totalAbsenceDeduction += pb.totals?.totalAbsenceDeduction || 0;
+          totals.totalSocialInsurance += pb.totals?.totalSocialInsurance || 0;
+          totals.totalManualDeductions += pb.totals?.totalManualDeductions || 0;
+          totals.totalNet += pb.totals?.totalNet || 0;
+          unlinkedRecords += pb.unlinkedSummary?.totalRecords || 0;
+          unlinkedPresent += pb.unlinkedSummary?.presentRecords || 0;
+          unlinkedHours += pb.unlinkedSummary?.totalHours || 0;
+          branchBreakdown.push({
+            branchId: pb.branch.id,
+            branchName: pb.branch.name,
+            isLocked: pb.isLocked,
+            employeeCount: pb.totals?.employeeCount || 0,
+            totalNet: pb.totals?.totalNet || 0,
+          });
+        }
+
         return res.json({
           lines,
-          totals: {
-            employeeCount: existing.employeeCount,
-            totalBase: existing.totalBase,
-            totalAllowances: existing.totalAllowances,
-            totalGross: existing.totalGross,
-            totalAbsenceDeduction: existing.totalAbsenceDeduction,
-            totalSocialInsurance: existing.totalSocialInsurance,
-            totalManualDeductions: existing.totalManualDeductions,
-            totalNet: existing.totalNet,
-          },
-          unlinked: [],
-          unlinkedSummary: { totalRecords: existing.unlinkedCount || 0, presentRecords: 0, totalHours: 0 },
-          warnings: (existing.warnings as any) || [],
-          closure: existing,
-          isLocked: true,
+          totals,
+          unlinked,
+          unlinkedSummary: { totalRecords: unlinkedRecords, presentRecords: unlinkedPresent, totalHours: unlinkedHours },
+          warnings,
+          closure: null,
+          isLocked: false,
+          isAllBranches: true,
+          branchBreakdown,
         });
       }
 
-      const raw = await fetchSalaryClosingRaw(branchId, month);
-      const result = computeSalaryClosing(raw);
-      res.json({ ...result, closure: existing || null, isLocked });
+      const hasAccess = await canAccessBranch(req, branchId);
+      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      const result = await buildBranchPreview(branchId, month);
+      res.json(result);
     } catch (error) {
       console.error("Error computing salary closing preview:", error);
       res.status(500).json({ error: "فشل في حساب معاينة الإغلاق" });
@@ -29491,8 +29556,22 @@ export async function registerRoutes(
     try {
       const branchId = req.query.branchId as string | undefined;
       const month = req.query.month as string | undefined;
-      if (!branchId || branchId === "all") return res.status(400).json({ error: "اختر فرعاً محدداً" });
+      if (!branchId) return res.status(400).json({ error: "اختر فرعاً" });
       if (!isValidMonth(month)) return res.status(400).json({ error: "صيغة الشهر يجب أن تكون YYYY-MM" });
+
+      // "كل الفروع": تجميع سجلات الصرف عبر جميع الفروع المصرّح بها
+      if (branchId === "all") {
+        const allowed = getAllowedBranchIds(req);
+        const all = await storage.getAllBranches();
+        const candidate = allowed === null ? all : all.filter((b) => allowed.includes(b.id));
+        const accessibleIds: string[] = [];
+        for (const b of candidate) {
+          if (await canAccessBranch(req, b.id)) accessibleIds.push(b.id);
+        }
+        const rowsArr = await Promise.all(accessibleIds.map((id) => storage.getSalaryPaymentsByBranchAndMonth(id, month)));
+        return res.json(rowsArr.flat());
+      }
+
       const hasAccess = await canAccessBranch(req, branchId);
       if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
       const rows = await storage.getSalaryPaymentsByBranchAndMonth(branchId, month);

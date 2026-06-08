@@ -863,6 +863,9 @@ export default function SalaryClosingPage() {
   }, []);
 
   const branchActive = !!branch && branch !== "all";
+  const isAllBranches = branch === "all";
+  // عرض البيانات مفعّل عند اختيار فرع محدد أو "كل الفروع"
+  const dataActive = branchActive || isAllBranches;
 
   // bundle خاص بالإغلاق — لقائمة الموظفين المستخدمة في نافذة الربط
   const { data: salaryClosingBundle } = useQuery<{
@@ -904,7 +907,7 @@ export default function SalaryClosingPage() {
       if (!res.ok) throw new Error("Failed to fetch salary closing preview");
       return res.json();
     },
-    enabled: branchActive,
+    enabled: dataActive && !!month,
     staleTime: 30_000,
   });
   const salaryClosingPreview = salaryClosingPreviewQuery.data;
@@ -1059,7 +1062,7 @@ export default function SalaryClosingPage() {
       if (!res.ok) throw new Error("Failed to fetch salary payments");
       return res.json();
     },
-    enabled: branchActive && !!month,
+    enabled: dataActive && !!month,
     staleTime: 30_000,
   });
   const salaryPayments = salaryPaymentsQuery.data ?? [];
@@ -1742,6 +1745,7 @@ export default function SalaryClosingPage() {
                     <SelectValue placeholder="اختر الفرع" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
+                    <SelectItem value="all" data-testid="select-branch-all">🏢 كل الفروع (عرض فقط)</SelectItem>
                     {branches?.map((b) => (
                       <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                     ))}
@@ -1776,18 +1780,20 @@ export default function SalaryClosingPage() {
                   <Download className="w-4 h-4 ml-2" />
                   تصدير PDF
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setBankDueDate("");
-                    setBankExportOpen(true);
-                  }}
-                  disabled={previewLoading || salaryClosingData.length === 0}
-                  data-testid="button-export-bank-file"
-                >
-                  <Landmark className="w-4 h-4 ml-2" />
-                  تصدير ملف البنك
-                </Button>
+                {!isAllBranches && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setBankDueDate("");
+                      setBankExportOpen(true);
+                    }}
+                    disabled={previewLoading || salaryClosingData.length === 0}
+                    data-testid="button-export-bank-file"
+                  >
+                    <Landmark className="w-4 h-4 ml-2" />
+                    تصدير ملف البنك
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   className="border-green-300 text-green-700 hover:bg-green-50"
@@ -1818,7 +1824,7 @@ export default function SalaryClosingPage() {
                     ملف التحويل البنكي
                   </Button>
                 )}
-                {!salaryClosingIsLocked && canApproveSalaryClosing && (
+                {!isAllBranches && !salaryClosingIsLocked && canApproveSalaryClosing && (
                   <Button
                     className="bg-emerald-600 hover:bg-emerald-700 text-white"
                     onClick={() => {
@@ -1935,7 +1941,7 @@ export default function SalaryClosingPage() {
                   <p className="text-sm text-orange-600 mt-1">
                     هذه السجلات غير مضمنة في حساب الرواتب - اربطها بالموظف الصحيح قبل الإغلاق.
                   </p>
-                  {!salaryClosingIsLocked && canApproveSalaryClosing && (
+                  {!isAllBranches && !salaryClosingIsLocked && canApproveSalaryClosing && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -1952,13 +1958,13 @@ export default function SalaryClosingPage() {
           </Card>
         )}
 
-        {branchActive && salaryClosingData.length > 0 && (
+        {dataActive && salaryClosingData.length > 0 && (
           <>
             {/* ملخص الرواتب */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg">
-                  ملخص الرواتب - {getBranchName(branch)} - {month}
+                  ملخص الرواتب - {isAllBranches ? "كل الفروع" : getBranchName(branch)} - {month}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -2324,7 +2330,7 @@ export default function SalaryClosingPage() {
             {/* جدول الرواتب */}
             <Card>
               <CardContent className="py-3 overflow-x-auto">
-                {!salaryClosingIsLocked && selectedEmpIds.size > 0 && (
+                {!isAllBranches && !salaryClosingIsLocked && selectedEmpIds.size > 0 && (
                   <div
                     className="flex flex-wrap items-center justify-between gap-2 mb-3 p-2.5 bg-orange-50 border border-orange-200 rounded-lg"
                     data-testid="toolbar-bulk-deduction"
@@ -2365,7 +2371,7 @@ export default function SalaryClosingPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        {!salaryClosingIsLocked && (
+                        {!isAllBranches && !salaryClosingIsLocked && (
                           <TableHead className="text-center w-8">
                             <Checkbox
                               checked={filteredLines.length > 0 && filteredLines.every((e: any) => selectedEmpIds.has(e.id))}
@@ -2379,6 +2385,7 @@ export default function SalaryClosingPage() {
                         <TableHead className={isRTL ? "text-right" : "text-left"}>#</TableHead>
                         <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "رقم الموظف" : "Employee #"}</TableHead>
                         <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الاسم" : "Name"}</TableHead>
+                        {isAllBranches && <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الفرع" : "Branch"}</TableHead>}
                         {cols.jobTitle && <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الوظيفة" : "Job Title"}</TableHead>}
                         {cols.bank && <TableHead className={isRTL ? "text-right" : "text-left"} title={isRTL ? "البنك ورقم الحساب البنكي / الآيبان (من ملف الموظف)" : "Bank & IBAN"}>{isRTL ? "البنك / الآيبان" : "Bank / IBAN"}</TableHead>}
                         {cols.workDays && <TableHead className="text-center" title={isRTL ? "أيام العمل المجدولة (من الجدول الموقّع)" : "Scheduled work days"}>{isRTL ? "أيام العمل" : "Work Days"}</TableHead>}
@@ -2401,7 +2408,7 @@ export default function SalaryClosingPage() {
                     <TableBody>
                       {filteredLines.map((emp, index) => (
                         <TableRow key={emp.id} className={emp.noWorkAtAll ? "bg-red-50/60" : (emp.dataSource === "signed_timesheet" ? "bg-emerald-50/30" : "")}>
-                          {!salaryClosingIsLocked && (
+                          {!isAllBranches && !salaryClosingIsLocked && (
                             <TableCell className="text-center">
                               <Checkbox
                                 checked={selectedEmpIds.has(emp.id)}
@@ -2460,6 +2467,7 @@ export default function SalaryClosingPage() {
                               )}
                             </div>
                           </TableCell>
+                          {isAllBranches && <TableCell className="text-xs text-gray-700" data-testid={`cell-branch-${emp.id}`}>{emp.branchName || "-"}</TableCell>}
                           {cols.jobTitle && <TableCell>{emp.jobTitle}</TableCell>}
                           {cols.bank && (
                             <TableCell className="text-xs" data-testid={`cell-bank-${emp.id}`}>
@@ -2487,7 +2495,7 @@ export default function SalaryClosingPage() {
                             </TableCell>
                           )}
                           <TableCell className="text-center">
-                            {emp.branchEmployeeId != null && !salaryClosingIsLocked ? (
+                            {emp.branchEmployeeId != null && !salaryClosingIsLocked && !isAllBranches ? (
                               <AttendanceAdjustmentPopover
                                 branchEmployeeId={Number(emp.branchEmployeeId)}
                                 month={month}
@@ -2666,7 +2674,7 @@ export default function SalaryClosingPage() {
                             </TableCell>
                           )}
                           <TableCell className="text-center bg-orange-50/40">
-                            {salaryClosingIsLocked ? (
+                            {salaryClosingIsLocked || isAllBranches ? (
                               <span className="text-red-600" data-testid={`text-locked-deductions-${emp.id}`}>
                                 {(emp.manualDeductionsTotal || 0) > 0 ? `- ${formatCurrency(emp.manualDeductionsTotal || 0, isRTL)}` : "-"}
                               </span>
@@ -2684,7 +2692,18 @@ export default function SalaryClosingPage() {
                           </TableCell>
                           <TableCell className="text-center font-bold">{formatCurrency(emp.netSalary, isRTL)}</TableCell>
                           <TableCell className="text-center bg-green-50/40">
-                            {emp.branchEmployeeId != null || emp.id != null ? (
+                            {isAllBranches ? (
+                              (() => {
+                                const pay = emp.branchEmployeeId != null ? paymentByEmp.get(Number(emp.branchEmployeeId)) : undefined;
+                                return pay ? (
+                                  <Badge className="bg-green-100 text-green-800" data-testid={`badge-paid-readonly-${emp.id}`}>
+                                    مدفوع{pay.paymentMethod ? ` · ${SALARY_PAYMENT_METHOD_LABELS[pay.paymentMethod] || pay.paymentMethod}` : ""}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-amber-700 border-amber-300" data-testid={`badge-unpaid-readonly-${emp.id}`}>غير مدفوع</Badge>
+                                );
+                              })()
+                            ) : (emp.branchEmployeeId != null || emp.id != null) ? (
                               <PaymentStatusPopover
                                 branchEmployeeId={Number(emp.branchEmployeeId ?? emp.id)}
                                 month={month}
@@ -2730,14 +2749,14 @@ export default function SalaryClosingPage() {
           </>
         )}
 
-        {branchActive && !previewLoading && salaryClosingData.length === 0 && (
+        {dataActive && !previewLoading && salaryClosingData.length === 0 && (
           <div className="text-center py-16 text-gray-500" data-testid="empty-no-employees">
             <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>{isRTL ? "لا يوجد موظفين نشطين في هذا الفرع" : "No active employees in this branch"}</p>
+            <p>{isAllBranches ? "لا يوجد موظفين نشطين في الفروع المتاحة" : (isRTL ? "لا يوجد موظفين نشطين في هذا الفرع" : "No active employees in this branch")}</p>
           </div>
         )}
 
-        {!branchActive && (
+        {!dataActive && (
           <div className="text-center py-16 text-gray-500" data-testid="empty-no-branch">
             <Wallet className="w-12 h-12 mx-auto mb-4 opacity-50" />
             <p>اختر الفرع والشهر لعرض تقرير إغلاق الرواتب</p>
