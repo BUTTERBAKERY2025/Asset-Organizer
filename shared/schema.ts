@@ -5736,6 +5736,52 @@ export type SalaryAttendanceAdjustment = typeof salaryAttendanceAdjustments.$inf
 export type InsertSalaryAttendanceAdjustment = z.infer<typeof insertSalaryAttendanceAdjustmentSchema>;
 
 // =====================================================
+// Salary Payments - تتبع صرف الرواتب وطريقة الدفع
+// =====================================================
+// لكل موظف/شهر نسجّل هل تم صرف راتبه وبأي طريقة (حوالة بنكية | حماية أجور | نقدي)،
+// لأن الرواتب أحياناً تُصرف بأكثر من طريقة. يتيح هذا فلترة المدفوع/المتبقّي وتصدير
+// كشف مخصص لكل منهما. وجود السجل = تم الصرف؛ حذفه = إلغاء التأشير.
+export const salaryPayments = pgTable("salary_payments", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  month: text("month").notNull(), // YYYY-MM
+  paymentMethod: text("payment_method").notNull(), // bank_transfer | wage_protection | cash
+  amount: real("amount"), // المبلغ المصروف (اختياري — افتراضياً صافي الراتب)
+  paidAt: timestamp("paid_at").defaultNow().notNull(),
+  note: text("note"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_salary_payments_branch_month").on(table.branchId, table.month),
+  index("idx_salary_payments_employee").on(table.branchEmployeeId),
+  // سجل صرف واحد لكل موظف/شهر
+  uniqueIndex("idx_salary_payments_emp_month").on(table.branchEmployeeId, table.month),
+]);
+
+export const insertSalaryPaymentSchema = createInsertSchema(salaryPayments, {
+  paymentMethod: z.enum(["bank_transfer", "wage_protection", "cash"]),
+  month: z.string().regex(/^\d{4}-\d{2}$/, "صيغة الشهر يجب أن تكون YYYY-MM"),
+  amount: z.number().nonnegative("المبلغ يجب أن يكون صفراً أو أكثر").optional(),
+}).omit({
+  id: true,
+  paidAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SalaryPayment = typeof salaryPayments.$inferSelect;
+export type InsertSalaryPayment = z.infer<typeof insertSalaryPaymentSchema>;
+
+export const SALARY_PAYMENT_METHOD_LABELS: Record<string, string> = {
+  bank_transfer: "حوالة بنكية",
+  wage_protection: "حماية أجور",
+  cash: "نقدي",
+};
+
+// =====================================================
 // Salary Closures - إغلاق الرواتب الشهري (لقطة ثابتة + قفل)
 // =====================================================
 // عند إغلاق رواتب شهر/فرع، نحفظ "لقطة" ثابتة من الأرقام المحسوبة على الخادم

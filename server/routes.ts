@@ -29485,6 +29485,82 @@ export async function registerRoutes(
     }
   });
 
+  // ===== صرف الرواتب وطريقة الدفع =====
+  // جلب سجلات صرف رواتب فرع/شهر
+  app.get("/api/salary-closing/payments", isAuthenticated, requirePermission("salary_closing", "view"), async (req, res) => {
+    try {
+      const branchId = req.query.branchId as string | undefined;
+      const month = req.query.month as string | undefined;
+      if (!branchId || branchId === "all") return res.status(400).json({ error: "اختر فرعاً محدداً" });
+      if (!isValidMonth(month)) return res.status(400).json({ error: "صيغة الشهر يجب أن تكون YYYY-MM" });
+      const hasAccess = await canAccessBranch(req, branchId);
+      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      const rows = await storage.getSalaryPaymentsByBranchAndMonth(branchId, month);
+      res.json(rows);
+    } catch (error) {
+      console.error("Error fetching salary payments:", error);
+      res.status(500).json({ error: "فشل في جلب سجلات صرف الرواتب" });
+    }
+  });
+
+  // تأشير صرف راتب موظف وتحديد طريقة الدفع (متاح حتى بعد الإغلاق — الصرف يتم بعد الإغلاق عادةً)
+  app.post("/api/salary-closing/payments", isAuthenticated, requirePermission("salary_closing", "edit"), async (req, res) => {
+    try {
+      const { branchEmployeeId, month, paymentMethod, amount, note } = req.body || {};
+      const beId = parseInt(branchEmployeeId, 10);
+      if (Number.isNaN(beId)) return res.status(400).json({ error: "معرف الموظف غير صحيح" });
+      if (!isValidMonth(month)) return res.status(400).json({ error: "صيغة الشهر يجب أن تكون YYYY-MM" });
+      const validMethods = ["bank_transfer", "wage_protection", "cash"];
+      if (!paymentMethod || !validMethods.includes(paymentMethod)) {
+        return res.status(400).json({ error: "طريقة الدفع غير صالحة" });
+      }
+      let amt: number | undefined = undefined;
+      if (amount !== undefined && amount !== null && amount !== "") {
+        amt = Number(amount);
+        if (!Number.isFinite(amt) || amt < 0) return res.status(400).json({ error: "المبلغ غير صالح" });
+      }
+      // التحقق من الموظف والفرع (IDOR-safe)
+      const employee = await storage.getBranchEmployee(beId);
+      if (!employee) return res.status(404).json({ error: "الموظف غير موجود" });
+      const hasAccess = await canAccessBranch(req, employee.branchId);
+      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      const saved = await storage.upsertSalaryPayment({
+        branchEmployeeId: beId,
+        branchId: employee.branchId,
+        month,
+        paymentMethod,
+        amount: amt,
+        note: note ? String(note).trim() : null,
+        createdBy: req.currentUser?.id ?? null,
+        createdByName: currentUserName(req),
+      } as any);
+      res.status(201).json({ success: true, payment: saved });
+    } catch (error) {
+      console.error("Error saving salary payment:", error);
+      res.status(500).json({ error: "فشل في حفظ صرف الراتب" });
+    }
+  });
+
+  // إلغاء تأشير صرف راتب موظف
+  app.delete("/api/salary-closing/payments", isAuthenticated, requirePermission("salary_closing", "edit"), async (req, res) => {
+    try {
+      const branchEmployeeId = req.body?.branchEmployeeId ?? req.query?.branchEmployeeId;
+      const month = req.body?.month ?? req.query?.month;
+      const beId = parseInt(branchEmployeeId, 10);
+      if (Number.isNaN(beId)) return res.status(400).json({ error: "معرف الموظف غير صحيح" });
+      if (!isValidMonth(month)) return res.status(400).json({ error: "صيغة الشهر يجب أن تكون YYYY-MM" });
+      const employee = await storage.getBranchEmployee(beId);
+      if (!employee) return res.status(404).json({ error: "الموظف غير موجود" });
+      const hasAccess = await canAccessBranch(req, employee.branchId);
+      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      const deleted = await storage.deleteSalaryPayment(beId, month);
+      res.json({ success: true, deleted });
+    } catch (error) {
+      console.error("Error deleting salary payment:", error);
+      res.status(500).json({ error: "فشل في حذف صرف الراتب" });
+    }
+  });
+
   // ربط سجل حضور يتيم بموظف (قبل الإغلاق) — IDOR-safe
   app.post("/api/salary-closing/link-attendance", isAuthenticated, requirePermission("salary_closing", "edit"), async (req, res) => {
     try {

@@ -376,6 +376,9 @@ import {
   salaryAttendanceAdjustments,
   type SalaryAttendanceAdjustment,
   type InsertSalaryAttendanceAdjustment,
+  salaryPayments,
+  type SalaryPayment,
+  type InsertSalaryPayment,
   salaryClosures,
   type SalaryClosure,
   type InsertSalaryClosure,
@@ -1417,6 +1420,9 @@ export interface IStorage {
   getAttendanceAdjustmentsByBranchAndMonth(branchId: string, month: string): Promise<SalaryAttendanceAdjustment[]>;
   upsertAttendanceAdjustment(data: InsertSalaryAttendanceAdjustment): Promise<SalaryAttendanceAdjustment>;
   deleteAttendanceAdjustment(branchEmployeeId: number, month: string): Promise<boolean>;
+  getSalaryPaymentsByBranchAndMonth(branchId: string, month: string): Promise<SalaryPayment[]>;
+  upsertSalaryPayment(data: InsertSalaryPayment): Promise<SalaryPayment>;
+  deleteSalaryPayment(branchEmployeeId: number, month: string): Promise<boolean>;
   getAllSalaryDeductionsByMonth(month: string): Promise<SalaryDeduction[]>;
   getSalaryDeductionsByEmployeeAndMonth(branchEmployeeId: number, month: string): Promise<SalaryDeduction[]>;
   getSalaryDeduction(id: number): Promise<SalaryDeduction | undefined>;
@@ -12388,6 +12394,44 @@ export class DatabaseStorage implements IStorage {
     const result = await db.delete(salaryAttendanceAdjustments).where(and(
       eq(salaryAttendanceAdjustments.branchEmployeeId, branchEmployeeId),
       eq(salaryAttendanceAdjustments.month, month),
+    ));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // ===== Salary Payments - تتبع صرف الرواتب وطريقة الدفع =====
+  async getSalaryPaymentsByBranchAndMonth(branchId: string, month: string): Promise<SalaryPayment[]> {
+    return await db.select()
+      .from(salaryPayments)
+      .where(and(
+        eq(salaryPayments.branchId, branchId),
+        eq(salaryPayments.month, month),
+      ));
+  }
+
+  async upsertSalaryPayment(data: InsertSalaryPayment): Promise<SalaryPayment> {
+    const [row] = await db.insert(salaryPayments)
+      .values(data)
+      .onConflictDoUpdate({
+        target: [salaryPayments.branchEmployeeId, salaryPayments.month],
+        set: {
+          branchId: data.branchId,
+          paymentMethod: data.paymentMethod,
+          amount: data.amount,
+          note: data.note,
+          paidAt: new Date(),
+          createdBy: data.createdBy,
+          createdByName: data.createdByName,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return row;
+  }
+
+  async deleteSalaryPayment(branchEmployeeId: number, month: string): Promise<boolean> {
+    const result = await db.delete(salaryPayments).where(and(
+      eq(salaryPayments.branchEmployeeId, branchEmployeeId),
+      eq(salaryPayments.month, month),
     ));
     return (result.rowCount ?? 0) > 0;
   }

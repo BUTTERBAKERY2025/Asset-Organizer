@@ -65,7 +65,7 @@ import {
   Minus,
 } from "lucide-react";
 import type { BranchEmployee, AttendanceRecord, SalaryDeduction } from "@shared/schema";
-import { SALARY_DEDUCTION_TYPE_LABELS, LEAVE_TYPE_LABELS } from "@shared/schema";
+import { SALARY_DEDUCTION_TYPE_LABELS, LEAVE_TYPE_LABELS, SALARY_PAYMENT_METHOD_LABELS, type SalaryPayment } from "@shared/schema";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -281,6 +281,132 @@ function DeductionsPopover({
           <div className="text-[10px] text-gray-500 pt-1 border-t">
             💡 المبلغ المُسجَّل سيُخصم من صافي الراتب تلقائياً عند إغلاق هذا الشهر.
           </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ===== تأشير صرف الراتب وتحديد طريقة الدفع (حوالة بنكية / حماية أجور / نقدي) =====
+function PaymentStatusPopover({
+  branchEmployeeId,
+  month,
+  employeeName,
+  netSalary,
+  payment,
+  onChanged,
+}: {
+  branchEmployeeId: number;
+  month: string;
+  employeeName: string;
+  netSalary: number;
+  payment: SalaryPayment | undefined;
+  onChanged: () => void;
+}) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [method, setMethod] = useState<string>(payment?.paymentMethod || "bank_transfer");
+
+  useEffect(() => {
+    setMethod(payment?.paymentMethod || "bank_transfer");
+  }, [payment?.paymentMethod]);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/salary-closing/payments", {
+        branchEmployeeId,
+        month,
+        paymentMethod: method,
+        amount: netSalary,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "تم تسجيل الصرف", description: `${employeeName} — ${SALARY_PAYMENT_METHOD_LABELS[method] || method}` });
+      setOpen(false);
+      onChanged();
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", "/api/salary-closing/payments", { branchEmployeeId, month });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "تم إلغاء التأشير", description: `${employeeName} — أصبح ضمن المتبقّي` });
+      setOpen(false);
+      onChanged();
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          data-testid={`btn-payment-${branchEmployeeId}`}
+          className="flex items-center justify-center w-full hover:opacity-80 transition-opacity"
+          title="تأشير صرف الراتب وطريقة الدفع"
+        >
+          {payment ? (
+            <Badge className="bg-green-100 text-green-800 border-green-300 cursor-pointer text-[11px] px-1.5 py-0" data-testid={`badge-paid-${branchEmployeeId}`}>
+              ✓ {SALARY_PAYMENT_METHOD_LABELS[payment.paymentMethod] || payment.paymentMethod}
+            </Badge>
+          ) : (
+            <Badge className="bg-gray-100 text-gray-600 border-gray-300 cursor-pointer text-[11px] px-1.5 py-0" data-testid={`badge-unpaid-${branchEmployeeId}`}>
+              متبقّي
+            </Badge>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64" side="top">
+        <div className="space-y-3">
+          <div className="border-b pb-2">
+            <div className="text-sm font-bold text-gray-900">حالة صرف الراتب</div>
+            <div className="text-xs text-gray-600">{employeeName} — {month}</div>
+          </div>
+          <div>
+            <Label className="text-[11px]">طريقة الدفع</Label>
+            <Select value={method} onValueChange={setMethod}>
+              <SelectTrigger className="h-8 text-xs" data-testid={`select-payment-method-${branchEmployeeId}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(SALARY_PAYMENT_METHOD_LABELS).map(([k, v]) => (
+                  <SelectItem key={k} value={k} className="text-xs">{v}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="text-[11px] text-gray-500">
+            المبلغ المسجّل: {netSalary.toLocaleString("ar-SA-u-nu-latn", { maximumFractionDigits: 2 })} ر.س
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            className="w-full h-8 text-xs bg-green-600 hover:bg-green-700"
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+            data-testid={`btn-mark-paid-${branchEmployeeId}`}
+          >
+            {payment ? "تحديث طريقة الدفع" : "تأشير: تم الصرف"}
+          </Button>
+          {payment && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full h-8 text-xs text-red-600 hover:text-red-700"
+              onClick={() => removeMutation.mutate()}
+              disabled={removeMutation.isPending}
+              data-testid={`btn-unmark-paid-${branchEmployeeId}`}
+            >
+              إلغاء التأشير (إرجاع للمتبقّي)
+            </Button>
+          )}
         </div>
       </PopoverContent>
     </Popover>
@@ -705,6 +831,8 @@ export default function SalaryClosingPage() {
   const [dataSourceFilter, setDataSourceFilter] = usePersistedState("dataSourceFilter", "all");
   const [statusFilter, setStatusFilter] = usePersistedState("statusFilter", "all");
   const [bankFilter, setBankFilter] = usePersistedState("bankFilter", "all");
+  const [paymentStatusFilter, setPaymentStatusFilter] = usePersistedState("paymentStatusFilter", "all");
+  const [paymentMethodFilter, setPaymentMethodFilter] = usePersistedState("paymentMethodFilter", "all");
   const [netMin, setNetMin] = usePersistedState("netMin", "");
   const [netMax, setNetMax] = usePersistedState("netMax", "");
   const [sortField, setSortField] = usePersistedState("sortField", "employeeName");
@@ -918,6 +1046,41 @@ export default function SalaryClosingPage() {
     queryClient.invalidateQueries({ queryKey: ["/api/salary-closing/preview"] });
     queryClient.invalidateQueries({ queryKey: ["/api/salary-closing/list"] });
     queryClient.invalidateQueries({ queryKey: ["/api/employee-reports/bundle", "salary-closing"] });
+  };
+
+  // ===== سجلات صرف الرواتب (مدفوع/متبقّي + طريقة الدفع) =====
+  const salaryPaymentsQuery = useQuery<SalaryPayment[]>({
+    queryKey: ["/api/salary-closing/payments", branch, month],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("branchId", branch);
+      params.set("month", month);
+      const res = await fetch(`/api/salary-closing/payments?${params.toString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch salary payments");
+      return res.json();
+    },
+    enabled: branchActive && !!month,
+    staleTime: 30_000,
+  });
+  const salaryPayments = salaryPaymentsQuery.data ?? [];
+  const paymentByEmp = useMemo(() => {
+    const m = new Map<number, SalaryPayment>();
+    for (const p of salaryPayments) m.set(Number(p.branchEmployeeId), p);
+    return m;
+  }, [salaryPayments]);
+  const refreshPayments = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/salary-closing/payments"] });
+  };
+  const fetchLatestPayments = async (): Promise<Map<number, SalaryPayment>> => {
+    try {
+      const r = await salaryPaymentsQuery.refetch();
+      const list = r.data ?? salaryPayments;
+      const m = new Map<number, SalaryPayment>();
+      for (const p of list) m.set(Number(p.branchEmployeeId), p);
+      return m;
+    } catch {
+      return paymentByEmp;
+    }
   };
 
   const closeSalaryMutation = useMutation({
@@ -1145,6 +1308,68 @@ export default function SalaryClosingPage() {
     }
 
     XLSX.writeFile(wb, `${isRTL ? "إغلاق_الرواتب" : "salary_closing"}_${getBranchName(branch)}_${month}.xlsx`);
+  };
+
+  // تصدير مخصص: الرواتب المدفوعة أو المتبقية (حسب حالة الصرف وطريقة الدفع)
+  const exportPaymentsExcel = async (mode: "paid" | "remaining") => {
+    const fresh = await fetchLatestClosing();
+    const lines: any[] = fresh?.lines ?? salaryClosingData;
+    const payMap = await fetchLatestPayments();
+    const isPaid = (emp: any) => payMap.has(Number(emp.branchEmployeeId ?? emp.id));
+    const subset = lines.filter((emp) => (mode === "paid" ? isPaid(emp) : !isPaid(emp)));
+    if (subset.length === 0) {
+      alert(mode === "paid"
+        ? (isRTL ? "لا توجد رواتب مدفوعة لهذا الشهر بعد." : "No paid salaries yet.")
+        : (isRTL ? "لا توجد رواتب متبقية — تم صرف الجميع." : "No remaining salaries."));
+      return;
+    }
+    const XLSX = await import("xlsx");
+    const wb = XLSX.utils.book_new();
+
+    const totalNet = subset.reduce((s, e) => s + (e.netSalary || 0), 0);
+    const summaryData: any[] = [
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "الفرع" : "Branch", [isRTL ? "القيمة" : "Value"]: getBranchName(branch) },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "الشهر" : "Month", [isRTL ? "القيمة" : "Value"]: month },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "نوع الكشف" : "Report Type", [isRTL ? "القيمة" : "Value"]: mode === "paid" ? (isRTL ? "الرواتب المدفوعة" : "Paid Salaries") : (isRTL ? "الرواتب المتبقية" : "Remaining Salaries") },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "عدد الموظفين" : "Employee Count", [isRTL ? "القيمة" : "Value"]: subset.length },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي صافي الرواتب" : "Total Net", [isRTL ? "القيمة" : "Value"]: totalNet },
+    ];
+    if (mode === "paid") {
+      for (const [k, v] of Object.entries(SALARY_PAYMENT_METHOD_LABELS)) {
+        const cnt = subset.filter((e) => payMap.get(Number(e.branchEmployeeId ?? e.id))?.paymentMethod === k).length;
+        const sum = subset.filter((e) => payMap.get(Number(e.branchEmployeeId ?? e.id))?.paymentMethod === k).reduce((s, e) => s + (e.netSalary || 0), 0);
+        summaryData.push({ [isRTL ? "البيان" : "Item"]: `${isRTL ? "عدد/إجمالي" : "Count/Total"} — ${v}`, [isRTL ? "القيمة" : "Value"]: `${cnt} / ${sum.toLocaleString("en-US", { maximumFractionDigits: 2 })}` });
+      }
+    }
+    const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, wsSummary, isRTL ? "ملخص" : "Summary");
+
+    const data = subset.map((emp, index) => {
+      const p = payMap.get(Number(emp.branchEmployeeId ?? emp.id));
+      const base: any = {
+        [isRTL ? "م" : "#"]: index + 1,
+        [isRTL ? "رقم الموظف" : "Employee #"]: emp.employeeNumber,
+        [isRTL ? "الاسم" : "Name"]: emp.employeeName,
+        [isRTL ? "الوظيفة" : "Job Title"]: emp.jobTitle,
+        [isRTL ? "الجنسية" : "Nationality"]: emp.nationality,
+        [isRTL ? "البنك" : "Bank"]: emp.bankName || "",
+        [isRTL ? "الآيبان / رقم الحساب" : "IBAN / Account #"]: emp.bankAccountNumber || "",
+        [isRTL ? "صافي الراتب" : "Net Salary"]: emp.netSalary,
+      };
+      if (mode === "paid") {
+        base[isRTL ? "طريقة الدفع" : "Payment Method"] = p ? (SALARY_PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod) : "";
+        base[isRTL ? "تاريخ الصرف" : "Paid At"] = p?.paidAt ? new Date(p.paidAt).toLocaleString("en-GB") : "";
+        base[isRTL ? "ملاحظة" : "Note"] = p?.note || "";
+      } else {
+        base[isRTL ? "الحالة" : "Status"] = isRTL ? "غير مدفوع" : "Unpaid";
+      }
+      return base;
+    });
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, mode === "paid" ? (isRTL ? "المدفوعة" : "Paid") : (isRTL ? "المتبقية" : "Remaining"));
+
+    const tag = mode === "paid" ? (isRTL ? "الرواتب_المدفوعة" : "paid_salaries") : (isRTL ? "الرواتب_المتبقية" : "remaining_salaries");
+    XLSX.writeFile(wb, `${tag}_${getBranchName(branch)}_${month}.xlsx`);
   };
 
   // تصدير ملف البنك (نموذج بنك الرياض - نظام مدد) المطابق للتنسيق المعتمد
@@ -1431,6 +1656,9 @@ export default function SalaryClosingPage() {
     else if (statusFilter === "no_work") result = result.filter((e) => e.noWorkAtAll);
     if (bankFilter === "has_bank") result = result.filter((e) => !!(e.bankAccountNumber || e.bankName));
     else if (bankFilter === "no_bank") result = result.filter((e) => !e.bankAccountNumber && !e.bankName);
+    if (paymentStatusFilter === "paid") result = result.filter((e) => paymentByEmp.has(Number(e.branchEmployeeId ?? e.id)));
+    else if (paymentStatusFilter === "unpaid") result = result.filter((e) => !paymentByEmp.has(Number(e.branchEmployeeId ?? e.id)));
+    if (paymentMethodFilter !== "all") result = result.filter((e) => paymentByEmp.get(Number(e.branchEmployeeId ?? e.id))?.paymentMethod === paymentMethodFilter);
     const min = netMin ? parseFloat(netMin) : -Infinity;
     const max = netMax ? parseFloat(netMax) : Infinity;
     result = result.filter((e) => (e.netSalary || 0) >= min && (e.netSalary || 0) <= max);
@@ -1453,7 +1681,7 @@ export default function SalaryClosingPage() {
       return sortOrder === "asc" ? av - bv : bv - av;
     });
     return result;
-  }, [salaryClosingData, search, jobTitleFilter, nationalityFilter, dataSourceFilter, statusFilter, bankFilter, netMin, netMax, sortField, sortOrder]);
+  }, [salaryClosingData, search, jobTitleFilter, nationalityFilter, dataSourceFilter, statusFilter, bankFilter, paymentStatusFilter, paymentMethodFilter, paymentByEmp, netMin, netMax, sortField, sortOrder]);
 
   const hasActiveFilters =
     !!search ||
@@ -1462,6 +1690,8 @@ export default function SalaryClosingPage() {
     dataSourceFilter !== "all" ||
     statusFilter !== "all" ||
     bankFilter !== "all" ||
+    paymentStatusFilter !== "all" ||
+    paymentMethodFilter !== "all" ||
     !!netMin ||
     !!netMax;
 
@@ -1472,6 +1702,8 @@ export default function SalaryClosingPage() {
     setDataSourceFilter("all");
     setStatusFilter("all");
     setBankFilter("all");
+    setPaymentStatusFilter("all");
+    setPaymentMethodFilter("all");
     setNetMin("");
     setNetMax("");
   };
@@ -1555,6 +1787,26 @@ export default function SalaryClosingPage() {
                 >
                   <Landmark className="w-4 h-4 ml-2" />
                   تصدير ملف البنك
+                </Button>
+                <Button
+                  variant="outline"
+                  className="border-green-300 text-green-700 hover:bg-green-50"
+                  onClick={() => exportPaymentsExcel("paid")}
+                  disabled={previewLoading || salaryClosingData.length === 0}
+                  data-testid="button-export-paid-salaries"
+                >
+                  <FileSpreadsheet className="w-4 h-4 ml-2" />
+                  تصدير المدفوعة
+                </Button>
+                <Button
+                  variant="outline"
+                  className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                  onClick={() => exportPaymentsExcel("remaining")}
+                  disabled={previewLoading || salaryClosingData.length === 0}
+                  data-testid="button-export-remaining-salaries"
+                >
+                  <FileSpreadsheet className="w-4 h-4 ml-2" />
+                  تصدير المتبقية
                 </Button>
                 {salaryClosingClosure && (
                   <Button
@@ -1961,6 +2213,29 @@ export default function SalaryClosingPage() {
                           </SelectContent>
                         </Select>
                       </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">حالة الدفع</Label>
+                        <Select value={paymentStatusFilter} onValueChange={setPaymentStatusFilter}>
+                          <SelectTrigger data-testid="select-filter-payment-status"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">الكل</SelectItem>
+                            <SelectItem value="paid">مدفوع</SelectItem>
+                            <SelectItem value="unpaid">غير مدفوع</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">طريقة الدفع</Label>
+                        <Select value={paymentMethodFilter} onValueChange={setPaymentMethodFilter}>
+                          <SelectTrigger data-testid="select-filter-payment-method"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">الكل</SelectItem>
+                            {Object.entries(SALARY_PAYMENT_METHOD_LABELS).map(([k, v]) => (
+                              <SelectItem key={k} value={k}>{v}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -2119,6 +2394,7 @@ export default function SalaryClosingPage() {
                         {cols.insurance && <TableHead className="text-center">{isRTL ? "التأمينات" : "Insurance"}</TableHead>}
                         <TableHead className="text-center bg-orange-50" title={isRTL ? "السُلف والخصومات اليدوية الشهرية — اضغط للإضافة/التعديل" : "Manual advances & deductions"}>{isRTL ? "سُلف/خصومات" : "Advances/Deductions"}</TableHead>
                         <TableHead className="text-center">{isRTL ? "الصافي" : "Net"}</TableHead>
+                        <TableHead className="text-center bg-green-50" title={isRTL ? "حالة صرف الراتب وطريقة الدفع — اضغط للتأشير" : "Payment status & method"}>{isRTL ? "حالة الدفع" : "Payment"}</TableHead>
                         <TableHead className="text-center">{isRTL ? "قسيمة" : "Payslip"}</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -2407,6 +2683,20 @@ export default function SalaryClosingPage() {
                             )}
                           </TableCell>
                           <TableCell className="text-center font-bold">{formatCurrency(emp.netSalary, isRTL)}</TableCell>
+                          <TableCell className="text-center bg-green-50/40">
+                            {emp.branchEmployeeId != null || emp.id != null ? (
+                              <PaymentStatusPopover
+                                branchEmployeeId={Number(emp.branchEmployeeId ?? emp.id)}
+                                month={month}
+                                employeeName={emp.employeeName}
+                                netSalary={emp.netSalary || 0}
+                                payment={paymentByEmp.get(Number(emp.branchEmployeeId ?? emp.id))}
+                                onChanged={refreshPayments}
+                              />
+                            ) : (
+                              <span className="text-gray-300 text-xs">—</span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-center">
                             {salaryClosingIsLocked && savedClosureId && closureLineIdByBranchEmployee.has(Number(emp.branchEmployeeId ?? emp.id)) ? (
                               <Button
