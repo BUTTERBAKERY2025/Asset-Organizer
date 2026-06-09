@@ -12,3 +12,9 @@ description: Auth/IDOR model and surface for the shareholder self-service portal
 - Admin investor-portal routes (`/api/governance/*`) are gated by `requirePermission("governance_shareholders", <action>)`.
 - `/api/shareholder/me` returns `{ hasShareholder: false }` (not 403) for non-shareholders so the portal page can render a clean empty/redirect state; other portal queries are `enabled: !!hasShareholder`.
 - Reachable from the governance hub (`/governance`) tile, not a dedicated sidebar item — consistent with other governance sub-pages.
+- Meeting minutes shown/printed in the portal are ONLY signed/archived OR `isLocked=true` records — never drafts.
+  - **Why:** minutes are immutable official records (Saudi Companies Law M/132); exposing drafts to shareholders would leak un-ratified content.
+  - **How to apply:** the `/api/shareholder/meetings` join filters on that condition and attaches the newest such record per meeting.
+- Credential delivery from the admin investor-portal uses a client-side `wa.me` deep link (prefilled message), NOT the Twilio notification queue.
+  - **Why:** user reported the backend WhatsApp queue "doesn't work well"; the deep link lets the admin review and send from their own WhatsApp. Tradeoff: password passes through the admin device's wa.me URL — acceptable here since the admin generated it and the old queue also sent plaintext.
+  - **How to apply:** Saudi phone normalization → international `966...` before building the URL.

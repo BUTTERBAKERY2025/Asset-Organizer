@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { db } from "./db";
-import { eq, and, desc, isNull, sql } from "drizzle-orm";
+import { eq, and, desc, isNull, sql, inArray } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import { isAuthenticated, requirePermission } from "./auth";
 import {
@@ -9,6 +9,7 @@ import {
   shareholderNotifications,
   shareholderDocuments,
   governanceMeetings,
+  meetingMinutes,
   dividendDistributions,
   assemblyResolutions,
   assemblyResolutionVotes,
@@ -136,7 +137,38 @@ export function registerShareholderPortalRoutes(app: Express) {
         })
         .from(governanceMeetings)
         .orderBy(desc(governanceMeetings.meetingDate));
-      res.json(rows);
+
+      // أرفق المحاضر المعتمدة/الموقّعة فقط (الرسمية وغير القابلة للتعديل) لكل اجتماع
+      const meetingIds = rows.map((r) => r.id);
+      let minutesByMeeting = new Map<number, any>();
+      if (meetingIds.length > 0) {
+        const mins = await db
+          .select({
+            id: meetingMinutes.id,
+            meetingId: meetingMinutes.meetingId,
+            minutesNumber: meetingMinutes.minutesNumber,
+            content: meetingMinutes.content,
+            summary: meetingMinutes.summary,
+            attendanceList: meetingMinutes.attendanceList,
+            discussionPoints: meetingMinutes.discussionPoints,
+            decisions: meetingMinutes.decisions,
+            votingResults: meetingMinutes.votingResults,
+            status: meetingMinutes.status,
+            isLocked: meetingMinutes.isLocked,
+          })
+          .from(meetingMinutes)
+          .where(
+            and(
+              inArray(meetingMinutes.meetingId, meetingIds),
+              sql`(${meetingMinutes.status} IN ('signed','archived') OR ${meetingMinutes.isLocked} = true)`,
+            ),
+          )
+          .orderBy(desc(meetingMinutes.id));
+        for (const m of mins) {
+          if (!minutesByMeeting.has(m.meetingId)) minutesByMeeting.set(m.meetingId, m);
+        }
+      }
+      res.json(rows.map((r) => ({ ...r, minutes: minutesByMeeting.get(r.id) || null })));
     } catch (error) {
       console.error("Error fetching meetings:", error);
       res.status(500).json({ error: "فشل في جلب الاجتماعات" });

@@ -338,6 +338,17 @@ function genUsername(sh: any): string {
   const rand = Math.floor(10 + Math.random() * 89);
   return `sh${sh?.id ?? ""}${rand}`;
 }
+// تحويل رقم الجوال إلى صيغة واتساب الدولية (السعودية افتراضياً 966)
+function toWhatsAppNumber(phone: any): string | null {
+  if (!phone) return null;
+  let d = String(phone).replace(/\D/g, "");
+  if (!d) return null;
+  if (d.startsWith("00")) d = d.slice(2);
+  if (d.startsWith("966")) return d;
+  if (d.startsWith("0")) return "966" + d.slice(1);
+  if (d.startsWith("5") && d.length === 9) return "966" + d;
+  return d;
+}
 
 function AccountsTab({ accounts, toast, queryClient }: any) {
   const [dialog, setDialog] = useState<{ mode: "create" | "reset"; sh: any } | null>(null);
@@ -364,11 +375,26 @@ function AccountsTab({ accounts, toast, queryClient }: any) {
     onSuccess: () => { toast({ title: "تم تغيير كلمة المرور" }); setCreated(true); },
     onError: (e: any) => toast({ title: "فشل", description: e?.message || "", variant: "destructive" }),
   });
-  const sendCreds = useMutation({
-    mutationFn: () => apiRequest("POST", `/api/governance/shareholders/${dialog!.sh.id}/send-credentials`, { username, password }),
-    onSuccess: () => toast({ title: "تم إرسال بيانات الدخول عبر واتساب" }),
-    onError: (e: any) => toast({ title: "تعذّر الإرسال", description: e?.message || "", variant: "destructive" }),
-  });
+  const portalUrl = typeof window !== "undefined" ? `${window.location.origin}/shareholder-portal` : "";
+  const sendCredsWhatsApp = () => {
+    const wa = toWhatsAppNumber(dialog?.sh?.phone);
+    if (!wa) { toast({ title: "لا يوجد رقم جوال صحيح", variant: "destructive" }); return; }
+    const lines = [
+      `مرحباً ${dialog?.sh?.fullName || ""}،`,
+      "تم تجهيز حسابك في بوابة المساهمين بشركة الزبد الأفضل التجارية.",
+      "",
+      "🔗 رابط الدخول:",
+      portalUrl,
+      "",
+      "👤 بيانات الدخول:",
+      `اسم المستخدم: ${username}`,
+      `كلمة المرور: ${password}`,
+      "",
+      "🔒 يُنصح بتغيير كلمة المرور بعد أول تسجيل دخول.",
+    ];
+    const url = `https://wa.me/${wa}?text=${encodeURIComponent(lines.join("\n"))}`;
+    window.open(url, "_blank");
+  };
   const unlink = useMutation({
     mutationFn: (id: number) => apiRequest("POST", `/api/governance/shareholders/${id}/unlink-account`),
     onSuccess: () => { toast({ title: "تم فك الارتباط" }); queryClient.invalidateQueries({ queryKey: ["/api/governance/shareholder-portal-accounts"] }); queryClient.invalidateQueries({ queryKey: ["/api/governance/investor-dashboard"] }); },
@@ -439,16 +465,17 @@ function AccountsTab({ accounts, toast, queryClient }: any) {
                   <div className="flex justify-between gap-2"><span className="text-muted-foreground">كلمة المرور</span><span className="font-mono font-medium" data-testid="text-created-password">{password}</span></div>
                 </div>
                 {!dialog?.sh?.phone && <p className="text-[11px] text-amber-600">لا يوجد رقم جوال مسجّل لهذا المساهم، لذا لا يمكن الإرسال عبر واتساب.</p>}
+                {dialog?.sh?.phone && <p className="text-[11px] text-muted-foreground">سيفتح واتساب برسالة جاهزة لرقم المساهم — راجِعها ثم اضغط إرسال داخل واتساب.</p>}
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" className="flex-1" onClick={copyAll} data-testid="button-copy-credentials"><Copy className="w-4 h-4 ml-2" /> نسخ</Button>
                   <Button
                     size="sm"
                     className="flex-1 bg-green-600 hover:bg-green-700"
-                    disabled={!dialog?.sh?.phone || sendCreds.isPending}
-                    onClick={() => sendCreds.mutate()}
+                    disabled={!dialog?.sh?.phone}
+                    onClick={sendCredsWhatsApp}
                     data-testid="button-send-credentials-whatsapp"
                   >
-                    {sendCreds.isPending ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : <MessageSquare className="w-4 h-4 ml-2" />} إرسال عبر واتساب
+                    <MessageSquare className="w-4 h-4 ml-2" /> فتح واتساب
                   </Button>
                 </div>
               </div>
