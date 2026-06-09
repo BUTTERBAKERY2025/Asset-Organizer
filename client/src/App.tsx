@@ -143,6 +143,7 @@ const RsvpPage = makeLazy("rsvp-page");
 const GovernancePage = makeLazy("governance");
 const BoardMembersPage = makeLazy("governance-board-members");
 const ShareholdersPage = makeLazy("governance-shareholders");
+const InvestorPortalPage = makeLazy("governance-investor-portal");
 const GovernanceMeetingsPage = makeLazy("governance-meetings");
 const AssemblyMinutesPage = makeLazy("governance-assembly-minutes");
 const ResolutionsPage = makeLazy("governance-resolutions");
@@ -179,6 +180,7 @@ const PublicGreetingPage = makeLazy("public-greeting");
 const FloorPlanPage = makeLazy("floor-plan");
 const HRHubPage = makeLazy("hr-hub");
 const MyPortalPage = makeLazy("my-portal");
+const ShareholderPortalPage = makeLazy("shareholder-portal");
 const HREmployeeDocumentsPage = makeLazy("hr/employee-documents");
 const HRLeavesPage = makeLazy("hr/leaves");
 const HRWarningsPage = makeLazy("hr/warnings");
@@ -314,6 +316,7 @@ const Router = React.memo(function Router() {
       
       {/* HR - الموارد البشرية */}
       <Route path="/my-portal">{() => <ProtectedPage component={MyPortalPage} />}</Route>
+      <Route path="/shareholder-portal">{() => <ProtectedPage component={ShareholderPortalPage} />}</Route>
       <Route path="/hr-hub">{() => <ModulePage component={HRHubPage} module="hr_management" />}</Route>
       <Route path="/hr/employee-documents">{() => <ModulePage component={HREmployeeDocumentsPage} module="hr_documents" />}</Route>
       <Route path="/hr/leaves">{() => <ModulePage component={HRLeavesPage} module="hr_leaves" />}</Route>
@@ -468,6 +471,7 @@ const Router = React.memo(function Router() {
       <Route path="/governance">{() => <ModulePage component={GovernancePage} module="governance" />}</Route>
       <Route path="/governance/board">{() => <ModulePage component={BoardMembersPage} module="governance_board" />}</Route>
       <Route path="/governance/shareholders">{() => <ModulePage component={ShareholdersPage} module="governance_shareholders" />}</Route>
+      <Route path="/governance/investor-portal">{() => <ModulePage component={InvestorPortalPage} module="governance_shareholders" />}</Route>
       <Route path="/governance/meetings">{() => <ModulePage component={GovernanceMeetingsPage} module="governance_meetings" />}</Route>
       <Route path="/governance/assembly-minutes">{() => <ModulePage component={AssemblyMinutesPage} module="governance_meetings" />}</Route>
       <Route path="/governance/resolutions">{() => <ModulePage component={ResolutionsPage} module="governance_resolutions" />}</Route>

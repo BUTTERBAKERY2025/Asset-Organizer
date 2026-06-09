@@ -147,6 +147,8 @@ export default function LoginPage() {
 
       if (userData?.role === "attendance_clerk") {
         setLocation("/attendance-check");
+      } else if (userData?.role === "shareholder") {
+        setLocation(next !== "/" ? next : "/shareholder-portal");
       } else {
         setLocation(next);
       }

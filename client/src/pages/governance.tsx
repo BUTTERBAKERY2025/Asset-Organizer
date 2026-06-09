@@ -89,6 +89,15 @@ const governanceModules: GovernanceModule[] = [
     href: "/governance/shareholders",
   },
   {
+    id: "investor-portal",
+    title: "لوحة التحكم والتواصل مع المساهمين",
+    description: "لوحة مؤشرات، إشعارات وواتساب، أخبار وإعلانات، وحسابات بوابة المساهمين",
+    icon: Users,
+    color: "text-rose-600",
+    bgColor: "bg-rose-100",
+    href: "/governance/investor-portal",
+  },
+  {
     id: "resolutions",
     title: "قرارات مجلس الإدارة",
     description: "توثيق ومتابعة قرارات المجلس",

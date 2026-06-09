@@ -8563,6 +8563,7 @@ export const shareholders = pgTable("shareholders", {
   bankName: text("bank_name"),
   bankAccountNumber: text("bank_account_number"),
   iban: text("iban"),
+  linkedUserId: varchar("linked_user_id").references(() => users.id),
   isBoardMember: boolean("is_board_member").default(false),
   boardMemberId: integer("board_member_id").references(() => boardMembers.id),
   votingRights: boolean("voting_rights").default(true),
@@ -8586,6 +8587,58 @@ export const insertShareholderSchema = createInsertSchema(shareholders).omit({
 
 export type Shareholder = typeof shareholders.$inferSelect;
 export type InsertShareholder = z.infer<typeof insertShareholderSchema>;
+
+// أخبار وإعلانات المساهمين - Shareholder Announcements (news / openings / events)
+export const shareholderAnnouncements = pgTable("shareholder_announcements", {
+  id: serial("id").primaryKey(),
+  category: text("category").notNull().default("announcement"), // news, announcement, opening, event
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  imageUrl: text("image_url"),
+  eventDate: date("event_date"),
+  isPublished: boolean("is_published").default(true).notNull(),
+  publishedAt: timestamp("published_at").defaultNow(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shareholder_announcements_category").on(table.category),
+  index("idx_shareholder_announcements_published").on(table.isPublished),
+]);
+
+export const insertShareholderAnnouncementSchema = createInsertSchema(shareholderAnnouncements).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  publishedAt: true,
+});
+
+export type ShareholderAnnouncement = typeof shareholderAnnouncements.$inferSelect;
+export type InsertShareholderAnnouncement = z.infer<typeof insertShareholderAnnouncementSchema>;
+
+// إشعارات المساهمين - Shareholder Notifications (fan-out: one row per shareholder)
+export const shareholderNotifications = pgTable("shareholder_notifications", {
+  id: serial("id").primaryKey(),
+  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id, { onDelete: 'cascade' }),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  sentWhatsapp: boolean("sent_whatsapp").default(false).notNull(),
+  readAt: timestamp("read_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shareholder_notifications_shareholder").on(table.shareholderId),
+  index("idx_shareholder_notifications_read").on(table.readAt),
+]);
+
+export const insertShareholderNotificationSchema = createInsertSchema(shareholderNotifications).omit({
+  id: true,
+  createdAt: true,
+  readAt: true,
+});
+
+export type ShareholderNotification = typeof shareholderNotifications.$inferSelect;
+export type InsertShareholderNotification = z.infer<typeof insertShareholderNotificationSchema>;
 
 // وثائق المساهمين - Shareholder Documents
 export const shareholderDocuments = pgTable("shareholder_documents", {
