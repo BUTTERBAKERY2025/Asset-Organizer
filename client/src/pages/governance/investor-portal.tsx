@@ -16,7 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Users, PieChart as PieIcon, TrendingUp, UserCheck, Landmark, Megaphone, Bell,
   KeyRound, Plus, Pencil, Trash2, Send, Loader2, MessageSquare, Newspaper, Store,
-  CalendarDays, ShieldCheck, Link2, Link2Off,
+  CalendarDays, ShieldCheck, Link2, Link2Off, RefreshCw, Check, Copy,
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
 
@@ -324,23 +324,50 @@ function AnnouncementsTab({ announcements, toast, queryClient }: any) {
   );
 }
 
+function genPassword(): string {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghijkmnpqrstuvwxyz";
+  const digits = "23456789";
+  const all = upper + lower + digits;
+  const pick = (s: string) => s[Math.floor(Math.random() * s.length)];
+  let pw = pick(upper) + pick(lower) + pick(digits);
+  for (let i = 0; i < 7; i++) pw += pick(all);
+  return pw.split("").sort(() => Math.random() - 0.5).join("");
+}
+function genUsername(sh: any): string {
+  const rand = Math.floor(10 + Math.random() * 89);
+  return `sh${sh?.id ?? ""}${rand}`;
+}
+
 function AccountsTab({ accounts, toast, queryClient }: any) {
   const [dialog, setDialog] = useState<{ mode: "create" | "reset"; sh: any } | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [created, setCreated] = useState(false);
 
-  const openCreate = (sh: any) => { setUsername(""); setPassword(""); setDialog({ mode: "create", sh }); };
-  const openReset = (sh: any) => { setPassword(""); setDialog({ mode: "reset", sh }); };
+  const openCreate = (sh: any) => { setUsername(""); setPassword(""); setCreated(false); setDialog({ mode: "create", sh }); };
+  const openReset = (sh: any) => { setPassword(""); setCreated(false); setDialog({ mode: "reset", sh }); };
+
+  const generateBoth = () => { if (dialog?.mode === "create") setUsername(genUsername(dialog.sh)); setPassword(genPassword()); };
+  const copyAll = () => {
+    const txt = dialog?.mode === "create" ? `اسم المستخدم: ${username}\nكلمة المرور: ${password}` : `كلمة المرور: ${password}`;
+    navigator.clipboard?.writeText(txt).then(() => toast({ title: "تم النسخ" })).catch(() => {});
+  };
 
   const createAcct = useMutation({
     mutationFn: () => apiRequest("POST", `/api/governance/shareholders/${dialog!.sh.id}/create-account`, { username, password }),
-    onSuccess: () => { toast({ title: "تم إنشاء الحساب" }); setDialog(null); queryClient.invalidateQueries({ queryKey: ["/api/governance/shareholder-portal-accounts"] }); queryClient.invalidateQueries({ queryKey: ["/api/governance/investor-dashboard"] }); },
+    onSuccess: () => { toast({ title: "تم إنشاء الحساب" }); setCreated(true); queryClient.invalidateQueries({ queryKey: ["/api/governance/shareholder-portal-accounts"] }); queryClient.invalidateQueries({ queryKey: ["/api/governance/investor-dashboard"] }); },
     onError: (e: any) => toast({ title: "فشل", description: e?.message || "", variant: "destructive" }),
   });
   const resetPwd = useMutation({
     mutationFn: () => apiRequest("POST", `/api/governance/shareholders/${dialog!.sh.id}/reset-password`, { password }),
-    onSuccess: () => { toast({ title: "تم تغيير كلمة المرور" }); setDialog(null); },
+    onSuccess: () => { toast({ title: "تم تغيير كلمة المرور" }); setCreated(true); },
     onError: (e: any) => toast({ title: "فشل", description: e?.message || "", variant: "destructive" }),
+  });
+  const sendCreds = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/governance/shareholders/${dialog!.sh.id}/send-credentials`, { username, password }),
+    onSuccess: () => toast({ title: "تم إرسال بيانات الدخول عبر واتساب" }),
+    onError: (e: any) => toast({ title: "تعذّر الإرسال", description: e?.message || "", variant: "destructive" }),
   });
   const unlink = useMutation({
     mutationFn: (id: number) => apiRequest("POST", `/api/governance/shareholders/${id}/unlink-account`),
@@ -378,21 +405,58 @@ function AccountsTab({ accounts, toast, queryClient }: any) {
       <Dialog open={!!dialog} onOpenChange={(o) => !o && setDialog(null)}>
         <DialogContent dir="rtl" className="max-w-sm">
           <DialogHeader><DialogTitle>{dialog?.mode === "create" ? "إنشاء حساب" : "تغيير كلمة المرور"} — {dialog?.sh?.fullName}</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            {dialog?.mode === "create" && (
-              <div><Label>اسم المستخدم</Label><Input value={username} onChange={(e) => setUsername(e.target.value)} data-testid="input-username" /></div>
-            )}
-            <div><Label>كلمة المرور</Label><Input type="text" value={password} onChange={(e) => setPassword(e.target.value)} data-testid="input-password" /><p className="text-[11px] text-muted-foreground mt-1">8 أحرف على الأقل، تحتوي حروفاً كبيرة وصغيرة وأرقاماً</p></div>
-          </div>
-          <DialogFooter>
-            <Button
-              disabled={(dialog?.mode === "create" && !username.trim()) || !password.trim() || createAcct.isPending || resetPwd.isPending}
-              onClick={() => (dialog?.mode === "create" ? createAcct.mutate() : resetPwd.mutate())}
-              data-testid="button-confirm-account"
-            >
-              {(createAcct.isPending || resetPwd.isPending) && <Loader2 className="w-4 h-4 animate-spin ml-2" />} تأكيد
-            </Button>
-          </DialogFooter>
+
+          {!created ? (
+            <>
+              <div className="space-y-3">
+                <Button type="button" variant="outline" size="sm" className="w-full" onClick={generateBoth} data-testid="button-generate-credentials">
+                  <RefreshCw className="w-4 h-4 ml-2" /> توليد {dialog?.mode === "create" ? "اسم المستخدم وكلمة المرور" : "كلمة مرور"} تلقائياً
+                </Button>
+                {dialog?.mode === "create" && (
+                  <div><Label>اسم المستخدم</Label><Input value={username} onChange={(e) => setUsername(e.target.value)} data-testid="input-username" /></div>
+                )}
+                <div><Label>كلمة المرور</Label><Input type="text" value={password} onChange={(e) => setPassword(e.target.value)} data-testid="input-password" /><p className="text-[11px] text-muted-foreground mt-1">8 أحرف على الأقل، تحتوي حروفاً كبيرة وصغيرة وأرقاماً</p></div>
+              </div>
+              <DialogFooter>
+                <Button
+                  disabled={(dialog?.mode === "create" && !username.trim()) || !password.trim() || createAcct.isPending || resetPwd.isPending}
+                  onClick={() => (dialog?.mode === "create" ? createAcct.mutate() : resetPwd.mutate())}
+                  data-testid="button-confirm-account"
+                >
+                  {(createAcct.isPending || resetPwd.isPending) && <Loader2 className="w-4 h-4 animate-spin ml-2" />} تأكيد
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 rounded-md bg-green-50 text-green-700 border border-green-200 px-3 py-2 text-sm">
+                  <Check className="w-4 h-4 shrink-0" />
+                  <span>{dialog?.mode === "create" ? "تم إنشاء الحساب بنجاح. أرسِل بيانات الدخول للمساهم." : "تم تغيير كلمة المرور. يمكنك إرسالها للمساهم."}</span>
+                </div>
+                <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1.5">
+                  {dialog?.mode === "create" && <div className="flex justify-between gap-2"><span className="text-muted-foreground">اسم المستخدم</span><span className="font-mono font-medium" data-testid="text-created-username">{username}</span></div>}
+                  <div className="flex justify-between gap-2"><span className="text-muted-foreground">كلمة المرور</span><span className="font-mono font-medium" data-testid="text-created-password">{password}</span></div>
+                </div>
+                {!dialog?.sh?.phone && <p className="text-[11px] text-amber-600">لا يوجد رقم جوال مسجّل لهذا المساهم، لذا لا يمكن الإرسال عبر واتساب.</p>}
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="flex-1" onClick={copyAll} data-testid="button-copy-credentials"><Copy className="w-4 h-4 ml-2" /> نسخ</Button>
+                  <Button
+                    size="sm"
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    disabled={!dialog?.sh?.phone || sendCreds.isPending}
+                    onClick={() => sendCreds.mutate()}
+                    data-testid="button-send-credentials-whatsapp"
+                  >
+                    {sendCreds.isPending ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : <MessageSquare className="w-4 h-4 ml-2" />} إرسال عبر واتساب
+                  </Button>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setDialog(null)} data-testid="button-close-account-dialog">تم</Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </Card>

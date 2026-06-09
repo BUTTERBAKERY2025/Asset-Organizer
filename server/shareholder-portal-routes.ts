@@ -599,6 +599,43 @@ export function registerShareholderPortalRoutes(app: Express) {
     }
   });
 
+  // إرسال بيانات الدخول للمساهم عبر واتساب (يُدرَج في طابور الإشعارات)
+  app.post("/api/governance/shareholders/:id/send-credentials", isAuthenticated, requirePermission("governance_shareholders", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const { username, password } = req.body || {};
+      if (!username || !password) return res.status(400).json({ error: "اسم المستخدم وكلمة المرور مطلوبان" });
+
+      const [shareholder] = await db.select().from(shareholders).where(eq(shareholders.id, id)).limit(1);
+      if (!shareholder) return res.status(404).json({ error: "المساهم غير موجود" });
+      if (!shareholder.linkedUserId) return res.status(400).json({ error: "هذا المساهم غير مرتبط بحساب" });
+      if (!shareholder.phone) return res.status(400).json({ error: "لا يوجد رقم جوال مسجّل لهذا المساهم" });
+
+      const message =
+        `مرحباً ${shareholder.fullName}،\n\n` +
+        `تم تفعيل حسابك في بوابة المساهمين الخاصة بـ ${COMPANY_INFO.name}.\n\n` +
+        `بيانات الدخول:\n` +
+        `اسم المستخدم: ${username}\n` +
+        `كلمة المرور: ${password}\n\n` +
+        `يُرجى تسجيل الدخول وتغيير كلمة المرور بعد أول دخول للحفاظ على أمان حسابك.`;
+
+      await db.insert(notificationQueue).values({
+        recipientPhone: shareholder.phone,
+        recipientName: shareholder.fullName,
+        channel: "whatsapp",
+        message,
+        relatedModule: "shareholder_credentials",
+        relatedEntityId: String(shareholder.id),
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error sending shareholder credentials:", error);
+      res.status(500).json({ error: "فشل في إرسال بيانات الدخول" });
+    }
+  });
+
   // إعادة تعيين كلمة المرور
   app.post("/api/governance/shareholders/:id/reset-password", isAuthenticated, requirePermission("governance_shareholders", "edit"), async (req, res) => {
     try {
