@@ -22,6 +22,7 @@ import {
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { notifyEmployeeOfDecision, notifyHrOfRequest } from "./notify-helpers";
+import { computeLeaveDays, findOverlappingLeave } from "./leave-helpers";
 import {
   getWarningTemplate,
   getWarningReasonCategory,
@@ -237,13 +238,23 @@ export function registerSelfServiceRoutes(app: Express) {
       if (parsed.endDate < parsed.startDate) {
         return res.status(400).json({ error: "تاريخ النهاية يجب أن يكون بعد تاريخ البداية" });
       }
+      // منع التداخل مع إجازة أخرى لنفس الموظف
+      const overlap = await findOverlappingLeave(emp.id, parsed.startDate, parsed.endDate);
+      if (overlap) {
+        return res.status(409).json({
+          error: `لديك طلب إجازة متداخل مع هذه الفترة (${overlap.startDate} إلى ${overlap.endDate})`,
+        });
+      }
+      // إعادة احتساب الأيام على الخادم (لا نثق بالعميل)
+      const { totalDays, workingDays } = computeLeaveDays(parsed.startDate, parsed.endDate);
       const [created] = await db.insert(leaveRequests).values({
         branchEmployeeId: emp.id,
         branchId: emp.branchId,
         leaveType: parsed.leaveType,
         startDate: parsed.startDate,
         endDate: parsed.endDate,
-        totalDays: parsed.totalDays,
+        totalDays,
+        workingDays,
         reason: parsed.reason,
         attachmentUrl: parsed.attachmentUrl,
         status: "pending",

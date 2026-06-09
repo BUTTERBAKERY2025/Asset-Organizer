@@ -11281,13 +11281,22 @@ export const leaveRequests = pgTable("leave_requests", {
   leaveType: text("leave_type").notNull(), // annual | sick | emergency | maternity | paternity | unpaid | hajj | marriage | bereavement | other
   startDate: text("start_date").notNull(), // YYYY-MM-DD
   endDate: text("end_date").notNull(), // YYYY-MM-DD
-  totalDays: real("total_days").notNull(),
+  totalDays: real("total_days").notNull(), // calendar days (inclusive)
+  workingDays: real("working_days"), // working days excluding weekly rest (server-computed)
   reason: text("reason"),
   status: text("status").notNull().default("pending"), // pending | approved | rejected | cancelled
   reviewedBy: varchar("reviewed_by").references(() => users.id),
   reviewedAt: timestamp("reviewed_at"),
   reviewerNote: text("reviewer_note"),
   attachmentUrl: text("attachment_url"),
+  // إلغاء/سحب إجازة معتمدة (Phase 2)
+  cancelReason: text("cancel_reason"),
+  cancelledBy: varchar("cancelled_by").references(() => users.id),
+  cancelledAt: timestamp("cancelled_at"),
+  // تدرّج الموافقات (Phase 3) — سلسلة الموافقات المتعددة
+  approvalFlow: jsonb("approval_flow"), // [{level, title, approverId, approverName, decision, note, at}]
+  currentLevel: integer("current_level").default(1).notNull(),
+  requiredLevels: integer("required_levels").default(1).notNull(),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -11298,6 +11307,36 @@ export const leaveRequests = pgTable("leave_requests", {
   index("idx_leave_requests_type").on(table.leaveType),
   index("idx_leave_requests_start").on(table.startDate),
 ]);
+
+// رصيد الإجازات السنوي لكل موظف (Phase 1)
+export const leaveBalances = pgTable("leave_balances", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  year: integer("year").notNull(),
+  leaveType: text("leave_type").notNull().default("annual"),
+  entitledDays: real("entitled_days").notNull().default(21), // المستحق سنوياً
+  carriedOverDays: real("carried_over_days").notNull().default(0), // مرحّل من العام السابق
+  adjustmentDays: real("adjustment_days").notNull().default(0), // تعديل يدوي (+/-)
+  note: text("note"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_leave_balance_emp_year_type").on(table.branchEmployeeId, table.year, table.leaveType),
+  index("idx_leave_balances_branch").on(table.branchId),
+  index("idx_leave_balances_year").on(table.year),
+]);
+
+export const insertLeaveBalanceSchema = createInsertSchema(leaveBalances, {
+  year: z.number().int().min(2020).max(2100),
+  entitledDays: z.number().min(0).max(365),
+  carriedOverDays: z.number().min(0).max(365),
+  adjustmentDays: z.number().min(-365).max(365),
+}).omit({ id: true, createdAt: true, updatedAt: true, createdBy: true });
+
+export type LeaveBalance = typeof leaveBalances.$inferSelect;
+export type InsertLeaveBalance = z.infer<typeof insertLeaveBalanceSchema>;
 
 export const insertLeaveRequestSchema = createInsertSchema(leaveRequests, {
   leaveType: z.enum(["annual", "sick", "emergency", "maternity", "paternity", "unpaid", "hajj", "marriage", "bereavement", "other"]),

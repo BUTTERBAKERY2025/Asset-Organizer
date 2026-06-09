@@ -1,22 +1,30 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useUpload } from "@/hooks/use-upload";
+import { useReactToPrint } from "react-to-print";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { CalendarDays, Plus, CheckCircle2, XCircle, Clock, Trash2, ArrowRight } from "lucide-react";
+import {
+  CalendarDays, Plus, CheckCircle2, XCircle, Clock, Trash2, ArrowRight,
+  Wallet, Printer, FileSpreadsheet, Ban, Paperclip, Pencil, ChevronRight, ChevronLeft,
+} from "lucide-react";
 import { LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS } from "@shared/schema";
 import { Layout } from "@/components/layout";
 import { Link } from "wouter";
+import * as XLSX from "xlsx";
 
 type Leave = any;
 type Emp = { id: number; employeeName: string; jobTitle: string; branchId: string };
+type Balance = any;
 
 const initialForm = {
   branchEmployeeId: "",
@@ -25,6 +33,8 @@ const initialForm = {
   startDate: "",
   endDate: "",
   reason: "",
+  attachmentUrl: "",
+  requiredLevels: "1",
 };
 
 function calcDays(start: string, end: string): number {
@@ -34,16 +44,37 @@ function calcDays(start: string, end: string): number {
   return Math.max(0, Math.round((e - s) / (24 * 60 * 60 * 1000)) + 1);
 }
 
+const arNum = (v: any) => Number(v || 0).toLocaleString("ar-SA-u-nu-latn");
+
 export default function LeavesPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const currentYear = new Date().getFullYear();
+
+  const [tab, setTab] = useState("requests");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<typeof initialForm>(initialForm);
-  const [reviewing, setReviewing] = useState<{ id: number; decision: "approved" | "rejected" } | null>(null);
+  const [reviewing, setReviewing] = useState<{ id: number; decision: "approved" | "rejected"; leave: Leave } | null>(null);
   const [reviewNote, setReviewNote] = useState("");
+  const [allowOver, setAllowOver] = useState(false);
+  const [cancelling, setCancelling] = useState<Leave | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [printLeave, setPrintLeave] = useState<Leave | null>(null);
+
+  // balances state
+  const [balYear, setBalYear] = useState(currentYear);
+  const [balType, setBalType] = useState("annual");
+  const [editBal, setEditBal] = useState<Balance | null>(null);
+  const [balForm, setBalForm] = useState({ entitledDays: "21", carriedOverDays: "0", adjustmentDays: "0", note: "" });
+
+  // calendar state
+  const [calMonth, setCalMonth] = useState(() => new Date().toISOString().slice(0, 7));
+
+  const printRef = useRef<HTMLDivElement>(null);
+  const { uploadFile, isUploading } = useUpload({ folder: "leaves" });
 
   const { data: leaves = [], isLoading } = useQuery<Leave[]>({
     queryKey: ["/api/hr/leaves", filterStatus, filterType],
@@ -66,6 +97,21 @@ export default function LeavesPage() {
     queryFn: async () => (await apiRequest("GET", "/api/branch-employees")).json(),
   });
 
+  const { data: balances = [], isLoading: balLoading } = useQuery<Balance[]>({
+    queryKey: ["/api/hr/leave-balances", balYear, balType],
+    queryFn: async () =>
+      (await apiRequest("GET", `/api/hr/leave-balances?year=${balYear}&type=${balType}`)).json(),
+    enabled: tab === "balances",
+  });
+
+  // balance for the employee selected in the create form
+  const { data: formBalance } = useQuery<Balance>({
+    queryKey: ["/api/hr/leave-balances/emp", form.branchEmployeeId, form.leaveType],
+    queryFn: async () =>
+      (await apiRequest("GET", `/api/hr/leave-balances/${form.branchEmployeeId}?year=${currentYear}&type=${form.leaveType}`)).json(),
+    enabled: open && !!form.branchEmployeeId,
+  });
+
   const filtered = useMemo(() => {
     if (!search.trim()) return leaves;
     const q = search.toLowerCase();
@@ -82,6 +128,7 @@ export default function LeavesPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/hr/leaves"] });
       qc.invalidateQueries({ queryKey: ["/api/hr/leaves/stats"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/leave-balances"] });
       toast({ title: "تم تسجيل طلب الإجازة" });
       setForm(initialForm);
       setOpen(false);
@@ -90,15 +137,49 @@ export default function LeavesPage() {
   });
 
   const reviewMutation = useMutation({
-    mutationFn: async ({ id, decision, note }: any) =>
-      (await apiRequest("POST", `/api/hr/leaves/${id}/review`, { decision, note })).json(),
+    mutationFn: async ({ id, decision, note, allowOverBalance }: any) => {
+      const res = await apiRequest("POST", `/api/hr/leaves/${id}/review`, { decision, note, allowOverBalance });
+      return res.json();
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/hr/leaves"] });
       qc.invalidateQueries({ queryKey: ["/api/hr/leaves/stats"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/leave-balances"] });
       toast({ title: "تم تحديث الطلب" });
       setReviewing(null);
       setReviewNote("");
+      setAllowOver(false);
     },
+    onError: (e: any) => {
+      const msg: string = e?.message || "";
+      let parsed: any = null;
+      const jsonStart = msg.indexOf("{");
+      if (jsonStart >= 0) {
+        try { parsed = JSON.parse(msg.slice(jsonStart)); } catch {}
+      }
+      if (parsed?.error === "balance_exceeded" || msg.includes("balance_exceeded")) {
+        setAllowOver(true);
+        toast({ title: "تحذير الرصيد", description: parsed?.message || "الرصيد المتبقي لا يكفي لهذه الإجازة", variant: "destructive" });
+      } else {
+        toast({ title: "خطأ", description: msg || "فشل", variant: "destructive" });
+      }
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async ({ id, reason }: any) => {
+      const res = await apiRequest("POST", `/api/hr/leaves/${id}/cancel`, { reason });
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/hr/leaves"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/leaves/stats"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/leave-balances"] });
+      toast({ title: "تم إلغاء الإجازة" });
+      setCancelling(null);
+      setCancelReason("");
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل الإلغاء", variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
@@ -109,6 +190,21 @@ export default function LeavesPage() {
       toast({ title: "تم الحذف" });
     },
   });
+
+  const saveBalMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      const res = await apiRequest("POST", "/api/hr/leave-balances", payload);
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/hr/leave-balances"] });
+      toast({ title: "تم حفظ الرصيد" });
+      setEditBal(null);
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل", variant: "destructive" }),
+  });
+
+  const handlePrint = useReactToPrint({ contentRef: printRef, documentTitle: "نموذج إجازة" });
 
   const submit = () => {
     if (!form.branchEmployeeId || !form.startDate || !form.endDate) {
@@ -125,7 +221,79 @@ export default function LeavesPage() {
       endDate: form.endDate,
       totalDays,
       reason: form.reason,
+      attachmentUrl: form.attachmentUrl || undefined,
+      requiredLevels: parseInt(form.requiredLevels, 10) || 1,
     });
+  };
+
+  const onUpload = async (file: File | undefined, target: "form") => {
+    if (!file) return;
+    const res = await uploadFile(file);
+    if (res?.downloadUrl) {
+      if (target === "form") setForm((f) => ({ ...f, attachmentUrl: res.downloadUrl }));
+      toast({ title: "تم رفع المرفق" });
+    }
+  };
+
+  const openEditBal = (b: Balance) => {
+    setEditBal(b);
+    setBalForm({
+      entitledDays: String(b.entitledDays ?? b.suggestedEntitlement ?? 21),
+      carriedOverDays: String(b.carriedOverDays ?? 0),
+      adjustmentDays: String(b.adjustmentDays ?? 0),
+      note: b.note ?? "",
+    });
+  };
+
+  const submitBal = () => {
+    if (!editBal) return;
+    saveBalMutation.mutate({
+      branchEmployeeId: editBal.branchEmployeeId,
+      year: balYear,
+      leaveType: balType,
+      entitledDays: parseFloat(balForm.entitledDays) || 0,
+      carriedOverDays: parseFloat(balForm.carriedOverDays) || 0,
+      adjustmentDays: parseFloat(balForm.adjustmentDays) || 0,
+      note: balForm.note || undefined,
+    });
+  };
+
+  const exportLeavesExcel = () => {
+    const rows = filtered.map((l: any) => ({
+      "الموظف": l.employeeName || "",
+      "الوظيفة": l.employeeJob || "",
+      "الفرع": l.branchName || "",
+      "النوع": LEAVE_TYPE_LABELS[l.leaveType] || l.leaveType,
+      "من": l.startDate,
+      "إلى": l.endDate,
+      "الأيام": Number(l.totalDays),
+      "أيام العمل": l.workingDays != null ? Number(l.workingDays) : "",
+      "الحالة": LEAVE_STATUS_LABELS[l.status] || l.status,
+      "المراجع": l.reviewerName || "",
+      "السبب": l.reason || "",
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "الإجازات");
+    XLSX.writeFile(wb, `leaves_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const exportBalancesExcel = () => {
+    const rows = balances.map((b: any) => ({
+      "الموظف": b.employeeName || "",
+      "الوظيفة": b.jobTitle || "",
+      "الفرع": b.branchName || "",
+      "السنة": b.year,
+      "المستحق": Number(b.entitledDays),
+      "المرحّل": Number(b.carriedOverDays),
+      "تعديل": Number(b.adjustmentDays),
+      "المستخدم": Number(b.usedDays),
+      "المتبقي": Number(b.remainingDays),
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "الأرصدة");
+    XLSX.writeFile(wb, `leave_balances_${balYear}.xlsx`);
   };
 
   const statusBadge = (s: string) => {
@@ -137,6 +305,25 @@ export default function LeavesPage() {
     };
     return <Badge className={map[s] || ""}>{LEAVE_STATUS_LABELS[s] || s}</Badge>;
   };
+
+  // Calendar data: approved leaves overlapping the selected month
+  const calDays = useMemo(() => {
+    const [y, m] = calMonth.split("-").map(Number);
+    const first = new Date(Date.UTC(y, m - 1, 1));
+    const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const startWeekday = first.getUTCDay(); // 0=Sun
+    const cells: { date: string | null; leaves: Leave[] }[] = [];
+    for (let i = 0; i < startWeekday; i++) cells.push({ date: null, leaves: [] });
+    const approved = leaves.filter((l: any) => l.status === "approved");
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${calMonth}-${String(d).padStart(2, "0")}`;
+      const dayLeaves = approved.filter((l: any) => l.startDate <= dateStr && l.endDate >= dateStr);
+      cells.push({ date: dateStr, leaves: dayLeaves });
+    }
+    return cells;
+  }, [leaves, calMonth]);
+
+  const printEmp = printLeave ? employees.find((e) => e.id === printLeave.branchEmployeeId) : null;
 
   return (
     <Layout>
@@ -151,7 +338,7 @@ export default function LeavesPage() {
           <CalendarDays className="h-7 w-7 text-blue-600" />
           <div>
             <h1 className="text-2xl font-bold">طلبات الإجازات</h1>
-            <p className="text-sm text-muted-foreground">إدارة طلبات الإجازات والموافقة عليها</p>
+            <p className="text-sm text-muted-foreground">إدارة الطلبات والأرصدة والموافقات والتقويم</p>
           </div>
         </div>
         <Button onClick={() => setOpen(true)} data-testid="button-add-leave">
@@ -167,81 +354,216 @@ export default function LeavesPage() {
         <StatCard label="في إجازة اليوم" value={stats?.onLeaveToday ?? 0} icon={<CalendarDays className="h-5 w-5" />} accent="blue" />
       </div>
 
-      <Card>
-        <CardContent className="space-y-3 pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-            <Input placeholder="بحث باسم الموظف" value={search} onChange={(e) => setSearch(e.target.value)} data-testid="input-search-leaves" />
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger data-testid="select-filter-status"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">كل الحالات</SelectItem>
-                {Object.entries(LEAVE_STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger data-testid="select-filter-type"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">كل الأنواع</SelectItem>
-                {Object.entries(LEAVE_TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList data-testid="tabs-leaves">
+          <TabsTrigger value="requests" data-testid="tab-requests"><CalendarDays className="h-4 w-4 ms-1" />الطلبات</TabsTrigger>
+          <TabsTrigger value="balances" data-testid="tab-balances"><Wallet className="h-4 w-4 ms-1" />الأرصدة</TabsTrigger>
+          <TabsTrigger value="calendar" data-testid="tab-calendar"><CalendarDays className="h-4 w-4 ms-1" />التقويم</TabsTrigger>
+        </TabsList>
 
-          <div className="overflow-auto border rounded-lg">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="text-right p-2">الموظف</th>
-                  <th className="text-right p-2">النوع</th>
-                  <th className="text-right p-2">من - إلى</th>
-                  <th className="text-right p-2">أيام</th>
-                  <th className="text-right p-2">الحالة</th>
-                  <th className="text-right p-2">المراجع</th>
-                  <th className="text-right p-2">إجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading && <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">جاري التحميل...</td></tr>}
-                {!isLoading && filtered.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">لا توجد طلبات</td></tr>}
-                {filtered.map((l: any) => (
-                  <tr key={l.id} className="border-t hover:bg-slate-50" data-testid={`row-leave-${l.id}`}>
-                    <td className="p-2">
-                      <div className="font-medium">{l.employeeName || "-"}</div>
-                      <div className="text-xs text-muted-foreground">{l.employeeJob || ""}</div>
-                    </td>
-                    <td className="p-2">{LEAVE_TYPE_LABELS[l.leaveType] || l.leaveType}</td>
-                    <td className="p-2 text-xs">{l.startDate} → {l.endDate}</td>
-                    <td className="p-2 tabular-nums">{Number(l.totalDays).toLocaleString("ar-SA-u-nu-latn")}</td>
-                    <td className="p-2">{statusBadge(l.status)}</td>
-                    <td className="p-2 text-xs">{l.reviewerName || "-"}</td>
-                    <td className="p-2">
-                      <div className="flex gap-1 flex-wrap">
-                        {l.status === "pending" && (
-                          <>
-                            <Button size="sm" variant="ghost" className="text-emerald-600" onClick={() => setReviewing({ id: l.id, decision: "approved" })} data-testid={`button-approve-${l.id}`}>
-                              <CheckCircle2 className="h-3.5 w-3.5" />
+        {/* ---------- REQUESTS TAB ---------- */}
+        <TabsContent value="requests">
+          <Card>
+            <CardContent className="space-y-3 pt-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                <Input placeholder="بحث باسم الموظف" value={search} onChange={(e) => setSearch(e.target.value)} data-testid="input-search-leaves" />
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger data-testid="select-filter-status"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">كل الحالات</SelectItem>
+                    {Object.entries(LEAVE_STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filterType} onValueChange={setFilterType}>
+                  <SelectTrigger data-testid="select-filter-type"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">كل الأنواع</SelectItem>
+                    {Object.entries(LEAVE_TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" onClick={exportLeavesExcel} data-testid="button-export-leaves">
+                  <FileSpreadsheet className="h-4 w-4 ms-1" />تصدير Excel
+                </Button>
+              </div>
+
+              <div className="overflow-auto border rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="text-right p-2">الموظف</th>
+                      <th className="text-right p-2">النوع</th>
+                      <th className="text-right p-2">من - إلى</th>
+                      <th className="text-right p-2">أيام</th>
+                      <th className="text-right p-2">الحالة</th>
+                      <th className="text-right p-2">المراجع</th>
+                      <th className="text-right p-2">إجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {isLoading && <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">جاري التحميل...</td></tr>}
+                    {!isLoading && filtered.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">لا توجد طلبات</td></tr>}
+                    {filtered.map((l: any) => (
+                      <tr key={l.id} className="border-t hover:bg-slate-50" data-testid={`row-leave-${l.id}`}>
+                        <td className="p-2">
+                          <div className="font-medium flex items-center gap-1">
+                            {l.employeeName || "-"}
+                            {l.attachmentUrl && <a href={l.attachmentUrl} target="_blank" rel="noreferrer" title="مرفق"><Paperclip className="h-3 w-3 text-blue-500" /></a>}
+                          </div>
+                          <div className="text-xs text-muted-foreground">{l.employeeJob || ""}</div>
+                        </td>
+                        <td className="p-2">{LEAVE_TYPE_LABELS[l.leaveType] || l.leaveType}</td>
+                        <td className="p-2 text-xs">{l.startDate} → {l.endDate}</td>
+                        <td className="p-2 tabular-nums">
+                          {arNum(l.totalDays)}
+                          {l.requiredLevels > 1 && l.status === "pending" && (
+                            <span className="block text-[10px] text-amber-600">موافقة {arNum(l.currentLevel)}/{arNum(l.requiredLevels)}</span>
+                          )}
+                        </td>
+                        <td className="p-2">{statusBadge(l.status)}</td>
+                        <td className="p-2 text-xs">{l.reviewerName || "-"}</td>
+                        <td className="p-2">
+                          <div className="flex gap-1 flex-wrap">
+                            {l.status === "pending" && (
+                              <>
+                                <Button size="sm" variant="ghost" className="text-emerald-600" onClick={() => { setAllowOver(false); setReviewing({ id: l.id, decision: "approved", leave: l }); }} data-testid={`button-approve-${l.id}`}>
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button size="sm" variant="ghost" className="text-red-600" onClick={() => setReviewing({ id: l.id, decision: "rejected", leave: l })} data-testid={`button-reject-${l.id}`}>
+                                  <XCircle className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
+                            )}
+                            {(l.status === "approved" || l.status === "pending") && (
+                              <Button size="sm" variant="ghost" className="text-orange-600" title="إلغاء/سحب" onClick={() => { setCancelReason(""); setCancelling(l); }} data-testid={`button-cancel-${l.id}`}>
+                                <Ban className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            <Button size="sm" variant="ghost" title="طباعة نموذج" onClick={() => setPrintLeave(l)} data-testid={`button-print-${l.id}`}>
+                              <Printer className="h-3.5 w-3.5 text-slate-600" />
                             </Button>
-                            <Button size="sm" variant="ghost" className="text-red-600" onClick={() => setReviewing({ id: l.id, decision: "rejected" })} data-testid={`button-reject-${l.id}`}>
-                              <XCircle className="h-3.5 w-3.5" />
+                            <Button size="sm" variant="ghost" onClick={() => { if (confirm("حذف هذا الطلب؟")) deleteMutation.mutate(l.id); }} data-testid={`button-delete-${l.id}`}>
+                              <Trash2 className="h-3.5 w-3.5 text-red-600" />
                             </Button>
-                          </>
-                        )}
-                        <Button size="sm" variant="ghost" onClick={() => { if (confirm("حذف هذا الطلب؟")) deleteMutation.mutate(l.id); }} data-testid={`button-delete-${l.id}`}>
-                          <Trash2 className="h-3.5 w-3.5 text-red-600" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ---------- BALANCES TAB ---------- */}
+        <TabsContent value="balances">
+          <Card>
+            <CardContent className="space-y-3 pt-6">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Select value={String(balYear)} onValueChange={(v) => setBalYear(parseInt(v, 10))}>
+                  <SelectTrigger className="w-32" data-testid="select-bal-year"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[currentYear + 1, currentYear, currentYear - 1, currentYear - 2].map((y) => (
+                      <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={balType} onValueChange={setBalType}>
+                  <SelectTrigger className="w-40" data-testid="select-bal-type"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(LEAVE_TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" onClick={exportBalancesExcel} data-testid="button-export-balances">
+                  <FileSpreadsheet className="h-4 w-4 ms-1" />تصدير Excel
+                </Button>
+              </div>
+              <div className="overflow-auto border rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="text-right p-2">الموظف</th>
+                      <th className="text-right p-2">الفرع</th>
+                      <th className="text-right p-2">المستحق</th>
+                      <th className="text-right p-2">المرحّل</th>
+                      <th className="text-right p-2">تعديل</th>
+                      <th className="text-right p-2">المستخدم</th>
+                      <th className="text-right p-2">المتبقي</th>
+                      <th className="text-right p-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {balLoading && <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">جاري التحميل...</td></tr>}
+                    {!balLoading && balances.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">لا يوجد موظفون</td></tr>}
+                    {balances.map((b: any) => (
+                      <tr key={b.branchEmployeeId} className="border-t hover:bg-slate-50" data-testid={`row-balance-${b.branchEmployeeId}`}>
+                        <td className="p-2">
+                          <div className="font-medium">{b.employeeName}</div>
+                          <div className="text-xs text-muted-foreground">{b.jobTitle}</div>
+                        </td>
+                        <td className="p-2 text-xs">{b.branchName}</td>
+                        <td className="p-2 tabular-nums">{arNum(b.entitledDays)}{!b.hasRow && <span className="text-[10px] text-amber-500 me-1">مقترح</span>}</td>
+                        <td className="p-2 tabular-nums">{arNum(b.carriedOverDays)}</td>
+                        <td className="p-2 tabular-nums">{arNum(b.adjustmentDays)}</td>
+                        <td className="p-2 tabular-nums">{arNum(b.usedDays)}</td>
+                        <td className={`p-2 tabular-nums font-bold ${b.remainingDays < 0 ? "text-red-600" : "text-emerald-600"}`} data-testid={`text-remaining-${b.branchEmployeeId}`}>{arNum(b.remainingDays)}</td>
+                        <td className="p-2">
+                          <Button size="sm" variant="ghost" onClick={() => openEditBal(b)} data-testid={`button-edit-balance-${b.branchEmployeeId}`}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ---------- CALENDAR TAB ---------- */}
+        <TabsContent value="calendar">
+          <Card>
+            <CardContent className="space-y-3 pt-6">
+              <div className="flex items-center justify-between">
+                <Button variant="outline" size="sm" onClick={() => {
+                  const [y, m] = calMonth.split("-").map(Number);
+                  const d = new Date(Date.UTC(y, m - 2, 1));
+                  setCalMonth(d.toISOString().slice(0, 7));
+                }} data-testid="button-cal-prev"><ChevronRight className="h-4 w-4" /></Button>
+                <div className="font-bold" data-testid="text-cal-month">{calMonth}</div>
+                <Button variant="outline" size="sm" onClick={() => {
+                  const [y, m] = calMonth.split("-").map(Number);
+                  const d = new Date(Date.UTC(y, m, 1));
+                  setCalMonth(d.toISOString().slice(0, 7));
+                }} data-testid="button-cal-next"><ChevronLeft className="h-4 w-4" /></Button>
+              </div>
+              <div className="grid grid-cols-7 gap-1 text-center text-xs">
+                {["أحد", "إثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"].map((d) => (
+                  <div key={d} className="font-bold text-muted-foreground p-1">{d}</div>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                {calDays.map((c, i) => (
+                  <div key={i} className={`min-h-[64px] border rounded p-1 text-right ${c.date ? "bg-white" : "bg-slate-50"}`} data-testid={c.date ? `cal-day-${c.date}` : undefined}>
+                    {c.date && <div className="text-[10px] text-muted-foreground">{Number(c.date.slice(-2))}</div>}
+                    <div className="space-y-0.5">
+                      {c.leaves.slice(0, 3).map((l: any) => (
+                        <div key={l.id} className="text-[9px] bg-emerald-100 text-emerald-800 rounded px-1 truncate" title={`${l.employeeName} - ${LEAVE_TYPE_LABELS[l.leaveType] || l.leaveType}`}>
+                          {l.employeeName}
+                        </div>
+                      ))}
+                      {c.leaves.length > 3 && <div className="text-[9px] text-muted-foreground">+{arNum(c.leaves.length - 3)}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Create dialog */}
       <Dialog open={open} onOpenChange={(o) => { if (!o) { setForm(initialForm); setOpen(false); } else setOpen(true); }}>
-        <DialogContent className="max-w-lg" dir="rtl">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-auto" dir="rtl">
           <DialogHeader><DialogTitle>طلب إجازة جديد</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div>
@@ -256,6 +578,14 @@ export default function LeavesPage() {
                 </SelectContent>
               </Select>
             </div>
+            {formBalance && form.branchEmployeeId && (
+              <div className="text-xs bg-blue-50 rounded p-2 flex justify-between" data-testid="text-form-balance">
+                <span>الرصيد المتبقي ({balType === form.leaveType ? "" : ""}{LEAVE_TYPE_LABELS[form.leaveType]}):</span>
+                <span className={`font-bold ${formBalance.remainingDays < 0 ? "text-red-600" : "text-emerald-700"}`}>
+                  {arNum(formBalance.remainingDays)} يوم (مستحق {arNum(formBalance.entitledDays)} − مستخدم {arNum(formBalance.usedDays)})
+                </span>
+              </div>
+            )}
             <div>
               <Label>نوع الإجازة</Label>
               <Select value={form.leaveType} onValueChange={(v) => setForm({ ...form, leaveType: v })}>
@@ -275,7 +605,26 @@ export default function LeavesPage() {
                 <Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} data-testid="input-end-date" />
               </div>
             </div>
-            <div className="text-sm text-muted-foreground">إجمالي الأيام: <span className="font-bold tabular-nums">{totalDays.toLocaleString("ar-SA-u-nu-latn")}</span></div>
+            <div className="text-sm text-muted-foreground">إجمالي الأيام: <span className="font-bold tabular-nums">{arNum(totalDays)}</span></div>
+            <div>
+              <Label>مستويات الموافقة المطلوبة</Label>
+              <Select value={form.requiredLevels} onValueChange={(v) => setForm({ ...form, requiredLevels: v })}>
+                <SelectTrigger data-testid="select-required-levels"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">مستوى واحد (موافقة مباشرة)</SelectItem>
+                  <SelectItem value="2">مستويان</SelectItem>
+                  <SelectItem value="3">ثلاثة مستويات</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>المرفق (اختياري)</Label>
+              <div className="flex items-center gap-2">
+                <Input type="file" onChange={(e) => onUpload(e.target.files?.[0], "form")} disabled={isUploading} data-testid="input-attachment" />
+                {form.attachmentUrl && <a href={form.attachmentUrl} target="_blank" rel="noreferrer" className="text-blue-600 text-xs whitespace-nowrap">عرض</a>}
+              </div>
+              {isUploading && <div className="text-xs text-muted-foreground mt-1">جاري الرفع...</div>}
+            </div>
             <div>
               <Label>السبب / ملاحظات</Label>
               <Textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} data-testid="textarea-reason" />
@@ -291,20 +640,36 @@ export default function LeavesPage() {
       </Dialog>
 
       {/* Review dialog */}
-      <Dialog open={!!reviewing} onOpenChange={(o) => { if (!o) { setReviewing(null); setReviewNote(""); } }}>
+      <Dialog open={!!reviewing} onOpenChange={(o) => { if (!o) { setReviewing(null); setReviewNote(""); setAllowOver(false); } }}>
         <DialogContent className="max-w-md" dir="rtl">
           <DialogHeader>
             <DialogTitle>{reviewing?.decision === "approved" ? "اعتماد طلب الإجازة" : "رفض طلب الإجازة"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
+            {reviewing?.leave?.requiredLevels > 1 && (
+              <div className="text-xs bg-amber-50 text-amber-700 rounded p-2">
+                هذا الطلب يتطلب {arNum(reviewing.leave.requiredLevels)} مستويات موافقة — أنت على المستوى {arNum(reviewing.leave.currentLevel)}.
+              </div>
+            )}
+            {allowOver && (
+              <div className="text-xs bg-red-50 text-red-700 rounded p-2" data-testid="text-balance-warning">
+                تنبيه: الرصيد لا يكفي. فعّل التجاوز للاعتماد رغم ذلك.
+              </div>
+            )}
             <Label>ملاحظة المراجع (اختياري)</Label>
             <Textarea value={reviewNote} onChange={(e) => setReviewNote(e.target.value)} data-testid="textarea-review-note" />
+            {allowOver && reviewing?.decision === "approved" && (
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={allowOver} onChange={(e) => setAllowOver(e.target.checked)} data-testid="checkbox-allow-over" />
+                تجاوز تحذير الرصيد والاعتماد
+              </label>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setReviewing(null); setReviewNote(""); }}>إلغاء</Button>
+            <Button variant="outline" onClick={() => { setReviewing(null); setReviewNote(""); setAllowOver(false); }}>إلغاء</Button>
             <Button
               variant={reviewing?.decision === "approved" ? "default" : "destructive"}
-              onClick={() => reviewing && reviewMutation.mutate({ id: reviewing.id, decision: reviewing.decision, note: reviewNote })}
+              onClick={() => reviewing && reviewMutation.mutate({ id: reviewing.id, decision: reviewing.decision, note: reviewNote, allowOverBalance: allowOver })}
               disabled={reviewMutation.isPending}
               data-testid="button-confirm-review"
             >
@@ -313,8 +678,119 @@ export default function LeavesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Cancel approved dialog */}
+      <Dialog open={!!cancelling} onOpenChange={(o) => { if (!o) { setCancelling(null); setCancelReason(""); } }}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader><DialogTitle>إلغاء / سحب الإجازة</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              سيتم إلغاء إجازة {cancelling?.employeeName} ({cancelling?.startDate} → {cancelling?.endDate}) وعكس سجلات الحضور المرتبطة.
+            </p>
+            <Label>سبب الإلغاء (إلزامي)</Label>
+            <Textarea value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} data-testid="textarea-cancel-reason" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setCancelling(null); setCancelReason(""); }}>تراجع</Button>
+            <Button variant="destructive" disabled={cancelMutation.isPending || cancelReason.trim().length < 3}
+              onClick={() => cancelling && cancelMutation.mutate({ id: cancelling.id, reason: cancelReason })}
+              data-testid="button-confirm-cancel">
+              {cancelMutation.isPending ? "..." : "تأكيد الإلغاء"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit balance dialog */}
+      <Dialog open={!!editBal} onOpenChange={(o) => { if (!o) setEditBal(null); }}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader><DialogTitle>تعديل رصيد {editBal?.employeeName} — {balYear}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label>المستحق</Label>
+                <Input type="number" value={balForm.entitledDays} onChange={(e) => setBalForm({ ...balForm, entitledDays: e.target.value })} data-testid="input-entitled" />
+              </div>
+              <div>
+                <Label>المرحّل</Label>
+                <Input type="number" value={balForm.carriedOverDays} onChange={(e) => setBalForm({ ...balForm, carriedOverDays: e.target.value })} data-testid="input-carried" />
+              </div>
+              <div>
+                <Label>تعديل ±</Label>
+                <Input type="number" value={balForm.adjustmentDays} onChange={(e) => setBalForm({ ...balForm, adjustmentDays: e.target.value })} data-testid="input-adjustment" />
+              </div>
+            </div>
+            <div>
+              <Label>ملاحظة</Label>
+              <Textarea value={balForm.note} onChange={(e) => setBalForm({ ...balForm, note: e.target.value })} data-testid="textarea-bal-note" />
+            </div>
+            <div className="text-xs text-muted-foreground">المستخدم حالياً: {arNum(editBal?.usedDays)} يوم</div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditBal(null)}>إلغاء</Button>
+            <Button onClick={submitBal} disabled={saveBalMutation.isPending} data-testid="button-save-balance">
+              {saveBalMutation.isPending ? "..." : "حفظ"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Print leave form dialog */}
+      <Dialog open={!!printLeave} onOpenChange={(o) => { if (!o) setPrintLeave(null); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-auto" dir="rtl">
+          <DialogHeader><DialogTitle>نموذج إجازة قابل للطباعة</DialogTitle></DialogHeader>
+          <div ref={printRef} className="leave-print bg-white text-black p-8" dir="rtl">
+            {printLeave && (
+              <>
+                <div className="text-center mb-6">
+                  <h2 className="text-xl font-bold">شركة باتر للمخبوزات</h2>
+                  <h3 className="text-lg mt-1">نموذج طلب / اعتماد إجازة</h3>
+                  <div className="text-xs mt-1">{printLeave.branchName || ""}</div>
+                </div>
+                <table className="w-full text-sm border-collapse mb-4">
+                  <tbody>
+                    <PrintRow label="اسم الموظف" value={printLeave.employeeName} />
+                    <PrintRow label="الوظيفة" value={printLeave.employeeJob || printEmp?.jobTitle || "-"} />
+                    <PrintRow label="رقم الطلب" value={`#${printLeave.id}`} />
+                    <PrintRow label="نوع الإجازة" value={LEAVE_TYPE_LABELS[printLeave.leaveType] || printLeave.leaveType} />
+                    <PrintRow label="من تاريخ" value={printLeave.startDate} />
+                    <PrintRow label="إلى تاريخ" value={printLeave.endDate} />
+                    <PrintRow label="عدد الأيام" value={`${arNum(printLeave.totalDays)} يوم`} />
+                    {printLeave.workingDays != null && <PrintRow label="أيام العمل" value={`${arNum(printLeave.workingDays)} يوم`} />}
+                    <PrintRow label="الحالة" value={LEAVE_STATUS_LABELS[printLeave.status] || printLeave.status} />
+                    <PrintRow label="السبب / الملاحظات" value={printLeave.reason || "-"} />
+                    {printLeave.reviewerName && <PrintRow label="المعتمد" value={printLeave.reviewerName} />}
+                    {printLeave.cancelReason && <PrintRow label="سبب الإلغاء" value={printLeave.cancelReason} />}
+                  </tbody>
+                </table>
+                <div className="grid grid-cols-3 gap-6 mt-12 text-center text-sm">
+                  <div><div className="border-t border-black pt-1">توقيع الموظف</div></div>
+                  <div><div className="border-t border-black pt-1">مدير الفرع</div></div>
+                  <div><div className="border-t border-black pt-1">الموارد البشرية</div></div>
+                </div>
+                <div className="text-[10px] text-center mt-8 text-gray-500">
+                  تم إنشاء هذا النموذج آلياً بتاريخ {new Date().toLocaleDateString("ar-SA-u-nu-latn")}
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPrintLeave(null)}>إغلاق</Button>
+            <Button onClick={handlePrint} data-testid="button-do-print"><Printer className="h-4 w-4 ms-1" />طباعة</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
     </Layout>
+  );
+}
+
+function PrintRow({ label, value }: { label: string; value: any }) {
+  return (
+    <tr>
+      <td className="border border-gray-400 p-2 font-bold bg-gray-50 w-1/3">{label}</td>
+      <td className="border border-gray-400 p-2">{value ?? "-"}</td>
+    </tr>
   );
 }
 

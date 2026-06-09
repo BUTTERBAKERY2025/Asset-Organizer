@@ -14,6 +14,8 @@ import {
 import {
   employeeDocuments,
   leaveRequests,
+  leaveBalances,
+  insertLeaveBalanceSchema,
   employeeWarnings,
   eosCalculations,
   salaryDeductions,
@@ -33,6 +35,15 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import { notifyEmployeeOfDecision } from "./notify-helpers";
+import { auditEvent } from "./audit-helpers";
+import {
+  computeLeaveDays,
+  findOverlappingLeave,
+  getLeaveBalanceSummary,
+  suggestedEntitlement,
+  syncAttendanceForLeave,
+  reverseAttendanceForLeave,
+} from "./leave-helpers";
 
 function getUserId(req: any): string | null {
   return (req as any).user?.id || (req as any).user?.claims?.sub || null;
@@ -282,11 +293,38 @@ export function registerHrRoutes(app: Express) {
       if (parsed.endDate < parsed.startDate) {
         return res.status(400).json({ error: "تاريخ النهاية يجب أن يكون بعد تاريخ البداية" });
       }
+      // منع التداخل مع إجازة أخرى (معلّقة أو معتمدة)
+      const overlap = await findOverlappingLeave(parsed.branchEmployeeId, parsed.startDate, parsed.endDate);
+      if (overlap) {
+        return res.status(409).json({
+          error: `يوجد طلب إجازة متداخل لنفس الموظف (${overlap.startDate} إلى ${overlap.endDate})`,
+        });
+      }
+      // إعادة احتساب الأيام على الخادم (لا نثق بالعميل)
+      const { totalDays, workingDays } = computeLeaveDays(parsed.startDate, parsed.endDate);
+      // حصر مستويات الموافقة بين 1 و3، وتجاهل أي حقول حالة/تدرّج يرسلها العميل
+      const requiredLevels = Math.min(3, Math.max(1, Number((parsed as any).requiredLevels) || 1));
       const [created] = await db.insert(leaveRequests).values({
         ...parsed,
+        totalDays,
+        workingDays,
+        status: "pending",
+        currentLevel: 1,
+        requiredLevels,
+        approvalFlow: [],
+        cancelReason: null,
+        cancelledBy: null,
+        cancelledAt: null,
         branchId: emp.branchId,
         createdBy: getUserId(req) || undefined,
       }).returning();
+      await auditEvent({
+        req, module: "hr_leaves", entityId: created.id, action: "create",
+        entityName: emp.employeeName, branchId: emp.branchId,
+        description: `إنشاء طلب إجازة (${parsed.leaveType}) ${parsed.startDate}→${parsed.endDate}`,
+        details: { totalDays, workingDays, leaveType: parsed.leaveType },
+        targetId: emp.id,
+      });
       res.status(201).json(created);
     } catch (e: any) {
       if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
@@ -302,6 +340,7 @@ export function registerHrRoutes(app: Express) {
       const decision = z.object({
         decision: z.enum(["approved", "rejected"]),
         note: z.string().optional(),
+        allowOverBalance: z.boolean().optional(), // تجاوز تحذير تخطّي الرصيد
       }).parse(req.body);
       const { branchIds } = getBranchScope(req);
       const [existing] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id));
@@ -312,18 +351,75 @@ export function registerHrRoutes(app: Express) {
       if (existing.status !== "pending") {
         return res.status(400).json({ error: "تمت معالجة هذا الطلب مسبقاً" });
       }
+
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, existing.branchEmployeeId));
+      const userId = getUserId(req) || undefined;
+      const user: any = (req as any).currentUser || (req as any).user || null;
+      const approverName = user?.fullName || user?.firstName || user?.username || "—";
+      const now = new Date();
+      const year = parseInt(existing.startDate.slice(0, 4), 10);
+
+      // تحقق الرصيد عند الاعتماد (تحذير + إمكانية التجاوز)
+      if (decision.decision === "approved" && !decision.allowOverBalance) {
+        const bal = await getLeaveBalanceSummary(existing.branchEmployeeId, year, existing.leaveType, emp?.hireDate);
+        const projected = bal.remainingDays - Number(existing.totalDays);
+        if (projected < 0 && existing.leaveType !== "unpaid") {
+          return res.status(409).json({
+            error: "balance_exceeded",
+            message: `الرصيد المتبقي (${bal.remainingDays} يوم) لا يكفي لهذه الإجازة (${existing.totalDays} يوم).`,
+            balance: bal,
+            requestedDays: Number(existing.totalDays),
+          });
+        }
+      }
+
+      // سلسلة الموافقات (تدرّج)
+      const flow: any[] = Array.isArray(existing.approvalFlow) ? [...(existing.approvalFlow as any[])] : [];
+      flow.push({
+        level: existing.currentLevel,
+        approverId: userId || null,
+        approverName,
+        decision: decision.decision,
+        note: decision.note || null,
+        at: now.toISOString(),
+      });
+
+      let finalStatus = decision.decision;
+      let nextLevel = existing.currentLevel;
+      // إذا اعتُمد ولكن تبقّت مستويات موافقة أعلى → ينتقل للمستوى التالي ويبقى معلّقاً
+      if (decision.decision === "approved" && existing.currentLevel < existing.requiredLevels) {
+        finalStatus = "pending";
+        nextLevel = existing.currentLevel + 1;
+      }
+
+      const isFinal = finalStatus !== "pending";
       const [updated] = await db.update(leaveRequests).set({
-        status: decision.decision,
-        reviewedBy: getUserId(req) || undefined,
-        reviewedAt: new Date(),
-        reviewerNote: decision.note,
-        updatedAt: new Date(),
+        status: finalStatus,
+        currentLevel: nextLevel,
+        approvalFlow: flow as any,
+        reviewedBy: isFinal ? userId : existing.reviewedBy,
+        reviewedAt: isFinal ? now : existing.reviewedAt,
+        reviewerNote: decision.note ?? existing.reviewerNote,
+        updatedAt: now,
       }).where(eq(leaveRequests.id, id)).returning();
 
-      // Notify the employee back (in-app + WhatsApp) — non-blocking.
-      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, existing.branchEmployeeId));
-      if (emp) {
-        const verb = decision.decision === "approved" ? "اعتماد" : "رفض";
+      // عند الاعتماد النهائي: مزامنة سجلات الحضور (إجازة) — غير متلف
+      if (finalStatus === "approved") {
+        try { await syncAttendanceForLeave(updated); } catch (err) { console.error("[hr/leaves] attendance sync failed:", err); }
+      }
+
+      await auditEvent({
+        req, module: "hr_leaves", entityId: id,
+        action: finalStatus === "pending" ? "approve_level" : finalStatus,
+        entityName: emp?.employeeName, branchId: existing.branchId,
+        description: `${decision.decision === "approved" ? "اعتماد" : "رفض"} طلب إجازة (مستوى ${existing.currentLevel}/${existing.requiredLevels})`,
+        details: { decision: decision.decision, level: existing.currentLevel, finalStatus, note: decision.note },
+        targetId: existing.branchEmployeeId,
+      });
+
+      // إشعار الموظف فقط عند القرار النهائي — non-blocking.
+      if (emp && isFinal) {
+        const verb = finalStatus === "approved" ? "اعتماد" : "رفض";
         const noteLine = decision.note ? `\nملاحظة: ${decision.note}` : "";
         await notifyEmployeeOfDecision({
           emp,
@@ -337,6 +433,58 @@ export function registerHrRoutes(app: Express) {
     } catch (e: any) {
       if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
       console.error("[hr/leaves] review error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // إلغاء/سحب إجازة معتمدة (يتطلب سبباً) + عكس سجلات الحضور
+  app.post("/api/hr/leaves/:id/cancel", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const body = z.object({ reason: z.string().min(3, "يجب ذكر سبب الإلغاء") }).parse(req.body);
+      const { branchIds } = getBranchScope(req);
+      const [existing] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id));
+      if (!existing) return res.status(404).json({ error: "الطلب غير موجود" });
+      if (branchIds !== null && !branchIds.includes(existing.branchId)) {
+        return res.status(403).json({ error: "ليس لديك صلاحية" });
+      }
+      if (existing.status !== "approved" && existing.status !== "pending") {
+        return res.status(400).json({ error: "لا يمكن إلغاء هذا الطلب في حالته الحالية" });
+      }
+      const userId = getUserId(req) || undefined;
+      const [updated] = await db.update(leaveRequests).set({
+        status: "cancelled",
+        cancelReason: body.reason,
+        cancelledBy: userId,
+        cancelledAt: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(leaveRequests.id, id)).returning();
+
+      // عكس سجلات الحضور التلقائية فقط
+      let reversed = 0;
+      try { reversed = await reverseAttendanceForLeave(id); } catch (err) { console.error("[hr/leaves] attendance reverse failed:", err); }
+
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, existing.branchEmployeeId));
+      await auditEvent({
+        req, module: "hr_leaves", entityId: id, action: "cancel",
+        entityName: emp?.employeeName, branchId: existing.branchId,
+        description: `إلغاء إجازة معتمدة: ${body.reason}`,
+        details: { reason: body.reason, reversedAttendance: reversed, prevStatus: existing.status },
+        targetId: existing.branchEmployeeId,
+      });
+      if (emp) {
+        await notifyEmployeeOfDecision({
+          emp,
+          title: "تم إلغاء طلب الإجازة",
+          message: `تم إلغاء إجازتك (${existing.startDate} إلى ${existing.endDate}).\nالسبب: ${body.reason}`,
+          linkUrl: "/my-portal",
+          relatedEntityId: id,
+        });
+      }
+      res.json(updated);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
+      console.error("[hr/leaves] cancel error:", e);
       res.status(500).json({ error: e.message });
     }
   });
@@ -378,10 +526,136 @@ export function registerHrRoutes(app: Express) {
       if (branchIds !== null && !branchIds.includes(existing.branchId)) {
         return res.status(403).json({ error: "ليس لديك صلاحية" });
       }
+      try { await reverseAttendanceForLeave(id); } catch (err) { console.error("[hr/leaves] attendance reverse failed:", err); }
       await db.delete(leaveRequests).where(eq(leaveRequests.id, id));
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, existing.branchEmployeeId));
+      await auditEvent({
+        req, module: "hr_leaves", entityId: id, action: "delete",
+        entityName: emp?.employeeName, branchId: existing.branchId,
+        description: `حذف طلب إجازة (${existing.startDate}→${existing.endDate})`,
+        details: { leaveType: existing.leaveType, status: existing.status },
+        targetId: existing.branchEmployeeId,
+      });
       res.json({ success: true });
     } catch (e: any) {
       console.error("[hr/leaves] delete error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ------------------------------------------------------------------
+  // أرصدة الإجازات  /api/hr/leave-balances
+  // ------------------------------------------------------------------
+  // قائمة الأرصدة المحسوبة لكل الموظفين ضمن النطاق لسنة معيّنة ونوع
+  app.get("/api/hr/leave-balances", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const { branchIds } = getBranchScope(req);
+      const year = req.query.year ? parseInt(req.query.year as string, 10) : new Date().getFullYear();
+      const leaveType = (req.query.type as string) || "annual";
+      const branchId = req.query.branchId as string | undefined;
+
+      const conds: any[] = [eq(branchEmployees.status, "active")];
+      const scopeCond = applyBranchScope(branchEmployees, branchIds);
+      if (scopeCond !== undefined) conds.push(scopeCond);
+      if (branchId) conds.push(eq(branchEmployees.branchId, branchId));
+
+      const emps = await db
+        .select({
+          id: branchEmployees.id,
+          employeeName: branchEmployees.employeeName,
+          jobTitle: branchEmployees.jobTitle,
+          branchId: branchEmployees.branchId,
+          branchName: branches.name,
+          hireDate: branchEmployees.hireDate,
+        })
+        .from(branchEmployees)
+        .leftJoin(branches, eq(branchEmployees.branchId, branches.id))
+        .where(conds.length ? and(...conds) : undefined)
+        .orderBy(branchEmployees.employeeName)
+        .limit(2000);
+
+      const results = [];
+      for (const e of emps) {
+        const bal = await getLeaveBalanceSummary(e.id, year, leaveType, e.hireDate);
+        results.push({
+          ...bal,
+          employeeName: e.employeeName,
+          jobTitle: e.jobTitle,
+          branchId: e.branchId,
+          branchName: e.branchName,
+          hireDate: e.hireDate,
+          suggestedEntitlement: suggestedEntitlement(e.hireDate),
+        });
+      }
+      res.json(results);
+    } catch (e: any) {
+      console.error("[hr/leave-balances] list error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // رصيد موظف واحد (لعرض البطاقة عند الإنشاء/الطباعة)
+  app.get("/api/hr/leave-balances/:employeeId", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const employeeId = parseInt(req.params.employeeId, 10);
+      const year = req.query.year ? parseInt(req.query.year as string, 10) : new Date().getFullYear();
+      const leaveType = (req.query.type as string) || "annual";
+      const { branchIds } = getBranchScope(req);
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, employeeId));
+      if (!emp) return res.status(404).json({ error: "الموظف غير موجود" });
+      if (branchIds !== null && (!emp.branchId || !branchIds.includes(emp.branchId))) {
+        return res.status(403).json({ error: "ليس لديك صلاحية على فرع الموظف" });
+      }
+      const bal = await getLeaveBalanceSummary(employeeId, year, leaveType, emp.hireDate);
+      res.json({ ...bal, suggestedEntitlement: suggestedEntitlement(emp.hireDate) });
+    } catch (e: any) {
+      console.error("[hr/leave-balances/:id] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // إنشاء/تحديث رصيد (تعيين المستحق/المرحّل/التعديل اليدوي)
+  app.post("/api/hr/leave-balances", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const parsed = insertLeaveBalanceSchema.parse(req.body);
+      const { branchIds } = getBranchScope(req);
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, parsed.branchEmployeeId));
+      if (!emp) return res.status(404).json({ error: "الموظف غير موجود" });
+      if (branchIds !== null && (!emp.branchId || !branchIds.includes(emp.branchId))) {
+        return res.status(403).json({ error: "ليس لديك صلاحية على فرع الموظف" });
+      }
+      const [existing] = await db.select().from(leaveBalances).where(and(
+        eq(leaveBalances.branchEmployeeId, parsed.branchEmployeeId),
+        eq(leaveBalances.year, parsed.year),
+        eq(leaveBalances.leaveType, parsed.leaveType || "annual"),
+      ));
+      let saved;
+      if (existing) {
+        [saved] = await db.update(leaveBalances).set({
+          entitledDays: parsed.entitledDays,
+          carriedOverDays: parsed.carriedOverDays,
+          adjustmentDays: parsed.adjustmentDays,
+          note: parsed.note,
+          updatedAt: new Date(),
+        }).where(eq(leaveBalances.id, existing.id)).returning();
+      } else {
+        [saved] = await db.insert(leaveBalances).values({
+          ...parsed,
+          branchId: emp.branchId,
+          createdBy: getUserId(req) || undefined,
+        }).returning();
+      }
+      await auditEvent({
+        req, module: "hr_leaves", entityId: saved.id, action: existing ? "update_balance" : "create_balance",
+        entityName: emp.employeeName, branchId: emp.branchId,
+        description: `${existing ? "تحديث" : "تعيين"} رصيد إجازة ${parsed.year} (${parsed.leaveType || "annual"})`,
+        details: { entitled: parsed.entitledDays, carried: parsed.carriedOverDays, adjustment: parsed.adjustmentDays },
+        targetId: parsed.branchEmployeeId,
+      });
+      res.json(saved);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
+      console.error("[hr/leave-balances] save error:", e);
       res.status(500).json({ error: e.message });
     }
   });
