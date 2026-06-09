@@ -18,6 +18,7 @@ import {
   Wallet, Printer, FileSpreadsheet, Ban, Paperclip, Pencil, ChevronRight, ChevronLeft,
 } from "lucide-react";
 import { LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS } from "@shared/schema";
+import butterLogo from "@assets/logo_-5_1765206843638.png";
 import { Layout } from "@/components/layout";
 import { Link } from "wouter";
 import * as XLSX from "xlsx";
@@ -204,7 +205,11 @@ export default function LeavesPage() {
     onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل", variant: "destructive" }),
   });
 
-  const handlePrint = useReactToPrint({ contentRef: printRef, documentTitle: "نموذج إجازة" });
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: "نموذج إجازة",
+    pageStyle: `@page { size: A4; margin: 16mm; } @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }`,
+  });
 
   const submit = () => {
     if (!form.branchEmployeeId || !form.startDate || !form.endDate) {
@@ -742,16 +747,31 @@ export default function LeavesPage() {
           <div ref={printRef} className="leave-print bg-white text-black p-8" dir="rtl">
             {printLeave && (
               <>
+                {/* رأس رسمي بهوية باتر */}
+                <div className="flex items-center justify-between border-b-4 pb-4 mb-6" style={{ borderColor: "#C8932A" }}>
+                  <div className="flex items-center gap-3">
+                    <img src={butterLogo} alt="Butter Bakery" className="h-16 w-16 object-contain" />
+                    <div className="text-start">
+                      <h2 className="text-xl font-extrabold leading-tight" style={{ color: "#8A6212" }}>شركة باتر للمخبوزات</h2>
+                      <div className="text-sm font-semibold" style={{ color: "#C8932A" }}>Butter Bakery Co.</div>
+                      <div className="text-[11px] text-gray-600 mt-0.5">إدارة الموارد البشرية</div>
+                    </div>
+                  </div>
+                  <div className="text-end text-[11px] text-gray-600 leading-relaxed">
+                    <div>رقم الطلب: <span className="font-bold text-black">#{printLeave.id}</span></div>
+                    <div>الفرع: <span className="font-bold text-black">{printLeave.branchName || "-"}</span></div>
+                    <div>التاريخ: <span className="font-bold text-black">{new Date().toLocaleDateString("ar-SA-u-nu-latn")}</span></div>
+                  </div>
+                </div>
                 <div className="text-center mb-6">
-                  <h2 className="text-xl font-bold">شركة باتر للمخبوزات</h2>
-                  <h3 className="text-lg mt-1">نموذج طلب / اعتماد إجازة</h3>
-                  <div className="text-xs mt-1">{printLeave.branchName || ""}</div>
+                  <h3 className="inline-block text-lg font-bold px-8 py-1.5 rounded" style={{ backgroundColor: "#FBF3E0", color: "#8A6212" }}>
+                    نموذج طلب / اعتماد إجازة
+                  </h3>
                 </div>
                 <table className="w-full text-sm border-collapse mb-4">
                   <tbody>
                     <PrintRow label="اسم الموظف" value={printLeave.employeeName} />
                     <PrintRow label="الوظيفة" value={printLeave.employeeJob || printEmp?.jobTitle || "-"} />
-                    <PrintRow label="رقم الطلب" value={`#${printLeave.id}`} />
                     <PrintRow label="نوع الإجازة" value={LEAVE_TYPE_LABELS[printLeave.leaveType] || printLeave.leaveType} />
                     <PrintRow label="من تاريخ" value={printLeave.startDate} />
                     <PrintRow label="إلى تاريخ" value={printLeave.endDate} />
@@ -763,13 +783,13 @@ export default function LeavesPage() {
                     {printLeave.cancelReason && <PrintRow label="سبب الإلغاء" value={printLeave.cancelReason} />}
                   </tbody>
                 </table>
-                <div className="grid grid-cols-3 gap-6 mt-12 text-center text-sm">
-                  <div><div className="border-t border-black pt-1">توقيع الموظف</div></div>
-                  <div><div className="border-t border-black pt-1">مدير الفرع</div></div>
-                  <div><div className="border-t border-black pt-1">الموارد البشرية</div></div>
+                <div className="grid grid-cols-3 gap-6 mt-16 text-center text-sm">
+                  <div><div className="border-t-2 pt-1" style={{ borderColor: "#C8932A" }}>توقيع الموظف</div></div>
+                  <div><div className="border-t-2 pt-1" style={{ borderColor: "#C8932A" }}>مدير الفرع</div></div>
+                  <div><div className="border-t-2 pt-1" style={{ borderColor: "#C8932A" }}>الموارد البشرية</div></div>
                 </div>
-                <div className="text-[10px] text-center mt-8 text-gray-500">
-                  تم إنشاء هذا النموذج آلياً بتاريخ {new Date().toLocaleDateString("ar-SA-u-nu-latn")}
+                <div className="border-t border-gray-300 mt-10 pt-3 text-[10px] text-center text-gray-500">
+                  شركة باتر للمخبوزات — المملكة العربية السعودية · هذا النموذج صادر آلياً من نظام إدارة الموارد البشرية
                 </div>
               </>
             )}
@@ -788,8 +808,8 @@ export default function LeavesPage() {
 function PrintRow({ label, value }: { label: string; value: any }) {
   return (
     <tr>
-      <td className="border border-gray-400 p-2 font-bold bg-gray-50 w-1/3">{label}</td>
-      <td className="border border-gray-400 p-2">{value ?? "-"}</td>
+      <td className="border p-2 font-bold w-1/3" style={{ borderColor: "#E5C98F", backgroundColor: "#FBF3E0", color: "#8A6212" }}>{label}</td>
+      <td className="border p-2" style={{ borderColor: "#E5C98F" }}>{value ?? "-"}</td>
     </tr>
   );
 }
