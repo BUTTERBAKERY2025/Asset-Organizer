@@ -177,6 +177,7 @@ const EmploymentApplicationsPage = makeLazy("employment-applications");
 const EmploymentApplicationPublicPage = makeLazy("employment-application-public");
 const VacancyPublicPage = makeLazy("vacancy-public");
 const PublicGreetingPage = makeLazy("public-greeting");
+const InvitationPage = makeLazy("invitation");
 const FloorPlanPage = makeLazy("floor-plan");
 const HRHubPage = makeLazy("hr-hub");
 const MyPortalPage = makeLazy("my-portal");
@@ -310,6 +311,9 @@ const Router = React.memo(function Router() {
 
       {/* Public animated greeting page (Phase 5) - no auth required */}
       <Route path="/g/:slug">{() => <Suspense fallback={<PageLoadingFallback />}><PublicGreetingPage /></Suspense>}</Route>
+
+      {/* Public personalized branch-opening invitation - no auth required */}
+      <Route path="/invite/:token">{() => <Suspense fallback={<PageLoadingFallback />}><InvitationPage /></Suspense>}</Route>
       <Route path="/hr/job-offers">{() => <ModulePage component={JobOffersPage} module="hr_job_offers" />}</Route>
       <Route path="/hr/onboarding">{() => <ModulePage component={OnboardingPage} module="hr_onboarding" />}</Route>
       <Route path="/hr/applications">{() => <ModulePage component={EmploymentApplicationsPage} module="hr_employment_applications" />}</Route>

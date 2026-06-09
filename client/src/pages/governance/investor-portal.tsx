@@ -17,6 +17,7 @@ import {
   Users, PieChart as PieIcon, TrendingUp, UserCheck, Landmark, Megaphone, Bell,
   KeyRound, Plus, Pencil, Trash2, Send, Loader2, MessageSquare, Newspaper, Store,
   CalendarDays, ShieldCheck, Link2, Link2Off, RefreshCw, Check, Copy,
+  PartyPopper, Eye, ExternalLink, Sparkles,
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
 
@@ -64,6 +65,7 @@ export default function InvestorPortalPage() {
             <TabsTrigger value="communication" data-testid="tab-communication"><MessageSquare className="w-4 h-4 ml-1" /> التواصل</TabsTrigger>
             <TabsTrigger value="announcements" data-testid="tab-announcements"><Newspaper className="w-4 h-4 ml-1" /> الأخبار والإعلانات</TabsTrigger>
             <TabsTrigger value="accounts" data-testid="tab-accounts"><KeyRound className="w-4 h-4 ml-1" /> حسابات البوابة</TabsTrigger>
+            <TabsTrigger value="invitations" data-testid="tab-invitations"><PartyPopper className="w-4 h-4 ml-1" /> دعوات الافتتاح</TabsTrigger>
           </TabsList>
 
           {/* Dashboard */}
@@ -84,6 +86,11 @@ export default function InvestorPortalPage() {
           {/* Accounts */}
           <TabsContent value="accounts" className="mt-4">
             <AccountsTab accounts={accounts} toast={toast} queryClient={queryClient} />
+          </TabsContent>
+
+          {/* Invitations */}
+          <TabsContent value="invitations" className="mt-4">
+            <InvitationsTab toast={toast} queryClient={queryClient} />
           </TabsContent>
         </Tabs>
       </div>
@@ -487,6 +494,216 @@ function AccountsTab({ accounts, toast, queryClient }: any) {
         </DialogContent>
       </Dialog>
     </Card>
+  );
+}
+
+const INVITE_THEMES = [
+  { value: "gold", label: "ذهبي فاخر", color: "#e6b450" },
+  { value: "royal", label: "ملكي بنفسجي", color: "#a98bff" },
+  { value: "emerald", label: "زمردي", color: "#34d399" },
+  { value: "rose", label: "وردي", color: "#fb7185" },
+];
+
+function InvitationsTab({ toast, queryClient }: any) {
+  const [createOpen, setCreateOpen] = useState(false);
+  const [form, setForm] = useState<any>({ title: "", branchName: "", eventDate: "", eventTime: "", location: "", locationUrl: "", message: "", theme: "gold" });
+  const [recipientsFor, setRecipientsFor] = useState<any>(null);
+
+  const { data: invitations = [] } = useQuery<any[]>({ queryKey: ["/api/governance/invitations"] });
+
+  const createInv = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/governance/invitations", {
+      ...form,
+      eventDate: form.eventDate ? new Date(form.eventDate).toISOString() : null,
+      branchName: form.branchName || null,
+      eventTime: form.eventTime || null,
+      location: form.location || null,
+      locationUrl: form.locationUrl || null,
+      message: form.message || null,
+    }),
+    onSuccess: () => {
+      toast({ title: "تم إنشاء الدعوة" });
+      setCreateOpen(false);
+      setForm({ title: "", branchName: "", eventDate: "", eventTime: "", location: "", locationUrl: "", message: "", theme: "gold" });
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/invitations"] });
+    },
+    onError: (e: any) => toast({ title: "فشل", description: e?.message || "", variant: "destructive" }),
+  });
+
+  const deleteInv = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/governance/invitations/${id}`),
+    onSuccess: () => { toast({ title: "تم الحذف" }); queryClient.invalidateQueries({ queryKey: ["/api/governance/invitations"] }); },
+  });
+
+  const toggleInv = useMutation({
+    mutationFn: ({ id, isActive }: any) => apiRequest("PATCH", `/api/governance/invitations/${id}`, { isActive }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/governance/invitations"] }),
+  });
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="text-base">دعوات افتتاح الفروع</CardTitle>
+          <p className="text-xs text-muted-foreground mt-1">أنشئ دعوة فاخرة وولّد رابطاً شخصياً لكل مساهم باسمه.</p>
+        </div>
+        <Button size="sm" onClick={() => setCreateOpen(true)} data-testid="button-new-invitation"><Plus className="w-4 h-4 ml-1" /> دعوة جديدة</Button>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {invitations.length === 0 ? <Empty /> : invitations.map((inv: any) => {
+          const themeColor = INVITE_THEMES.find((t) => t.value === inv.theme)?.color || "#e6b450";
+          return (
+            <div key={inv.id} className="rounded-lg border p-3" data-testid={`row-invitation-${inv.id}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex items-start gap-2">
+                  <span className="mt-1 inline-block w-3 h-3 rounded-full shrink-0" style={{ background: themeColor }} />
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{inv.title}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {inv.branchName && <span>{inv.branchName} • </span>}
+                      {fmtDate(inv.eventDate)}
+                      {inv.eventTime && <span> • {inv.eventTime}</span>}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      <Eye className="w-3 h-3 inline ml-1" />{fmtNum(inv.openedCount)} فتحت من {fmtNum(inv.recipientsCount)} مرسلة
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Badge variant="outline" className={inv.isActive ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-100 text-gray-500"}>
+                    {inv.isActive ? "نشطة" : "موقوفة"}
+                  </Badge>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 mt-3">
+                <Button size="sm" variant="outline" onClick={() => setRecipientsFor(inv)} data-testid={`button-recipients-${inv.id}`}>
+                  <Send className="w-3.5 h-3.5 ml-1" /> الروابط والإرسال
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => toggleInv.mutate({ id: inv.id, isActive: !inv.isActive })} data-testid={`button-toggle-invitation-${inv.id}`}>
+                  {inv.isActive ? "إيقاف" : "تفعيل"}
+                </Button>
+                <Button size="icon" variant="ghost" className="text-red-600" onClick={() => { if (confirm("حذف الدعوة وكل روابطها؟")) deleteInv.mutate(inv.id); }} data-testid={`button-delete-invitation-${inv.id}`}>
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+
+      {/* Create dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent dir="rtl" className="max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>دعوة افتتاح جديدة</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label>عنوان الدعوة *</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="حفل افتتاح فرع..." data-testid="input-invitation-title" /></div>
+            <div><Label>اسم الفرع</Label><Input value={form.branchName} onChange={(e) => setForm({ ...form, branchName: e.target.value })} data-testid="input-invitation-branch" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>التاريخ</Label><Input type="date" value={form.eventDate} onChange={(e) => setForm({ ...form, eventDate: e.target.value })} data-testid="input-invitation-date" /></div>
+              <div><Label>الوقت</Label><Input value={form.eventTime} onChange={(e) => setForm({ ...form, eventTime: e.target.value })} placeholder="٨:٠٠ مساءً" data-testid="input-invitation-time" /></div>
+            </div>
+            <div><Label>الموقع</Label><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} data-testid="input-invitation-location" /></div>
+            <div><Label>رابط الخريطة</Label><Input value={form.locationUrl} onChange={(e) => setForm({ ...form, locationUrl: e.target.value })} placeholder="https://maps.google.com/..." data-testid="input-invitation-location-url" /></div>
+            <div><Label>نص الدعوة</Label><Textarea value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} rows={4} placeholder="يشرفنا حضوركم..." data-testid="input-invitation-message" /></div>
+            <div>
+              <Label>النمط</Label>
+              <Select value={form.theme} onValueChange={(v) => setForm({ ...form, theme: v })}>
+                <SelectTrigger data-testid="select-invitation-theme"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {INVITE_THEMES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      <span className="inline-flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ background: t.color }} /> {t.label}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button disabled={!form.title.trim() || createInv.isPending} onClick={() => createInv.mutate()} data-testid="button-save-invitation">
+              {createInv.isPending && <Loader2 className="w-4 h-4 animate-spin ml-2" />} حفظ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Recipients dialog */}
+      {recipientsFor && (
+        <RecipientsDialog invitation={recipientsFor} onClose={() => setRecipientsFor(null)} toast={toast} queryClient={queryClient} />
+      )}
+    </Card>
+  );
+}
+
+function RecipientsDialog({ invitation, onClose, toast, queryClient }: any) {
+  const { data: recipients = [], isLoading } = useQuery<any[]>({ queryKey: [`/api/governance/invitations/${invitation.id}/recipients`] });
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+
+  const generate = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/governance/invitations/${invitation.id}/recipients`, {}),
+    onSuccess: (res: any) => {
+      toast({ title: "تم توليد الروابط", description: res?.created ? `${res.created} رابط جديد` : "كل المساهمين لديهم روابط" });
+      queryClient.invalidateQueries({ queryKey: [`/api/governance/invitations/${invitation.id}/recipients`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/invitations"] });
+    },
+    onError: (e: any) => toast({ title: "فشل", description: e?.message || "", variant: "destructive" }),
+  });
+
+  const linkFor = (token: string) => `${origin}/invite/${token}`;
+
+  const copyLink = (token: string) => {
+    navigator.clipboard?.writeText(linkFor(token)).then(() => toast({ title: "تم نسخ الرابط" })).catch(() => {});
+  };
+
+  const sendWhatsApp = (r: any) => {
+    const wa = toWhatsAppNumber(r.phone);
+    if (!wa) { toast({ title: "لا يوجد رقم جوال صحيح", variant: "destructive" }); return; }
+    const lines = [
+      `مرحباً ${r.fullName} 🌟`,
+      `يسعدنا دعوتكم لحضور ${invitation.title}`,
+      "",
+      "اضغط الرابط لمشاهدة دعوتكم الخاصة:",
+      linkFor(r.token),
+    ];
+    window.open(`https://wa.me/${wa}?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent dir="rtl" className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader><DialogTitle className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-amber-500" /> روابط المساهمين — {invitation.title}</DialogTitle></DialogHeader>
+        <Button variant="outline" className="w-full" onClick={() => generate.mutate()} disabled={generate.isPending} data-testid="button-generate-recipients">
+          {generate.isPending ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : <RefreshCw className="w-4 h-4 ml-2" />}
+          توليد روابط شخصية لكل المساهمين
+        </Button>
+        <div className="space-y-2 mt-2">
+          {isLoading ? (
+            <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+          ) : recipients.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">لا توجد روابط بعد — اضغط الزر أعلاه للتوليد.</p>
+          ) : recipients.map((r: any) => (
+            <div key={r.id} className="flex items-center justify-between gap-2 border-b pb-2" data-testid={`row-recipient-${r.id}`}>
+              <div className="min-w-0">
+                <div className="font-medium truncate">{r.fullName}</div>
+                <div className="text-xs text-muted-foreground">
+                  {r.openedAt ? <span className="text-green-600">فُتحت • {fmtNum(r.viewCount)} مشاهدة</span> : <span>لم تُفتح بعد</span>}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <Button size="icon" variant="ghost" onClick={() => window.open(linkFor(r.token), "_blank")} data-testid={`button-preview-${r.id}`}><ExternalLink className="w-4 h-4" /></Button>
+                <Button size="icon" variant="ghost" onClick={() => copyLink(r.token)} data-testid={`button-copy-link-${r.id}`}><Copy className="w-4 h-4" /></Button>
+                <Button size="sm" className="bg-green-600 hover:bg-green-700" disabled={!r.phone} onClick={() => sendWhatsApp(r)} data-testid={`button-whatsapp-${r.id}`}>
+                  <MessageSquare className="w-4 h-4 ml-1" /> واتساب
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} data-testid="button-close-recipients">إغلاق</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

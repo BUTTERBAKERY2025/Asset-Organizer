@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import crypto from "crypto";
 import { db } from "./db";
 import { eq, and, desc, isNull, sql, inArray } from "drizzle-orm";
 import bcrypt from "bcrypt";
@@ -16,6 +17,9 @@ import {
   users,
   notificationQueue,
   insertShareholderAnnouncementSchema,
+  branchOpeningInvitations,
+  invitationRecipients,
+  insertBranchOpeningInvitationSchema,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -702,6 +706,214 @@ export function registerShareholderPortalRoutes(app: Express) {
     } catch (error) {
       console.error("Error unlinking shareholder account:", error);
       res.status(500).json({ error: "فشل في فك الارتباط" });
+    }
+  });
+
+  // ======================================================================
+  // دعوات افتتاح الفروع — روابط شخصية فاخرة لكل مساهم
+  // Branch opening invitations — personalized luxury links per shareholder
+  // ======================================================================
+
+  // قائمة الدعوات مع عدد المستلمين والمشاهدات
+  app.get("/api/governance/invitations", isAuthenticated, requirePermission("governance_shareholders", "view"), async (_req, res) => {
+    try {
+      const rows = await db
+        .select({
+          id: branchOpeningInvitations.id,
+          title: branchOpeningInvitations.title,
+          branchName: branchOpeningInvitations.branchName,
+          eventDate: branchOpeningInvitations.eventDate,
+          eventTime: branchOpeningInvitations.eventTime,
+          location: branchOpeningInvitations.location,
+          locationUrl: branchOpeningInvitations.locationUrl,
+          message: branchOpeningInvitations.message,
+          imageUrl: branchOpeningInvitations.imageUrl,
+          theme: branchOpeningInvitations.theme,
+          isActive: branchOpeningInvitations.isActive,
+          createdAt: branchOpeningInvitations.createdAt,
+          recipientsCount: sql<number>`(SELECT count(*)::int FROM ${invitationRecipients} ir WHERE ir.invitation_id = ${branchOpeningInvitations.id})`,
+          openedCount: sql<number>`(SELECT count(*)::int FROM ${invitationRecipients} ir WHERE ir.invitation_id = ${branchOpeningInvitations.id} AND ir.opened_at IS NOT NULL)`,
+        })
+        .from(branchOpeningInvitations)
+        .orderBy(desc(branchOpeningInvitations.createdAt));
+      res.json(rows);
+    } catch (error) {
+      console.error("Error fetching invitations:", error);
+      res.status(500).json({ error: "فشل في جلب الدعوات" });
+    }
+  });
+
+  // إنشاء دعوة جديدة
+  app.post("/api/governance/invitations", isAuthenticated, requirePermission("governance_shareholders", "edit"), async (req, res) => {
+    try {
+      const parsed = insertBranchOpeningInvitationSchema.parse({ ...req.body, createdBy: getUserId(req) });
+      const [created] = await db.insert(branchOpeningInvitations).values(parsed).returning();
+      res.status(201).json(created);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating invitation:", error);
+      res.status(500).json({ error: "فشل في إنشاء الدعوة" });
+    }
+  });
+
+  // تعديل دعوة
+  app.patch("/api/governance/invitations/:id", isAuthenticated, requirePermission("governance_shareholders", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const parsed = insertBranchOpeningInvitationSchema.omit({ createdBy: true }).partial().parse(req.body);
+      const [updated] = await db.update(branchOpeningInvitations).set(parsed).where(eq(branchOpeningInvitations.id, id)).returning();
+      if (!updated) return res.status(404).json({ error: "الدعوة غير موجودة" });
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error updating invitation:", error);
+      res.status(500).json({ error: "فشل في تعديل الدعوة" });
+    }
+  });
+
+  // حذف دعوة (يحذف معها روابط المستلمين تلقائياً)
+  app.delete("/api/governance/invitations/:id", isAuthenticated, requirePermission("governance_shareholders", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      await db.delete(branchOpeningInvitations).where(eq(branchOpeningInvitations.id, id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting invitation:", error);
+      res.status(500).json({ error: "فشل في حذف الدعوة" });
+    }
+  });
+
+  // توليد/جلب روابط المستلمين لدعوة (لكل المساهمين أو لمجموعة محددة)
+  app.post("/api/governance/invitations/:id/recipients", isAuthenticated, requirePermission("governance_shareholders", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const [inv] = await db.select().from(branchOpeningInvitations).where(eq(branchOpeningInvitations.id, id)).limit(1);
+      if (!inv) return res.status(404).json({ error: "الدعوة غير موجودة" });
+
+      const bodySchema = z.object({ shareholderIds: z.array(z.number().int().positive()).optional() });
+      const { shareholderIds } = bodySchema.parse(req.body || {});
+
+      // المساهمون المستهدفون (محددون أو الجميع)
+      const targets = shareholderIds && shareholderIds.length > 0
+        ? await db.select().from(shareholders).where(inArray(shareholders.id, shareholderIds))
+        : await db.select().from(shareholders);
+
+      if (targets.length === 0) return res.json({ created: 0, recipients: [] });
+
+      // المستلمون الموجودون مسبقاً لتفادي التكرار
+      const existing = await db.select().from(invitationRecipients).where(eq(invitationRecipients.invitationId, id));
+      const existingIds = new Set(existing.map((r) => r.shareholderId));
+
+      const newRows = targets
+        .filter((s) => !existingIds.has(s.id))
+        .map((s) => ({
+          invitationId: id,
+          shareholderId: s.id,
+          token: crypto.randomBytes(24).toString("hex"),
+        }));
+
+      if (newRows.length > 0) {
+        await db.insert(invitationRecipients).values(newRows);
+      }
+
+      res.json({ created: newRows.length, total: existing.length + newRows.length });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error generating invitation recipients:", error);
+      res.status(500).json({ error: "فشل في توليد الروابط" });
+    }
+  });
+
+  // قائمة المستلمين مع الروابط الشخصية (اسم + جوال للمشاركة عبر واتساب)
+  app.get("/api/governance/invitations/:id/recipients", isAuthenticated, requirePermission("governance_shareholders", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const rows = await db
+        .select({
+          id: invitationRecipients.id,
+          shareholderId: invitationRecipients.shareholderId,
+          token: invitationRecipients.token,
+          openedAt: invitationRecipients.openedAt,
+          viewCount: invitationRecipients.viewCount,
+          fullName: shareholders.fullName,
+          phone: shareholders.phone,
+        })
+        .from(invitationRecipients)
+        .innerJoin(shareholders, eq(invitationRecipients.shareholderId, shareholders.id))
+        .where(eq(invitationRecipients.invitationId, id))
+        .orderBy(shareholders.fullName);
+      res.json(rows);
+    } catch (error) {
+      console.error("Error fetching invitation recipients:", error);
+      res.status(500).json({ error: "فشل في جلب المستلمين" });
+    }
+  });
+
+  // عام (بدون تسجيل دخول): فتح الدعوة الشخصية بواسطة الرمز
+  // يعيد بيانات الدعوة + اسم المساهم فقط (لا جوال/بيانات حساسة) — حماية الخصوصية/IDOR
+  app.get("/api/public/invite/:token", async (req, res) => {
+    try {
+      const token = String(req.params.token || "");
+      if (!token) return res.status(400).json({ error: "رمز غير صالح" });
+
+      const [recipient] = await db
+        .select({
+          id: invitationRecipients.id,
+          invitationId: invitationRecipients.invitationId,
+          fullName: shareholders.fullName,
+        })
+        .from(invitationRecipients)
+        .innerJoin(shareholders, eq(invitationRecipients.shareholderId, shareholders.id))
+        .where(eq(invitationRecipients.token, token))
+        .limit(1);
+
+      if (!recipient) return res.status(404).json({ error: "الدعوة غير موجودة" });
+
+      const [inv] = await db
+        .select()
+        .from(branchOpeningInvitations)
+        .where(eq(branchOpeningInvitations.id, recipient.invitationId))
+        .limit(1);
+
+      if (!inv || !inv.isActive) return res.status(404).json({ error: "الدعوة غير متاحة" });
+
+      // تسجيل المشاهدة (أول فتح + عداد)
+      await db
+        .update(invitationRecipients)
+        .set({
+          viewCount: sql`${invitationRecipients.viewCount} + 1`,
+          openedAt: sql`COALESCE(${invitationRecipients.openedAt}, now())`,
+        })
+        .where(eq(invitationRecipients.id, recipient.id));
+
+      res.json({
+        guestName: recipient.fullName,
+        invitation: {
+          title: inv.title,
+          branchName: inv.branchName,
+          eventDate: inv.eventDate,
+          eventTime: inv.eventTime,
+          location: inv.location,
+          locationUrl: inv.locationUrl,
+          message: inv.message,
+          imageUrl: inv.imageUrl,
+          theme: inv.theme,
+        },
+        company: COMPANY_INFO,
+      });
+    } catch (error) {
+      console.error("Error opening public invitation:", error);
+      res.status(500).json({ error: "فشل في فتح الدعوة" });
     }
   });
 }

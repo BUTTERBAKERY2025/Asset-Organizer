@@ -8640,6 +8640,51 @@ export const insertShareholderNotificationSchema = createInsertSchema(shareholde
 export type ShareholderNotification = typeof shareholderNotifications.$inferSelect;
 export type InsertShareholderNotification = z.infer<typeof insertShareholderNotificationSchema>;
 
+// دعوات افتتاح الفروع للمساهمين - Branch opening invitations (personalized luxury invites)
+export const branchOpeningInvitations = pgTable("branch_opening_invitations", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  branchName: text("branch_name"),
+  eventDate: timestamp("event_date"),
+  eventTime: text("event_time"),
+  location: text("location"),
+  locationUrl: text("location_url"), // رابط خرائط جوجل
+  message: text("message"), // نص الدعوة الفاخر
+  imageUrl: text("image_url"),
+  theme: text("theme").default("gold").notNull(), // gold, royal, emerald, rose
+  isActive: boolean("is_active").default(true).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_opening_invitations_active").on(table.isActive),
+]);
+
+export const insertBranchOpeningInvitationSchema = createInsertSchema(branchOpeningInvitations).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  eventDate: z.coerce.date().nullable().optional(),
+});
+
+export type BranchOpeningInvitation = typeof branchOpeningInvitations.$inferSelect;
+export type InsertBranchOpeningInvitation = z.infer<typeof insertBranchOpeningInvitationSchema>;
+
+// مستلمو الدعوة - per-shareholder personalized invitation token
+export const invitationRecipients = pgTable("invitation_recipients", {
+  id: serial("id").primaryKey(),
+  invitationId: integer("invitation_id").notNull().references(() => branchOpeningInvitations.id, { onDelete: "cascade" }),
+  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  openedAt: timestamp("opened_at"),
+  viewCount: integer("view_count").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_invitation_recipients_invitation").on(table.invitationId),
+  uniqueIndex("uq_invitation_recipient").on(table.invitationId, table.shareholderId),
+]);
+
+export type InvitationRecipient = typeof invitationRecipients.$inferSelect;
+
 // وثائق المساهمين - Shareholder Documents
 export const shareholderDocuments = pgTable("shareholder_documents", {
   id: serial("id").primaryKey(),
