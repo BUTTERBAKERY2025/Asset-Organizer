@@ -752,9 +752,10 @@ export default function LeavesPage() {
                   <div className="flex items-center gap-3">
                     <img src={butterLogo} alt="Butter Bakery" className="h-16 w-16 object-contain" />
                     <div className="text-start">
-                      <h2 className="text-xl font-extrabold leading-tight" style={{ color: "#8A6212" }}>شركة باتر للمخبوزات</h2>
-                      <div className="text-sm font-semibold" style={{ color: "#C8932A" }}>Butter Bakery Co.</div>
-                      <div className="text-[11px] text-gray-600 mt-0.5">إدارة الموارد البشرية</div>
+                      <h2 className="text-xl font-extrabold leading-tight" style={{ color: "#8A6212" }}>شركة الزبد الأفضل التجارية</h2>
+                      <div className="text-sm font-semibold" style={{ color: "#C8932A" }}>Butter Bakery Trading Co.</div>
+                      <div className="text-[11px] text-gray-700 mt-0.5">شركة مساهمة مقفلة · سجل تجاري: 7026155296</div>
+                      <div className="text-[11px] text-gray-600">إدارة الموارد البشرية</div>
                     </div>
                   </div>
                   <div className="text-end text-[11px] text-gray-600 leading-relaxed">
@@ -789,7 +790,7 @@ export default function LeavesPage() {
                   <div><div className="border-t-2 pt-1" style={{ borderColor: "#C8932A" }}>الموارد البشرية</div></div>
                 </div>
                 <div className="border-t border-gray-300 mt-10 pt-3 text-[10px] text-center text-gray-500">
-                  شركة باتر للمخبوزات — المملكة العربية السعودية · هذا النموذج صادر آلياً من نظام إدارة الموارد البشرية
+                  شركة الزبد الأفضل التجارية (شركة مساهمة مقفلة) · سجل تجاري: 7026155296 · المملكة العربية السعودية — هذا النموذج صادر آلياً من نظام إدارة الموارد البشرية
                 </div>
               </>
             )}
