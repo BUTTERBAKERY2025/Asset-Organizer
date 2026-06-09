@@ -651,21 +651,30 @@ function RecipientsDialog({ invitation, onClose, toast, queryClient }: any) {
 
   const linkFor = (token: string) => `${origin}/invite/${token}`;
 
-  const copyLink = (token: string) => {
-    navigator.clipboard?.writeText(linkFor(token)).then(() => toast({ title: "تم نسخ الرابط" })).catch(() => {});
+  // رسالة شخصية تتضمن اسم المساهم + الرابط (تُستخدم للنسخ وللإرسال عبر واتساب)
+  const messageFor = (r: any) =>
+    [
+      `مرحباً ${r.fullName} 🌟`,
+      `يسعدنا دعوتكم لحضور ${invitation.title}`,
+      invitation.branchName ? `📍 ${invitation.branchName}` : "",
+      "",
+      "اضغط الرابط لمشاهدة دعوتكم الشخصية:",
+      linkFor(r.token),
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+  const copyLink = (r: any) => {
+    navigator.clipboard
+      ?.writeText(messageFor(r))
+      .then(() => toast({ title: "تم نسخ الرسالة", description: "تتضمن اسم المساهم والرابط" }))
+      .catch(() => {});
   };
 
   const sendWhatsApp = (r: any) => {
     const wa = toWhatsAppNumber(r.phone);
     if (!wa) { toast({ title: "لا يوجد رقم جوال صحيح", variant: "destructive" }); return; }
-    const lines = [
-      `مرحباً ${r.fullName} 🌟`,
-      `يسعدنا دعوتكم لحضور ${invitation.title}`,
-      "",
-      "اضغط الرابط لمشاهدة دعوتكم الخاصة:",
-      linkFor(r.token),
-    ];
-    window.open(`https://wa.me/${wa}?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
+    window.open(`https://wa.me/${wa}?text=${encodeURIComponent(messageFor(r))}`, "_blank");
   };
 
   return (
@@ -691,7 +700,7 @@ function RecipientsDialog({ invitation, onClose, toast, queryClient }: any) {
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <Button size="icon" variant="ghost" onClick={() => window.open(linkFor(r.token), "_blank")} data-testid={`button-preview-${r.id}`}><ExternalLink className="w-4 h-4" /></Button>
-                <Button size="icon" variant="ghost" onClick={() => copyLink(r.token)} data-testid={`button-copy-link-${r.id}`}><Copy className="w-4 h-4" /></Button>
+                <Button size="icon" variant="ghost" onClick={() => copyLink(r)} data-testid={`button-copy-link-${r.id}`}><Copy className="w-4 h-4" /></Button>
                 <Button size="sm" className="bg-green-600 hover:bg-green-700" disabled={!r.phone} onClick={() => sendWhatsApp(r)} data-testid={`button-whatsapp-${r.id}`}>
                   <MessageSquare className="w-4 h-4 ml-1" /> واتساب
                 </Button>

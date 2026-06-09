@@ -188,7 +188,7 @@ function ConfettiBurst({ accent, soft }: { accent: string; soft: string }) {
 }
 
 function Brand({ theme, size = "md" }: { theme: any; size?: "sm" | "md" }) {
-  const h = size === "sm" ? "h-12" : "h-16 sm:h-20";
+  const h = size === "sm" ? "h-20 sm:h-24" : "h-28 sm:h-36";
   return (
     <div className="flex flex-col items-center gap-1">
       <motion.img
