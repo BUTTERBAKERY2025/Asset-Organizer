@@ -261,8 +261,8 @@ export default function EmploymentApplicationsPage() {
   });
 
   const convertMut = useMutation({
-    mutationFn: async (id: number) => {
-      const r = await apiRequest("POST", `/api/hr/applications/${id}/convert-to-offer`, {});
+    mutationFn: async ({ id, reconvert }: { id: number; reconvert?: boolean }) => {
+      const r = await apiRequest("POST", `/api/hr/applications/${id}/convert-to-offer`, reconvert ? { reconvert: true } : {});
       return await r.json();
     },
     onSuccess: (data) => {
@@ -276,13 +276,13 @@ export default function EmploymentApplicationsPage() {
   });
 
   const convertToOffer = (app: EmploymentApplication) => {
-    if (app.convertedToOfferId) {
-      toast({ title: "تم التحويل مسبقاً", description: "هذا الطلب محوّل بالفعل" });
-      setLocation("/hr/job-offers");
-      return;
-    }
     if (!confirm("هل تريد إنشاء عرض عمل بناءً على بيانات هذا الطلب؟")) return;
-    convertMut.mutate(app.id);
+    convertMut.mutate({ id: app.id });
+  };
+
+  const reconvertToOffer = (app: EmploymentApplication) => {
+    if (!confirm("هذا الطلب محوّل مسبقاً. هل تريد إنشاء عرض عمل جديد آخر من نفس بيانات الطلب؟")) return;
+    convertMut.mutate({ id: app.id, reconvert: true });
   };
 
   const handleViewApp = async (app: EmploymentApplication) => {
@@ -454,6 +454,11 @@ export default function EmploymentApplicationsPage() {
                           {app.status === "accepted" && !app.convertedToOfferId && (
                             <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => convertToOffer(app)} data-testid={`button-convert-${app.id}`}>
                               <Briefcase className="w-4 h-4 ml-1" /> تحويل لعرض عمل
+                            </Button>
+                          )}
+                          {app.status === "accepted" && app.convertedToOfferId && (
+                            <Button size="sm" variant="outline" className="border-green-600 text-green-700 hover:bg-green-50" onClick={() => reconvertToOffer(app)} data-testid={`button-reconvert-${app.id}`}>
+                              <RefreshCw className="w-4 h-4 ml-1" /> عرض عمل جديد
                             </Button>
                           )}
                           <Button size="sm" variant="outline" className="text-red-600" onClick={() => { if (confirm("حذف الطلب؟")) deleteMut.mutate(app.id); }}>
@@ -766,8 +771,13 @@ export default function EmploymentApplicationsPage() {
                 <Printer className="w-4 h-4 ml-1" /> طباعة / PDF
               </Button>
               {viewApp?.status === "accepted" && !viewApp?.convertedToOfferId && (
-                <Button className="bg-green-600 hover:bg-green-700" onClick={() => convertToOffer(viewApp)}>
+                <Button className="bg-green-600 hover:bg-green-700" onClick={() => convertToOffer(viewApp)} data-testid="button-convert-dialog">
                   <Briefcase className="w-4 h-4 ml-1" /> تحويل لعرض عمل
+                </Button>
+              )}
+              {viewApp?.status === "accepted" && viewApp?.convertedToOfferId && (
+                <Button variant="outline" className="border-green-600 text-green-700 hover:bg-green-50" onClick={() => reconvertToOffer(viewApp)} data-testid="button-reconvert-dialog">
+                  <RefreshCw className="w-4 h-4 ml-1" /> إنشاء عرض عمل جديد
                 </Button>
               )}
               <Button onClick={() => {

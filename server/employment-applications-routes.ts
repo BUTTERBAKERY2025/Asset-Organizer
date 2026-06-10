@@ -533,8 +533,10 @@ export function registerEmploymentApplicationRoutes(app: Express) {
         if (application.status !== "accepted") {
           return res.status(400).json({ error: "يجب قبول الطلب أولاً" });
         }
-        if (application.convertedToOfferId) {
-          return res.status(409).json({ error: "تم تحويل الطلب مسبقاً", offerId: application.convertedToOfferId });
+        const reconvert = req.body?.reconvert === true;
+        const previousOfferId = application.convertedToOfferId;
+        if (previousOfferId && !reconvert) {
+          return res.status(409).json({ error: "تم تحويل الطلب مسبقاً", offerId: previousOfferId });
         }
 
         const user: any = (req as any).user;
@@ -587,10 +589,15 @@ export function registerEmploymentApplicationRoutes(app: Express) {
                 createdBy: user?.id || null,
               } as any).returning();
 
-              // ربط ذرّي - يمنع التكرار: نشترط أن convertedToOfferId لا يزال NULL
+              // ربط ذرّي - يمنع التكرار/السباق:
+              // أول تحويل: نشترط أن convertedToOfferId لا يزال NULL.
+              // إعادة تحويل: نشترط بقاء العرض السابق كما هو (تزامن متفائل).
+              const linkGuard = previousOfferId
+                ? eq(employmentApplications.convertedToOfferId, previousOfferId)
+                : isNull(employmentApplications.convertedToOfferId);
               const linked = await tx.update(employmentApplications)
                 .set({ convertedToOfferId: offer.id, updatedAt: new Date() })
-                .where(and(eq(employmentApplications.id, id), isNull(employmentApplications.convertedToOfferId)))
+                .where(and(eq(employmentApplications.id, id), linkGuard))
                 .returning({ id: employmentApplications.id });
 
               if (linked.length === 0) {
@@ -607,7 +614,7 @@ export function registerEmploymentApplicationRoutes(app: Express) {
         });
         createdOffer = result;
 
-        await logAudit(id, "converted_to_offer", req, { offerId: createdOffer.id, offerNumber: createdOffer.offerNumber });
+        await logAudit(id, reconvert ? "reconverted_to_offer" : "converted_to_offer", req, { offerId: createdOffer.id, offerNumber: createdOffer.offerNumber, previousOfferId: previousOfferId || null });
         res.json({ success: true, offer: createdOffer });
       } catch (e: any) {
         console.error("[emp-apps] convert error:", e);
