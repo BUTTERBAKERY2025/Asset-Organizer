@@ -117,6 +117,89 @@ _With our warmest regards,_
 *Butter Bakery* | باتر بيكري`;
 }
 
+// ===== رابط التهنئة (Welcome / Congratulations) =====
+// توكن موقّع بدون تخزين (HMAC) — صالح يوماً واحداً، يحمل رقم العرض فقط،
+// ولا يمنح أي وصول لبيانات حساسة (الراتب/الهاتف/الهوية). يُستخدم لصفحة تهنئة
+// عامة يمكن للموظف مشاركتها مع أصدقائه.
+const LINKEDIN_URL = "https://www.linkedin.com/company/butter-bakery/about/";
+
+function welcomeSecret(): string {
+  // SESSION_SECRET مطلوب عند الإقلاع (server/auth.ts) — لا نستخدم قيمة افتراضية
+  // قابلة للتخمين لأن ذلك يسمح بتزوير توكنات التهنئة العامة.
+  const secret = process.env.SESSION_SECRET;
+  if (!secret || secret.length < 16) {
+    throw new Error("SESSION_SECRET is required and must be strong for welcome tokens");
+  }
+  return secret;
+}
+
+function b64url(buf: Buffer): string {
+  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function signWelcomeToken(offerId: number, expMs: number): string {
+  const payload = `${offerId}.${expMs}`;
+  const sig = crypto.createHmac("sha256", welcomeSecret()).update(payload).digest();
+  return `${b64url(Buffer.from(payload))}.${b64url(sig)}`;
+}
+
+function verifyWelcomeToken(token: string): { offerId: number; exp: number } | null {
+  try {
+    const [payloadPart, sigPart] = (token || "").split(".");
+    if (!payloadPart || !sigPart) return null;
+    const payload = Buffer.from(payloadPart.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+    const expected = b64url(crypto.createHmac("sha256", welcomeSecret()).update(payload).digest());
+    const a = Buffer.from(sigPart);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+    const [idStr, expStr] = payload.split(".");
+    const offerId = Number(idStr);
+    const exp = Number(expStr);
+    if (!Number.isFinite(offerId) || !Number.isFinite(exp)) return null;
+    return { offerId, exp };
+  } catch {
+    return null;
+  }
+}
+
+function buildWelcomeMessage(offer: any, link: string): string {
+  const nameLine = offer.candidateNameEn
+    ? `${offer.candidateName} / ${offer.candidateNameEn}`
+    : offer.candidateName;
+  const positionLine = offer.positionEn
+    ? `${offer.position} / ${offer.positionEn}`
+    : offer.position;
+  const dept = offer.department || offer.branchName || "";
+
+  return `🎉🥐 *BUTTER BAKERY* 🥐🎉
+✨ *تهنئة بالانضمام* | *Welcome Aboard* ✨
+━━━━━━━━━━━━━━━━━━━━
+
+🎊 مبروك *${nameLine}* 🎊
+🎊 _Congratulations!_ 🎊
+
+🌟 *أهلاً بك في عائلة باتر بيكري!*
+🌟 _Welcome to the Butter Bakery family!_
+
+💼 *الوظيفة | Position:*
+${positionLine}
+${dept ? `\n🏢 *القسم | Department:*\n${dept}\n` : ""}
+━━━━━━━━━━━━━━━━━━━━
+🔗 *بطاقة التهنئة | Your Card:*
+${link}
+
+⏰ الرابط صالح لمدة يوم واحد | Valid for 1 day
+🤝 شاركها مع أصدقائك وعائلتك!
+🤝 _Share it with your friends & family!_
+━━━━━━━━━━━━━━━━━━━━
+
+نتطلع لرؤيتك ضمن فريقنا 🌹
+_So happy to have you with us!_
+
+👥 *إدارة الموارد البشرية | HR Department*
+*Butter Bakery* | باتر بيكري`;
+}
+
 export function registerJobOfferRoutes(app: Express) {
   // ===== Internal (HR) =====
 
@@ -443,6 +526,59 @@ export function registerJobOfferRoutes(app: Express) {
     }
   );
 
+  // توليد رابط تهنئة (بطاقة ترحيب) لعرض مقبول + إرسال واتساب اختياري
+  app.post(
+    "/api/hr/job-offers/:id/welcome-link",
+    isAuthenticated,
+    requirePermission(PERMISSION_MODULE, "edit"),
+    async (req, res) => {
+      try {
+        const id = Number(req.params.id);
+        const [offer] = await db
+          .select()
+          .from(jobOffers)
+          .where(eq(jobOffers.id, id))
+          .limit(1);
+        if (!offer) return res.status(404).json({ error: "غير موجود" });
+        if (!checkOfferBranchAccess(req, offer))
+          return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
+        if (offer.status !== "accepted")
+          return res
+            .status(400)
+            .json({ error: "بطاقة التهنئة متاحة فقط للعروض المقبولة" });
+
+        const expMs = Date.now() + 24 * 60 * 60 * 1000; // يوم واحد
+        const token = signWelcomeToken(id, expMs);
+        const proto = (req.headers["x-forwarded-proto"] as string) || req.protocol;
+        const host = req.headers["x-forwarded-host"] || req.headers.host;
+        const link = `${proto}://${host}/welcome/${token}`;
+
+        let waResult: any = { success: false, error: "Twilio غير مكوّن" };
+        if (req.body?.send && isTwilioConfigured() && offer.phone) {
+          const message = buildWelcomeMessage(offer, link);
+          waResult = await sendWhatsAppMessage(offer.phone, message);
+        }
+
+        await logAudit(id, "welcome_sent", req, {
+          link,
+          whatsapp: waResult,
+          channel: "whatsapp",
+        });
+
+        res.json({
+          success: true,
+          link,
+          token,
+          expiresAt: new Date(expMs),
+          whatsapp: waResult,
+        });
+      } catch (e: any) {
+        console.error("[job-offers] welcome-link error:", e);
+        res.status(500).json({ error: e.message || "فشل توليد الرابط" });
+      }
+    }
+  );
+
   app.post(
     "/api/hr/job-offers/:id/extend",
     isAuthenticated,
@@ -613,6 +749,50 @@ export function registerJobOfferRoutes(app: Express) {
       });
     } catch (e: any) {
       console.error("[job-offers] public get error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // صفحة التهنئة العامة — تُعيد فقط بيانات غير حساسة (اسم/وظيفة/قسم) يمكن مشاركتها
+  app.get("/api/public/welcome/:token", async (req, res) => {
+    try {
+      const decoded = verifyWelcomeToken(req.params.token);
+      if (!decoded) return res.status(404).json({ error: "الرابط غير صالح" });
+      if (decoded.exp < Date.now())
+        return res.status(410).json({ error: "انتهت صلاحية بطاقة التهنئة" });
+
+      const [offer] = await db
+        .select({
+          candidateName: jobOffers.candidateName,
+          candidateNameEn: jobOffers.candidateNameEn,
+          position: jobOffers.position,
+          positionEn: jobOffers.positionEn,
+          department: jobOffers.department,
+          branchName: jobOffers.branchName,
+          status: jobOffers.status,
+        })
+        .from(jobOffers)
+        .where(eq(jobOffers.id, decoded.offerId))
+        .limit(1);
+      if (!offer || offer.status !== "accepted")
+        return res.status(404).json({ error: "البطاقة غير متاحة" });
+
+      res.json({
+        candidateName: offer.candidateName,
+        candidateNameEn: offer.candidateNameEn,
+        position: offer.position,
+        positionEn: offer.positionEn,
+        department: offer.department,
+        branchName: offer.branchName,
+        expiresAt: new Date(decoded.exp),
+        company: {
+          nameAr: "باتر بيكري",
+          nameEn: "Butter Bakery",
+          linkedinUrl: LINKEDIN_URL,
+        },
+      });
+    } catch (e: any) {
+      console.error("[job-offers] public welcome error:", e);
       res.status(500).json({ error: e.message });
     }
   });

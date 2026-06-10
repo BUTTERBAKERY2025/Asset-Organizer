@@ -32,6 +32,9 @@ import {
   Phone,
   Mail,
   MessageCircle,
+  PartyPopper,
+  Linkedin,
+  Share2,
   Printer,
   Pencil,
   Trash2,
@@ -124,6 +127,7 @@ export default function JobOffersPage() {
   const [editId, setEditId] = useState<number | null>(null);
   const [viewOffer, setViewOffer] = useState<JobOffer | null>(null);
   const [shareLink, setShareLink] = useState<{ link: string; offer: JobOffer } | null>(null);
+  const [welcomeShare, setWelcomeShare] = useState<{ link: string; offer: JobOffer } | null>(null);
   const [deleteOffer, setDeleteOffer] = useState<JobOffer | null>(null);
 
   // Prefill from accepted employment application (Convert to Job Offer)
@@ -276,6 +280,24 @@ export default function JobOffersPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/hr/job-offers/stats"] });
     },
     onError: (e: any) => toast({ title: "فشل الإرسال", description: e.message, variant: "destructive" }),
+  });
+
+  const welcomeMutation = useMutation({
+    mutationFn: async ({ id, send }: { id: number; send: boolean }) => {
+      const res = await apiRequest("POST", `/api/hr/job-offers/${id}/welcome-link`, { send });
+      return await res.json();
+    },
+    onSuccess: (data, vars) => {
+      const offer = offers.find((o) => o.id === vars.id);
+      toast({
+        title: data.whatsapp?.success ? "تم إرسال التهنئة عبر واتساب 🎉" : "تم توليد بطاقة التهنئة 🎉",
+        description: data.whatsapp?.success
+          ? "تم إرسال بطاقة الترحيب للموظف"
+          : "اضغط فتح واتساب أو انسخ الرابط لمشاركته",
+      });
+      if (offer) setWelcomeShare({ link: data.link, offer });
+    },
+    onError: (e: any) => toast({ title: "فشل توليد التهنئة", description: e.message, variant: "destructive" }),
   });
 
   const cancelMutation = useMutation({
@@ -504,6 +526,18 @@ export default function JobOffersPage() {
                                   <MessageCircle className="w-3.5 h-3.5" />
                                 </Button>
                               </>
+                            )}
+                            {o.status === "accepted" && (
+                              <Button
+                                size="sm"
+                                className="bg-gradient-to-l from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white"
+                                onClick={() => welcomeMutation.mutate({ id: o.id, send: true })}
+                                disabled={welcomeMutation.isPending}
+                                data-testid={`btn-welcome-${o.id}`}
+                                title="إرسال بطاقة تهنئة"
+                              >
+                                <PartyPopper className="w-3.5 h-3.5 ml-1" /> تهنئة
+                              </Button>
                             )}
                             {!["accepted", "cancelled", "declined"].includes(o.status) && (
                               <Button
@@ -754,6 +788,73 @@ export default function JobOffersPage() {
                 </p>
               )}
               <p className="text-xs text-slate-500">ينتهي الرابط بعد {shareLink?.offer.validityDays} يوم</p>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Welcome / Congratulations Card Dialog */}
+        <Dialog open={!!welcomeShare} onOpenChange={(o) => !o && setWelcomeShare(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <PartyPopper className="w-5 h-5 text-amber-600" /> بطاقة التهنئة جاهزة 🎉
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-sm text-slate-600">
+                بطاقة ترحيب متحركة باسم <span className="font-bold">{welcomeShare?.offer.candidateName}</span> ومسماه الوظيفي
+                وقسمه — يمكن للموظف مشاركتها مع أصدقائه. الرابط صالح ليوم واحد.
+              </p>
+              <div className="bg-slate-50 border rounded p-3 break-all text-sm" dir="ltr">{welcomeShare?.link}</div>
+              <div className="flex gap-2">
+                <Button onClick={() => welcomeShare && copyLink(welcomeShare.link)} className="flex-1 gap-2">
+                  <Copy className="w-4 h-4" /> نسخ الرابط
+                </Button>
+                {welcomeShare && (
+                  <a
+                    href={`https://wa.me/${normalizeSaudiPhone(welcomeShare.offer.phone)}?text=${encodeURIComponent(
+                      `🎉🥐 *BUTTER BAKERY* 🥐🎉\n✨ *تهنئة بالانضمام | Welcome Aboard* ✨\n━━━━━━━━━━━━━━━━━━━━\n\n` +
+                      `🎊 مبروك *${welcomeShare.offer.candidateName}* 🎊\n🎊 _Congratulations!_ 🎊\n\n` +
+                      `🌟 *أهلاً بك في عائلة باتر بيكري!*\n🌟 _Welcome to the Butter Bakery family!_\n\n` +
+                      `💼 *الوظيفة | Position:* ${welcomeShare.offer.position}\n` +
+                      (welcomeShare.offer.department || welcomeShare.offer.branchName
+                        ? `🏢 *القسم | Department:* ${welcomeShare.offer.department || welcomeShare.offer.branchName}\n`
+                        : "") +
+                      `\n🔗 *بطاقة التهنئة | Your Card:*\n${welcomeShare.link}\n\n` +
+                      `⏰ صالح لمدة يوم واحد | Valid for 1 day\n🤝 شاركها مع أصدقائك! | Share it with friends!\n\n` +
+                      `👥 *إدارة الموارد البشرية | HR Department*\n*Butter Bakery* | باتر بيكري`
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1"
+                  >
+                    <Button className="w-full gap-2 bg-green-600 hover:bg-green-700">
+                      <MessageCircle className="w-4 h-4" /> فتح واتساب
+                    </Button>
+                  </a>
+                )}
+              </div>
+              <a href={welcomeShare?.link} target="_blank" rel="noreferrer" className="block">
+                <Button variant="outline" className="w-full gap-2 border-amber-400 text-amber-700 hover:bg-amber-50">
+                  <Share2 className="w-4 h-4" /> معاينة البطاقة
+                </Button>
+              </a>
+              <a
+                href="https://www.linkedin.com/company/butter-bakery/about/"
+                target="_blank"
+                rel="noreferrer"
+                className="block"
+              >
+                <Button variant="outline" className="w-full gap-2 text-[#0A66C2] border-[#0A66C2]/40 hover:bg-[#0A66C2]/5">
+                  <Linkedin className="w-4 h-4" /> صفحة لينكدإن للشركة
+                </Button>
+              </a>
+              {welcomeShare && (
+                <p className="text-xs text-slate-500 flex items-center gap-1">
+                  <Phone className="w-3 h-3" />
+                  سيُفتح واتساب على رقم: <span dir="ltr" className="font-mono">{normalizeSaudiPhone(welcomeShare.offer.phone)}</span>
+                </p>
+              )}
             </div>
           </DialogContent>
         </Dialog>

@@ -157,6 +157,7 @@ const pageImports: Record<string, () => Promise<any>> = {
   "company-templates": () => import("@/pages/company-templates"),
   "job-offers": () => import("@/pages/job-offers"),
   "job-offer-public": () => import("@/pages/job-offer-public"),
+  "welcome": () => import("@/pages/welcome"),
   "onboarding": () => import("@/pages/onboarding"),
   "onboarding-public": () => import("@/pages/onboarding-public"),
   "warning-public": () => import("@/pages/warning-public"),

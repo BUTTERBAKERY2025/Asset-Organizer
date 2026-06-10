@@ -170,6 +170,7 @@ const ExecutiveCalendarPage = makeLazy("executive-calendar");
 const CompanyTemplatesPage = makeLazy("company-templates");
 const JobOffersPage = makeLazy("job-offers");
 const JobOfferPublicPage = makeLazy("job-offer-public");
+const WelcomePublicPage = makeLazy("welcome");
 const OnboardingPage = makeLazy("onboarding");
 const OnboardingPublicPage = makeLazy("onboarding-public");
 const WarningPublicPage = makeLazy("warning-public");
@@ -303,6 +304,7 @@ const Router = React.memo(function Router() {
       {/* Public RSVP confirmation page - no auth required */}
       <Route path="/rsvp/:token">{() => <Suspense fallback={<PageLoadingFallback />}><RsvpPage /></Suspense>}</Route>
       <Route path="/job-offer/:token">{() => <Suspense fallback={<PageLoadingFallback />}><JobOfferPublicPage /></Suspense>}</Route>
+      <Route path="/welcome/:token">{() => <Suspense fallback={<PageLoadingFallback />}><WelcomePublicPage /></Suspense>}</Route>
       <Route path="/onboarding/:token">{() => <Suspense fallback={<PageLoadingFallback />}><OnboardingPublicPage /></Suspense>}</Route>
       <Route path="/warning/:token">{() => <Suspense fallback={<PageLoadingFallback />}><WarningPublicPage /></Suspense>}</Route>
       <Route path="/apply/v/:slug">{() => <Suspense fallback={<PageLoadingFallback />}><VacancyPublicPage /></Suspense>}</Route>
