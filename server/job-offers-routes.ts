@@ -124,11 +124,12 @@ _With our warmest regards,_
 const LINKEDIN_URL = "https://www.linkedin.com/company/butter-bakery/about/";
 
 function welcomeSecret(): string {
-  // SESSION_SECRET مطلوب عند الإقلاع (server/auth.ts) — لا نستخدم قيمة افتراضية
-  // قابلة للتخمين لأن ذلك يسمح بتزوير توكنات التهنئة العامة.
+  // نستخدم نفس سرّ الجلسات (SESSION_SECRET) لتوقيع توكنات التهنئة. لا توجد قيمة
+  // افتراضية قابلة للتخمين (وهذا هو ضمان عدم التزوير). نتحقق فقط من وجوده —
+  // تماماً كما يفعل server/auth.ts — حتى لا تتعطّل الميزة مع أي طول سرّ صالح.
   const secret = process.env.SESSION_SECRET;
-  if (!secret || secret.length < 16) {
-    throw new Error("SESSION_SECRET is required and must be strong for welcome tokens");
+  if (!secret) {
+    throw new Error("SESSION_SECRET environment variable is required");
   }
   return secret;
 }
