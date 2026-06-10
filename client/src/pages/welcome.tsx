@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { Share2, Linkedin, MessageCircle, Briefcase, Building2, Sparkles, PartyPopper } from "lucide-react";
 import logo from "@assets/logo_butter_bakery__1768502624540.png";
+import teamArt from "@assets/generated_images/butter_bakery_team_celebration.png";
 
 interface WelcomeData {
   candidateName: string;
@@ -443,12 +444,23 @@ export default function WelcomePage() {
             </button>
           </motion.div>
 
+          {/* رسمة فريق باتر بيكري الاحتفالية */}
+          <motion.img
+            src={teamArt}
+            alt="Butter Bakery team"
+            className="mx-auto mt-8 w-full max-w-md"
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.35, duration: 0.8, ease: "easeOut" }}
+            data-testid="img-team"
+          />
+
           {/* التذييل */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 1.4 }}
-            className="mt-8 border-t pt-4"
+            transition={{ delay: 1.5 }}
+            className="mt-4 border-t pt-4"
             style={{ borderColor: "#f0e7df" }}
           >
             <p className="text-xs font-medium" style={{ color: MUTE }}>
