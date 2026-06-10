@@ -15,6 +15,11 @@ description: Durable facts about this repo's recurring security-scan findings an
 - HoundDog flags `server/scheduler.ts` `[scheduler] starting (tick=..., twilio=configured)` as CRITICAL AUTH-TOKEN+PHONE-NUMBER. It logs only the string "configured"/"disabled" — no token, no phone. Confirmed false positive.
 - SAST flags `server/media-team-routes.ts` PATCH handler as remote-property-injection, but the key is iterated from a STATIC allowlist array, so it's safe.
 
+## Committed bcrypt hashes in seed SQL (info disclosure)
+- `supabase_complete_seed.sql` and `supabase_data_seed.sql` are GIT-TRACKED and contain real users' bcrypt password hashes (incl. admin). SAST flags them HIGH.
+- bcrypt is not reversible, but the seed defines the initial admin login, so the safe mitigation is to ROTATE the production admin password after first seed, not to rely on the committed hash being secret.
+- **How to apply:** don't delete unilaterally (needs destructive git rm + may break seeding). Recommend to user: rotate admin pwd in prod + gitignore future seeds.
+
 ## uuid high (CVE-2026-41907)
 - uuid is only a TRANSITIVE dep (not imported in our code). Forcing v11 via override is breaking (ESM-only major). Low practical impact; document rather than force.
 
