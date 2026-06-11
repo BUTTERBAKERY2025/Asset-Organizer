@@ -96,6 +96,7 @@ const pageImports: Record<string, () => Promise<any>> = {
   "notifications-management": () => import("@/pages/notifications-management"),
   "shift-management": () => import("@/pages/shift-management"),
   "attendance-check": () => import("@/pages/attendance-check"),
+  "employee-attendance-report": () => import("@/pages/employee-attendance-report"),
   "timesheet": () => import("@/pages/timesheet"),
   "attendance-dashboard": () => import("@/pages/attendance-dashboard"),
   "branch-employees": () => import("@/pages/branch-employees"),

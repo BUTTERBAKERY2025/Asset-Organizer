@@ -78,3 +78,19 @@ the person still appears once, zero data loss); wrap in BEGIN/COMMIT, idempotent
 orphans with no confirmed real twin alone (could be a genuinely deleted employee). Diagnostics
 live in `supabase_duplicate_employee_profiles_diagnose.sql` (E1 = orphan detector) and the
 fix in `supabase_cleanup_orphan_schedules.sql`.
+
+## Cross-branch consolidation report — filter branches BEFORE dedupe
+
+**Why:** a transferred employee has attendance under the SAME canonical id but DIFFERENT
+`branch_id` across the month. The monthly summary + the `/api/employee-attendance-report`
+endpoint must fetch with NO branch filter (all 3 identity forms) to see both branches, then
+dedupe by date (highest id wins). For a branch-scoped (non-admin/non-HR) caller you MUST
+apply the allowed-branch filter *before* the date-dedupe — otherwise an unauthorized branch's
+row can win the dedupe and then get removed, making the authorized day vanish and undercount.
+Also the `employeeName` fallback via `getBranchEmployee(id)` is an IDOR vector: gate it behind
+cross-branch read access (allowedBranchIds === null); scoped callers get the name only from
+their own already-filtered rows.
+
+**How to apply:** order = fetch(no filter) → filter allowed branches (if scoped) → dedupe by
+date → aggregate per-branch + grand total. Never call getBranchEmployee for name unless caller
+has cross-branch read. No DB schema change needed (data already spans branches).

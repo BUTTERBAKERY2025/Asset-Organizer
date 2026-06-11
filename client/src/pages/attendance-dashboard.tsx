@@ -104,6 +104,14 @@ export default function AttendanceDashboardPage() {
       tone: "violet",
     },
     {
+      key: "qa-employee-report",
+      title: "تقرير حضور الموظف عبر الفروع",
+      description: "حضور الموظف المنقول بين الفروع مجمّعاً في تقرير واحد",
+      icon: BarChart3,
+      href: "/employee-attendance-report",
+      tone: "primary",
+    },
+    {
       key: "qa-employees",
       title: t("actions.branchEmployees.title"),
       description: t("actions.branchEmployees.description"),

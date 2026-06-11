@@ -10944,6 +10944,60 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  // يجلب كل سجلات حضور موظف واحد عبر *كل الفروع* خلال فترة، مع مطابقة جميع صيغ الهوية
+  // (branch_emp_<id> النصية + العمود الرقمي branch_employee_id + UUID المستخدم المرتبط).
+  // لا يطبّق أي فلتر فرع — وهذا أساس توحيد حضور الموظف المنقول بين الفروع خلال الشهر.
+  async getEmployeeAttendanceAcrossBranches(employeeId: string, startDate: string, endDate: string): Promise<AttendanceRecord[]> {
+    let branchEmpId: number | undefined;
+    let linkedUserId: string | undefined;
+    try {
+      if (employeeId.startsWith("branch_emp_")) {
+        const n = parseInt(employeeId.replace("branch_emp_", ""), 10);
+        if (!isNaN(n)) {
+          branchEmpId = n;
+          const be = await this.getBranchEmployee(n);
+          if (be?.linkedUserId) linkedUserId = be.linkedUserId;
+        }
+      } else {
+        const be = await this.getBranchEmployeeByLinkedUserId(employeeId);
+        if (be) {
+          branchEmpId = be.id;
+          linkedUserId = employeeId;
+        }
+      }
+    } catch {
+      // best-effort: fall back to the original identity only
+    }
+
+    const idForms = new Set<string>([employeeId]);
+    if (branchEmpId !== undefined) idForms.add(`branch_emp_${branchEmpId}`);
+    if (linkedUserId) idForms.add(linkedUserId);
+
+    const orConds: any[] = [inArray(attendanceRecords.employeeId, Array.from(idForms))];
+    if (branchEmpId !== undefined) {
+      orConds.push(eq(attendanceRecords.branchEmployeeId, branchEmpId));
+    }
+
+    const dateConds = [
+      gte(attendanceRecords.attendanceDate, startDate),
+      lte(attendanceRecords.attendanceDate, endDate),
+    ];
+
+    try {
+      return await db.select().from(attendanceRecords)
+        .where(and(or(...orConds), ...dateConds))
+        .orderBy(desc(attendanceRecords.attendanceDate), desc(attendanceRecords.id));
+    } catch (error: any) {
+      if (error?.code === '42703') {
+        // Schema-drift fallback (branch_employee_id column missing): match string forms only.
+        return await db.select().from(attendanceRecords)
+          .where(and(inArray(attendanceRecords.employeeId, Array.from(idForms)), ...dateConds))
+          .orderBy(desc(attendanceRecords.attendanceDate), desc(attendanceRecords.id));
+      }
+      throw error;
+    }
+  }
+
   async getAttendanceRecord(id: number): Promise<AttendanceRecord | undefined> {
     try {
       const [record] = await db.select().from(attendanceRecords).where(eq(attendanceRecords.id, id));
@@ -12039,7 +12093,15 @@ export class DatabaseStorage implements IStorage {
     const startDate = `${month}-01`;
     const endDate = `${month}-31`;
     
-    const records = await this.getAllAttendanceRecords({ employeeId, startDate, endDate });
+    // توحيد عبر كل الفروع وكل صيغ الهوية (الموظف المنقول خلال الشهر)، ثم إزالة تكرار اليوم
+    // (الأحدث = أعلى id) لمنع ازدواج العدّ عند وجود سجلين لنفس اليوم (بوابة + مدير / فرعين).
+    const rawRecords = await this.getEmployeeAttendanceAcrossBranches(employeeId, startDate, endDate);
+    const byDate = new Map<string, AttendanceRecord>();
+    for (const r of rawRecords) {
+      const ex = byDate.get(r.attendanceDate);
+      if (!ex || (r.id ?? 0) > (ex.id ?? 0)) byDate.set(r.attendanceDate, r);
+    }
+    const records = Array.from(byDate.values());
     const employee = await this.getUser(employeeId);
     const employeeName = employee ? `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.username || 'Unknown' : 'Unknown';
     const branchId = employee?.branchId || '';

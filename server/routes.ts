@@ -25706,6 +25706,100 @@ export async function registerRoutes(
     }
   });
 
+  // تقرير حضور الموظف عبر *كل الفروع* — لإثبات حضور الموظف المنقول بين الفروع خلال الشهر.
+  // يجمع كل أيامه بكل صيغ الهوية، يعرض الفرع لكل يوم + مجاميع لكل فرع + الإجمالي العام.
+  app.get("/api/employee-attendance-report", isAuthenticated, requirePermission("attendance", "view"), async (req, res) => {
+    try {
+      const employeeId = req.query.employeeId as string | undefined;
+      const month = req.query.month as string | undefined;
+      let startDate = req.query.startDate as string | undefined;
+      let endDate = req.query.endDate as string | undefined;
+
+      if (!employeeId) return res.status(400).json({ error: "معرف الموظف مطلوب" });
+      if (month && /^\d{4}-\d{2}$/.test(month)) {
+        startDate = `${month}-01`;
+        endDate = `${month}-31`;
+      }
+      if (!startDate || !endDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+        return res.status(400).json({ error: "حدد الشهر أو نطاق تاريخ صحيح" });
+      }
+
+      // الصلاحية: المدير/الموارد البشرية (قراءة عبر الفروع) يرون كل الفروع؛ غيرهم يقتصرون على فروعهم.
+      let allowedBranchIds: string[] | null = null; // null = كل الفروع
+      if (!isUserAdmin(req) && !hasCrossBranchHrReadAccess(req)) {
+        allowedBranchIds = getAllowedBranchIds(req);
+        if (!allowedBranchIds || allowedBranchIds.length === 0) {
+          return res.status(403).json({ error: "غير مصرح بالوصول" });
+        }
+      }
+
+      let rows = await storage.getEmployeeAttendanceAcrossBranches(employeeId, startDate, endDate);
+
+      // SECURITY: فلترة الفروع المسموح بها *قبل* إزالة التكرار — وإلا قد يفوز سجل فرع غير
+      // مصرّح به في الـ dedupe ثم يُحذف فيختفي اليوم المصرّح به ويختلّ العدّ للمستخدم المحصور.
+      if (allowedBranchIds !== null) {
+        const set = new Set(allowedBranchIds);
+        rows = rows.filter((r: any) => set.has(r.branchId));
+      }
+
+      // إزالة تكرار اليوم (الأحدث = أعلى id)
+      const byDate = new Map<string, any>();
+      for (const r of rows as any[]) {
+        const ex = byDate.get(r.attendanceDate);
+        if (!ex || (r.id ?? 0) > (ex.id ?? 0)) byDate.set(r.attendanceDate, r);
+      }
+      rows = Array.from(byDate.values());
+
+      rows.sort((a: any, b: any) => (a.attendanceDate < b.attendanceDate ? -1 : a.attendanceDate > b.attendanceDate ? 1 : 0));
+
+      const branches = await storage.getAllBranches();
+      const branchName = new Map(branches.map((b: any) => [b.id, b.name]));
+
+      // اسم الموظف من السجلات المصرّح بها فقط. الرجوع إلى ملف الموظف (getBranchEmployee)
+      // مقصور على من يملك قراءة عبر الفروع (مدير/موارد بشرية) — وإلا يستطيع مستخدم محصور
+      // تخمين معرّفات الموظفين وكشف أسماء موظفي فروع أخرى (IDOR).
+      let employeeName = (rows[0] as any)?.employeeName || "";
+      if (!employeeName && allowedBranchIds === null && employeeId.startsWith("branch_emp_")) {
+        const be = await storage.getBranchEmployee(parseInt(employeeId.replace("branch_emp_", ""), 10));
+        employeeName = be?.employeeName || "";
+      }
+
+      const enriched = rows.map((r: any) => ({ ...r, branchName: branchName.get(r.branchId) || r.branchId }));
+
+      const agg = (list: any[]) => ({
+        days: list.length,
+        present: list.filter((r) => r.status === 'present').length,
+        late: list.filter((r) => r.status === 'late').length,
+        absent: list.filter((r) => r.status === 'absent').length,
+        earlyLeave: list.filter((r) => r.status === 'early_leave').length,
+        leave: list.filter((r) => r.status === 'on_leave').length,
+        workingHours: Math.round(list.reduce((s, r) => s + (r.workingHours || 0), 0) * 100) / 100,
+        overtimeHours: Math.round(list.reduce((s, r) => s + ((r.overtimeMinutes || 0) / 60), 0) * 100) / 100,
+        lateMinutes: list.reduce((s, r) => s + (r.lateMinutes || 0), 0),
+      });
+
+      const branchIdsInData = Array.from(new Set(enriched.map((r) => r.branchId)));
+      const byBranch = branchIdsInData.map((bid) => ({
+        branchId: bid,
+        branchName: branchName.get(bid) || bid,
+        ...agg(enriched.filter((r) => r.branchId === bid)),
+      }));
+
+      res.json({
+        employeeId,
+        employeeName,
+        startDate,
+        endDate,
+        rows: enriched,
+        byBranch,
+        totals: agg(enriched),
+      });
+    } catch (error) {
+      console.error("Error building employee attendance report:", error);
+      res.status(500).json({ error: "فشل في إنشاء تقرير الحضور" });
+    }
+  });
+
   app.get("/api/attendance/:id", isAuthenticated, requirePermission("attendance", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
