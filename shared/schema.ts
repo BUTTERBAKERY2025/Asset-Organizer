@@ -11395,6 +11395,8 @@ export const leaveRequests = pgTable("leave_requests", {
   approvalFlow: jsonb("approval_flow"), // [{level, title, approverId, approverName, decision, note, at}]
   currentLevel: integer("current_level").default(1).notNull(),
   requiredLevels: integer("required_levels").default(1).notNull(),
+  // لقطة سلسلة الاعتمادات المطبّقة وقت الإنشاء (نظام الموافقات والاعتمادات)
+  approvalChain: jsonb("approval_chain"), // [{level, jobTitle, stepName}]
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -11405,6 +11407,56 @@ export const leaveRequests = pgTable("leave_requests", {
   index("idx_leave_requests_type").on(table.leaveType),
   index("idx_leave_requests_start").on(table.startDate),
 ]);
+
+// ===== نظام الموافقات والاعتمادات (Approval Chains) =====
+// سلسلة موافقات واحدة لكل (فرع + نوع طلب). branchId = null تعني سلسلة افتراضية لكل الفروع.
+export const approvalWorkflows = pgTable("approval_workflows", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").references(() => branches.id), // null = افتراضي لكل الفروع
+  requestType: text("request_type").notNull().default("leave"), // leave (حالياً)
+  name: text("name").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_approval_workflows_branch").on(table.branchId),
+  index("idx_approval_workflows_type").on(table.requestType),
+  // سلسلة واحدة فقط لكل (نوع طلب + فرع) — وفريدة افتراضية واحدة لكل نوع طلب
+  uniqueIndex("uniq_approval_workflows_branch_type")
+    .on(table.requestType, table.branchId)
+    .where(sql`${table.branchId} IS NOT NULL`),
+  uniqueIndex("uniq_approval_workflows_default_type")
+    .on(table.requestType)
+    .where(sql`${table.branchId} IS NULL`),
+]);
+
+// مراحل سلسلة الموافقة بالترتيب
+export const approvalWorkflowSteps = pgTable("approval_workflow_steps", {
+  id: serial("id").primaryKey(),
+  workflowId: integer("workflow_id").notNull().references(() => approvalWorkflows.id, { onDelete: "cascade" }),
+  stepOrder: integer("step_order").notNull(), // 1, 2, 3...
+  approverType: text("approver_type").notNull().default("job_role"), // job_role (حالياً)
+  jobTitle: text("job_title"), // يطابق org_job_roles.title_ar / branch_employees.job_title
+  stepName: text("step_name"), // تسمية المرحلة الظاهرة (مثلاً: موافقة مدير الفرع)
+  isRequired: boolean("is_required").default(true).notNull(),
+}, (table) => [
+  index("idx_approval_workflow_steps_wf").on(table.workflowId),
+]);
+
+export const insertApprovalWorkflowSchema = createInsertSchema(approvalWorkflows).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertApprovalWorkflow = z.infer<typeof insertApprovalWorkflowSchema>;
+export type ApprovalWorkflow = typeof approvalWorkflows.$inferSelect;
+
+export const insertApprovalWorkflowStepSchema = createInsertSchema(approvalWorkflowSteps).omit({
+  id: true,
+});
+export type InsertApprovalWorkflowStep = z.infer<typeof insertApprovalWorkflowStepSchema>;
+export type ApprovalWorkflowStep = typeof approvalWorkflowSteps.$inferSelect;
 
 // رصيد الإجازات السنوي لكل موظف (Phase 1)
 export const leaveBalances = pgTable("leave_balances", {

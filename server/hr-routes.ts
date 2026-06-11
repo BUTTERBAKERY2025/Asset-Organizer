@@ -27,6 +27,8 @@ import {
   onboardingNotifications,
   attendanceRecords,
   financialPeriods,
+  approvalWorkflows,
+  approvalWorkflowSteps,
   insertEmployeeDocumentSchema,
   insertLeaveRequestSchema,
   insertEmployeeWarningSchema,
@@ -43,6 +45,8 @@ import {
   suggestedEntitlement,
   syncAttendanceForLeave,
   reverseAttendanceForLeave,
+  getApplicableLeaveChain,
+  resolveReviewerJobTitle,
 } from "./leave-helpers";
 
 function getUserId(req: any): string | null {
@@ -302,8 +306,12 @@ export function registerHrRoutes(app: Express) {
       }
       // إعادة احتساب الأيام على الخادم (لا نثق بالعميل)
       const { totalDays, workingDays } = computeLeaveDays(parsed.startDate, parsed.endDate);
-      // حصر مستويات الموافقة بين 1 و3، وتجاهل أي حقول حالة/تدرّج يرسلها العميل
-      const requiredLevels = Math.min(3, Math.max(1, Number((parsed as any).requiredLevels) || 1));
+      // نظام الموافقات والاعتمادات: جلب سلسلة الفرع (أو الافتراضية). إن لم توجد سلسلة
+      // نرجع للسلوك السابق (مستوى واحد أو ما يطلبه العميل، بحد أقصى 3).
+      const chain = await getApplicableLeaveChain(emp.branchId);
+      const requiredLevels = chain
+        ? chain.length
+        : Math.min(3, Math.max(1, Number((parsed as any).requiredLevels) || 1));
       const [created] = await db.insert(leaveRequests).values({
         ...parsed,
         totalDays,
@@ -312,6 +320,7 @@ export function registerHrRoutes(app: Express) {
         currentLevel: 1,
         requiredLevels,
         approvalFlow: [],
+        approvalChain: chain ?? null,
         cancelReason: null,
         cancelledBy: null,
         cancelledAt: null,
@@ -359,6 +368,31 @@ export function registerHrRoutes(app: Express) {
       const now = new Date();
       const year = parseInt(existing.startDate.slice(0, 4), 10);
 
+      // نظام الموافقات والاعتمادات: التحقق من أن المعتمِد يطابق منصب المرحلة الحالية.
+      // المدير العام (super_admin / admin) يتجاوز التسلسل لتفادي تعطّل الطلبات.
+      const chain: any[] = Array.isArray(existing.approvalChain) ? (existing.approvalChain as any[]) : [];
+      // تطبيق سلسلة الموافقات: يجب أن يطابق المسمى الوظيفي للمراجِع مرحلة الاعتماد الحالية
+      // (للاعتماد والرفض معاً)، مع استثناء المدير العام/المدير.
+      let stepTitle: string | null = null;
+      if ((decision.decision === "approved" || decision.decision === "rejected") && chain.length > 0) {
+        const expected = chain.find((c) => Number(c.level) === existing.currentLevel);
+        if (expected?.jobTitle) {
+          stepTitle = expected.stepName || expected.jobTitle;
+          const role = (user?.role || "").toLowerCase();
+          const isAdmin = role === "admin" || role === "super_admin";
+          if (!isAdmin) {
+            const reviewerJobTitle = await resolveReviewerJobTitle(userId);
+            if (!reviewerJobTitle || reviewerJobTitle !== expected.jobTitle) {
+              return res.status(403).json({
+                error: `هذه المرحلة تتطلب اعتماد: ${stepTitle}`,
+                requiredJobTitle: expected.jobTitle,
+                level: existing.currentLevel,
+              });
+            }
+          }
+        }
+      }
+
       // تحقق الرصيد عند الاعتماد (تحذير + إمكانية التجاوز)
       if (decision.decision === "approved" && !decision.allowOverBalance) {
         const bal = await getLeaveBalanceSummary(existing.branchEmployeeId, year, existing.leaveType, emp?.hireDate);
@@ -377,6 +411,7 @@ export function registerHrRoutes(app: Express) {
       const flow: any[] = Array.isArray(existing.approvalFlow) ? [...(existing.approvalFlow as any[])] : [];
       flow.push({
         level: existing.currentLevel,
+        title: stepTitle || null,
         approverId: userId || null,
         approverName,
         decision: decision.decision,
@@ -433,6 +468,110 @@ export function registerHrRoutes(app: Express) {
     } catch (e: any) {
       if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
       console.error("[hr/leaves] review error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ===== نظام الموافقات والاعتمادات (إعدادات سلاسل الموافقة) =====
+  // محمي بصلاحية الإعدادات (إداري). حالياً نوع الطلب = leave فقط.
+
+  // جلب سلسلة فرع معيّن (أو الافتراضية branchId فارغ) لنوع طلب
+  app.get("/api/approval-workflows", isAuthenticated, requirePermission("settings"), async (req, res) => {
+    try {
+      const requestType = (req.query.requestType as string) || "leave";
+      const branchId = (req.query.branchId as string) || null;
+      const conds = [eq(approvalWorkflows.requestType, requestType)] as any[];
+      conds.push(branchId ? eq(approvalWorkflows.branchId, branchId) : sql`${approvalWorkflows.branchId} IS NULL`);
+      const [wf] = await db.select().from(approvalWorkflows).where(and(...conds)).limit(1);
+      if (!wf) return res.json(null);
+      const steps = await db.select().from(approvalWorkflowSteps)
+        .where(eq(approvalWorkflowSteps.workflowId, wf.id))
+        .orderBy(approvalWorkflowSteps.stepOrder);
+      res.json({ ...wf, steps });
+    } catch (e: any) {
+      console.error("[approval-workflows] get error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // قائمة كل السلاسل (للعرض في صفحة الإعدادات)
+  app.get("/api/approval-workflows/all", isAuthenticated, requirePermission("settings"), async (req, res) => {
+    try {
+      const requestType = (req.query.requestType as string) || "leave";
+      const list = await db.select().from(approvalWorkflows)
+        .where(eq(approvalWorkflows.requestType, requestType))
+        .orderBy(approvalWorkflows.branchId);
+      res.json(list);
+    } catch (e: any) {
+      console.error("[approval-workflows] list error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // حفظ/تحديث سلسلة فرع (upsert) مع استبدال المراحل بالكامل
+  app.put("/api/approval-workflows", isAuthenticated, requirePermission("settings"), async (req, res) => {
+    try {
+      const schema = z.object({
+        branchId: z.string().nullable().optional(),
+        requestType: z.string().default("leave"),
+        name: z.string().min(1, "الاسم مطلوب"),
+        isActive: z.boolean().default(true),
+        steps: z.array(z.object({
+          jobTitle: z.string().min(1, "المسمى الوظيفي مطلوب"),
+          stepName: z.string().optional(),
+          isRequired: z.boolean().default(true),
+        })).min(1, "يجب إضافة مرحلة واحدة على الأقل").max(3, "الحد الأقصى 3 مستويات"),
+      });
+      const body = schema.parse(req.body);
+      const branchId = body.branchId || null;
+
+      const result = await db.transaction(async (tx) => {
+        const conds = [eq(approvalWorkflows.requestType, body.requestType)] as any[];
+        conds.push(branchId ? eq(approvalWorkflows.branchId, branchId) : sql`${approvalWorkflows.branchId} IS NULL`);
+        const [existing] = await tx.select().from(approvalWorkflows).where(and(...conds)).limit(1);
+
+        let wf = existing;
+        if (existing) {
+          [wf] = await tx.update(approvalWorkflows).set({
+            name: body.name, isActive: body.isActive, updatedAt: new Date(),
+          }).where(eq(approvalWorkflows.id, existing.id)).returning();
+          await tx.delete(approvalWorkflowSteps).where(eq(approvalWorkflowSteps.workflowId, existing.id));
+        } else {
+          [wf] = await tx.insert(approvalWorkflows).values({
+            branchId, requestType: body.requestType, name: body.name, isActive: body.isActive,
+            createdBy: getUserId(req) || undefined,
+          }).returning();
+        }
+        const stepRows = body.steps.map((s, i) => ({
+          workflowId: wf.id, stepOrder: i + 1, approverType: "job_role",
+          jobTitle: s.jobTitle, stepName: s.stepName || `موافقة ${s.jobTitle}`,
+          isRequired: s.isRequired,
+        }));
+        const steps = await tx.insert(approvalWorkflowSteps).values(stepRows).returning();
+        return { ...wf, steps };
+      });
+
+      await auditEvent({
+        req, module: "settings", entityId: result.id, action: "update",
+        description: `حفظ سلسلة موافقات (${body.requestType}) ${branchId ? "للفرع" : "افتراضية"}`,
+        branchId: branchId || undefined,
+      });
+      res.json(result);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
+      console.error("[approval-workflows] save error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // حذف سلسلة
+  app.delete("/api/approval-workflows/:id", isAuthenticated, requirePermission("settings"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      await db.delete(approvalWorkflows).where(eq(approvalWorkflows.id, id));
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error("[approval-workflows] delete error:", e);
       res.status(500).json({ error: e.message });
     }
   });

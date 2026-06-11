@@ -58,6 +58,7 @@ import {
   ChevronDown,
   ExternalLink,
   Fingerprint,
+  GitBranch,
 } from "lucide-react";
 
 interface SettingItem {
@@ -231,6 +232,17 @@ const settingsSections: SettingSection[] = [
         badgeVariant: "default",
         requiredModule: "biometric_settings",
         keywords: ["بصمة", "وجه", "حضور", "جهاز", "موبايل", "biometric", "fingerprint"],
+      },
+      {
+        id: "approval-settings",
+        title: "نظام الموافقات والاعتمادات",
+        description: "ترتيب مستويات اعتماد طلبات الإجازة حسب كل فرع والمسمى الوظيفي",
+        icon: GitBranch,
+        path: "/approval-settings",
+        badge: "جديد",
+        badgeVariant: "default",
+        requiredModule: "settings",
+        keywords: ["موافقة", "اعتماد", "تسلسل", "إجازة", "مستوى", "approval", "workflow"],
       },
       {
         id: "portal-settings",

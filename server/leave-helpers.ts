@@ -201,3 +201,81 @@ export async function reverseAttendanceForLeave(leaveId: number): Promise<number
     .returning({ id: attendanceRecords.id });
   return deleted.length;
 }
+
+// ============================================================
+// نظام الموافقات والاعتمادات — حلّ سلسلة الموافقة المطبّقة للإجازات
+// ============================================================
+import { approvalWorkflows, approvalWorkflowSteps, users } from "@shared/schema";
+import { isNull } from "drizzle-orm";
+
+export interface ResolvedApprovalStep {
+  level: number;
+  jobTitle: string;
+  stepName: string;
+}
+
+/**
+ * يجلب سلسلة الموافقات المطبّقة على إجازات فرع معيّن:
+ * أولاً السلسلة الخاصة بالفرع (مفعّلة)، وإلا السلسلة الافتراضية (branchId = null).
+ * يُرجع المراحل مرتبة (بحد أقصى 3 مستويات) أو null إذا لا توجد سلسلة.
+ */
+export async function getApplicableLeaveChain(
+  branchId: string | null | undefined,
+): Promise<ResolvedApprovalStep[] | null> {
+  let wf: any = null;
+  if (branchId) {
+    [wf] = await db
+      .select()
+      .from(approvalWorkflows)
+      .where(
+        and(
+          eq(approvalWorkflows.requestType, "leave"),
+          eq(approvalWorkflows.isActive, true),
+          eq(approvalWorkflows.branchId, branchId),
+        ),
+      )
+      .limit(1);
+  }
+  if (!wf) {
+    [wf] = await db
+      .select()
+      .from(approvalWorkflows)
+      .where(
+        and(
+          eq(approvalWorkflows.requestType, "leave"),
+          eq(approvalWorkflows.isActive, true),
+          isNull(approvalWorkflows.branchId),
+        ),
+      )
+      .limit(1);
+  }
+  if (!wf) return null;
+  const steps = await db
+    .select()
+    .from(approvalWorkflowSteps)
+    .where(eq(approvalWorkflowSteps.workflowId, wf.id))
+    .orderBy(approvalWorkflowSteps.stepOrder);
+  const usable = steps.filter((s: any) => s.jobTitle).slice(0, 3); // الحد الأقصى 3 مستويات
+  if (usable.length === 0) return null;
+  return usable.map((s: any, i: number) => ({
+    level: i + 1,
+    jobTitle: s.jobTitle as string,
+    stepName: (s.stepName as string) || `موافقة ${s.jobTitle}`,
+  }));
+}
+
+/**
+ * يحلّ المسمى الوظيفي للمستخدم المعتمِد: من users.jobTitle أولاً،
+ * وإلا من ملف الموظف المرتبط (branch_employees.job_title عبر linked_user_id).
+ */
+export async function resolveReviewerJobTitle(userId?: string | null): Promise<string | null> {
+  if (!userId) return null;
+  const [u] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (u?.jobTitle) return u.jobTitle;
+  const [be] = await db
+    .select()
+    .from(branchEmployees)
+    .where(eq(branchEmployees.linkedUserId, userId))
+    .limit(1);
+  return be?.jobTitle || null;
+}

@@ -1,0 +1,35 @@
+---
+name: Approval chains (نظام الموافقات والاعتمادات)
+description: Per-branch, job-title-based approval chains layered on the existing leave_requests multi-level infra.
+---
+
+# Approval chains for leave requests
+
+Per-branch approval chains (currently `requestType = "leave"` only, max 3 levels). The
+approver at each step is identified by an org **job title** (matched against
+`org_job_roles.title_ar` / `branch_employees.job_title`), not a specific user.
+
+**Reuses existing leave multi-level infra:** `leave_requests.currentLevel` /
+`requiredLevels` / `approvalFlow`. A new nullable `approvalChain` jsonb column on
+`leave_requests` stores a **snapshot** of the resolved chain at creation time, so later
+edits to the workflow don't retroactively change in-flight requests.
+
+**Resolution order:** branch-specific active workflow first, then the default workflow
+(`branch_id IS NULL`) active. No applicable chain → falls back to legacy single-level
+behavior (this is the backward-compat path; never assume a chain exists).
+
+**Why two unique indexes, not one:** Postgres treats NULLs as distinct, so a plain
+unique on `(request_type, branch_id)` would allow many default rows. There are two
+partial unique indexes: `(request_type, branch_id) WHERE branch_id IS NOT NULL` for
+branch rows and `(request_type) WHERE branch_id IS NULL` for the single default row.
+**How to apply:** any new request-type scope must keep both indexes in lockstep, or the
+PUT upsert's `limit(1)` selection becomes nondeterministic under concurrent writes.
+
+**Review enforcement gotcha:** the job-title match check in `/api/hr/leaves/:id/review`
+must gate **both** `approved` and `rejected` decisions (admin/super_admin override only).
+A reject is as authoritative as an approve — gating only approvals lets a wrong-position
+reviewer kill a request. Self-service create and HR create both set `requiredLevels` from
+the chain length and persist the `approvalChain` snapshot.
+
+Settings UI at `/approval-settings` (module `settings`); CRUD at `/api/approval-workflows*`
+all behind `requirePermission("settings")`.

@@ -22,7 +22,7 @@ import {
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { notifyEmployeeOfDecision, notifyHrOfRequest } from "./notify-helpers";
-import { computeLeaveDays, findOverlappingLeave } from "./leave-helpers";
+import { computeLeaveDays, findOverlappingLeave, getApplicableLeaveChain } from "./leave-helpers";
 import {
   getWarningTemplate,
   getWarningReasonCategory,
@@ -247,6 +247,8 @@ export function registerSelfServiceRoutes(app: Express) {
       }
       // إعادة احتساب الأيام على الخادم (لا نثق بالعميل)
       const { totalDays, workingDays } = computeLeaveDays(parsed.startDate, parsed.endDate);
+      // نظام الموافقات والاعتمادات: تطبيق سلسلة الفرع (أو الافتراضية) عند الإنشاء
+      const chain = await getApplicableLeaveChain(emp.branchId);
       const [created] = await db.insert(leaveRequests).values({
         branchEmployeeId: emp.id,
         branchId: emp.branchId,
@@ -258,6 +260,9 @@ export function registerSelfServiceRoutes(app: Express) {
         reason: parsed.reason,
         attachmentUrl: parsed.attachmentUrl,
         status: "pending",
+        currentLevel: 1,
+        requiredLevels: chain ? chain.length : 1,
+        approvalChain: chain ?? null,
         createdBy: getUserId(req) || undefined,
       }).returning();
       // Notify HR/branch managers of the new request (branch-level in-app) — non-blocking.
