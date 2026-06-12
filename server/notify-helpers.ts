@@ -27,8 +27,11 @@ export async function notifyEmployeeOfDecision(opts: {
   message: string;
   linkUrl?: string;
   relatedEntityId?: string | number;
+  /** قنوات الإرسال الخارجية. الافتراضي: واتساب فقط (للحفاظ على سلوك المستدعين الآخرين). */
+  channels?: ("whatsapp" | "sms")[];
 }): Promise<void> {
   const { emp, title, message, linkUrl, relatedEntityId } = opts;
+  const channels = opts.channels && opts.channels.length > 0 ? opts.channels : ["whatsapp"];
   // 1) In-app notification (only if the employee has a portal account)
   if (emp.linkedUserId) {
     try {
@@ -46,19 +49,22 @@ export async function notifyEmployeeOfDecision(opts: {
       console.error("[notifyEmployeeOfDecision] in-app failed:", e?.message);
     }
   }
-  // 2) WhatsApp via the notification queue (scheduler delivers it)
+  // 2) External channels via the notification queue (scheduler delivers each).
+  //    Default = WhatsApp only; leave events pass ["whatsapp","sms"].
   if (emp.phoneNumber) {
-    try {
-      await storage.createNotification({
-        recipientPhone: emp.phoneNumber,
-        recipientName: emp.employeeName,
-        channel: "whatsapp",
-        message: `${title}\n${message}`,
-        relatedModule: "system_notification",
-        relatedEntityId: relatedEntityId != null ? String(relatedEntityId) : undefined,
-      } as any);
-    } catch (e: any) {
-      console.error("[notifyEmployeeOfDecision] whatsapp queue failed:", e?.message);
+    for (const channel of channels) {
+      try {
+        await storage.createNotification({
+          recipientPhone: emp.phoneNumber,
+          recipientName: emp.employeeName,
+          channel,
+          message: `${title}\n${message}`,
+          relatedModule: "system_notification",
+          relatedEntityId: relatedEntityId != null ? String(relatedEntityId) : undefined,
+        } as any);
+      } catch (e: any) {
+        console.error(`[notifyEmployeeOfDecision] ${channel} queue failed:`, e?.message);
+      }
     }
   }
 }

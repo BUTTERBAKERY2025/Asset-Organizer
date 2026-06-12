@@ -452,7 +452,7 @@ export function registerHrRoutes(app: Express) {
         targetId: existing.branchEmployeeId,
       });
 
-      // إشعار الموظف فقط عند القرار النهائي — non-blocking.
+      // إشعار الموظف — non-blocking.
       if (emp && isFinal) {
         const verb = finalStatus === "approved" ? "اعتماد" : "رفض";
         const noteLine = decision.note ? `\nملاحظة: ${decision.note}` : "";
@@ -462,12 +462,137 @@ export function registerHrRoutes(app: Express) {
           message: `طلب إجازتك (${existing.startDate} إلى ${existing.endDate}) تم ${verb}ه.${noteLine}`,
           linkUrl: "/my-portal",
           relatedEntityId: id,
+          channels: ["whatsapp", "sms"],
+        });
+      } else if (emp && decision.decision === "approved" && !isFinal) {
+        // اعتماد مرحلي: ما زال الطلب بحاجة لمستويات أعلى — نُعلم الموظف بتقدّم طلبه.
+        await notifyEmployeeOfDecision({
+          emp,
+          title: "تقدّم طلب إجازتك",
+          message: `تم اعتماد المستوى ${existing.currentLevel} من ${existing.requiredLevels} لطلب إجازتك (${existing.startDate} إلى ${existing.endDate})، بانتظار الاعتماد التالي.`,
+          linkUrl: "/my-portal",
+          relatedEntityId: id,
+          channels: ["whatsapp", "sms"],
         });
       }
       res.json(updated);
     } catch (e: any) {
       if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
       console.error("[hr/leaves] review error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // مسار الاعتماد المطبّق على فرع معيّن (لعرضه داخل نموذج الطلب). صلاحية الإجازات تكفي.
+  app.get("/api/hr/leaves/applicable-chain", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const branchId = (req.query.branchId as string | undefined) || null;
+      const { branchIds } = getBranchScope(req);
+      if (branchId && branchIds !== null && !branchIds.includes(branchId)) {
+        return res.status(403).json({ error: "ليس لديك صلاحية على هذا الفرع" });
+      }
+      const chain = await getApplicableLeaveChain(branchId);
+      res.json({ chain: chain ?? [] });
+    } catch (e: any) {
+      console.error("[hr/leaves/applicable-chain] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // تعديل تواريخ إجازة قائمة (للمسؤول). يُبقي دورة الاعتماد كما هي ويُسجّل التعديل
+  // ويُشعر الموظف (داخل النظام + واتساب).
+  app.patch("/api/hr/leaves/:id/dates", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const body = z.object({
+        startDate: z.string().min(1),
+        endDate: z.string().min(1),
+        note: z.string().optional(),
+      }).parse(req.body);
+      if (body.endDate < body.startDate) {
+        return res.status(400).json({ error: "تاريخ النهاية يجب أن يكون بعد تاريخ البداية" });
+      }
+      const { branchIds } = getBranchScope(req);
+      const [existing] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id));
+      if (!existing) return res.status(404).json({ error: "الطلب غير موجود" });
+      if (branchIds !== null && !branchIds.includes(existing.branchId)) {
+        return res.status(403).json({ error: "ليس لديك صلاحية" });
+      }
+      if (existing.status !== "pending" && existing.status !== "approved") {
+        return res.status(400).json({ error: "لا يمكن تعديل تواريخ طلب مرفوض أو ملغى" });
+      }
+      if (existing.startDate === body.startDate && existing.endDate === body.endDate) {
+        return res.status(400).json({ error: "لم تتغيّر التواريخ" });
+      }
+      // منع التداخل مع إجازة أخرى (باستثناء هذا الطلب)
+      const overlap = await findOverlappingLeave(existing.branchEmployeeId, body.startDate, body.endDate, id);
+      if (overlap) {
+        return res.status(409).json({
+          error: `يوجد طلب إجازة متداخل لنفس الموظف (${overlap.startDate} إلى ${overlap.endDate})`,
+        });
+      }
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, existing.branchEmployeeId));
+      const userId = getUserId(req) || undefined;
+      const user: any = (req as any).currentUser || (req as any).user || null;
+      const editorName = user?.fullName || user?.firstName || user?.username || "—";
+      const now = new Date();
+      const { totalDays, workingDays } = computeLeaveDays(body.startDate, body.endDate);
+      const oldStart = existing.startDate;
+      const oldEnd = existing.endDate;
+
+      // تسجيل التعديل ضمن مسار الاعتماد (إعادة استخدام approvalFlow — لا حاجة لعمود جديد)
+      const flow: any[] = Array.isArray(existing.approvalFlow) ? [...(existing.approvalFlow as any[])] : [];
+      flow.push({
+        type: "date_edit",
+        oldStart, oldEnd,
+        newStart: body.startDate, newEnd: body.endDate,
+        editorId: userId || null,
+        editorName,
+        note: body.note || null,
+        at: now.toISOString(),
+      });
+
+      const [updated] = await db.update(leaveRequests).set({
+        startDate: body.startDate,
+        endDate: body.endDate,
+        totalDays,
+        workingDays,
+        approvalFlow: flow as any,
+        updatedAt: now,
+      }).where(eq(leaveRequests.id, id)).returning();
+
+      // إعادة مزامنة سجلات الحضور إذا كانت الإجازة معتمدة (حذف القديم التلقائي ثم إنشاء الجديد) — غير متلف
+      if (updated.status === "approved") {
+        try {
+          await reverseAttendanceForLeave(id);
+          await syncAttendanceForLeave(updated);
+        } catch (err) { console.error("[hr/leaves/dates] attendance resync failed:", err); }
+      }
+
+      await auditEvent({
+        req, module: "hr_leaves", entityId: id, action: "edit_dates",
+        entityName: emp?.employeeName, branchId: existing.branchId,
+        description: `تعديل تواريخ إجازة من (${oldStart}→${oldEnd}) إلى (${body.startDate}→${body.endDate})`,
+        details: { oldStart, oldEnd, newStart: body.startDate, newEnd: body.endDate, totalDays, workingDays, note: body.note },
+        targetId: existing.branchEmployeeId,
+      });
+
+      // إشعار الموظف بالتعديل — داخل النظام + واتساب (غير متلف)
+      if (emp) {
+        const noteLine = body.note ? `\nملاحظة: ${body.note}` : "";
+        await notifyEmployeeOfDecision({
+          emp,
+          title: "تم تعديل تواريخ إجازتك",
+          message: `تم تعديل تواريخ إجازتك من (${oldStart} إلى ${oldEnd}) إلى (${body.startDate} إلى ${body.endDate}).${noteLine}`,
+          linkUrl: "/my-portal",
+          relatedEntityId: id,
+          channels: ["whatsapp", "sms"],
+        });
+      }
+      res.json(updated);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
+      console.error("[hr/leaves/dates] error:", e);
       res.status(500).json({ error: e.message });
     }
   });

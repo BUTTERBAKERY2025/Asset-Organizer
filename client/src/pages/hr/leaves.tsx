@@ -64,6 +64,8 @@ export default function LeavesPage() {
   const [cancelling, setCancelling] = useState<Leave | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [printLeave, setPrintLeave] = useState<Leave | null>(null);
+  const [editingDates, setEditingDates] = useState<Leave | null>(null);
+  const [datesForm, setDatesForm] = useState({ startDate: "", endDate: "", note: "" });
 
   // balances state
   const [balYear, setBalYear] = useState(currentYear);
@@ -112,6 +114,15 @@ export default function LeavesPage() {
       (await apiRequest("GET", `/api/hr/leave-balances/${form.branchEmployeeId}?year=${currentYear}&type=${form.leaveType}`)).json(),
     enabled: open && !!form.branchEmployeeId,
   });
+
+  // مسار الاعتماد المطبّق على فرع الموظف المختار (لعرضه داخل النموذج)
+  const { data: applicableChainResp } = useQuery<{ chain: any[] }>({
+    queryKey: ["/api/hr/leaves/applicable-chain", form.branchId],
+    queryFn: async () =>
+      (await apiRequest("GET", `/api/hr/leaves/applicable-chain?branchId=${encodeURIComponent(form.branchId)}`)).json(),
+    enabled: open && !!form.branchId,
+  });
+  const applicableChain = applicableChainResp?.chain ?? [];
 
   const filtered = useMemo(() => {
     if (!search.trim()) return leaves;
@@ -181,6 +192,21 @@ export default function LeavesPage() {
       setCancelReason("");
     },
     onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل الإلغاء", variant: "destructive" }),
+  });
+
+  const editDatesMutation = useMutation({
+    mutationFn: async ({ id, startDate, endDate, note }: any) => {
+      const res = await apiRequest("PATCH", `/api/hr/leaves/${id}/dates`, { startDate, endDate, note });
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/hr/leaves"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/leaves/stats"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/leave-balances"] });
+      toast({ title: "تم تعديل التواريخ وإشعار الموظف" });
+      setEditingDates(null);
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل التعديل", variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
@@ -425,7 +451,18 @@ export default function LeavesPage() {
                           )}
                         </td>
                         <td className="p-2">{statusBadge(l.status)}</td>
-                        <td className="p-2 text-xs">{l.reviewerName || "-"}</td>
+                        <td className="p-2 text-xs">
+                          {l.status === "pending"
+                            ? (() => {
+                                const step = Array.isArray(l.approvalChain)
+                                  ? l.approvalChain.find((c: any) => Number(c.level) === Number(l.currentLevel))
+                                  : null;
+                                return step
+                                  ? <span className="text-amber-700" data-testid={`text-pending-approver-${l.id}`}>بانتظار: {step.stepName || step.jobTitle}</span>
+                                  : (l.reviewerName || "-");
+                              })()
+                            : (l.reviewerName || "-")}
+                        </td>
                         <td className="p-2">
                           <div className="flex gap-1 flex-wrap">
                             {l.status === "pending" && (
@@ -437,6 +474,11 @@ export default function LeavesPage() {
                                   <XCircle className="h-3.5 w-3.5" />
                                 </Button>
                               </>
+                            )}
+                            {(l.status === "approved" || l.status === "pending") && (
+                              <Button size="sm" variant="ghost" className="text-blue-600" title="تعديل التواريخ" onClick={() => { setDatesForm({ startDate: l.startDate, endDate: l.endDate, note: "" }); setEditingDates(l); }} data-testid={`button-edit-dates-${l.id}`}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
                             )}
                             {(l.status === "approved" || l.status === "pending") && (
                               <Button size="sm" variant="ghost" className="text-orange-600" title="إلغاء/سحب" onClick={() => { setCancelReason(""); setCancelling(l); }} data-testid={`button-cancel-${l.id}`}>
@@ -611,17 +653,34 @@ export default function LeavesPage() {
               </div>
             </div>
             <div className="text-sm text-muted-foreground">إجمالي الأيام: <span className="font-bold tabular-nums">{arNum(totalDays)}</span></div>
-            <div>
-              <Label>مستويات الموافقة المطلوبة</Label>
-              <Select value={form.requiredLevels} onValueChange={(v) => setForm({ ...form, requiredLevels: v })}>
-                <SelectTrigger data-testid="select-required-levels"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">مستوى واحد (موافقة مباشرة)</SelectItem>
-                  <SelectItem value="2">مستويان</SelectItem>
-                  <SelectItem value="3">ثلاثة مستويات</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {applicableChain.length > 0 ? (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3" data-testid="box-approval-path">
+                <div className="text-xs font-semibold text-blue-800 mb-1.5">مسار الاعتماد لهذا الطلب</div>
+                <div className="flex items-center gap-1 flex-wrap text-xs">
+                  {applicableChain.map((step: any, i: number) => (
+                    <span key={step.level} className="flex items-center gap-1">
+                      <span className="rounded-full bg-white border border-blue-300 px-2 py-0.5 text-blue-700" data-testid={`chip-approval-step-${step.level}`}>
+                        {arNum(step.level)}. {step.stepName || step.jobTitle}
+                      </span>
+                      {i < applicableChain.length - 1 && <ChevronLeft className="h-3.5 w-3.5 text-blue-400" />}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <Label>مستويات الموافقة المطلوبة</Label>
+                <Select value={form.requiredLevels} onValueChange={(v) => setForm({ ...form, requiredLevels: v })}>
+                  <SelectTrigger data-testid="select-required-levels"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">مستوى واحد (موافقة مباشرة)</SelectItem>
+                    <SelectItem value="2">مستويان</SelectItem>
+                    <SelectItem value="3">ثلاثة مستويات</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground mt-1">لا توجد سلسلة اعتماد محددة لهذا الفرع — يمكنك ضبطها من إعدادات الموافقات.</p>
+              </div>
+            )}
             <div>
               <Label>المرفق (اختياري)</Label>
               <div className="flex items-center gap-2">
@@ -639,6 +698,43 @@ export default function LeavesPage() {
             <Button variant="outline" onClick={() => { setForm(initialForm); setOpen(false); }}>إلغاء</Button>
             <Button onClick={submit} disabled={saveMutation.isPending} data-testid="button-save-leave">
               {saveMutation.isPending ? "جاري الحفظ..." : "حفظ الطلب"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit dates dialog */}
+      <Dialog open={!!editingDates} onOpenChange={(o) => { if (!o) setEditingDates(null); }}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader><DialogTitle>تعديل تواريخ الإجازة</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="text-xs bg-blue-50 text-blue-700 rounded p-2">
+              {editingDates?.employeeName} — يبقى الاعتماد كما هو، وسيتم إشعار الموظف بالتعديل.
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>من تاريخ</Label>
+                <Input type="date" value={datesForm.startDate} onChange={(e) => setDatesForm({ ...datesForm, startDate: e.target.value })} data-testid="input-edit-start-date" />
+              </div>
+              <div>
+                <Label>إلى تاريخ</Label>
+                <Input type="date" value={datesForm.endDate} onChange={(e) => setDatesForm({ ...datesForm, endDate: e.target.value })} data-testid="input-edit-end-date" />
+              </div>
+            </div>
+            <div className="text-sm text-muted-foreground">إجمالي الأيام: <span className="font-bold tabular-nums">{arNum(calcDays(datesForm.startDate, datesForm.endDate))}</span></div>
+            <div>
+              <Label>سبب التعديل (اختياري — يظهر للموظف)</Label>
+              <Textarea value={datesForm.note} onChange={(e) => setDatesForm({ ...datesForm, note: e.target.value })} data-testid="textarea-edit-dates-note" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingDates(null)}>إلغاء</Button>
+            <Button
+              onClick={() => editingDates && editDatesMutation.mutate({ id: editingDates.id, startDate: datesForm.startDate, endDate: datesForm.endDate, note: datesForm.note })}
+              disabled={editDatesMutation.isPending || !datesForm.startDate || !datesForm.endDate}
+              data-testid="button-confirm-edit-dates"
+            >
+              {editDatesMutation.isPending ? "جاري الحفظ..." : "حفظ التواريخ وإشعار الموظف"}
             </Button>
           </DialogFooter>
         </DialogContent>
