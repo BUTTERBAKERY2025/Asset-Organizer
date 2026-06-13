@@ -15,7 +15,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   CalendarDays, Plus, CheckCircle2, XCircle, Clock, Trash2, ArrowRight,
-  Wallet, Printer, FileSpreadsheet, Ban, Paperclip, Pencil, ChevronRight, ChevronLeft,
+  Wallet, Printer, FileSpreadsheet, Ban, Paperclip, Pencil, ChevronRight, ChevronLeft, ListChecks,
 } from "lucide-react";
 import { LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS } from "@shared/schema";
 import butterLogo from "@assets/logo_-5_1765206843638.png";
@@ -207,6 +207,21 @@ export default function LeavesPage() {
       setEditingDates(null);
     },
     onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل التعديل", variant: "destructive" }),
+  });
+
+  const applyChainsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/hr/leaves/apply-chains", {});
+      return res.json();
+    },
+    onSuccess: (r: any) => {
+      qc.invalidateQueries({ queryKey: ["/api/hr/leaves"] });
+      const parts: string[] = [`تم تفعيل المستويات على ${r?.updated ?? 0} طلب`];
+      if (r?.skippedNoChain) parts.push(`${r.skippedNoChain} طلب بلا سلسلة لفرعه`);
+      if (r?.skippedInFlight) parts.push(`${r.skippedInFlight} طلب جارٍ اعتماده (لم يُمَس)`);
+      toast({ title: "اكتمل التفعيل", description: parts.join(" • ") });
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل التفعيل", variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
@@ -414,6 +429,19 @@ export default function LeavesPage() {
                 </Select>
                 <Button variant="outline" onClick={exportLeavesExcel} data-testid="button-export-leaves">
                   <FileSpreadsheet className="h-4 w-4 ms-1" />تصدير Excel
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={applyChainsMutation.isPending}
+                  onClick={() => {
+                    if (window.confirm("سيتم تطبيق سلسلة الموافقات الحالية على الطلبات المعلّقة التي أُنشئت قبل إعداد المستويات. الطلبات التي بدأ اعتمادها فعلياً لن تتأثر. متابعة؟")) {
+                      applyChainsMutation.mutate();
+                    }
+                  }}
+                  data-testid="button-apply-chains"
+                >
+                  <ListChecks className="h-4 w-4 ms-1" />
+                  {applyChainsMutation.isPending ? "جارٍ التفعيل..." : "تفعيل المستويات على الطلبات الحالية"}
                 </Button>
               </div>
 

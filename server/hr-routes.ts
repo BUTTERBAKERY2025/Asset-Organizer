@@ -499,6 +499,65 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
+  // تفعيل مستويات الموافقة على الطلبات المعلّقة الحالية التي أُنشئت قبل إعداد السلاسل
+  // (نسخة سلسلة الفرع كانت فارغة). يطبّق سلسلة فرع كل طلب ويعيد ضبط المستوى الحالي = 1.
+  // يتخطّى الطلبات التي بدأ فيها اتخاذ قرار فعلي (approvalFlow فيه decision) أو لا سلسلة لفرعها.
+  app.post("/api/hr/leaves/apply-chains", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const { branchIds } = getBranchScope(req);
+      const conds: any[] = [eq(leaveRequests.status, "pending")];
+      const scope = applyBranchScope(leaveRequests, branchIds);
+      if (scope !== undefined) conds.push(scope);
+      const pending = await db.select().from(leaveRequests).where(and(...conds));
+
+      const chainCache = new Map<string, any[] | null>();
+      let updated = 0, skippedNoChain = 0, skippedInFlight = 0, alreadyOk = 0;
+      const now = new Date();
+
+      for (const lr of pending) {
+        const hasChain = Array.isArray(lr.approvalChain) && (lr.approvalChain as any[]).length > 0;
+        if (hasChain) { alreadyOk++; continue; }
+        const flowHasDecision = Array.isArray(lr.approvalFlow)
+          && (lr.approvalFlow as any[]).some((f) => f && f.decision);
+        if (flowHasDecision) { skippedInFlight++; continue; }
+
+        const key = lr.branchId || "__default__";
+        if (!chainCache.has(key)) {
+          chainCache.set(key, await getApplicableLeaveChain(lr.branchId));
+        }
+        const chain = chainCache.get(key);
+        if (!chain || chain.length === 0) { skippedNoChain++; continue; }
+
+        // تحديث مشروط ذرّي: لا نمسّ الطلب إلا إذا ظل معلّقاً وبلا سلسلة وبلا قرار فعلي
+        // (يمنع سباق القراءة-ثم-الكتابة لو اعتمده مراجع بين الجلب والتحديث).
+        const affected = await db.update(leaveRequests).set({
+          approvalChain: chain as any,
+          requiredLevels: chain.length,
+          currentLevel: 1,
+          updatedAt: now,
+        }).where(and(
+          eq(leaveRequests.id, lr.id),
+          eq(leaveRequests.status, "pending"),
+          sql`(${leaveRequests.approvalChain} IS NULL OR jsonb_array_length(${leaveRequests.approvalChain}) = 0)`,
+          sql`NOT EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(${leaveRequests.approvalFlow}, '[]'::jsonb)) AS e WHERE (e ->> 'decision') IS NOT NULL)`,
+        )).returning({ id: leaveRequests.id });
+
+        if (affected.length > 0) updated++; else skippedInFlight++;
+      }
+
+      await auditEvent({
+        req, module: "hr_leaves", entityId: 0, action: "apply_chains",
+        description: `تفعيل مستويات الموافقة على الطلبات المعلّقة (حُدّث ${updated})`,
+        details: { updated, skippedNoChain, skippedInFlight, alreadyOk, total: pending.length },
+      });
+
+      res.json({ updated, skippedNoChain, skippedInFlight, alreadyOk, total: pending.length });
+    } catch (e: any) {
+      console.error("[hr/leaves/apply-chains] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // تعديل تواريخ إجازة قائمة (للمسؤول). يُبقي دورة الاعتماد كما هي ويُسجّل التعديل
   // ويُشعر الموظف (داخل النظام + واتساب).
   app.patch("/api/hr/leaves/:id/dates", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {

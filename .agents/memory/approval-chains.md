@@ -33,3 +33,14 @@ the chain length and persist the `approvalChain` snapshot.
 
 Settings UI at `/approval-settings` (module `settings`); CRUD at `/api/approval-workflows*`
 all behind `requirePermission("settings")`.
+
+**Backfilling pre-existing pending requests:** requests created before a chain was
+configured keep `approvalChain = null` and therefore never enter the multi-level flow —
+they stay single-level. Configuring a chain does NOT retroactively touch them (snapshot
+model). Fixing them needs an explicit backfill that resolves the branch chain and sets
+`approvalChain` + `requiredLevels` + `currentLevel=1`.
+**Why guarded UPDATE, not read-then-write:** a select-then-update-by-id backfill has a
+TOCTOU race — a reviewer can approve between the read and the write, and the backfill
+would clobber `currentLevel` back to 1 on an in-flight request. The UPDATE must re-assert
+the guards in its WHERE (`status='pending'`, chain empty, no `decision` in `approvalFlow`)
+and count only actually-affected rows.
