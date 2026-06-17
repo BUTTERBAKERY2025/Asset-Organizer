@@ -19,4 +19,14 @@ HR is a **cross-branch** function in this org. Three things must stay in sync or
 
 **How to apply:** when adding any HR data GET endpoint, gate the branch check with `!hasCrossBranchHrReadAccess(req)`; when adding a new module an HR manager needs, add it to `HR_MANAGER_MODULES` (the my-permissions merge picks it up automatically).
 
+## HR specialist (`role === "hr_specialist"`) — narrower sibling
+
+Same 3-things-in-sync model as the manager, but driven by an **action-aware map** `HR_SPECIALIST_PERMISSIONS` (server/auth.ts, `Record<module, actions[]>`) instead of a flat module set. Narrower than the manager: **excludes `salary_closing`, `hr_eos`, `employee_transfers`, `organizational_structure`**; `branch_employees`/`employee_reports` are view+export only.
+
+- `requirePermission`/`requireAnyPermission` have a dedicated `hr_specialist` branch: grant if module in the map AND (`action == null` OR action listed). Modules **not** in the map fall through to explicit `user_permissions` (so admin can still grant extras to one specialist).
+- **Granularity caveat:** most `/api/hr/*` routes call `requirePermission("hr_*")` with NO action arg → `action===undefined` → for an included module the grant is effectively module-level (e.g. specialist CAN hit leave review/approve). True per-action limits only work where the route passes an explicit action (e.g. `branch_employees` create/edit/delete → blocked, view-only holds). To restrict further, the HR route itself must pass an action string.
+- Cross-branch READ: `hasCrossBranchHrReadAccess` returns true for `hr_specialist` too; writes stay branch-scoped (specialist needs explicit `userBranchAccess` rows to write to other branches, same as a manager).
+- `/api/my-permissions` has a separate merge block using `HR_SPECIALIST_PERMISSIONS` (action-aware, not all MODULE_ACTIONS). Role added to all valid-role lists + PRIVILEGED_ROLES/OP_PRIVILEGED_ROLES (admin-only assignment), and to `ROLES` in users.tsx + onboarding select.
+- **No DB schema change** — `users.role` is a plain text column.
+
 **Note:** the HR Hub page (`/hr-hub`) has NO frontend permission gating — it renders `/api/hr/hub-bundle` unconditionally. So an empty hub for a real `hr_manager` on current code means production is running OLDER code (deploy fixes it); the standalone employees/attendance pages are what items 1–3 fix.

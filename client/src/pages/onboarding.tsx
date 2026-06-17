@@ -1316,6 +1316,7 @@ function ConvertDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: 
                       <SelectContent>
                         <SelectItem value="employee">موظف</SelectItem>
                         <SelectItem value="viewer">مشاهد</SelectItem>
+                        <SelectItem value="hr_specialist">اختصاصي موارد بشرية</SelectItem>
                         <SelectItem value="attendance_clerk">موظف حضور</SelectItem>
                       </SelectContent>
                     </Select>

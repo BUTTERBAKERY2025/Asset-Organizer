@@ -39,6 +39,7 @@ interface PermissionWithSource {
 const ROLES = [
   { value: "admin", label: "مدير", icon: Shield, description: "صلاحيات كاملة" },
   { value: "hr_manager", label: "مدير الموارد البشرية", icon: UserCog, description: "اطلاع على بيانات الموظفين والإجازات والمستندات في جميع الفروع (لا يشمل المالية أو المخزون)" },
+  { value: "hr_specialist", label: "اختصاصي موارد بشرية", icon: UserCog, description: "صلاحيات موارد بشرية في جميع الفروع أقل من المدير: الإجازات والمستندات والإنذارات والسلف والحضور والورديات والتوظيف (بدون إغلاق الرواتب أو نهاية الخدمة، وبيانات الموظفين عرض فقط)" },
   { value: "financial_accountant", label: "محاسب مالي", icon: UserCog, description: "اطلاع على التقارير المالية والتشغيلية" },
   { value: "employee", label: "موظف", icon: UserCog, description: "حسب الصلاحيات المحددة" },
   { value: "viewer", label: "مشاهد", icon: Eye, description: "حسب الصلاحيات المحددة" },

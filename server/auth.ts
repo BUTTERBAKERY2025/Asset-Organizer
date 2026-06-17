@@ -68,6 +68,7 @@ export function hasCrossBranchHrReadAccess(req: any): boolean {
   if (!user) return false;
   if (user.role === "admin") return true;
   if (user.role === "hr_manager") return true;
+  if (user.role === "hr_specialist") return true;
   const perms = getCachedPermissionsForUser(user.id) || [];
   const hr = perms.find((p: any) => p.module === "hr_management");
   if (!hr) return false;
@@ -109,6 +110,35 @@ export const HR_MANAGER_MODULES: ReadonlySet<string> = new Set([
   "hr_job_offers",
   "hr_onboarding",
 ]);
+
+// HR modules auto-granted to users with role === "hr_specialist" (اختصاصي موارد
+// بشرية). NARROWER than the HR manager: NO salary closing, NO end-of-service, NO
+// employee transfers, NO org structure. Action-aware so sensitive modules stay
+// read-only (e.g. branch_employees / employee_reports = view+export only).
+// Cross-branch READ is granted separately via hasCrossBranchHrReadAccess.
+// NOTE: many HR routes call requirePermission(module) WITHOUT an action arg
+// (action === undefined). For those, presence of the module in this map grants
+// access. Routes that DO pass an action (e.g. branch_employees create/edit/delete)
+// are enforced against the listed actions, so view-only modules stay view-only.
+export const HR_SPECIALIST_PERMISSIONS: Record<string, string[]> = {
+  hr_management: ["view"],
+  hr_leaves: ["view", "create", "edit", "export"],
+  hr_documents: ["view", "create", "edit", "export"],
+  hr_warnings: ["view", "create", "edit", "export"],
+  hr_advances: ["view", "create", "edit", "export"],
+  // Employees & reports — view only
+  branch_employees: ["view", "export"],
+  employee_reports: ["view", "export"],
+  // Attendance & shifts
+  attendance: ["view", "create", "edit", "export"],
+  attendance_check: ["view", "create", "edit"],
+  shifts: ["view", "create", "edit", "export"],
+  timesheet: ["view", "export"],
+  // Recruitment / onboarding
+  hr_employment_applications: ["view", "create", "edit", "export"],
+  hr_job_offers: ["view", "create", "edit", "export"],
+  hr_onboarding: ["view", "create", "edit", "export"],
+};
 
 function setCachedAuth(userId: string, user: any, branchAccess: any[], permissions: any[]) {
   authCache.set(userId, { user, branchAccess, permissions, timestamp: Date.now() });
@@ -943,6 +973,16 @@ export const requirePermission = (module: string, action: string): RequestHandle
     if (user.role === "hr_manager" && HR_MANAGER_MODULES.has(module)) {
       return next();
     }
+
+    // HR Specialist role: narrower, action-aware HR access. Modules not in the
+    // map fall through to the standard explicit-permission check below (so an
+    // admin can still grant extra modules to an individual specialist).
+    if (user.role === "hr_specialist") {
+      const allowed = HR_SPECIALIST_PERMISSIONS[module];
+      if (allowed && (action == null || allowed.includes(action))) {
+        return next();
+      }
+    }
     
     // Use cached permissions (pre-fetched by isAuthenticated middleware)
     const permissions = getCachedPermissions(user.id) || await storage.getUserPermissions(user.id);
@@ -1029,6 +1069,15 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
     // HR Manager auto-grants HR modules (shared constant w/ requirePermission)
     if (user.role === "hr_manager" && HR_MANAGER_MODULES.has(module)) {
       return next();
+    }
+
+    // HR Specialist: grant when ANY requested action is in the specialist's
+    // allowed actions for this module (mirrors requirePermission above).
+    if (user.role === "hr_specialist") {
+      const allowed = HR_SPECIALIST_PERMISSIONS[module];
+      if (allowed && actions.some((a) => allowed.includes(a))) {
+        return next();
+      }
     }
     
     // Use cached permissions (pre-fetched by isAuthenticated middleware)
