@@ -380,7 +380,7 @@ const Router = React.memo(function Router() {
       <Route path="/event-pos">{() => <ModulePage component={EventPosPage} module="event_pos" />}</Route>
       <Route path="/targets-planning">{() => <ModulePage component={TargetsPlanningPage} module="targets_planning" />}</Route>
       <Route path="/targets-dashboard">{() => <ModulePage component={TargetsDashboardPage} module="targets" />}</Route>
-      <Route path="/cashier-shift-performance">{() => <ProtectedPage component={CashierShiftPerformancePage} />}</Route>
+      <Route path="/cashier-shift-performance">{() => <ModulePage component={CashierShiftPerformancePage} module="cashier_performance" />}</Route>
       <Route path="/incentives-management">{() => <ModulePage component={IncentivesManagementPage} module="incentives" />}</Route>
       <Route path="/pnl-dashboard">{() => <ModulePage component={PnLDashboardPage} module="pnl_dashboard" />}</Route>
       <Route path="/pnl-rent-history">{() => <ModulePage component={PnLRentHistoryPage} module="pnl_dashboard" />}</Route>
