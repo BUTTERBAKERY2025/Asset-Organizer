@@ -1,3 +1,4 @@
+- [Home dashboard sales gating](home-dashboard-sales-gating.md) — home hero + hero-widgets + /api/dashboard/stats|widgets leak sales by default; gate by sales-view perm on BOTH client and server, not by role.
 - [Notification surfaces](notification-surfaces.md) — bell/popup read `systemNotifications` (branch+role targeting); the `notifications` table is invisible to users.
 - [Targeted position messaging](targeted-position-messaging.md) — position/role broadcasts must re-resolve recipients server-side; never trust client userId/phone/branch (IDOR).
 - [Security scan notes](security-scan-notes.md) — recurring scan findings: xlsx patched build only on SheetJS CDN (firewall-blocked, manual on Render); scheduler/media-team flags are false positives; uuid is transitive.

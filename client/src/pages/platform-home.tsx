@@ -152,6 +152,11 @@ export default function PlatformHomePage() {
 
   const accessibleApps = apps.filter((a) => !a.module || canView(a.module));
 
+  const canViewSales =
+    canView("cashier_journal") ||
+    canView("sales_analytics") ||
+    canView("cashier_performance");
+
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour >= 5 && hour < 12) return { text: t("greeting.morning"), icon: Sun, color: "text-amber-500" };
@@ -215,28 +220,32 @@ export default function PlatformHomePage() {
                     {t("hero.pendingApprovals", { count: formatNumber(pendingApprovals) as unknown as number })}
                   </span>
                 )}
-                <span className="font-bold text-gray-900">
-                  {t("hero.salesSummary", {
-                    amount: formatNumber(todaySales),
-                    currency: t("currency"),
-                  })}
-                </span>
-                {salesTrend !== null && (
-                  <span
-                    className={`inline-flex items-center gap-1 mx-2 text-xs font-medium ${
-                      salesTrend >= 0 ? "text-emerald-600" : "text-rose-600"
-                    }`}
-                  >
-                    {salesTrend >= 0 ? (
-                      <TrendingUp className="w-3.5 h-3.5" />
-                    ) : (
-                      <TrendingDown className="w-3.5 h-3.5" />
+                {canViewSales && (
+                  <>
+                    <span className="font-bold text-gray-900">
+                      {t("hero.salesSummary", {
+                        amount: formatNumber(todaySales),
+                        currency: t("currency"),
+                      })}
+                    </span>
+                    {salesTrend !== null && (
+                      <span
+                        className={`inline-flex items-center gap-1 mx-2 text-xs font-medium ${
+                          salesTrend >= 0 ? "text-emerald-600" : "text-rose-600"
+                        }`}
+                      >
+                        {salesTrend >= 0 ? (
+                          <TrendingUp className="w-3.5 h-3.5" />
+                        ) : (
+                          <TrendingDown className="w-3.5 h-3.5" />
+                        )}
+                        {salesTrend >= 0 ? "+" : ""}
+                        {salesTrend}%
+                      </span>
                     )}
-                    {salesTrend >= 0 ? "+" : ""}
-                    {salesTrend}%
-                  </span>
+                    .
+                  </>
                 )}
-                .
               </p>
 
               {activeBranch && (

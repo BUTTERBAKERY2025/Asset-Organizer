@@ -217,6 +217,13 @@ export async function registerRoutes(
         prodConds.push(inArray(productionOrders.branchId, branchIds));
       }
 
+      const uid = req.currentUser?.id;
+      const canViewSales = uid
+        ? (await storage.hasPermission(uid, "cashier_journal", "view")) ||
+          (await storage.hasPermission(uid, "sales_analytics", "view")) ||
+          (await storage.hasPermission(uid, "cashier_performance", "view"))
+        : false;
+
       const [[salesRow], [prodRow]] = await Promise.all([
         db
           .select({ total: sql<number>`COALESCE(SUM(${cashierSalesJournals.totalSales}), 0)::float` })
@@ -229,7 +236,7 @@ export async function registerRoutes(
       ]);
 
       res.json({
-        todaySales: Number(salesRow?.total ?? 0),
+        todaySales: canViewSales ? Number(salesRow?.total ?? 0) : 0,
         productionOrders: Number(prodRow?.count ?? 0),
       });
     } catch (error) {
@@ -320,13 +327,23 @@ export async function registerRoutes(
       const weekSales = days.map((date) => ({ date, total: byDate.get(date) ?? 0 }));
       const yesterdaySales = byDate.get(yesterday) ?? 0;
 
+      const uid = req.currentUser?.id;
+      const canViewSales = uid
+        ? (await storage.hasPermission(uid, "cashier_journal", "view")) ||
+          (await storage.hasPermission(uid, "sales_analytics", "view")) ||
+          (await storage.hasPermission(uid, "cashier_performance", "view"))
+        : false;
+      const canViewProduction = uid
+        ? await storage.hasPermission(uid, "production", "view")
+        : false;
+
       res.json({
-        weekSales,
-        yesterdaySales,
-        topBranchToday: topBranchRows[0]
+        weekSales: canViewSales ? weekSales : empty.weekSales,
+        yesterdaySales: canViewSales ? yesterdaySales : 0,
+        topBranchToday: canViewSales && topBranchRows[0]
           ? { name: topBranchRows[0].name as string, total: Number(topBranchRows[0].total ?? 0) }
           : null,
-        topProductionToday: topProdRows[0]
+        topProductionToday: canViewProduction && topProdRows[0]
           ? { name: topProdRows[0].name as string, orders: Number(topProdRows[0].orders ?? 0) }
           : null,
       });

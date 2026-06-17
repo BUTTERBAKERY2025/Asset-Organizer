@@ -86,6 +86,11 @@ export function HeroWidgets() {
   const [, navigate] = useLocation();
   const lang = i18n.language;
 
+  const canViewSales =
+    canView("cashier_journal") ||
+    canView("sales_analytics") ||
+    canView("cashier_performance");
+
   const widgetsUrl = `/api/dashboard/widgets${activeBranch?.id ? `?branchId=${activeBranch.id}` : ""}`;
   const { data } = useQuery<WidgetsData>({
     queryKey: [widgetsUrl],
@@ -113,7 +118,7 @@ export function HeroWidgets() {
   const accessibleActions = quickActions.filter((a) => !a.module || canView(a.module as any));
 
   const highlights: { key: string; icon: React.ComponentType<{ className?: string }>; iconClass: string; title: string; value: string }[] = [];
-  if (weekSum > 0) {
+  if (canViewSales && weekSum > 0) {
     highlights.push({
       key: "h-week",
       icon: TrendingUp,
@@ -122,7 +127,7 @@ export function HeroWidgets() {
       value: `${formatShort(weekSum)} ${t("currency")}`,
     });
   }
-  if (data?.topBranchToday) {
+  if (canViewSales && data?.topBranchToday) {
     highlights.push({
       key: "h-branch",
       icon: Trophy,
@@ -131,7 +136,7 @@ export function HeroWidgets() {
       value: `${data.topBranchToday.name} · ${formatShort(data.topBranchToday.total)}`,
     });
   }
-  if (data?.topProductionToday) {
+  if (canView("production") && data?.topProductionToday) {
     highlights.push({
       key: "h-prod",
       icon: Factory,
@@ -141,7 +146,7 @@ export function HeroWidgets() {
     });
   }
 
-  const showSparkline = weekSum > 0;
+  const showSparkline = canViewSales && weekSum > 0;
 
   const [qaCollapsed, setQaCollapsed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
