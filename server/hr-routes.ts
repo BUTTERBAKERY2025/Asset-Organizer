@@ -875,6 +875,9 @@ export function registerHrRoutes(app: Express) {
       const { branchIds } = getBranchScope(req);
       const year = req.query.year ? parseInt(req.query.year as string, 10) : new Date().getFullYear();
       const leaveType = (req.query.type as string) || "annual";
+      if (leaveType === "unpaid") {
+        return res.status(400).json({ error: "الإجازة بدون راتب لا ترتبط برصيد إجازات" });
+      }
       const branchId = req.query.branchId as string | undefined;
 
       const conds: any[] = [eq(branchEmployees.status, "active")];
@@ -923,6 +926,9 @@ export function registerHrRoutes(app: Express) {
       const employeeId = parseInt(req.params.employeeId, 10);
       const year = req.query.year ? parseInt(req.query.year as string, 10) : new Date().getFullYear();
       const leaveType = (req.query.type as string) || "annual";
+      if (leaveType === "unpaid") {
+        return res.status(400).json({ error: "الإجازة بدون راتب لا ترتبط برصيد إجازات" });
+      }
       const { branchIds } = getBranchScope(req);
       const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, employeeId));
       if (!emp) return res.status(404).json({ error: "الموظف غير موجود" });
@@ -941,6 +947,9 @@ export function registerHrRoutes(app: Express) {
   app.post("/api/hr/leave-balances", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
     try {
       const parsed = insertLeaveBalanceSchema.parse(req.body);
+      if ((parsed.leaveType || "annual") === "unpaid") {
+        return res.status(400).json({ error: "الإجازة بدون راتب لا ترتبط برصيد إجازات" });
+      }
       const { branchIds } = getBranchScope(req);
       const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, parsed.branchEmployeeId));
       if (!emp) return res.status(404).json({ error: "الموظف غير موجود" });

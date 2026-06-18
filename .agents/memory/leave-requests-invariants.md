@@ -12,4 +12,7 @@ description: Non-obvious correctness/security rules for the leave-requests + lea
 - **Attendance sync/reversal on approve/cancel/delete is intentionally non-blocking + idempotent.** It uses a notes marker `__leave:<id>`; failures are logged, not thrown.
   **Why:** payroll/salary reads leave from `leave_requests` directly (not attendance), so attendance is non-authoritative; failing a manager's approval/cancel because of a transient attendance write would be worse, and re-running self-heals via the marker.
 
+- **Unpaid leave (`leaveType === "unpaid"`) is fully decoupled from leave balance.** `getLeaveBalanceSummary` early-returns all-zeros for unpaid (no entitlement/used/remaining); the approval `balance_exceeded` check exempts unpaid; the three `/api/hr/leave-balances*` management endpoints reject `type=unpaid` with HTTP 400; the create-form balance card and the balances-tab type selector hide/skip unpaid.
+  **Why:** unpaid leave has no entitlement, so it must never consume or be limited by a balance — but salary still deducts unpaid days separately from `leave_requests` (do not confuse the two).
+
 - **apiRequest throws a plain `Error` with message `"<status>: <body>"` — no `.data`.** To detect a structured server error (e.g. 409 `balance_exceeded`) on the client, slice the JSON out of `error.message` and parse it (see leaves.tsx review onError). Do not expect `error.data`.

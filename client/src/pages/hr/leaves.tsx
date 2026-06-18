@@ -112,7 +112,7 @@ export default function LeavesPage() {
     queryKey: ["/api/hr/leave-balances/emp", form.branchEmployeeId, form.leaveType],
     queryFn: async () =>
       (await apiRequest("GET", `/api/hr/leave-balances/${form.branchEmployeeId}?year=${currentYear}&type=${form.leaveType}`)).json(),
-    enabled: open && !!form.branchEmployeeId,
+    enabled: open && !!form.branchEmployeeId && form.leaveType !== "unpaid",
   });
 
   // مسار الاعتماد المطبّق على فرع الموظف المختار (لعرضه داخل النموذج)
@@ -546,7 +546,7 @@ export default function LeavesPage() {
                 <Select value={balType} onValueChange={setBalType}>
                   <SelectTrigger className="w-40" data-testid="select-bal-type"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {Object.entries(LEAVE_TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                    {Object.entries(LEAVE_TYPE_LABELS).filter(([k]) => k !== "unpaid").map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <Button variant="outline" onClick={exportBalancesExcel} data-testid="button-export-balances">
@@ -653,14 +653,18 @@ export default function LeavesPage() {
                 </SelectContent>
               </Select>
             </div>
-            {formBalance && form.branchEmployeeId && (
+            {form.leaveType === "unpaid" ? (
+              <div className="text-xs bg-amber-50 text-amber-700 rounded p-2" data-testid="text-form-unpaid-note">
+                إجازة بدون راتب — لا تُحتسب من رصيد الإجازات.
+              </div>
+            ) : formBalance && form.branchEmployeeId ? (
               <div className="text-xs bg-blue-50 rounded p-2 flex justify-between" data-testid="text-form-balance">
                 <span>الرصيد المتبقي ({balType === form.leaveType ? "" : ""}{LEAVE_TYPE_LABELS[form.leaveType]}):</span>
                 <span className={`font-bold ${formBalance.remainingDays < 0 ? "text-red-600" : "text-emerald-700"}`}>
                   {arNum(formBalance.remainingDays)} يوم (مستحق {arNum(formBalance.entitledDays)} − مستخدم {arNum(formBalance.usedDays)})
                 </span>
               </div>
-            )}
+            ) : null}
             <div>
               <Label>نوع الإجازة</Label>
               <Select value={form.leaveType} onValueChange={(v) => setForm({ ...form, leaveType: v })}>

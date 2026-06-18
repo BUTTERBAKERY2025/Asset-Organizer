@@ -81,6 +81,22 @@ export async function getLeaveBalanceSummary(
   leaveType = "annual",
   hireDate?: string | null,
 ): Promise<LeaveBalanceSummary> {
+  // الإجازة بدون راتب لا ترتبط بأي رصيد — لا استحقاق ولا خصم.
+  if (leaveType === "unpaid") {
+    return {
+      branchEmployeeId,
+      year,
+      leaveType,
+      entitledDays: 0,
+      carriedOverDays: 0,
+      adjustmentDays: 0,
+      usedDays: 0,
+      remainingDays: 0,
+      note: null,
+      hasRow: false,
+    };
+  }
+
   const [row] = await db
     .select()
     .from(leaveBalances)
