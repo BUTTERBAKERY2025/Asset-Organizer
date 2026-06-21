@@ -547,12 +547,7 @@ export function registerGovernanceRoutes(app: Express) {
 
   app.post("/api/governance/meetings", isAuthenticated, requirePermission("governance_meetings", "create"), async (req, res) => {
     try {
-      const year = new Date().getFullYear();
-      const maxResult = await db.select({ maxNum: sql<string>`MAX(meeting_number)` }).from(governanceMeetings);
-      const lastNum = maxResult[0]?.maxNum ? parseInt(maxResult[0].maxNum.replace(/\D/g, '').slice(-4)) : 0;
-      const meetingNumber = `MTG-${year}-${String(lastNum + 1).padStart(4, '0')}`;
-      
-      const { sendWhatsApp, sendEmail, sendSMS, invitationMessage, meetingLink, meetingPlatform, scheduledDate, quorumRequired, resolutionTitle, resolutionContent, ...meetingData } = req.body;
+      const { sendWhatsApp, sendEmail, sendSMS, invitationMessage, meetingLink, meetingPlatform, scheduledDate, quorumRequired, resolutions, resolutionTitle, resolutionContent, ...meetingData } = req.body;
       
       const meetingTypeMap: Record<string, string> = {
         'ordinary': 'ordinary_assembly',
@@ -567,7 +562,6 @@ export function registerGovernanceRoutes(app: Express) {
       const insertData: any = {
         ...meetingData,
         meetingType: resolvedMeetingType,
-        meetingNumber,
         meetingDate: scheduledDate ? new Date(scheduledDate) : new Date(),
         quorumRequired: quorumRequired ? String(quorumRequired) : "50",
         notes: meetingLink ? `رابط الاجتماع (${meetingPlatform}): ${meetingLink}\n${meetingData.notes || ''}` : meetingData.notes,
@@ -589,50 +583,89 @@ export function registerGovernanceRoutes(app: Express) {
       }
       const forcedNoticeOverride = !!noticeErr && force;
 
-      // 2-in-1: validate optional resolution fields — require both or neither so a
-      // half-filled resolution never silently disappears.
-      const resTitle = typeof resolutionTitle === 'string' ? resolutionTitle.trim() : '';
-      const resContent = typeof resolutionContent === 'string' ? resolutionContent.trim() : '';
-      if ((resTitle && !resContent) || (resContent && !resTitle)) {
-        return res.status(400).json({ error: "يجب إدخال عنوان القرار ونصّه معاً، أو تركهما فارغين." });
+      // 2-in-1: normalize the optional resolution(s). Accept an array
+      // `resolutions: [{title, content}]` (new), or a single `resolutionTitle`/
+      // `resolutionContent` pair (backward-compatible fallback).
+      const rawResolutions: any[] = Array.isArray(resolutions)
+        ? resolutions
+        : (resolutionTitle || resolutionContent)
+          ? [{ title: resolutionTitle, content: resolutionContent }]
+          : [];
+
+      // Each row must have both title and content (or be fully empty → skipped),
+      // so a half-filled resolution never silently disappears.
+      const cleanedResolutions: { title: string; content: string }[] = [];
+      for (const raw of rawResolutions) {
+        const title = typeof raw?.title === 'string' ? raw.title.trim() : '';
+        const content = typeof raw?.content === 'string' ? raw.content.trim() : '';
+        if (!title && !content) continue;
+        if (!title || !content) {
+          return res.status(400).json({ error: "يجب إدخال عنوان القرار ونصّه معاً لكل قرار، أو ترك القرار فارغاً." });
+        }
+        cleanedResolutions.push({ title, content });
       }
 
-      // Create the meeting (and, when provided, its linked resolution) atomically.
-      // If the resolution insert fails, the whole transaction rolls back so we never
-      // end up with a meeting that is missing the resolution the user asked for.
-      let createdResolution: any = null;
-      const meeting = await db.transaction(async (tx) => {
-        const [m] = await tx.insert(governanceMeetings).values(insertData).returning();
-        if (resTitle && resContent) {
-          const resYear = new Date().getFullYear();
-          const maxResResult = await tx
-            .select({ maxNum: sql<string>`MAX(resolution_number)` })
-            .from(boardResolutions)
-            .where(sql`resolution_number LIKE ${`RES-${resYear}-%`}`);
-          const lastResNum = maxResResult[0]?.maxNum
-            ? parseInt(String(maxResResult[0].maxNum).split('-').pop() || '0', 10) || 0
-            : 0;
-          const resolutionNumber = `RES-${resYear}-${String(lastResNum + 1).padStart(4, '0')}`;
-          const resTypeMap: Record<string, string> = {
-            ordinary_assembly: 'general_assembly',
-            extraordinary_assembly: 'extraordinary_assembly',
-          };
-          const [r] = await tx.insert(boardResolutions).values({
-            resolutionNumber,
-            meetingId: m.id,
-            resolutionType: resTypeMap[resolvedMeetingType] || 'general_assembly',
-            title: resTitle,
-            description: resContent,
-            category: 'governance',
-            status: 'voting',
-            proposedBy: getCurrentUserId(req),
-            proposedAt: new Date(),
-            createdBy: getCurrentUserId(req),
-          }).returning();
-          createdResolution = r;
+      // Create the meeting (and, when provided, its linked resolutions) atomically.
+      // If any resolution insert fails, the whole transaction rolls back so we never
+      // end up with a meeting that is missing the resolutions the user asked for.
+      // Sequential numbers (MTG-/RES-) are computed inside the transaction; on the rare
+      // chance two concurrent creates pick the same number, the unique constraint trips
+      // a 23505 and we simply retry with freshly recomputed numbers.
+      let meeting: any;
+      let createdResolutions: any[] = [];
+      const resTypeMap: Record<string, string> = {
+        ordinary_assembly: 'general_assembly',
+        extraordinary_assembly: 'extraordinary_assembly',
+      };
+      const MAX_NUMBERING_ATTEMPTS = 5;
+      for (let attempt = 1; ; attempt++) {
+        try {
+          createdResolutions = [];
+          meeting = await db.transaction(async (tx) => {
+            const year = new Date().getFullYear();
+            const maxResult = await tx.select({ maxNum: sql<string>`MAX(meeting_number)` }).from(governanceMeetings);
+            const lastNum = maxResult[0]?.maxNum ? parseInt(String(maxResult[0].maxNum).replace(/\D/g, '').slice(-4)) || 0 : 0;
+            const meetingNumber = `MTG-${year}-${String(lastNum + 1).padStart(4, '0')}`;
+
+            const [m] = await tx.insert(governanceMeetings).values({ ...insertData, meetingNumber }).returning();
+
+            if (cleanedResolutions.length > 0) {
+              const resYear = new Date().getFullYear();
+              const maxResResult = await tx
+                .select({ maxNum: sql<string>`MAX(resolution_number)` })
+                .from(boardResolutions)
+                .where(sql`resolution_number LIKE ${`RES-${resYear}-%`}`);
+              let nextNum = maxResResult[0]?.maxNum
+                ? parseInt(String(maxResResult[0].maxNum).split('-').pop() || '0', 10) || 0
+                : 0;
+              for (const r of cleanedResolutions) {
+                nextNum += 1;
+                const resolutionNumber = `RES-${resYear}-${String(nextNum).padStart(4, '0')}`;
+                const [created] = await tx.insert(boardResolutions).values({
+                  resolutionNumber,
+                  meetingId: m.id,
+                  resolutionType: resTypeMap[resolvedMeetingType] || 'general_assembly',
+                  title: r.title,
+                  description: r.content,
+                  category: 'governance',
+                  status: 'voting',
+                  proposedBy: getCurrentUserId(req),
+                  proposedAt: new Date(),
+                  createdBy: getCurrentUserId(req),
+                }).returning();
+                createdResolutions.push(created);
+              }
+            }
+            return m;
+          });
+          break;
+        } catch (txErr: any) {
+          if (txErr?.code === '23505' && attempt < MAX_NUMBERING_ATTEMPTS) {
+            continue; // numbering collision under concurrency — retry with fresh numbers
+          }
+          throw txErr;
         }
-        return m;
-      });
+      }
 
       // AUDIT: log any forced notice-period override so the secretariat can
       // explain it to the auditor later.
@@ -672,7 +705,11 @@ export function registerGovernanceRoutes(app: Express) {
               location: meetingData.location || 'سيتم تحديده لاحقاً',
               meetingLink: meetingLink,
               agenda: meetingData.agenda,
-              resolutionText: createdResolution ? `${createdResolution.title}\n${createdResolution.description}` : undefined,
+              resolutionText: createdResolutions.length > 0
+                ? createdResolutions
+                    .map((r, i) => `${createdResolutions.length > 1 ? `(${i + 1}) ` : ''}${r.title}\n${r.description}`)
+                    .join('\n\n')
+                : undefined,
             };
 
             invitationResults = await sendMeetingInvitations(
@@ -702,7 +739,7 @@ export function registerGovernanceRoutes(app: Express) {
         }
       }
 
-      res.status(201).json({ ...meeting, invitationResults, resolution: createdResolution });
+      res.status(201).json({ ...meeting, invitationResults, resolutions: createdResolutions });
     } catch (error) {
       console.error("Error creating meeting:", error);
       res.status(500).json({ error: "فشل في إنشاء الاجتماع" });

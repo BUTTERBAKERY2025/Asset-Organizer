@@ -163,8 +163,7 @@ export default function GeneralAssemblyPage() {
     sendEmail: true,
     sendSMS: false,
     invitationMessage: "",
-    resolutionTitle: "",
-    resolutionContent: "",
+    resolutions: [] as { title: string; content: string }[],
   });
   const { toast } = useToast();
   const { isAdmin } = useAuth();
@@ -232,8 +231,7 @@ export default function GeneralAssemblyPage() {
         sendEmail: true,
         sendSMS: false,
         invitationMessage: "",
-        resolutionTitle: "",
-        resolutionContent: "",
+        resolutions: [],
       });
       if (data.invitationResults) {
         const ir = data.invitationResults;
@@ -1341,35 +1339,78 @@ export default function GeneralAssemblyPage() {
               />
             </div>
 
-            {/* القرار المطروح للتصويت (٢ في واحد) */}
+            {/* القرارات المطروحة للتصويت (٢ في واحد) */}
             <Separator className="col-span-2 my-1" />
-            <div className="col-span-2 p-3 bg-amber-50 rounded-lg border border-amber-200 space-y-2">
-              <Label className="text-sm font-semibold flex items-center gap-2 text-gray-800">
-                <Gavel className="h-4 w-4 text-amber-600" />
-                القرار المطروح للتصويت (اختياري)
-              </Label>
+            <div className="col-span-2 p-3 bg-amber-50 rounded-lg border border-amber-200 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-sm font-semibold flex items-center gap-2 text-gray-800">
+                  <Gavel className="h-4 w-4 text-amber-600" />
+                  القرارات المطروحة للتصويت (اختياري)
+                </Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1 text-xs shrink-0"
+                  onClick={() => setNewMeeting({ ...newMeeting, resolutions: [...newMeeting.resolutions, { title: "", content: "" }] })}
+                  data-testid="button-add-resolution"
+                >
+                  <Plus className="h-3 w-3" />
+                  إضافة قرار
+                </Button>
+              </div>
               <p className="text-xs text-gray-600">
-                عند إضافة قرار هنا، سيُنشأ تلقائياً مربوطاً بالاجتماع ويُرسل نصّه للمساهمين مع الدعوة في رسالة واحدة.
+                يمكنك إضافة قرار واحد أو أكثر. تُنشأ تلقائياً مربوطة بالاجتماع، ويُرسل نصّها للمساهمين مع الدعوة في رسالة واحدة.
               </p>
-              <div>
-                <Label className="text-xs">عنوان القرار</Label>
-                <Input
-                  value={newMeeting.resolutionTitle}
-                  onChange={(e) => setNewMeeting({ ...newMeeting, resolutionTitle: e.target.value })}
-                  placeholder="مثال: زيادة رأس مال الشركة"
-                  data-testid="input-resolution-title"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">نص القرار</Label>
-                <Textarea
-                  value={newMeeting.resolutionContent}
-                  onChange={(e) => setNewMeeting({ ...newMeeting, resolutionContent: e.target.value })}
-                  placeholder="اكتب نص القرار المطروح للتصويت على المساهمين..."
-                  rows={3}
-                  data-testid="textarea-resolution-content"
-                />
-              </div>
+              {newMeeting.resolutions.length === 0 && (
+                <p className="text-xs text-gray-400 text-center py-2" data-testid="text-no-resolutions">
+                  لا توجد قرارات مضافة — اضغط "إضافة قرار" لطرح قرار للتصويت.
+                </p>
+              )}
+              {newMeeting.resolutions.map((r, idx) => (
+                <div key={idx} className="bg-white rounded-lg border border-amber-200 p-2 space-y-2" data-testid={`card-resolution-${idx}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-amber-700">القرار {idx + 1}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                      onClick={() => setNewMeeting({ ...newMeeting, resolutions: newMeeting.resolutions.filter((_, i) => i !== idx) })}
+                      data-testid={`button-remove-resolution-${idx}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <div>
+                    <Label className="text-xs">عنوان القرار</Label>
+                    <Input
+                      value={r.title}
+                      onChange={(e) => {
+                        const updated = [...newMeeting.resolutions];
+                        updated[idx] = { ...updated[idx], title: e.target.value };
+                        setNewMeeting({ ...newMeeting, resolutions: updated });
+                      }}
+                      placeholder="مثال: زيادة رأس مال الشركة"
+                      data-testid={`input-resolution-title-${idx}`}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">نص القرار</Label>
+                    <Textarea
+                      value={r.content}
+                      onChange={(e) => {
+                        const updated = [...newMeeting.resolutions];
+                        updated[idx] = { ...updated[idx], content: e.target.value };
+                        setNewMeeting({ ...newMeeting, resolutions: updated });
+                      }}
+                      placeholder="اكتب نص القرار المطروح للتصويت على المساهمين..."
+                      rows={3}
+                      data-testid={`textarea-resolution-content-${idx}`}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* رابط الاجتماع */}

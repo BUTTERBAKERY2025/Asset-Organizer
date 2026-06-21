@@ -67,7 +67,7 @@ ${recipientName} المحترم/ة
   }
 
   if (invitation.resolutionText) {
-    message += `\n\n📌 القرار المطروح للتصويت:\n${invitation.resolutionText}`;
+    message += `\n\n📌 القرارات المطروحة للتصويت:\n${invitation.resolutionText}`;
   }
 
   message += `\n\nشركة الزبد الأفضل التجارية
