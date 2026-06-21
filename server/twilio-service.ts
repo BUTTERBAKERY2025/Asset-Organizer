@@ -28,6 +28,7 @@ export interface MeetingInvitation {
   location: string;
   meetingLink?: string;
   agenda?: string;
+  resolutionText?: string;
 }
 
 function formatPhoneNumber(phone: string): string {
@@ -63,6 +64,10 @@ ${recipientName} المحترم/ة
 
   if (invitation.agenda) {
     message += `\n\n📋 جدول الأعمال:\n${invitation.agenda}`;
+  }
+
+  if (invitation.resolutionText) {
+    message += `\n\n📌 القرار المطروح للتصويت:\n${invitation.resolutionText}`;
   }
 
   message += `\n\nشركة الزبد الأفضل التجارية

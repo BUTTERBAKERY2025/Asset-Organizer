@@ -163,6 +163,8 @@ export default function GeneralAssemblyPage() {
     sendEmail: true,
     sendSMS: false,
     invitationMessage: "",
+    resolutionTitle: "",
+    resolutionContent: "",
   });
   const { toast } = useToast();
   const { isAdmin } = useAuth();
@@ -230,6 +232,8 @@ export default function GeneralAssemblyPage() {
         sendEmail: true,
         sendSMS: false,
         invitationMessage: "",
+        resolutionTitle: "",
+        resolutionContent: "",
       });
       if (data.invitationResults) {
         const ir = data.invitationResults;
@@ -1335,6 +1339,37 @@ export default function GeneralAssemblyPage() {
                 placeholder="1. الافتتاح والترحيب&#10;2. التحقق من النصاب&#10;3. اعتماد جدول الأعمال&#10;4. ..."
                 rows={4}
               />
+            </div>
+
+            {/* القرار المطروح للتصويت (٢ في واحد) */}
+            <Separator className="col-span-2 my-1" />
+            <div className="col-span-2 p-3 bg-amber-50 rounded-lg border border-amber-200 space-y-2">
+              <Label className="text-sm font-semibold flex items-center gap-2 text-gray-800">
+                <Gavel className="h-4 w-4 text-amber-600" />
+                القرار المطروح للتصويت (اختياري)
+              </Label>
+              <p className="text-xs text-gray-600">
+                عند إضافة قرار هنا، سيُنشأ تلقائياً مربوطاً بالاجتماع ويُرسل نصّه للمساهمين مع الدعوة في رسالة واحدة.
+              </p>
+              <div>
+                <Label className="text-xs">عنوان القرار</Label>
+                <Input
+                  value={newMeeting.resolutionTitle}
+                  onChange={(e) => setNewMeeting({ ...newMeeting, resolutionTitle: e.target.value })}
+                  placeholder="مثال: زيادة رأس مال الشركة"
+                  data-testid="input-resolution-title"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">نص القرار</Label>
+                <Textarea
+                  value={newMeeting.resolutionContent}
+                  onChange={(e) => setNewMeeting({ ...newMeeting, resolutionContent: e.target.value })}
+                  placeholder="اكتب نص القرار المطروح للتصويت على المساهمين..."
+                  rows={3}
+                  data-testid="textarea-resolution-content"
+                />
+              </div>
             </div>
 
             {/* رابط الاجتماع */}

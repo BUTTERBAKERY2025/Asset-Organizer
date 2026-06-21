@@ -552,7 +552,7 @@ export function registerGovernanceRoutes(app: Express) {
       const lastNum = maxResult[0]?.maxNum ? parseInt(maxResult[0].maxNum.replace(/\D/g, '').slice(-4)) : 0;
       const meetingNumber = `MTG-${year}-${String(lastNum + 1).padStart(4, '0')}`;
       
-      const { sendWhatsApp, sendEmail, sendSMS, invitationMessage, meetingLink, meetingPlatform, scheduledDate, quorumRequired, ...meetingData } = req.body;
+      const { sendWhatsApp, sendEmail, sendSMS, invitationMessage, meetingLink, meetingPlatform, scheduledDate, quorumRequired, resolutionTitle, resolutionContent, ...meetingData } = req.body;
       
       const meetingTypeMap: Record<string, string> = {
         'ordinary': 'ordinary_assembly',
@@ -589,7 +589,50 @@ export function registerGovernanceRoutes(app: Express) {
       }
       const forcedNoticeOverride = !!noticeErr && force;
 
-      const [meeting] = await db.insert(governanceMeetings).values(insertData).returning();
+      // 2-in-1: validate optional resolution fields — require both or neither so a
+      // half-filled resolution never silently disappears.
+      const resTitle = typeof resolutionTitle === 'string' ? resolutionTitle.trim() : '';
+      const resContent = typeof resolutionContent === 'string' ? resolutionContent.trim() : '';
+      if ((resTitle && !resContent) || (resContent && !resTitle)) {
+        return res.status(400).json({ error: "يجب إدخال عنوان القرار ونصّه معاً، أو تركهما فارغين." });
+      }
+
+      // Create the meeting (and, when provided, its linked resolution) atomically.
+      // If the resolution insert fails, the whole transaction rolls back so we never
+      // end up with a meeting that is missing the resolution the user asked for.
+      let createdResolution: any = null;
+      const meeting = await db.transaction(async (tx) => {
+        const [m] = await tx.insert(governanceMeetings).values(insertData).returning();
+        if (resTitle && resContent) {
+          const resYear = new Date().getFullYear();
+          const maxResResult = await tx
+            .select({ maxNum: sql<string>`MAX(resolution_number)` })
+            .from(boardResolutions)
+            .where(sql`resolution_number LIKE ${`RES-${resYear}-%`}`);
+          const lastResNum = maxResResult[0]?.maxNum
+            ? parseInt(String(maxResResult[0].maxNum).split('-').pop() || '0', 10) || 0
+            : 0;
+          const resolutionNumber = `RES-${resYear}-${String(lastResNum + 1).padStart(4, '0')}`;
+          const resTypeMap: Record<string, string> = {
+            ordinary_assembly: 'general_assembly',
+            extraordinary_assembly: 'extraordinary_assembly',
+          };
+          const [r] = await tx.insert(boardResolutions).values({
+            resolutionNumber,
+            meetingId: m.id,
+            resolutionType: resTypeMap[resolvedMeetingType] || 'general_assembly',
+            title: resTitle,
+            description: resContent,
+            category: 'governance',
+            status: 'voting',
+            proposedBy: getCurrentUserId(req),
+            proposedAt: new Date(),
+            createdBy: getCurrentUserId(req),
+          }).returning();
+          createdResolution = r;
+        }
+        return m;
+      });
 
       // AUDIT: log any forced notice-period override so the secretariat can
       // explain it to the auditor later.
@@ -629,6 +672,7 @@ export function registerGovernanceRoutes(app: Express) {
               location: meetingData.location || 'سيتم تحديده لاحقاً',
               meetingLink: meetingLink,
               agenda: meetingData.agenda,
+              resolutionText: createdResolution ? `${createdResolution.title}\n${createdResolution.description}` : undefined,
             };
 
             invitationResults = await sendMeetingInvitations(
@@ -658,7 +702,7 @@ export function registerGovernanceRoutes(app: Express) {
         }
       }
 
-      res.status(201).json({ ...meeting, invitationResults });
+      res.status(201).json({ ...meeting, invitationResults, resolution: createdResolution });
     } catch (error) {
       console.error("Error creating meeting:", error);
       res.status(500).json({ error: "فشل في إنشاء الاجتماع" });
