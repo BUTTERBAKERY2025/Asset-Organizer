@@ -64,6 +64,7 @@ import {
   CalendarCheck
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { useAuth } from "@/hooks/useAuth";
 import { printAssemblyResolution, exportAssemblyResolutionExcel } from "@/lib/assembly-resolution-print";
 import { printAssemblyMeeting, exportAssemblyMeetingExcel } from "@/lib/assembly-meeting-print";
 
@@ -164,8 +165,10 @@ export default function GeneralAssemblyPage() {
     invitationMessage: "",
   });
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+  const [noticeForcePrompt, setNoticeForcePrompt] = useState<string | null>(null);
 
   const { data: meetings = [], isLoading: meetingsLoading } = useQuery<GeneralAssembly[]>({
     queryKey: ["/api/governance/meetings"],
@@ -191,17 +194,27 @@ export default function GeneralAssemblyPage() {
   });
 
   const createMeetingMutation = useMutation({
-    mutationFn: async (data: typeof newMeeting) => {
-      const response = await fetch("/api/governance/meetings", {
+    mutationFn: async (data: typeof newMeeting & { force?: boolean }) => {
+      const { force, ...payload } = data as typeof newMeeting & { force?: boolean };
+      const url = force ? "/api/governance/meetings?force=1" : "/api/governance/meetings";
+      const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
         credentials: "include",
       });
-      if (!response.ok) throw new Error("Failed to create meeting");
+      if (!response.ok) {
+        let body: any = {};
+        try { body = await response.json(); } catch { /* ignore non-JSON */ }
+        const err: any = new Error(body.error || "فشل في إنشاء الاجتماع");
+        err.code = body.code;
+        err.canForce = body.canForce;
+        throw err;
+      }
       return response.json();
     },
     onSuccess: (data) => {
+      setNoticeForcePrompt(null);
       queryClient.invalidateQueries({ queryKey: ["/api/governance/meetings"] });
       setShowNewMeeting(false);
       setNewMeeting({
@@ -231,8 +244,16 @@ export default function GeneralAssemblyPage() {
         toast({ title: "تم إنشاء اجتماع الجمعية العمومية بنجاح" });
       }
     },
-    onError: () => {
-      toast({ title: "فشل في إنشاء الاجتماع", variant: "destructive" });
+    onError: (error: any) => {
+      if (error?.code === "NOTICE_PERIOD_VIOLATION" && error?.canForce) {
+        setNoticeForcePrompt(error.message || "مدة الإشعار غير كافية");
+        return;
+      }
+      toast({
+        title: "فشل في إنشاء الاجتماع",
+        description: error?.message && error.message !== "فشل في إنشاء الاجتماع" ? error.message : undefined,
+        variant: "destructive",
+      });
     },
   });
 
@@ -1431,6 +1452,37 @@ export default function GeneralAssemblyPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* تنبيه مدة الإشعار غير الكافية (تجاوز للمدير فقط) */}
+      <AlertDialog open={!!noticeForcePrompt} onOpenChange={(open) => { if (!open) setNoticeForcePrompt(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-600" />
+              مدة الإشعار غير كافية
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-right leading-relaxed">
+              {noticeForcePrompt}
+              <br />
+              {isAdmin
+                ? "بصفتك مديراً يمكنك تجاوز هذا الشرط وإنشاء الاجتماع على مسؤوليتك (سيتم تسجيل التجاوز في سجل المراجعة). هل تريد المتابعة؟"
+                : "يرجى تعديل تاريخ الاجتماع ليتوافق مع مدة الإشعار النظامية."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel data-testid="button-cancel-force-meeting">تعديل التاريخ</AlertDialogCancel>
+            {isAdmin && (
+              <AlertDialogAction
+                data-testid="button-force-create-meeting"
+                disabled={createMeetingMutation.isPending}
+                onClick={(e) => { e.preventDefault(); createMeetingMutation.mutate({ ...newMeeting, force: true }); }}
+              >
+                {createMeetingMutation.isPending ? 'جاري الإنشاء...' : 'تجاوز وإنشاء الاجتماع'}
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* نافذة تسجيل الحضور */}
       <Dialog open={showAttendance} onOpenChange={setShowAttendance}>
