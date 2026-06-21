@@ -1,5 +1,5 @@
 // مولّد قرار الجمعية العمومية الرسمي القابل للطباعة والتصدير PDF
-// Official General Assembly Resolution Printer with Voting Signatures
+// Official General Assembly Resolution Printer (formal legal-prose layout)
 
 import { getCompanyLogoDataUri } from "./company-logo-data";
 
@@ -46,8 +46,10 @@ export interface PrintMeeting {
   id?: number;
   title?: string;
   meetingType?: string; // ordinary_assembly | extraordinary_assembly | ordinary | extraordinary
+  meetingNumber?: string;
   meetingDate?: string;
   scheduledDate?: string;
+  startTime?: string;
   location?: string;
   quorumRequired?: number;
 }
@@ -57,6 +59,7 @@ export interface CompanyInfo {
   nameEn?: string;
   cr?: string;
   details?: string;
+  city?: string;
 }
 
 const DEFAULT_COMPANY: Required<CompanyInfo> = {
@@ -64,6 +67,7 @@ const DEFAULT_COMPANY: Required<CompanyInfo> = {
   nameEn: "THE BUTTER BEST TRADING COMPANY",
   cr: "7026155296",
   details: "شركة مساهمة مقفلة | المملكة العربية السعودية",
+  city: "خميس مشيط",
 };
 
 const meetingTypeLabel = (t?: string) => {
@@ -79,12 +83,26 @@ const meetingTypeLabel = (t?: string) => {
   }
 };
 
+// اسم الجمعية بصيغة المحضر الرسمي
+const assemblyName = (t?: string) => {
+  if (t && t.includes("extraordinary")) return "الجمعية العامة غير العادية";
+  if (t && (t.includes("ordinary") || t.includes("general_assembly"))) return "الجمعية العامة العادية";
+  return "الجمعية العامة";
+};
+
 const resolutionTypeLabel = (t: string) => {
   const map: Record<string, string> = {
     ordinary: "قرار عادي",
     extraordinary: "قرار استثنائي",
     general_assembly: "قرار جمعية عمومية عادية",
     extraordinary_assembly: "قرار جمعية عمومية غير عادية",
+    regular: "قرار عادي",
+    dividend: "توزيع أرباح",
+    capital_change: "تعديل رأس المال",
+    statute_amendment: "تعديل النظام الأساس",
+    merger: "اندماج",
+    dissolution: "تصفية/حل",
+    board_election: "انتخاب مجلس الإدارة",
     strategic: "قرار استراتيجي",
     financial: "قرار مالي",
     administrative: "قرار إداري",
@@ -108,12 +126,27 @@ const voteLabel = (v: string) => (v === "for" ? "موافق" : v === "against" ?
 const voteColor = (v: string) =>
   v === "for" ? "#2e7d32" : v === "against" ? "#c62828" : v === "abstain" ? "#e65100" : "#666";
 
+const nf = (n: number) => n.toLocaleString("ar-SA-u-nu-latn");
+// تنسيق رقمي آمن: يعيد "-" إذا كانت القيمة غير رقمية لتفادي ظهور NaN في الوثيقة الرسمية
+const nfSafe = (v: unknown) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? nf(n) : "-";
+};
+
 const fmtDate = (d?: string | null) => {
   if (!d) return "-";
   try {
     return new Date(d).toLocaleDateString("ar-SA-u-nu-latn", { year: "numeric", month: "long", day: "numeric" });
   } catch {
     return "-";
+  }
+};
+const fmtHijri = (d?: string | null) => {
+  if (!d) return "";
+  try {
+    return new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura-nu-latn", { year: "numeric", month: "long", day: "numeric" }).format(new Date(d));
+  } catch {
+    return "";
   }
 };
 
@@ -138,150 +171,163 @@ export function buildAssemblyResolutionHtml(
   logoDataUri?: string | null
 ): string {
   const co = { ...DEFAULT_COMPANY, ...(company || {}) };
+  const legalForm = (co.details.split("|")[0] || "").trim() || "شركة مساهمة مقفلة";
+  const asmName = assemblyName(meeting?.meetingType || resolution.resolutionType);
   const st = statusBadge(resolution.status);
-  const meetingType = meetingTypeLabel(meeting?.meetingType || resolution.resolutionType);
-  const resType = resolutionTypeLabel(resolution.resolutionType);
 
-  const totalVotes = resolution.totalVotes || votes.length || 0;
+  const meetingDate = meeting?.meetingDate || meeting?.scheduledDate || resolution.approvedAt || resolution.createdAt;
+  const greg = fmtDate(meetingDate);
+  const hijri = fmtHijri(meetingDate);
+
   const votesFor = resolution.forVotes ?? votes.filter((v) => v.vote === "for").length;
   const votesAgainst = resolution.againstVotes ?? votes.filter((v) => v.vote === "against").length;
   const votesAbstain = resolution.abstainVotes ?? votes.filter((v) => v.vote === "abstain").length;
-  const pct = (n: number) => (totalVotes > 0 ? ((n / totalVotes) * 100).toFixed(1) : "0.0");
+  const unanimous = votesAgainst === 0 && votesAbstain === 0 && (votesFor > 0 || votes.length > 0);
+  const resultText = unanimous
+    ? "تمت الموافقة على هذا القرار بالإجماع من الأصوات الحاضرة والممثَّلة في الاجتماع."
+    : `تمت الموافقة على هذا القرار بأغلبية الأصوات (موافق: ${nf(votesFor)} — معارض: ${nf(votesAgainst)} — ممتنع: ${nf(votesAbstain)}).`;
+
+  const statusNote =
+    resolution.status === "rejected"
+      ? "تم رفض هذا القرار."
+      : resolution.status === "approved" || resolution.status === "implemented"
+      ? "وقد صدر هذا القرار معتمداً وفقاً للأنظمة المرعية."
+      : "";
+
+  const description = (resolution.description || "").trim();
 
   const votersRowsHtml = votes.length
     ? votes
         .map(
           (v, i) => `
-        <tr>
-          <td style="text-align:center;">${i + 1}</td>
-          <td>${escapeHtml(v.voterName)}</td>
-          <td style="text-align:center;">${v.voterType === "shareholder" ? "مساهم" : v.voterType === "board_member" ? "عضو مجلس" : escapeHtml(v.voterType)}</td>
-          <td style="text-align:center;color:${voteColor(v.vote)};font-weight:700;">${voteLabel(v.vote)}</td>
-          <td style="text-align:center;">${v.votingPower ? Number(v.votingPower).toLocaleString("ar-SA-u-nu-latn") : "-"}</td>
-          <td style="text-align:center;font-size:8pt;color:#666;">${fmtDate(v.votedAt)}</td>
-        </tr>`
+          <tr>
+            <td style="text-align:center;">${i + 1}</td>
+            <td>${escapeHtml(v.voterName)}</td>
+            <td style="text-align:center;">${v.voterType === "shareholder" ? "مساهم" : v.voterType === "board_member" ? "عضو مجلس" : escapeHtml(v.voterType)}</td>
+            <td style="text-align:center;color:${voteColor(v.vote)};font-weight:700;">${voteLabel(v.vote)}</td>
+            <td style="text-align:center;">${v.votingPower ? nfSafe(v.votingPower) : "-"}</td>
+            <td style="text-align:center;font-size:8.5pt;color:#666;">${fmtDate(v.votedAt)}</td>
+          </tr>`
         )
         .join("")
-    : `<tr><td colspan="6" style="text-align:center;color:#999;padding:14px;">لا توجد بيانات تصويت مسجلة</td></tr>`;
+    : "";
+
+  const votersTableHtml = votes.length
+    ? `
+      <table class="att">
+        <thead>
+          <tr>
+            <th style="width:34px;">م</th>
+            <th>الاسم</th>
+            <th style="width:90px;">الصفة</th>
+            <th style="width:80px;">التصويت</th>
+            <th style="width:90px;">عدد الأسهم</th>
+            <th style="width:110px;">التاريخ</th>
+          </tr>
+        </thead>
+        <tbody>${votersRowsHtml}</tbody>
+      </table>`
+    : "";
 
   const signaturesHtml = signatures.length
-    ? signatures
-        .map(
-          (sig) => `
-      <div class="sig-card sig-${sig.status}">
-        <div class="sig-name">${escapeHtml(sig.memberName || "—")}</div>
-        <div class="sig-pos">${escapeHtml(sig.memberPosition || (sig.signerType === "shareholder" ? "مساهم" : "عضو مجلس"))}</div>
-        <div class="sig-box">
-          ${(() => {
-            const safe = sig.status === "signed" ? safeImageSrc(sig.signatureData) : null;
-            if (safe) return `<img src="${safe}" alt="توقيع ${escapeHtml(sig.memberName || "")}" />`;
-            if (sig.status === "signed") return `<div class="sig-empty">توقيع غير صالح</div>`;
-            if (sig.status === "declined") return `<div class="sig-empty declined">رفض التوقيع</div>`;
-            return `<div class="sig-empty">في انتظار التوقيع</div>`;
-          })()}
+    ? `<div class="sig-cards">${signatures
+        .map((sig) => {
+          const safe = sig.status === "signed" ? safeImageSrc(sig.signatureData) : null;
+          const box = safe
+            ? `<img class="sig-img" src="${safe}" alt="توقيع ${escapeHtml(sig.memberName || "")}" />`
+            : sig.status === "declined"
+            ? `<div class="sig-empty">رفض التوقيع</div>`
+            : sig.status === "signed"
+            ? `<div class="sig-empty">توقيع غير صالح</div>`
+            : `<div class="sig-line">التوقيع: ................</div>`;
+          return `
+          <div class="sig-card">
+            <div class="sig-name">${escapeHtml(sig.memberName || "—")}</div>
+            <div class="sig-role">(${escapeHtml(sig.memberPosition || (sig.signerType === "shareholder" ? "مساهم" : "عضو مجلس"))})</div>
+            ${box}
+            ${sig.status === "signed" && sig.signedAt ? `<div class="sig-date">${fmtDate(sig.signedAt)}</div>` : ""}
+          </div>`;
+        })
+        .join("")}</div>`
+    : `<div class="sig-grid">
+        <div class="sig-col">
+          <div class="sig-title">رئيس ${escapeHtml(asmName)}</div>
+          <div class="sig-name">(__________)</div>
+          <div class="sig-role">(رئيس مجلس الإدارة)</div>
+          <div class="sig-line">التوقيع: ........................</div>
         </div>
-        <div class="sig-foot">
-          ${sig.status === "signed" && sig.signedAt ? `<span class="sig-date">${fmtDate(sig.signedAt)}</span>` : `<span></span>`}
-          <span class="sig-status sig-status-${sig.status}">${
-            sig.status === "signed" ? "✓ موقّع" : sig.status === "declined" ? "✗ مرفوض" : "⏳ معلّق"
-          }</span>
+        <div class="sig-col">
+          <div class="sig-title">أمين سر ${escapeHtml(asmName)}</div>
+          <div class="sig-name">(__________)</div>
+          <div class="sig-role">(أمين سر مجلس الإدارة)</div>
+          <div class="sig-line">التوقيع: ........................</div>
         </div>
-      </div>`
-        )
-        .join("")
-    : `<div class="sig-empty-all">لم يتم إرسال طلبات توقيع لهذا القرار بعد</div>`;
-
-  const meetingDate = meeting?.meetingDate || meeting?.scheduledDate;
+      </div>`;
 
   return `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
 <meta charset="UTF-8" />
-<title>قرار جمعية عمومية رقم ${escapeHtml(resolution.resolutionNumber)}</title>
+<title>قرار ${escapeHtml(asmName)} رقم ${escapeHtml(resolution.resolutionNumber)}</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
-  @page { size: A4; margin: 12mm 12mm 14mm 12mm; }
+  @page { size: A4; margin: 16mm 16mm 16mm 16mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { font-family: 'Cairo', sans-serif; direction: rtl; background: white; color: #1a1a1a; line-height: 1.55; font-size: 10.5pt; }
-  .watermark { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; opacity: 0.06; z-index: 0; pointer-events: none; }
-  .watermark img { width: 340px; height: 340px; object-fit: contain; }
-  .doc { max-width: 186mm; margin: 0 auto; position: relative; z-index: 1; }
-  .page-wrap { width: 100%; border-collapse: collapse; }
+  html, body { font-family: 'Cairo', sans-serif; direction: rtl; background: white; color: #1a1a1a; line-height: 1.9; font-size: 11pt; }
+  .watermark { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; opacity: 0.05; z-index: 0; pointer-events: none; }
+  .watermark img { width: 360px; height: 360px; object-fit: contain; }
+  .page-wrap { width: 100%; max-width: 182mm; margin: 0 auto; border-collapse: collapse; position: relative; z-index: 1; }
   .page-wrap > thead > tr > td, .page-wrap > tbody > tr > td { padding: 0; border: none; background: transparent; }
   .page-wrap > tbody > tr { page-break-inside: auto; break-inside: auto; }
-  .page-head-cell { padding-bottom: 2px; }
-  .header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; margin-bottom: 12px; background: linear-gradient(to left, #f6f9f7, #ffffff, #f6f9f7); border: 1.5px solid #1a5f3c; border-radius: 8px; }
-  .logo-row { display: flex; align-items: center; gap: 12px; }
-  .logo { width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(135deg, #1a5f3c, #2e7d4f); color: white; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; }
-  .logo-img { width: 62px; height: 62px; object-fit: contain; }
-  .co-info { line-height: 1.3; }
-  .co-name-ar { font-size: 14pt; font-weight: 800; color: #1a3a2f; }
-  .co-name-en { font-size: 8pt; color: #555; letter-spacing: 1px; }
-  .co-details { font-size: 8pt; color: #666; margin-top: 2px; }
-  .doc-title-box { text-align: center; }
-  .doc-type { background: #1a5f3c; color: white; padding: 4px 14px; border-radius: 14px; font-size: 9pt; font-weight: 700; display: inline-block; }
-  .doc-num { margin-top: 4px; font-weight: 700; font-size: 11pt; color: #1a3a2f; }
-  .meta-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; padding: 8px; background: #fafaf7; border: 1px solid #e0d8c5; border-radius: 6px; font-size: 9pt; }
-  .meta-cell { display: flex; flex-direction: column; }
-  .meta-label { color: #888; font-size: 7.5pt; }
-  .meta-value { font-weight: 700; color: #1a3a2f; margin-top: 1px; }
-  .section { margin-top: 14px; page-break-inside: avoid; break-inside: avoid; }
-  .section-title { display: flex; align-items: center; gap: 8px; font-weight: 700; color: #1a3a2f; font-size: 11pt; padding-bottom: 4px; border-bottom: 2px solid #1a5f3c; margin-bottom: 8px; }
-  .section-icon { width: 22px; height: 22px; border-radius: 50%; background: #1a5f3c; color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 10pt; font-weight: 700; }
-  .resolution-title { font-size: 13pt; font-weight: 700; color: #1a3a2f; padding: 8px 12px; background: #f8faf9; border-right: 4px solid #1a5f3c; border-radius: 4px; margin-bottom: 8px; }
-  .resolution-text { font-size: 10.5pt; line-height: 1.7; color: #2c2c2c; padding: 6px 12px; text-align: justify; white-space: pre-wrap; }
-  table { width: 100%; border-collapse: collapse; font-size: 9pt; }
-  th { background: #1a5f3c; color: white; padding: 6px 4px; font-weight: 700; }
-  td { padding: 5px 6px; border-bottom: 1px solid #eee; }
-  tr:nth-child(even) td { background: #fafafa; }
-  .vote-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
-  .vote-stat { padding: 8px; border-radius: 6px; text-align: center; border: 1.5px solid; }
-  .vote-stat.for { background: #e8f5e9; border-color: #2e7d32; color: #1b5e20; }
-  .vote-stat.against { background: #ffebee; border-color: #c62828; color: #b71c1c; }
-  .vote-stat.abstain { background: #fff3e0; border-color: #e65100; color: #e65100; }
-  .vote-num { font-size: 18pt; font-weight: 800; }
-  .vote-pct { font-size: 8pt; opacity: .8; margin-top: 1px; }
-  .vote-label { font-size: 9pt; font-weight: 700; margin-top: 2px; }
-  .result-badge { padding: 8px; text-align: center; font-weight: 700; border-radius: 6px; font-size: 11pt; background: ${st.bg}; color: ${st.color}; border: 1.5px solid ${st.color}; margin-top: 6px; }
-  .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .sig-card { border: 1.2px solid #d0d0d0; border-radius: 6px; padding: 6px; background: white; page-break-inside: avoid; break-inside: avoid; }
-  .sig-card.sig-signed { border-color: #2e7d32; background: #f1f8f1; }
-  .sig-card.sig-declined { border-color: #c62828; background: #fdecec; }
-  .sig-name { font-weight: 700; font-size: 9.5pt; color: #1a3a2f; }
-  .sig-pos { font-size: 8pt; color: #666; margin-bottom: 4px; }
-  .sig-box { height: 56px; display: flex; align-items: center; justify-content: center; background: #fff; border: 1px dashed #ccc; border-radius: 4px; overflow: hidden; }
-  .sig-box img { max-height: 52px; max-width: 100%; object-fit: contain; }
-  .sig-empty { color: #999; font-size: 8pt; font-style: italic; }
-  .sig-empty.declined { color: #c62828; font-style: normal; font-weight: 600; }
-  .sig-empty-all { padding: 18px; text-align: center; color: #888; background: #fafafa; border: 1px dashed #ccc; border-radius: 6px; grid-column: 1 / -1; }
-  .sig-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; font-size: 7.5pt; }
-  .sig-date { color: #666; }
-  .sig-status { padding: 1px 6px; border-radius: 8px; font-weight: 700; }
-  .sig-status-signed { background: #e8f5e9; color: #2e7d32; }
-  .sig-status-declined { background: #ffebee; color: #c62828; }
-  .sig-status-pending { background: #fff3e0; color: #e65100; }
-  .footer { margin-top: 18px; padding: 6px 10px; background: #f5f5f5; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; font-size: 7.5pt; color: #555; border-top: 2px solid #1a5f3c; }
+  .letterhead { text-align: center; border-bottom: 2.5px solid #1a5f3c; padding-bottom: 8px; margin-bottom: 4px; }
+  .lh-row { display: flex; align-items: center; justify-content: center; gap: 14px; }
+  .lh-logo { width: 62px; height: 62px; object-fit: contain; }
+  .lh-co-ar { font-size: 15pt; font-weight: 800; color: #1a3a2f; }
+  .lh-co-en { font-size: 8pt; color: #666; letter-spacing: 1px; }
+  .lh-co-meta { font-size: 8.5pt; color: #555; margin-top: 2px; }
+  .doc-title { text-align: center; font-size: 14pt; font-weight: 800; color: #1a3a2f; margin: 16px 0 4px; }
+  .doc-meta-line { text-align: center; font-size: 10pt; color: #555; margin-bottom: 6px; }
+  .status-line { text-align: center; font-weight: 800; color: ${st.color}; margin-bottom: 8px; }
+  .preamble { text-align: justify; font-size: 11pt; line-height: 2.05; margin: 12px 2px; }
+  .sec { margin-top: 16px; }
+  .sec-h { font-size: 12pt; font-weight: 800; color: #1a5f3c; border-right: 4px solid #1a5f3c; padding-right: 8px; margin-bottom: 6px; }
+  .sec-p { text-align: justify; line-height: 2.05; margin-bottom: 6px; }
+  .res-h { font-weight: 800; color: #1a3a2f; font-size: 11.5pt; margin-bottom: 6px; }
+  .res-body { text-align: justify; line-height: 2.05; white-space: pre-wrap; }
+  table.att { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin: 8px 0; }
+  table.att th { background: #1a5f3c; color: #fff; padding: 6px 5px; font-weight: 700; border: 1px solid #14492f; }
+  table.att td { padding: 5px 6px; border: 1px solid #cfd8d3; vertical-align: middle; }
+  table.att tr:nth-child(even) td { background: #f6f9f7; }
+  table.att tr { page-break-inside: avoid; break-inside: avoid; }
+  .sig-grid { display: flex; justify-content: space-around; gap: 30px; margin-top: 34px; page-break-inside: avoid; break-inside: avoid; }
+  .sig-col { text-align: center; flex: 1; }
+  .sig-cards { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 18px; }
+  .sig-card { flex: 1 1 200px; min-width: 180px; text-align: center; border: 1px solid #cfd8d3; border-radius: 8px; padding: 12px 10px; page-break-inside: avoid; break-inside: avoid; }
+  .sig-title { font-weight: 800; color: #1a3a2f; margin-bottom: 6px; }
+  .sig-name { font-weight: 700; margin-bottom: 2px; }
+  .sig-role { font-size: 9pt; color: #555; margin-bottom: 18px; }
+  .sig-img { max-height: 50px; max-width: 140px; object-fit: contain; display: block; margin: 0 auto 4px; }
+  .sig-empty { color: #999; font-size: 9pt; margin: 10px 0; }
+  .sig-date { font-size: 8.5pt; color: #777; margin-top: 4px; }
+  .sig-line { font-size: 10pt; color: #333; margin-top: 8px; }
+  .footer { margin-top: 22px; padding-top: 8px; border-top: 1.5px solid #1a5f3c; font-size: 8pt; color: #666; display: flex; justify-content: space-between; }
   @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
 </style>
 </head>
 <body>
   ${logoDataUri ? `<div class="watermark"><img src="${logoDataUri}" alt="" /></div>` : ""}
-  <table class="page-wrap doc">
+  <table class="page-wrap">
     <thead>
       <tr>
-        <td class="page-head-cell">
-          <div class="header">
-            <div class="logo-row">
-              ${logoDataUri ? `<img class="logo-img" src="${logoDataUri}" alt="${escapeHtml(co.nameAr)}" />` : `<div class="logo">${escapeHtml((co.nameAr || "B").trim().charAt(0))}</div>`}
-              <div class="co-info">
-                <div class="co-name-ar">${escapeHtml(co.nameAr)}</div>
-                <div class="co-name-en">${escapeHtml(co.nameEn)}</div>
-                <div class="co-details">${escapeHtml(co.details)} | س.ت: ${escapeHtml(co.cr)}</div>
+        <td>
+          <div class="letterhead">
+            <div class="lh-row">
+              ${logoDataUri ? `<img class="lh-logo" src="${logoDataUri}" alt="${escapeHtml(co.nameAr)}" />` : ""}
+              <div>
+                <div class="lh-co-ar">${escapeHtml(co.nameAr)}</div>
+                <div class="lh-co-en">${escapeHtml(co.nameEn)}</div>
+                <div class="lh-co-meta">${escapeHtml(co.details)} — س.ت ${escapeHtml(co.cr)}${co.city ? ` — مدينة ${escapeHtml(co.city)}` : ""}</div>
               </div>
-            </div>
-            <div class="doc-title-box">
-              <div class="doc-type">${escapeHtml(meetingType)}</div>
-              <div class="doc-num">قرار رقم: ${escapeHtml(resolution.resolutionNumber)}</div>
             </div>
           </div>
         </td>
@@ -291,55 +337,35 @@ export function buildAssemblyResolutionHtml(
       <tr>
         <td>
 
-    <div class="meta-row">
-      <div class="meta-cell"><span class="meta-label">نوع القرار</span><span class="meta-value">${escapeHtml(resType)}</span></div>
-      <div class="meta-cell"><span class="meta-label">تاريخ الاجتماع</span><span class="meta-value">${escapeHtml(fmtDate(meetingDate))}</span></div>
-      <div class="meta-cell"><span class="meta-label">المكان</span><span class="meta-value">${escapeHtml(meeting?.location || "-")}</span></div>
-      <div class="meta-cell"><span class="meta-label">تاريخ الاعتماد</span><span class="meta-value">${escapeHtml(fmtDate(resolution.approvedAt || resolution.createdAt))}</span></div>
-    </div>
+          <div class="doc-title">قرار ${escapeHtml(asmName)}</div>
+          <div class="doc-meta-line">رقم القرار: ${escapeHtml(resolution.resolutionNumber)}${greg !== "-" ? ` — بتاريخ ${escapeHtml(greg)}` : ""}</div>
+          <div class="status-line">${escapeHtml(st.label)}</div>
 
-    <div class="section">
-      <div class="section-title"><span class="section-icon">١</span><span>نص القرار</span></div>
-      <div class="resolution-title">${escapeHtml(resolution.title)}</div>
-      ${resolution.description ? `<div class="resolution-text">${escapeHtml(resolution.description)}</div>` : ""}
-    </div>
+          <div class="preamble">إنه بناءً على ما تم عرضه ومناقشته في اجتماع ${escapeHtml(asmName)} لـ${escapeHtml(co.nameAr)} (${escapeHtml(legalForm)})${greg !== "-" ? ` المنعقد بتاريخ (${escapeHtml(greg)})` : ""}${hijri ? ` الموافق (${escapeHtml(hijri)})` : ""}${meeting?.location ? ` في ${escapeHtml(meeting.location)}` : ""}، وبعد المداولة، أصدرت ${escapeHtml(asmName)} القرار التالي:</div>
 
-    <div class="section">
-      <div class="section-title"><span class="section-icon">٢</span><span>نتائج التصويت</span></div>
-      <div class="vote-summary">
-        <div class="vote-stat for"><div class="vote-num">${votesFor}</div><div class="vote-pct">${pct(votesFor)}%</div><div class="vote-label">موافق</div></div>
-        <div class="vote-stat against"><div class="vote-num">${votesAgainst}</div><div class="vote-pct">${pct(votesAgainst)}%</div><div class="vote-label">معارض</div></div>
-        <div class="vote-stat abstain"><div class="vote-num">${votesAbstain}</div><div class="vote-pct">${pct(votesAbstain)}%</div><div class="vote-label">ممتنع</div></div>
-      </div>
-      <div class="result-badge">${st.label}</div>
-    </div>
+          <div class="sec">
+            <div class="sec-h">نص القرار</div>
+            <div class="res-h">${escapeHtml(resolution.title)}</div>
+            ${description ? `<div class="res-body">${escapeHtml(description).replace(/\n/g, "<br/>")}</div>` : `<div class="sec-p">—</div>`}
+          </div>
 
-    <div class="section">
-      <div class="section-title"><span class="section-icon">٣</span><span>سجل المصوتين (${votes.length})</span></div>
-      <table>
-        <thead>
-          <tr>
-            <th style="width:32px;">#</th>
-            <th>الاسم</th>
-            <th style="width:80px;">الصفة</th>
-            <th style="width:70px;">التصويت</th>
-            <th style="width:80px;">قوة التصويت</th>
-            <th style="width:90px;">التاريخ</th>
-          </tr>
-        </thead>
-        <tbody>${votersRowsHtml}</tbody>
-      </table>
-    </div>
+          <div class="sec">
+            <div class="sec-h">نتيجة التصويت</div>
+            <div class="sec-p">${resultText}${statusNote ? ` ${statusNote}` : ""}</div>
+            ${votersTableHtml}
+          </div>
 
-    <div class="section">
-      <div class="section-title"><span class="section-icon">✍</span><span>التوقيعات (${signatures.filter((s) => s.status === "signed").length} / ${signatures.length})</span></div>
-      <div class="signatures">${signaturesHtml}</div>
-    </div>
+          ${resolution.notes ? `<div class="sec"><div class="sec-h">ملاحظات</div><div class="sec-p" style="white-space:pre-wrap;">${escapeHtml(resolution.notes)}</div></div>` : ""}
 
-    <div class="footer">
-      <div>${escapeHtml(co.nameAr)} | س.ت: ${escapeHtml(co.cr)}</div>
-      <div>تم الإصدار: ${new Date().toLocaleDateString("ar-SA-u-nu-latn")} | وثيقة رسمية</div>
-    </div>
+          <div class="sec">
+            <div class="sec-h">التوقيعات</div>
+            ${signaturesHtml}
+          </div>
+
+          <div class="footer">
+            <div>${escapeHtml(co.nameAr)} — س.ت ${escapeHtml(co.cr)}</div>
+            <div>وثيقة رسمية — تم الإصدار: ${new Date().toLocaleDateString("ar-SA-u-nu-latn")}</div>
+          </div>
         </td>
       </tr>
     </tbody>

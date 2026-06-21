@@ -1,5 +1,5 @@
 // مولّد محضر اجتماع الجمعية العمومية الرسمي القابل للطباعة والتصدير
-// Official General Assembly Meeting Minutes Printer with Attendee Signatures
+// Official General Assembly Meeting Minutes Printer (formal legal-prose layout)
 
 import { getCompanyLogoDataUri } from "./company-logo-data";
 
@@ -7,8 +7,12 @@ export interface MeetingPrint {
   id: number;
   title: string;
   meetingType: string;
+  meetingNumber?: string | null;
   scheduledDate?: string | null;
   meetingDate?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  fiscalYear?: string | null;
   location?: string | null;
   locationType?: string | null;
   virtualMeetingLink?: string | null;
@@ -53,6 +57,9 @@ export interface MeetingResolutionPrint {
   id: number;
   resolutionNumber: string;
   title: string;
+  description?: string | null;
+  resolutionType?: string | null;
+  assemblyType?: string | null;
   status: string;
   forVotes?: number | null;
   againstVotes?: number | null;
@@ -65,6 +72,7 @@ export interface MeetingCompanyInfo {
   nameEn?: string;
   cr?: string;
   details?: string;
+  city?: string;
 }
 
 const DEFAULT_COMPANY: Required<MeetingCompanyInfo> = {
@@ -72,7 +80,11 @@ const DEFAULT_COMPANY: Required<MeetingCompanyInfo> = {
   nameEn: "THE BUTTER BEST TRADING COMPANY",
   cr: "7026155296",
   details: "شركة مساهمة مقفلة | المملكة العربية السعودية",
+  city: "خميس مشيط",
 };
+
+const SECTION_ORDINALS = ["أولاً", "ثانياً", "ثالثاً", "رابعاً", "خامساً", "سادساً", "سابعاً", "ثامناً", "تاسعاً", "عاشراً"];
+const RES_ORDINALS = ["الأول", "الثاني", "الثالث", "الرابع", "الخامس", "السادس", "السابع", "الثامن", "التاسع", "العاشر"];
 
 const meetingTypeLabel = (t?: string) => {
   switch (t) {
@@ -87,6 +99,13 @@ const meetingTypeLabel = (t?: string) => {
   }
 };
 
+// اسم الجمعية للاستخدام في صياغة المحضر (الجمعية العامة العادية/غير العادية)
+const assemblyName = (t?: string) => {
+  if (t && t.includes("extraordinary")) return "الجمعية العامة غير العادية";
+  if (t && t.includes("ordinary")) return "الجمعية العامة العادية";
+  return "الجمعية العامة";
+};
+
 const attendeeTypeLabel = (t: string) => {
   const m: Record<string, string> = {
     board_member: "عضو مجلس إدارة",
@@ -96,6 +115,14 @@ const attendeeTypeLabel = (t: string) => {
     secretary: "أمين السر",
   };
   return m[t] || t;
+};
+
+// صفة الحضور بالصيغة النظامية (أصالةً / وكالةً)
+const capacityLabel = (a: AttendancePrint) => {
+  if (a.attendanceMethod === "proxy") return "وكالةً";
+  if (a.attendeeType === "observer") return "مراقب";
+  if (a.attendeeType === "secretary") return "أمين السر";
+  return "أصالةً";
 };
 
 const attendanceStatusLabel = (s: string) => {
@@ -128,12 +155,30 @@ const meetingStatusLabel = (s: string) => {
   return m[s] || { label: s, bg: "#f5f5f5", color: "#333" };
 };
 
+const nf = (n: number) => n.toLocaleString("ar-SA-u-nu-latn");
+
 const fmtDate = (d?: string | null) => {
   if (!d) return "-";
   try {
     return new Date(d).toLocaleDateString("ar-SA-u-nu-latn", { year: "numeric", month: "long", day: "numeric" });
   } catch {
     return "-";
+  }
+};
+const fmtHijri = (d?: string | null) => {
+  if (!d) return "";
+  try {
+    return new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura-nu-latn", { year: "numeric", month: "long", day: "numeric" }).format(new Date(d));
+  } catch {
+    return "";
+  }
+};
+const fmtWeekday = (d?: string | null) => {
+  if (!d) return "";
+  try {
+    return new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(d));
+  } catch {
+    return "";
   }
 };
 const fmtTime = (d?: string | null) => {
@@ -173,186 +218,160 @@ export function buildAssemblyMeetingHtml(
   logoDataUri?: string | null
 ): string {
   const co = { ...DEFAULT_COMPANY, ...(company || {}) };
-  const mType = meetingTypeLabel(meeting.meetingType);
-  const mStat = meetingStatusLabel(meeting.status);
+  const asmName = assemblyName(meeting.meetingType);
+  const legalForm = (co.details.split("|")[0] || "").trim() || "شركة مساهمة مقفلة";
   const meetingDate = meeting.meetingDate || meeting.scheduledDate;
+  const greg = fmtDate(meetingDate);
+  const hijri = fmtHijri(meetingDate);
+  const weekday = fmtWeekday(meetingDate);
+  const timeStr = (meeting.startTime || "").trim();
 
-  const presentCount = attendance.filter((a) => a.attendanceStatus === "present" || a.attendanceStatus === "late" || a.attendanceStatus === "left_early").length;
-  const absentCount = attendance.filter((a) => a.attendanceStatus === "absent").length;
-  const excusedCount = attendance.filter((a) => a.attendanceStatus === "excused").length;
-  const proxyCount = attendance.filter((a) => a.attendanceMethod === "proxy").length;
-  const totalCount = attendance.length || 1;
-  const attendancePct = ((presentCount / totalCount) * 100).toFixed(1);
-  const totalShares = attendance
-    .filter((a) => a.attendanceStatus === "present" || a.attendanceStatus === "late" || a.attendanceStatus === "left_early")
-    .reduce((sum, a) => sum + (Number(a.representedShares) || 0), 0);
+  const presentList = attendance.filter((a) => ["present", "late", "left_early"].includes(a.attendanceStatus));
+  const totalAllShares = attendance.reduce((s, a) => s + (Number(a.representedShares) || 0), 0);
+  const presentShares = presentList.reduce((s, a) => s + (Number(a.representedShares) || 0), 0);
+  const headCount = attendance.length || 1;
+  const headPct = (presentList.length / headCount) * 100;
+  const representedPct = totalAllShares > 0 ? (presentShares / totalAllShares) * 100 : headPct;
+  const quorumReq = Number(meeting.quorumRequired || 0);
+  const quorumMet = representedPct >= quorumReq;
 
-  const quorumReq = meeting.quorumRequired || 0;
-  const quorumMet = parseFloat(attendancePct) >= quorumReq;
-
-  // قائمة الحضور مع التواقيع
-  const attendanceRowsHtml = attendance.length
+  // جدول الحضور
+  const attRowsHtml = attendance.length
     ? attendance
         .map((a, i) => {
-          const st = attendanceStatusLabel(a.attendanceStatus);
+          const shares = Number(a.representedShares) || 0;
+          const pctVal = totalAllShares > 0 ? (shares / totalAllShares) * 100 : Number(a.votingPower) || 0;
+          const hasPct = shares > 0 || Number(a.votingPower) > 0;
           const safeSig = safeImageSrc(a.signatureUrl);
           return `
-        <tr>
-          <td style="text-align:center;font-weight:700;">${i + 1}</td>
-          <td style="font-weight:600;">${escapeHtml(a.attendeeName)}</td>
-          <td style="text-align:center;">${escapeHtml(attendeeTypeLabel(a.attendeeType))}</td>
-          <td style="text-align:center;">${a.representedShares ? Number(a.representedShares).toLocaleString("ar-SA-u-nu-latn") : "-"}</td>
-          <td style="text-align:center;color:${st.color};font-weight:700;">${st.label}</td>
-          <td style="text-align:center;font-size:8pt;">${escapeHtml(attendanceMethodLabel(a.attendanceMethod))}${a.proxyHolderName ? `<br/><span style="font-size:7pt;color:#666;">وكيل: ${escapeHtml(a.proxyHolderName)}</span>` : ""}</td>
-          <td class="sig-cell">
-            ${
+          <tr>
+            <td style="text-align:center;">${i + 1}</td>
+            <td>${escapeHtml(a.attendeeName)}</td>
+            <td style="text-align:center;">${shares ? nf(shares) : "-"}</td>
+            <td style="text-align:center;">${hasPct ? pctVal.toFixed(2) + "%" : "-"}</td>
+            <td style="text-align:center;">${capacityLabel(a)}${a.proxyHolderName ? `<br/><span style="font-size:7.5pt;color:#666;">عن: ${escapeHtml(a.proxyHolderName)}</span>` : ""}</td>
+            <td style="text-align:center;">${
               safeSig
-                ? `<img src="${safeSig}" alt="توقيع ${escapeHtml(a.attendeeName)}" />`
+                ? `<img class="sig-inline" src="${safeSig}" alt="توقيع ${escapeHtml(a.attendeeName)}" />`
                 : a.attendanceStatus === "absent"
-                ? `<span class="sig-na">—</span>`
-                : `<span class="sig-empty">_______________</span>`
-            }
-            ${a.signedAt ? `<div class="sig-date">${fmtDate(a.signedAt)} ${fmtTime(a.signedAt)}</div>` : ""}
-          </td>
-        </tr>`;
+                ? "—"
+                : "..............."
+            }</td>
+          </tr>`;
         })
         .join("")
-    : `<tr><td colspan="7" style="text-align:center;color:#999;padding:18px;">لا توجد بيانات حضور مسجلة لهذا الاجتماع</td></tr>`;
+    : `<tr><td colspan="6" style="text-align:center;color:#999;padding:16px;">لا توجد بيانات حضور مسجلة لهذا الاجتماع</td></tr>`;
 
-  // قرارات الاجتماع
-  const resolutionsHtml = resolutions.length
-    ? `
-      <div class="section">
-        <div class="section-title"><span class="section-icon">٤</span><span>القرارات المتخذة في الاجتماع (${resolutions.length})</span></div>
-        <table>
-          <thead>
-            <tr>
-              <th style="width:32px;">#</th>
-              <th style="width:110px;">رقم القرار</th>
-              <th>عنوان القرار</th>
-              <th style="width:60px;">موافق</th>
-              <th style="width:60px;">معارض</th>
-              <th style="width:60px;">ممتنع</th>
-              <th style="width:110px;">النتيجة</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${resolutions
-              .map((r, i) => {
-                const v = voteLabel(r.status);
-                return `
-              <tr>
-                <td style="text-align:center;">${i + 1}</td>
-                <td class="mono" style="text-align:center;">${escapeHtml(r.resolutionNumber)}</td>
-                <td style="font-weight:600;">${escapeHtml(r.title)}</td>
-                <td style="text-align:center;color:#2e7d32;font-weight:700;">${r.forVotes ?? 0}</td>
-                <td style="text-align:center;color:#c62828;font-weight:700;">${r.againstVotes ?? 0}</td>
-                <td style="text-align:center;color:#e65100;font-weight:700;">${r.abstainVotes ?? 0}</td>
-                <td style="text-align:center;color:${v.color};font-weight:700;">${v.txt}</td>
-              </tr>`;
-              })
-              .join("")}
-          </tbody>
-        </table>
-      </div>`
-    : "";
+  const totalRow =
+    totalAllShares > 0
+      ? `<tr class="tot"><td></td><td>الإجمالي</td><td style="text-align:center;">${nf(totalAllShares)}</td><td style="text-align:center;">100%</td><td></td><td></td></tr>`
+      : "";
 
-  const minutesHtml = minutes
-    ? `
-      <div class="section">
-        <div class="section-title"><span class="section-icon">٥</span><span>محتوى المحضر — ${escapeHtml(minutes.minutesNumber)}</span></div>
-        ${minutes.summary ? `<div class="summary-box"><strong>الملخص:</strong> ${escapeHtml(minutes.summary)}</div>` : ""}
-        <div class="minutes-content">${escapeHtml(minutes.content || "").replace(/\n/g, "<br/>")}</div>
-      </div>`
-    : "";
+  // رئيس الاجتماع وأمين السر (استنباط من سجل الحضور)
+  const chairman = attendance.find((a) => /رئيس/.test(a.attendeeRole || "")) || null;
+  const secretary = attendance.find((a) => a.attendeeType === "secretary" || /أمين/.test(a.attendeeRole || "")) || null;
+  const chairSig = chairman ? safeImageSrc(chairman.signatureUrl) : null;
+  const secSig = secretary ? safeImageSrc(secretary.signatureUrl) : null;
+
+  // جدول الأعمال
+  const agendaList = (meeting.agenda || "")
+    .split(/\r?\n/)
+    .map((s) =>
+      s
+        .replace(/^\s*[\d\u0660-\u0669]+[\).\-]\s*/, "")
+        .replace(/^\s*[-•]\s*/, "")
+        .trim()
+    )
+    .filter(Boolean);
+
+  // قرارات الجمعية كنص قانوني
+  const resBlocksHtml = resolutions.length
+    ? resolutions
+        .map((r, i) => {
+          const ord = RES_ORDINALS[i] || `رقم (${i + 1})`;
+          const body = (r.description || "").trim();
+          return `
+          <div class="res-block">
+            <div class="res-h">القرار ${ord}: ${escapeHtml(r.title)}</div>
+            ${body ? `<div class="res-body">${escapeHtml(body).replace(/\n/g, "<br/>")}</div>` : ""}
+          </div>`;
+        })
+        .join("")
+    : `<div class="sec-p">لم تُسجَّل قرارات لهذا الاجتماع.</div>`;
+
+  // نتيجة التصويت
+  const allUnanimous = resolutions.length > 0 && resolutions.every((r) => (r.againstVotes || 0) === 0 && (r.abstainVotes || 0) === 0);
+  const votingResultText = allUnanimous
+    ? "بعد المناقشة، تمت الموافقة على القرارات الواردة أعلاه بالإجماع من الأصوات الحاضرة والممثَّلة في الاجتماع."
+    : "بعد المناقشة، تمت الموافقة على القرارات الواردة أعلاه بأغلبية الأصوات الحاضرة والممثَّلة في الاجتماع.";
+
+  const mType = meetingTypeLabel(meeting.meetingType);
 
   return `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
 <meta charset="UTF-8" />
-<title>محضر ${escapeHtml(mType)} — ${escapeHtml(meeting.title)}</title>
+<title>محضر اجتماع ${escapeHtml(asmName)} وقراراتها — ${escapeHtml(meeting.title)}</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
-  @page { size: A4; margin: 12mm 12mm 14mm 12mm; }
+  @page { size: A4; margin: 16mm 16mm 16mm 16mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { font-family: 'Cairo', sans-serif; direction: rtl; background: white; color: #1a1a1a; line-height: 1.55; font-size: 10pt; }
-  .watermark { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; opacity: 0.06; z-index: 0; pointer-events: none; }
-  .watermark img { width: 340px; height: 340px; object-fit: contain; }
-  .doc { max-width: 186mm; margin: 0 auto; position: relative; z-index: 1; }
-  .page-wrap { width: 100%; border-collapse: collapse; }
+  html, body { font-family: 'Cairo', sans-serif; direction: rtl; background: white; color: #1a1a1a; line-height: 1.9; font-size: 11pt; }
+  .watermark { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; opacity: 0.05; z-index: 0; pointer-events: none; }
+  .watermark img { width: 360px; height: 360px; object-fit: contain; }
+  .page-wrap { width: 100%; max-width: 182mm; margin: 0 auto; border-collapse: collapse; position: relative; z-index: 1; }
   .page-wrap > thead > tr > td, .page-wrap > tbody > tr > td { padding: 0; border: none; background: transparent; }
   .page-wrap > tbody > tr { page-break-inside: auto; break-inside: auto; }
-  .page-head-cell { padding-bottom: 2px; }
-  .header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; margin-bottom: 12px; background: linear-gradient(to left, #f6f9f7, #ffffff, #f6f9f7); border: 1.5px solid #1a5f3c; border-radius: 8px; }
-  .logo-row { display: flex; align-items: center; gap: 12px; }
-  .logo { width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(135deg, #1a5f3c, #2e7d4f); color: white; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; }
-  .logo-img { width: 62px; height: 62px; object-fit: contain; }
-  .co-info { line-height: 1.3; }
-  .co-name-ar { font-size: 14pt; font-weight: 800; color: #1a3a2f; }
-  .co-name-en { font-size: 8pt; color: #555; letter-spacing: 1px; }
-  .co-details { font-size: 8pt; color: #666; margin-top: 2px; }
-  .doc-title-box { text-align: center; }
-  .doc-type { background: #1a5f3c; color: white; padding: 4px 14px; border-radius: 14px; font-size: 9pt; font-weight: 700; display: inline-block; }
-  .doc-num { margin-top: 4px; font-weight: 700; font-size: 11pt; color: #1a3a2f; }
-  .meeting-title { text-align: center; font-size: 13pt; font-weight: 800; color: #1a3a2f; padding: 8px; background: #f8faf9; border: 1.5px solid #1a5f3c; border-radius: 6px; margin-bottom: 10px; }
-  .meta-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; padding: 8px; background: #fafaf7; border: 1px solid #e0d8c5; border-radius: 6px; font-size: 9pt; }
-  .meta-cell { display: flex; flex-direction: column; }
-  .meta-label { color: #888; font-size: 7.5pt; }
-  .meta-value { font-weight: 700; color: #1a3a2f; margin-top: 1px; }
-  .section { margin-top: 14px; }
-  .section-title { display: flex; align-items: center; gap: 8px; font-weight: 700; color: #1a3a2f; font-size: 11pt; padding-bottom: 4px; border-bottom: 2px solid #1a5f3c; margin-bottom: 8px; }
-  .section-icon { width: 22px; height: 22px; border-radius: 50%; background: #1a5f3c; color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 10pt; font-weight: 700; }
-  .quorum-summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 8px; }
-  .q-stat { padding: 6px; border-radius: 6px; text-align: center; border: 1.2px solid; }
-  .q-stat.present { background: #e8f5e9; border-color: #2e7d32; color: #1b5e20; }
-  .q-stat.absent { background: #ffebee; border-color: #c62828; color: #b71c1c; }
-  .q-stat.excused { background: #fff3e0; border-color: #e65100; color: #e65100; }
-  .q-stat.proxy { background: #e3f2fd; border-color: #1565c0; color: #0d47a1; }
-  .q-stat.shares { background: #f3e5f5; border-color: #6a1b9a; color: #4a148c; }
-  .q-num { font-size: 16pt; font-weight: 800; }
-  .q-label { font-size: 8pt; font-weight: 700; margin-top: 1px; }
-  .quorum-badge { padding: 6px 10px; text-align: center; font-weight: 700; border-radius: 6px; font-size: 10pt; margin-bottom: 8px; ${quorumMet ? "background:#e8f5e9;color:#1b5e20;border:1.5px solid #2e7d32;" : "background:#ffebee;color:#b71c1c;border:1.5px solid #c62828;"} }
-  table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
-  th { background: #1a5f3c; color: white; padding: 6px 4px; font-weight: 700; }
-  td { padding: 5px 6px; border-bottom: 1px solid #eee; vertical-align: middle; }
-  tr:nth-child(even) td { background: #fafafa; }
-  tr { page-break-inside: avoid; break-inside: avoid; }
-  .mono { font-family: monospace; font-size: 8pt; }
-  .sig-cell { width: 110px; text-align: center; }
-  .sig-cell img { max-height: 36px; max-width: 100px; object-fit: contain; }
-  .sig-empty { color: #aaa; font-style: italic; font-size: 8pt; }
-  .sig-na { color: #ccc; }
-  .sig-date { font-size: 7pt; color: #666; margin-top: 2px; }
-  .agenda-box { padding: 10px 14px; background: #f8faf9; border-right: 4px solid #1a5f3c; border-radius: 4px; white-space: pre-wrap; font-size: 9.5pt; line-height: 1.7; }
-  .summary-box { padding: 8px 12px; background: #fffde7; border-right: 3px solid #f9a825; border-radius: 4px; margin-bottom: 8px; font-size: 9.5pt; }
-  .minutes-content { padding: 8px 12px; line-height: 1.8; text-align: justify; font-size: 10pt; }
-  .meeting-status-badge { padding: 3px 10px; border-radius: 12px; display: inline-block; font-size: 8.5pt; font-weight: 700; background: ${mStat.bg}; color: ${mStat.color}; }
-  .footer { margin-top: 18px; padding: 6px 10px; background: #f5f5f5; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; font-size: 7.5pt; color: #555; border-top: 2px solid #1a5f3c; }
-  .auth-sig-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; padding-top: 14px; border-top: 1.5px dashed #1a5f3c; }
-  .auth-sig { text-align: center; }
-  .auth-sig-line { border-bottom: 1.5px solid #1a3a2f; height: 38px; margin-bottom: 4px; }
-  .auth-sig-label { font-weight: 700; font-size: 9pt; color: #1a3a2f; }
+  .letterhead { text-align: center; border-bottom: 2.5px solid #1a5f3c; padding-bottom: 8px; margin-bottom: 4px; }
+  .lh-row { display: flex; align-items: center; justify-content: center; gap: 14px; }
+  .lh-logo { width: 62px; height: 62px; object-fit: contain; }
+  .lh-co-ar { font-size: 15pt; font-weight: 800; color: #1a3a2f; }
+  .lh-co-en { font-size: 8pt; color: #666; letter-spacing: 1px; }
+  .lh-co-meta { font-size: 8.5pt; color: #555; margin-top: 2px; }
+  .doc-title { text-align: center; font-size: 14pt; font-weight: 800; color: #1a3a2f; margin: 16px 0 4px; }
+  .doc-meta-line { text-align: center; font-size: 10pt; color: #555; margin-bottom: 6px; }
+  .preamble { text-align: justify; font-size: 11pt; line-height: 2.05; margin: 12px 2px; }
+  .sec { margin-top: 16px; }
+  .sec-h { font-size: 12pt; font-weight: 800; color: #1a5f3c; border-right: 4px solid #1a5f3c; padding-right: 8px; margin-bottom: 6px; }
+  .sec-p { text-align: justify; line-height: 2.05; margin-bottom: 6px; }
+  table.att { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin: 8px 0; }
+  table.att th { background: #1a5f3c; color: #fff; padding: 6px 5px; font-weight: 700; border: 1px solid #14492f; }
+  table.att td { padding: 5px 6px; border: 1px solid #cfd8d3; vertical-align: middle; }
+  table.att tr:nth-child(even) td { background: #f6f9f7; }
+  table.att tr.tot td { font-weight: 800; background: #eef4f0; }
+  table.att tr { page-break-inside: avoid; break-inside: avoid; }
+  .sig-inline { max-height: 32px; max-width: 100px; object-fit: contain; }
+  .att-note { font-size: 9pt; color: #555; margin-top: 4px; line-height: 1.8; }
+  ol.agenda { margin: 6px 28px 6px 0; line-height: 2.05; }
+  ol.agenda li { margin-bottom: 4px; }
+  .res-block { margin-bottom: 12px; page-break-inside: avoid; break-inside: avoid; }
+  .res-h { font-weight: 800; color: #1a3a2f; font-size: 11.5pt; margin-bottom: 4px; }
+  .res-body { text-align: justify; line-height: 2.05; white-space: pre-wrap; }
+  .sig-grid { display: flex; justify-content: space-around; gap: 30px; margin-top: 34px; page-break-inside: avoid; break-inside: avoid; }
+  .sig-col { text-align: center; flex: 1; }
+  .sig-title { font-weight: 800; color: #1a3a2f; margin-bottom: 6px; }
+  .sig-name { font-weight: 700; margin-bottom: 2px; }
+  .sig-role { font-size: 9pt; color: #555; margin-bottom: 22px; }
+  .sig-img { max-height: 50px; max-width: 140px; object-fit: contain; display: block; margin: 0 auto 4px; }
+  .sig-line { font-size: 10pt; color: #333; }
+  .footer { margin-top: 22px; padding-top: 8px; border-top: 1.5px solid #1a5f3c; font-size: 8pt; color: #666; display: flex; justify-content: space-between; }
   @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
 </style>
 </head>
 <body>
   ${logoDataUri ? `<div class="watermark"><img src="${logoDataUri}" alt="" /></div>` : ""}
-  <table class="page-wrap doc">
+  <table class="page-wrap">
     <thead>
       <tr>
-        <td class="page-head-cell">
-          <div class="header">
-            <div class="logo-row">
-              ${logoDataUri ? `<img class="logo-img" src="${logoDataUri}" alt="${escapeHtml(co.nameAr)}" />` : `<div class="logo">${escapeHtml((co.nameAr || "B").trim().charAt(0))}</div>`}
-              <div class="co-info">
-                <div class="co-name-ar">${escapeHtml(co.nameAr)}</div>
-                <div class="co-name-en">${escapeHtml(co.nameEn)}</div>
-                <div class="co-details">${escapeHtml(co.details)} | س.ت: ${escapeHtml(co.cr)}</div>
+        <td>
+          <div class="letterhead">
+            <div class="lh-row">
+              ${logoDataUri ? `<img class="lh-logo" src="${logoDataUri}" alt="${escapeHtml(co.nameAr)}" />` : ""}
+              <div>
+                <div class="lh-co-ar">${escapeHtml(co.nameAr)}</div>
+                <div class="lh-co-en">${escapeHtml(co.nameEn)}</div>
+                <div class="lh-co-meta">${escapeHtml(co.details)} — س.ت ${escapeHtml(co.cr)}${co.city ? ` — مدينة ${escapeHtml(co.city)}` : ""}</div>
               </div>
-            </div>
-            <div class="doc-title-box">
-              <div class="doc-type">${escapeHtml(mType)}</div>
-              <div class="doc-num">${escapeHtml(minutes?.minutesNumber || `اجتماع رقم: ${meeting.id}`)}</div>
             </div>
           </div>
         </td>
@@ -362,87 +381,81 @@ export function buildAssemblyMeetingHtml(
       <tr>
         <td>
 
-    <div class="meeting-title">${escapeHtml(meeting.title)}</div>
+          <div class="doc-title">محضر اجتماع ${escapeHtml(asmName)} وقراراتها</div>
+          <div class="doc-meta-line">الاجتماع رقم (${escapeHtml(meeting.meetingNumber || minutes?.minutesNumber || "—")})${meeting.fiscalYear ? ` — العام المالي ${escapeHtml(String(meeting.fiscalYear))}` : ""}</div>
 
-    <div class="meta-row">
-      <div class="meta-cell"><span class="meta-label">تاريخ الانعقاد</span><span class="meta-value">${escapeHtml(fmtDate(meetingDate))}</span></div>
-      <div class="meta-cell"><span class="meta-label">المكان</span><span class="meta-value">${escapeHtml(meeting.location || (meeting.locationType === "virtual" ? "افتراضي" : "-"))}</span></div>
-      <div class="meta-cell"><span class="meta-label">النصاب المطلوب</span><span class="meta-value">${quorumReq}%</span></div>
-      <div class="meta-cell"><span class="meta-label">حالة الاجتماع</span><span class="meta-value"><span class="meeting-status-badge">${mStat.label}</span></span></div>
-    </div>
+          <div class="preamble">إنه في يوم ${weekday ? escapeHtml(weekday) : "(__________)"} الموافق ${hijri ? `(${escapeHtml(hijri)})` : "(__/__/144هـ)"} الموافق ${greg !== "-" ? `(${escapeHtml(greg)})` : "(__/__/2026م)"}، وفي تمام الساعة (${timeStr ? escapeHtml(timeStr) : "________"})، انعقدت ${escapeHtml(asmName)} لـ${escapeHtml(co.nameAr)} (${escapeHtml(legalForm)})، في ${escapeHtml(meeting.location || "مقر الشركة")}${co.city ? ` بمدينة ${escapeHtml(co.city)}` : ""}، وذلك بناءً على الدعوة الموجَّهة من مجلس الإدارة وفقاً لأحكام نظام الشركات والنظام الأساس للشركة.</div>
 
-    ${
-      meeting.agenda
-        ? `<div class="section">
-            <div class="section-title"><span class="section-icon">١</span><span>جدول الأعمال</span></div>
-            <div class="agenda-box">${escapeHtml(meeting.agenda)}</div>
-          </div>`
-        : ""
-    }
+          <div class="sec">
+            <div class="sec-h">${SECTION_ORDINALS[0]}: حضور الاجتماع واكتمال النصاب</div>
+            <div class="sec-p">حضر الاجتماع المساهمون التالية أسماؤهم (أصالةً أو وكالةً)، وقد بلغت نسبة الأسهم الممثَّلة في الاجتماع (${representedPct.toFixed(2)}%) من إجمالي الأسهم المثبتة في كشف الحضور أدناه، وهي النسبة التي ${quorumMet ? "يكتمل بها النصاب القانوني اللازم لصحة انعقاد" : "لا يكتمل بها النصاب القانوني اللازم لانعقاد"} ${escapeHtml(asmName)} وفقاً للنظام الأساس للشركة ونظام الشركات (النصاب المطلوب ${quorumReq}%).</div>
+            <table class="att">
+              <thead>
+                <tr>
+                  <th style="width:34px;">م</th>
+                  <th>اسم المساهم</th>
+                  <th style="width:92px;">عدد الأسهم</th>
+                  <th style="width:80px;">نسبة الملكية</th>
+                  <th style="width:96px;">صفة الحضور</th>
+                  <th style="width:120px;">التوقيع</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${attRowsHtml}
+                ${totalRow}
+              </tbody>
+            </table>
+            ${totalAllShares > 0 ? `<div class="att-note">إجمالي عدد الأسهم الممثَّلة في الجدول أعلاه (${nf(totalAllShares)}) سهم.</div>` : ""}
+          </div>
 
-    <div class="section">
-      <div class="section-title"><span class="section-icon">٢</span><span>إحصائيات الحضور والنصاب</span></div>
-      <div class="quorum-summary">
-        <div class="q-stat present"><div class="q-num">${presentCount}</div><div class="q-label">حاضر</div></div>
-        <div class="q-stat absent"><div class="q-num">${absentCount}</div><div class="q-label">غائب</div></div>
-        <div class="q-stat excused"><div class="q-num">${excusedCount}</div><div class="q-label">عذر</div></div>
-        <div class="q-stat proxy"><div class="q-num">${proxyCount}</div><div class="q-label">بالوكالة</div></div>
-        <div class="q-stat shares"><div class="q-num">${totalShares.toLocaleString("ar-SA-u-nu-latn")}</div><div class="q-label">أسهم حاضرة</div></div>
-      </div>
-      <div class="quorum-badge">
-        نسبة الحضور: ${attendancePct}% — ${quorumMet ? `✓ تم تحقق النصاب القانوني (المطلوب ${quorumReq}%)` : `✗ لم يتحقق النصاب القانوني (المطلوب ${quorumReq}%)`}
-      </div>
-    </div>
+          <div class="sec">
+            <div class="sec-h">${SECTION_ORDINALS[1]}: رئاسة الاجتماع وأمانة السر</div>
+            <div class="sec-p">ترأّس الاجتماع ${chairman ? `الأستاذ/ ${escapeHtml(chairman.attendeeName)} — ${escapeHtml(chairman.attendeeRole || "رئيس مجلس الإدارة")}` : "الأستاذ/ (__________) — رئيس مجلس الإدارة"}، وتولّى أمانة سر الاجتماع ${secretary ? `${escapeHtml(secretary.attendeeName)} — ${escapeHtml(secretary.attendeeRole || "أمين سر مجلس الإدارة")}` : "(__________) — أمين سر مجلس الإدارة"}، وتم التحقق من اكتمال النصاب وصحة انعقاد ${escapeHtml(asmName)}.</div>
+          </div>
 
-    <div class="section">
-      <div class="section-title"><span class="section-icon">٣</span><span>سجل الحضور والتوقيعات (${attendance.length})</span></div>
-      <table>
-        <thead>
-          <tr>
-            <th style="width:30px;">#</th>
-            <th>الاسم</th>
-            <th style="width:90px;">الصفة</th>
-            <th style="width:70px;">الأسهم</th>
-            <th style="width:70px;">الحالة</th>
-            <th style="width:90px;">طريقة الحضور</th>
-            <th style="width:120px;">التوقيع</th>
-          </tr>
-        </thead>
-        <tbody>${attendanceRowsHtml}</tbody>
-      </table>
-    </div>
+          <div class="sec">
+            <div class="sec-h">${SECTION_ORDINALS[2]}: جدول الأعمال</div>
+            ${agendaList.length ? `<ol class="agenda">${agendaList.map((it) => `<li>${escapeHtml(it)}</li>`).join("")}</ol>` : `<div class="sec-p">لم يُدرج جدول أعمال تفصيلي لهذا الاجتماع.</div>`}
+          </div>
 
-    ${resolutionsHtml}
-    ${minutesHtml}
+          <div class="sec">
+            <div class="sec-h">${SECTION_ORDINALS[3]}: قرارات الجمعية</div>
+            ${resBlocksHtml}
+          </div>
 
-    ${
-      meeting.notes
-        ? `<div class="section">
-            <div class="section-title"><span class="section-icon">📝</span><span>ملاحظات</span></div>
-            <div class="agenda-box">${escapeHtml(meeting.notes)}</div>
-          </div>`
-        : ""
-    }
+          <div class="sec">
+            <div class="sec-h">${SECTION_ORDINALS[4]}: نتيجة التصويت</div>
+            <div class="sec-p">${votingResultText}</div>
+          </div>
 
-    <div class="auth-sig-row">
-      <div class="auth-sig">
-        <div class="auth-sig-line"></div>
-        <div class="auth-sig-label">رئيس الاجتماع</div>
-      </div>
-      <div class="auth-sig">
-        <div class="auth-sig-line"></div>
-        <div class="auth-sig-label">أمين السر</div>
-      </div>
-      <div class="auth-sig">
-        <div class="auth-sig-line"></div>
-        <div class="auth-sig-label">مدقق المحضر</div>
-      </div>
-    </div>
+          <div class="sec">
+            <div class="sec-h">${SECTION_ORDINALS[5]}: ختام الاجتماع</div>
+            <div class="sec-p">وحيث لم يكن هناك ما يُستجد من أعمال، رُفعت الجلسة، وتم تحرير هذا المحضر وتوقيعه من المختصين.</div>
+          </div>
 
-    <div class="footer">
-      <div>${escapeHtml(co.nameAr)} | س.ت: ${escapeHtml(co.cr)}</div>
-      <div>تم الإصدار: ${new Date().toLocaleDateString("ar-SA-u-nu-latn")} | محضر رسمي</div>
-    </div>
+          ${meeting.notes ? `<div class="sec"><div class="sec-h">ملاحظات</div><div class="sec-p" style="white-space:pre-wrap;">${escapeHtml(meeting.notes)}</div></div>` : ""}
+
+          <div class="sig-grid">
+            <div class="sig-col">
+              <div class="sig-title">رئيس ${escapeHtml(asmName)}</div>
+              <div class="sig-name">${chairman ? escapeHtml(chairman.attendeeName) : "(__________)"}</div>
+              <div class="sig-role">(${chairman && chairman.attendeeRole ? escapeHtml(chairman.attendeeRole) : "رئيس مجلس الإدارة"})</div>
+              ${chairSig ? `<img class="sig-img" src="${chairSig}" alt="" />` : ""}
+              <div class="sig-line">التوقيع: ........................</div>
+            </div>
+            <div class="sig-col">
+              <div class="sig-title">أمين سر ${escapeHtml(asmName)}</div>
+              <div class="sig-name">${secretary ? escapeHtml(secretary.attendeeName) : "(__________)"}</div>
+              <div class="sig-role">(${secretary && secretary.attendeeRole ? escapeHtml(secretary.attendeeRole) : "أمين سر مجلس الإدارة"})</div>
+              ${secSig ? `<img class="sig-img" src="${secSig}" alt="" />` : ""}
+              <div class="sig-line">التوقيع: ........................</div>
+            </div>
+          </div>
+
+          <div class="footer">
+            <div>${escapeHtml(co.nameAr)} — س.ت ${escapeHtml(co.cr)}</div>
+            <div>محضر ${escapeHtml(mType)} رسمي — تم الإصدار: ${new Date().toLocaleDateString("ar-SA-u-nu-latn")}</div>
+          </div>
         </td>
       </tr>
     </tbody>
@@ -470,6 +483,9 @@ export async function fetchMeetingPrintData(meetingId: number): Promise<{
       id: r.id,
       resolutionNumber: r.resolutionNumber,
       title: r.title,
+      description: r.description,
+      resolutionType: r.resolutionType,
+      assemblyType: r.assemblyType,
       status: r.status,
       forVotes: r.forVotes,
       againstVotes: r.againstVotes,
