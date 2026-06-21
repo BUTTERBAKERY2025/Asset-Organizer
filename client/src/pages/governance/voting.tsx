@@ -479,7 +479,7 @@ export default function VotingPage() {
             margin: 5mm 8mm 8mm 8mm;
           }
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Cairo', sans-serif; padding: 5px 10px 30px 10px; background: white; color: #333; direction: rtl; font-size: 9px; line-height: 1.2; }
+          body { font-family: 'Cairo', sans-serif; padding: 5px 10px 20px 10px; background: white; color: #333; direction: rtl; font-size: 9px; line-height: 1.2; }
           
           .page-footer {
             position: fixed;
@@ -515,15 +515,15 @@ export default function VotingPage() {
           
           .resolution-section { background: #fffef5; border: 1px solid #d4a853; border-radius: 3px; padding: 4px 6px; margin-bottom: 4px; }
           .resolution-title { font-size: 9px; font-weight: 700; color: #333; margin-bottom: 2px; }
-          .resolution-text { font-size: 8px; line-height: 1.3; color: #444; white-space: pre-wrap; }
+          .resolution-text { font-size: 8px; line-height: 1.25; color: #444; white-space: pre-wrap; }
           
           .result-badge { display: inline-block; padding: 2px 10px; border-radius: 8px; font-size: 9px; font-weight: 700; }
           .result-approved { background: linear-gradient(135deg, #dcfce7, #bbf7d0); color: #166534; border: 2px solid #22c55e; }
           .result-rejected { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #991b1b; border: 2px solid #ef4444; }
           
           .votes-table { width: 100%; border-collapse: collapse; margin-bottom: 3px; font-size: 8px; }
-          .votes-table th { background: linear-gradient(135deg, #b8962f, #d4a853); color: white; padding: 2px 3px; text-align: right; font-weight: 600; font-size: 7px; }
-          .votes-table td { padding: 2px 3px; border-bottom: 1px solid #e0e0e0; vertical-align: middle; font-size: 7px; }
+          .votes-table th { background: linear-gradient(135deg, #b8962f, #d4a853); color: white; padding: 1px 3px; text-align: right; font-weight: 600; font-size: 7px; }
+          .votes-table td { padding: 1px 3px; border-bottom: 1px solid #e0e0e0; vertical-align: middle; font-size: 7px; }
           .votes-table tr:nth-child(even) { background: #fafafa; }
           
           .vote-badge { padding: 1px 4px; border-radius: 6px; font-size: 7px; font-weight: 600; display: inline-block; }
@@ -533,10 +533,10 @@ export default function VotingPage() {
           
           .signature-img { max-width: 60px; max-height: 18px; border: 1px solid #ddd; border-radius: 2px; }
           
-          .footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e0e0e0; padding-top: 3px; margin-top: 3px; font-size: 7px; color: #888; page-break-inside: avoid; break-inside: avoid; }
-          .stamp-area { padding: 2px 10px; text-align: center; color: #999; border-radius: 3px; font-size: 8px; page-break-inside: avoid; break-inside: avoid; }
+          .footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e0e0e0; padding-top: 2px; margin-top: 2px; font-size: 7px; color: #888; page-break-inside: avoid; break-inside: avoid; }
+          .stamp-area { padding: 0 10px; text-align: center; color: #999; border-radius: 3px; font-size: 8px; page-break-inside: avoid; break-inside: avoid; }
           .stamp-img { display: inline-block; page-break-inside: avoid; break-inside: avoid; }
-          .stamp-img svg { width: 170px; height: 170px; display: block; margin: 0 auto; }
+          .stamp-img svg { width: 160px; height: 160px; display: block; margin: 0 auto; }
           
           @media print {
             body { padding: 3px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
