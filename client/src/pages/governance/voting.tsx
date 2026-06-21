@@ -536,7 +536,7 @@ export default function VotingPage() {
           .footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e0e0e0; padding-top: 3px; margin-top: 3px; font-size: 7px; color: #888; }
           .stamp-area { padding: 2px 10px; text-align: center; color: #999; border-radius: 3px; font-size: 8px; }
           .stamp-img { display: inline-block; }
-          .stamp-img svg { width: 150px; height: 150px; display: block; margin: 0 auto; }
+          .stamp-img svg { width: 220px; height: 220px; display: block; margin: 0 auto; }
           
           @media print {
             body { padding: 3px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
