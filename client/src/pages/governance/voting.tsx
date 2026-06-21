@@ -442,12 +442,19 @@ export default function VotingPage() {
       '</div>';
     }
 
+    const docTitle =
+      (resolution.resolutionType === 'extraordinary' || resolution.resolutionType === 'extraordinary_assembly')
+        ? 'محضر قرار الجمعية العمومية غير العادية'
+        : (resolution.resolutionType === 'general_assembly' || resolution.resolutionType === 'ordinary_assembly')
+          ? 'محضر قرار الجمعية العمومية العادية'
+          : 'محضر قرار مجلس الإدارة';
+
     const printContent = `
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
         <meta charset="UTF-8">
-        <title>قرار مجلس الإدارة - ${sanitize(resolution.resolutionNumber)}</title>
+        <title>${docTitle} - ${sanitize(resolution.resolutionNumber)}</title>
         <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
         <style>
           @page { 
@@ -481,6 +488,9 @@ export default function VotingPage() {
           .cr-number { font-size: 8px; color: #b8962f; font-weight: 600; }
           .doc-title { font-size: 12px; font-weight: 700; color: #b8962f; }
           .doc-number { font-size: 9px; color: #666; background: #f5f5f5; padding: 2px 8px; border-radius: 8px; display: inline-block; }
+
+          .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 90px; font-weight: 800; color: rgba(184, 150, 47, 0.07); white-space: nowrap; z-index: -1; pointer-events: none; }
+          .watermark-sub { position: fixed; top: 58%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 28px; font-weight: 700; letter-spacing: 4px; color: rgba(184, 150, 47, 0.07); white-space: nowrap; z-index: -1; pointer-events: none; }
           
           .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-bottom: 4px; }
           .info-box { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 3px; padding: 4px 6px; }
@@ -519,6 +529,8 @@ export default function VotingPage() {
         </style>
       </head>
       <body>
+        <div class="watermark">شركة الزبد الأفضل التجارية</div>
+        <div class="watermark-sub">BUTTER BAKERY</div>
         <div class="document-header">
           <div class="header-right">
             <div class="logo">BUTTER BAKERY</div>
@@ -527,7 +539,7 @@ export default function VotingPage() {
             <div class="cr-number">سجل تجاري: 7026155296</div>
           </div>
           <div class="header-center">
-            <div class="doc-title">محضر قرار مجلس الإدارة</div>
+            <div class="doc-title">${docTitle}</div>
             <div class="doc-number">رقم القرار: ${sanitize(resolution.resolutionNumber) || '-'}</div>
           </div>
           <div class="header-left">
