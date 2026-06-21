@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearch } from "wouter";
 import { Layout } from "@/components/layout";
@@ -357,6 +357,19 @@ export default function ResolutionsPage() {
     return Number.isNaN(n) ? null : n;
   }, [search]);
 
+  // النوع الافتراضي عند الإنشاء (يُمرَّر من صفحة الجمعية العمومية عبر ?type=)
+  const createTypeParam = useMemo(() => {
+    const params = new URLSearchParams(search);
+    const t = params.get("type");
+    const valid = resolutionTypes.map((rt) => rt.value);
+    return t && valid.includes(t) ? t : null;
+  }, [search]);
+  const defaultResolutionType = createTypeParam ?? "regular";
+
+  useEffect(() => {
+    if (createTypeParam) setIsDialogOpen(true);
+  }, [createTypeParam]);
+
   const filteredResolutions = resolutions.filter((r) => {
     const matchesSearch = r.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === "all" || r.status === statusFilter;
@@ -486,7 +499,7 @@ export default function ResolutionsPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="resolutionType">نوع القرار *</Label>
-                      <Select name="resolutionType" defaultValue="regular">
+                      <Select name="resolutionType" defaultValue={defaultResolutionType}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -705,6 +718,13 @@ export default function ResolutionsPage() {
                               const status = resolutionStatuses.find(s => s.value === resolution.status)?.label || resolution.status;
                               const priority = priorities.find(p => p.value === resolution.priority)?.label || resolution.priority;
                               const category = categories.find(c => c.value === resolution.category)?.label || resolution.category;
+                              const isAssemblyDoc = ['general_assembly', 'ordinary'].includes(resolution.resolutionType);
+                              const isExtraordinaryDoc = ['extraordinary_assembly', 'extraordinary'].includes(resolution.resolutionType);
+                              const docTypeBadge = isAssemblyDoc
+                                ? 'قرار الجمعية العمومية العادية'
+                                : isExtraordinaryDoc
+                                  ? 'قرار الجمعية العمومية غير العادية'
+                                  : 'قرار مجلس الإدارة';
                               
                               // جلب التوقيعات الإلكترونية
                               let signaturesData: ResolutionSignature[] = [];
@@ -1224,7 +1244,7 @@ export default function ResolutionsPage() {
                                         </div>
                                       </div>
                                       <div class="doc-title-section">
-                                        <div class="doc-type-badge">قـــرار مجلس الإدارة</div>
+                                        <div class="doc-type-badge">${docTypeBadge}</div>
                                         <div class="resolution-number">رقم: ${resolution.resolutionNumber}</div>
                                       </div>
                                       <div class="meta-section">

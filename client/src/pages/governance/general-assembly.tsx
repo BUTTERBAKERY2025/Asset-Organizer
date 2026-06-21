@@ -1063,7 +1063,7 @@ export default function GeneralAssemblyPage() {
                 </CardDescription>
               </div>
               <div className="flex gap-2">
-                <Link href="/governance/resolutions">
+                <Link href="/governance/resolutions?type=general_assembly">
                   <Button variant="outline" className="gap-2" data-testid="button-new-resolution">
                     <Plus className="h-4 w-4" />
                     قرار جديد
@@ -1088,7 +1088,7 @@ export default function GeneralAssemblyPage() {
                     <div className="text-center py-12 text-gray-500" data-testid="empty-assembly-resolutions">
                       <Gavel className="h-16 w-16 mx-auto mb-4 opacity-30" />
                       <p>لا توجد قرارات جمعية عمومية حالياً</p>
-                      <Link href="/governance/resolutions">
+                      <Link href="/governance/resolutions?type=general_assembly">
                         <Button className="mt-4">
                           <Plus className="h-4 w-4 ml-2" />
                           إنشاء قرار جديد
