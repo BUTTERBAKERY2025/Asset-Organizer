@@ -20,5 +20,6 @@
 - [Timesheet employee modes](timesheet-employee-modes.md) — dashboard active-only vs attendance-based list; transferred-out rows are view-only, canGenerate must mirror generate-bulk's branch-membership gate.
 - [Timesheet no-schedule & metric parity](timesheet-no-schedule.md) — never fake 08:00-16:00/absent for unscheduled days (use no_schedule); frontend-derived metrics must reuse backend predicates (late = status==="late").
 - [Timesheet cross-branch reports](timesheet-cross-branch-reports.md) — reports fetch schedule/attendance across ALL branches (transferred employees); each generate path MUST then gate target-employee branch membership or it leaks another branch's data.
+- [Print-window asset embedding](print-window-asset-embedding.md) — window.open+document.write print docs have about:blank origin; embed logos/watermark as base64 data URI (cache only on success), fixed+low-opacity = per-page watermark.
 - [Leave notify channels & date-edit](leave-notify-channels.md) — notifyEmployeeOfDecision defaults WhatsApp-only (one queue row per channel); pass channels:["whatsapp","sms"] for dual; editing leave dates keeps approval as-is by design.
 - [Approval chains](approval-chains.md) — leave approval chains by job title; snapshot in leave_requests.approvalChain; 2 partial unique indexes (branch vs default); review gate must cover approve AND reject.

@@ -1,6 +1,8 @@
 // مولّد قرار الجمعية العمومية الرسمي القابل للطباعة والتصدير PDF
 // Official General Assembly Resolution Printer with Voting Signatures
 
+import { getCompanyLogoDataUri } from "./company-logo-data";
+
 export interface PrintSignature {
   id: number;
   memberName?: string;
@@ -132,7 +134,8 @@ export function buildAssemblyResolutionHtml(
   signatures: PrintSignature[],
   votes: PrintVote[],
   meeting?: PrintMeeting,
-  company?: CompanyInfo
+  company?: CompanyInfo,
+  logoDataUri?: string | null
 ): string {
   const co = { ...DEFAULT_COMPANY, ...(company || {}) };
   const st = statusBadge(resolution.status);
@@ -200,10 +203,13 @@ export function buildAssemblyResolutionHtml(
   @page { size: A4; margin: 12mm 12mm 14mm 12mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { font-family: 'Cairo', sans-serif; direction: rtl; background: white; color: #1a1a1a; line-height: 1.55; font-size: 10.5pt; }
-  .doc { max-width: 186mm; margin: 0 auto; }
+  .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 360px; height: 360px; opacity: 0.06; z-index: 0; pointer-events: none; }
+  .watermark img { width: 100%; height: 100%; object-fit: contain; }
+  .doc { max-width: 186mm; margin: 0 auto; position: relative; z-index: 1; }
   .header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; margin-bottom: 12px; background: linear-gradient(to left, #f6f9f7, #ffffff, #f6f9f7); border: 1.5px solid #1a5f3c; border-radius: 8px; }
   .logo-row { display: flex; align-items: center; gap: 12px; }
   .logo { width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(135deg, #1a5f3c, #2e7d4f); color: white; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; }
+  .logo-img { width: 62px; height: 62px; object-fit: contain; }
   .co-info { line-height: 1.3; }
   .co-name-ar { font-size: 14pt; font-weight: 800; color: #1a3a2f; }
   .co-name-en { font-size: 8pt; color: #555; letter-spacing: 1px; }
@@ -256,9 +262,10 @@ export function buildAssemblyResolutionHtml(
 </head>
 <body>
   <div class="doc">
+    ${logoDataUri ? `<div class="watermark"><img src="${logoDataUri}" alt="" /></div>` : ""}
     <div class="header">
       <div class="logo-row">
-        <div class="logo">${escapeHtml((co.nameAr || "B").trim().charAt(0))}</div>
+        ${logoDataUri ? `<img class="logo-img" src="${logoDataUri}" alt="${escapeHtml(co.nameAr)}" />` : `<div class="logo">${escapeHtml((co.nameAr || "B").trim().charAt(0))}</div>`}
         <div class="co-info">
           <div class="co-name-ar">${escapeHtml(co.nameAr)}</div>
           <div class="co-name-en">${escapeHtml(co.nameEn)}</div>
@@ -341,7 +348,8 @@ export async function printAssemblyResolution(
   company?: CompanyInfo
 ): Promise<void> {
   const { signatures, votes } = await fetchResolutionPrintData(resolution.id);
-  const html = buildAssemblyResolutionHtml(resolution, signatures, votes, meeting, company);
+  const logo = await getCompanyLogoDataUri();
+  const html = buildAssemblyResolutionHtml(resolution, signatures, votes, meeting, company, logo);
   const w = window.open("", "_blank");
   if (!w) {
     alert("الرجاء السماح بالنوافذ المنبثقة لطباعة القرار");

@@ -1,6 +1,8 @@
 // مولّد محضر اجتماع الجمعية العمومية الرسمي القابل للطباعة والتصدير
 // Official General Assembly Meeting Minutes Printer with Attendee Signatures
 
+import { getCompanyLogoDataUri } from "./company-logo-data";
+
 export interface MeetingPrint {
   id: number;
   title: string;
@@ -167,7 +169,8 @@ export function buildAssemblyMeetingHtml(
   attendance: AttendancePrint[],
   resolutions: MeetingResolutionPrint[],
   minutes?: MinutesPrint | null,
-  company?: MeetingCompanyInfo
+  company?: MeetingCompanyInfo,
+  logoDataUri?: string | null
 ): string {
   const co = { ...DEFAULT_COMPANY, ...(company || {}) };
   const mType = meetingTypeLabel(meeting.meetingType);
@@ -273,10 +276,13 @@ export function buildAssemblyMeetingHtml(
   @page { size: A4; margin: 12mm 12mm 14mm 12mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { font-family: 'Cairo', sans-serif; direction: rtl; background: white; color: #1a1a1a; line-height: 1.55; font-size: 10pt; }
-  .doc { max-width: 186mm; margin: 0 auto; }
+  .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 360px; height: 360px; opacity: 0.06; z-index: 0; pointer-events: none; }
+  .watermark img { width: 100%; height: 100%; object-fit: contain; }
+  .doc { max-width: 186mm; margin: 0 auto; position: relative; z-index: 1; }
   .header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; margin-bottom: 12px; background: linear-gradient(to left, #f6f9f7, #ffffff, #f6f9f7); border: 1.5px solid #1a5f3c; border-radius: 8px; }
   .logo-row { display: flex; align-items: center; gap: 12px; }
   .logo { width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(135deg, #1a5f3c, #2e7d4f); color: white; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; }
+  .logo-img { width: 62px; height: 62px; object-fit: contain; }
   .co-info { line-height: 1.3; }
   .co-name-ar { font-size: 14pt; font-weight: 800; color: #1a3a2f; }
   .co-name-en { font-size: 8pt; color: #555; letter-spacing: 1px; }
@@ -327,9 +333,10 @@ export function buildAssemblyMeetingHtml(
 </head>
 <body>
   <div class="doc">
+    ${logoDataUri ? `<div class="watermark"><img src="${logoDataUri}" alt="" /></div>` : ""}
     <div class="header">
       <div class="logo-row">
-        <div class="logo">${escapeHtml((co.nameAr || "B").trim().charAt(0))}</div>
+        ${logoDataUri ? `<img class="logo-img" src="${logoDataUri}" alt="${escapeHtml(co.nameAr)}" />` : `<div class="logo">${escapeHtml((co.nameAr || "B").trim().charAt(0))}</div>`}
         <div class="co-info">
           <div class="co-name-ar">${escapeHtml(co.nameAr)}</div>
           <div class="co-name-en">${escapeHtml(co.nameEn)}</div>
@@ -458,7 +465,8 @@ export async function fetchMeetingPrintData(meetingId: number): Promise<{
 
 export async function printAssemblyMeeting(meeting: MeetingPrint, company?: MeetingCompanyInfo): Promise<void> {
   const { attendance, minutes, resolutions } = await fetchMeetingPrintData(meeting.id);
-  const html = buildAssemblyMeetingHtml(meeting, attendance, resolutions, minutes, company);
+  const logo = await getCompanyLogoDataUri();
+  const html = buildAssemblyMeetingHtml(meeting, attendance, resolutions, minutes, company, logo);
   const w = window.open("", "_blank");
   if (!w) {
     alert("الرجاء السماح بالنوافذ المنبثقة لطباعة المحضر");
