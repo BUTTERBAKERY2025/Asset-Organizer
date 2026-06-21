@@ -2355,22 +2355,26 @@ export function registerGovernanceRoutes(app: Express) {
       const newSignatures: any[] = [];
       
       if (isAssemblyResolution) {
-        const activeShareholders = await db.select().from(shareholders).where(eq(shareholders.status, "active"));
-        
-        if (activeShareholders.length === 0) {
-          return res.status(400).json({ error: "لا يوجد مساهمين نشطين" });
+        // قرار الجمعية العمومية يوقّع عليه رئيس مجلس الإدارة وأمين السر فقط (واحد لكل منصب)
+        const activeMembers = await db.select().from(boardMembers).where(eq(boardMembers.status, "active"));
+        const chairman = activeMembers.find(m => m.position === "chairman");
+        const secretary = activeMembers.find(m => m.position === "secretary");
+        const signers = [chairman, secretary].filter((m): m is typeof activeMembers[number] => !!m);
+
+        if (signers.length === 0) {
+          return res.status(400).json({ error: "لا يوجد رئيس مجلس إدارة أو أمين سر نشط. الرجاء تحديد منصب \"رئيس مجلس الإدارة\" و\"أمين السر\" في صفحة أعضاء المجلس أولاً." });
         }
-        
-        const existingShareholderIds = new Set(existingSignatures.filter(s => s.shareholderId).map(s => s.shareholderId));
-        
-        for (const sh of activeShareholders) {
-          if (!existingShareholderIds.has(sh.id)) {
+
+        const existingMemberIds = new Set(existingSignatures.filter(s => s.boardMemberId).map(s => s.boardMemberId));
+
+        for (const member of signers) {
+          if (!existingMemberIds.has(member.id)) {
             const signatureToken = crypto.randomBytes(32).toString('hex');
             newSignatures.push({
               resolutionId,
-              shareholderId: sh.id,
-              signerName: sh.fullName,
-              signerType: "shareholder",
+              boardMemberId: member.id,
+              signerName: member.fullName,
+              signerType: "board_member",
               signatureToken,
               status: "pending" as const,
               expiresAt,
@@ -2409,7 +2413,7 @@ export function registerGovernanceRoutes(app: Express) {
       res.json({ 
         created: newSignatures.length, 
         total: existingSignatures.length + newSignatures.length,
-        signerType: isAssemblyResolution ? "shareholders" : "board_members",
+        signerType: isAssemblyResolution ? "chairman_secretary" : "board_members",
       });
     } catch (error) {
       console.error("Error creating signature requests:", error);
