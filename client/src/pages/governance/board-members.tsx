@@ -48,7 +48,7 @@ const positions = [
   { value: "chairman", label: "رئيس مجلس الإدارة" },
   { value: "vice_chairman", label: "نائب رئيس مجلس الإدارة" },
   { value: "member", label: "عضو مجلس الإدارة" },
-  { value: "secretary", label: "أمين المجلس" },
+  { value: "secretary", label: "أمين السر" },
   { value: "independent_member", label: "عضو مستقل" },
 ];
 
