@@ -58,6 +58,7 @@ import {
   Edit,
   Archive,
 } from "lucide-react";
+import companyStampSvg from "@assets/company-stamp.svg?raw";
 import type { BoardResolution, ResolutionVote, Shareholder } from "@shared/schema";
 import { exportToExcel, exportToCSV, printAsPDF } from "@/lib/export-utils";
 
@@ -375,6 +376,16 @@ export default function VotingPage() {
     const requiredMajorityInfo = getRequiredMajority(resolution);
     const isApproved = Number(approvalPercentage) >= requiredMajorityInfo.percentage;
 
+    // توقيع رئيس مجلس الإدارة (عبدالحافظ احمد إبراهيم ال مكوش) — يُؤخذ من توقيعه الإلكتروني
+    const normalizeAr = (s: string | undefined | null) =>
+      (s || '').replace(/[إأآا]/g, 'ا').replace(/\s+/g, ' ').trim();
+    const chairmanToken = votedTokens.find(t => {
+      const n = normalizeAr(t.shareholderName);
+      return n.startsWith('عبدالحافظ') && n.includes('مكوش');
+    });
+    const chairmanSig = isValidSignature(chairmanToken?.signatureData) ? chairmanToken!.signatureData : '';
+    const chairmanName = chairmanToken?.shareholderName || 'عبدالحافظ احمد إبراهيم ال مكوش';
+
     // بناء صفحات الجدول مع ترقيم لكل صفحة
     const rowsPerPage = 15;
     const totalPages = Math.max(1, Math.ceil(votedTokens.length / rowsPerPage));
@@ -413,10 +424,16 @@ export default function VotingPage() {
             '<div>نظام BUTTER BAKERY - إدارة حوكمة الشركات | سجل تجاري: 7026155296</div>' +
             '<div>تاريخ الطباعة: ' + new Date().toLocaleDateString('en-GB') + ' - ' + new Date().toLocaleTimeString('en-GB') + '</div>' +
           '</div>' +
-          '<div class="stamp-area">ختم الشركة</div>' +
+          '<div class="stamp-area">' +
+            '<div style="margin-bottom: 2px;">ختم الشركة</div>' +
+            '<div class="stamp-img">' + companyStampSvg + '</div>' +
+          '</div>' +
           '<div style="text-align: left;">' +
             '<div style="font-weight: 600; color: #333; margin-bottom: 3px;">توقيع رئيس مجلس الإدارة</div>' +
-            '<div style="border-bottom: 1px solid #333; width: 150px; height: 40px;"></div>' +
+            (chairmanSig
+              ? '<img src="' + chairmanSig + '" alt="توقيع رئيس مجلس الإدارة" style="max-width: 130px; max-height: 45px; display: block; margin-bottom: 2px;" />'
+              : '<div style="border-bottom: 1px solid #333; width: 150px; height: 40px;"></div>') +
+            '<div style="font-size: 8px; color: #333; font-weight: 600;">' + sanitize(chairmanName) + '</div>' +
           '</div>' +
         '</div>';
       }
@@ -488,9 +505,6 @@ export default function VotingPage() {
           .cr-number { font-size: 8px; color: #b8962f; font-weight: 600; }
           .doc-title { font-size: 12px; font-weight: 700; color: #b8962f; }
           .doc-number { font-size: 9px; color: #666; background: #f5f5f5; padding: 2px 8px; border-radius: 8px; display: inline-block; }
-
-          .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 90px; font-weight: 800; color: rgba(184, 150, 47, 0.07); white-space: nowrap; z-index: -1; pointer-events: none; }
-          .watermark-sub { position: fixed; top: 58%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 28px; font-weight: 700; letter-spacing: 4px; color: rgba(184, 150, 47, 0.07); white-space: nowrap; z-index: -1; pointer-events: none; }
           
           .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-bottom: 4px; }
           .info-box { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 3px; padding: 4px 6px; }
@@ -520,7 +534,9 @@ export default function VotingPage() {
           .signature-img { max-width: 60px; max-height: 18px; border: 1px solid #ddd; border-radius: 2px; }
           
           .footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e0e0e0; padding-top: 3px; margin-top: 3px; font-size: 7px; color: #888; }
-          .stamp-area { border: 1px dashed #ccc; padding: 6px 15px; text-align: center; color: #999; border-radius: 3px; font-size: 7px; }
+          .stamp-area { padding: 4px 10px; text-align: center; color: #999; border-radius: 3px; font-size: 7px; }
+          .stamp-img { display: inline-block; }
+          .stamp-img svg { width: 72px; height: 72px; display: block; margin: 0 auto; }
           
           @media print {
             body { padding: 3px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -529,8 +545,6 @@ export default function VotingPage() {
         </style>
       </head>
       <body>
-        <div class="watermark">شركة الزبد الأفضل التجارية</div>
-        <div class="watermark-sub">BUTTER BAKERY</div>
         <div class="document-header">
           <div class="header-right">
             <div class="logo">BUTTER BAKERY</div>
