@@ -203,9 +203,13 @@ export function buildAssemblyResolutionHtml(
   @page { size: A4; margin: 12mm 12mm 14mm 12mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { font-family: 'Cairo', sans-serif; direction: rtl; background: white; color: #1a1a1a; line-height: 1.55; font-size: 10.5pt; }
-  .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 360px; height: 360px; opacity: 0.06; z-index: 0; pointer-events: none; }
-  .watermark img { width: 100%; height: 100%; object-fit: contain; }
+  .watermark { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; opacity: 0.06; z-index: 0; pointer-events: none; }
+  .watermark img { width: 340px; height: 340px; object-fit: contain; }
   .doc { max-width: 186mm; margin: 0 auto; position: relative; z-index: 1; }
+  .page-wrap { width: 100%; border-collapse: collapse; }
+  .page-wrap > thead > tr > td, .page-wrap > tbody > tr > td { padding: 0; border: none; background: transparent; }
+  .page-wrap > tbody > tr { page-break-inside: auto; break-inside: auto; }
+  .page-head-cell { padding-bottom: 2px; }
   .header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; margin-bottom: 12px; background: linear-gradient(to left, #f6f9f7, #ffffff, #f6f9f7); border: 1.5px solid #1a5f3c; border-radius: 8px; }
   .logo-row { display: flex; align-items: center; gap: 12px; }
   .logo { width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(135deg, #1a5f3c, #2e7d4f); color: white; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; }
@@ -261,22 +265,31 @@ export function buildAssemblyResolutionHtml(
 </style>
 </head>
 <body>
-  <div class="doc">
-    ${logoDataUri ? `<div class="watermark"><img src="${logoDataUri}" alt="" /></div>` : ""}
-    <div class="header">
-      <div class="logo-row">
-        ${logoDataUri ? `<img class="logo-img" src="${logoDataUri}" alt="${escapeHtml(co.nameAr)}" />` : `<div class="logo">${escapeHtml((co.nameAr || "B").trim().charAt(0))}</div>`}
-        <div class="co-info">
-          <div class="co-name-ar">${escapeHtml(co.nameAr)}</div>
-          <div class="co-name-en">${escapeHtml(co.nameEn)}</div>
-          <div class="co-details">${escapeHtml(co.details)} | س.ت: ${escapeHtml(co.cr)}</div>
-        </div>
-      </div>
-      <div class="doc-title-box">
-        <div class="doc-type">${escapeHtml(meetingType)}</div>
-        <div class="doc-num">قرار رقم: ${escapeHtml(resolution.resolutionNumber)}</div>
-      </div>
-    </div>
+  ${logoDataUri ? `<div class="watermark"><img src="${logoDataUri}" alt="" /></div>` : ""}
+  <table class="page-wrap doc">
+    <thead>
+      <tr>
+        <td class="page-head-cell">
+          <div class="header">
+            <div class="logo-row">
+              ${logoDataUri ? `<img class="logo-img" src="${logoDataUri}" alt="${escapeHtml(co.nameAr)}" />` : `<div class="logo">${escapeHtml((co.nameAr || "B").trim().charAt(0))}</div>`}
+              <div class="co-info">
+                <div class="co-name-ar">${escapeHtml(co.nameAr)}</div>
+                <div class="co-name-en">${escapeHtml(co.nameEn)}</div>
+                <div class="co-details">${escapeHtml(co.details)} | س.ت: ${escapeHtml(co.cr)}</div>
+              </div>
+            </div>
+            <div class="doc-title-box">
+              <div class="doc-type">${escapeHtml(meetingType)}</div>
+              <div class="doc-num">قرار رقم: ${escapeHtml(resolution.resolutionNumber)}</div>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>
 
     <div class="meta-row">
       <div class="meta-cell"><span class="meta-label">نوع القرار</span><span class="meta-value">${escapeHtml(resType)}</span></div>
@@ -327,7 +340,10 @@ export function buildAssemblyResolutionHtml(
       <div>${escapeHtml(co.nameAr)} | س.ت: ${escapeHtml(co.cr)}</div>
       <div>تم الإصدار: ${new Date().toLocaleDateString("ar-SA-u-nu-latn")} | وثيقة رسمية</div>
     </div>
-  </div>
+        </td>
+      </tr>
+    </tbody>
+  </table>
 </body>
 </html>`;
 }

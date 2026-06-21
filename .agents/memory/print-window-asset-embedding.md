@@ -26,6 +26,18 @@ transient first-load failure locks the whole session into the fallback for that 
   (centered, low opacity ~0.06) repeats on every page in Chrome print. Give the
   document container `position: relative; z-index: 1` and the watermark `z-index: 0`
   so text stays above it.
+- **Do NOT use `transform: translate(-50%,-50%)` to center a `position:fixed`
+  watermark** — it triggers a Chrome print bug that injects a blank first page.
+  Center with a full-page fixed flex container instead:
+  `.watermark{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center}`.
+- **Repeating the letterhead/header on every printed page:** wrap the whole document
+  in a `<table>` with the header in `<thead>` and all content in one `<tbody><tr><td>`.
+  Browsers auto-repeat `<thead>` at the top of every printed page (the bulletproof
+  running-header technique). Gotchas: a global `tr { page-break-inside: avoid }` will
+  stop the big tbody row from paginating — override with
+  `.page-wrap > tbody > tr { page-break-inside: auto; break-inside: auto; }`; and reset
+  wrapper cells (`padding:0;border:none;background:transparent`) so they don't inherit
+  global `td`/zebra styling. Nested real tables inside the tbody cell keep their styles.
 - Watermark shows through whitespace only; opaque cell/section backgrounds will hide
   it, which is the expected "official paper" look.
 - User-supplied images (e.g. signature URLs) still must pass through `safeImageSrc`
