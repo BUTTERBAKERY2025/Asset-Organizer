@@ -291,7 +291,11 @@ export default function GeneralAssemblyPage() {
         body: JSON.stringify(data),
         credentials: "include",
       });
-      if (!response.ok) throw new Error("Failed to update meeting");
+      if (!response.ok) {
+        let errBody: any = {};
+        try { errBody = await response.json(); } catch { /* ignore non-JSON */ }
+        throw new Error(errBody.error || "فشل في تحديث الاجتماع");
+      }
       return response.json();
     },
     onSuccess: () => {
@@ -300,8 +304,12 @@ export default function GeneralAssemblyPage() {
       setEditingMeeting(null);
       toast({ title: "تم تحديث الاجتماع بنجاح" });
     },
-    onError: () => {
-      toast({ title: "فشل في تحديث الاجتماع", variant: "destructive" });
+    onError: (error: any) => {
+      toast({
+        title: "فشل في تحديث الاجتماع",
+        description: error?.message && error.message !== "فشل في تحديث الاجتماع" ? error.message : undefined,
+        variant: "destructive",
+      });
     },
   });
 

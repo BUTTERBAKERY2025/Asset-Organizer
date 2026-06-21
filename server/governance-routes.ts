@@ -796,7 +796,16 @@ export function registerGovernanceRoutes(app: Express) {
 
   app.patch("/api/governance/meetings/:id", isAuthenticated, requirePermission("governance_meetings", "edit"), async (req, res) => {
     try {
-      const validatedData = updateGovernanceMeetingSchema.parse(req.body);
+      // تحويل حقول التاريخ من نص ISO إلى كائن Date قبل التحقق
+      // (مخطط drizzle-zod لأعمدة timestamp يتوقع Date وليس نصاً)
+      const body: any = { ...req.body };
+      for (const field of ["meetingDate", "postponedTo", "invitationSentAt", "reminderSentAt", "minutesApprovedAt"]) {
+        if (typeof body[field] === "string" && body[field]) {
+          const d = new Date(body[field]);
+          if (!isNaN(d.getTime())) body[field] = d;
+        }
+      }
+      const validatedData = updateGovernanceMeetingSchema.parse(body);
       const [meeting] = await db.update(governanceMeetings)
         .set({ ...validatedData, updatedAt: new Date() })
         .where(eq(governanceMeetings.id, parseInt(req.params.id)))
