@@ -800,6 +800,59 @@ export default function ResolutionsPage() {
                                       </div>
                                     </div>
                                   `;
+
+                              // جلب أصوات الحاضرين/المساهمين المصوّتين على هذا القرار
+                              let votesData: any[] = [];
+                              try {
+                                const vres = await fetch(`/api/governance/resolutions/${resolution.id}/votes`);
+                                if (vres.ok) {
+                                  votesData = await vres.json();
+                                }
+                              } catch (e) {
+                                console.error('Failed to fetch votes:', e);
+                              }
+
+                              const escapeHtml = (s: any) => String(s ?? '').replace(/[&<>"']/g, (c) => (({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as Record<string, string>)[c]));
+                              const safeImgSrc = (u: any) => {
+                                const s = String(u ?? '').trim();
+                                return /^https:\/\//i.test(s) || /^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i.test(s) ? s : '';
+                              };
+                              const voteLabel = (v: string) => v === 'for' ? 'موافق' : v === 'against' ? 'معارض' : v === 'abstain' ? 'ممتنع' : '';
+                              const voteClass = (v: string) => v === 'for' ? 'for' : v === 'against' ? 'against' : 'abstain';
+                              const voterTypeLabel = (t: string) => t === 'board_member' ? 'عضو مجلس الإدارة' : t === 'shareholder' ? 'مساهم' : t === 'proxy' ? 'وكيل' : (t || '');
+
+                              const votersHtml = votesData.length > 0
+                                ? votesData.map((v: any) => {
+                                    const sig = safeImgSrc(v.signatureUrl);
+                                    const name = escapeHtml(v.voterName);
+                                    return `
+                                    <div class="voter-card vote-${voteClass(v.vote)}">
+                                      <div class="voter-head">
+                                        <span class="voter-name">${name}</span>
+                                        <span class="voter-vote vote-${voteClass(v.vote)}">${voteLabel(v.vote)}</span>
+                                      </div>
+                                      <div class="voter-meta">${escapeHtml(voterTypeLabel(v.voterType))}${v.votingPower && Number(v.votingPower) > 1 ? ' · ' + Number(v.votingPower).toLocaleString('ar-SA-u-nu-latn') + ' صوت' : ''}</div>
+                                      <div class="voter-sig">
+                                        ${sig
+                                          ? `<img src="${sig}" alt="توقيع ${name}" class="voter-sig-img" />`
+                                          : '<div class="sig-line">________________</div>'}
+                                      </div>
+                                    </div>
+                                  `;
+                                  }).join('')
+                                : '';
+
+                              const votersSectionHtml = votersHtml
+                                ? `<div class="signatures-section voters-section">
+                                     <div class="section-title">
+                                       <div class="section-icon">👥</div>
+                                       <span>توقيعات الحاضرين والمساهمين المصوّتين على القرار (${votesData.length})</span>
+                                     </div>
+                                     <div class="voters-grid">
+                                       ${votersHtml}
+                                     </div>
+                                   </div>`
+                                : '';
                               
                               const html = `
                                 <!DOCTYPE html>
@@ -1169,6 +1222,53 @@ export default function ResolutionsPage() {
                                       color: #e65100;
                                     }
                                     
+                                    /* Voters / Attendees Signatures */
+                                    .voters-section { margin-top: 8px; page-break-inside: auto; break-inside: auto; }
+                                    .voter-card { page-break-inside: avoid; break-inside: avoid; }
+                                    .voters-grid {
+                                      display: grid;
+                                      grid-template-columns: repeat(4, 1fr);
+                                      gap: 6px;
+                                    }
+                                    .voter-card {
+                                      background: white;
+                                      border: 1px solid #e0e0e0;
+                                      border-radius: 5px;
+                                      padding: 5px 6px;
+                                      text-align: center;
+                                    }
+                                    .voter-card.vote-for { border-color: #aed581; background: linear-gradient(to bottom,#f1f8e9,#e8f5e9); }
+                                    .voter-card.vote-against { border-color: #ef9a9a; background: linear-gradient(to bottom,#ffebee,#ffcdd2); }
+                                    .voter-card.vote-abstain { border-color: #ffcc80; background: linear-gradient(to bottom,#fff8e1,#ffecb3); }
+                                    .voter-head {
+                                      display: flex;
+                                      justify-content: space-between;
+                                      align-items: center;
+                                      gap: 4px;
+                                      margin-bottom: 2px;
+                                    }
+                                    .voter-name { font-size: 8px; font-weight: 700; color: #1a1a1a; }
+                                    .voter-vote {
+                                      font-size: 7px;
+                                      font-weight: 700;
+                                      padding: 1px 6px;
+                                      border-radius: 8px;
+                                      white-space: nowrap;
+                                    }
+                                    .voter-vote.vote-for { background: #e8f5e9; color: #2e7d32; }
+                                    .voter-vote.vote-against { background: #ffebee; color: #c62828; }
+                                    .voter-vote.vote-abstain { background: #fff3e0; color: #e65100; }
+                                    .voter-meta { font-size: 6.5px; color: #777; margin-bottom: 3px; }
+                                    .voter-sig {
+                                      min-height: 24px;
+                                      display: flex;
+                                      align-items: center;
+                                      justify-content: center;
+                                      border-top: 1px dashed #ddd;
+                                      padding-top: 3px;
+                                    }
+                                    .voter-sig-img { max-width: 70px; max-height: 22px; object-fit: contain; }
+                                    
                                     .sig-status.declined {
                                       background: #ffebee;
                                       color: #c62828;
@@ -1300,6 +1400,7 @@ export default function ResolutionsPage() {
                                           ${signaturesHtml}
                                         </div>
                                       </div>
+                                      ${votersSectionHtml}
                                     </div>
                                     
                                     <div class="footer">
