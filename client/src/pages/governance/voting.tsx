@@ -553,33 +553,33 @@ export default function VotingPage() {
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: 'Cairo', sans-serif; color: #333; direction: rtl; font-size: 9px; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .letterhead { position: fixed; top: 0; left: 0; width: 210mm; height: 297mm; z-index: 0; }
-          .print-page { position: relative; z-index: 1; min-height: 297mm; padding: 32mm 16mm 24mm 16mm; box-sizing: border-box; }
+          .print-page { position: relative; z-index: 1; min-height: 297mm; padding: 30mm 16mm 20mm 16mm; box-sizing: border-box; }
           .print-page + .print-page { page-break-before: always; }
 
-          .doc-title-main { text-align: center; font-size: 16px; font-weight: 700; color: #2b3a4f; margin-bottom: 7px; }
-          .doc-meta-wrap { text-align: center; margin-bottom: 13px; }
+          .doc-title-main { text-align: center; font-size: 16px; font-weight: 700; color: #2b3a4f; margin-bottom: 4px; }
+          .doc-meta-wrap { text-align: center; margin-bottom: 8px; }
           .doc-meta-pill { display: inline-block; background: #fbf6e9; border: 1px solid #e6d4a3; color: #7a6326; border-radius: 14px; padding: 4px 18px; font-size: 9px; font-weight: 600; }
           .doc-meta-pill .sep { color: #c9a45b; margin: 0 7px; }
 
-          .info-strip { display: flex; background: #faf8f1; border: 1px solid #e9dfc4; border-radius: 7px; overflow: hidden; margin-bottom: 14px; }
-          .info-cell { flex: 1; text-align: center; padding: 8px 4px; border-left: 1px solid #ece2c8; }
+          .info-strip { display: flex; background: #faf8f1; border: 1px solid #e9dfc4; border-radius: 7px; overflow: hidden; margin-bottom: 9px; }
+          .info-cell { flex: 1; text-align: center; padding: 5px 4px; border-left: 1px solid #ece2c8; }
           .info-cell:last-child { border-left: none; }
           .info-cell .lbl { font-size: 8px; color: #b8962f; font-weight: 600; margin-bottom: 4px; }
           .info-cell .val { font-size: 11px; font-weight: 700; color: #2b3a4f; }
           .info-cell .val.ok { color: #2e7d52; }
           .info-cell .val.reject { color: #c0392b; }
 
-          .section-head { font-size: 13px; font-weight: 700; color: #2b3a4f; margin: 6px 0 8px; padding-right: 9px; border-right: 3px solid #b8962f; }
+          .section-head { font-size: 13px; font-weight: 700; color: #2b3a4f; margin: 3px 0 5px; padding-right: 9px; border-right: 3px solid #b8962f; }
 
-          .res-intro { font-size: 9px; color: #555; line-height: 1.7; margin-bottom: 9px; }
-          .res-box { background: #fdfbf3; border: 1px solid #ecdcb4; border-right: 3px solid #c9a45b; border-radius: 5px; padding: 8px 11px; margin-bottom: 9px; }
+          .res-intro { font-size: 9px; color: #555; line-height: 1.6; margin-bottom: 6px; }
+          .res-box { background: #fdfbf3; border: 1px solid #ecdcb4; border-right: 3px solid #c9a45b; border-radius: 5px; padding: 6px 10px; margin-bottom: 6px; }
           .res-box-title { font-size: 10px; font-weight: 700; color: #b8962f; margin-bottom: 4px; }
           .res-box-text { font-size: 9px; color: #444; line-height: 1.75; white-space: pre-wrap; }
 
           .vt { width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 6px; }
-          .vt th { background: #2b3a4f; color: #fff; padding: 6px 6px; font-weight: 600; font-size: 9px; text-align: center; }
+          .vt th { background: #2b3a4f; color: #fff; padding: 4px 6px; font-weight: 600; font-size: 9px; text-align: center; }
           .vt th.name { text-align: right; }
-          .vt td { padding: 5px 6px; border-bottom: 1px solid #eee; text-align: center; color: #444; }
+          .vt td { padding: 2px 6px; border-bottom: 1px solid #eee; text-align: center; color: #444; }
           .vt td.name { text-align: right; font-weight: 600; color: #2b3a4f; }
           .vt tbody tr:nth-child(even) { background: #faf9f5; }
           .vt tfoot td { background: #f3ead2; color: #5a4a1e; font-weight: 700; padding: 6px; font-size: 9px; }
@@ -587,10 +587,10 @@ export default function VotingPage() {
           .vt-for { background: #e3f3e9; color: #2e7d52; border: 1px solid #bfe3cd; }
           .vt-against { background: #fbe5e5; color: #b3261e; border: 1px solid #f0c0c0; }
           .vt-abstain { background: #eef0f2; color: #556; border: 1px solid #d8dde2; }
-          .sign-elec { color: #8a8a8a; font-size: 8px; display: block; }
-          .vt-sign-img { max-width: 100px; max-height: 30px; display: block; margin: 0 auto 2px; }
+          .sign-elec { color: #8a8a8a; font-size: 7px; display: block; }
+          .vt-sign-img { max-width: 86px; max-height: 20px; display: block; margin: 0 auto 1px; }
 
-          .sign-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 22px; page-break-inside: avoid; break-inside: avoid; }
+          .sign-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 12px; page-break-inside: avoid; break-inside: avoid; }
           .sign-col { flex: 1; text-align: center; }
           .sign-role { font-size: 10px; font-weight: 700; color: #2b3a4f; margin-bottom: 6px; }
           .sign-img { max-width: 150px; max-height: 48px; display: block; margin: 0 auto 3px; }
@@ -601,7 +601,7 @@ export default function VotingPage() {
           .stamp-svg { display: inline-block; }
           .stamp-svg svg { width: 150px; height: 150px; }
 
-          .doc-note { text-align: center; font-size: 7.5px; color: #8a8a8a; margin-top: 16px; }
+          .doc-note { text-align: center; font-size: 7.5px; color: #8a8a8a; margin-top: 10px; }
           .page-num { margin-top: 10px; text-align: center; font-size: 7px; color: #999; }
 
           @media print { .vt tr { break-inside: avoid; } }
