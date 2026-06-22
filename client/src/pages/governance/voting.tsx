@@ -460,86 +460,64 @@ export default function VotingPage() {
       resolutionBodyHtml +
       '<div class="section-head">سجل التصويت</div>';
 
-    // بناء صفحات الجدول مع ترقيم لكل صفحة
-    const rowsPerPage = 13;
-    const totalPages = Math.max(1, Math.ceil(votedTokens.length / rowsPerPage));
-    let pagesHtml = '';
-    
-    for (let page = 0; page < totalPages; page++) {
-      const startIdx = page * rowsPerPage;
-      const endIdx = Math.min(startIdx + rowsPerPage, votedTokens.length);
-      const pageTokens = votedTokens.slice(startIdx, endIdx);
-      const isLastPage = page === totalPages - 1;
-      const pageNum = page + 1;
-      
-      let tableRows = '';
-      pageTokens.forEach((token, idx) => {
-        const voteClass = token.vote === 'for' ? 'vt-for' : token.vote === 'against' ? 'vt-against' : 'vt-abstain';
-        const voteText = voteLabels[token.vote || ''] || sanitize(token.vote || '');
-        const dateStr = token.votedAt ? new Date(token.votedAt).toLocaleTimeString('en-GB') + ' — ' + new Date(token.votedAt).toLocaleDateString('en-GB') : '-';
-        const signTxt = isValidSignature(token.signatureData)
-          ? '<img class="vt-sign-img" src="' + token.signatureData + '" alt="توقيع المساهم" /><span class="sign-elec">موقّع إلكترونياً</span>'
-          : '<span style="color:#bbb;">-</span>';
-        
-        tableRows += '<tr>' +
-          '<td>' + (startIdx + idx + 1) + '</td>' +
-          '<td class="name">' + sanitize(token.shareholderName) + '</td>' +
-          '<td>' + (token.numberOfShares || 0).toLocaleString('en-US') + '</td>' +
-          '<td><span class="vt-badge ' + voteClass + '">' + voteText + '</span></td>' +
-          '<td>' + dateStr + '</td>' +
-          '<td>' + signTxt + '</td>' +
-        '</tr>';
-      });
-      
-      let tfoot = '';
-      if (isLastPage) {
-        tfoot = '<tfoot><tr>' +
-          '<td colspan="2" style="text-align:right;">الإجمالي — ' + votedTokens.length + ' مساهم</td>' +
-          '<td>' + totalSharesVoted.toLocaleString('en-US') + '</td>' +
-          '<td colspan="3" style="text-align:center;">نسبة الموافقة ' + approvalPercentage + '% (' + forVotes + ' موافق / ' + againstVotes + ' رافض / ' + abstainVotes + ' ممتنع)</td>' +
-        '</tr></tfoot>';
-      }
-      
-      let footerSection = '';
-      if (isLastPage) {
-        const printNow = new Date();
-        footerSection = '<div class="sign-row">' +
-          '<div class="sign-col">' +
-            '<div class="sign-role">رئيس مجلس الإدارة</div>' +
-            (chairmanSig
-              ? '<img class="sign-img" src="' + chairmanSig + '" alt="توقيع رئيس مجلس الإدارة" />'
-              : '<div class="sign-blank"></div>') +
-            '<div class="sign-name">' + sanitize(chairmanName) + '</div>' +
-          '</div>' +
-          '<div class="stamp-col">' +
-            '<div class="stamp-lbl">ختم الشركة</div>' +
-            '<div class="stamp-svg">' + companyStampSvg + '</div>' +
-          '</div>' +
-          '<div class="sign-col"></div>' +
+    // بناء صفوف جدول التصويت (يتدفق طبيعياً عبر الصفحات)
+    let tableRows = '';
+    votedTokens.forEach((token, idx) => {
+      const voteClass = token.vote === 'for' ? 'vt-for' : token.vote === 'against' ? 'vt-against' : 'vt-abstain';
+      const voteText = voteLabels[token.vote || ''] || sanitize(token.vote || '');
+      const dateStr = token.votedAt ? new Date(token.votedAt).toLocaleTimeString('en-GB') + ' — ' + new Date(token.votedAt).toLocaleDateString('en-GB') : '-';
+      const signTxt = isValidSignature(token.signatureData)
+        ? '<img class="vt-sign-img" src="' + token.signatureData + '" alt="توقيع المساهم" /><span class="sign-elec">موقّع إلكترونياً</span>'
+        : '<span style="color:#bbb;">-</span>';
+
+      tableRows += '<tr>' +
+        '<td>' + (idx + 1) + '</td>' +
+        '<td class="name">' + sanitize(token.shareholderName) + '</td>' +
+        '<td>' + (token.numberOfShares || 0).toLocaleString('en-US') + '</td>' +
+        '<td><span class="vt-badge ' + voteClass + '">' + voteText + '</span></td>' +
+        '<td>' + dateStr + '</td>' +
+        '<td>' + signTxt + '</td>' +
+      '</tr>';
+    });
+
+    const tableTfoot = '<tfoot><tr>' +
+      '<td colspan="2" style="text-align:right;">الإجمالي — ' + votedTokens.length + ' مساهم</td>' +
+      '<td>' + totalSharesVoted.toLocaleString('en-US') + '</td>' +
+      '<td colspan="3" style="text-align:center;">نسبة الموافقة ' + approvalPercentage + '% (' + forVotes + ' موافق / ' + againstVotes + ' رافض / ' + abstainVotes + ' ممتنع)</td>' +
+    '</tr></tfoot>';
+
+    const votingTableHtml =
+      '<table class="vt">' +
+        '<thead><tr>' +
+          '<th style="width:5%;">#</th>' +
+          '<th class="name" style="width:25%;">اسم المساهم</th>' +
+          '<th style="width:13%;">عدد الأسهم</th>' +
+          '<th style="width:11%;">التصويت</th>' +
+          '<th style="width:20%;">تاريخ ووقت التصويت</th>' +
+          '<th style="width:26%;">التوقيع</th>' +
+        '</tr></thead>' +
+        '<tbody>' + tableRows + '</tbody>' +
+        tableTfoot +
+      '</table>';
+
+    const printNow = new Date();
+    const footerSection = '<div class="sign-row">' +
+        '<div class="sign-col">' +
+          '<div class="sign-role">رئيس مجلس الإدارة</div>' +
+          (chairmanSig
+            ? '<img class="sign-img" src="' + chairmanSig + '" alt="توقيع رئيس مجلس الإدارة" />'
+            : '<div class="sign-blank"></div>') +
+          '<div class="sign-name">' + sanitize(chairmanName) + '</div>' +
         '</div>' +
-        '<div class="doc-note">مستند رسمي صادر إلكترونياً عبر نظام إدارة حوكمة الشركات | تاريخ الطباعة: ' + printNow.toLocaleDateString('en-GB') + ' — ' + printNow.toLocaleTimeString('en-GB') + ' | رقم القرار ' + (sanitize(resolution.resolutionNumber) || '-') + '</div>';
-      }
-      
-      const pageNumHtml = totalPages > 1 ? '<div class="page-num">صفحة ' + pageNum + ' من ' + totalPages + '</div>' : '';
-      
-      pagesHtml += '<div class="print-page">' +
-        (page === 0 ? headerHtml : '') +
-        '<table class="vt">' +
-          '<thead><tr>' +
-            '<th style="width:5%;">#</th>' +
-            '<th class="name" style="width:25%;">اسم المساهم</th>' +
-            '<th style="width:13%;">عدد الأسهم</th>' +
-            '<th style="width:11%;">التصويت</th>' +
-            '<th style="width:20%;">تاريخ ووقت التصويت</th>' +
-            '<th style="width:26%;">التوقيع</th>' +
-          '</tr></thead>' +
-          '<tbody>' + tableRows + '</tbody>' +
-          tfoot +
-        '</table>' +
-        footerSection +
-        pageNumHtml +
-      '</div>';
-    }
+        '<div class="stamp-col">' +
+          '<div class="stamp-lbl">ختم الشركة</div>' +
+          '<div class="stamp-svg">' + companyStampSvg + '</div>' +
+        '</div>' +
+        '<div class="sign-col"></div>' +
+      '</div>' +
+      '<div class="doc-note">مستند رسمي صادر إلكترونياً عبر نظام إدارة حوكمة الشركات | تاريخ الطباعة: ' + printNow.toLocaleDateString('en-GB') + ' — ' + printNow.toLocaleTimeString('en-GB') + ' | رقم القرار ' + (sanitize(resolution.resolutionNumber) || '-') + '</div>';
+
+    const docBodyHtml = headerHtml + votingTableHtml + footerSection;
 
     const printContent = `
       <!DOCTYPE html>
@@ -553,8 +531,13 @@ export default function VotingPage() {
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: 'Cairo', sans-serif; color: #333; direction: rtl; font-size: 9px; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .letterhead { position: fixed; top: 0; left: 0; width: 210mm; height: 297mm; z-index: 0; }
-          .print-page { position: relative; z-index: 1; min-height: 297mm; padding: 30mm 16mm 20mm 16mm; box-sizing: border-box; }
-          .print-page + .print-page { page-break-before: always; }
+          /* Spacer table: thead/tfoot reserve top/bottom safe zones on EVERY printed
+             page so flowing content never collides with the fixed letterhead bands. */
+          .doc-table { position: relative; z-index: 1; width: 210mm; border-collapse: collapse; }
+          .doc-table > thead > tr > td, .doc-table > tfoot > tr > td { padding: 0; border: none; }
+          .space-head { height: 30mm; }
+          .space-foot { height: 20mm; }
+          .content-cell { padding: 0 16mm; vertical-align: top; }
 
           .doc-title-main { text-align: center; font-size: 16px; font-weight: 700; color: #2b3a4f; margin-bottom: 4px; }
           .doc-meta-wrap { text-align: center; margin-bottom: 8px; }
@@ -569,7 +552,8 @@ export default function VotingPage() {
           .info-cell .val.ok { color: #2e7d52; }
           .info-cell .val.reject { color: #c0392b; }
 
-          .section-head { font-size: 13px; font-weight: 700; color: #2b3a4f; margin: 3px 0 5px; padding-right: 9px; border-right: 3px solid #b8962f; }
+          .section-head { font-size: 13px; font-weight: 700; color: #2b3a4f; margin: 3px 0 5px; padding-right: 9px; border-right: 3px solid #b8962f; break-after: avoid; }
+          .info-strip, .res-box, .res-intro { break-inside: avoid; }
 
           .res-intro { font-size: 9px; color: #555; line-height: 1.6; margin-bottom: 6px; }
           .res-box { background: #fdfbf3; border: 1px solid #ecdcb4; border-right: 3px solid #c9a45b; border-radius: 5px; padding: 6px 10px; margin-bottom: 6px; }
@@ -602,14 +586,17 @@ export default function VotingPage() {
           .stamp-svg svg { width: 150px; height: 150px; }
 
           .doc-note { text-align: center; font-size: 7.5px; color: #8a8a8a; margin-top: 10px; }
-          .page-num { margin-top: 10px; text-align: center; font-size: 7px; color: #999; }
 
           @media print { .vt tr { break-inside: avoid; } }
         </style>
       </head>
       <body>
         <img class="letterhead" src="${officialLetterhead}" alt="" />
-        ${pagesHtml}
+        <table class="doc-table">
+          <thead><tr><td><div class="space-head"></div></td></tr></thead>
+          <tfoot><tr><td><div class="space-foot"></div></td></tr></tfoot>
+          <tbody><tr><td class="content-cell">${docBodyHtml}</td></tr></tbody>
+        </table>
       </body>
       </html>
     `;
