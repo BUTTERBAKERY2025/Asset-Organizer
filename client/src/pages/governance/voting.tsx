@@ -394,84 +394,6 @@ export default function VotingPage() {
     const chairmanSig = isValidSignature(chairmanToken?.signatureData) ? chairmanToken!.signatureData : '';
     const chairmanName = chairmanToken?.shareholderName || 'عبدالحافظ احمد إبراهيم ال مكوش';
 
-    // بناء صفحات الجدول مع ترقيم لكل صفحة
-    const rowsPerPage = 15;
-    const totalPages = Math.max(1, Math.ceil(votedTokens.length / rowsPerPage));
-    let pagesHtml = '';
-    
-    for (let page = 0; page < totalPages; page++) {
-      const startIdx = page * rowsPerPage;
-      const endIdx = Math.min(startIdx + rowsPerPage, votedTokens.length);
-      const pageTokens = votedTokens.slice(startIdx, endIdx);
-      const isLastPage = page === totalPages - 1;
-      const pageNum = page + 1;
-      
-      let tableRows = '';
-      pageTokens.forEach((token, idx) => {
-        const voteClass = token.vote === 'for' ? 'vt-for' : token.vote === 'against' ? 'vt-against' : 'vt-abstain';
-        const voteText = voteLabels[token.vote || ''] || sanitize(token.vote || '');
-        const dateStr = token.votedAt ? new Date(token.votedAt).toLocaleTimeString('en-GB') + ' — ' + new Date(token.votedAt).toLocaleDateString('en-GB') : '-';
-        const signTxt = isValidSignature(token.signatureData) ? '<span class="sign-elec">موقّع إلكترونياً</span>' : '<span style="color:#bbb;">-</span>';
-        
-        tableRows += '<tr>' +
-          '<td>' + (startIdx + idx + 1) + '</td>' +
-          '<td class="name">' + sanitize(token.shareholderName) + '</td>' +
-          '<td>' + (token.numberOfShares || 0).toLocaleString('en-US') + '</td>' +
-          '<td><span class="vt-badge ' + voteClass + '">' + voteText + '</span></td>' +
-          '<td>' + dateStr + '</td>' +
-          '<td>' + signTxt + '</td>' +
-        '</tr>';
-      });
-      
-      let tfoot = '';
-      if (isLastPage) {
-        tfoot = '<tfoot><tr>' +
-          '<td colspan="2" style="text-align:right;">الإجمالي — ' + votedTokens.length + ' مساهم</td>' +
-          '<td>' + totalSharesVoted.toLocaleString('en-US') + '</td>' +
-          '<td colspan="3" style="text-align:center;">نسبة الموافقة ' + approvalPercentage + '% (' + forVotes + ' موافق / ' + againstVotes + ' رافض / ' + abstainVotes + ' ممتنع)</td>' +
-        '</tr></tfoot>';
-      }
-      
-      let footerSection = '';
-      if (isLastPage) {
-        const printNow = new Date();
-        footerSection = '<div class="sign-row">' +
-          '<div class="sign-col">' +
-            '<div class="sign-role">رئيس مجلس الإدارة</div>' +
-            (chairmanSig
-              ? '<img class="sign-img" src="' + chairmanSig + '" alt="توقيع رئيس مجلس الإدارة" />'
-              : '<div class="sign-blank"></div>') +
-            '<div class="sign-name">' + sanitize(chairmanName) + '</div>' +
-          '</div>' +
-          '<div class="stamp-col">' +
-            '<div class="stamp-lbl">ختم الشركة</div>' +
-            '<div class="stamp-svg">' + companyStampSvg + '</div>' +
-          '</div>' +
-          '<div class="sign-col"></div>' +
-        '</div>' +
-        '<div class="doc-note">مستند رسمي صادر إلكترونياً عبر نظام إدارة حوكمة الشركات | تاريخ الطباعة: ' + printNow.toLocaleDateString('en-GB') + ' — ' + printNow.toLocaleTimeString('en-GB') + ' | رقم القرار ' + (sanitize(resolution.resolutionNumber) || '-') + '</div>';
-      }
-      
-      const pageNumHtml = totalPages > 1 ? '<div class="page-num">صفحة ' + pageNum + ' من ' + totalPages + '</div>' : '';
-      
-      pagesHtml += '<div class="print-page" style="' + (!isLastPage ? 'page-break-after: always;' : '') + '">' +
-        '<table class="vt">' +
-          '<thead><tr>' +
-            '<th style="width:6%;">#</th>' +
-            '<th class="name" style="width:30%;">اسم المساهم</th>' +
-            '<th style="width:16%;">عدد الأسهم</th>' +
-            '<th style="width:14%;">التصويت</th>' +
-            '<th style="width:22%;">تاريخ ووقت التصويت</th>' +
-            '<th style="width:12%;">التوقيع</th>' +
-          '</tr></thead>' +
-          '<tbody>' + tableRows + '</tbody>' +
-          tfoot +
-        '</table>' +
-        footerSection +
-        pageNumHtml +
-      '</div>';
-    }
-
     const docTitle =
       (resolution.resolutionType === 'extraordinary' || resolution.resolutionType === 'extraordinary_assembly')
         ? 'محضر قرار الجمعية العمومية غير العادية'
@@ -522,6 +444,103 @@ export default function VotingPage() {
     };
     const resolutionBodyHtml = buildResolutionBody(resolution.description);
 
+    const headerHtml =
+      '<div class="doc-title-main">' + docTitle + '</div>' +
+      '<div class="doc-meta-wrap">' +
+        '<span class="doc-meta-pill">رقم القرار ' + resNum + '<span class="sep">•</span>التاريخ الهجري ' + hijriDateStr + 'هـ<span class="sep">•</span>التاريخ الميلادي ' + gregDateStr + 'م</span>' +
+      '</div>' +
+      '<div class="info-strip">' +
+        '<div class="info-cell"><div class="lbl">نوع القرار</div><div class="val">' + typeLabel + '</div></div>' +
+        '<div class="info-cell"><div class="lbl">الأغلبية المطلوبة</div><div class="val">' + requiredMajorityInfo.percentage + '%</div></div>' +
+        '<div class="info-cell"><div class="lbl">عدد المصوتين</div><div class="val">' + votedTokens.length + ' مساهم</div></div>' +
+        '<div class="info-cell"><div class="lbl">الأسهم المصوتة</div><div class="val">' + totalSharesVoted.toLocaleString('en-US') + '</div></div>' +
+        '<div class="info-cell"><div class="lbl">نتيجة التصويت</div><div class="val ' + (isApproved ? 'ok' : 'reject') + '">' + approvalPercentage + '% ' + (isApproved ? 'معتمد' : 'غير معتمد') + '</div></div>' +
+      '</div>' +
+      '<div class="section-head">نص القرار</div>' +
+      resolutionBodyHtml +
+      '<div class="section-head">سجل التصويت</div>';
+
+    // بناء صفحات الجدول مع ترقيم لكل صفحة
+    const rowsPerPage = 13;
+    const totalPages = Math.max(1, Math.ceil(votedTokens.length / rowsPerPage));
+    let pagesHtml = '';
+    
+    for (let page = 0; page < totalPages; page++) {
+      const startIdx = page * rowsPerPage;
+      const endIdx = Math.min(startIdx + rowsPerPage, votedTokens.length);
+      const pageTokens = votedTokens.slice(startIdx, endIdx);
+      const isLastPage = page === totalPages - 1;
+      const pageNum = page + 1;
+      
+      let tableRows = '';
+      pageTokens.forEach((token, idx) => {
+        const voteClass = token.vote === 'for' ? 'vt-for' : token.vote === 'against' ? 'vt-against' : 'vt-abstain';
+        const voteText = voteLabels[token.vote || ''] || sanitize(token.vote || '');
+        const dateStr = token.votedAt ? new Date(token.votedAt).toLocaleTimeString('en-GB') + ' — ' + new Date(token.votedAt).toLocaleDateString('en-GB') : '-';
+        const signTxt = isValidSignature(token.signatureData)
+          ? '<img class="vt-sign-img" src="' + token.signatureData + '" alt="توقيع المساهم" /><span class="sign-elec">موقّع إلكترونياً</span>'
+          : '<span style="color:#bbb;">-</span>';
+        
+        tableRows += '<tr>' +
+          '<td>' + (startIdx + idx + 1) + '</td>' +
+          '<td class="name">' + sanitize(token.shareholderName) + '</td>' +
+          '<td>' + (token.numberOfShares || 0).toLocaleString('en-US') + '</td>' +
+          '<td><span class="vt-badge ' + voteClass + '">' + voteText + '</span></td>' +
+          '<td>' + dateStr + '</td>' +
+          '<td>' + signTxt + '</td>' +
+        '</tr>';
+      });
+      
+      let tfoot = '';
+      if (isLastPage) {
+        tfoot = '<tfoot><tr>' +
+          '<td colspan="2" style="text-align:right;">الإجمالي — ' + votedTokens.length + ' مساهم</td>' +
+          '<td>' + totalSharesVoted.toLocaleString('en-US') + '</td>' +
+          '<td colspan="3" style="text-align:center;">نسبة الموافقة ' + approvalPercentage + '% (' + forVotes + ' موافق / ' + againstVotes + ' رافض / ' + abstainVotes + ' ممتنع)</td>' +
+        '</tr></tfoot>';
+      }
+      
+      let footerSection = '';
+      if (isLastPage) {
+        const printNow = new Date();
+        footerSection = '<div class="sign-row">' +
+          '<div class="sign-col">' +
+            '<div class="sign-role">رئيس مجلس الإدارة</div>' +
+            (chairmanSig
+              ? '<img class="sign-img" src="' + chairmanSig + '" alt="توقيع رئيس مجلس الإدارة" />'
+              : '<div class="sign-blank"></div>') +
+            '<div class="sign-name">' + sanitize(chairmanName) + '</div>' +
+          '</div>' +
+          '<div class="stamp-col">' +
+            '<div class="stamp-lbl">ختم الشركة</div>' +
+            '<div class="stamp-svg">' + companyStampSvg + '</div>' +
+          '</div>' +
+          '<div class="sign-col"></div>' +
+        '</div>' +
+        '<div class="doc-note">مستند رسمي صادر إلكترونياً عبر نظام إدارة حوكمة الشركات | تاريخ الطباعة: ' + printNow.toLocaleDateString('en-GB') + ' — ' + printNow.toLocaleTimeString('en-GB') + ' | رقم القرار ' + (sanitize(resolution.resolutionNumber) || '-') + '</div>';
+      }
+      
+      const pageNumHtml = totalPages > 1 ? '<div class="page-num">صفحة ' + pageNum + ' من ' + totalPages + '</div>' : '';
+      
+      pagesHtml += '<div class="print-page">' +
+        (page === 0 ? headerHtml : '') +
+        '<table class="vt">' +
+          '<thead><tr>' +
+            '<th style="width:5%;">#</th>' +
+            '<th class="name" style="width:25%;">اسم المساهم</th>' +
+            '<th style="width:13%;">عدد الأسهم</th>' +
+            '<th style="width:11%;">التصويت</th>' +
+            '<th style="width:20%;">تاريخ ووقت التصويت</th>' +
+            '<th style="width:26%;">التوقيع</th>' +
+          '</tr></thead>' +
+          '<tbody>' + tableRows + '</tbody>' +
+          tfoot +
+        '</table>' +
+        footerSection +
+        pageNumHtml +
+      '</div>';
+    }
+
     const printContent = `
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
@@ -530,11 +549,12 @@ export default function VotingPage() {
         <title>${docTitle} - ${resNum}</title>
         <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
         <style>
-          @page { size: A4 portrait; margin: 27mm 14mm 20mm 14mm; }
+          @page { size: A4 portrait; margin: 0; }
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: 'Cairo', sans-serif; color: #333; direction: rtl; font-size: 9px; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .letterhead { position: fixed; top: -27mm; left: -14mm; width: 210mm; height: 297mm; z-index: 0; }
-          .content { position: relative; z-index: 1; }
+          .letterhead { position: fixed; top: 0; left: 0; width: 210mm; height: 297mm; z-index: 0; }
+          .print-page { position: relative; z-index: 1; min-height: 297mm; padding: 32mm 16mm 24mm 16mm; box-sizing: border-box; }
+          .print-page + .print-page { page-break-before: always; }
 
           .doc-title-main { text-align: center; font-size: 16px; font-weight: 700; color: #2b3a4f; margin-bottom: 7px; }
           .doc-meta-wrap { text-align: center; margin-bottom: 13px; }
@@ -567,7 +587,8 @@ export default function VotingPage() {
           .vt-for { background: #e3f3e9; color: #2e7d52; border: 1px solid #bfe3cd; }
           .vt-against { background: #fbe5e5; color: #b3261e; border: 1px solid #f0c0c0; }
           .vt-abstain { background: #eef0f2; color: #556; border: 1px solid #d8dde2; }
-          .sign-elec { color: #8a8a8a; font-size: 8px; }
+          .sign-elec { color: #8a8a8a; font-size: 8px; display: block; }
+          .vt-sign-img { max-width: 100px; max-height: 30px; display: block; margin: 0 auto 2px; }
 
           .sign-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 22px; page-break-inside: avoid; break-inside: avoid; }
           .sign-col { flex: 1; text-align: center; }
@@ -578,7 +599,7 @@ export default function VotingPage() {
           .stamp-col { flex: 1; text-align: center; }
           .stamp-lbl { font-size: 9px; color: #888; margin-bottom: 4px; }
           .stamp-svg { display: inline-block; }
-          .stamp-svg svg { width: 95px; height: 95px; }
+          .stamp-svg svg { width: 150px; height: 150px; }
 
           .doc-note { text-align: center; font-size: 7.5px; color: #8a8a8a; margin-top: 16px; }
           .page-num { margin-top: 10px; text-align: center; font-size: 7px; color: #999; }
@@ -588,23 +609,7 @@ export default function VotingPage() {
       </head>
       <body>
         <img class="letterhead" src="${officialLetterhead}" alt="" />
-        <div class="content">
-          <div class="doc-title-main">${docTitle}</div>
-          <div class="doc-meta-wrap">
-            <span class="doc-meta-pill">رقم القرار ${resNum}<span class="sep">•</span>التاريخ الهجري ${hijriDateStr}هـ<span class="sep">•</span>التاريخ الميلادي ${gregDateStr}م</span>
-          </div>
-          <div class="info-strip">
-            <div class="info-cell"><div class="lbl">نوع القرار</div><div class="val">${typeLabel}</div></div>
-            <div class="info-cell"><div class="lbl">الأغلبية المطلوبة</div><div class="val">${requiredMajorityInfo.percentage}%</div></div>
-            <div class="info-cell"><div class="lbl">عدد المصوتين</div><div class="val">${votedTokens.length} مساهم</div></div>
-            <div class="info-cell"><div class="lbl">الأسهم المصوتة</div><div class="val">${totalSharesVoted.toLocaleString('en-US')}</div></div>
-            <div class="info-cell"><div class="lbl">نتيجة التصويت</div><div class="val ${isApproved ? 'ok' : 'reject'}">${approvalPercentage}% ${isApproved ? 'معتمد' : 'غير معتمد'}</div></div>
-          </div>
-          <div class="section-head">نص القرار</div>
-          ${resolutionBodyHtml}
-          <div class="section-head">سجل التصويت</div>
-          ${pagesHtml}
-        </div>
+        ${pagesHtml}
       </body>
       </html>
     `;
