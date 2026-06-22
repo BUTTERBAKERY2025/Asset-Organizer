@@ -855,7 +855,13 @@ export default function ResolutionsPage() {
                                     * { margin: 0; padding: 0; box-sizing: border-box; }
                                     body { font-family: 'Cairo', sans-serif; color: #333; direction: rtl; font-size: 9px; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                                     .letterhead { position: fixed; top: 0; left: 0; width: 210mm; height: 297mm; z-index: 0; }
-                                    .print-page { position: relative; z-index: 1; min-height: 297mm; padding: 30mm 16mm 20mm 16mm; box-sizing: border-box; }
+                                    .doc-table { position: relative; z-index: 1; width: 210mm; border-collapse: collapse; }
+                                    .doc-table > thead > tr > td, .doc-table > tfoot > tr > td { padding: 0; border: none; }
+                                    .space-head { height: 30mm; }
+                                    .space-foot { height: 20mm; }
+                                    .content-cell { padding: 0 16mm; vertical-align: top; }
+                                    .section-head { break-after: avoid; page-break-after: avoid; }
+                                    .info-strip, .subject-box, .vote-summary, .result-badge, .stamp-wrap { break-inside: avoid; page-break-inside: avoid; }
 
                                     .doc-title-main { text-align: center; font-size: 17px; font-weight: 700; color: #2b3a4f; margin-bottom: 4px; }
                                     .doc-meta-wrap { text-align: center; margin-bottom: 9px; }
@@ -934,7 +940,10 @@ export default function ResolutionsPage() {
                                 </head>
                                 <body>
                                   <img class="letterhead" src="${officialLetterhead}" alt="" />
-                                  <div class="print-page">
+                                  <table class="doc-table">
+                                    <thead><tr><td><div class="space-head"></div></td></tr></thead>
+                                    <tfoot><tr><td><div class="space-foot"></div></td></tr></tfoot>
+                                    <tbody><tr><td class="content-cell">
                                     <div class="doc-title-main">${docTypeBadge}</div>
                                     <div class="doc-meta-wrap"><span class="doc-meta-pill">رقم القرار ${escapeHtml(resolution.resolutionNumber)}<span class="sep">•</span>التاريخ ${dateStr}م<span class="sep">•</span>النوع ${escapeHtml(resolutionType)}</span></div>
                                     <div class="info-strip">
@@ -959,7 +968,8 @@ export default function ResolutionsPage() {
                                     <div class="stamp-wrap"><div class="stamp-lbl">ختم الشركة</div>${companyStampSvg}</div>
                                     ${votersSectionHtml}
                                     <div class="doc-note">مستند رسمي صادر إلكترونياً عبر نظام إدارة حوكمة الشركات | تاريخ الطباعة: ${printStamp} | رقم القرار ${escapeHtml(resolution.resolutionNumber)}</div>
-                                  </div>
+                                    </td></tr></tbody>
+                                  </table>
                                 </body>
                                 </html>
                               `;
