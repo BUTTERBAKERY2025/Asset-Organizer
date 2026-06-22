@@ -59,6 +59,7 @@ import {
   Archive,
 } from "lucide-react";
 import companyStampSvg from "@assets/company-stamp.svg?raw";
+import officialLetterhead from "@assets/official-letterhead.png?inline";
 import type { BoardResolution, ResolutionVote, Shareholder } from "@shared/schema";
 import { exportToExcel, exportToCSV, printAsPDF } from "@/lib/export-utils";
 
@@ -324,7 +325,14 @@ export default function VotingPage() {
     const votedTokens = tokens.filter(t => t.status === 'voted');
     const voteLabels: Record<string, string> = { for: 'موافق', against: 'رافض', abstain: 'ممتنع' };
     
-    const hijriDateStr = computeHijriDate(new Date());
+    const docDate = (() => {
+      const times = votedTokens
+        .map(t => (t.votedAt ? new Date(t.votedAt).getTime() : 0))
+        .filter(n => n > 0);
+      return times.length ? new Date(Math.max(...times)) : new Date();
+    })();
+    const hijriDateStr = computeHijriDate(docDate);
+    const gregDateStr = docDate.toLocaleDateString('en-GB');
     
     const fixHijriInText = (text: string): string => {
       if (!text) return text;
@@ -400,62 +408,67 @@ export default function VotingPage() {
       
       let tableRows = '';
       pageTokens.forEach((token, idx) => {
-        const voteClass = token.vote === 'for' ? 'vote-for' : token.vote === 'against' ? 'vote-against' : 'vote-abstain';
+        const voteClass = token.vote === 'for' ? 'vt-for' : token.vote === 'against' ? 'vt-against' : 'vt-abstain';
         const voteText = voteLabels[token.vote || ''] || sanitize(token.vote || '');
-        const dateStr = token.votedAt ? new Date(token.votedAt).toLocaleDateString('en-GB') + '<br>' + new Date(token.votedAt).toLocaleTimeString('en-GB') : '-';
-        const sigImg = isValidSignature(token.signatureData) ? '<img class="signature-img" src="' + token.signatureData + '" alt="توقيع" />' : '<span style="color: #999;">-</span>';
+        const dateStr = token.votedAt ? new Date(token.votedAt).toLocaleTimeString('en-GB') + ' — ' + new Date(token.votedAt).toLocaleDateString('en-GB') : '-';
+        const signTxt = isValidSignature(token.signatureData) ? '<span class="sign-elec">موقّع إلكترونياً</span>' : '<span style="color:#bbb;">-</span>';
         
         tableRows += '<tr>' +
-          '<td style="text-align: center; font-weight: 600;">' + (startIdx + idx + 1) + '</td>' +
-          '<td style="font-weight: 600;">' + sanitize(token.shareholderName) + '</td>' +
-          '<td style="text-align: center;">' + (token.numberOfShares || 0).toLocaleString('en-US') + '</td>' +
-          '<td style="text-align: center;"><span class="vote-badge ' + voteClass + '">' + voteText + '</span></td>' +
-          '<td style="text-align: center; font-size: 9px;">' + dateStr + '</td>' +
-          '<td style="font-size: 9px; color: #666;">' + (sanitize(token.comments) || '-') + '</td>' +
-          '<td>' + sigImg + '</td>' +
+          '<td>' + (startIdx + idx + 1) + '</td>' +
+          '<td class="name">' + sanitize(token.shareholderName) + '</td>' +
+          '<td>' + (token.numberOfShares || 0).toLocaleString('en-US') + '</td>' +
+          '<td><span class="vt-badge ' + voteClass + '">' + voteText + '</span></td>' +
+          '<td>' + dateStr + '</td>' +
+          '<td>' + signTxt + '</td>' +
         '</tr>';
       });
       
-      let footerSection = '';
+      let tfoot = '';
       if (isLastPage) {
-        footerSection = '<div class="footer">' +
-          '<div>' +
-            '<div style="font-weight: 600; color: #333; margin-bottom: 3px;">مستند رسمي صادر إلكترونياً</div>' +
-            '<div>نظام BUTTER BAKERY - إدارة حوكمة الشركات | سجل تجاري: 7026155296</div>' +
-            '<div>تاريخ الطباعة: ' + new Date().toLocaleDateString('en-GB') + ' - ' + new Date().toLocaleTimeString('en-GB') + '</div>' +
-          '</div>' +
-          '<div class="stamp-area">' +
-            '<div style="margin-bottom: 2px;">ختم الشركة</div>' +
-            '<div class="stamp-img">' + companyStampSvg + '</div>' +
-          '</div>' +
-          '<div style="text-align: left;">' +
-            '<div style="font-weight: 600; color: #333; margin-bottom: 3px;">توقيع رئيس مجلس الإدارة</div>' +
-            (chairmanSig
-              ? '<img src="' + chairmanSig + '" alt="توقيع رئيس مجلس الإدارة" style="max-width: 130px; max-height: 45px; display: block; margin-bottom: 2px;" />'
-              : '<div style="border-bottom: 1px solid #333; width: 150px; height: 40px;"></div>') +
-            '<div style="font-size: 8px; color: #333; font-weight: 600;">' + sanitize(chairmanName) + '</div>' +
-          '</div>' +
-        '</div>';
+        tfoot = '<tfoot><tr>' +
+          '<td colspan="2" style="text-align:right;">الإجمالي — ' + votedTokens.length + ' مساهم</td>' +
+          '<td>' + totalSharesVoted.toLocaleString('en-US') + '</td>' +
+          '<td colspan="3" style="text-align:center;">نسبة الموافقة ' + approvalPercentage + '% (' + forVotes + ' موافق / ' + againstVotes + ' رافض / ' + abstainVotes + ' ممتنع)</td>' +
+        '</tr></tfoot>';
       }
       
+      let footerSection = '';
+      if (isLastPage) {
+        const printNow = new Date();
+        footerSection = '<div class="sign-row">' +
+          '<div class="sign-col">' +
+            '<div class="sign-role">رئيس مجلس الإدارة</div>' +
+            (chairmanSig
+              ? '<img class="sign-img" src="' + chairmanSig + '" alt="توقيع رئيس مجلس الإدارة" />'
+              : '<div class="sign-blank"></div>') +
+            '<div class="sign-name">' + sanitize(chairmanName) + '</div>' +
+          '</div>' +
+          '<div class="stamp-col">' +
+            '<div class="stamp-lbl">ختم الشركة</div>' +
+            '<div class="stamp-svg">' + companyStampSvg + '</div>' +
+          '</div>' +
+          '<div class="sign-col"></div>' +
+        '</div>' +
+        '<div class="doc-note">مستند رسمي صادر إلكترونياً عبر نظام إدارة حوكمة الشركات | تاريخ الطباعة: ' + printNow.toLocaleDateString('en-GB') + ' — ' + printNow.toLocaleTimeString('en-GB') + ' | رقم القرار ' + (sanitize(resolution.resolutionNumber) || '-') + '</div>';
+      }
+      
+      const pageNumHtml = totalPages > 1 ? '<div class="page-num">صفحة ' + pageNum + ' من ' + totalPages + '</div>' : '';
+      
       pagesHtml += '<div class="print-page" style="' + (!isLastPage ? 'page-break-after: always;' : '') + '">' +
-        '<table class="votes-table">' +
+        '<table class="vt">' +
           '<thead><tr>' +
-            '<th style="width: 5%;">#</th>' +
-            '<th style="width: 20%;">اسم المساهم</th>' +
-            '<th style="width: 12%;">عدد الأسهم</th>' +
-            '<th style="width: 10%;">التصويت</th>' +
-            '<th style="width: 13%;">تاريخ التصويت</th>' +
-            '<th style="width: 20%;">الملاحظات</th>' +
-            '<th style="width: 20%;">التوقيع الإلكتروني</th>' +
+            '<th style="width:6%;">#</th>' +
+            '<th class="name" style="width:30%;">اسم المساهم</th>' +
+            '<th style="width:16%;">عدد الأسهم</th>' +
+            '<th style="width:14%;">التصويت</th>' +
+            '<th style="width:22%;">تاريخ ووقت التصويت</th>' +
+            '<th style="width:12%;">التوقيع</th>' +
           '</tr></thead>' +
           '<tbody>' + tableRows + '</tbody>' +
+          tfoot +
         '</table>' +
         footerSection +
-        '<div class="page-footer">' +
-          '<span style="font-weight: 600; color: #333;">صفحة ' + pageNum + ' من ' + totalPages + '</span>' +
-          '<span>شركة الزبد الأفضل التجارية | سجل تجاري: 7026155296 | رقم القرار: ' + (sanitize(resolution.resolutionNumber) || '-') + '</span>' +
-        '</div>' +
+        pageNumHtml +
       '</div>';
     }
 
@@ -466,132 +479,132 @@ export default function VotingPage() {
           ? 'محضر قرار الجمعية العمومية العادية'
           : 'محضر قرار مجلس الإدارة';
 
+    const typeLabel =
+      (resolution.resolutionType === 'ordinary' || resolution.resolutionType === 'regular') ? 'قرار عادي'
+      : (resolution.resolutionType === 'extraordinary' || resolution.resolutionType === 'extraordinary_assembly') ? 'جمعية غير عادية'
+      : (resolution.resolutionType === 'general_assembly' || resolution.resolutionType === 'ordinary_assembly') ? 'جمعية عادية'
+      : resolution.resolutionType === 'emergency' ? 'قرار طارئ'
+      : resolution.resolutionType === 'administrative' ? 'قرار إداري'
+      : resolution.resolutionType === 'financial' ? 'قرار مالي'
+      : resolution.resolutionType === 'circular' ? 'قرار بالتمرير'
+      : sanitize(resolution.resolutionType || '');
+
+    const resNum = sanitize(resolution.resolutionNumber) || '-';
+
+    const buildResolutionBody = (raw: string | undefined | null): string => {
+      const text = fixHijriInText(sanitize(raw || ''));
+      if (!text.trim()) return '<div class="res-box"><div class="res-box-text">-</div></div>';
+      const lines = text.split(/\r?\n/);
+      const intro: string[] = [];
+      const sections: { title: string; body: string[] }[] = [];
+      let cur: { title: string; body: string[] } | null = null;
+      for (const ln of lines) {
+        const t = ln.trim();
+        if (/^القرار\s+\S+/.test(t) && t.length <= 80) {
+          cur = { title: t, body: [] };
+          sections.push(cur);
+        } else if (cur) {
+          cur.body.push(ln);
+        } else {
+          intro.push(ln);
+        }
+      }
+      const introText = intro.join('\n').trim();
+      if (!sections.length) {
+        return '<div class="res-box"><div class="res-box-text">' + (introText || text) + '</div></div>';
+      }
+      let html = '';
+      if (introText) html += '<div class="res-intro">' + introText + '</div>';
+      for (const s of sections) {
+        html += '<div class="res-box"><div class="res-box-title">' + s.title + '</div><div class="res-box-text">' + s.body.join('\n').trim() + '</div></div>';
+      }
+      return html;
+    };
+    const resolutionBodyHtml = buildResolutionBody(resolution.description);
+
     const printContent = `
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
       <head>
         <meta charset="UTF-8">
-        <title>${docTitle} - ${sanitize(resolution.resolutionNumber)}</title>
+        <title>${docTitle} - ${resNum}</title>
         <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
         <style>
-          @page { 
-            size: A4 landscape; 
-            margin: 5mm 8mm 8mm 8mm;
-          }
+          @page { size: A4 portrait; margin: 27mm 14mm 20mm 14mm; }
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Cairo', sans-serif; padding: 5px 10px 20px 10px; background: white; color: #333; direction: rtl; font-size: 9px; line-height: 1.2; }
-          
-          .page-footer {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            font-size: 7px;
-            color: #666;
-            padding: 3px 8mm;
-            background: white;
-            border-top: 1px solid #e0e0e0;
-            display: flex;
-            justify-content: space-between;
-          }
-          
-          .document-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #b8962f; padding-bottom: 4px; margin-bottom: 4px; }
-          .header-right { text-align: right; }
-          .header-center { text-align: center; flex: 1; }
-          .header-left { text-align: left; font-size: 8px; }
-          .logo { font-size: 14px; font-weight: 700; color: #b8962f; }
-          .company-name { font-size: 10px; color: #333; font-weight: 600; }
-          .company-name-en { font-size: 8px; color: #666; }
-          .cr-number { font-size: 8px; color: #b8962f; font-weight: 600; }
-          .doc-title { font-size: 12px; font-weight: 700; color: #b8962f; }
-          .doc-number { font-size: 9px; color: #666; background: #f5f5f5; padding: 2px 8px; border-radius: 8px; display: inline-block; }
-          
-          .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-bottom: 4px; }
-          .info-box { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 3px; padding: 4px 6px; }
-          .info-box-header { font-weight: 600; color: #b8962f; margin-bottom: 2px; font-size: 9px; border-bottom: 1px solid #e0e0e0; padding-bottom: 2px; }
-          .info-row { display: flex; justify-content: space-between; margin-bottom: 1px; font-size: 8px; }
-          .info-label { color: #666; }
-          .info-value { font-weight: 600; color: #333; }
-          
-          .resolution-section { background: #fffef5; border: 1px solid #d4a853; border-radius: 3px; padding: 4px 6px; margin-bottom: 4px; }
-          .resolution-title { font-size: 9px; font-weight: 700; color: #333; margin-bottom: 2px; }
-          .resolution-text { font-size: 8px; line-height: 1.25; color: #444; white-space: pre-wrap; }
-          
-          .result-badge { display: inline-block; padding: 2px 10px; border-radius: 8px; font-size: 9px; font-weight: 700; }
-          .result-approved { background: linear-gradient(135deg, #dcfce7, #bbf7d0); color: #166534; border: 2px solid #22c55e; }
-          .result-rejected { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #991b1b; border: 2px solid #ef4444; }
-          
-          .votes-table { width: 100%; border-collapse: collapse; margin-bottom: 3px; font-size: 8px; }
-          .votes-table th { background: linear-gradient(135deg, #b8962f, #d4a853); color: white; padding: 1px 3px; text-align: right; font-weight: 600; font-size: 7px; }
-          .votes-table td { padding: 1px 3px; border-bottom: 1px solid #e0e0e0; vertical-align: middle; font-size: 7px; }
-          .votes-table tr:nth-child(even) { background: #fafafa; }
-          
-          .vote-badge { padding: 1px 4px; border-radius: 6px; font-size: 7px; font-weight: 600; display: inline-block; }
-          .vote-for { background: #dcfce7; color: #166534; }
-          .vote-against { background: #fee2e2; color: #991b1b; }
-          .vote-abstain { background: #f3f4f6; color: #374151; }
-          
-          .signature-img { max-width: 60px; max-height: 18px; border: 1px solid #ddd; border-radius: 2px; }
-          
-          .footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e0e0e0; padding-top: 2px; margin-top: 2px; font-size: 7px; color: #888; page-break-inside: avoid; break-inside: avoid; }
-          .stamp-area { padding: 0 10px; text-align: center; color: #999; border-radius: 3px; font-size: 8px; page-break-inside: avoid; break-inside: avoid; }
-          .stamp-img { display: inline-block; page-break-inside: avoid; break-inside: avoid; }
-          .stamp-img svg { width: 160px; height: 160px; display: block; margin: 0 auto; }
-          
-          @media print {
-            body { padding: 3px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .votes-table tr { break-inside: avoid; }
-          }
+          body { font-family: 'Cairo', sans-serif; color: #333; direction: rtl; font-size: 9px; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .letterhead { position: fixed; top: -27mm; left: -14mm; width: 210mm; height: 297mm; z-index: 0; }
+          .content { position: relative; z-index: 1; }
+
+          .doc-title-main { text-align: center; font-size: 16px; font-weight: 700; color: #2b3a4f; margin-bottom: 7px; }
+          .doc-meta-wrap { text-align: center; margin-bottom: 13px; }
+          .doc-meta-pill { display: inline-block; background: #fbf6e9; border: 1px solid #e6d4a3; color: #7a6326; border-radius: 14px; padding: 4px 18px; font-size: 9px; font-weight: 600; }
+          .doc-meta-pill .sep { color: #c9a45b; margin: 0 7px; }
+
+          .info-strip { display: flex; background: #faf8f1; border: 1px solid #e9dfc4; border-radius: 7px; overflow: hidden; margin-bottom: 14px; }
+          .info-cell { flex: 1; text-align: center; padding: 8px 4px; border-left: 1px solid #ece2c8; }
+          .info-cell:last-child { border-left: none; }
+          .info-cell .lbl { font-size: 8px; color: #b8962f; font-weight: 600; margin-bottom: 4px; }
+          .info-cell .val { font-size: 11px; font-weight: 700; color: #2b3a4f; }
+          .info-cell .val.ok { color: #2e7d52; }
+          .info-cell .val.reject { color: #c0392b; }
+
+          .section-head { font-size: 13px; font-weight: 700; color: #2b3a4f; margin: 6px 0 8px; padding-right: 9px; border-right: 3px solid #b8962f; }
+
+          .res-intro { font-size: 9px; color: #555; line-height: 1.7; margin-bottom: 9px; }
+          .res-box { background: #fdfbf3; border: 1px solid #ecdcb4; border-right: 3px solid #c9a45b; border-radius: 5px; padding: 8px 11px; margin-bottom: 9px; }
+          .res-box-title { font-size: 10px; font-weight: 700; color: #b8962f; margin-bottom: 4px; }
+          .res-box-text { font-size: 9px; color: #444; line-height: 1.75; white-space: pre-wrap; }
+
+          .vt { width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 6px; }
+          .vt th { background: #2b3a4f; color: #fff; padding: 6px 6px; font-weight: 600; font-size: 9px; text-align: center; }
+          .vt th.name { text-align: right; }
+          .vt td { padding: 5px 6px; border-bottom: 1px solid #eee; text-align: center; color: #444; }
+          .vt td.name { text-align: right; font-weight: 600; color: #2b3a4f; }
+          .vt tbody tr:nth-child(even) { background: #faf9f5; }
+          .vt tfoot td { background: #f3ead2; color: #5a4a1e; font-weight: 700; padding: 6px; font-size: 9px; }
+          .vt-badge { display: inline-block; border-radius: 10px; padding: 1px 11px; font-size: 8px; font-weight: 600; }
+          .vt-for { background: #e3f3e9; color: #2e7d52; border: 1px solid #bfe3cd; }
+          .vt-against { background: #fbe5e5; color: #b3261e; border: 1px solid #f0c0c0; }
+          .vt-abstain { background: #eef0f2; color: #556; border: 1px solid #d8dde2; }
+          .sign-elec { color: #8a8a8a; font-size: 8px; }
+
+          .sign-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 22px; page-break-inside: avoid; break-inside: avoid; }
+          .sign-col { flex: 1; text-align: center; }
+          .sign-role { font-size: 10px; font-weight: 700; color: #2b3a4f; margin-bottom: 6px; }
+          .sign-img { max-width: 150px; max-height: 48px; display: block; margin: 0 auto 3px; }
+          .sign-blank { height: 42px; }
+          .sign-name { font-size: 9px; font-weight: 600; color: #333; border-top: 1px solid #b9b9b9; padding-top: 4px; display: inline-block; min-width: 170px; }
+          .stamp-col { flex: 1; text-align: center; }
+          .stamp-lbl { font-size: 9px; color: #888; margin-bottom: 4px; }
+          .stamp-svg { display: inline-block; }
+          .stamp-svg svg { width: 95px; height: 95px; }
+
+          .doc-note { text-align: center; font-size: 7.5px; color: #8a8a8a; margin-top: 16px; }
+          .page-num { margin-top: 10px; text-align: center; font-size: 7px; color: #999; }
+
+          @media print { .vt tr { break-inside: avoid; } }
         </style>
       </head>
       <body>
-        <div class="document-header">
-          <div class="header-right">
-            <div class="logo">BUTTER BAKERY</div>
-            <div class="company-name">شركة الزبد الأفضل التجارية</div>
-            <div class="company-name-en">Butter Bakery Trading Co.</div>
-            <div class="cr-number">سجل تجاري: 7026155296</div>
+        <img class="letterhead" src="${officialLetterhead}" alt="" />
+        <div class="content">
+          <div class="doc-title-main">${docTitle}</div>
+          <div class="doc-meta-wrap">
+            <span class="doc-meta-pill">رقم القرار ${resNum}<span class="sep">•</span>التاريخ الهجري ${hijriDateStr}هـ<span class="sep">•</span>التاريخ الميلادي ${gregDateStr}م</span>
           </div>
-          <div class="header-center">
-            <div class="doc-title">${docTitle}</div>
-            <div class="doc-number">رقم القرار: ${sanitize(resolution.resolutionNumber) || '-'}</div>
+          <div class="info-strip">
+            <div class="info-cell"><div class="lbl">نوع القرار</div><div class="val">${typeLabel}</div></div>
+            <div class="info-cell"><div class="lbl">الأغلبية المطلوبة</div><div class="val">${requiredMajorityInfo.percentage}%</div></div>
+            <div class="info-cell"><div class="lbl">عدد المصوتين</div><div class="val">${votedTokens.length} مساهم</div></div>
+            <div class="info-cell"><div class="lbl">الأسهم المصوتة</div><div class="val">${totalSharesVoted.toLocaleString('en-US')}</div></div>
+            <div class="info-cell"><div class="lbl">نتيجة التصويت</div><div class="val ${isApproved ? 'ok' : 'reject'}">${approvalPercentage}% ${isApproved ? 'معتمد' : 'غير معتمد'}</div></div>
           </div>
-          <div class="header-left">
-            <div style="color: #666; font-size: 10px;">التاريخ الهجري</div>
-            <div style="font-weight: 600;">${hijriDateStr}هـ</div>
-            <div style="color: #666; font-size: 10px; margin-top: 5px;">التاريخ الميلادي</div>
-            <div style="font-weight: 600;">${new Date().toLocaleDateString('en-GB')}</div>
-          </div>
+          <div class="section-head">نص القرار</div>
+          ${resolutionBodyHtml}
+          <div class="section-head">سجل التصويت</div>
+          ${pagesHtml}
         </div>
-        
-        <div class="info-grid">
-          <div class="info-box">
-            <div class="info-box-header">بيانات القرار</div>
-            <div class="info-row"><span class="info-label">نوع القرار:</span><span class="info-value">${resolution.resolutionType === 'ordinary' || resolution.resolutionType === 'regular' ? 'قرار عادي' : resolution.resolutionType === 'extraordinary' || resolution.resolutionType === 'extraordinary_assembly' ? 'جمعية عمومية غير عادية' : resolution.resolutionType === 'general_assembly' ? 'محضر جمعية عمومية' : resolution.resolutionType === 'emergency' ? 'قرار طارئ' : resolution.resolutionType === 'administrative' ? 'قرار إداري' : resolution.resolutionType === 'financial' ? 'قرار مالي' : resolution.resolutionType === 'circular' ? 'قرار بالتمرير' : resolution.resolutionType}</span></div>
-            <div class="info-row"><span class="info-label">الأغلبية المطلوبة:</span><span class="info-value">${requiredMajorityInfo.label} (${requiredMajorityInfo.percentage}%)</span></div>
-            <div class="info-row"><span class="info-label">تاريخ انتهاء التصويت:</span><span class="info-value">${resolution.votingDeadline ? new Date(resolution.votingDeadline).toLocaleDateString('en-GB') : '-'}</span></div>
-          </div>
-          <div class="info-box">
-            <div class="info-box-header">ملخص التصويت</div>
-            <div class="info-row"><span class="info-label">إجمالي المصوتين:</span><span class="info-value">${votedTokens.length} مساهم</span></div>
-            <div class="info-row"><span class="info-label">موافق / رافض / ممتنع:</span><span class="info-value">${forVotes} / ${againstVotes} / ${abstainVotes}</span></div>
-            <div class="info-row"><span class="info-label">إجمالي الأسهم المصوتة:</span><span class="info-value">${totalSharesVoted.toLocaleString('en-US')} سهم</span></div>
-          </div>
-          <div class="info-box">
-            <div class="info-box-header">نتيجة التصويت</div>
-            <div class="info-row"><span class="info-label">نسبة الموافقة:</span><span class="info-value" style="color: ${isApproved ? '#166534' : '#991b1b'}; font-size: 16px;">${approvalPercentage}%</span></div>
-            <div style="text-align: center; margin-top: 8px;">
-              <span class="result-badge ${isApproved ? 'result-approved' : 'result-rejected'}">${isApproved ? '✓ تمت الموافقة' : '✗ لم تتم الموافقة'}</span>
-            </div>
-          </div>
-        </div>
-        
-        <div class="resolution-section">
-          <div class="resolution-title">نص القرار: ${sanitize(resolution.title)}</div>
-          <div class="resolution-text">${fixHijriInText(sanitize(resolution.description))}</div>
-        </div>
-        
-        ${pagesHtml}
       </body>
       </html>
     `;
