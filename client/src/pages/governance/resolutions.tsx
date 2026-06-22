@@ -52,6 +52,8 @@ import {
   RotateCcw,
 } from "lucide-react";
 import type { BoardResolution, BoardMember } from "@shared/schema";
+import companyStampSvg from "@assets/company-stamp.svg?raw";
+import officialLetterhead from "@assets/official-letterhead.png?inline";
 import { exportToExcel, exportToCSV, printAsPDF } from "@/lib/export-utils";
 
 const resolutionTypes = [
@@ -750,58 +752,50 @@ export default function ResolutionsPage() {
                                 return positions[pos] || pos;
                               };
                               
-                              const signaturesHtml = signaturesData.length > 0 
-                                ? signaturesData.map(sig => `
-                                    <div class="signature-card ${sig.status === 'signed' ? 'signed' : 'pending'}">
-                                      <div class="sig-header">
-                                        <div class="sig-name">${sig.memberName}</div>
-                                        <div class="sig-position">${translatePosition(sig.memberPosition)}</div>
-                                      </div>
-                                      <div class="sig-content">
-                                        ${sig.status === 'signed' && sig.signatureData 
-                                          ? `<img src="${sig.signatureData}" alt="توقيع ${sig.memberName}" class="sig-image" />`
-                                          : sig.status === 'declined'
-                                            ? '<div class="sig-declined">رفض التوقيع</div>'
-                                            : '<div class="sig-pending">في انتظار التوقيع</div>'
-                                        }
-                                      </div>
-                                      <div class="sig-footer">
-                                        ${sig.status === 'signed' && sig.signedAt 
-                                          ? `<span class="sig-date">تاريخ التوقيع: ${new Date(sig.signedAt).toLocaleDateString('ar-SA-u-nu-latn')}</span>`
-                                          : ''
-                                        }
-                                        <span class="sig-status ${sig.status}">${sig.status === 'signed' ? '✓ موقّع' : sig.status === 'declined' ? '✗ مرفوض' : '⏳ معلّق'}</span>
-                                      </div>
-                                    </div>
-                                  `).join('')
-                                : `
-                                    <div class="signature-card pending">
-                                      <div class="sig-header">
-                                        <div class="sig-name">رئيس مجلس الإدارة</div>
-                                      </div>
-                                      <div class="sig-content">
-                                        <div class="sig-line">________________________</div>
-                                      </div>
-                                    </div>
-                                    <div class="signature-card pending">
-                                      <div class="sig-header">
-                                        <div class="sig-name">نائب رئيس مجلس الإدارة</div>
-                                      </div>
-                                      <div class="sig-content">
-                                        <div class="sig-line">________________________</div>
-                                      </div>
-                                    </div>
-                                    <div class="signature-card pending">
-                                      <div class="sig-header">
-                                        <div class="sig-name">أمين سر المجلس</div>
-                                      </div>
-                                      <div class="sig-content">
-                                        <div class="sig-line">________________________</div>
-                                      </div>
-                                    </div>
-                                  `;
+                              const escapeHtml = (s: any) => String(s ?? '').replace(/[&<>"']/g, (c) => (({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as Record<string, string>)[c]));
+                              const safeImgSrc = (u: any) => {
+                                const v = String(u ?? '').trim();
+                                return /^https:\/\//i.test(v) || /^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i.test(v) ? v : '';
+                              };
+                              const fmtG = (d: any) => { const x = d ? new Date(d) : new Date(); return x.getFullYear() + '/' + String(x.getMonth() + 1).padStart(2, '0') + '/' + String(x.getDate()).padStart(2, '0'); };
+                              const memberCount = signaturesData.length;
+                              const signedCount = signaturesData.filter((sg) => sg.status === 'signed').length;
+                              let forV = Number(resolution.forVotes || 0), againstV = Number(resolution.againstVotes || 0), abstainV = Number(resolution.abstainVotes || 0);
+                              if (forV + againstV + abstainV === 0 && signedCount > 0) forV = signedCount;
+                              const totalVotes = forV + againstV + abstainV;
+                              const unanimous = totalVotes > 0 && againstV === 0 && abstainV === 0;
+                              const isApproved = resolution.status === 'approved' || resolution.status === 'implemented';
+                              const isRejected = resolution.status === 'rejected';
+                              const resultText = isApproved ? ('اعتُمد ' + (unanimous ? 'بالإجماع' : 'بالأغلبية')) : isRejected ? 'مرفوض' : status;
+                              const resultClass = isApproved ? 'ok' : isRejected ? 'reject' : 'pending';
+                              const badgeClass = resultClass;
+                              const badgeText = isApproved ? ('✓ تم اعتماد القرار ' + (unanimous ? 'بالإجماع' : 'بالأغلبية') + ' من أعضاء مجلس الإدارة') : isRejected ? '✗ تم رفض القرار' : ('⏳ ' + status);
+                              const dateStr = fmtG(resolution.createdAt);
+                              const printStamp = fmtG(new Date());
+                              const subjectText = escapeHtml(resolution.title || '');
+                              const bodyText = escapeHtml(resolution.description || ('بناءً على الصلاحيات المخولة لمجلس الإدارة، وبعد الاطلاع على الموضوع المعروض، تقرر ما يلي:\n\n' + (resolution.title || '')));
 
-                              // جلب أصوات الحاضرين/المساهمين المصوّتين على هذا القرار
+                              const signaturesHtml = memberCount > 0
+                                ? signaturesData.map((sig) => {
+                                    const signed = sig.status === 'signed';
+                                    const img = signed ? safeImgSrc(sig.signatureData) : '';
+                                    const inner = img
+                                      ? '<img class="sig-img" src="' + img + '" alt="توقيع ' + escapeHtml(sig.memberName) + '" />'
+                                      : sig.status === 'declined'
+                                        ? '<span class="sig-x">✗ رفض التوقيع</span>'
+                                        : '<span class="sig-wait">في انتظار التوقيع</span>';
+                                    const dateLine = signed && sig.signedAt ? '<span class="sig-date">تاريخ التوقيع: ' + fmtG(sig.signedAt) + '</span>' : '';
+                                    const okBadge = signed ? '<span class="sig-ok">✓ موقّع</span>' : sig.status === 'declined' ? '<span class="sig-rej">✗ مرفوض</span>' : '<span class="sig-pend">⏳ معلّق</span>';
+                                    return '<div class="sig-card ' + (signed ? 'signed' : sig.status) + '">'
+                                      + '<div class="sig-role">' + escapeHtml(translatePosition(sig.memberPosition)) + '</div>'
+                                      + '<div class="sig-name">' + escapeHtml(sig.memberName) + '</div>'
+                                      + '<div class="sig-img-wrap">' + inner + '</div>'
+                                      + '<div class="sig-foot">' + okBadge + dateLine + '</div>'
+                                      + '</div>';
+                                  }).join('')
+                                : '<div class="sig-empty">لم يتم إضافة موقّعين بعد</div>';
+
+                                                            // جلب أصوات الحاضرين/المساهمين المصوّتين على هذا القرار
                               let votesData: any[] = [];
                               try {
                                 const vres = await fetch(`/api/governance/resolutions/${resolution.id}/votes`);
@@ -812,11 +806,6 @@ export default function ResolutionsPage() {
                                 console.error('Failed to fetch votes:', e);
                               }
 
-                              const escapeHtml = (s: any) => String(s ?? '').replace(/[&<>"']/g, (c) => (({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as Record<string, string>)[c]));
-                              const safeImgSrc = (u: any) => {
-                                const s = String(u ?? '').trim();
-                                return /^https:\/\//i.test(s) || /^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i.test(s) ? s : '';
-                              };
                               const voteLabel = (v: string) => v === 'for' ? 'موافق' : v === 'against' ? 'معارض' : v === 'abstain' ? 'ممتنع' : '';
                               const voteClass = (v: string) => v === 'for' ? 'for' : v === 'against' ? 'against' : 'abstain';
                               const voterTypeLabel = (t: string) => t === 'board_member' ? 'عضو مجلس الإدارة' : t === 'shareholder' ? 'مساهم' : t === 'proxy' ? 'وكيل' : (t || '');
@@ -856,564 +845,121 @@ export default function ResolutionsPage() {
                               
                               const html = `
                                 <!DOCTYPE html>
-                                <html dir="rtl" lang="ar">
+                                <html lang="ar" dir="rtl">
                                 <head>
                                   <meta charset="UTF-8">
-                                  <title>قرار رقم ${resolution.resolutionNumber}</title>
+                                  <title>${escapeHtml(docTypeBadge)} - ${escapeHtml(resolution.resolutionNumber)}</title>
+                                  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
                                   <style>
-                                    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
-                                    
-                                    /* Single-Page Setup */
-                                    @page { 
-                                      size: A4 landscape; 
-                                      margin: 8mm 8mm 8mm 8mm;
-                                    }
-                                    
-                                    * { box-sizing: border-box; margin: 0; padding: 0; }
-                                    
-                                    html, body { 
-                                      font-family: 'Cairo', sans-serif; 
-                                      direction: rtl; 
-                                      background: white;
-                                      color: #1a1a1a;
-                                      line-height: 1.4;
-                                      font-size: 10pt;
-                                    }
-                                    
-                                    .document {
-                                      width: 100%;
-                                      max-width: 281mm;
-                                      margin: 0 auto;
-                                      padding: 0;
-                                      background: white;
-                                    }
-                                    
-                                    /* Keep critical small blocks together; allow long text to flow naturally */
-                                    .header, .resolution-title-box, .voting-box, .result-badge,
-                                    .signature-card, .section-title, .meta-section, .footer,
-                                    .signatures-section {
-                                      page-break-inside: avoid;
-                                      break-inside: avoid;
-                                    }
-                                    
-                                    .section-title {
-                                      page-break-after: avoid;
-                                      break-after: avoid;
-                                      margin-top: 8px;
-                                    }
-                                    
-                                    @media print {
-                                      .document { padding: 0; }
-                                      body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-                                    }
-                                    
-                                    /* Header Section - compact */
-                                    .header {
-                                      display: flex;
-                                      justify-content: space-between;
-                                      align-items: center;
-                                      padding: 6px 10px;
-                                      margin-bottom: 8px;
-                                      background: linear-gradient(to left, #f8faf9, #fff, #f8faf9);
-                                      border: 1.5px solid #1a5f3c;
-                                      border-radius: 6px;
-                                    }
-                                    
-                                    .logo-section {
-                                      display: flex;
-                                      align-items: center;
-                                      gap: 8px;
-                                    }
-                                    
-                                    .logo-circle {
-                                      width: 36px;
-                                      height: 36px;
-                                      background: linear-gradient(135deg, #d4a853, #b8962f);
-                                      border-radius: 50%;
-                                      display: flex;
-                                      align-items: center;
-                                      justify-content: center;
-                                      color: white;
-                                      font-weight: 800;
-                                      font-size: 16px;
-                                    }
-                                    
-                                    .company-info { text-align: right; }
-                                    
-                                    .company-name-ar {
-                                      font-size: 13px;
-                                      font-weight: 800;
-                                      color: #1a5f3c;
-                                    }
-                                    
-                                    .company-name-en {
-                                      font-size: 8px;
-                                      color: #555;
-                                      font-weight: 600;
-                                    }
-                                    
-                                    .company-details {
-                                      font-size: 7px;
-                                      color: #777;
-                                      margin-top: 1px;
-                                    }
-                                    
-                                    .doc-title-section {
-                                      text-align: center;
-                                      flex-shrink: 0;
-                                    }
-                                    
-                                    .doc-type-badge {
-                                      background: linear-gradient(135deg, #1a5f3c 0%, #2d8f5e 100%);
-                                      color: white;
-                                      padding: 5px 22px;
-                                      font-size: 12px;
-                                      font-weight: 700;
-                                      border-radius: 4px;
-                                      display: inline-block;
-                                    }
-                                    
-                                    .resolution-number {
-                                      font-size: 10px;
-                                      color: #1a5f3c;
-                                      font-weight: 700;
-                                      margin-top: 3px;
-                                    }
-                                    
-                                    .meta-section {
-                                      text-align: left;
-                                      font-size: 8px;
-                                      color: #444;
-                                      background: #f5f5f5;
-                                      padding: 5px 8px;
-                                      border-radius: 4px;
-                                      min-width: 120px;
-                                    }
-                                    
-                                    .meta-item {
-                                      margin-bottom: 2px;
-                                      display: flex;
-                                      justify-content: space-between;
-                                      gap: 6px;
-                                    }
-                                    
-                                    .meta-label { color: #888; font-weight: 600; }
-                                    
-                                    /* Main Content - Two Column Layout */
-                                    .main-content {
-                                      display: grid;
-                                      grid-template-columns: 1fr 240px;
-                                      gap: 10px;
-                                      margin-top: 6px;
-                                    }
-                                    
-                                    .content-section {
-                                      background: #fafafa;
-                                      border: 1px solid #e0e0e0;
-                                      border-radius: 6px;
-                                      padding: 8px 10px;
-                                    }
-                                    
-                                    .section-title {
-                                      display: flex;
-                                      align-items: center;
-                                      gap: 6px;
-                                      font-size: 10px;
-                                      font-weight: 700;
-                                      color: #1a5f3c;
-                                      margin-bottom: 6px;
-                                      padding-bottom: 4px;
-                                      border-bottom: 1.5px solid #1a5f3c;
-                                    }
-                                    
-                                    .section-icon {
-                                      width: 18px;
-                                      height: 18px;
-                                      background: linear-gradient(135deg, #1a5f3c, #2d8f5e);
-                                      color: white;
-                                      border-radius: 50%;
-                                      display: flex;
-                                      align-items: center;
-                                      justify-content: center;
-                                      font-size: 9px;
-                                      font-weight: bold;
-                                      flex-shrink: 0;
-                                    }
-                                    
-                                    .resolution-title-box {
-                                      background: linear-gradient(to left, #e8f5e9, #fff, #e8f5e9);
-                                      padding: 6px 10px;
-                                      border-radius: 5px;
-                                      text-align: center;
-                                      margin-bottom: 6px;
-                                      border: 1px solid #c8e6c9;
-                                    }
-                                    
-                                    .resolution-title-box h2 {
-                                      font-size: 11px;
-                                      font-weight: 700;
-                                      color: #1a1a1a;
-                                      line-height: 1.4;
-                                    }
-                                    
-                                    .resolution-text {
-                                      line-height: 1.6;
-                                      text-align: justify;
-                                      white-space: pre-wrap;
-                                      font-size: 9.5px;
-                                      color: #333;
-                                      padding: 6px 8px;
-                                      background: white;
-                                      border-radius: 4px;
-                                      border: 1px solid #eee;
-                                    }
-                                    
-                                    /* Voting Section */
-                                    .voting-box {
-                                      display: flex;
-                                      justify-content: space-around;
-                                      background: linear-gradient(to bottom, #f0f7f4, #e8f5e9);
-                                      padding: 6px 10px;
-                                      border-radius: 5px;
-                                      margin-top: 6px;
-                                      border: 1px solid #c8e6c9;
-                                    }
-                                    
-                                    .vote-item { text-align: center; padding: 2px 8px; }
-                                    
-                                    .vote-count {
-                                      font-size: 16px;
-                                      font-weight: 800;
-                                      display: block;
-                                    }
-                                    
-                                    .vote-count.for { color: #2e7d32; }
-                                    .vote-count.against { color: #c62828; }
-                                    .vote-count.abstain { color: #757575; }
-                                    
-                                    .vote-label {
-                                      font-size: 8px;
-                                      color: #555;
-                                      font-weight: 600;
-                                    }
-                                    
-                                    .result-badge {
-                                      text-align: center;
-                                      margin-top: 5px;
-                                      padding: 5px 10px;
-                                      background: ${resolution.status === 'approved' || resolution.status === 'implemented' ? 'linear-gradient(to left, #e8f5e9, #c8e6c9)' : resolution.status === 'rejected' ? 'linear-gradient(to left, #ffebee, #ffcdd2)' : 'linear-gradient(to left, #fff3e0, #ffe0b2)'};
-                                      border-radius: 4px;
-                                      font-size: 10px;
-                                      font-weight: 700;
-                                      color: ${resolution.status === 'approved' || resolution.status === 'implemented' ? '#1b5e20' : resolution.status === 'rejected' ? '#b71c1c' : '#e65100'};
-                                      border: 1px solid ${resolution.status === 'approved' || resolution.status === 'implemented' ? '#a5d6a7' : resolution.status === 'rejected' ? '#ef9a9a' : '#ffcc80'};
-                                    }
-                                    
-                                    /* Signatures Section */
-                                    .signatures-section {
-                                      background: linear-gradient(to bottom, #fff, #fafafa);
-                                      border: 1px solid #e0e0e0;
-                                      border-radius: 6px;
-                                      padding: 8px 10px;
-                                    }
-                                    
-                                    .signatures-grid {
-                                      display: grid;
-                                      grid-template-columns: 1fr 1fr;
-                                      gap: 6px;
-                                    }
-                                    
-                                    .signature-card {
-                                      background: white;
-                                      border: 1px solid #e0e0e0;
-                                      border-radius: 5px;
-                                      padding: 5px 6px;
-                                      text-align: center;
-                                    }
-                                    
-                                    .signature-card.signed {
-                                      background: linear-gradient(to bottom, #f1f8e9, #e8f5e9);
-                                      border-color: #aed581;
-                                    }
-                                    
-                                    .sig-header {
-                                      margin-bottom: 3px;
-                                      padding-bottom: 3px;
-                                      border-bottom: 1px dashed #ddd;
-                                    }
-                                    
-                                    .sig-name {
-                                      font-size: 9px;
-                                      font-weight: 700;
-                                      color: #1a1a1a;
-                                      line-height: 1.2;
-                                    }
-                                    
-                                    .sig-position {
-                                      font-size: 7px;
-                                      color: #666;
-                                      margin-top: 1px;
-                                    }
-                                    
-                                    .sig-content {
-                                      min-height: 28px;
-                                      display: flex;
-                                      align-items: center;
-                                      justify-content: center;
-                                      padding: 2px;
-                                    }
-                                    
-                                    .sig-image {
-                                      max-width: 80px;
-                                      max-height: 26px;
-                                      object-fit: contain;
-                                    }
-                                    
-                                    .sig-line {
-                                      color: #bbb;
-                                      font-size: 11px;
-                                      letter-spacing: 1px;
-                                    }
-                                    
-                                    .sig-pending {
-                                      color: #ff9800;
-                                      font-size: 7px;
-                                      font-style: italic;
-                                      padding: 2px 6px;
-                                      background: #fff8e1;
-                                      border-radius: 8px;
-                                    }
-                                    
-                                    .sig-declined {
-                                      color: #f44336;
-                                      font-size: 7px;
-                                      padding: 2px 6px;
-                                      background: #ffebee;
-                                      border-radius: 8px;
-                                    }
-                                    
-                                    .sig-footer {
-                                      display: flex;
-                                      justify-content: space-between;
-                                      align-items: center;
-                                      margin-top: 3px;
-                                      padding-top: 3px;
-                                      border-top: 1px dotted #eee;
-                                      font-size: 7px;
-                                    }
-                                    
-                                    .sig-date {
-                                      color: #888;
-                                    }
-                                    
-                                    .sig-status {
-                                      padding: 3px 10px;
-                                      border-radius: 12px;
-                                      font-weight: 600;
-                                    }
-                                    
-                                    .sig-status.signed {
-                                      background: #e8f5e9;
-                                      color: #2e7d32;
-                                    }
-                                    
-                                    .sig-status.pending {
-                                      background: #fff3e0;
-                                      color: #e65100;
-                                    }
-                                    
-                                    /* Voters / Attendees Signatures */
-                                    .voters-section { margin-top: 8px; page-break-inside: auto; break-inside: auto; }
-                                    .voter-card { page-break-inside: avoid; break-inside: avoid; }
-                                    .voters-grid {
-                                      display: grid;
-                                      grid-template-columns: repeat(4, 1fr);
-                                      gap: 6px;
-                                    }
-                                    .voter-card {
-                                      background: white;
-                                      border: 1px solid #e0e0e0;
-                                      border-radius: 5px;
-                                      padding: 5px 6px;
-                                      text-align: center;
-                                    }
-                                    .voter-card.vote-for { border-color: #aed581; background: linear-gradient(to bottom,#f1f8e9,#e8f5e9); }
-                                    .voter-card.vote-against { border-color: #ef9a9a; background: linear-gradient(to bottom,#ffebee,#ffcdd2); }
-                                    .voter-card.vote-abstain { border-color: #ffcc80; background: linear-gradient(to bottom,#fff8e1,#ffecb3); }
-                                    .voter-head {
-                                      display: flex;
-                                      justify-content: space-between;
-                                      align-items: center;
-                                      gap: 4px;
-                                      margin-bottom: 2px;
-                                    }
-                                    .voter-name { font-size: 8px; font-weight: 700; color: #1a1a1a; }
-                                    .voter-vote {
-                                      font-size: 7px;
-                                      font-weight: 700;
-                                      padding: 1px 6px;
-                                      border-radius: 8px;
-                                      white-space: nowrap;
-                                    }
-                                    .voter-vote.vote-for { background: #e8f5e9; color: #2e7d32; }
-                                    .voter-vote.vote-against { background: #ffebee; color: #c62828; }
-                                    .voter-vote.vote-abstain { background: #fff3e0; color: #e65100; }
-                                    .voter-meta { font-size: 6.5px; color: #777; margin-bottom: 3px; }
-                                    .voter-sig {
-                                      min-height: 24px;
-                                      display: flex;
-                                      align-items: center;
-                                      justify-content: center;
-                                      border-top: 1px dashed #ddd;
-                                      padding-top: 3px;
-                                    }
-                                    .voter-sig-img { max-width: 70px; max-height: 22px; object-fit: contain; }
-                                    
-                                    .sig-status.declined {
-                                      background: #ffebee;
-                                      color: #c62828;
-                                    }
-                                    
-                                    /* Footer */
-                                    .footer {
-                                      margin-top: 6px;
-                                      padding: 4px 10px;
-                                      background: #f5f5f5;
-                                      border-radius: 4px;
-                                      display: flex;
-                                      justify-content: space-between;
-                                      align-items: center;
-                                      font-size: 7px;
-                                      color: #666;
-                                    }
-                                    
-                                    .footer-right {
-                                      display: flex;
-                                      align-items: center;
-                                      gap: 5px;
-                                    }
-                                    
-                                    .footer-left {
-                                      text-align: left;
-                                    }
-                                    
-                                    /* Page Number Counter (for browsers that don't support @page counter) */
-                                    .page-number {
-                                      position: fixed;
-                                      bottom: 5mm;
-                                      left: 50%;
-                                      transform: translateX(-50%);
-                                      font-size: 9px;
-                                      color: #888;
-                                    }
-                                    
-                                    @media print {
-                                      body { 
-                                        print-color-adjust: exact; 
-                                        -webkit-print-color-adjust: exact; 
-                                      }
-                                      .document { 
-                                        padding: 0; 
-                                      }
-                                      .page-number {
-                                        display: block;
-                                      }
-                                      /* Orphan and Widow control */
-                                      p, .resolution-text {
-                                        orphans: 3;
-                                        widows: 3;
-                                      }
-                                    }
-                                    
-                                    @media screen {
-                                      .page-number {
-                                        display: none;
-                                      }
-                                    }
+                                    @page { size: A4 portrait; margin: 0; }
+                                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                                    body { font-family: 'Cairo', sans-serif; color: #333; direction: rtl; font-size: 9px; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                                    .letterhead { position: fixed; top: 0; left: 0; width: 210mm; height: 297mm; z-index: 0; }
+                                    .print-page { position: relative; z-index: 1; min-height: 297mm; padding: 30mm 16mm 20mm 16mm; box-sizing: border-box; }
+
+                                    .doc-title-main { text-align: center; font-size: 17px; font-weight: 700; color: #2b3a4f; margin-bottom: 4px; }
+                                    .doc-meta-wrap { text-align: center; margin-bottom: 9px; }
+                                    .doc-meta-pill { display: inline-block; background: #fbf6e9; border: 1px solid #e6d4a3; color: #7a6326; border-radius: 14px; padding: 4px 18px; font-size: 9px; font-weight: 600; }
+                                    .doc-meta-pill .sep { color: #c9a45b; margin: 0 7px; }
+
+                                    .info-strip { display: flex; background: #faf8f1; border: 1px solid #e9dfc4; border-radius: 7px; overflow: hidden; margin-bottom: 11px; }
+                                    .info-cell { flex: 1; text-align: center; padding: 6px 4px; border-left: 1px solid #ece2c8; }
+                                    .info-cell:last-child { border-left: none; }
+                                    .info-cell .lbl { font-size: 8px; color: #b8962f; font-weight: 600; margin-bottom: 4px; }
+                                    .info-cell .val { font-size: 10.5px; font-weight: 700; color: #2b3a4f; }
+                                    .info-cell .val.ok { color: #2e7d52; }
+                                    .info-cell .val.reject { color: #c0392b; }
+
+                                    .section-head { font-size: 13px; font-weight: 700; color: #2b3a4f; margin: 9px 0 6px; padding-right: 9px; border-right: 3px solid #b8962f; }
+
+                                    .subject-box { background: #f4f7fb; border: 1px solid #d8e2ee; border-right: 3px solid #2b3a4f; border-radius: 5px; padding: 7px 11px; margin-bottom: 7px; }
+                                    .subject-lbl { font-size: 8px; color: #7a8aa0; font-weight: 600; margin-bottom: 2px; }
+                                    .subject-txt { font-size: 11px; font-weight: 700; color: #2b3a4f; }
+                                    .res-box { background: #fdfbf3; border: 1px solid #ecdcb4; border-right: 3px solid #c9a45b; border-radius: 5px; padding: 8px 11px; margin-bottom: 7px; }
+                                    .res-box-text { font-size: 9.5px; color: #444; line-height: 1.85; white-space: pre-wrap; }
+
+                                    .vote-summary { display: flex; gap: 8px; margin-bottom: 8px; }
+                                    .vote-cell { flex: 1; text-align: center; border-radius: 6px; padding: 8px 4px; }
+                                    .vote-cell.for { background: #eaf6ee; border: 1px solid #bfe3cd; }
+                                    .vote-cell.against { background: #fbe9e9; border: 1px solid #f0c0c0; }
+                                    .vote-cell.abstain { background: #eef0f2; border: 1px solid #d8dde2; }
+                                    .vote-num { font-size: 20px; font-weight: 800; line-height: 1; }
+                                    .vote-cell.for .vote-num { color: #2e7d52; }
+                                    .vote-cell.against .vote-num { color: #c0392b; }
+                                    .vote-cell.abstain .vote-num { color: #5a6472; }
+                                    .vote-cap { font-size: 9px; font-weight: 600; color: #555; margin-top: 4px; }
+                                    .result-badge { text-align: center; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 7px; margin-bottom: 4px; }
+                                    .result-badge.ok { background: #e3f3e9; color: #2e7d52; border: 1px solid #bfe3cd; }
+                                    .result-badge.reject { background: #fbe5e5; color: #b3261e; border: 1px solid #f0c0c0; }
+                                    .result-badge.pending { background: #fff7e6; color: #9a7b1e; border: 1px solid #f0dca8; }
+
+                                    .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 4px; }
+                                    .sig-card { border: 1px solid #e3dcc6; border-radius: 7px; padding: 8px 10px 6px; background: #fffdf8; text-align: center; page-break-inside: avoid; break-inside: avoid; }
+                                    .sig-card.signed { border-color: #cfe3d6; background: #fbfdfb; }
+                                    .sig-role { font-size: 8px; color: #b8962f; font-weight: 700; margin-bottom: 2px; }
+                                    .sig-name { font-size: 11px; font-weight: 700; color: #2b3a4f; margin-bottom: 3px; }
+                                    .sig-img-wrap { height: 36px; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; border-bottom: 1px solid #e7e2d4; padding-bottom: 3px; }
+                                    .sig-img { max-height: 34px; max-width: 160px; }
+                                    .sig-wait { font-size: 8px; color: #b0a98f; }
+                                    .sig-x { font-size: 8px; color: #c0392b; }
+                                    .sig-foot { display: flex; justify-content: center; gap: 8px; align-items: center; }
+                                    .sig-ok { font-size: 8px; color: #2e7d52; font-weight: 700; }
+                                    .sig-rej { font-size: 8px; color: #c0392b; font-weight: 700; }
+                                    .sig-pend { font-size: 8px; color: #9a7b1e; font-weight: 700; }
+                                    .sig-date { font-size: 7.5px; color: #888; }
+                                    .sig-empty { text-align: center; color: #aaa; font-size: 9px; padding: 14px; grid-column: 1 / -1; }
+
+                                    .stamp-wrap { text-align: center; margin-top: 10px; }
+                                    .stamp-lbl { font-size: 9px; color: #888; margin-bottom: 2px; }
+                                    .stamp-wrap svg { width: 110px; height: 110px; }
+
+                                    .voters-section { margin-top: 10px; }
+                                    .voters-section .section-title { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #2b3a4f; margin: 0 0 5px; }
+                                    .voters-section .section-icon { font-size: 12px; }
+                                    .voters-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+                                    .voter-card { border: 1px solid #e6e0cd; border-radius: 5px; padding: 5px 7px; background: #fffdf8; }
+                                    .voter-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
+                                    .voter-name { font-size: 8.5px; font-weight: 700; color: #2b3a4f; }
+                                    .voter-vote { font-size: 7.5px; font-weight: 700; border-radius: 8px; padding: 1px 7px; }
+                                    .voter-vote.vote-for { background: #e3f3e9; color: #2e7d52; }
+                                    .voter-vote.vote-against { background: #fbe5e5; color: #b3261e; }
+                                    .voter-vote.vote-abstain { background: #eef0f2; color: #556; }
+                                    .voter-meta { font-size: 7px; color: #888; }
+                                    .voter-sig { margin-top: 2px; }
+                                    .voter-sig-img { max-height: 18px; max-width: 80px; }
+                                    .sig-line { color: #bbb; font-size: 8px; }
+
+                                    .doc-note { text-align: center; font-size: 7.5px; color: #8a8a8a; margin-top: 12px; }
                                   </style>
                                 </head>
                                 <body>
-                                  <div class="document">
-                                    <div class="header">
-                                      <div class="logo-section">
-                                        <div class="logo-circle">B</div>
-                                        <div class="company-info">
-                                          <div class="company-name-ar">شركة الزبد الأفضل التجارية</div>
-                                          <div class="company-name-en">THE BUTTER BEST TRADING COMPANY</div>
-                                          <div class="company-details">شركة مساهمة مقفلة | سجل تجاري: 7026155296 | المملكة العربية السعودية</div>
-                                        </div>
-                                      </div>
-                                      <div class="doc-title-section">
-                                        <div class="doc-type-badge">${docTypeBadge}</div>
-                                        <div class="resolution-number">رقم: ${resolution.resolutionNumber}</div>
-                                      </div>
-                                      <div class="meta-section">
-                                        <div class="meta-item"><span class="meta-label">التاريخ:</span> <span>${resolution.createdAt ? new Date(resolution.createdAt).toLocaleDateString('ar-SA-u-nu-latn') : new Date().toLocaleDateString('ar-SA-u-nu-latn')}</span></div>
-                                        <div class="meta-item"><span class="meta-label">النوع:</span> <span>${resolutionType}</span></div>
-                                        <div class="meta-item"><span class="meta-label">التصنيف:</span> <span>${category}</span></div>
-                                        ${priority ? `<div class="meta-item"><span class="meta-label">الأولوية:</span> <span>${priority}</span></div>` : ''}
-                                      </div>
+                                  <img class="letterhead" src="${officialLetterhead}" alt="" />
+                                  <div class="print-page">
+                                    <div class="doc-title-main">${docTypeBadge}</div>
+                                    <div class="doc-meta-wrap"><span class="doc-meta-pill">رقم القرار ${escapeHtml(resolution.resolutionNumber)}<span class="sep">•</span>التاريخ ${dateStr}م<span class="sep">•</span>النوع ${escapeHtml(resolutionType)}</span></div>
+                                    <div class="info-strip">
+                                      <div class="info-cell"><div class="lbl">نوع القرار</div><div class="val">${escapeHtml(resolutionType)}</div></div>
+                                      <div class="info-cell"><div class="lbl">التصنيف</div><div class="val">${escapeHtml(category)}</div></div>
+                                      <div class="info-cell"><div class="lbl">الأولوية</div><div class="val">${escapeHtml(priority || '-')}</div></div>
+                                      <div class="info-cell"><div class="lbl">عدد الأعضاء</div><div class="val">${memberCount} أعضاء</div></div>
+                                      <div class="info-cell"><div class="lbl">النتيجة</div><div class="val ${resultClass}">${resultText}</div></div>
                                     </div>
-                                    
-                                    <div class="main-content">
-                                      <div class="content-section">
-                                        <div class="section-title">
-                                          <div class="section-icon">١</div>
-                                          <span>نص القرار</span>
-                                        </div>
-                                        <div class="resolution-title-box">
-                                          <h2>${resolution.title}</h2>
-                                        </div>
-                                        <div class="resolution-text">
-                                          ${resolution.description || 'بناءً على الصلاحيات المخولة لمجلس الإدارة، وبعد الاطلاع على الموضوع المعروض، تقرر ما يلي:\n\n' + resolution.title}
-                                        </div>
-                                        
-                                        <div class="section-title" style="margin-top: 8px;">
-                                          <div class="section-icon">٢</div>
-                                          <span>نتيجة التصويت</span>
-                                        </div>
-                                        <div class="voting-box">
-                                          <div class="vote-item">
-                                            <div class="vote-count for">${resolution.forVotes || 0}</div>
-                                            <div class="vote-label">موافق</div>
-                                          </div>
-                                          <div class="vote-item">
-                                            <div class="vote-count against">${resolution.againstVotes || 0}</div>
-                                            <div class="vote-label">معارض</div>
-                                          </div>
-                                          <div class="vote-item">
-                                            <div class="vote-count abstain">${resolution.abstainVotes || 0}</div>
-                                            <div class="vote-label">ممتنع</div>
-                                          </div>
-                                        </div>
-                                        <div class="result-badge">
-                                          ${resolution.status === 'approved' || resolution.status === 'implemented' ? '✓ تم اعتماد القرار بالأغلبية' : resolution.status === 'rejected' ? '✗ تم رفض القرار' : '⏳ ' + status}
-                                        </div>
-                                      </div>
-                                      
-                                      <div class="signatures-section">
-                                        <div class="section-title">
-                                          <div class="section-icon">✍</div>
-                                          <span>التوقيعات</span>
-                                        </div>
-                                        <div class="signatures-grid">
-                                          ${signaturesHtml}
-                                        </div>
-                                      </div>
-                                      ${votersSectionHtml}
+                                    <div class="section-head">نص القرار</div>
+                                    ${subjectText ? '<div class="subject-box"><div class="subject-lbl">موضوع القرار</div><div class="subject-txt">' + subjectText + '</div></div>' : ''}
+                                    <div class="res-box"><div class="res-box-text">${bodyText}</div></div>
+                                    <div class="section-head">نتيجة التصويت</div>
+                                    <div class="vote-summary">
+                                      <div class="vote-cell for"><div class="vote-num">${forV}</div><div class="vote-cap">موافق</div></div>
+                                      <div class="vote-cell against"><div class="vote-num">${againstV}</div><div class="vote-cap">معارض</div></div>
+                                      <div class="vote-cell abstain"><div class="vote-num">${abstainV}</div><div class="vote-cap">ممتنع</div></div>
                                     </div>
-                                    
-                                    <div class="footer">
-                                      <div class="footer-right">شركة الزبد الأفضل التجارية (شركة مساهمة مقفلة) | سجل تجاري: 7026155296</div>
-                                      <div class="footer-left">تم الطباعة: ${new Date().toLocaleDateString('ar-SA-u-nu-latn')} | وثيقة رسمية</div>
-                                    </div>
+                                    <div class="result-badge ${badgeClass}">${badgeText}</div>
+                                    <div class="section-head">التوقيعات</div>
+                                    <div class="sig-grid">${signaturesHtml}</div>
+                                    <div class="stamp-wrap"><div class="stamp-lbl">ختم الشركة</div>${companyStampSvg}</div>
+                                    ${votersSectionHtml}
+                                    <div class="doc-note">مستند رسمي صادر إلكترونياً عبر نظام إدارة حوكمة الشركات | تاريخ الطباعة: ${printStamp} | رقم القرار ${escapeHtml(resolution.resolutionNumber)}</div>
                                   </div>
-                                  <script>
-                                    // Page numbering for browsers
-                                    window.onload = function() {
-                                      // This will work when printing
-                                    };
-                                  </script>
                                 </body>
                                 </html>
                               `;
