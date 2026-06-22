@@ -1245,6 +1245,52 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
+  // ADMIN-ONLY "unlock" endpoint — deliberately reopens a locked resolution so it
+  // can be edited again. This is an explicit, audited escape hatch (clears the lock
+  // flag and records who reopened it). Only an admin may perform it.
+  app.post("/api/governance/resolutions/:id/unlock", isAuthenticated, requirePermission("governance_resolutions", "edit"), async (req, res) => {
+    try {
+      const user = (req as any).currentUser;
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ error: "فقط المسؤول يمكنه فتح قفل القرار" });
+      }
+      const resolutionId = parseInt(req.params.id);
+      const reason = (req.body?.reason || '').toString().trim();
+      const [existing] = await db.select().from(boardResolutions).where(eq(boardResolutions.id, resolutionId));
+      if (!existing) return res.status(404).json({ error: "القرار غير موجود" });
+      if (!(existing as any).isLocked) return res.status(409).json({ error: "القرار غير مقفل" });
+      const unlocked = await db.transaction(async (tx) => {
+        const [row] = await tx.update(boardResolutions)
+          .set({ isLocked: false, lockedAt: null, lockedBy: null, updatedAt: new Date() } as any)
+          .where(eq(boardResolutions.id, resolutionId))
+          .returning();
+        // Audit trail: record who reopened a locked resolution and why (compliance).
+        await tx.insert(systemAuditLogs).values({
+          module: 'governance',
+          entityId: String(resolutionId),
+          entityName: (existing as any).resolutionNumber || (existing as any).title,
+          action: 'update',
+          details: JSON.stringify({
+            type: 'unlock',
+            resolutionNumber: (existing as any).resolutionNumber,
+            title: (existing as any).title,
+            reason: reason || null,
+            previousLockedAt: (existing as any).lockedAt || null,
+            previousLockedBy: (existing as any).lockedBy || null,
+          }),
+          userId: getCurrentUserId(req),
+          userName: (req as any).currentUser?.username || 'system',
+          ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
+        });
+        return row;
+      });
+      res.json(unlocked);
+    } catch (error) {
+      console.error("Error unlocking resolution:", error);
+      res.status(500).json({ error: "فشل في فتح قفل القرار" });
+    }
+  });
+
   app.delete("/api/governance/resolutions/:id", isAuthenticated, async (req, res) => {
     try {
       const user = (req as any).currentUser;

@@ -49,6 +49,7 @@ import {
   Share2,
   Trash2,
   Lock,
+  Unlock,
   RotateCcw,
 } from "lucide-react";
 import type { BoardResolution, BoardMember } from "@shared/schema";
@@ -310,6 +311,33 @@ export default function ResolutionsPage() {
     },
     onError: (e: any) => {
       toast({ title: "فشل قفل القرار", description: e?.message, variant: "destructive" });
+    },
+  });
+
+  const [unlockResolutionId, setUnlockResolutionId] = useState<number | null>(null);
+  const [unlockReason, setUnlockReason] = useState("");
+  const unlockMutation = useMutation({
+    mutationFn: async ({ id, reason }: { id: number; reason: string }) => {
+      const res = await fetch(`/api/governance/resolutions/${id}/unlock`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || "Failed to unlock resolution");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/resolutions"] });
+      setUnlockResolutionId(null);
+      setUnlockReason("");
+      toast({ title: "تم فتح قفل القرار", description: "أصبح قابلاً للتعديل الآن" });
+    },
+    onError: (e: any) => {
+      toast({ title: "فشل فتح قفل القرار", description: e?.message, variant: "destructive" });
     },
   });
 
@@ -1055,6 +1083,53 @@ export default function ResolutionsPage() {
                                     disabled={lockMutation.isPending}
                                   >
                                     {lockMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin ml-2" />جاري القفل…</> : "نعم، اقفل نهائياً"}
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                          {isAdmin && (resolution as any).isLocked && (
+                            <AlertDialog open={unlockResolutionId === resolution.id} onOpenChange={(open) => { if (!open) { setUnlockResolutionId(null); setUnlockReason(""); } }}>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-1 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                                  onClick={() => setUnlockResolutionId(resolution.id)}
+                                  data-testid={`btn-unlock-${resolution.id}`}
+                                >
+                                  <Unlock className="h-4 w-4" />
+                                  فتح القفل للتعديل
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent dir="rtl">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle className="flex items-center gap-2">
+                                    <Unlock className="h-5 w-5 text-emerald-600" /> فتح قفل القرار {resolution.resolutionNumber}
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    سيتم فتح قفل القرار ليصبح قابلاً للتعديل مرة أخرى. هذا إجراء استثنائي للمسؤول فقط ويُسجَّل في سجل المراجعة.
+                                    يُنصح بإعادة قفل القرار نهائياً بعد الانتهاء من التعديلات للحفاظ على الامتثال النظامي.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <div className="px-1 py-2">
+                                  <Label className="text-right block mb-1 text-sm">سبب فتح القفل (اختياري)</Label>
+                                  <Textarea
+                                    value={unlockReason}
+                                    onChange={(e) => setUnlockReason(e.target.value)}
+                                    placeholder="مثال: تصحيح خطأ إملائي في نص القرار"
+                                    className="text-right"
+                                    data-testid="input-unlock-reason"
+                                  />
+                                </div>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel onClick={() => setUnlockReason("")}>تراجع</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    className="bg-emerald-600 hover:bg-emerald-700"
+                                    onClick={() => unlockMutation.mutate({ id: resolution.id, reason: unlockReason })}
+                                    disabled={unlockMutation.isPending}
+                                  >
+                                    {unlockMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin ml-2" />جاري فتح القفل…</> : "نعم، افتح القفل"}
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
