@@ -981,8 +981,8 @@ function ConvertDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: 
 
   const mutation = useMutation({
     mutationFn: async (data: EmployeeFormData) => {
-      // الفرع مقفول دائماً على فرع الإشعار — نتجاهل أي تعديل من الـ UI
-      const payload = { ...data, branchId: (row?.offer as any)?.branchId || data.branchId };
+      // الفرع قابل للتعديل: نستخدم اختيار المستخدم، ونرجع لفرع الإشعار فقط إن تُرك فارغاً
+      const payload = { ...data, branchId: data.branchId || (row?.offer as any)?.branchId };
       const r = await apiRequest("POST", `/api/hr/onboarding/${row!.notification!.id}/convert`, payload);
       return await r.json();
     },
@@ -1046,15 +1046,14 @@ function ConvertDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: 
             <TabsContent value="basic" className="space-y-4 pt-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>{offerHasBranch ? "الفرع (مقفول من الإشعار)" : "الفرع *"}</Label>
+                  <Label>الفرع *</Label>
                   <Select
                     value={wBranch}
-                    disabled={offerHasBranch}
-                    onValueChange={offerHasBranch ? undefined : (v) => form.setValue("branchId", v, { shouldValidate: true })}
+                    onValueChange={(v) => form.setValue("branchId", v, { shouldValidate: true })}
                   >
                     <SelectTrigger
                       data-testid="select-branch"
-                      className={offerHasBranch ? "bg-slate-100 cursor-not-allowed" : (form.formState.errors.branchId ? "border-red-500" : "")}
+                      className={form.formState.errors.branchId ? "border-red-500" : ""}
                     >
                       <SelectValue placeholder="اختر الفرع" />
                     </SelectTrigger>
@@ -1063,11 +1062,11 @@ function ConvertDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: 
                     </SelectContent>
                   </Select>
                   {offerHasBranch ? (
-                    <p className="text-xs text-slate-500">الفرع مرتبط بإشعار مباشرة العمل ولا يمكن تغييره من هنا</p>
+                    <p className="text-xs text-slate-500">معبّأ تلقائياً من الإشعار — يمكنك تغييره عند الحاجة</p>
                   ) : (
                     <p className="text-xs text-amber-600">عرض العمل غير مرتبط بفرع — اختر الفرع يدوياً</p>
                   )}
-                  {!offerHasBranch && form.formState.errors.branchId && (
+                  {form.formState.errors.branchId && (
                     <p className="text-sm text-red-500">{form.formState.errors.branchId.message}</p>
                   )}
                 </div>

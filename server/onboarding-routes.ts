@@ -578,7 +578,17 @@ export function registerOnboardingRoutes(app: Express) {
             userId: n.convertedEmployeeId,
           });
         }
-        if (!n.branchId) return res.status(400).json({ error: "الإشعار بدون فرع مرتبط" });
+
+        // الفرع قابل للتعديل من النموذج: نستخدم الفرع المُختار إن وُجد، وإلا فرع الإشعار
+        let effectiveBranchId: string | null = n.branchId;
+        if (bodyBranchId && String(bodyBranchId) !== n.branchId) {
+          const [b] = await db.select().from(branches).where(eq(branches.id, String(bodyBranchId))).limit(1);
+          if (!b) return res.status(400).json({ error: "الفرع المحدد غير موجود" });
+          effectiveBranchId = b.id;
+          // SECURITY: يجب أن يملك المستخدم صلاحية على الفرع الجديد المُختار أيضاً
+          if (!checkBranchAccess(req, effectiveBranchId)) return res.status(403).json({ error: "لا تملك صلاحية على الفرع المحدد" });
+        }
+        if (!effectiveBranchId) return res.status(400).json({ error: "الإشعار بدون فرع مرتبط — اختر الفرع في النموذج" });
 
         // قراءة عرض العمل لجلب البيانات الافتراضية (الراتب، الجنسية، إلخ)
         const [offer] = await db.select().from(jobOffers).where(eq(jobOffers.id, n.jobOfferId)).limit(1);
@@ -618,7 +628,7 @@ export function registerOnboardingRoutes(app: Express) {
                 lastName: parts.slice(1).join(" ") || "-",
                 phone: phoneNumber || phone || n.phone,
                 email: email || offer.email || null,
-                branchId: n.branchId,
+                branchId: effectiveBranchId,
                 jobTitle: jobTitle || n.position,
                 role: effectiveRole,
                 isActive: "active",
@@ -645,9 +655,9 @@ export function registerOnboardingRoutes(app: Express) {
           const branchPrefixes: Record<string, string> = {
             medina: "MED", jeddah: "JED", riyadh: "RYD", makkah: "MAK", dammam: "DAM",
           };
-          const prefix = branchPrefixes[n.branchId!] || n.branchId!.substring(0, 3).toUpperCase();
+          const prefix = branchPrefixes[effectiveBranchId!] || effectiveBranchId!.substring(0, 3).toUpperCase();
           const existingNumsRes: any = await tx.execute(sql`
-            SELECT employee_number FROM branch_employees WHERE branch_id = ${n.branchId}
+            SELECT employee_number FROM branch_employees WHERE branch_id = ${effectiveBranchId}
           `);
           const rows = (existingNumsRes?.rows ?? existingNumsRes) as Array<{ employee_number: string | null }>;
           let maxNum = 0;
@@ -662,7 +672,7 @@ export function registerOnboardingRoutes(app: Express) {
           const nowDate = new Date();
 
           const [newBranchEmployee] = await tx.insert(branchEmployees).values({
-            branchId: n.branchId!,
+            branchId: effectiveBranchId!,
             linkedUserId: newUserId,
             employeeNumber,
             employeeName: (employeeName || n.candidateName || "").trim(),
