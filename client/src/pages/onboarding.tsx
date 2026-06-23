@@ -934,6 +934,9 @@ function ConvertDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: 
   const wCreateLogin = useWatch({ control: form.control, name: "createLogin" });
   const wRole = useWatch({ control: form.control, name: "role" });
 
+  // الفرع يُقفل فقط إذا كان عرض العمل/الإشعار مرتبطاً بفرع؛ وإلا يمكن اختياره يدوياً
+  const offerHasBranch = !!(row?.offer as any)?.branchId;
+
   // تعبئة تلقائية من بيانات عرض العمل والإشعار عند فتح النافذة
   useEffect(() => {
     if (row) {
@@ -1017,8 +1020,11 @@ function ConvertDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: 
         </DialogHeader>
         {row && (
           <div className="bg-green-50 border border-green-200 rounded p-2 text-xs mb-2">
-            ✓ تم تأكيد مباشرة <strong>{row.offer.candidateName}</strong> في فرع <strong>{row.offer.branchName}</strong> —
-            البيانات معبّأة تلقائياً من عرض العمل.
+            ✓ تم تأكيد مباشرة <strong>{row.offer.candidateName}</strong>
+            {offerHasBranch
+              ? <> في فرع <strong>{row.offer.branchName}</strong></>
+              : <> — <strong className="text-amber-700">الفرع غير محدد، يرجى اختياره أدناه</strong></>}
+            {" — "}البيانات معبّأة تلقائياً من عرض العمل.
           </div>
         )}
         <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
@@ -1040,16 +1046,30 @@ function ConvertDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: 
             <TabsContent value="basic" className="space-y-4 pt-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>الفرع (مقفول من الإشعار)</Label>
-                  <Select value={wBranch} disabled>
-                    <SelectTrigger data-testid="select-branch" className="bg-slate-100 cursor-not-allowed">
-                      <SelectValue placeholder="—" />
+                  <Label>{offerHasBranch ? "الفرع (مقفول من الإشعار)" : "الفرع *"}</Label>
+                  <Select
+                    value={wBranch}
+                    disabled={offerHasBranch}
+                    onValueChange={offerHasBranch ? undefined : (v) => form.setValue("branchId", v, { shouldValidate: true })}
+                  >
+                    <SelectTrigger
+                      data-testid="select-branch"
+                      className={offerHasBranch ? "bg-slate-100 cursor-not-allowed" : (form.formState.errors.branchId ? "border-red-500" : "")}
+                    >
+                      <SelectValue placeholder="اختر الفرع" />
                     </SelectTrigger>
                     <SelectContent>
                       {branches?.map((b: any) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-slate-500">الفرع مرتبط بإشعار مباشرة العمل ولا يمكن تغييره من هنا</p>
+                  {offerHasBranch ? (
+                    <p className="text-xs text-slate-500">الفرع مرتبط بإشعار مباشرة العمل ولا يمكن تغييره من هنا</p>
+                  ) : (
+                    <p className="text-xs text-amber-600">عرض العمل غير مرتبط بفرع — اختر الفرع يدوياً</p>
+                  )}
+                  {!offerHasBranch && form.formState.errors.branchId && (
+                    <p className="text-sm text-red-500">{form.formState.errors.branchId.message}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>الحالة</Label>
