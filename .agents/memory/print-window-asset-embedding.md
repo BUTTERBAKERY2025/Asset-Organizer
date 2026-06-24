@@ -44,3 +44,13 @@ transient first-load failure locks the whole session into the fallback for that 
   (data:image or https only); the self-fetched same-origin logo is trusted and does not.
 - Used by the General Assembly print generators: `assembly-meeting-print.ts` and
   `assembly-resolution-print.ts`.
+
+## Escape DB text before document.write (XSS)
+- These print/export generators interpolate DB-sourced strings (employee/branch/
+  department names, job titles, notes) directly into an HTML string fed to
+  `document.write` / iframe write. That is a stored-XSS sink: any malicious value
+  persisted in a profile field runs as script in the app's same origin at print time.
+- **Rule:** run every dynamic text field through an `escapeHtml` helper before
+  concatenation. Numeric fields formatted via `fmt`/`toLocaleString` are safe.
+- **How to apply:** when adding a new print/PDF generator, escape text at the
+  interpolation site (see `escapeHtml` in `salary-closing.tsx` accrued-salaries PDF).

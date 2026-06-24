@@ -29273,8 +29273,12 @@ export async function registerRoutes(
     const isLocked = !!existing && existing.status === "closed";
     if (isLocked && existing) {
       const savedLines = await storage.getSalaryClosureLines(existing.id);
+      // إثراء الإدارة من سجل الموظف الحالي (اللقطة لا تخزّن الإدارة) — لتقرير الرواتب المستحقة حسب الإدارة
+      const deptEmps = await storage.getBranchEmployeesByBranch(branchId).catch(() => [] as any[]);
+      const deptMap = new Map<number, string | null>(deptEmps.map((e: any) => [e.id, e.department ?? null]));
       const lines = savedLines.map((l: any) => ({
         ...l,
+        department: l.department ?? deptMap.get(l.branchEmployeeId) ?? null,
         presentDates: l.presentDates ?? [],
         absentDates: l.absentDates ?? [],
         // اللقطة تخزّن أيام الغياب مجمّعة؛ نعرضها كأيام صريحة للعرض فقط

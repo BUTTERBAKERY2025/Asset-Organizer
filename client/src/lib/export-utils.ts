@@ -335,6 +335,33 @@ export function downloadAsPDF(
   }
 }
 
+// طباعة مستند HTML جاهز (للتقارير المخصّصة متعددة الجداول) عبر إطار مخفي ثم نافذة الطباعة
+export function printHtmlDocument(html: string) {
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "absolute";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "none";
+  iframe.style.left = "-9999px";
+  document.body.appendChild(iframe);
+
+  const iframeDoc = iframe.contentWindow?.document;
+  if (iframeDoc) {
+    iframeDoc.open();
+    iframeDoc.write(html);
+    iframeDoc.close();
+
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow?.print();
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+        }, 1000);
+      }, 250);
+    };
+  }
+}
+
 export function formatCurrencyForExport(value: number | null | undefined): string {
   if (value == null) return "0";
   return value.toLocaleString("en-GB");

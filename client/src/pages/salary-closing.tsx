@@ -63,7 +63,9 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  FileBarChart2,
 } from "lucide-react";
+import { printHtmlDocument } from "@/lib/export-utils";
 import type { BranchEmployee, AttendanceRecord, SalaryDeduction } from "@shared/schema";
 import { SALARY_DEDUCTION_TYPE_LABELS, LEAVE_TYPE_LABELS, SALARY_PAYMENT_METHOD_LABELS, type SalaryPayment } from "@shared/schema";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -1627,6 +1629,283 @@ export default function SalaryClosingPage() {
     }
   };
 
+  // ============================================================
+  // تقرير "الرواتب المستحقة" المخصّص للإدارة المالية والحسابات
+  // يعرض الراتب المستحق الكامل لكل موظف "قبل أي خصومات" (غياب/تأمينات/سُلف)،
+  // مع توزيع دقيق حسب الفرع وحسب الإدارة. هذا التقرير لا يطبّق أي حسميات إطلاقاً.
+  // ============================================================
+  const round2 = (n: number) => Math.round((n || 0) * 100) / 100;
+  // تهريب أي محتوى نصّي قادم من قاعدة البيانات قبل حقنه في HTML الطباعة (منع XSS)
+  const escapeHtml = (s: any) =>
+    String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
+  const accruedBranchOf = (e: any) => e.branchName || getBranchName(branch);
+  const accruedDeptOf = (e: any) => (e.department && String(e.department).trim()) || "غير محدد";
+  const accruedOtherAllow = (e: any) => round2((e.allowances || 0) - (e.housingAllowance || 0));
+
+  type AccruedGroup = { key: string; count: number; base: number; housing: number; other: number; allowances: number; gross: number };
+  const buildAccruedGroups = (lines: any[], keyFn: (e: any) => string): AccruedGroup[] => {
+    const map = new Map<string, AccruedGroup>();
+    for (const e of lines) {
+      const key = keyFn(e);
+      const g = map.get(key) || { key, count: 0, base: 0, housing: 0, other: 0, allowances: 0, gross: 0 };
+      g.count += 1;
+      g.base += e.baseSalary || 0;
+      g.housing += e.housingAllowance || 0;
+      g.other += accruedOtherAllow(e);
+      g.allowances += e.allowances || 0;
+      g.gross += e.grossSalary || 0;
+      map.set(key, g);
+    }
+    return Array.from(map.values())
+      .map((g) => ({ ...g, base: round2(g.base), housing: round2(g.housing), other: round2(g.other), allowances: round2(g.allowances), gross: round2(g.gross) }))
+      .sort((a, b) => b.gross - a.gross);
+  };
+
+  const exportAccruedSalariesExcel = async () => {
+    const fresh = await fetchLatestClosing();
+    const lines: any[] = fresh?.lines ?? salaryClosingData;
+    if (lines.length === 0) {
+      alert(isRTL ? "لا توجد بيانات للتصدير" : "No data to export");
+      return;
+    }
+    const XLSX = await import("xlsx");
+    const wb = XLSX.utils.book_new();
+
+    const scopeLabel = isAllBranches ? "كل الفروع" : getBranchName(branch);
+    const totalBase = round2(lines.reduce((s, e) => s + (e.baseSalary || 0), 0));
+    const totalHousing = round2(lines.reduce((s, e) => s + (e.housingAllowance || 0), 0));
+    const totalOther = round2(lines.reduce((s, e) => s + accruedOtherAllow(e), 0));
+    const totalAllow = round2(lines.reduce((s, e) => s + (e.allowances || 0), 0));
+    const totalGross = round2(lines.reduce((s, e) => s + (e.grossSalary || 0), 0));
+
+    // ورقة 1: ملخص عام
+    const summary = [
+      { "البيان": "اسم التقرير", "القيمة": "الرواتب المستحقة (قبل الخصومات)" },
+      { "البيان": "النطاق", "القيمة": scopeLabel },
+      { "البيان": "الشهر", "القيمة": month },
+      { "البيان": "تاريخ الإصدار", "القيمة": new Date().toLocaleDateString("ar-SA-u-nu-latn", { year: "numeric", month: "long", day: "numeric" }) },
+      { "البيان": "عدد الموظفين", "القيمة": lines.length },
+      { "البيان": "", "القيمة": "" },
+      { "البيان": "إجمالي الرواتب الأساسية", "القيمة": totalBase },
+      { "البيان": "إجمالي بدل السكن", "القيمة": totalHousing },
+      { "البيان": "إجمالي البدلات الأخرى", "القيمة": totalOther },
+      { "البيان": "إجمالي البدلات", "القيمة": totalAllow },
+      { "البيان": "إجمالي المستحق (قبل الخصومات)", "القيمة": totalGross },
+      { "البيان": "", "القيمة": "" },
+      { "البيان": "ملاحظة", "القيمة": "هذا التقرير يعرض كامل الراتب المستحق لكل موظف قبل أي خصومات غياب أو تأمينات أو سُلف — مخصّص لمراجعة الالتزام المالي الشهري للرواتب." },
+    ];
+    const wsSummary = XLSX.utils.json_to_sheet(summary);
+    wsSummary["!cols"] = [{ wch: 32 }, { wch: 48 }];
+    XLSX.utils.book_append_sheet(wb, wsSummary, "ملخص عام");
+
+    // ورقة 2: حسب الفرع
+    const byBranch = buildAccruedGroups(lines, accruedBranchOf);
+    const branchRows = byBranch.map((g, i) => ({
+      "م": i + 1,
+      "الفرع": g.key,
+      "عدد الموظفين": g.count,
+      "الراتب الأساسي": g.base,
+      "بدل السكن": g.housing,
+      "بدلات أخرى": g.other,
+      "إجمالي البدلات": g.allowances,
+      "إجمالي المستحق": g.gross,
+    }));
+    branchRows.push({
+      "م": "" as any,
+      "الفرع": "الإجمالي",
+      "عدد الموظفين": lines.length,
+      "الراتب الأساسي": totalBase,
+      "بدل السكن": totalHousing,
+      "بدلات أخرى": totalOther,
+      "إجمالي البدلات": totalAllow,
+      "إجمالي المستحق": totalGross,
+    });
+    const wsBranch = XLSX.utils.json_to_sheet(branchRows);
+    wsBranch["!cols"] = [{ wch: 5 }, { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 16 }];
+    XLSX.utils.book_append_sheet(wb, wsBranch, "حسب الفرع");
+
+    // ورقة 3: حسب الإدارة
+    const byDept = buildAccruedGroups(lines, accruedDeptOf);
+    const deptRows = byDept.map((g, i) => ({
+      "م": i + 1,
+      "الإدارة": g.key,
+      "عدد الموظفين": g.count,
+      "الراتب الأساسي": g.base,
+      "بدل السكن": g.housing,
+      "بدلات أخرى": g.other,
+      "إجمالي البدلات": g.allowances,
+      "إجمالي المستحق": g.gross,
+    }));
+    deptRows.push({
+      "م": "" as any,
+      "الإدارة": "الإجمالي",
+      "عدد الموظفين": lines.length,
+      "الراتب الأساسي": totalBase,
+      "بدل السكن": totalHousing,
+      "بدلات أخرى": totalOther,
+      "إجمالي البدلات": totalAllow,
+      "إجمالي المستحق": totalGross,
+    });
+    const wsDept = XLSX.utils.json_to_sheet(deptRows);
+    wsDept["!cols"] = [{ wch: 5 }, { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 16 }];
+    XLSX.utils.book_append_sheet(wb, wsDept, "حسب الإدارة");
+
+    // ورقة 4: تفاصيل الموظفين
+    const detail = lines.map((e, i) => ({
+      "م": i + 1,
+      "رقم الموظف": e.employeeNumber || "",
+      "الاسم": e.employeeName,
+      "الفرع": accruedBranchOf(e),
+      "الإدارة": accruedDeptOf(e),
+      "الوظيفة": e.jobTitle || "",
+      "الجنسية": e.nationality || "",
+      "الراتب الأساسي": round2(e.baseSalary || 0),
+      "بدل السكن": round2(e.housingAllowance || 0),
+      "بدلات أخرى": accruedOtherAllow(e),
+      "إجمالي البدلات": round2(e.allowances || 0),
+      "إجمالي المستحق (قبل الخصومات)": round2(e.grossSalary || 0),
+    }));
+    const wsDetail = XLSX.utils.json_to_sheet(detail);
+    wsDetail["!cols"] = [{ wch: 5 }, { wch: 12 }, { wch: 26 }, { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 22 }];
+    XLSX.utils.book_append_sheet(wb, wsDetail, "تفاصيل الموظفين");
+
+    XLSX.writeFile(wb, `الرواتب_المستحقة_${scopeLabel}_${month}.xlsx`);
+  };
+
+  const exportAccruedSalariesPDF = async () => {
+    const fresh = await fetchLatestClosing();
+    const lines: any[] = fresh?.lines ?? salaryClosingData;
+    if (lines.length === 0) {
+      alert(isRTL ? "لا توجد بيانات للتصدير" : "No data to export");
+      return;
+    }
+    const scopeLabel = isAllBranches ? "كل الفروع" : getBranchName(branch);
+    const fmt = (n: number) => (round2(n)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const totalBase = lines.reduce((s, e) => s + (e.baseSalary || 0), 0);
+    const totalHousing = lines.reduce((s, e) => s + (e.housingAllowance || 0), 0);
+    const totalOther = lines.reduce((s, e) => s + accruedOtherAllow(e), 0);
+    const totalAllow = lines.reduce((s, e) => s + (e.allowances || 0), 0);
+    const totalGross = lines.reduce((s, e) => s + (e.grossSalary || 0), 0);
+
+    const byBranch = buildAccruedGroups(lines, accruedBranchOf);
+    const byDept = buildAccruedGroups(lines, accruedDeptOf);
+
+    const groupTable = (title: string, label: string, groups: AccruedGroup[]) => `
+      <h3 class="section-title">${title}</h3>
+      <table>
+        <thead><tr>
+          <th>${label}</th><th>عدد الموظفين</th><th>الراتب الأساسي</th><th>بدل السكن</th><th>بدلات أخرى</th><th>إجمالي البدلات</th><th>إجمالي المستحق</th>
+        </tr></thead>
+        <tbody>
+          ${groups.map((g, i) => `<tr class="${i % 2 === 0 ? "even" : "odd"}">
+            <td class="rtl">${escapeHtml(g.key)}</td><td>${g.count}</td><td>${fmt(g.base)}</td><td>${fmt(g.housing)}</td><td>${fmt(g.other)}</td><td>${fmt(g.allowances)}</td><td class="strong">${fmt(g.gross)}</td>
+          </tr>`).join("")}
+          <tr class="total-row">
+            <td class="rtl">الإجمالي</td><td>${lines.length}</td><td>${fmt(totalBase)}</td><td>${fmt(totalHousing)}</td><td>${fmt(totalOther)}</td><td>${fmt(totalAllow)}</td><td>${fmt(totalGross)}</td>
+          </tr>
+        </tbody>
+      </table>`;
+
+    const detailRows = lines.map((e, i) => `
+      <tr class="${i % 2 === 0 ? "even" : "odd"}">
+        <td>${i + 1}</td>
+        <td>${escapeHtml(e.employeeNumber || "")}</td>
+        <td class="rtl">${escapeHtml(e.employeeName || "")}</td>
+        <td class="rtl">${escapeHtml(accruedBranchOf(e))}</td>
+        <td class="rtl">${escapeHtml(accruedDeptOf(e))}</td>
+        <td class="rtl">${escapeHtml(e.jobTitle || "")}</td>
+        <td>${fmt(e.baseSalary || 0)}</td>
+        <td>${fmt(e.housingAllowance || 0)}</td>
+        <td>${fmt(accruedOtherAllow(e))}</td>
+        <td>${fmt(e.allowances || 0)}</td>
+        <td class="strong">${fmt(e.grossSalary || 0)}</td>
+      </tr>`).join("");
+
+    const html = `
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <title>الرواتب المستحقة - ${escapeHtml(scopeLabel)} - ${escapeHtml(month)}</title>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
+          @page { size: A4 landscape; margin: 12mm; }
+          * { box-sizing: border-box; }
+          body { font-family: 'Cairo','Segoe UI',sans-serif; margin: 0; direction: rtl; color: #1a1a1a; font-size: 11px; background: #fff; }
+          .header { background: linear-gradient(135deg, #1a3a2f 0%, #2d5a47 100%); color: #fff; padding: 18px 24px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+          .brand { display: flex; align-items: center; gap: 14px; }
+          .logo { width: 54px; height: 54px; background: linear-gradient(135deg,#f5a623,#e67e22); border-radius: 12px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:#1a3a2f; }
+          .brand h1 { margin: 0; font-size: 18px; }
+          .brand .sub { margin-top: 3px; font-size: 11px; color: #f5a623; }
+          .meta { text-align: left; font-size: 10px; opacity: .9; }
+          .title-block { background: #f8f9fa; border-right: 5px solid #f5a623; padding: 12px 18px; border-radius: 0 8px 8px 0; margin-bottom: 14px; }
+          .title-block h2 { margin: 0; font-size: 17px; color: #1a3a2f; }
+          .title-block p { margin: 5px 0 0; font-size: 11px; color: #666; }
+          .cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 18px; }
+          .card { background: linear-gradient(135deg,#fef9f3,#fff5eb); border: 1px solid #f5a623; border-radius: 8px; padding: 10px 12px; text-align: center; }
+          .card .lbl { font-size: 9px; color: #666; margin-bottom: 4px; }
+          .card .val { font-size: 14px; font-weight: 800; color: #1a3a2f; }
+          .card.accent { background: linear-gradient(135deg,#1a3a2f,#2d5a47); border-color:#1a3a2f; }
+          .card.accent .lbl { color: #cfe3d8; }
+          .card.accent .val { color: #fff; }
+          .section-title { font-size: 13px; color: #1a3a2f; margin: 18px 0 6px; padding-right: 10px; border-right: 4px solid #f5a623; }
+          table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 6px; }
+          thead { background: linear-gradient(135deg,#1a3a2f,#2d5a47); }
+          th { color: #fff; padding: 9px 7px; font-size: 9.5px; font-weight: 600; text-align: center; border-left: 1px solid rgba(255,255,255,.1); white-space: nowrap; }
+          td { padding: 7px; font-size: 9.5px; text-align: center; border-bottom: 1px solid #eee; border-left: 1px solid #f0f0f0; }
+          td.rtl { text-align: right; }
+          td.strong { font-weight: 700; color: #1a3a2f; }
+          tr.even { background: #fff; } tr.odd { background: #fafbfc; }
+          tr.total-row td { background: #fff3e0; font-weight: 800; color: #1a3a2f; border-top: 2px solid #f5a623; }
+          .footer { margin-top: 18px; padding-top: 12px; border-top: 2px solid #1a3a2f; display: flex; justify-content: space-between; font-size: 9px; color: #666; }
+          .confidential { background: #fee2e2; color: #991b1b; padding: 3px 10px; border-radius: 4px; font-weight: 600; }
+          @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } .header,thead,.card,.title-block,tr.total-row td { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="brand">
+            <div class="logo">ز</div>
+            <div><h1>شركة الزبد الأفضل التجارية</h1><div class="sub">BUTTER BAKERY - الإدارة المالية</div></div>
+          </div>
+          <div class="meta">
+            <div>تاريخ الإصدار: ${new Date().toLocaleDateString("ar-SA-u-nu-latn", { year: "numeric", month: "long", day: "numeric" })}</div>
+            <div>رقم المرجع: SAL-${Date.now().toString(36).toUpperCase()}</div>
+          </div>
+        </div>
+        <div class="title-block">
+          <h2>تقرير الرواتب المستحقة (قبل الخصومات)</h2>
+          <p>النطاق: ${escapeHtml(scopeLabel)} — الشهر: ${escapeHtml(month)} — كامل الراتب المستحق لكل موظف قبل أي خصومات غياب أو تأمينات أو سُلف</p>
+        </div>
+        <div class="cards">
+          <div class="card"><div class="lbl">عدد الموظفين</div><div class="val">${lines.length}</div></div>
+          <div class="card"><div class="lbl">إجمالي الرواتب الأساسية</div><div class="val">${fmt(totalBase)}</div></div>
+          <div class="card"><div class="lbl">إجمالي البدلات</div><div class="val">${fmt(totalAllow)}</div></div>
+          <div class="card"><div class="lbl">عدد الفروع / الإدارات</div><div class="val">${byBranch.length} / ${byDept.length}</div></div>
+          <div class="card accent"><div class="lbl">إجمالي المستحق (قبل الخصومات)</div><div class="val">${fmt(totalGross)} ر.س</div></div>
+        </div>
+        ${groupTable("التوزيع حسب الفرع", "الفرع", byBranch)}
+        ${groupTable("التوزيع حسب الإدارة", "الإدارة", byDept)}
+        <h3 class="section-title">تفاصيل الموظفين</h3>
+        <table>
+          <thead><tr>
+            <th>م</th><th>رقم الموظف</th><th>الاسم</th><th>الفرع</th><th>الإدارة</th><th>الوظيفة</th>
+            <th>الراتب الأساسي</th><th>بدل السكن</th><th>بدلات أخرى</th><th>إجمالي البدلات</th><th>إجمالي المستحق</th>
+          </tr></thead>
+          <tbody>${detailRows}</tbody>
+        </table>
+        <div class="footer">
+          <span>BUTTER BAKERY SYSTEM — تقرير الرواتب المستحقة</span>
+          <span>عدد السجلات: ${lines.length}</span>
+          <span class="confidential">سري - للإدارة المالية فقط</span>
+        </div>
+      </body>
+      </html>`;
+
+    printHtmlDocument(html);
+  };
+
   // قوائم الفلاتر المشتقة
   const uniqueJobTitles = useMemo(
     () => Array.from(new Set(salaryClosingData.map((e) => e.jobTitle).filter(Boolean))).sort(),
@@ -1779,6 +2058,25 @@ export default function SalaryClosingPage() {
                 >
                   <Download className="w-4 h-4 ml-2" />
                   تصدير PDF
+                </Button>
+                <Button
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                  onClick={exportAccruedSalariesExcel}
+                  disabled={previewLoading || salaryClosingData.length === 0}
+                  data-testid="button-export-accrued-excel"
+                >
+                  <FileBarChart2 className="w-4 h-4 ml-2" />
+                  الرواتب المستحقة (Excel)
+                </Button>
+                <Button
+                  variant="outline"
+                  className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                  onClick={exportAccruedSalariesPDF}
+                  disabled={previewLoading || salaryClosingData.length === 0}
+                  data-testid="button-export-accrued-pdf"
+                >
+                  <FileBarChart2 className="w-4 h-4 ml-2" />
+                  الرواتب المستحقة (PDF)
                 </Button>
                 {!isAllBranches && (
                   <Button
