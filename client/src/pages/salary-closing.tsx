@@ -1642,22 +1642,46 @@ export default function SalaryClosingPage() {
   const accruedDeptOf = (e: any) => (e.department && String(e.department).trim()) || "غير محدد";
   const accruedOtherAllow = (e: any) => round2((e.allowances || 0) - (e.housingAllowance || 0));
 
-  type AccruedGroup = { key: string; count: number; base: number; housing: number; other: number; allowances: number; gross: number };
+  const accruedAbsence = (e: any) => round2(e.absenceDeduction || 0);
+  const accruedInsurance = (e: any) => round2(e.socialInsurance || 0);
+  const accruedManual = (e: any) => round2(e.manualDeductionsTotal || 0);
+  const accruedTotalDed = (e: any) => round2(accruedAbsence(e) + accruedInsurance(e) + accruedManual(e));
+  const accruedNet = (e: any) =>
+    round2(e.netSalary != null ? e.netSalary : Math.max(0, (e.grossSalary || 0) - accruedTotalDed(e)));
+  const manualDeductionsText = (e: any) =>
+    (e.manualDeductions || [])
+      .map((m: any) => `${m.type || "خصم"}${m.description ? " (" + m.description + ")" : ""}: ${round2(m.amount || 0)}`)
+      .join(" | ");
+
+  type AccruedGroup = {
+    key: string; count: number; base: number; housing: number; other: number; allowances: number;
+    gross: number; absence: number; insurance: number; manual: number; totalDed: number; net: number;
+  };
   const buildAccruedGroups = (lines: any[], keyFn: (e: any) => string): AccruedGroup[] => {
     const map = new Map<string, AccruedGroup>();
     for (const e of lines) {
       const key = keyFn(e);
-      const g = map.get(key) || { key, count: 0, base: 0, housing: 0, other: 0, allowances: 0, gross: 0 };
+      const g = map.get(key) || { key, count: 0, base: 0, housing: 0, other: 0, allowances: 0, gross: 0, absence: 0, insurance: 0, manual: 0, totalDed: 0, net: 0 };
       g.count += 1;
       g.base += e.baseSalary || 0;
       g.housing += e.housingAllowance || 0;
       g.other += accruedOtherAllow(e);
       g.allowances += e.allowances || 0;
       g.gross += e.grossSalary || 0;
+      g.absence += accruedAbsence(e);
+      g.insurance += accruedInsurance(e);
+      g.manual += accruedManual(e);
+      g.totalDed += accruedTotalDed(e);
+      g.net += accruedNet(e);
       map.set(key, g);
     }
     return Array.from(map.values())
-      .map((g) => ({ ...g, base: round2(g.base), housing: round2(g.housing), other: round2(g.other), allowances: round2(g.allowances), gross: round2(g.gross) }))
+      .map((g) => ({
+        ...g,
+        base: round2(g.base), housing: round2(g.housing), other: round2(g.other), allowances: round2(g.allowances),
+        gross: round2(g.gross), absence: round2(g.absence), insurance: round2(g.insurance), manual: round2(g.manual),
+        totalDed: round2(g.totalDed), net: round2(g.net),
+      }))
       .sort((a, b) => b.gross - a.gross);
   };
 
@@ -1677,10 +1701,15 @@ export default function SalaryClosingPage() {
     const totalOther = round2(lines.reduce((s, e) => s + accruedOtherAllow(e), 0));
     const totalAllow = round2(lines.reduce((s, e) => s + (e.allowances || 0), 0));
     const totalGross = round2(lines.reduce((s, e) => s + (e.grossSalary || 0), 0));
+    const totalAbsence = round2(lines.reduce((s, e) => s + accruedAbsence(e), 0));
+    const totalInsurance = round2(lines.reduce((s, e) => s + accruedInsurance(e), 0));
+    const totalManual = round2(lines.reduce((s, e) => s + accruedManual(e), 0));
+    const totalDed = round2(lines.reduce((s, e) => s + accruedTotalDed(e), 0));
+    const totalNet = round2(lines.reduce((s, e) => s + accruedNet(e), 0));
 
     // ورقة 1: ملخص عام
     const summary = [
-      { "البيان": "اسم التقرير", "القيمة": "الرواتب المستحقة (قبل الخصومات)" },
+      { "البيان": "اسم التقرير", "القيمة": "الرواتب المستحقة (قبل وبعد الخصومات)" },
       { "البيان": "النطاق", "القيمة": scopeLabel },
       { "البيان": "الشهر", "القيمة": month },
       { "البيان": "تاريخ الإصدار", "القيمة": new Date().toLocaleDateString("ar-SA-u-nu-latn", { year: "numeric", month: "long", day: "numeric" }) },
@@ -1692,63 +1721,59 @@ export default function SalaryClosingPage() {
       { "البيان": "إجمالي البدلات", "القيمة": totalAllow },
       { "البيان": "إجمالي المستحق (قبل الخصومات)", "القيمة": totalGross },
       { "البيان": "", "القيمة": "" },
-      { "البيان": "ملاحظة", "القيمة": "هذا التقرير يعرض كامل الراتب المستحق لكل موظف قبل أي خصومات غياب أو تأمينات أو سُلف — مخصّص لمراجعة الالتزام المالي الشهري للرواتب." },
+      { "البيان": "إجمالي خصم الغياب", "القيمة": totalAbsence },
+      { "البيان": "إجمالي التأمينات الاجتماعية", "القيمة": totalInsurance },
+      { "البيان": "إجمالي الخصومات المباشرة / السُلف", "القيمة": totalManual },
+      { "البيان": "إجمالي الخصومات", "القيمة": totalDed },
+      { "البيان": "", "القيمة": "" },
+      { "البيان": "صافي المستحق (بعد الخصومات)", "القيمة": totalNet },
+      { "البيان": "", "القيمة": "" },
+      { "البيان": "ملاحظة", "القيمة": "يعرض هذا التقرير الراتب المستحق قبل الخصومات وبعدها مع تفصيل كل بند خصم (غياب / تأمينات / خصومات مباشرة وسُلف) — مخصّص لمراجعة الالتزام المالي الشهري للرواتب." },
     ];
     const wsSummary = XLSX.utils.json_to_sheet(summary);
-    wsSummary["!cols"] = [{ wch: 32 }, { wch: 48 }];
+    wsSummary["!cols"] = [{ wch: 36 }, { wch: 56 }];
     XLSX.utils.book_append_sheet(wb, wsSummary, "ملخص عام");
 
-    // ورقة 2: حسب الفرع
-    const byBranch = buildAccruedGroups(lines, accruedBranchOf);
-    const branchRows = byBranch.map((g, i) => ({
-      "م": i + 1,
-      "الفرع": g.key,
-      "عدد الموظفين": g.count,
-      "الراتب الأساسي": g.base,
-      "بدل السكن": g.housing,
-      "بدلات أخرى": g.other,
-      "إجمالي البدلات": g.allowances,
-      "إجمالي المستحق": g.gross,
-    }));
-    branchRows.push({
-      "م": "" as any,
-      "الفرع": "الإجمالي",
-      "عدد الموظفين": lines.length,
-      "الراتب الأساسي": totalBase,
-      "بدل السكن": totalHousing,
-      "بدلات أخرى": totalOther,
-      "إجمالي البدلات": totalAllow,
-      "إجمالي المستحق": totalGross,
-    });
-    const wsBranch = XLSX.utils.json_to_sheet(branchRows);
-    wsBranch["!cols"] = [{ wch: 5 }, { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 16 }];
-    XLSX.utils.book_append_sheet(wb, wsBranch, "حسب الفرع");
+    const groupSheet = (groups: AccruedGroup[], label: string) => {
+      const rows = groups.map((g, i) => ({
+        "م": i + 1,
+        [label]: g.key,
+        "عدد الموظفين": g.count,
+        "الراتب الأساسي": g.base,
+        "بدل السكن": g.housing,
+        "بدلات أخرى": g.other,
+        "إجمالي البدلات": g.allowances,
+        "إجمالي المستحق (قبل الخصومات)": g.gross,
+        "خصم الغياب": g.absence,
+        "التأمينات": g.insurance,
+        "خصومات مباشرة / سُلف": g.manual,
+        "إجمالي الخصومات": g.totalDed,
+        "صافي المستحق (بعد الخصومات)": g.net,
+      }));
+      rows.push({
+        "م": "" as any,
+        [label]: "الإجمالي",
+        "عدد الموظفين": lines.length,
+        "الراتب الأساسي": totalBase,
+        "بدل السكن": totalHousing,
+        "بدلات أخرى": totalOther,
+        "إجمالي البدلات": totalAllow,
+        "إجمالي المستحق (قبل الخصومات)": totalGross,
+        "خصم الغياب": totalAbsence,
+        "التأمينات": totalInsurance,
+        "خصومات مباشرة / سُلف": totalManual,
+        "إجمالي الخصومات": totalDed,
+        "صافي المستحق (بعد الخصومات)": totalNet,
+      });
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws["!cols"] = [{ wch: 5 }, { wch: 22 }, { wch: 12 }, { wch: 13 }, { wch: 11 }, { wch: 11 }, { wch: 13 }, { wch: 20 }, { wch: 11 }, { wch: 11 }, { wch: 18 }, { wch: 14 }, { wch: 22 }];
+      return ws;
+    };
 
+    // ورقة 2: حسب الفرع
+    XLSX.utils.book_append_sheet(wb, groupSheet(buildAccruedGroups(lines, accruedBranchOf), "الفرع"), "حسب الفرع");
     // ورقة 3: حسب الإدارة
-    const byDept = buildAccruedGroups(lines, accruedDeptOf);
-    const deptRows = byDept.map((g, i) => ({
-      "م": i + 1,
-      "الإدارة": g.key,
-      "عدد الموظفين": g.count,
-      "الراتب الأساسي": g.base,
-      "بدل السكن": g.housing,
-      "بدلات أخرى": g.other,
-      "إجمالي البدلات": g.allowances,
-      "إجمالي المستحق": g.gross,
-    }));
-    deptRows.push({
-      "م": "" as any,
-      "الإدارة": "الإجمالي",
-      "عدد الموظفين": lines.length,
-      "الراتب الأساسي": totalBase,
-      "بدل السكن": totalHousing,
-      "بدلات أخرى": totalOther,
-      "إجمالي البدلات": totalAllow,
-      "إجمالي المستحق": totalGross,
-    });
-    const wsDept = XLSX.utils.json_to_sheet(deptRows);
-    wsDept["!cols"] = [{ wch: 5 }, { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 16 }];
-    XLSX.utils.book_append_sheet(wb, wsDept, "حسب الإدارة");
+    XLSX.utils.book_append_sheet(wb, groupSheet(buildAccruedGroups(lines, accruedDeptOf), "الإدارة"), "حسب الإدارة");
 
     // ورقة 4: تفاصيل الموظفين
     const detail = lines.map((e, i) => ({
@@ -1764,9 +1789,16 @@ export default function SalaryClosingPage() {
       "بدلات أخرى": accruedOtherAllow(e),
       "إجمالي البدلات": round2(e.allowances || 0),
       "إجمالي المستحق (قبل الخصومات)": round2(e.grossSalary || 0),
+      "أيام الغياب": e.absentDays || 0,
+      "خصم الغياب": accruedAbsence(e),
+      "التأمينات": accruedInsurance(e),
+      "خصومات مباشرة / سُلف": accruedManual(e),
+      "تفصيل الخصومات المباشرة": manualDeductionsText(e),
+      "إجمالي الخصومات": accruedTotalDed(e),
+      "صافي المستحق (بعد الخصومات)": accruedNet(e),
     }));
     const wsDetail = XLSX.utils.json_to_sheet(detail);
-    wsDetail["!cols"] = [{ wch: 5 }, { wch: 12 }, { wch: 26 }, { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 22 }];
+    wsDetail["!cols"] = [{ wch: 5 }, { wch: 12 }, { wch: 26 }, { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 10 }, { wch: 12 }, { wch: 11 }, { wch: 11 }, { wch: 12 }, { wch: 18 }, { wch: 10 }, { wch: 11 }, { wch: 11 }, { wch: 16 }, { wch: 28 }, { wch: 14 }, { wch: 20 }];
     XLSX.utils.book_append_sheet(wb, wsDetail, "تفاصيل الموظفين");
 
     XLSX.writeFile(wb, `الرواتب_المستحقة_${scopeLabel}_${month}.xlsx`);
@@ -1783,10 +1815,13 @@ export default function SalaryClosingPage() {
     const fmt = (n: number) => (round2(n)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     const totalBase = lines.reduce((s, e) => s + (e.baseSalary || 0), 0);
-    const totalHousing = lines.reduce((s, e) => s + (e.housingAllowance || 0), 0);
-    const totalOther = lines.reduce((s, e) => s + accruedOtherAllow(e), 0);
     const totalAllow = lines.reduce((s, e) => s + (e.allowances || 0), 0);
     const totalGross = lines.reduce((s, e) => s + (e.grossSalary || 0), 0);
+    const totalAbsence = lines.reduce((s, e) => s + accruedAbsence(e), 0);
+    const totalInsurance = lines.reduce((s, e) => s + accruedInsurance(e), 0);
+    const totalManual = lines.reduce((s, e) => s + accruedManual(e), 0);
+    const totalDed = lines.reduce((s, e) => s + accruedTotalDed(e), 0);
+    const totalNet = lines.reduce((s, e) => s + accruedNet(e), 0);
 
     const byBranch = buildAccruedGroups(lines, accruedBranchOf);
     const byDept = buildAccruedGroups(lines, accruedDeptOf);
@@ -1795,14 +1830,14 @@ export default function SalaryClosingPage() {
       <h3 class="section-title">${title}</h3>
       <table>
         <thead><tr>
-          <th>${label}</th><th>عدد الموظفين</th><th>الراتب الأساسي</th><th>بدل السكن</th><th>بدلات أخرى</th><th>إجمالي البدلات</th><th>إجمالي المستحق</th>
+          <th>${label}</th><th>عدد</th><th>المستحق (قبل الخصومات)</th><th>خصم الغياب</th><th>التأمينات</th><th>خصومات / سُلف</th><th>إجمالي الخصومات</th><th>الصافي (بعد الخصومات)</th>
         </tr></thead>
         <tbody>
           ${groups.map((g, i) => `<tr class="${i % 2 === 0 ? "even" : "odd"}">
-            <td class="rtl">${escapeHtml(g.key)}</td><td>${g.count}</td><td>${fmt(g.base)}</td><td>${fmt(g.housing)}</td><td>${fmt(g.other)}</td><td>${fmt(g.allowances)}</td><td class="strong">${fmt(g.gross)}</td>
+            <td class="rtl">${escapeHtml(g.key)}</td><td>${g.count}</td><td>${fmt(g.gross)}</td><td class="ded">${fmt(g.absence)}</td><td class="ded">${fmt(g.insurance)}</td><td class="ded">${fmt(g.manual)}</td><td class="ded strong">${fmt(g.totalDed)}</td><td class="strong net">${fmt(g.net)}</td>
           </tr>`).join("")}
           <tr class="total-row">
-            <td class="rtl">الإجمالي</td><td>${lines.length}</td><td>${fmt(totalBase)}</td><td>${fmt(totalHousing)}</td><td>${fmt(totalOther)}</td><td>${fmt(totalAllow)}</td><td>${fmt(totalGross)}</td>
+            <td class="rtl">الإجمالي</td><td>${lines.length}</td><td>${fmt(totalGross)}</td><td>${fmt(totalAbsence)}</td><td>${fmt(totalInsurance)}</td><td>${fmt(totalManual)}</td><td>${fmt(totalDed)}</td><td>${fmt(totalNet)}</td>
           </tr>
         </tbody>
       </table>`;
@@ -1814,12 +1849,14 @@ export default function SalaryClosingPage() {
         <td class="rtl">${escapeHtml(e.employeeName || "")}</td>
         <td class="rtl">${escapeHtml(accruedBranchOf(e))}</td>
         <td class="rtl">${escapeHtml(accruedDeptOf(e))}</td>
-        <td class="rtl">${escapeHtml(e.jobTitle || "")}</td>
         <td>${fmt(e.baseSalary || 0)}</td>
-        <td>${fmt(e.housingAllowance || 0)}</td>
-        <td>${fmt(accruedOtherAllow(e))}</td>
         <td>${fmt(e.allowances || 0)}</td>
         <td class="strong">${fmt(e.grossSalary || 0)}</td>
+        <td class="ded">${fmt(accruedAbsence(e))}</td>
+        <td class="ded">${fmt(accruedInsurance(e))}</td>
+        <td class="ded">${fmt(accruedManual(e))}</td>
+        <td class="ded strong">${fmt(accruedTotalDed(e))}</td>
+        <td class="strong net">${fmt(accruedNet(e))}</td>
       </tr>`).join("");
 
     const html = `
@@ -1852,10 +1889,12 @@ export default function SalaryClosingPage() {
           .section-title { font-size: 13px; color: #1a3a2f; margin: 18px 0 6px; padding-right: 10px; border-right: 4px solid #f5a623; }
           table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 6px; }
           thead { background: linear-gradient(135deg,#1a3a2f,#2d5a47); }
-          th { color: #fff; padding: 9px 7px; font-size: 9.5px; font-weight: 600; text-align: center; border-left: 1px solid rgba(255,255,255,.1); white-space: nowrap; }
-          td { padding: 7px; font-size: 9.5px; text-align: center; border-bottom: 1px solid #eee; border-left: 1px solid #f0f0f0; }
+          th { color: #fff; padding: 7px 5px; font-size: 8.5px; font-weight: 600; text-align: center; border-left: 1px solid rgba(255,255,255,.1); }
+          td { padding: 5px; font-size: 8.5px; text-align: center; border-bottom: 1px solid #eee; border-left: 1px solid #f0f0f0; }
           td.rtl { text-align: right; }
           td.strong { font-weight: 700; color: #1a3a2f; }
+          td.ded { color: #b91c1c; }
+          td.net { color: #15803d; }
           tr.even { background: #fff; } tr.odd { background: #fafbfc; }
           tr.total-row td { background: #fff3e0; font-weight: 800; color: #1a3a2f; border-top: 2px solid #f5a623; }
           .footer { margin-top: 18px; padding-top: 12px; border-top: 2px solid #1a3a2f; display: flex; justify-content: space-between; font-size: 9px; color: #666; }
@@ -1875,23 +1914,29 @@ export default function SalaryClosingPage() {
           </div>
         </div>
         <div class="title-block">
-          <h2>تقرير الرواتب المستحقة (قبل الخصومات)</h2>
-          <p>النطاق: ${escapeHtml(scopeLabel)} — الشهر: ${escapeHtml(month)} — كامل الراتب المستحق لكل موظف قبل أي خصومات غياب أو تأمينات أو سُلف</p>
+          <h2>تقرير الرواتب المستحقة (قبل وبعد الخصومات)</h2>
+          <p>النطاق: ${escapeHtml(scopeLabel)} — الشهر: ${escapeHtml(month)} — الراتب المستحق قبل الخصومات وبعدها مع تفصيل كل بند (غياب / تأمينات / خصومات مباشرة وسُلف)</p>
         </div>
         <div class="cards">
           <div class="card"><div class="lbl">عدد الموظفين</div><div class="val">${lines.length}</div></div>
+          <div class="card"><div class="lbl">المستحق (قبل الخصومات)</div><div class="val">${fmt(totalGross)}</div></div>
+          <div class="card"><div class="lbl">خصم الغياب</div><div class="val" style="color:#b91c1c">${fmt(totalAbsence)}</div></div>
+          <div class="card"><div class="lbl">التأمينات</div><div class="val" style="color:#b91c1c">${fmt(totalInsurance)}</div></div>
+          <div class="card"><div class="lbl">خصومات مباشرة / سُلف</div><div class="val" style="color:#b91c1c">${fmt(totalManual)}</div></div>
+          <div class="card"><div class="lbl">إجمالي الخصومات</div><div class="val" style="color:#b91c1c">${fmt(totalDed)}</div></div>
           <div class="card"><div class="lbl">إجمالي الرواتب الأساسية</div><div class="val">${fmt(totalBase)}</div></div>
           <div class="card"><div class="lbl">إجمالي البدلات</div><div class="val">${fmt(totalAllow)}</div></div>
           <div class="card"><div class="lbl">عدد الفروع / الإدارات</div><div class="val">${byBranch.length} / ${byDept.length}</div></div>
-          <div class="card accent"><div class="lbl">إجمالي المستحق (قبل الخصومات)</div><div class="val">${fmt(totalGross)} ر.س</div></div>
+          <div class="card accent"><div class="lbl">صافي المستحق (بعد الخصومات)</div><div class="val">${fmt(totalNet)} ر.س</div></div>
         </div>
         ${groupTable("التوزيع حسب الفرع", "الفرع", byBranch)}
         ${groupTable("التوزيع حسب الإدارة", "الإدارة", byDept)}
         <h3 class="section-title">تفاصيل الموظفين</h3>
         <table>
           <thead><tr>
-            <th>م</th><th>رقم الموظف</th><th>الاسم</th><th>الفرع</th><th>الإدارة</th><th>الوظيفة</th>
-            <th>الراتب الأساسي</th><th>بدل السكن</th><th>بدلات أخرى</th><th>إجمالي البدلات</th><th>إجمالي المستحق</th>
+            <th>م</th><th>رقم الموظف</th><th>الاسم</th><th>الفرع</th><th>الإدارة</th>
+            <th>الراتب الأساسي</th><th>إجمالي البدلات</th><th>المستحق (قبل الخصومات)</th>
+            <th>خصم الغياب</th><th>التأمينات</th><th>خصومات / سُلف</th><th>إجمالي الخصومات</th><th>الصافي (بعد الخصومات)</th>
           </tr></thead>
           <tbody>${detailRows}</tbody>
         </table>
