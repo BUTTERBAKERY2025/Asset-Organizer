@@ -413,9 +413,12 @@ export default function VotingPage() {
 
     const resNum = sanitize(resolution.resolutionNumber) || '-';
 
-    const buildResolutionBody = (raw: string | undefined | null): string => {
+    // Returns the resolution text as structured blocks. `text`/`title` are already
+    // sanitized; the paginator can split a long block by its lines across pages.
+    type ResBlock = { cls: 'res-box' | 'res-intro'; title?: string; text: string };
+    const buildResolutionBlocks = (raw: string | undefined | null): ResBlock[] => {
       const text = fixHijriInText(sanitize(raw || ''));
-      if (!text.trim()) return '<div class="res-box"><div class="res-box-text">-</div></div>';
+      if (!text.trim()) return [{ cls: 'res-box', text: '-' }];
       const lines = text.split(/\r?\n/);
       const intro: string[] = [];
       const sections: { title: string; body: string[] }[] = [];
@@ -433,44 +436,58 @@ export default function VotingPage() {
       }
       const introText = intro.join('\n').trim();
       if (!sections.length) {
-        return '<div class="res-box"><div class="res-box-text">' + (introText || text) + '</div></div>';
+        return [{ cls: 'res-box', text: introText || text }];
       }
-      let html = '';
-      if (introText) html += '<div class="res-intro">' + introText + '</div>';
+      const out: ResBlock[] = [];
+      if (introText) out.push({ cls: 'res-intro', text: introText });
       for (const s of sections) {
-        html += '<div class="res-box"><div class="res-box-title">' + s.title + '</div><div class="res-box-text">' + s.body.join('\n').trim() + '</div></div>';
+        out.push({ cls: 'res-box', title: s.title, text: s.body.join('\n').trim() });
       }
-      return html;
+      return out;
     };
-    const resolutionBodyHtml = buildResolutionBody(resolution.description);
 
-    const headerHtml =
-      '<div class="doc-title-main">' + docTitle + '</div>' +
-      '<div class="doc-meta-wrap">' +
-        '<span class="doc-meta-pill">رقم القرار ' + resNum + '<span class="sep">•</span>التاريخ الهجري ' + hijriDateStr + 'هـ<span class="sep">•</span>التاريخ الميلادي ' + gregDateStr + 'م</span>' +
-      '</div>' +
-      '<div class="info-strip">' +
-        '<div class="info-cell"><div class="lbl">نوع القرار</div><div class="val">' + typeLabel + '</div></div>' +
-        '<div class="info-cell"><div class="lbl">الأغلبية المطلوبة</div><div class="val">' + requiredMajorityInfo.percentage + '%</div></div>' +
-        '<div class="info-cell"><div class="lbl">عدد المصوتين</div><div class="val">' + votedTokens.length + ' مساهم</div></div>' +
-        '<div class="info-cell"><div class="lbl">الأسهم المصوتة</div><div class="val">' + totalSharesVoted.toLocaleString('en-US') + '</div></div>' +
-        '<div class="info-cell"><div class="lbl">نتيجة التصويت</div><div class="val ' + (isApproved ? 'ok' : 'reject') + '">' + approvalPercentage + '% ' + (isApproved ? 'معتمد' : 'غير معتمد') + '</div></div>' +
-      '</div>' +
-      '<div class="section-head">نص القرار</div>' +
-      resolutionBodyHtml +
-      '<div class="section-head">سجل التصويت</div>';
+    // ----- ordered flow items: html = fixed block, text = splittable resolution text -----
+    type FlowItem =
+      | { kind: 'html'; html: string; head?: boolean; beforeTable?: boolean }
+      | { kind: 'text'; cls: 'res-box' | 'res-intro'; title?: string; text: string };
+    const flowItems: FlowItem[] = [
+      { kind: 'html', html: '<div class="doc-title-main">' + docTitle + '</div>' },
+      { kind: 'html', html:
+        '<div class="doc-meta-wrap">' +
+          '<span class="doc-meta-pill">رقم القرار ' + resNum + '<span class="sep">•</span>التاريخ الهجري ' + hijriDateStr + 'هـ<span class="sep">•</span>التاريخ الميلادي ' + gregDateStr + 'م</span>' +
+        '</div>' },
+      { kind: 'html', html:
+        '<div class="info-strip">' +
+          '<div class="info-cell"><div class="lbl">نوع القرار</div><div class="val">' + typeLabel + '</div></div>' +
+          '<div class="info-cell"><div class="lbl">الأغلبية المطلوبة</div><div class="val">' + requiredMajorityInfo.percentage + '%</div></div>' +
+          '<div class="info-cell"><div class="lbl">عدد المصوتين</div><div class="val">' + votedTokens.length + ' مساهم</div></div>' +
+          '<div class="info-cell"><div class="lbl">الأسهم المصوتة</div><div class="val">' + totalSharesVoted.toLocaleString('en-US') + '</div></div>' +
+          '<div class="info-cell"><div class="lbl">نتيجة التصويت</div><div class="val ' + (isApproved ? 'ok' : 'reject') + '">' + approvalPercentage + '% ' + (isApproved ? 'معتمد' : 'غير معتمد') + '</div></div>' +
+        '</div>' },
+      { kind: 'html', html: '<div class="section-head">نص القرار</div>', head: true },
+      ...buildResolutionBlocks(resolution.description).map((b): FlowItem => ({ kind: 'text', cls: b.cls, title: b.title, text: b.text })),
+      { kind: 'html', html: '<div class="section-head">سجل التصويت</div>', head: true, beforeTable: true },
+    ];
 
-    // بناء صفوف جدول التصويت (يتدفق طبيعياً عبر الصفحات)
-    let tableRows = '';
-    votedTokens.forEach((token, idx) => {
+    // ----- voting table parts (head row + body rows + totals) -----
+    const tableHeadHtml =
+      '<tr>' +
+        '<th style="width:5%;">#</th>' +
+        '<th class="name" style="width:25%;">اسم المساهم</th>' +
+        '<th style="width:13%;">عدد الأسهم</th>' +
+        '<th style="width:11%;">التصويت</th>' +
+        '<th style="width:20%;">تاريخ ووقت التصويت</th>' +
+        '<th style="width:26%;">التوقيع</th>' +
+      '</tr>';
+
+    const tableRowHtmls: string[] = votedTokens.map((token, idx) => {
       const voteClass = token.vote === 'for' ? 'vt-for' : token.vote === 'against' ? 'vt-against' : 'vt-abstain';
       const voteText = voteLabels[token.vote || ''] || sanitize(token.vote || '');
       const dateStr = token.votedAt ? new Date(token.votedAt).toLocaleTimeString('en-GB') + ' — ' + new Date(token.votedAt).toLocaleDateString('en-GB') : '-';
       const signTxt = isValidSignature(token.signatureData)
         ? '<img class="vt-sign-img" src="' + token.signatureData + '" alt="توقيع المساهم" /><span class="sign-elec">موقّع إلكترونياً</span>'
         : '<span style="color:#bbb;">-</span>';
-
-      tableRows += '<tr>' +
+      return '<tr>' +
         '<td>' + (idx + 1) + '</td>' +
         '<td class="name">' + sanitize(token.shareholderName) + '</td>' +
         '<td>' + (token.numberOfShares || 0).toLocaleString('en-US') + '</td>' +
@@ -480,28 +497,17 @@ export default function VotingPage() {
       '</tr>';
     });
 
-    const tableTfoot = '<tfoot><tr>' +
-      '<td colspan="2" style="text-align:right;">الإجمالي — ' + votedTokens.length + ' مساهم</td>' +
-      '<td>' + totalSharesVoted.toLocaleString('en-US') + '</td>' +
-      '<td colspan="3" style="text-align:center;">نسبة الموافقة ' + approvalPercentage + '% (' + forVotes + ' موافق / ' + againstVotes + ' رافض / ' + abstainVotes + ' ممتنع)</td>' +
-    '</tr></tfoot>';
-
-    const votingTableHtml =
-      '<table class="vt">' +
-        '<thead><tr>' +
-          '<th style="width:5%;">#</th>' +
-          '<th class="name" style="width:25%;">اسم المساهم</th>' +
-          '<th style="width:13%;">عدد الأسهم</th>' +
-          '<th style="width:11%;">التصويت</th>' +
-          '<th style="width:20%;">تاريخ ووقت التصويت</th>' +
-          '<th style="width:26%;">التوقيع</th>' +
-        '</tr></thead>' +
-        '<tbody>' + tableRows + '</tbody>' +
-        tableTfoot +
-      '</table>';
+    // Totals rendered as a standalone block (not a <tfoot>) so the paginator can
+    // place it cleanly after the last chunk of rows.
+    const totalsBlockHtml =
+      '<div class="vt-total">' +
+        '<span>الإجمالي: ' + votedTokens.length + ' مساهم</span>' +
+        '<span>إجمالي الأسهم: ' + totalSharesVoted.toLocaleString('en-US') + '</span>' +
+        '<span>نسبة الموافقة ' + approvalPercentage + '% (' + forVotes + ' موافق / ' + againstVotes + ' رافض / ' + abstainVotes + ' ممتنع)</span>' +
+      '</div>';
 
     const printNow = new Date();
-    const footerSection = '<div class="sign-row">' +
+    const signBlockHtml = '<div class="sign-row">' +
         '<div class="sign-col">' +
           '<div class="sign-role">رئيس مجلس الإدارة</div>' +
           (chairmanSig
@@ -517,7 +523,9 @@ export default function VotingPage() {
       '</div>' +
       '<div class="doc-note">مستند رسمي صادر إلكترونياً عبر نظام إدارة حوكمة الشركات | تاريخ الطباعة: ' + printNow.toLocaleDateString('en-GB') + ' — ' + printNow.toLocaleTimeString('en-GB') + ' | رقم القرار ' + (sanitize(resolution.resolutionNumber) || '-') + '</div>';
 
-    const docBodyHtml = headerHtml + votingTableHtml + footerSection;
+    // Inject runtime data into the print window's pagination script. Escaping `</`
+    // prevents any data URI / SVG string from prematurely closing the <script> tag.
+    const toJs = (v: unknown) => JSON.stringify(v).replace(/<\//g, '<\\/');
 
     const printContent = `
       <!DOCTYPE html>
@@ -529,15 +537,20 @@ export default function VotingPage() {
         <style>
           @page { size: A4 portrait; margin: 0; }
           * { margin: 0; padding: 0; box-sizing: border-box; }
+          html, body { background: #fff; }
           body { font-family: 'Cairo', sans-serif; color: #333; direction: rtl; font-size: 9px; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .letterhead { position: fixed; top: 0; left: 0; width: 210mm; height: 297mm; z-index: 0; }
-          /* Spacer table: thead/tfoot reserve top/bottom safe zones on EVERY printed
-             page so flowing content never collides with the fixed letterhead bands. */
-          .doc-table { position: relative; z-index: 1; width: 210mm; border-collapse: collapse; }
-          .doc-table > thead > tr > td, .doc-table > tfoot > tr > td { padding: 0; border: none; }
-          .space-head { height: 30mm; }
-          .space-foot { height: 20mm; }
-          .content-cell { padding: 0 16mm; vertical-align: top; }
+
+          /* Each .sheet is exactly one A4 page. The letterhead is absolutely
+             positioned INSIDE the bounded sheet (never position:fixed), which
+             eliminates the Chrome blank-first-page bug caused by a full-page
+             fixed image at @page margin:0. */
+          .sheet { position: relative; width: 210mm; height: 297mm; overflow: hidden; background: #fff; page-break-after: always; break-after: page; }
+          .sheet:last-child { page-break-after: auto; break-after: auto; }
+          .sheet-bg { position: absolute; top: 0; left: 0; width: 210mm; height: 297mm; z-index: 0; }
+          .sheet-content { position: absolute; top: 30mm; left: 16mm; right: 16mm; bottom: 26mm; z-index: 1; overflow: hidden; }
+          /* Sits in the clear band just above the letterhead's dark footer bar. */
+          .pagenum { position: absolute; bottom: 20mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #8a8a8a; z-index: 2; }
+          #measure { position: absolute; left: -10000px; top: 0; width: 178mm; visibility: hidden; }
 
           .doc-title-main { text-align: center; font-size: 16px; font-weight: 700; color: #2b3a4f; margin-bottom: 4px; }
           .doc-meta-wrap { text-align: center; margin-bottom: 8px; }
@@ -552,8 +565,7 @@ export default function VotingPage() {
           .info-cell .val.ok { color: #2e7d52; }
           .info-cell .val.reject { color: #c0392b; }
 
-          .section-head { font-size: 13px; font-weight: 700; color: #2b3a4f; margin: 3px 0 5px; padding-right: 9px; border-right: 3px solid #b8962f; break-after: avoid; }
-          .info-strip, .res-box, .res-intro { break-inside: avoid; }
+          .section-head { font-size: 13px; font-weight: 700; color: #2b3a4f; margin: 3px 0 5px; padding-right: 9px; border-right: 3px solid #b8962f; }
 
           .res-intro { font-size: 9px; color: #555; line-height: 1.6; margin-bottom: 6px; }
           .res-box { background: #fdfbf3; border: 1px solid #ecdcb4; border-right: 3px solid #c9a45b; border-radius: 5px; padding: 6px 10px; margin-bottom: 6px; }
@@ -566,18 +578,21 @@ export default function VotingPage() {
           .vt td { padding: 2px 6px; border-bottom: 1px solid #eee; text-align: center; color: #444; }
           .vt td.name { text-align: right; font-weight: 600; color: #2b3a4f; }
           .vt tbody tr:nth-child(even) { background: #faf9f5; }
-          .vt tfoot td { background: #f3ead2; color: #5a4a1e; font-weight: 700; padding: 6px; font-size: 9px; }
           .vt-badge { display: inline-block; border-radius: 10px; padding: 1px 11px; font-size: 8px; font-weight: 600; }
           .vt-for { background: #e3f3e9; color: #2e7d52; border: 1px solid #bfe3cd; }
           .vt-against { background: #fbe5e5; color: #b3261e; border: 1px solid #f0c0c0; }
           .vt-abstain { background: #eef0f2; color: #556; border: 1px solid #d8dde2; }
           .sign-elec { color: #8a8a8a; font-size: 7px; display: block; }
-          .vt-sign-img { max-width: 86px; max-height: 20px; display: block; margin: 0 auto 1px; }
+          /* Fixed height (not max-height) so row height is deterministic before the
+             data-URI image finishes decoding -> accurate measurement. */
+          .vt-sign-img { height: 18px; width: auto; max-width: 86px; display: block; margin: 0 auto 1px; }
 
-          .sign-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 12px; page-break-inside: avoid; break-inside: avoid; }
+          .vt-total { display: flex; justify-content: space-between; gap: 8px; background: #f3ead2; color: #5a4a1e; font-weight: 700; padding: 6px 10px; font-size: 9px; border-radius: 4px; margin-bottom: 8px; }
+
+          .sign-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 12px; }
           .sign-col { flex: 1; text-align: center; }
           .sign-role { font-size: 10px; font-weight: 700; color: #2b3a4f; margin-bottom: 6px; }
-          .sign-img { max-width: 150px; max-height: 48px; display: block; margin: 0 auto 3px; }
+          .sign-img { height: 44px; width: auto; max-width: 150px; display: block; margin: 0 auto 3px; }
           .sign-blank { height: 42px; }
           .sign-name { font-size: 9px; font-weight: 600; color: #333; border-top: 1px solid #b9b9b9; padding-top: 4px; display: inline-block; min-width: 170px; }
           .stamp-col { flex: 1; text-align: center; }
@@ -586,26 +601,183 @@ export default function VotingPage() {
           .stamp-svg svg { width: 150px; height: 150px; }
 
           .doc-note { text-align: center; font-size: 7.5px; color: #8a8a8a; margin-top: 10px; }
-
-          @media print { .vt tr { break-inside: avoid; } }
         </style>
       </head>
       <body>
-        <img class="letterhead" src="${officialLetterhead}" alt="" />
-        <table class="doc-table">
-          <thead><tr><td><div class="space-head"></div></td></tr></thead>
-          <tfoot><tr><td><div class="space-foot"></div></td></tr></tfoot>
-          <tbody><tr><td class="content-cell">${docBodyHtml}</td></tr></tbody>
-        </table>
+        <div id="measure"></div>
+        <script>
+        (function () {
+          var MM = 96 / 25.4;
+          var AVAIL = (297 - 30 - 26) * MM; // usable content height per sheet (px)
+          var BG = ${toJs(officialLetterhead)};
+          var flow = ${toJs(flowItems)};
+          var theadHtml = ${toJs(tableHeadHtml)};
+          var rowHtmls = ${toJs(tableRowHtmls)};
+          var totalsHtml = ${toJs(totalsBlockHtml)};
+          var signHtml = ${toJs(signBlockHtml)};
+
+          var measure = document.getElementById('measure');
+          function mk(html) { var d = document.createElement('div'); d.innerHTML = html; return d.firstElementChild; }
+          function oh(el) {
+            var r = el.getBoundingClientRect();
+            var s = getComputedStyle(el);
+            return r.height + (parseFloat(s.marginTop) || 0) + (parseFloat(s.marginBottom) || 0);
+          }
+          // Measure an html string's flow height, then remove it.
+          function measureHtml(html) { var e = mk(html); measure.appendChild(e); var h = oh(e); measure.removeChild(e); return h; }
+          // Render a (possibly partial) resolution text block. The section title only
+          // appears on the first piece; continuation pieces repeat the box framing.
+          function renderText(it, text, cont) {
+            if (it.cls === 'res-intro') return '<div class="res-intro">' + text + '</div>';
+            var t = (it.title && !cont) ? '<div class="res-box-title">' + it.title + '</div>' : '';
+            return '<div class="res-box">' + t + '<div class="res-box-text">' + text + '</div></div>';
+          }
+          var NO_VOTERS = '<tr><td colspan="6" style="text-align:center;color:#999;padding:8px;">لا يوجد مصوتون</td></tr>';
+
+          function build() {
+            var sheets = [];
+            var cur = [];
+            var curH = 0;
+            function flush() { if (cur.length) { sheets.push(cur); cur = []; curH = 0; } }
+            function add(html, h) { if (curH + h > AVAIL && cur.length) { flush(); } cur.push(html); curH += h; }
+
+            // First non-empty line of a text item (used for keep-with-next measuring).
+            function firstLineOf(it) {
+              var ls = it.text.split(/\\r?\\n/);
+              for (var x = 0; x < ls.length; x++) { if (ls[x].trim()) return ls[x]; }
+              return it.text;
+            }
+            // A single line too tall for an empty page: split it by words so it still
+            // flows across pages instead of being clipped by overflow:hidden.
+            function placeLongLine(it, line, cont) {
+              var words = line.split(/(\\s+)/);
+              var i = 0;
+              while (i < words.length) {
+                var avail = AVAIL - curH;
+                var best = null;
+                for (var k = i; k < words.length; k++) {
+                  var tx = words.slice(i, k + 1).join('');
+                  var h = measureHtml(renderText(it, tx, cont));
+                  if (h <= avail) best = { k: k, text: tx, h: h }; else break;
+                }
+                if (!best) {
+                  if (cur.length) { flush(); continue; }
+                  // Single word taller than a whole page (effectively impossible for a
+                  // resolution) -> force it; only residual clip path that remains.
+                  var w = words[i];
+                  cur.push(renderText(it, w, cont)); curH += measureHtml(renderText(it, w, cont)); i++; cont = true; flush();
+                  continue;
+                }
+                cur.push(renderText(it, best.text, cont)); curH += best.h; i = best.k + 1; cont = true;
+                if (i < words.length) flush();
+              }
+            }
+            // Splittable resolution text: fill the current page line-by-line, spilling
+            // overflow onto new pages so long resolutions are never clipped.
+            function placeText(it) {
+              var fh = measureHtml(renderText(it, it.text, false));
+              if (curH + fh <= AVAIL) { cur.push(renderText(it, it.text, false)); curH += fh; return; }
+              var lines = it.text.split(/\\r?\\n/);
+              var idx = 0, cont = false;
+              while (idx < lines.length) {
+                var avail = AVAIL - curH;
+                var best = null;
+                for (var k = idx; k < lines.length; k++) {
+                  var tx = lines.slice(idx, k + 1).join('\\n');
+                  var h = measureHtml(renderText(it, tx, cont));
+                  if (h <= avail) best = { k: k, text: tx, h: h }; else break;
+                }
+                if (!best) {
+                  if (cur.length) { flush(); continue; } // retry on a fresh page
+                  placeLongLine(it, lines[idx], cont); idx++; cont = true; // line alone > empty page
+                  continue;
+                }
+                cur.push(renderText(it, best.text, cont)); curH += best.h; idx = best.k + 1; cont = true;
+                if (idx < lines.length) flush();
+              }
+            }
+
+            // Measure the voting table head + row heights (deterministic: fixed img heights).
+            var effRows = rowHtmls.length ? rowHtmls : [NO_VOTERS];
+            var tableEl = mk('<table class="vt"><thead>' + theadHtml + '</thead><tbody>' + effRows.join('') + '</tbody></table>');
+            measure.appendChild(tableEl);
+            var theadH = tableEl.querySelector('thead').getBoundingClientRect().height;
+            var rowEls = tableEl.querySelectorAll('tbody tr');
+            var rowH = [].map.call(rowEls, function (tr) { return tr.getBoundingClientRect().height; });
+            measure.removeChild(tableEl);
+
+            // Flow items (header + splittable resolution text).
+            for (var i = 0; i < flow.length; i++) {
+              var it = flow[i];
+              if (it.kind === 'html' && it.head) {
+                var headH = measureHtml(it.html);
+                var follow = 0;
+                if (it.beforeTable) {
+                  follow = theadH + (rowH[0] || 30);
+                } else if (i + 1 < flow.length) {
+                  var nx = flow[i + 1];
+                  follow = (nx.kind === 'html')
+                    ? measureHtml(nx.html)
+                    : measureHtml(renderText(nx, firstLineOf(nx), false)); // first text fragment
+                }
+                if (curH + headH + follow > AVAIL && cur.length) { flush(); }
+                cur.push(it.html); curH += headH;
+              } else if (it.kind === 'html') {
+                add(it.html, measureHtml(it.html));
+              } else {
+                placeText(it);
+              }
+            }
+
+            // Voting table: re-emit the header row at the top of every sheet chunk.
+            var r = 0;
+            while (r < effRows.length) {
+              if (curH + theadH + rowH[r] > AVAIL && cur.length) { flush(); }
+              var chunk = [];
+              var used = theadH;
+              while (r < effRows.length && curH + used + rowH[r] <= AVAIL) { chunk.push(effRows[r]); used += rowH[r]; r++; }
+              if (!chunk.length) { chunk.push(effRows[r]); used += rowH[r]; r++; } // row taller than page: force one
+              cur.push('<table class="vt"><thead>' + theadHtml + '</thead><tbody>' + chunk.join('') + '</tbody></table>');
+              curH += used;
+            }
+
+            add(totalsHtml, measureHtml(totalsHtml));
+            add(signHtml, measureHtml(signHtml));
+            flush();
+
+            if (measure.parentNode) measure.parentNode.removeChild(measure);
+
+            var N = sheets.length || 1;
+            var out = sheets.map(function (s, idx) {
+              return '<div class="sheet">' +
+                '<img class="sheet-bg" src="' + BG + '" alt="" />' +
+                '<div class="sheet-content">' + s.join('') + '</div>' +
+                '<div class="pagenum">صفحة ' + (idx + 1) + ' من ' + N + '</div>' +
+                '</div>';
+            }).join('');
+            document.body.insertAdjacentHTML('beforeend', out);
+            setTimeout(function () { window.focus(); window.print(); }, 350);
+          }
+
+          // Guard against double-run from the ready/fallback race.
+          var ran = false;
+          var _build = build;
+          build = function () { if (ran) return; ran = true; _build(); };
+
+          // Measure after fonts are ready (image heights are pinned via CSS, so they
+          // do not depend on async decoding). Hard fallback if fonts never settle.
+          if (document.fonts && document.fonts.ready) { document.fonts.ready.then(function () { setTimeout(build, 40); }); }
+          setTimeout(build, 1200);
+        })();
+        <\/script>
       </body>
       </html>
     `;
-    
+
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       printWindow.document.write(printContent);
       printWindow.document.close();
-      setTimeout(() => printWindow.print(), 500);
     }
   };
 
