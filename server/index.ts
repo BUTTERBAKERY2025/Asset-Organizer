@@ -65,6 +65,7 @@ if (process.env.NODE_ENV === "production") {
       req.path === '/vote-resolution.html' ||
       req.path === '/sign-resolution.html' ||
       req.path === '/discount-standalone.html' ||
+      req.path === '/print-document.html' ||
       req.path.startsWith('/api/public/')
     ) {
       return next();

@@ -11,26 +11,29 @@ RTL HTML doc with company letterhead, watermark, electronic signatures, and Hijr
 - assembly resolutions → `client/src/lib/assembly-resolution-print.ts`
 - meeting minutes → `client/src/lib/meeting-minutes-print.ts`
 
-## Async print → about:blank popup + document.write (NOT Blob/iframe)
-These print docs rely on INLINE `<script>` (board builds ALL its content via an inline paginator;
-assembly/minutes use an injected `load`→print listener). Production helmet CSP is `scriptSrc: 'self'`
-(NO `'unsafe-inline'`). **Blob: URLs and iframes INHERIT the page CSP → their inline scripts are blocked
-→ blank page** (board especially, since its content is script-built). An `about:blank` popup written via
-`document.write` does NOT inherit the HTTP-header CSP, so inline scripts run — this is why the original
-voting.tsx popup print worked. **Do not switch these to Blob/iframe/srcdoc.**
+## Print blank in PRODUCTION → CSP blocks inline scripts; fix = CSP-exempt shell page
+These print docs rely on INLINE `<script>` — board builds ALL its content via an inline paginator
+(`document.createElement` + measure + `.sheet` pages), and it self-prints; assembly/minutes have an
+injected `load`→print listener. **helmet CSP is PRODUCTION-ONLY** (`if NODE_ENV==="production"` in
+`server/index.ts`) with `scriptSrc: 'self'` (no `'unsafe-inline'`). So the blank page NEVER reproduces
+in the Replit dev preview (helmet off) — only on Render/thebutterbakery.com. Do not trust "works in dev".
+**about:blank, Blob:, and iframe/srcdoc ALL inherit the opener's CSP in modern Chrome → their inline
+scripts are blocked → blank** (board hits this hardest since its content is script-built). Confirmed
+dead ends: blob navigation (blank) and about:blank + document.write (blank).
 
-Three rules when a page must `await` (fetch tokens/signatures) BEFORE printing:
-1. Open the window SYNCHRONOUSLY in the click handler or the popup is blocked. Use
-   `openPrintWindow()` (in `client/src/lib/print-window.ts`): it `window.open('','_blank')`s AND
-   immediately `document.write`s a small loading placeholder to CLAIM the document. Pass the window
-   down as a `targetWindow` arg; libs fall back to `openPrintWindow()` when omitted.
-2. After data is ready, write final HTML via `renderToPrintWindow(win, html)` =
-   `document.open(); document.write(html); document.close();`. The sync placeholder + explicit
-   `document.open()` is what makes write-after-`await` render reliably (plain write-after-await = blank).
-3. Auto-print lives as an inline `<script>` inside the HTML (board: font-ready→doPrint; assembly/minutes:
-   injected `load` listener). Opener-side `win.onload`/`setTimeout(win.print)` are unreliable.
-**Why:** the unified signed-resolutions page fetches on click (unlike voting.tsx which has tokens in
-state), so a naive sync `document.write` wasn't possible and a first Blob attempt went blank in prod CSP.
+**Fix (matches the codebase's own pattern):** the popup navigates to a real same-origin page that the
+server EXEMPTS from helmet — `client/public/print-document.html`, added to the exempt list in
+`server/index.ts` alongside `vote-resolution.html` etc. A document loaded from a CSP-exempt HTTP
+response carries NO CSP, so inline scripts written into it run. Flow in `client/src/lib/print-window.ts`:
+1. `openPrintWindow()` = `window.open('/print-document.html','_blank')` — call SYNCHRONOUSLY in the
+   click handler (popup-blocker). The shell shows an Arabic "جارٍ التحضير" message and defines
+   `window.__renderPrint(html)` + `window.__printReady=true`.
+2. `renderToPrintWindow(win, html)` POLLS (~25ms, up to 5s) until `win.__printReady`, then calls
+   `win.__renderPrint(html)` which does `document.open(); write(html); close()` inside the exempt doc.
+3. Libs use `const w = targetWindow ?? openPrintWindow()`; signed-resolutions passes `openPrintWindow()`
+   as `targetWindow`. Auto-print stays inline in the generated HTML (now allowed).
+**Why polling not onload:** opener can't reliably catch the shell's load; polling for the shell-defined
+`__printReady` flag is race-free across the navigation.
 
 **Rule:** keep each print routine in its shared lib as the single source of truth. The owning page
 (voting.tsx, assembly-minutes.tsx) calls the lib via a thin wrapper. The unified

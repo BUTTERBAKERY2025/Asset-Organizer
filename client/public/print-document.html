@@ -1,0 +1,37 @@
+<!doctype html>
+<html dir="rtl" lang="ar">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>تجهيز المستند للطباعة…</title>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      body {
+        font-family: system-ui, 'Segoe UI', Tahoma, sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #7a5c1e;
+        font-size: 18px;
+        background: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <div>جارٍ تجهيز المستند للطباعة…</div>
+    <!--
+      صفحة وسيطة للطباعة. هذه الصفحة مُستثناة من سياسة الأمان (CSP) في الخادم
+      (انظر server/index.ts)، لذلك تعمل السكربتات المُضمَّنة داخل مستند الطباعة
+      (ترقيم صفحات قرار المجلس + الطباعة التلقائية). النافذة الأصلية تستدعي
+      __renderPrint بعد جلب البيانات لكتابة المستند النهائي.
+    -->
+    <script>
+      window.__renderPrint = function (html) {
+        document.open();
+        document.write(html);
+        document.close();
+      };
+      window.__printReady = true;
+    </script>
+  </body>
+</html>
