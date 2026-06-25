@@ -1,45 +1,43 @@
 // أدوات نافذة الطباعة المشتركة.
 //
-// لماذا صفحة وسيطة (/print-document.html) وليس about:blank أو Blob؟
-// إعدادات الأمان في الخادم (helmet CSP) تُطبَّق في الإنتاج فقط وتضع
-// scriptSrc: 'self' — أي أن أي سكربت مُضمَّن (<script> inline) محظور. مستندات
-// about:blank وBlob وiframe ترث سياسة CSP الخاصة بالنافذة الأصلية، فتُحجب فيها
-// السكربتات (ترقيم صفحات قرار المجلس الذي يبني كامل المحتوى + الطباعة التلقائية)
-// وتظهر صفحة بيضاء. لذلك نفتح النافذة على صفحة /print-document.html المُستثناة من
-// CSP في الخادم؛ هذه الصفحة لا تحمل أي سياسة أمان فتعمل السكربتات بداخلها.
-//
-// ملاحظة: لا تظهر مشكلة الصفحة البيضاء في بيئة التطوير لأن helmet مُعطَّل هناك،
-// وإنما تظهر فقط في الموقع المنشور (الإنتاج).
+// المشكلة في الإنتاج (وليست في التطوير لأن helmet مُعطَّل هناك):
+// 1) سياسة CSP (scriptSrc 'self') تمنع السكربتات المُضمَّنة. حلّها: نفتح النافذة
+//    على /print-document.html المُستثناة من CSP في الخادم، فتعمل السكربتات بداخلها.
+// 2) سياسة COOP (same-origin) تقطع علاقة النافذة الأصلية بنافذة الطباعة المنبثقة،
+//    فلا تستطيع النافذة الأصلية الوصول إلى محتوى النافذة الجديدة أو استدعاء دوالها.
+//    حلّها: نمرّر مستند HTML عبر localStorage (مشترك لكل النوافذ من نفس الأصل،
+//    ولا تتأثر مشاركته بـ COOP). الصفحة الوسيطة تقرأ المفتاح من الـ hash وتعرض
+//    المستند بنفسها ثم تطبع.
 
-const PRINT_SHELL_URL = "/print-document.html";
+const SHELL_URL = "/print-document.html?v=2";
 
-// يفتح نافذة الطباعة على الصفحة الوسيطة. يجب استدعاؤها بشكل متزامن داخل معالج
-// النقر (onClick) لتفادي حجب النوافذ المنبثقة.
-export function openPrintWindow(): Window | null {
-  return window.open(PRINT_SHELL_URL, "_blank");
+export interface PrintTarget {
+  key: string;
+  win: Window | null;
 }
 
-// يكتب مستند HTML النهائي داخل نافذة مفتوحة على الصفحة الوسيطة. ننتظر حتى تُحمّل
-// الصفحة الوسيطة (تُعرّف __renderPrint) ثم نمرر لها المحتوى لتكتبه ضمن سياقها
-// المُستثنى من CSP، فتعمل السكربتات المُضمَّنة.
-export function renderToPrintWindow(win: Window, html: string) {
-  let attempts = 0;
-  const tryRender = () => {
-    if (win.closed) return;
-    let ready = false;
+// يفتح نافذة الطباعة على الصفحة الوسيطة مع مفتاح فريد في عنوان الـ hash. يجب
+// استدعاؤها بشكل متزامن داخل معالج النقر (onClick) لتفادي حجب النوافذ المنبثقة.
+export function openPrintWindow(): PrintTarget {
+  const key =
+    "__print_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+  const win = window.open(SHELL_URL + "#" + encodeURIComponent(key), "_blank");
+  return { key, win };
+}
+
+// يمرّر مستند HTML النهائي إلى الصفحة الوسيطة عبر localStorage.
+export function renderToPrintWindow(target: PrintTarget, html: string) {
+  try {
+    localStorage.setItem(target.key, html);
+    return;
+  } catch {
+    // احتياطي (بيئة التطوير حيث لا COOP، أو عند فشل localStorage): الكتابة المباشرة.
     try {
-      const w = win as unknown as { __printReady?: boolean; __renderPrint?: (h: string) => void };
-      ready = w.__printReady === true && typeof w.__renderPrint === "function";
-      if (ready) {
-        w.__renderPrint!(html);
-        return;
+      if (target.win) {
+        target.win.document.open();
+        target.win.document.write(html);
+        target.win.document.close();
       }
-    } catch {
-      // النافذة لا تزال تُحمّل الصفحة الوسيطة — نعيد المحاولة.
-    }
-    if (attempts++ < 200) {
-      setTimeout(tryRender, 25); // حتى ~5 ثوانٍ
-    }
-  };
-  tryRender();
+    } catch {}
+  }
 }

@@ -11,29 +11,38 @@ RTL HTML doc with company letterhead, watermark, electronic signatures, and Hijr
 - assembly resolutions → `client/src/lib/assembly-resolution-print.ts`
 - meeting minutes → `client/src/lib/meeting-minutes-print.ts`
 
-## Print blank in PRODUCTION → CSP blocks inline scripts; fix = CSP-exempt shell page
+## Print blank in PRODUCTION → TWO production-only blockers (CSP + COOP); fix = exempt shell + localStorage handoff
 These print docs rely on INLINE `<script>` — board builds ALL its content via an inline paginator
 (`document.createElement` + measure + `.sheet` pages), and it self-prints; assembly/minutes have an
-injected `load`→print listener. **helmet CSP is PRODUCTION-ONLY** (`if NODE_ENV==="production"` in
-`server/index.ts`) with `scriptSrc: 'self'` (no `'unsafe-inline'`). So the blank page NEVER reproduces
-in the Replit dev preview (helmet off) — only on Render/thebutterbakery.com. Do not trust "works in dev".
-**about:blank, Blob:, and iframe/srcdoc ALL inherit the opener's CSP in modern Chrome → their inline
-scripts are blocked → blank** (board hits this hardest since its content is script-built). Confirmed
-dead ends: blob navigation (blank) and about:blank + document.write (blank).
+injected `load`→print listener. **helmet is PRODUCTION-ONLY** (`if NODE_ENV==="production"` in
+`server/index.ts`), so neither blocker reproduces in the Replit dev preview — only on
+Render/thebutterbakery.com. Do not trust "works in dev". Diagnose with `curl -sI` against prod.
 
-**Fix (matches the codebase's own pattern):** the popup navigates to a real same-origin page that the
-server EXEMPTS from helmet — `client/public/print-document.html`, added to the exempt list in
-`server/index.ts` alongside `vote-resolution.html` etc. A document loaded from a CSP-exempt HTTP
-response carries NO CSP, so inline scripts written into it run. Flow in `client/src/lib/print-window.ts`:
-1. `openPrintWindow()` = `window.open('/print-document.html','_blank')` — call SYNCHRONOUSLY in the
-   click handler (popup-blocker). The shell shows an Arabic "جارٍ التحضير" message and defines
-   `window.__renderPrint(html)` + `window.__printReady=true`.
-2. `renderToPrintWindow(win, html)` POLLS (~25ms, up to 5s) until `win.__printReady`, then calls
-   `win.__renderPrint(html)` which does `document.open(); write(html); close()` inside the exempt doc.
-3. Libs use `const w = targetWindow ?? openPrintWindow()`; signed-resolutions passes `openPrintWindow()`
-   as `targetWindow`. Auto-print stays inline in the generated HTML (now allowed).
-**Why polling not onload:** opener can't reliably catch the shell's load; polling for the shell-defined
-`__printReady` flag is race-free across the navigation.
+Blocker 1 — **CSP `scriptSrc: 'self'`** (no `'unsafe-inline'`): about:blank, Blob:, and iframe/srcdoc
+ALL inherit the opener's CSP → inline scripts blocked → blank (board hits this hardest).
+Blocker 2 — **COOP `same-origin`** (helmet default, not disabled): when the opener (COOP same-origin)
+opens a popup whose document has NO COOP, the browsing-context group is SEVERED → opener's
+`window.open()` return becomes a disowned proxy → cross-window `win.__printReady`/`win.__renderPrint`
+are UNREACHABLE → popup sticks on the loading message forever. (about:blank inherits the opener's COOP
+so it stays connected — which is why the old voting.tsx about:blank+write worked but a real exempt page
+does not.) Confirmed dead ends: blob nav (blank), about:blank+write (CSP blank), and a CSP-exempt shell
+driven by cross-window `__renderPrint` (COOP-severed → stuck on loading).
+
+**Fix (current):** CSP-exempt shell page + **localStorage handoff** (no cross-window scripting, so COOP
+is irrelevant; localStorage is shared per-origin across all windows regardless of COOP).
+- Shell `client/public/print-document.html` is in the helmet exempt list in `server/index.ts` (alongside
+  `vote-resolution.html`) → served with NO CSP, so inline scripts written into it run.
+- `client/src/lib/print-window.ts` exports `PrintTarget {key, win}`. `openPrintWindow()` generates a
+  unique key, opens `/print-document.html?v=2#<key>` SYNCHRONOUSLY in the click handler (popup-blocker),
+  returns the handle. `renderToPrintWindow(target, html)` does `localStorage.setItem(target.key, html)`
+  (fallback: direct `document.write` if localStorage throws, for dev).
+- The shell reads `key` from `location.hash`, POLLS its own `localStorage` (~25ms, up to ~12s) until the
+  key is present, `removeItem`s it, then `document.open/write/close(html)` to self-render + auto-print.
+- Libs (`board/assembly/minutes`) take `targetWindow?: PrintTarget | null`; null-check `target.win`.
+  `signed-resolutions.tsx` calls `openPrintWindow()` and passes the handle; standalone callers
+  (voting/general-assembly/assembly-minutes) pass nothing so libs self-open.
+**Notes:** `?v=2` query busts the browser cache of the old shell (shell served `cache-control: max-age=3600`);
+bump it whenever the shell changes. Letterhead PNG ~157KB → base64 well under the ~5MB localStorage quota.
 
 **Rule:** keep each print routine in its shared lib as the single source of truth. The owning page
 (voting.tsx, assembly-minutes.tsx) calls the lib via a thin wrapper. The unified

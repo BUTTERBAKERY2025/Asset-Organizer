@@ -174,7 +174,7 @@ export default function SignedResolutionsPage() {
 
   const handlePrint = async (row: UnifiedRow) => {
     const printWindow = openPrintWindow();
-    if (!printWindow) {
+    if (!printWindow.win) {
       toast({
         title: "النوافذ المنبثقة محظورة",
         description: "الرجاء السماح بالنوافذ المنبثقة لهذا الموقع ثم إعادة المحاولة.",
@@ -201,7 +201,7 @@ export default function SignedResolutionsPage() {
         );
       }
     } catch (e) {
-      printWindow.close();
+      printWindow.win?.close();
       toast({
         title: "تعذّرت الطباعة",
         description: "حدث خطأ أثناء تجهيز المستند للطباعة. حاول مرة أخرى.",

@@ -1,4 +1,4 @@
-import { renderToPrintWindow, openPrintWindow } from "./print-window";
+import { renderToPrintWindow, openPrintWindow, type PrintTarget } from "./print-window";
 
 export interface PrintMeetingMinutes {
   id: number;
@@ -68,7 +68,7 @@ const fixHijriInContent = (content: string, meetingDate: Date): string => {
   return fixed;
 };
 
-export const printMeetingMinutes = async (m: PrintMeetingMinutes, meeting?: PrintMinutesMeeting, targetWindow?: Window | null) => {
+export const printMeetingMinutes = async (m: PrintMeetingMinutes, meeting?: PrintMinutesMeeting, targetWindow?: PrintTarget | null) => {
   const printWindow = targetWindow ?? openPrintWindow();
   const meetingDate = meeting?.meetingDate ? new Date(meeting.meetingDate) : new Date();
   const hijriDate = computeHijriDate(meetingDate);
@@ -451,7 +451,7 @@ export const printMeetingMinutes = async (m: PrintMeetingMinutes, meeting?: Prin
 </body>
 </html>`;
 
-  if (printWindow) {
+  if (printWindow.win) {
     renderToPrintWindow(printWindow, printContent);
   }
 };

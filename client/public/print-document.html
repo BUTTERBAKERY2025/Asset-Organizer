@@ -14,24 +14,43 @@
         color: #7a5c1e;
         font-size: 18px;
         background: #fff;
+        text-align: center;
       }
     </style>
   </head>
   <body>
-    <div>جارٍ تجهيز المستند للطباعة…</div>
+    <div id="msg">جارٍ تجهيز المستند للطباعة…</div>
     <!--
-      صفحة وسيطة للطباعة. هذه الصفحة مُستثناة من سياسة الأمان (CSP) في الخادم
-      (انظر server/index.ts)، لذلك تعمل السكربتات المُضمَّنة داخل مستند الطباعة
-      (ترقيم صفحات قرار المجلس + الطباعة التلقائية). النافذة الأصلية تستدعي
-      __renderPrint بعد جلب البيانات لكتابة المستند النهائي.
+      صفحة وسيطة للطباعة. مُستثناة من سياسة الأمان (CSP) في الخادم
+      (server/index.ts) لتعمل السكربتات المُضمَّنة داخل مستند الطباعة (ترقيم صفحات
+      قرار المجلس + الطباعة التلقائية). النافذة الأصلية تكتب المستند في localStorage
+      تحت مفتاح موجود في عنوان الـ hash، وهذه الصفحة تقرأه وتعرضه. نستخدم
+      localStorage لأن سياسة COOP تمنع الوصول المباشر بين النوافذ.
     -->
     <script>
-      window.__renderPrint = function (html) {
-        document.open();
-        document.write(html);
-        document.close();
-      };
-      window.__printReady = true;
+      (function () {
+        var key = "";
+        try { key = decodeURIComponent((location.hash || "").replace(/^#/, "")); } catch (e) {}
+        var attempts = 0;
+        function tryRender() {
+          var html = null;
+          try { html = key ? localStorage.getItem(key) : null; } catch (e) {}
+          if (html) {
+            try { localStorage.removeItem(key); } catch (e) {}
+            document.open();
+            document.write(html);
+            document.close();
+            return;
+          }
+          if (attempts++ < 480) {
+            setTimeout(tryRender, 25); // حتى ~12 ثانية
+          } else {
+            var m = document.getElementById("msg");
+            if (m) m.textContent = "تعذّر تحميل المستند. أغلق هذه النافذة وحاول مرة أخرى.";
+          }
+        }
+        tryRender();
+      })();
     </script>
   </body>
 </html>

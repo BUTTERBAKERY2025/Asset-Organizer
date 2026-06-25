@@ -1,7 +1,7 @@
 import companyStampSvg from "@assets/company-stamp.svg?raw";
 import officialLetterhead from "@assets/official-letterhead.png?inline";
 import type { BoardResolution } from "@shared/schema";
-import { renderToPrintWindow, openPrintWindow } from "./print-window";
+import { renderToPrintWindow, openPrintWindow, type PrintTarget } from "./print-window";
 
 export interface VotingTokenData {
   id: number;
@@ -50,7 +50,7 @@ const getRequiredMajority = (resolution: BoardResolution): { percentage: number;
   return { percentage: savedMajority > 50 ? savedMajority : 50.01, label: 'الأغلبية المطلقة (50%+1)' };
 };
 
-export const printBoardResolutionWithSignatures = (resolution: BoardResolution, tokens: VotingTokenData[], targetWindow?: Window | null) => {
+export const printBoardResolutionWithSignatures = (resolution: BoardResolution, tokens: VotingTokenData[], targetWindow?: PrintTarget | null) => {
   const votedTokens = tokens.filter(t => t.status === 'voted');
   const voteLabels: Record<string, string> = { for: 'موافق', against: 'رافض', abstain: 'ممتنع' };
 
@@ -568,8 +568,8 @@ export const printBoardResolutionWithSignatures = (resolution: BoardResolution, 
     </html>
   `;
 
-  const printWindow = targetWindow ?? openPrintWindow();
-  if (printWindow) {
-    renderToPrintWindow(printWindow, printContent);
+  const printTarget = targetWindow ?? openPrintWindow();
+  if (printTarget.win) {
+    renderToPrintWindow(printTarget, printContent);
   }
 };
