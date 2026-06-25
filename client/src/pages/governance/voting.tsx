@@ -527,6 +527,20 @@ export default function VotingPage() {
     // prevents any data URI / SVG string from prematurely closing the <script> tag.
     const toJs = (v: unknown) => JSON.stringify(v).replace(/<\//g, '<\\/');
 
+    // All print data is serialized into a single JSON island (a
+    // <script type="application/json"> block). The HTML parser treats its
+    // contents as inert text, so no value here can ever break the executable
+    // script's JS syntax — which previously could fail to parse on certain
+    // characters and leave the user with a completely blank print page.
+    const printDataJson = toJs({
+      BG: officialLetterhead,
+      flow: flowItems,
+      theadHtml: tableHeadHtml,
+      rowHtmls: tableRowHtmls,
+      totalsHtml: totalsBlockHtml,
+      signHtml: signBlockHtml,
+    });
+
     const printContent = `
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
@@ -611,16 +625,22 @@ export default function VotingPage() {
       </head>
       <body>
         <div id="measure"></div>
+        <script id="print-data" type="application/json">${printDataJson}</script>
         <script>
         (function () {
           var MM = 96 / 25.4;
           var AVAIL = (297 - 30 - 26) * MM; // usable content height per sheet (px)
-          var BG = ${toJs(officialLetterhead)};
-          var flow = ${toJs(flowItems)};
-          var theadHtml = ${toJs(tableHeadHtml)};
-          var rowHtmls = ${toJs(tableRowHtmls)};
-          var totalsHtml = ${toJs(totalsBlockHtml)};
-          var signHtml = ${toJs(signBlockHtml)};
+          // Data is read from the JSON island; this executable script contains no
+          // interpolated data, so it always parses and the fallback/watchdog below
+          // are guaranteed to run even on unusual input.
+          var __D__ = {};
+          try { __D__ = JSON.parse(document.getElementById('print-data').textContent); } catch (e) { __D__ = {}; }
+          var BG = __D__.BG || '';
+          var flow = __D__.flow || [];
+          var theadHtml = __D__.theadHtml || '';
+          var rowHtmls = __D__.rowHtmls || [];
+          var totalsHtml = __D__.totalsHtml || '';
+          var signHtml = __D__.signHtml || '';
 
           var measure = document.getElementById('measure');
           function mk(html) { var d = document.createElement('div'); d.innerHTML = html; return d.firstElementChild; }

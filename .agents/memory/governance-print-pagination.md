@@ -35,6 +35,17 @@ that a `position:fixed` full-page letterhead with `@page{margin:0}` triggers.
   table — it's a formal document).
 - Re-emit the table `<thead>` at the top of every row chunk.
 - Keep a double-run guard (ready/fallback race) + a hard timeout fallback.
+- The executable inline `<script>` MUST be data-free: serialize all runtime data
+  into a `<script type="application/json" id="print-data">` island and read it via
+  `JSON.parse(getElementById('print-data').textContent)`.
+  **Why:** interpolating data straight into JS (`var flow = {...}`) can produce a
+  parse error on unusual real input → the WHOLE script dies → the try/catch
+  fallback + watchdog never run → about:blank, totally blank popup (the symptom
+  the user kept hitting). JSON in a non-executed script tag is inert text and can
+  never break JS syntax. Still escape `</`→`<\/` to avoid early tag close.
+- Self-healing is mandatory: wrap `build()` in try/catch → guaranteed flowing
+  fallback render; `hasRendered` flips ONLY after successful DOM insertion (so a
+  late insertion failure still leaves the fallback available); add a ~3s watchdog.
 
 ## Older approaches that FAILED (do not reintroduce)
 - `position:fixed` full-page letterhead + `@page{margin:0}` → Chrome blank first page,
