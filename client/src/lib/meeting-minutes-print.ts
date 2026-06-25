@@ -1,4 +1,4 @@
-import { renderToPrintWindow } from "./print-window";
+import { renderToPrintWindow, openPrintWindow } from "./print-window";
 
 export interface PrintMeetingMinutes {
   id: number;
@@ -69,7 +69,7 @@ const fixHijriInContent = (content: string, meetingDate: Date): string => {
 };
 
 export const printMeetingMinutes = async (m: PrintMeetingMinutes, meeting?: PrintMinutesMeeting, targetWindow?: Window | null) => {
-  const printWindow = targetWindow ?? window.open('', '_blank');
+  const printWindow = targetWindow ?? openPrintWindow();
   const meetingDate = meeting?.meetingDate ? new Date(meeting.meetingDate) : new Date();
   const hijriDate = computeHijriDate(meetingDate);
   const hijriFull = formatHijriFull(meetingDate);

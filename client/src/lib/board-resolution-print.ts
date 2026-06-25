@@ -1,7 +1,7 @@
 import companyStampSvg from "@assets/company-stamp.svg?raw";
 import officialLetterhead from "@assets/official-letterhead.png?inline";
 import type { BoardResolution } from "@shared/schema";
-import { renderToPrintWindow } from "./print-window";
+import { renderToPrintWindow, openPrintWindow } from "./print-window";
 
 export interface VotingTokenData {
   id: number;
@@ -568,7 +568,7 @@ export const printBoardResolutionWithSignatures = (resolution: BoardResolution, 
     </html>
   `;
 
-  const printWindow = targetWindow ?? window.open('', '_blank');
+  const printWindow = targetWindow ?? openPrintWindow();
   if (printWindow) {
     renderToPrintWindow(printWindow, printContent);
   }

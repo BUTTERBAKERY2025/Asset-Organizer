@@ -23,6 +23,7 @@ import type { BoardResolution, AssemblyResolution, MeetingMinutes, GovernanceMee
 import { printBoardResolutionWithSignatures, type VotingTokenData } from "@/lib/board-resolution-print";
 import { printAssemblyResolution, type PrintResolution } from "@/lib/assembly-resolution-print";
 import { printMeetingMinutes, type PrintMeetingMinutes, type PrintMinutesMeeting } from "@/lib/meeting-minutes-print";
+import { openPrintWindow } from "@/lib/print-window";
 
 const tolerantFetch = (url: string) => async () => {
   const res = await fetch(url, { credentials: "include" });
@@ -172,7 +173,7 @@ export default function SignedResolutionsPage() {
   }), [rows]);
 
   const handlePrint = async (row: UnifiedRow) => {
-    const printWindow = window.open("", "_blank");
+    const printWindow = openPrintWindow();
     if (!printWindow) {
       toast({
         title: "النوافذ المنبثقة محظورة",

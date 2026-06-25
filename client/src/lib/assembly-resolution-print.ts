@@ -2,7 +2,7 @@
 // Official General Assembly Resolution Printer (formal legal-prose layout)
 
 import { getCompanyLogoDataUri } from "./company-logo-data";
-import { renderToPrintWindow } from "./print-window";
+import { renderToPrintWindow, openPrintWindow } from "./print-window";
 
 export interface PrintSignature {
   id: number;
@@ -392,7 +392,7 @@ export async function printAssemblyResolution(
   company?: CompanyInfo,
   targetWindow?: Window | null
 ): Promise<void> {
-  const w = targetWindow ?? window.open("", "_blank");
+  const w = targetWindow ?? openPrintWindow();
   if (!w) {
     alert("الرجاء السماح بالنوافذ المنبثقة لطباعة القرار");
     return;
