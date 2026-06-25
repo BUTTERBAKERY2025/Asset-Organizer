@@ -2,6 +2,7 @@
 // Official General Assembly Resolution Printer (formal legal-prose layout)
 
 import { getCompanyLogoDataUri } from "./company-logo-data";
+import { renderToPrintWindow } from "./print-window";
 
 export interface PrintSignature {
   id: number;
@@ -370,6 +371,7 @@ export function buildAssemblyResolutionHtml(
       </tr>
     </tbody>
   </table>
+  <script>window.addEventListener('load',function(){setTimeout(function(){try{window.focus();window.print();}catch(e){}},400);});</script>
 </body>
 </html>`;
 }
@@ -398,9 +400,7 @@ export async function printAssemblyResolution(
   const { signatures, votes } = await fetchResolutionPrintData(resolution.id);
   const logo = await getCompanyLogoDataUri();
   const html = buildAssemblyResolutionHtml(resolution, signatures, votes, meeting, company, logo);
-  w.document.write(html);
-  w.document.close();
-  w.onload = () => setTimeout(() => w.print(), 400);
+  renderToPrintWindow(w, html);
 }
 
 export async function exportAssemblyResolutionExcel(

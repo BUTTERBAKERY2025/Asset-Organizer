@@ -1,3 +1,5 @@
+import { renderToPrintWindow } from "./print-window";
+
 export interface PrintMeetingMinutes {
   id: number;
   meetingId: number;
@@ -445,12 +447,11 @@ export const printMeetingMinutes = async (m: PrintMeetingMinutes, meeting?: Prin
     <span>شركة الزبد الأفضل التجارية | سجل تجاري: 7026155296</span>
     <span>رقم المحضر: ${sanitize(m.minutesNumber)} | ${hijriFull} الموافق ${meetingDate.toLocaleDateString('en-GB')}</span>
   </div>
+  <script>window.addEventListener('load',function(){setTimeout(function(){try{window.focus();window.print();}catch(e){}},500);});</script>
 </body>
 </html>`;
 
   if (printWindow) {
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-    setTimeout(() => printWindow.print(), 500);
+    renderToPrintWindow(printWindow, printContent);
   }
 };
