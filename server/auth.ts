@@ -114,7 +114,7 @@ export const HR_MANAGER_MODULES: ReadonlySet<string> = new Set([
 // HR modules auto-granted to users with role === "hr_specialist" (اختصاصي موارد
 // بشرية). NARROWER than the HR manager: NO salary closing, NO end-of-service, NO
 // employee transfers, NO org structure. Action-aware so sensitive modules stay
-// read-only (e.g. branch_employees / employee_reports = view+export only).
+// scoped (e.g. employee_reports = view+export only).
 // Cross-branch READ is granted separately via hasCrossBranchHrReadAccess.
 // NOTE: many HR routes call requirePermission(module) WITHOUT an action arg
 // (action === undefined). For those, presence of the module in this map grants
@@ -126,8 +126,9 @@ export const HR_SPECIALIST_PERMISSIONS: Record<string, string[]> = {
   hr_documents: ["view", "create", "edit", "export"],
   hr_warnings: ["view", "create", "edit", "export"],
   hr_advances: ["view", "create", "edit", "export"],
-  // Employees & reports — view only
-  branch_employees: ["view", "export"],
+  // Employees — can add & edit employee records (delete stays admin/HR-manager only)
+  branch_employees: ["view", "create", "edit", "export"],
+  // Reports — view only
   employee_reports: ["view", "export"],
   // Attendance & shifts
   attendance: ["view", "create", "edit", "export"],
