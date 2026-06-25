@@ -66,7 +66,8 @@ const fixHijriInContent = (content: string, meetingDate: Date): string => {
   return fixed;
 };
 
-export const printMeetingMinutes = async (m: PrintMeetingMinutes, meeting?: PrintMinutesMeeting) => {
+export const printMeetingMinutes = async (m: PrintMeetingMinutes, meeting?: PrintMinutesMeeting, targetWindow?: Window | null) => {
+  const printWindow = targetWindow ?? window.open('', '_blank');
   const meetingDate = meeting?.meetingDate ? new Date(meeting.meetingDate) : new Date();
   const hijriDate = computeHijriDate(meetingDate);
   const hijriFull = formatHijriFull(meetingDate);
@@ -447,7 +448,6 @@ export const printMeetingMinutes = async (m: PrintMeetingMinutes, meeting?: Prin
 </body>
 </html>`;
 
-  const printWindow = window.open('', '_blank');
   if (printWindow) {
     printWindow.document.write(printContent);
     printWindow.document.close();

@@ -49,7 +49,7 @@ const getRequiredMajority = (resolution: BoardResolution): { percentage: number;
   return { percentage: savedMajority > 50 ? savedMajority : 50.01, label: 'الأغلبية المطلقة (50%+1)' };
 };
 
-export const printBoardResolutionWithSignatures = (resolution: BoardResolution, tokens: VotingTokenData[]) => {
+export const printBoardResolutionWithSignatures = (resolution: BoardResolution, tokens: VotingTokenData[], targetWindow?: Window | null) => {
   const votedTokens = tokens.filter(t => t.status === 'voted');
   const voteLabels: Record<string, string> = { for: 'موافق', against: 'رافض', abstain: 'ممتنع' };
 
@@ -567,7 +567,7 @@ export const printBoardResolutionWithSignatures = (resolution: BoardResolution, 
     </html>
   `;
 
-  const printWindow = window.open('', '_blank');
+  const printWindow = targetWindow ?? window.open('', '_blank');
   if (printWindow) {
     printWindow.document.write(printContent);
     printWindow.document.close();

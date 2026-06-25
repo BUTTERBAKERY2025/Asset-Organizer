@@ -172,24 +172,35 @@ export default function SignedResolutionsPage() {
   }), [rows]);
 
   const handlePrint = async (row: UnifiedRow) => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      toast({
+        title: "النوافذ المنبثقة محظورة",
+        description: "الرجاء السماح بالنوافذ المنبثقة لهذا الموقع ثم إعادة المحاولة.",
+        variant: "destructive",
+      });
+      return;
+    }
     setPrintingKey(row.key);
     try {
       if (row.source === "board") {
         const res = await fetch(`/api/governance/resolutions/${row.id}/voting-tokens`, { credentials: "include" });
         if (!res.ok) throw new Error("tokens");
         const tokens = (await res.json()) as VotingTokenData[];
-        printBoardResolutionWithSignatures(row.raw as BoardResolution, Array.isArray(tokens) ? tokens : []);
+        printBoardResolutionWithSignatures(row.raw as BoardResolution, Array.isArray(tokens) ? tokens : [], printWindow);
       } else if (row.source === "assembly") {
-        await printAssemblyResolution(row.raw as unknown as PrintResolution);
+        await printAssemblyResolution(row.raw as unknown as PrintResolution, undefined, undefined, printWindow);
       } else {
         const m = row.raw as MeetingMinutes;
         const meeting = meetings.find((mt) => mt.id === m.meetingId);
         await printMeetingMinutes(
           m as unknown as PrintMeetingMinutes,
           meeting as unknown as PrintMinutesMeeting | undefined,
+          printWindow,
         );
       }
     } catch (e) {
+      printWindow.close();
       toast({
         title: "تعذّرت الطباعة",
         description: "حدث خطأ أثناء تجهيز المستند للطباعة. حاول مرة أخرى.",

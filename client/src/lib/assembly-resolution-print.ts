@@ -387,16 +387,17 @@ export async function fetchResolutionPrintData(resolutionId: number): Promise<{ 
 export async function printAssemblyResolution(
   resolution: PrintResolution,
   meeting?: PrintMeeting,
-  company?: CompanyInfo
+  company?: CompanyInfo,
+  targetWindow?: Window | null
 ): Promise<void> {
-  const { signatures, votes } = await fetchResolutionPrintData(resolution.id);
-  const logo = await getCompanyLogoDataUri();
-  const html = buildAssemblyResolutionHtml(resolution, signatures, votes, meeting, company, logo);
-  const w = window.open("", "_blank");
+  const w = targetWindow ?? window.open("", "_blank");
   if (!w) {
     alert("الرجاء السماح بالنوافذ المنبثقة لطباعة القرار");
     return;
   }
+  const { signatures, votes } = await fetchResolutionPrintData(resolution.id);
+  const logo = await getCompanyLogoDataUri();
+  const html = buildAssemblyResolutionHtml(resolution, signatures, votes, meeting, company, logo);
   w.document.write(html);
   w.document.close();
   w.onload = () => setTimeout(() => w.print(), 400);
