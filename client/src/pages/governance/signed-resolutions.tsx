@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,9 +19,17 @@ import {
   FileText,
   Filter,
 } from "lucide-react";
-import type { BoardResolution, AssemblyResolution, MeetingMinutes } from "@shared/schema";
+import type { BoardResolution, AssemblyResolution, MeetingMinutes, GovernanceMeeting } from "@shared/schema";
 import { printBoardResolutionWithSignatures, type VotingTokenData } from "@/lib/board-resolution-print";
 import { printAssemblyResolution, type PrintResolution } from "@/lib/assembly-resolution-print";
+import { printMeetingMinutes, type PrintMeetingMinutes, type PrintMinutesMeeting } from "@/lib/meeting-minutes-print";
+
+const tolerantFetch = (url: string) => async () => {
+  const res = await fetch(url, { credentials: "include" });
+  if (res.status === 401 || res.status === 403) return [];
+  if (!res.ok) throw new Error(String(res.status));
+  return res.json();
+};
 
 type SourceType = "board" | "assembly" | "minutes";
 
@@ -67,7 +75,6 @@ const fmtDate = (d: Date | null) =>
 
 export default function SignedResolutionsPage() {
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | SourceType>("all");
   const [printingKey, setPrintingKey] = useState<string | null>(null);
@@ -80,9 +87,14 @@ export default function SignedResolutionsPage() {
   });
   const { data: minutes = [], isLoading: loadingMinutes } = useQuery<MeetingMinutes[]>({
     queryKey: ["/api/governance/minutes"],
+    queryFn: tolerantFetch("/api/governance/minutes"),
+  });
+  const { data: meetings = [], isLoading: loadingMeetings } = useQuery<GovernanceMeeting[]>({
+    queryKey: ["/api/governance/meetings"],
+    queryFn: tolerantFetch("/api/governance/meetings"),
   });
 
-  const isLoading = loadingBoard || loadingAssembly || loadingMinutes;
+  const isLoading = loadingBoard || loadingAssembly || loadingMinutes || loadingMeetings;
 
   const rows = useMemo<UnifiedRow[]>(() => {
     const out: UnifiedRow[] = [];
@@ -160,10 +172,6 @@ export default function SignedResolutionsPage() {
   }), [rows]);
 
   const handlePrint = async (row: UnifiedRow) => {
-    if (row.source === "minutes") {
-      setLocation("/governance/assembly-minutes");
-      return;
-    }
     setPrintingKey(row.key);
     try {
       if (row.source === "board") {
@@ -171,8 +179,15 @@ export default function SignedResolutionsPage() {
         if (!res.ok) throw new Error("tokens");
         const tokens = (await res.json()) as VotingTokenData[];
         printBoardResolutionWithSignatures(row.raw as BoardResolution, Array.isArray(tokens) ? tokens : []);
-      } else {
+      } else if (row.source === "assembly") {
         await printAssemblyResolution(row.raw as unknown as PrintResolution);
+      } else {
+        const m = row.raw as MeetingMinutes;
+        const meeting = meetings.find((mt) => mt.id === m.meetingId);
+        await printMeetingMinutes(
+          m as unknown as PrintMeetingMinutes,
+          meeting as unknown as PrintMinutesMeeting | undefined,
+        );
       }
     } catch (e) {
       toast({
@@ -310,7 +325,7 @@ export default function SignedResolutionsPage() {
                           data-testid={`button-print-${row.key}`}
                         >
                           {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
-                          {row.source === "minutes" ? "فتح المحضر للطباعة" : "طباعة بالتوقيع"}
+                          طباعة بالتوقيع
                         </Button>
                       </div>
                     </div>

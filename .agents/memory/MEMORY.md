@@ -25,3 +25,4 @@
 - [Governance print pagination](governance-print-pagination.md) — voting.tsx resolution print now uses a bounded-sheet JS paginator (per-page "صفحة X من Y", no Chrome blank first page); text must be splittable, signature img heights fixed for deterministic measurement.
 - [Leave notify channels & date-edit](leave-notify-channels.md) — notifyEmployeeOfDecision defaults WhatsApp-only (one queue row per channel); pass channels:["whatsapp","sms"] for dual; editing leave dates keeps approval as-is by design.
 - [Approval chains](approval-chains.md) — leave approval chains by job title; snapshot in leave_requests.approvalChain; 2 partial unique indexes (branch vs default); review gate must cover approve AND reject.
+- [Governance print & unified resolutions](governance-print-libs.md) — each gov doc type prints via its own shared lib (board/assembly/minutes); cross-type pages must tolerantly fetch (return [] on 401/403) across differing permission modules.
