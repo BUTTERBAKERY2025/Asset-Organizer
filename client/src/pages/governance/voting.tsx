@@ -601,6 +601,12 @@ export default function VotingPage() {
           .stamp-svg svg { width: 150px; height: 150px; }
 
           .doc-note { text-align: center; font-size: 7.5px; color: #8a8a8a; margin-top: 10px; }
+
+          /* Emergency fallback layout (used only if the paginator fails for any
+             reason) — guarantees the content is visible instead of a blank page. */
+          .fallback { padding: 18mm 16mm; }
+          .fallback-bg { display: none; }
+          .fallback .vt { margin-top: 8px; }
         </style>
       </head>
       <body>
@@ -634,7 +640,41 @@ export default function VotingPage() {
           }
           var NO_VOTERS = '<tr><td colspan="6" style="text-align:center;color:#999;padding:8px;">لا يوجد مصوتون</td></tr>';
 
+          // Flips to true only AFTER content has been successfully inserted into the
+          // document, so a late failure in build() still leaves fallback() available.
+          var hasRendered = false;
+          function doPrint() { setTimeout(function () { try { window.focus(); window.print(); } catch (e) {} }, 350); }
+
+          // Emergency fallback: a single flowing render that is guaranteed to show the
+          // content even if the bounded-sheet paginator throws or never runs. It drops
+          // per-page numbering but never leaves the user with a blank page.
+          function fallback() {
+            if (hasRendered) return;
+            var ok = false;
+            try {
+              var m = document.getElementById('measure'); if (m && m.parentNode) m.parentNode.removeChild(m);
+              var html = '<div class="fallback">';
+              for (var i = 0; i < flow.length; i++) {
+                var it = flow[i];
+                if (it.kind === 'html') { html += it.html; }
+                else {
+                  var t = (it.title) ? '<div class="res-box-title">' + it.title + '</div>' : '';
+                  html += (it.cls === 'res-intro')
+                    ? '<div class="res-intro">' + it.text + '</div>'
+                    : '<div class="res-box">' + t + '<div class="res-box-text">' + it.text + '</div></div>';
+                }
+              }
+              var rows = (rowHtmls && rowHtmls.length) ? rowHtmls.join('') : NO_VOTERS;
+              html += '<table class="vt"><thead>' + theadHtml + '</thead><tbody>' + rows + '</tbody></table>';
+              html += totalsHtml + signHtml + '</div>';
+              document.body.insertAdjacentHTML('beforeend', html);
+              ok = true;
+            } catch (e) {}
+            if (ok) { hasRendered = true; doPrint(); }
+          }
+
           function build() {
+            if (hasRendered) return;
             var sheets = [];
             var cur = [];
             var curH = 0;
@@ -756,18 +796,23 @@ export default function VotingPage() {
                 '</div>';
             }).join('');
             document.body.insertAdjacentHTML('beforeend', out);
-            setTimeout(function () { window.focus(); window.print(); }, 350);
+            hasRendered = true;
+            doPrint();
           }
 
-          // Guard against double-run from the ready/fallback race.
-          var ran = false;
-          var _build = build;
-          build = function () { if (ran) return; ran = true; _build(); };
+          // Run the paginator; if it throws for ANY reason, drop to the guaranteed
+          // fallback render so the user never gets a blank page.
+          function tryBuild() {
+            if (hasRendered) return;
+            try { build(); } catch (e) { fallback(); }
+          }
 
           // Measure after fonts are ready (image heights are pinned via CSS, so they
           // do not depend on async decoding). Hard fallback if fonts never settle.
-          if (document.fonts && document.fonts.ready) { document.fonts.ready.then(function () { setTimeout(build, 40); }); }
-          setTimeout(build, 1200);
+          if (document.fonts && document.fonts.ready) { document.fonts.ready.then(function () { setTimeout(tryBuild, 40); }); }
+          setTimeout(tryBuild, 1200);
+          // Watchdog: if nothing has rendered shortly after, force the fallback.
+          setTimeout(fallback, 3000);
         })();
         <\/script>
       </body>
