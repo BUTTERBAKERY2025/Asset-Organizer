@@ -47,6 +47,25 @@ that a `position:fixed` full-page letterhead with `@page{margin:0}` triggers.
   fallback render; `hasRendered` flips ONLY after successful DOM insertion (so a
   late insertion failure still leaves the fallback available); add a ~3s watchdog.
 
+## Print must use a safe inner margin, NOT full-bleed
+The board print uses `@page{margin:8mm}` with the `.sheet` (and `.sheet-bg`
+letterhead PNG) sized to the printable area (194×280mm), not the full A4 page.
+**Why:** a full-bleed model (`@page{margin:0}` + sheet exactly 210×297mm) gets the
+right/bottom edge clipped by any printer hardware margin or the dialog's "Default"
+margin setting — the symptom is a footer URL cut off and content looking shrunk
+("غير منسقه"). **How to apply:** the four constants must stay mutually consistent or
+content overflows/clips — `#measure` width = sheet width − 2×side inset, and paginator
+`AVAIL = (sheetHeight − contentTop − contentBottom)×MM`. Keep sheet height a hair under
+the printable height (avoids the off-by-one extra blank page). Assembly/minutes already
+use safe `@page` margins, so only the board template had this bug.
+
+## Auto-print after shell document.write — don't rely on the load event
+Assembly/minutes templates auto-print via an inline trigger. When the print SHELL
+`document.write`s the doc, `load` has usually already fired, so a bare
+`window.addEventListener('load', print)` never runs → no print dialog. Use a
+readyState-aware self-invoking trigger: print now if `document.readyState==='complete'`,
+else attach the load listener. (Board uses a setTimeout, so it was unaffected.)
+
 ## Older approaches that FAILED (do not reintroduce)
 - `position:fixed` full-page letterhead + `@page{margin:0}` → Chrome blank first page,
   and no way to number pages.

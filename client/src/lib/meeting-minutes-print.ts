@@ -447,7 +447,7 @@ export const printMeetingMinutes = async (m: PrintMeetingMinutes, meeting?: Prin
     <span>شركة الزبد الأفضل التجارية | سجل تجاري: 7026155296</span>
     <span>رقم المحضر: ${sanitize(m.minutesNumber)} | ${hijriFull} الموافق ${meetingDate.toLocaleDateString('en-GB')}</span>
   </div>
-  <script>window.addEventListener('load',function(){setTimeout(function(){try{window.focus();window.print();}catch(e){}},500);});</script>
+  <script>(function(){function p(){setTimeout(function(){try{window.focus();window.print();}catch(e){}},500);}if(document.readyState==='complete'){p();}else{window.addEventListener('load',p);}})();</script>
 </body>
 </html>`;
 

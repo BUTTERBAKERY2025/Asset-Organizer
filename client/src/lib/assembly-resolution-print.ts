@@ -371,7 +371,7 @@ export function buildAssemblyResolutionHtml(
       </tr>
     </tbody>
   </table>
-  <script>window.addEventListener('load',function(){setTimeout(function(){try{window.focus();window.print();}catch(e){}},400);});</script>
+  <script>(function(){function p(){setTimeout(function(){try{window.focus();window.print();}catch(e){}},400);}if(document.readyState==='complete'){p();}else{window.addEventListener('load',p);}})();</script>
 </body>
 </html>`;
 }

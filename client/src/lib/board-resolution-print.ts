@@ -50,7 +50,7 @@ const getRequiredMajority = (resolution: BoardResolution): { percentage: number;
   return { percentage: savedMajority > 50 ? savedMajority : 50.01, label: 'الأغلبية المطلقة (50%+1)' };
 };
 
-export const printBoardResolutionWithSignatures = (resolution: BoardResolution, tokens: VotingTokenData[], targetWindow?: PrintTarget | null) => {
+export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: VotingTokenData[]): string => {
   const votedTokens = tokens.filter(t => t.status === 'voted');
   const voteLabels: Record<string, string> = { for: 'موافق', against: 'رافض', abstain: 'ممتنع' };
 
@@ -278,7 +278,7 @@ export const printBoardResolutionWithSignatures = (resolution: BoardResolution, 
       <title>${docTitle} - ${resNum}</title>
       <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
       <style>
-        @page { size: A4 portrait; margin: 0; }
+        @page { size: A4 portrait; margin: 8mm; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { background: #fff; }
         body { font-family: 'Cairo', sans-serif; color: #333; direction: rtl; font-size: 9px; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -287,13 +287,13 @@ export const printBoardResolutionWithSignatures = (resolution: BoardResolution, 
            positioned INSIDE the bounded sheet (never position:fixed), which
            eliminates the Chrome blank-first-page bug caused by a full-page
            fixed image at @page margin:0. */
-        .sheet { position: relative; width: 210mm; height: 297mm; overflow: hidden; background: #fff; page-break-after: always; break-after: page; }
+        .sheet { position: relative; width: 194mm; height: 280mm; overflow: hidden; background: #fff; page-break-after: always; break-after: page; margin: 0 auto; }
         .sheet:last-child { page-break-after: auto; break-after: auto; }
-        .sheet-bg { position: absolute; top: 0; left: 0; width: 210mm; height: 297mm; z-index: 0; }
-        .sheet-content { position: absolute; top: 30mm; left: 16mm; right: 16mm; bottom: 26mm; z-index: 1; overflow: hidden; }
+        .sheet-bg { position: absolute; top: 0; left: 0; width: 194mm; height: 280mm; z-index: 0; }
+        .sheet-content { position: absolute; top: 28mm; left: 16mm; right: 16mm; bottom: 24mm; z-index: 1; overflow: hidden; }
         /* Sits in the clear band just above the letterhead's dark footer bar. */
-        .pagenum { position: absolute; bottom: 20mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #8a8a8a; z-index: 2; }
-        #measure { position: absolute; left: -10000px; top: 0; width: 178mm; visibility: hidden; }
+        .pagenum { position: absolute; bottom: 18mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #8a8a8a; z-index: 2; }
+        #measure { position: absolute; left: -10000px; top: 0; width: 162mm; visibility: hidden; }
 
         .doc-title-main { text-align: center; font-size: 16px; font-weight: 700; color: #2b3a4f; margin-bottom: 4px; }
         .doc-meta-wrap { text-align: center; margin-bottom: 8px; }
@@ -358,7 +358,7 @@ export const printBoardResolutionWithSignatures = (resolution: BoardResolution, 
       <script>
       (function () {
         var MM = 96 / 25.4;
-        var AVAIL = (297 - 30 - 26) * MM; // usable content height per sheet (px)
+        var AVAIL = (280 - 28 - 24) * MM; // usable content height per sheet (px)
         // Data is read from the JSON island; this executable script contains no
         // interpolated data, so it always parses and the fallback/watchdog below
         // are guaranteed to run even on unusual input.
@@ -568,6 +568,11 @@ export const printBoardResolutionWithSignatures = (resolution: BoardResolution, 
     </html>
   `;
 
+  return printContent;
+};
+
+export const printBoardResolutionWithSignatures = (resolution: BoardResolution, tokens: VotingTokenData[], targetWindow?: PrintTarget | null) => {
+  const printContent = buildBoardResolutionHtml(resolution, tokens);
   const printTarget = targetWindow ?? openPrintWindow();
   if (printTarget.win) {
     renderToPrintWindow(printTarget, printContent);
