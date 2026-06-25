@@ -278,7 +278,7 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
       <title>${docTitle} - ${resNum}</title>
       <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
       <style>
-        @page { size: A4 portrait; margin: 8mm; }
+        @page { size: A4 portrait; margin: 0; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { background: #fff; }
         body { font-family: 'Cairo', sans-serif; color: #333; direction: rtl; font-size: 9px; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -287,13 +287,15 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
            positioned INSIDE the bounded sheet (never position:fixed), which
            eliminates the Chrome blank-first-page bug caused by a full-page
            fixed image at @page margin:0. */
-        .sheet { position: relative; width: 194mm; height: 280mm; overflow: hidden; background: #fff; page-break-after: always; break-after: page; margin: 0 auto; }
+        .sheet { position: relative; width: 210mm; height: 297mm; overflow: hidden; background: #fff; page-break-after: always; break-after: page; margin: 0 auto; }
         .sheet:last-child { page-break-after: auto; break-after: auto; }
-        .sheet-bg { position: absolute; top: 0; left: 0; width: 194mm; height: 280mm; z-index: 0; }
-        .sheet-content { position: absolute; top: 28mm; left: 16mm; right: 16mm; bottom: 24mm; z-index: 1; overflow: hidden; }
-        /* Sits in the clear band just above the letterhead's dark footer bar. */
-        .pagenum { position: absolute; bottom: 18mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #8a8a8a; z-index: 2; }
-        #measure { position: absolute; left: -10000px; top: 0; width: 162mm; visibility: hidden; }
+        .sheet-bg { position: absolute; top: 0; left: 0; width: 210mm; height: 297mm; z-index: 0; }
+        /* Insets matched to the official letterhead artwork: header gold rule ends
+           at ~54mm, footer green rule sits at ~274mm, side rules inset ~20mm. */
+        .sheet-content { position: absolute; top: 56mm; left: 20mm; right: 20mm; bottom: 30mm; z-index: 1; overflow: hidden; }
+        /* Sits in the clear white band just above the letterhead's footer rule. */
+        .pagenum { position: absolute; bottom: 25mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #8a8a8a; z-index: 2; }
+        #measure { position: absolute; left: -10000px; top: 0; width: 170mm; visibility: hidden; }
 
         .doc-title-main { text-align: center; font-size: 16px; font-weight: 700; color: #2b3a4f; margin-bottom: 4px; }
         .doc-meta-wrap { text-align: center; margin-bottom: 8px; }
@@ -358,7 +360,7 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
       <script>
       (function () {
         var MM = 96 / 25.4;
-        var AVAIL = (280 - 28 - 24) * MM; // usable content height per sheet (px)
+        var AVAIL = (297 - 56 - 30) * MM; // usable content height per sheet (px)
         // Data is read from the JSON island; this executable script contains no
         // interpolated data, so it always parses and the fallback/watchdog below
         // are guaranteed to run even on unusual input.

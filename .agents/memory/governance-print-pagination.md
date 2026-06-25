@@ -47,17 +47,28 @@ that a `position:fixed` full-page letterhead with `@page{margin:0}` triggers.
   fallback render; `hasRendered` flips ONLY after successful DOM insertion (so a
   late insertion failure still leaves the fallback available); add a ~3s watchdog.
 
-## Print must use a safe inner margin, NOT full-bleed
-The board print uses `@page{margin:8mm}` with the `.sheet` (and `.sheet-bg`
-letterhead PNG) sized to the printable area (194×280mm), not the full A4 page.
-**Why:** a full-bleed model (`@page{margin:0}` + sheet exactly 210×297mm) gets the
-right/bottom edge clipped by any printer hardware margin or the dialog's "Default"
-margin setting — the symptom is a footer URL cut off and content looking shrunk
-("غير منسقه"). **How to apply:** the four constants must stay mutually consistent or
-content overflows/clips — `#measure` width = sheet width − 2×side inset, and paginator
-`AVAIL = (sheetHeight − contentTop − contentBottom)×MM`. Keep sheet height a hair under
-the printable height (avoids the off-by-one extra blank page). Assembly/minutes already
-use safe `@page` margins, so only the board template had this bug.
+## Board letterhead is a full-bleed raster; content insets MUST match its artwork
+The board print background is the official letterhead PNG
+(`attached_assets/official-letterhead.png`, full A4, base64-inlined via `?inline`),
+drawn as `.sheet-bg` filling a full-bleed sheet (`@page{margin:0}`, `.sheet`
+210×297mm). The current letterhead has its OWN safe margins (logo ~19mm from top,
+footer line ~10mm from bottom, header/footer rules inset ~20mm from the sides), so
+full-bleed does NOT clip. `.sheet-content` insets are tuned to that artwork:
+top 56mm (just below the header gold rule at ~54mm), bottom 30mm (above the footer
+green rule at ~274mm), left/right 20mm (aligned to the rules); `#measure` width 170mm
+(=210−20−20); paginator `AVAIL=(297−56−30)×MM`.
+**Why this matters:** an EARLIER letterhead had its footer URL at the extreme bleed
+edge, so full-bleed + any printer/dialog margin clipped it (symptom: cut-off footer,
+content looking shrunk — "غير منسقه"). The fix was NOT a page margin; it was swapping
+to a letterhead whose critical content is safely inset.
+**How to apply when the letterhead image changes:** measure the new artwork's rule
+positions (e.g. `pdftoppm`+PIL row-darkness scan) and re-tune the four constants in
+lockstep — content top below the top rule, bottom above the footer rule, `#measure`
+width = sheet − 2×side inset, `AVAIL=(297−top−bottom)×MM` — or content overlaps the
+letterhead or overflows (`overflow:hidden` silently clips). Keep `.sheet-bg`
+`position:absolute` (never `fixed`) to avoid the Chrome blank-first-page bug.
+Assembly/minutes use CSS text headers (green `#1a5f3c` / gold `#b8860b` rules), NOT
+this raster — they're unaffected by letterhead-image swaps.
 
 ## Auto-print after shell document.write — don't rely on the load event
 Assembly/minutes templates auto-print via an inline trigger. When the print SHELL
