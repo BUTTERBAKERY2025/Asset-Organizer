@@ -157,6 +157,7 @@ const CapitalPage = makeLazy("governance-capital");
 const VotingPage = makeLazy("governance-voting");
 const GeneralAssemblyPage = makeLazy("governance-general-assembly");
 const AssemblyResolutionsPage = makeLazy("governance-assembly-resolutions");
+const SignedResolutionsPage = makeLazy("governance-signed-resolutions");
 const InsidersPage = makeLazy("governance-insiders");
 const BlackoutPeriodsPage = makeLazy("governance-blackout-periods");
 const AuditCommitteePage = makeLazy("governance-audit-committee");
@@ -493,6 +494,7 @@ const Router = React.memo(function Router() {
       <Route path="/governance/voting">{() => <ModulePage component={VotingPage} module="governance_voting" />}</Route>
       <Route path="/governance/general-assembly">{() => <ModulePage component={GeneralAssemblyPage} module="governance_meetings" />}</Route>
       <Route path="/governance/assembly-resolutions">{() => <ModulePage component={AssemblyResolutionsPage} module="governance_resolutions" />}</Route>
+      <Route path="/governance/signed-resolutions">{() => <ModulePage component={SignedResolutionsPage} module="governance_resolutions" />}</Route>
       <Route path="/governance/insiders">{() => <ModulePage component={InsidersPage} module="governance_compliance" />}</Route>
       <Route path="/governance/blackout-periods">{() => <ModulePage component={BlackoutPeriodsPage} module="governance_compliance" />}</Route>
       <Route path="/governance/audit-committee">{() => <ModulePage component={AuditCommitteePage} module="governance_compliance" />}</Route>

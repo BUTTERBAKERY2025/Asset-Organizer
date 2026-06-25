@@ -14,6 +14,7 @@ import {
   BarChart3,
   Scale,
   Vote,
+  FileSignature,
   ClipboardList,
   Briefcase,
   FileCheck,
@@ -168,6 +169,15 @@ const governanceModules: GovernanceModule[] = [
     color: "text-blue-700",
     bgColor: "bg-blue-100",
     href: "/governance/assembly-resolutions",
+  },
+  {
+    id: "signed-resolutions",
+    title: "القرارات الموقعة",
+    description: "كل القرارات المعتمدة والمحاضر الموقّعة جاهزة للطباعة بالتوقيعات",
+    icon: FileSignature,
+    color: "text-amber-700",
+    bgColor: "bg-amber-100",
+    href: "/governance/signed-resolutions",
   },
   {
     id: "insiders",
