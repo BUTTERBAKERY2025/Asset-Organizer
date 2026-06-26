@@ -188,7 +188,7 @@ export default function SignedResolutionsPage() {
         const res = await fetch(`/api/governance/resolutions/${row.id}/voting-tokens`, { credentials: "include" });
         if (!res.ok) throw new Error("tokens");
         const tokens = (await res.json()) as VotingTokenData[];
-        printBoardResolutionWithSignatures(row.raw as BoardResolution, Array.isArray(tokens) ? tokens : [], printWindow);
+        await printBoardResolutionWithSignatures(row.raw as BoardResolution, Array.isArray(tokens) ? tokens : [], printWindow);
       } else if (row.source === "assembly") {
         await printAssemblyResolution(row.raw as unknown as PrintResolution, undefined, undefined, printWindow);
       } else {

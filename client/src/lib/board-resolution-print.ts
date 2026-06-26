@@ -19,6 +19,31 @@ export interface VotingTokenData {
   comments?: string;
 }
 
+// توقيعات أعضاء مجلس الإدارة المعتمدين للقرار — مصدرها جدول resolution_signatures
+// (نفس مصدر التوقيعات الذي تستخدمه صفحة القرارات وطباعة قرارات الجمعية)
+export interface BoardSignature {
+  id: number;
+  status: string;
+  signatureData?: string | null;
+  signedAt?: string | null;
+  memberName?: string;
+  memberPosition?: string;
+}
+
+const BOARD_POSITION_LABELS: Record<string, string> = {
+  chairman: 'رئيس مجلس الإدارة',
+  vice_chairman: 'نائب رئيس مجلس الإدارة',
+  managing_director: 'العضو المنتدب',
+  member: 'عضو مجلس الإدارة',
+  board_member: 'عضو مجلس الإدارة',
+  secretary: 'أمين سر المجلس',
+  ceo: 'الرئيس التنفيذي',
+};
+const translateBoardPosition = (pos: string | undefined | null): string => {
+  if (!pos) return 'عضو مجلس الإدارة';
+  return BOARD_POSITION_LABELS[pos] || pos;
+};
+
 const computeHijriDate = (date: Date): string => {
   const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', { day: 'numeric', month: 'numeric', year: 'numeric' }).formatToParts(date);
   const day = parts.find(p => p.type === 'day')?.value || '1';
@@ -50,7 +75,7 @@ const getRequiredMajority = (resolution: BoardResolution): { percentage: number;
   return { percentage: savedMajority > 50 ? savedMajority : 50.01, label: 'الأغلبية المطلقة (50%+1)' };
 };
 
-export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: VotingTokenData[]): string => {
+export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: VotingTokenData[], signatures: BoardSignature[] = []): string => {
   const votedTokens = tokens.filter(t => t.status === 'voted');
   const voteLabels: Record<string, string> = { for: 'موافق', against: 'رافض', abstain: 'ممتنع' };
 
@@ -235,8 +260,34 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
       '<span>نسبة الموافقة ' + approvalPercentage + '% (' + forVotes + ' موافق / ' + againstVotes + ' رافض / ' + abstainVotes + ' ممتنع)</span>' +
     '</div>';
 
+  // قسم توقيعات أعضاء مجلس الإدارة المعتمدين للقرار (إن وُجدت طلبات توقيع).
+  // التوقيعات تُجلب من نفس مصدر صفحة القرارات حتى تظهر هنا كما تظهر في قرارات الجمعية.
+  const fmtSigDate = (d: string): string => { try { return new Date(d).toLocaleDateString('en-GB'); } catch { return ''; } };
+  const memberSignaturesHtml = signatures.length
+    ? '<div class="section-head" style="margin-top:10px;">توقيعات أعضاء مجلس الإدارة</div>' +
+      '<div class="sig-grid">' +
+      signatures.map((sig) => {
+        const signed = sig.status === 'signed';
+        const img = signed && isValidSignature(sig.signatureData) ? sig.signatureData : '';
+        const inner = img
+          ? '<img class="sig-img2" src="' + img + '" alt="توقيع ' + sanitize(sig.memberName) + '" />'
+          : sig.status === 'declined'
+            ? '<span class="sig-x">✗ رفض التوقيع</span>'
+            : '<span class="sig-wait">في انتظار التوقيع</span>';
+        const dateLine = signed && sig.signedAt ? '<span class="sig-date">تاريخ التوقيع: ' + fmtSigDate(sig.signedAt) + '</span>' : '';
+        const okBadge = signed ? '<span class="sig-ok">✓ موقّع</span>' : sig.status === 'declined' ? '<span class="sig-rej">✗ مرفوض</span>' : '<span class="sig-pend">⏳ معلّق</span>';
+        return '<div class="sig-card ' + (signed ? 'signed' : sanitize(sig.status)) + '">' +
+          '<div class="sig-role">' + sanitize(translateBoardPosition(sig.memberPosition)) + '</div>' +
+          '<div class="sig-name">' + sanitize(sig.memberName) + '</div>' +
+          '<div class="sig-img-wrap">' + inner + '</div>' +
+          '<div class="sig-foot">' + okBadge + dateLine + '</div>' +
+          '</div>';
+      }).join('') +
+      '</div>'
+    : '';
+
   const printNow = new Date();
-  const signBlockHtml = '<div class="sign-row">' +
+  const signBlockHtml = memberSignaturesHtml + '<div class="sign-row">' +
       '<div class="sign-col">' +
         '<div class="sign-role">رئيس مجلس الإدارة</div>' +
         (chairmanSig
@@ -344,6 +395,23 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
         .stamp-lbl { font-size: 9px; color: #888; margin-bottom: 4px; }
         .stamp-svg { display: inline-block; }
         .stamp-svg svg { width: 150px; height: 150px; }
+
+        /* بطاقات توقيع أعضاء مجلس الإدارة (مطابقة لأسلوب صفحة القرارات) */
+        .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 8px; }
+        .sig-card { border: 1px solid #e3dcc6; border-radius: 7px; padding: 7px 10px 5px; background: #fffdf8; text-align: center; page-break-inside: avoid; break-inside: avoid; }
+        .sig-card.signed { border-color: #cfe3d6; background: #fbfdfb; }
+        .sig-card.declined { border-color: #f0c0c0; background: #fdf6f6; }
+        .sig-role { font-size: 8px; color: #b8962f; font-weight: 700; margin-bottom: 2px; }
+        .sig-name { font-size: 11px; font-weight: 700; color: #2b3a4f; margin-bottom: 3px; }
+        .sig-img-wrap { height: 38px; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; border-bottom: 1px solid #e7e2d4; padding-bottom: 3px; }
+        .sig-img2 { max-height: 36px; max-width: 160px; }
+        .sig-wait { font-size: 8px; color: #b0a98f; }
+        .sig-x { font-size: 8px; color: #c0392b; }
+        .sig-foot { display: flex; justify-content: center; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .sig-ok { font-size: 8px; color: #2e7d52; font-weight: 700; }
+        .sig-rej { font-size: 8px; color: #c0392b; font-weight: 700; }
+        .sig-pend { font-size: 8px; color: #b8860b; font-weight: 700; }
+        .sig-date { font-size: 8px; color: #888; }
 
         .doc-note { text-align: center; font-size: 7.5px; color: #8a8a8a; margin-top: 10px; }
 
@@ -573,10 +641,24 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
   return printContent;
 };
 
-export const printBoardResolutionWithSignatures = (resolution: BoardResolution, tokens: VotingTokenData[], targetWindow?: PrintTarget | null) => {
-  const printContent = buildBoardResolutionHtml(resolution, tokens);
-  const printTarget = targetWindow ?? openPrintWindow();
-  if (printTarget.win) {
-    renderToPrintWindow(printTarget, printContent);
+// جلب توقيعات أعضاء مجلس الإدارة للقرار من نفس مصدر صفحة القرارات.
+// يُرجع مصفوفة فارغة بهدوء عند أي خطأ حتى لا تتعطل الطباعة.
+export async function fetchBoardResolutionSignatures(resolutionId: number): Promise<BoardSignature[]> {
+  try {
+    const res = await fetch('/api/governance/resolutions/' + resolutionId + '/signatures', { credentials: 'include' });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
   }
+}
+
+export const printBoardResolutionWithSignatures = async (resolution: BoardResolution, tokens: VotingTokenData[], targetWindow?: PrintTarget | null) => {
+  // نفتح نافذة الطباعة بشكل متزامن أولاً (قبل أي await) لتفادي حظر النوافذ المنبثقة.
+  const printTarget = targetWindow ?? openPrintWindow();
+  if (!printTarget.win) return;
+  const signatures = await fetchBoardResolutionSignatures(resolution.id);
+  const printContent = buildBoardResolutionHtml(resolution, tokens, signatures);
+  renderToPrintWindow(printTarget, printContent);
 };
