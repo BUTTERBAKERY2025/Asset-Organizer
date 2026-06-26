@@ -5,11 +5,13 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   PieChart, Building2, Wallet, CalendarDays, FileText, Bell, Vote, User,
   TrendingUp, MapPin, Clock, CheckCircle2, Newspaper, Megaphone, Store,
   Landmark, LogOut, Loader2, Phone, Mail, CreditCard, Hash, Printer,
-  ScrollText, ChevronLeft,
+  ScrollText, ChevronLeft, MessageSquare, Send, Plus,
 } from "lucide-react";
 import logoUrl from "@assets/logo_-5_1765206843638.png";
 
@@ -48,6 +50,7 @@ const NAV_ITEMS = [
   { key: "meetings", label: "الاجتماعات", icon: CalendarDays },
   { key: "dividends", label: "الأرباح", icon: Wallet },
   { key: "voting", label: "التصويت", icon: Vote },
+  { key: "messages", label: "الرسائل", icon: MessageSquare },
 ];
 
 const SECTION_TITLES: Record<string, string> = {
@@ -58,6 +61,7 @@ const SECTION_TITLES: Record<string, string> = {
   voting: "التصويت على القرارات",
   documents: "وثائقي",
   notifications: "الإشعارات",
+  messages: "الرسائل والاستفسارات",
 };
 
 export default function ShareholderPortalPage() {
@@ -87,6 +91,7 @@ export default function ShareholderPortalPage() {
     showVoting: portalSettings?.showVoting ?? true,
     showDocuments: portalSettings?.showDocuments ?? true,
     showFinancials: portalSettings?.showFinancials ?? true,
+    showMessages: portalSettings?.showMessages ?? true,
   };
   const sectionEnabled: Record<string, boolean> = {
     overview: true,
@@ -95,6 +100,7 @@ export default function ShareholderPortalPage() {
     dividends: settings.showDividends,
     voting: settings.showVoting,
     documents: settings.showDocuments,
+    messages: settings.showMessages,
     notifications: true,
   };
   const navItems = NAV_ITEMS.filter((i) => sectionEnabled[i.key] !== false);
@@ -103,7 +109,7 @@ export default function ShareholderPortalPage() {
   useEffect(() => {
     if (sectionEnabled[tab] === false) setTab("overview");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, settings.showNews, settings.showMeetings, settings.showDividends, settings.showVoting, settings.showDocuments]);
+  }, [tab, settings.showNews, settings.showMeetings, settings.showDividends, settings.showVoting, settings.showDocuments, settings.showMessages]);
 
   const markRead = useMutation({
     mutationFn: (id: number) => apiRequest("POST", `/api/shareholder/notifications/${id}/read`),
@@ -449,6 +455,11 @@ export default function ShareholderPortalPage() {
             ))}
           </div>
         )}
+
+        {/* ===== Messages / Tickets ===== */}
+        {tab === "messages" && settings.showMessages && (
+          <ShareholderMessages />
+        )}
       </main>
 
       {/* Bottom navigation (mobile-first) */}
@@ -661,4 +672,177 @@ function statusLabel(s: string): string {
 }
 function voteLabel(v: string): string {
   return { for: "موافق", against: "غير موافق", abstain: "امتناع" }[v] || v;
+}
+
+/* ===================== Messages / Tickets ===================== */
+
+const TICKET_STATUS_META: Record<string, { label: string; cls: string }> = {
+  new: { label: "جديد", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  in_progress: { label: "قيد المعالجة", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  closed: { label: "مغلق", cls: "bg-gray-100 text-gray-600 border-gray-200" },
+};
+
+function ShareholderMessages() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [openId, setOpenId] = useState<number | null>(null);
+  const [composing, setComposing] = useState(false);
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [reply, setReply] = useState("");
+
+  const { data: tickets = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/shareholder/tickets"] });
+  const { data: detail } = useQuery<any>({
+    queryKey: ["/api/shareholder/tickets", openId],
+    enabled: openId != null,
+    queryFn: () => fetch(`/api/shareholder/tickets/${openId}`, { credentials: "include" }).then((r) => {
+      if (!r.ok) throw new Error("فشل في جلب الاستفسار");
+      return r.json();
+    }),
+  });
+
+  const createTicket = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/shareholder/tickets", { subject, body }),
+    onSuccess: () => {
+      toast({ title: "تم إرسال استفسارك" });
+      setComposing(false);
+      setSubject("");
+      setBody("");
+      queryClient.invalidateQueries({ queryKey: ["/api/shareholder/tickets"] });
+    },
+    onError: (e: any) => toast({ title: "تعذّر الإرسال", description: e?.message || "", variant: "destructive" }),
+  });
+
+  const sendReply = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/shareholder/tickets/${openId}/messages`, { body: reply }),
+    onSuccess: () => {
+      setReply("");
+      queryClient.invalidateQueries({ queryKey: ["/api/shareholder/tickets", openId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/shareholder/tickets"] });
+    },
+    onError: (e: any) => toast({ title: "تعذّر الإرسال", description: e?.message || "", variant: "destructive" }),
+  });
+
+  // عرض المحادثة
+  if (openId != null) {
+    const ticket = detail?.ticket;
+    const messages: any[] = detail?.messages || [];
+    const meta = TICKET_STATUS_META[ticket?.status] || TICKET_STATUS_META.new;
+    return (
+      <div className="space-y-3">
+        <button onClick={() => setOpenId(null)} className="flex items-center gap-1 text-sm text-amber-700" data-testid="button-back-tickets">
+          <ChevronLeft className="w-4 h-4 rotate-180" /> رجوع للرسائل
+        </button>
+        <Card>
+          <CardContent className="py-3 flex items-center justify-between gap-2">
+            <div className="font-semibold text-sm truncate" data-testid="text-ticket-subject">{ticket?.subject || "—"}</div>
+            <Badge variant="outline" className={meta.cls} data-testid="badge-ticket-status">{meta.label}</Badge>
+          </CardContent>
+        </Card>
+
+        <div className="space-y-2">
+          {messages.map((m) => {
+            const mine = m.senderType === "shareholder";
+            return (
+              <div key={m.id} className={`flex ${mine ? "justify-start" : "justify-end"}`} data-testid={`message-${m.id}`}>
+                <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${mine ? "bg-amber-100 text-amber-900" : "bg-white border"}`}>
+                  <div className="text-[11px] text-muted-foreground mb-0.5">{mine ? "أنت" : (m.senderName || "الإدارة")}</div>
+                  <p className="whitespace-pre-wrap leading-relaxed">{m.body}</p>
+                  <div className="text-[10px] text-muted-foreground mt-1">{fmtDate(m.createdAt)}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {ticket?.status === "closed" ? (
+          <div className="text-center text-[12px] text-muted-foreground py-2">تم إغلاق هذا الاستفسار — يمكنك الرد لإعادة فتحه.</div>
+        ) : null}
+        <div className="flex items-end gap-2 sticky bottom-2">
+          <Textarea
+            value={reply}
+            onChange={(e) => setReply(e.target.value)}
+            placeholder="اكتب ردك..."
+            rows={2}
+            className="flex-1 resize-none bg-white"
+            data-testid="input-ticket-reply"
+          />
+          <Button
+            onClick={() => sendReply.mutate()}
+            disabled={!reply.trim() || sendReply.isPending}
+            className="bg-amber-600 hover:bg-amber-700 shrink-0"
+            data-testid="button-send-reply"
+          >
+            {sendReply.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // نموذج استفسار جديد
+  if (composing) {
+    return (
+      <div className="space-y-3">
+        <button onClick={() => setComposing(false)} className="flex items-center gap-1 text-sm text-amber-700" data-testid="button-cancel-compose">
+          <ChevronLeft className="w-4 h-4 rotate-180" /> رجوع
+        </button>
+        <Card>
+          <CardHeader><CardTitle className="text-base">استفسار جديد</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">الموضوع</label>
+              <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="موضوع الاستفسار" maxLength={200} data-testid="input-ticket-subject" />
+            </div>
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">الرسالة</label>
+              <Textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="اكتب استفسارك بالتفصيل..." rows={5} maxLength={4000} className="resize-none" data-testid="input-ticket-body" />
+            </div>
+            <Button
+              onClick={() => createTicket.mutate()}
+              disabled={!subject.trim() || !body.trim() || createTicket.isPending}
+              className="w-full bg-amber-600 hover:bg-amber-700"
+              data-testid="button-submit-ticket"
+            >
+              {createTicket.isPending ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : <Send className="w-4 h-4 ml-2" />}
+              إرسال الاستفسار
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // قائمة التذاكر
+  return (
+    <div className="space-y-3">
+      <Button onClick={() => setComposing(true)} className="w-full bg-amber-600 hover:bg-amber-700" data-testid="button-new-ticket">
+        <Plus className="w-4 h-4 ml-2" /> استفسار جديد
+      </Button>
+      {isLoading && <div className="text-center py-8"><Loader2 className="w-6 h-6 animate-spin text-amber-600 mx-auto" /></div>}
+      {!isLoading && tickets.length === 0 && <Empty text="لا توجد رسائل بعد — ابدأ باستفسار جديد" />}
+      {tickets.map((t) => {
+        const meta = TICKET_STATUS_META[t.status] || TICKET_STATUS_META.new;
+        return (
+          <Card
+            key={t.id}
+            className={`cursor-pointer active:scale-[0.99] transition-transform ${t.unreadByShareholder ? "border-amber-300 bg-amber-50/40" : ""}`}
+            onClick={() => setOpenId(t.id)}
+            data-testid={`card-ticket-${t.id}`}
+          >
+            <CardContent className="py-3 flex items-center justify-between gap-2">
+              <div className="min-w-0 flex items-center gap-2">
+                {t.unreadByShareholder && <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />}
+                <div className="min-w-0">
+                  <div className="font-medium text-sm truncate">{t.subject}</div>
+                  <div className="text-[11px] text-muted-foreground">{fmtDate(t.lastMessageAt)}</div>
+                </div>
+              </div>
+              <Badge variant="outline" className={`${meta.cls} shrink-0`}>{meta.label}</Badge>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
 }

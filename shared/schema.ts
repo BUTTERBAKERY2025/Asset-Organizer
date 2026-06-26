@@ -8652,6 +8652,7 @@ export const shareholderPortalSettings = pgTable("shareholder_portal_settings", 
   showVoting: boolean("show_voting").default(true).notNull(),
   showDocuments: boolean("show_documents").default(true).notNull(),
   showFinancials: boolean("show_financials").default(true).notNull(), // البيانات البنكية في الملف
+  showMessages: boolean("show_messages").default(true).notNull(), // صندوق الرسائل/الاستفسارات
   supportEmail: text("support_email"),
   supportPhone: text("support_phone"),
   enableWhatsapp: boolean("enable_whatsapp").default(true).notNull(),
@@ -8666,6 +8667,52 @@ export const insertShareholderPortalSettingsSchema = createInsertSchema(sharehol
 
 export type ShareholderPortalSettings = typeof shareholderPortalSettings.$inferSelect;
 export type InsertShareholderPortalSettings = z.infer<typeof insertShareholderPortalSettingsSchema>;
+
+// تذاكر/استفسارات المساهمين - تواصل ثنائي الاتجاه (المرحلة 2)
+export const shareholderTickets = pgTable("shareholder_tickets", {
+  id: serial("id").primaryKey(),
+  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id, { onDelete: "cascade" }),
+  subject: text("subject").notNull(),
+  status: text("status").default("new").notNull(), // new | in_progress | closed
+  unreadByAdmin: boolean("unread_by_admin").default(true).notNull(),
+  unreadByShareholder: boolean("unread_by_shareholder").default(false).notNull(),
+  lastMessageAt: timestamp("last_message_at").defaultNow().notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shareholder_tickets_shareholder").on(table.shareholderId),
+  index("idx_shareholder_tickets_status").on(table.status),
+  index("idx_shareholder_tickets_last_message").on(table.lastMessageAt),
+]);
+
+export const insertShareholderTicketSchema = createInsertSchema(shareholderTickets).omit({
+  id: true,
+  status: true,
+  unreadByAdmin: true,
+  unreadByShareholder: true,
+  lastMessageAt: true,
+  createdBy: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ShareholderTicket = typeof shareholderTickets.$inferSelect;
+export type InsertShareholderTicket = z.infer<typeof insertShareholderTicketSchema>;
+
+export const shareholderTicketMessages = pgTable("shareholder_ticket_messages", {
+  id: serial("id").primaryKey(),
+  ticketId: integer("ticket_id").notNull().references(() => shareholderTickets.id, { onDelete: "cascade" }),
+  senderType: text("sender_type").notNull(), // shareholder | admin
+  senderUserId: varchar("sender_user_id").references(() => users.id),
+  senderName: text("sender_name"),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shareholder_ticket_messages_ticket").on(table.ticketId),
+]);
+
+export type ShareholderTicketMessage = typeof shareholderTicketMessages.$inferSelect;
 
 // دعوات افتتاح الفروع للمساهمين - Branch opening invitations (personalized luxury invites)
 export const branchOpeningInvitations = pgTable("branch_opening_invitations", {

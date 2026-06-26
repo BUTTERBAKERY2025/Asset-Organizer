@@ -15,6 +15,9 @@ description: Auth/IDOR model and surface for the shareholder self-service portal
 - Meeting minutes shown/printed in the portal are ONLY signed/archived OR `isLocked=true` records — never drafts.
   - **Why:** minutes are immutable official records (Saudi Companies Law M/132); exposing drafts to shareholders would leak un-ratified content.
   - **How to apply:** the `/api/shareholder/meetings` join filters on that condition and attaches the newest such record per meeting.
+- Shareholder-facing ticket/message responses must use explicit column projection (NOT `.select()`/`select *`) to exclude internal fields like `senderUserId`/`createdBy`.
+  - **Why:** raw row select leaks internal user identifiers to shareholders; ownership gating doesn't help once the row shape is over-broad.
+  - **How to apply:** shareholder ticket detail (`/api/shareholder/tickets/:id`) selects only id/ticketId/senderType/senderName/body/createdAt. Admin side may return full rows (internal).
 - Credential delivery from the admin investor-portal uses a client-side `wa.me` deep link (prefilled message), NOT the Twilio notification queue.
   - **Why:** user reported the backend WhatsApp queue "doesn't work well"; the deep link lets the admin review and send from their own WhatsApp. Tradeoff: password passes through the admin device's wa.me URL — acceptable here since the admin generated it and the old queue also sent plaintext.
   - **How to apply:** Saudi phone normalization → international `966...` before building the URL.

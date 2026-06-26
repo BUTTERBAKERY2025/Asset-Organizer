@@ -21,6 +21,8 @@ import {
   invitationRecipients,
   insertBranchOpeningInvitationSchema,
   shareholderPortalSettings,
+  shareholderTickets,
+  shareholderTicketMessages,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -61,6 +63,7 @@ const DEFAULT_PORTAL_SETTINGS = {
   showVoting: true,
   showDocuments: true,
   showFinancials: true,
+  showMessages: true,
   supportEmail: null as string | null,
   supportPhone: null as string | null,
   enableWhatsapp: true,
@@ -94,6 +97,7 @@ function publicPortalSettings(s: any) {
     showVoting: s.showVoting ?? true,
     showDocuments: s.showDocuments ?? true,
     showFinancials: s.showFinancials ?? true,
+    showMessages: s.showMessages ?? true,
     supportEmail: s.supportEmail ?? null,
     supportPhone: s.supportPhone ?? null,
   };
@@ -108,6 +112,7 @@ const updatePortalSettingsSchema = z.object({
   showVoting: z.boolean().optional(),
   showDocuments: z.boolean().optional(),
   showFinancials: z.boolean().optional(),
+  showMessages: z.boolean().optional(),
   supportEmail: z.string().max(200).nullable().optional(),
   supportPhone: z.string().max(50).nullable().optional(),
   enableWhatsapp: z.boolean().optional(),
@@ -466,6 +471,346 @@ export function registerShareholderPortalRoutes(app: Express) {
     } catch (error) {
       console.error("Error casting vote:", error);
       res.status(500).json({ error: "فشل في تسجيل التصويت" });
+    }
+  });
+
+  // ======================================================================
+  // المرحلة 2 — التواصل ثنائي الاتجاه (صندوق الرسائل/التذاكر)
+  // ======================================================================
+  const createTicketSchema = z.object({
+    subject: z.string().trim().min(1, "الموضوع مطلوب").max(200),
+    body: z.string().trim().min(1, "الرسالة مطلوبة").max(4000),
+  });
+  const ticketReplySchema = z.object({
+    body: z.string().trim().min(1, "الرسالة مطلوبة").max(4000),
+  });
+  const ticketStatusSchema = z.object({
+    status: z.enum(["new", "in_progress", "closed"]),
+  });
+
+  function adminDisplayName(req: any): string {
+    const u = (req as any).currentUser || {};
+    return u.fullName || u.name || u.username || "الإدارة";
+  }
+
+  // ---- جهة المساهم ----
+
+  // قائمة تذاكر المساهم الحالي
+  app.get("/api/shareholder/tickets", isAuthenticated, async (req, res) => {
+    try {
+      const sh = await getMyShareholder(req);
+      if (!sh) return res.status(403).json({ error: "غير مرتبط بملف مساهم" });
+      const rows = await db
+        .select()
+        .from(shareholderTickets)
+        .where(eq(shareholderTickets.shareholderId, sh.id))
+        .orderBy(desc(shareholderTickets.lastMessageAt));
+      res.json(rows);
+    } catch (error) {
+      console.error("Error listing shareholder tickets:", error);
+      res.status(500).json({ error: "فشل في جلب الرسائل" });
+    }
+  });
+
+  // فتح استفسار جديد
+  app.post("/api/shareholder/tickets", isAuthenticated, async (req, res) => {
+    try {
+      const sh = await getMyShareholder(req);
+      if (!sh) return res.status(403).json({ error: "غير مرتبط بملف مساهم" });
+      const parsed = createTicketSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten() });
+
+      const userId = getUserId(req);
+      const ticket = await db.transaction(async (tx) => {
+        const [t] = await tx
+          .insert(shareholderTickets)
+          .values({
+            shareholderId: sh.id,
+            subject: parsed.data.subject,
+            status: "new",
+            unreadByAdmin: true,
+            unreadByShareholder: false,
+            createdBy: userId,
+          })
+          .returning();
+        await tx.insert(shareholderTicketMessages).values({
+          ticketId: t.id,
+          senderType: "shareholder",
+          senderUserId: userId,
+          senderName: sh.fullName,
+          body: parsed.data.body,
+        });
+        return t;
+      });
+
+      // إشعار جهة الدعم (إن وُجد رقم) بوجود استفسار جديد
+      try {
+        const settings = await getPortalSettings();
+        if (settings.enableWhatsapp && settings.supportPhone) {
+          await db.insert(notificationQueue).values({
+            recipientPhone: settings.supportPhone,
+            recipientName: "الدعم",
+            channel: "whatsapp",
+            message: `استفسار جديد من مساهم: ${sh.fullName}\nالموضوع: ${parsed.data.subject}`,
+            relatedModule: "shareholder_ticket",
+            relatedEntityId: String(ticket.id),
+          });
+        }
+      } catch (e) {
+        console.error("notify support failed:", e);
+      }
+
+      res.status(201).json(ticket);
+    } catch (error) {
+      console.error("Error creating shareholder ticket:", error);
+      res.status(500).json({ error: "فشل في إنشاء الاستفسار" });
+    }
+  });
+
+  // تفاصيل تذكرة + رسائلها (يجب أن تخص المساهم الحالي)
+  app.get("/api/shareholder/tickets/:id", isAuthenticated, async (req, res) => {
+    try {
+      const sh = await getMyShareholder(req);
+      if (!sh) return res.status(403).json({ error: "غير مرتبط بملف مساهم" });
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const [ticket] = await db
+        .select()
+        .from(shareholderTickets)
+        .where(and(eq(shareholderTickets.id, id), eq(shareholderTickets.shareholderId, sh.id)))
+        .limit(1);
+      if (!ticket) return res.status(404).json({ error: "الاستفسار غير موجود" });
+      const messages = await db
+        .select({
+          id: shareholderTicketMessages.id,
+          ticketId: shareholderTicketMessages.ticketId,
+          senderType: shareholderTicketMessages.senderType,
+          senderName: shareholderTicketMessages.senderName,
+          body: shareholderTicketMessages.body,
+          createdAt: shareholderTicketMessages.createdAt,
+        })
+        .from(shareholderTicketMessages)
+        .where(eq(shareholderTicketMessages.ticketId, id))
+        .orderBy(shareholderTicketMessages.createdAt);
+      if (ticket.unreadByShareholder) {
+        await db
+          .update(shareholderTickets)
+          .set({ unreadByShareholder: false })
+          .where(eq(shareholderTickets.id, id));
+      }
+      res.json({ ticket: { ...ticket, unreadByShareholder: false }, messages });
+    } catch (error) {
+      console.error("Error fetching shareholder ticket:", error);
+      res.status(500).json({ error: "فشل في جلب الاستفسار" });
+    }
+  });
+
+  // رد المساهم على تذكرته
+  app.post("/api/shareholder/tickets/:id/messages", isAuthenticated, async (req, res) => {
+    try {
+      const sh = await getMyShareholder(req);
+      if (!sh) return res.status(403).json({ error: "غير مرتبط بملف مساهم" });
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const parsed = ticketReplySchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten() });
+
+      const [ticket] = await db
+        .select()
+        .from(shareholderTickets)
+        .where(and(eq(shareholderTickets.id, id), eq(shareholderTickets.shareholderId, sh.id)))
+        .limit(1);
+      if (!ticket) return res.status(404).json({ error: "الاستفسار غير موجود" });
+
+      const userId = getUserId(req);
+      await db.transaction(async (tx) => {
+        await tx.insert(shareholderTicketMessages).values({
+          ticketId: id,
+          senderType: "shareholder",
+          senderUserId: userId,
+          senderName: sh.fullName,
+          body: parsed.data.body,
+        });
+        await tx
+          .update(shareholderTickets)
+          .set({
+            // إعادة فتح التذكرة عند رد المساهم على تذكرة مغلقة
+            status: ticket.status === "closed" ? "new" : ticket.status,
+            unreadByAdmin: true,
+            unreadByShareholder: false,
+            lastMessageAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(shareholderTickets.id, id));
+      });
+
+      res.status(201).json({ success: true });
+    } catch (error) {
+      console.error("Error adding shareholder ticket message:", error);
+      res.status(500).json({ error: "فشل في إرسال الرسالة" });
+    }
+  });
+
+  // ---- جهة الإدارة (governance_shareholders) ----
+
+  // قائمة جميع التذاكر مع اسم المساهم وفلترة بالحالة
+  app.get("/api/governance/shareholder-tickets", isAuthenticated, requirePermission("governance_shareholders", "view"), async (req, res) => {
+    try {
+      const status = typeof req.query.status === "string" ? req.query.status : null;
+      const conds = status && ["new", "in_progress", "closed"].includes(status)
+        ? eq(shareholderTickets.status, status)
+        : undefined;
+      const rows = await db
+        .select({
+          id: shareholderTickets.id,
+          shareholderId: shareholderTickets.shareholderId,
+          shareholderName: shareholders.fullName,
+          shareholderPhone: shareholders.phone,
+          subject: shareholderTickets.subject,
+          status: shareholderTickets.status,
+          unreadByAdmin: shareholderTickets.unreadByAdmin,
+          unreadByShareholder: shareholderTickets.unreadByShareholder,
+          lastMessageAt: shareholderTickets.lastMessageAt,
+          createdAt: shareholderTickets.createdAt,
+        })
+        .from(shareholderTickets)
+        .leftJoin(shareholders, eq(shareholderTickets.shareholderId, shareholders.id))
+        .where(conds as any)
+        .orderBy(desc(shareholderTickets.lastMessageAt))
+        .limit(300);
+      res.json(rows);
+    } catch (error) {
+      console.error("Error listing admin shareholder tickets:", error);
+      res.status(500).json({ error: "فشل في جلب التذاكر" });
+    }
+  });
+
+  // تفاصيل تذكرة + رسائلها (إدارة)
+  app.get("/api/governance/shareholder-tickets/:id", isAuthenticated, requirePermission("governance_shareholders", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const [ticket] = await db
+        .select({
+          id: shareholderTickets.id,
+          shareholderId: shareholderTickets.shareholderId,
+          shareholderName: shareholders.fullName,
+          shareholderPhone: shareholders.phone,
+          subject: shareholderTickets.subject,
+          status: shareholderTickets.status,
+          unreadByAdmin: shareholderTickets.unreadByAdmin,
+          unreadByShareholder: shareholderTickets.unreadByShareholder,
+          lastMessageAt: shareholderTickets.lastMessageAt,
+          createdAt: shareholderTickets.createdAt,
+        })
+        .from(shareholderTickets)
+        .leftJoin(shareholders, eq(shareholderTickets.shareholderId, shareholders.id))
+        .where(eq(shareholderTickets.id, id))
+        .limit(1);
+      if (!ticket) return res.status(404).json({ error: "التذكرة غير موجودة" });
+      const messages = await db
+        .select()
+        .from(shareholderTicketMessages)
+        .where(eq(shareholderTicketMessages.ticketId, id))
+        .orderBy(shareholderTicketMessages.createdAt);
+      if (ticket.unreadByAdmin) {
+        await db
+          .update(shareholderTickets)
+          .set({ unreadByAdmin: false })
+          .where(eq(shareholderTickets.id, id));
+      }
+      res.json({ ticket: { ...ticket, unreadByAdmin: false }, messages });
+    } catch (error) {
+      console.error("Error fetching admin shareholder ticket:", error);
+      res.status(500).json({ error: "فشل في جلب التذكرة" });
+    }
+  });
+
+  // رد الإدارة على التذكرة (+ إشعار واتساب للمساهم + إشعار داخل البوابة)
+  app.post("/api/governance/shareholder-tickets/:id/messages", isAuthenticated, requirePermission("governance_shareholders", "create"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const parsed = ticketReplySchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten() });
+
+      const [ticket] = await db.select().from(shareholderTickets).where(eq(shareholderTickets.id, id)).limit(1);
+      if (!ticket) return res.status(404).json({ error: "التذكرة غير موجودة" });
+      const [sh] = await db.select().from(shareholders).where(eq(shareholders.id, ticket.shareholderId)).limit(1);
+
+      const userId = getUserId(req);
+      const senderName = adminDisplayName(req);
+      await db.transaction(async (tx) => {
+        await tx.insert(shareholderTicketMessages).values({
+          ticketId: id,
+          senderType: "admin",
+          senderUserId: userId,
+          senderName,
+          body: parsed.data.body,
+        });
+        await tx
+          .update(shareholderTickets)
+          .set({
+            // رد الإدارة ينقل الحالة إلى "قيد المعالجة" ما لم تكن مغلقة عمداً
+            status: ticket.status === "closed" ? "closed" : "in_progress",
+            unreadByShareholder: true,
+            unreadByAdmin: false,
+            lastMessageAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(shareholderTickets.id, id));
+      });
+
+      // إشعار داخل البوابة (جرس المساهم) + واتساب
+      let whatsappQueued = false;
+      try {
+        const settings = await getPortalSettings();
+        await db.insert(shareholderNotifications).values({
+          shareholderId: ticket.shareholderId,
+          title: "رد جديد على استفسارك",
+          body: `${ticket.subject}\n\n${parsed.data.body}`,
+          sentWhatsapp: !!settings.enableWhatsapp && !!sh?.phone,
+          createdBy: userId,
+        });
+        if (settings.enableWhatsapp && sh?.phone) {
+          await db.insert(notificationQueue).values({
+            recipientPhone: sh.phone,
+            recipientName: sh.fullName,
+            channel: "whatsapp",
+            message: `لديك رد جديد على استفسارك: ${ticket.subject}\n\n${parsed.data.body}`,
+            relatedModule: "shareholder_ticket",
+            relatedEntityId: String(id),
+          });
+          whatsappQueued = true;
+        }
+      } catch (e) {
+        console.error("notify shareholder of reply failed:", e);
+      }
+
+      res.status(201).json({ success: true, whatsappQueued });
+    } catch (error) {
+      console.error("Error adding admin ticket reply:", error);
+      res.status(500).json({ error: "فشل في إرسال الرد" });
+    }
+  });
+
+  // تغيير حالة التذكرة (إدارة)
+  app.patch("/api/governance/shareholder-tickets/:id", isAuthenticated, requirePermission("governance_shareholders", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const parsed = ticketStatusSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "حالة غير صالحة" });
+      const [updated] = await db
+        .update(shareholderTickets)
+        .set({ status: parsed.data.status, updatedAt: new Date() })
+        .where(eq(shareholderTickets.id, id))
+        .returning();
+      if (!updated) return res.status(404).json({ error: "التذكرة غير موجودة" });
+      res.json({ success: true, status: updated.status });
+    } catch (error) {
+      console.error("Error updating ticket status:", error);
+      res.status(500).json({ error: "فشل في تحديث الحالة" });
     }
   });
 
