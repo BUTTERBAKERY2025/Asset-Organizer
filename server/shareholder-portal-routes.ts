@@ -20,6 +20,7 @@ import {
   branchOpeningInvitations,
   invitationRecipients,
   insertBranchOpeningInvitationSchema,
+  shareholderPortalSettings,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -49,6 +50,68 @@ async function getMyShareholder(req: any) {
     .limit(1);
   return sh || null;
 }
+
+// إعدادات البوابة (سجل مفرد id=1) — يقرأها ويُنشئها إن لم تكن موجودة
+const DEFAULT_PORTAL_SETTINGS = {
+  welcomeTitle: null as string | null,
+  welcomeMessage: null as string | null,
+  showNews: true,
+  showMeetings: true,
+  showDividends: true,
+  showVoting: true,
+  showDocuments: true,
+  showFinancials: true,
+  supportEmail: null as string | null,
+  supportPhone: null as string | null,
+  enableWhatsapp: true,
+};
+
+async function getPortalSettings() {
+  const [row] = await db.select().from(shareholderPortalSettings).where(eq(shareholderPortalSettings.id, 1)).limit(1);
+  if (row) return row;
+  try {
+    const [created] = await db
+      .insert(shareholderPortalSettings)
+      .values({ id: 1, ...DEFAULT_PORTAL_SETTINGS } as any)
+      .onConflictDoNothing()
+      .returning();
+    if (created) return created;
+  } catch {
+    /* تجاهل سباق الإنشاء المتزامن */
+  }
+  const [again] = await db.select().from(shareholderPortalSettings).where(eq(shareholderPortalSettings.id, 1)).limit(1);
+  return again || ({ id: 1, ...DEFAULT_PORTAL_SETTINGS, updatedBy: null, updatedAt: new Date() } as any);
+}
+
+// الحقول الظاهرة للمساهم فقط (بدون بيانات تدقيق)
+function publicPortalSettings(s: any) {
+  return {
+    welcomeTitle: s.welcomeTitle ?? null,
+    welcomeMessage: s.welcomeMessage ?? null,
+    showNews: s.showNews ?? true,
+    showMeetings: s.showMeetings ?? true,
+    showDividends: s.showDividends ?? true,
+    showVoting: s.showVoting ?? true,
+    showDocuments: s.showDocuments ?? true,
+    showFinancials: s.showFinancials ?? true,
+    supportEmail: s.supportEmail ?? null,
+    supportPhone: s.supportPhone ?? null,
+  };
+}
+
+const updatePortalSettingsSchema = z.object({
+  welcomeTitle: z.string().max(200).nullable().optional(),
+  welcomeMessage: z.string().max(4000).nullable().optional(),
+  showNews: z.boolean().optional(),
+  showMeetings: z.boolean().optional(),
+  showDividends: z.boolean().optional(),
+  showVoting: z.boolean().optional(),
+  showDocuments: z.boolean().optional(),
+  showFinancials: z.boolean().optional(),
+  supportEmail: z.string().max(200).nullable().optional(),
+  supportPhone: z.string().max(50).nullable().optional(),
+  enableWhatsapp: z.boolean().optional(),
+});
 
 // تحقق صلاحية كلمة المرور (نفس قواعد بوابة الموظف)
 function validatePassword(password: string): string | null {
@@ -98,6 +161,52 @@ export function registerShareholderPortalRoutes(app: Express) {
     } catch (error) {
       console.error("Error fetching shareholder profile:", error);
       res.status(500).json({ error: "فشل في جلب بيانات المساهم" });
+    }
+  });
+
+  // إعدادات البوابة الظاهرة للمساهم (الأقسام المفعّلة + رسالة الترحيب + الدعم)
+  // محصورة على حسابات المساهمين المرتبطة فقط (نفس سياسة باقي مسارات /api/shareholder)
+  app.get("/api/shareholder/portal-settings", isAuthenticated, async (req, res) => {
+    try {
+      const sh = await getMyShareholder(req);
+      if (!sh) return res.status(403).json({ error: "غير مرتبط بملف مساهم" });
+      const s = await getPortalSettings();
+      return res.json(publicPortalSettings(s));
+    } catch (error) {
+      console.error("Error fetching portal settings:", error);
+      // قيم افتراضية آمنة حتى لا تنهار البوابة
+      return res.json(publicPortalSettings(DEFAULT_PORTAL_SETTINGS));
+    }
+  });
+
+  // ===== إعدادات البوابة (إدارة) =====
+  app.get("/api/governance/shareholder-portal-settings", isAuthenticated, requirePermission("governance_shareholders", "view"), async (_req, res) => {
+    try {
+      const s = await getPortalSettings();
+      return res.json(s);
+    } catch (error) {
+      console.error("Error fetching portal settings (admin):", error);
+      res.status(500).json({ error: "فشل في جلب إعدادات البوابة" });
+    }
+  });
+
+  app.put("/api/governance/shareholder-portal-settings", isAuthenticated, requirePermission("governance_shareholders", "edit"), async (req, res) => {
+    try {
+      const parsed = updatePortalSettingsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "بيانات غير صحيحة", details: parsed.error.flatten() });
+      }
+      await getPortalSettings(); // يضمن وجود السجل
+      const userId = getUserId(req);
+      const [updated] = await db
+        .update(shareholderPortalSettings)
+        .set({ ...parsed.data, updatedBy: userId, updatedAt: new Date() })
+        .where(eq(shareholderPortalSettings.id, 1))
+        .returning();
+      return res.json(updated);
+    } catch (error) {
+      console.error("Error updating portal settings:", error);
+      res.status(500).json({ error: "فشل في حفظ إعدادات البوابة" });
     }
   });
 

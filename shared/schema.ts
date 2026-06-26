@@ -8640,6 +8640,33 @@ export const insertShareholderNotificationSchema = createInsertSchema(shareholde
 export type ShareholderNotification = typeof shareholderNotifications.$inferSelect;
 export type InsertShareholderNotification = z.infer<typeof insertShareholderNotificationSchema>;
 
+// إعدادات بوابة المساهمين - Shareholder Portal Settings (singleton row id=1)
+// تتحكم لوحة الإدارة من خلالها في الأقسام الظاهرة للمساهم ورسالة الترحيب وقنوات التواصل
+export const shareholderPortalSettings = pgTable("shareholder_portal_settings", {
+  id: serial("id").primaryKey(),
+  welcomeTitle: text("welcome_title"),
+  welcomeMessage: text("welcome_message"),
+  showNews: boolean("show_news").default(true).notNull(),
+  showMeetings: boolean("show_meetings").default(true).notNull(),
+  showDividends: boolean("show_dividends").default(true).notNull(),
+  showVoting: boolean("show_voting").default(true).notNull(),
+  showDocuments: boolean("show_documents").default(true).notNull(),
+  showFinancials: boolean("show_financials").default(true).notNull(), // البيانات البنكية في الملف
+  supportEmail: text("support_email"),
+  supportPhone: text("support_phone"),
+  enableWhatsapp: boolean("enable_whatsapp").default(true).notNull(),
+  updatedBy: varchar("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertShareholderPortalSettingsSchema = createInsertSchema(shareholderPortalSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type ShareholderPortalSettings = typeof shareholderPortalSettings.$inferSelect;
+export type InsertShareholderPortalSettings = z.infer<typeof insertShareholderPortalSettingsSchema>;
+
 // دعوات افتتاح الفروع للمساهمين - Branch opening invitations (personalized luxury invites)
 export const branchOpeningInvitations = pgTable("branch_opening_invitations", {
   id: serial("id").primaryKey(),

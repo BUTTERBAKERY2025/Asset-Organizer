@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -76,6 +76,34 @@ export default function ShareholderPortalPage() {
   const { data: documents = [] } = useQuery<any[]>({ queryKey: ["/api/shareholder/documents"], enabled: !!hasShareholder });
   const { data: notifications = [] } = useQuery<any[]>({ queryKey: ["/api/shareholder/notifications"], enabled: !!hasShareholder });
   const { data: resolutions = [] } = useQuery<any[]>({ queryKey: ["/api/shareholder/resolutions"], enabled: !!hasShareholder });
+  const { data: portalSettings } = useQuery<any>({ queryKey: ["/api/shareholder/portal-settings"], enabled: !!hasShareholder });
+
+  const settings = {
+    welcomeTitle: portalSettings?.welcomeTitle || "",
+    welcomeMessage: portalSettings?.welcomeMessage || "",
+    showNews: portalSettings?.showNews ?? true,
+    showMeetings: portalSettings?.showMeetings ?? true,
+    showDividends: portalSettings?.showDividends ?? true,
+    showVoting: portalSettings?.showVoting ?? true,
+    showDocuments: portalSettings?.showDocuments ?? true,
+    showFinancials: portalSettings?.showFinancials ?? true,
+  };
+  const sectionEnabled: Record<string, boolean> = {
+    overview: true,
+    news: settings.showNews,
+    meetings: settings.showMeetings,
+    dividends: settings.showDividends,
+    voting: settings.showVoting,
+    documents: settings.showDocuments,
+    notifications: true,
+  };
+  const navItems = NAV_ITEMS.filter((i) => sectionEnabled[i.key] !== false);
+
+  // إن أُوقف القسم المعروض حالياً، نرجع لـ "ملفي"
+  useEffect(() => {
+    if (sectionEnabled[tab] === false) setTab("overview");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, settings.showNews, settings.showMeetings, settings.showDividends, settings.showVoting, settings.showDocuments]);
 
   const markRead = useMutation({
     mutationFn: (id: number) => apiRequest("POST", `/api/shareholder/notifications/${id}/read`),
@@ -143,14 +171,16 @@ export default function ShareholderPortalPage() {
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={() => setTab("documents")}
-              className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-colors ${tab === "documents" ? "bg-amber-100 text-amber-700" : "text-muted-foreground hover:bg-muted"}`}
-              data-testid="button-header-documents"
-              aria-label="وثائقي"
-            >
-              <FileText className="w-5 h-5" />
-            </button>
+            {settings.showDocuments && (
+              <button
+                onClick={() => setTab("documents")}
+                className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-colors ${tab === "documents" ? "bg-amber-100 text-amber-700" : "text-muted-foreground hover:bg-muted"}`}
+                data-testid="button-header-documents"
+                aria-label="وثائقي"
+              >
+                <FileText className="w-5 h-5" />
+              </button>
+            )}
             <button
               onClick={() => setTab("notifications")}
               className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-colors ${tab === "notifications" ? "bg-amber-100 text-amber-700" : "text-muted-foreground hover:bg-muted"}`}
@@ -183,11 +213,18 @@ export default function ShareholderPortalPage() {
           <div className="text-lg font-bold" data-testid="text-shareholder-name">{shareholder?.fullName}</div>
         </div>
 
+        {(settings.welcomeTitle || settings.welcomeMessage) && (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/70 p-3" data-testid="card-welcome">
+            {settings.welcomeTitle && <div className="font-bold text-amber-800 text-sm">{settings.welcomeTitle}</div>}
+            {settings.welcomeMessage && <div className="text-sm text-amber-700 whitespace-pre-wrap mt-0.5">{settings.welcomeMessage}</div>}
+          </div>
+        )}
+
         {/* Hero share summary */}
         <div className="grid grid-cols-2 gap-2.5 mb-4">
           <StatCard icon={PieChart} label="نسبة الملكية" value={`${fmtNum(shareholder?.sharePercentage)}%`} accent="amber" testid="stat-percentage" />
           <StatCard icon={TrendingUp} label="عدد الأسهم" value={fmtNum(shareholder?.numberOfShares)} accent="green" testid="stat-shares" />
-          <StatCard icon={Vote} label="تصويتات مفتوحة" value={fmtNum(openVotes)} accent="purple" testid="stat-open-votes" onClick={() => setTab("voting")} />
+          {settings.showVoting && <StatCard icon={Vote} label="تصويتات مفتوحة" value={fmtNum(openVotes)} accent="purple" testid="stat-open-votes" onClick={() => setTab("voting")} />}
           <StatCard icon={Bell} label="إشعارات جديدة" value={fmtNum(unreadCount)} accent="blue" testid="stat-unread" onClick={() => setTab("notifications")} />
         </div>
 
@@ -212,14 +249,16 @@ export default function ShareholderPortalPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><CreditCard className="w-4 h-4 text-amber-600" /> البيانات البنكية</CardTitle></CardHeader>
-              <CardContent className="grid sm:grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                <InfoRow icon={Landmark} label="البنك" value={shareholder?.bankName} />
-                <InfoRow icon={CreditCard} label="رقم الحساب" value={shareholder?.bankAccountNumber} />
-                <InfoRow icon={Hash} label="الآيبان" value={shareholder?.iban} testid="info-iban" />
-              </CardContent>
-            </Card>
+            {settings.showFinancials && (
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><CreditCard className="w-4 h-4 text-amber-600" /> البيانات البنكية</CardTitle></CardHeader>
+                <CardContent className="grid sm:grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                  <InfoRow icon={Landmark} label="البنك" value={shareholder?.bankName} />
+                  <InfoRow icon={CreditCard} label="رقم الحساب" value={shareholder?.bankAccountNumber} />
+                  <InfoRow icon={Hash} label="الآيبان" value={shareholder?.iban} testid="info-iban" />
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Building2 className="w-4 h-4 text-amber-600" /> بيانات الشركة</CardTitle></CardHeader>
@@ -231,15 +270,17 @@ export default function ShareholderPortalPage() {
             </Card>
 
             {/* Quick links */}
-            <div className="grid grid-cols-2 gap-2.5">
-              <QuickLink icon={FileText} label="وثائقي" count={documents.length} onClick={() => setTab("documents")} testid="quick-documents" />
-              <QuickLink icon={Wallet} label="الأرباح" count={dividends.length} onClick={() => setTab("dividends")} testid="quick-dividends" />
-            </div>
+            {(settings.showDocuments || settings.showDividends) && (
+              <div className="grid grid-cols-2 gap-2.5">
+                {settings.showDocuments && <QuickLink icon={FileText} label="وثائقي" count={documents.length} onClick={() => setTab("documents")} testid="quick-documents" />}
+                {settings.showDividends && <QuickLink icon={Wallet} label="الأرباح" count={dividends.length} onClick={() => setTab("dividends")} testid="quick-dividends" />}
+              </div>
+            )}
           </div>
         )}
 
         {/* ===== News ===== */}
-        {tab === "news" && (
+        {tab === "news" && settings.showNews && (
           <div className="space-y-3">
             {announcements.length === 0 && <Empty text="لا توجد أخبار أو إعلانات حالياً" />}
             {announcements.map((a) => {
@@ -264,7 +305,7 @@ export default function ShareholderPortalPage() {
         )}
 
         {/* ===== Meetings ===== */}
-        {tab === "meetings" && (
+        {tab === "meetings" && settings.showMeetings && (
           <div className="space-y-3">
             {meetings.length === 0 && <Empty text="لا توجد اجتماعات مجدولة" />}
             {meetings.map((m) => (
@@ -309,7 +350,7 @@ export default function ShareholderPortalPage() {
         )}
 
         {/* ===== Dividends ===== */}
-        {tab === "dividends" && (
+        {tab === "dividends" && settings.showDividends && (
           <div className="space-y-3">
             {dividends.length === 0 && <Empty text="لا توجد توزيعات أرباح" />}
             {dividends.map((d) => (
@@ -332,7 +373,7 @@ export default function ShareholderPortalPage() {
         )}
 
         {/* ===== Voting ===== */}
-        {tab === "voting" && (
+        {tab === "voting" && settings.showVoting && (
           <div className="space-y-3">
             {resolutions.length === 0 && <Empty text="لا توجد قرارات للتصويت" />}
             {resolutions.map((r) => (
@@ -364,7 +405,7 @@ export default function ShareholderPortalPage() {
         )}
 
         {/* ===== Documents ===== */}
-        {tab === "documents" && (
+        {tab === "documents" && settings.showDocuments && (
           <div className="space-y-3">
             {documents.length === 0 && <Empty text="لا توجد وثائق" />}
             {documents.map((doc) => (
@@ -412,8 +453,8 @@ export default function ShareholderPortalPage() {
 
       {/* Bottom navigation (mobile-first) */}
       <nav className="fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t shadow-[0_-2px_10px_rgba(0,0,0,0.04)]" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-        <div className="max-w-5xl mx-auto grid grid-cols-5">
-          {NAV_ITEMS.map((item) => {
+        <div className="max-w-5xl mx-auto grid" style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}>
+          {navItems.map((item) => {
             const Icon = item.icon;
             const active = tab === item.key;
             const badge = item.key === "voting" ? openVotes : 0;

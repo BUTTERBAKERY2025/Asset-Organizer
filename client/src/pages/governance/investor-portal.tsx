@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -17,7 +17,7 @@ import {
   Users, PieChart as PieIcon, TrendingUp, UserCheck, Landmark, Megaphone, Bell,
   KeyRound, Plus, Pencil, Trash2, Send, Loader2, MessageSquare, Newspaper, Store,
   CalendarDays, ShieldCheck, Link2, Link2Off, RefreshCw, Check, Copy,
-  PartyPopper, Eye, ExternalLink, Sparkles,
+  PartyPopper, Eye, ExternalLink, Sparkles, Settings, Save, FileText,
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
 
@@ -66,6 +66,7 @@ export default function InvestorPortalPage() {
             <TabsTrigger value="announcements" data-testid="tab-announcements"><Newspaper className="w-4 h-4 ml-1" /> الأخبار والإعلانات</TabsTrigger>
             <TabsTrigger value="accounts" data-testid="tab-accounts"><KeyRound className="w-4 h-4 ml-1" /> حسابات البوابة</TabsTrigger>
             <TabsTrigger value="invitations" data-testid="tab-invitations"><PartyPopper className="w-4 h-4 ml-1" /> دعوات الافتتاح</TabsTrigger>
+            <TabsTrigger value="settings" data-testid="tab-settings"><Settings className="w-4 h-4 ml-1" /> إعدادات البوابة</TabsTrigger>
           </TabsList>
 
           {/* Dashboard */}
@@ -92,9 +93,102 @@ export default function InvestorPortalPage() {
           <TabsContent value="invitations" className="mt-4">
             <InvitationsTab toast={toast} queryClient={queryClient} />
           </TabsContent>
+
+          {/* Portal Settings */}
+          <TabsContent value="settings" className="mt-4">
+            <SettingsTab toast={toast} queryClient={queryClient} />
+          </TabsContent>
         </Tabs>
       </div>
     </Layout>
+  );
+}
+
+function SettingsTab({ toast, queryClient }: any) {
+  const { data, isLoading } = useQuery<any>({ queryKey: ["/api/governance/shareholder-portal-settings"] });
+  const [form, setForm] = useState<any>(null);
+
+  useEffect(() => {
+    if (data) {
+      setForm({
+        welcomeTitle: data.welcomeTitle || "",
+        welcomeMessage: data.welcomeMessage || "",
+        showNews: data.showNews ?? true,
+        showMeetings: data.showMeetings ?? true,
+        showDividends: data.showDividends ?? true,
+        showVoting: data.showVoting ?? true,
+        showDocuments: data.showDocuments ?? true,
+        showFinancials: data.showFinancials ?? true,
+        supportEmail: data.supportEmail || "",
+        supportPhone: data.supportPhone || "",
+        enableWhatsapp: data.enableWhatsapp ?? true,
+      });
+    }
+  }, [data]);
+
+  const save = useMutation({
+    mutationFn: () => apiRequest("PUT", "/api/governance/shareholder-portal-settings", {
+      ...form,
+      welcomeTitle: form.welcomeTitle.trim() || null,
+      welcomeMessage: form.welcomeMessage.trim() || null,
+      supportEmail: form.supportEmail.trim() || null,
+      supportPhone: form.supportPhone.trim() || null,
+    }),
+    onSuccess: () => {
+      toast({ title: "تم حفظ الإعدادات" });
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/shareholder-portal-settings"] });
+    },
+    onError: (e: any) => toast({ title: "فشل الحفظ", description: e?.message || "", variant: "destructive" }),
+  });
+
+  if (isLoading || !form) {
+    return <div className="py-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-amber-600" /></div>;
+  }
+
+  const SECTIONS = [
+    { key: "showNews", label: "الأخبار والإعلانات", icon: Newspaper },
+    { key: "showMeetings", label: "الاجتماعات والمحاضر", icon: CalendarDays },
+    { key: "showDividends", label: "توزيعات الأرباح", icon: TrendingUp },
+    { key: "showVoting", label: "التصويت على القرارات", icon: ShieldCheck },
+    { key: "showDocuments", label: "الوثائق", icon: FileText },
+    { key: "showFinancials", label: "البيانات البنكية في الملف", icon: Landmark },
+  ];
+
+  return (
+    <div className="grid lg:grid-cols-2 gap-4">
+      <Card>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Eye className="w-4 h-4 text-amber-600" /> الأقسام الظاهرة للمساهم</CardTitle></CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-xs text-muted-foreground mb-1">عند إيقاف أي قسم سيختفي تماماً من بوابة المساهم.</p>
+          {SECTIONS.map((s) => {
+            const Icon = s.icon;
+            return (
+              <div key={s.key} className="flex items-center justify-between rounded-lg border p-3">
+                <div className="flex items-center gap-2"><Icon className="w-4 h-4 text-amber-600" /><span className="text-sm">{s.label}</span></div>
+                <Switch checked={!!form[s.key]} onCheckedChange={(v) => setForm({ ...form, [s.key]: v })} data-testid={`switch-${s.key}`} />
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Sparkles className="w-4 h-4 text-amber-600" /> الترحيب والتواصل</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div><Label>عنوان الترحيب</Label><Input value={form.welcomeTitle} onChange={(e) => setForm({ ...form, welcomeTitle: e.target.value })} placeholder="أهلاً بك في بوابة المساهمين" data-testid="input-welcome-title" /></div>
+          <div><Label>رسالة الترحيب</Label><Textarea value={form.welcomeMessage} onChange={(e) => setForm({ ...form, welcomeMessage: e.target.value })} rows={3} placeholder="رسالة قصيرة تظهر للمساهم عند الدخول (اختياري)" data-testid="input-welcome-message" /></div>
+          <div><Label>بريد الدعم (اختياري)</Label><Input type="email" value={form.supportEmail} onChange={(e) => setForm({ ...form, supportEmail: e.target.value })} data-testid="input-support-email" /></div>
+          <div><Label>جوال الدعم (اختياري)</Label><Input value={form.supportPhone} onChange={(e) => setForm({ ...form, supportPhone: e.target.value })} data-testid="input-support-phone" /></div>
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <div className="flex items-center gap-2"><MessageSquare className="w-4 h-4 text-green-600" /><span className="text-sm">تفعيل إشعارات واتساب للمساهمين</span></div>
+            <Switch checked={!!form.enableWhatsapp} onCheckedChange={(v) => setForm({ ...form, enableWhatsapp: v })} data-testid="switch-enable-whatsapp" />
+          </div>
+          <Button className="w-full" disabled={save.isPending} onClick={() => save.mutate()} data-testid="button-save-settings">
+            {save.isPending ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : <Save className="w-4 h-4 ml-2" />} حفظ الإعدادات
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
