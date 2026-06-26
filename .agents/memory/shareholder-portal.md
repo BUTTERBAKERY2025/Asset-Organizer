@@ -31,3 +31,10 @@ description: Auth/IDOR model and surface for the shareholder self-service portal
   - **Why:** the app-level `SELECT pending then INSERT` / `status==='pending'` guards are race-prone; two concurrent admins or double-submits violate the invariant.
   - **How to apply:** partial unique index `uq_shareholder_pending_profile_request ON (shareholder_id) WHERE status='pending'` (catch 23505 → 409 on create). Approve/reject update with `WHERE id=? AND status='pending'` + `.returning()`; 0 rows → 409. Approve does the guarded request-update FIRST inside the txn, then applies shareholder changes, so a lost race rolls back the whole apply.
 - Shareholder-facing request list uses explicit projection (no `reviewedBy`/`createdBy`) — same internal-id-leak rule as tickets.
+
+# Printable statement & showFinancials gating
+
+- The portal `showFinancials` toggle must be enforced server-side, not just in the UI. `/api/shareholder/me` redacts bank fields (`bankName`/`bankAccountNumber`/`iban`) from the payload when `showFinancials` is off; client-only hiding still ships the data to the browser.
+  - **Why:** presentation-only gating leaves sensitive fields in the client (and in any printable HTML built from them). Honor admin intent at the payload boundary.
+  - **How to apply:** when financials are off ALSO (a) drop the 3 financial fields from `editableFields` in GET profile-requests, and (b) skip them in the create-request diff loop — otherwise the redacted-empty form seeds a spurious "clear my bank info" change request. The 3 keys live in `FINANCIAL_FIELD_KEYS`.
+- The portal builds printable docs (account statement, meetings, minutes) by `window.open` + `document.write` of an RTL HTML string via `printDoc()`; user prints to PDF. EVERY DB value interpolated MUST pass through `esc()` (about:blank origin = XSS risk). Statement content gates (financials/dividends) mirror the portal section settings.

@@ -156,6 +156,8 @@ const EDITABLE_PROFILE_FIELDS: { field: string; label: string }[] = [
   { field: "iban", label: "الآيبان (IBAN)" },
 ];
 const EDITABLE_FIELD_KEYS = EDITABLE_PROFILE_FIELDS.map((f) => f.field) as [string, ...string[]];
+// حقول مالية حسّاسة: تُخفى وتُمنع من التحرير عند إيقاف عرض البيانات المالية (showFinancials)
+const FINANCIAL_FIELD_KEYS = ["bankName", "bankAccountNumber", "iban"];
 
 const profileUpdateRequestSchema = z.object({
   // قيم الحقول المطلوبة فقط — أي حقل خارج القائمة البيضاء يُرفض
@@ -182,9 +184,16 @@ export function registerShareholderPortalRoutes(app: Express) {
         .select({ c: sql<number>`count(*)::int` })
         .from(shareholderNotifications)
         .where(and(eq(shareholderNotifications.shareholderId, sh.id), isNull(shareholderNotifications.readAt)));
+      // إخفاء البيانات المالية الحسّاسة من الحمولة عند إيقاف عرضها (تطبيق على مستوى الخادم لا الواجهة)
+      const settings = await getPortalSettings();
+      let shareholderOut: any = sh;
+      if (!settings.showFinancials) {
+        const { bankName, bankAccountNumber, iban, ...rest } = sh as any;
+        shareholderOut = rest;
+      }
       return res.json({
         hasShareholder: true,
-        shareholder: sh,
+        shareholder: shareholderOut,
         company: COMPANY_INFO,
         unreadNotifications: unread[0]?.c || 0,
       });
@@ -861,7 +870,12 @@ export function registerShareholderPortalRoutes(app: Express) {
         .from(shareholderProfileUpdateRequests)
         .where(eq(shareholderProfileUpdateRequests.shareholderId, sh.id))
         .orderBy(desc(shareholderProfileUpdateRequests.createdAt));
-      res.json({ requests: rows, editableFields: EDITABLE_PROFILE_FIELDS });
+      // أخفِ الحقول المالية من القائمة القابلة للتحرير عند إيقاف عرض البيانات المالية
+      const settings = await getPortalSettings();
+      const editableFields = settings.showFinancials
+        ? EDITABLE_PROFILE_FIELDS
+        : EDITABLE_PROFILE_FIELDS.filter((f) => !FINANCIAL_FIELD_KEYS.includes(f.field));
+      res.json({ requests: rows, editableFields });
     } catch (error) {
       console.error("Error fetching profile requests:", error);
       res.status(500).json({ error: "فشل في جلب الطلبات" });
@@ -893,6 +907,8 @@ export function registerShareholderPortalRoutes(app: Express) {
       const changes: { field: string; label: string; oldValue: string | null; newValue: string | null }[] = [];
       for (const { field, label } of EDITABLE_PROFILE_FIELDS) {
         if (!(field in parsed.data.values)) continue;
+        // تجاهل الحقول المالية عند إيقاف عرض البيانات المالية (حماية على مستوى الخادم)
+        if (!settings.showFinancials && FINANCIAL_FIELD_KEYS.includes(field)) continue;
         const newValue = norm((parsed.data.values as any)[field]);
         const oldValue = norm((sh as any)[field]);
         if (newValue !== oldValue) changes.push({ field, label, oldValue, newValue });

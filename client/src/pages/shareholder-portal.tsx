@@ -247,6 +247,14 @@ export default function ShareholderPortalPage() {
         {/* ===== Overview ===== */}
         {tab === "overview" && (
           <div className="space-y-4">
+            <Button
+              variant="outline"
+              className="w-full border-amber-300 text-amber-700 hover:bg-amber-50"
+              onClick={() => printStatement(shareholder, company, dividends, settings.showFinancials, settings.showDividends)}
+              data-testid="button-print-statement"
+            >
+              <Printer className="w-4 h-4 ml-2" /> طباعة كشف الحساب (PDF)
+            </Button>
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><User className="w-4 h-4 text-amber-600" /> بياناتي الشخصية</CardTitle></CardHeader>
               <CardContent className="grid sm:grid-cols-2 gap-x-4 gap-y-1 text-sm">
@@ -362,6 +370,16 @@ export default function ShareholderPortalPage() {
         {/* ===== Dividends ===== */}
         {tab === "dividends" && settings.showDividends && (
           <div className="space-y-3">
+            {dividends.length > 0 && (
+              <Button
+                variant="outline"
+                className="w-full border-amber-300 text-amber-700 hover:bg-amber-50"
+                onClick={() => printStatement(shareholder, company, dividends, settings.showFinancials, settings.showDividends)}
+                data-testid="button-print-statement-dividends"
+              >
+                <Printer className="w-4 h-4 ml-2" /> طباعة كشف الحساب (PDF)
+              </Button>
+            )}
             {dividends.length === 0 && <Empty text="لا توجد توزيعات أرباح" />}
             {dividends.map((d) => (
               <Card key={d.id} data-testid={`card-dividend-${d.id}`}>
@@ -572,6 +590,70 @@ function printMeeting(m: any, company: any, shareholder: any) {
   printDoc(`اجتماع - ${m.title}`, body, company, shareholder);
 }
 
+function printStatement(shareholder: any, company: any, dividends: any[], showFinancials: boolean, showDividends: boolean) {
+  const divRows = showDividends && Array.isArray(dividends) ? dividends : [];
+  const totalReceived = divRows.reduce((s, d) => s + (parseFloat(d?.myAmount) || 0), 0);
+
+  const ownership = `
+    <h2 class="sec">بيانات الملكية</h2>
+    <div class="kv">
+      <div><span class="k">الاسم:</span> ${esc(shareholder?.fullName)}</div>
+      <div><span class="k">نوع المساهم:</span> ${esc(shareholderTypeLabel(shareholder?.shareholderType))}</div>
+      <div><span class="k">الهوية / السجل:</span> ${esc(shareholder?.nationalId || shareholder?.commercialRegister)}</div>
+      <div><span class="k">الجنسية:</span> ${esc(shareholder?.nationality)}</div>
+      <div><span class="k">عدد الأسهم:</span> ${esc(fmtNum(shareholder?.numberOfShares))}</div>
+      <div><span class="k">نسبة الملكية:</span> ${esc(fmtNum(shareholder?.sharePercentage))}%</div>
+      <div><span class="k">فئة الأسهم:</span> ${esc(shareClassLabel(shareholder?.shareClass))}</div>
+      <div><span class="k">رقم الشهادة:</span> ${esc(shareholder?.certificateNumber)}</div>
+      <div><span class="k">تاريخ التملك:</span> ${esc(fmtDate(shareholder?.acquisitionDate))}</div>
+      <div><span class="k">الحالة:</span> ${esc(statusLabel(shareholder?.status))}</div>
+      <div><span class="k">الجوال:</span> ${esc(shareholder?.phone)}</div>
+      <div><span class="k">البريد:</span> ${esc(shareholder?.email)}</div>
+    </div>`;
+
+  const bank = showFinancials ? `
+    <h2 class="sec">البيانات البنكية</h2>
+    <div class="kv">
+      <div><span class="k">البنك:</span> ${esc(shareholder?.bankName)}</div>
+      <div><span class="k">رقم الحساب:</span> ${esc(shareholder?.bankAccountNumber)}</div>
+      <div><span class="k">الآيبان:</span> ${esc(shareholder?.iban)}</div>
+    </div>` : "";
+
+  const divTable = divRows.length
+    ? `
+    <h2 class="sec">توزيعات الأرباح</h2>
+    <table>
+      <thead><tr>
+        <th>البيان</th><th>تاريخ الصرف</th><th>ربح السهم (﷼)</th>
+        <th>عدد أسهمي</th><th>نصيبي (﷼)</th><th>الحالة</th>
+      </tr></thead>
+      <tbody>
+        ${divRows.map((d) => `<tr>
+          <td>توزيع ${esc(d?.fiscalYear)}</td>
+          <td>${esc(fmtDate(d?.paymentDate))}</td>
+          <td>${esc(fmtMoney(d?.amountPerShare))}</td>
+          <td>${esc(fmtNum(d?.myShares))}</td>
+          <td>${esc(fmtMoney(d?.myAmount))}</td>
+          <td>${esc(statusLabel(d?.status))}</td>
+        </tr>`).join("")}
+      </tbody>
+      <tfoot><tr>
+        <th colspan="4">إجمالي ما تم استحقاقه</th>
+        <th>${esc(fmtMoney(totalReceived))}</th><th></th>
+      </tr></tfoot>
+    </table>`
+    : `<h2 class="sec">توزيعات الأرباح</h2><div class="muted">لا توجد توزيعات أرباح مسجّلة.</div>`;
+
+  const body = `
+    <p class="doc-title">كشف حساب مساهم</p>
+    <div class="muted">${esc(company?.nameAr || "")}</div>
+    ${ownership}
+    ${bank}
+    ${divTable}
+  `;
+  printDoc("كشف حساب مساهم", body, company, shareholder);
+}
+
 function printMinutes(m: any, company: any, shareholder: any) {
   const mn = m.minutes || {};
   const attendance = Array.isArray(mn.attendanceList) ? mn.attendanceList : [];
@@ -677,7 +759,12 @@ function statusLabel(s: string): string {
     scheduled: "مجدول", in_progress: "جارٍ", completed: "منتهٍ", cancelled: "ملغى", postponed: "مؤجل",
     announced: "معلن", record_closed: "إغلاق السجل", in_payment: "قيد الصرف",
     draft: "مسودة", voting: "تصويت مفتوح", approved: "معتمد", rejected: "مرفوض", implemented: "منفّذ",
+    active: "نشط", frozen: "مجمّد", transferred: "منقول", paid: "مدفوع",
   }[s] || s || "—";
+}
+
+function shareClassLabel(c: string): string {
+  return { common: "عادية", preferred: "ممتازة", founders: "تأسيسية" }[c] || c || "عادية";
 }
 function voteLabel(v: string): string {
   return { for: "موافق", against: "غير موافق", abstain: "امتناع" }[v] || v;
