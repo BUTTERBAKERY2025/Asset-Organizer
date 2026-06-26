@@ -11,7 +11,7 @@ import {
   PieChart, Building2, Wallet, CalendarDays, FileText, Bell, Vote, User,
   TrendingUp, MapPin, Clock, CheckCircle2, Newspaper, Megaphone, Store,
   Landmark, LogOut, Loader2, Phone, Mail, CreditCard, Hash, Printer,
-  ScrollText, ChevronLeft, MessageSquare, Send, Plus,
+  ScrollText, ChevronLeft, MessageSquare, Send, Plus, UserCog, Save,
 } from "lucide-react";
 import logoUrl from "@assets/logo_-5_1765206843638.png";
 
@@ -51,6 +51,7 @@ const NAV_ITEMS = [
   { key: "dividends", label: "الأرباح", icon: Wallet },
   { key: "voting", label: "التصويت", icon: Vote },
   { key: "messages", label: "الرسائل", icon: MessageSquare },
+  { key: "profile-edits", label: "تحديث بياناتي", icon: UserCog },
 ];
 
 const SECTION_TITLES: Record<string, string> = {
@@ -62,6 +63,7 @@ const SECTION_TITLES: Record<string, string> = {
   documents: "وثائقي",
   notifications: "الإشعارات",
   messages: "الرسائل والاستفسارات",
+  "profile-edits": "تحديث بياناتي",
 };
 
 export default function ShareholderPortalPage() {
@@ -92,6 +94,7 @@ export default function ShareholderPortalPage() {
     showDocuments: portalSettings?.showDocuments ?? true,
     showFinancials: portalSettings?.showFinancials ?? true,
     showMessages: portalSettings?.showMessages ?? true,
+    showProfileEdits: portalSettings?.showProfileEdits ?? true,
   };
   const sectionEnabled: Record<string, boolean> = {
     overview: true,
@@ -101,6 +104,7 @@ export default function ShareholderPortalPage() {
     voting: settings.showVoting,
     documents: settings.showDocuments,
     messages: settings.showMessages,
+    "profile-edits": settings.showProfileEdits,
     notifications: true,
   };
   const navItems = NAV_ITEMS.filter((i) => sectionEnabled[i.key] !== false);
@@ -109,7 +113,7 @@ export default function ShareholderPortalPage() {
   useEffect(() => {
     if (sectionEnabled[tab] === false) setTab("overview");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, settings.showNews, settings.showMeetings, settings.showDividends, settings.showVoting, settings.showDocuments, settings.showMessages]);
+  }, [tab, settings.showNews, settings.showMeetings, settings.showDividends, settings.showVoting, settings.showDocuments, settings.showMessages, settings.showProfileEdits]);
 
   const markRead = useMutation({
     mutationFn: (id: number) => apiRequest("POST", `/api/shareholder/notifications/${id}/read`),
@@ -459,6 +463,11 @@ export default function ShareholderPortalPage() {
         {/* ===== Messages / Tickets ===== */}
         {tab === "messages" && settings.showMessages && (
           <ShareholderMessages />
+        )}
+
+        {/* ===== Profile update requests ===== */}
+        {tab === "profile-edits" && settings.showProfileEdits && (
+          <ShareholderProfileEdits shareholder={shareholder} />
         )}
       </main>
 
@@ -843,6 +852,140 @@ function ShareholderMessages() {
           </Card>
         );
       })}
+    </div>
+  );
+}
+
+/* ===================== Profile update requests (shareholder) ===================== */
+
+const REQ_STATUS_META: Record<string, { label: string; cls: string }> = {
+  pending: { label: "قيد المراجعة", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  approved: { label: "تمت الموافقة", cls: "bg-green-50 text-green-700 border-green-200" },
+  rejected: { label: "مرفوض", cls: "bg-red-50 text-red-700 border-red-200" },
+};
+
+function ShareholderProfileEdits({ shareholder }: { shareholder: any }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [note, setNote] = useState("");
+
+  const { data, isLoading } = useQuery<any>({ queryKey: ["/api/shareholder/profile-requests"] });
+  const editableFields: { field: string; label: string }[] = data?.editableFields || [];
+  const requests: any[] = data?.requests || [];
+  const hasPending = requests.some((r) => r.status === "pending");
+
+  const startEdit = () => {
+    const init: Record<string, string> = {};
+    for (const f of editableFields) init[f.field] = shareholder?.[f.field] ?? "";
+    setValues(init);
+    setNote("");
+    setEditing(true);
+  };
+
+  const submit = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/shareholder/profile-requests", { values, note: note || undefined }),
+    onSuccess: () => {
+      toast({ title: "تم إرسال طلب التحديث", description: "سيتم إشعارك عند مراجعته من الإدارة" });
+      setEditing(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/shareholder/profile-requests"] });
+    },
+    onError: (e: any) => toast({ title: "تعذّر الإرسال", description: e?.message || "", variant: "destructive" }),
+  });
+
+  if (isLoading) return <div className="py-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-amber-600" /></div>;
+
+  // نموذج التعديل
+  if (editing) {
+    return (
+      <div className="space-y-3 max-w-2xl">
+        <button onClick={() => setEditing(false)} className="flex items-center gap-1 text-sm text-amber-700" data-testid="button-cancel-profile-edit">
+          <ChevronLeft className="w-4 h-4 rotate-180" /> رجوع
+        </button>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">طلب تحديث البيانات</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {editableFields.map((f) => (
+              <div key={f.field} className="space-y-1">
+                <label className="text-xs text-muted-foreground">{f.label}</label>
+                <Input
+                  value={values[f.field] ?? ""}
+                  onChange={(e) => setValues((v) => ({ ...v, [f.field]: e.target.value }))}
+                  data-testid={`input-profile-${f.field}`}
+                />
+              </div>
+            ))}
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">ملاحظة (اختياري)</label>
+              <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="سبب التعديل..." data-testid="input-profile-note" />
+            </div>
+            <Button onClick={() => submit.mutate()} disabled={submit.isPending} className="w-full bg-amber-600 hover:bg-amber-700" data-testid="button-submit-profile-request">
+              {submit.isPending ? <Loader2 className="w-4 h-4 animate-spin ml-1" /> : <Save className="w-4 h-4 ml-1" />}
+              إرسال الطلب
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // العرض الرئيسي: البيانات الحالية + الطلبات السابقة
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <Card>
+        <CardHeader className="pb-2 flex-row items-center justify-between">
+          <CardTitle className="text-sm">بياناتي الحالية</CardTitle>
+          {!hasPending && (
+            <Button size="sm" onClick={startEdit} className="bg-amber-600 hover:bg-amber-700 h-8" data-testid="button-request-profile-edit">
+              <UserCog className="w-4 h-4 ml-1" /> طلب تعديل
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {hasPending && (
+            <div className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-lg px-3 py-2" data-testid="text-pending-notice">
+              لديك طلب قيد المراجعة. لا يمكن إرسال طلب جديد حتى يتم البت فيه.
+            </div>
+          )}
+          {editableFields.map((f) => (
+            <div key={f.field} className="flex items-center justify-between text-sm border-b last:border-0 py-1.5">
+              <span className="text-muted-foreground">{f.label}</span>
+              <span className="font-medium" data-testid={`text-current-${f.field}`}>{shareholder?.[f.field] || "—"}</span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold px-1">طلباتي السابقة</h3>
+        {requests.length === 0 && <div className="text-center text-muted-foreground py-6 text-sm">لا توجد طلبات سابقة</div>}
+        {requests.map((r) => {
+          const meta = REQ_STATUS_META[r.status] || REQ_STATUS_META.pending;
+          const changes: any[] = Array.isArray(r.changes) ? r.changes : [];
+          return (
+            <Card key={r.id} data-testid={`card-profile-request-${r.id}`}>
+              <CardContent className="py-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">{fmtDate(r.createdAt)}</span>
+                  <Badge variant="outline" className={meta.cls}>{meta.label}</Badge>
+                </div>
+                <div className="space-y-1">
+                  {changes.map((c, i) => (
+                    <div key={i} className="text-xs flex flex-wrap items-center gap-1">
+                      <span className="text-muted-foreground">{c.label}:</span>
+                      <span className="line-through text-red-400">{c.oldValue || "—"}</span>
+                      <ChevronLeft className="w-3 h-3 text-muted-foreground" />
+                      <span className="text-green-600 font-medium">{c.newValue || "—"}</span>
+                    </div>
+                  ))}
+                </div>
+                {r.reviewNote && <div className="text-xs text-muted-foreground border-t pt-1">ملاحظة الإدارة: {r.reviewNote}</div>}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }

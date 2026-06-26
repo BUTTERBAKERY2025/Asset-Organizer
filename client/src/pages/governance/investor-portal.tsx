@@ -18,7 +18,7 @@ import {
   KeyRound, Plus, Pencil, Trash2, Send, Loader2, MessageSquare, Newspaper, Store,
   CalendarDays, ShieldCheck, Link2, Link2Off, RefreshCw, Check, Copy,
   PartyPopper, Eye, ExternalLink, Sparkles, Settings, Save, FileText,
-  Inbox, ChevronLeft,
+  Inbox, ChevronLeft, UserCog, CheckCircle2, XCircle,
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
 
@@ -65,6 +65,7 @@ export default function InvestorPortalPage() {
             <TabsTrigger value="dashboard" data-testid="tab-dashboard"><PieIcon className="w-4 h-4 ml-1" /> لوحة التحكم</TabsTrigger>
             <TabsTrigger value="communication" data-testid="tab-communication"><MessageSquare className="w-4 h-4 ml-1" /> التواصل</TabsTrigger>
             <TabsTrigger value="tickets" data-testid="tab-tickets"><Inbox className="w-4 h-4 ml-1" /> صندوق الرسائل</TabsTrigger>
+            <TabsTrigger value="profile-requests" data-testid="tab-profile-requests"><UserCog className="w-4 h-4 ml-1" /> طلبات التحديث</TabsTrigger>
             <TabsTrigger value="announcements" data-testid="tab-announcements"><Newspaper className="w-4 h-4 ml-1" /> الأخبار والإعلانات</TabsTrigger>
             <TabsTrigger value="accounts" data-testid="tab-accounts"><KeyRound className="w-4 h-4 ml-1" /> حسابات البوابة</TabsTrigger>
             <TabsTrigger value="invitations" data-testid="tab-invitations"><PartyPopper className="w-4 h-4 ml-1" /> دعوات الافتتاح</TabsTrigger>
@@ -84,6 +85,11 @@ export default function InvestorPortalPage() {
           {/* Tickets / Messages inbox */}
           <TabsContent value="tickets" className="mt-4">
             <TicketsTab toast={toast} queryClient={queryClient} />
+          </TabsContent>
+
+          {/* Profile update requests */}
+          <TabsContent value="profile-requests" className="mt-4">
+            <ProfileRequestsTab toast={toast} queryClient={queryClient} />
           </TabsContent>
 
           {/* Announcements */}
@@ -127,6 +133,7 @@ function SettingsTab({ toast, queryClient }: any) {
         showDocuments: data.showDocuments ?? true,
         showFinancials: data.showFinancials ?? true,
         showMessages: data.showMessages ?? true,
+        showProfileEdits: data.showProfileEdits ?? true,
         supportEmail: data.supportEmail || "",
         supportPhone: data.supportPhone || "",
         enableWhatsapp: data.enableWhatsapp ?? true,
@@ -161,6 +168,7 @@ function SettingsTab({ toast, queryClient }: any) {
     { key: "showDocuments", label: "الوثائق", icon: FileText },
     { key: "showFinancials", label: "البيانات البنكية في الملف", icon: Landmark },
     { key: "showMessages", label: "صندوق الرسائل والاستفسارات", icon: Inbox },
+    { key: "showProfileEdits", label: "طلبات تحديث البيانات الذاتية", icon: UserCog },
   ];
 
   return (
@@ -996,6 +1004,134 @@ function TicketsTab({ toast, queryClient }: any) {
                   </div>
                 </div>
                 <Badge variant="outline" className={`${meta.cls} shrink-0`}>{meta.label}</Badge>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ===================== Profile update requests (admin) ===================== */
+
+const REQ_STATUS_META: Record<string, { label: string; cls: string }> = {
+  pending: { label: "قيد المراجعة", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  approved: { label: "تمت الموافقة", cls: "bg-green-50 text-green-700 border-green-200" },
+  rejected: { label: "مرفوض", cls: "bg-red-50 text-red-700 border-red-200" },
+};
+
+function ProfileRequestsTab({ toast, queryClient }: any) {
+  const [statusFilter, setStatusFilter] = useState<string>("pending");
+  const [reviewId, setReviewId] = useState<number | null>(null);
+  const [reviewNote, setReviewNote] = useState("");
+
+  const { data: requests = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/governance/profile-requests", statusFilter],
+    queryFn: () => {
+      const qs = statusFilter !== "all" ? `?status=${statusFilter}` : "";
+      return fetch(`/api/governance/profile-requests${qs}`, { credentials: "include" }).then((r) => {
+        if (!r.ok) throw new Error("فشل في جلب الطلبات");
+        return r.json();
+      });
+    },
+  });
+
+  const refreshAll = () => queryClient.invalidateQueries({ queryKey: ["/api/governance/profile-requests"] });
+
+  const review = useMutation({
+    mutationFn: ({ id, action }: { id: number; action: "approve" | "reject" }) =>
+      apiRequest("POST", `/api/governance/profile-requests/${id}/${action}`, { reviewNote: reviewNote || undefined }),
+    onSuccess: (res: any, vars) => {
+      toast({
+        title: vars.action === "approve" ? "تمت الموافقة وتحديث البيانات" : "تم رفض الطلب",
+        description: res?.whatsappQueued ? "تم إرسال إشعار واتساب للمساهم" : undefined,
+      });
+      setReviewId(null);
+      setReviewNote("");
+      refreshAll();
+    },
+    onError: (e: any) => toast({ title: "تعذّر تنفيذ الإجراء", description: e?.message || "", variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="h-9 w-[180px]" data-testid="select-request-status-filter"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="pending">قيد المراجعة</SelectItem>
+            <SelectItem value="approved">تمت الموافقة</SelectItem>
+            <SelectItem value="rejected">مرفوض</SelectItem>
+            <SelectItem value="all">الكل</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isLoading && <div className="py-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-amber-600" /></div>}
+      {!isLoading && requests.length === 0 && <Empty />}
+
+      <div className="space-y-2">
+        {requests.map((r) => {
+          const meta = REQ_STATUS_META[r.status] || REQ_STATUS_META.pending;
+          const changes: any[] = Array.isArray(r.changes) ? r.changes : [];
+          const isReviewing = reviewId === r.id;
+          return (
+            <Card key={r.id} data-testid={`card-profile-request-${r.id}`}>
+              <CardContent className="py-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-medium text-sm truncate">{r.shareholderName}</div>
+                    <div className="text-[11px] text-muted-foreground">{r.shareholderPhone || "—"} • {fmtDate(r.createdAt)}</div>
+                  </div>
+                  <Badge variant="outline" className={`${meta.cls} shrink-0`}>{meta.label}</Badge>
+                </div>
+
+                <div className="space-y-1 bg-muted/40 rounded-lg p-2">
+                  {changes.map((c, i) => (
+                    <div key={i} className="text-xs flex flex-wrap items-center gap-1">
+                      <span className="text-muted-foreground">{c.label}:</span>
+                      <span className="line-through text-red-400">{c.oldValue || "—"}</span>
+                      <ChevronLeft className="w-3 h-3 text-muted-foreground" />
+                      <span className="text-green-600 font-medium">{c.newValue || "—"}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {r.note && <div className="text-xs text-muted-foreground">ملاحظة المساهم: {r.note}</div>}
+                {r.reviewNote && <div className="text-xs text-muted-foreground border-t pt-1">ملاحظة الإدارة: {r.reviewNote}</div>}
+
+                {r.status === "pending" && !isReviewing && (
+                  <div className="flex gap-2 pt-1">
+                    <Button size="sm" onClick={() => { setReviewId(r.id); setReviewNote(""); }} className="bg-green-600 hover:bg-green-700 h-8" data-testid={`button-review-${r.id}`}>
+                      مراجعة الطلب
+                    </Button>
+                  </div>
+                )}
+
+                {isReviewing && (
+                  <div className="space-y-2 border-t pt-2">
+                    <Textarea
+                      value={reviewNote}
+                      onChange={(e) => setReviewNote(e.target.value)}
+                      rows={2}
+                      placeholder="ملاحظة المراجعة (اختياري — تظهر للمساهم)"
+                      className="resize-none"
+                      data-testid="input-review-note"
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" disabled={review.isPending} onClick={() => review.mutate({ id: r.id, action: "approve" })} className="bg-green-600 hover:bg-green-700 h-8 flex-1" data-testid={`button-approve-${r.id}`}>
+                        <CheckCircle2 className="w-4 h-4 ml-1" /> موافقة وتطبيق
+                      </Button>
+                      <Button size="sm" disabled={review.isPending} variant="destructive" onClick={() => review.mutate({ id: r.id, action: "reject" })} className="h-8 flex-1" data-testid={`button-reject-${r.id}`}>
+                        <XCircle className="w-4 h-4 ml-1" /> رفض
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setReviewId(null)} className="h-8" data-testid={`button-cancel-review-${r.id}`}>
+                        إلغاء
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           );

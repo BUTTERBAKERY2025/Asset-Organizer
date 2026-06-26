@@ -8653,6 +8653,7 @@ export const shareholderPortalSettings = pgTable("shareholder_portal_settings", 
   showDocuments: boolean("show_documents").default(true).notNull(),
   showFinancials: boolean("show_financials").default(true).notNull(), // البيانات البنكية في الملف
   showMessages: boolean("show_messages").default(true).notNull(), // صندوق الرسائل/الاستفسارات
+  showProfileEdits: boolean("show_profile_edits").default(true).notNull(), // طلبات تحديث البيانات الذاتية
   supportEmail: text("support_email"),
   supportPhone: text("support_phone"),
   enableWhatsapp: boolean("enable_whatsapp").default(true).notNull(),
@@ -8713,6 +8714,30 @@ export const shareholderTicketMessages = pgTable("shareholder_ticket_messages", 
 ]);
 
 export type ShareholderTicketMessage = typeof shareholderTicketMessages.$inferSelect;
+
+// طلبات تحديث بيانات المساهم الذاتية - Self-service profile update requests (المرحلة 3)
+export const shareholderProfileUpdateRequests = pgTable("shareholder_profile_update_requests", {
+  id: serial("id").primaryKey(),
+  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id, { onDelete: "cascade" }),
+  changes: jsonb("changes").notNull(), // [{ field, label, oldValue, newValue }]
+  note: text("note"), // ملاحظة المساهم (سبب التعديل)
+  status: text("status").default("pending").notNull(), // pending | approved | rejected
+  reviewNote: text("review_note"), // ملاحظة الإدارة عند المراجعة
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shareholder_profile_requests_shareholder").on(table.shareholderId),
+  index("idx_shareholder_profile_requests_status").on(table.status),
+  // طلب معلّق واحد فقط لكل مساهم (حماية من التضارب على مستوى قاعدة البيانات)
+  uniqueIndex("uq_shareholder_pending_profile_request")
+    .on(table.shareholderId)
+    .where(sql`status = 'pending'`),
+]);
+
+export type ShareholderProfileUpdateRequest = typeof shareholderProfileUpdateRequests.$inferSelect;
 
 // دعوات افتتاح الفروع للمساهمين - Branch opening invitations (personalized luxury invites)
 export const branchOpeningInvitations = pgTable("branch_opening_invitations", {

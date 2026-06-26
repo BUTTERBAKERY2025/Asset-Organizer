@@ -21,3 +21,13 @@ description: Auth/IDOR model and surface for the shareholder self-service portal
 - Credential delivery from the admin investor-portal uses a client-side `wa.me` deep link (prefilled message), NOT the Twilio notification queue.
   - **Why:** user reported the backend WhatsApp queue "doesn't work well"; the deep link lets the admin review and send from their own WhatsApp. Tradeoff: password passes through the admin device's wa.me URL — acceptable here since the admin generated it and the old queue also sent plaintext.
   - **How to apply:** Saudi phone normalization → international `966...` before building the URL.
+
+# Profile-update requests (self-service with approval)
+
+- Shareholders never mutate their own row directly. Edits to a WHITELISTED field set (phone/email/address/bankName/bankAccountNumber/iban) become approval requests; admin approval applies them atomically to `shareholders` + notifies. Each request row is the audit trail.
+  - **Why:** bank/contact fields are sensitive; direct self-edit = fraud/mass-assignment risk. Approval + immutable per-row audit gives accountability.
+  - **How to apply:** whitelist enforced on BOTH create (build diff only from allowed fields) AND approve (rebuild updateSet only from `EDITABLE_FIELD_KEYS`) — never trust the stored `changes` blob blindly.
+- "One pending request per shareholder" and "review once" are enforced at the DB layer, not just by a read-then-write check.
+  - **Why:** the app-level `SELECT pending then INSERT` / `status==='pending'` guards are race-prone; two concurrent admins or double-submits violate the invariant.
+  - **How to apply:** partial unique index `uq_shareholder_pending_profile_request ON (shareholder_id) WHERE status='pending'` (catch 23505 → 409 on create). Approve/reject update with `WHERE id=? AND status='pending'` + `.returning()`; 0 rows → 409. Approve does the guarded request-update FIRST inside the txn, then applies shareholder changes, so a lost race rolls back the whole apply.
+- Shareholder-facing request list uses explicit projection (no `reviewedBy`/`createdBy`) — same internal-id-leak rule as tickets.

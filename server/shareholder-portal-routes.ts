@@ -23,6 +23,7 @@ import {
   shareholderPortalSettings,
   shareholderTickets,
   shareholderTicketMessages,
+  shareholderProfileUpdateRequests,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -64,6 +65,7 @@ const DEFAULT_PORTAL_SETTINGS = {
   showDocuments: true,
   showFinancials: true,
   showMessages: true,
+  showProfileEdits: true,
   supportEmail: null as string | null,
   supportPhone: null as string | null,
   enableWhatsapp: true,
@@ -98,6 +100,7 @@ function publicPortalSettings(s: any) {
     showDocuments: s.showDocuments ?? true,
     showFinancials: s.showFinancials ?? true,
     showMessages: s.showMessages ?? true,
+    showProfileEdits: s.showProfileEdits ?? true,
     supportEmail: s.supportEmail ?? null,
     supportPhone: s.supportPhone ?? null,
   };
@@ -113,6 +116,7 @@ const updatePortalSettingsSchema = z.object({
   showDocuments: z.boolean().optional(),
   showFinancials: z.boolean().optional(),
   showMessages: z.boolean().optional(),
+  showProfileEdits: z.boolean().optional(),
   supportEmail: z.string().max(200).nullable().optional(),
   supportPhone: z.string().max(50).nullable().optional(),
   enableWhatsapp: z.boolean().optional(),
@@ -140,6 +144,27 @@ const sendNotificationSchema = z.object({
 const voteSchema = z.object({
   vote: z.enum(["for", "against", "abstain"]),
   comments: z.string().max(1000).optional(),
+});
+
+// الحقول التي يُسمح للمساهم بطلب تعديلها ذاتياً (المرحلة 3) — مع التسميات العربية
+const EDITABLE_PROFILE_FIELDS: { field: string; label: string }[] = [
+  { field: "phone", label: "رقم الجوال" },
+  { field: "email", label: "البريد الإلكتروني" },
+  { field: "address", label: "العنوان" },
+  { field: "bankName", label: "اسم البنك" },
+  { field: "bankAccountNumber", label: "رقم الحساب البنكي" },
+  { field: "iban", label: "الآيبان (IBAN)" },
+];
+const EDITABLE_FIELD_KEYS = EDITABLE_PROFILE_FIELDS.map((f) => f.field) as [string, ...string[]];
+
+const profileUpdateRequestSchema = z.object({
+  // قيم الحقول المطلوبة فقط — أي حقل خارج القائمة البيضاء يُرفض
+  values: z.record(z.enum(EDITABLE_FIELD_KEYS), z.string().trim().max(500).nullable()),
+  note: z.string().max(1000).optional(),
+});
+
+const profileReviewSchema = z.object({
+  reviewNote: z.string().max(1000).optional(),
 });
 
 export function registerShareholderPortalRoutes(app: Express) {
@@ -811,6 +836,256 @@ export function registerShareholderPortalRoutes(app: Express) {
     } catch (error) {
       console.error("Error updating ticket status:", error);
       res.status(500).json({ error: "فشل في تحديث الحالة" });
+    }
+  });
+
+  // ======================================================================
+  // طلبات تحديث البيانات الذاتية (المرحلة 3) — Self-service profile updates
+  // ======================================================================
+
+  // قائمة طلبات المساهم الحالي
+  app.get("/api/shareholder/profile-requests", isAuthenticated, async (req, res) => {
+    try {
+      const sh = await getMyShareholder(req);
+      if (!sh) return res.status(403).json({ error: "غير مرتبط بملف مساهم" });
+      const rows = await db
+        .select({
+          id: shareholderProfileUpdateRequests.id,
+          changes: shareholderProfileUpdateRequests.changes,
+          note: shareholderProfileUpdateRequests.note,
+          status: shareholderProfileUpdateRequests.status,
+          reviewNote: shareholderProfileUpdateRequests.reviewNote,
+          reviewedAt: shareholderProfileUpdateRequests.reviewedAt,
+          createdAt: shareholderProfileUpdateRequests.createdAt,
+        })
+        .from(shareholderProfileUpdateRequests)
+        .where(eq(shareholderProfileUpdateRequests.shareholderId, sh.id))
+        .orderBy(desc(shareholderProfileUpdateRequests.createdAt));
+      res.json({ requests: rows, editableFields: EDITABLE_PROFILE_FIELDS });
+    } catch (error) {
+      console.error("Error fetching profile requests:", error);
+      res.status(500).json({ error: "فشل في جلب الطلبات" });
+    }
+  });
+
+  // إنشاء طلب تحديث بيانات
+  app.post("/api/shareholder/profile-requests", isAuthenticated, async (req, res) => {
+    try {
+      const sh = await getMyShareholder(req);
+      if (!sh) return res.status(403).json({ error: "غير مرتبط بملف مساهم" });
+
+      const settings = await getPortalSettings();
+      if (!settings.showProfileEdits) return res.status(403).json({ error: "خدمة تحديث البيانات غير مفعّلة" });
+
+      const parsed = profileUpdateRequestSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten() });
+
+      // امنع وجود طلب معلّق آخر لتجنّب التضارب
+      const [pending] = await db
+        .select({ id: shareholderProfileUpdateRequests.id })
+        .from(shareholderProfileUpdateRequests)
+        .where(and(eq(shareholderProfileUpdateRequests.shareholderId, sh.id), eq(shareholderProfileUpdateRequests.status, "pending")))
+        .limit(1);
+      if (pending) return res.status(409).json({ error: "لديك طلب قيد المراجعة بالفعل. الرجاء انتظار البت فيه." });
+
+      // احسب الفروقات الفعلية فقط (تجاهل القيم غير المتغيّرة) من القائمة البيضاء
+      const norm = (v: any) => (v === undefined || v === null || String(v).trim() === "" ? null : String(v).trim());
+      const changes: { field: string; label: string; oldValue: string | null; newValue: string | null }[] = [];
+      for (const { field, label } of EDITABLE_PROFILE_FIELDS) {
+        if (!(field in parsed.data.values)) continue;
+        const newValue = norm((parsed.data.values as any)[field]);
+        const oldValue = norm((sh as any)[field]);
+        if (newValue !== oldValue) changes.push({ field, label, oldValue, newValue });
+      }
+      if (changes.length === 0) return res.status(400).json({ error: "لا توجد تغييرات على البيانات" });
+
+      const userId = getUserId(req);
+      const [created] = await db
+        .insert(shareholderProfileUpdateRequests)
+        .values({
+          shareholderId: sh.id,
+          changes,
+          note: parsed.data.note || null,
+          status: "pending",
+          createdBy: userId,
+        } as any)
+        .returning();
+
+      res.status(201).json(created);
+    } catch (error: any) {
+      // حماية على مستوى قاعدة البيانات ضد التضارب (إنشاء طلبين معلّقين معًا)
+      if (error?.code === "23505") {
+        return res.status(409).json({ error: "لديك طلب قيد المراجعة بالفعل. الرجاء انتظار البت فيه." });
+      }
+      console.error("Error creating profile request:", error);
+      res.status(500).json({ error: "فشل في إنشاء الطلب" });
+    }
+  });
+
+  // ---- جهة الإدارة (governance_shareholders) ----
+
+  // قائمة طلبات التحديث مع اسم المساهم + فلتر بالحالة
+  app.get("/api/governance/profile-requests", isAuthenticated, requirePermission("governance_shareholders", "view"), async (req, res) => {
+    try {
+      const status = typeof req.query.status === "string" ? req.query.status : null;
+      const conds: any[] = [];
+      if (status && ["pending", "approved", "rejected"].includes(status)) {
+        conds.push(eq(shareholderProfileUpdateRequests.status, status));
+      }
+      const rows = await db
+        .select({
+          id: shareholderProfileUpdateRequests.id,
+          shareholderId: shareholderProfileUpdateRequests.shareholderId,
+          shareholderName: shareholders.fullName,
+          shareholderPhone: shareholders.phone,
+          changes: shareholderProfileUpdateRequests.changes,
+          note: shareholderProfileUpdateRequests.note,
+          status: shareholderProfileUpdateRequests.status,
+          reviewNote: shareholderProfileUpdateRequests.reviewNote,
+          reviewedAt: shareholderProfileUpdateRequests.reviewedAt,
+          createdAt: shareholderProfileUpdateRequests.createdAt,
+        })
+        .from(shareholderProfileUpdateRequests)
+        .innerJoin(shareholders, eq(shareholders.id, shareholderProfileUpdateRequests.shareholderId))
+        .where(conds.length ? and(...conds) : undefined)
+        .orderBy(desc(shareholderProfileUpdateRequests.createdAt));
+      res.json(rows);
+    } catch (error) {
+      console.error("Error fetching admin profile requests:", error);
+      res.status(500).json({ error: "فشل في جلب الطلبات" });
+    }
+  });
+
+  // الموافقة على الطلب: يطبّق التغييرات على ملف المساهم ذرّياً + إشعار
+  app.post("/api/governance/profile-requests/:id/approve", isAuthenticated, requirePermission("governance_shareholders", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const parsed = profileReviewSchema.safeParse(req.body || {});
+      if (!parsed.success) return res.status(400).json({ error: "بيانات غير صالحة" });
+
+      const [reqRow] = await db.select().from(shareholderProfileUpdateRequests).where(eq(shareholderProfileUpdateRequests.id, id)).limit(1);
+      if (!reqRow) return res.status(404).json({ error: "الطلب غير موجود" });
+      if (reqRow.status !== "pending") return res.status(409).json({ error: "تمت مراجعة هذا الطلب مسبقاً" });
+
+      const [sh] = await db.select().from(shareholders).where(eq(shareholders.id, reqRow.shareholderId)).limit(1);
+      if (!sh) return res.status(404).json({ error: "المساهم غير موجود" });
+
+      // ابنِ خريطة التحديث من القائمة البيضاء فقط (حماية إضافية)
+      const changes = Array.isArray(reqRow.changes) ? (reqRow.changes as any[]) : [];
+      const updateSet: Record<string, any> = {};
+      for (const c of changes) {
+        if (EDITABLE_FIELD_KEYS.includes(c.field)) updateSet[c.field] = c.newValue ?? null;
+      }
+
+      const userId = getUserId(req);
+      try {
+        await db.transaction(async (tx) => {
+          // حارس ذرّي: لا يُحدّث إلا إذا كان الطلب لا يزال معلّقاً (يمنع مراجعة مزدوجة متزامنة)
+          const guard = await tx
+            .update(shareholderProfileUpdateRequests)
+            .set({ status: "approved", reviewNote: parsed.data.reviewNote || null, reviewedBy: userId, reviewedAt: new Date(), updatedAt: new Date() })
+            .where(and(eq(shareholderProfileUpdateRequests.id, id), eq(shareholderProfileUpdateRequests.status, "pending")))
+            .returning({ id: shareholderProfileUpdateRequests.id });
+          if (guard.length === 0) throw new Error("__ALREADY_REVIEWED__");
+          if (Object.keys(updateSet).length > 0) {
+            await tx
+              .update(shareholders)
+              .set({ ...updateSet, updatedAt: new Date() })
+              .where(eq(shareholders.id, reqRow.shareholderId));
+          }
+        });
+      } catch (e: any) {
+        if (e?.message === "__ALREADY_REVIEWED__") return res.status(409).json({ error: "تمت مراجعة هذا الطلب مسبقاً" });
+        throw e;
+      }
+
+      // إشعار المساهم (بوابة + واتساب)
+      let whatsappQueued = false;
+      try {
+        const settings = await getPortalSettings();
+        await db.insert(shareholderNotifications).values({
+          shareholderId: reqRow.shareholderId,
+          title: "تم اعتماد طلب تحديث بياناتك",
+          body: "تمت الموافقة على طلب تحديث بياناتك وتحديثها في النظام.",
+          sentWhatsapp: !!settings.enableWhatsapp && !!sh.phone,
+          createdBy: userId,
+        });
+        if (settings.enableWhatsapp && sh.phone) {
+          await db.insert(notificationQueue).values({
+            recipientPhone: sh.phone,
+            recipientName: sh.fullName,
+            channel: "whatsapp",
+            message: "تمت الموافقة على طلب تحديث بياناتك وتحديثها في النظام.",
+            relatedModule: "shareholder_profile_request",
+            relatedEntityId: String(id),
+          });
+          whatsappQueued = true;
+        }
+      } catch (e) {
+        console.error("notify shareholder of approval failed:", e);
+      }
+
+      res.json({ success: true, whatsappQueued });
+    } catch (error) {
+      console.error("Error approving profile request:", error);
+      res.status(500).json({ error: "فشل في اعتماد الطلب" });
+    }
+  });
+
+  // رفض الطلب
+  app.post("/api/governance/profile-requests/:id/reject", isAuthenticated, requirePermission("governance_shareholders", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const parsed = profileReviewSchema.safeParse(req.body || {});
+      if (!parsed.success) return res.status(400).json({ error: "بيانات غير صالحة" });
+
+      const [reqRow] = await db.select().from(shareholderProfileUpdateRequests).where(eq(shareholderProfileUpdateRequests.id, id)).limit(1);
+      if (!reqRow) return res.status(404).json({ error: "الطلب غير موجود" });
+      if (reqRow.status !== "pending") return res.status(409).json({ error: "تمت مراجعة هذا الطلب مسبقاً" });
+
+      const [sh] = await db.select().from(shareholders).where(eq(shareholders.id, reqRow.shareholderId)).limit(1);
+
+      const userId = getUserId(req);
+      // حارس ذرّي: يمنع رفض طلب تمت مراجعته بالفعل بشكل متزامن
+      const guard = await db
+        .update(shareholderProfileUpdateRequests)
+        .set({ status: "rejected", reviewNote: parsed.data.reviewNote || null, reviewedBy: userId, reviewedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(shareholderProfileUpdateRequests.id, id), eq(shareholderProfileUpdateRequests.status, "pending")))
+        .returning({ id: shareholderProfileUpdateRequests.id });
+      if (guard.length === 0) return res.status(409).json({ error: "تمت مراجعة هذا الطلب مسبقاً" });
+
+      let whatsappQueued = false;
+      try {
+        const settings = await getPortalSettings();
+        const reason = parsed.data.reviewNote ? `\nالسبب: ${parsed.data.reviewNote}` : "";
+        await db.insert(shareholderNotifications).values({
+          shareholderId: reqRow.shareholderId,
+          title: "تم رفض طلب تحديث بياناتك",
+          body: `لم تتم الموافقة على طلب تحديث بياناتك.${reason}`,
+          sentWhatsapp: !!settings.enableWhatsapp && !!sh?.phone,
+          createdBy: userId,
+        });
+        if (settings.enableWhatsapp && sh?.phone) {
+          await db.insert(notificationQueue).values({
+            recipientPhone: sh.phone,
+            recipientName: sh.fullName,
+            channel: "whatsapp",
+            message: `لم تتم الموافقة على طلب تحديث بياناتك.${reason}`,
+            relatedModule: "shareholder_profile_request",
+            relatedEntityId: String(id),
+          });
+          whatsappQueued = true;
+        }
+      } catch (e) {
+        console.error("notify shareholder of rejection failed:", e);
+      }
+
+      res.json({ success: true, whatsappQueued });
+    } catch (error) {
+      console.error("Error rejecting profile request:", error);
+      res.status(500).json({ error: "فشل في رفض الطلب" });
     }
   });
 
