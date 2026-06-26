@@ -8568,6 +8568,7 @@ export const shareholders = pgTable("shareholders", {
   boardMemberId: integer("board_member_id").references(() => boardMembers.id),
   votingRights: boolean("voting_rights").default(true),
   dividendRights: boolean("dividend_rights").default(true),
+  twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(), // تفعيل التحقق بخطوتين لهذا المساهم (للوضع الاختياري)
   status: text("status").default("active"), // active, frozen, transferred
   notes: text("notes"),
   createdBy: varchar("created_by").references(() => users.id),
@@ -8657,6 +8658,8 @@ export const shareholderPortalSettings = pgTable("shareholder_portal_settings", 
   supportEmail: text("support_email"),
   supportPhone: text("support_phone"),
   enableWhatsapp: boolean("enable_whatsapp").default(true).notNull(),
+  requireTwoFactor: boolean("require_two_factor").default(false).notNull(), // إلزام التحقق بخطوتين لجميع المساهمين عند الدخول
+  twoFactorChannel: text("two_factor_channel").default("whatsapp").notNull(), // whatsapp | sms | both
   updatedBy: varchar("updated_by").references(() => users.id),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -10381,6 +10384,50 @@ export const loyaltyOtpCodes = pgTable("loyalty_otp_codes", {
 ]);
 
 export type LoyaltyOtpCode = typeof loyaltyOtpCodes.$inferSelect;
+
+// رموز التحقق بخطوتين لدخول المساهمين (المرحلة 5) — يُخزَّن الرمز مُشفّراً فقط
+export const shareholderOtpCodes = pgTable("shareholder_otp_codes", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  codeHash: text("code_hash").notNull(), // sha256(code:userId) — لا يُخزَّن الرمز نفسه أبداً
+  channel: text("channel").default("whatsapp").notNull(), // whatsapp | sms
+  phone: text("phone"), // الوجهة التي أُرسل إليها الرمز
+  attempts: integer("attempts").default(0).notNull(), // المحاولات الخاطئة على الرمز الحالي
+  sendCount: integer("send_count").default(1).notNull(), // عدد مرات الإرسال خلال عمر الرمز
+  expiresAt: timestamp("expires_at").notNull(),
+  consumedAt: timestamp("consumed_at"), // وقت الاستخدام (NULL = لم يُستخدم)
+  lastSentAt: timestamp("last_sent_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_shareholder_otp_user").on(table.userId),
+  index("idx_shareholder_otp_expires").on(table.expiresAt),
+]);
+
+export type ShareholderOtpCode = typeof shareholderOtpCodes.$inferSelect;
+
+// سجل نشاط المساهمين (المرحلة 5) — دخول، تصويت، طلبات تعديل، عرض مستندات
+export const shareholderActivityLog = pgTable("shareholder_activity_log", {
+  id: serial("id").primaryKey(),
+  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").references(() => users.id),
+  action: text("action").notNull(), // login | otp_verified | vote | profile_request | view_document ...
+  description: text("description"), // وصف عربي مقروء
+  metadata: jsonb("metadata"), // { resolutionId, documentId, ... }
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_shareholder_activity_shareholder").on(table.shareholderId),
+  index("idx_shareholder_activity_created").on(table.createdAt),
+]);
+
+export const insertShareholderActivityLogSchema = createInsertSchema(shareholderActivityLog).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ShareholderActivityLog = typeof shareholderActivityLog.$inferSelect;
+export type InsertShareholderActivityLog = z.infer<typeof insertShareholderActivityLogSchema>;
 
 export const meetingRsvps = pgTable("meeting_rsvps", {
   id: serial("id").primaryKey(),

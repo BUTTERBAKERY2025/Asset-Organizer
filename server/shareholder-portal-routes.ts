@@ -24,8 +24,10 @@ import {
   shareholderTickets,
   shareholderTicketMessages,
   shareholderProfileUpdateRequests,
+  shareholderActivityLog,
 } from "@shared/schema";
 import { z } from "zod";
+import { logShareholderActivity } from "./shareholder-security";
 
 // بيانات الكيان القانوني (تظهر للمساهم في البوابة)
 const COMPANY_INFO = {
@@ -69,6 +71,8 @@ const DEFAULT_PORTAL_SETTINGS = {
   supportEmail: null as string | null,
   supportPhone: null as string | null,
   enableWhatsapp: true,
+  requireTwoFactor: false,
+  twoFactorChannel: "whatsapp",
 };
 
 async function getPortalSettings() {
@@ -120,6 +124,8 @@ const updatePortalSettingsSchema = z.object({
   supportEmail: z.string().max(200).nullable().optional(),
   supportPhone: z.string().max(50).nullable().optional(),
   enableWhatsapp: z.boolean().optional(),
+  requireTwoFactor: z.boolean().optional(),
+  twoFactorChannel: z.enum(["whatsapp", "sms", "both"]).optional(),
 });
 
 // تحقق صلاحية كلمة المرور (نفس قواعد بوابة الموظف)
@@ -369,6 +375,93 @@ export function registerShareholderPortalRoutes(app: Express) {
     }
   });
 
+  // تسجيل اطلاع المساهم على وثيقة (لسجل النشاط)
+  app.post("/api/shareholder/documents/:id/view", isAuthenticated, async (req, res) => {
+    try {
+      const sh = await getMyShareholder(req);
+      if (!sh) return res.status(403).json({ error: "غير مرتبط بملف مساهم" });
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "معرّف غير صالح" });
+      // تأكد أن الوثيقة تخص هذا المساهم (منع IDOR)
+      const [doc] = await db
+        .select()
+        .from(shareholderDocuments)
+        .where(and(eq(shareholderDocuments.id, id), eq(shareholderDocuments.shareholderId, sh.id)))
+        .limit(1);
+      if (!doc) return res.status(404).json({ error: "الوثيقة غير موجودة" });
+      void logShareholderActivity({
+        shareholderId: sh.id,
+        userId: getUserId(req),
+        action: "document_view",
+        description: `اطّلاع على وثيقة: ${doc.documentName || `#${id}`}`,
+        metadata: { documentId: id },
+        ipAddress: req.ip || null,
+        userAgent: req.headers["user-agent"] || null,
+      });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error logging document view:", error);
+      res.status(500).json({ error: "فشل في تسجيل الاطلاع" });
+    }
+  });
+
+  // سجل نشاط المساهم نفسه (يرى نشاطه فقط)
+  app.get("/api/shareholder/activity", isAuthenticated, async (req, res) => {
+    try {
+      const sh = await getMyShareholder(req);
+      if (!sh) return res.status(403).json({ error: "غير مرتبط بملف مساهم" });
+      const limit = Math.min(parseInt(String(req.query.limit ?? "100"), 10) || 100, 200);
+      const rows = await db
+        .select()
+        .from(shareholderActivityLog)
+        .where(eq(shareholderActivityLog.shareholderId, sh.id))
+        .orderBy(desc(shareholderActivityLog.createdAt))
+        .limit(limit);
+      res.json(rows);
+    } catch (error) {
+      console.error("Error fetching shareholder activity:", error);
+      res.status(500).json({ error: "فشل في جلب سجل النشاط" });
+    }
+  });
+
+  // سجل نشاط جميع المساهمين (للإدارة) — مع اسم المساهم وفلتر اختياري
+  app.get(
+    "/api/governance/shareholder-activity",
+    isAuthenticated,
+    requirePermission("governance_shareholders", "view"),
+    async (req, res) => {
+      try {
+        const limit = Math.min(parseInt(String(req.query.limit ?? "200"), 10) || 200, 500);
+        const shFilter = req.query.shareholderId ? parseInt(String(req.query.shareholderId), 10) : null;
+        const conditions = shFilter && Number.isFinite(shFilter)
+          ? eq(shareholderActivityLog.shareholderId, shFilter)
+          : undefined;
+        const rows = await db
+          .select({
+            id: shareholderActivityLog.id,
+            shareholderId: shareholderActivityLog.shareholderId,
+            shareholderName: shareholders.fullName,
+            userId: shareholderActivityLog.userId,
+            action: shareholderActivityLog.action,
+            description: shareholderActivityLog.description,
+            metadata: shareholderActivityLog.metadata,
+            ipAddress: shareholderActivityLog.ipAddress,
+            userAgent: shareholderActivityLog.userAgent,
+            createdAt: shareholderActivityLog.createdAt,
+          })
+          .from(shareholderActivityLog)
+          .leftJoin(shareholders, eq(shareholderActivityLog.shareholderId, shareholders.id))
+          .where(conditions as any)
+          .orderBy(desc(shareholderActivityLog.createdAt))
+          .limit(limit);
+        res.json(rows);
+      } catch (error) {
+        console.error("Error fetching all shareholder activity:", error);
+        res.status(500).json({ error: "فشل في جلب سجل النشاط" });
+      }
+    },
+  );
+
   // إشعارات المساهم الخاصة به
   app.get("/api/shareholder/notifications", isAuthenticated, async (req, res) => {
     try {
@@ -501,6 +594,15 @@ export function registerShareholderPortalRoutes(app: Express) {
       });
 
       if ((result as any).error) return res.status((result as any).code).json({ error: (result as any).error });
+      void logShareholderActivity({
+        shareholderId: sh.id,
+        userId: getUserId(req),
+        action: "vote",
+        description: `تصويت على قرار رقم ${id}: ${parsed.data.vote === "for" ? "موافق" : parsed.data.vote === "against" ? "غير موافق" : "ممتنع"}`,
+        metadata: { resolutionId: id, vote: parsed.data.vote },
+        ipAddress: req.ip || null,
+        userAgent: req.headers["user-agent"] || null,
+      });
       res.json({ success: true });
     } catch (error) {
       console.error("Error casting vote:", error);
@@ -926,6 +1028,16 @@ export function registerShareholderPortalRoutes(app: Express) {
           createdBy: userId,
         } as any)
         .returning();
+
+      void logShareholderActivity({
+        shareholderId: sh.id,
+        userId,
+        action: "profile_request",
+        description: `طلب تحديث بيانات (${changes.length} حقل)`,
+        metadata: { requestId: created?.id, fields: changes.map((c) => c.field) },
+        ipAddress: req.ip || null,
+        userAgent: req.headers["user-agent"] || null,
+      });
 
       res.status(201).json(created);
     } catch (error: any) {

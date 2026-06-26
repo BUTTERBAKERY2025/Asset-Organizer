@@ -371,6 +371,38 @@ export async function runStartupMigrations() {
       )`,
       `CREATE UNIQUE INDEX IF NOT EXISTS idx_loyalty_otp_phone_campaign ON loyalty_otp_codes(phone, campaign_id)`,
       `CREATE INDEX IF NOT EXISTS idx_loyalty_otp_expires ON loyalty_otp_codes(expires_at)`,
+      // Shareholder Portal Phase 5: OTP two-factor login + activity log
+      `CREATE TABLE IF NOT EXISTS shareholder_otp_codes (
+        id serial PRIMARY KEY,
+        user_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        code_hash text NOT NULL,
+        channel text NOT NULL DEFAULT 'whatsapp',
+        phone text,
+        attempts integer NOT NULL DEFAULT 0,
+        send_count integer NOT NULL DEFAULT 1,
+        expires_at timestamp NOT NULL,
+        consumed_at timestamp,
+        last_sent_at timestamp NOT NULL DEFAULT now(),
+        created_at timestamp NOT NULL DEFAULT now()
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_shareholder_otp_user ON shareholder_otp_codes(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_shareholder_otp_expires ON shareholder_otp_codes(expires_at)`,
+      `CREATE TABLE IF NOT EXISTS shareholder_activity_log (
+        id serial PRIMARY KEY,
+        shareholder_id integer NOT NULL REFERENCES shareholders(id) ON DELETE CASCADE,
+        user_id varchar REFERENCES users(id),
+        action text NOT NULL,
+        description text,
+        metadata jsonb,
+        ip_address text,
+        user_agent text,
+        created_at timestamp NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_shareholder_activity_shareholder ON shareholder_activity_log(shareholder_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_shareholder_activity_created ON shareholder_activity_log(created_at)`,
+      `ALTER TABLE shareholders ADD COLUMN IF NOT EXISTS two_factor_enabled boolean NOT NULL DEFAULT false`,
+      `ALTER TABLE shareholder_portal_settings ADD COLUMN IF NOT EXISTS require_two_factor boolean NOT NULL DEFAULT false`,
+      `ALTER TABLE shareholder_portal_settings ADD COLUMN IF NOT EXISTS two_factor_channel text NOT NULL DEFAULT 'whatsapp'`,
     ];
     for (const mig of migrations) {
       try { await pool.query(mig); } catch (e) { /* index may already exist or table not found */ }

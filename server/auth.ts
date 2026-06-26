@@ -6,6 +6,12 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { systemAuditLogs } from "@shared/schema";
 import { isLoginBlocked, trackLoginAttempt } from "./security";
+import {
+  getTwoFactorConfig,
+  issueOtpForUser,
+  verifyOtpForUser,
+  logShareholderActivity,
+} from "./shareholder-security";
 
 // ============================================================
 // HIGH-PERFORMANCE IN-MEMORY CACHE FOR AUTH MIDDLEWARE
@@ -161,6 +167,8 @@ declare module "express-session" {
     fingerprint?: string;
     createdAt?: number;
     ipAddress?: string;
+    // المرحلة 5: حالة انتظار التحقق بخطوتين بعد كلمة المرور (قبل إنشاء الجلسة المصادَق عليها)
+    pendingTwoFactor?: { userId: string; rememberMe: boolean; at: number };
   }
 }
 
@@ -202,6 +210,137 @@ export function parseUserAgent(ua: string): { browser: string; os: string; devic
   }
 
   return { browser, os, device };
+}
+
+// المرحلة 5: إنشاء الجلسة المصادَق عليها بعد التحقق من الهوية (كلمة المرور أو OTP).
+// تُستخدم من مسار الدخول المباشر ومن مسار التحقق بخطوتين معاً لتفادي التكرار.
+function establishSession(
+  req: any,
+  res: any,
+  user: any,
+  rememberMe: boolean,
+  clientIp: string,
+  opts?: { twoFactor?: boolean },
+) {
+  req.session.regenerate(async (regenerateErr: any) => {
+    try {
+      if (regenerateErr) {
+        console.error("Session regenerate error:", regenerateErr);
+        return res.status(500).json({ error: "فشل تسجيل الدخول" });
+      }
+
+      req.session.userId = user.id;
+      req.session.lastActivity = Date.now();
+      req.session.fingerprint = generateSessionFingerprint(req);
+      req.session.createdAt = Date.now();
+      req.session.ipAddress = clientIp;
+
+      if (rememberMe) {
+        req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
+      } else {
+        req.session.cookie.maxAge = 8 * 60 * 60 * 1000;
+        req.session.cookie.expires = undefined as any;
+      }
+
+      const userBranches = await storage.getUserBranchAccess(user.id);
+      const defaultBranch = userBranches.find((b: any) => b.isDefault) || userBranches[0];
+      req.session.activeBranchId = defaultBranch?.branchId || undefined;
+
+      req.session.save(async (saveErr: any) => {
+        try {
+          if (saveErr) {
+            console.error("Session save error:", saveErr);
+            return res.status(500).json({ error: "فشل تسجيل الدخول" });
+          }
+          const { password: _, ...safeUser } = user;
+
+          let activeBranch = null;
+          if (req.session.activeBranchId) {
+            activeBranch = await storage.getBranch(req.session.activeBranchId);
+          }
+
+          const displayName = user.firstName && user.lastName
+            ? `${user.firstName} ${user.lastName}`
+            : user.username || 'غير معروف';
+          const userAgentStr = req.headers['user-agent'] || '';
+          const deviceInfo = parseUserAgent(userAgentStr);
+          try {
+            await storage.createSystemAuditLog({
+              module: "users",
+              entityId: user.id,
+              entityName: displayName,
+              action: "login",
+              description: `تسجيل دخول ناجح${opts?.twoFactor ? ' (تحقق بخطوتين)' : ''}${rememberMe ? ' (تذكرني)' : ''}`,
+              details: JSON.stringify({
+                browser: deviceInfo.browser,
+                os: deviceInfo.os,
+                device: deviceInfo.device,
+                rememberMe: !!rememberMe,
+                twoFactor: !!opts?.twoFactor,
+              }),
+              userId: user.id,
+              userName: displayName,
+              branchId: req.session.activeBranchId || user.branchId || null,
+              ipAddress: req.ip || req.socket?.remoteAddress,
+              userAgent: userAgentStr,
+            });
+
+            const sessionExpiry = rememberMe
+              ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+              : new Date(Date.now() + 8 * 60 * 60 * 1000);
+
+            await storage.createUserSession({
+              sessionId: req.sessionID,
+              userId: user.id,
+              deviceInfo,
+              ipAddress: req.ip || req.socket?.remoteAddress || null,
+              userAgent: userAgentStr,
+              isActive: true,
+              lastActivityAt: new Date(),
+              expiresAt: sessionExpiry,
+            });
+
+            try {
+              const currentSessionId = req.sessionID;
+              await storage.invalidateAllUserSessionsExcept(user.id, currentSessionId);
+            } catch (e) {
+              console.warn("Failed to invalidate old sessions:", e);
+            }
+          } catch (logError) {
+            console.error("Failed to create audit log for login:", logError);
+          }
+
+          // المرحلة 5: سجّل دخول المساهم في سجل نشاط البوابة (أفضل جهد)
+          if (user.role === "shareholder") {
+            void logShareholderActivity({
+              userId: user.id,
+              action: "login",
+              description: opts?.twoFactor ? "تسجيل دخول بالتحقق بخطوتين" : "تسجيل دخول",
+              ipAddress: req.ip || req.socket?.remoteAddress || null,
+              userAgent: userAgentStr,
+            });
+          }
+
+          res.json({
+            ...safeUser,
+            activeBranchId: req.session.activeBranchId,
+            activeBranch,
+            allowedBranches: userBranches,
+          });
+        } catch (saveCallbackError) {
+          console.error("Session save callback error:", saveCallbackError);
+          if (!res.headersSent) {
+            res.status(500).json({ error: "حدث خطأ أثناء تسجيل الدخول" });
+          }
+        }
+      });
+    } catch (regenerateCallbackError) {
+      console.error("Session regenerate callback error:", regenerateCallbackError);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "حدث خطأ أثناء تسجيل الدخول" });
+      }
+    }
+  });
 }
 
 export const loginRateLimiter = rateLimit({
@@ -358,119 +497,116 @@ export async function setupAuth(app: Express) {
         return res.status(403).json({ error: "حسابك معطّل. يرجى التواصل مع المسؤول." });
       }
 
-      req.session.regenerate(async (regenerateErr) => {
-        try {
-          if (regenerateErr) {
-            console.error("Session regenerate error:", regenerateErr);
-            return res.status(500).json({ error: "فشل تسجيل الدخول" });
+      // المرحلة 5: التحقق بخطوتين للمساهمين (يتحكم به المدير عبر إعدادات البوابة)
+      if (user.role === "shareholder") {
+        const cfg = await getTwoFactorConfig();
+        if (cfg.required) {
+          const issued = await issueOtpForUser(user.id);
+          if (!issued.ok) {
+            if (issued.error === "no_phone") {
+              return res.status(403).json({
+                error: "لا يوجد رقم جوال مسجّل لحسابك لإرسال رمز التحقق. يرجى التواصل مع الإدارة.",
+              });
+            }
+            return res.status(500).json({ error: "تعذّر إرسال رمز التحقق. يرجى المحاولة لاحقاً." });
           }
-          
-          req.session.userId = user.id;
-          req.session.lastActivity = Date.now();
-          req.session.fingerprint = generateSessionFingerprint(req);
-          req.session.createdAt = Date.now();
-          req.session.ipAddress = clientIp;
-          
-          if (rememberMe) {
-            req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
-          } else {
-            req.session.cookie.maxAge = 8 * 60 * 60 * 1000;
-            req.session.cookie.expires = undefined as any;
-          }
-        
-          const userBranches = await storage.getUserBranchAccess(user.id);
-          const defaultBranch = userBranches.find(b => b.isDefault) || userBranches[0];
-          req.session.activeBranchId = defaultBranch?.branchId || undefined;
-          
-          req.session.save(async (saveErr) => {
-            try {
+          // نُنشئ جلسة مؤقتة تحمل علامة الانتظار فقط (دون مصادقة كاملة)
+          return req.session.regenerate((regenErr) => {
+            if (regenErr) {
+              console.error("Session regenerate (2FA) error:", regenErr);
+              return res.status(500).json({ error: "فشل تسجيل الدخول" });
+            }
+            req.session.pendingTwoFactor = { userId: user.id, rememberMe: !!rememberMe, at: Date.now() };
+            req.session.save((saveErr) => {
               if (saveErr) {
-                console.error("Session save error:", saveErr);
+                console.error("Session save (2FA) error:", saveErr);
                 return res.status(500).json({ error: "فشل تسجيل الدخول" });
               }
-              const { password: _, ...safeUser } = user;
-              
-              let activeBranch = null;
-              if (req.session.activeBranchId) {
-                activeBranch = await storage.getBranch(req.session.activeBranchId);
-              }
-              
-              const displayName = user.firstName && user.lastName 
-                ? `${user.firstName} ${user.lastName}` 
-                : user.username || 'غير معروف';
-              // Parse device info once for both audit log and session record
-              const userAgentStr = req.headers['user-agent'] || '';
-              const deviceInfo = parseUserAgent(userAgentStr);
-              try {
-                await storage.createSystemAuditLog({
-                  module: "users",
-                  entityId: user.id,
-                  entityName: displayName,
-                  action: "login",
-                  description: `تسجيل دخول ناجح${rememberMe ? ' (تذكرني)' : ''}`,
-                  details: JSON.stringify({
-                    browser: deviceInfo.browser,
-                    os: deviceInfo.os,
-                    device: deviceInfo.device,
-                    rememberMe: !!rememberMe,
-                  }),
-                  userId: user.id,
-                  userName: displayName,
-                  branchId: req.session.activeBranchId || user.branchId || null,
-                  ipAddress: req.ip || req.socket?.remoteAddress,
-                  userAgent: userAgentStr,
-                });
-                
-                // Create user session record with device info
-                const sessionExpiry = rememberMe 
-                  ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) 
-                  : new Date(Date.now() + 8 * 60 * 60 * 1000);
-                
-                await storage.createUserSession({
-                  sessionId: req.sessionID,
-                  userId: user.id,
-                  deviceInfo,
-                  ipAddress: req.ip || req.socket?.remoteAddress || null,
-                  userAgent: userAgentStr,
-                  isActive: true,
-                  lastActivityAt: new Date(),
-                  expiresAt: sessionExpiry,
-                });
-                
-                // SECURITY: Invalidate all OTHER sessions for this user (single session enforcement)
-                try {
-                  const currentSessionId = req.sessionID;
-                  await storage.invalidateAllUserSessionsExcept(user.id, currentSessionId);
-                } catch (e) {
-                  console.warn("Failed to invalidate old sessions:", e);
-                }
-              } catch (logError) {
-                console.error("Failed to create audit log for login:", logError);
-              }
-              
-              res.json({
-                ...safeUser,
-                activeBranchId: req.session.activeBranchId,
-                activeBranch,
-                allowedBranches: userBranches,
-              });
-            } catch (saveCallbackError) {
-              console.error("Session save callback error:", saveCallbackError);
-              if (!res.headersSent) {
-                res.status(500).json({ error: "حدث خطأ أثناء تسجيل الدخول" });
-              }
-            }
+              return res.json({ otpRequired: true, phone: issued.phone, channel: issued.channel });
+            });
           });
-        } catch (regenerateCallbackError) {
-          console.error("Session regenerate callback error:", regenerateCallbackError);
-          if (!res.headersSent) {
-            res.status(500).json({ error: "حدث خطأ أثناء تسجيل الدخول" });
-          }
         }
-      });
+      }
+
+      return establishSession(req, res, user, !!rememberMe, clientIp);
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ error: "حدث خطأ أثناء تسجيل الدخول" });
+    }
+  });
+
+  // المرحلة 5: التحقق من رمز OTP لإكمال دخول المساهم
+  app.post("/api/auth/verify-otp", loginRateLimiter, async (req, res) => {
+    res.set({ 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Pragma': 'no-cache' });
+    try {
+      const pending = req.session.pendingTwoFactor;
+      if (!pending || !pending.userId) {
+        return res.status(401).json({ error: "انتهت جلسة التحقق. يرجى تسجيل الدخول من جديد." });
+      }
+      // مهلة كلية للتحدي: 10 دقائق منذ بدء الدخول
+      if (Date.now() - pending.at > 10 * 60 * 1000) {
+        delete req.session.pendingTwoFactor;
+        return res.status(401).json({ error: "انتهت مهلة التحقق. يرجى تسجيل الدخول من جديد." });
+      }
+      const code = String(req.body?.code || "").trim();
+      if (!/^\d{4,8}$/.test(code)) {
+        return res.status(400).json({ error: "رمز غير صالح" });
+      }
+      const result = await verifyOtpForUser(pending.userId, code);
+      if (!result.ok) {
+        const messages: Record<string, string> = {
+          no_challenge: "انتهت صلاحية الرمز. يرجى طلب رمز جديد.",
+          expired: "انتهت صلاحية الرمز. يرجى طلب رمز جديد.",
+          too_many_attempts: "تم تجاوز عدد المحاولات. يرجى طلب رمز جديد.",
+          invalid: "الرمز غير صحيح.",
+        };
+        return res.status(401).json({ error: messages[result.error] || "تعذّر التحقق" });
+      }
+      const user = await storage.getUser(pending.userId);
+      if (!user || user.isActive === "inactive") {
+        delete req.session.pendingTwoFactor;
+        return res.status(403).json({ error: "تعذّر إكمال الدخول. يرجى التواصل مع الإدارة." });
+      }
+      const rememberMe = pending.rememberMe;
+      const clientIp = req.ip || req.socket?.remoteAddress || 'unknown';
+      delete req.session.pendingTwoFactor;
+      return establishSession(req, res, user, rememberMe, clientIp, { twoFactor: true });
+    } catch (error) {
+      console.error("verify-otp error:", error);
+      res.status(500).json({ error: "حدث خطأ أثناء التحقق" });
+    }
+  });
+
+  // المرحلة 5: إعادة إرسال رمز OTP (مع ضوابط التكرار)
+  app.post("/api/auth/resend-otp", loginRateLimiter, async (req, res) => {
+    res.set({ 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Pragma': 'no-cache' });
+    try {
+      const pending = req.session.pendingTwoFactor;
+      if (!pending || !pending.userId) {
+        return res.status(401).json({ error: "انتهت جلسة التحقق. يرجى تسجيل الدخول من جديد." });
+      }
+      // مهلة كلية للتحدي: 10 دقائق منذ بدء الدخول
+      if (Date.now() - pending.at > 10 * 60 * 1000) {
+        delete req.session.pendingTwoFactor;
+        return res.status(401).json({ error: "انتهت مهلة التحقق. يرجى تسجيل الدخول من جديد." });
+      }
+      const issued = await issueOtpForUser(pending.userId, { resend: true });
+      if (!issued.ok) {
+        if (issued.error === "cooldown") {
+          return res.status(429).json({ error: `يرجى الانتظار ${issued.retryAfter || 45} ثانية قبل إعادة الإرسال.` });
+        }
+        if (issued.error === "too_many_sends") {
+          return res.status(429).json({ error: "تم تجاوز حد إعادة الإرسال. يرجى تسجيل الدخول من جديد لاحقاً." });
+        }
+        if (issued.error === "no_phone") {
+          return res.status(403).json({ error: "لا يوجد رقم جوال مسجّل لحسابك." });
+        }
+        return res.status(500).json({ error: "تعذّر إرسال الرمز." });
+      }
+      return res.json({ otpRequired: true, phone: issued.phone, channel: issued.channel });
+    } catch (error) {
+      console.error("resend-otp error:", error);
+      res.status(500).json({ error: "حدث خطأ أثناء إعادة الإرسال" });
     }
   });
 

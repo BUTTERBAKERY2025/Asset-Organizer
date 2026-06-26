@@ -18,7 +18,7 @@ import {
   KeyRound, Plus, Pencil, Trash2, Send, Loader2, MessageSquare, Newspaper, Store,
   CalendarDays, ShieldCheck, Link2, Link2Off, RefreshCw, Check, Copy,
   PartyPopper, Eye, ExternalLink, Sparkles, Settings, Save, FileText,
-  Inbox, ChevronLeft, UserCog, CheckCircle2, XCircle,
+  Inbox, ChevronLeft, UserCog, CheckCircle2, XCircle, History, LogIn, Vote, FileSearch,
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
 
@@ -38,6 +38,24 @@ function fmtNum(n: any): string {
 function fmtDate(d: any): string {
   if (!d) return "—";
   try { return new Date(d).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" }); } catch { return String(d); }
+}
+function fmtDateTime(d: any): string {
+  if (!d) return "—";
+  try { return new Date(d).toLocaleString("ar-SA", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return String(d); }
+}
+const ACTIVITY_LABELS: Record<string, string> = {
+  login: "تسجيل دخول",
+  otp_verified: "تحقق بخطوتين",
+  vote: "تصويت على قرار",
+  profile_request: "طلب تحديث بيانات",
+  document_view: "اطلاع على وثيقة",
+};
+function activityLabel(action: string): string {
+  return ACTIVITY_LABELS[action] || action;
+}
+function ActivityIcon({ action, className }: { action: string; className?: string }) {
+  const Icon = action === "vote" ? Vote : action === "document_view" ? FileSearch : action === "profile_request" ? UserCog : LogIn;
+  return <Icon className={className} />;
 }
 
 export default function InvestorPortalPage() {
@@ -69,6 +87,7 @@ export default function InvestorPortalPage() {
             <TabsTrigger value="announcements" data-testid="tab-announcements"><Newspaper className="w-4 h-4 ml-1" /> الأخبار والإعلانات</TabsTrigger>
             <TabsTrigger value="accounts" data-testid="tab-accounts"><KeyRound className="w-4 h-4 ml-1" /> حسابات البوابة</TabsTrigger>
             <TabsTrigger value="invitations" data-testid="tab-invitations"><PartyPopper className="w-4 h-4 ml-1" /> دعوات الافتتاح</TabsTrigger>
+            <TabsTrigger value="activity" data-testid="tab-activity"><History className="w-4 h-4 ml-1" /> سجل النشاط</TabsTrigger>
             <TabsTrigger value="settings" data-testid="tab-settings"><Settings className="w-4 h-4 ml-1" /> إعدادات البوابة</TabsTrigger>
           </TabsList>
 
@@ -107,6 +126,11 @@ export default function InvestorPortalPage() {
             <InvitationsTab toast={toast} queryClient={queryClient} />
           </TabsContent>
 
+          {/* Activity log (all shareholders) */}
+          <TabsContent value="activity" className="mt-4">
+            <ActivityTab accounts={accounts} />
+          </TabsContent>
+
           {/* Portal Settings */}
           <TabsContent value="settings" className="mt-4">
             <SettingsTab toast={toast} queryClient={queryClient} />
@@ -137,6 +161,8 @@ function SettingsTab({ toast, queryClient }: any) {
         supportEmail: data.supportEmail || "",
         supportPhone: data.supportPhone || "",
         enableWhatsapp: data.enableWhatsapp ?? true,
+        requireTwoFactor: data.requireTwoFactor ?? false,
+        twoFactorChannel: data.twoFactorChannel || "whatsapp",
       });
     }
   }, [data]);
@@ -200,12 +226,95 @@ function SettingsTab({ toast, queryClient }: any) {
             <div className="flex items-center gap-2"><MessageSquare className="w-4 h-4 text-green-600" /><span className="text-sm">تفعيل إشعارات واتساب للمساهمين</span></div>
             <Switch checked={!!form.enableWhatsapp} onCheckedChange={(v) => setForm({ ...form, enableWhatsapp: v })} data-testid="switch-enable-whatsapp" />
           </div>
+          <div className="rounded-lg border p-3 space-y-3 bg-amber-50/40">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-amber-600" /><span className="text-sm font-medium">التحقق بخطوتين عند الدخول (OTP)</span></div>
+              <Switch checked={!!form.requireTwoFactor} onCheckedChange={(v) => setForm({ ...form, requireTwoFactor: v })} data-testid="switch-require-2fa" />
+            </div>
+            <p className="text-xs text-muted-foreground">عند التفعيل، يُطلب من كل مساهم إدخال رمز تحقق يُرسل إلى جواله بعد كلمة المرور.</p>
+            {form.requireTwoFactor && (
+              <div>
+                <Label className="text-xs">قناة إرسال الرمز</Label>
+                <Select value={form.twoFactorChannel} onValueChange={(v) => setForm({ ...form, twoFactorChannel: v })}>
+                  <SelectTrigger data-testid="select-2fa-channel"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="whatsapp">واتساب</SelectItem>
+                    <SelectItem value="sms">رسالة نصية (SMS)</SelectItem>
+                    <SelectItem value="both">واتساب ورسالة نصية معاً</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
           <Button className="w-full" disabled={save.isPending} onClick={() => save.mutate()} data-testid="button-save-settings">
             {save.isPending ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : <Save className="w-4 h-4 ml-2" />} حفظ الإعدادات
           </Button>
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function ActivityTab({ accounts }: any) {
+  const [shFilter, setShFilter] = useState<string>("all");
+  const { data: rows = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/governance/shareholder-activity", shFilter],
+    queryFn: async () => {
+      const qs = shFilter && shFilter !== "all" ? `?shareholderId=${shFilter}` : "";
+      const res = await fetch(`/api/governance/shareholder-activity${qs}`, { credentials: "include" });
+      if (!res.ok) throw new Error("فشل في جلب سجل النشاط");
+      return res.json();
+    },
+  });
+
+  const shareholderOptions = (accounts || [])
+    .filter((a: any) => a.shareholderId || a.id)
+    .map((a: any) => ({ id: a.shareholderId || a.id, name: a.fullName || a.name || `#${a.shareholderId || a.id}` }));
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <CardTitle className="text-base flex items-center gap-2"><History className="w-4 h-4 text-amber-600" /> سجل نشاط المساهمين</CardTitle>
+          <div className="w-56">
+            <Select value={shFilter} onValueChange={setShFilter}>
+              <SelectTrigger data-testid="select-activity-shareholder"><SelectValue placeholder="كل المساهمين" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل المساهمين</SelectItem>
+                {shareholderOptions.map((o: any) => (
+                  <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="py-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-amber-600" /></div>
+        ) : rows.length === 0 ? (
+          <div className="py-12 text-center text-muted-foreground text-sm" data-testid="text-no-activity">لا يوجد نشاط مسجّل</div>
+        ) : (
+          <div className="space-y-2">
+            {rows.map((r: any) => (
+              <div key={r.id} className="flex items-start gap-3 rounded-lg border p-3" data-testid={`activity-row-${r.id}`}>
+                <div className="w-9 h-9 shrink-0 rounded-full bg-amber-100 flex items-center justify-center">
+                  <ActivityIcon action={r.action} className="w-4 h-4 text-amber-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium">{r.shareholderName || "—"}</span>
+                    <Badge variant="secondary" className="text-[11px]">{activityLabel(r.action)}</Badge>
+                  </div>
+                  {r.description && <p className="text-xs text-muted-foreground mt-0.5">{r.description}</p>}
+                  <p className="text-[11px] text-muted-foreground mt-0.5" dir="ltr">{fmtDateTime(r.createdAt)}{r.ipAddress ? ` · ${r.ipAddress}` : ""}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

@@ -12,6 +12,7 @@ import {
   TrendingUp, MapPin, Clock, CheckCircle2, Newspaper, Megaphone, Store,
   Landmark, LogOut, Loader2, Phone, Mail, CreditCard, Hash, Printer,
   ScrollText, ChevronLeft, MessageSquare, Send, Plus, UserCog, Save,
+  History, LogIn, FileSearch,
 } from "lucide-react";
 import logoUrl from "@assets/logo_-5_1765206843638.png";
 
@@ -28,6 +29,30 @@ function fmtDate(d: any): string {
   } catch {
     return String(d);
   }
+}
+function fmtDateTime(d: any): string {
+  if (!d) return "—";
+  try {
+    return new Date(d).toLocaleString("ar-SA", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return String(d);
+  }
+}
+
+const SH_ACTIVITY_LABELS: Record<string, string> = {
+  login: "تسجيل دخول",
+  vote: "تصويت على قرار",
+  profile_request: "طلب تحديث بيانات",
+  document_view: "اطّلاع على وثيقة",
+};
+
+function ShActivityIcon({ action }: { action: string }) {
+  const cls = "w-4 h-4 text-amber-600";
+  if (action === "login") return <LogIn className={cls} />;
+  if (action === "vote") return <Vote className={cls} />;
+  if (action === "profile_request") return <UserCog className={cls} />;
+  if (action === "document_view") return <FileSearch className={cls} />;
+  return <History className={cls} />;
 }
 
 const CATEGORY_META: Record<string, { label: string; icon: any; cls: string }> = {
@@ -52,6 +77,7 @@ const NAV_ITEMS = [
   { key: "voting", label: "التصويت", icon: Vote },
   { key: "messages", label: "الرسائل", icon: MessageSquare },
   { key: "profile-edits", label: "تحديث بياناتي", icon: UserCog },
+  { key: "activity", label: "سجل نشاطي", icon: History },
 ];
 
 const SECTION_TITLES: Record<string, string> = {
@@ -64,6 +90,7 @@ const SECTION_TITLES: Record<string, string> = {
   notifications: "الإشعارات",
   messages: "الرسائل والاستفسارات",
   "profile-edits": "تحديث بياناتي",
+  activity: "سجل نشاطي",
 };
 
 export default function ShareholderPortalPage() {
@@ -106,6 +133,7 @@ export default function ShareholderPortalPage() {
     messages: settings.showMessages,
     "profile-edits": settings.showProfileEdits,
     notifications: true,
+    activity: true,
   };
   const navItems = NAV_ITEMS.filter((i) => sectionEnabled[i.key] !== false);
 
@@ -121,6 +149,16 @@ export default function ShareholderPortalPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/shareholder/notifications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/shareholder/me"] });
     },
+  });
+
+  // المرحلة 5: سجل نشاط المساهم نفسه + تسجيل الاطلاع على الوثائق
+  const { data: activity = [] } = useQuery<any[]>({
+    queryKey: ["/api/shareholder/activity"],
+    enabled: !!hasShareholder && tab === "activity",
+  });
+
+  const logDocView = useMutation({
+    mutationFn: (id: number) => apiRequest("POST", `/api/shareholder/documents/${id}/view`),
   });
 
   const castVote = useMutation({
@@ -446,7 +484,7 @@ export default function ShareholderPortalPage() {
                       <div className="text-[11px] text-muted-foreground">{fmtDate(doc.createdAt)}</div>
                     </div>
                   </div>
-                  <a href={doc.fileUrl} target="_blank" rel="noreferrer">
+                  <a href={doc.fileUrl} target="_blank" rel="noreferrer" onClick={() => logDocView.mutate(doc.id)}>
                     <Button size="sm" variant="outline" data-testid={`button-view-doc-${doc.id}`}>عرض</Button>
                   </a>
                 </CardContent>
@@ -486,6 +524,29 @@ export default function ShareholderPortalPage() {
         {/* ===== Profile update requests ===== */}
         {tab === "profile-edits" && settings.showProfileEdits && (
           <ShareholderProfileEdits shareholder={shareholder} />
+        )}
+
+        {/* ===== Activity log (own) ===== */}
+        {tab === "activity" && (
+          <div className="space-y-2">
+            {activity.length === 0 && <Empty text="لا يوجد نشاط مسجّل" />}
+            {activity.map((a) => (
+              <Card key={a.id} data-testid={`card-activity-${a.id}`}>
+                <CardContent className="py-3 flex items-start gap-3">
+                  <div className="w-9 h-9 shrink-0 rounded-full bg-amber-100 flex items-center justify-center">
+                    <ShActivityIcon action={a.action} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium">{SH_ACTIVITY_LABELS[a.action] || a.action}</span>
+                    </div>
+                    {a.description && <p className="text-xs text-muted-foreground mt-0.5">{a.description}</p>}
+                    <p className="text-[11px] text-muted-foreground mt-0.5" dir="ltr">{fmtDateTime(a.createdAt)}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         )}
       </main>
 

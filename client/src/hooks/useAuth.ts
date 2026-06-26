@@ -58,10 +58,51 @@ export function useAuth() {
       return res.json();
     },
     onSuccess: (userData) => {
+      // المرحلة 5: إذا طُلب التحقق بخطوتين فلا تُنشئ الجلسة بعد — ننتظر رمز OTP
+      if (userData?.otpRequired) return;
       queryClient.clear();
       clearPersistentCache();
       setCurrentUser(userData?.id?.toString() || null);
       queryClient.setQueryData(["/api/auth/me"], userData);
+    },
+  });
+
+  // المرحلة 5: التحقق من رمز OTP لإكمال تسجيل الدخول للمساهمين
+  const verifyOtpMutation = useMutation({
+    mutationFn: async (payload: { code: string }) => {
+      const res = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "فشل التحقق من الرمز");
+      }
+      return res.json();
+    },
+    onSuccess: (userData) => {
+      queryClient.clear();
+      clearPersistentCache();
+      setCurrentUser(userData?.id?.toString() || null);
+      queryClient.setQueryData(["/api/auth/me"], userData);
+    },
+  });
+
+  // المرحلة 5: إعادة إرسال رمز OTP
+  const resendOtpMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/auth/resend-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "فشل إعادة إرسال الرمز");
+      }
+      return res.json();
     },
   });
 
@@ -117,8 +158,13 @@ export function useAuth() {
     login: loginMutation.mutateAsync,
     logout: logoutMutation.mutateAsync,
     switchBranch: switchBranchMutation.mutateAsync,
+    verifyOtp: verifyOtpMutation.mutateAsync,
+    resendOtp: resendOtpMutation.mutateAsync,
     loginError: loginMutation.error?.message,
+    verifyOtpError: verifyOtpMutation.error?.message,
     isLoggingIn: loginMutation.isPending,
+    isVerifyingOtp: verifyOtpMutation.isPending,
+    isResendingOtp: resendOtpMutation.isPending,
     isLoggingOut: logoutMutation.isPending,
     isSwitchingBranch: switchBranchMutation.isPending,
   };

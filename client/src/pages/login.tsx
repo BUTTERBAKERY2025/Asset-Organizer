@@ -42,6 +42,18 @@ const T = {
     switchLang: "English",
     switchLangShort: "EN",
     switchLangAria: "التبديل إلى الإنجليزية",
+    otpTitle: "التحقق بخطوتين",
+    otpSubtitle: "أدخل رمز التحقق المرسل إلى",
+    otpCode: "رمز التحقق",
+    otpCodePh: "••••••",
+    otpVerify: "تأكيد الرمز",
+    otpVerifying: "جارٍ التحقق...",
+    otpResend: "إعادة إرسال الرمز",
+    otpResending: "جارٍ الإرسال...",
+    otpResent: "تم إرسال رمز جديد",
+    otpBack: "العودة لتسجيل الدخول",
+    otpChannelWhatsapp: "واتساب",
+    otpChannelSms: "رسالة نصية",
   },
   en: {
     systemTitle: "BUTTER BAKERY SYSTEM",
@@ -64,12 +76,24 @@ const T = {
     switchLang: "العربية",
     switchLangShort: "ع",
     switchLangAria: "Switch to Arabic",
+    otpTitle: "Two-factor verification",
+    otpSubtitle: "Enter the verification code sent to",
+    otpCode: "Verification code",
+    otpCodePh: "••••••",
+    otpVerify: "Verify code",
+    otpVerifying: "Verifying...",
+    otpResend: "Resend code",
+    otpResending: "Sending...",
+    otpResent: "A new code was sent",
+    otpBack: "Back to login",
+    otpChannelWhatsapp: "WhatsApp",
+    otpChannelSms: "SMS",
   },
 } as const;
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
-  const { login, isLoggingIn, isAuthenticated } = useAuth();
+  const { login, isLoggingIn, isAuthenticated, verifyOtp, resendOtp, isVerifyingOtp, isResendingOtp } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -77,6 +101,12 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [honeypot, setHoneypot] = useState("");
   const [formKey, setFormKey] = useState(0);
+  // المرحلة 5: حالة التحقق بخطوتين (OTP)
+  const [otpStep, setOtpStep] = useState(false);
+  const [otpPhone, setOtpPhone] = useState("");
+  const [otpChannel, setOtpChannel] = useState<string>("whatsapp");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpInfo, setOtpInfo] = useState("");
   const [lang, setLang] = useState<Lang>(() => {
     try {
       const saved = localStorage.getItem(LANG_KEY);
@@ -119,6 +149,30 @@ export default function LoginPage() {
     return null;
   }
 
+  const navigateAfterLogin = (userData: any) => {
+    if (rememberMe) {
+      localStorage.setItem(REMEMBER_KEY, JSON.stringify({ u: username }));
+    } else {
+      localStorage.removeItem(REMEMBER_KEY);
+    }
+
+    // Restore intended path if present
+    let next = "/";
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const r = params.get("redirect");
+      if (r && r.startsWith("/") && !r.startsWith("//")) next = r;
+    } catch {}
+
+    if (userData?.role === "attendance_clerk") {
+      setLocation("/attendance-check");
+    } else if (userData?.role === "shareholder") {
+      setLocation(next !== "/" ? next : "/shareholder-portal");
+    } else {
+      setLocation(next);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -131,32 +185,57 @@ export default function LoginPage() {
     try {
       const userData = await login({ username, password, rememberMe });
 
-      if (rememberMe) {
-        localStorage.setItem(REMEMBER_KEY, JSON.stringify({ u: username }));
-      } else {
-        localStorage.removeItem(REMEMBER_KEY);
+      // المرحلة 5: المساهم يحتاج للتحقق بخطوتين قبل إنشاء الجلسة
+      if (userData?.otpRequired) {
+        setOtpPhone(userData.phone || "");
+        setOtpChannel(userData.channel || "whatsapp");
+        setOtpCode("");
+        setOtpInfo("");
+        setOtpStep(true);
+        return;
       }
 
-      // Restore intended path if present
-      let next = "/";
-      try {
-        const params = new URLSearchParams(window.location.search);
-        const r = params.get("redirect");
-        if (r && r.startsWith("/") && !r.startsWith("//")) next = r;
-      } catch {}
-
-      if (userData?.role === "attendance_clerk") {
-        setLocation("/attendance-check");
-      } else if (userData?.role === "shareholder") {
-        setLocation(next !== "/" ? next : "/shareholder-portal");
-      } else {
-        setLocation(next);
-      }
+      navigateAfterLogin(userData);
     } catch (err: any) {
       setPassword("");
       setFormKey((prev) => prev + 1);
       setError(err.message || t.loginFailed);
     }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setOtpInfo("");
+    try {
+      const userData = await verifyOtp({ code: otpCode.trim() });
+      navigateAfterLogin(userData);
+    } catch (err: any) {
+      setOtpCode("");
+      setError(err.message || t.loginFailed);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setError("");
+    setOtpInfo("");
+    try {
+      const res: any = await resendOtp();
+      if (res?.phone) setOtpPhone(res.phone);
+      if (res?.channel) setOtpChannel(res.channel);
+      setOtpInfo(t.otpResent);
+    } catch (err: any) {
+      setError(err.message || t.loginFailed);
+    }
+  };
+
+  const handleBackToLogin = () => {
+    setOtpStep(false);
+    setOtpCode("");
+    setError("");
+    setOtpInfo("");
+    setPassword("");
+    setFormKey((prev) => prev + 1);
   };
 
   const textAlignClass = isRTL ? "text-right" : "text-left";
@@ -234,11 +313,93 @@ export default function LoginPage() {
                 {t.systemTitle}
               </h1>
               <p className="text-[11px] sm:text-[12px] md:text-[13px] text-slate-500 mt-1">
-                {t.subtitle}
+                {otpStep ? t.otpTitle : t.subtitle}
               </p>
               <div className="w-10 sm:w-12 h-[2.5px] sm:h-[3px] bg-primary rounded-full mt-2 sm:mt-3"></div>
             </div>
 
+            {otpStep && (
+              <form onSubmit={handleVerifyOtp} className="space-y-4" autoComplete="off">
+                <p className={`text-[13px] text-slate-600 ${textAlignClass}`} data-testid="text-otp-subtitle">
+                  {t.otpSubtitle}{" "}
+                  <span className="font-semibold text-[#1a3a2f]" dir="ltr">{otpPhone}</span>
+                  {" "}
+                  <span className="text-slate-400">
+                    ({otpChannel === "sms" ? t.otpChannelSms : otpChannel === "both" ? `${t.otpChannelWhatsapp}/${t.otpChannelSms}` : t.otpChannelWhatsapp})
+                  </span>
+                </p>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="otp" className={`text-[13px] font-semibold text-slate-700 block ${textAlignClass}`}>
+                    {t.otpCode} <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="otp"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    placeholder={t.otpCodePh}
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    maxLength={6}
+                    className="h-12 sm:h-11 text-center text-2xl tracking-[0.5em] font-bold bg-white border-slate-300 text-slate-900 placeholder:text-slate-300 focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 rounded-lg transition-all"
+                    data-testid="input-otp"
+                    autoFocus
+                    required
+                  />
+                </div>
+
+                {otpInfo && (
+                  <div className="text-emerald-700 text-[13px] text-center px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg" data-testid="text-otp-info">
+                    {otpInfo}
+                  </div>
+                )}
+
+                {error && (
+                  <div id="login-error" role="alert" className="text-red-700 text-[13px] text-center px-3 py-2 bg-red-50 border border-red-200 rounded-lg" data-testid="text-error">
+                    {error}
+                  </div>
+                )}
+
+                <Button
+                  type="submit"
+                  className="w-full h-12 sm:h-11 text-base sm:text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg shadow-sm hover:shadow-md hover:shadow-primary/25 transition-all duration-200 active:scale-[0.99]"
+                  disabled={isVerifyingOtp || otpCode.length !== 6}
+                  data-testid="button-verify-otp"
+                >
+                  {isVerifyingOtp ? (
+                    <>
+                      <Loader2 className={`${isRTL ? "ml-2" : "mr-2"} h-4 w-4 animate-spin`} />
+                      <span>{t.otpVerifying}</span>
+                    </>
+                  ) : (
+                    t.otpVerify
+                  )}
+                </Button>
+
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleBackToLogin}
+                    className="text-[12px] text-slate-500 hover:text-[var(--color-primary)] transition-colors py-1 min-h-[32px]"
+                    data-testid="button-otp-back"
+                  >
+                    {t.otpBack}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={isResendingOtp}
+                    className="text-[12px] text-[var(--color-primary)] hover:underline disabled:opacity-50 transition-colors py-1 min-h-[32px]"
+                    data-testid="button-otp-resend"
+                  >
+                    {isResendingOtp ? t.otpResending : t.otpResend}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {!otpStep && (
             <form
               onSubmit={handleSubmit}
               className="space-y-4"
@@ -427,6 +588,7 @@ export default function LoginPage() {
                 )}
               </Button>
             </form>
+            )}
           </div>
 
           {/* Compact footer below card */}
