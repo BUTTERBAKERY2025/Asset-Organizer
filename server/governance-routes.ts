@@ -2464,7 +2464,7 @@ export function registerGovernanceRoutes(app: Express) {
   app.post("/api/governance/resolutions/:resolutionId/signatures/create-requests", isAuthenticated, requirePermission("governance", "edit"), async (req, res) => {
     try {
       const resolutionId = parseInt(req.params.resolutionId);
-      const { expiresInDays = 7 } = req.body;
+      const { expiresInDays = 7, scope } = req.body;
       
       const [resolution] = await db.select().from(boardResolutions).where(eq(boardResolutions.id, resolutionId)).limit(1);
       if (!resolution) {
@@ -2472,6 +2472,8 @@ export function registerGovernanceRoutes(app: Express) {
       }
       
       const isAssemblyResolution = resolution.resolutionType === 'general_assembly' || resolution.resolutionType === 'extraordinary_assembly';
+      // قرار الجمعية دائماً رئيس المجلس وأمين السر فقط؛ ولقرار المجلس يمكن اختيار "chairman_secretary" أو "all"
+      const useChairmanSecretary = isAssemblyResolution || scope === 'chairman_secretary';
       
       const existingSignatures = await db.select()
         .from(resolutionSignatures)
@@ -2481,55 +2483,39 @@ export function registerGovernanceRoutes(app: Express) {
       expiresAt.setDate(expiresAt.getDate() + expiresInDays);
       const newSignatures: any[] = [];
       
-      if (isAssemblyResolution) {
-        // قرار الجمعية العمومية يوقّع عليه رئيس مجلس الإدارة وأمين السر فقط (واحد لكل منصب)
-        const activeMembers = await db.select().from(boardMembers).where(eq(boardMembers.status, "active"));
+      const activeMembers = await db.select().from(boardMembers).where(eq(boardMembers.status, "active"));
+
+      let signers: typeof activeMembers;
+      if (useChairmanSecretary) {
+        // يوقّع عليه رئيس مجلس الإدارة وأمين السر فقط (واحد لكل منصب)
         const chairman = activeMembers.find(m => m.position === "chairman");
         const secretary = activeMembers.find(m => m.position === "secretary");
-        const signers = [chairman, secretary].filter((m): m is typeof activeMembers[number] => !!m);
+        signers = [chairman, secretary].filter((m): m is typeof activeMembers[number] => !!m);
 
         if (signers.length === 0) {
           return res.status(400).json({ error: "لا يوجد رئيس مجلس إدارة أو أمين سر نشط. الرجاء تحديد منصب \"رئيس مجلس الإدارة\" و\"أمين السر\" في صفحة أعضاء المجلس أولاً." });
         }
-
-        const existingMemberIds = new Set(existingSignatures.filter(s => s.boardMemberId).map(s => s.boardMemberId));
-
-        for (const member of signers) {
-          if (!existingMemberIds.has(member.id)) {
-            const signatureToken = crypto.randomBytes(32).toString('hex');
-            newSignatures.push({
-              resolutionId,
-              boardMemberId: member.id,
-              signerName: member.fullName,
-              signerType: "board_member",
-              signatureToken,
-              status: "pending" as const,
-              expiresAt,
-            });
-          }
-        }
       } else {
-        const members = await db.select().from(boardMembers).where(eq(boardMembers.status, "active"));
-        
-        if (members.length === 0) {
+        signers = activeMembers;
+        if (signers.length === 0) {
           return res.status(400).json({ error: "لا يوجد أعضاء مجلس نشطين" });
         }
-        
-        const existingMemberIds = new Set(existingSignatures.filter(s => s.boardMemberId).map(s => s.boardMemberId));
-        
-        for (const member of members) {
-          if (!existingMemberIds.has(member.id)) {
-            const signatureToken = crypto.randomBytes(32).toString('hex');
-            newSignatures.push({
-              resolutionId,
-              boardMemberId: member.id,
-              signerName: member.fullName,
-              signerType: "board_member",
-              signatureToken,
-              status: "pending" as const,
-              expiresAt,
-            });
-          }
+      }
+
+      const existingMemberIds = new Set(existingSignatures.filter(s => s.boardMemberId).map(s => s.boardMemberId));
+
+      for (const member of signers) {
+        if (!existingMemberIds.has(member.id)) {
+          const signatureToken = crypto.randomBytes(32).toString('hex');
+          newSignatures.push({
+            resolutionId,
+            boardMemberId: member.id,
+            signerName: member.fullName,
+            signerType: "board_member",
+            signatureToken,
+            status: "pending" as const,
+            expiresAt,
+          });
         }
       }
       
@@ -2540,7 +2526,7 @@ export function registerGovernanceRoutes(app: Express) {
       res.json({ 
         created: newSignatures.length, 
         total: existingSignatures.length + newSignatures.length,
-        signerType: isAssemblyResolution ? "chairman_secretary" : "board_members",
+        signerType: useChairmanSecretary ? "chairman_secretary" : "board_members",
       });
     } catch (error) {
       console.error("Error creating signature requests:", error);

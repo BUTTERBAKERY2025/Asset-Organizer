@@ -156,11 +156,11 @@ export default function ResolutionsPage() {
   });
 
   const createSignatureRequestsMutation = useMutation({
-    mutationFn: async (resolutionId: number) => {
+    mutationFn: async ({ resolutionId, scope }: { resolutionId: number; scope?: "chairman_secretary" | "all" }) => {
       const res = await fetch(`/api/governance/resolutions/${resolutionId}/signatures/create-requests`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ expiresInDays: 7 }),
+        body: JSON.stringify({ expiresInDays: 7, scope }),
       });
       if (!res.ok) throw new Error("Failed to create signature requests");
       return res.json();
@@ -1460,21 +1460,53 @@ export default function ResolutionsPage() {
                     <div className="text-gray-500 mb-4">
                       لم يتم إنشاء طلبات توقيع بعد
                     </div>
-                    <Button
-                      className="bg-emerald-600 hover:bg-emerald-700 gap-2"
-                      onClick={() => createSignatureRequestsMutation.mutate(selectedResolution.id)}
-                      disabled={createSignatureRequestsMutation.isPending || (selectedResolution as any).isLocked}
-                      title={(selectedResolution as any).isLocked ? "القرار مقفل ولا يمكن إنشاء طلبات توقيع جديدة" : ""}
-                    >
-                      {createSignatureRequestsMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="h-4 w-4" />
-                      )}
-                      {selectedResolution.resolutionType === 'general_assembly' || selectedResolution.resolutionType === 'extraordinary_assembly'
-                        ? 'إنشاء روابط توقيع رئيس المجلس وأمين السر'
-                        : 'إنشاء طلبات التوقيع لجميع أعضاء المجلس'}
-                    </Button>
+                    {selectedResolution.resolutionType === 'general_assembly' || selectedResolution.resolutionType === 'extraordinary_assembly' ? (
+                      <Button
+                        className="bg-emerald-600 hover:bg-emerald-700 gap-2"
+                        onClick={() => createSignatureRequestsMutation.mutate({ resolutionId: selectedResolution.id })}
+                        disabled={createSignatureRequestsMutation.isPending || (selectedResolution as any).isLocked}
+                        title={(selectedResolution as any).isLocked ? "القرار مقفل ولا يمكن إنشاء طلبات توقيع جديدة" : ""}
+                        data-testid="button-create-signatures-chairman-secretary"
+                      >
+                        {createSignatureRequestsMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4" />
+                        )}
+                        إنشاء روابط توقيع رئيس المجلس وأمين السر
+                      </Button>
+                    ) : (
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="text-sm text-gray-600">اختر من يوقّع على هذا القرار:</div>
+                        <div className="flex flex-wrap items-center justify-center gap-2">
+                          <Button
+                            className="bg-emerald-600 hover:bg-emerald-700 gap-2"
+                            onClick={() => createSignatureRequestsMutation.mutate({ resolutionId: selectedResolution.id, scope: "chairman_secretary" })}
+                            disabled={createSignatureRequestsMutation.isPending || (selectedResolution as any).isLocked}
+                            title={(selectedResolution as any).isLocked ? "القرار مقفل ولا يمكن إنشاء طلبات توقيع جديدة" : ""}
+                            data-testid="button-create-signatures-chairman-secretary"
+                          >
+                            {createSignatureRequestsMutation.isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Send className="h-4 w-4" />
+                            )}
+                            رئيس المجلس وأمين السر فقط
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="gap-2"
+                            onClick={() => createSignatureRequestsMutation.mutate({ resolutionId: selectedResolution.id, scope: "all" })}
+                            disabled={createSignatureRequestsMutation.isPending || (selectedResolution as any).isLocked}
+                            title={(selectedResolution as any).isLocked ? "القرار مقفل ولا يمكن إنشاء طلبات توقيع جديدة" : ""}
+                            data-testid="button-create-signatures-all"
+                          >
+                            <Send className="h-4 w-4" />
+                            جميع أعضاء المجلس
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <>
