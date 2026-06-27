@@ -12,8 +12,9 @@ import {
   TrendingUp, MapPin, Clock, CheckCircle2, Newspaper, Megaphone, Store,
   Landmark, LogOut, Loader2, Phone, Mail, CreditCard, Hash, Printer,
   ScrollText, ChevronLeft, MessageSquare, Send, Plus, UserCog, Save,
-  History, LogIn, FileSearch,
+  History, LogIn, FileSearch, ArrowRight, MoreHorizontal,
 } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import logoUrl from "@assets/logo_-5_1765206843638.png";
 
 function fmtMoney(n: any): string {
@@ -97,6 +98,34 @@ export default function ShareholderPortalPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState("overview");
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  // التنقل مع دعم زر الرجوع في الجوال/المتصفح
+  const go = (key: string) => {
+    setMoreOpen(false);
+    setTab((prev) => {
+      if (prev !== key) {
+        try { window.history.pushState({ ...window.history.state, shTab: key }, ""); } catch {}
+      }
+      return key;
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const goBack = () => {
+    // إن كان زر الرجوع في المتصفح متزامناً مع القسم الحالي، نستخدم سجل المتصفح؛ وإلا نرجع لـ "ملفي"
+    if (typeof window !== "undefined" && window.history.state?.shTab === tab && tab !== "overview") {
+      window.history.back();
+    } else {
+      go("overview");
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  useEffect(() => {
+    try { window.history.replaceState({ ...window.history.state, shTab: "overview" }, ""); } catch {}
+    const onPop = (e: PopStateEvent) => setTab((e.state && e.state.shTab) || "overview");
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   const { data: meData, isLoading } = useQuery<any>({ queryKey: ["/api/shareholder/me"] });
   const shareholder = meData?.shareholder;
@@ -136,6 +165,11 @@ export default function ShareholderPortalPage() {
     activity: true,
   };
   const navItems = NAV_ITEMS.filter((i) => sectionEnabled[i.key] !== false);
+  // على الجوال: نعرض أهم 4 أقسام + زر "المزيد" لبقية الأقسام
+  const showMore = navItems.length > 5;
+  const primaryItems = showMore ? navItems.slice(0, 4) : navItems;
+  const moreItems = showMore ? navItems.slice(4) : [];
+  const moreActive = moreItems.some((i) => i.key === tab);
 
   // إن أُوقف القسم المعروض حالياً، نرجع لـ "ملفي"
   useEffect(() => {
@@ -212,16 +246,29 @@ export default function ShareholderPortalPage() {
       <header className="bg-white border-b sticky top-0 z-30 shadow-sm">
         <div className="max-w-5xl mx-auto px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5 min-w-0">
-            <img src={logoUrl} alt="logo" className="w-10 h-10 object-contain shrink-0" />
+            {tab !== "overview" ? (
+              <button
+                onClick={goBack}
+                className="w-9 h-9 -mr-1 rounded-full flex items-center justify-center text-amber-700 hover:bg-amber-50 active:scale-90 transition shrink-0"
+                data-testid="button-back"
+                aria-label="رجوع"
+              >
+                <ArrowRight className="w-5 h-5" />
+              </button>
+            ) : (
+              <img src={logoUrl} alt="logo" className="w-10 h-10 object-contain shrink-0" />
+            )}
             <div className="min-w-0">
-              <div className="font-bold text-sm leading-tight truncate" data-testid="text-company-name">{company?.nameAr}</div>
+              <div className="font-bold text-sm leading-tight truncate" data-testid="text-company-name">
+                {tab === "overview" ? company?.nameAr : SECTION_TITLES[tab]}
+              </div>
               <div className="text-[11px] text-muted-foreground">بوابة المساهمين</div>
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {settings.showDocuments && (
               <button
-                onClick={() => setTab("documents")}
+                onClick={() => go("documents")}
                 className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-colors ${tab === "documents" ? "bg-amber-100 text-amber-700" : "text-muted-foreground hover:bg-muted"}`}
                 data-testid="button-header-documents"
                 aria-label="وثائقي"
@@ -230,7 +277,7 @@ export default function ShareholderPortalPage() {
               </button>
             )}
             <button
-              onClick={() => setTab("notifications")}
+              onClick={() => go("notifications")}
               className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-colors ${tab === "notifications" ? "bg-amber-100 text-amber-700" : "text-muted-foreground hover:bg-muted"}`}
               data-testid="button-header-notifications"
               aria-label="الإشعارات"
@@ -255,32 +302,33 @@ export default function ShareholderPortalPage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-3 sm:px-4 py-4 pb-28">
-        {/* Greeting */}
-        <div className="mb-3">
-          <div className="text-[13px] text-muted-foreground">مرحباً 👋</div>
-          <div className="text-lg font-bold" data-testid="text-shareholder-name">{shareholder?.fullName}</div>
-        </div>
+        {tab === "overview" && (
+          <>
+            {/* Greeting */}
+            <div className="mb-3">
+              <div className="text-[13px] text-muted-foreground">مرحباً 👋</div>
+              <div className="text-lg font-bold" data-testid="text-shareholder-name">{shareholder?.fullName}</div>
+            </div>
 
-        {(settings.welcomeTitle || settings.welcomeMessage) && (
-          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/70 p-3" data-testid="card-welcome">
-            {settings.welcomeTitle && <div className="font-bold text-amber-800 text-sm">{settings.welcomeTitle}</div>}
-            {settings.welcomeMessage && <div className="text-sm text-amber-700 whitespace-pre-wrap mt-0.5">{settings.welcomeMessage}</div>}
-          </div>
+            {(settings.welcomeTitle || settings.welcomeMessage) && (
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/70 p-3" data-testid="card-welcome">
+                {settings.welcomeTitle && <div className="font-bold text-amber-800 text-sm">{settings.welcomeTitle}</div>}
+                {settings.welcomeMessage && <div className="text-sm text-amber-700 whitespace-pre-wrap mt-0.5">{settings.welcomeMessage}</div>}
+              </div>
+            )}
+
+            {/* Hero share summary */}
+            <div className="grid grid-cols-2 gap-2.5 mb-4">
+              <StatCard icon={PieChart} label="نسبة الملكية" value={`${fmtNum(shareholder?.sharePercentage)}%`} accent="amber" testid="stat-percentage" />
+              <StatCard icon={TrendingUp} label="عدد الأسهم" value={fmtNum(shareholder?.numberOfShares)} accent="green" testid="stat-shares" />
+              {settings.showVoting && <StatCard icon={Vote} label="تصويتات مفتوحة" value={fmtNum(openVotes)} accent="purple" testid="stat-open-votes" onClick={() => go("voting")} />}
+              <StatCard icon={Bell} label="إشعارات جديدة" value={fmtNum(unreadCount)} accent="blue" testid="stat-unread" onClick={() => go("notifications")} />
+            </div>
+          </>
         )}
 
-        {/* Hero share summary */}
-        <div className="grid grid-cols-2 gap-2.5 mb-4">
-          <StatCard icon={PieChart} label="نسبة الملكية" value={`${fmtNum(shareholder?.sharePercentage)}%`} accent="amber" testid="stat-percentage" />
-          <StatCard icon={TrendingUp} label="عدد الأسهم" value={fmtNum(shareholder?.numberOfShares)} accent="green" testid="stat-shares" />
-          {settings.showVoting && <StatCard icon={Vote} label="تصويتات مفتوحة" value={fmtNum(openVotes)} accent="purple" testid="stat-open-votes" onClick={() => setTab("voting")} />}
-          <StatCard icon={Bell} label="إشعارات جديدة" value={fmtNum(unreadCount)} accent="blue" testid="stat-unread" onClick={() => setTab("notifications")} />
-        </div>
-
-        {/* Section title */}
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-1.5 h-5 rounded-full bg-amber-500" />
-          <h2 className="font-bold text-base" data-testid="text-section-title">{SECTION_TITLES[tab]}</h2>
-        </div>
+        {/* Section content (animated on tab change) */}
+        <div key={tab} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
 
         {/* ===== Overview ===== */}
         {tab === "overview" && (
@@ -328,8 +376,8 @@ export default function ShareholderPortalPage() {
             {/* Quick links */}
             {(settings.showDocuments || settings.showDividends) && (
               <div className="grid grid-cols-2 gap-2.5">
-                {settings.showDocuments && <QuickLink icon={FileText} label="وثائقي" count={documents.length} onClick={() => setTab("documents")} testid="quick-documents" />}
-                {settings.showDividends && <QuickLink icon={Wallet} label="الأرباح" count={dividends.length} onClick={() => setTab("dividends")} testid="quick-dividends" />}
+                {settings.showDocuments && <QuickLink icon={FileText} label="وثائقي" count={documents.length} onClick={() => go("documents")} testid="quick-documents" />}
+                {settings.showDividends && <QuickLink icon={Wallet} label="الأرباح" count={dividends.length} onClick={() => go("dividends")} testid="quick-dividends" />}
               </div>
             )}
           </div>
@@ -548,23 +596,24 @@ export default function ShareholderPortalPage() {
             ))}
           </div>
         )}
+        </div>
       </main>
 
       {/* Bottom navigation (mobile-first) */}
       <nav className="fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t shadow-[0_-2px_10px_rgba(0,0,0,0.04)]" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-        <div className="max-w-5xl mx-auto grid" style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}>
-          {navItems.map((item) => {
+        <div className="max-w-5xl mx-auto grid" style={{ gridTemplateColumns: `repeat(${primaryItems.length + (showMore ? 1 : 0)}, minmax(0, 1fr))` }}>
+          {primaryItems.map((item) => {
             const Icon = item.icon;
             const active = tab === item.key;
             const badge = item.key === "voting" ? openVotes : 0;
             return (
               <button
                 key={item.key}
-                onClick={() => setTab(item.key)}
-                className={`relative flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${active ? "text-amber-600" : "text-muted-foreground"}`}
+                onClick={() => go(item.key)}
+                className={`relative flex flex-col items-center justify-center gap-0.5 py-2 transition-colors active:scale-95 ${active ? "text-amber-600" : "text-muted-foreground"}`}
                 data-testid={`nav-${item.key}`}
               >
-                <div className={`relative flex items-center justify-center w-9 h-7 rounded-full transition-colors ${active ? "bg-amber-100" : ""}`}>
+                <div className={`relative flex items-center justify-center w-9 h-7 rounded-full transition-all ${active ? "bg-amber-100 scale-105" : ""}`}>
                   <Icon className="w-[18px] h-[18px]" />
                   {badge > 0 && (
                     <span className="absolute -top-1 -left-1 min-w-[16px] h-4 px-1 bg-red-500 text-white rounded-full text-[9px] font-bold flex items-center justify-center">{badge}</span>
@@ -574,6 +623,45 @@ export default function ShareholderPortalPage() {
               </button>
             );
           })}
+
+          {showMore && (
+            <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
+              <SheetTrigger asChild>
+                <button
+                  className={`relative flex flex-col items-center justify-center gap-0.5 py-2 transition-colors active:scale-95 ${moreActive ? "text-amber-600" : "text-muted-foreground"}`}
+                  data-testid="nav-more"
+                  aria-label="المزيد"
+                >
+                  <div className={`relative flex items-center justify-center w-9 h-7 rounded-full transition-all ${moreActive ? "bg-amber-100 scale-105" : ""}`}>
+                    <MoreHorizontal className="w-[18px] h-[18px]" />
+                  </div>
+                  <span className="text-[10px] font-medium">المزيد</span>
+                </button>
+              </SheetTrigger>
+              <SheetContent side="bottom" className="rounded-t-2xl pb-[calc(env(safe-area-inset-bottom)+1rem)]" dir="rtl">
+                <SheetHeader>
+                  <SheetTitle className="text-right">المزيد من الأقسام</SheetTitle>
+                </SheetHeader>
+                <div className="grid grid-cols-3 gap-3 mt-4">
+                  {moreItems.map((item) => {
+                    const Icon = item.icon;
+                    const active = tab === item.key;
+                    return (
+                      <button
+                        key={item.key}
+                        onClick={() => go(item.key)}
+                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border p-3 transition-colors active:scale-95 ${active ? "border-amber-300 bg-amber-50 text-amber-700" : "border-border hover:bg-muted text-foreground"}`}
+                        data-testid={`more-${item.key}`}
+                      >
+                        <Icon className="w-6 h-6" />
+                        <span className="text-xs font-medium text-center leading-tight">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </SheetContent>
+            </Sheet>
+          )}
         </div>
       </nav>
     </div>
