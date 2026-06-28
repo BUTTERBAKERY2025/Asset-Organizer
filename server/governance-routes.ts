@@ -1296,6 +1296,65 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
+  // RE-OPEN VOTING: atomically move a resolution back to "voting" status so it can be
+  // managed again on the voting page. If the resolution is locked, an admin may reopen it
+  // in the SAME transaction (unlock + set voting + audit) so the record can never be left
+  // unlocked-but-still-decided if a later step fails.
+  app.post("/api/governance/resolutions/:id/reopen-voting", isAuthenticated, requirePermission("governance_resolutions", "edit"), async (req, res) => {
+    try {
+      const resolutionId = parseInt(req.params.id);
+      const reason = (req.body?.reason || '').toString().trim();
+      const [existing] = await db.select().from(boardResolutions).where(eq(boardResolutions.id, resolutionId));
+      if (!existing) return res.status(404).json({ error: "القرار غير موجود" });
+
+      // Already open for voting → idempotent no-op.
+      if ((existing as any).status === "voting") {
+        return res.json(existing);
+      }
+
+      const isLocked = Boolean((existing as any).isLocked);
+      // Locked resolutions are immutable; only an admin may reopen them.
+      if (isLocked && (req as any).currentUser?.role !== 'admin') {
+        return res.status(403).json({ error: "فقط المسؤول يمكنه إعادة فتح التصويت على قرار مقفل" });
+      }
+
+      const updated = await db.transaction(async (tx) => {
+        const setFields: any = { status: "voting", updatedAt: new Date() };
+        if (isLocked) {
+          setFields.isLocked = false;
+          setFields.lockedAt = null;
+          setFields.lockedBy = null;
+        }
+        const [row] = await tx.update(boardResolutions)
+          .set(setFields)
+          .where(eq(boardResolutions.id, resolutionId))
+          .returning();
+        await tx.insert(systemAuditLogs).values({
+          module: 'governance',
+          entityId: String(resolutionId),
+          entityName: (existing as any).resolutionNumber || (existing as any).title,
+          action: 'update',
+          details: JSON.stringify({
+            type: 'reopen_voting',
+            resolutionNumber: (existing as any).resolutionNumber,
+            title: (existing as any).title,
+            previousStatus: (existing as any).status,
+            wasLocked: isLocked,
+            reason: reason || null,
+          }),
+          userId: getCurrentUserId(req),
+          userName: (req as any).currentUser?.username || 'system',
+          ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
+        });
+        return row;
+      });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error reopening voting:", error);
+      res.status(500).json({ error: "فشل في إعادة فتح التصويت على القرار" });
+    }
+  });
+
   app.delete("/api/governance/resolutions/:id", isAuthenticated, async (req, res) => {
     try {
       const user = (req as any).currentUser;

@@ -1218,27 +1218,62 @@ export default function GeneralAssemblyPage() {
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
                                     onClick={async () => {
-                                      if (
-                                        resolution.status !== "voting" &&
-                                        resolution.status !== "approved" &&
-                                        resolution.status !== "rejected"
-                                      ) {
-                                        try {
-                                          const res = await fetch(`/api/governance/resolutions/${resolution.id}`, {
-                                            method: "PATCH",
+                                      // Already open for voting → just go manage the votes.
+                                      if (resolution.status === "voting") {
+                                        setLocation("/governance/voting");
+                                        return;
+                                      }
+
+                                      const isDecided =
+                                        resolution.status === "approved" || resolution.status === "rejected";
+                                      const isLocked = Boolean((resolution as any).isLocked);
+
+                                      // Re-opening a decided/locked resolution is a deliberate, audited action.
+                                      // Capture an explicit reason for traceability.
+                                      let reason: string | undefined;
+                                      if (isDecided || isLocked) {
+                                        const entered = window.prompt(
+                                          isLocked
+                                            ? "هذا القرار مقفل نظامياً. لإعادة فتح التصويت سيتم فتح القفل. اكتب سبب إعادة الفتح (سيُسجّل في سجل التدقيق):"
+                                            : "هذا القرار محسوم (معتمد/مرفوض). اكتب سبب إعادة فتح التصويت عليه (سيُسجّل في سجل التدقيق):"
+                                        );
+                                        // Cancel → abort. Empty string is allowed.
+                                        if (entered === null) return;
+                                        reason = entered.trim();
+                                      }
+
+                                      try {
+                                        // Single atomic endpoint: unlocks (if needed), sets status to "voting",
+                                        // and writes the audit log in one transaction — no partial state.
+                                        const res = await fetch(
+                                          `/api/governance/resolutions/${resolution.id}/reopen-voting`,
+                                          {
+                                            method: "POST",
                                             headers: { "Content-Type": "application/json" },
                                             credentials: "include",
-                                            body: JSON.stringify({ status: "voting" }),
-                                          });
-                                          if (res.ok) {
-                                            queryClient.invalidateQueries({ queryKey: ["/api/governance/resolutions"] });
-                                            toast({ title: "تم فتح التصويت على القرار" });
+                                            body: JSON.stringify({ reason }),
                                           }
-                                        } catch (e) {
-                                          console.error("Failed to update status:", e);
+                                        );
+                                        if (res.ok) {
+                                          queryClient.invalidateQueries({ queryKey: ["/api/governance/resolutions"] });
+                                          toast({ title: "تم فتح التصويت على القرار" });
+                                          setLocation("/governance/voting");
+                                        } else {
+                                          const err = await res.json().catch(() => ({}));
+                                          toast({
+                                            title: "تعذر فتح التصويت",
+                                            description: err?.error || "حدث خطأ أثناء فتح التصويت على القرار.",
+                                            variant: "destructive",
+                                          });
                                         }
+                                      } catch (e) {
+                                        console.error("Failed to reopen voting:", e);
+                                        toast({
+                                          title: "تعذر فتح التصويت",
+                                          description: "تعذر الاتصال بالخادم. حاول مرة أخرى.",
+                                          variant: "destructive",
+                                        });
                                       }
-                                      setLocation("/governance/voting");
                                     }}
                                     data-testid={`menu-vote-${resolution.id}`}
                                   >
