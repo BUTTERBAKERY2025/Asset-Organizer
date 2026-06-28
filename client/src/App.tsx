@@ -142,6 +142,7 @@ const LoyaltyCampaignsPage = makeLazy("loyalty-campaigns");
 const CampaignJoinPage = makeLazy("campaign-join");
 const LoyaltyCardPage = makeLazy("loyalty-card");
 const RsvpPage = makeLazy("rsvp-page");
+const RevotePage = makeLazy("revote");
 const GovernancePage = makeLazy("governance");
 const BoardMembersPage = makeLazy("governance-board-members");
 const ShareholdersPage = makeLazy("governance-shareholders");
@@ -306,6 +307,7 @@ const Router = React.memo(function Router() {
       
       {/* Public RSVP confirmation page - no auth required */}
       <Route path="/rsvp/:token">{() => <Suspense fallback={<PageLoadingFallback />}><RsvpPage /></Suspense>}</Route>
+      <Route path="/revote/:token">{() => <Suspense fallback={<PageLoadingFallback />}><RevotePage /></Suspense>}</Route>
       <Route path="/job-offer/:token">{() => <Suspense fallback={<PageLoadingFallback />}><JobOfferPublicPage /></Suspense>}</Route>
       <Route path="/welcome/:token">{() => <Suspense fallback={<PageLoadingFallback />}><WelcomePublicPage /></Suspense>}</Route>
       <Route path="/onboarding/:token">{() => <Suspense fallback={<PageLoadingFallback />}><OnboardingPublicPage /></Suspense>}</Route>

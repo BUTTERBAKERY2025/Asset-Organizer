@@ -128,6 +128,7 @@ const pageImports: Record<string, () => Promise<any>> = {
   "shared-document": () => import("@/pages/shared-document"),
   "discount-card": () => import("@/pages/discount-card"),
   "rsvp-page": () => import("@/pages/rsvp-page"),
+  "revote": () => import("@/pages/revote"),
   "governance": () => import("@/pages/governance"),
   "governance-board-members": () => import("@/pages/governance/board-members"),
   "governance-shareholders": () => import("@/pages/governance/shareholders"),

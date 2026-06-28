@@ -18,8 +18,9 @@ import { apiRequest, queryClient as qc } from "@/lib/queryClient";
 import {
   Building2, Plus, Search, Eye, Edit, Trash2, Lock, LockOpen,
   ThumbsUp, ThumbsDown, Loader2, Scale, AlertTriangle, FileDown,
-  Printer, FileText, ListChecks,
+  Printer, FileText, ListChecks, RotateCcw, Copy, Send, Ban,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { AssemblyResolution } from "@shared/schema";
 
 const assemblyTypes = [
@@ -66,6 +67,7 @@ export default function AssemblyResolutionsPage() {
   const [lockId, setLockId] = useState<number | null>(null);
   const [viewing, setViewing] = useState<AssemblyResolution | null>(null);
   const [manageItemsFor, setManageItemsFor] = useState<AssemblyResolution | null>(null);
+  const [reopenFor, setReopenFor] = useState<AssemblyResolution | null>(null);
 
   const { data: resolutions = [], isLoading } = useQuery<AssemblyResolution[]>({
     queryKey: ["/api/governance/assembly-resolutions"],
@@ -599,6 +601,16 @@ export default function AssemblyResolutionsPage() {
                           >
                             <ListChecks className="h-4 w-4 ml-1" /> البنود
                           </Button>
+                          {isAdmin && (
+                            <Button
+                              variant="outline" size="sm"
+                              className="text-indigo-700 border-indigo-300 hover:bg-indigo-50"
+                              onClick={() => setReopenFor(r)}
+                              data-testid={`btn-reopen-vote-${r.id}`}
+                            >
+                              <RotateCcw className="h-4 w-4 ml-1" /> إعادة فتح التصويت
+                            </Button>
+                          )}
                           {isAdmin && !r.isLocked && (r.status === "approved" || r.status === "implemented") && (
                             <Button
                               variant="outline" size="sm"
@@ -867,6 +879,8 @@ export default function AssemblyResolutionsPage() {
         </AlertDialog>
 
         <ManageClausesDialog resolution={manageItemsFor} onClose={() => setManageItemsFor(null)} />
+
+        <ReopenVoteDialog resolution={reopenFor} onClose={() => setReopenFor(null)} />
       </div>
     </Layout>
   );
@@ -1003,6 +1017,240 @@ function ManageClausesDialog({ resolution, onClose }: { resolution: AssemblyReso
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} data-testid="btn-close-clauses">إغلاق</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+type RevoteShareholder = { id: number; fullName: string; numberOfShares?: number | null };
+type RevoteClause = { id: number; text: string; sequence: number | null };
+type RevoteGrant = {
+  id: number;
+  resolutionId: number;
+  itemId: number | null;
+  shareholderId: number;
+  shareholderName: string | null;
+  status: string;
+  reason: string | null;
+  token: string;
+  grantedAt: string | null;
+  usedAt: string | null;
+  expiresAt: string | null;
+};
+
+function ReopenVoteDialog({ resolution, onClose }: { resolution: AssemblyResolution | null; onClose: () => void }) {
+  const { toast } = useToast();
+  const open = !!resolution;
+  const resId = resolution?.id;
+
+  const [shareholderId, setShareholderId] = useState<string>("");
+  const [itemId, setItemId] = useState<string>("__whole__");
+  const [reason, setReason] = useState("");
+  const [sendWhatsapp, setSendWhatsapp] = useState(false);
+
+  const grantsKey = ["/api/governance/assembly-resolutions", resId, "revote-grants"];
+
+  const { data: shareholders = [] } = useQuery<RevoteShareholder[]>({
+    queryKey: ["/api/governance/shareholders"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/governance/shareholders");
+      return res.json();
+    },
+    enabled: open,
+  });
+
+  const { data: clauses = [] } = useQuery<RevoteClause[]>({
+    queryKey: ["/api/governance/assembly-resolutions", resId, "items"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/governance/assembly-resolutions/${resId}/items`);
+      return res.json();
+    },
+    enabled: open && resId != null,
+  });
+
+  const { data: grants = [], isLoading: grantsLoading } = useQuery<RevoteGrant[]>({
+    queryKey: grantsKey,
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/governance/assembly-resolutions/${resId}/revote-grants`);
+      return res.json();
+    },
+    enabled: open && resId != null,
+  });
+
+  const reset = () => {
+    setShareholderId("");
+    setItemId("__whole__");
+    setReason("");
+    setSendWhatsapp(false);
+  };
+
+  const copyLink = (token: string) => {
+    const link = `${window.location.origin}/revote/${token}`;
+    navigator.clipboard?.writeText(link).then(
+      () => toast({ title: "تم نسخ الرابط" }),
+      () => toast({ title: "تعذّر نسخ الرابط", variant: "destructive" }),
+    );
+  };
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const body: any = {
+        shareholderId: Number(shareholderId),
+        reason: reason.trim() || undefined,
+        sendWhatsapp,
+      };
+      if (itemId !== "__whole__") body.itemId = Number(itemId);
+      const res = await apiRequest("POST", `/api/governance/assembly-resolutions/${resId}/revote`, body);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: grantsKey });
+      toast({
+        title: "تم فتح إعادة التصويت",
+        description: data?.whatsappQueued ? "تم إرسال رابط واتساب للمساهم" : undefined,
+      });
+      if (data?.link) copyLink(data.grant?.token || "");
+      reset();
+    },
+    onError: (e: any) => toast({ title: "فشل فتح إعادة التصويت", description: e?.message, variant: "destructive" }),
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: async (grantId: number) => {
+      const res = await apiRequest("POST", `/api/governance/assembly-resolutions/revote-grants/${grantId}/revoke`);
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: grantsKey });
+      toast({ title: "تم إلغاء الطلب" });
+    },
+    onError: (e: any) => toast({ title: "فشل الإلغاء", description: e?.message, variant: "destructive" }),
+  });
+
+  const statusBadge = (s: string) =>
+    s === "open" ? <Badge className="bg-green-100 text-green-800">مفتوح</Badge>
+    : s === "used" ? <Badge className="bg-gray-100 text-gray-700">تم التصويت</Badge>
+    : <Badge className="bg-red-100 text-red-700">ملغى</Badge>;
+
+  const clauseLabel = (id: number | null) => {
+    if (id == null) return "القرار ككل";
+    const c = clauses.find(x => x.id === id);
+    return c ? `بند: ${c.text.slice(0, 40)}` : `بند #${id}`;
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <RotateCcw className="h-5 w-5 text-indigo-600" /> إعادة فتح التصويت
+          </DialogTitle>
+          <DialogDescription>
+            {resolution?.title} — افتح التصويت من جديد لمساهم محدد. سيُستبدل صوته السابق بالصوت الجديد.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 border rounded-lg p-3 bg-indigo-50/40">
+          <div>
+            <Label>المساهم *</Label>
+            <Select value={shareholderId} onValueChange={setShareholderId}>
+              <SelectTrigger data-testid="select-revote-shareholder"><SelectValue placeholder="اختر المساهم" /></SelectTrigger>
+              <SelectContent>
+                {shareholders.map(s => (
+                  <SelectItem key={s.id} value={String(s.id)}>{s.fullName}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {clauses.length > 0 && (
+            <div>
+              <Label>نطاق إعادة التصويت</Label>
+              <Select value={itemId} onValueChange={setItemId}>
+                <SelectTrigger data-testid="select-revote-scope"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__whole__">القرار ككل</SelectItem>
+                  {clauses.map((c, i) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{`البند ${i + 1}: ${c.text.slice(0, 50)}`}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div>
+            <Label>السبب (اختياري)</Label>
+            <Textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="سبب إعادة فتح التصويت…"
+              data-testid="input-revote-reason"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="revote-whatsapp"
+              checked={sendWhatsapp}
+              onCheckedChange={(v) => setSendWhatsapp(!!v)}
+              data-testid="checkbox-revote-whatsapp"
+            />
+            <Label htmlFor="revote-whatsapp" className="cursor-pointer">إرسال رابط تصويت عبر واتساب للمساهم</Label>
+          </div>
+
+          <Button
+            onClick={() => createMutation.mutate()}
+            disabled={!shareholderId || createMutation.isPending}
+            className="gap-2 w-full"
+            data-testid="btn-submit-revote"
+          >
+            {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            فتح إعادة التصويت
+          </Button>
+        </div>
+
+        <div className="mt-2">
+          <h4 className="font-semibold mb-2 text-sm text-gray-700">طلبات إعادة التصويت</h4>
+          {grantsLoading ? (
+            <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+          ) : grants.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-3">لا توجد طلبات</p>
+          ) : (
+            <div className="space-y-2">
+              {grants.map(g => (
+                <div key={g.id} className="border rounded-lg p-2 flex items-center justify-between gap-2 text-sm" data-testid={`grant-row-${g.id}`}>
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{g.shareholderName || `#${g.shareholderId}`}</div>
+                    <div className="text-xs text-gray-500 truncate">{clauseLabel(g.itemId)}</div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {statusBadge(g.status)}
+                    {g.status === "open" && (
+                      <>
+                        <Button variant="outline" size="sm" onClick={() => copyLink(g.token)} data-testid={`btn-copy-link-${g.id}`}>
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="outline" size="sm"
+                          className="text-red-600 border-red-200 hover:bg-red-50"
+                          onClick={() => revokeMutation.mutate(g.id)}
+                          disabled={revokeMutation.isPending}
+                          data-testid={`btn-revoke-grant-${g.id}`}
+                        >
+                          <Ban className="h-3 w-3" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { reset(); onClose(); }} data-testid="btn-close-revote">إغلاق</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

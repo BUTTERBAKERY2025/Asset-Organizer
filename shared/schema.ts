@@ -9202,6 +9202,34 @@ export const insertAssemblyResolutionSignatureSchema = createInsertSchema(assemb
 export type AssemblyResolutionSignature = typeof assemblyResolutionSignatures.$inferSelect;
 export type InsertAssemblyResolutionSignature = z.infer<typeof insertAssemblyResolutionSignatureSchema>;
 
+// إعادة فتح التصويت — admin grants a specific shareholder permission to (re)vote on a
+// resolution (whole) or a specific clause/بند. The latest vote supersedes the previous
+// one; totals are reversed/re-applied atomically and the old vote is archived to the
+// audit log. A grant can also back a one-time WhatsApp link (token) for re-voting.
+export const assemblyRevoteGrants = pgTable("assembly_revote_grants", {
+  id: serial("id").primaryKey(),
+  resolutionId: integer("resolution_id").notNull().references(() => assemblyResolutions.id, { onDelete: "cascade" }),
+  // NULL = re-vote on the whole (legacy) resolution; set = re-vote on a specific clause.
+  itemId: integer("item_id").references(() => assemblyResolutionItems.id, { onDelete: "cascade" }),
+  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id),
+  token: text("token").notNull().unique(),
+  status: text("status").default("open").notNull(), // 'open' | 'used' | 'revoked'
+  reason: text("reason"),
+  grantedBy: varchar("granted_by").references(() => users.id),
+  grantedAt: timestamp("granted_at").defaultNow().notNull(),
+  usedAt: timestamp("used_at"),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_assembly_revote_grants_resolution").on(table.resolutionId),
+  index("idx_assembly_revote_grants_shareholder").on(table.shareholderId),
+]);
+export const insertAssemblyRevoteGrantSchema = createInsertSchema(assemblyRevoteGrants).omit({
+  id: true, createdAt: true,
+});
+export type AssemblyRevoteGrant = typeof assemblyRevoteGrants.$inferSelect;
+export type InsertAssemblyRevoteGrant = z.infer<typeof insertAssemblyRevoteGrantSchema>;
+
 // ============================================================================
 // سجل المطلعين - Insider Register (CMA / Nomu listing requirement)
 // ============================================================================

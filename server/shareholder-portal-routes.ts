@@ -15,6 +15,7 @@ import {
   assemblyResolutions,
   assemblyResolutionVotes,
   assemblyResolutionItems,
+  assemblyRevoteGrants,
   users,
   notificationQueue,
   insertShareholderAnnouncementSchema,
@@ -29,6 +30,7 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import { logShareholderActivity } from "./shareholder-security";
+import { castOrSupersedeVote } from "./assembly-revote";
 
 // بيانات الكيان القانوني (تظهر للمساهم في البوابة)
 const COMPANY_INFO = {
@@ -601,51 +603,67 @@ export function registerShareholderPortalRoutes(app: Express) {
           .where(eq(assemblyResolutions.id, id))
           .limit(1);
         if (!resolution) return { error: "القرار غير موجود", code: 404 };
-        if (resolution.status !== "voting") return { error: "التصويت غير مفتوح على هذا القرار", code: 400 };
 
-        // Strict mode: if this resolution has clauses (بنود), the shareholder must
-        // vote per-clause, not on the whole resolution.
-        const [{ itemCount = 0 } = {}] = await tx
-          .select({ itemCount: sql<number>`count(*)::int` })
-          .from(assemblyResolutionItems)
-          .where(eq(assemblyResolutionItems.resolutionId, id));
-        if (itemCount > 0) return { error: "هذا القرار يُصوَّت عليه بنداً بنداً", code: 400 };
-
-        const [existing] = await tx
+        // إعادة فتح التصويت: إن وُجد تفويض مفتوح لهذا المساهم على القرار ككل،
+        // نسمح بالتصويت حتى لو لم يكن مفتوحاً، ويُستبدل الصوت السابق (إن وُجد).
+        const [grant] = await tx
           .select()
-          .from(assemblyResolutionVotes)
+          .from(assemblyRevoteGrants)
           .where(and(
-            eq(assemblyResolutionVotes.resolutionId, id),
-            eq(assemblyResolutionVotes.shareholderId, sh.id),
-            isNull(assemblyResolutionVotes.itemId),
+            eq(assemblyRevoteGrants.resolutionId, id),
+            eq(assemblyRevoteGrants.shareholderId, sh.id),
+            isNull(assemblyRevoteGrants.itemId),
+            eq(assemblyRevoteGrants.status, "open"),
           ))
           .limit(1);
-        if (existing) return { error: "لقد قمت بالتصويت على هذا القرار مسبقاً", code: 400 };
+        const hasGrant = !!grant && !(grant.expiresAt && new Date(grant.expiresAt) < new Date());
+
+        if (!hasGrant) {
+          if (resolution.status !== "voting") return { error: "التصويت غير مفتوح على هذا القرار", code: 400 };
+
+          // Strict mode: if this resolution has clauses (بنود), the shareholder must
+          // vote per-clause, not on the whole resolution.
+          const [{ itemCount = 0 } = {}] = await tx
+            .select({ itemCount: sql<number>`count(*)::int` })
+            .from(assemblyResolutionItems)
+            .where(eq(assemblyResolutionItems.resolutionId, id));
+          if (itemCount > 0) return { error: "هذا القرار يُصوَّت عليه بنداً بنداً", code: 400 };
+
+          const [existing] = await tx
+            .select()
+            .from(assemblyResolutionVotes)
+            .where(and(
+              eq(assemblyResolutionVotes.resolutionId, id),
+              eq(assemblyResolutionVotes.shareholderId, sh.id),
+              isNull(assemblyResolutionVotes.itemId),
+            ))
+            .limit(1);
+          if (existing) return { error: "لقد قمت بالتصويت على هذا القرار مسبقاً", code: 400 };
+        } else if (grant) {
+          // Atomically claim the grant (open -> used) before casting. Concurrent
+          // submissions serialize on the row; only one transition matches.
+          const claimed = await tx.update(assemblyRevoteGrants)
+            .set({ status: "used", usedAt: new Date() })
+            .where(and(eq(assemblyRevoteGrants.id, grant.id), eq(assemblyRevoteGrants.status, "open")))
+            .returning();
+          if (claimed.length !== 1) return { error: "لم يعد بإمكانك إعادة التصويت على هذا القرار", code: 409 };
+        }
 
         const shares = sh.numberOfShares || 0;
-        await tx.insert(assemblyResolutionVotes).values({
-          resolutionId: id,
+        await castOrSupersedeVote(tx, {
+          resolution,
+          itemId: null,
           shareholderId: sh.id,
           voterName: sh.fullName,
+          shares,
           vote: parsed.data.vote,
-          sharesVoted: String(shares),
           voteMethod: "online_portal",
           comments: parsed.data.comments || null,
           ipAddress: req.ip || null,
+          actorUserId: getUserId(req),
+          actorName: sh.fullName,
         });
 
-        // حدّث المجاميع (الأصوات بالرؤوس + الأسهم)
-        const voteCol =
-          parsed.data.vote === "for" ? "for_votes" : parsed.data.vote === "against" ? "against_votes" : "abstain_votes";
-        const shareCol =
-          parsed.data.vote === "for" ? "for_shares" : parsed.data.vote === "against" ? "against_shares" : "abstain_shares";
-        await tx.execute(sql`
-          UPDATE assembly_resolutions
-          SET ${sql.raw(voteCol)} = COALESCE(${sql.raw(voteCol)}, 0) + 1,
-              total_votes = COALESCE(total_votes, 0) + 1,
-              ${sql.raw(shareCol)} = COALESCE(${sql.raw(shareCol)}, 0) + ${shares}
-          WHERE id = ${id}
-        `);
         return { ok: true };
       });
 
@@ -686,7 +704,6 @@ export function registerShareholderPortalRoutes(app: Express) {
           .where(eq(assemblyResolutions.id, id))
           .limit(1);
         if (!resolution) return { error: "القرار غير موجود", code: 404 };
-        if (resolution.status !== "voting") return { error: "التصويت غير مفتوح على هذا القرار", code: 400 };
 
         // البند يجب أن يكون تابعاً لنفس القرار (حماية من العبث بالمعرفات)
         const [item] = await tx
@@ -696,69 +713,57 @@ export function registerShareholderPortalRoutes(app: Express) {
           .limit(1);
         if (!item) return { error: "البند غير موجود ضمن هذا القرار", code: 404 };
 
-        const [existing] = await tx
+        // إعادة فتح التصويت على بند محدد: إن وُجد تفويض مفتوح لهذا المساهم على البند،
+        // نسمح بالتصويت حتى خارج حالة "voting"، ويُستبدل الصوت السابق (إن وُجد).
+        const [grant] = await tx
           .select()
-          .from(assemblyResolutionVotes)
+          .from(assemblyRevoteGrants)
           .where(and(
-            eq(assemblyResolutionVotes.itemId, itemId),
-            eq(assemblyResolutionVotes.shareholderId, sh.id),
+            eq(assemblyRevoteGrants.resolutionId, id),
+            eq(assemblyRevoteGrants.itemId, itemId),
+            eq(assemblyRevoteGrants.shareholderId, sh.id),
+            eq(assemblyRevoteGrants.status, "open"),
           ))
           .limit(1);
-        if (existing) return { error: "لقد قمت بالتصويت على هذا البند مسبقاً", code: 400 };
+        const hasGrant = !!grant && !(grant.expiresAt && new Date(grant.expiresAt) < new Date());
+
+        if (!hasGrant) {
+          if (resolution.status !== "voting") return { error: "التصويت غير مفتوح على هذا القرار", code: 400 };
+
+          const [existing] = await tx
+            .select()
+            .from(assemblyResolutionVotes)
+            .where(and(
+              eq(assemblyResolutionVotes.itemId, itemId),
+              eq(assemblyResolutionVotes.shareholderId, sh.id),
+            ))
+            .limit(1);
+          if (existing) return { error: "لقد قمت بالتصويت على هذا البند مسبقاً", code: 400 };
+        } else if (grant) {
+          // Atomically claim the grant (open -> used) before casting. Concurrent
+          // submissions serialize on the row; only one transition matches.
+          const claimed = await tx.update(assemblyRevoteGrants)
+            .set({ status: "used", usedAt: new Date() })
+            .where(and(eq(assemblyRevoteGrants.id, grant.id), eq(assemblyRevoteGrants.status, "open")))
+            .returning();
+          if (claimed.length !== 1) return { error: "لم يعد بإمكانك إعادة التصويت على هذا البند", code: 409 };
+        }
 
         const shares = sh.numberOfShares || 0;
-        await tx.insert(assemblyResolutionVotes).values({
-          resolutionId: id,
+        await castOrSupersedeVote(tx, {
+          resolution,
           itemId,
           shareholderId: sh.id,
           voterName: sh.fullName,
+          shares,
           vote: parsed.data.vote,
-          sharesVoted: String(shares),
           voteMethod: "online_portal",
           comments: parsed.data.comments || null,
           ipAddress: req.ip || null,
+          actorUserId: getUserId(req),
+          actorName: sh.fullName,
         });
 
-        const voteCol =
-          parsed.data.vote === "for" ? "for_votes" : parsed.data.vote === "against" ? "against_votes" : "abstain_votes";
-        const shareCol =
-          parsed.data.vote === "for" ? "for_shares" : parsed.data.vote === "against" ? "against_shares" : "abstain_shares";
-        await tx.execute(sql`
-          UPDATE assembly_resolution_items
-          SET ${sql.raw(voteCol)} = COALESCE(${sql.raw(voteCol)}, 0) + 1,
-              total_votes = COALESCE(total_votes, 0) + 1,
-              ${sql.raw(shareCol)} = COALESCE(${sql.raw(shareCol)}, 0) + ${shares},
-              updated_at = now()
-          WHERE id = ${itemId}
-        `);
-
-        // أعد احتساب نتيجة البند مرجّحة بالأسهم وفق الأغلبية الفعّالة
-        // (أغلبية البند إن وُجدت، وإلا أغلبية القرار، وإلا أغلبية بسيطة).
-        const [updated] = await tx
-          .select()
-          .from(assemblyResolutionItems)
-          .where(eq(assemblyResolutionItems.id, itemId))
-          .limit(1);
-        if (updated) {
-          const effMajority = updated.majorityType || resolution.majorityType || "simple";
-          const f = Number(updated.forShares) || 0;
-          const a = Number(updated.againstShares) || 0;
-          const ab = Number(updated.abstainShares) || 0;
-          const totalVoted = f + a + ab;
-          const ratio = totalVoted > 0 ? f / totalVoted : 0;
-          const meets =
-            effMajority === "two_thirds" ? ratio >= 2 / 3
-            : effMajority === "three_quarters" ? ratio >= 0.75
-            : ratio > 0.5;
-          // أثناء فتح التصويت لا نعلن "مرفوض" نهائياً؛ نبقيه "بانتظار" حتى يتحقق النصاب.
-          const newResult = meets ? "approved" : "pending";
-          if (newResult !== updated.result) {
-            await tx
-              .update(assemblyResolutionItems)
-              .set({ result: newResult })
-              .where(eq(assemblyResolutionItems.id, itemId));
-          }
-        }
         return { ok: true };
       });
 

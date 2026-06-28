@@ -19,6 +19,8 @@ import {
   assemblyResolutionItems,
   insertAssemblyResolutionItemSchema,
   assemblyResolutionSignatures,
+  assemblyRevoteGrants,
+  notificationQueue,
   insiderRegister,
   insiderBlackoutPeriods,
   insertAssemblyResolutionSchema,
@@ -76,6 +78,7 @@ import {
 import crypto from "crypto";
 import { z } from "zod";
 import { sendMeetingInvitations, isTwilioConfigured, generateWhatsAppLinks } from "./twilio-service";
+import { castOrSupersedeVote } from "./assembly-revote";
 
 const updateBoardMemberSchema = insertBoardMemberSchema.partial().omit({ createdBy: true });
 const updateShareholderSchema = insertShareholderSchema.partial().omit({ createdBy: true });
@@ -1731,6 +1734,291 @@ export function registerGovernanceRoutes(app: Express) {
     } catch (error) {
       console.error("Error deleting resolution item:", error);
       res.status(500).json({ error: "فشل في حذف البند" });
+    }
+  });
+
+  // ===== إعادة فتح التصويت (re-vote) =====
+  const revoteSchema = z.object({
+    shareholderId: z.number().int().positive(),
+    itemId: z.number().int().positive().nullable().optional(),
+    reason: z.string().trim().max(1000).optional(),
+    sendWhatsapp: z.boolean().optional(),
+  });
+
+  // Admin reopens voting for a specific shareholder (whole resolution or a clause).
+  app.post("/api/governance/assembly-resolutions/:id/revote", isAuthenticated, requirePermission("governance_resolutions", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const parsed = revoteSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.errors });
+      const { shareholderId, reason } = parsed.data;
+      const itemId = parsed.data.itemId ?? null;
+
+      const [resolution] = await db.select().from(assemblyResolutions).where(eq(assemblyResolutions.id, id));
+      if (!resolution || (resolution as any).deletedAt) return res.status(404).json({ error: "قرار الجمعية غير موجود" });
+
+      const [shareholder] = await db.select().from(shareholders).where(eq(shareholders.id, shareholderId)).limit(1);
+      if (!shareholder) return res.status(404).json({ error: "المساهم غير موجود" });
+
+      // Enforce the same strict-mode invariant as live voting: clause-based resolutions
+      // are voted on per-clause, so a whole-resolution re-vote grant is not allowed when
+      // the resolution has clauses.
+      const [{ itemCount = 0 } = {}] = await db
+        .select({ itemCount: sql<number>`count(*)::int` })
+        .from(assemblyResolutionItems)
+        .where(eq(assemblyResolutionItems.resolutionId, id));
+      if (itemId == null && itemCount > 0) {
+        return res.status(400).json({ error: "هذا القرار يُصوَّت عليه بنداً بنداً؛ اختر بنداً محدداً لإعادة فتح التصويت" });
+      }
+
+      // A specified clause must belong to this resolution.
+      if (itemId != null) {
+        const [item] = await db.select().from(assemblyResolutionItems)
+          .where(and(eq(assemblyResolutionItems.id, itemId), eq(assemblyResolutionItems.resolutionId, id))).limit(1);
+        if (!item) return res.status(404).json({ error: "البند غير موجود ضمن هذا القرار" });
+      }
+
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 14);
+
+      const grant = await db.transaction(async (tx) => {
+        // Revoke any existing OPEN grant for the same shareholder + scope.
+        await tx.update(assemblyRevoteGrants)
+          .set({ status: "revoked" })
+          .where(and(
+            eq(assemblyRevoteGrants.resolutionId, id),
+            eq(assemblyRevoteGrants.shareholderId, shareholderId),
+            itemId == null ? isNull(assemblyRevoteGrants.itemId) : eq(assemblyRevoteGrants.itemId, itemId),
+            eq(assemblyRevoteGrants.status, "open"),
+          ));
+        const [row] = await tx.insert(assemblyRevoteGrants).values({
+          resolutionId: id,
+          itemId,
+          shareholderId,
+          token,
+          status: "open",
+          reason: reason || null,
+          grantedBy: getCurrentUserId(req),
+          expiresAt,
+        }).returning();
+        await tx.insert(systemAuditLogs).values({
+          module: "governance",
+          entityId: String(id),
+          entityName: (resolution as any).resolutionNumber || (resolution as any).title,
+          action: "update",
+          details: JSON.stringify({ type: "revote_grant", resolutionId: id, itemId, shareholderId, reason: reason || null }),
+          userId: getCurrentUserId(req),
+          userName: (req as any).currentUser?.username || "system",
+          ipAddress: req.ip || "unknown",
+        });
+        return row;
+      });
+
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      const link = `${baseUrl}/revote/${token}`;
+
+      let whatsappQueued = false;
+      if (parsed.data.sendWhatsapp) {
+        const phone = (shareholder as any).phone;
+        if (phone) {
+          const scopeLine = itemId != null ? "\n(إعادة التصويت على بند محدد)" : "";
+          const msg = `السلام عليكم ${shareholder.fullName}\nتم فتح إعادة التصويت لكم على القرار: ${resolution.title}${scopeLine}\nيرجى التصويت من جديد عبر الرابط التالي (صالح لمرة واحدة):\n${link}`;
+          await db.insert(notificationQueue).values({
+            recipientPhone: phone,
+            recipientName: shareholder.fullName,
+            channel: "whatsapp",
+            message: msg,
+            relatedModule: "assembly_revote",
+            relatedEntityId: String(grant.id),
+          });
+          whatsappQueued = true;
+        }
+      }
+
+      res.status(201).json({ grant, link, whatsappQueued });
+    } catch (error) {
+      console.error("Error creating revote grant:", error);
+      res.status(500).json({ error: "فشل في فتح إعادة التصويت" });
+    }
+  });
+
+  // List re-vote grants for a resolution (admin view).
+  app.get("/api/governance/assembly-resolutions/:id/revote-grants", isAuthenticated, requirePermission("governance_resolutions", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const rows = await db.select({
+        id: assemblyRevoteGrants.id,
+        resolutionId: assemblyRevoteGrants.resolutionId,
+        itemId: assemblyRevoteGrants.itemId,
+        shareholderId: assemblyRevoteGrants.shareholderId,
+        shareholderName: shareholders.fullName,
+        status: assemblyRevoteGrants.status,
+        reason: assemblyRevoteGrants.reason,
+        token: assemblyRevoteGrants.token,
+        grantedAt: assemblyRevoteGrants.grantedAt,
+        usedAt: assemblyRevoteGrants.usedAt,
+        expiresAt: assemblyRevoteGrants.expiresAt,
+      })
+        .from(assemblyRevoteGrants)
+        .leftJoin(shareholders, eq(assemblyRevoteGrants.shareholderId, shareholders.id))
+        .where(eq(assemblyRevoteGrants.resolutionId, id))
+        .orderBy(desc(assemblyRevoteGrants.grantedAt));
+      res.json(rows);
+    } catch (error) {
+      console.error("Error listing revote grants:", error);
+      res.status(500).json({ error: "فشل في جلب طلبات إعادة التصويت" });
+    }
+  });
+
+  // Revoke an open re-vote grant.
+  app.post("/api/governance/assembly-resolutions/revote-grants/:grantId/revoke", isAuthenticated, requirePermission("governance_resolutions", "edit"), async (req, res) => {
+    try {
+      const grantId = parseInt(req.params.grantId);
+      if (isNaN(grantId)) return res.status(400).json({ error: "معرف غير صالح" });
+      const [grant] = await db.select().from(assemblyRevoteGrants).where(eq(assemblyRevoteGrants.id, grantId)).limit(1);
+      if (!grant) return res.status(404).json({ error: "الطلب غير موجود" });
+      if (grant.status !== "open") return res.status(409).json({ error: "لا يمكن إلغاء طلب غير مفتوح" });
+      const [row] = await db.update(assemblyRevoteGrants).set({ status: "revoked" }).where(eq(assemblyRevoteGrants.id, grantId)).returning();
+      res.json(row);
+    } catch (error) {
+      console.error("Error revoking revote grant:", error);
+      res.status(500).json({ error: "فشل في إلغاء الطلب" });
+    }
+  });
+
+  // Public: load a one-time re-vote grant (WhatsApp link). No auth — token is the credential.
+  app.get("/api/public/revote/:token", async (req, res) => {
+    try {
+      const clientIp = req.ip || req.socket.remoteAddress || "unknown";
+      if (!checkSignatureRateLimit(clientIp)) return res.status(429).json({ error: "تم تجاوز الحد الأقصى للطلبات. حاول لاحقاً." });
+      const { token } = req.params;
+      if (!token || !/^[a-f0-9]{64}$/.test(token)) return res.status(400).json({ error: "رابط غير صالح" });
+      const [grant] = await db.select().from(assemblyRevoteGrants).where(eq(assemblyRevoteGrants.token, token)).limit(1);
+      if (!grant) return res.status(404).json({ error: "الرابط غير صالح" });
+      if (grant.status === "used") return res.status(410).json({ error: "تم استخدام هذا الرابط مسبقاً", code: "USED" });
+      if (grant.status === "revoked") return res.status(410).json({ error: "تم إلغاء هذا الرابط", code: "REVOKED" });
+      if (grant.expiresAt && new Date(grant.expiresAt) < new Date()) return res.status(410).json({ error: "انتهت صلاحية الرابط", code: "EXPIRED" });
+
+      const [resolution] = await db.select().from(assemblyResolutions).where(eq(assemblyResolutions.id, grant.resolutionId)).limit(1);
+      if (!resolution) return res.status(404).json({ error: "القرار غير موجود" });
+      const [shareholder] = await db.select().from(shareholders).where(eq(shareholders.id, grant.shareholderId)).limit(1);
+      let item: { id: number; sequence: number; text: string } | null = null;
+      if (grant.itemId != null) {
+        const [it] = await db.select().from(assemblyResolutionItems).where(eq(assemblyResolutionItems.id, grant.itemId)).limit(1);
+        item = it ? { id: it.id, sequence: it.sequence, text: it.text } : null;
+      }
+      res.json({
+        shareholderName: shareholder?.fullName || String(grant.shareholderId),
+        resolution: {
+          id: resolution.id,
+          resolutionNumber: (resolution as any).resolutionNumber,
+          title: resolution.title,
+          description: resolution.description,
+        },
+        item,
+        status: grant.status,
+      });
+    } catch (error) {
+      console.error("Error loading revote grant:", error);
+      res.status(500).json({ error: "فشل في تحميل البيانات" });
+    }
+  });
+
+  const publicRevoteSchema = z.object({
+    vote: z.enum(["for", "against", "abstain"]),
+    comments: z.string().trim().max(1000).optional(),
+    signatureData: z.string().optional(),
+    signatureType: z.string().optional(),
+  });
+
+  // Public: submit the re-vote (and optional signature) via a one-time token.
+  app.post("/api/public/revote/:token", async (req, res) => {
+    try {
+      const clientIp = req.ip || req.socket.remoteAddress || "unknown";
+      if (!checkSignatureRateLimit(clientIp)) return res.status(429).json({ error: "تم تجاوز الحد الأقصى للطلبات. حاول لاحقاً." });
+      const { token } = req.params;
+      if (!token || !/^[a-f0-9]{64}$/.test(token)) return res.status(400).json({ error: "رابط غير صالح" });
+      const parsed = publicRevoteSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "بيانات غير صالحة" });
+
+      const result = await db.transaction(async (tx) => {
+        const [grant] = await tx.select().from(assemblyRevoteGrants).where(eq(assemblyRevoteGrants.token, token)).limit(1);
+        if (!grant) return { error: "الرابط غير صالح", code: 404 };
+        if (grant.status !== "open") return { error: "هذا الرابط لم يعد صالحاً", code: 410 };
+        if (grant.expiresAt && new Date(grant.expiresAt) < new Date()) return { error: "انتهت صلاحية الرابط", code: 410 };
+
+        // Atomically claim the grant (open -> used). Concurrent requests serialize on the
+        // row; only one transition matches, guaranteeing the link is truly single-use.
+        const claimed = await tx.update(assemblyRevoteGrants)
+          .set({ status: "used", usedAt: new Date() })
+          .where(and(eq(assemblyRevoteGrants.id, grant.id), eq(assemblyRevoteGrants.status, "open")))
+          .returning();
+        if (claimed.length !== 1) return { error: "هذا الرابط لم يعد صالحاً", code: 410 };
+
+        const [resolution] = await tx.select().from(assemblyResolutions).where(eq(assemblyResolutions.id, grant.resolutionId)).limit(1);
+        if (!resolution) return { error: "القرار غير موجود", code: 404 };
+        const [shareholder] = await tx.select().from(shareholders).where(eq(shareholders.id, grant.shareholderId)).limit(1);
+        if (!shareholder) return { error: "المساهم غير موجود", code: 404 };
+
+        const shares = (shareholder as any).numberOfShares || 0;
+        await castOrSupersedeVote(tx, {
+          resolution,
+          itemId: grant.itemId ?? null,
+          shareholderId: grant.shareholderId,
+          voterName: shareholder.fullName,
+          shares,
+          vote: parsed.data.vote,
+          voteMethod: "whatsapp_link",
+          comments: parsed.data.comments || null,
+          ipAddress: req.ip || null,
+          actorUserId: null,
+          actorName: shareholder.fullName,
+        });
+
+        // Latest signature becomes authoritative (if provided).
+        if (parsed.data.signatureData) {
+          const [existingSig] = await tx.select().from(assemblyResolutionSignatures)
+            .where(and(
+              eq(assemblyResolutionSignatures.resolutionId, grant.resolutionId),
+              eq(assemblyResolutionSignatures.shareholderId, grant.shareholderId),
+            )).limit(1);
+          if (existingSig) {
+            await tx.update(assemblyResolutionSignatures).set({
+              signatureData: parsed.data.signatureData,
+              signatureType: parsed.data.signatureType || "draw",
+              status: "signed",
+              signedAt: new Date(),
+              ipAddress: req.ip || null,
+              userAgent: req.headers["user-agent"] || null,
+              updatedAt: new Date(),
+            } as any).where(eq(assemblyResolutionSignatures.id, existingSig.id));
+          } else {
+            await tx.insert(assemblyResolutionSignatures).values({
+              resolutionId: grant.resolutionId,
+              shareholderId: grant.shareholderId,
+              signerName: shareholder.fullName,
+              signatureToken: crypto.randomBytes(32).toString("hex"),
+              signatureData: parsed.data.signatureData,
+              signatureType: parsed.data.signatureType || "draw",
+              status: "signed",
+              signedAt: new Date(),
+              ipAddress: req.ip || null,
+              userAgent: req.headers["user-agent"] || null,
+            });
+          }
+        }
+        return { ok: true };
+      });
+
+      if ((result as any).error) return res.status((result as any).code).json({ error: (result as any).error });
+      res.json({ success: true });
+    } catch (error: any) {
+      if (error?.code === "23505") return res.status(400).json({ error: "تعذّر تسجيل التصويت" });
+      console.error("Error submitting public revote:", error);
+      res.status(500).json({ error: "فشل في تسجيل التصويت" });
     }
   });
 
