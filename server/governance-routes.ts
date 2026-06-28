@@ -3464,6 +3464,116 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
+  // RE-OPEN VOTING FOR A SINGLE VOTER: reissue a fresh voting link so a shareholder/board
+  // member who ALREADY voted can vote again on the SAME resolution. The previous vote is
+  // reversed from the resolution totals, archived to the audit log, and the token is reset to
+  // "pending" with a brand-new token string. The last vote cast then becomes authoritative.
+  app.post("/api/governance/resolutions/:resolutionId/voting-tokens/:tokenId/reopen", isAuthenticated, requirePermission("governance", "edit"), async (req, res) => {
+    try {
+      const resolutionId = parseInt(req.params.resolutionId);
+      const tokenId = parseInt(req.params.tokenId);
+      const { expiresInDays = 7, reason } = req.body || {};
+
+      const [resolution] = await db.select().from(boardResolutions).where(eq(boardResolutions.id, resolutionId)).limit(1);
+      if (!resolution) return res.status(404).json({ error: "القرار غير موجود" });
+      // Locked resolutions are immutable — reopen the resolution's voting first.
+      if ((resolution as any).isLocked) {
+        return res.status(423).json({ error: "القرار مقفل. أعد فتح التصويت على القرار أولاً ثم أعد إرسال الرابط.", code: "RESOLUTION_LOCKED" });
+      }
+
+      const [preCheck] = await db.select({ id: votingTokens.id }).from(votingTokens)
+        .where(and(eq(votingTokens.id, tokenId), eq(votingTokens.resolutionId, resolutionId)));
+      if (!preCheck) return res.status(404).json({ error: "رابط التصويت غير موجود" });
+
+      const newToken = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + (Number(expiresInDays) || 7));
+
+      const result = await db.transaction(async (tx) => {
+        // Row-lock the token so concurrent reopen requests serialize — prevents the
+        // previous vote from being reversed twice (double-reverse race).
+        const [locked] = await tx.select().from(votingTokens)
+          .where(and(eq(votingTokens.id, tokenId), eq(votingTokens.resolutionId, resolutionId)))
+          .for("update");
+        if (!locked) return null;
+
+        const hadVote = locked.status === "voted" && !!locked.vote;
+
+        // Reverse the previous vote from the resolution totals (never below zero).
+        if (hadVote) {
+          const voteWeight = locked.voteWeight || 1;
+          const voteField = locked.vote === "for" ? "forVotes" : locked.vote === "against" ? "againstVotes" : "abstainVotes";
+          await tx.update(boardResolutions)
+            .set({
+              [voteField]: sql`GREATEST(COALESCE(${boardResolutions[voteField as keyof typeof boardResolutions]}, 0) - ${voteWeight}, 0)`,
+            })
+            .where(eq(boardResolutions.id, resolutionId));
+
+          // Mark the superseded vote-history row(s) invalid so reports/exports that read
+          // resolution_votes directly don't double-count the old + new vote.
+          const voterCond = locked.voterType === "board_member" && locked.boardMemberId
+            ? eq(resolutionVotes.boardMemberId, locked.boardMemberId)
+            : locked.shareholderId
+              ? eq(resolutionVotes.shareholderId, locked.shareholderId)
+              : null;
+          if (voterCond) {
+            await tx.update(resolutionVotes)
+              .set({ isValid: false, invalidationReason: "superseded_by_revote" })
+              .where(and(eq(resolutionVotes.resolutionId, resolutionId), voterCond, eq(resolutionVotes.isValid, true)));
+          }
+        }
+
+        // Reset the token so the voter can cast a new (authoritative) vote.
+        const [row] = await tx.update(votingTokens)
+          .set({
+            voteToken: newToken,
+            status: "pending",
+            vote: null,
+            comments: null,
+            signatureData: null,
+            votedAt: null,
+            ipAddress: null,
+            userAgent: null,
+            expiresAt,
+            updatedAt: new Date(),
+          })
+          .where(eq(votingTokens.id, tokenId))
+          .returning();
+
+        // Archive the superseded vote for compliance.
+        await tx.insert(systemAuditLogs).values({
+          module: 'governance',
+          entityId: String(resolutionId),
+          entityName: (resolution as any).resolutionNumber || (resolution as any).title,
+          action: 'update',
+          details: JSON.stringify({
+            type: 'voter_revote_reopen',
+            resolutionNumber: (resolution as any).resolutionNumber,
+            tokenId,
+            voterType: locked.voterType,
+            shareholderId: locked.shareholderId || null,
+            boardMemberId: locked.boardMemberId || null,
+            previousVote: hadVote ? locked.vote : null,
+            previousVotedAt: locked.votedAt || null,
+            reversedWeight: hadVote ? (locked.voteWeight || 1) : 0,
+            reason: (reason || '').toString().trim() || null,
+          }),
+          userId: getCurrentUserId(req),
+          userName: (req as any).currentUser?.username || 'system',
+          ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
+        });
+
+        return { row, hadVote };
+      });
+
+      if (!result) return res.status(404).json({ error: "رابط التصويت غير موجود" });
+      res.json({ token: result.row, voteToken: newToken, expiresAt, reversedPreviousVote: result.hadVote });
+    } catch (error) {
+      console.error("Error reopening voter token:", error);
+      res.status(500).json({ error: "فشل في إعادة فتح التصويت للمصوّت" });
+    }
+  });
+
   // CORS for public voting endpoints
   app.options("/api/public/vote/:token", (req, res) => {
     res.set({

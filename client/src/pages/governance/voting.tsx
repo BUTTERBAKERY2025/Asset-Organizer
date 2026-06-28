@@ -231,6 +231,37 @@ export default function VotingPage() {
     },
   });
 
+  const reopenVoterMutation = useMutation({
+    mutationFn: async ({ resolutionId, tokenId }: { resolutionId: number; tokenId: number }) => {
+      const res = await fetch(`/api/governance/resolutions/${resolutionId}/voting-tokens/${tokenId}/reopen`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ expiresInDays: 7 }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "فشل في إعادة فتح التصويت");
+      }
+      return res.json();
+    },
+    onSuccess: (data, variables) => {
+      // Update the in-dialog token list with the new (pending) token + link.
+      setVotingTokens((prev) =>
+        prev.map((t) =>
+          t.id === variables.tokenId
+            ? { ...t, voteToken: data.voteToken, status: "pending", vote: null, votedAt: null }
+            : t
+        )
+      );
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/resolutions"] });
+      toast({ title: "تم إنشاء رابط تصويت جديد", description: "أرسل الرابط للمصوّت ليصوّت من جديد — آخر تصويت هو المعتمد." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "تعذر إعادة فتح التصويت", description: error.message, variant: "destructive" });
+    },
+  });
+
   const deleteResolutionMutation = useMutation({
     mutationFn: async (resolutionId: number) => {
       const res = await fetch(`/api/governance/resolutions/${resolutionId}`, {
@@ -1244,6 +1275,30 @@ export default function VotingPage() {
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-2">
+                              {token.status === 'voted' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1 text-amber-700 border-amber-300 hover:bg-amber-50"
+                                  disabled={reopenVoterMutation.isPending}
+                                  onClick={() => {
+                                    if (
+                                      window.confirm(
+                                        `سيتم إلغاء التصويت السابق لـ ${token.shareholderName} وإنشاء رابط جديد ليصوّت من جديد على نفس القرار. آخر تصويت هو المعتمد. متابعة؟`
+                                      )
+                                    ) {
+                                      reopenVoterMutation.mutate({
+                                        resolutionId: selectedResolutionForLinks.id,
+                                        tokenId: token.id,
+                                      });
+                                    }
+                                  }}
+                                  data-testid={`button-revote-${token.id}`}
+                                >
+                                  <RefreshCw className="h-4 w-4" />
+                                  إعادة التصويت
+                                </Button>
+                              )}
                               {token.shareholderPhone && (
                                 <Button
                                   size="sm"
