@@ -160,7 +160,18 @@ export default function AssemblyResolutionsPage() {
   const labelOf = (arr: { value: string; label: string }[], v?: string | null) =>
     arr.find(x => x.value === v)?.label || v || "—";
 
-  const buildResolutionDocContent = (r: AssemblyResolution) => {
+  type MinutesData = {
+    items: { id: number; text: string; sequence: number | null }[];
+    votes: { itemId: number | null; voterName: string; vote: string; sharesVoted: string | null }[];
+    signatures: { signerName: string | null; signatureData: string | null; signatureType: string | null; status: string | null; signedAt: string | null }[];
+  };
+
+  const fetchMinutes = async (id: number): Promise<MinutesData> => {
+    const res = await apiRequest("GET", `/api/governance/assembly-resolutions/${id}/minutes`);
+    return await res.json();
+  };
+
+  const buildResolutionDocContent = (r: AssemblyResolution, minutes?: MinutesData) => {
     const fmt = (n: any) => (n == null || n === "" ? "0" : Number(n).toLocaleString("en-US"));
     const dateAr = (d: any) =>
       d ? new Date(d).toLocaleDateString("ar-SA-u-nu-latn", { year: "numeric", month: "long", day: "numeric" }) : "—";
@@ -183,6 +194,63 @@ export default function AssemblyResolutionsPage() {
            <div class="vote-item"><div class="vote-num" style="color:#a16207">${fmt(r.abstainShares)}</div><div class="vote-lbl">أسهم ممتنعة</div></div>
          </div>`
       : "";
+    const items = minutes?.items ?? [];
+    const allVotes = minutes?.votes ?? [];
+    const signatures = minutes?.signatures ?? [];
+    const hasClauses = items.length > 0;
+    const hasPerClauseVotes = allVotes.some(v => v.itemId != null);
+    const legacyVotes = allVotes.filter(v => v.itemId == null);
+    const voteMeta = (v: string) =>
+      v === "for" ? { t: "موافق", c: "#15803d" }
+      : v === "against" ? { t: "غير موافق", c: "#b91c1c" }
+      : { t: "ممتنع", c: "#a16207" };
+    const voterRowsFor = (clauseId: number) => {
+      const rows = hasPerClauseVotes ? allVotes.filter(v => v.itemId === clauseId) : legacyVotes;
+      if (!rows.length) return `<tr><td colspan="3" class="empty">لا توجد أصوات مسجّلة</td></tr>`;
+      return rows.map(v => {
+        const m = voteMeta(v.vote);
+        return `<tr><td>${escapeHtml(v.voterName)}</td><td style="color:${m.c};font-weight:700">${m.t}</td><td>${fmt(v.sharesVoted)}</td></tr>`;
+      }).join("");
+    };
+    const clausesHtml = hasClauses ? `
+      <div class="sec-title"><div class="ic">٢</div><span>التصويت على البنود</span></div>
+      ${!hasPerClauseVotes ? `<div class="note">صُوّت على هذا القرار إجمالاً (قبل تفعيل التصويت على البنود)، لذا يظهر موقف كل مساهم على القرار ككل أمام كل بند.</div>` : ""}
+      ${items.map((it, i) => `
+        <div class="clause">
+          <div class="clause-head">البند ${i + 1}: ${escapeHtml(it.text)}</div>
+          <table class="vtbl">
+            <thead><tr><th>المساهم</th><th>الموقف</th><th>عدد الأسهم</th></tr></thead>
+            <tbody>${voterRowsFor(it.id)}</tbody>
+          </table>
+        </div>`).join("")}
+    ` : "";
+    const aggregateHtml = hasClauses ? "" : `
+      <div class="sec-title"><div class="ic">٢</div><span>نتيجة التصويت</span></div>
+      <div class="vote-box">
+        <div class="vote-item"><div class="vote-num" style="color:#15803d">${fmt(r.forVotes)}</div><div class="vote-lbl">موافق</div></div>
+        <div class="vote-item"><div class="vote-num" style="color:#b91c1c">${fmt(r.againstVotes)}</div><div class="vote-lbl">معارض</div></div>
+        <div class="vote-item"><div class="vote-num" style="color:#a16207">${fmt(r.abstainVotes)}</div><div class="vote-lbl">ممتنع</div></div>
+      </div>
+      ${sharesRow}
+      ${r.requiredMajority ? `<div class="req">النسبة المطلوبة للاعتماد: ${Number(r.requiredMajority)}%</div>` : ""}`;
+    const signaturesHtml = signatures.length ? `
+      <div class="sec-title"><div class="ic">٣</div><span>توقيعات المساهمين</span></div>
+      <div class="sig-grid">
+        ${signatures.map(s => {
+          const signed = s.status === "signed" && !!s.signatureData;
+          const isImg = signed && /^data:image/i.test(String(s.signatureData));
+          const body = isImg
+            ? `<img class="sig-img" src="${escapeHtml(String(s.signatureData))}" alt="توقيع" />`
+            : signed
+              ? `<div class="sig-text">${escapeHtml(String(s.signatureData))}</div>`
+              : `<div class="sig-blank"></div>`;
+          return `<div class="sig-cell">
+            ${body}
+            <div class="sig-name">${escapeHtml(s.signerName || "—")}</div>
+            <div class="sig-date">${signed && s.signedAt ? "وُقّع في " + dateAr(s.signedAt) : "بدون توقيع"}</div>
+          </div>`;
+        }).join("")}
+      </div>` : "";
     return `
     <div id="res-doc">
       <style>
@@ -213,6 +281,20 @@ export default function AssemblyResolutionsPage() {
         #res-doc .vote-lbl { font-size:10px; color:#666; margin-top:2px; }
         #res-doc .result { margin-top:12px; text-align:center; font-weight:700; font-size:14px; color:${resultColor}; border:2px dashed ${resultColor}; border-radius:8px; padding:8px; }
         #res-doc .req { text-align:center; font-size:11px; color:#666; margin-top:6px; }
+        #res-doc .note { background:#fff8e1; border:1px solid #f0d68a; border-radius:6px; padding:8px 12px; font-size:11px; color:#7a5c00; margin:8px 0; line-height:1.6; }
+        #res-doc .clause { border:1px solid #e5e7eb; border-radius:8px; padding:10px 12px; margin:10px 0; break-inside:avoid; page-break-inside:avoid; }
+        #res-doc .clause-head { font-weight:700; font-size:12.5px; color:#1a3a2f; margin-bottom:8px; line-height:1.6; }
+        #res-doc .vtbl { width:100%; border-collapse:collapse; font-size:11px; }
+        #res-doc .vtbl th { background:#f1f5f3; color:#1a3a2f; text-align:right; padding:6px 8px; border:1px solid #e5e7eb; font-weight:700; }
+        #res-doc .vtbl td { padding:6px 8px; border:1px solid #eee; }
+        #res-doc .vtbl td.empty { text-align:center; color:#888; }
+        #res-doc .sig-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:8px; }
+        #res-doc .sig-cell { border:1px solid #e5e7eb; border-radius:8px; padding:10px; text-align:center; break-inside:avoid; page-break-inside:avoid; }
+        #res-doc .sig-img { max-height:60px; max-width:100%; object-fit:contain; }
+        #res-doc .sig-text { font-size:18px; color:#1a3a2f; min-height:60px; display:flex; align-items:center; justify-content:center; }
+        #res-doc .sig-blank { height:60px; border-bottom:1px dashed #aaa; }
+        #res-doc .sig-name { font-weight:700; font-size:11px; color:#1a3a2f; margin-top:6px; }
+        #res-doc .sig-date { font-size:9px; color:#777; margin-top:2px; }
         #res-doc .foot { margin-top:20px; padding-top:10px; border-top:2px solid #1a3a2f; display:flex; justify-content:space-between; font-size:9px; color:#666; }
       </style>
       <div class="doc-header">
@@ -238,15 +320,10 @@ export default function AssemblyResolutionsPage() {
       <div class="sec-title"><div class="ic">١</div><span>نص القرار</span></div>
       <div class="title-box"><h2>${escapeHtml(r.title)}</h2></div>
       <div class="desc">${escapeHtml(r.description)}</div>
-      <div class="sec-title"><div class="ic">٢</div><span>نتيجة التصويت</span></div>
-      <div class="vote-box">
-        <div class="vote-item"><div class="vote-num" style="color:#15803d">${fmt(r.forVotes)}</div><div class="vote-lbl">موافق</div></div>
-        <div class="vote-item"><div class="vote-num" style="color:#b91c1c">${fmt(r.againstVotes)}</div><div class="vote-lbl">معارض</div></div>
-        <div class="vote-item"><div class="vote-num" style="color:#a16207">${fmt(r.abstainVotes)}</div><div class="vote-lbl">ممتنع</div></div>
-      </div>
-      ${sharesRow}
-      ${r.requiredMajority ? `<div class="req">النسبة المطلوبة للاعتماد: ${Number(r.requiredMajority)}%</div>` : ""}
+      ${aggregateHtml}
+      ${clausesHtml}
       <div class="result">${resultBadge}</div>
+      ${signaturesHtml}
       <div class="foot">
         <div>شركة الزبد الأفضل التجارية (شركة مساهمة) | سجل تجاري: 7026155296</div>
         <div>تاريخ الطباعة: ${new Date().toLocaleDateString("ar-SA-u-nu-latn")} | وثيقة رسمية</div>
@@ -254,11 +331,17 @@ export default function AssemblyResolutionsPage() {
     </div>`;
   };
 
-  const printResolution = (r: AssemblyResolution) => {
+  const printResolution = async (r: AssemblyResolution) => {
     try {
+      let minutes: MinutesData | undefined;
+      try {
+        minutes = await fetchMinutes(r.id);
+      } catch {
+        toast({ title: "تعذّر تحميل تفاصيل البنود والتوقيعات", description: "سيُطبع المستند بالملخّص فقط. أعد المحاولة لإظهار التفاصيل الكاملة.", variant: "destructive" });
+      }
       const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>قرار ${escapeHtml(r.resolutionNumber)}</title>
       <style>@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');@page{size:A4 portrait;margin:12mm}body{margin:0}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style>
-      </head><body>${buildResolutionDocContent(r)}</body></html>`;
+      </head><body>${buildResolutionDocContent(r, minutes)}</body></html>`;
       const iframe = document.createElement("iframe");
       iframe.style.position = "fixed";
       iframe.style.right = "-9999px";
@@ -300,12 +383,18 @@ export default function AssemblyResolutionsPage() {
   const exportResolutionPdf = async (r: AssemblyResolution) => {
     let container: HTMLDivElement | null = null;
     try {
+      let minutes: MinutesData | undefined;
+      try {
+        minutes = await fetchMinutes(r.id);
+      } catch {
+        toast({ title: "تعذّر تحميل تفاصيل البنود والتوقيعات", description: "سيُصدَّر المستند بالملخّص فقط. أعد المحاولة لإظهار التفاصيل الكاملة.", variant: "destructive" });
+      }
       const html2pdf = (await import("html2pdf.js")).default;
       container = document.createElement("div");
       container.style.position = "fixed";
       container.style.right = "-9999px";
       container.style.top = "0";
-      container.innerHTML = buildResolutionDocContent(r);
+      container.innerHTML = buildResolutionDocContent(r, minutes);
       document.body.appendChild(container);
       await html2pdf()
         .set({

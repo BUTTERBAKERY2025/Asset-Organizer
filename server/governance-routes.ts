@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { db } from "./db";
-import { eq, and, desc, asc, sql, gte, lte, or, isNull } from "drizzle-orm";
+import { eq, and, desc, asc, sql, gte, lte, or, isNull, isNotNull } from "drizzle-orm";
 import { isAuthenticated, requirePermission } from "./auth";
 import { ObjectStorageService, ObjectNotFoundError } from "./replit_integrations/object_storage/objectStorage";
 import {
@@ -1594,6 +1594,51 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
+  // Consolidated data for the printable minutes (المحضر): clauses + every voter's
+  // per-clause (or legacy whole-resolution) position + signatures.
+  app.get("/api/governance/assembly-resolutions/:id/minutes", isAuthenticated, requirePermission("governance_resolutions", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const [resolution] = await db.select().from(assemblyResolutions).where(eq(assemblyResolutions.id, id));
+      if (!resolution || (resolution as any).deletedAt) return res.status(404).json({ error: "قرار الجمعية غير موجود" });
+
+      const items = await db.select().from(assemblyResolutionItems)
+        .where(eq(assemblyResolutionItems.resolutionId, id))
+        .orderBy(asc(assemblyResolutionItems.sequence), asc(assemblyResolutionItems.id));
+
+      const voteRows = await db
+        .select({
+          itemId: assemblyResolutionVotes.itemId,
+          shareholderId: assemblyResolutionVotes.shareholderId,
+          voterName: assemblyResolutionVotes.voterName,
+          vote: assemblyResolutionVotes.vote,
+          sharesVoted: assemblyResolutionVotes.sharesVoted,
+        })
+        .from(assemblyResolutionVotes)
+        .where(and(eq(assemblyResolutionVotes.resolutionId, id), eq(assemblyResolutionVotes.isValid, true)))
+        .orderBy(asc(assemblyResolutionVotes.voterName));
+
+      const signatures = await db
+        .select({
+          shareholderId: assemblyResolutionSignatures.shareholderId,
+          signerName: assemblyResolutionSignatures.signerName,
+          signatureData: assemblyResolutionSignatures.signatureData,
+          signatureType: assemblyResolutionSignatures.signatureType,
+          status: assemblyResolutionSignatures.status,
+          signedAt: assemblyResolutionSignatures.signedAt,
+        })
+        .from(assemblyResolutionSignatures)
+        .where(eq(assemblyResolutionSignatures.resolutionId, id))
+        .orderBy(asc(assemblyResolutionSignatures.signerName));
+
+      res.json({ items, votes: voteRows, signatures });
+    } catch (error) {
+      console.error("Error fetching resolution minutes:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات المحضر" });
+    }
+  });
+
   // Add a clause to a resolution.
   app.post("/api/governance/assembly-resolutions/:id/items", isAuthenticated, requirePermission("governance_resolutions", "edit"), async (req, res) => {
     try {
@@ -1602,12 +1647,15 @@ export function registerGovernanceRoutes(app: Express) {
       const [resolution] = await db.select().from(assemblyResolutions).where(eq(assemblyResolutions.id, id));
       if (!resolution || (resolution as any).deletedAt) return res.status(404).json({ error: "قرار الجمعية غير موجود" });
       if ((resolution as any).isLocked) return res.status(423).json({ error: "القرار مقفل ولا يمكن تعديل بنوده", code: "RESOLUTION_LOCKED" });
-      // Block adding clauses once voting has produced votes, to keep tallies consistent.
+      // Freeze the ballot once any PER-CLAUSE vote exists (itemId NOT NULL) to keep
+      // per-clause tallies consistent. Legacy whole-resolution votes (itemId NULL) do
+      // NOT freeze clauses, so descriptive clauses can be added to old signed resolutions
+      // for the new minutes format without re-voting.
       const [{ votes = 0 } = {}] = await db
         .select({ votes: sql<number>`count(*)::int` })
         .from(assemblyResolutionVotes)
-        .where(eq(assemblyResolutionVotes.resolutionId, id));
-      if (votes > 0) return res.status(423).json({ error: "لا يمكن تعديل البنود بعد بدء التصويت", code: "VOTING_STARTED" });
+        .where(and(eq(assemblyResolutionVotes.resolutionId, id), isNotNull(assemblyResolutionVotes.itemId)));
+      if (votes > 0) return res.status(423).json({ error: "لا يمكن تعديل البنود بعد بدء التصويت على البنود", code: "VOTING_STARTED" });
 
       const data = insertAssemblyResolutionItemSchema.parse({
         ...req.body,
@@ -1640,12 +1688,13 @@ export function registerGovernanceRoutes(app: Express) {
       if (!item) return res.status(404).json({ error: "البند غير موجود" });
       const [resolution] = await db.select().from(assemblyResolutions).where(eq(assemblyResolutions.id, item.resolutionId));
       if ((resolution as any)?.isLocked) return res.status(423).json({ error: "القرار مقفل ولا يمكن تعديل بنوده", code: "RESOLUTION_LOCKED" });
-      // Freeze the whole ballot once ANY vote exists on the resolution.
+      // Freeze the whole ballot once any PER-CLAUSE vote exists (itemId NOT NULL).
+      // Legacy whole-resolution votes (itemId NULL) do not freeze clauses.
       const [{ votes = 0 } = {}] = await db
         .select({ votes: sql<number>`count(*)::int` })
         .from(assemblyResolutionVotes)
-        .where(eq(assemblyResolutionVotes.resolutionId, item.resolutionId));
-      if (votes > 0) return res.status(423).json({ error: "لا يمكن تعديل البنود بعد بدء التصويت", code: "VOTING_STARTED" });
+        .where(and(eq(assemblyResolutionVotes.resolutionId, item.resolutionId), isNotNull(assemblyResolutionVotes.itemId)));
+      if (votes > 0) return res.status(423).json({ error: "لا يمكن تعديل البنود بعد بدء التصويت على البنود", code: "VOTING_STARTED" });
 
       const patch: any = {};
       if (typeof req.body.text === "string") patch.text = req.body.text;
@@ -1670,12 +1719,13 @@ export function registerGovernanceRoutes(app: Express) {
       if (!item) return res.status(404).json({ error: "البند غير موجود" });
       const [resolution] = await db.select().from(assemblyResolutions).where(eq(assemblyResolutions.id, item.resolutionId));
       if ((resolution as any)?.isLocked) return res.status(423).json({ error: "القرار مقفل ولا يمكن حذف بنوده", code: "RESOLUTION_LOCKED" });
-      // Freeze the whole ballot once ANY vote exists on the resolution.
+      // Freeze the whole ballot once any PER-CLAUSE vote exists (itemId NOT NULL).
+      // Legacy whole-resolution votes (itemId NULL) do not freeze clauses.
       const [{ votes = 0 } = {}] = await db
         .select({ votes: sql<number>`count(*)::int` })
         .from(assemblyResolutionVotes)
-        .where(eq(assemblyResolutionVotes.resolutionId, item.resolutionId));
-      if (votes > 0) return res.status(423).json({ error: "لا يمكن حذف البنود بعد بدء التصويت", code: "VOTING_STARTED" });
+        .where(and(eq(assemblyResolutionVotes.resolutionId, item.resolutionId), isNotNull(assemblyResolutionVotes.itemId)));
+      if (votes > 0) return res.status(423).json({ error: "لا يمكن حذف البنود بعد بدء التصويت على البنود", code: "VOTING_STARTED" });
       await db.delete(assemblyResolutionItems).where(eq(assemblyResolutionItems.id, itemId));
       res.json({ success: true });
     } catch (error) {
