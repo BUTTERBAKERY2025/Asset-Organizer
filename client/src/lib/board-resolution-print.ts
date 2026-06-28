@@ -319,10 +319,16 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
   // قسم توقيعات أعضاء مجلس الإدارة المعتمدين للقرار (إن وُجدت طلبات توقيع).
   // التوقيعات تُجلب من نفس مصدر صفحة القرارات حتى تظهر هنا كما تظهر في قرارات الجمعية.
   const fmtSigDate = (d: string): string => { try { return new Date(d).toLocaleDateString('en-GB'); } catch { return ''; } };
-  const memberSignaturesHtml = signatures.length
+  // استبعاد رئيس مجلس الإدارة من شبكة البطاقات لأنه يظهر بالفعل في كتلة التوقيع
+  // الرسمي بالأسفل (مع ختم الشركة) — منعاً لتكرار اسمه وتوقيعه.
+  const boardMemberSigs = signatures.filter((sig) => {
+    const n = normalizeAr(sig.memberName);
+    return !(n.startsWith('عبدالحافظ') && n.includes('مكوش'));
+  });
+  const memberSignaturesHtml = boardMemberSigs.length
     ? '<div class="section-head" style="margin-top:10px;">توقيعات أعضاء مجلس الإدارة</div>' +
       '<div class="sig-grid">' +
-      signatures.map((sig) => {
+      boardMemberSigs.map((sig) => {
         const signed = sig.status === 'signed';
         const img = signed && isValidSignature(sig.signatureData) ? sig.signatureData : '';
         const inner = img
