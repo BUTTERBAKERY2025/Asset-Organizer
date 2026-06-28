@@ -350,18 +350,10 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
 
   const printNow = new Date();
   const signBlockHtml = memberSignaturesHtml + '<div class="sign-row">' +
-      '<div class="sign-col">' +
-        '<div class="sign-role">رئيس مجلس الإدارة</div>' +
-        (chairmanSig
-          ? '<img class="sign-img" src="' + chairmanSig + '" alt="توقيع رئيس مجلس الإدارة" />'
-          : '<div class="sign-blank"></div>') +
-        '<div class="sign-name">' + sanitize(chairmanName) + '</div>' +
-      '</div>' +
       '<div class="stamp-col">' +
         '<div class="stamp-lbl">ختم الشركة</div>' +
         '<div class="stamp-svg">' + companyStampSvg + '</div>' +
       '</div>' +
-      '<div class="sign-col"></div>' +
     '</div>' +
     '<div class="doc-note">مستند رسمي صادر إلكترونياً عبر نظام إدارة حوكمة الشركات | تاريخ الطباعة: ' + printNow.toLocaleDateString('en-GB') + ' — ' + printNow.toLocaleTimeString('en-GB') + ' | رقم القرار ' + (sanitize(resolution.resolutionNumber) || '-') + '</div>';
 
@@ -447,16 +439,16 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
 
         .vt-total { display: flex; justify-content: space-between; gap: 8px; background: #f3ead2; color: #5a4a1e; font-weight: 700; padding: 6px 10px; font-size: 9px; border-radius: 4px; margin-bottom: 8px; }
 
-        .sign-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 12px; }
+        .sign-row { display: flex; justify-content: center; align-items: flex-end; margin-top: 12px; }
         .sign-col { flex: 1; text-align: center; }
         .sign-role { font-size: 10px; font-weight: 700; color: #2b3a4f; margin-bottom: 6px; }
         .sign-img { height: 44px; width: auto; max-width: 150px; display: block; margin: 0 auto 3px; }
         .sign-blank { height: 42px; }
         .sign-name { font-size: 9px; font-weight: 600; color: #333; border-top: 1px solid #b9b9b9; padding-top: 4px; display: inline-block; min-width: 170px; }
-        .stamp-col { flex: 1; text-align: center; }
+        .stamp-col { text-align: center; }
         .stamp-lbl { font-size: 9px; color: #888; margin-bottom: 4px; }
         .stamp-svg { display: inline-block; }
-        .stamp-svg svg { width: 150px; height: 150px; }
+        .stamp-svg svg { width: 240px; height: 240px; }
 
         /* بطاقات توقيع أعضاء مجلس الإدارة (مطابقة لأسلوب صفحة القرارات) */
         .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 8px; }
