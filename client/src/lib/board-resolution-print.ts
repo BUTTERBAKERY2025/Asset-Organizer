@@ -200,10 +200,51 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
     return out;
   };
 
+  // تقسيم نص القرار إلى بنود (أولاً، ثانياً، ...) لعرض سجل التصويت أسفل كل بند.
+  // يُعيد المقدمة (إن وُجدت) ثم كل بند بعنوانه ونصّه بعد التنقية. عند تعذّر اكتشاف
+  // بنود مُرقّمة يُعاد مصفوفة فارغة فيتم الرجوع تلقائياً إلى جدول تصويت واحد مُجمّع.
+  type Clause = { title: string; body: string };
+  const buildClauses = (raw: string | undefined | null): { preamble: string; clauses: Clause[] } => {
+    const text = fixHijriInText(sanitize(raw || ''));
+    if (!text.trim()) return { preamble: '', clauses: [] };
+    const ord = '(?:أولا|ثانيا|ثالثا|رابعا|خامسا|سادسا|سابعا|ثامنا|تاسعا|عاشرا)';
+    // المحاولة الأولى: العلامة في بداية سطر مع أي فاصل. الثانية: العلامة متبوعة
+    // بنقطتين في أي موضع (تلتقط الحالة التي يكون فيها النص فقرة واحدة بلا أسطر).
+    const tryRes = [
+      new RegExp('(?:^|\\n)\\s*(' + ord + '[\u064b\ufe8d]?)\\s*[:\uff1a.\\-\u2013]', 'g'),
+      new RegExp('(' + ord + '[\u064b\ufe8d]?)\\s*[:\uff1a]', 'g'),
+    ];
+    let marks: { idx: number }[] = [];
+    for (const re of tryRes) {
+      marks = [];
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(text)) !== null) {
+        marks.push({ idx: m.index + m[0].indexOf(m[1]) });
+      }
+      if (marks.length >= 2) break;
+    }
+    if (marks.length < 2) return { preamble: text.trim(), clauses: [] };
+    const preamble = text.slice(0, marks[0].idx).trim();
+    const clauses: Clause[] = [];
+    for (let i = 0; i < marks.length; i++) {
+      const segEnd = i + 1 < marks.length ? marks[i + 1].idx : text.length;
+      const seg = text.slice(marks[i].idx, segEnd).trim();
+      const nl = seg.search(/\r?\n/);
+      let title = '';
+      let body = seg;
+      if (nl !== -1) { title = seg.slice(0, nl).trim(); body = seg.slice(nl + 1).trim(); }
+      if (!body) { body = title; title = ''; }
+      clauses.push({ title, body });
+    }
+    return { preamble, clauses };
+  };
+  const { preamble: clausePreamble, clauses } = buildClauses(resolution.description);
+
   // ----- ordered flow items: html = fixed block, text = splittable resolution text -----
   type FlowItem =
     | { kind: 'html'; html: string; head?: boolean; beforeTable?: boolean }
-    | { kind: 'text'; cls: 'res-box' | 'res-intro'; title?: string; text: string };
+    | { kind: 'text'; cls: 'res-box' | 'res-intro'; title?: string; text: string }
+    | { kind: 'table' };
   const flowItems: FlowItem[] = [
     { kind: 'html', html: '<div class="doc-title-main">' + docTitle + '</div>' },
     { kind: 'html', html:
@@ -219,9 +260,24 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
         '<div class="info-cell"><div class="lbl">نتيجة التصويت</div><div class="val ' + (isApproved ? 'ok' : 'reject') + '">' + approvalPercentage + '% ' + (isApproved ? 'معتمد' : 'غير معتمد') + '</div></div>' +
       '</div>' },
     { kind: 'html', html: '<div class="section-head">نص القرار</div>', head: true },
-    ...buildResolutionBlocks(resolution.description).map((b): FlowItem => ({ kind: 'text', cls: b.cls, title: b.title, text: b.text })),
-    { kind: 'html', html: '<div class="section-head">سجل التصويت</div>', head: true, beforeTable: true },
   ];
+
+  if (clauses.length) {
+    // لكل بند: نص البند ثم سجل تصويت المساهمين أسفله (نفس مواقف القرار ككل).
+    if (clausePreamble) flowItems.push({ kind: 'text', cls: 'res-intro', text: clausePreamble });
+    clauses.forEach((c) => {
+      flowItems.push({ kind: 'text', cls: 'res-box', title: c.title || undefined, text: c.body || '-' });
+      flowItems.push({ kind: 'html', html: '<div class="section-head">سجل التصويت على هذا البند</div>', head: true, beforeTable: true });
+      flowItems.push({ kind: 'table' });
+    });
+  } else {
+    // لا توجد بنود مُرقّمة: نعرض نص القرار كاملاً مع جدول تصويت واحد كما كان.
+    buildResolutionBlocks(resolution.description).forEach((b) => {
+      flowItems.push({ kind: 'text', cls: b.cls, title: b.title, text: b.text });
+    });
+    flowItems.push({ kind: 'html', html: '<div class="section-head">سجل التصويت</div>', head: true, beforeTable: true });
+    flowItems.push({ kind: 'table' });
+  }
 
   // ----- voting table parts (head row + body rows + totals) -----
   const tableHeadHtml =
@@ -473,9 +529,12 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
           try {
             var m = document.getElementById('measure'); if (m && m.parentNode) m.parentNode.removeChild(m);
             var html = '<div class="fallback">';
+            var rows = (rowHtmls && rowHtmls.length) ? rowHtmls.join('') : NO_VOTERS;
             for (var i = 0; i < flow.length; i++) {
               var it = flow[i];
-              if (it.kind === 'html') { html += it.html; }
+              if (it.kind === 'table') {
+                html += '<table class="vt"><thead>' + theadHtml + '</thead><tbody>' + rows + '</tbody></table>';
+              } else if (it.kind === 'html') { html += it.html; }
               else {
                 var t = (it.title) ? '<div class="res-box-title">' + it.title + '</div>' : '';
                 html += (it.cls === 'res-intro')
@@ -483,8 +542,6 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
                   : '<div class="res-box">' + t + '<div class="res-box-text">' + it.text + '</div></div>';
               }
             }
-            var rows = (rowHtmls && rowHtmls.length) ? rowHtmls.join('') : NO_VOTERS;
-            html += '<table class="vt"><thead>' + theadHtml + '</thead><tbody>' + rows + '</tbody></table>';
             html += totalsHtml + signHtml + '</div>';
             document.body.insertAdjacentHTML('beforeend', html);
             ok = true;
@@ -565,7 +622,22 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
           var rowH = [].map.call(rowEls, function (tr) { return tr.getBoundingClientRect().height; });
           measure.removeChild(tableEl);
 
-          // Flow items (header + splittable resolution text).
+          // Emit one voting table, re-emitting the header row at the top of every
+          // sheet chunk. The same shared rows/heights are reused under each بند.
+          function emitTable() {
+            var r = 0;
+            while (r < effRows.length) {
+              if (curH + theadH + rowH[r] > AVAIL && cur.length) { flush(); }
+              var chunk = [];
+              var used = theadH;
+              while (r < effRows.length && curH + used + rowH[r] <= AVAIL) { chunk.push(effRows[r]); used += rowH[r]; r++; }
+              if (!chunk.length) { chunk.push(effRows[r]); used += rowH[r]; r++; } // row taller than page: force one
+              cur.push('<table class="vt"><thead>' + theadHtml + '</thead><tbody>' + chunk.join('') + '</tbody></table>');
+              curH += used;
+            }
+          }
+
+          // Flow items (header + splittable resolution text + per-بند voting tables).
           for (var i = 0; i < flow.length; i++) {
             var it = flow[i];
             if (it.kind === 'html' && it.head) {
@@ -577,27 +649,19 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
                 var nx = flow[i + 1];
                 follow = (nx.kind === 'html')
                   ? measureHtml(nx.html)
-                  : measureHtml(renderText(nx, firstLineOf(nx), false)); // first text fragment
+                  : nx.kind === 'table'
+                    ? theadH + (rowH[0] || 30)
+                    : measureHtml(renderText(nx, firstLineOf(nx), false)); // first text fragment
               }
               if (curH + headH + follow > AVAIL && cur.length) { flush(); }
               cur.push(it.html); curH += headH;
             } else if (it.kind === 'html') {
               add(it.html, measureHtml(it.html));
+            } else if (it.kind === 'table') {
+              emitTable();
             } else {
               placeText(it);
             }
-          }
-
-          // Voting table: re-emit the header row at the top of every sheet chunk.
-          var r = 0;
-          while (r < effRows.length) {
-            if (curH + theadH + rowH[r] > AVAIL && cur.length) { flush(); }
-            var chunk = [];
-            var used = theadH;
-            while (r < effRows.length && curH + used + rowH[r] <= AVAIL) { chunk.push(effRows[r]); used += rowH[r]; r++; }
-            if (!chunk.length) { chunk.push(effRows[r]); used += rowH[r]; r++; } // row taller than page: force one
-            cur.push('<table class="vt"><thead>' + theadHtml + '</thead><tbody>' + chunk.join('') + '</tbody></table>');
-            curH += used;
           }
 
           add(totalsHtml, measureHtml(totalsHtml));

@@ -27,4 +27,5 @@
 - [Approval chains](approval-chains.md) — leave approval chains by job title; snapshot in leave_requests.approvalChain; 2 partial unique indexes (branch vs default); review gate must cover approve AND reject.
 - [Governance print & unified resolutions](governance-print-libs.md) — each gov doc type prints via its own shared lib (board/assembly/minutes); cross-type pages must tolerantly fetch (return [] on 401/403) across differing permission modules.
 - [Assembly per-clause voting](assembly-per-clause-voting.md) — resolutions can have بنود; if any exist, whole-resolution vote is rejected (strict mode) and clauses freeze once ANY resolution-level vote exists; DB partial-unique guards both vote shapes.
+- [Governance resolution print routing](governance-resolution-printers.md) — assembly-typed resolutions often live in board_resolutions and print via board-resolution-print.ts (not assembly-resolution-print.ts); confirm table+source before editing a PDF.
 - [Assembly re-vote grants](assembly-revote-grants.md) — one-time revote tokens: claim atomically (UPDATE ... WHERE status='open' + rowcount==1) before casting; whole-resolution grants forbidden when clauses exist.
