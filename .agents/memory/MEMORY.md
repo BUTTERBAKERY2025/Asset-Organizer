@@ -26,3 +26,4 @@
 - [Leave notify channels & date-edit](leave-notify-channels.md) — notifyEmployeeOfDecision defaults WhatsApp-only (one queue row per channel); pass channels:["whatsapp","sms"] for dual; editing leave dates keeps approval as-is by design.
 - [Approval chains](approval-chains.md) — leave approval chains by job title; snapshot in leave_requests.approvalChain; 2 partial unique indexes (branch vs default); review gate must cover approve AND reject.
 - [Governance print & unified resolutions](governance-print-libs.md) — each gov doc type prints via its own shared lib (board/assembly/minutes); cross-type pages must tolerantly fetch (return [] on 401/403) across differing permission modules.
+- [Assembly per-clause voting](assembly-per-clause-voting.md) — resolutions can have بنود; if any exist, whole-resolution vote is rejected (strict mode) and clauses freeze once ANY resolution-level vote exists; DB partial-unique guards both vote shapes.

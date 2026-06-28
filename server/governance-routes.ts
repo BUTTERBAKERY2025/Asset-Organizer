@@ -16,6 +16,8 @@ import {
   resolutionSignatures,
   assemblyResolutions,
   assemblyResolutionVotes,
+  assemblyResolutionItems,
+  insertAssemblyResolutionItemSchema,
   assemblyResolutionSignatures,
   insiderRegister,
   insiderBlackoutPeriods,
@@ -1573,6 +1575,112 @@ export function registerGovernanceRoutes(app: Express) {
     } catch (error) {
       console.error("Error locking assembly resolution:", error);
       res.status(500).json({ error: "فشل في قفل قرار الجمعية" });
+    }
+  });
+
+  // ===== بنود القرار (per-clause voting) =====
+  // List clauses of a resolution (with current tallies).
+  app.get("/api/governance/assembly-resolutions/:id/items", isAuthenticated, requirePermission("governance_resolutions", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const rows = await db.select().from(assemblyResolutionItems)
+        .where(eq(assemblyResolutionItems.resolutionId, id))
+        .orderBy(asc(assemblyResolutionItems.sequence), asc(assemblyResolutionItems.id));
+      res.json(rows);
+    } catch (error) {
+      console.error("Error fetching resolution items:", error);
+      res.status(500).json({ error: "فشل في جلب بنود القرار" });
+    }
+  });
+
+  // Add a clause to a resolution.
+  app.post("/api/governance/assembly-resolutions/:id/items", isAuthenticated, requirePermission("governance_resolutions", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const [resolution] = await db.select().from(assemblyResolutions).where(eq(assemblyResolutions.id, id));
+      if (!resolution || (resolution as any).deletedAt) return res.status(404).json({ error: "قرار الجمعية غير موجود" });
+      if ((resolution as any).isLocked) return res.status(423).json({ error: "القرار مقفل ولا يمكن تعديل بنوده", code: "RESOLUTION_LOCKED" });
+      // Block adding clauses once voting has produced votes, to keep tallies consistent.
+      const [{ votes = 0 } = {}] = await db
+        .select({ votes: sql<number>`count(*)::int` })
+        .from(assemblyResolutionVotes)
+        .where(eq(assemblyResolutionVotes.resolutionId, id));
+      if (votes > 0) return res.status(423).json({ error: "لا يمكن تعديل البنود بعد بدء التصويت", code: "VOTING_STARTED" });
+
+      const data = insertAssemblyResolutionItemSchema.parse({
+        ...req.body,
+        resolutionId: id,
+      });
+      // Auto-sequence if not provided.
+      let seq = data.sequence;
+      if (seq == null || seq === 0) {
+        const [{ maxSeq = 0 } = {}] = await db
+          .select({ maxSeq: sql<number>`COALESCE(MAX(sequence),0)::int` })
+          .from(assemblyResolutionItems)
+          .where(eq(assemblyResolutionItems.resolutionId, id));
+        seq = (maxSeq || 0) + 1;
+      }
+      const [row] = await db.insert(assemblyResolutionItems).values({ ...data, sequence: seq }).returning();
+      res.status(201).json(row);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      console.error("Error adding resolution item:", error);
+      res.status(500).json({ error: "فشل في إضافة بند" });
+    }
+  });
+
+  // Edit a clause (text / sequence / majority).
+  app.patch("/api/governance/assembly-resolutions/items/:itemId", isAuthenticated, requirePermission("governance_resolutions", "edit"), async (req, res) => {
+    try {
+      const itemId = parseInt(req.params.itemId);
+      if (isNaN(itemId)) return res.status(400).json({ error: "معرف غير صالح" });
+      const [item] = await db.select().from(assemblyResolutionItems).where(eq(assemblyResolutionItems.id, itemId));
+      if (!item) return res.status(404).json({ error: "البند غير موجود" });
+      const [resolution] = await db.select().from(assemblyResolutions).where(eq(assemblyResolutions.id, item.resolutionId));
+      if ((resolution as any)?.isLocked) return res.status(423).json({ error: "القرار مقفل ولا يمكن تعديل بنوده", code: "RESOLUTION_LOCKED" });
+      // Freeze the whole ballot once ANY vote exists on the resolution.
+      const [{ votes = 0 } = {}] = await db
+        .select({ votes: sql<number>`count(*)::int` })
+        .from(assemblyResolutionVotes)
+        .where(eq(assemblyResolutionVotes.resolutionId, item.resolutionId));
+      if (votes > 0) return res.status(423).json({ error: "لا يمكن تعديل البنود بعد بدء التصويت", code: "VOTING_STARTED" });
+
+      const patch: any = {};
+      if (typeof req.body.text === "string") patch.text = req.body.text;
+      if (typeof req.body.sequence === "number") patch.sequence = req.body.sequence;
+      if (typeof req.body.majorityType === "string" || req.body.majorityType === null) patch.majorityType = req.body.majorityType;
+      if (Object.keys(patch).length === 0) return res.status(400).json({ error: "لا يوجد تعديل" });
+      patch.updatedAt = new Date();
+      const [row] = await db.update(assemblyResolutionItems).set(patch).where(eq(assemblyResolutionItems.id, itemId)).returning();
+      res.json(row);
+    } catch (error) {
+      console.error("Error updating resolution item:", error);
+      res.status(500).json({ error: "فشل في تعديل البند" });
+    }
+  });
+
+  // Delete a clause.
+  app.delete("/api/governance/assembly-resolutions/items/:itemId", isAuthenticated, requirePermission("governance_resolutions", "edit"), async (req, res) => {
+    try {
+      const itemId = parseInt(req.params.itemId);
+      if (isNaN(itemId)) return res.status(400).json({ error: "معرف غير صالح" });
+      const [item] = await db.select().from(assemblyResolutionItems).where(eq(assemblyResolutionItems.id, itemId));
+      if (!item) return res.status(404).json({ error: "البند غير موجود" });
+      const [resolution] = await db.select().from(assemblyResolutions).where(eq(assemblyResolutions.id, item.resolutionId));
+      if ((resolution as any)?.isLocked) return res.status(423).json({ error: "القرار مقفل ولا يمكن حذف بنوده", code: "RESOLUTION_LOCKED" });
+      // Freeze the whole ballot once ANY vote exists on the resolution.
+      const [{ votes = 0 } = {}] = await db
+        .select({ votes: sql<number>`count(*)::int` })
+        .from(assemblyResolutionVotes)
+        .where(eq(assemblyResolutionVotes.resolutionId, item.resolutionId));
+      if (votes > 0) return res.status(423).json({ error: "لا يمكن حذف البنود بعد بدء التصويت", code: "VOTING_STARTED" });
+      await db.delete(assemblyResolutionItems).where(eq(assemblyResolutionItems.id, itemId));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting resolution item:", error);
+      res.status(500).json({ error: "فشل في حذف البند" });
     }
   });
 

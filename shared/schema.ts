@@ -9105,9 +9105,41 @@ export const insertAssemblyResolutionSchema = createInsertSchema(assemblyResolut
 export type AssemblyResolution = typeof assemblyResolutions.$inferSelect;
 export type InsertAssemblyResolution = z.infer<typeof insertAssemblyResolutionSchema>;
 
+// بنود القرار — each clause of an assembly resolution can be voted on separately.
+export const assemblyResolutionItems = pgTable("assembly_resolution_items", {
+  id: serial("id").primaryKey(),
+  resolutionId: integer("resolution_id").notNull().references(() => assemblyResolutions.id, { onDelete: "cascade" }),
+  sequence: integer("sequence").default(0).notNull(),
+  text: text("text").notNull(),
+  // Optional per-clause majority override; falls back to the resolution majority.
+  majorityType: text("majority_type"), // 'simple' | 'two_thirds' | 'three_quarters'
+  forVotes: integer("for_votes").default(0).notNull(),
+  againstVotes: integer("against_votes").default(0).notNull(),
+  abstainVotes: integer("abstain_votes").default(0).notNull(),
+  totalVotes: integer("total_votes").default(0).notNull(),
+  forShares: numeric("for_shares", { precision: 18, scale: 4 }).default("0").notNull(),
+  againstShares: numeric("against_shares", { precision: 18, scale: 4 }).default("0").notNull(),
+  abstainShares: numeric("abstain_shares", { precision: 18, scale: 4 }).default("0").notNull(),
+  result: text("result").default("pending").notNull(), // 'pending' | 'approved' | 'rejected'
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_assembly_resolution_items_resolution").on(table.resolutionId),
+]);
+export const insertAssemblyResolutionItemSchema = createInsertSchema(assemblyResolutionItems).omit({
+  id: true, forVotes: true, againstVotes: true, abstainVotes: true, totalVotes: true,
+  forShares: true, againstShares: true, abstainShares: true, result: true,
+  createdAt: true, updatedAt: true,
+});
+export type AssemblyResolutionItem = typeof assemblyResolutionItems.$inferSelect;
+export type InsertAssemblyResolutionItem = z.infer<typeof insertAssemblyResolutionItemSchema>;
+
 export const assemblyResolutionVotes = pgTable("assembly_resolution_votes", {
   id: serial("id").primaryKey(),
   resolutionId: integer("resolution_id").notNull().references(() => assemblyResolutions.id, { onDelete: "cascade" }),
+  // NULL = legacy whole-resolution vote. When set, this vote is for a specific
+  // clause/item (بند) of the resolution (per-item voting).
+  itemId: integer("item_id").references(() => assemblyResolutionItems.id, { onDelete: "cascade" }),
   shareholderId: integer("shareholder_id").references(() => shareholders.id),
   voterName: text("voter_name").notNull(),
   vote: text("vote").notNull(),
@@ -9125,6 +9157,15 @@ export const assemblyResolutionVotes = pgTable("assembly_resolution_votes", {
 }, (table) => [
   index("idx_assembly_votes_resolution").on(table.resolutionId),
   index("idx_assembly_votes_shareholder").on(table.shareholderId),
+  index("idx_assembly_votes_item").on(table.itemId),
+  // One per-clause vote per shareholder (item_id set).
+  uniqueIndex("uq_assembly_votes_item_shareholder")
+    .on(table.itemId, table.shareholderId)
+    .where(sql`item_id IS NOT NULL AND shareholder_id IS NOT NULL`),
+  // One legacy whole-resolution vote per shareholder (item_id null).
+  uniqueIndex("uq_assembly_votes_resolution_shareholder")
+    .on(table.resolutionId, table.shareholderId)
+    .where(sql`item_id IS NULL AND shareholder_id IS NOT NULL`),
 ]);
 export const insertAssemblyResolutionVoteSchema = createInsertSchema(assemblyResolutionVotes).omit({
   id: true, createdAt: true,

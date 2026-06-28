@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import crypto from "crypto";
 import { db } from "./db";
-import { eq, and, desc, isNull, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, asc, isNull, sql, inArray } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import { isAuthenticated, requirePermission } from "./auth";
 import {
@@ -14,6 +14,7 @@ import {
   dividendDistributions,
   assemblyResolutions,
   assemblyResolutionVotes,
+  assemblyResolutionItems,
   users,
   notificationQueue,
   insertShareholderAnnouncementSchema,
@@ -522,16 +523,59 @@ export function registerShareholderPortalRoutes(app: Express) {
         .orderBy(desc(assemblyResolutions.proposedAt));
 
       const myVotes = await db
-        .select({ resolutionId: assemblyResolutionVotes.resolutionId, vote: assemblyResolutionVotes.vote })
+        .select({
+          resolutionId: assemblyResolutionVotes.resolutionId,
+          itemId: assemblyResolutionVotes.itemId,
+          vote: assemblyResolutionVotes.vote,
+        })
         .from(assemblyResolutionVotes)
         .where(eq(assemblyResolutionVotes.shareholderId, sh.id));
-      const voteMap = new Map(myVotes.map((v) => [v.resolutionId, v.vote]));
+      // Whole-resolution votes (legacy) have itemId = null.
+      const voteMap = new Map(myVotes.filter((v) => v.itemId == null).map((v) => [v.resolutionId, v.vote]));
+      const itemVoteMap = new Map(myVotes.filter((v) => v.itemId != null).map((v) => [v.itemId as number, v.vote]));
 
-      const enriched = rows.map((r) => ({
-        ...r,
-        myVote: voteMap.get(r.id) || null,
-        canVote: !!sh.votingRights && r.status === "voting",
-      }));
+      // Load clauses (بنود) for the listed resolutions.
+      const resIds = rows.map((r) => r.id);
+      const itemsByResolution = new Map<number, any[]>();
+      if (resIds.length) {
+        const allItems = await db
+          .select()
+          .from(assemblyResolutionItems)
+          .where(inArray(assemblyResolutionItems.resolutionId, resIds))
+          .orderBy(asc(assemblyResolutionItems.sequence), asc(assemblyResolutionItems.id));
+        for (const it of allItems) {
+          const list = itemsByResolution.get(it.resolutionId) || [];
+          list.push({
+            id: it.id,
+            sequence: it.sequence,
+            text: it.text,
+            result: it.result,
+            myVote: itemVoteMap.get(it.id) || null,
+          });
+          itemsByResolution.set(it.resolutionId, list);
+        }
+      }
+
+      const enriched = rows.map((r) => {
+        const items = itemsByResolution.get(r.id) || [];
+        // ملخّص إجمالي للبنود (للقرارات التي تُصوَّت بنداً بنداً).
+        const itemsSummary = items.length
+          ? {
+              total: items.length,
+              approved: items.filter((it) => it.result === "approved").length,
+              rejected: items.filter((it) => it.result === "rejected").length,
+              pending: items.filter((it) => it.result !== "approved" && it.result !== "rejected").length,
+              votedByMe: items.filter((it) => it.myVote != null).length,
+            }
+          : null;
+        return {
+          ...r,
+          items,
+          itemsSummary,
+          myVote: voteMap.get(r.id) || null,
+          canVote: !!sh.votingRights && r.status === "voting",
+        };
+      });
       res.json(enriched);
     } catch (error) {
       console.error("Error fetching resolutions:", error);
@@ -559,10 +603,22 @@ export function registerShareholderPortalRoutes(app: Express) {
         if (!resolution) return { error: "القرار غير موجود", code: 404 };
         if (resolution.status !== "voting") return { error: "التصويت غير مفتوح على هذا القرار", code: 400 };
 
+        // Strict mode: if this resolution has clauses (بنود), the shareholder must
+        // vote per-clause, not on the whole resolution.
+        const [{ itemCount = 0 } = {}] = await tx
+          .select({ itemCount: sql<number>`count(*)::int` })
+          .from(assemblyResolutionItems)
+          .where(eq(assemblyResolutionItems.resolutionId, id));
+        if (itemCount > 0) return { error: "هذا القرار يُصوَّت عليه بنداً بنداً", code: 400 };
+
         const [existing] = await tx
           .select()
           .from(assemblyResolutionVotes)
-          .where(and(eq(assemblyResolutionVotes.resolutionId, id), eq(assemblyResolutionVotes.shareholderId, sh.id)))
+          .where(and(
+            eq(assemblyResolutionVotes.resolutionId, id),
+            eq(assemblyResolutionVotes.shareholderId, sh.id),
+            isNull(assemblyResolutionVotes.itemId),
+          ))
           .limit(1);
         if (existing) return { error: "لقد قمت بالتصويت على هذا القرار مسبقاً", code: 400 };
 
@@ -604,8 +660,122 @@ export function registerShareholderPortalRoutes(app: Express) {
         userAgent: req.headers["user-agent"] || null,
       });
       res.json({ success: true });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === "23505") return res.status(400).json({ error: "لقد قمت بالتصويت على هذا القرار مسبقاً" });
       console.error("Error casting vote:", error);
+      res.status(500).json({ error: "فشل في تسجيل التصويت" });
+    }
+  });
+
+  // الإدلاء بصوت على بند محدد داخل القرار (per-clause voting)
+  app.post("/api/shareholder/resolutions/:id/items/:itemId/vote", isAuthenticated, async (req, res) => {
+    try {
+      const sh = await getMyShareholder(req);
+      if (!sh) return res.status(403).json({ error: "غير مرتبط بملف مساهم" });
+      if (!sh.votingRights) return res.status(403).json({ error: "لا تملك حق التصويت" });
+      const id = parseInt(req.params.id);
+      const itemId = parseInt(req.params.itemId);
+      if (isNaN(id) || isNaN(itemId)) return res.status(400).json({ error: "معرف غير صالح" });
+      const parsed = voteSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "بيانات غير صالحة" });
+
+      const result = await db.transaction(async (tx) => {
+        const [resolution] = await tx
+          .select()
+          .from(assemblyResolutions)
+          .where(eq(assemblyResolutions.id, id))
+          .limit(1);
+        if (!resolution) return { error: "القرار غير موجود", code: 404 };
+        if (resolution.status !== "voting") return { error: "التصويت غير مفتوح على هذا القرار", code: 400 };
+
+        // البند يجب أن يكون تابعاً لنفس القرار (حماية من العبث بالمعرفات)
+        const [item] = await tx
+          .select()
+          .from(assemblyResolutionItems)
+          .where(and(eq(assemblyResolutionItems.id, itemId), eq(assemblyResolutionItems.resolutionId, id)))
+          .limit(1);
+        if (!item) return { error: "البند غير موجود ضمن هذا القرار", code: 404 };
+
+        const [existing] = await tx
+          .select()
+          .from(assemblyResolutionVotes)
+          .where(and(
+            eq(assemblyResolutionVotes.itemId, itemId),
+            eq(assemblyResolutionVotes.shareholderId, sh.id),
+          ))
+          .limit(1);
+        if (existing) return { error: "لقد قمت بالتصويت على هذا البند مسبقاً", code: 400 };
+
+        const shares = sh.numberOfShares || 0;
+        await tx.insert(assemblyResolutionVotes).values({
+          resolutionId: id,
+          itemId,
+          shareholderId: sh.id,
+          voterName: sh.fullName,
+          vote: parsed.data.vote,
+          sharesVoted: String(shares),
+          voteMethod: "online_portal",
+          comments: parsed.data.comments || null,
+          ipAddress: req.ip || null,
+        });
+
+        const voteCol =
+          parsed.data.vote === "for" ? "for_votes" : parsed.data.vote === "against" ? "against_votes" : "abstain_votes";
+        const shareCol =
+          parsed.data.vote === "for" ? "for_shares" : parsed.data.vote === "against" ? "against_shares" : "abstain_shares";
+        await tx.execute(sql`
+          UPDATE assembly_resolution_items
+          SET ${sql.raw(voteCol)} = COALESCE(${sql.raw(voteCol)}, 0) + 1,
+              total_votes = COALESCE(total_votes, 0) + 1,
+              ${sql.raw(shareCol)} = COALESCE(${sql.raw(shareCol)}, 0) + ${shares},
+              updated_at = now()
+          WHERE id = ${itemId}
+        `);
+
+        // أعد احتساب نتيجة البند مرجّحة بالأسهم وفق الأغلبية الفعّالة
+        // (أغلبية البند إن وُجدت، وإلا أغلبية القرار، وإلا أغلبية بسيطة).
+        const [updated] = await tx
+          .select()
+          .from(assemblyResolutionItems)
+          .where(eq(assemblyResolutionItems.id, itemId))
+          .limit(1);
+        if (updated) {
+          const effMajority = updated.majorityType || resolution.majorityType || "simple";
+          const f = Number(updated.forShares) || 0;
+          const a = Number(updated.againstShares) || 0;
+          const ab = Number(updated.abstainShares) || 0;
+          const totalVoted = f + a + ab;
+          const ratio = totalVoted > 0 ? f / totalVoted : 0;
+          const meets =
+            effMajority === "two_thirds" ? ratio >= 2 / 3
+            : effMajority === "three_quarters" ? ratio >= 0.75
+            : ratio > 0.5;
+          // أثناء فتح التصويت لا نعلن "مرفوض" نهائياً؛ نبقيه "بانتظار" حتى يتحقق النصاب.
+          const newResult = meets ? "approved" : "pending";
+          if (newResult !== updated.result) {
+            await tx
+              .update(assemblyResolutionItems)
+              .set({ result: newResult })
+              .where(eq(assemblyResolutionItems.id, itemId));
+          }
+        }
+        return { ok: true };
+      });
+
+      if ((result as any).error) return res.status((result as any).code).json({ error: (result as any).error });
+      void logShareholderActivity({
+        shareholderId: sh.id,
+        userId: getUserId(req),
+        action: "vote",
+        description: `تصويت على بند رقم ${itemId} من القرار رقم ${id}: ${parsed.data.vote === "for" ? "موافق" : parsed.data.vote === "against" ? "غير موافق" : "ممتنع"}`,
+        metadata: { resolutionId: id, itemId, vote: parsed.data.vote },
+        ipAddress: req.ip || null,
+        userAgent: req.headers["user-agent"] || null,
+      });
+      res.json({ success: true });
+    } catch (error: any) {
+      if (error?.code === "23505") return res.status(400).json({ error: "لقد قمت بالتصويت على هذا البند مسبقاً" });
+      console.error("Error casting item vote:", error);
       res.status(500).json({ error: "فشل في تسجيل التصويت" });
     }
   });

@@ -205,6 +205,16 @@ export default function ShareholderPortalPage() {
     onError: (e: any) => toast({ title: "تعذّر التصويت", description: e?.message || "", variant: "destructive" }),
   });
 
+  const castItemVote = useMutation({
+    mutationFn: ({ id, itemId, vote }: { id: number; itemId: number; vote: string }) =>
+      apiRequest("POST", `/api/shareholder/resolutions/${id}/items/${itemId}/vote`, { vote }),
+    onSuccess: () => {
+      toast({ title: "تم تسجيل تصويتك على البند" });
+      queryClient.invalidateQueries({ queryKey: ["/api/shareholder/resolutions"] });
+    },
+    onError: (e: any) => toast({ title: "تعذّر التصويت", description: e?.message || "", variant: "destructive" }),
+  });
+
   const logout = async () => {
     try {
       await apiRequest("POST", "/api/auth/logout");
@@ -499,7 +509,48 @@ export default function ShareholderPortalPage() {
                   </div>
                   <h3 className="font-bold">{r.title}</h3>
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">{r.description}</p>
-                  {r.myVote ? (
+                  {Array.isArray(r.items) && r.items.length > 0 ? (
+                    <div className="space-y-3">
+                      {(() => {
+                        const votedCount = r.items.filter((it: any) => it.myVote).length;
+                        const approved = r.items.filter((it: any) => it.result === "approved").length;
+                        return (
+                          <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground" data-testid={`text-clause-progress-${r.id}`}>
+                            <span>صوّتت على {votedCount} من {r.items.length} بنود</span>
+                            <span className="text-green-700" data-testid={`text-clause-summary-${r.id}`}>محقّق النصاب: {approved} من {r.items.length}</span>
+                          </div>
+                        );
+                      })()}
+                      {r.items.map((it: any, idx: number) => (
+                        <div key={it.id} className="border rounded-lg p-3 space-y-2" data-testid={`clause-${r.id}-${it.id}`}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="text-sm">
+                              <span className="font-bold text-amber-700">بند {idx + 1}:</span> {it.text}
+                            </div>
+                            <span
+                              className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${it.result === "approved" ? "bg-green-100 text-green-800" : it.result === "rejected" ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-700"}`}
+                              data-testid={`badge-clause-result-${r.id}-${it.id}`}
+                            >
+                              {it.result === "approved" ? "محقّق النصاب" : it.result === "rejected" ? "مرفوض" : "بانتظار التصويت"}
+                            </span>
+                          </div>
+                          {it.myVote ? (
+                            <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 rounded-lg p-2">
+                              <CheckCircle2 className="w-4 h-4" /> صوّتت: {voteLabel(it.myVote)}
+                            </div>
+                          ) : r.canVote ? (
+                            <div className="grid grid-cols-3 gap-2">
+                              <Button size="sm" className="bg-green-600 hover:bg-green-700" disabled={castItemVote.isPending} onClick={() => castItemVote.mutate({ id: r.id, itemId: it.id, vote: "for" })} data-testid={`button-vote-for-${r.id}-${it.id}`}>موافق</Button>
+                              <Button size="sm" variant="destructive" disabled={castItemVote.isPending} onClick={() => castItemVote.mutate({ id: r.id, itemId: it.id, vote: "against" })} data-testid={`button-vote-against-${r.id}-${it.id}`}>غير موافق</Button>
+                              <Button size="sm" variant="outline" disabled={castItemVote.isPending} onClick={() => castItemVote.mutate({ id: r.id, itemId: it.id, vote: "abstain" })} data-testid={`button-vote-abstain-${r.id}-${it.id}`}>امتناع</Button>
+                            </div>
+                          ) : (
+                            <div className="text-xs text-muted-foreground">التصويت غير متاح حالياً</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : r.myVote ? (
                     <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 rounded-lg p-2">
                       <CheckCircle2 className="w-4 h-4" /> صوّتت: {voteLabel(r.myVote)}
                     </div>

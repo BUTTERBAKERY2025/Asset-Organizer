@@ -18,7 +18,7 @@ import { apiRequest, queryClient as qc } from "@/lib/queryClient";
 import {
   Building2, Plus, Search, Eye, Edit, Trash2, Lock, LockOpen,
   ThumbsUp, ThumbsDown, Loader2, Scale, AlertTriangle, FileDown,
-  Printer, FileText,
+  Printer, FileText, ListChecks,
 } from "lucide-react";
 import type { AssemblyResolution } from "@shared/schema";
 
@@ -65,6 +65,7 @@ export default function AssemblyResolutionsPage() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [lockId, setLockId] = useState<number | null>(null);
   const [viewing, setViewing] = useState<AssemblyResolution | null>(null);
+  const [manageItemsFor, setManageItemsFor] = useState<AssemblyResolution | null>(null);
 
   const { data: resolutions = [], isLoading } = useQuery<AssemblyResolution[]>({
     queryKey: ["/api/governance/assembly-resolutions"],
@@ -501,6 +502,14 @@ export default function AssemblyResolutionsPage() {
                           >
                             <Edit className="h-4 w-4 ml-1" /> تعديل
                           </Button>
+                          <Button
+                            variant="outline" size="sm"
+                            className="text-amber-800 border-amber-300 hover:bg-amber-50"
+                            onClick={() => setManageItemsFor(r)}
+                            data-testid={`btn-manage-items-${r.id}`}
+                          >
+                            <ListChecks className="h-4 w-4 ml-1" /> البنود
+                          </Button>
                           {isAdmin && !r.isLocked && (r.status === "approved" || r.status === "implemented") && (
                             <Button
                               variant="outline" size="sm"
@@ -767,7 +776,146 @@ export default function AssemblyResolutionsPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <ManageClausesDialog resolution={manageItemsFor} onClose={() => setManageItemsFor(null)} />
       </div>
     </Layout>
+  );
+}
+
+type ClauseItem = {
+  id: number;
+  sequence: number;
+  text: string;
+  result: string;
+  forVotes: number;
+  againstVotes: number;
+  abstainVotes: number;
+  forShares: string;
+  againstShares: string;
+  abstainShares: string;
+};
+
+function ManageClausesDialog({ resolution, onClose }: { resolution: AssemblyResolution | null; onClose: () => void }) {
+  const { toast } = useToast();
+  const [newText, setNewText] = useState("");
+  const open = !!resolution;
+  const resId = resolution?.id;
+  const locked = !!resolution?.isLocked;
+
+  const { data: items = [], isLoading } = useQuery<ClauseItem[]>({
+    queryKey: ["/api/governance/assembly-resolutions", resId, "items"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/governance/assembly-resolutions/${resId}/items`);
+      return res.json();
+    },
+    enabled: open && resId != null,
+  });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["/api/governance/assembly-resolutions", resId, "items"] });
+  };
+
+  const addMutation = useMutation({
+    mutationFn: async (text: string) => {
+      const res = await apiRequest("POST", `/api/governance/assembly-resolutions/${resId}/items`, { text });
+      return res.json();
+    },
+    onSuccess: () => { setNewText(""); invalidate(); },
+    onError: (e: any) => toast({ title: "تعذّر إضافة البند", description: e?.message, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (itemId: number) => {
+      const res = await apiRequest("DELETE", `/api/governance/assembly-resolutions/items/${itemId}`);
+      return res.json();
+    },
+    onSuccess: () => invalidate(),
+    onError: (e: any) => toast({ title: "تعذّر حذف البند", description: e?.message, variant: "destructive" }),
+  });
+
+  const resultLabel = (r: string) =>
+    r === "approved" ? "معتمد" : r === "rejected" ? "مرفوض" : "بانتظار التصويت";
+  const resultClass = (r: string) =>
+    r === "approved" ? "bg-green-100 text-green-800" : r === "rejected" ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-700";
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ListChecks className="h-5 w-5 text-amber-600" />
+            بنود القرار {resolution?.resolutionNumber}
+          </DialogTitle>
+          <DialogDescription>
+            أضف بنود القرار ليصوّت المساهمون على كل بند بشكل منفصل. القرارات بدون بنود تبقى بتصويت واحد على القرار كله.
+          </DialogDescription>
+        </DialogHeader>
+
+        {locked && (
+          <div className="flex items-center gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
+            <Lock className="h-4 w-4" /> القرار مقفل — لا يمكن تعديل البنود.
+          </div>
+        )}
+
+        <div className="space-y-2">
+          {isLoading && <div className="text-sm text-muted-foreground py-4 text-center">جارٍ التحميل…</div>}
+          {!isLoading && items.length === 0 && (
+            <div className="text-sm text-muted-foreground py-4 text-center" data-testid="text-no-clauses">لا توجد بنود بعد.</div>
+          )}
+          {items.map((it, idx) => {
+            const voted = (it.forVotes || 0) + (it.againstVotes || 0) + (it.abstainVotes || 0) > 0;
+            return (
+              <div key={it.id} className="border rounded-lg p-3 space-y-2" data-testid={`clause-${it.id}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 text-sm">
+                    <span className="font-bold text-amber-700">بند {idx + 1}:</span> {it.text}
+                  </div>
+                  <span className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${resultClass(it.result)}`}>{resultLabel(it.result)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                  <span>موافق: {it.forVotes || 0} · معارض: {it.againstVotes || 0} · ممتنع: {it.abstainVotes || 0}</span>
+                  {!locked && !voted && (
+                    <Button
+                      variant="ghost" size="sm"
+                      className="h-7 text-red-600 hover:bg-red-50"
+                      onClick={() => deleteMutation.mutate(it.id)}
+                      disabled={deleteMutation.isPending}
+                      data-testid={`btn-delete-clause-${it.id}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 ml-1" /> حذف
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {!locked && (
+          <div className="space-y-2 border-t pt-3">
+            <Textarea
+              value={newText}
+              onChange={(e) => setNewText(e.target.value)}
+              placeholder="نص البند الجديد…"
+              rows={2}
+              data-testid="input-new-clause"
+            />
+            <Button
+              onClick={() => newText.trim() && addMutation.mutate(newText.trim())}
+              disabled={!newText.trim() || addMutation.isPending}
+              className="gap-2"
+              data-testid="btn-add-clause"
+            >
+              <Plus className="h-4 w-4" /> إضافة بند
+            </Button>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} data-testid="btn-close-clauses">إغلاق</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
