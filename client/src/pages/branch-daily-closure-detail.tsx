@@ -59,6 +59,8 @@ const DISCREPANCY_LABELS: Record<string, { label: string; color: string; icon: a
   surplus: { label: "زيادة", color: "text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40", icon: TrendingUp },
 };
 
+const VAT_RATE = 0.15; // ضريبة القيمة المضافة السعودية على عمولة البنك
+
 const BANK_COMMISSION_RATES: Record<string, { label: string; rate: number }> = {
   mada: { label: "مدى (Mada)", rate: 0.728 },
   visa: { label: "فيزا (Visa)", rate: 1.8025 },
@@ -119,25 +121,33 @@ export default function BranchDailyClosureDetailPage() {
     rows.push(["تفاصيل عمولة البنك حسب طرق الدفع"]);
     rows.push([]);
 
-    rows.push(["طريقة الدفع", "مبلغ Terminal البنك (ر.س)", "نسبة العمولة %", "مبلغ العمولة (ر.س)", "صافي المحصّل (ر.س)"]);
+    rows.push(["طريقة الدفع", "مبلغ Terminal البنك (ر.س)", "نسبة العمولة %", "مبلغ العمولة (ر.س)", "الضريبة على العمولة 15% (ر.س)", "إجمالي العمولة مع الضريبة (ر.س)", "صافي المحصّل (ر.س)"]);
 
     let totalTerminal = 0;
     let totalComm = 0;
+    let totalTax = 0;
+    let totalCommWithTax = 0;
     let totalNet = 0;
 
     bankPayments.forEach((p: any) => {
       const config = BANK_COMMISSION_RATES[p.paymentMethod];
       const terminalAmount = p.totalTerminalAmount || 0;
       const commission = (terminalAmount * config.rate) / 100;
-      const netAmount = terminalAmount - commission;
+      const commissionTax = commission * VAT_RATE;
+      const commissionWithTax = commission + commissionTax;
+      const netAmount = terminalAmount - commissionWithTax;
       totalTerminal += terminalAmount;
       totalComm += commission;
+      totalTax += commissionTax;
+      totalCommWithTax += commissionWithTax;
       totalNet += netAmount;
       rows.push([
         config.label,
         Math.round(terminalAmount * 100) / 100,
         config.rate + "%",
         Math.round(commission * 100) / 100,
+        Math.round(commissionTax * 100) / 100,
+        Math.round(commissionWithTax * 100) / 100,
         Math.round(netAmount * 100) / 100,
       ]);
     });
@@ -147,6 +157,8 @@ export default function BranchDailyClosureDetailPage() {
       Math.round(totalTerminal * 100) / 100,
       "",
       Math.round(totalComm * 100) / 100,
+      Math.round(totalTax * 100) / 100,
+      Math.round(totalCommWithTax * 100) / 100,
       Math.round(totalNet * 100) / 100,
     ]);
 
@@ -159,9 +171,10 @@ export default function BranchDailyClosureDetailPage() {
     rows.push(["البيان", "مدين (ر.س)", "دائن (ر.س)"]);
     rows.push(["البنك (صافي المحصّل)", Math.round(totalNet * 100) / 100, ""]);
     rows.push(["عمولة البنك (مصروف)", Math.round(totalComm * 100) / 100, ""]);
+    rows.push(["ضريبة القيمة المضافة على العمولة (15%)", Math.round(totalTax * 100) / 100, ""]);
     rows.push(["المبيعات (إجمالي Terminal البنك)", "", Math.round(totalTerminal * 100) / 100]);
     rows.push([]);
-    rows.push(["إجمالي القيد", Math.round((totalNet + totalComm) * 100) / 100, Math.round(totalTerminal * 100) / 100]);
+    rows.push(["إجمالي القيد", Math.round((totalNet + totalComm + totalTax) * 100) / 100, Math.round(totalTerminal * 100) / 100]);
 
     const ws = XLSX.utils.aoa_to_sheet(rows);
 
@@ -170,14 +183,16 @@ export default function BranchDailyClosureDetailPage() {
       { wch: 25 },
       { wch: 18 },
       { wch: 22 },
+      { wch: 26 },
+      { wch: 26 },
       { wch: 22 },
     ];
 
     ws["!merges"] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
-      { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
-      { s: { r: 6, c: 0 }, e: { r: 6, c: 4 } },
-      { s: { r: accountingTitleRow, c: 0 }, e: { r: accountingTitleRow, c: 4 } },
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } },
+      { s: { r: 6, c: 0 }, e: { r: 6, c: 6 } },
+      { s: { r: accountingTitleRow, c: 0 }, e: { r: accountingTitleRow, c: 6 } },
     ];
 
     const wb = XLSX.utils.book_new();
@@ -397,27 +412,32 @@ export default function BranchDailyClosureDetailPage() {
       ${(() => {
         const bankPayments = (closure.payments || []).filter((p: any) => BANK_COMMISSION_RATES[p.paymentMethod]);
         if (bankPayments.length === 0) return '';
-        let commTotalTerminal = 0, commTotalComm = 0, commTotalNet = 0;
+        let commTotalTerminal = 0, commTotalComm = 0, commTotalTax = 0, commTotalCommWithTax = 0, commTotalNet = 0;
         const commRows = bankPayments.map((p: any) => {
           const config = BANK_COMMISSION_RATES[p.paymentMethod];
           const terminalAmount = p.totalTerminalAmount || 0;
           const commission = (terminalAmount * config.rate) / 100;
-          const netAmount = terminalAmount - commission;
+          const commissionTax = commission * VAT_RATE;
+          const commissionWithTax = commission + commissionTax;
+          const netAmount = terminalAmount - commissionWithTax;
           commTotalTerminal += terminalAmount;
           commTotalComm += commission;
+          commTotalTax += commissionTax;
+          commTotalCommWithTax += commissionWithTax;
           commTotalNet += netAmount;
-          return '<tr><td>' + config.label + '</td><td>' + formatCurrency(terminalAmount) + '</td><td>' + config.rate + '%</td><td>' + formatCurrency(Math.round(commission * 100) / 100) + '</td><td>' + formatCurrency(Math.round(netAmount * 100) / 100) + '</td></tr>';
+          return '<tr><td>' + config.label + '</td><td>' + formatCurrency(terminalAmount) + '</td><td>' + config.rate + '%</td><td>' + formatCurrency(Math.round(commission * 100) / 100) + '</td><td>' + formatCurrency(Math.round(commissionTax * 100) / 100) + '</td><td>' + formatCurrency(Math.round(commissionWithTax * 100) / 100) + '</td><td>' + formatCurrency(Math.round(netAmount * 100) / 100) + '</td></tr>';
         }).join('');
         return '<div class="section-header">بيان عمولة البنك</div>' +
-          '<table><tr><th>طريقة الدفع</th><th>مبلغ الجهاز (ر.س)</th><th>نسبة العمولة</th><th>مبلغ العمولة (ر.س)</th><th>صافي المحصّل (ر.س)</th></tr>' +
+          '<table><tr><th>طريقة الدفع</th><th>مبلغ الجهاز (ر.س)</th><th>نسبة العمولة</th><th>مبلغ العمولة (ر.س)</th><th>الضريبة على العمولة 15% (ر.س)</th><th>إجمالي العمولة مع الضريبة (ر.س)</th><th>صافي المحصّل (ر.س)</th></tr>' +
           commRows +
-          '<tr class="totals-row"><td>الإجمالي</td><td>' + formatCurrency(Math.round(commTotalTerminal * 100) / 100) + '</td><td></td><td>' + formatCurrency(Math.round(commTotalComm * 100) / 100) + '</td><td>' + formatCurrency(Math.round(commTotalNet * 100) / 100) + '</td></tr></table>' +
+          '<tr class="totals-row"><td>الإجمالي</td><td>' + formatCurrency(Math.round(commTotalTerminal * 100) / 100) + '</td><td></td><td>' + formatCurrency(Math.round(commTotalComm * 100) / 100) + '</td><td>' + formatCurrency(Math.round(commTotalTax * 100) / 100) + '</td><td>' + formatCurrency(Math.round(commTotalCommWithTax * 100) / 100) + '</td><td>' + formatCurrency(Math.round(commTotalNet * 100) / 100) + '</td></tr></table>' +
           '<div class="section-header">ملخص القيد المحاسبي</div>' +
           '<table><tr><th>البيان</th><th>مدين (ر.س)</th><th>دائن (ر.س)</th></tr>' +
           '<tr><td class="text-right">البنك (صافي المحصّل)</td><td>' + formatCurrency(Math.round(commTotalNet * 100) / 100) + '</td><td>-</td></tr>' +
           '<tr><td class="text-right">عمولة البنك (مصروف)</td><td>' + formatCurrency(Math.round(commTotalComm * 100) / 100) + '</td><td>-</td></tr>' +
+          '<tr><td class="text-right">ضريبة القيمة المضافة على العمولة (15%)</td><td>' + formatCurrency(Math.round(commTotalTax * 100) / 100) + '</td><td>-</td></tr>' +
           '<tr><td class="text-right">المبيعات (إجمالي الجهاز)</td><td>-</td><td>' + formatCurrency(Math.round(commTotalTerminal * 100) / 100) + '</td></tr>' +
-          '<tr class="totals-row"><td class="text-right">إجمالي القيد</td><td>' + formatCurrency(Math.round((commTotalNet + commTotalComm) * 100) / 100) + '</td><td>' + formatCurrency(Math.round(commTotalTerminal * 100) / 100) + '</td></tr></table>';
+          '<tr class="totals-row"><td class="text-right">إجمالي القيد</td><td>' + formatCurrency(Math.round((commTotalNet + commTotalComm + commTotalTax) * 100) / 100) + '</td><td>' + formatCurrency(Math.round(commTotalTerminal * 100) / 100) + '</td></tr></table>';
       })()}
 
       <div class="footer">
@@ -664,12 +684,16 @@ export default function BranchDailyClosureDetailPage() {
             const config = BANK_COMMISSION_RATES[p.paymentMethod];
             const terminalAmount = p.totalTerminalAmount || 0;
             const commission = (terminalAmount * config.rate) / 100;
-            const netAmount = terminalAmount - commission;
-            return { ...p, label: config.label, rate: config.rate, terminalAmount, commission, netAmount };
+            const commissionTax = commission * VAT_RATE;
+            const commissionWithTax = commission + commissionTax;
+            const netAmount = terminalAmount - commissionWithTax;
+            return { ...p, label: config.label, rate: config.rate, terminalAmount, commission, commissionTax, commissionWithTax, netAmount };
           });
 
           const totalTerminalSales = commissionRows.reduce((s: number, r: any) => s + r.terminalAmount, 0);
           const totalCommission = commissionRows.reduce((s: number, r: any) => s + r.commission, 0);
+          const totalCommissionTax = commissionRows.reduce((s: number, r: any) => s + r.commissionTax, 0);
+          const totalCommissionWithTax = commissionRows.reduce((s: number, r: any) => s + r.commissionWithTax, 0);
           const totalNetAmount = commissionRows.reduce((s: number, r: any) => s + r.netAmount, 0);
 
           return (
@@ -693,7 +717,7 @@ export default function BranchDailyClosureDetailPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
                   <KpiCard
                     label="إجمالي مبلغ Terminal البنك"
                     value={formatCurrency(totalTerminalSales)}
@@ -709,6 +733,14 @@ export default function BranchDailyClosureDetailPage() {
                     icon={Percent}
                     tone="alert"
                     data-testid="kpi-commission-total"
+                  />
+                  <KpiCard
+                    label="إجمالي عمولة البنك مع الضريبة"
+                    value={formatCurrency(totalCommissionWithTax)}
+                    unit="ر.س"
+                    icon={Receipt}
+                    tone="alert"
+                    data-testid="kpi-commission-with-tax-total"
                   />
                   <KpiCard
                     label="صافي المبلغ المحصّل"
@@ -728,6 +760,8 @@ export default function BranchDailyClosureDetailPage() {
                         <TableHead className="text-right font-bold">مبلغ Terminal (ر.س)</TableHead>
                         <TableHead className="text-right font-bold">نسبة العمولة %</TableHead>
                         <TableHead className="text-right font-bold">مبلغ العمولة (ر.س)</TableHead>
+                        <TableHead className="text-right font-bold">الضريبة على العمولة (15%) (ر.س)</TableHead>
+                        <TableHead className="text-right font-bold">إجمالي العمولة مع الضريبة (ر.س)</TableHead>
                         <TableHead className="text-right font-bold">صافي المحصّل (ر.س)</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -748,6 +782,8 @@ export default function BranchDailyClosureDetailPage() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-rose-600 font-semibold">{formatCurrency(r.commission)}</TableCell>
+                          <TableCell className="text-amber-600 font-semibold">{formatCurrency(r.commissionTax)}</TableCell>
+                          <TableCell className="text-rose-700 font-semibold">{formatCurrency(r.commissionWithTax)}</TableCell>
                           <TableCell className="text-green-600 font-semibold">{formatCurrency(r.netAmount)}</TableCell>
                         </TableRow>
                       ))}
@@ -756,6 +792,8 @@ export default function BranchDailyClosureDetailPage() {
                         <TableCell className="font-bold">{formatCurrency(totalTerminalSales)}</TableCell>
                         <TableCell></TableCell>
                         <TableCell className="text-rose-700 font-bold">{formatCurrency(totalCommission)}</TableCell>
+                        <TableCell className="text-amber-700 font-bold">{formatCurrency(totalCommissionTax)}</TableCell>
+                        <TableCell className="text-rose-800 font-bold">{formatCurrency(totalCommissionWithTax)}</TableCell>
                         <TableCell className="text-green-700 font-bold">{formatCurrency(totalNetAmount)}</TableCell>
                       </TableRow>
                     </TableBody>
@@ -775,6 +813,10 @@ export default function BranchDailyClosureDetailPage() {
                     <div className="flex justify-between items-center py-1 border-b border-border">
                       <span className="text-muted-foreground">مدين: عمولة البنك (مصروف)</span>
                       <span className="font-bold text-rose-700 dark:text-rose-300">{formatCurrency(totalCommission)} ر.س</span>
+                    </div>
+                    <div className="flex justify-between items-center py-1 border-b border-border">
+                      <span className="text-muted-foreground">مدين: ضريبة القيمة المضافة على العمولة (15%)</span>
+                      <span className="font-bold text-amber-700 dark:text-amber-300">{formatCurrency(totalCommissionTax)} ر.س</span>
                     </div>
                     <div className="flex justify-between items-center py-1">
                       <span className="text-muted-foreground">دائن: المبيعات (إجمالي Terminal البنك)</span>
