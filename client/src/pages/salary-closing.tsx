@@ -40,6 +40,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useBranches } from "@/hooks/useBranches";
 import {
   FileSpreadsheet,
@@ -82,6 +83,7 @@ function DeductionsPopover({
   initialDeductions,
   totalAmount,
   onChanged,
+  canEdit,
 }: {
   branchEmployeeId: number;
   branchId: string;
@@ -90,6 +92,7 @@ function DeductionsPopover({
   initialDeductions: SalaryDeduction[];
   totalAmount: number;
   onChanged: () => void;
+  canEdit: boolean;
 }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -202,21 +205,23 @@ function DeductionsPopover({
                       <div className="text-gray-600 mt-0.5 break-words">{d.description}</div>
                     )}
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      if (confirm(`حذف ${SALARY_DEDUCTION_TYPE_LABELS[d.type]} بمبلغ ${d.amount} ر.س؟`)) {
-                        deleteMutation.mutate(d.id);
-                      }
-                    }}
-                    disabled={deleteMutation.isPending}
-                    className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                    data-testid={`btn-delete-deduction-${d.id}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
+                  {canEdit && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm(`حذف ${SALARY_DEDUCTION_TYPE_LABELS[d.type]} بمبلغ ${d.amount} ر.س؟`)) {
+                          deleteMutation.mutate(d.id);
+                        }
+                      }}
+                      disabled={deleteMutation.isPending}
+                      className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                      data-testid={`btn-delete-deduction-${d.id}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
                 </div>
               ))}
               <div className="text-xs font-bold text-orange-900 text-left pt-1 border-t border-orange-200">
@@ -225,6 +230,7 @@ function DeductionsPopover({
             </div>
           )}
 
+          {canEdit && (
           <div className="space-y-2 pt-2 border-t">
             <div className="text-xs font-semibold text-gray-700">إضافة جديدة:</div>
             <div className="grid grid-cols-2 gap-2">
@@ -279,6 +285,7 @@ function DeductionsPopover({
               {createMutation.isPending ? "جاري الحفظ..." : "إضافة"}
             </Button>
           </div>
+          )}
 
           <div className="text-[10px] text-gray-500 pt-1 border-t">
             💡 المبلغ المُسجَّل سيُخصم من صافي الراتب تلقائياً عند إغلاق هذا الشهر.
@@ -789,9 +796,15 @@ export default function SalaryClosingPage() {
   const isRTL = i18n.language === "ar";
   const { toast } = useToast();
   const { isAdmin, user } = useAuth();
+  const { canEdit: canEditModule } = usePermissions();
   const isHrManager = user?.role === "hr_manager";
-  const canCloseSalary = isAdmin || isHrManager;
-  const canApproveSalaryClosing = isAdmin || isHrManager;
+  // Salary closing is a core financial function: allow anyone with salary_closing:edit
+  // (e.g. financial_manager via role template) in addition to admin / HR manager.
+  const canCloseSalary = isAdmin || isHrManager || canEditModule("salary_closing");
+  const canApproveSalaryClosing = isAdmin || isHrManager || canEditModule("salary_closing");
+  // Manual salary deductions/advances write to /api/salary-deductions (branch_employees:edit),
+  // which a monitoring-only financial_manager lacks — gate that UI separately to avoid 403s.
+  const canManageDeductions = isAdmin || isHrManager || canEditModule("branch_employees");
 
   const { branches, userBranchId } = useBranches();
 
@@ -2041,7 +2054,7 @@ export default function SalaryClosingPage() {
         <div className="flex flex-col items-center justify-center py-20 text-center" dir={isRTL ? "rtl" : "ltr"}>
           <ShieldAlert className="w-14 h-14 text-red-400 mb-4" />
           <h2 className="text-xl font-bold text-gray-800 mb-1">غير مصرّح بالوصول</h2>
-          <p className="text-gray-500">صفحة إغلاق الرواتب الشهرية متاحة للمدير ومدير الموارد البشرية فقط.</p>
+          <p className="text-gray-500">صفحة إغلاق الرواتب الشهرية متاحة للمدير ومدير الموارد البشرية والمدير المالي فقط.</p>
         </div>
       </Layout>
     );
@@ -2682,15 +2695,17 @@ export default function SalaryClosingPage() {
                       تم تحديد {selectedEmpIds.size} موظف
                     </span>
                     <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        className="bg-orange-600 hover:bg-orange-700"
-                        onClick={() => setShowBulkDeductionDialog(true)}
-                        data-testid="button-open-bulk-deduction"
-                      >
-                        <Plus className="w-3.5 h-3.5 ml-1" />
-                        تطبيق سُلفة/خصم على المحددين
-                      </Button>
+                      {canManageDeductions && (
+                        <Button
+                          size="sm"
+                          className="bg-orange-600 hover:bg-orange-700"
+                          onClick={() => setShowBulkDeductionDialog(true)}
+                          data-testid="button-open-bulk-deduction"
+                        >
+                          <Plus className="w-3.5 h-3.5 ml-1" />
+                          تطبيق سُلفة/خصم على المحددين
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"
@@ -3030,6 +3045,7 @@ export default function SalaryClosingPage() {
                                 initialDeductions={emp.manualDeductions || []}
                                 totalAmount={emp.manualDeductionsTotal || 0}
                                 onChanged={refreshSalaryClosing}
+                                canEdit={canManageDeductions}
                               />
                             )}
                           </TableCell>

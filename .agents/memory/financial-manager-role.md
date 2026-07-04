@@ -65,3 +65,26 @@ platform-home redirects them to `/my-portal` ("حسابك غير مرتبط بم
    auto-grant never drift; keep pnl↔pnl_dashboard synonym tolerant.
 Keeping the template is still useful (RBAC matrix UI + populates user_permissions on
 assignment), but it is a bonus, not the mechanism.
+
+## Client-side role hardcoding parallels backend RBAC — a second place to break
+Backend auto-grant is necessary but NOT sufficient: several client pages hardcode
+role checks that silently deny a permission-holding role.
+- Salary closing pages gate the WHOLE page on `isAdmin || isHrManager` (a role
+  string check, not a permission). Any role with `salary_closing:edit` must be added
+  additively as `|| canEditModule("salary_closing")` — never replace the role checks
+  (would regress hr_manager if their auto-grant lacks the module).
+- **Salary deductions use a DIFFERENT module than closing**: closing/payments/
+  attendance-adjust are `salary_closing:edit`, but manual deductions (`/api/salary-
+  deductions` POST/PUT/DELETE) are `branch_employees:edit`. A monitoring-only role
+  (branch_employees view+export) must have every deduction write surface hidden
+  (bulk toolbar button AND the per-employee popover add/delete) via a separate
+  `canManageDeductions` gate, or they see buttons that 403.
+- **platform-home portal redirect**: `portalOnly` (empty view-perms → navigate
+  /my-portal) must exclude known staff/management roles via a NON_PORTAL_ROLES set,
+  else a transient empty-permissions window during navigation bounces them to the
+  portal mid-session.
+**Why:** the app authorizes on the backend by permission but decides UI visibility
+by a mix of role strings AND permissions on the client; the two must be kept in sync
+per page. **How to apply:** when adding a permission-based role, grep client pages for
+`role === "..."` / `isHrManager` / `isAdmin ||` gates on the relevant feature and make
+them additive with the matching `canView/canEdit(module)`.

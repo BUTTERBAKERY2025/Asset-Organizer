@@ -84,8 +84,17 @@ export default function PlatformHomePage() {
 
   // Employee-portal-only users have NO viewable platform module (the portal itself is not a
   // permission module — it is open to any authenticated employee). Send them straight to /my-portal.
+  // Management/staff roles always have platform (non-portal) access via role template
+  // or auto-granted permissions. They must never be bounced to /my-portal — even if the
+  // permissions query is momentarily empty during a navigation/refetch race, which would
+  // otherwise flip portalOnly true and redirect them to the portal mid-session.
+  const NON_PORTAL_ROLES = new Set([
+    "admin", "attendance_clerk", "hr_manager", "hr_specialist",
+    "financial_manager", "financial_accountant", "finance_manager", "viewer",
+  ]);
   const portalOnly =
     !isAdmin && !isAttendanceClerk && !permsLoading &&
+    !NON_PORTAL_ROLES.has(user?.role ?? "") &&
     !permissions.some((p) => p.actions.includes("view"));
 
   useEffect(() => {

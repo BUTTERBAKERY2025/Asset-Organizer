@@ -126,8 +126,10 @@ export default function EmployeeReportsDashboardPage() {
   const { toast } = useToast();
   // إغلاق الرواتب الشهري متاح فقط لمدير الموارد البشرية والمدير العام (الأدمن)
   const isHrManager = user?.role === "hr_manager";
-  const canCloseSalary = isAdmin || isHrManager;
-  const canApproveSalaryClosing = isAdmin || isHrManager;
+  // Salary closing is a core financial function: allow anyone with salary_closing:edit
+  // (e.g. financial_manager via role template) in addition to admin / HR manager.
+  const canCloseSalary = isAdmin || isHrManager || canEditModule("salary_closing");
+  const canApproveSalaryClosing = isAdmin || isHrManager || canEditModule("salary_closing");
   
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
