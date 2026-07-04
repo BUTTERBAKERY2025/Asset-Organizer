@@ -1,5 +1,6 @@
 - [Home dashboard sales gating](home-dashboard-sales-gating.md) — home hero + hero-widgets + /api/dashboard/stats|widgets leak sales by default; gate by sales-view perm on BOTH client and server, not by role.
 - [Notification surfaces](notification-surfaces.md) — bell/popup read `systemNotifications` (branch+role targeting); the `notifications` table is invisible to users.
+- [Permissions never stale-cache](permissions-never-stale-cache.md) — /api/my-permissions must bypass ALL 3 client caches (SW, localStorage persist, RQ); stale-empty perms flip users to /my-portal.
 - [Targeted position messaging](targeted-position-messaging.md) — position/role broadcasts must re-resolve recipients server-side; never trust client userId/phone/branch (IDOR).
 - [Security scan notes](security-scan-notes.md) — recurring scan findings: xlsx patched build only on SheetJS CDN (firewall-blocked, manual on Render); scheduler/media-team flags are false positives; uuid is transitive.
 - [HR manager access](hr-manager-access.md) — hr_manager needs HR_MANAGER_MODULES + /api/my-permissions merge + read-only cross-branch elevation (hasCrossBranchHrReadAccess), all in sync or HR pages render empty; also covers hr_specialist (narrower action-aware sibling).

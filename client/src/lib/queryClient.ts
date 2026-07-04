@@ -280,7 +280,7 @@ export function hydrateFromPersistentCache() {
     '/api/chart-of-accounts', '/api/contractors',
     '/api/dashboard/stats', '/api/command-center',
     '/api/warehouse/items', '/api/targets',
-    '/api/my-permissions', '/api/auth/me',
+    '/api/auth/me',
   ];
   for (const url of endpoints) {
     const cached = getCachedData(url);

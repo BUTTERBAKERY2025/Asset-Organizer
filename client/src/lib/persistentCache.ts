@@ -1,6 +1,6 @@
 const CACHE_PREFIX = 'btr_qc_';
 const MAX_ENTRIES = 60;
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 
 interface CacheEntry {
   d: any;
@@ -144,7 +144,6 @@ const PERSIST_ENDPOINTS = new Set([
   '/api/warehouse/items',
   '/api/targets',
   '/api/construction-projects',
-  '/api/my-permissions',
   '/api/auth/me',
 ]);
 

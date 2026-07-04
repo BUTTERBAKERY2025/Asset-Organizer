@@ -1,7 +1,7 @@
-const CACHE_NAME = 'butter-v6';
-const STATIC_CACHE = 'butter-static-v6';
+const CACHE_NAME = 'butter-v7';
+const STATIC_CACHE = 'butter-static-v7';
 const FONT_CACHE = 'butter-fonts-v4';
-const API_CACHE = 'butter-api-v5';
+const API_CACHE = 'butter-api-v6';
 
 const STATIC_ASSETS = [
   '/',
@@ -59,6 +59,12 @@ self.addEventListener('fetch', (event) => {
     if (url.pathname.startsWith('/api/auth/')) {
       return;
     }
+    // Permissions are security-sensitive: NEVER serve them from cache. A stale/empty
+    // cached response makes the client think the user has no modules and bounces them
+    // to /my-portal ("account not linked to employee"). Always go straight to network.
+    if (url.pathname === '/api/my-permissions') {
+      return;
+    }
     const SAFE_STALE_ENDPOINTS = [
       '/api/branches', '/api/products', '/api/product-categories',
       '/api/departments', '/api/roles', '/api/operations/products',
@@ -67,7 +73,7 @@ self.addEventListener('fetch', (event) => {
       '/api/warehouse/items', '/api/branch-cashiers',
       '/api/biometric-settings', '/api/point-settings',
       '/api/product-commissions', '/api/checklist-templates',
-      '/api/my-permissions', '/api/users',
+      '/api/users',
       '/api/governance', '/api/security',
     ];
     const basePath = url.pathname.split('?')[0];
