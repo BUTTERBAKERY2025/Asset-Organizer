@@ -624,12 +624,12 @@ export async function registerRoutes(
       // SECURITY: Only admins may assign privileged roles. Non-admins can only
       // create "viewer" or "employee" accounts. This prevents privilege escalation
       // via the users:create permission (e.g., creating an admin or hr_manager).
-      const PRIVILEGED_ROLES = new Set(["admin", "hr_manager", "hr_specialist", "financial_accountant", "attendance_clerk"]);
+      const PRIVILEGED_ROLES = new Set(["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "attendance_clerk"]);
       const requestedRole = (role as string | undefined) || "viewer";
       if (PRIVILEGED_ROLES.has(requestedRole) && (req as any).currentUser?.role !== "admin") {
         return res.status(403).json({ error: "فقط المسؤولين يمكنهم منح هذا الدور" });
       }
-      if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "employee", "viewer", "attendance_clerk"].includes(requestedRole)) {
+      if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "employee", "viewer", "attendance_clerk"].includes(requestedRole)) {
         return res.status(400).json({ error: "دور غير صالح" });
       }
       
@@ -717,7 +717,7 @@ export async function registerRoutes(
       }
       
       if (role !== undefined) {
-        if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "employee", "viewer", "attendance_clerk"].includes(role)) {
+        if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "employee", "viewer", "attendance_clerk"].includes(role)) {
           return res.status(400).json({ error: "Invalid role" });
         }
         // SECURITY: Only admins can change user roles to prevent privilege escalation
@@ -1127,8 +1127,8 @@ export async function registerRoutes(
       const user = req.currentUser;
       
       // SECURITY: Filter branches based on user role and branch access
-      if (isUserAdmin(req)) {
-        // Admins can see all branches
+      if (isUserAdmin(req) || user?.role === "financial_manager") {
+        // Admins and the cross-branch Financial Manager can see all branches
         res.json(branches);
       } else if (user) {
         // Get user's allowed branches from user_branch_access table
@@ -5024,7 +5024,7 @@ export async function registerRoutes(
       // PHASE 9: Large payments require explicit large-approval permission
       if (existingRequest && existingRequest.amount >= APPROVAL_THRESHOLDS.large) {
         const user: any = req.currentUser;
-        const isAdmin = user?.role === "admin" || user?.role === "ceo" || user?.role === "general_manager" || user?.role === "finance_manager";
+        const isAdmin = user?.role === "admin" || user?.role === "ceo" || user?.role === "general_manager" || user?.role === "finance_manager" || user?.role === "financial_manager";
         if (!isAdmin) {
           return res.status(403).json({
             error: `طلبات الصرف بقيمة ${APPROVAL_THRESHOLDS.large.toLocaleString("ar-SA")} ر.س أو أكثر تحتاج موافقة المدير المالي أو الإدارة العليا.`,
@@ -7430,12 +7430,12 @@ export async function registerRoutes(
       
       // SECURITY: Only admins may assign privileged roles via this endpoint.
       // Non-admins with operations:create can only create regular "employee" accounts.
-      const OP_PRIVILEGED_ROLES = new Set(["admin", "hr_manager", "hr_specialist", "financial_accountant", "attendance_clerk"]);
+      const OP_PRIVILEGED_ROLES = new Set(["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "attendance_clerk"]);
       const opRequestedRole = (role as string | undefined) || "employee";
       if (OP_PRIVILEGED_ROLES.has(opRequestedRole) && !isUserAdmin(req)) {
         return res.status(403).json({ error: "فقط المسؤولين يمكنهم منح هذا الدور" });
       }
-      if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "employee", "viewer", "attendance_clerk"].includes(opRequestedRole)) {
+      if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "employee", "viewer", "attendance_clerk"].includes(opRequestedRole)) {
         return res.status(400).json({ error: "دور غير صالح" });
       }
       

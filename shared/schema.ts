@@ -1622,6 +1622,36 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
     { module: "branches", actions: ["view"] },
   ],
 
+  // Financial Manager: إشراف مالي شامل على كل الفروع. يعتمد الصرف وتحويل المبالغ
+  // (صلاحية approve تغطي الاعتماد والرفض وتأكيد الصرف mark-paid)، ويغلق الرواتب
+  // الشهرية (الإغلاق/إعادة الفتح بصلاحية edit)، ويتابع الموظفين والرواتب تفصيليًا،
+  // مع رؤية مالية ورقابية. لا يشمل إدارة المستخدمين أو إعدادات النظام أو الصلاحيات.
+  financial_manager: [
+    { module: "dashboard", actions: ["view", "export"] },
+    // الاعتماد المالي وتحويل المبالغ
+    { module: "payment_requests", actions: ["view", "create", "edit", "approve", "export", "print"] },
+    // إغلاق الرواتب الشهرية وتصديرها
+    { module: "salary_closing", actions: ["view", "edit", "export", "print"] },
+    // متابعة الموظفين والرواتب تفصيليًا
+    { module: "branch_employees", actions: ["view", "export"] },
+    { module: "hr_advances", actions: ["view", "create", "edit", "export"] },
+    { module: "hr_eos", actions: ["view", "create", "edit", "export"] },
+    { module: "attendance", actions: ["view", "export"] },
+    { module: "timesheet", actions: ["view", "export"] },
+    { module: "employee_reports", actions: ["view", "export", "print"] },
+    // الرؤية المالية والرقابة
+    { module: "pnl_dashboard", actions: ["view", "export"] },
+    { module: "cashier_journal", actions: ["view", "export", "print"] },
+    { module: "daily_closures", actions: ["view", "export", "print"] },
+    { module: "branch_closure", actions: ["view", "export"] },
+    { module: "sales_analytics", actions: ["view", "export"] },
+    { module: "reports", actions: ["view", "export", "print", "advanced"] },
+    { module: "contractor_statements", actions: ["view", "export"] },
+    { module: "project_expenses", actions: ["view", "export"] },
+    { module: "budget_planning", actions: ["view", "export"] },
+    { module: "audit_logs", actions: ["view"] },
+  ],
+
   // Viewer: View-only access to all modules
   viewer: SYSTEM_MODULES.filter((m) => m !== "users").map((module) => ({
     module,

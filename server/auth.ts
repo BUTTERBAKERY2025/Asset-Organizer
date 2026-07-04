@@ -727,7 +727,8 @@ export async function setupAuth(app: Express) {
       
       const allBranches = await allBranchesPromise;
       let filteredBranches: any[] = [];
-      if (user.role === "admin") {
+      if (user.role === "admin" || user.role === "financial_manager") {
+        // Financial Manager is a cross-branch role — sees every branch org-wide.
         filteredBranches = allBranches;
       } else if (userBranches.length > 0) {
         const allowedIds = userBranches.map((b: any) => b.branchId);
@@ -1264,6 +1265,10 @@ export async function canAccessBranch(req: any, branchId: string): Promise<boole
   
   // Admin can access all branches
   if (user.role === "admin") return true;
+
+  // Financial Manager is a cross-branch role — can access every branch. Module-level
+  // requirePermission still governs WHAT they can do; this only governs WHICH branch.
+  if (user.role === "financial_manager") return true;
   
   // Check if user has the required permission for the module linked to this branch
   // Users with event_pos permissions should access EVENT-BB branch
@@ -1372,6 +1377,13 @@ export function getAllowedBranchIds(req: any): string[] | null {
   // Admin can see all branches
   if (user.role === "admin") {
     return null; // null means all branches
+  }
+
+  // Financial Manager: نطاق مالي على مستوى المنشأة — يرى ويعتمد عبر كل الفروع.
+  // تبقى الوحدات مقيّدة بقالب صلاحياته (مالية + موارد بشرية للقراءة)، فالتوسّع هنا
+  // على مستوى الفرع فقط لا على مستوى الوحدات.
+  if (user.role === "financial_manager") {
+    return null; // كل الفروع
   }
   
   // Check if user has explicit branch access
