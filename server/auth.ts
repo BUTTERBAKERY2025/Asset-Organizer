@@ -4,7 +4,7 @@ import connectPg from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 import { db } from "./db";
-import { systemAuditLogs } from "@shared/schema";
+import { systemAuditLogs, ROLE_PERMISSION_TEMPLATES } from "@shared/schema";
 import { isLoginBlocked, trackLoginAttempt } from "./security";
 import {
   getTwoFactorConfig,
@@ -146,6 +146,32 @@ export const HR_SPECIALIST_PERMISSIONS: Record<string, string[]> = {
   hr_job_offers: ["view", "create", "edit", "export"],
   hr_onboarding: ["view", "create", "edit", "export"],
 };
+
+// Modules auto-granted to users with role === "financial_manager" (المدير المالي).
+// Action-aware (mirrors HR_SPECIALIST_PERMISSIONS) and sourced from the shared
+// ROLE_PERMISSION_TEMPLATES.financial_manager so there is a SINGLE source of truth.
+// Auto-grant makes the role self-healing: it works even if the template was never
+// applied to user_permissions (e.g. an account created before deploy). Cross-branch
+// SCOPE is handled separately in getAllowedBranchIds / canAccessBranch; this map only
+// governs WHICH modules/actions are authorized. Must be merged into /api/my-permissions
+// too (see routes.ts) or the frontend sidebar/landing page won't match the backend.
+export const FINANCIAL_MANAGER_PERMISSIONS: Record<string, string[]> =
+  Object.fromEntries(
+    ((ROLE_PERMISSION_TEMPLATES as any).financial_manager || []).map(
+      (e: { module: string; actions: string[] }) => [e.module, e.actions],
+    ),
+  );
+
+// Resolve a module's allowed actions for a financial_manager, tolerating the
+// historical pnl / pnl_dashboard synonym so P&L API routes written against either
+// name are authorized even when relying purely on auto-grant.
+function financialManagerActionsFor(module: string): string[] | undefined {
+  return (
+    FINANCIAL_MANAGER_PERMISSIONS[module] ||
+    (module === "pnl" ? FINANCIAL_MANAGER_PERMISSIONS["pnl_dashboard"] : undefined) ||
+    (module === "pnl_dashboard" ? FINANCIAL_MANAGER_PERMISSIONS["pnl"] : undefined)
+  );
+}
 
 function setCachedAuth(userId: string, user: any, branchAccess: any[], permissions: any[]) {
   authCache.set(userId, { user, branchAccess, permissions, timestamp: Date.now() });
@@ -1121,6 +1147,16 @@ export const requirePermission = (module: string, action: string): RequestHandle
         return next();
       }
     }
+
+    // Financial Manager role: action-aware auto-grant for finance/HR-read modules
+    // across ALL branches (branch scope handled in getAllowedBranchIds). Modules
+    // not in the map fall through to the standard explicit-permission check below.
+    if (user.role === "financial_manager") {
+      const allowed = financialManagerActionsFor(module);
+      if (allowed && (action == null || allowed.includes(action))) {
+        return next();
+      }
+    }
     
     // Use cached permissions (pre-fetched by isAuthenticated middleware)
     const permissions = getCachedPermissions(user.id) || await storage.getUserPermissions(user.id);
@@ -1213,6 +1249,15 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
     // allowed actions for this module (mirrors requirePermission above).
     if (user.role === "hr_specialist") {
       const allowed = HR_SPECIALIST_PERMISSIONS[module];
+      if (allowed && actions.some((a) => allowed.includes(a))) {
+        return next();
+      }
+    }
+
+    // Financial Manager: grant when ANY requested action is allowed for this module
+    // (mirrors requirePermission above).
+    if (user.role === "financial_manager") {
+      const allowed = financialManagerActionsFor(module);
       if (allowed && actions.some((a) => allowed.includes(a))) {
         return next();
       }

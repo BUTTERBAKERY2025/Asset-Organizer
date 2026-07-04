@@ -116,7 +116,7 @@ import { sendWhatsAppMessage, isTwilioConfigured } from "./twilio-service";
 import { recipientsSchema as reportRecipientsSchema } from "./scheduler";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertContractMilestoneSchema, insertContractVariationSchema, insertContractGuaranteeSchema, insertContractTemplateSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
-import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, hasCrossBranchHrReadAccess } from "./auth";
+import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, hasCrossBranchHrReadAccess } from "./auth";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
 import { registerJobOfferRoutes } from "./job-offers-routes";
@@ -1103,6 +1103,26 @@ export async function registerRoutes(
           merged.set(p.module, new Set(p.actions || []));
         }
         for (const [m, acts] of Object.entries(HR_SPECIALIST_PERMISSIONS)) {
+          const set = merged.get(m) || new Set<string>();
+          for (const a of acts) set.add(a);
+          merged.set(m, set);
+        }
+        permissions = Array.from(merged.entries()).map(([module, actions]) => ({
+          module,
+          actions: Array.from(actions),
+        }));
+      }
+
+      // Financial Manager: merge the action-aware auto-granted finance/HR-read
+      // modules so the frontend sidebar/landing/canView matches what the backend
+      // authorizes. Without this the user has no viewable module and the platform
+      // home redirects them to /my-portal ("account not linked to an employee").
+      if (currentUser.role === "financial_manager") {
+        const merged = new Map<string, Set<string>>();
+        for (const p of permissions) {
+          merged.set(p.module, new Set(p.actions || []));
+        }
+        for (const [m, acts] of Object.entries(FINANCIAL_MANAGER_PERMISSIONS)) {
           const set = merged.get(m) || new Set<string>();
           for (const a of acts) set.add(a);
           merged.set(m, set);

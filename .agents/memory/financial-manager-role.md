@@ -48,3 +48,20 @@ doesn't have, so it's out of scope there.)
 - salary_closing: close/reopen use action `edit` (there is no salary_closing "approve").
 - hr_advances / hr_eos: routes call requirePermission(module) with NO action → mere
   module presence grants; list any sensible actions.
+
+## Auto-grant, not template-only — or a fresh user lands on /my-portal
+A cross-branch role must be SELF-HEALING like hr_manager/hr_specialist: rely on an
+auto-grant map, not on the template having been written to `user_permissions`.
+**Why:** the template only populates `user_permissions` at role-assignment time; a
+user created before deploy (or before the role existed) has zero rows, so
+`/api/my-permissions` returns nothing, `canView` is false everywhere, and
+platform-home redirects them to `/my-portal` ("حسابك غير مرتبط بملف موظف").
+**How to apply:** three surfaces must agree (mirror hr_specialist exactly):
+1. `requirePermission` AND `requireAnyPermission` (auth.ts) get an action-aware
+   bypass for the role.
+2. `/api/my-permissions` (routes.ts) MUST merge the same map, or the backend
+   authorizes but the frontend sidebar/landing stays empty.
+3. Build the auto-grant map from `ROLE_PERMISSION_TEMPLATES.<role>` so template and
+   auto-grant never drift; keep pnl↔pnl_dashboard synonym tolerant.
+Keeping the template is still useful (RBAC matrix UI + populates user_permissions on
+assignment), but it is a bonus, not the mechanism.
