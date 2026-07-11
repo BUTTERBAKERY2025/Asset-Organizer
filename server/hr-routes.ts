@@ -1212,6 +1212,72 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
+  // كشف حساب إجازات موظف: بياناته + أرصدته لكل نوع + سجل الحركات خلال السنة
+  app.get("/api/hr/leaves/employee-statement", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const branchEmployeeId = Number(req.query.branchEmployeeId);
+      const year = req.query.year ? parseInt(req.query.year as string, 10) : new Date().getFullYear();
+      if (!branchEmployeeId || !Number.isFinite(year) || year < 2000 || year > 2100) {
+        return res.status(400).json({ error: "معاملات غير صحيحة" });
+      }
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, branchEmployeeId));
+      if (!emp) return res.status(404).json({ error: "الموظف غير موجود" });
+      const { branchIds } = getBranchScope(req);
+      if (branchIds !== null && (!emp.branchId || !branchIds.includes(emp.branchId))) {
+        return res.status(403).json({ error: "ليس لديك صلاحية على فرع الموظف" });
+      }
+      const [branch] = await db.select({ name: branches.name }).from(branches).where(eq(branches.id, emp.branchId));
+
+      const yearStart = `${year}-01-01`;
+      const yearEnd = `${year}-12-31`;
+      // كل طلبات الإجازة المتداخلة مع السنة (كل الأنواع والحالات) مرتبة زمنياً
+      const movements = await db.select().from(leaveRequests)
+        .where(and(
+          eq(leaveRequests.branchEmployeeId, branchEmployeeId),
+          lte(leaveRequests.startDate, yearEnd),
+          gte(leaveRequests.endDate, yearStart),
+        ))
+        .orderBy(leaveRequests.startDate, leaveRequests.id);
+
+      // أيام كل حركة الواقعة داخل السنة (لتقسيم الإجازات العابرة بين سنتين)
+      const MS = 86400000;
+      const withDaysInYear = movements.map((m) => {
+        const segStart = m.startDate > yearStart ? m.startDate : yearStart;
+        const segEnd = m.endDate < yearEnd ? m.endDate : yearEnd;
+        const daysInYear = Math.max(0, Math.round((new Date(segEnd).getTime() - new Date(segStart).getTime()) / MS) + 1);
+        return { ...m, daysInYear };
+      });
+
+      // الأرصدة: الأنواع التي لها رصيد مسجل أو استخدام فعلي + السنوية والمرضية دائماً
+      const typesInUse = new Set<string>(["annual", "sick"]);
+      for (const m of movements) if (m.leaveType !== "unpaid") typesInUse.add(m.leaveType);
+      const balances: any[] = [];
+      for (const t of Array.from(typesInUse)) {
+        balances.push(await getLeaveBalanceSummary(branchEmployeeId, year, t, emp.hireDate));
+      }
+
+      res.json({
+        employee: {
+          id: emp.id,
+          employeeNumber: emp.employeeNumber,
+          employeeName: emp.employeeName,
+          jobTitle: emp.jobTitle,
+          department: emp.department,
+          branchId: emp.branchId,
+          branchName: branch?.name || emp.branchId,
+          hireDate: emp.hireDate,
+          status: emp.status,
+        },
+        year,
+        balances,
+        movements: withDaysInYear,
+      });
+    } catch (e: any) {
+      console.error("[hr/leaves/employee-statement] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.get("/api/hr/leaves/stats", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
     try {
       const { branchIds } = getBranchScope(req);

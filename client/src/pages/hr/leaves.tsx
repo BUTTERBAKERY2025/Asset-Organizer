@@ -15,7 +15,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   CalendarDays, Plus, CheckCircle2, XCircle, Clock, Trash2, ArrowRight,
-  Wallet, Printer, FileSpreadsheet, Ban, Paperclip, Pencil, ChevronRight, ChevronLeft, ListChecks, Sun,
+  Wallet, Printer, FileSpreadsheet, Ban, Paperclip, Pencil, ChevronRight, ChevronLeft, ListChecks, Sun, FileText,
 } from "lucide-react";
 import { LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS } from "@shared/schema";
 import butterLogo from "@assets/logo_-5_1765206843638.png";
@@ -178,6 +178,34 @@ export default function LeavesPage() {
       (await apiRequest("GET", `/api/hr/leaves/sick-tier-preview?branchEmployeeId=${form.branchEmployeeId}&startDate=${form.startDate}&endDate=${form.endDate}`)).json(),
     enabled: open && form.leaveType === "sick" && !!form.branchEmployeeId && !!form.startDate && !!form.endDate && form.endDate >= form.startDate,
   });
+
+  // ===== كشف حساب إجازات موظف =====
+  const [stmtEmpId, setStmtEmpId] = useState<number | null>(null);
+  const [stmtYear, setStmtYear] = useState(currentYear);
+  const { data: statement, isLoading: stmtLoading } = useQuery<any>({
+    queryKey: ["/api/hr/leaves/employee-statement", stmtEmpId, stmtYear],
+    queryFn: async () =>
+      (await apiRequest("GET", `/api/hr/leaves/employee-statement?branchEmployeeId=${stmtEmpId}&year=${stmtYear}`)).json(),
+    enabled: !!stmtEmpId,
+  });
+  const stmtPrintRef = useRef<HTMLDivElement>(null);
+  const printStatement = useReactToPrint({ contentRef: stmtPrintRef });
+  // رصيد متحرك لكل نوع: يبدأ من (مستحق+مرحّل+تعديل) ويخصم الحركات المعتمدة تباعاً
+  const stmtRows = useMemo(() => {
+    if (!statement) return [];
+    const running: Record<string, number> = {};
+    for (const b of statement.balances || []) {
+      running[b.leaveType] = Number(b.entitledDays) + Number(b.carriedOverDays) + Number(b.adjustmentDays);
+    }
+    return (statement.movements || []).map((m: any) => {
+      let after: number | null = null;
+      if (m.status === "approved" && m.leaveType !== "unpaid" && running[m.leaveType] !== undefined) {
+        running[m.leaveType] -= m.daysInYear;
+        after = running[m.leaveType];
+      }
+      return { ...m, balanceAfter: after };
+    });
+  }, [statement]);
 
   // أيام العطلات ضمن الشهر المعروض في التقويم
   const holidayDatesSet = useMemo(() => {
@@ -766,9 +794,16 @@ export default function LeavesPage() {
                         <td className="p-2 tabular-nums">{arNum(b.usedDays)}</td>
                         <td className={`p-2 tabular-nums font-bold ${b.remainingDays < 0 ? "text-red-600" : "text-emerald-600"}`} data-testid={`text-remaining-${b.branchEmployeeId}`}>{arNum(b.remainingDays)}</td>
                         <td className="p-2">
-                          <Button size="sm" variant="ghost" onClick={() => openEditBal(b)} data-testid={`button-edit-balance-${b.branchEmployeeId}`}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="ghost" onClick={() => openEditBal(b)} data-testid={`button-edit-balance-${b.branchEmployeeId}`}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button size="sm" variant="ghost" className="text-blue-600" title="كشف حساب الإجازات"
+                              onClick={() => { setStmtYear(balYear); setStmtEmpId(b.branchEmployeeId); }}
+                              data-testid={`button-statement-${b.branchEmployeeId}`}>
+                              <FileText className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1254,6 +1289,135 @@ export default function LeavesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPrintLeave(null)}>إغلاق</Button>
             <Button onClick={handlePrint} data-testid="button-do-print"><Printer className="h-4 w-4 ms-1" />طباعة</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Employee leave statement dialog */}
+      <Dialog open={!!stmtEmpId} onOpenChange={(o) => { if (!o) setStmtEmpId(null); }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-auto" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-600" />
+              كشف حساب الإجازات
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center gap-2 mb-1">
+            <Label className="text-xs">السنة</Label>
+            <Select value={String(stmtYear)} onValueChange={(v) => setStmtYear(Number(v))}>
+              <SelectTrigger className="w-28 h-8" data-testid="select-stmt-year"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[currentYear + 1, currentYear, currentYear - 1, currentYear - 2].map((y) => (
+                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {stmtLoading && <div className="text-center py-8 text-muted-foreground text-sm">جارٍ التحميل...</div>}
+          {!stmtLoading && statement && (
+            <div ref={stmtPrintRef} className="leave-print bg-white text-black p-6" dir="rtl">
+              {/* رأس رسمي */}
+              <div className="flex items-center justify-between border-b-4 pb-3 mb-4" style={{ borderColor: "#C8932A" }}>
+                <div className="flex items-center gap-3">
+                  <img src={butterLogo} alt="Butter Bakery" className="h-14 w-14 object-contain" />
+                  <div className="text-start">
+                    <h2 className="text-lg font-extrabold leading-tight" style={{ color: "#8A6212" }}>شركة الزبد الأفضل التجارية</h2>
+                    <div className="text-xs font-semibold" style={{ color: "#C8932A" }}>Butter Bakery Trading Co.</div>
+                    <div className="text-[10px] text-gray-600">إدارة الموارد البشرية — كشف حساب إجازات لسنة {statement.year}</div>
+                  </div>
+                </div>
+                <div className="text-end text-[10px] text-gray-600 leading-relaxed">
+                  <div>تاريخ الإصدار: <span className="font-bold text-black">{new Date().toLocaleDateString("ar-SA-u-nu-latn")}</span></div>
+                </div>
+              </div>
+
+              {/* بيانات الموظف */}
+              <table className="w-full text-xs border-collapse mb-4">
+                <tbody>
+                  <tr>
+                    <td className="border p-1.5 font-bold" style={{ borderColor: "#E5C98F", backgroundColor: "#FBF3E0", color: "#8A6212" }}>اسم الموظف</td>
+                    <td className="border p-1.5" style={{ borderColor: "#E5C98F" }} data-testid="text-stmt-name">{statement.employee.employeeName}</td>
+                    <td className="border p-1.5 font-bold" style={{ borderColor: "#E5C98F", backgroundColor: "#FBF3E0", color: "#8A6212" }}>الرقم الوظيفي</td>
+                    <td className="border p-1.5" style={{ borderColor: "#E5C98F" }}>{statement.employee.employeeNumber || "-"}</td>
+                  </tr>
+                  <tr>
+                    <td className="border p-1.5 font-bold" style={{ borderColor: "#E5C98F", backgroundColor: "#FBF3E0", color: "#8A6212" }}>الوظيفة</td>
+                    <td className="border p-1.5" style={{ borderColor: "#E5C98F" }}>{statement.employee.jobTitle}</td>
+                    <td className="border p-1.5 font-bold" style={{ borderColor: "#E5C98F", backgroundColor: "#FBF3E0", color: "#8A6212" }}>الفرع</td>
+                    <td className="border p-1.5" style={{ borderColor: "#E5C98F" }}>{statement.employee.branchName}</td>
+                  </tr>
+                  <tr>
+                    <td className="border p-1.5 font-bold" style={{ borderColor: "#E5C98F", backgroundColor: "#FBF3E0", color: "#8A6212" }}>تاريخ التعيين</td>
+                    <td className="border p-1.5" style={{ borderColor: "#E5C98F" }}>{statement.employee.hireDate || "-"}</td>
+                    <td className="border p-1.5 font-bold" style={{ borderColor: "#E5C98F", backgroundColor: "#FBF3E0", color: "#8A6212" }}>سنوات الخدمة</td>
+                    <td className="border p-1.5" style={{ borderColor: "#E5C98F" }}>{serviceYears(statement.employee.hireDate) != null ? `${arNum(serviceYears(statement.employee.hireDate))} سنة` : "-"}</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* الأرصدة لكل نوع */}
+              <h4 className="font-bold text-sm mb-1.5" style={{ color: "#8A6212" }}>ملخص الأرصدة</h4>
+              <table className="w-full text-xs border-collapse mb-4">
+                <thead>
+                  <tr style={{ backgroundColor: "#FBF3E0" }}>
+                    {["نوع الإجازة", "المستحق", "المرحّل", "تعديلات", "المستخدم", "المتبقي"].map((h) => (
+                      <th key={h} className="border p-1.5 font-bold" style={{ borderColor: "#E5C98F", color: "#8A6212" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(statement.balances || []).map((b: any) => (
+                    <tr key={b.leaveType} data-testid={`row-stmt-bal-${b.leaveType}`}>
+                      <td className="border p-1.5 font-semibold" style={{ borderColor: "#E5C98F" }}>{LEAVE_TYPE_LABELS[b.leaveType] || b.leaveType}</td>
+                      <td className="border p-1.5 tabular-nums text-center" style={{ borderColor: "#E5C98F" }}>{arNum(b.entitledDays)}{!b.hasRow && b.leaveType === "annual" ? " (مقترح)" : ""}</td>
+                      <td className="border p-1.5 tabular-nums text-center" style={{ borderColor: "#E5C98F" }}>{arNum(b.carriedOverDays)}</td>
+                      <td className="border p-1.5 tabular-nums text-center" style={{ borderColor: "#E5C98F" }}>{arNum(b.adjustmentDays)}</td>
+                      <td className="border p-1.5 tabular-nums text-center" style={{ borderColor: "#E5C98F" }}>{arNum(b.usedDays)}</td>
+                      <td className={`border p-1.5 tabular-nums text-center font-bold ${b.remainingDays < 0 ? "text-red-600" : ""}`} style={{ borderColor: "#E5C98F" }}>{arNum(b.remainingDays)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* سجل الحركات */}
+              <h4 className="font-bold text-sm mb-1.5" style={{ color: "#8A6212" }}>سجل الحركات خلال السنة</h4>
+              {stmtRows.length === 0 ? (
+                <div className="text-center text-xs text-gray-500 border rounded py-4" style={{ borderColor: "#E5C98F" }}>لا توجد حركات إجازة خلال هذه السنة</div>
+              ) : (
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr style={{ backgroundColor: "#FBF3E0" }}>
+                      {["النوع", "من", "إلى", "أيام ضمن السنة", "الحالة", "الرصيد بعد الحركة"].map((h) => (
+                        <th key={h} className="border p-1.5 font-bold" style={{ borderColor: "#E5C98F", color: "#8A6212" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stmtRows.map((m: any) => (
+                      <tr key={m.id} data-testid={`row-stmt-mov-${m.id}`}>
+                        <td className="border p-1.5" style={{ borderColor: "#E5C98F" }}>{LEAVE_TYPE_LABELS[m.leaveType] || m.leaveType}</td>
+                        <td className="border p-1.5 tabular-nums" style={{ borderColor: "#E5C98F" }}>{m.startDate}</td>
+                        <td className="border p-1.5 tabular-nums" style={{ borderColor: "#E5C98F" }}>{m.endDate}</td>
+                        <td className="border p-1.5 tabular-nums text-center" style={{ borderColor: "#E5C98F" }}>{arNum(m.daysInYear)}</td>
+                        <td className="border p-1.5" style={{ borderColor: "#E5C98F" }}>{LEAVE_STATUS_LABELS[m.status] || m.status}</td>
+                        <td className="border p-1.5 tabular-nums text-center font-bold" style={{ borderColor: "#E5C98F" }}>
+                          {m.balanceAfter != null ? arNum(m.balanceAfter) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              <div className="border-t border-gray-300 mt-6 pt-2 text-[9px] text-center text-gray-500">
+                شركة الزبد الأفضل التجارية · سجل تجاري: 7026155296 — كشف صادر آلياً من نظام إدارة الموارد البشرية ولا يحتاج توقيعاً
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStmtEmpId(null)}>إغلاق</Button>
+            <Button onClick={printStatement} disabled={!statement} data-testid="button-print-statement">
+              <Printer className="h-4 w-4 ms-1" />طباعة
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
