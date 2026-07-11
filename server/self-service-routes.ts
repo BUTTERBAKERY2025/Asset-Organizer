@@ -22,7 +22,7 @@ import {
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { notifyEmployeeOfDecision, notifyHrOfRequest } from "./notify-helpers";
-import { computeLeaveDays, findOverlappingLeave, getApplicableLeaveChain } from "./leave-helpers";
+import { computeLeaveDays, computeLeaveDaysWithHolidays, findOverlappingLeave, getApplicableLeaveChain } from "./leave-helpers";
 import {
   getWarningTemplate,
   getWarningReasonCategory,
@@ -245,8 +245,8 @@ export function registerSelfServiceRoutes(app: Express) {
           error: `لديك طلب إجازة متداخل مع هذه الفترة (${overlap.startDate} إلى ${overlap.endDate})`,
         });
       }
-      // إعادة احتساب الأيام على الخادم (لا نثق بالعميل)
-      const { totalDays, workingDays } = computeLeaveDays(parsed.startDate, parsed.endDate);
+      // إعادة احتساب الأيام على الخادم (لا نثق بالعميل) — مع استثناء العطلات الرسمية
+      const { totalDays, workingDays } = await computeLeaveDaysWithHolidays(parsed.startDate, parsed.endDate);
       // نظام الموافقات والاعتمادات: تطبيق سلسلة الفرع (أو الافتراضية) عند الإنشاء
       const chain = await getApplicableLeaveChain(emp.branchId);
       const [created] = await db.insert(leaveRequests).values({

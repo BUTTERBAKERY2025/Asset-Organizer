@@ -15,7 +15,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   CalendarDays, Plus, CheckCircle2, XCircle, Clock, Trash2, ArrowRight,
-  Wallet, Printer, FileSpreadsheet, Ban, Paperclip, Pencil, ChevronRight, ChevronLeft, ListChecks,
+  Wallet, Printer, FileSpreadsheet, Ban, Paperclip, Pencil, ChevronRight, ChevronLeft, ListChecks, Sun,
 } from "lucide-react";
 import { LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS } from "@shared/schema";
 import butterLogo from "@assets/logo_-5_1765206843638.png";
@@ -137,6 +137,64 @@ export default function LeavesPage() {
     enabled: open && !!form.branchId,
   });
   const applicableChain = applicableChainResp?.chain ?? [];
+
+  // ===== العطلات الرسمية =====
+  const [holOpen, setHolOpen] = useState(false);
+  const [holForm, setHolForm] = useState({ name: "", startDate: "", endDate: "", note: "" });
+  const { data: holidays = [] } = useQuery<any[]>({
+    queryKey: ["/api/hr/public-holidays"],
+    queryFn: async () => (await apiRequest("GET", "/api/hr/public-holidays")).json(),
+    enabled: tab === "holidays" || tab === "calendar",
+  });
+  const createHolidayMutation = useMutation({
+    mutationFn: async (body: any) => (await apiRequest("POST", "/api/hr/public-holidays", body)).json(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/hr/public-holidays"] });
+      setHolOpen(false);
+      setHolForm({ name: "", startDate: "", endDate: "", note: "" });
+      toast({ title: "تمت إضافة العطلة الرسمية" });
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
+  });
+  const toggleHolidayMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) =>
+      (await apiRequest("PATCH", `/api/hr/public-holidays/${id}`, { isActive })).json(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/hr/public-holidays"] }),
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
+  });
+  const deleteHolidayMutation = useMutation({
+    mutationFn: async (id: number) => (await apiRequest("DELETE", `/api/hr/public-holidays/${id}`)).json(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/hr/public-holidays"] });
+      toast({ title: "تم حذف العطلة" });
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
+  });
+
+  // تفصيل مراحل الإجازة المرضية (المادة 117) — معاينة في نموذج الإنشاء
+  const { data: sickPreview } = useQuery<any>({
+    queryKey: ["/api/hr/leaves/sick-tier-preview", form.branchEmployeeId, form.startDate, form.endDate],
+    queryFn: async () =>
+      (await apiRequest("GET", `/api/hr/leaves/sick-tier-preview?branchEmployeeId=${form.branchEmployeeId}&startDate=${form.startDate}&endDate=${form.endDate}`)).json(),
+    enabled: open && form.leaveType === "sick" && !!form.branchEmployeeId && !!form.startDate && !!form.endDate && form.endDate >= form.startDate,
+  });
+
+  // أيام العطلات ضمن الشهر المعروض في التقويم
+  const holidayDatesSet = useMemo(() => {
+    const set = new Map<string, string>();
+    for (const h of holidays) {
+      if (h.isActive === false) continue;
+      const d = new Date(h.startDate + "T00:00:00Z");
+      const end = new Date(h.endDate + "T00:00:00Z");
+      let guard = 0;
+      while (d.getTime() <= end.getTime() && guard < 60) {
+        set.set(d.toISOString().slice(0, 10), h.name);
+        d.setUTCDate(d.getUTCDate() + 1);
+        guard++;
+      }
+    }
+    return set;
+  }, [holidays]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return leaves;
@@ -497,6 +555,7 @@ export default function LeavesPage() {
           <TabsTrigger value="requests" data-testid="tab-requests"><CalendarDays className="h-4 w-4 ms-1" />الطلبات</TabsTrigger>
           <TabsTrigger value="balances" data-testid="tab-balances"><Wallet className="h-4 w-4 ms-1" />الأرصدة</TabsTrigger>
           <TabsTrigger value="calendar" data-testid="tab-calendar"><CalendarDays className="h-4 w-4 ms-1" />التقويم</TabsTrigger>
+          <TabsTrigger value="holidays" data-testid="tab-holidays"><Sun className="h-4 w-4 ms-1" />العطلات الرسمية</TabsTrigger>
         </TabsList>
 
         {/* ---------- REQUESTS TAB ---------- */}
@@ -575,6 +634,12 @@ export default function LeavesPage() {
                           {arNum(l.totalDays)}
                           {l.requiredLevels > 1 && l.status === "pending" && (
                             <span className="block text-[10px] text-amber-600">موافقة {arNum(l.currentLevel)}/{arNum(l.requiredLevels)}</span>
+                          )}
+                          {l.leaveType === "sick" && l.sickTierBreakdown && (
+                            <span className="block text-[10px] text-purple-700" data-testid={`text-sick-tiers-${l.id}`}
+                              title={`مادة 117 — مستخدم سابقاً: ${l.sickTierBreakdown.usedBefore} يوم`}>
+                              كامل {arNum(l.sickTierBreakdown.fullPayDays)} · ¾ {arNum(l.sickTierBreakdown.threeQuarterPayDays)} · بدون {arNum(l.sickTierBreakdown.unpaidDays)}
+                            </span>
                           )}
                         </td>
                         <td className="p-2">{statusBadge(l.status)}</td>
@@ -736,8 +801,13 @@ export default function LeavesPage() {
                   <div key={d} className="font-bold text-muted-foreground p-1">{d}</div>
                 ))}
                 {calDays.map((c, i) => (
-                  <div key={i} className={`min-h-[64px] border rounded p-1 text-right ${c.date ? "bg-white" : "bg-slate-50"}`} data-testid={c.date ? `cal-day-${c.date}` : undefined}>
+                  <div key={i} className={`min-h-[64px] border rounded p-1 text-right ${c.date ? (holidayDatesSet.has(c.date) ? "bg-amber-50 border-amber-300" : "bg-white") : "bg-slate-50"}`} data-testid={c.date ? `cal-day-${c.date}` : undefined}>
                     {c.date && <div className="text-[10px] text-muted-foreground">{Number(c.date.slice(-2))}</div>}
+                    {c.date && holidayDatesSet.has(c.date) && (
+                      <div className="text-[9px] bg-amber-200 text-amber-900 rounded px-1 truncate" title={holidayDatesSet.get(c.date)}>
+                        {holidayDatesSet.get(c.date)}
+                      </div>
+                    )}
                     <div className="space-y-0.5">
                       {c.leaves.slice(0, 3).map((l: any) => (
                         <div key={l.id} className="text-[9px] bg-emerald-100 text-emerald-800 rounded px-1 truncate" title={`${l.employeeName} - ${LEAVE_TYPE_LABELS[l.leaveType] || l.leaveType}`}>
@@ -752,7 +822,110 @@ export default function LeavesPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* ---------- HOLIDAYS TAB ---------- */}
+        <TabsContent value="holidays">
+          <Card>
+            <CardContent className="space-y-3 pt-6">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="text-xs text-muted-foreground">
+                  أيام العطلات الرسمية المفعّلة تُستثنى تلقائياً من "أيام العمل" عند حساب أي إجازة جديدة.
+                </div>
+                <Button size="sm" onClick={() => setHolOpen(true)} data-testid="button-add-holiday">
+                  <Plus className="h-4 w-4 ms-1" />إضافة عطلة
+                </Button>
+              </div>
+              <div className="overflow-auto border rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="text-right p-2">العطلة</th>
+                      <th className="text-right p-2">من - إلى</th>
+                      <th className="text-right p-2">الأيام</th>
+                      <th className="text-right p-2">الحالة</th>
+                      <th className="text-right p-2">إجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {holidays.length === 0 && (
+                      <tr><td colSpan={5} className="p-6 text-center text-muted-foreground">لا توجد عطلات مسجلة — أضف عطلات مثل عيد الفطر وعيد الأضحى واليوم الوطني</td></tr>
+                    )}
+                    {holidays.map((h: any) => (
+                      <tr key={h.id} className="border-t hover:bg-slate-50" data-testid={`row-holiday-${h.id}`}>
+                        <td className="p-2">
+                          <div className="font-medium">{h.name}</div>
+                          {h.note && <div className="text-xs text-muted-foreground">{h.note}</div>}
+                        </td>
+                        <td className="p-2 text-xs">{h.startDate} → {h.endDate}</td>
+                        <td className="p-2 tabular-nums">{arNum(calcDays(h.startDate, h.endDate))}</td>
+                        <td className="p-2">
+                          {h.isActive
+                            ? <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">مفعّلة</Badge>
+                            : <Badge variant="secondary">موقوفة</Badge>}
+                        </td>
+                        <td className="p-2">
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="ghost" title={h.isActive ? "إيقاف" : "تفعيل"}
+                              onClick={() => toggleHolidayMutation.mutate({ id: h.id, isActive: !h.isActive })}
+                              data-testid={`button-toggle-holiday-${h.id}`}>
+                              {h.isActive ? <Ban className="h-3.5 w-3.5 text-orange-600" /> : <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
+                            </Button>
+                            <Button size="sm" variant="ghost"
+                              onClick={() => { if (confirm(`حذف عطلة "${h.name}"؟`)) deleteHolidayMutation.mutate(h.id); }}
+                              data-testid={`button-delete-holiday-${h.id}`}>
+                              <Trash2 className="h-3.5 w-3.5 text-red-600" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* Add holiday dialog */}
+      <Dialog open={holOpen} onOpenChange={setHolOpen}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader><DialogTitle>إضافة عطلة رسمية</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>اسم العطلة</Label>
+              <Input value={holForm.name} onChange={(e) => setHolForm({ ...holForm, name: e.target.value })} placeholder="مثال: عيد الفطر المبارك" data-testid="input-holiday-name" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>من تاريخ</Label>
+                <Input type="date" value={holForm.startDate} onChange={(e) => setHolForm({ ...holForm, startDate: e.target.value, endDate: holForm.endDate || e.target.value })} data-testid="input-holiday-start" />
+              </div>
+              <div>
+                <Label>إلى تاريخ</Label>
+                <Input type="date" value={holForm.endDate} onChange={(e) => setHolForm({ ...holForm, endDate: e.target.value })} data-testid="input-holiday-end" />
+              </div>
+            </div>
+            {holForm.startDate && holForm.endDate && (
+              <div className="text-sm text-muted-foreground">عدد الأيام: <span className="font-bold tabular-nums">{arNum(calcDays(holForm.startDate, holForm.endDate))}</span></div>
+            )}
+            <div>
+              <Label>ملاحظة (اختياري)</Label>
+              <Input value={holForm.note} onChange={(e) => setHolForm({ ...holForm, note: e.target.value })} data-testid="input-holiday-note" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHolOpen(false)}>إلغاء</Button>
+            <Button
+              onClick={() => createHolidayMutation.mutate({ name: holForm.name.trim(), startDate: holForm.startDate, endDate: holForm.endDate, note: holForm.note.trim() || undefined })}
+              disabled={createHolidayMutation.isPending || !holForm.name.trim() || !holForm.startDate || !holForm.endDate || holForm.endDate < holForm.startDate}
+              data-testid="button-save-holiday"
+            >
+              {createHolidayMutation.isPending ? "جاري الحفظ..." : "حفظ العطلة"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Create dialog */}
       <Dialog open={open} onOpenChange={(o) => { if (!o) { setForm(initialForm); setOpen(false); } else setOpen(true); }}>
@@ -793,6 +966,33 @@ export default function LeavesPage() {
                 )}
               </div>
             ) : null}
+            {form.leaveType === "sick" && sickPreview && (
+              <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 text-xs space-y-1.5" data-testid="box-sick-tiers">
+                <div className="font-semibold text-purple-800">توزيع الأجر حسب نظام العمل (المادة 117)</div>
+                <div className="text-[10px] text-purple-600">
+                  المرضية المستخدمة سابقاً في {sickPreview.year}: {arNum(sickPreview.usedBefore)} يوم
+                </div>
+                <div className="grid grid-cols-3 gap-1.5 text-center">
+                  <div className="rounded bg-white border border-emerald-200 p-1.5">
+                    <div className="font-bold text-emerald-700 tabular-nums" data-testid="text-sick-full">{arNum(sickPreview.fullPayDays)}</div>
+                    <div className="text-[10px] text-muted-foreground">أجر كامل</div>
+                  </div>
+                  <div className="rounded bg-white border border-amber-200 p-1.5">
+                    <div className="font-bold text-amber-700 tabular-nums" data-testid="text-sick-three-quarter">{arNum(sickPreview.threeQuarterPayDays)}</div>
+                    <div className="text-[10px] text-muted-foreground">¾ الأجر</div>
+                  </div>
+                  <div className="rounded bg-white border border-red-200 p-1.5">
+                    <div className="font-bold text-red-700 tabular-nums" data-testid="text-sick-unpaid">{arNum(sickPreview.unpaidDays)}</div>
+                    <div className="text-[10px] text-muted-foreground">بدون أجر</div>
+                  </div>
+                </div>
+                {sickPreview.unpaidDays > 0 && (
+                  <div className="text-red-600 bg-red-50 rounded p-1.5">
+                    ⚠ جزء من هذه الإجازة سيكون بدون أجر لتجاوز 90 يوماً مرضياً خلال السنة.
+                  </div>
+                )}
+              </div>
+            )}
             <div>
               <Label>نوع الإجازة</Label>
               <Select value={form.leaveType} onValueChange={(v) => setForm({ ...form, leaveType: v })}>

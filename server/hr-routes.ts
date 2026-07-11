@@ -29,6 +29,8 @@ import {
   financialPeriods,
   approvalWorkflows,
   approvalWorkflowSteps,
+  publicHolidays,
+  insertPublicHolidaySchema,
   insertEmployeeDocumentSchema,
   insertLeaveRequestSchema,
   insertEmployeeWarningSchema,
@@ -40,6 +42,8 @@ import { notifyEmployeeOfDecision } from "./notify-helpers";
 import { auditEvent } from "./audit-helpers";
 import {
   computeLeaveDays,
+  computeLeaveDaysWithHolidays,
+  getSickTierBreakdown,
   findOverlappingLeave,
   getLeaveBalanceSummary,
   suggestedEntitlement,
@@ -304,8 +308,8 @@ export function registerHrRoutes(app: Express) {
           error: `يوجد طلب إجازة متداخل لنفس الموظف (${overlap.startDate} إلى ${overlap.endDate})`,
         });
       }
-      // إعادة احتساب الأيام على الخادم (لا نثق بالعميل)
-      const { totalDays, workingDays } = computeLeaveDays(parsed.startDate, parsed.endDate);
+      // إعادة احتساب الأيام على الخادم (لا نثق بالعميل) — مع استثناء العطلات الرسمية
+      const { totalDays, workingDays } = await computeLeaveDaysWithHolidays(parsed.startDate, parsed.endDate);
       // نظام الموافقات والاعتمادات: جلب سلسلة الفرع (أو الافتراضية). إن لم توجد سلسلة
       // نرجع للسلوك السابق (مستوى واحد أو ما يطلبه العميل، بحد أقصى 3).
       const chain = await getApplicableLeaveChain(emp.branchId);
@@ -428,6 +432,13 @@ export function registerHrRoutes(app: Express) {
       }
 
       const isFinal = finalStatus !== "pending";
+      // عند الاعتماد النهائي لإجازة مرضية: حفظ تفصيل مراحل الأجر (المادة 117)
+      let sickTiers: any = undefined;
+      if (finalStatus === "approved" && existing.leaveType === "sick") {
+        try {
+          sickTiers = await getSickTierBreakdown(existing.branchEmployeeId, existing.startDate, existing.endDate, existing.id);
+        } catch (err) { console.error("[hr/leaves] sick tier compute failed:", err); }
+      }
       const [updated] = await db.update(leaveRequests).set({
         status: finalStatus,
         currentLevel: nextLevel,
@@ -435,6 +446,7 @@ export function registerHrRoutes(app: Express) {
         reviewedBy: isFinal ? userId : existing.reviewedBy,
         reviewedAt: isFinal ? now : existing.reviewedAt,
         reviewerNote: decision.note ?? existing.reviewerNote,
+        ...(sickTiers ? { sickTierBreakdown: sickTiers as any } : {}),
         updatedAt: now,
       }).where(eq(leaveRequests.id, id)).returning();
 
@@ -595,7 +607,7 @@ export function registerHrRoutes(app: Express) {
       const user: any = (req as any).currentUser || (req as any).user || null;
       const editorName = user?.fullName || user?.firstName || user?.username || "—";
       const now = new Date();
-      const { totalDays, workingDays } = computeLeaveDays(body.startDate, body.endDate);
+      const { totalDays, workingDays } = await computeLeaveDaysWithHolidays(body.startDate, body.endDate);
       const oldStart = existing.startDate;
       const oldEnd = existing.endDate;
 
@@ -1083,6 +1095,119 @@ export function registerHrRoutes(app: Express) {
     } catch (e: any) {
       if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
       console.error("[hr/leave-balances/carryover] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==================== العطلات الرسمية ====================
+  app.get("/api/hr/public-holidays", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const year = String(req.query.year || "").trim();
+      const conds: any[] = [];
+      if (/^\d{4}$/.test(year)) {
+        conds.push(lte(publicHolidays.startDate, `${year}-12-31`));
+        conds.push(gte(publicHolidays.endDate, `${year}-01-01`));
+      }
+      const rows = await db.select().from(publicHolidays)
+        .where(conds.length ? and(...conds) : undefined)
+        .orderBy(desc(publicHolidays.startDate));
+      res.json(rows);
+    } catch (e: any) {
+      console.error("[hr/public-holidays] list error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/hr/public-holidays", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const parsed = insertPublicHolidaySchema.parse(req.body);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(parsed.startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(parsed.endDate)) {
+        return res.status(400).json({ error: "صيغة التاريخ غير صحيحة (YYYY-MM-DD)" });
+      }
+      if (parsed.endDate < parsed.startDate) {
+        return res.status(400).json({ error: "تاريخ النهاية يجب أن يكون بعد تاريخ البداية" });
+      }
+      const [created] = await db.insert(publicHolidays).values({
+        ...parsed,
+        createdBy: getUserId(req) || undefined,
+      }).returning();
+      await auditEvent({
+        req, module: "hr_leaves", entityId: created.id, action: "create_holiday",
+        entityName: created.name,
+        description: `إضافة عطلة رسمية: ${created.name} (${created.startDate}→${created.endDate})`,
+      });
+      res.status(201).json(created);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
+      console.error("[hr/public-holidays] create error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.patch("/api/hr/public-holidays/:id", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const parsed = insertPublicHolidaySchema.partial().parse(req.body);
+      if ((parsed.startDate && !/^\d{4}-\d{2}-\d{2}$/.test(parsed.startDate)) ||
+          (parsed.endDate && !/^\d{4}-\d{2}-\d{2}$/.test(parsed.endDate))) {
+        return res.status(400).json({ error: "صيغة التاريخ غير صحيحة (YYYY-MM-DD)" });
+      }
+      const [existing] = await db.select().from(publicHolidays).where(eq(publicHolidays.id, id));
+      if (!existing) return res.status(404).json({ error: "العطلة غير موجودة" });
+      const start = parsed.startDate ?? existing.startDate;
+      const end = parsed.endDate ?? existing.endDate;
+      if (end < start) return res.status(400).json({ error: "تاريخ النهاية يجب أن يكون بعد تاريخ البداية" });
+      const [updated] = await db.update(publicHolidays).set(parsed).where(eq(publicHolidays.id, id)).returning();
+      await auditEvent({
+        req, module: "hr_leaves", entityId: id, action: "update_holiday",
+        entityName: updated.name,
+        description: `تعديل عطلة رسمية: ${updated.name}`,
+        details: parsed,
+      });
+      res.json(updated);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
+      console.error("[hr/public-holidays] update error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete("/api/hr/public-holidays/:id", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const [deleted] = await db.delete(publicHolidays).where(eq(publicHolidays.id, id)).returning();
+      if (!deleted) return res.status(404).json({ error: "العطلة غير موجودة" });
+      await auditEvent({
+        req, module: "hr_leaves", entityId: id, action: "delete_holiday",
+        entityName: deleted.name,
+        description: `حذف عطلة رسمية: ${deleted.name}`,
+      });
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error("[hr/public-holidays] delete error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // معاينة تفصيل مراحل الإجازة المرضية (المادة 117) قبل الإنشاء/الاعتماد
+  app.get("/api/hr/leaves/sick-tier-preview", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const branchEmployeeId = Number(req.query.branchEmployeeId);
+      const startDate = String(req.query.startDate || "");
+      const endDate = String(req.query.endDate || "");
+      if (!branchEmployeeId || !/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate) || endDate < startDate) {
+        return res.status(400).json({ error: "معاملات غير صحيحة" });
+      }
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, branchEmployeeId));
+      if (!emp) return res.status(404).json({ error: "الموظف غير موجود" });
+      const { branchIds } = getBranchScope(req);
+      if (branchIds !== null && !branchIds.includes(emp.branchId)) {
+        return res.status(403).json({ error: "ليس لديك صلاحية على فرع الموظف" });
+      }
+      const breakdown = await getSickTierBreakdown(branchEmployeeId, startDate, endDate);
+      res.json(breakdown);
+    } catch (e: any) {
+      console.error("[hr/leaves/sick-tier-preview] error:", e);
       res.status(500).json({ error: e.message });
     }
   });

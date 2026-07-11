@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { and, eq, lte, lt, sql, desc } from "drizzle-orm";
-import { notificationQueue, reportSchedules, reportRuns, systemNotifications, notificationAutomations, branchEmployees } from "@shared/schema";
+import { notificationQueue, reportSchedules, reportRuns, systemNotifications, notificationAutomations, branchEmployees, leaveRequests, notifications } from "@shared/schema";
 import { sendWhatsAppMessage, sendSMS, isTwilioConfigured } from "./twilio-service";
 import { generateReport, type ReportType } from "./report-generator";
 import { z } from "zod";
@@ -276,6 +276,90 @@ export async function processAnniversaryGreetings(force = false): Promise<{ crea
   return { created, skipped };
 }
 
+/**
+ * تذكير العودة من الإجازة: للإجازات المعتمدة التي تنتهي اليوم (بتوقيت الرياض)
+ * نرسل للموظف تذكيراً بأن العودة للعمل غداً (واتساب + SMS + إشعار داخلي).
+ * آمنة للتكرار: تفحص طابور الإشعارات (relatedModule) قبل الإرسال، وتعمل مرة يومياً.
+ */
+let lastReturnReminderDate: string | null = null; // YYYY-MM-DD (Riyadh)
+export async function processReturnReminders(force = false): Promise<{ queued: number; skipped: number }> {
+  const todayRiyadh = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
+  if (!force && lastReturnReminderDate === todayRiyadh) return { queued: 0, skipped: 0 };
+
+  const endingToday = await db
+    .select({
+      id: leaveRequests.id,
+      branchEmployeeId: leaveRequests.branchEmployeeId,
+      branchId: leaveRequests.branchId,
+      startDate: leaveRequests.startDate,
+      endDate: leaveRequests.endDate,
+    })
+    .from(leaveRequests)
+    .where(and(eq(leaveRequests.status, "approved"), eq(leaveRequests.endDate, todayRiyadh)));
+
+  let queued = 0, skipped = 0;
+  for (const leave of endingToday) {
+    try {
+      // منع التكرار: هل سبق إرسال تذكير لهذه الإجازة؟
+      const [already] = await db
+        .select({ id: notificationQueue.id })
+        .from(notificationQueue)
+        .where(and(
+          eq(notificationQueue.relatedModule, "leave_return_reminder"),
+          eq(notificationQueue.relatedEntityId, String(leave.id)),
+        ))
+        .limit(1);
+      if (already) { skipped++; continue; }
+
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, leave.branchEmployeeId));
+      if (!emp) { skipped++; continue; }
+
+      const title = "تذكير بانتهاء الإجازة";
+      const message = `عزيزنا ${emp.employeeName}،\nتنتهي إجازتك اليوم (${leave.endDate})، ونتطلع لعودتك للعمل غداً بإذن الله.\nنتمنى أن تكون قضيت وقتاً طيباً 🌟\nإدارة Butter Bakery`;
+
+      // إشعار داخلي في بوابة الموظف (إن كان له حساب)
+      if (emp.linkedUserId) {
+        try {
+          await db.insert(notifications).values({
+            branchId: emp.branchId,
+            userId: emp.linkedUserId,
+            title,
+            message: `تنتهي إجازتك اليوم (${leave.endDate}) — العودة للعمل غداً.`,
+            type: "info",
+            category: "system",
+            priority: "normal",
+            linkUrl: "/my-portal",
+          });
+        } catch (e: any) { console.error("[scheduler] return-reminder in-app failed:", e.message); }
+      }
+
+      // واتساب + SMS عبر الطابور (صف لكل قناة) — الفهرس الفريد الجزئي يمنع التكرار حتى مع التزامن
+      if (emp.phoneNumber) {
+        for (const channel of ["whatsapp", "sms"] as const) {
+          await db.insert(notificationQueue).values({
+            recipientPhone: emp.phoneNumber,
+            recipientName: emp.employeeName,
+            channel,
+            message,
+            relatedModule: "leave_return_reminder",
+            relatedEntityId: String(leave.id),
+          }).onConflictDoNothing();
+        }
+        queued++;
+      } else {
+        skipped++;
+      }
+    } catch (err: any) {
+      console.error(`[scheduler] return-reminder error for leave ${leave.id}:`, err.message);
+      skipped++;
+    }
+  }
+
+  lastReturnReminderDate = todayRiyadh;
+  if (queued > 0) console.log(`[scheduler] return-reminders: queued ${queued}, skipped ${skipped}`);
+  return { queued, skipped };
+}
+
 async function tick() {
   if (tickRunning) {
     console.log("[scheduler] tick skipped - previous tick still running");
@@ -290,6 +374,11 @@ async function tick() {
       const h = new Date().getHours();
       if (h >= 6) await processAnniversaryGreetings(false);
     } catch (e: any) { console.error("[scheduler] processAnniversaryGreetings error:", e.message); }
+    // تذكير العودة من الإجازة — بعد 6 صباحاً بتوقيت الرياض، مرة يومياً.
+    try {
+      const hRiyadh = Number(new Date().toLocaleString("en-US", { timeZone: "Asia/Riyadh", hour: "2-digit", hour12: false }));
+      if (hRiyadh >= 6) await processReturnReminders(false);
+    } catch (e: any) { console.error("[scheduler] processReturnReminders error:", e.message); }
   } finally {
     tickRunning = false;
   }

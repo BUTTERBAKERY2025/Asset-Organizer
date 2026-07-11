@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { leaveRequests, leaveBalances, branchEmployees, attendanceRecords } from "@shared/schema";
+import { leaveRequests, leaveBalances, branchEmployees, attendanceRecords, publicHolidays } from "@shared/schema";
 import { and, eq, ne, inArray, lte, gte, sql } from "drizzle-orm";
 
 // ============================================================
@@ -29,6 +29,121 @@ export function computeLeaveDays(start: string, end: string): { totalDays: numbe
     d.setUTCDate(d.getUTCDate() + 1);
   }
   return { totalDays: total, workingDays: working };
+}
+
+/** يجلب أيام العطلات الرسمية المفعّلة المتقاطعة مع فترة معيّنة كمجموعة تواريخ YYYY-MM-DD. */
+export async function getHolidayDatesInRange(start: string, end: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ startDate: publicHolidays.startDate, endDate: publicHolidays.endDate })
+    .from(publicHolidays)
+    .where(and(
+      eq(publicHolidays.isActive, true),
+      lte(publicHolidays.startDate, end),
+      gte(publicHolidays.endDate, start),
+    ));
+  const set = new Set<string>();
+  for (const h of rows) {
+    const from = h.startDate > start ? h.startDate : start;
+    const to = h.endDate < end ? h.endDate : end;
+    const n = isoDaysInclusive(from, to);
+    const d = new Date(from + "T00:00:00Z");
+    for (let i = 0; i < n && i < 400; i++) {
+      set.add(d.toISOString().slice(0, 10));
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
+  }
+  return set;
+}
+
+/**
+ * مثل computeLeaveDays لكن تستثني أيضاً العطلات الرسمية المفعّلة من أيام العمل.
+ * العطلة التي تصادف جمعة لا تُحسب مرتين.
+ */
+export async function computeLeaveDaysWithHolidays(
+  start: string,
+  end: string,
+): Promise<{ totalDays: number; workingDays: number; holidayDays: number }> {
+  const total = isoDaysInclusive(start, end);
+  if (total <= 0) return { totalDays: 0, workingDays: 0, holidayDays: 0 };
+  const holidays = await getHolidayDatesInRange(start, end);
+  let working = 0, holidayCount = 0;
+  const d = new Date(start + "T00:00:00Z");
+  for (let i = 0; i < total && i < 400; i++) {
+    const iso = d.toISOString().slice(0, 10);
+    const isFriday = d.getUTCDay() === 5;
+    const isHoliday = holidays.has(iso);
+    if (!isFriday && !isHoliday) working++;
+    if (isHoliday && !isFriday) holidayCount++;
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return { totalDays: total, workingDays: working, holidayDays: holidayCount };
+}
+
+// ============================================================
+// الإجازة المرضية بمراحل المادة 117 من نظام العمل السعودي:
+// 30 يوماً بأجر كامل، ثم 60 يوماً بثلاثة أرباع الأجر، ثم 30 يوماً بدون أجر
+// (خلال السنة الواحدة — نعتمد السنة الميلادية بما يتسق مع أرصدة النظام).
+// ============================================================
+export interface SickTierBreakdown {
+  year: number;
+  usedBefore: number; // أيام مرضية معتمدة سابقاً في نفس السنة
+  fullPayDays: number; // ضمن أول 30 يوماً (أجر كامل)
+  threeQuarterPayDays: number; // ضمن 31-90 (ثلاثة أرباع الأجر)
+  unpaidDays: number; // ما بعد 90 يوماً (بدون أجر)
+}
+
+/**
+ * يوزّع أيام إجازة مرضية مطلوبة على مراحل الأجر حسب الرصيد المرضي
+ * المستهلك (المعتمد) سابقاً في نفس السنة. يُستثنى الطلب الحالي إن مُرّر excludeId.
+ */
+export async function getSickTierBreakdown(
+  branchEmployeeId: number,
+  startDate: string,
+  endDate: string,
+  excludeId?: number,
+): Promise<SickTierBreakdown> {
+  const year = Number(startDate.slice(0, 4));
+  const yearStart = `${year}-01-01`;
+  const yearEnd = `${year}-12-31`;
+  const conds = [
+    eq(leaveRequests.branchEmployeeId, branchEmployeeId),
+    eq(leaveRequests.leaveType, "sick"),
+    eq(leaveRequests.status, "approved"),
+    lte(leaveRequests.startDate, yearEnd),
+    gte(leaveRequests.endDate, yearStart),
+  ];
+  if (excludeId) conds.push(ne(leaveRequests.id, excludeId));
+  const prior = await db
+    .select({ startDate: leaveRequests.startDate, endDate: leaveRequests.endDate })
+    .from(leaveRequests)
+    .where(and(...conds));
+  // نحسب فقط الأيام الواقعة داخل السنة نفسها (الإجازات العابرة للسنة تُقسّم)
+  let usedBefore = 0;
+  for (const p of prior) {
+    const from = p.startDate > yearStart ? p.startDate : yearStart;
+    const to = p.endDate < yearEnd ? p.endDate : yearEnd;
+    usedBefore += isoDaysInclusive(from, to);
+  }
+  const clippedStart = startDate > yearStart ? startDate : yearStart;
+  const clippedEnd = endDate < yearEnd ? endDate : yearEnd;
+  const requested = isoDaysInclusive(clippedStart, clippedEnd);
+
+  const allocate = (used: number, req: number) => {
+    const seg = (cap: number, floor: number) =>
+      Math.max(0, Math.min(used + req, cap) - Math.max(used, floor));
+    const full = seg(30, 0);
+    const threeQuarter = seg(90, 30);
+    const unpaid = req - full - threeQuarter;
+    return { full, threeQuarter, unpaid: Math.max(0, unpaid) };
+  };
+  const a = allocate(usedBefore, requested);
+  return {
+    year,
+    usedBefore,
+    fullPayDays: a.full,
+    threeQuarterPayDays: a.threeQuarter,
+    unpaidDays: a.unpaid,
+  };
 }
 
 /** يبحث عن أي إجازة (معلّقة أو معتمدة) متداخلة زمنياً لنفس الموظف. */

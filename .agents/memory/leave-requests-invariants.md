@@ -25,3 +25,14 @@ description: Non-obvious correctness/security rules for the leave-requests + lea
 
 - **"Today" for leave movement classification must be Asia/Riyadh, not UTC.** Stats endpoint computes `today` via `toLocaleDateString("en-CA",{timeZone:"Asia/Riyadh"})`.
   **Why:** UTC misclassifies في إجازة الآن/سيغادر/سيعود for ~3 hours around midnight KSA.
+
+- **Working-days must be computed via `computeLeaveDaysWithHolidays` (async) in every leave create/edit path.** It excludes Fridays AND active `public_holidays` ranges without double-counting. Never reintroduce the sync `computeLeaveDays` in a write path.
+  **Why:** a path using the old sync helper silently ignores holidays → over-deducts balances.
+
+- **Sick-tier breakdown (Art. 117: 30 full / 60 @¾ / rest unpaid) counts *calendar* days per calendar year, clips cross-year ranges, and excludes the request itself (`excludeId`) when recomputing at approval.** Persisted to `leave_requests.sick_tier_breakdown` only on FINAL approval; preview endpoint must branch-scope the target employee.
+  **Why:** without excludeId, re-review double-counts the request's own days; tiers reset per calendar year by law.
+
+- **Return-reminder dedupe is DB-enforced**: partial unique index `uq_notification_queue_return_reminder` on (related_module, related_entity_id, channel) WHERE related_module='leave_return_reminder', + `onConflictDoNothing()`. In-memory once-per-day gate is only an optimization.
+  **Why:** check-then-insert alone is a TOCTOU race under concurrent ticks/instances.
+
+- **Dev/prod DB drift trap:** `notification_queue.media_url` existed in the Drizzle schema but not in the DB — every drizzle insert into that table failed with an opaque "Failed query". If a drizzle insert fails but raw SQL works, diff schema columns vs information_schema first.

@@ -11643,6 +11643,8 @@ export const leaveRequests = pgTable("leave_requests", {
   requiredLevels: integer("required_levels").default(1).notNull(),
   // لقطة سلسلة الاعتمادات المطبّقة وقت الإنشاء (نظام الموافقات والاعتمادات)
   approvalChain: jsonb("approval_chain"), // [{level, jobTitle, stepName}]
+  // تفصيل مراحل الإجازة المرضية حسب المادة 117 (يُحفظ عند الاعتماد النهائي)
+  sickTierBreakdown: jsonb("sick_tier_breakdown"), // {fullPayDays, threeQuarterPayDays, unpaidDays, usedBefore, year}
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -11653,6 +11655,28 @@ export const leaveRequests = pgTable("leave_requests", {
   index("idx_leave_requests_type").on(table.leaveType),
   index("idx_leave_requests_start").on(table.startDate),
 ]);
+
+// ===== العطلات الرسمية (تُستثنى من أيام العمل عند حساب الإجازات) =====
+export const publicHolidays = pgTable("public_holidays", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(), // مثل: عيد الفطر، اليوم الوطني
+  startDate: text("start_date").notNull(), // YYYY-MM-DD
+  endDate: text("end_date").notNull(), // YYYY-MM-DD (شامل)
+  isActive: boolean("is_active").default(true).notNull(),
+  note: text("note"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_public_holidays_dates").on(table.startDate, table.endDate),
+]);
+
+export const insertPublicHolidaySchema = createInsertSchema(publicHolidays).omit({
+  id: true,
+  createdAt: true,
+  createdBy: true,
+});
+export type InsertPublicHoliday = z.infer<typeof insertPublicHolidaySchema>;
+export type PublicHoliday = typeof publicHolidays.$inferSelect;
 
 // ===== نظام الموافقات والاعتمادات (Approval Chains) =====
 // سلسلة موافقات واحدة لكل (فرع + نوع طلب). branchId = null تعني سلسلة افتراضية لكل الفروع.
