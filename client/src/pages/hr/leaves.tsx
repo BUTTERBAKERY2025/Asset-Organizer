@@ -708,6 +708,9 @@ export default function LeavesPage() {
                             <Button size="sm" variant="ghost" title="طباعة نموذج" onClick={() => setPrintLeave(l)} data-testid={`button-print-${l.id}`}>
                               <Printer className="h-3.5 w-3.5 text-slate-600" />
                             </Button>
+                            <Button size="sm" variant="ghost" title="كشف حساب الإجازات" onClick={() => { setStmtYear(Number(l.startDate?.slice(0, 4)) || currentYear); setStmtEmpId(l.branchEmployeeId); }} data-testid={`button-req-statement-${l.id}`}>
+                              <FileText className="h-3.5 w-3.5 text-blue-600" />
+                            </Button>
                             <Button size="sm" variant="ghost" onClick={() => { if (confirm("حذف هذا الطلب؟")) deleteMutation.mutate(l.id); }} data-testid={`button-delete-${l.id}`}>
                               <Trash2 className="h-3.5 w-3.5 text-red-600" />
                             </Button>

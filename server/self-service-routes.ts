@@ -223,6 +223,9 @@ export function registerSelfServiceRoutes(app: Express) {
     try {
       const emp = await getMyEmployee(req);
       if (!emp) return res.status(403).json({ error: "حسابك غير مرتبط بملف موظف" });
+      if (emp.status === "terminated" || emp.status === "inactive") {
+        return res.status(403).json({ error: "لا يمكن تقديم طلب إجازة — الملف الوظيفي غير نشط" });
+      }
       if (!(await portalFlag(PORTAL_SETTING_KEYS.ALLOW_LEAVE_REQUESTS))) {
         return res.status(403).json({ error: "طلبات الإجازات غير مفعّلة حالياً" });
       }

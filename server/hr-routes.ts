@@ -298,6 +298,10 @@ export function registerHrRoutes(app: Express) {
       if (branchIds !== null && (!emp.branchId || !branchIds.includes(emp.branchId))) {
         return res.status(403).json({ error: "ليس لديك صلاحية على فرع الموظف" });
       }
+      // لا يجوز تسجيل إجازة لموظف منتهي الخدمة أو غير نشط
+      if (emp.status === "terminated" || emp.status === "inactive") {
+        return res.status(400).json({ error: "لا يمكن تسجيل إجازة لموظف غير نشط أو منتهي الخدمة" });
+      }
       if (parsed.endDate < parsed.startDate) {
         return res.status(400).json({ error: "تاريخ النهاية يجب أن يكون بعد تاريخ البداية" });
       }
