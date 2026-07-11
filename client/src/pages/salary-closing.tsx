@@ -1453,11 +1453,17 @@ export default function SalaryClosingPage() {
       "الخصومات", "العنوان", "العملة ", "الحالة", "وصف  الدفع", "مرجع  الدفع",
     ];
     const paymentDesc = `رواتب شهر ${month}`;
+    // استبعاد غير النشطين من ملف البنك (يظلون في التقرير والتصديرات الأخرى)
+    // ملاحظة: الحالة الفارغة (بيانات إغلاقات قديمة قبل إضافة العمود) تُعامل كنشط
+    const activeOnly = lines.filter(
+      (emp) => !emp.employeeStatus || emp.employeeStatus === "active",
+    );
+    const excludedNonActive = lines.length - activeOnly.length;
     // استبعاد الموظفين بلا رقم حساب بنكي (سيرفضها البنك) وإشعار المستخدم بعددهم
-    const eligible = lines.filter(
+    const eligible = activeOnly.filter(
       (emp) => String(emp.bankAccountNumber || "").trim() !== "",
     );
-    const excludedCount = lines.length - eligible.length;
+    const excludedCount = activeOnly.length - eligible.length;
     if (eligible.length === 0) {
       toast({
         title: "لا يوجد موظفون مؤهلون للتحويل",
@@ -1578,6 +1584,9 @@ export default function SalaryClosingPage() {
       title: "تم إنشاء ملف البنك",
       description:
         `تم تصدير ${eligible.length} موظف.` +
+        (excludedNonActive > 0
+          ? ` استُبعد ${excludedNonActive} موظف غير نشط.`
+          : "") +
         (excludedCount > 0
           ? ` استُبعد ${excludedCount} موظف بدون رقم حساب بنكي.`
           : ""),
