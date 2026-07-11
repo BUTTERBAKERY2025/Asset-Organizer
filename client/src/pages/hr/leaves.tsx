@@ -15,7 +15,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   CalendarDays, Plus, CheckCircle2, XCircle, Clock, Trash2, ArrowRight,
-  Wallet, Printer, FileSpreadsheet, Ban, Paperclip, Pencil, ChevronRight, ChevronLeft, ListChecks, Sun, FileText,
+  Wallet, Printer, FileSpreadsheet, Ban, Paperclip, Pencil, ChevronRight, ChevronLeft, ListChecks, Sun, FileText, Calculator,
 } from "lucide-react";
 import { LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS } from "@shared/schema";
 import butterLogo from "@assets/logo_-5_1765206843638.png";
@@ -24,7 +24,7 @@ import { Link } from "wouter";
 import * as XLSX from "xlsx";
 
 type Leave = any;
-type Emp = { id: number; employeeName: string; jobTitle: string; branchId: string };
+type Emp = { id: number; employeeName: string; jobTitle: string; branchId: string; hireDate?: string | null; status?: string };
 type Balance = any;
 
 const initialForm = {
@@ -69,6 +69,8 @@ export default function LeavesPage() {
   const [tab, setTab] = useState("requests");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
+  const [filterBranch, setFilterBranch] = useState<string>("all");
+  const [filterMonth, setFilterMonth] = useState<string>("all"); // YYYY-MM أو all
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<typeof initialForm>(initialForm);
@@ -207,6 +209,50 @@ export default function LeavesPage() {
     });
   }, [statement]);
 
+  // ===== حاسبة الرصيد المستحق =====
+  const [calcOpen, setCalcOpen] = useState(false);
+  const [calcEmpId, setCalcEmpId] = useState<string>("");
+  const [calcAsOf, setCalcAsOf] = useState<string>(new Date().toLocaleDateString("en-CA"));
+  const [calcType, setCalcType] = useState<string>("annual");
+  const calcYear = Number(calcAsOf?.slice(0, 4)) || currentYear;
+  const { data: calcBalance } = useQuery<any>({
+    queryKey: ["/api/hr/leave-balances/calc", calcEmpId, calcYear, calcType],
+    queryFn: async () =>
+      (await apiRequest("GET", `/api/hr/leave-balances/${calcEmpId}?year=${calcYear}&type=${calcType}`)).json(),
+    enabled: calcOpen && !!calcEmpId && calcType !== "unpaid",
+  });
+  const calcResult = useMemo(() => {
+    if (!calcEmpId || !calcBalance || !calcAsOf) return null;
+    const emp = employees.find((e) => e.id === Number(calcEmpId));
+    if (!emp) return null;
+    const hire = emp.hireDate ? new Date(emp.hireDate + "T00:00:00Z") : null;
+    const asOf = new Date(calcAsOf + "T00:00:00Z");
+    if (hire && asOf < hire) return { error: "التاريخ المختار قبل تاريخ التعيين" } as any;
+    // مدة الخدمة الكلية
+    let serviceText = "-";
+    if (hire) {
+      const totalMonths = Math.max(0, (asOf.getUTCFullYear() - hire.getUTCFullYear()) * 12 + (asOf.getUTCMonth() - hire.getUTCMonth()) - (asOf.getUTCDate() < hire.getUTCDate() ? 1 : 0));
+      serviceText = `${arNum(Math.floor(totalMonths / 12))} سنة و ${arNum(totalMonths % 12)} شهر`;
+    }
+    // الاستحقاق التراكمي (pro-rata) داخل سنة الحساب: من بداية السنة أو تاريخ التعيين أيهما أحدث
+    const yearStart = new Date(Date.UTC(calcYear, 0, 1));
+    const accrualStart = hire && hire > yearStart ? hire : yearStart;
+    const daysElapsed = Math.max(0, Math.round((asOf.getTime() - accrualStart.getTime()) / 86400000) + 1);
+    const daysInYear = ((calcYear % 4 === 0 && calcYear % 100 !== 0) || calcYear % 400 === 0) ? 366 : 365;
+    const entitled = Number(calcBalance.entitledDays);
+    const accrued = Math.round(entitled * Math.min(1, daysElapsed / daysInYear) * 10) / 10;
+    const carried = Number(calcBalance.carriedOverDays);
+    const adjust = Number(calcBalance.adjustmentDays);
+    const used = Number(calcBalance.usedDays);
+    const accruedNet = Math.round((accrued + carried + adjust - used) * 10) / 10;
+    return {
+      empName: emp.employeeName, jobTitle: emp.jobTitle, hireDate: emp.hireDate, serviceText,
+      entitled, accrued, carried, adjust, used, accruedNet,
+      fullYearRemaining: Number(calcBalance.remainingDays),
+      monthlyAccrual: Math.round((entitled / 12) * 100) / 100,
+    } as any;
+  }, [calcEmpId, calcBalance, calcAsOf, employees, calcYear]);
+
   // أيام العطلات ضمن الشهر المعروض في التقويم
   const holidayDatesSet = useMemo(() => {
     const set = new Map<string, string>();
@@ -224,11 +270,36 @@ export default function LeavesPage() {
     return set;
   }, [holidays]);
 
+  // خيارات فلتر الفرع من الطلبات المعروضة
+  const branchOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const l of leaves as any[]) if (l.branchId) map.set(l.branchId, l.branchName || l.branchId);
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1], "ar"));
+  }, [leaves]);
+  // خيارات فلتر الشهر: آخر 12 شهرًا + الأشهر القادمة الموجودة في الطلبات
+  const monthOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const l of leaves as any[]) {
+      if (l.startDate) set.add(l.startDate.slice(0, 7));
+      if (l.endDate) set.add(l.endDate.slice(0, 7));
+    }
+    return Array.from(set).sort().reverse();
+  }, [leaves]);
+
   const filtered = useMemo(() => {
-    if (!search.trim()) return leaves;
-    const q = search.toLowerCase();
-    return leaves.filter((l: any) => (l.employeeName || "").toLowerCase().includes(q));
-  }, [leaves, search]);
+    let list = leaves as any[];
+    if (filterBranch !== "all") list = list.filter((l) => l.branchId === filterBranch);
+    if (filterMonth !== "all") {
+      const mStart = `${filterMonth}-01`;
+      const mEnd = `${filterMonth}-31`;
+      list = list.filter((l) => l.startDate <= mEnd && l.endDate >= mStart);
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((l) => (l.employeeName || "").toLowerCase().includes(q));
+    }
+    return list;
+  }, [leaves, search, filterBranch, filterMonth]);
 
   const totalDays = calcDays(form.startDate, form.endDate);
 
@@ -590,7 +661,7 @@ export default function LeavesPage() {
         <TabsContent value="requests">
           <Card>
             <CardContent className="space-y-3 pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-2">
                 <Input placeholder="بحث باسم الموظف" value={search} onChange={(e) => setSearch(e.target.value)} data-testid="input-search-leaves" />
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
                   <SelectTrigger data-testid="select-filter-status"><SelectValue /></SelectTrigger>
@@ -604,6 +675,20 @@ export default function LeavesPage() {
                   <SelectContent>
                     <SelectItem value="all">كل الأنواع</SelectItem>
                     {Object.entries(LEAVE_TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filterBranch} onValueChange={setFilterBranch}>
+                  <SelectTrigger data-testid="select-filter-branch"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">كل الفروع</SelectItem>
+                    {branchOptions.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filterMonth} onValueChange={setFilterMonth}>
+                  <SelectTrigger data-testid="select-filter-month"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">كل الشهور</SelectItem>
+                    {monthOptions.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <Button variant="outline" onClick={exportLeavesExcel} data-testid="button-export-leaves">
@@ -760,6 +845,9 @@ export default function LeavesPage() {
                 >
                   <Wallet className="h-4 w-4 ms-1" />
                   {carryoverMutation.isPending ? "جارٍ الترحيل..." : `ترحيل أرصدة ${balYear - 1} ←`}
+                </Button>
+                <Button variant="outline" className="text-blue-700 border-blue-300" onClick={() => setCalcOpen(true)} data-testid="button-open-calculator">
+                  <Calculator className="h-4 w-4 ms-1" />حاسبة الرصيد المستحق
                 </Button>
               </div>
               <div className="overflow-auto border rounded-lg">
@@ -1295,6 +1383,84 @@ export default function LeavesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Entitlement calculator dialog */}
+      <Dialog open={calcOpen} onOpenChange={setCalcOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-auto" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calculator className="h-5 w-5 text-blue-600" />
+              حاسبة الرصيد المستحق
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>الموظف</Label>
+              <Select value={calcEmpId} onValueChange={setCalcEmpId}>
+                <SelectTrigger data-testid="select-calc-employee"><SelectValue placeholder="اختر الموظف" /></SelectTrigger>
+                <SelectContent>
+                  {employees.map((e) => <SelectItem key={e.id} value={String(e.id)}>{e.employeeName} — {e.jobTitle}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>نوع الإجازة</Label>
+                <Select value={calcType} onValueChange={setCalcType}>
+                  <SelectTrigger data-testid="select-calc-type"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(LEAVE_TYPE_LABELS).filter(([k]) => k !== "unpaid").map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>حتى تاريخ</Label>
+                <Input type="date" value={calcAsOf} onChange={(e) => setCalcAsOf(e.target.value)} data-testid="input-calc-asof" />
+              </div>
+            </div>
+
+            {calcResult?.error && (
+              <div className="text-xs bg-red-50 text-red-700 rounded p-2">{calcResult.error}</div>
+            )}
+            {calcResult && !calcResult.error && (
+              <div className="space-y-2" data-testid="box-calc-result">
+                <div className="rounded-lg border bg-slate-50 p-3 text-xs space-y-1">
+                  <div className="flex justify-between"><span className="text-muted-foreground">الموظف</span><span className="font-semibold">{calcResult.empName}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">تاريخ التعيين</span><span className="font-semibold tabular-nums">{calcResult.hireDate || "-"}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">مدة الخدمة حتى {calcAsOf}</span><span className="font-semibold">{calcResult.serviceText}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">الاستحقاق السنوي ({LEAVE_TYPE_LABELS[calcType]})</span><span className="font-semibold tabular-nums">{arNum(calcResult.entitled)} يوم ({arNum(calcResult.monthlyAccrual)} يوم/شهر)</span></div>
+                </div>
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs space-y-1">
+                  <div className="font-bold text-blue-800 mb-1">الرصيد المتراكم حتى {calcAsOf}</div>
+                  <div className="flex justify-between"><span>المستحق تراكمياً (نسبة وتناسب)</span><span className="font-semibold tabular-nums" data-testid="text-calc-accrued">{arNum(calcResult.accrued)} يوم</span></div>
+                  <div className="flex justify-between"><span>+ المرحّل من سنوات سابقة</span><span className="font-semibold tabular-nums">{arNum(calcResult.carried)} يوم</span></div>
+                  <div className="flex justify-between"><span>+ تعديلات يدوية</span><span className="font-semibold tabular-nums">{arNum(calcResult.adjust)} يوم</span></div>
+                  <div className="flex justify-between"><span>− المستخدم خلال {calcYear}</span><span className="font-semibold tabular-nums text-red-600">{arNum(calcResult.used)} يوم</span></div>
+                  <div className="flex justify-between border-t border-blue-200 pt-1 mt-1">
+                    <span className="font-bold">الصافي المتراكم المستحق الآن</span>
+                    <span className={`font-bold tabular-nums ${calcResult.accruedNet < 0 ? "text-red-600" : "text-emerald-700"}`} data-testid="text-calc-net">{arNum(calcResult.accruedNet)} يوم</span>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs flex justify-between">
+                  <span className="font-semibold text-emerald-800">الرصيد المتبقي على أساس السنة كاملة</span>
+                  <span className="font-bold tabular-nums text-emerald-700" data-testid="text-calc-fullyear">{arNum(calcResult.fullYearRemaining)} يوم</span>
+                </div>
+                <div className="text-[10px] text-muted-foreground leading-relaxed">
+                  المستحق التراكمي يُحسب نسبةً من الاستحقاق السنوي بعدد الأيام المنقضية من بداية السنة (أو من تاريخ التعيين إن كان خلالها) حتى التاريخ المختار. الاستحقاق السنوي حسب نظام العمل: 21 يومًا، ويصبح 30 يومًا بعد إتمام 5 سنوات خدمة.
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => { setStmtYear(calcYear); setStmtEmpId(Number(calcEmpId)); }} data-testid="button-calc-to-statement">
+                    <FileText className="h-3.5 w-3.5 ms-1" />عرض كشف الحساب الكامل
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCalcOpen(false)}>إغلاق</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Employee leave statement dialog */}
       <Dialog open={!!stmtEmpId} onOpenChange={(o) => { if (!o) setStmtEmpId(null); }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-auto" dir="rtl">
