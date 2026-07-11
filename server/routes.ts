@@ -29296,9 +29296,12 @@ export async function registerRoutes(
       // إثراء الإدارة من سجل الموظف الحالي (اللقطة لا تخزّن الإدارة) — لتقرير الرواتب المستحقة حسب الإدارة
       const deptEmps = await storage.getBranchEmployeesByBranch(branchId).catch(() => [] as any[]);
       const deptMap = new Map<number, string | null>(deptEmps.map((e: any) => [e.id, e.department ?? null]));
+      // اللقطة لا تخزّن حالة الموظف — نشتقها من سجل الموظف الحالي لعرض ملاحظة "نشط / غير نشط"
+      const statusMap = new Map<number, string>(deptEmps.map((e: any) => [e.id, e.status || "active"]));
       const lines = savedLines.map((l: any) => ({
         ...l,
         department: l.department ?? deptMap.get(l.branchEmployeeId) ?? null,
+        employeeStatus: l.employeeStatus ?? statusMap.get(l.branchEmployeeId) ?? "unknown",
         presentDates: l.presentDates ?? [],
         absentDates: l.absentDates ?? [],
         // اللقطة تخزّن أيام الغياب مجمّعة؛ نعرضها كأيام صريحة للعرض فقط
@@ -29509,6 +29512,7 @@ export async function registerRoutes(
         employeeNumber: l.employeeNumber,
         employeeName: l.employeeName,
         jobTitle: l.jobTitle,
+        employeeStatus: l.employeeStatus ?? null,
         nationality: l.nationality,
         bankName: l.bankName,
         bankAccountNumber: l.bankAccountNumber,

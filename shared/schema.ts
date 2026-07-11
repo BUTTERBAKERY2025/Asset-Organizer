@@ -5860,6 +5860,7 @@ export const salaryClosureLines = pgTable("salary_closure_lines", {
   employeeNumber: text("employee_number"),
   employeeName: text("employee_name").notNull(),
   jobTitle: text("job_title"),
+  employeeStatus: text("employee_status"), // حالة الموظف وقت الإغلاق (active/inactive/terminated/on_leave) — لقطة ثابتة
   nationality: text("nationality"),
   bankName: text("bank_name"),
   bankAccountNumber: text("bank_account_number"),

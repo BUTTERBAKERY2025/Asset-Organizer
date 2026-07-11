@@ -24,6 +24,7 @@ export interface SalaryClosingLine {
   employeeName: string;
   jobTitle: string;
   department: string | null;
+  employeeStatus: string; // active | inactive | terminated | on_leave — حالة الموظف وقت الاحتساب
   nationality: string;
   iqamaNumber: string | null;
   bankName: string;
@@ -114,8 +115,10 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
   const lastDay = new Date(yearNum, monthNum, 0).getDate();
   const monthEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
 
-  const branchEmployees = (raw.employees || []).filter(
-    (emp) => emp.branchId === branchId && emp.status === "active"
+  // جميع موظفي الفرع بكل الحالات — سنحدد لاحقاً من يدخل التقرير:
+  // النشطون دائماً + أي موظف غير نشط له دوام فعلي (حضور/تايم شيت/إجازة معتمدة) خلال الشهر
+  const allBranchEmployees = (raw.employees || []).filter(
+    (emp) => emp.branchId === branchId
   );
 
   const monthAttendance = (raw.attendance || []).filter(
@@ -161,7 +164,7 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
       .toLowerCase();
   // اسم مُوحَّد -> قائمة معرّفات الموظفين (للكشف عن التطابقات المتعددة الغامضة)
   const nameLookup = new Map<string, number[]>();
-  branchEmployees.forEach((emp) => {
+  allBranchEmployees.forEach((emp) => {
     employeeLookup.set(`bid:${emp.id}`, emp.id);
     employeeLookup.set(`bid:${String(emp.id)}`, emp.id);
     employeeLookup.set(`eid:${emp.id.toString()}`, emp.id);
@@ -280,6 +283,27 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
 
   const todayLocal = todayRiyadh();
   const warnings: SalaryClosingWarning[] = [];
+
+  // من يدخل التقرير: النشطون دائماً + غير النشطين الذين لهم دوام فعلي خلال الشهر
+  // (سجلات حضور، أو تايم شيت موقّع، أو إجازة معتمدة متقاطعة مع الشهر)
+  const empIdsWithWork = new Set<number>();
+  monthAttendance.forEach((rec) => {
+    const id = matchEmployee(rec);
+    if (id !== null) empIdsWithWork.add(id);
+  });
+  signedByEmpId.forEach((r, empId) => {
+    if ((r.entries || []).length > 0) empIdsWithWork.add(empId);
+  });
+  (raw.leaveRequests || []).forEach((lr: any) => {
+    if (!lr || lr.status !== "approved" || lr.branchEmployeeId === null || lr.branchEmployeeId === undefined) return;
+    // تحقق دفاعي: الفرع نفسه + تقاطع فعلي مع الشهر (البيانات القادمة مفلترة مسبقاً لكن نعيد التحقق)
+    if (lr.branchId && lr.branchId !== branchId) return;
+    if (lr.startDate && lr.endDate && (String(lr.startDate) > monthEnd || String(lr.endDate) < `${month}-01`)) return;
+    empIdsWithWork.add(Number(lr.branchEmployeeId));
+  });
+  const branchEmployees = allBranchEmployees.filter(
+    (emp) => emp.status === "active" || empIdsWithWork.has(emp.id)
+  );
 
   const lines: SalaryClosingLine[] = branchEmployees.map((emp) => {
     const empSchedules = monthSchedules.filter((s: any) => matchScheduleEmployee(s) === emp.id);
@@ -532,6 +556,7 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
       employeeName: emp.employeeName,
       jobTitle: emp.jobTitle,
       department: emp.department ?? null,
+      employeeStatus: emp.status || "active",
       nationality: emp.nationality,
       iqamaNumber: emp.iqamaNumber ?? null,
       bankName: emp.bankName || "",

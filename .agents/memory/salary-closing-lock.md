@@ -17,6 +17,10 @@ description: Constraints for the monthly salary-closing immutable snapshot + loc
 
 - Known accepted gap: lock check + mutation are TOCTOU (not atomic). Acceptable at this team's scale; revisit with advisory/row locks if concurrent close+mutation becomes a real problem.
 
+- Inclusion rule: report covers active employees PLUS any non-active employee with real work in the month (matched attendance, signed timesheet with entries, or approved leave overlapping the month). Each line carries `employeeStatus`; snapshot column `salary_closure_lines.employee_status` stores it at close-time. Locked months read snapshot first, fall back to live branch-employee status, then `"unknown"` (عرض "غير معروف") for deleted employees.
+  **Why:** filtering to active-only silently dropped terminated/inactive employees who worked part of the month and were owed pay.
+  **How to apply:** never re-narrow the branch-employee filter to `status === "active"` alone; keep the empIdsWithWork union and keep persisting employeeStatus in the close payload (old closures pre-column have NULL status — the live fallback covers them).
+
 ## Attendance↔employee name matching (Excel imports)
 
 - `computeSalaryClosing`'s `normalizeName` folds Arabic variants (أإآٱ→ا, ة→ه, ى→ي, ؤ→و, ئ→ي), strips tashkeel/tatweel, and removes ALL spaces (so "عبد الله"="عبدالله"). Applied to BOTH the employee nameLookup build and record matching.

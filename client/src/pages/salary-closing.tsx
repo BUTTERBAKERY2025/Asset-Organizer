@@ -72,6 +72,17 @@ import { SALARY_DEDUCTION_TYPE_LABELS, LEAVE_TYPE_LABELS, SALARY_PAYMENT_METHOD_
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Checkbox } from "@/components/ui/checkbox";
 
+// تسميات حالة الموظف — تُعرض كملاحظة بجوار الاسم في تقرير إغلاق الرواتب
+const EMPLOYEE_STATUS_LABELS: Record<string, string> = {
+  active: "نشط",
+  inactive: "غير نشط",
+  terminated: "منتهي الخدمة",
+  on_leave: "في إجازة",
+  unknown: "غير معروف",
+};
+const employeeStatusLabel = (s: string | null | undefined) =>
+  s ? (EMPLOYEE_STATUS_LABELS[s] || s) : "";
+
 // =====================================================
 // مكوّن نافذة إدارة السُلف والخصومات اليدوية للموظف
 // =====================================================
@@ -1271,6 +1282,7 @@ export default function SalaryClosingPage() {
       [isRTL ? "م" : "#"]: index + 1,
       [isRTL ? "رقم الموظف" : "Employee #"]: emp.employeeNumber,
       [isRTL ? "الاسم" : "Name"]: emp.employeeName,
+      [isRTL ? "حالة الموظف" : "Employee Status"]: employeeStatusLabel(emp.employeeStatus) || "-",
       [isRTL ? "الوظيفة" : "Job Title"]: emp.jobTitle,
       [isRTL ? "الجنسية" : "Nationality"]: emp.nationality,
       [isRTL ? "البنك" : "Bank"]: emp.bankName || "",
@@ -1368,6 +1380,7 @@ export default function SalaryClosingPage() {
         [isRTL ? "م" : "#"]: index + 1,
         [isRTL ? "رقم الموظف" : "Employee #"]: emp.employeeNumber,
         [isRTL ? "الاسم" : "Name"]: emp.employeeName,
+        [isRTL ? "حالة الموظف" : "Employee Status"]: employeeStatusLabel(emp.employeeStatus) || "-",
         [isRTL ? "الوظيفة" : "Job Title"]: emp.jobTitle,
         [isRTL ? "الجنسية" : "Nationality"]: emp.nationality,
         [isRTL ? "البنك" : "Bank"]: emp.bankName || "",
@@ -1793,6 +1806,7 @@ export default function SalaryClosingPage() {
       "م": i + 1,
       "رقم الموظف": e.employeeNumber || "",
       "الاسم": e.employeeName,
+      "حالة الموظف": employeeStatusLabel(e.employeeStatus) || "-",
       "الفرع": accruedBranchOf(e),
       "الإدارة": accruedDeptOf(e),
       "الوظيفة": e.jobTitle || "",
@@ -1811,7 +1825,7 @@ export default function SalaryClosingPage() {
       "صافي المستحق (بعد الخصومات)": accruedNet(e),
     }));
     const wsDetail = XLSX.utils.json_to_sheet(detail);
-    wsDetail["!cols"] = [{ wch: 5 }, { wch: 12 }, { wch: 26 }, { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 10 }, { wch: 12 }, { wch: 11 }, { wch: 11 }, { wch: 12 }, { wch: 18 }, { wch: 10 }, { wch: 11 }, { wch: 11 }, { wch: 16 }, { wch: 28 }, { wch: 14 }, { wch: 20 }];
+    wsDetail["!cols"] = [{ wch: 5 }, { wch: 12 }, { wch: 26 }, { wch: 12 }, { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 10 }, { wch: 12 }, { wch: 11 }, { wch: 11 }, { wch: 12 }, { wch: 18 }, { wch: 10 }, { wch: 11 }, { wch: 11 }, { wch: 16 }, { wch: 28 }, { wch: 14 }, { wch: 20 }];
     XLSX.utils.book_append_sheet(wb, wsDetail, "تفاصيل الموظفين");
 
     XLSX.writeFile(wb, `الرواتب_المستحقة_${scopeLabel}_${month}.xlsx`);
@@ -1859,7 +1873,7 @@ export default function SalaryClosingPage() {
       <tr class="${i % 2 === 0 ? "even" : "odd"}">
         <td>${i + 1}</td>
         <td>${escapeHtml(e.employeeNumber || "")}</td>
-        <td class="rtl">${escapeHtml(e.employeeName || "")}</td>
+        <td class="rtl">${escapeHtml(e.employeeName || "")}${e.employeeStatus && e.employeeStatus !== "active" ? ` <span style="color:#b91c1c;font-size:9px;">(${escapeHtml(employeeStatusLabel(e.employeeStatus))})</span>` : ""}</td>
         <td class="rtl">${escapeHtml(accruedBranchOf(e))}</td>
         <td class="rtl">${escapeHtml(accruedDeptOf(e))}</td>
         <td>${fmt(e.baseSalary || 0)}</td>
@@ -2787,6 +2801,24 @@ export default function SalaryClosingPage() {
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span>{emp.employeeName}</span>
+                              {emp.employeeStatus && (
+                                emp.employeeStatus === "active" ? (
+                                  <Badge
+                                    className="bg-green-50 text-green-700 border-green-200 text-[10px] px-1.5 py-0"
+                                    data-testid={`badge-emp-status-${emp.id}`}
+                                  >
+                                    نشط
+                                  </Badge>
+                                ) : (
+                                  <Badge
+                                    className="bg-red-100 text-red-700 border-red-300 text-[10px] px-1.5 py-0"
+                                    title="موظف غير نشط حالياً — مُدرج لأن له دواماً خلال هذا الشهر"
+                                    data-testid={`badge-emp-status-${emp.id}`}
+                                  >
+                                    {employeeStatusLabel(emp.employeeStatus)}
+                                  </Badge>
+                                )
+                              )}
                               {emp.dataSource === "signed_timesheet" && (
                                 <Badge
                                   className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px] px-1.5 py-0"
