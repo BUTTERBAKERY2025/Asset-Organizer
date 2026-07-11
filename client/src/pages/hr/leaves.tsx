@@ -47,6 +47,20 @@ function calcDays(start: string, end: string): number {
 
 const arNum = (v: any) => Number(v || 0).toLocaleString("ar-SA-u-nu-latn");
 
+const fmtDate = (d?: string | null) => {
+  if (!d) return "-";
+  try {
+    return new Date(d + "T00:00:00").toLocaleDateString("ar-SA-u-nu-latn-ca-gregory", { day: "numeric", month: "short" });
+  } catch { return d; }
+};
+
+const serviceYears = (hireDate?: string | null): number | null => {
+  if (!hireDate) return null;
+  const h = new Date(hireDate + "T00:00:00").getTime();
+  if (isNaN(h)) return null;
+  return Math.floor((Date.now() - h) / (365.25 * 86400000));
+};
+
 export default function LeavesPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -233,6 +247,24 @@ export default function LeavesPage() {
     },
   });
 
+  const carryoverMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/hr/leave-balances/carryover", {
+        fromYear: balYear - 1,
+        leaveType: balType,
+      });
+      return res.json();
+    },
+    onSuccess: (r: any) => {
+      qc.invalidateQueries({ queryKey: ["/api/hr/leave-balances"] });
+      const parts: string[] = [`تم ترحيل رصيد ${arNum(r?.carried ?? 0)} موظف من ${arNum(r?.fromYear)} إلى ${arNum(r?.toYear)}`];
+      if (r?.unchanged) parts.push(`${arNum(r.unchanged)} بدون تغيير (مرحّل مسبقاً)`);
+      if (r?.skippedZero) parts.push(`${arNum(r.skippedZero)} بلا رصيد متبقٍ`);
+      toast({ title: "اكتمل الترحيل", description: parts.join(" • ") });
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل الترحيل", variant: "destructive" }),
+  });
+
   const saveBalMutation = useMutation({
     mutationFn: async (payload: any) => {
       const res = await apiRequest("POST", "/api/hr/leave-balances", payload);
@@ -400,6 +432,66 @@ export default function LeavesPage() {
         <StatCard label="في إجازة اليوم" value={stats?.onLeaveToday ?? 0} icon={<CalendarDays className="h-5 w-5" />} accent="blue" />
       </div>
 
+      {/* حركة الإجازات: من في إجازة الآن، من سيغادر، من سيعود */}
+      {((stats?.onLeaveNow?.length ?? 0) > 0 || (stats?.departingSoon?.length ?? 0) > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Card className="border-blue-200 bg-blue-50/40">
+            <CardContent className="pt-4 space-y-2">
+              <div className="text-sm font-bold text-blue-800 flex items-center gap-1">
+                <CalendarDays className="h-4 w-4" />في إجازة الآن ({arNum(stats?.onLeaveNow?.length ?? 0)})
+              </div>
+              {(stats?.onLeaveNow ?? []).length === 0 && <div className="text-xs text-muted-foreground">لا يوجد</div>}
+              {(stats?.onLeaveNow ?? []).slice(0, 6).map((m: any) => (
+                <div key={m.id} className="text-xs flex items-center justify-between gap-2 bg-white rounded p-1.5 border border-blue-100" data-testid={`movement-onleave-${m.id}`}>
+                  <div>
+                    <span className="font-medium">{m.employeeName}</span>
+                    <span className="text-muted-foreground me-1"> — {LEAVE_TYPE_LABELS[m.leaveType] || m.leaveType}</span>
+                  </div>
+                  <span className="text-blue-700 whitespace-nowrap">يعود {fmtDate(m.returnDate)}</span>
+                </div>
+              ))}
+              {(stats?.onLeaveNow?.length ?? 0) > 6 && <div className="text-[10px] text-muted-foreground">+{arNum(stats.onLeaveNow.length - 6)} آخرين</div>}
+            </CardContent>
+          </Card>
+          <Card className="border-amber-200 bg-amber-50/40">
+            <CardContent className="pt-4 space-y-2">
+              <div className="text-sm font-bold text-amber-800 flex items-center gap-1">
+                <Clock className="h-4 w-4" />سيغادرون خلال ٧ أيام ({arNum(stats?.departingSoon?.length ?? 0)})
+              </div>
+              {(stats?.departingSoon ?? []).length === 0 && <div className="text-xs text-muted-foreground">لا يوجد</div>}
+              {(stats?.departingSoon ?? []).slice(0, 6).map((m: any) => (
+                <div key={m.id} className="text-xs flex items-center justify-between gap-2 bg-white rounded p-1.5 border border-amber-100" data-testid={`movement-departing-${m.id}`}>
+                  <div>
+                    <span className="font-medium">{m.employeeName}</span>
+                    <span className="text-muted-foreground me-1"> — {LEAVE_TYPE_LABELS[m.leaveType] || m.leaveType}</span>
+                  </div>
+                  <span className="text-amber-700 whitespace-nowrap">يغادر {fmtDate(m.startDate)}</span>
+                </div>
+              ))}
+              {(stats?.departingSoon?.length ?? 0) > 6 && <div className="text-[10px] text-muted-foreground">+{arNum(stats.departingSoon.length - 6)} آخرين</div>}
+            </CardContent>
+          </Card>
+          <Card className="border-emerald-200 bg-emerald-50/40">
+            <CardContent className="pt-4 space-y-2">
+              <div className="text-sm font-bold text-emerald-800 flex items-center gap-1">
+                <CheckCircle2 className="h-4 w-4" />سيعودون خلال ٧ أيام ({arNum(stats?.returningSoon?.length ?? 0)})
+              </div>
+              {(stats?.returningSoon ?? []).length === 0 && <div className="text-xs text-muted-foreground">لا يوجد</div>}
+              {(stats?.returningSoon ?? []).slice(0, 6).map((m: any) => (
+                <div key={m.id} className="text-xs flex items-center justify-between gap-2 bg-white rounded p-1.5 border border-emerald-100" data-testid={`movement-returning-${m.id}`}>
+                  <div>
+                    <span className="font-medium">{m.employeeName}</span>
+                    <span className="text-muted-foreground me-1"> — {LEAVE_TYPE_LABELS[m.leaveType] || m.leaveType}</span>
+                  </div>
+                  <span className="text-emerald-700 whitespace-nowrap">يعود {fmtDate(m.returnDate)}</span>
+                </div>
+              ))}
+              {(stats?.returningSoon?.length ?? 0) > 6 && <div className="text-[10px] text-muted-foreground">+{arNum(stats.returningSoon.length - 6)} آخرين</div>}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList data-testid="tabs-leaves">
           <TabsTrigger value="requests" data-testid="tab-requests"><CalendarDays className="h-4 w-4 ms-1" />الطلبات</TabsTrigger>
@@ -471,7 +563,14 @@ export default function LeavesPage() {
                           <div className="text-xs text-muted-foreground">{l.employeeJob || ""}</div>
                         </td>
                         <td className="p-2">{LEAVE_TYPE_LABELS[l.leaveType] || l.leaveType}</td>
-                        <td className="p-2 text-xs">{l.startDate} → {l.endDate}</td>
+                        <td className="p-2 text-xs">
+                          {l.startDate} → {l.endDate}
+                          {l.status === "approved" && (
+                            <span className="block text-[10px] text-emerald-600" data-testid={`text-return-date-${l.id}`}>
+                              العودة للعمل: {fmtDate((() => { const d = new Date(l.endDate + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })())}
+                            </span>
+                          )}
+                        </td>
                         <td className="p-2 tabular-nums">
                           {arNum(l.totalDays)}
                           {l.requiredLevels > 1 && l.status === "pending" && (
@@ -552,6 +651,20 @@ export default function LeavesPage() {
                 <Button variant="outline" onClick={exportBalancesExcel} data-testid="button-export-balances">
                   <FileSpreadsheet className="h-4 w-4 ms-1" />تصدير Excel
                 </Button>
+                <Button
+                  variant="outline"
+                  className="text-purple-700 border-purple-300"
+                  disabled={carryoverMutation.isPending}
+                  onClick={() => {
+                    if (window.confirm(`سيتم ترحيل الرصيد المتبقي لكل موظف من سنة ${balYear - 1} إلى خانة "المرحّل" في سنة ${balYear} (${LEAVE_TYPE_LABELS[balType] || balType}). إعادة التشغيل آمنة ولا تضاعف الأرصدة. متابعة؟`)) {
+                      carryoverMutation.mutate();
+                    }
+                  }}
+                  data-testid="button-carryover-balances"
+                >
+                  <Wallet className="h-4 w-4 ms-1" />
+                  {carryoverMutation.isPending ? "جارٍ الترحيل..." : `ترحيل أرصدة ${balYear - 1} ←`}
+                </Button>
               </div>
               <div className="overflow-auto border rounded-lg">
                 <table className="w-full text-sm">
@@ -574,7 +687,12 @@ export default function LeavesPage() {
                       <tr key={b.branchEmployeeId} className="border-t hover:bg-slate-50" data-testid={`row-balance-${b.branchEmployeeId}`}>
                         <td className="p-2">
                           <div className="font-medium">{b.employeeName}</div>
-                          <div className="text-xs text-muted-foreground">{b.jobTitle}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {b.jobTitle}
+                            {serviceYears(b.hireDate) != null && (
+                              <span className="text-[10px] text-slate-400 me-1"> • خدمة {arNum(serviceYears(b.hireDate))} سنة</span>
+                            )}
+                          </div>
                         </td>
                         <td className="p-2 text-xs">{b.branchName}</td>
                         <td className="p-2 tabular-nums">{arNum(b.entitledDays)}{!b.hasRow && <span className="text-[10px] text-amber-500 me-1">مقترح</span>}</td>
@@ -658,11 +776,21 @@ export default function LeavesPage() {
                 إجازة بدون راتب — لا تُحتسب من رصيد الإجازات.
               </div>
             ) : formBalance && form.branchEmployeeId ? (
-              <div className="text-xs bg-blue-50 rounded p-2 flex justify-between" data-testid="text-form-balance">
-                <span>الرصيد المتبقي ({balType === form.leaveType ? "" : ""}{LEAVE_TYPE_LABELS[form.leaveType]}):</span>
-                <span className={`font-bold ${formBalance.remainingDays < 0 ? "text-red-600" : "text-emerald-700"}`}>
-                  {arNum(formBalance.remainingDays)} يوم (مستحق {arNum(formBalance.entitledDays)} − مستخدم {arNum(formBalance.usedDays)})
-                </span>
+              <div className="text-xs bg-blue-50 rounded p-2 space-y-1" data-testid="text-form-balance">
+                <div className="flex justify-between">
+                  <span>الرصيد المتبقي ({LEAVE_TYPE_LABELS[form.leaveType]}):</span>
+                  <span className={`font-bold ${formBalance.remainingDays < 0 ? "text-red-600" : "text-emerald-700"}`}>
+                    {arNum(formBalance.remainingDays)} يوم
+                  </span>
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  مستحق {arNum(formBalance.entitledDays)} + مرحّل {arNum(formBalance.carriedOverDays)} + تعديل {arNum(formBalance.adjustmentDays)} − مستخدم {arNum(formBalance.usedDays)}
+                </div>
+                {totalDays > 0 && totalDays > Number(formBalance.remainingDays) && (
+                  <div className="text-red-600 font-bold bg-red-50 rounded p-1.5" data-testid="text-form-balance-warning">
+                    ⚠ الأيام المطلوبة ({arNum(totalDays)}) تتجاوز الرصيد المتبقي ({arNum(formBalance.remainingDays)}) — سيتطلب الاعتماد سماحاً بتجاوز الرصيد.
+                  </div>
+                )}
               </div>
             ) : null}
             <div>

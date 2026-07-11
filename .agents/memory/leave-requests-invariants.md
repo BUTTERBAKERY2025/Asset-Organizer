@@ -16,3 +16,12 @@ description: Non-obvious correctness/security rules for the leave-requests + lea
   **Why:** unpaid leave has no entitlement, so it must never consume or be limited by a balance — but salary still deducts unpaid days separately from `leave_requests` (do not confuse the two).
 
 - **apiRequest throws a plain `Error` with message `"<status>: <body>"` — no `.data`.** To detect a structured server error (e.g. 409 `balance_exceeded`) on the client, slice the JSON out of `error.message` and parse it (see leaves.tsx review onError). Do not expect `error.data`.
+
+- **Leave-balance writes never trust client branchId.** `/api/hr/leave-balances` parses with `.omit({branchId:true})` and always derives/syncs branchId from the employee record (covers transfers).
+  **Why:** the schema's notNull branchId made the create path 400 when the client omitted it, and accepting it from the client would allow branch spoofing.
+
+- **Carryover (ترحيل الأرصدة) is overwrite-idempotent, transactional, and tag-stripped.** It recomputes prev-year remaining and overwrites `carriedOverDays` (skip-if-equal), runs all writes in one `db.transaction`, and strips any previous "ترحيل تلقائي من ..." segment from `note` before appending.
+  **Why:** append-only notes bloat on reruns; non-transactional bulk HR writes leave partial state on mid-run failure.
+
+- **"Today" for leave movement classification must be Asia/Riyadh, not UTC.** Stats endpoint computes `today` via `toLocaleDateString("en-CA",{timeZone:"Asia/Riyadh"})`.
+  **Why:** UTC misclassifies في إجازة الآن/سيغادر/سيعود for ~3 hours around midnight KSA.

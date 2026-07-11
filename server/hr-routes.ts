@@ -946,7 +946,8 @@ export function registerHrRoutes(app: Express) {
   // إنشاء/تحديث رصيد (تعيين المستحق/المرحّل/التعديل اليدوي)
   app.post("/api/hr/leave-balances", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
     try {
-      const parsed = insertLeaveBalanceSchema.parse(req.body);
+      // branchId لا يُطلب من العميل — الخادم يشتقه من سجل الموظف (مصدر الحقيقة)
+      const parsed = insertLeaveBalanceSchema.omit({ branchId: true }).parse(req.body);
       if ((parsed.leaveType || "annual") === "unpaid") {
         return res.status(400).json({ error: "الإجازة بدون راتب لا ترتبط برصيد إجازات" });
       }
@@ -968,6 +969,7 @@ export function registerHrRoutes(app: Express) {
           carriedOverDays: parsed.carriedOverDays,
           adjustmentDays: parsed.adjustmentDays,
           note: parsed.note,
+          branchId: emp.branchId, // مزامنة الفرع مع سجل الموظف الحالي (حالات النقل)
           updatedAt: new Date(),
         }).where(eq(leaveBalances.id, existing.id)).returning();
       } else {
@@ -992,6 +994,99 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
+  // ترحيل أرصدة سنة سابقة إلى السنة التالية (المتبقي > 0 → مرحّل)
+  // آمنة لإعادة التشغيل: تعيد كتابة "المرحّل" بالقيمة المحسوبة نفسها دون مضاعفة.
+  app.post("/api/hr/leave-balances/carryover", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const schema = z.object({
+        fromYear: z.number().int().min(2020).max(2100),
+        leaveType: z.string().default("annual"),
+        branchId: z.string().optional(),
+      });
+      const { fromYear, leaveType, branchId } = schema.parse(req.body);
+      if (leaveType === "unpaid") {
+        return res.status(400).json({ error: "الإجازة بدون راتب لا ترتبط برصيد إجازات" });
+      }
+      const toYear = fromYear + 1;
+      const { branchIds } = getBranchScope(req);
+      if (branchId && branchIds !== null && !branchIds.includes(branchId)) {
+        return res.status(403).json({ error: "ليس لديك صلاحية على هذا الفرع" });
+      }
+
+      const conds: any[] = [eq(branchEmployees.status, "active")];
+      const scopeCond = applyBranchScope(branchEmployees, branchIds);
+      if (scopeCond !== undefined) conds.push(scopeCond);
+      if (branchId) conds.push(eq(branchEmployees.branchId, branchId));
+      const emps = await db
+        .select({ id: branchEmployees.id, employeeName: branchEmployees.employeeName, branchId: branchEmployees.branchId, hireDate: branchEmployees.hireDate })
+        .from(branchEmployees)
+        .where(and(...conds));
+
+      // إزالة أي وسم ترحيل سابق من الملاحظة حتى لا تتضخم مع تكرار التشغيل
+      const stripCarryTag = (note: string | null) =>
+        (note || "").split(" | ").filter(s => s && !s.startsWith("ترحيل تلقائي من ")).join(" | ");
+
+      // المرحلة 1: حساب المبالغ (قراءات فقط)
+      const plans: { emp: typeof emps[number]; amount: number }[] = [];
+      let skippedZero = 0;
+      for (const emp of emps) {
+        const prev = await getLeaveBalanceSummary(emp.id, fromYear, leaveType, emp.hireDate);
+        const amount = Math.max(0, prev.remainingDays);
+        if (amount <= 0) { skippedZero++; continue; }
+        plans.push({ emp, amount });
+      }
+
+      // المرحلة 2: كل الكتابات داخل معاملة واحدة — إما تكتمل جميعها أو لا شيء
+      let carried = 0, unchanged = 0;
+      const details: { employeeName: string; amount: number }[] = [];
+      const userId = getUserId(req) || undefined;
+      await db.transaction(async (tx) => {
+        for (const { emp, amount } of plans) {
+          const [existing] = await tx.select().from(leaveBalances).where(and(
+            eq(leaveBalances.branchEmployeeId, emp.id),
+            eq(leaveBalances.year, toYear),
+            eq(leaveBalances.leaveType, leaveType),
+          ));
+          if (existing) {
+            if (Number(existing.carriedOverDays) === amount) { unchanged++; continue; }
+            const baseNote = stripCarryTag(existing.note);
+            await tx.update(leaveBalances).set({
+              carriedOverDays: amount,
+              branchId: emp.branchId,
+              note: `${baseNote ? baseNote + " | " : ""}ترحيل تلقائي من ${fromYear}: ${amount} يوم`,
+              updatedAt: new Date(),
+            }).where(eq(leaveBalances.id, existing.id));
+          } else {
+            await tx.insert(leaveBalances).values({
+              branchEmployeeId: emp.id,
+              branchId: emp.branchId,
+              year: toYear,
+              leaveType,
+              entitledDays: suggestedEntitlement(emp.hireDate),
+              carriedOverDays: amount,
+              adjustmentDays: 0,
+              note: `ترحيل تلقائي من ${fromYear}: ${amount} يوم`,
+              createdBy: userId,
+            });
+          }
+          carried++;
+          if (details.length < 200) details.push({ employeeName: emp.employeeName, amount });
+        }
+      });
+      await auditEvent({
+        req, module: "hr_leaves", entityId: 0, action: "carryover_balances",
+        entityName: `ترحيل أرصدة ${fromYear} → ${toYear}`, branchId: branchId || null,
+        description: `ترحيل أرصدة (${leaveType}) من ${fromYear} إلى ${toYear}: ${carried} موظف`,
+        details: { fromYear, toYear, leaveType, carried, skippedZero, unchanged },
+      });
+      res.json({ fromYear, toYear, leaveType, carried, skippedZero, unchanged, details });
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
+      console.error("[hr/leave-balances/carryover] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.get("/api/hr/leaves/stats", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
     try {
       const { branchIds } = getBranchScope(req);
@@ -1001,11 +1096,51 @@ export function registerHrRoutes(app: Express) {
       const pending = all.filter(l => l.status === "pending").length;
       const approved = all.filter(l => l.status === "approved").length;
       const rejected = all.filter(l => l.status === "rejected").length;
-      const today = new Date().toISOString().slice(0, 10);
-      const onLeaveToday = all.filter(l => l.status === "approved" && l.startDate <= today && l.endDate >= today).length;
+      // اليوم بتوقيت السعودية (وليس UTC) حتى لا تختل تصنيفات "الآن/سيغادر/سيعود" في ساعات حدود اليوم
+      const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
+      const plusDays = (dateStr: string, n: number) => {
+        const d = new Date(`${dateStr}T00:00:00Z`);
+        d.setUTCDate(d.getUTCDate() + n);
+        return d.toISOString().slice(0, 10);
+      };
+      const weekAhead = plusDays(today, 7);
+      const approvedList = all.filter(l => l.status === "approved");
+      const onLeaveNowRaw = approvedList.filter(l => l.startDate <= today && l.endDate >= today);
+      const departingSoonRaw = approvedList.filter(l => l.startDate > today && l.startDate <= weekAhead);
+      const returningSoonRaw = onLeaveNowRaw.filter(l => l.endDate <= weekAhead);
+      const onLeaveToday = onLeaveNowRaw.length;
+      // أسماء الموظفين للحركات (الجدول لا يخزّن الاسم)
+      const movementIds = Array.from(new Set(
+        [...onLeaveNowRaw, ...departingSoonRaw].map(l => l.branchEmployeeId)
+      ));
+      const nameById = new Map<number, { name: string; job: string | null }>();
+      if (movementIds.length > 0) {
+        const emps = await db
+          .select({ id: branchEmployees.id, employeeName: branchEmployees.employeeName, jobTitle: branchEmployees.jobTitle })
+          .from(branchEmployees)
+          .where(inArray(branchEmployees.id, movementIds));
+        emps.forEach(e => nameById.set(e.id, { name: e.employeeName, job: e.jobTitle }));
+      }
+      const toMovement = (l: any) => ({
+        id: l.id,
+        branchEmployeeId: l.branchEmployeeId,
+        employeeName: nameById.get(l.branchEmployeeId)?.name || "-",
+        jobTitle: nameById.get(l.branchEmployeeId)?.job || "",
+        leaveType: l.leaveType,
+        startDate: l.startDate,
+        endDate: l.endDate,
+        returnDate: plusDays(l.endDate, 1), // أول يوم عمل متوقع بعد الإجازة
+      });
+      const sortByStart = (a: any, b: any) => a.startDate.localeCompare(b.startDate);
+      const sortByEnd = (a: any, b: any) => a.endDate.localeCompare(b.endDate);
       const byType: Record<string, number> = {};
       all.forEach(l => { byType[l.leaveType] = (byType[l.leaveType] || 0) + 1; });
-      res.json({ total, pending, approved, rejected, onLeaveToday, byType });
+      res.json({
+        total, pending, approved, rejected, onLeaveToday, byType,
+        onLeaveNow: onLeaveNowRaw.sort(sortByEnd).map(toMovement),
+        departingSoon: departingSoonRaw.sort(sortByStart).map(toMovement),
+        returningSoon: returningSoonRaw.sort(sortByEnd).map(toMovement),
+      });
     } catch (e: any) {
       console.error("[hr/leaves/stats] error:", e);
       res.status(500).json({ error: e.message });
