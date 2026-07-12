@@ -5883,6 +5883,10 @@ export const salaryClosureLines = pgTable("salary_closure_lines", {
   grossSalary: real("gross_salary").default(0).notNull(),
   dailyRate: real("daily_rate").default(0).notNull(),
   absenceDeduction: real("absence_deduction").default(0).notNull(),
+  // خصم الإجازة المرضية حسب المادة 117 (أيام 75% × ربع قيمة اليوم) — لقطة ثابتة
+  sickLeaveDeduction: real("sick_leave_deduction").default(0),
+  sickThreeQuarterDays: real("sick_three_quarter_days").default(0),
+  sickUnpaidDays: real("sick_unpaid_days").default(0),
   socialInsurance: real("social_insurance").default(0).notNull(),
   manualDeductionsTotal: real("manual_deductions_total").default(0).notNull(),
   netSalary: real("net_salary").default(0).notNull(),

@@ -164,13 +164,34 @@ export async function findOverlappingLeave(
   return rows[0] || null;
 }
 
-/** الاستحقاق المقترح حسب الأقدمية (نظام العمل السعودي: 21 يوم، 30 بعد 5 سنوات). */
-export function suggestedEntitlement(hireDate?: string | null): number {
+/**
+ * الاستحقاق المقترح حسب الأقدمية (نظام العمل السعودي: 21 يوم، 30 بعد 5 سنوات).
+ * عند تمرير السنة: يُحتسب الاستحقاق نسبياً (pro-rata) في سنة التعيين حسب الشهور
+ * المتبقية من تاريخ التعيين حتى نهاية السنة، مقرّباً لأقرب نصف يوم.
+ */
+export function suggestedEntitlement(hireDate?: string | null, year?: number): number {
   if (!hireDate) return 21;
   const h = new Date(hireDate + "T00:00:00Z");
   if (isNaN(h.getTime())) return 21;
-  const years = (Date.now() - h.getTime()) / (365.25 * 86400000);
-  return years >= 5 ? 30 : 21;
+
+  // نقطة القياس للأقدمية: نهاية السنة المطلوبة، أو الآن إذا لم تُمرَّر سنة
+  const refTime = year ? Date.UTC(year, 11, 31) : Date.now();
+  const years = (refTime - h.getTime()) / (365.25 * 86400000);
+  const annual = years >= 5 ? 30 : 21;
+
+  if (!year) return annual;
+
+  const hireYear = h.getUTCFullYear();
+  if (hireYear > year) return 0; // تعيين بعد السنة المطلوبة — لا استحقاق
+  if (hireYear < year) return annual; // سنة كاملة
+
+  // سنة التعيين: نسبة الأيام المتبقية من السنة (من تاريخ التعيين حتى 31 ديسمبر)
+  const yearStart = Date.UTC(year, 0, 1);
+  const yearEndExclusive = Date.UTC(year + 1, 0, 1);
+  const totalDays = (yearEndExclusive - yearStart) / 86400000;
+  const remainingDays = Math.max(0, (yearEndExclusive - h.getTime()) / 86400000);
+  const prorated = annual * (remainingDays / totalDays);
+  return Math.round(prorated * 2) / 2; // تقريب لأقرب نصف يوم
 }
 
 export interface LeaveBalanceSummary {
@@ -246,7 +267,7 @@ export async function getLeaveBalanceSummary(
     const days = Math.round((new Date(segEnd).getTime() - new Date(segStart).getTime()) / MS_PER_DAY) + 1;
     if (days > 0) usedDays += days;
   }
-  const entitledDays = row ? Number(row.entitledDays) : suggestedEntitlement(hireDate);
+  const entitledDays = row ? Number(row.entitledDays) : suggestedEntitlement(hireDate, year);
   const carriedOverDays = row ? Number(row.carriedOverDays) : 0;
   const adjustmentDays = row ? Number(row.adjustmentDays) : 0;
   const settledDays = row ? Number((row as any).settledDays ?? 0) : 0;
@@ -494,4 +515,101 @@ export async function resolveReviewerJobTitle(userId?: string | null): Promise<s
     .where(eq(branchEmployees.linkedUserId, userId))
     .limit(1);
   return be?.jobTitle || null;
+}
+
+// ============================================================
+// ترحيل أرصدة الإجازات السنوية (يدوي من الواجهة أو تلقائي من المجدول)
+// ============================================================
+
+export interface LeaveCarryoverResult {
+  fromYear: number;
+  toYear: number;
+  leaveType: string;
+  carried: number;
+  skippedZero: number;
+  unchanged: number;
+  capped: number;
+  details: { employeeName: string; amount: number }[];
+}
+
+/**
+ * ينفّذ ترحيل أرصدة سنة سابقة إلى السنة التالية (المتبقي > 0 → مرحّل).
+ * آمن لإعادة التشغيل: يعيد كتابة "المرحّل" بالقيمة المحسوبة نفسها دون مضاعفة.
+ * - maxDays: سقف اختياري لأيام الترحيل لكل موظف (سياسة الشركة).
+ * - branchIds: نطاق الفروع المسموح (null = كل الفروع).
+ */
+export async function runLeaveCarryover(opts: {
+  fromYear: number;
+  leaveType?: string;
+  branchId?: string;
+  branchIds?: string[] | null;
+  maxDays?: number | null;
+  userId?: string;
+}): Promise<LeaveCarryoverResult> {
+  const leaveType = opts.leaveType || "annual";
+  const { fromYear } = opts;
+  const toYear = fromYear + 1;
+  const maxDays = opts.maxDays != null && opts.maxDays > 0 ? opts.maxDays : null;
+
+  const conds: any[] = [eq(branchEmployees.status, "active")];
+  if (opts.branchIds != null) conds.push(inArray(branchEmployees.branchId, opts.branchIds.length ? opts.branchIds : ["__none__"]));
+  if (opts.branchId) conds.push(eq(branchEmployees.branchId, opts.branchId));
+  const emps = await db
+    .select({ id: branchEmployees.id, employeeName: branchEmployees.employeeName, branchId: branchEmployees.branchId, hireDate: branchEmployees.hireDate })
+    .from(branchEmployees)
+    .where(and(...conds));
+
+  // إزالة أي وسم ترحيل سابق من الملاحظة حتى لا تتضخم مع تكرار التشغيل
+  const stripCarryTag = (note: string | null) =>
+    (note || "").split(" | ").filter(s => s && !s.startsWith("ترحيل تلقائي من ")).join(" | ");
+
+  // المرحلة 1: حساب المبالغ (قراءات فقط)
+  const plans: { emp: typeof emps[number]; amount: number }[] = [];
+  let skippedZero = 0, capped = 0;
+  for (const emp of emps) {
+    const prev = await getLeaveBalanceSummary(emp.id, fromYear, leaveType, emp.hireDate);
+    let amount = Math.max(0, prev.remainingDays);
+    if (amount <= 0) { skippedZero++; continue; }
+    if (maxDays != null && amount > maxDays) { amount = maxDays; capped++; }
+    plans.push({ emp, amount });
+  }
+
+  // المرحلة 2: كل الكتابات داخل معاملة واحدة — إما تكتمل جميعها أو لا شيء
+  let carried = 0, unchanged = 0;
+  const details: { employeeName: string; amount: number }[] = [];
+  await db.transaction(async (tx) => {
+    for (const { emp, amount } of plans) {
+      const [existing] = await tx.select().from(leaveBalances).where(and(
+        eq(leaveBalances.branchEmployeeId, emp.id),
+        eq(leaveBalances.year, toYear),
+        eq(leaveBalances.leaveType, leaveType),
+      ));
+      if (existing) {
+        if (Number(existing.carriedOverDays) === amount) { unchanged++; continue; }
+        const baseNote = stripCarryTag(existing.note);
+        await tx.update(leaveBalances).set({
+          carriedOverDays: amount,
+          branchId: emp.branchId,
+          note: `${baseNote ? baseNote + " | " : ""}ترحيل تلقائي من ${fromYear}: ${amount} يوم`,
+          updatedAt: new Date(),
+        }).where(eq(leaveBalances.id, existing.id));
+      } else {
+        await tx.insert(leaveBalances).values({
+          branchEmployeeId: emp.id,
+          branchId: emp.branchId,
+          year: toYear,
+          leaveType,
+          entitledDays: suggestedEntitlement(emp.hireDate, toYear),
+          carriedOverDays: amount,
+          adjustmentDays: 0,
+          note: `ترحيل تلقائي من ${fromYear}: ${amount} يوم`,
+          createdBy: opts.userId,
+        });
+      }
+      carried++;
+      if (details.length < 200) details.push({ employeeName: emp.employeeName, amount });
+    }
+  });
+
+  return { fromYear, toYear, leaveType, carried, skippedZero, unchanged, capped, details };
 }

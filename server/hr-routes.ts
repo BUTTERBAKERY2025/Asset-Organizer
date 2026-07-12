@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import crypto from "node:crypto";
 import { db } from "./db";
-import { eq, and, desc, sql, inArray, gte, lte, lt } from "drizzle-orm";
+import { eq, and, ne, desc, sql, inArray, gte, lte, lt } from "drizzle-orm";
 import { isAuthenticated, requirePermission, getEffectiveBranchFilter, getCachedPermissionsForUser, hasCrossBranchHrReadAccess } from "./auth";
 import {
   WARNING_TEMPLATES,
@@ -28,6 +28,9 @@ import {
   onboardingNotifications,
   attendanceRecords,
   financialPeriods,
+  chartOfAccounts,
+  accountingJournalEntries,
+  journalEntryLines,
   approvalWorkflows,
   approvalWorkflowSteps,
   publicHolidays,
@@ -56,7 +59,9 @@ import {
   clearOverdueAbsencesFrom,
   addDaysIso,
   isoDiffDays,
+  runLeaveCarryover,
 } from "./leave-helpers";
+import { storage } from "./storage";
 
 function getUserId(req: any): string | null {
   return (req as any).user?.id || (req as any).user?.claims?.sub || null;
@@ -1010,6 +1015,207 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
+  // تغطية الفرع خلال فترة الطلب: كم موظفاً آخر في نفس الفرع لديه إجازة معتمدة متداخلة؟
+  app.get("/api/hr/leaves/:id/coverage", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const { branchIds } = getBranchScope(req);
+      const [existing] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id));
+      if (!existing) return res.status(404).json({ error: "الطلب غير موجود" });
+      if (branchIds !== null && !branchIds.includes(existing.branchId)) {
+        return res.status(403).json({ error: "ليس لديك صلاحية" });
+      }
+
+      // الموظفون النشطون في الفرع
+      const activeEmps = await db
+        .select({ id: branchEmployees.id, employeeName: branchEmployees.employeeName })
+        .from(branchEmployees)
+        .where(and(eq(branchEmployees.branchId, existing.branchId), eq(branchEmployees.status, "active")));
+      const totalActive = activeEmps.length;
+      const nameById = new Map(activeEmps.map(e => [e.id, e.employeeName]));
+
+      // إجازات معتمدة متداخلة مع فترة الطلب لموظفين آخرين في نفس الفرع
+      const overlapping = await db
+        .select({
+          id: leaveRequests.id,
+          branchEmployeeId: leaveRequests.branchEmployeeId,
+          leaveType: leaveRequests.leaveType,
+          startDate: leaveRequests.startDate,
+          endDate: leaveRequests.endDate,
+        })
+        .from(leaveRequests)
+        .where(and(
+          eq(leaveRequests.branchId, existing.branchId),
+          eq(leaveRequests.status, "approved"),
+          ne(leaveRequests.branchEmployeeId, existing.branchEmployeeId),
+          lte(leaveRequests.startDate, existing.endDate),
+          gte(leaveRequests.endDate, existing.startDate),
+        ));
+
+      const onLeave = overlapping
+        .filter(l => nameById.has(l.branchEmployeeId))
+        .map(l => ({
+          employeeName: nameById.get(l.branchEmployeeId),
+          leaveType: l.leaveType,
+          startDate: l.startDate,
+          endDate: l.endDate,
+        }));
+      const onLeaveCount = new Set(overlapping.map(l => l.branchEmployeeId)).size;
+      // نسبة الغياب المتوقعة لو اعتُمد هذا الطلب (الموظف الحالي + المتداخلون)
+      const absentIfApproved = onLeaveCount + 1;
+      const absencePercent = totalActive > 0 ? Math.round((absentIfApproved / totalActive) * 100) : 0;
+
+      res.json({
+        branchId: existing.branchId,
+        totalActive,
+        onLeaveCount,
+        absentIfApproved,
+        absencePercent,
+        overlapping: onLeave.slice(0, 20),
+      });
+    } catch (e: any) {
+      console.error("[hr/leaves/:id/coverage] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // إنشاء قيد مخصص الإجازات (التزام أرصدة الإجازات السنوية) — قيد محاسبي مسودة
+  app.post("/api/hr/leaves/provision-journal", isAuthenticated, requirePermission("hr_leaves", "edit"), async (req, res) => {
+    try {
+      const { branchIds } = getBranchScope(req);
+      const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
+      const currentYear = parseInt(today.slice(0, 4), 10);
+      const year = Number(req.body?.year) || currentYear;
+      if (!Number.isInteger(year) || year < 2020 || year > currentYear + 1) {
+        return res.status(400).json({ error: "سنة غير صالحة" });
+      }
+      const refId = `leave-provision-${year}-${branchIds === null ? "all" : branchIds.slice().sort().join(",")}`;
+      const replace = !!req.body?.replace;
+
+      // التأكد من وجود حسابي المخصص في شجرة الحسابات
+      await db.insert(chartOfAccounts).values([
+        { accountCode: "2310", accountName: "مخصص الإجازات المستحقة", accountType: "liability", parentCode: "2300", level: 2, isActive: "true", description: "التزام أرصدة الإجازات السنوية غير المستخدمة" },
+        { accountCode: "5210", accountName: "مصروف مخصص الإجازات", accountType: "expense", parentCode: "5200", level: 2, isActive: "true", description: "مصروف تكوين مخصص الإجازات السنوية" },
+      ]).onConflictDoNothing({ target: chartOfAccounts.accountCode });
+
+      // حساب الالتزام (نفس منطق لوحة الإحصائيات): المتبقي من الرصيد السنوي × (الراتب ÷ 30)
+      const empScope = branchIds === null ? undefined : inArray(branchEmployees.branchId, branchIds);
+      const activeEmps = await db
+        .select({ id: branchEmployees.id, totalSalary: branchEmployees.totalSalary, hireDate: branchEmployees.hireDate })
+        .from(branchEmployees)
+        .where(empScope !== undefined ? and(eq(branchEmployees.status, "active"), empScope) : eq(branchEmployees.status, "active"));
+      const activeIds = activeEmps.map(e => e.id);
+      const balRows = activeIds.length > 0 ? await db.select().from(leaveBalances)
+        .where(and(eq(leaveBalances.year, year), eq(leaveBalances.leaveType, "annual"), inArray(leaveBalances.branchEmployeeId, activeIds))) : [];
+      const balByEmp = new Map(balRows.map(b => [b.branchEmployeeId, b]));
+      const approvedAnnual = activeIds.length > 0 ? await db.select().from(leaveRequests)
+        .where(and(
+          eq(leaveRequests.status, "approved"),
+          eq(leaveRequests.leaveType, "annual"),
+          inArray(leaveRequests.branchEmployeeId, activeIds),
+          lte(leaveRequests.startDate, `${year}-12-31`),
+          gte(leaveRequests.endDate, `${year}-01-01`),
+        )) : [];
+      const usedByEmp = new Map<number, number>();
+      for (const l of approvedAnnual) {
+        const segStart = l.startDate > `${year}-01-01` ? l.startDate : `${year}-01-01`;
+        const segEnd = l.endDate < `${year}-12-31` ? l.endDate : `${year}-12-31`;
+        if (segStart > segEnd) continue;
+        const days = isoDiffDays(segStart, segEnd) + 1;
+        usedByEmp.set(l.branchEmployeeId, (usedByEmp.get(l.branchEmployeeId) || 0) + days);
+      }
+      let liabilityDays = 0;
+      let liabilityAmount = 0;
+      let liabilityEmployees = 0;
+      for (const e of activeEmps) {
+        const b: any = balByEmp.get(e.id);
+        const entitled = b ? Number(b.entitledDays) : suggestedEntitlement(e.hireDate, year);
+        const remaining = entitled
+          + (b ? Number(b.carriedOverDays) : 0)
+          + (b ? Number(b.adjustmentDays) : 0)
+          - (b ? Number(b.settledDays ?? 0) : 0)
+          - (usedByEmp.get(e.id) || 0);
+        if (remaining > 0) {
+          liabilityDays += remaining;
+          liabilityAmount += remaining * (Number(e.totalSalary || 0) / 30);
+          liabilityEmployees++;
+        }
+      }
+      liabilityAmount = Math.round(liabilityAmount * 100) / 100;
+      if (liabilityAmount <= 0) {
+        return res.status(400).json({ error: "لا يوجد التزام إجازات موجب لإنشاء قيد" });
+      }
+
+      const amountStr = liabilityAmount.toFixed(2);
+      const desc = `قيد مخصص الإجازات السنوية ${year} — ${liabilityEmployees} موظف / ${Math.round(liabilityDays)} يوم`;
+
+      // معاملة واحدة + قفل استشاري يمنع التكرار حتى مع طلبات متزامنة
+      const txResult = await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${refId}))`);
+
+        const [existing] = await tx.select().from(accountingJournalEntries)
+          .where(and(eq(accountingJournalEntries.referenceType, "leave_provision"), eq(accountingJournalEntries.referenceId, refId)));
+        if (existing && !replace) {
+          return { conflict: existing } as const;
+        }
+
+        // ترقيم القيد داخل نفس المعاملة (نفس صيغة generateNextEntryNumber)
+        const [{ cnt }] = await tx.select({ cnt: sql<number>`count(*)::int` }).from(accountingJournalEntries);
+        const now = new Date();
+        const entryNumber = `JE-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}-${String(cnt + 1).padStart(5, "0")}`;
+
+        // عند الاستبدال: نُعلّم القيد القديم كمستبدَل (بتغيير مرجعه) قبل إنشاء الجديد
+        if (existing) {
+          await tx.update(accountingJournalEntries)
+            .set({ referenceId: `${refId}-superseded-${existing.id}` })
+            .where(eq(accountingJournalEntries.id, existing.id));
+        }
+
+        const [created] = await tx.insert(accountingJournalEntries).values({
+          entryNumber,
+          entryDate: today,
+          entryType: "provision",
+          description: desc,
+          branchId: branchIds !== null && branchIds.length === 1 ? branchIds[0] : null,
+          referenceType: "leave_provision",
+          referenceId: refId,
+          totalDebit: amountStr,
+          totalCredit: amountStr,
+          vatAmount: "0",
+          status: "draft",
+          reconciliationStatus: "pending",
+        }).returning();
+        await tx.insert(journalEntryLines).values([
+          { journalEntryId: created.id, lineNumber: 1, accountCode: "5210", accountName: "مصروف مخصص الإجازات", description: desc, debitAmount: amountStr, creditAmount: "0" },
+          { journalEntryId: created.id, lineNumber: 2, accountCode: "2310", accountName: "مخصص الإجازات المستحقة", description: desc, debitAmount: "0", creditAmount: amountStr },
+        ]);
+        return { created, replaced: !!existing } as const;
+      });
+
+      if ("conflict" in txResult) {
+        return res.status(409).json({
+          error: `يوجد قيد مخصص إجازات لسنة ${year} مسبقاً (${txResult.conflict.entryNumber}). أعد المحاولة مع خيار الاستبدال لإنشاء قيد جديد.`,
+          existingEntryNumber: txResult.conflict.entryNumber,
+        });
+      }
+
+      await auditEvent({
+        req,
+        module: "hr_leaves",
+        entityId: txResult.created.id,
+        action: "create",
+        entityName: txResult.created.entryNumber,
+        description: `إنشاء قيد مخصص الإجازات السنوية ${year}`,
+        details: { year, entryNumber: txResult.created.entryNumber, liabilityAmount, liabilityDays, liabilityEmployees, replaced: txResult.replaced },
+      });
+
+      res.json({ entry: txResult.created, year, liabilityAmount, liabilityDays: Math.round(liabilityDays), liabilityEmployees, replaced: txResult.replaced });
+    } catch (e: any) {
+      console.error("[hr/leaves/provision-journal] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // معاينة تصفية الرصيد (قبل التنفيذ)
   app.get("/api/hr/leaves/:id/settlement-preview", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
     try {
@@ -1287,7 +1493,7 @@ export function registerHrRoutes(app: Express) {
       const results = emps.map((e) => {
         const row = balByEmp.get(e.id);
         const usedDays = usedByEmp.get(e.id) || 0;
-        const entitledDays = row ? Number(row.entitledDays) : suggestedEntitlement(e.hireDate);
+        const entitledDays = row ? Number(row.entitledDays) : suggestedEntitlement(e.hireDate, year);
         const carriedOverDays = row ? Number(row.carriedOverDays) : 0;
         const adjustmentDays = row ? Number(row.adjustmentDays) : 0;
         const settledDays = row ? Number((row as any).settledDays ?? 0) : 0;
@@ -1308,7 +1514,7 @@ export function registerHrRoutes(app: Express) {
           branchId: e.branchId,
           branchName: e.branchName,
           hireDate: e.hireDate,
-          suggestedEntitlement: suggestedEntitlement(e.hireDate),
+          suggestedEntitlement: suggestedEntitlement(e.hireDate, year),
         };
       });
       res.json(results);
@@ -1334,7 +1540,7 @@ export function registerHrRoutes(app: Express) {
         return res.status(403).json({ error: "ليس لديك صلاحية على فرع الموظف" });
       }
       const bal = await getLeaveBalanceSummary(employeeId, year, leaveType, emp.hireDate);
-      res.json({ ...bal, suggestedEntitlement: suggestedEntitlement(emp.hireDate) });
+      res.json({ ...bal, suggestedEntitlement: suggestedEntitlement(emp.hireDate, year) });
     } catch (e: any) {
       console.error("[hr/leave-balances/:id] error:", e);
       res.status(500).json({ error: e.message });
@@ -1400,84 +1606,34 @@ export function registerHrRoutes(app: Express) {
         fromYear: z.number().int().min(2020).max(2100),
         leaveType: z.string().default("annual"),
         branchId: z.string().optional(),
+        maxDays: z.number().min(0).max(365).nullish(),
       });
-      const { fromYear, leaveType, branchId } = schema.parse(req.body);
+      const { fromYear, leaveType, branchId, maxDays } = schema.parse(req.body);
       if (leaveType === "unpaid") {
         return res.status(400).json({ error: "الإجازة بدون راتب لا ترتبط برصيد إجازات" });
       }
-      const toYear = fromYear + 1;
       const { branchIds } = getBranchScope(req);
       if (branchId && branchIds !== null && !branchIds.includes(branchId)) {
         return res.status(403).json({ error: "ليس لديك صلاحية على هذا الفرع" });
       }
 
-      const conds: any[] = [eq(branchEmployees.status, "active")];
-      const scopeCond = applyBranchScope(branchEmployees, branchIds);
-      if (scopeCond !== undefined) conds.push(scopeCond);
-      if (branchId) conds.push(eq(branchEmployees.branchId, branchId));
-      const emps = await db
-        .select({ id: branchEmployees.id, employeeName: branchEmployees.employeeName, branchId: branchEmployees.branchId, hireDate: branchEmployees.hireDate })
-        .from(branchEmployees)
-        .where(and(...conds));
-
-      // إزالة أي وسم ترحيل سابق من الملاحظة حتى لا تتضخم مع تكرار التشغيل
-      const stripCarryTag = (note: string | null) =>
-        (note || "").split(" | ").filter(s => s && !s.startsWith("ترحيل تلقائي من ")).join(" | ");
-
-      // المرحلة 1: حساب المبالغ (قراءات فقط)
-      const plans: { emp: typeof emps[number]; amount: number }[] = [];
-      let skippedZero = 0;
-      for (const emp of emps) {
-        const prev = await getLeaveBalanceSummary(emp.id, fromYear, leaveType, emp.hireDate);
-        const amount = Math.max(0, prev.remainingDays);
-        if (amount <= 0) { skippedZero++; continue; }
-        plans.push({ emp, amount });
+      // حفظ سقف الترحيل كسياسة افتراضية للتشغيل التلقائي السنوي
+      if (maxDays !== undefined) {
+        try { await storage.setPortalSetting("leave_carryover_max_days", maxDays == null ? "" : String(maxDays)); } catch {}
       }
 
-      // المرحلة 2: كل الكتابات داخل معاملة واحدة — إما تكتمل جميعها أو لا شيء
-      let carried = 0, unchanged = 0;
-      const details: { employeeName: string; amount: number }[] = [];
-      const userId = getUserId(req) || undefined;
-      await db.transaction(async (tx) => {
-        for (const { emp, amount } of plans) {
-          const [existing] = await tx.select().from(leaveBalances).where(and(
-            eq(leaveBalances.branchEmployeeId, emp.id),
-            eq(leaveBalances.year, toYear),
-            eq(leaveBalances.leaveType, leaveType),
-          ));
-          if (existing) {
-            if (Number(existing.carriedOverDays) === amount) { unchanged++; continue; }
-            const baseNote = stripCarryTag(existing.note);
-            await tx.update(leaveBalances).set({
-              carriedOverDays: amount,
-              branchId: emp.branchId,
-              note: `${baseNote ? baseNote + " | " : ""}ترحيل تلقائي من ${fromYear}: ${amount} يوم`,
-              updatedAt: new Date(),
-            }).where(eq(leaveBalances.id, existing.id));
-          } else {
-            await tx.insert(leaveBalances).values({
-              branchEmployeeId: emp.id,
-              branchId: emp.branchId,
-              year: toYear,
-              leaveType,
-              entitledDays: suggestedEntitlement(emp.hireDate),
-              carriedOverDays: amount,
-              adjustmentDays: 0,
-              note: `ترحيل تلقائي من ${fromYear}: ${amount} يوم`,
-              createdBy: userId,
-            });
-          }
-          carried++;
-          if (details.length < 200) details.push({ employeeName: emp.employeeName, amount });
-        }
+      const result = await runLeaveCarryover({
+        fromYear, leaveType, branchId, branchIds,
+        maxDays: maxDays ?? null,
+        userId: getUserId(req) || undefined,
       });
       await auditEvent({
         req, module: "hr_leaves", entityId: 0, action: "carryover_balances",
-        entityName: `ترحيل أرصدة ${fromYear} → ${toYear}`, branchId: branchId || null,
-        description: `ترحيل أرصدة (${leaveType}) من ${fromYear} إلى ${toYear}: ${carried} موظف`,
-        details: { fromYear, toYear, leaveType, carried, skippedZero, unchanged },
+        entityName: `ترحيل أرصدة ${fromYear} → ${result.toYear}`, branchId: branchId || null,
+        description: `ترحيل أرصدة (${leaveType}) من ${fromYear} إلى ${result.toYear}: ${result.carried} موظف${result.capped ? ` (سقف ${maxDays} يوم على ${result.capped})` : ""}`,
+        details: { fromYear, toYear: result.toYear, leaveType, carried: result.carried, skippedZero: result.skippedZero, unchanged: result.unchanged, capped: result.capped, maxDays: maxDays ?? null },
       });
-      res.json({ fromYear, toYear, leaveType, carried, skippedZero, unchanged, details });
+      res.json(result);
     } catch (e: any) {
       if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
       console.error("[hr/leave-balances/carryover] error:", e);
@@ -1808,7 +1964,7 @@ export function registerHrRoutes(app: Express) {
       let liabilityEmployees = 0;
       for (const e of activeEmps) {
         const b: any = balByEmp.get(e.id);
-        const entitled = b ? Number(b.entitledDays) : suggestedEntitlement(e.hireDate);
+        const entitled = b ? Number(b.entitledDays) : suggestedEntitlement(e.hireDate, year);
         const remaining = entitled
           + (b ? Number(b.carriedOverDays) : 0)
           + (b ? Number(b.adjustmentDays) : 0)
@@ -2325,8 +2481,23 @@ export function registerHrRoutes(app: Express) {
         eosAmount = fullEos;
       }
 
+      // تعبئة رصيد الإجازات تلقائياً من نظام الإجازات إذا لم يُدخل يدوياً (المادة 111: بدل الإجازة المستحقة)
+      let vacationBalance = input.vacationBalance;
+      let vacationAutoFilled = false;
+      if (vacationBalance == null) {
+        try {
+          const endYear = parseInt(input.endDate.slice(0, 4), 10);
+          const bal = await getLeaveBalanceSummary(emp.id, endYear, "annual", (emp as any).hireDate);
+          vacationBalance = Math.max(0, Number(bal.remainingDays) || 0);
+          vacationAutoFilled = true;
+        } catch (balErr) {
+          console.error("[hr/eos/calculate] leave balance auto-fill failed:", balErr);
+          vacationBalance = 0;
+        }
+      }
+
       const dailyRate = total / 30;
-      const vacationAmount = (input.vacationBalance || 0) * dailyRate;
+      const vacationAmount = (vacationBalance || 0) * dailyRate;
       const netAmount = eosAmount + vacationAmount + (input.otherDues || 0) - (input.totalDeductions || 0);
 
       res.json({
@@ -2335,7 +2506,8 @@ export function registerHrRoutes(app: Express) {
         basicSalary: basic,
         totalSalary: total,
         eosAmount: parseFloat(eosAmount.toFixed(2)),
-        vacationBalance: input.vacationBalance || 0,
+        vacationBalance: vacationBalance || 0,
+        vacationAutoFilled,
         vacationAmount: parseFloat(vacationAmount.toFixed(2)),
         otherDues: input.otherDues || 0,
         totalDeductions: input.totalDeductions || 0,

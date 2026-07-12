@@ -775,6 +775,7 @@ const TOGGLEABLE_COLUMNS: { key: string; label: string }[] = [
   { key: "allowances", label: "البدلات" },
   { key: "dailyRate", label: "قيمة اليوم" },
   { key: "absenceDeduction", label: "خصم الغياب" },
+  { key: "sickLeaveDeduction", label: "خصم المرضية (75%)" },
   { key: "insurance", label: "التأمينات" },
 ];
 
@@ -875,6 +876,7 @@ export default function SalaryClosingPage() {
     allowances: true,
     dailyRate: true,
     absenceDeduction: true,
+    sickLeaveDeduction: true,
     insurance: true,
   });
   const toggleCol = (k: string) => setCols((p) => ({ ...p, [k]: !p[k] }));
@@ -1315,6 +1317,7 @@ export default function SalaryClosingPage() {
       [isRTL ? "إجمالي الراتب" : "Gross Salary"]: emp.grossSalary,
       [isRTL ? "قيمة اليوم" : "Daily Rate"]: emp.dailyRate,
       [isRTL ? "خصم الغياب" : "Absence Deduction"]: emp.absenceDeduction,
+      [isRTL ? "خصم المرضية" : "Sick Deduction"]: (emp as any).sickLeaveDeduction || 0,
       [isRTL ? "التأمينات الاجتماعية" : "Social Insurance"]: emp.socialInsurance,
       [isRTL ? "صافي الراتب" : "Net Salary"]: emp.netSalary,
     }));
@@ -1477,6 +1480,7 @@ export default function SalaryClosingPage() {
       const otherIncome = round2((emp.allowances ?? 0) - housing);
       const deductions = round2(
         (emp.absenceDeduction ?? 0) +
+          ((emp as any).sickLeaveDeduction ?? 0) +
           (emp.socialInsurance ?? 0) +
           (emp.manualDeductionsTotal ?? 0),
       );
@@ -1624,6 +1628,9 @@ export default function SalaryClosingPage() {
           grossSalary: emp.grossSalary,
           dailyRate: emp.dailyRate,
           absenceDeduction: emp.absenceDeduction,
+          sickLeaveDeduction: (emp as any).sickLeaveDeduction || 0,
+          sickThreeQuarterDays: (emp as any).sickThreeQuarterDays || 0,
+          sickUnpaidDays: (emp as any).sickUnpaidDays || 0,
           socialInsurance: emp.socialInsurance,
           manualDeductions: (emp.manualDeductions || []).map((d: any) => ({
             type: SALARY_DEDUCTION_TYPE_LABELS[d.type] || d.type,
@@ -2779,6 +2786,7 @@ export default function SalaryClosingPage() {
                         {cols.allowances && <TableHead className="text-center">{isRTL ? "البدلات" : "Allowances"}</TableHead>}
                         {cols.dailyRate && <TableHead className="text-center" title={isRTL ? "قيمة اليوم = الراتب الإجمالي ÷ 30" : "Daily rate"}>{isRTL ? "قيمة اليوم" : "Daily Rate"}</TableHead>}
                         {cols.absenceDeduction && <TableHead className="text-center" title={isRTL ? "خصم الغياب = أيام الغياب × قيمة اليوم" : "Absence deduction"}>{isRTL ? "خصم الغياب" : "Absence Deduction"}</TableHead>}
+                        {cols.sickLeaveDeduction && <TableHead className="text-center" title={isRTL ? "خصم الإجازة المرضية (المادة 117): أيام الشريحة 75% يُخصم منها ربع قيمة اليوم" : "Sick leave deduction (Art. 117)"}>{isRTL ? "خصم المرضية" : "Sick Deduction"}</TableHead>}
                         {cols.insurance && <TableHead className="text-center">{isRTL ? "التأمينات" : "Insurance"}</TableHead>}
                         <TableHead className="text-center bg-orange-50" title={isRTL ? "السُلف والخصومات اليدوية الشهرية — اضغط للإضافة/التعديل" : "Manual advances & deductions"}>{isRTL ? "سُلف/خصومات" : "Advances/Deductions"}</TableHead>
                         <TableHead className="text-center">{isRTL ? "الصافي" : "Net"}</TableHead>
@@ -3065,6 +3073,11 @@ export default function SalaryClosingPage() {
                           {cols.absenceDeduction && (
                             <TableCell className="text-center text-red-600">
                               {emp.absenceDeduction > 0 ? `- ${formatCurrency(emp.absenceDeduction, isRTL)}` : "-"}
+                            </TableCell>
+                          )}
+                          {cols.sickLeaveDeduction && (
+                            <TableCell className="text-center text-red-600" title={(emp as any).sickThreeQuarterDays > 0 ? `${(emp as any).sickThreeQuarterDays} يوم بأجر 75%${(emp as any).sickUnpaidDays > 0 ? ` + ${(emp as any).sickUnpaidDays} يوم بدون أجر (ضمن خصم الغياب)` : ""}` : undefined}>
+                              {((emp as any).sickLeaveDeduction ?? 0) > 0 ? `- ${formatCurrency((emp as any).sickLeaveDeduction, isRTL)}` : "-"}
                             </TableCell>
                           )}
                           {cols.insurance && (

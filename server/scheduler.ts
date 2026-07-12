@@ -2,7 +2,8 @@ import { db } from "./db";
 import { and, eq, lte, lt, gte, sql, desc } from "drizzle-orm";
 import { notificationQueue, reportSchedules, reportRuns, systemNotifications, notificationAutomations, branchEmployees, leaveRequests, notifications } from "@shared/schema";
 import { sendWhatsAppMessage, sendSMS, isTwilioConfigured } from "./twilio-service";
-import { markOverdueAbsences, addDaysIso } from "./leave-helpers";
+import { markOverdueAbsences, addDaysIso, runLeaveCarryover } from "./leave-helpers";
+import { storage } from "./storage";
 import { isNull } from "drizzle-orm";
 import { generateReport, type ReportType } from "./report-generator";
 import { z } from "zod";
@@ -335,6 +336,22 @@ export async function processReturnReminders(force = false): Promise<{ queued: n
         } catch (e: any) { console.error("[scheduler] return-reminder in-app failed:", e.message); }
       }
 
+      // إشعار داخلي لإدارة الفرع (بدون userId → يظهر لمستخدمي الفرع) بعودة الموظف غداً
+      if (emp.branchId) {
+        try {
+          await db.insert(notifications).values({
+            branchId: emp.branchId,
+            userId: null,
+            title: "عودة موظف من إجازة",
+            message: `ينتهي آخر يوم من إجازة ${emp.employeeName} اليوم (${leave.endDate}) — يُتوقع مباشرته للعمل غداً. لا تنسَ تسجيل المباشرة عند عودته.`,
+            type: "info",
+            category: "hr",
+            priority: "normal",
+            linkUrl: "/hr/leaves",
+          });
+        } catch (e: any) { console.error("[scheduler] return-reminder branch notify failed:", e.message); }
+      }
+
       // واتساب + SMS عبر الطابور (صف لكل قناة) — الفهرس الفريد الجزئي يمنع التكرار حتى مع التزامن
       if (emp.phoneNumber) {
         for (const channel of ["whatsapp", "sms"] as const) {
@@ -407,6 +424,44 @@ export async function processOverdueLeaveAbsences(force = false): Promise<{ mark
   return { marked, leaves };
 }
 
+/**
+ * الترحيل السنوي التلقائي لأرصدة الإجازات: يعمل في يناير (بتوقيت الرياض) مرة واحدة
+ * لكل سنة، ويرحّل أرصدة السنة الماضية إلى السنة الجديدة لجميع الفروع.
+ * الحماية من التكرار: مفتاح إعداد auto_leave_carryover_<toYear> يُسجَّل بعد النجاح.
+ * السقف الاختياري يُقرأ من إعداد leave_carryover_max_days (يُحفظ من واجهة الترحيل اليدوي).
+ */
+let lastCarryoverCheckDate: string | null = null; // YYYY-MM-DD (Riyadh)
+export async function processAnnualLeaveCarryover(force = false): Promise<{ ran: boolean; carried?: number }> {
+  const todayRiyadh = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
+  if (!force && lastCarryoverCheckDate === todayRiyadh) return { ran: false };
+  lastCarryoverCheckDate = todayRiyadh;
+
+  const [yearStr, monthStr] = todayRiyadh.split("-");
+  const toYear = Number(yearStr);
+  if (!force && monthStr !== "01") return { ran: false }; // يناير فقط
+
+  const doneKey = `auto_leave_carryover_${toYear}`;
+  const done = await storage.getPortalSetting(doneKey);
+  if (done === "done") return { ran: false };
+
+  let maxDays: number | null = null;
+  try {
+    const capStr = await storage.getPortalSetting("leave_carryover_max_days");
+    const cap = Number(capStr);
+    if (capStr !== "" && Number.isFinite(cap) && cap > 0) maxDays = cap;
+  } catch {}
+
+  const result = await runLeaveCarryover({
+    fromYear: toYear - 1,
+    leaveType: "annual",
+    branchIds: null, // كل الفروع
+    maxDays,
+  });
+  await storage.setPortalSetting(doneKey, "done");
+  console.log(`[scheduler] annual leave carryover ${toYear - 1}→${toYear}: carried ${result.carried}, capped ${result.capped}, unchanged ${result.unchanged}`);
+  return { ran: true, carried: result.carried };
+}
+
 async function tick() {
   if (tickRunning) {
     console.log("[scheduler] tick skipped - previous tick still running");
@@ -431,6 +486,11 @@ async function tick() {
       const hRiyadh = Number(new Date().toLocaleString("en-US", { timeZone: "Asia/Riyadh", hour: "2-digit", hour12: false }));
       if (hRiyadh >= 6) await processOverdueLeaveAbsences(false);
     } catch (e: any) { console.error("[scheduler] processOverdueLeaveAbsences error:", e.message); }
+    // الترحيل السنوي التلقائي لأرصدة الإجازات — يناير، بعد 6 صباحاً بتوقيت الرياض.
+    try {
+      const hRiyadh = Number(new Date().toLocaleString("en-US", { timeZone: "Asia/Riyadh", hour: "2-digit", hour12: false }));
+      if (hRiyadh >= 6) await processAnnualLeaveCarryover(false);
+    } catch (e: any) { console.error("[scheduler] processAnnualLeaveCarryover error:", e.message); }
   } finally {
     tickRunning = false;
   }

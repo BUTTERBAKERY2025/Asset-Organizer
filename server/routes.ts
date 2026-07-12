@@ -29313,7 +29313,11 @@ export async function registerRoutes(
         paidLeaveDays: l.paidLeaveDays ?? 0,
         unpaidLeaveDays: l.unpaidLeaveDays ?? 0,
         unpaidDays: l.unpaidDays ?? 0,
+        sickThreeQuarterDays: l.sickThreeQuarterDays ?? 0,
+        sickUnpaidDays: l.sickUnpaidDays ?? 0,
+        sickLeaveDeduction: l.sickLeaveDeduction ?? 0,
       }));
+      const totalSickLeaveDeductionSnap = Math.round(lines.reduce((s: number, l: any) => s + (Number(l.sickLeaveDeduction) || 0), 0) * 100) / 100;
       return {
         lines,
         totals: {
@@ -29322,6 +29326,7 @@ export async function registerRoutes(
           totalAllowances: existing.totalAllowances,
           totalGross: existing.totalGross,
           totalAbsenceDeduction: existing.totalAbsenceDeduction,
+          totalSickLeaveDeduction: totalSickLeaveDeductionSnap,
           totalSocialInsurance: existing.totalSocialInsurance,
           totalManualDeductions: existing.totalManualDeductions,
           totalNet: existing.totalNet,
@@ -29366,7 +29371,7 @@ export async function registerRoutes(
         const warnings: any[] = [];
         const totals = {
           employeeCount: 0, totalBase: 0, totalAllowances: 0, totalGross: 0,
-          totalAbsenceDeduction: 0, totalSocialInsurance: 0, totalManualDeductions: 0, totalNet: 0,
+          totalAbsenceDeduction: 0, totalSickLeaveDeduction: 0, totalSocialInsurance: 0, totalManualDeductions: 0, totalNet: 0,
         };
         let unlinkedRecords = 0, unlinkedPresent = 0, unlinkedHours = 0;
         const branchBreakdown: any[] = [];
@@ -29380,6 +29385,7 @@ export async function registerRoutes(
           totals.totalAllowances += pb.totals?.totalAllowances || 0;
           totals.totalGross += pb.totals?.totalGross || 0;
           totals.totalAbsenceDeduction += pb.totals?.totalAbsenceDeduction || 0;
+          totals.totalSickLeaveDeduction += (pb.totals as any)?.totalSickLeaveDeduction || 0;
           totals.totalSocialInsurance += pb.totals?.totalSocialInsurance || 0;
           totals.totalManualDeductions += pb.totals?.totalManualDeductions || 0;
           totals.totalNet += pb.totals?.totalNet || 0;
@@ -29535,6 +29541,9 @@ export async function registerRoutes(
         grossSalary: l.grossSalary,
         dailyRate: l.dailyRate,
         absenceDeduction: l.absenceDeduction,
+        sickLeaveDeduction: (l as any).sickLeaveDeduction ?? 0,
+        sickThreeQuarterDays: (l as any).sickThreeQuarterDays ?? 0,
+        sickUnpaidDays: (l as any).sickUnpaidDays ?? 0,
         socialInsurance: l.socialInsurance,
         manualDeductionsTotal: l.manualDeductionsTotal,
         netSalary: l.netSalary,

@@ -84,6 +84,13 @@ export default function LeavesPage() {
   const [form, setForm] = useState<typeof initialForm>(initialForm);
   const [reviewing, setReviewing] = useState<{ id: number; decision: "approved" | "rejected"; leave: Leave } | null>(null);
   const [reviewNote, setReviewNote] = useState("");
+  // تغطية الفرع عند مراجعة الاعتماد: هل هناك إجازات معتمدة متداخلة لموظفين آخرين؟
+  const { data: coverage } = useQuery<any>({
+    queryKey: ["/api/hr/leaves", reviewing?.id, "coverage"],
+    queryFn: async () => (await apiRequest("GET", `/api/hr/leaves/${reviewing!.id}/coverage`)).json(),
+    enabled: !!reviewing && reviewing.decision === "approved",
+    staleTime: 30_000,
+  });
   const [allowOver, setAllowOver] = useState(false);
   const [cancelling, setCancelling] = useState<Leave | null>(null);
   const [cancelReason, setCancelReason] = useState("");
@@ -498,21 +505,47 @@ export default function LeavesPage() {
   });
 
   const carryoverMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (maxDays: number | null) => {
       const res = await apiRequest("POST", "/api/hr/leave-balances/carryover", {
         fromYear: balYear - 1,
         leaveType: balType,
+        maxDays,
       });
       return res.json();
     },
     onSuccess: (r: any) => {
       qc.invalidateQueries({ queryKey: ["/api/hr/leave-balances"] });
       const parts: string[] = [`تم ترحيل رصيد ${arNum(r?.carried ?? 0)} موظف من ${arNum(r?.fromYear)} إلى ${arNum(r?.toYear)}`];
+      if (r?.capped) parts.push(`${arNum(r.capped)} طُبّق عليهم السقف`);
       if (r?.unchanged) parts.push(`${arNum(r.unchanged)} بدون تغيير (مرحّل مسبقاً)`);
       if (r?.skippedZero) parts.push(`${arNum(r.skippedZero)} بلا رصيد متبقٍ`);
       toast({ title: "اكتمل الترحيل", description: parts.join(" • ") });
     },
     onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل الترحيل", variant: "destructive" }),
+  });
+
+  const provisionMutation = useMutation({
+    mutationFn: async (replace: boolean) => {
+      const res = await apiRequest("POST", "/api/hr/leaves/provision-journal", { replace, year: stats?.year });
+      return res.json();
+    },
+    onSuccess: (r: any) => {
+      toast({
+        title: r?.replaced ? "تم استبدال قيد المخصص" : "تم إنشاء قيد المخصص",
+        description: `${r?.entry?.entryNumber ?? ""} — ${arNum(Math.round(r?.liabilityAmount ?? 0))} ر.س لـ ${arNum(r?.liabilityEmployees ?? 0)} موظف (مسودة في دفتر اليومية)`,
+      });
+    },
+    onError: (e: any) => {
+      const msg = e?.message || "فشل إنشاء القيد";
+      if (msg.includes("409") || msg.includes("مسبقاً")) {
+        if (window.confirm(`${msg}\n\nهل تريد استبداله بقيد جديد بالقيمة الحالية؟`)) {
+          provisionMutation.mutate(true);
+          return;
+        }
+      } else {
+        toast({ title: "خطأ", description: msg, variant: "destructive" });
+      }
+    },
   });
 
   const saveBalMutation = useMutation({
@@ -799,6 +832,20 @@ export default function LeavesPage() {
                       <div className="text-[11px] text-muted-foreground mt-1">
                         {arNum(stats?.financial?.liabilityDays ?? 0)} يوم متبقٍ لـ {arNum(stats?.financial?.liabilityEmployees ?? 0)} موظف — بدل اليوم = الراتب ÷ 30
                       </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 h-7 text-xs text-amber-700 border-amber-300"
+                        disabled={provisionMutation.isPending || !(stats?.financial?.liabilityAmount > 0)}
+                        onClick={() => {
+                          if (window.confirm(`سيتم إنشاء قيد محاسبي (مسودة) بمخصص الإجازات السنوية لسنة ${stats?.year}: مدين "مصروف مخصص الإجازات 5210" / دائن "مخصص الإجازات المستحقة 2310" بمبلغ ${arNum(Math.round(stats?.financial?.liabilityAmount ?? 0))} ر.س تقريباً. متابعة؟`)) {
+                            provisionMutation.mutate(false);
+                          }
+                        }}
+                        data-testid="button-provision-journal"
+                      >
+                        {provisionMutation.isPending ? "جارٍ الإنشاء..." : "إنشاء قيد المخصص"}
+                      </Button>
                     </div>
                     <Coins className="h-8 w-8 text-amber-400" />
                   </div>
@@ -1153,7 +1200,14 @@ export default function LeavesPage() {
                   disabled={carryoverMutation.isPending}
                   onClick={() => {
                     if (window.confirm(`سيتم ترحيل الرصيد المتبقي لكل موظف من سنة ${balYear - 1} إلى خانة "المرحّل" في سنة ${balYear} (${LEAVE_TYPE_LABELS[balType] || balType}). إعادة التشغيل آمنة ولا تضاعف الأرصدة. متابعة؟`)) {
-                      carryoverMutation.mutate();
+                      const capStr = window.prompt("سقف أيام الترحيل لكل موظف (اتركه فارغاً بدون سقف):", "");
+                      if (capStr === null) return; // إلغاء
+                      const cap = capStr.trim() === "" ? null : Number(capStr);
+                      if (cap !== null && (!Number.isFinite(cap) || cap < 0)) {
+                        toast({ title: "قيمة السقف غير صحيحة", variant: "destructive" });
+                        return;
+                      }
+                      carryoverMutation.mutate(cap);
                     }
                   }}
                   data-testid="button-carryover-balances"
@@ -1551,6 +1605,19 @@ export default function LeavesPage() {
             {(reviewing?.leave?.requiredLevels ?? 0) > 1 && (
               <div className="text-xs bg-amber-50 text-amber-700 rounded p-2">
                 هذا الطلب يتطلب {arNum(reviewing?.leave?.requiredLevels)} مستويات موافقة — أنت على المستوى {arNum(reviewing?.leave?.currentLevel)}.
+              </div>
+            )}
+            {reviewing?.decision === "approved" && coverage && coverage.onLeaveCount > 0 && (
+              <div className="text-xs bg-amber-50 text-amber-800 rounded p-2 space-y-1" data-testid="text-coverage-warning">
+                <div className="font-semibold">
+                  تنبيه تغطية الفرع: {arNum(coverage.onLeaveCount)} موظف آخر في إجازة متداخلة مع هذه الفترة
+                  {coverage.totalActive > 0 && <> — سيغيب {arNum(coverage.absentIfApproved)} من {arNum(coverage.totalActive)} ({arNum(coverage.absencePercent)}٪)</>}
+                </div>
+                <ul className="list-disc pr-4">
+                  {(coverage.overlapping || []).slice(0, 5).map((o: any, i: number) => (
+                    <li key={i}>{o.employeeName} ({LEAVE_TYPE_LABELS[o.leaveType] || o.leaveType}): {o.startDate} ← {o.endDate}</li>
+                  ))}
+                </ul>
               </div>
             )}
             {allowOver && (

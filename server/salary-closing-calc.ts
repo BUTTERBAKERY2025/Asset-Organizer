@@ -39,6 +39,12 @@ export interface SalaryClosingLine {
   unpaidLeaveDays: number;
   unpaidDays: number;
   leaveBreakdown: Array<{ type: string; days: number; paid: boolean }>;
+  /** أيام الإجازة المرضية المدفوعة بـ 75% ضمن الشهر (المادة 117) */
+  sickThreeQuarterDays: number;
+  /** أيام الإجازة المرضية بدون أجر ضمن الشهر (المادة 117) */
+  sickUnpaidDays: number;
+  /** خصم الإجازة المرضية = 25% × أيام الـ75% × قيمة اليوم (أيام "بدون أجر" تدخل ضمن خصم الغياب) */
+  sickLeaveDeduction: number;
   scheduledWorkDays: number;
   scheduledHours: number;
   lateDays: number;
@@ -75,6 +81,7 @@ export interface SalaryClosingTotals {
   totalAllowances: number;
   totalGross: number;
   totalAbsenceDeduction: number;
+  totalSickLeaveDeduction: number;
   totalSocialInsurance: number;
   totalManualDeductions: number;
   totalNet: number;
@@ -102,6 +109,39 @@ function addDaysISO(iso: string, n: number): string {
 // أنواع الإجازات المدفوعة (تُحتسب ضمن أيام الصرف). الوحيدة غير المدفوعة هي "بدون راتب".
 function isPaidLeaveType(t: string): boolean {
   return t !== "unpaid";
+}
+
+// عدد الأيام بين تاريخين ISO (بدون احتساب اليومين معاً — فرق بسيط)
+function diffDaysISO(a: string, b: string): number {
+  return Math.round((new Date(b + "T00:00:00Z").getTime() - new Date(a + "T00:00:00Z").getTime()) / 86400000);
+}
+
+/**
+ * نسبة أجر يوم الإجازة المرضية حسب المادة 117 من نظام العمل السعودي:
+ * أول 30 يوماً (تراكمياً في السنة) بأجر كامل، ثم 60 يوماً بـ 75%، ثم بدون أجر.
+ * نعتمد على sickTierBreakdown المحفوظ عند اعتماد الطلب (usedBefore + year).
+ * إن لم يوجد التفصيل (طلبات قديمة) نُبقي السلوك السابق: أجر كامل.
+ */
+function sickDayPayFraction(lr: any, date: string): number {
+  const b = lr?.sickTierBreakdown;
+  if (!b || typeof b.usedBefore !== "number" || !b.year) return 1;
+  // اليوم خارج سنة التفصيل (إجازة عابرة للسنة): تبدأ عدّادات السنة الجديدة من الصفر
+  const dayYear = Number(date.slice(0, 4));
+  let cumIndex: number;
+  if (dayYear === Number(b.year)) {
+    const yearStart = `${b.year}-01-01`;
+    const leaveStartInYear = lr.startDate > yearStart ? lr.startDate : yearStart;
+    cumIndex = Number(b.usedBefore) + diffDaysISO(leaveStartInYear, date);
+  } else if (dayYear > Number(b.year)) {
+    // سنة جديدة: العدّاد يبدأ من أول يوم في السنة الجديدة ضمن هذه الإجازة
+    cumIndex = diffDaysISO(`${dayYear}-01-01`, date < lr.startDate ? lr.startDate : date);
+    cumIndex = Math.max(0, Math.min(cumIndex, diffDaysISO(`${dayYear}-01-01`, date)));
+  } else {
+    return 1;
+  }
+  if (cumIndex < 30) return 1;
+  if (cumIndex < 90) return 0.75;
+  return 0;
 }
 
 function todayRiyadh(): string {
@@ -412,13 +452,13 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
     const empLeaves = (raw.leaveRequests || []).filter(
       (lr: any) => lr.branchEmployeeId === emp.id && lr.status === "approved"
     );
-    const leaveByDate = new Map<string, string>();
+    const leaveByDate = new Map<string, any>();
     empLeaves.forEach((lr: any) => {
       let d = lr.startDate < monthStart ? monthStart : lr.startDate;
       const end = lr.endDate > monthEnd ? monthEnd : lr.endDate;
       let guard = 0;
       while (d <= end && guard < 400) {
-        if (!leaveByDate.has(d)) leaveByDate.set(d, lr.leaveType);
+        if (!leaveByDate.has(d)) leaveByDate.set(d, lr);
         d = addDaysISO(d, 1);
         guard++;
       }
@@ -432,6 +472,8 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
     let paidLeaveDays = 0;
     let unpaidLeaveDays = 0;
     let unpaidDays = 0;
+    let sickThreeQuarterDays = 0;
+    let sickUnpaidDays = 0;
     const leaveCounts = new Map<string, number>();
     const unpaidNonLeaveDates: string[] = [];
 
@@ -442,10 +484,22 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
         if (presentSet.has(d)) {
           presentDaysCalc++;
         } else {
-          const lt = leaveByDate.get(d);
-          if (lt) {
+          const lrDay = leaveByDate.get(d);
+          const lt = lrDay?.leaveType as string | undefined;
+          if (lrDay && lt) {
             leaveCounts.set(lt, (leaveCounts.get(lt) || 0) + 1);
-            if (isPaidLeaveType(lt)) {
+            if (lt === "sick") {
+              // المادة 117: كامل / 75% / بدون أجر حسب الرصيد التراكمي في السنة
+              const f = sickDayPayFraction(lrDay, d);
+              if (f === 0) {
+                sickUnpaidDays++;
+                unpaidLeaveDays++;
+                unpaidDays++;
+              } else {
+                paidLeaveDays++;
+                if (f === 0.75) sickThreeQuarterDays++;
+              }
+            } else if (isPaidLeaveType(lt)) {
               paidLeaveDays++;
             } else {
               unpaidLeaveDays++;
@@ -512,9 +566,13 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
     const dailyRate = grossSalary / 30;
 
     // الخصم = (أيام غير مدفوعة) × قيمة اليوم. الأيام غير المدفوعة تشمل: الغياب،
-    // الأيام غير المسجّلة (لم يحضرها ولم تكن راحة ولا إجازة مدفوعة)، والإجازات بدون راتب.
+    // الأيام غير المسجّلة (لم يحضرها ولم تكن راحة ولا إجازة مدفوعة)، والإجازات بدون راتب،
+    // وأيام الإجازة المرضية التي تجاوزت 90 يوماً (بدون أجر حسب المادة 117).
     // نستخدم القيمة بعد تطبيق تعديل أيام الحضور اليدوي (إن وُجد).
     const absenceDeduction = round2(effectiveUnpaidDays * dailyRate);
+
+    // خصم الإجازة المرضية (المادة 117): أيام الشريحة الثانية تُدفع 75% → يُخصم 25% من قيمة اليوم
+    const sickLeaveDeduction = round2(sickThreeQuarterDays * 0.25 * dailyRate);
 
     // غياب صريح/أيام مخصومة (لأغراض العرض فقط — لا يشمل أيام الإجازات)
     const absentDaysDisplay = absentDaysDisplayCalc;
@@ -529,7 +587,7 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
     const empDeductions = deductions.filter((d) => d.branchEmployeeId === emp.id);
     const manualDeductionsTotal = round2(empDeductions.reduce((sum, d) => sum + (d.amount || 0), 0));
 
-    const netBeforeManual = round2(grossSalary - socialInsurance - absenceDeduction);
+    const netBeforeManual = round2(grossSalary - socialInsurance - absenceDeduction - sickLeaveDeduction);
     const netSalary = Math.max(0, round2(netBeforeManual - manualDeductionsTotal));
 
     if (noWorkAtAll) {
@@ -571,6 +629,9 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
       unpaidLeaveDays,
       unpaidDays: effectiveUnpaidDays,
       leaveBreakdown,
+      sickThreeQuarterDays,
+      sickUnpaidDays,
+      sickLeaveDeduction,
       scheduledWorkDays,
       scheduledHours: Math.round(scheduledHoursTotal * 10) / 10,
       lateDays,
@@ -605,6 +666,7 @@ export function computeSalaryClosing(raw: SalaryClosingRaw): SalaryClosingResult
     totalAllowances: round2(lines.reduce((s, e) => s + e.allowances, 0)),
     totalGross: round2(lines.reduce((s, e) => s + e.grossSalary, 0)),
     totalAbsenceDeduction: round2(lines.reduce((s, e) => s + e.absenceDeduction, 0)),
+    totalSickLeaveDeduction: round2(lines.reduce((s, e) => s + e.sickLeaveDeduction, 0)),
     totalSocialInsurance: round2(lines.reduce((s, e) => s + e.socialInsurance, 0)),
     totalManualDeductions: round2(lines.reduce((s, e) => s + e.manualDeductionsTotal, 0)),
     totalNet: round2(lines.reduce((s, e) => s + e.netSalary, 0)),

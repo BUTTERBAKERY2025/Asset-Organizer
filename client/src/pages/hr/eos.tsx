@@ -22,7 +22,7 @@ const initialForm = {
   branchEmployeeId: "",
   endDate: new Date().toISOString().slice(0, 10),
   terminationType: "resignation",
-  vacationBalance: "0",
+  vacationBalance: "",
   otherDues: "0",
   totalDeductions: "0",
   notes: "",
@@ -101,7 +101,7 @@ export default function EOSPage() {
       branchEmployeeId: parseInt(form.branchEmployeeId, 10),
       endDate: form.endDate,
       terminationType: form.terminationType,
-      vacationBalance: parseFloat(form.vacationBalance) || 0,
+      ...(form.vacationBalance.trim() !== "" ? { vacationBalance: parseFloat(form.vacationBalance) || 0 } : {}),
       otherDues: parseFloat(form.otherDues) || 0,
       totalDeductions: parseFloat(form.totalDeductions) || 0,
     });
@@ -260,7 +260,8 @@ export default function EOSPage() {
               </div>
               <div>
                 <Label>رصيد الإجازات (أيام)</Label>
-                <Input type="number" step="0.5" value={form.vacationBalance} onChange={(e) => setForm({ ...form, vacationBalance: e.target.value })} data-testid="input-vacation-balance" />
+                <Input type="number" step="0.5" placeholder="تلقائي من نظام الإجازات" value={form.vacationBalance} onChange={(e) => setForm({ ...form, vacationBalance: e.target.value })} data-testid="input-vacation-balance" />
+                <p className="text-xs text-muted-foreground mt-1">اتركه فارغاً ليُجلب الرصيد المتبقي تلقائياً</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
