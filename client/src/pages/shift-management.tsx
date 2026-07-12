@@ -67,6 +67,8 @@ export default function ShiftManagementPage() {
   const [showAuditTrail, setShowAuditTrail] = useState(false);
   const [showApplyConfirmDialog, setShowApplyConfirmDialog] = useState(false);
   const [showConflictDialog, setShowConflictDialog] = useState(false);
+  // يوم الراحة الافتراضي عند "تطبيق على الجميع" (الفهرس داخل الأسبوع الذي يبدأ السبت). الافتراضي: الجمعة
+  const [applyRestDay, setApplyRestDay] = useState<number>(6);
   const [pendingDraft, setPendingDraft] = useState<{ savedAt: number; data: Record<string, Record<string, ScheduleCell>> } | null>(null);
   
   // Report filter states
@@ -736,12 +738,12 @@ export default function ShiftManagementPage() {
       newScheduleData[String(emp.id)] = {};
       weekDates.forEach((date, index) => {
         const dateStr = format(date, "yyyy-MM-dd");
-        const isFriday = index === 6;
+        const isRestDay = index === applyRestDay;
         newScheduleData[String(emp.id)][dateStr] = {
           startTime,
           endTime,
-          isOff: isFriday,
-          shiftType: isFriday ? undefined : normalizedCode,
+          isOff: isRestDay,
+          shiftType: isRestDay ? undefined : normalizedCode,
         };
       });
     });
@@ -754,7 +756,7 @@ export default function ShiftManagementPage() {
     });
     setHasUnsavedChanges(true);
     
-    toast({ title: "تم تطبيق الجدول", description: `${profileName} (${startTime} - ${endTime})، الجمعة إجازة - اضغط حفظ لتأكيد التغييرات` });
+    toast({ title: "تم تطبيق الجدول", description: `${profileName} (${startTime} - ${endTime})، ${DAYS_AR[applyRestDay]} إجازة - اضغط حفظ لتأكيد التغييرات` });
   };
 
   const getEmployeeShiftSelection = (empId: string) => {
@@ -789,12 +791,13 @@ export default function ShiftManagementPage() {
       }
       weekDates.forEach((date, index) => {
         const dateStr = format(date, "yyyy-MM-dd");
-        const isFriday = index === 6;
+        // التطبيق الفردي يبقى على الافتراضي (الجمعة إجازة) — اختيار يوم الراحة خاص بحوار "تطبيق على الجميع" فقط
+        const isRestDay = index === 6;
         newData[empId][dateStr] = {
           startTime,
           endTime,
-          isOff: isFriday,
-          shiftType: isFriday ? undefined : normalizedCode,
+          isOff: isRestDay,
+          shiftType: isRestDay ? undefined : normalizedCode,
         };
       });
       return newData;
@@ -2068,13 +2071,14 @@ export default function ShiftManagementPage() {
                         }
                       }} 
                       className={`gap-2 h-11 sm:h-9 ${isScheduleLocked ? "opacity-70" : ""}`} 
+                      disabled={selectedBranch === "all"}
                       data-testid="btn-apply-default"
                     >
                       {isScheduleLocked ? <Lock className="w-4 h-4" /> : <Users className="w-4 h-4" />}
                       {t("shiftManagement.applyAll")}
                       {isScheduleLocked && <Badge variant="outline" className="mr-1 text-[10px]">مقفل</Badge>}
                     </Button>
-                    <Button variant="outline" onClick={copyToNextWeek} className="gap-2 h-11 sm:h-9" data-testid="btn-copy-next-week">
+                    <Button variant="outline" onClick={copyToNextWeek} disabled={selectedBranch === "all"} className="gap-2 h-11 sm:h-9" data-testid="btn-copy-next-week">
                       <Copy className="w-4 h-4" />
                       {t("shiftManagement.copyToNextWeek")}
                     </Button>
@@ -2088,12 +2092,22 @@ export default function ShiftManagementPage() {
                       {isRTL ? "سجل التعديلات" : "Change Log"}
                     </Button>
                     {hasUnsavedChanges && (
-                      <Button onClick={() => saveSchedulesMutation.mutate()} disabled={saveSchedulesMutation.isPending} className="gap-2 h-11 sm:h-9" data-testid="btn-save-schedule">
+                      <Button onClick={() => saveSchedulesMutation.mutate()} disabled={saveSchedulesMutation.isPending || selectedBranch === "all"} className="gap-2 h-11 sm:h-9" data-testid="btn-save-schedule">
                         <Save className="w-4 h-4" />
                         {saveSchedulesMutation.isPending ? t("common.loading") : t("shiftManagement.save")}
                       </Button>
                     )}
                   </div>
+
+                  {selectedBranch === "all" && (
+                    <Alert className="mb-4 border-slate-200 bg-slate-50" data-testid="alert-all-branches-readonly">
+                      <Info className="h-4 w-4 text-slate-600" />
+                      <AlertTitle className="text-slate-800">وضع "كل الفروع" للعرض فقط</AlertTitle>
+                      <AlertDescription className="text-slate-700">
+                        اختر فرعاً محدداً من القائمة أعلاه لتتمكن من تعديل الجدول أو تطبيق الورديات أو النسخ للأسبوع القادم.
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
                   {pendingDraft && !hasUnsavedChanges && (
                     <Alert className="mb-4 border-blue-200 bg-blue-50" data-testid="alert-draft-available">
@@ -4074,10 +4088,26 @@ export default function ShiftManagementPage() {
                   <h4 className="font-semibold text-foreground">كيف يعمل هذا الزر:</h4>
                   <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
                     <li>سيتم تطبيق الوردية المختارة (<span className="font-semibold text-foreground">{activeShiftProfiles.find(p => p.shiftCode === selectedShiftProfile)?.displayName || selectedShiftProfile}</span>) على جميع الموظفين</li>
-                    <li>يوم <strong>الجمعة</strong> سيكون إجازة تلقائياً لجميع الموظفين</li>
+                    <li>يوم <strong>{DAYS_AR[applyRestDay]}</strong> سيكون إجازة تلقائياً لجميع الموظفين</li>
                     <li>بعد التطبيق، <strong>سيتم قفل هذا الزر</strong> لهذا الأسبوع</li>
                     <li>يمكنك تعديل جدول كل موظف بشكل فردي بعد القفل</li>
                   </ul>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Label className="whitespace-nowrap font-semibold text-foreground">يوم الراحة الأسبوعية:</Label>
+                  <Select value={String(applyRestDay)} onValueChange={(v) => setApplyRestDay(Number(v))}>
+                    <SelectTrigger className="w-40" data-testid="select-rest-day">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DAYS_AR.map((day, idx) => (
+                        <SelectItem key={idx} value={String(idx)} data-testid={`option-rest-day-${idx}`}>
+                          {day}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <Alert className="border-blue-200 bg-blue-50">

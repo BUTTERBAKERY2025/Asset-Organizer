@@ -63,11 +63,16 @@ localStorage (`shift-draft:{branch}:{weekStart}`, 7-day expiry, restore banner).
 fingerprint check is non-transactional (TOCTOU window) and ms-precision on updatedAt — good
 enough for human editing, not strict serialization.
 
+**"All branches" mode is view-only by design (2026-07-12):** apply/copy/save buttons are
+disabled + info banner when branch="all"; runtime toast guards remain as backstops.
+
+**Rest-day selector scope (2026-07-12):** the rest-day choice in the "تطبيق على الجميع"
+dialog applies ONLY to apply-to-all (default Friday, index 6 with Saturday week start).
+**Why:** per-employee quick-apply intentionally stays fixed on Friday — sharing the dialog's
+state silently changed individual applies (review-flagged UX ambiguity). Keep them decoupled.
+
 **Still-open gaps (not yet fixed):**
-- "all" branch mode can't schedule: bundle returns empty for branchId="all" and save sends
-  branchId="all" → server 400 (branch not found). No UI guard on save/apply for "all" (copy/export do guard).
 - Invalid times silently coerced to 08:00/16:00 in storage (console.warn only).
-- Friday (week starts Saturday, index===6) hardcoded as the off day in apply-profile helpers.
 
 **Inactive (terminated) employees are READ-ONLY, not hidden (decision 2026-06-04, Option A).**
 Their existing schedules stay VISIBLE in the grid + reports/exports, but cannot be created/edited/deleted.
