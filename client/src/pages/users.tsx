@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { TablePagination } from "@/components/ui/pagination";
-import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2, Wand2, Pencil, Search, X, Filter, KeyRound, Power } from "lucide-react";
+import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2, Wand2, Pencil, Search, X, Filter, KeyRound, Power, Copy } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
@@ -34,6 +34,64 @@ interface PermissionWithSource {
   roleName?: string;
   isActive: boolean;
   permissionId?: number;
+}
+
+const AR_TO_LATIN: Record<string, string> = {
+  "ا": "a", "أ": "a", "إ": "e", "آ": "a", "ب": "b", "ت": "t", "ث": "th", "ج": "j",
+  "ح": "h", "خ": "kh", "د": "d", "ذ": "th", "ر": "r", "ز": "z", "س": "s", "ش": "sh",
+  "ص": "s", "ض": "d", "ط": "t", "ظ": "z", "ع": "a", "غ": "gh", "ف": "f", "ق": "q",
+  "ك": "k", "ل": "l", "م": "m", "ن": "n", "ه": "h", "و": "w", "ي": "y", "ى": "a",
+  "ة": "h", "ء": "", "ئ": "e", "ؤ": "o",
+};
+
+function transliterate(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .split("")
+    .map((ch) => {
+      if (/[a-z0-9]/.test(ch)) return ch;
+      if (AR_TO_LATIN[ch] !== undefined) return AR_TO_LATIN[ch];
+      return "";
+    })
+    .join("");
+}
+
+function buildUsername(firstName: string, lastName: string, taken: Set<string>): string {
+  const first = transliterate(firstName);
+  const last = transliterate(lastName);
+  let base = first && last ? `${first}.${last}` : first || last;
+  if (!base) base = `user${Math.floor(1000 + Math.random() * 9000)}`;
+  base = base.slice(0, 20);
+  if (!taken.has(base)) return base;
+  for (let i = 1; i <= 99; i++) {
+    const candidate = `${base}${i}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return `${base}${Math.floor(100 + Math.random() * 900)}`;
+}
+
+function buildPassword(): string {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghjkmnpqrstuvwxyz";
+  const digits = "23456789";
+  const symbols = "@#$%*";
+  const rand = (chars: string) => {
+    const arr = new Uint32Array(1);
+    crypto.getRandomValues(arr);
+    return chars[arr[0] % chars.length];
+  };
+  const all = upper + lower + digits;
+  let pwd = rand(upper) + rand(lower) + rand(digits) + rand(symbols);
+  for (let i = 0; i < 6; i++) pwd += rand(all);
+  const arr = pwd.split("");
+  for (let i = arr.length - 1; i > 0; i--) {
+    const buf = new Uint32Array(1);
+    crypto.getRandomValues(buf);
+    const j = buf[0] % (i + 1);
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.join("");
 }
 
 const ROLES = [
@@ -112,6 +170,8 @@ export default function UsersPage() {
     }
   }, [authLoading, isAuthenticated, isAdmin, toast]);
 
+  const [showNewPassword, setShowNewPassword] = useState(false);
+
   const { data: users = [], isLoading } = useQuery<SafeUser[]>({
     queryKey: ["/api/users"],
     queryFn: async () => {
@@ -145,6 +205,7 @@ export default function UsersPage() {
       toast({ title: "تم إضافة المستخدم بنجاح" });
       setIsAddDialogOpen(false);
       setNewUser({ username: "", password: "", firstName: "", lastName: "", role: "viewer", branchIds: [] });
+      setShowNewPassword(false);
     },
     onError: (error: Error) => {
       toast({ title: error.message || "فشل إضافة المستخدم", variant: "destructive" });
@@ -709,7 +770,7 @@ export default function UsersPage() {
           title="إدارة المستخدمين"
           description="إضافة وتعديل وحذف المستخدمين وإدارة صلاحياتهم وفروعهم"
           actions={
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if (!open) setShowNewPassword(false); }}>
             <DialogTrigger asChild>
               <Button size="sm" className="bg-white text-violet-700 hover:bg-violet-50 shadow-md font-semibold" data-testid="button-add-user">
                 <Plus className="w-4 h-4 ml-2" />
@@ -745,7 +806,22 @@ export default function UsersPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="username">اسم المستخدم *</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="username">اسم المستخدم *</Label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const taken = new Set(users.map(u => (u.username || "").toLowerCase()));
+                        const generated = buildUsername(newUser.firstName, newUser.lastName, taken);
+                        setNewUser({ ...newUser, username: generated });
+                      }}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                      data-testid="btn-generate-username"
+                    >
+                      <Wand2 className="w-3.5 h-3.5" />
+                      توليد تلقائي
+                    </button>
+                  </div>
                   <Input
                     id="username"
                     type="text"
@@ -757,21 +833,68 @@ export default function UsersPage() {
                     required
                     data-testid="input-username"
                   />
+                  <p className="text-[11px] text-muted-foreground">يُولَّد من الاسم الأول واسم العائلة — أدخلهما أولاً للحصول على اسم أفضل</p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">كلمة المرور *</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={newUser.password}
-                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                    placeholder="••••••••"
-                    className="text-left h-11 sm:h-10"
-                    dir="ltr"
-                    required
-                    autoComplete="new-password"
-                    data-testid="input-password"
-                  />
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">كلمة المرور *</Label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewUser({ ...newUser, password: buildPassword() });
+                        setShowNewPassword(true);
+                      }}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                      data-testid="btn-generate-password"
+                    >
+                      <Wand2 className="w-3.5 h-3.5" />
+                      توليد تلقائي
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showNewPassword ? "text" : "password"}
+                      value={newUser.password}
+                      onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                      placeholder="••••••••"
+                      className="text-left h-11 sm:h-10 pe-16"
+                      dir="ltr"
+                      required
+                      autoComplete="new-password"
+                      data-testid="input-password"
+                    />
+                    <div className="absolute end-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(v => !v)}
+                        className="p-1 text-muted-foreground hover:text-foreground"
+                        title={showNewPassword ? "إخفاء" : "إظهار"}
+                        data-testid="btn-toggle-password-visibility"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      {newUser.password && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(newUser.password);
+                              toast({ title: "تم نسخ كلمة المرور" });
+                            } catch {
+                              toast({ title: "تعذّر النسخ — انسخها يدوياً", variant: "destructive" });
+                            }
+                          }}
+                          className="p-1 text-muted-foreground hover:text-foreground"
+                          title="نسخ"
+                          data-testid="btn-copy-password"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">انسخ كلمة المرور وسلّمها للموظف — لن تظهر مرة أخرى بعد الحفظ</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="role">الصلاحية</Label>
