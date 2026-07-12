@@ -66,16 +66,8 @@ export default function ShiftManagementPage() {
   const [showLockedDialog, setShowLockedDialog] = useState(false);
   const [showAuditTrail, setShowAuditTrail] = useState(false);
   const [showApplyConfirmDialog, setShowApplyConfirmDialog] = useState(false);
-
-  useEffect(() => {
-    if (!hasUnsavedChanges) return;
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [hasUnsavedChanges]);
+  const [showConflictDialog, setShowConflictDialog] = useState(false);
+  const [pendingDraft, setPendingDraft] = useState<{ savedAt: number; data: Record<string, Record<string, ScheduleCell>> } | null>(null);
   
   // Report filter states
   const [reportPeriod, setReportPeriod] = useState<string>("thisWeek");
@@ -126,6 +118,7 @@ export default function ShiftManagementPage() {
     attendance: AttendanceRecord[];
     weeklyLock: WeeklyScheduleLock[];
     approvedLeaves?: { id: number; branchEmployeeId: number; leaveType: string; startDate: string; endDate: string }[];
+    scheduleVersion?: string;
   }>({
     queryKey: ["/api/shift-management/bundle", selectedBranch, startDateStr, endDateStr],
     queryFn: async () => {
@@ -146,6 +139,87 @@ export default function ShiftManagementPage() {
   const attendanceRecords = shiftBundle?.attendance;
   const weeklyLock = shiftBundle?.weeklyLock;
   const approvedLeaves = shiftBundle?.approvedLeaves;
+  const scheduleVersion = shiftBundle?.scheduleVersion;
+
+  // ===== مسودة تلقائية: حفظ التعديلات غير المحفوظة محلياً واسترجاعها بعد انقطاع =====
+  const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // أسبوع
+  const draftKey = `shift-draft:${selectedBranch}:${startDateStr}`;
+
+  const writeDraft = () => {
+    if (selectedBranch === "all") return;
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({ savedAt: Date.now(), data: scheduleData }));
+    } catch { /* التخزين ممتلئ أو معطل - نتجاهل */ }
+  };
+  const clearDraft = () => {
+    try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
+  };
+
+  // تحذير قبل مغادرة الصفحة + حفظ المسودة فوراً (حماية من إغلاق المتصفح المفاجئ)
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      writeDraft();
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  });
+
+  // حفظ تلقائي للمسودة كل ثانية ونصف أثناء التعديل
+  useEffect(() => {
+    if (!hasUnsavedChanges || selectedBranch === "all") return;
+    const t = setTimeout(writeDraft, 1500);
+    return () => clearTimeout(t);
+  }, [scheduleData, hasUnsavedChanges, draftKey, selectedBranch]);
+
+  // تنظيف المسودات القديمة (أقدم من أسبوع) مرة واحدة عند فتح الصفحة
+  useEffect(() => {
+    try {
+      const stale: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || !k.startsWith("shift-draft:")) continue;
+        try {
+          const p = JSON.parse(localStorage.getItem(k) || "{}");
+          if (!p?.savedAt || Date.now() - p.savedAt > DRAFT_MAX_AGE_MS) stale.push(k);
+        } catch { stale.push(k); }
+      }
+      stale.forEach(k => localStorage.removeItem(k));
+    } catch { /* ignore */ }
+  }, []);
+
+  // عند فتح أسبوع/فرع: لو وُجدت مسودة غير محفوظة نعرض شريط الاسترجاع
+  useEffect(() => {
+    if (isBundlePlaceholder || selectedBranch === "all" || !selectedBranch) return;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) { setPendingDraft(null); return; }
+      const parsed = JSON.parse(raw);
+      if (!parsed?.data || typeof parsed.data !== "object" || !parsed?.savedAt || Date.now() - parsed.savedAt > DRAFT_MAX_AGE_MS) {
+        localStorage.removeItem(draftKey);
+        setPendingDraft(null);
+        return;
+      }
+      setPendingDraft(parsed);
+    } catch {
+      setPendingDraft(null);
+    }
+  }, [draftKey, isBundlePlaceholder, selectedBranch]);
+
+  const restoreDraft = () => {
+    if (!pendingDraft) return;
+    setScheduleData(pendingDraft.data);
+    setHasUnsavedChanges(true);
+    setPendingDraft(null);
+    toast({ title: "تم استرجاع المسودة", description: "راجع التعديلات ثم اضغط حفظ الجدول لاعتمادها" });
+  };
+  const discardDraft = () => {
+    clearDraft();
+    setPendingDraft(null);
+  };
+  // ===== نهاية المسودة التلقائية =====
 
   // إجازات معتمدة من نظام الإجازات: تظهر في الجدول كأيام مقفلة ولا تُحسب من
   // حد الراحة الأسبوعية (4 أيام بالشهر). المفتاح: branchEmployeeId
@@ -424,7 +498,7 @@ export default function ShiftManagementPage() {
   };
 
   const saveSchedulesMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (opts?: { force?: boolean }) => {
       if (selectedBranch === "all") {
         throw new Error("يرجى اختيار فرع محدد قبل الحفظ - لا يمكن حفظ الجدول في وضع \"كل الفروع\"");
       }
@@ -475,7 +549,18 @@ export default function ShiftManagementPage() {
         throw new Error("لا توجد بيانات جداول للحفظ - تأكد من وجود موظفين نشطين في الفرع");
       }
 
-      const res = await apiRequest("POST", "/api/employee-schedules/bulk", { schedules });
+      const res = await apiRequest("POST", "/api/employee-schedules/bulk", {
+        schedules,
+        // كشف تعارض التعديل المزدوج: نرسل نسخة الجدول التي حمّلناها، والسيرفر
+        // يرفض الحفظ (409) لو عدّل مستخدم آخر نفس الأسبوع منذ فتحنا الصفحة
+        baseline: scheduleVersion != null ? {
+          branchId: selectedBranch,
+          startDate: startDateStr,
+          endDate: endDateStr,
+          version: scheduleVersion,
+        } : undefined,
+        force: opts?.force === true,
+      });
       const contentType = res.headers.get("content-type") || "";
       if (!contentType.includes("application/json")) {
         throw new Error(`خطأ في الخادم (${res.status}) - يرجى المحاولة مرة أخرى`);
@@ -505,6 +590,7 @@ export default function ShiftManagementPage() {
         });
       } else {
         setHasUnsavedChanges(false);
+        clearDraft();
         if (warnings.length > 0) {
           toast({ 
             title: `تم حفظ ${data.saved || 0} من ${data.total || 0} جدول`,
@@ -517,6 +603,11 @@ export default function ShiftManagementPage() {
     },
     onError: (error: any) => {
       const rawMsg = error?.message || "خطأ غير معروف";
+      // تعارض تعديل مزدوج: مستخدم آخر عدّل نفس الأسبوع - نعرض حوار الاختيار بدل رسالة خطأ
+      if (rawMsg.includes("SCHEDULE_CONFLICT")) {
+        setShowConflictDialog(true);
+        return;
+      }
       let cleanMsg = rawMsg;
       if (rawMsg.includes("<!DOCTYPE") || rawMsg.includes("<html")) {
         const statusMatch = rawMsg.match(/^(\d{3}):/);
@@ -2003,6 +2094,69 @@ export default function ShiftManagementPage() {
                       </Button>
                     )}
                   </div>
+
+                  {pendingDraft && !hasUnsavedChanges && (
+                    <Alert className="mb-4 border-blue-200 bg-blue-50" data-testid="alert-draft-available">
+                      <History className="h-4 w-4 text-blue-600" />
+                      <AlertTitle className="text-blue-800">لديك مسودة غير محفوظة</AlertTitle>
+                      <AlertDescription className="text-blue-700">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span>
+                            وُجدت تعديلات لم تُحفظ لهذا الأسبوع (آخر تعديل: {format(new Date(pendingDraft.savedAt), "yyyy-MM-dd HH:mm", { locale: ar })}). هل تريد استرجاعها؟
+                          </span>
+                          <Button size="sm" onClick={restoreDraft} className="h-8" data-testid="btn-restore-draft">
+                            استرجاع المسودة
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={discardDraft} className="h-8" data-testid="btn-discard-draft">
+                            تجاهل
+                          </Button>
+                        </div>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <Dialog open={showConflictDialog} onOpenChange={setShowConflictDialog}>
+                    <DialogContent dir="rtl">
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                          <AlertTriangle className="w-5 h-5 text-amber-500" />
+                          تعارض في التعديل
+                        </DialogTitle>
+                        <DialogDescription className="text-right leading-relaxed">
+                          قام مستخدم آخر بتعديل جدول هذا الأسبوع منذ فتحك للصفحة.
+                          لو حفظت الآن ستمسح تعديلاته. ماذا تريد أن تفعل؟
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter className="flex-col sm:flex-row gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={async () => {
+                            setShowConflictDialog(false);
+                            clearDraft();
+                            setHasUnsavedChanges(false);
+                            await queryClient.refetchQueries({ queryKey: ["/api/shift-management/bundle", selectedBranch, startDateStr, endDateStr] });
+                            toast({ title: "تم تحديث الجدول", description: "هذه أحدث نسخة محفوظة - تعديلاتك المحلية أُلغيت" });
+                          }}
+                          data-testid="btn-conflict-refresh"
+                        >
+                          تحديث وعرض تعديلاته (إلغاء تعديلاتي)
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={() => {
+                            setShowConflictDialog(false);
+                            saveSchedulesMutation.mutate({ force: true });
+                          }}
+                          data-testid="btn-conflict-force-save"
+                        >
+                          الحفظ فوق تعديلاته
+                        </Button>
+                        <Button variant="ghost" onClick={() => setShowConflictDialog(false)} data-testid="btn-conflict-cancel">
+                          متابعة التعديل
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
 
                   {isScheduleLocked && currentLock && (
                     <Alert className="mb-4 border-amber-200 bg-amber-50">

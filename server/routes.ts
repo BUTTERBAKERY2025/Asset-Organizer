@@ -25472,6 +25472,21 @@ export async function registerRoutes(
 
   const WEEKLY_REST_CAP_MESSAGE = `تجاوز الحد الأقصى للراحة الأسبوعية المدفوعة (${WEEKLY_REST_MONTHLY_CAP} أيام في الشهر الواحد). أي أيام إضافية يجب تقديمها كطلب إجازة رسمي من نظام الإجازات`;
 
+  // CONFLICT DETECTION: fingerprint of a week's schedule rows. All schedule write
+  // paths bump updated_at (single create-or-update, bulk ON CONFLICT ... updated_at
+  // = NOW(), PATCH), inserts bump maxId, and deletes change the count — so any
+  // concurrent modification changes this version string.
+  function computeScheduleStateVersion(rows: Array<{ id: number; updatedAt: Date | string | null }>): string {
+    let maxId = 0;
+    let maxUpdated = 0;
+    for (const r of rows) {
+      if (r.id > maxId) maxId = r.id;
+      const t = r.updatedAt ? new Date(r.updatedAt as any).getTime() : 0;
+      if (t > maxUpdated) maxUpdated = t;
+    }
+    return `${rows.length}:${maxId}:${maxUpdated}`;
+  }
+
   app.post("/api/employee-schedules", isAuthenticated, requirePermission("shifts", "create"), async (req, res) => {
     try {
       // SECURITY: Verify branch access for non-admin users
@@ -25657,7 +25672,31 @@ export async function registerRoutes(
           });
         }
       }
-      
+
+      // CONFLICT DETECTION: if the client sends the schedule version it loaded
+      // (from the bundle), reject the save when another user modified this week's
+      // rows in the meantime — instead of silently overwriting their changes.
+      // The client may resend with force=true after explicit user confirmation.
+      const __baseline = req.body?.baseline;
+      const __force = req.body?.force === true;
+      if (__baseline?.version != null && !__force) {
+        const bBranch = String(__baseline.branchId || "");
+        const bStart = String(__baseline.startDate || "");
+        const bEnd = String(__baseline.endDate || "");
+        const payloadBranches = new Set(validatedSchedules.map((s: any) => s.branchId));
+        if (bBranch && payloadBranches.has(bBranch) && CANONICAL_DATE.test(bStart) && CANONICAL_DATE.test(bEnd) && bStart <= bEnd) {
+          const currentRows = await storage.getEmployeeSchedulesByBranchAndDateRange(bBranch, bStart, bEnd);
+          const currentVersion = computeScheduleStateVersion(currentRows as any);
+          if (currentVersion !== String(__baseline.version)) {
+            console.warn(`[CONFLICT] Bulk save rejected: week ${bStart} branch ${bBranch} changed (loaded=${__baseline.version}, current=${currentVersion})`);
+            return res.status(409).json({
+              error: "تم تعديل جدول هذا الأسبوع بواسطة مستخدم آخر منذ فتحك للصفحة. يمكنك تحديث الصفحة لمراجعة تعديلاته أولاً، أو الحفظ فوقها.",
+              code: "SCHEDULE_CONFLICT",
+            });
+          }
+        }
+      }
+
       console.log(`[BULK SCHEDULES] Saving ${validatedSchedules.length} schedules for branch ${validatedSchedules[0]?.branchId}`);
       const { results: created, errors: saveErrors } = await storage.createBulkEmployeeSchedules(validatedSchedules);
       console.log(`[BULK SCHEDULES] Saved ${created.length}/${validatedSchedules.length}, errors: ${saveErrors.length}`);
@@ -30223,7 +30262,10 @@ export async function registerRoutes(
         (e: any) => e.status === "active" || scheduledEmpIds.has(e.id)
       );
 
-      res.json({ shiftProfiles, employees, schedules, attendance, weeklyLock, approvedLeaves });
+      // نسخة حالة الجدول: يستخدمها العميل لاكتشاف تعارض التعديل المزدوج عند الحفظ
+      const scheduleVersion = computeScheduleStateVersion(schedules as any[]);
+
+      res.json({ shiftProfiles, employees, schedules, attendance, weeklyLock, approvedLeaves, scheduleVersion });
     } catch (error) {
       console.error("Error fetching shift management bundle:", error);
       res.status(500).json({ error: "فشل في جلب بيانات إدارة الورديات" });

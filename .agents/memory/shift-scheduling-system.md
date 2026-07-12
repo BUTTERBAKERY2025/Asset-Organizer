@@ -55,10 +55,17 @@ keeps/adds ≥1 off-day (so legacy over-cap months stay editable downward). Days
 leave_requests never count and render as locked amber "إجازة معتمدة" cells via bundle's
 `approvedLeaves`; client save & copy-to-next-week skip leave-covered TARGET dates.
 
+**Optimistic concurrency + local drafts:** bundle returns `scheduleVersion`
+("count:maxId:maxUpdatedMs" over the week's rows); bulk save sends it as `baseline` and gets
+409 SCHEDULE_CONFLICT if another user changed the week (client dialog: refresh/force/cancel;
+`force:true` skips only this check, no privilege change). Unsaved grid edits also autosave to
+localStorage (`shift-draft:{branch}:{weekStart}`, 7-day expiry, restore banner). **Limits:**
+fingerprint check is non-transactional (TOCTOU window) and ms-precision on updatedAt — good
+enough for human editing, not strict serialization.
+
 **Still-open gaps (not yet fixed):**
 - "all" branch mode can't schedule: bundle returns empty for branchId="all" and save sends
   branchId="all" → server 400 (branch not found). No UI guard on save/apply for "all" (copy/export do guard).
-- No optimistic/row versioning → concurrent editors of same branch+week silently overwrite (last-write-wins) until locked.
 - Invalid times silently coerced to 08:00/16:00 in storage (console.warn only).
 - Friday (week starts Saturday, index===6) hardcoded as the off day in apply-profile helpers.
 
