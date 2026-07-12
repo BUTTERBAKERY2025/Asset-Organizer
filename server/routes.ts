@@ -25273,6 +25273,205 @@ export async function registerRoutes(
     return null;
   }
 
+  // ── Weekly-rest monthly cap (الراحة الأسبوعية) ──────────────────────────────
+  // Business rule: at most 4 paid weekly-rest days (isOff) per employee per
+  // CALENDAR MONTH may be granted through shift scheduling. Anything beyond
+  // that must go through the formal leave-request system (نظام الإجازات).
+  // Days covered by an APPROVED leave request do NOT count toward the cap.
+  // Enforced server-side on all schedule write routes (single/bulk/PATCH);
+  // identity is dual (branchEmployeeId int is canonical, employeeId string is
+  // legacy) so existing rows are matched by BOTH forms.
+  const WEEKLY_REST_MONTHLY_CAP = 4;
+  async function validateMonthlyWeeklyRestCap(rows: {
+    employeeId?: string | null;
+    branchEmployeeId?: number | null;
+    employeeName?: string | null;
+    scheduleDate: string;
+    isOff?: boolean | null;
+  }[]): Promise<string[]> {
+    const valid = rows.filter((r) => CANONICAL_DATE.test(String(r.scheduleDate || "")));
+    if (valid.length === 0) return [];
+
+    // Resolve user-UUID employeeIds to canonical branchEmployee ids.
+    const uuidToResolve = new Set<string>();
+    for (const r of valid) {
+      if (!r.branchEmployeeId && typeof r.employeeId === "string" && r.employeeId && !r.employeeId.startsWith("branch_emp_")) {
+        uuidToResolve.add(r.employeeId);
+      }
+    }
+    const linkedMap = new Map<string, number>();
+    if (uuidToResolve.size > 0) {
+      const linkedRows = await db
+        .select({ id: branchEmployees.id, linkedUserId: branchEmployees.linkedUserId })
+        .from(branchEmployees)
+        .where(inArray(branchEmployees.linkedUserId, Array.from(uuidToResolve)));
+      for (const lr of linkedRows) if (lr.linkedUserId) linkedMap.set(lr.linkedUserId, lr.id);
+    }
+    const keyOf = (r: { employeeId?: string | null; branchEmployeeId?: number | null }): string => {
+      if (r.branchEmployeeId) return `be:${r.branchEmployeeId}`;
+      const e = String(r.employeeId || "");
+      if (e.startsWith("branch_emp_")) {
+        const n = parseInt(e.slice("branch_emp_".length), 10);
+        if (!isNaN(n)) return `be:${n}`;
+      }
+      const resolved = linkedMap.get(e);
+      if (resolved) return `be:${resolved}`;
+      return `e:${e}`;
+    };
+
+    // Group incoming rows by employee-key + calendar month.
+    type MonthData = { incoming: Map<string, boolean>; existing: Map<string, boolean> };
+    type Group = { months: Map<string, MonthData>; name: string };
+    const groups = new Map<string, Group>();
+    let minDate = "9999-12-31";
+    let maxDate = "0000-01-01";
+    for (const r of valid) {
+      const k = keyOf(r);
+      const ym = r.scheduleDate.slice(0, 7);
+      let g = groups.get(k);
+      if (!g) {
+        g = { months: new Map(), name: String(r.employeeName || "") };
+        groups.set(k, g);
+      }
+      if (!g.name && r.employeeName) g.name = String(r.employeeName);
+      let m = g.months.get(ym);
+      if (!m) {
+        m = { incoming: new Map(), existing: new Map() };
+        g.months.set(ym, m);
+      }
+      m.incoming.set(r.scheduleDate, Boolean(r.isOff));
+      const ms = `${ym}-01`;
+      const me = `${ym}-31`;
+      if (ms < minDate) minDate = ms;
+      if (me > maxDate) maxDate = me;
+    }
+
+    const beIds: number[] = [];
+    for (const k of Array.from(groups.keys())) if (k.startsWith("be:")) beIds.push(Number(k.slice(3)));
+
+    // Build identity-string lookup (legacy forms) + fill employee names.
+    const beRows = beIds.length > 0
+      ? await db
+          .select({ id: branchEmployees.id, linkedUserId: branchEmployees.linkedUserId, employeeName: branchEmployees.employeeName })
+          .from(branchEmployees)
+          .where(inArray(branchEmployees.id, beIds))
+      : [];
+    const idStrings = new Set<string>();
+    const keyByIdString = new Map<string, string>();
+    for (const be of beRows) {
+      const k = `be:${be.id}`;
+      const g = groups.get(k);
+      if (g && !g.name && be.employeeName) g.name = be.employeeName;
+      idStrings.add(`branch_emp_${be.id}`);
+      keyByIdString.set(`branch_emp_${be.id}`, k);
+      if (be.linkedUserId) {
+        idStrings.add(be.linkedUserId);
+        keyByIdString.set(be.linkedUserId, k);
+      }
+    }
+    for (const k of Array.from(groups.keys())) {
+      if (k.startsWith("e:")) {
+        const e = k.slice(2);
+        if (e) {
+          idStrings.add(e);
+          keyByIdString.set(e, k);
+        }
+      }
+    }
+
+    // Existing schedule rows in the touched months for these employees.
+    const identityConds: SQL[] = [];
+    if (beIds.length > 0) identityConds.push(inArray(employeeSchedules.branchEmployeeId, beIds));
+    if (idStrings.size > 0) identityConds.push(inArray(employeeSchedules.employeeId, Array.from(idStrings)));
+    const existingRows = identityConds.length > 0
+      ? await db
+          .select({
+            employeeId: employeeSchedules.employeeId,
+            branchEmployeeId: employeeSchedules.branchEmployeeId,
+            scheduleDate: employeeSchedules.scheduleDate,
+            isOff: employeeSchedules.isOff,
+          })
+          .from(employeeSchedules)
+          .where(and(
+            gte(employeeSchedules.scheduleDate, minDate),
+            lte(employeeSchedules.scheduleDate, maxDate),
+            or(...identityConds),
+          ))
+      : [];
+
+    // Approved leaves overlapping the touched months — those days never count.
+    const approvedLeaveRows = beIds.length > 0
+      ? await db
+          .select({
+            branchEmployeeId: leaveRequests.branchEmployeeId,
+            startDate: leaveRequests.startDate,
+            endDate: leaveRequests.endDate,
+          })
+          .from(leaveRequests)
+          .where(and(
+            inArray(leaveRequests.branchEmployeeId, beIds),
+            eq(leaveRequests.status, "approved"),
+            lte(leaveRequests.startDate, maxDate),
+            gte(leaveRequests.endDate, minDate),
+          ))
+      : [];
+    const leavesByKey = new Map<string, { s: string; e: string }[]>();
+    for (const lv of approvedLeaveRows) {
+      const k = `be:${lv.branchEmployeeId}`;
+      if (!leavesByKey.has(k)) leavesByKey.set(k, []);
+      leavesByKey.get(k)!.push({ s: lv.startDate, e: lv.endDate });
+    }
+
+    // Merge existing rows: legacy (string-id) rows first, canonical rows second,
+    // so on date collisions the canonical row wins.
+    const sortedExisting = [...existingRows].sort(
+      (a, b) => (a.branchEmployeeId ? 1 : 0) - (b.branchEmployeeId ? 1 : 0),
+    );
+    for (const ex of sortedExisting) {
+      const k = ex.branchEmployeeId ? `be:${ex.branchEmployeeId}` : keyByIdString.get(String(ex.employeeId || ""));
+      if (!k) continue;
+      const g = groups.get(k);
+      if (!g) continue;
+      const date = String(ex.scheduleDate || "");
+      const m = g.months.get(date.slice(0, 7));
+      if (!m) continue;
+      m.existing.set(date, Boolean(ex.isOff));
+    }
+
+    // Count final off-days per employee-month; incoming rows override existing.
+    const monthLabel = (ym: string) => {
+      const [y, mo] = ym.split("-");
+      return `${mo}/${y}`;
+    };
+    const violations: string[] = [];
+    for (const [k, g] of Array.from(groups.entries())) {
+      const empLeaves = leavesByKey.get(k) || [];
+      const coveredByLeave = (date: string) => empLeaves.some((lv) => date >= lv.s && date <= lv.e);
+      for (const [ym, m] of Array.from(g.months.entries())) {
+        // Only enforce when this save actually adds/keeps at least one off-day.
+        let incomingHasOff = false;
+        m.incoming.forEach((v) => { if (v) incomingHasOff = true; });
+        if (!incomingHasOff) continue;
+        const allDates = new Set<string>();
+        m.incoming.forEach((_v, d) => allDates.add(d));
+        m.existing.forEach((_v, d) => allDates.add(d));
+        let offCount = 0;
+        allDates.forEach((d) => {
+          const isOff = m.incoming.has(d) ? m.incoming.get(d)! : m.existing.get(d)!;
+          if (isOff && !coveredByLeave(d)) offCount++;
+        });
+        if (offCount > WEEKLY_REST_MONTHLY_CAP) {
+          violations.push(
+            `${g.name || "موظف"}: سيصبح عدد أيام الراحة الأسبوعية ${offCount} أيام في شهر ${monthLabel(ym)} والحد الأقصى ${WEEKLY_REST_MONTHLY_CAP} أيام`,
+          );
+        }
+      }
+    }
+    return violations;
+  }
+
+  const WEEKLY_REST_CAP_MESSAGE = `تجاوز الحد الأقصى للراحة الأسبوعية المدفوعة (${WEEKLY_REST_MONTHLY_CAP} أيام في الشهر الواحد). أي أيام إضافية يجب تقديمها كطلب إجازة رسمي من نظام الإجازات`;
+
   app.post("/api/employee-schedules", isAuthenticated, requirePermission("shifts", "create"), async (req, res) => {
     try {
       // SECURITY: Verify branch access for non-admin users
@@ -25311,6 +25510,17 @@ export async function registerRoutes(
       const __inactiveName = await resolveInactiveScheduleTarget(validatedData.branchEmployeeId, validatedData.employeeId);
       if (__inactiveName) {
         return res.status(409).json({ error: `لا يمكن حفظ جدول لموظف غير نشط (${__inactiveName}) - جدوله للعرض فقط` });
+      }
+      // WEEKLY-REST CAP: max 4 paid weekly-rest (isOff) days per employee per month.
+      if (validatedData.isOff) {
+        const __capViolations = await validateMonthlyWeeklyRestCap([validatedData as any]);
+        if (__capViolations.length > 0) {
+          return res.status(400).json({
+            error: `${WEEKLY_REST_CAP_MESSAGE}. ${__capViolations[0]}`,
+            code: "WEEKLY_REST_CAP_EXCEEDED",
+            details: __capViolations,
+          });
+        }
       }
       const schedule = await storage.createEmployeeSchedule(validatedData);
       res.status(201).json(schedule);
@@ -25420,6 +25630,16 @@ export async function registerRoutes(
         });
       }
 
+      // WEEKLY-REST CAP: max 4 paid weekly-rest (isOff) days per employee per month.
+      const __capViolations = await validateMonthlyWeeklyRestCap(validatedSchedules);
+      if (__capViolations.length > 0) {
+        return res.status(400).json({
+          error: `${WEEKLY_REST_CAP_MESSAGE}. ${__capViolations.slice(0, 3).join(" | ")}`,
+          code: "WEEKLY_REST_CAP_EXCEEDED",
+          details: __capViolations.slice(0, 10),
+        });
+      }
+
       // LOCK ENFORCEMENT: a locked week cannot be overwritten via bulk save (this
       // also covers "copy to next week" and any direct API call). Admins may bypass
       // — there is no separate unlock screen, so admin acts as the override path.
@@ -25513,6 +25733,39 @@ export async function registerRoutes(
       }
 
       const partialData = insertEmployeeScheduleSchema.partial().parse(req.body);
+
+      // WEEKLY-REST CAP: validate the merged (existing + patch) row when the
+      // result is an off-day; if the date moves, neutralize the old date so the
+      // month count reflects the post-update state.
+      const __mergedIsOff = partialData.isOff ?? __patchExisting?.isOff ?? false;
+      const __mergedDate = partialData.scheduleDate ?? __patchExisting?.scheduleDate;
+      if (__mergedIsOff && __mergedDate) {
+        const __capRows: any[] = [{
+          employeeId: partialData.employeeId ?? __patchExisting?.employeeId,
+          branchEmployeeId: partialData.branchEmployeeId ?? __patchExisting?.branchEmployeeId,
+          employeeName: (partialData as any).employeeName ?? __patchExisting?.employeeName,
+          scheduleDate: __mergedDate,
+          isOff: true,
+        }];
+        if (__patchExisting?.scheduleDate && __patchExisting.scheduleDate !== __mergedDate) {
+          __capRows.push({
+            employeeId: __patchExisting.employeeId,
+            branchEmployeeId: __patchExisting.branchEmployeeId,
+            employeeName: __patchExisting.employeeName,
+            scheduleDate: __patchExisting.scheduleDate,
+            isOff: false,
+          });
+        }
+        const __capViolations = await validateMonthlyWeeklyRestCap(__capRows);
+        if (__capViolations.length > 0) {
+          return res.status(400).json({
+            error: `${WEEKLY_REST_CAP_MESSAGE}. ${__capViolations[0]}`,
+            code: "WEEKLY_REST_CAP_EXCEEDED",
+            details: __capViolations,
+          });
+        }
+      }
+
       const schedule = await storage.updateEmployeeSchedule(id, partialData);
       if (!schedule) return res.status(404).json({ error: "الجدول غير موجود" });
       invalidateCache("schedules");
@@ -29902,7 +30155,7 @@ export async function registerRoutes(
       const endDate = req.query.endDate as string;
 
       if (!branchId || branchId === "all") {
-        return res.json({ shiftProfiles: [], employees: [], schedules: [], attendance: [], weeklyLock: [] });
+        return res.json({ shiftProfiles: [], employees: [], schedules: [], attendance: [], weeklyLock: [], approvedLeaves: [] });
       }
 
       if (!isUserAdmin(req)) {
@@ -29912,7 +30165,7 @@ export async function registerRoutes(
         }
       }
 
-      const [shiftProfiles, allBranchEmployees, schedules, attendance, weeklyLock] = await Promise.all([
+      const [shiftProfiles, allBranchEmployees, schedules, attendance, weeklyLock, approvedLeaves] = await Promise.all([
         storage.getBranchShiftProfiles(branchId).catch(() => []),
         storage.getBranchEmployeesByBranch(branchId).catch(() => []),
         (startDate && endDate)
@@ -29926,6 +30179,24 @@ export async function registerRoutes(
               and(
                 eq(weeklyScheduleLocks.branchId, branchId),
                 eq(weeklyScheduleLocks.weekStartDate, startDate)
+              )
+            ).catch(() => [])
+          : Promise.resolve([]),
+        // Approved leaves overlapping this range: shown in the grid as locked
+        // "إجازة معتمدة" days (never editable, never counted as weekly rest).
+        (startDate && endDate)
+          ? db.select({
+              id: leaveRequests.id,
+              branchEmployeeId: leaveRequests.branchEmployeeId,
+              leaveType: leaveRequests.leaveType,
+              startDate: leaveRequests.startDate,
+              endDate: leaveRequests.endDate,
+            }).from(leaveRequests).where(
+              and(
+                eq(leaveRequests.branchId, branchId),
+                eq(leaveRequests.status, "approved"),
+                lte(leaveRequests.startDate, endDate),
+                gte(leaveRequests.endDate, startDate),
               )
             ).catch(() => [])
           : Promise.resolve([]),
@@ -29952,7 +30223,7 @@ export async function registerRoutes(
         (e: any) => e.status === "active" || scheduledEmpIds.has(e.id)
       );
 
-      res.json({ shiftProfiles, employees, schedules, attendance, weeklyLock });
+      res.json({ shiftProfiles, employees, schedules, attendance, weeklyLock, approvedLeaves });
     } catch (error) {
       console.error("Error fetching shift management bundle:", error);
       res.status(500).json({ error: "فشل في جلب بيانات إدارة الورديات" });

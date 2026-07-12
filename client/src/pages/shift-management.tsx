@@ -125,6 +125,7 @@ export default function ShiftManagementPage() {
     schedules: EmployeeSchedule[];
     attendance: AttendanceRecord[];
     weeklyLock: WeeklyScheduleLock[];
+    approvedLeaves?: { id: number; branchEmployeeId: number; leaveType: string; startDate: string; endDate: string }[];
   }>({
     queryKey: ["/api/shift-management/bundle", selectedBranch, startDateStr, endDateStr],
     queryFn: async () => {
@@ -144,6 +145,30 @@ export default function ShiftManagementPage() {
   const employeeSchedules = shiftBundle?.schedules;
   const attendanceRecords = shiftBundle?.attendance;
   const weeklyLock = shiftBundle?.weeklyLock;
+  const approvedLeaves = shiftBundle?.approvedLeaves;
+
+  // إجازات معتمدة من نظام الإجازات: تظهر في الجدول كأيام مقفلة ولا تُحسب من
+  // حد الراحة الأسبوعية (4 أيام بالشهر). المفتاح: branchEmployeeId
+  const approvedLeavesByEmp = useMemo(() => {
+    const map = new Map<number, { leaveType: string; startDate: string; endDate: string }[]>();
+    for (const lv of approvedLeaves || []) {
+      if (!map.has(lv.branchEmployeeId)) map.set(lv.branchEmployeeId, []);
+      map.get(lv.branchEmployeeId)!.push(lv);
+    }
+    return map;
+  }, [approvedLeaves]);
+
+  const getApprovedLeaveForDay = (branchEmployeeId: number, dateStr: string) => {
+    const list = approvedLeavesByEmp.get(branchEmployeeId);
+    if (!list) return null;
+    return list.find((lv) => dateStr >= lv.startDate && dateStr <= lv.endDate) || null;
+  };
+
+  const LEAVE_TYPE_LABELS: Record<string, string> = {
+    annual: "سنوية", sick: "مرضية", emergency: "طارئة", maternity: "أمومة",
+    paternity: "أبوة", unpaid: "بدون راتب", hajj: "حج", marriage: "زواج",
+    bereavement: "وفاة", other: "أخرى",
+  };
 
   const { data: users } = useQuery<User[]>({ queryKey: [`/api/branch-cashiers${selectedBranch && selectedBranch !== "all" ? `?branchId=${selectedBranch}` : ""}`] });
   const { data: periods } = useQuery<SchedulePeriod[]>({
@@ -424,6 +449,8 @@ export default function ShiftManagementPage() {
         if (employee.status !== "active") return; // #6: inactive employees are read-only, never saved
         Object.entries(dates).forEach(([dateStr, data]) => {
           if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
+          // أيام الإجازات المعتمدة من نظام الإجازات مقفلة — لا تُحفظ من الجدول
+          if (getApprovedLeaveForDay(employee.id, dateStr)) return;
           const shiftType = data.isOff ? null : normalizeShiftType(data.shiftType, data.startTime || "08:00");
           const date = new Date(dateStr + "T12:00:00");
           const dayOfWeek = dayNames[date.getDay()];
@@ -495,11 +522,26 @@ export default function ShiftManagementPage() {
         const statusMatch = rawMsg.match(/^(\d{3}):/);
         const statusCode = statusMatch ? statusMatch[1] : "502";
         cleanMsg = `خطأ في الخادم (${statusCode}) - انتهاء وقت الاستجابة. يرجى المحاولة مرة أخرى`;
+      } else if (rawMsg.includes("الراحة الأسبوعية")) {
+        // رسالة حد الراحة الأسبوعية (4 أيام بالشهر) — تُعرض كاملة بدون قص
+        const jsonStart = rawMsg.indexOf("{");
+        cleanMsg = rawMsg.replace(/^\d{3}:\s*/, "").substring(0, 400);
+        if (jsonStart >= 0) {
+          try {
+            const parsed = JSON.parse(rawMsg.slice(jsonStart));
+            if (parsed?.error) cleanMsg = String(parsed.error).substring(0, 400);
+          } catch { /* keep fallback */ }
+        }
       } else if (cleanMsg.length > 150) {
         cleanMsg = cleanMsg.substring(0, 150) + "...";
       }
       console.error("Schedule save error:", rawMsg);
-      toast({ title: "خطأ في حفظ الجدول", description: cleanMsg, variant: "destructive" });
+      const isRestCap = rawMsg.includes("الراحة الأسبوعية");
+      toast({
+        title: isRestCap ? "تجاوز حد الراحة الأسبوعية (4 أيام بالشهر)" : "خطأ في حفظ الجدول",
+        description: cleanMsg,
+        variant: "destructive",
+      });
     },
   });
 
@@ -732,6 +774,9 @@ export default function ShiftManagementPage() {
         const currentDateStr = format(currentDate, "yyyy-MM-dd");
         const nextDateStr = format(nextWeekDates[index], "yyyy-MM-dd");
         const cellData = empSchedule[currentDateStr];
+        // لا تكتب فوق يوم في الأسبوع القادم مغطى بإجازة معتمدة من نظام الإجازات
+        // (السيرفر يستثني هذه الأيام من حد الراحة الأسبوعية على أي حال)
+        if (getApprovedLeaveForDay(employee.id, nextDateStr)) return;
         
         if (cellData) {
           schedulesToSave.push({
@@ -763,7 +808,9 @@ export default function ShiftManagementPage() {
       const raw = String(error?.message || "");
       const msg = raw.includes("423") || raw.includes("مقفل")
         ? "الأسبوع التالي مقفل - لا يمكن النسخ"
-        : "فشل في نسخ الجدول";
+        : raw.includes("الراحة الأسبوعية")
+          ? "النسخ سيتجاوز الحد الأقصى للراحة الأسبوعية (4 أيام بالشهر) لبعض الموظفين - قدّم طلب إجازة رسمي من نظام الإجازات للأيام الإضافية"
+          : "فشل في نسخ الجدول";
       toast({ title: "خطأ", description: msg, variant: "destructive" });
     }
   };
@@ -2058,7 +2105,21 @@ export default function ShiftManagementPage() {
                                 const dateStr = format(date, "yyyy-MM-dd");
                                 const cellData = scheduleData[empIdStr]?.[dateStr] || { startTime: "08:00", endTime: "16:00", isOff: false };
                                 const attendance = getAttendanceStatus(empIdStr, dateStr, cellData.startTime, employee);
-                                
+                                const approvedLeave = getApprovedLeaveForDay(employee.id, dateStr);
+
+                                if (approvedLeave) {
+                                  return (
+                                    <TableCell key={index} className={`p-2 bg-amber-50 dark:bg-amber-950/30 ${isToday(date) ? "ring-1 ring-primary/30" : ""}`}>
+                                      <div className="flex flex-col items-center justify-center gap-1 py-2" data-testid={`cell-approved-leave-${employee.id}-${dateStr}`}>
+                                        <Badge className="text-xs bg-amber-500 hover:bg-amber-500 text-white">إجازة معتمدة</Badge>
+                                        <span className="text-[10px] text-muted-foreground">
+                                          {LEAVE_TYPE_LABELS[approvedLeave.leaveType] || approvedLeave.leaveType}
+                                        </span>
+                                      </div>
+                                    </TableCell>
+                                  );
+                                }
+
                                 return (
                                   <TableCell key={index} className={`p-2 ${isToday(date) ? "bg-primary/5" : ""} ${cellData.isOff ? "bg-gray-100" : ""}`}>
                                     <div className="space-y-2">

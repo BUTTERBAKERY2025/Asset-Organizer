@@ -47,6 +47,14 @@ message) and fall back to per-row SELECT-then-insert. **Why:** if the partial un
 aren't present, ON CONFLICT throws 42P10; catching only 42704 turned a recoverable case into a
 total silent save failure. shared/schema.ts now declares both PARTIAL indexes to match db.ts.
 
+**Weekly-rest monthly cap (2026-07-12):** max 4 paid isOff days per employee per CALENDAR MONTH,
+enforced server-side in `validateMonthlyWeeklyRestCap` on single/bulk POST + PATCH (400,
+code WEEKLY_REST_CAP_EXCEEDED, Arabic message directing to نظام الإجازات). Counts existing month
+rows by BOTH identity forms, incoming rows override existing per date; only enforced when the save
+keeps/adds ≥1 off-day (so legacy over-cap months stay editable downward). Days inside APPROVED
+leave_requests never count and render as locked amber "إجازة معتمدة" cells via bundle's
+`approvedLeaves`; client save & copy-to-next-week skip leave-covered TARGET dates.
+
 **Still-open gaps (not yet fixed):**
 - "all" branch mode can't schedule: bundle returns empty for branchId="all" and save sends
   branchId="all" → server 400 (branch not found). No UI guard on save/apply for "all" (copy/export do guard).
