@@ -18,12 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
-import {
-  Calendar, FileText, Pen, Download, Loader2, CheckCircle, Clock,
-  AlertCircle, User, Check, XCircle, LayoutDashboard, Users,
-  Sparkles, Eye, FilePlus2, AlertTriangle, FileDown, Wand2, Lock, History, RefreshCw,
-  Wallet, TrendingDown, Activity, CalendarOff, MinusCircle, Search, ListFilter, X,
-} from "lucide-react";
+import { Calendar, FileText, Pen, Download, Loader2, CheckCircle, Clock, AlertCircle, User, Check, XCircle, LayoutDashboard, Users, Sparkles, Eye, FilePlus2, AlertTriangle, FileDown, Wand2, Lock, History, RefreshCw, Wallet, TrendingDown, Activity, CalendarOff, MinusCircle, Search, ListFilter, X, ChevronLeft, ChevronRight, ArrowUpDown } from "lucide-react";
 import { useLocation } from "wouter";
 import SignatureCanvas from "react-signature-canvas";
 
@@ -194,6 +189,7 @@ export default function TimesheetPage() {
   const [employeeMode, setEmployeeMode] = useState<"active" | "attendance">("active");
   const [activeTab, setActiveTab] = useState("dashboard");
   const [dashboardSearch, setDashboardSearch] = useState("");
+  const [dashboardSort, setDashboardSort] = useState<string>("default");
   const [dashboardStatusFilter, setDashboardStatusFilter] = useState<string>("all");
   const [entryStatusFilter, setEntryStatusFilter] = useState<string>("all");
   const [showSignatureDialog, setShowSignatureDialog] = useState(false);
@@ -489,6 +485,38 @@ export default function TimesheetPage() {
       return true;
     });
   }, [dashboardRows, dashboardSearch, dashboardStatusFilter, rowCategory]);
+
+  const monthOffset = useMemo(() => {
+    const [y, m] = selectedMonth.split("-").map(Number);
+    if (!y || !m) return 0;
+    const now = new Date();
+    return (now.getFullYear() - y) * 12 + (now.getMonth() + 1 - m);
+  }, [selectedMonth]);
+
+  const shiftMonth = (delta: number) => {
+    const [y, m] = selectedMonth.split("-").map(Number);
+    if (!y || !m) return;
+    const d = new Date(y, m - 1 + delta, 1);
+    setSelectedMonth(format(d, "yyyy-MM"));
+  };
+
+  const sortedDashboardRows = useMemo(() => {
+    if (dashboardSort === "default") return filteredDashboardRows;
+    const rows = [...filteredDashboardRows];
+    const pct = (row: typeof rows[number]) => {
+      const r = row.report;
+      if (!r || !r.totalScheduledDays) return -1;
+      return r.totalPresentDays / r.totalScheduledDays;
+    };
+    if (dashboardSort === "name") {
+      rows.sort((a, b) => (a.name || "").localeCompare(b.name || "", "ar"));
+    } else if (dashboardSort === "mostPresent") {
+      rows.sort((a, b) => pct(b) - pct(a));
+    } else if (dashboardSort === "mostAbsent") {
+      rows.sort((a, b) => (b.report?.totalAbsentDays ?? -1) - (a.report?.totalAbsentDays ?? -1));
+    }
+    return rows;
+  }, [filteredDashboardRows, dashboardSort]);
 
   const toggleDashboardFilter = (cat: string) => {
     setDashboardStatusFilter(prev => (prev === cat ? "all" : cat));
@@ -1102,21 +1130,47 @@ export default function TimesheetPage() {
               </div>
               <div className="space-y-2">
                 <Label className="text-xs font-semibold text-amber-900">{t("timesheet.month")}</Label>
-                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                  <SelectTrigger className="h-11 sm:h-10 bg-white" data-testid="select-month">
-                    <SelectValue placeholder={t("timesheet.selectMonth")} />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60 overflow-y-auto">
-                    {[0, 1, 2, 3, 4, 5].map(offset => {
-                      const d = subMonths(new Date(), offset);
-                      return (
-                        <SelectItem key={offset} value={format(d, "yyyy-MM")}>
-                          {format(d, "MMMM yyyy", { locale: dateLocale })}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-11 sm:h-10 w-9 shrink-0 bg-white"
+                    disabled={monthOffset >= 5}
+                    onClick={() => shiftMonth(-1)}
+                    title={t("timesheet.filters.prevMonth")}
+                    data-testid="btn-prev-month"
+                  >
+                    {isRTL ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+                  </Button>
+                  <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                    <SelectTrigger className="h-11 sm:h-10 bg-white" data-testid="select-month">
+                      <SelectValue placeholder={t("timesheet.selectMonth")} />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60 overflow-y-auto">
+                      {[0, 1, 2, 3, 4, 5].map(offset => {
+                        const d = subMonths(new Date(), offset);
+                        return (
+                          <SelectItem key={offset} value={format(d, "yyyy-MM")}>
+                            {format(d, "MMMM yyyy", { locale: dateLocale })}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-11 sm:h-10 w-9 shrink-0 bg-white"
+                    disabled={monthOffset <= 0}
+                    onClick={() => shiftMonth(1)}
+                    title={t("timesheet.filters.nextMonth")}
+                    data-testid="btn-next-month"
+                  >
+                    {isRTL ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                  </Button>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -1210,6 +1264,20 @@ export default function TimesheetPage() {
                           {employeeMode === "attendance" ? t("timesheet.dashboard.modeAttendanceHint") : t("timesheet.dashboard.subhead")}
                         </CardDescription>
                       </div>
+                      <Select value={dashboardSort} onValueChange={setDashboardSort}>
+                        <SelectTrigger className="h-9 w-full sm:w-44 bg-white" data-testid="select-dashboard-sort">
+                          <div className="flex items-center gap-1.5">
+                            <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground" />
+                            <SelectValue />
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="default">{t("timesheet.filters.sortDefault")}</SelectItem>
+                          <SelectItem value="name">{t("timesheet.filters.sortName")}</SelectItem>
+                          <SelectItem value="mostPresent">{t("timesheet.filters.sortMostPresent")}</SelectItem>
+                          <SelectItem value="mostAbsent">{t("timesheet.filters.sortMostAbsent")}</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <div className="relative w-full sm:w-56" data-testid="search-employee-wrap">
                         <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                         <Input
@@ -1297,7 +1365,7 @@ export default function TimesheetPage() {
                                 {t("timesheet.filters.noMatches")}
                               </TableCell>
                             </TableRow>
-                          ) : filteredDashboardRows.map((row, idx) => {
+                          ) : sortedDashboardRows.map((row, idx) => {
                             const r = row.report;
                             const isMissing = !r;
                             const badge = isMissing ? NOT_GENERATED_BADGE : TIMESHEET_STATUS_LABELS[r!.status];
@@ -1353,11 +1421,21 @@ export default function TimesheetPage() {
                                 </TableCell>
                                 <TableCell className="text-center text-sm">
                                   {r ? (
-                                    <span className="font-medium">
-                                      <span className="text-green-700">{r.totalPresentDays}</span>
-                                      {' / '}
-                                      <span className="text-muted-foreground">{r.totalScheduledDays}</span>
-                                    </span>
+                                    <div className="inline-flex flex-col items-center gap-1 min-w-[64px]">
+                                      <span className="font-medium">
+                                        <span className="text-green-700">{r.totalPresentDays}</span>
+                                        {' / '}
+                                        <span className="text-muted-foreground">{r.totalScheduledDays}</span>
+                                      </span>
+                                      {r.totalScheduledDays > 0 && (
+                                        <div className="w-16 h-1.5 rounded-full bg-gray-200 overflow-hidden" data-testid={`progress-days-${row.id}`}>
+                                          <div
+                                            className={`h-full rounded-full ${(r.totalPresentDays / r.totalScheduledDays) >= 0.9 ? "bg-green-500" : (r.totalPresentDays / r.totalScheduledDays) >= 0.7 ? "bg-amber-500" : "bg-red-400"}`}
+                                            style={{ width: `${Math.min(100, Math.round((r.totalPresentDays / r.totalScheduledDays) * 100))}%` }}
+                                          />
+                                        </div>
+                                      )}
+                                    </div>
                                   ) : <span className="text-muted-foreground">—</span>}
                                 </TableCell>
                                 <TableCell className="text-center">

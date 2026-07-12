@@ -183,7 +183,6 @@
     "dailyDetails": "Daily Details",
     "date": "Date",
     "day": "Day",
-    "branch": "Branch",
     "status": "Status",
     "scheduledStart": "Scheduled Start",
     "scheduledEnd": "Scheduled End",
@@ -246,7 +245,13 @@
       "showing": "Showing {{shown}} of {{total}} employees",
       "showingDays": "Showing {{shown}} of {{total}} days",
       "noMatches": "No results match the filter",
-      "kpiHint": "Click any card above to filter the list by status"
+      "kpiHint": "Click any card above to filter the list by status",
+      "prevMonth": "Previous month",
+      "nextMonth": "Next month",
+      "sortDefault": "Default order",
+      "sortName": "By name",
+      "sortMostPresent": "Most present",
+      "sortMostAbsent": "Most absent"
     },
     "reportStatusLabels": {
       "pending": "In Progress",

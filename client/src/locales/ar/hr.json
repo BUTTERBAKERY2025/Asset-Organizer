@@ -183,7 +183,6 @@
     "dailyDetails": "التفاصيل اليومية",
     "date": "التاريخ",
     "day": "اليوم",
-    "branch": "الفرع",
     "status": "الحالة",
     "scheduledStart": "بداية الدوام",
     "scheduledEnd": "نهاية الدوام",
@@ -246,7 +245,13 @@
       "showing": "عرض {{shown}} من {{total}} موظف",
       "showingDays": "عرض {{shown}} من {{total}} يوم",
       "noMatches": "لا توجد نتائج مطابقة للفلتر",
-      "kpiHint": "اضغط على أي بطاقة أعلاه لتصفية القائمة حسب الحالة"
+      "kpiHint": "اضغط على أي بطاقة أعلاه لتصفية القائمة حسب الحالة",
+      "prevMonth": "الشهر السابق",
+      "nextMonth": "الشهر التالي",
+      "sortDefault": "الترتيب الافتراضي",
+      "sortName": "حسب الاسم",
+      "sortMostPresent": "الأعلى حضوراً",
+      "sortMostAbsent": "الأعلى غياباً"
     },
     "reportStatusLabels": {
       "pending": "قيد الإنشاء",
