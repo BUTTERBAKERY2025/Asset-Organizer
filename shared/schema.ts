@@ -11645,6 +11645,15 @@ export const leaveRequests = pgTable("leave_requests", {
   approvalChain: jsonb("approval_chain"), // [{level, jobTitle, stepName}]
   // تفصيل مراحل الإجازة المرضية حسب المادة 117 (يُحفظ عند الاعتماد النهائي)
   sickTierBreakdown: jsonb("sick_tier_breakdown"), // {fullPayDays, threeQuarterPayDays, unpaidDays, usedBefore, year}
+  // ===== دورة الخروج والعودة (مباشرة الخروج / مباشرة العمل) =====
+  actualExitDate: text("actual_exit_date"), // YYYY-MM-DD تاريخ الخروج الفعلي
+  exitConfirmedBy: varchar("exit_confirmed_by").references(() => users.id),
+  exitConfirmedAt: timestamp("exit_confirmed_at"),
+  actualReturnDate: text("actual_return_date"), // YYYY-MM-DD تاريخ المباشرة الفعلي
+  returnConfirmedBy: varchar("return_confirmed_by").references(() => users.id),
+  returnConfirmedAt: timestamp("return_confirmed_at"),
+  returnStatus: text("return_status"), // on_time | late | early
+  lateDays: real("late_days").default(0), // أيام التأخير عن موعد العودة
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -11738,6 +11747,7 @@ export const leaveBalances = pgTable("leave_balances", {
   entitledDays: real("entitled_days").notNull().default(21), // المستحق سنوياً
   carriedOverDays: real("carried_over_days").notNull().default(0), // مرحّل من العام السابق
   adjustmentDays: real("adjustment_days").notNull().default(0), // تعديل يدوي (+/-)
+  settledDays: real("settled_days").notNull().default(0), // أيام تمت تصفيتها نقداً (تُخصم من الرصيد)
   note: text("note"),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -11753,10 +11763,44 @@ export const insertLeaveBalanceSchema = createInsertSchema(leaveBalances, {
   entitledDays: z.number().min(0).max(365),
   carriedOverDays: z.number().min(0).max(365),
   adjustmentDays: z.number().min(-365).max(365),
-}).omit({ id: true, createdAt: true, updatedAt: true, createdBy: true });
+}).omit({ id: true, createdAt: true, updatedAt: true, createdBy: true, settledDays: true });
 
 export type LeaveBalance = typeof leaveBalances.$inferSelect;
 export type InsertLeaveBalance = z.infer<typeof insertLeaveBalanceSchema>;
+
+// ===== تصفية رصيد الإجازة (سند صرف بدل الإجازة) =====
+export const leaveSettlements = pgTable("leave_settlements", {
+  id: serial("id").primaryKey(),
+  leaveRequestId: integer("leave_request_id").notNull().references(() => leaveRequests.id, { onDelete: "cascade" }),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  year: integer("year").notNull(),
+  leaveType: text("leave_type").notNull().default("annual"),
+  settledDays: real("settled_days").notNull(), // الأيام المصفّاة
+  divisor: integer("divisor").notNull(), // 30 أو 21 حسب استحقاق الموظف
+  grossSalary: real("gross_salary").notNull(), // الراتب الإجمالي وقت التصفية
+  dailyRate: real("daily_rate").notNull(), // الراتب ÷ المقسوم
+  calculatedAmount: real("calculated_amount").notNull(), // المبلغ المحسوب آلياً
+  finalAmount: real("final_amount").notNull(), // المبلغ النهائي (قد يكون يدوياً)
+  isManualAmount: boolean("is_manual_amount").notNull().default(false),
+  settlementDate: text("settlement_date").notNull(), // YYYY-MM-DD
+  note: text("note"),
+  status: text("status").notNull().default("active"), // active | cancelled
+  cancelledBy: varchar("cancelled_by").references(() => users.id),
+  cancelledAt: timestamp("cancelled_at"),
+  cancelReason: text("cancel_reason"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_leave_settlements_employee").on(table.branchEmployeeId),
+  index("idx_leave_settlements_branch").on(table.branchId),
+  // تصفية نشطة واحدة فقط لكل طلب إجازة
+  uniqueIndex("uq_leave_settlements_request_active")
+    .on(table.leaveRequestId)
+    .where(sql`${table.status} = 'active'`),
+]);
+
+export type LeaveSettlement = typeof leaveSettlements.$inferSelect;
 
 export const insertLeaveRequestSchema = createInsertSchema(leaveRequests, {
   leaveType: z.enum(["annual", "sick", "emergency", "maternity", "paternity", "unpaid", "hajj", "marriage", "bereavement", "other"]),
@@ -11764,7 +11808,12 @@ export const insertLeaveRequestSchema = createInsertSchema(leaveRequests, {
   totalDays: z.number().positive("عدد الأيام يجب أن يكون موجباً"),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "تاريخ غير صحيح"),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "تاريخ غير صحيح"),
-}).omit({ id: true, createdAt: true, updatedAt: true, reviewedBy: true, reviewedAt: true });
+}).omit({
+  id: true, createdAt: true, updatedAt: true, reviewedBy: true, reviewedAt: true,
+  actualExitDate: true, exitConfirmedBy: true, exitConfirmedAt: true,
+  actualReturnDate: true, returnConfirmedBy: true, returnConfirmedAt: true,
+  returnStatus: true, lateDays: true,
+});
 
 export type LeaveRequest = typeof leaveRequests.$inferSelect;
 export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;

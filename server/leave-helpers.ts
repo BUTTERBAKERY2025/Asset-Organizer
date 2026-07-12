@@ -180,6 +180,7 @@ export interface LeaveBalanceSummary {
   entitledDays: number;
   carriedOverDays: number;
   adjustmentDays: number;
+  settledDays: number;
   usedDays: number;
   remainingDays: number;
   note: string | null;
@@ -205,6 +206,7 @@ export async function getLeaveBalanceSummary(
       entitledDays: 0,
       carriedOverDays: 0,
       adjustmentDays: 0,
+      settledDays: 0,
       usedDays: 0,
       remainingDays: 0,
       note: null,
@@ -247,7 +249,8 @@ export async function getLeaveBalanceSummary(
   const entitledDays = row ? Number(row.entitledDays) : suggestedEntitlement(hireDate);
   const carriedOverDays = row ? Number(row.carriedOverDays) : 0;
   const adjustmentDays = row ? Number(row.adjustmentDays) : 0;
-  const remainingDays = entitledDays + carriedOverDays + adjustmentDays - usedDays;
+  const settledDays = row ? Number((row as any).settledDays ?? 0) : 0;
+  const remainingDays = entitledDays + carriedOverDays + adjustmentDays - usedDays - settledDays;
 
   return {
     branchEmployeeId,
@@ -256,6 +259,7 @@ export async function getLeaveBalanceSummary(
     entitledDays,
     carriedOverDays,
     adjustmentDays,
+    settledDays,
     usedDays,
     remainingDays,
     note: row?.note ?? null,
