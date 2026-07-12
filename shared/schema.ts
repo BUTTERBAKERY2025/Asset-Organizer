@@ -5464,6 +5464,7 @@ export const timesheetReports = pgTable("timesheet_reports", {
   totalPresentDays: integer("total_present_days").default(0),
   totalAbsentDays: integer("total_absent_days").default(0),
   totalLateDays: integer("total_late_days").default(0),
+  totalLeaveDays: integer("total_leave_days").default(0), // أيام الإجازة المعتمدة ضمن الفترة
   totalScheduledHours: real("total_scheduled_hours").default(0),
   totalActualHours: real("total_actual_hours").default(0),
   totalOvertimeMinutes: integer("total_overtime_minutes").default(0),
@@ -5524,7 +5525,8 @@ export const timesheetReportEntries = pgTable("timesheet_report_entries", {
   actualStartTime: text("actual_start_time"), // HH:MM
   actualEndTime: text("actual_end_time"), // HH:MM
   isOff: boolean("is_off").default(false),
-  status: text("status").default("pending"), // pending, present, absent, late, day_off
+  status: text("status").default("pending"), // pending, present, absent, late, day_off, leave, no_schedule
+  leaveType: text("leave_type"), // نوع الإجازة المعتمدة إن كانت الحالة leave (annual/sick/...)
   scheduledHours: real("scheduled_hours").default(0),
   actualHours: real("actual_hours").default(0),
   overtimeMinutes: integer("overtime_minutes").default(0),

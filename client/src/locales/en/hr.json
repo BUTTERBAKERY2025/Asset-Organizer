@@ -236,6 +236,7 @@
       "absent": "Absent",
       "late": "Late",
       "dayOff": "Day Off",
+      "leave": "Approved Leave",
       "noSchedule": "No Schedule"
     },
     "reportStatusLabels": {

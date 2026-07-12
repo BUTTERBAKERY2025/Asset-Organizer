@@ -28078,6 +28078,176 @@ export async function registerRoutes(
     }
   });
 
+  // ===== المولّد الموحّد لأيام التايم شيت =====
+  // دالة واحدة مشتركة تستخدمها كل مسارات التوليد (فردي/جماعي/PDF الفرع) لضمان
+  // تطابق الأرقام في كل مكان. تدمج ثلاثة مصادر: الجدول + الحضور + الإجازات المعتمدة.
+  // قواعد الحالة (بالأولوية):
+  //  1) حضور فعلي (بصمة/حالة حضور) → present/late حتى لو كان يوم راحة أو إجازة
+  //  2) يوم ضمن إجازة معتمدة → "leave" (لا يُحتسب غياباً ولا يوم عمل مجدول أبداً)
+  //  3) يوم راحة (من الجدول، أو الجمعة افتراضياً عند غياب الجدول) → "day_off"
+  //  4) يوم مجدول بلا حضور → "absent"
+  //  5) لا جدول ولا حضور → "no_schedule" (لا يُحتسب غياباً)
+  const TIMESHEET_DAY_NAMES = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  interface TimesheetLeaveSpan { startDate: string; endDate: string; leaveType: string | null }
+  interface TimesheetDayRow {
+    date: string;
+    dayOfWeek: string;
+    scheduledStartTime: string | null;
+    scheduledEndTime: string | null;
+    actualStartTime: string | null;
+    actualEndTime: string | null;
+    isOff: boolean;
+    status: string;
+    leaveType: string | null;
+    scheduledHours: number;
+    actualHours: number;
+    overtimeMinutes: number;
+    lateMinutes: number;
+    checkInSignature: string | null;
+    checkOutSignature: string | null;
+    attendanceBranchId: string | null;
+  }
+  interface TimesheetTotals {
+    scheduledDays: number; presentDays: number; absentDays: number; lateDays: number;
+    offDays: number; leaveDays: number;
+    scheduledHours: number; actualHours: number;
+    overtimeMinutes: number; lateMinutes: number;
+  }
+  function computeTimesheetDays(params: {
+    startDate: string;
+    endDate: string;
+    schedules: any[];
+    attendance: any[];
+    approvedLeaves: TimesheetLeaveSpan[];
+  }): { entries: TimesheetDayRow[]; totals: TimesheetTotals } {
+    const { startDate, endDate, schedules, attendance, approvedLeaves } = params;
+    const entries: TimesheetDayRow[] = [];
+    const totals: TimesheetTotals = {
+      scheduledDays: 0, presentDays: 0, absentDays: 0, lateDays: 0,
+      offDays: 0, leaveDays: 0,
+      scheduledHours: 0, actualHours: 0, overtimeMinutes: 0, lateMinutes: 0,
+    };
+
+    // فهرسة بالتاريخ بدل find داخل الحلقة (أداء أفضل للفترات الطويلة)
+    const scheduleByDate = new Map<string, any>();
+    for (const s of schedules) if (!scheduleByDate.has(s.scheduleDate)) scheduleByDate.set(s.scheduleDate, s);
+    const attendanceByDate = new Map<string, any>();
+    for (const a of attendance) if (!attendanceByDate.has(a.attendanceDate)) attendanceByDate.set(a.attendanceDate, a);
+
+    // نحلّل YYYY-MM-DD كتاريخ محلي لتجنب انزياح المنطقة الزمنية أثناء التكرار
+    const [sy, sm, sd] = startDate.split('-').map(Number);
+    const [ey, em, ed] = endDate.split('-').map(Number);
+    const start = new Date(sy, sm - 1, sd);
+    const end = new Date(ey, em - 1, ed);
+
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const dayOfWeek = TIMESHEET_DAY_NAMES[d.getDay()];
+
+      const schedule = scheduleByDate.get(dateStr);
+      const attendanceRecord = attendanceByDate.get(dateStr);
+      const leaveSpan = approvedLeaves.find(l => l.startDate <= dateStr && dateStr <= l.endDate);
+      const onLeave = !!leaveSpan;
+
+      const isOff = schedule ? !!schedule.isOff : (dayOfWeek === 'fri');
+      // يوم عمل مجدول فعلياً = جدول صريح، ليس راحة، وليس ضمن إجازة معتمدة
+      const hasSchedule = !!schedule && !isOff && !onLeave;
+
+      const scheduledStartTime = hasSchedule ? (schedule!.startTime || null) : null;
+      const scheduledEndTime = hasSchedule ? (schedule!.endTime || null) : null;
+      const actualStartTime = attendanceRecord?.actualCheckIn || null;
+      const actualEndTime = attendanceRecord?.actualCheckOut || null;
+
+      let scheduledHours = 0;
+      if (hasSchedule && schedule!.startTime && schedule!.endTime) {
+        const sp = schedule!.startTime.split(':').map(Number);
+        const ep = schedule!.endTime.split(':').map(Number);
+        scheduledHours = (ep[0] + ep[1] / 60) - (sp[0] + sp[1] / 60);
+        if (scheduledHours < 0) scheduledHours += 24;
+      }
+
+      const actualHours = attendanceRecord?.workingHours || 0;
+      const overtimeMinutes = attendanceRecord?.overtimeMinutes || 0;
+      const lateMinutes = attendanceRecord?.lateMinutes || 0;
+
+      const workedActually = !!(attendanceRecord && (attendanceRecord.actualCheckIn || attendanceRecord.status === "present" || attendanceRecord.status === "late"));
+
+      let status = "pending";
+      if (workedActually) {
+        status = attendanceRecord!.status === "late" ? "late" : "present";
+      } else if (onLeave) {
+        status = "leave";
+      } else if (isOff) {
+        status = "day_off";
+      } else if (hasSchedule) {
+        if (attendanceRecord?.status === "absent") status = "absent";
+        else if (attendanceRecord) status = attendanceRecord.status || "absent";
+        else status = "absent";
+      } else {
+        status = "no_schedule";
+      }
+
+      if (status === "present" || status === "late") {
+        totals.presentDays++;
+        totals.actualHours += actualHours;
+        totals.overtimeMinutes += overtimeMinutes;
+        if (status === "late") { totals.lateDays++; totals.lateMinutes += lateMinutes; }
+      } else if (status === "leave") {
+        totals.leaveDays++;
+      } else if (status === "day_off") {
+        totals.offDays++;
+      }
+      if (hasSchedule) {
+        totals.scheduledDays++;
+        totals.scheduledHours += scheduledHours;
+        if (status === "absent") totals.absentDays++;
+      }
+
+      entries.push({
+        date: dateStr,
+        dayOfWeek,
+        scheduledStartTime,
+        scheduledEndTime,
+        actualStartTime,
+        actualEndTime,
+        isOff,
+        status,
+        leaveType: status === "leave" ? (leaveSpan?.leaveType || null) : null,
+        scheduledHours,
+        actualHours,
+        overtimeMinutes,
+        lateMinutes,
+        checkInSignature: attendanceRecord?.checkInSignature || null,
+        checkOutSignature: attendanceRecord?.checkOutSignature || null,
+        attendanceBranchId: attendanceRecord?.branchId || null,
+      });
+    }
+
+    return { entries, totals };
+  }
+
+  // الإجازات المعتمدة المتقاطعة مع فترة — تُجلب عبر كل الفروع ثم تُصفّى لكل موظف برقمه
+  // (نظام الإجازات مبني على branch_employee_id؛ مستخدم UUID غير مربوط لا إجازات له هنا)
+  async function getApprovedLeavesInRange(startDate: string, endDate: string): Promise<Array<{ branchEmployeeId: number; startDate: string; endDate: string; leaveType: string | null }>> {
+    try {
+      return await db.select({
+        branchEmployeeId: leaveRequests.branchEmployeeId,
+        startDate: leaveRequests.startDate,
+        endDate: leaveRequests.endDate,
+        leaveType: leaveRequests.leaveType,
+      }).from(leaveRequests).where(
+        and(
+          eq(leaveRequests.status, "approved"),
+          lte(leaveRequests.startDate, endDate),
+          gte(leaveRequests.endDate, startDate),
+        )
+      );
+    } catch (e) {
+      console.error("Error fetching approved leaves for timesheet:", e);
+      return [];
+    }
+  }
+
   // Generate timesheet report for an employee
   app.post("/api/timesheet-reports/generate", isAuthenticated, requirePermission("timesheet", "create"), async (req, res) => {
     try {
@@ -28160,15 +28330,11 @@ export async function registerRoutes(
         (branchEmpNumId !== undefined && a.branchEmployeeId === branchEmpNumId)
       );
 
-      // Calculate totals
-      let totalScheduledDays = 0;
-      let totalPresentDays = 0;
-      let totalAbsentDays = 0;
-      let totalLateDays = 0;
-      let totalScheduledHours = 0;
-      let totalActualHours = 0;
-      let totalOvertimeMinutes = 0;
-      let totalLateMinutes = 0;
+      // الإجازات المعتمدة للموظف خلال الفترة (حسب رقمه في branch_employees)
+      const allApprovedLeaves = await getApprovedLeavesInRange(startDate, endDate);
+      const employeeLeaves = branchEmpNumId !== undefined
+        ? allApprovedLeaves.filter(l => l.branchEmployeeId === branchEmpNumId)
+        : [];
 
       // Create report first
       const report = await storage.createTimesheetReport({
@@ -28189,119 +28355,30 @@ export async function registerRoutes(
         totalLateMinutes: 0,
       });
 
-      // Generate daily entries
-      const entries: any[] = [];
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const dateStr = d.toISOString().split('T')[0];
-        const dayOfWeek = dayNames[d.getDay()];
-        
-        const schedule = employeeSchedules.find(s => s.scheduleDate === dateStr);
-        const attendanceRecord = attendance.find(a => a.attendanceDate === dateStr);
-
-        // يوم راحة: نحترم الجدول إن وُجد، وإلا نعتبر الجمعة راحة افتراضياً فقط عند عدم وجود جدول
-        const isOff = schedule ? !!schedule.isOff : (dayOfWeek === 'fri');
-        // يوم عمل مجدول فعلياً = له جدول صريح وليس راحة
-        const hasSchedule = !!schedule && !isOff;
-
-        // أوقات الجدول تظهر فقط عند وجود جدول حقيقي — لا نختلق 08:00-16:00
-        const scheduledStartTime = hasSchedule ? (schedule!.startTime || null) : null;
-        const scheduledEndTime = hasSchedule ? (schedule!.endTime || null) : null;
-        const actualStartTime = attendanceRecord?.actualCheckIn || null;
-        const actualEndTime = attendanceRecord?.actualCheckOut || null;
-
-        // ساعات مجدولة من الجدول الحقيقي فقط (تبقى 0 إذا لا يوجد جدول)
-        let scheduledHours = 0;
-        if (hasSchedule && schedule!.startTime && schedule!.endTime) {
-          const startParts = schedule!.startTime.split(':').map(Number);
-          const endParts = schedule!.endTime.split(':').map(Number);
-          scheduledHours = (endParts[0] + endParts[1]/60) - (startParts[0] + startParts[1]/60);
-          if (scheduledHours < 0) scheduledHours += 24;
-        }
-
-        let actualHours = attendanceRecord?.workingHours || 0;
-        let overtimeMinutes = attendanceRecord?.overtimeMinutes || 0;
-        let lateMinutes = attendanceRecord?.lateMinutes || 0;
-
-        // حضور فعلي = توجد بصمة دخول فعلية أو حالة حضور/تأخير مسجّلة لليوم
-        const workedActually = !!(attendanceRecord && (attendanceRecord.actualCheckIn || attendanceRecord.status === "present" || attendanceRecord.status === "late"));
-
-        // تحديد الحالة بدقة
-        let status = "pending";
-        if (isOff) {
-          // يوم راحة/إجازة — لكن إذا كان للموظف حضور فعلي (بصمة) نعتبره عملاً فعلياً (غالباً عمل إضافي)
-          // ولا نعرضه كإجازة، حتى لا يتعارض ظهور التوقيع مع حالة "إجازة"
-          if (workedActually) status = attendanceRecord!.status === "late" ? "late" : "present";
-          else status = "day_off";
-        } else if (hasSchedule) {
-          // يوم مجدول: يُحتسب غياباً فعلياً إذا لا يوجد حضور
-          if (attendanceRecord?.status === "present") status = "present";
-          else if (attendanceRecord?.status === "late") status = "late";
-          else if (attendanceRecord?.status === "absent") status = "absent";
-          else if (attendanceRecord) status = attendanceRecord.status || "absent";
-          else status = "absent";
-        } else {
-          // لا يوجد جدول لهذا اليوم: لا نحتسبه غياباً إطلاقاً
-          if (attendanceRecord?.status === "present") status = "present";
-          else if (attendanceRecord?.status === "late") status = "late";
-          else status = "no_schedule";
-        }
-
-        // احتساب الإجماليات:
-        // ساعات وأيام الحضور تُحتسب لأي يوم تم العمل فيه فعلاً (مجدول أو غير مجدول)
-        if (status === "present" || status === "late") {
-          totalPresentDays++;
-          totalActualHours += actualHours;
-          totalOvertimeMinutes += overtimeMinutes;
-          if (status === "late") {
-            totalLateDays++;
-            totalLateMinutes += lateMinutes;
-          }
-        }
-        // الأيام المجدولة والغياب تُحتسب فقط للأيام التي لها جدول صريح
-        if (hasSchedule) {
-          totalScheduledDays++;
-          totalScheduledHours += scheduledHours;
-          if (status === "absent") {
-            totalAbsentDays++;
-          }
-        }
-
-        entries.push({
-          reportId: report.id,
-          date: dateStr,
-          dayOfWeek,
-          scheduledStartTime,
-          scheduledEndTime,
-          actualStartTime,
-          actualEndTime,
-          isOff,
-          status,
-          scheduledHours,
-          actualHours,
-          overtimeMinutes,
-          lateMinutes,
-          checkInSignature: attendanceRecord?.checkInSignature || null,
-          checkOutSignature: attendanceRecord?.checkOutSignature || null,
-        });
-      }
+      // توليد الأيام والإجماليات عبر المولّد الموحّد (جدول + حضور + إجازات معتمدة)
+      const { entries: dayRows, totals } = computeTimesheetDays({
+        startDate,
+        endDate,
+        schedules: employeeSchedules,
+        attendance,
+        approvedLeaves: employeeLeaves,
+      });
+      const entries = dayRows.map(({ attendanceBranchId, ...row }) => ({ reportId: report.id, ...row }));
 
       // Save entries
       await storage.createBulkTimesheetReportEntries(entries);
 
       // Update report with totals
       const updatedReport = await storage.updateTimesheetReport(report.id, {
-        totalScheduledDays,
-        totalPresentDays,
-        totalAbsentDays,
-        totalLateDays,
-        totalScheduledHours: Math.round(totalScheduledHours * 100) / 100,
-        totalActualHours: Math.round(totalActualHours * 100) / 100,
-        totalOvertimeMinutes,
-        totalLateMinutes,
+        totalScheduledDays: totals.scheduledDays,
+        totalPresentDays: totals.presentDays,
+        totalAbsentDays: totals.absentDays,
+        totalLateDays: totals.lateDays,
+        totalLeaveDays: totals.leaveDays,
+        totalScheduledHours: Math.round(totals.scheduledHours * 100) / 100,
+        totalActualHours: Math.round(totals.actualHours * 100) / 100,
+        totalOvertimeMinutes: totals.overtimeMinutes,
+        totalLateMinutes: totals.lateMinutes,
       });
 
       res.status(201).json({ report: updatedReport, entriesCount: entries.length });
@@ -28334,11 +28411,12 @@ export async function registerRoutes(
       // Pre-fetch schedules, attendance (عبر كل الفروع), branch employees, and branch users ONCE.
       // الجدول والحضور يُجلبان من جميع الفروع حتى لا تُفقد أيام الموظف المنقول بين الفروع؛
       // التصفية لكل موظف حسب هويته تتم بالأسفل، وعضوية الفرع (للأمان) من branchEmps/branchUsers.
-      const [allSchedules, allAttendance, branchEmps, allUsers] = await Promise.all([
+      const [allSchedules, allAttendance, branchEmps, allUsers, allApprovedLeaves] = await Promise.all([
         storage.getEmployeeSchedulesByDateRange(startDate, endDate),
         storage.getAllAttendanceRecords({ startDate, endDate }),
         storage.getBranchEmployeesByBranch(branchId),
         storage.getAllUsers(),
+        getApprovedLeavesInRange(startDate, endDate),
       ]);
 
       // Build branch-scoped allow-set: which employee IDs (in either UUID or branch_emp_X form) belong to this branch?
@@ -28349,8 +28427,6 @@ export async function registerRoutes(
         branchEmpById.set(be.id, be);
         if (be.linkedUserId) linkedUserToBranchEmpId.set(be.linkedUserId, be.id);
       }
-
-      const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
       const created: Array<{ employeeId: string; reportId?: number; entriesCount: number }> = [];
       const skipped: Array<{ employeeId: string; reason: string; existingReportId?: number }> = [];
@@ -28418,85 +28494,30 @@ export async function registerRoutes(
             totalScheduledHours: 0, totalActualHours: 0, totalOvertimeMinutes: 0, totalLateMinutes: 0,
           });
 
-          // Compute daily entries + totals (same logic as single endpoint)
-          let totalScheduledDays = 0, totalPresentDays = 0, totalAbsentDays = 0, totalLateDays = 0;
-          let totalScheduledHours = 0, totalActualHours = 0;
-          let totalOvertimeMinutes = 0, totalLateMinutes = 0;
-          const entries: any[] = [];
-
-          const start = new Date(startDate);
-          const end = new Date(endDate);
-          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            const dateStr = d.toISOString().split('T')[0];
-            const dayOfWeek = dayNames[d.getDay()];
-
-            const schedule = empSchedules.find((s: any) => s.scheduleDate === dateStr);
-            const attendanceRecord = empAttendance.find((a: any) => a.attendanceDate === dateStr);
-
-            const isOff = schedule ? !!schedule.isOff : (dayOfWeek === 'fri');
-            const hasSchedule = !!schedule && !isOff;
-            const scheduledStartTime = hasSchedule ? (schedule!.startTime || null) : null;
-            const scheduledEndTime = hasSchedule ? (schedule!.endTime || null) : null;
-            const actualStartTime = attendanceRecord?.actualCheckIn || null;
-            const actualEndTime = attendanceRecord?.actualCheckOut || null;
-
-            let scheduledHours = 0;
-            if (hasSchedule && schedule!.startTime && schedule!.endTime) {
-              const sp = schedule!.startTime.split(':').map(Number);
-              const ep = schedule!.endTime.split(':').map(Number);
-              scheduledHours = (ep[0] + ep[1]/60) - (sp[0] + sp[1]/60);
-              if (scheduledHours < 0) scheduledHours += 24;
-            }
-
-            const actualHours = attendanceRecord?.workingHours || 0;
-            const overtimeMinutes = attendanceRecord?.overtimeMinutes || 0;
-            const lateMinutes = attendanceRecord?.lateMinutes || 0;
-
-            const workedActually = !!(attendanceRecord && (attendanceRecord.actualCheckIn || attendanceRecord.status === "present" || attendanceRecord.status === "late"));
-            let status = "pending";
-            if (isOff) {
-              // حضور فعلي في يوم راحة/إجازة → يُعتبر عملاً فعلياً ولا يظهر كإجازة
-              if (workedActually) status = attendanceRecord!.status === "late" ? "late" : "present";
-              else status = "day_off";
-            } else if (hasSchedule) {
-              if (attendanceRecord?.status === "present") status = "present";
-              else if (attendanceRecord?.status === "late") status = "late";
-              else if (attendanceRecord?.status === "absent") status = "absent";
-              else if (attendanceRecord) status = attendanceRecord.status || "absent";
-              else status = "absent";
-            } else {
-              if (attendanceRecord?.status === "present") status = "present";
-              else if (attendanceRecord?.status === "late") status = "late";
-              else status = "no_schedule";
-            }
-
-            if (status === "present" || status === "late") {
-              totalPresentDays++;
-              totalActualHours += actualHours;
-              totalOvertimeMinutes += overtimeMinutes;
-              if (status === "late") { totalLateDays++; totalLateMinutes += lateMinutes; }
-            }
-            if (hasSchedule) {
-              totalScheduledDays++;
-              totalScheduledHours += scheduledHours;
-              if (status === "absent") totalAbsentDays++;
-            }
-
-            entries.push({
-              reportId: report.id, date: dateStr, dayOfWeek,
-              scheduledStartTime, scheduledEndTime, actualStartTime, actualEndTime,
-              isOff, status, scheduledHours, actualHours, overtimeMinutes, lateMinutes,
-              checkInSignature: attendanceRecord?.checkInSignature || null,
-              checkOutSignature: attendanceRecord?.checkOutSignature || null,
-            });
-          }
+          // توليد الأيام والإجماليات عبر المولّد الموحّد (جدول + حضور + إجازات معتمدة)
+          const empLeaves = branchEmpNumId !== undefined
+            ? allApprovedLeaves.filter(l => l.branchEmployeeId === branchEmpNumId)
+            : [];
+          const { entries: dayRows, totals } = computeTimesheetDays({
+            startDate,
+            endDate,
+            schedules: empSchedules,
+            attendance: empAttendance,
+            approvedLeaves: empLeaves,
+          });
+          const entries = dayRows.map(({ attendanceBranchId, ...row }) => ({ reportId: report.id, ...row }));
 
           await storage.createBulkTimesheetReportEntries(entries);
           const updatedReport = await storage.updateTimesheetReport(report.id, {
-            totalScheduledDays, totalPresentDays, totalAbsentDays, totalLateDays,
-            totalScheduledHours: Math.round(totalScheduledHours * 100) / 100,
-            totalActualHours: Math.round(totalActualHours * 100) / 100,
-            totalOvertimeMinutes, totalLateMinutes,
+            totalScheduledDays: totals.scheduledDays,
+            totalPresentDays: totals.presentDays,
+            totalAbsentDays: totals.absentDays,
+            totalLateDays: totals.lateDays,
+            totalLeaveDays: totals.leaveDays,
+            totalScheduledHours: Math.round(totals.scheduledHours * 100) / 100,
+            totalActualHours: Math.round(totals.actualHours * 100) / 100,
+            totalOvertimeMinutes: totals.overtimeMinutes,
+            totalLateMinutes: totals.lateMinutes,
           });
 
           created.push({ employeeId, reportId: updatedReport?.id, entriesCount: entries.length });
@@ -28593,6 +28614,7 @@ export async function registerRoutes(
       // حتى لا تُفقد أيام الموظف المنقول بين الفروع؛ التصفية لكل موظف حسب هويته تتم بالأسفل.
       const allSchedules = await storage.getEmployeeSchedulesByDateRange(startDate, endDate);
       const allAttendance = await storage.getAllAttendanceRecords({ startDate, endDate });
+      const allApprovedLeaves = await getApprovedLeavesInRange(startDate, endDate);
       const allBranchesForNames = await storage.getAllBranches();
       const branchNameById = new Map(allBranchesForNames.map((b: any) => [b.id, b.name]));
 
@@ -28601,7 +28623,7 @@ export async function registerRoutes(
         sat: "السبت", sun: "الأحد", mon: "الاثنين", tue: "الثلاثاء", wed: "الأربعاء", thu: "الخميس", fri: "الجمعة"
       };
       const arStatusMap: Record<string, string> = {
-        present: "حاضر", late: "متأخر", absent: "غائب", day_off: "إجازة", pending: "معلق", no_schedule: "بدون جدول"
+        present: "حاضر", late: "متأخر", absent: "غائب", day_off: "راحة أسبوعية", pending: "معلق", no_schedule: "بدون جدول", leave: "إجازة معتمدة"
       };
       const monthLabel = (() => {
         try {
@@ -28614,101 +28636,50 @@ export async function registerRoutes(
       const employeeReports = employees.map(emp => {
         const empSchedules = allSchedules.filter((s: any) => matchesEmp(s, emp));
         const empAttendance = allAttendance.filter((a: any) => matchesEmp(a, emp));
+        const empLeaves = emp.branchEmpNumId !== undefined
+          ? allApprovedLeaves.filter(l => l.branchEmployeeId === emp.branchEmpNumId)
+          : [];
 
-        let scheduledDays = 0, presentDays = 0, absentDays = 0, lateDays = 0, offDays = 0;
-        let totalScheduledHours = 0, totalActualHours = 0, totalLateMinutes = 0, totalOvertimeMinutes = 0;
-        const entries: any[] = [];
+        // المولّد الموحّد — نفس منطق التوليد الفردي/الجماعي تماماً
+        const { entries: dayRows, totals } = computeTimesheetDays({
+          startDate,
+          endDate,
+          schedules: empSchedules,
+          attendance: empAttendance,
+          approvedLeaves: empLeaves,
+        });
 
-        // Parse YYYY-MM-DD into local-date to avoid timezone drift during iteration
-        const [sy, sm, sd] = startDate.split('-').map(Number);
-        const [ey, em, ed] = endDate.split('-').map(Number);
-        const start = new Date(sy, sm - 1, sd);
-        const end = new Date(ey, em - 1, ed);
-
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const yyyy = d.getFullYear();
-          const mm = String(d.getMonth() + 1).padStart(2, '0');
-          const dd = String(d.getDate()).padStart(2, '0');
-          const dateStr = `${yyyy}-${mm}-${dd}`;
-          const dayKey = dayNames[d.getDay()];
-          const schedule = empSchedules.find((s: any) => s.scheduleDate === dateStr);
-          const attendance = empAttendance.find((a: any) => a.attendanceDate === dateStr);
-
-          const isOff = schedule ? !!schedule.isOff : (dayKey === 'fri');
-          const hasSchedule = !!schedule && !isOff;
-          const scheduledStart = hasSchedule ? (schedule!.startTime || "-") : "-";
-          const scheduledEnd = hasSchedule ? (schedule!.endTime || "-") : "-";
-
-          let scheduledHours = 0;
-          if (hasSchedule && schedule!.startTime && schedule!.endTime) {
-            const sp = schedule!.startTime.split(':').map(Number);
-            const ep = schedule!.endTime.split(':').map(Number);
-            scheduledHours = (ep[0] + ep[1] / 60) - (sp[0] + sp[1] / 60);
-            if (scheduledHours < 0) scheduledHours += 24;
-          }
-
-          const workedActually = !!(attendance && (attendance.actualCheckIn || attendance.status === "present" || attendance.status === "late"));
-          let statusKey = "pending";
-          if (isOff) {
-            // حضور فعلي في يوم راحة/إجازة → يُحتسب عملاً فعلياً ولا يظهر كإجازة
-            statusKey = workedActually ? (attendance!.status === "late" ? "late" : "present") : "day_off";
-          } else if (hasSchedule) {
-            statusKey = (attendance?.status === "present" || attendance?.status === "late" || attendance?.status === "absent")
-              ? attendance.status
-              : "absent";
-          } else {
-            statusKey = (attendance?.status === "present" || attendance?.status === "late")
-              ? attendance.status
-              : "no_schedule";
-          }
-
-          const actualHours = attendance?.workingHours || 0;
-          const lateMin = attendance?.lateMinutes || 0;
-          const otMin = attendance?.overtimeMinutes || 0;
-
-          if (isOff && !workedActually) {
-            offDays++;
-          } else {
-            if (statusKey === "present" || statusKey === "late") {
-              presentDays++;
-              totalActualHours += actualHours;
-              totalOvertimeMinutes += otMin;
-            }
-            if (statusKey === "late") {
-              lateDays++;
-              totalLateMinutes += lateMin;
-            }
-            if (hasSchedule) {
-              scheduledDays++;
-              totalScheduledHours += scheduledHours;
-              if (statusKey === "absent") absentDays++;
-            }
-          }
-
-          entries.push({
-            date: dateStr,
-            dayName: arDayMap[dayKey] || dayKey,
-            branchName: (attendance?.branchId ? branchNameById.get(attendance.branchId) : null) || branch.name,
-            scheduledStart,
-            scheduledEnd,
-            actualCheckIn: attendance?.actualCheckIn || (isOff ? "-" : "غ"),
-            actualCheckOut: attendance?.actualCheckOut || (isOff ? "-" : "غ"),
-            workHours: actualHours ? actualHours.toFixed(1) : "-",
-            status: arStatusMap[statusKey] || statusKey,
-            isOff,
-            checkInSignature: attendance?.checkInSignature || null,
-          });
-        }
+        const entries = dayRows.map(row => {
+          const restLike = row.status === "day_off" || row.status === "no_schedule" || row.status === "leave";
+          return {
+            date: row.date,
+            dayName: arDayMap[row.dayOfWeek] || row.dayOfWeek,
+            branchName: (row.attendanceBranchId ? branchNameById.get(row.attendanceBranchId) : null) || branch.name,
+            scheduledStart: row.scheduledStartTime || "-",
+            scheduledEnd: row.scheduledEndTime || "-",
+            actualCheckIn: row.actualStartTime || (restLike ? "-" : "غ"),
+            actualCheckOut: row.actualEndTime || (restLike ? "-" : "غ"),
+            workHours: row.actualHours ? row.actualHours.toFixed(1) : "-",
+            status: arStatusMap[row.status] || row.status,
+            isOff: row.isOff,
+            checkInSignature: row.checkInSignature,
+          };
+        });
 
         return {
           employeeName: emp.name,
           jobTitle: emp.jobTitle,
           employeeNumber: emp.employeeNumber,
-          scheduledDays, presentDays, absentDays, lateDays, offDays,
-          totalScheduledHours: Math.round(totalScheduledHours * 100) / 100,
-          totalActualHours: Math.round(totalActualHours * 100) / 100,
-          totalLateMinutes,
-          totalOvertimeMinutes,
+          scheduledDays: totals.scheduledDays,
+          presentDays: totals.presentDays,
+          absentDays: totals.absentDays,
+          lateDays: totals.lateDays,
+          offDays: totals.offDays,
+          leaveDays: totals.leaveDays,
+          totalScheduledHours: Math.round(totals.scheduledHours * 100) / 100,
+          totalActualHours: Math.round(totals.actualHours * 100) / 100,
+          totalLateMinutes: totals.lateMinutes,
+          totalOvertimeMinutes: totals.overtimeMinutes,
           entries,
         };
       });
@@ -28796,7 +28767,7 @@ export async function registerRoutes(
       }
 
       const arDayMap: Record<string, string> = { sat: "السبت", sun: "الأحد", mon: "الاثنين", tue: "الثلاثاء", wed: "الأربعاء", thu: "الخميس", fri: "الجمعة" };
-      const arStatusMap: Record<string, string> = { present: "حاضر", late: "متأخر", absent: "غائب", day_off: "إجازة", pending: "معلق", no_schedule: "بدون جدول" };
+      const arStatusMap: Record<string, string> = { present: "حاضر", late: "متأخر", absent: "غائب", day_off: "راحة أسبوعية", pending: "معلق", no_schedule: "بدون جدول", leave: "إجازة معتمدة" };
 
       const monthLabel = (() => {
         try {
@@ -28809,15 +28780,15 @@ export async function registerRoutes(
       // Build entries + exceptions in one pass (sorted by date)
       const sortedEntries = [...entries].sort((a, b) => a.date.localeCompare(b.date));
       const pdfEntries = sortedEntries.map(e => {
-        const noSchedule = e.status === "no_schedule";
+        const restLike = e.status === "no_schedule" || e.status === "leave";
         return {
           date: e.date,
           dayName: arDayMap[e.dayOfWeek] || e.dayOfWeek,
           branchName: pdfBranchNameById.get(pdfBranchByDate.get(e.date) || report.branchId) || branch.name,
           scheduledStart: e.scheduledStartTime || "-",
           scheduledEnd: e.scheduledEndTime || "-",
-          actualCheckIn: e.actualStartTime || ((e.isOff || noSchedule) ? "-" : "غ"),
-          actualCheckOut: e.actualEndTime || ((e.isOff || noSchedule) ? "-" : "غ"),
+          actualCheckIn: e.actualStartTime || ((e.isOff || restLike) ? "-" : "غ"),
+          actualCheckOut: e.actualEndTime || ((e.isOff || restLike) ? "-" : "غ"),
           workHours: (e.actualHours && e.actualHours > 0) ? e.actualHours.toFixed(1) : "-",
           status: arStatusMap[e.status || "pending"] || (e.status || "pending"),
           isOff: !!e.isOff,
@@ -28851,7 +28822,8 @@ export async function registerRoutes(
         presentDays: report.totalPresentDays || 0,
         absentDays: report.totalAbsentDays || 0,
         lateDays: report.totalLateDays || 0,
-        offDays: Math.max(0, sortedEntries.filter(e => e.isOff).length),
+        offDays: Math.max(0, sortedEntries.filter(e => e.status === "day_off").length),
+        leaveDays: report.totalLeaveDays ?? sortedEntries.filter(e => e.status === "leave").length,
         totalScheduledHours: report.totalScheduledHours || 0,
         totalActualHours: report.totalActualHours || 0,
         totalLateMinutes: report.totalLateMinutes || 0,

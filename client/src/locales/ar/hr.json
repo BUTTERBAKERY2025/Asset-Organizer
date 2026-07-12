@@ -236,6 +236,7 @@
       "absent": "غائب",
       "late": "متأخر",
       "dayOff": "إجازة",
+      "leave": "إجازة معتمدة",
       "noSchedule": "بدون جدول"
     },
     "reportStatusLabels": {

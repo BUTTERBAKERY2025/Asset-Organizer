@@ -3506,6 +3506,7 @@ export interface BranchTimesheetEmployeeReport {
   absentDays: number;
   lateDays: number;
   offDays: number;
+  leaveDays?: number;
   totalScheduledHours: number;
   totalActualHours: number;
   totalLateMinutes: number;
@@ -3534,6 +3535,9 @@ export async function generateBranchTimesheetPdf(data: BranchTimesheetPdfData): 
     'متأخر': { bg: '#fef3c7', text: '#92400e' },
     'غائب': { bg: '#fee2e2', text: '#991b1b' },
     'إجازة': { bg: '#dbeafe', text: '#1e40af' },
+    'راحة أسبوعية': { bg: '#dbeafe', text: '#1e40af' },
+    'إجازة معتمدة': { bg: '#ede9fe', text: '#5b21b6' },
+    'بدون جدول': { bg: '#f3f4f6', text: '#6b7280' },
     'معلق': { bg: '#f3f4f6', text: '#374151' },
   };
 
@@ -3583,7 +3587,8 @@ export async function generateBranchTimesheetPdf(data: BranchTimesheetPdfData): 
         <div class="summary-item ok"><div class="summary-value">${emp.presentDays}</div><div class="summary-label">الحضور</div></div>
         <div class="summary-item bad"><div class="summary-value">${emp.absentDays}</div><div class="summary-label">الغياب</div></div>
         <div class="summary-item warn"><div class="summary-value">${emp.lateDays}</div><div class="summary-label">التأخير</div></div>
-        <div class="summary-item off"><div class="summary-value">${emp.offDays}</div><div class="summary-label">الإجازات</div></div>
+        <div class="summary-item off"><div class="summary-value">${emp.offDays}</div><div class="summary-label">الراحة الأسبوعية</div></div>
+        ${(emp.leaveDays ?? 0) > 0 ? `<div class="summary-item off"><div class="summary-value">${emp.leaveDays}</div><div class="summary-label">إجازات معتمدة</div></div>` : ''}
         <div class="summary-item info"><div class="summary-value">${emp.totalActualHours.toFixed(1)}</div><div class="summary-label">ساعات العمل</div></div>
       </div>
       <table class="entries-table">
@@ -3737,6 +3742,7 @@ export interface SingleTimesheetPdfData {
   absentDays: number;
   lateDays: number;
   offDays: number;
+  leaveDays?: number;
   totalScheduledHours: number;
   totalActualHours: number;
   totalLateMinutes: number;
@@ -3765,6 +3771,9 @@ export async function generateSingleTimesheetPdf(data: SingleTimesheetPdfData): 
     'متأخر': { bg: '#fef3c7', text: '#92400e' },
     'غائب': { bg: '#fee2e2', text: '#991b1b' },
     'إجازة': { bg: '#dbeafe', text: '#1e40af' },
+    'راحة أسبوعية': { bg: '#dbeafe', text: '#1e40af' },
+    'إجازة معتمدة': { bg: '#ede9fe', text: '#5b21b6' },
+    'بدون جدول': { bg: '#f3f4f6', text: '#6b7280' },
     'معلق': { bg: '#f3f4f6', text: '#374151' },
     'بدون جدول': { bg: '#f1f5f9', text: '#64748b' },
   };
@@ -3946,7 +3955,8 @@ export async function generateSingleTimesheetPdf(data: SingleTimesheetPdfData): 
       <div class="summary-item ok"><div class="summary-value">${data.presentDays}</div><div class="summary-label">الحضور</div></div>
       <div class="summary-item bad"><div class="summary-value">${data.absentDays}</div><div class="summary-label">الغياب</div></div>
       <div class="summary-item warn"><div class="summary-value">${data.lateDays}</div><div class="summary-label">التأخير</div></div>
-      <div class="summary-item off"><div class="summary-value">${data.offDays}</div><div class="summary-label">الإجازات</div></div>
+      <div class="summary-item off"><div class="summary-value">${data.offDays}</div><div class="summary-label">الراحة الأسبوعية</div></div>
+      ${(data.leaveDays ?? 0) > 0 ? `<div class="summary-item off"><div class="summary-value">${data.leaveDays}</div><div class="summary-label">إجازات معتمدة</div></div>` : ''}
       <div class="summary-item info"><div class="summary-value">${data.totalActualHours.toFixed(1)}</div><div class="summary-label">ساعات العمل</div></div>
     </div>
 

@@ -73,6 +73,7 @@ interface TimesheetReport {
   totalPresentDays: number;
   totalAbsentDays: number;
   totalLateDays: number;
+  totalLeaveDays?: number;
   totalScheduledHours: number;
   totalActualHours: number;
   totalOvertimeMinutes: number;
@@ -167,6 +168,7 @@ export default function TimesheetPage() {
     absent: { label: t("timesheet.statusLabels.absent"), color: "bg-red-100 text-red-700", icon: <XCircle className="w-3 h-3" /> },
     late: { label: t("timesheet.statusLabels.late"), color: "bg-amber-100 text-amber-700", icon: <AlertCircle className="w-3 h-3" /> },
     day_off: { label: t("timesheet.statusLabels.dayOff"), color: "bg-blue-100 text-blue-700", icon: <Calendar className="w-3 h-3" /> },
+    leave: { label: t("timesheet.statusLabels.leave"), color: "bg-violet-100 text-violet-700", icon: <Calendar className="w-3 h-3" /> },
     no_schedule: { label: t("timesheet.statusLabels.noSchedule"), color: "bg-slate-100 text-slate-500", icon: <MinusCircle className="w-3 h-3" /> },
   };
 
@@ -817,6 +819,7 @@ export default function TimesheetPage() {
       [t("timesheet.scheduledDays"), selectedReport.totalScheduledDays],
       [t("timesheet.presentDays"), selectedReport.totalPresentDays],
       [t("timesheet.absentDays"), selectedReport.totalAbsentDays],
+      [t("timesheet.statusLabels.leave"), selectedReport.totalLeaveDays ?? 0],
       [t("timesheet.lateDays"), selectedReport.totalLateDays],
       [t("timesheet.totalWorkHours"), selectedReport.totalActualHours?.toFixed(2) || 0],
       [t("timesheet.lateMinutes"), selectedReport.totalLateMinutes],
@@ -962,6 +965,7 @@ export default function TimesheetPage() {
             <div class="summary-item"><div class="summary-value">${selectedReport.totalScheduledDays}</div><div>أيام العمل المقررة</div></div>
             <div class="summary-item"><div class="summary-value">${selectedReport.totalPresentDays}</div><div>أيام الحضور</div></div>
             <div class="summary-item"><div class="summary-value">${selectedReport.totalAbsentDays}</div><div>أيام الغياب</div></div>
+            <div class="summary-item"><div class="summary-value">${selectedReport.totalLeaveDays ?? 0}</div><div>إجازات معتمدة</div></div>
             <div class="summary-item"><div class="summary-value">${selectedReport.totalActualHours?.toFixed(1) || 0}</div><div>إجمالي ساعات العمل</div></div>
           </div>
         </div>
@@ -1445,6 +1449,9 @@ export default function TimesheetPage() {
                     <KpiCard label={t("timesheet.scheduledDays")} value={selectedReport.totalScheduledDays} icon={Calendar} tone="neutral" data-testid="kpi-scheduled-days" />
                     <KpiCard label={t("timesheet.presentDays")} value={selectedReport.totalPresentDays} icon={CheckCircle} tone="money" data-testid="kpi-present-days" />
                     <KpiCard label={t("timesheet.absentDays")} value={selectedReport.totalAbsentDays} icon={XCircle} tone="alert" data-testid="kpi-absent-days" />
+                    {(selectedReport.totalLeaveDays ?? 0) > 0 && (
+                      <KpiCard label={t("timesheet.statusLabels.leave")} value={selectedReport.totalLeaveDays ?? 0} icon={Calendar} tone="neutral" data-testid="kpi-leave-days" />
+                    )}
                     <KpiCard label={t("timesheet.totalWorkHours")} value={Number(selectedReport.totalActualHours?.toFixed(1) ?? 0)} icon={Clock} tone="production" data-testid="kpi-actual-hours" />
                   </div>
 
@@ -1771,7 +1778,7 @@ export default function TimesheetPage() {
                   {/* ====== Status Legend ====== */}
                   <div className="mt-4 flex flex-wrap items-center gap-3 text-xs" data-testid="status-legend">
                     <span className="font-medium text-muted-foreground">{t("timesheet.legendTitle")}:</span>
-                    {(["present", "late", "absent", "day_off", "no_schedule"] as const).map(s => (
+                    {(["present", "late", "absent", "day_off", "leave", "no_schedule"] as const).map(s => (
                       <Badge key={s} className={`${STATUS_LABELS[s]?.color || "bg-gray-100"} gap-1`}>
                         {STATUS_LABELS[s]?.icon}
                         {STATUS_LABELS[s]?.label}

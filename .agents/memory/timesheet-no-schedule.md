@@ -1,17 +1,20 @@
 ---
-name: Timesheet no-schedule accuracy & metric parity
-description: How unscheduled days are handled in timesheet reports and the backend/frontend parity rule for derived metrics.
+name: Timesheet day-status rules & metric parity
+description: Unified day-status semantics (leave/no_schedule/day_off/absent) for timesheet reports and the backend/frontend parity rule for derived metrics.
 ---
 
-Timesheet report generation must NOT invent a default schedule (e.g. 08:00–16:00 / 8h) or mark a day absent when the employee has no schedule entry for that day.
+Timesheet report generation must NOT invent a default schedule (e.g. 08:00–16:00 / 8h) or mark a day absent when the employee has no schedule entry, and approved leave days must never count as absent.
 
-**Rule:**
-- A day with no schedule and no attendance (and not the weekly off) → status `no_schedule`. It is NOT counted as absent and contributes 0 scheduled hours.
-- A day with attendance but no schedule → counts as worked (present/late), schedule columns shown as "—".
-- `scheduledDays` and `absent` totals count ONLY days that have a real schedule (and are not off).
+**Unified generator:** all three generation paths (single, bulk, branch-PDF) share ONE day-loop helper. Never re-add a per-route day loop — divergence between paths was the original source of accuracy bugs.
 
-**Why:** Previously unscheduled days were faked as 08:00–16:00/8h/absent, producing false absences that fed into payroll-style absence deductions. Real branches don't schedule every employee every day.
+**Status priority (per day):** worked (check-in or present/late attendance) → present/late; else approved leave overlapping the date → `leave`; else off day → `day_off`; else explicit schedule → `absent`; else `no_schedule`.
 
-**Parity rule (must stay in sync):** any metric derived on the frontend from report entries must use the SAME predicate the backend uses for its stored totals. Specifically, late-day counts use `status === "late"` on BOTH sides — do NOT use `lateMinutes > 0` on the frontend, it diverges from the backend total.
+**Rules:**
+- `scheduledDays`/`absentDays` count ONLY real scheduled non-off, non-leave days. Approved leave excludes the day from both.
+- Approved leaves come from `leave_requests` (status=approved) keyed by branchEmployeeId ONLY — UUID-only users without a linked branch employee have no leaves here. Fetch across ALL branches (transferred employees), filter per employee.
+- Totals count `leaveDays` and `offDays` by STATUS, not by the `isOff` flag — a leave day falling on a rest day has `isOff=true` but must count as leave, not off (double-count bug caught in review).
+- PDFs/status maps: leave & no_schedule & off days show "-" (not "غ") for missing check-in/out; every Arabic status map must include `leave` or it renders raw key.
 
-**How to apply:** the no-schedule logic lives in all timesheet day-loop generators (single, bulk, branch-pdf) plus the single-PDF entry mapping in pdf-generator. The financial-impact endpoint reuses `totalAbsentDays`, so its absence deduction is automatically correct once totals exclude no_schedule days.
+**Why:** faked schedules/absences fed payroll-style absence deductions; the financial-impact endpoint reuses stored `totalAbsentDays`, so deductions auto-correct once totals exclude leave/no_schedule days.
+
+**Parity rule (must stay in sync):** any metric derived on the frontend from report entries must use the SAME predicate the backend uses for its stored totals (e.g. late = `status === "late"`, never `lateMinutes > 0`).
