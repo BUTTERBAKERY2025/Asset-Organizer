@@ -1248,19 +1248,69 @@ export function registerHrRoutes(app: Express) {
         .orderBy(branchEmployees.employeeName)
         .limit(2000);
 
-      const results = [];
-      for (const e of emps) {
-        const bal = await getLeaveBalanceSummary(e.id, year, leaveType, e.hireDate);
-        results.push({
-          ...bal,
+      // تحميل جماعي بدل استعلامين لكل موظف (كان بطيئاً جداً مع كثرة الموظفين)
+      const empIds = emps.map((e) => e.id);
+      if (empIds.length === 0) return res.json([]);
+
+      const yearStart = `${year}-01-01`;
+      const yearEnd = `${year}-12-31`;
+      const [balRows, approvedRows] = await Promise.all([
+        db.select().from(leaveBalances).where(and(
+          inArray(leaveBalances.branchEmployeeId, empIds),
+          eq(leaveBalances.year, year),
+          eq(leaveBalances.leaveType, leaveType),
+        )),
+        db.select({
+          branchEmployeeId: leaveRequests.branchEmployeeId,
+          startDate: leaveRequests.startDate,
+          endDate: leaveRequests.endDate,
+        }).from(leaveRequests).where(and(
+          inArray(leaveRequests.branchEmployeeId, empIds),
+          eq(leaveRequests.leaveType, leaveType),
+          eq(leaveRequests.status, "approved"),
+          lte(leaveRequests.startDate, yearEnd),
+          gte(leaveRequests.endDate, yearStart),
+        )),
+      ]);
+
+      const balByEmp = new Map(balRows.map((r) => [r.branchEmployeeId, r]));
+      const MS_PER_DAY = 24 * 60 * 60 * 1000;
+      const usedByEmp = new Map<number, number>();
+      for (const lr of approvedRows) {
+        // نحتسب فقط الأيام الواقعة داخل السنة (تقسيم الإجازات العابرة بين سنتين)
+        const segStart = lr.startDate > yearStart ? lr.startDate : yearStart;
+        const segEnd = lr.endDate < yearEnd ? lr.endDate : yearEnd;
+        const days = Math.round((new Date(segEnd).getTime() - new Date(segStart).getTime()) / MS_PER_DAY) + 1;
+        if (days > 0) usedByEmp.set(lr.branchEmployeeId, (usedByEmp.get(lr.branchEmployeeId) || 0) + days);
+      }
+
+      const results = emps.map((e) => {
+        const row = balByEmp.get(e.id);
+        const usedDays = usedByEmp.get(e.id) || 0;
+        const entitledDays = row ? Number(row.entitledDays) : suggestedEntitlement(e.hireDate);
+        const carriedOverDays = row ? Number(row.carriedOverDays) : 0;
+        const adjustmentDays = row ? Number(row.adjustmentDays) : 0;
+        const settledDays = row ? Number((row as any).settledDays ?? 0) : 0;
+        return {
+          branchEmployeeId: e.id,
+          year,
+          leaveType,
+          entitledDays,
+          carriedOverDays,
+          adjustmentDays,
+          settledDays,
+          usedDays,
+          remainingDays: entitledDays + carriedOverDays + adjustmentDays - usedDays - settledDays,
+          note: row?.note ?? null,
+          hasRow: !!row,
           employeeName: e.employeeName,
           jobTitle: e.jobTitle,
           branchId: e.branchId,
           branchName: e.branchName,
           hireDate: e.hireDate,
           suggestedEntitlement: suggestedEntitlement(e.hireDate),
-        });
-      }
+        };
+      });
       res.json(results);
     } catch (e: any) {
       console.error("[hr/leave-balances] list error:", e);
