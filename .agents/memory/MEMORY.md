@@ -31,3 +31,4 @@
 - [Assembly per-clause voting](assembly-per-clause-voting.md) — resolutions can have بنود; if any exist, whole-resolution vote is rejected (strict mode) and clauses freeze once ANY resolution-level vote exists; DB partial-unique guards both vote shapes.
 - [Governance resolution print routing](governance-resolution-printers.md) — assembly-typed resolutions often live in board_resolutions and print via board-resolution-print.ts (not assembly-resolution-print.ts); confirm table+source before editing a PDF.
 - [Assembly re-vote grants](assembly-revote-grants.md) — one-time revote tokens: claim atomically (UPDATE ... WHERE status='open' + rowcount==1) before casting; whole-resolution grants forbidden when clauses exist.
+- [Leave exit/return/settlement](leave-exit-return-settlement.md) — adjust attendance BEFORE setting actualReturnDate (scheduler stops at that point); Drizzle unique violations live in e.cause.constraint, not e.message.

@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   CalendarDays, Plus, CheckCircle2, XCircle, Clock, Trash2, ArrowRight,
   Wallet, Printer, FileSpreadsheet, Ban, Paperclip, Pencil, ChevronRight, ChevronLeft, ListChecks, Sun, FileText, Calculator,
+  Banknote, LogOut, LogIn, AlertTriangle,
 } from "lucide-react";
 import { LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS } from "@shared/schema";
 import butterLogo from "@assets/logo_-5_1765206843638.png";
@@ -82,6 +83,17 @@ export default function LeavesPage() {
   const [printLeave, setPrintLeave] = useState<Leave | null>(null);
   const [editingDates, setEditingDates] = useState<Leave | null>(null);
   const [datesForm, setDatesForm] = useState({ startDate: "", endDate: "", note: "" });
+
+  // ===== دورة الخروج والعودة + التصفية =====
+  const [exitLeave, setExitLeave] = useState<Leave | null>(null);
+  const [exitDate, setExitDate] = useState("");
+  const [returnLeave, setReturnLeave] = useState<Leave | null>(null);
+  const [returnDate, setReturnDate] = useState("");
+  const [settleLeave, setSettleLeave] = useState<Leave | null>(null);
+  const [settleForm, setSettleForm] = useState({ days: "", useManual: false, manualAmount: "", note: "" });
+  const [receiptSettlement, setReceiptSettlement] = useState<any | null>(null);
+  const receiptPrintRef = useRef<HTMLDivElement>(null);
+  const printReceipt = useReactToPrint({ contentRef: receiptPrintRef });
 
   // balances state
   const [balYear, setBalYear] = useState(currentYear);
@@ -378,6 +390,80 @@ export default function LeavesPage() {
       setEditingDates(null);
     },
     onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل التعديل", variant: "destructive" }),
+  });
+
+  // ===== معاينة التصفية (عند فتح نافذة التصفية) =====
+  const { data: settlePreview, isLoading: settlePreviewLoading } = useQuery<any>({
+    queryKey: ["/api/hr/leaves/settlement-preview", settleLeave?.id],
+    queryFn: async () =>
+      (await apiRequest("GET", `/api/hr/leaves/${settleLeave!.id}/settlement-preview`)).json(),
+    enabled: !!settleLeave,
+  });
+
+  const settlementMutation = useMutation({
+    mutationFn: async ({ id, days, manualAmount, note }: any) => {
+      const res = await apiRequest("POST", `/api/hr/leaves/${id}/settlement`, { days, manualAmount, note });
+      return res.json();
+    },
+    onSuccess: (s: any) => {
+      qc.invalidateQueries({ queryKey: ["/api/hr/leaves"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/leave-balances"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/leaves/employee-statement"] });
+      toast({ title: "تمت تصفية الرصيد", description: `المبلغ: ${arNum(s.finalAmount)} ريال عن ${arNum(s.settledDays)} يوم` });
+      const empName = settleLeave?.employeeName;
+      setSettleLeave(null);
+      setSettleForm({ days: "", useManual: false, manualAmount: "", note: "" });
+      setReceiptSettlement({ ...s, employeeName: empName });
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشلت التصفية", variant: "destructive" }),
+  });
+
+  const cancelSettlementMutation = useMutation({
+    mutationFn: async ({ id, reason }: any) => {
+      const res = await apiRequest("POST", `/api/hr/leave-settlements/${id}/cancel`, { reason });
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/hr/leaves"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/leave-balances"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/leaves/settlement-preview"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/leaves/employee-statement"] });
+      toast({ title: "تم إلغاء التصفية وإعادة الأيام للرصيد" });
+      setSettleLeave(null);
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل الإلغاء", variant: "destructive" }),
+  });
+
+  const confirmExitMutation = useMutation({
+    mutationFn: async ({ id, actualExitDate }: any) => {
+      const res = await apiRequest("POST", `/api/hr/leaves/${id}/confirm-exit`, { actualExitDate });
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/hr/leaves"] });
+      toast({ title: "تم تأكيد مباشرة الخروج" });
+      setExitLeave(null);
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل تأكيد الخروج", variant: "destructive" }),
+  });
+
+  const confirmReturnMutation = useMutation({
+    mutationFn: async ({ id, actualReturnDate }: any) => {
+      const res = await apiRequest("POST", `/api/hr/leaves/${id}/confirm-return`, { actualReturnDate });
+      return res.json();
+    },
+    onSuccess: (r: any) => {
+      qc.invalidateQueries({ queryKey: ["/api/hr/leaves"] });
+      const late = Number(r?.lateDays || 0);
+      toast({
+        title: "تم تسجيل مباشرة العمل",
+        description: late > 0
+          ? `تأخر ${arNum(late)} يوم عن موعد العودة — سُجّلت الأيام غياباً`
+          : "عاد في الموعد المحدد",
+      });
+      setReturnLeave(null);
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل تسجيل المباشرة", variant: "destructive" }),
   });
 
   const applyChainsMutation = useMutation({
@@ -742,6 +828,29 @@ export default function LeavesPage() {
                               العودة للعمل: {fmtDate((() => { const d = new Date(l.endDate + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })())}
                             </span>
                           )}
+                          <span className="flex flex-wrap gap-1 mt-0.5">
+                            {l.exitConfirmedAt && (
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 border-sky-300 text-sky-700" data-testid={`badge-exit-${l.id}`}>
+                                خرج {fmtDate(l.actualExitDate)}
+                              </Badge>
+                            )}
+                            {l.returnConfirmedAt && (
+                              l.returnStatus === "late" ? (
+                                <Badge variant="outline" className="text-[9px] px-1 py-0 border-red-300 text-red-700" data-testid={`badge-return-${l.id}`}>
+                                  باشر متأخراً {arNum(l.lateDays)} يوم
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[9px] px-1 py-0 border-emerald-300 text-emerald-700" data-testid={`badge-return-${l.id}`}>
+                                  باشر {fmtDate(l.actualReturnDate)}
+                                </Badge>
+                              )
+                            )}
+                            {l.settlementId && (
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 border-amber-300 text-amber-700" data-testid={`badge-settlement-${l.id}`}>
+                                مُصفّى {arNum(l.settlementDays)} يوم / {arNum(l.settlementAmount)} ر.س
+                              </Badge>
+                            )}
+                          </span>
                         </td>
                         <td className="p-2 tabular-nums">
                           {arNum(l.totalDays)}
@@ -788,6 +897,21 @@ export default function LeavesPage() {
                             {(l.status === "approved" || l.status === "pending") && (
                               <Button size="sm" variant="ghost" className="text-orange-600" title="إلغاء/سحب" onClick={() => { setCancelReason(""); setCancelling(l); }} data-testid={`button-cancel-${l.id}`}>
                                 <Ban className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {l.status === "approved" && !l.exitConfirmedAt && (
+                              <Button size="sm" variant="ghost" className="text-sky-600" title="تأكيد مباشرة الخروج" onClick={() => { setExitDate(l.startDate); setExitLeave(l); }} data-testid={`button-confirm-exit-${l.id}`}>
+                                <LogOut className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {l.status === "approved" && !l.returnConfirmedAt && (
+                              <Button size="sm" variant="ghost" className="text-emerald-700" title="تسجيل مباشرة العمل" onClick={() => { setReturnDate(new Date().toLocaleDateString("en-CA")); setReturnLeave(l); }} data-testid={`button-confirm-return-${l.id}`}>
+                                <LogIn className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {l.status === "approved" && l.leaveType === "annual" && (
+                              <Button size="sm" variant="ghost" className="text-amber-600" title={l.settlementId ? "عرض/إلغاء التصفية" : "تصفية الرصيد (سند صرف)"} onClick={() => { setSettleForm({ days: "", useManual: false, manualAmount: "", note: "" }); setSettleLeave(l); }} data-testid={`button-settle-${l.id}`}>
+                                <Banknote className="h-3.5 w-3.5" />
                               </Button>
                             )}
                             <Button size="sm" variant="ghost" title="طباعة نموذج" onClick={() => setPrintLeave(l)} data-testid={`button-print-${l.id}`}>
@@ -1461,6 +1585,236 @@ export default function LeavesPage() {
         </DialogContent>
       </Dialog>
 
+      {/* تأكيد مباشرة الخروج */}
+      <Dialog open={!!exitLeave} onOpenChange={(o) => { if (!o) setExitLeave(null); }}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><LogOut className="h-5 w-5 text-sky-600" />تأكيد مباشرة الخروج للإجازة</DialogTitle></DialogHeader>
+          {exitLeave && (
+            <div className="space-y-3">
+              <div className="text-sm bg-slate-50 rounded p-2">
+                <div className="font-semibold">{exitLeave.employeeName}</div>
+                <div className="text-xs text-muted-foreground">{LEAVE_TYPE_LABELS[exitLeave.leaveType] || exitLeave.leaveType} · {exitLeave.startDate} → {exitLeave.endDate}</div>
+              </div>
+              <div>
+                <Label>تاريخ الخروج الفعلي</Label>
+                <Input type="date" value={exitDate} onChange={(e) => setExitDate(e.target.value)} data-testid="input-exit-date" />
+              </div>
+              <div className="text-xs text-muted-foreground">
+                موعد العودة المتوقع: <span className="font-bold">{fmtDate((() => { const d = new Date(exitLeave.endDate + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })())}</span>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExitLeave(null)}>إلغاء</Button>
+            <Button
+              onClick={() => confirmExitMutation.mutate({ id: exitLeave.id, actualExitDate: exitDate })}
+              disabled={confirmExitMutation.isPending || !exitDate}
+              data-testid="button-save-exit"
+            >
+              {confirmExitMutation.isPending ? "جارٍ الحفظ..." : "تأكيد الخروج"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* تسجيل مباشرة العمل (العودة) */}
+      <Dialog open={!!returnLeave} onOpenChange={(o) => { if (!o) setReturnLeave(null); }}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><LogIn className="h-5 w-5 text-emerald-700" />تسجيل مباشرة العمل</DialogTitle></DialogHeader>
+          {returnLeave && (() => {
+            const expected = (() => { const d = new Date(returnLeave.endDate + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })();
+            const late = returnDate && returnDate > expected ? Math.round((new Date(returnDate + "T00:00:00Z").getTime() - new Date(expected + "T00:00:00Z").getTime()) / 86400000) : 0;
+            return (
+              <div className="space-y-3">
+                <div className="text-sm bg-slate-50 rounded p-2">
+                  <div className="font-semibold">{returnLeave.employeeName}</div>
+                  <div className="text-xs text-muted-foreground">{LEAVE_TYPE_LABELS[returnLeave.leaveType] || returnLeave.leaveType} · {returnLeave.startDate} → {returnLeave.endDate}</div>
+                  <div className="text-xs mt-1">موعد العودة المتوقع: <span className="font-bold">{expected}</span></div>
+                </div>
+                <div>
+                  <Label>تاريخ المباشرة الفعلي</Label>
+                  <Input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} data-testid="input-return-date" />
+                </div>
+                {late > 0 && (
+                  <div className="text-xs bg-red-50 text-red-700 rounded p-2 flex items-start gap-1.5" data-testid="text-late-warning">
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>الموظف متأخر <b>{arNum(late)}</b> يوم عن موعد العودة — ستُسجَّل أيام التأخير <b>غياباً بدون أجر</b> تلقائياً في سجل الحضور.</span>
+                  </div>
+                )}
+                {returnDate && returnDate <= expected && (
+                  <div className="text-xs bg-emerald-50 text-emerald-700 rounded p-2" data-testid="text-ontime-note">
+                    ✓ عودة في الموعد — لن تُسجَّل أي غيابات.
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReturnLeave(null)}>إلغاء</Button>
+            <Button
+              onClick={() => confirmReturnMutation.mutate({ id: returnLeave.id, actualReturnDate: returnDate })}
+              disabled={confirmReturnMutation.isPending || !returnDate}
+              data-testid="button-save-return"
+            >
+              {confirmReturnMutation.isPending ? "جارٍ الحفظ..." : "تسجيل المباشرة"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* تصفية رصيد الإجازة السنوية */}
+      <Dialog open={!!settleLeave} onOpenChange={(o) => { if (!o) setSettleLeave(null); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-auto" dir="rtl">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Banknote className="h-5 w-5 text-amber-600" />تصفية رصيد الإجازة السنوية</DialogTitle></DialogHeader>
+          {settleLeave && settlePreviewLoading && <div className="text-center py-6 text-sm text-muted-foreground">جارٍ تحميل المعاينة...</div>}
+          {settleLeave && !settlePreviewLoading && settlePreview && (() => {
+            const p = settlePreview;
+            if (p.alreadySettled && p.settlement) {
+              return (
+                <div className="space-y-3">
+                  <div className="text-sm bg-amber-50 rounded p-3 space-y-1" data-testid="box-existing-settlement">
+                    <div className="font-semibold text-amber-800">توجد تصفية سارية لهذا الطلب</div>
+                    <div className="text-xs">الأيام: <b>{arNum(p.settlement.settledDays)}</b> · المبلغ: <b>{arNum(p.settlement.finalAmount)}</b> ر.س · قيمة اليوم: {arNum(p.settlement.dailyRate)} ر.س</div>
+                    {p.settlement.note && <div className="text-xs text-muted-foreground">ملاحظة: {p.settlement.note}</div>}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="flex-1" onClick={() => setReceiptSettlement({ ...p.settlement, employeeName: settleLeave.employeeName })} data-testid="button-reprint-receipt">
+                      <Printer className="h-4 w-4 ms-1" />طباعة سند الصرف
+                    </Button>
+                    <Button
+                      variant="destructive" className="flex-1"
+                      onClick={() => { if (confirm("سيتم إلغاء التصفية وإعادة الأيام إلى رصيد الموظف. متابعة؟")) cancelSettlementMutation.mutate({ id: p.settlement.id, reason: "إلغاء من شاشة الإجازات" }); }}
+                      disabled={cancelSettlementMutation.isPending}
+                      data-testid="button-cancel-settlement"
+                    >
+                      {cancelSettlementMutation.isPending ? "جارٍ الإلغاء..." : "إلغاء التصفية"}
+                    </Button>
+                  </div>
+                </div>
+              );
+            }
+            const remainingDays = Number(p.balance?.remainingDays ?? 0);
+            const days = settleForm.days !== "" ? Number(settleForm.days) : Number(p.suggestedDays || 0);
+            const autoAmount = Math.round(days * Number(p.dailyRate || 0) * 100) / 100;
+            const finalAmount = settleForm.useManual && settleForm.manualAmount !== "" ? Number(settleForm.manualAmount) : autoAmount;
+            return (
+              <div className="space-y-3">
+                <div className="text-sm bg-slate-50 rounded p-2">
+                  <div className="font-semibold">{settleLeave.employeeName}</div>
+                  <div className="text-xs text-muted-foreground">إجازة سنوية · {settleLeave.startDate} → {settleLeave.endDate}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs bg-blue-50 rounded p-2" data-testid="box-settle-preview">
+                  <div>الراتب الإجمالي: <b>{arNum(p.grossSalary)}</b> ر.س</div>
+                  <div>قيمة اليوم (÷{arNum(p.divisor)}): <b>{arNum(p.dailyRate)}</b> ر.س</div>
+                  <div>الرصيد المتبقي: <b className={remainingDays < 0 ? "text-red-600" : ""}>{arNum(remainingDays)}</b> يوم</div>
+                  <div>الأيام المقترحة: <b>{arNum(p.suggestedDays)}</b> يوم</div>
+                </div>
+                <div>
+                  <Label>عدد الأيام المراد تصفيتها</Label>
+                  <Input type="number" inputMode="decimal" min="0.5" step="0.5" value={settleForm.days !== "" ? settleForm.days : String(p.suggestedDays || "")} onChange={(e) => setSettleForm({ ...settleForm, days: e.target.value })} data-testid="input-settle-days" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="manual-amount" checked={settleForm.useManual} onChange={(e) => setSettleForm({ ...settleForm, useManual: e.target.checked })} data-testid="checkbox-manual-amount" />
+                  <Label htmlFor="manual-amount" className="cursor-pointer">تحديد المبلغ يدوياً</Label>
+                </div>
+                {settleForm.useManual && (
+                  <div>
+                    <Label>المبلغ اليدوي (ر.س)</Label>
+                    <Input type="number" inputMode="decimal" min="0" step="0.01" value={settleForm.manualAmount} onChange={(e) => setSettleForm({ ...settleForm, manualAmount: e.target.value })} data-testid="input-manual-amount" />
+                  </div>
+                )}
+                <div>
+                  <Label>ملاحظة (اختياري)</Label>
+                  <Input value={settleForm.note} onChange={(e) => setSettleForm({ ...settleForm, note: e.target.value })} data-testid="input-settle-note" />
+                </div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm flex justify-between items-center" data-testid="text-settle-total">
+                  <span>المبلغ النهائي للصرف:</span>
+                  <span className="font-extrabold text-lg text-amber-800 tabular-nums">{arNum(finalAmount)} ر.س</span>
+                </div>
+                {days > remainingDays && (
+                  <div className="text-xs bg-red-50 text-red-700 rounded p-2" data-testid="text-settle-over-warning">
+                    ⚠ الأيام المطلوبة تتجاوز الرصيد المتبقي ({arNum(remainingDays)} يوم) — سيرفض النظام التصفية.
+                  </div>
+                )}
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setSettleLeave(null)}>إلغاء</Button>
+                  <Button
+                    onClick={() => settlementMutation.mutate({
+                      id: settleLeave.id,
+                      days,
+                      manualAmount: settleForm.useManual && settleForm.manualAmount !== "" ? Number(settleForm.manualAmount) : undefined,
+                      note: settleForm.note.trim() || undefined,
+                    })}
+                    disabled={settlementMutation.isPending || !days || days <= 0 || (settleForm.useManual && (settleForm.manualAmount === "" || Number(settleForm.manualAmount) < 0))}
+                    data-testid="button-save-settlement"
+                  >
+                    {settlementMutation.isPending ? "جارٍ التصفية..." : "اعتماد التصفية"}
+                  </Button>
+                </DialogFooter>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* سند صرف تصفية الإجازة */}
+      <Dialog open={!!receiptSettlement} onOpenChange={(o) => { if (!o) setReceiptSettlement(null); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-auto" dir="rtl">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Printer className="h-5 w-5" />سند صرف — تصفية رصيد إجازة</DialogTitle></DialogHeader>
+          {receiptSettlement && (
+            <div ref={receiptPrintRef} className="leave-print bg-white text-black p-6" dir="rtl">
+              <div className="flex items-center justify-between border-b-4 pb-3 mb-4" style={{ borderColor: "#C8932A" }}>
+                <div className="flex items-center gap-3">
+                  <img src={butterLogo} alt="Butter Bakery" className="h-14 w-14 object-contain" />
+                  <div className="text-start">
+                    <h2 className="text-lg font-extrabold leading-tight" style={{ color: "#8A6212" }}>شركة الزبد الأفضل التجارية</h2>
+                    <div className="text-xs font-semibold" style={{ color: "#C8932A" }}>Butter Bakery Trading Co.</div>
+                    <div className="text-[10px] text-gray-600">إدارة الموارد البشرية — سند صرف تصفية رصيد إجازة سنوية</div>
+                  </div>
+                </div>
+                <div className="text-end text-[10px] text-gray-600 leading-relaxed">
+                  <div>رقم السند: <span className="font-bold text-black" data-testid="text-receipt-number">LS-{receiptSettlement.id}</span></div>
+                  <div>التاريخ: <span className="font-bold text-black">{receiptSettlement.settlementDate || (receiptSettlement.createdAt || new Date().toISOString()).slice(0, 10)}</span></div>
+                </div>
+              </div>
+              <table className="w-full text-sm border-collapse mb-4">
+                <tbody>
+                  <PrintRow label="اسم الموظف" value={receiptSettlement.employeeName || "-"} />
+                  <PrintRow label="عدد الأيام المصفّاة" value={`${arNum(receiptSettlement.settledDays)} يوم`} />
+                  <PrintRow label="الراتب الإجمالي" value={`${arNum(receiptSettlement.grossSalary)} ريال`} />
+                  <PrintRow label="قيمة اليوم الواحد" value={`${arNum(receiptSettlement.dailyRate)} ريال (الراتب ÷ ${arNum(receiptSettlement.divisor)})`} />
+                  <PrintRow label="المبلغ المحسوب" value={`${arNum(receiptSettlement.calculatedAmount)} ريال`} />
+                  {receiptSettlement.isManualAmount && (
+                    <PrintRow label="طريقة التحديد" value="مبلغ محدَّد يدوياً" />
+                  )}
+                  <PrintRow label="المبلغ النهائي المستحق" value={<span className="font-extrabold text-base">{arNum(receiptSettlement.finalAmount)} ريال سعودي</span>} />
+                  {receiptSettlement.note && <PrintRow label="ملاحظات" value={receiptSettlement.note} />}
+                </tbody>
+              </table>
+              <div className="text-xs text-gray-700 leading-relaxed mb-8">
+                أُصرف للموظف المذكور أعلاه مبلغ التصفية النقدية لرصيد إجازته السنوية وفقاً لنظام العمل السعودي، ويُعد هذا السند إثباتاً لاستلام المبلغ.
+              </div>
+              <div className="grid grid-cols-3 gap-6 text-center text-xs mt-10">
+                {["توقيع الموظف (المستلم)", "الموارد البشرية", "المدير المالي"].map((t) => (
+                  <div key={t}>
+                    <div className="border-t border-gray-400 pt-1 font-bold">{t}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="border-t border-gray-300 mt-8 pt-2 text-[9px] text-center text-gray-500">
+                شركة الزبد الأفضل التجارية · سجل تجاري: 7026155296
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReceiptSettlement(null)}>إغلاق</Button>
+            <Button onClick={printReceipt} data-testid="button-print-receipt">
+              <Printer className="h-4 w-4 ms-1" />طباعة السند
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Employee leave statement dialog */}
       <Dialog open={!!stmtEmpId} onOpenChange={(o) => { if (!o) setStmtEmpId(null); }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-auto" dir="rtl">
@@ -1575,6 +1929,33 @@ export default function LeavesPage() {
                     ))}
                   </tbody>
                 </table>
+              )}
+
+              {/* التصفيات النقدية */}
+              {(statement.settlements || []).length > 0 && (
+                <>
+                  <h4 className="font-bold text-sm mb-1.5 mt-4" style={{ color: "#8A6212" }}>التصفيات النقدية لرصيد الإجازات</h4>
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr style={{ backgroundColor: "#FBF3E0" }}>
+                        {["التاريخ", "الأيام المصفّاة", "قيمة اليوم", "المبلغ (ر.س)", "ملاحظة"].map((h) => (
+                          <th key={h} className="border p-1.5 font-bold" style={{ borderColor: "#E5C98F", color: "#8A6212" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(statement.settlements || []).map((s: any) => (
+                        <tr key={s.id} data-testid={`row-stmt-settlement-${s.id}`}>
+                          <td className="border p-1.5 tabular-nums" style={{ borderColor: "#E5C98F" }}>{s.settlementDate || (s.createdAt || "").slice(0, 10)}</td>
+                          <td className="border p-1.5 tabular-nums text-center" style={{ borderColor: "#E5C98F" }}>{arNum(s.settledDays)}</td>
+                          <td className="border p-1.5 tabular-nums text-center" style={{ borderColor: "#E5C98F" }}>{arNum(s.dailyRate)}</td>
+                          <td className="border p-1.5 tabular-nums text-center font-bold" style={{ borderColor: "#E5C98F" }}>{arNum(s.finalAmount)}</td>
+                          <td className="border p-1.5" style={{ borderColor: "#E5C98F" }}>{s.note || "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
               )}
 
               <div className="border-t border-gray-300 mt-6 pt-2 text-[9px] text-center text-gray-500">

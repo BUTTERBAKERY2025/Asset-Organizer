@@ -1,7 +1,9 @@
 import { db } from "./db";
-import { and, eq, lte, lt, sql, desc } from "drizzle-orm";
+import { and, eq, lte, lt, gte, sql, desc } from "drizzle-orm";
 import { notificationQueue, reportSchedules, reportRuns, systemNotifications, notificationAutomations, branchEmployees, leaveRequests, notifications } from "@shared/schema";
 import { sendWhatsAppMessage, sendSMS, isTwilioConfigured } from "./twilio-service";
+import { markOverdueAbsences, addDaysIso } from "./leave-helpers";
+import { isNull } from "drizzle-orm";
 import { generateReport, type ReportType } from "./report-generator";
 import { z } from "zod";
 
@@ -360,6 +362,51 @@ export async function processReturnReminders(force = false): Promise<{ queued: n
   return { queued, skipped };
 }
 
+/**
+ * الغياب التلقائي للمتأخرين عن العودة من الإجازة:
+ * للإجازات المعتمدة التي انتهت ولم تُسجَّل لها مباشرة العمل بعد،
+ * نسجّل غياباً لكل يوم بعد نهاية الإجازة حتى الأمس (بتوقيت الرياض).
+ * تعمل مرة يومياً بعد 6 صباحاً، آمنة للتكرار (لا تلمس السجلات القائمة).
+ */
+let lastOverdueAbsenceDate: string | null = null; // YYYY-MM-DD (Riyadh)
+export async function processOverdueLeaveAbsences(force = false): Promise<{ marked: number; leaves: number }> {
+  const todayRiyadh = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
+  if (!force && lastOverdueAbsenceDate === todayRiyadh) return { marked: 0, leaves: 0 };
+
+  // نغطي حتى 180 يوماً للخلف فقط (حد أقصى معقول)
+  const minEndDate = addDaysIso(todayRiyadh, -180);
+  const yesterday = addDaysIso(todayRiyadh, -1);
+  const overdue = await db
+    .select({
+      id: leaveRequests.id,
+      branchEmployeeId: leaveRequests.branchEmployeeId,
+      branchId: leaveRequests.branchId,
+      endDate: leaveRequests.endDate,
+    })
+    .from(leaveRequests)
+    .where(and(
+      eq(leaveRequests.status, "approved"),
+      lt(leaveRequests.endDate, todayRiyadh),
+      gte(leaveRequests.endDate, minEndDate),
+      isNull(leaveRequests.actualReturnDate),
+    ));
+
+  let marked = 0, leaves = 0;
+  for (const leave of overdue) {
+    try {
+      // الغياب يُسجَّل حتى الأمس — يوم اليوم قد يباشر فيه الموظف
+      const n = await markOverdueAbsences(leave, yesterday);
+      if (n > 0) { marked += n; leaves++; }
+    } catch (err: any) {
+      console.error(`[scheduler] overdue-absence error for leave ${leave.id}:`, err.message);
+    }
+  }
+
+  lastOverdueAbsenceDate = todayRiyadh;
+  if (marked > 0) console.log(`[scheduler] overdue-absences: marked ${marked} days across ${leaves} leaves`);
+  return { marked, leaves };
+}
+
 async function tick() {
   if (tickRunning) {
     console.log("[scheduler] tick skipped - previous tick still running");
@@ -379,6 +426,11 @@ async function tick() {
       const hRiyadh = Number(new Date().toLocaleString("en-US", { timeZone: "Asia/Riyadh", hour: "2-digit", hour12: false }));
       if (hRiyadh >= 6) await processReturnReminders(false);
     } catch (e: any) { console.error("[scheduler] processReturnReminders error:", e.message); }
+    // الغياب التلقائي للمتأخرين عن العودة — بعد 6 صباحاً بتوقيت الرياض، مرة يومياً.
+    try {
+      const hRiyadh = Number(new Date().toLocaleString("en-US", { timeZone: "Asia/Riyadh", hour: "2-digit", hour12: false }));
+      if (hRiyadh >= 6) await processOverdueLeaveAbsences(false);
+    } catch (e: any) { console.error("[scheduler] processOverdueLeaveAbsences error:", e.message); }
   } finally {
     tickRunning = false;
   }

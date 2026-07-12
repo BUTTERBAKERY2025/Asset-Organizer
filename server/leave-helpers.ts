@@ -338,6 +338,87 @@ export async function reverseAttendanceForLeave(leaveId: number): Promise<number
 }
 
 // ============================================================
+// الغياب التلقائي للمتأخرين عن العودة من الإجازة
+// ============================================================
+
+const overdueMarker = (id: number) => `__leave_overdue:${id}`;
+
+/** يضيف يوماً واحداً لتاريخ YYYY-MM-DD. */
+export function addDaysIso(date: string, days: number): string {
+  const d = new Date(date + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** فرق الأيام بين تاريخين (b - a) بالأيام التقويمية. */
+export function isoDiffDays(a: string, b: string): number {
+  return Math.round((new Date(b + "T00:00:00Z").getTime() - new Date(a + "T00:00:00Z").getTime()) / 86400000);
+}
+
+/**
+ * يسجّل غياباً تلقائياً لأيام التأخير عن العودة من الإجازة:
+ * من اليوم التالي لنهاية الإجازة وحتى `untilDate` (شامل).
+ * لا يمسّ أي سجل حضور قائم (idempotent وغير متلف). بحد أقصى 180 يوماً.
+ */
+export async function markOverdueAbsences(leave: {
+  id: number;
+  branchEmployeeId: number;
+  branchId: string;
+  endDate: string;
+}, untilDate: string): Promise<number> {
+  const firstAbsent = addDaysIso(leave.endDate, 1);
+  if (untilDate < firstAbsent) return 0;
+  const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, leave.branchEmployeeId));
+  if (!emp) return 0;
+
+  const total = Math.min(isoDaysInclusive(firstAbsent, untilDate), 180);
+  const empIdStr = attendanceEmployeeId(emp);
+  const dates: string[] = [];
+  for (let i = 0; i < total; i++) dates.push(addDaysIso(firstAbsent, i));
+
+  const existing = await db
+    .select({ attendanceDate: attendanceRecords.attendanceDate })
+    .from(attendanceRecords)
+    .where(and(
+      inArray(attendanceRecords.attendanceDate, dates),
+      sql`(${attendanceRecords.branchEmployeeId} = ${emp.id} OR ${attendanceRecords.employeeId} = ${empIdStr})`,
+    ));
+  const taken = new Set(existing.map((r) => r.attendanceDate));
+
+  const toInsert = dates
+    .filter((dt) => !taken.has(dt))
+    .map((dt) => ({
+      employeeId: empIdStr,
+      employeeName: emp.employeeName,
+      branchId: leave.branchId,
+      branchEmployeeId: emp.id,
+      attendanceDate: dt,
+      status: "absent",
+      notes: overdueMarker(leave.id),
+    }));
+
+  if (toInsert.length === 0) return 0;
+  await db.insert(attendanceRecords).values(toInsert as any);
+  return toInsert.length;
+}
+
+/**
+ * يحذف سجلات الغياب التلقائية (المرتبطة بالتأخير عن العودة) اعتباراً من تاريخ معيّن.
+ * تُستخدم عند تسجيل المباشرة: أيام ما بعد المباشرة لا تُعتبر غياباً.
+ */
+export async function clearOverdueAbsencesFrom(leaveId: number, fromDate: string): Promise<number> {
+  const deleted = await db
+    .delete(attendanceRecords)
+    .where(and(
+      eq(attendanceRecords.status, "absent"),
+      eq(attendanceRecords.notes, overdueMarker(leaveId)),
+      gte(attendanceRecords.attendanceDate, fromDate),
+    ))
+    .returning({ id: attendanceRecords.id });
+  return deleted.length;
+}
+
+// ============================================================
 // نظام الموافقات والاعتمادات — حلّ سلسلة الموافقة المطبّقة للإجازات
 // ============================================================
 import { approvalWorkflows, approvalWorkflowSteps, users } from "@shared/schema";
