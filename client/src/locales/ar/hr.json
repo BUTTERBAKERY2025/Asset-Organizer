@@ -239,6 +239,15 @@
       "leave": "إجازة معتمدة",
       "noSchedule": "بدون جدول"
     },
+    "filters": {
+      "searchPlaceholder": "ابحث باسم الموظف...",
+      "all": "الكل",
+      "clear": "مسح الفلاتر",
+      "showing": "عرض {{shown}} من {{total}} موظف",
+      "showingDays": "عرض {{shown}} من {{total}} يوم",
+      "noMatches": "لا توجد نتائج مطابقة للفلتر",
+      "kpiHint": "اضغط على أي بطاقة أعلاه لتصفية القائمة حسب الحالة"
+    },
     "reportStatusLabels": {
       "pending": "قيد الإنشاء",
       "pendingEmployee": "بانتظار توقيع الموظف",

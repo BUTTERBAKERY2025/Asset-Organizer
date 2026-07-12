@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,7 +22,7 @@ import {
   Calendar, FileText, Pen, Download, Loader2, CheckCircle, Clock,
   AlertCircle, User, Check, XCircle, LayoutDashboard, Users,
   Sparkles, Eye, FilePlus2, AlertTriangle, FileDown, Wand2, Lock, History, RefreshCw,
-  Wallet, TrendingDown, Activity, CalendarOff, MinusCircle,
+  Wallet, TrendingDown, Activity, CalendarOff, MinusCircle, Search, ListFilter, X,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import SignatureCanvas from "react-signature-canvas";
@@ -192,6 +193,9 @@ export default function TimesheetPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), "yyyy-MM"));
   const [employeeMode, setEmployeeMode] = useState<"active" | "attendance">("active");
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [dashboardSearch, setDashboardSearch] = useState("");
+  const [dashboardStatusFilter, setDashboardStatusFilter] = useState<string>("all");
+  const [entryStatusFilter, setEntryStatusFilter] = useState<string>("all");
   const [showSignatureDialog, setShowSignatureDialog] = useState(false);
   const [signatureType, setSignatureType] = useState<"employee" | "manager">("employee");
   const [selectedReport, setSelectedReport] = useState<TimesheetReport | null>(null);
@@ -465,6 +469,47 @@ export default function TimesheetPage() {
     }
     return { total, signed, pendingMgr, pendingEmp, draft, notGen };
   }, [dashboardRows]);
+
+  // ====== Dashboard filtering (search + status via clickable KPI cards) ======
+  const rowCategory = useCallback((row: { report: TimesheetReport | null; canGenerate: boolean }) => {
+    if (!row.report) return row.canGenerate ? "not_generated" : "view_only";
+    switch (row.report.status) {
+      case "finalized": return "finalized";
+      case "pending_manager_signature": return "pending_manager";
+      case "pending_employee_signature": return "pending_employee";
+      default: return "draft";
+    }
+  }, []);
+
+  const filteredDashboardRows = useMemo(() => {
+    const q = dashboardSearch.trim().toLowerCase();
+    return dashboardRows.filter(row => {
+      if (q && !(row.name || "").toLowerCase().includes(q)) return false;
+      if (dashboardStatusFilter !== "all" && rowCategory(row) !== dashboardStatusFilter) return false;
+      return true;
+    });
+  }, [dashboardRows, dashboardSearch, dashboardStatusFilter, rowCategory]);
+
+  const toggleDashboardFilter = (cat: string) => {
+    setDashboardStatusFilter(prev => (prev === cat ? "all" : cat));
+  };
+  const kpiActiveClass = (cat: string) =>
+    dashboardStatusFilter === cat ? "ring-2 ring-amber-500 ring-offset-1" : "";
+
+  // ====== Daily entries filtering (view tab) ======
+  const entryStatusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const e of reportEntries) counts[e.status] = (counts[e.status] || 0) + 1;
+    return counts;
+  }, [reportEntries]);
+
+  const filteredEntries = useMemo(() => (
+    entryStatusFilter === "all" ? reportEntries : reportEntries.filter(e => e.status === entryStatusFilter)
+  ), [reportEntries, entryStatusFilter]);
+
+  useEffect(() => {
+    setEntryStatusFilter("all");
+  }, [selectedReport?.id]);
 
   // ====== Mutations ======
   const generateMutation = useMutation({
@@ -1115,13 +1160,14 @@ export default function TimesheetPage() {
               <>
                 {/* KPIs Strip */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                  <KpiCard label={t("timesheet.dashboard.kpiTotal")} value={kpis.total} icon={Users} tone="neutral" data-testid="kpi-total" />
-                  <KpiCard label={t("timesheet.dashboard.kpiSigned")} value={kpis.signed} icon={CheckCircle} tone="money" data-testid="kpi-signed" />
-                  <KpiCard label={t("timesheet.dashboard.kpiPendingMgr")} value={kpis.pendingMgr} icon={Clock} tone="production" data-testid="kpi-pending-mgr" />
-                  <KpiCard label={t("timesheet.dashboard.kpiPendingEmp")} value={kpis.pendingEmp} icon={Pen} tone="inventory" data-testid="kpi-pending-emp" />
-                  <KpiCard label={t("timesheet.dashboard.kpiDraft")} value={kpis.draft} icon={FileText} tone="neutral" data-testid="kpi-draft" />
-                  <KpiCard label={t("timesheet.dashboard.kpiNotGenerated")} value={kpis.notGen} icon={AlertCircle} tone="alert" data-testid="kpi-not-generated" />
+                  <KpiCard label={t("timesheet.dashboard.kpiTotal")} value={kpis.total} icon={Users} tone="neutral" onClick={() => setDashboardStatusFilter("all")} data-testid="kpi-total" />
+                  <KpiCard label={t("timesheet.dashboard.kpiSigned")} value={kpis.signed} icon={CheckCircle} tone="money" onClick={() => toggleDashboardFilter("finalized")} className={kpiActiveClass("finalized")} data-testid="kpi-signed" />
+                  <KpiCard label={t("timesheet.dashboard.kpiPendingMgr")} value={kpis.pendingMgr} icon={Clock} tone="production" onClick={() => toggleDashboardFilter("pending_manager")} className={kpiActiveClass("pending_manager")} data-testid="kpi-pending-mgr" />
+                  <KpiCard label={t("timesheet.dashboard.kpiPendingEmp")} value={kpis.pendingEmp} icon={Pen} tone="inventory" onClick={() => toggleDashboardFilter("pending_employee")} className={kpiActiveClass("pending_employee")} data-testid="kpi-pending-emp" />
+                  <KpiCard label={t("timesheet.dashboard.kpiDraft")} value={kpis.draft} icon={FileText} tone="neutral" onClick={() => toggleDashboardFilter("draft")} className={kpiActiveClass("draft")} data-testid="kpi-draft" />
+                  <KpiCard label={t("timesheet.dashboard.kpiNotGenerated")} value={kpis.notGen} icon={AlertCircle} tone="alert" onClick={() => toggleDashboardFilter("not_generated")} className={kpiActiveClass("not_generated")} data-testid="kpi-not-generated" />
                 </div>
+                <p className="text-[11px] text-muted-foreground -mt-1" data-testid="text-kpi-filter-hint">{t("timesheet.filters.kpiHint")}</p>
 
                 {/* Quick Actions */}
                 <Card>
@@ -1164,6 +1210,26 @@ export default function TimesheetPage() {
                           {employeeMode === "attendance" ? t("timesheet.dashboard.modeAttendanceHint") : t("timesheet.dashboard.subhead")}
                         </CardDescription>
                       </div>
+                      <div className="relative w-full sm:w-56" data-testid="search-employee-wrap">
+                        <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                        <Input
+                          value={dashboardSearch}
+                          onChange={(e) => setDashboardSearch(e.target.value)}
+                          placeholder={t("timesheet.filters.searchPlaceholder")}
+                          className="ps-8 pe-8 h-9"
+                          data-testid="input-search-employee"
+                        />
+                        {dashboardSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setDashboardSearch("")}
+                            className="absolute end-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            data-testid="btn-clear-search"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                       <div className="inline-flex items-center rounded-lg border border-amber-200 bg-amber-50/50 p-1 self-start" data-testid="toggle-employee-mode">
                         <button
                           type="button"
@@ -1185,6 +1251,21 @@ export default function TimesheetPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="p-0 sm:p-6 sm:pt-0">
+                    {(dashboardStatusFilter !== "all" || dashboardSearch.trim()) && (
+                      <div className="flex items-center gap-2 px-4 sm:px-0 pb-2 text-xs text-muted-foreground" data-testid="bar-active-filters">
+                        <ListFilter className="w-3.5 h-3.5" />
+                        <span>{t("timesheet.filters.showing", { shown: filteredDashboardRows.length, total: dashboardRows.length })}</span>
+                        <button
+                          type="button"
+                          onClick={() => { setDashboardStatusFilter("all"); setDashboardSearch(""); }}
+                          className="inline-flex items-center gap-1 text-amber-700 hover:text-amber-900 font-medium"
+                          data-testid="btn-clear-filters"
+                        >
+                          <X className="w-3 h-3" />
+                          {t("timesheet.filters.clear")}
+                        </button>
+                      </div>
+                    )}
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
@@ -1210,7 +1291,13 @@ export default function TimesheetPage() {
                                 {t("timesheet.dashboard.noEmployees")}
                               </TableCell>
                             </TableRow>
-                          ) : dashboardRows.map((row, idx) => {
+                          ) : filteredDashboardRows.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={6} className="text-center py-12 text-muted-foreground" data-testid="text-no-filter-matches">
+                                {t("timesheet.filters.noMatches")}
+                              </TableCell>
+                            </TableRow>
+                          ) : filteredDashboardRows.map((row, idx) => {
                             const r = row.report;
                             const isMissing = !r;
                             const badge = isMissing ? NOT_GENERATED_BADGE : TIMESHEET_STATUS_LABELS[r!.status];
@@ -1705,6 +1792,36 @@ export default function TimesheetPage() {
                     )}
                   </div>
 
+                  <div className="flex flex-wrap items-center gap-2 mb-3" data-testid="chips-entry-filter">
+                    <button
+                      type="button"
+                      onClick={() => setEntryStatusFilter("all")}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${entryStatusFilter === "all" ? "bg-amber-600 text-white border-amber-600" : "bg-white text-muted-foreground border-gray-200 hover:border-amber-300"}`}
+                      data-testid="chip-status-all"
+                    >
+                      {t("timesheet.filters.all")}
+                      <span className={`px-1.5 rounded-full text-[10px] ${entryStatusFilter === "all" ? "bg-white/25" : "bg-gray-100"}`}>{reportEntries.length}</span>
+                    </button>
+                    {(["present", "late", "absent", "leave", "day_off", "no_schedule"] as const).filter(s => (entryStatusCounts[s] || 0) > 0).map(s => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setEntryStatusFilter(prev => prev === s ? "all" : s)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${entryStatusFilter === s ? "bg-amber-600 text-white border-amber-600" : `${STATUS_LABELS[s]?.color || "bg-gray-100"} border-transparent hover:opacity-80`}`}
+                        data-testid={`chip-status-${s}`}
+                      >
+                        {STATUS_LABELS[s]?.icon}
+                        {STATUS_LABELS[s]?.label}
+                        <span className={`px-1.5 rounded-full text-[10px] ${entryStatusFilter === s ? "bg-white/25" : "bg-white/60"}`}>{entryStatusCounts[s]}</span>
+                      </button>
+                    ))}
+                    {entryStatusFilter !== "all" && (
+                      <span className="text-xs text-muted-foreground" data-testid="text-entries-showing">
+                        {t("timesheet.filters.showingDays", { shown: filteredEntries.length, total: reportEntries.length })}
+                      </span>
+                    )}
+                  </div>
+
                   <div className="rounded-md border overflow-x-auto">
                     <Table>
                       <TableHeader>
@@ -1729,7 +1846,13 @@ export default function TimesheetPage() {
                               <Loader2 className="w-6 h-6 animate-spin mx-auto" />
                             </TableCell>
                           </TableRow>
-                        ) : reportEntries.map(entry => (
+                        ) : filteredEntries.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={11} className="text-center py-8 text-muted-foreground" data-testid="text-no-entry-matches">
+                              {t("timesheet.filters.noMatches")}
+                            </TableCell>
+                          </TableRow>
+                        ) : filteredEntries.map(entry => (
                           <TableRow key={entry.id} className={entry.isOff ? "bg-gray-50" : ""}>
                             <TableCell className="font-medium">{entry.date}</TableCell>
                             <TableCell className="text-center">{DAY_LABELS[entry.dayOfWeek] || entry.dayOfWeek}</TableCell>

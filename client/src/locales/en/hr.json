@@ -239,6 +239,15 @@
       "leave": "Approved Leave",
       "noSchedule": "No Schedule"
     },
+    "filters": {
+      "searchPlaceholder": "Search by employee name...",
+      "all": "All",
+      "clear": "Clear filters",
+      "showing": "Showing {{shown}} of {{total}} employees",
+      "showingDays": "Showing {{shown}} of {{total}} days",
+      "noMatches": "No results match the filter",
+      "kpiHint": "Click any card above to filter the list by status"
+    },
     "reportStatusLabels": {
       "pending": "In Progress",
       "pendingEmployee": "Awaiting Employee Signature",
