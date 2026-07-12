@@ -16,8 +16,12 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   CalendarDays, Plus, CheckCircle2, XCircle, Clock, Trash2, ArrowRight,
   Wallet, Printer, FileSpreadsheet, Ban, Paperclip, Pencil, ChevronRight, ChevronLeft, ListChecks, Sun, FileText, Calculator,
-  Banknote, LogOut, LogIn, AlertTriangle,
+  Banknote, LogOut, LogIn, AlertTriangle, LayoutDashboard, Coins, UserX,
 } from "lucide-react";
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as ChartTooltip,
+  CartesianGrid, PieChart, Pie, Cell, Legend,
+} from "recharts";
 import { LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS } from "@shared/schema";
 import butterLogo from "@assets/logo_-5_1765206843638.png";
 import { Layout } from "@/components/layout";
@@ -47,6 +51,9 @@ function calcDays(start: string, end: string): number {
 }
 
 const arNum = (v: any) => Number(v || 0).toLocaleString("ar-SA-u-nu-latn");
+
+const MONTHS_AR = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+const PIE_COLORS = ["#3b82f6", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#0ea5e9", "#f97316", "#64748b"];
 
 const fmtDate = (d?: string | null) => {
   if (!d) return "-";
@@ -667,13 +674,45 @@ export default function LeavesPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <StatCard label="إجمالي الطلبات" value={stats?.total ?? 0} icon={<CalendarDays className="h-5 w-5" />} />
         <StatCard label="قيد المراجعة" value={stats?.pending ?? 0} icon={<Clock className="h-5 w-5" />} accent="amber" />
         <StatCard label="معتمدة" value={stats?.approved ?? 0} icon={<CheckCircle2 className="h-5 w-5" />} accent="emerald" />
         <StatCard label="مرفوضة" value={stats?.rejected ?? 0} icon={<XCircle className="h-5 w-5" />} accent="red" />
         <StatCard label="في إجازة اليوم" value={stats?.onLeaveToday ?? 0} icon={<CalendarDays className="h-5 w-5" />} accent="blue" />
+        <StatCard label="متأخرون عن العودة" value={stats?.overdueReturns?.length ?? 0} icon={<UserX className="h-5 w-5" />} accent="red" />
       </div>
+
+      {/* تنبيه: موظفون تأخروا عن العودة من الإجازة */}
+      {(stats?.overdueReturns?.length ?? 0) > 0 && (
+        <Card className="border-red-300 bg-red-50/60" data-testid="card-overdue-returns">
+          <CardContent className="pt-4 space-y-2">
+            <div className="text-sm font-bold text-red-800 flex items-center gap-1">
+              <AlertTriangle className="h-4 w-4" />
+              متأخرون عن العودة من الإجازة ({arNum(stats.overdueReturns.length)}) — يُسجَّل غيابهم تلقائياً يومياً
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {stats.overdueReturns.slice(0, 8).map((m: any) => (
+                <div key={m.id} className="text-xs flex items-center justify-between gap-2 bg-white rounded p-2 border border-red-200" data-testid={`overdue-return-${m.id}`}>
+                  <div>
+                    <span className="font-medium">{m.employeeName}</span>
+                    <span className="text-muted-foreground me-1"> — {LEAVE_TYPE_LABELS[m.leaveType] || m.leaveType}</span>
+                    <span className="block text-[10px] text-red-600">كان متوقعاً عودته {fmtDate(m.expectedReturn)} — متأخر {arNum(m.lateDaysSoFar)} يوم</span>
+                  </div>
+                  <Button
+                    size="sm" variant="outline" className="text-emerald-700 border-emerald-300 h-7 text-[11px] whitespace-nowrap"
+                    onClick={() => { setReturnDate(new Date().toLocaleDateString("en-CA")); setReturnLeave(m); }}
+                    data-testid={`button-overdue-return-${m.id}`}
+                  >
+                    <LogIn className="h-3 w-3 ms-1" />تسجيل المباشرة
+                  </Button>
+                </div>
+              ))}
+            </div>
+            {(stats.overdueReturns.length > 8) && <div className="text-[10px] text-muted-foreground">+{arNum(stats.overdueReturns.length - 8)} آخرين — راجع تبويب لوحة المؤشرات</div>}
+          </CardContent>
+        </Card>
+      )}
 
       {/* حركة الإجازات: من في إجازة الآن، من سيغادر، من سيعود */}
       {((stats?.onLeaveNow?.length ?? 0) > 0 || (stats?.departingSoon?.length ?? 0) > 0) && (
@@ -738,10 +777,162 @@ export default function LeavesPage() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList data-testid="tabs-leaves">
           <TabsTrigger value="requests" data-testid="tab-requests"><CalendarDays className="h-4 w-4 ms-1" />الطلبات</TabsTrigger>
+          <TabsTrigger value="dashboard" data-testid="tab-dashboard"><LayoutDashboard className="h-4 w-4 ms-1" />لوحة المؤشرات</TabsTrigger>
           <TabsTrigger value="balances" data-testid="tab-balances"><Wallet className="h-4 w-4 ms-1" />الأرصدة</TabsTrigger>
           <TabsTrigger value="calendar" data-testid="tab-calendar"><CalendarDays className="h-4 w-4 ms-1" />التقويم</TabsTrigger>
           <TabsTrigger value="holidays" data-testid="tab-holidays"><Sun className="h-4 w-4 ms-1" />العطلات الرسمية</TabsTrigger>
         </TabsList>
+
+        {/* ---------- DASHBOARD TAB ---------- */}
+        <TabsContent value="dashboard">
+          <div className="space-y-4">
+            {/* المؤشرات المالية */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Card className="border-amber-200 bg-gradient-to-bl from-amber-50 to-white" data-testid="card-fin-liability">
+                <CardContent className="pt-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-muted-foreground">الالتزام المالي لأرصدة الإجازات السنوية {stats?.year ?? ""}</div>
+                      <div className="text-2xl font-bold text-amber-700 tabular-nums" data-testid="text-liability-amount">
+                        {arNum(Math.round(stats?.financial?.liabilityAmount ?? 0))} <span className="text-sm font-normal">ر.س</span>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground mt-1">
+                        {arNum(stats?.financial?.liabilityDays ?? 0)} يوم متبقٍ لـ {arNum(stats?.financial?.liabilityEmployees ?? 0)} موظف — بدل اليوم = الراتب ÷ 30
+                      </div>
+                    </div>
+                    <Coins className="h-8 w-8 text-amber-400" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-emerald-200 bg-gradient-to-bl from-emerald-50 to-white" data-testid="card-fin-settlements">
+                <CardContent className="pt-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-muted-foreground">تصفيات الأرصدة المدفوعة {stats?.year ?? ""}</div>
+                      <div className="text-2xl font-bold text-emerald-700 tabular-nums" data-testid="text-settlements-ytd">
+                        {arNum(Math.round(stats?.financial?.settlementsYtd ?? 0))} <span className="text-sm font-normal">ر.س</span>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground mt-1">
+                        {arNum(stats?.financial?.settlementsCount ?? 0)} تصفية / {arNum(stats?.financial?.settlementsYtdDays ?? 0)} يوم مُصفّى
+                      </div>
+                    </div>
+                    <Banknote className="h-8 w-8 text-emerald-400" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-red-200 bg-gradient-to-bl from-red-50 to-white" data-testid="card-fin-late">
+                <CardContent className="pt-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-muted-foreground">مباشرات متأخرة مسجّلة {stats?.year ?? ""}</div>
+                      <div className="text-2xl font-bold text-red-700 tabular-nums" data-testid="text-late-returns">
+                        {arNum(stats?.financial?.lateReturnsCount ?? 0)} <span className="text-sm font-normal">موظف</span>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground mt-1">
+                        إجمالي أيام التأخير المخصومة غياباً: {arNum(stats?.financial?.lateDaysYtd ?? 0)} يوم
+                      </div>
+                    </div>
+                    <UserX className="h-8 w-8 text-red-400" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* الرسوم البيانية */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <Card data-testid="card-chart-monthly">
+                <CardContent className="pt-4">
+                  <div className="text-sm font-bold mb-2 flex items-center gap-1">
+                    <CalendarDays className="h-4 w-4 text-blue-600" />أيام الإجازات المعتمدة شهرياً — {stats?.year ?? ""}
+                  </div>
+                  <div style={{ direction: "ltr" }}>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <BarChart data={(stats?.byMonthDays ?? []).map((v: number, i: number) => ({ name: MONTHS_AR[i], أيام: v }))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
+                        <XAxis dataKey="name" tick={{ fontSize: 10, fontFamily: "Cairo" }} interval={0} />
+                        <YAxis tick={{ fontSize: 10 }} allowDecimals={false} width={28} />
+                        <ChartTooltip contentStyle={{ fontFamily: "Cairo", fontSize: 12, direction: "rtl" }} />
+                        <Bar dataKey="أيام" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card data-testid="card-chart-types">
+                <CardContent className="pt-4">
+                  <div className="text-sm font-bold mb-2 flex items-center gap-1">
+                    <FileText className="h-4 w-4 text-amber-600" />توزيع الطلبات حسب النوع
+                  </div>
+                  <div style={{ direction: "ltr" }}>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <PieChart>
+                        <Pie
+                          data={Object.entries(stats?.byType ?? {}).map(([k, v]) => ({ name: LEAVE_TYPE_LABELS[k] || k, value: v as number }))}
+                          dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} innerRadius={45}
+                          label={({ value }: any) => arNum(value)}
+                        >
+                          {Object.keys(stats?.byType ?? {}).map((k, i) => (
+                            <Cell key={k} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Legend wrapperStyle={{ fontFamily: "Cairo", fontSize: 11 }} />
+                        <ChartTooltip contentStyle={{ fontFamily: "Cairo", fontSize: 12, direction: "rtl" }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* جدول المتأخرين الكامل */}
+            {(stats?.overdueReturns?.length ?? 0) > 0 && (
+              <Card data-testid="card-overdue-table">
+                <CardContent className="pt-4">
+                  <div className="text-sm font-bold mb-2 flex items-center gap-1 text-red-800">
+                    <AlertTriangle className="h-4 w-4" />جميع المتأخرين عن العودة ({arNum(stats.overdueReturns.length)})
+                  </div>
+                  <div className="overflow-auto border rounded-lg">
+                    <table className="w-full text-sm">
+                      <thead className="bg-red-50">
+                        <tr>
+                          <th className="text-right p-2">الموظف</th>
+                          <th className="text-right p-2">نوع الإجازة</th>
+                          <th className="text-right p-2">نهاية الإجازة</th>
+                          <th className="text-right p-2">العودة المتوقعة</th>
+                          <th className="text-right p-2">أيام التأخير</th>
+                          <th className="text-right p-2">إجراء</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {stats.overdueReturns.map((m: any) => (
+                          <tr key={m.id} className="border-t" data-testid={`row-overdue-${m.id}`}>
+                            <td className="p-2">
+                              <div className="font-medium">{m.employeeName}</div>
+                              <div className="text-xs text-muted-foreground">{m.jobTitle}</div>
+                            </td>
+                            <td className="p-2">{LEAVE_TYPE_LABELS[m.leaveType] || m.leaveType}</td>
+                            <td className="p-2 text-xs">{fmtDate(m.endDate)}</td>
+                            <td className="p-2 text-xs">{fmtDate(m.expectedReturn)}</td>
+                            <td className="p-2"><Badge className="bg-red-100 text-red-700">{arNum(m.lateDaysSoFar)} يوم</Badge></td>
+                            <td className="p-2">
+                              <Button
+                                size="sm" variant="outline" className="text-emerald-700 border-emerald-300 h-7 text-[11px]"
+                                onClick={() => { setReturnDate(new Date().toLocaleDateString("en-CA")); setReturnLeave(m); }}
+                                data-testid={`button-table-return-${m.id}`}
+                              >
+                                <LogIn className="h-3 w-3 ms-1" />تسجيل المباشرة
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
 
         {/* ---------- REQUESTS TAB ---------- */}
         <TabsContent value="requests">
@@ -1357,9 +1548,9 @@ export default function LeavesPage() {
             <DialogTitle>{reviewing?.decision === "approved" ? "اعتماد طلب الإجازة" : "رفض طلب الإجازة"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
-            {reviewing?.leave?.requiredLevels > 1 && (
+            {(reviewing?.leave?.requiredLevels ?? 0) > 1 && (
               <div className="text-xs bg-amber-50 text-amber-700 rounded p-2">
-                هذا الطلب يتطلب {arNum(reviewing.leave.requiredLevels)} مستويات موافقة — أنت على المستوى {arNum(reviewing.leave.currentLevel)}.
+                هذا الطلب يتطلب {arNum(reviewing?.leave?.requiredLevels)} مستويات موافقة — أنت على المستوى {arNum(reviewing?.leave?.currentLevel)}.
               </div>
             )}
             {allowOver && (

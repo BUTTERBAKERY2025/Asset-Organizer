@@ -1091,7 +1091,7 @@ export const requireRole = (roles: string[]): RequestHandler => {
 };
 
 // New middleware for granular permission checking
-export const requirePermission = (module: string, action: string): RequestHandler => {
+export const requirePermission = (module: string, action?: string): RequestHandler => {
   return async (req, res, next) => {
     const user = (req as any).currentUser;
     if (!user) {
@@ -1105,7 +1105,7 @@ export const requirePermission = (module: string, action: string): RequestHandle
     
     // SECURITY: Attendance clerk has ONLY attendance_check permissions
     if (user.role === "attendance_clerk") {
-      if (module === "attendance_check" && ["view", "create", "edit"].includes(action)) {
+      if (module === "attendance_check" && action != null && ["view", "create", "edit"].includes(action)) {
         
         return next();
       }
@@ -1192,8 +1192,17 @@ export const requirePermission = (module: string, action: string): RequestHandle
       actionsArray = rawActions.replace(/[{}]/g, '').split(',').map((a: string) => a.trim());
     }
     
-    if (!actionsArray.includes(action)) {
-      return res.status(403).json({ message: `غير مسموح - ليس لديك صلاحية ${action} على هذه الوحدة` });
+    // When routes call requirePermission(module) without an explicit action,
+    // infer a safe action from the HTTP method so module presence alone can
+    // NEVER grant write access (GET→view, POST→create, PUT/PATCH→edit,
+    // DELETE→delete; unknown methods default to the strictest common action).
+    const METHOD_ACTION: Record<string, string> = {
+      GET: "view", HEAD: "view", OPTIONS: "view",
+      POST: "create", PUT: "edit", PATCH: "edit", DELETE: "delete",
+    };
+    const effectiveAction = action ?? METHOD_ACTION[req.method] ?? "edit";
+    if (!actionsArray.includes(effectiveAction)) {
+      return res.status(403).json({ message: `غير مسموح - ليس لديك صلاحية ${effectiveAction} على هذه الوحدة` });
     }
     
     next();

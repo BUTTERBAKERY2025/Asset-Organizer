@@ -32,3 +32,4 @@
 - [Governance resolution print routing](governance-resolution-printers.md) — assembly-typed resolutions often live in board_resolutions and print via board-resolution-print.ts (not assembly-resolution-print.ts); confirm table+source before editing a PDF.
 - [Assembly re-vote grants](assembly-revote-grants.md) — one-time revote tokens: claim atomically (UPDATE ... WHERE status='open' + rowcount==1) before casting; whole-resolution grants forbidden when clauses exist.
 - [Leave exit/return/settlement](leave-exit-return-settlement.md) — adjust attendance BEFORE setting actualReturnDate (scheduler stops at that point); Drizzle unique violations live in e.cause.constraint, not e.message.
+- [requirePermission omitted action](require-permission-omitted-action.md) — single-arg guards infer action from HTTP method; module presence must never grant writes; POST-as-read routes need explicit "view".

@@ -442,7 +442,7 @@ export function registerHrRoutes(app: Express) {
         at: now.toISOString(),
       });
 
-      let finalStatus = decision.decision;
+      let finalStatus: "approved" | "rejected" | "pending" = decision.decision;
       let nextLevel = existing.currentLevel;
       // إذا اعتُمد ولكن تبقّت مستويات موافقة أعلى → ينتقل للمستوى التالي ويبقى معلّقاً
       if (decision.decision === "approved" && existing.currentLevel < existing.requiredLevels) {
@@ -1672,11 +1672,127 @@ export function registerHrRoutes(app: Express) {
       const sortByEnd = (a: any, b: any) => a.endDate.localeCompare(b.endDate);
       const byType: Record<string, number> = {};
       all.forEach(l => { byType[l.leaveType] = (byType[l.leaveType] || 0) + 1; });
+
+      // ===== المتأخرون عن العودة (انتهت إجازتهم ولم يباشروا) =====
+      const diffDays = (a: string, b: string) =>
+        Math.round((new Date(b + "T00:00:00Z").getTime() - new Date(a + "T00:00:00Z").getTime()) / 86400000);
+      const overdueRaw = approvedList.filter(l => l.endDate < today && !l.actualReturnDate);
+      const overdueIds = Array.from(new Set(overdueRaw.map(l => l.branchEmployeeId)));
+      if (overdueIds.length > 0) {
+        const missing = overdueIds.filter(id => !nameById.has(id));
+        if (missing.length > 0) {
+          const emps2 = await db
+            .select({ id: branchEmployees.id, employeeName: branchEmployees.employeeName, jobTitle: branchEmployees.jobTitle })
+            .from(branchEmployees)
+            .where(inArray(branchEmployees.id, missing));
+          emps2.forEach(e => nameById.set(e.id, { name: e.employeeName, job: e.jobTitle }));
+        }
+      }
+      const overdueReturns = overdueRaw
+        .map(l => {
+          const expected = plusDays(l.endDate, 1);
+          return { ...toMovement(l), expectedReturn: expected, lateDaysSoFar: Math.max(0, diffDays(expected, today)) };
+        })
+        .filter(o => o.lateDaysSoFar > 0)
+        .sort((a, b) => b.lateDaysSoFar - a.lateDaysSoFar);
+
+      // ===== التوزيع الشهري لأيام الإجازات المعتمدة (السنة الحالية) =====
+      const year = Number(today.slice(0, 4));
+      const byMonthDays: number[] = Array(12).fill(0);
+      for (const l of approvedList) {
+        const segStart = l.startDate > `${year}-01-01` ? l.startDate : `${year}-01-01`;
+        const segEnd = l.endDate < `${year}-12-31` ? l.endDate : `${year}-12-31`;
+        if (segStart > segEnd) continue;
+        const d = new Date(segStart + "T00:00:00Z");
+        const end = new Date(segEnd + "T00:00:00Z");
+        while (d <= end) {
+          byMonthDays[d.getUTCMonth()]++;
+          d.setUTCDate(d.getUTCDate() + 1);
+        }
+      }
+
+      // ===== المؤشرات المالية =====
+      // 1) تصفيات الأرصدة المدفوعة هذه السنة (النشطة فقط)
+      const empScope = applyBranchScope(branchEmployees, branchIds);
+      const settleConds: any[] = [eq(leaveSettlements.status, "active"), eq(leaveSettlements.year, year)];
+      const settleScope = applyBranchScope(leaveSettlements, branchIds);
+      if (settleScope !== undefined) settleConds.push(settleScope);
+      const settleRows = await db
+        .select({ amount: leaveSettlements.finalAmount, days: leaveSettlements.settledDays })
+        .from(leaveSettlements)
+        .where(and(...settleConds));
+      const settlementsYtd = settleRows.reduce((s, r) => s + Number(r.amount || 0), 0);
+      const settlementsYtdDays = settleRows.reduce((s, r) => s + Number(r.days || 0), 0);
+
+      // 2) الالتزام المالي لأرصدة الإجازات السنوية المتبقية (بدل الإجازة = الراتب الإجمالي/30 × الأيام المتبقية)
+      const activeEmps = await db
+        .select({
+          id: branchEmployees.id,
+          totalSalary: branchEmployees.totalSalary,
+          hireDate: branchEmployees.hireDate,
+        })
+        .from(branchEmployees)
+        .where(empScope !== undefined ? and(eq(branchEmployees.status, "active"), empScope) : eq(branchEmployees.status, "active"));
+      const activeIds = activeEmps.map(e => e.id);
+      const balRows = activeIds.length > 0 ? await db
+        .select()
+        .from(leaveBalances)
+        .where(and(
+          eq(leaveBalances.year, year),
+          eq(leaveBalances.leaveType, "annual"),
+          inArray(leaveBalances.branchEmployeeId, activeIds),
+        )) : [];
+      const balByEmp = new Map(balRows.map(b => [b.branchEmployeeId, b]));
+      // الأيام السنوية المستخدمة لكل موظف (من الطلبات المعتمدة المتداخلة مع السنة — ضمن النطاق المحمّل)
+      const usedByEmp = new Map<number, number>();
+      for (const l of approvedList) {
+        if (l.leaveType !== "annual") continue;
+        const segStart = l.startDate > `${year}-01-01` ? l.startDate : `${year}-01-01`;
+        const segEnd = l.endDate < `${year}-12-31` ? l.endDate : `${year}-12-31`;
+        if (segStart > segEnd) continue;
+        const days = diffDays(segStart, segEnd) + 1;
+        usedByEmp.set(l.branchEmployeeId, (usedByEmp.get(l.branchEmployeeId) || 0) + days);
+      }
+      let liabilityDays = 0;
+      let liabilityAmount = 0;
+      let liabilityEmployees = 0;
+      for (const e of activeEmps) {
+        const b: any = balByEmp.get(e.id);
+        const entitled = b ? Number(b.entitledDays) : suggestedEntitlement(e.hireDate);
+        const remaining = entitled
+          + (b ? Number(b.carriedOverDays) : 0)
+          + (b ? Number(b.adjustmentDays) : 0)
+          - (b ? Number(b.settledDays ?? 0) : 0)
+          - (usedByEmp.get(e.id) || 0);
+        if (remaining > 0) {
+          liabilityDays += remaining;
+          liabilityAmount += remaining * (Number(e.totalSalary || 0) / 30);
+          liabilityEmployees++;
+        }
+      }
+
+      // 3) المباشرات المتأخرة المسجّلة هذه السنة
+      const lateReturnsYtd = all.filter(l => l.returnStatus === "late" && (l.actualReturnDate || "").startsWith(String(year)));
+      const lateDaysYtd = lateReturnsYtd.reduce((s, l) => s + Number(l.lateDays || 0), 0);
+
       res.json({
         total, pending, approved, rejected, onLeaveToday, byType,
         onLeaveNow: onLeaveNowRaw.sort(sortByEnd).map(toMovement),
         departingSoon: departingSoonRaw.sort(sortByStart).map(toMovement),
         returningSoon: returningSoonRaw.sort(sortByEnd).map(toMovement),
+        overdueReturns,
+        byMonthDays,
+        year,
+        financial: {
+          settlementsYtd: Math.round(settlementsYtd * 100) / 100,
+          settlementsYtdDays,
+          settlementsCount: settleRows.length,
+          liabilityDays,
+          liabilityAmount: Math.round(liabilityAmount * 100) / 100,
+          liabilityEmployees,
+          lateReturnsCount: lateReturnsYtd.length,
+          lateDaysYtd,
+        },
       });
     } catch (e: any) {
       console.error("[hr/leaves/stats] error:", e);
