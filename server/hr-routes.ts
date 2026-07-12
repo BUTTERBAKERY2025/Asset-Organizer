@@ -538,7 +538,7 @@ export function registerHrRoutes(app: Express) {
   // تفعيل مستويات الموافقة على الطلبات المعلّقة الحالية التي أُنشئت قبل إعداد السلاسل
   // (نسخة سلسلة الفرع كانت فارغة). يطبّق سلسلة فرع كل طلب ويعيد ضبط المستوى الحالي = 1.
   // يتخطّى الطلبات التي بدأ فيها اتخاذ قرار فعلي (approvalFlow فيه decision) أو لا سلسلة لفرعها.
-  app.post("/api/hr/leaves/apply-chains", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+  app.post("/api/hr/leaves/apply-chains", isAuthenticated, requirePermission("hr_leaves", "edit"), async (req, res) => {
     try {
       const { branchIds } = getBranchScope(req);
       const conds: any[] = [eq(leaveRequests.status, "pending")];
@@ -596,7 +596,7 @@ export function registerHrRoutes(app: Express) {
 
   // تعديل تواريخ إجازة قائمة (للمسؤول). يُبقي دورة الاعتماد كما هي ويُسجّل التعديل
   // ويُشعر الموظف (داخل النظام + واتساب).
-  app.patch("/api/hr/leaves/:id/dates", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+  app.patch("/api/hr/leaves/:id/dates", isAuthenticated, requirePermission("hr_leaves", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const body = z.object({
@@ -848,7 +848,7 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/hr/leaves/:id", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+  app.patch("/api/hr/leaves/:id", isAuthenticated, requirePermission("hr_leaves", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const { branchIds } = getBranchScope(req);
@@ -876,7 +876,7 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/hr/leaves/:id", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+  app.delete("/api/hr/leaves/:id", isAuthenticated, requirePermission("hr_leaves", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const { branchIds } = getBranchScope(req);
@@ -1261,7 +1261,7 @@ export function registerHrRoutes(app: Express) {
   });
 
   // تنفيذ تصفية الرصيد (سند صرف بدل إجازة) — يخصم الأيام من الرصيد
-  app.post("/api/hr/leaves/:id/settlement", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+  app.post("/api/hr/leaves/:id/settlement", isAuthenticated, requirePermission("hr_leaves", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const body = z.object({
@@ -1371,7 +1371,7 @@ export function registerHrRoutes(app: Express) {
   });
 
   // إلغاء تصفية (يعيد الأيام للرصيد)
-  app.post("/api/hr/leave-settlements/:id/cancel", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+  app.post("/api/hr/leave-settlements/:id/cancel", isAuthenticated, requirePermission("hr_leaves", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const body = z.object({ reason: z.string().min(3, "يجب ذكر سبب الإلغاء") }).parse(req.body);
@@ -1548,7 +1548,7 @@ export function registerHrRoutes(app: Express) {
   });
 
   // إنشاء/تحديث رصيد (تعيين المستحق/المرحّل/التعديل اليدوي)
-  app.post("/api/hr/leave-balances", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+  app.post("/api/hr/leave-balances", isAuthenticated, requirePermission("hr_leaves", "edit"), async (req, res) => {
     try {
       // branchId لا يُطلب من العميل — الخادم يشتقه من سجل الموظف (مصدر الحقيقة)
       const parsed = insertLeaveBalanceSchema.omit({ branchId: true }).parse(req.body);
@@ -1600,7 +1600,7 @@ export function registerHrRoutes(app: Express) {
 
   // ترحيل أرصدة سنة سابقة إلى السنة التالية (المتبقي > 0 → مرحّل)
   // آمنة لإعادة التشغيل: تعيد كتابة "المرحّل" بالقيمة المحسوبة نفسها دون مضاعفة.
-  app.post("/api/hr/leave-balances/carryover", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+  app.post("/api/hr/leave-balances/carryover", isAuthenticated, requirePermission("hr_leaves", "edit"), async (req, res) => {
     try {
       const schema = z.object({
         fromYear: z.number().int().min(2020).max(2100),
@@ -1660,7 +1660,7 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
-  app.post("/api/hr/public-holidays", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+  app.post("/api/hr/public-holidays", isAuthenticated, requirePermission("hr_leaves", "edit"), async (req, res) => {
     try {
       const parsed = insertPublicHolidaySchema.parse(req.body);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(parsed.startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(parsed.endDate)) {
@@ -1686,7 +1686,7 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/hr/public-holidays/:id", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+  app.patch("/api/hr/public-holidays/:id", isAuthenticated, requirePermission("hr_leaves", "edit"), async (req, res) => {
     try {
       const id = Number(req.params.id);
       const parsed = insertPublicHolidaySchema.partial().parse(req.body);
@@ -1714,7 +1714,7 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/hr/public-holidays/:id", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+  app.delete("/api/hr/public-holidays/:id", isAuthenticated, requirePermission("hr_leaves", "edit"), async (req, res) => {
     try {
       const id = Number(req.params.id);
       const [deleted] = await db.delete(publicHolidays).where(eq(publicHolidays.id, id)).returning();

@@ -116,7 +116,7 @@ import { sendWhatsAppMessage, isTwilioConfigured } from "./twilio-service";
 import { recipientsSchema as reportRecipientsSchema } from "./scheduler";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertContractMilestoneSchema, insertContractVariationSchema, insertContractGuaranteeSchema, insertContractTemplateSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
-import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, hasCrossBranchHrReadAccess } from "./auth";
+import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS, hasCrossBranchHrReadAccess } from "./auth";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
 import { registerJobOfferRoutes } from "./job-offers-routes";
@@ -624,12 +624,12 @@ export async function registerRoutes(
       // SECURITY: Only admins may assign privileged roles. Non-admins can only
       // create "viewer" or "employee" accounts. This prevents privilege escalation
       // via the users:create permission (e.g., creating an admin or hr_manager).
-      const PRIVILEGED_ROLES = new Set(["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "attendance_clerk"]);
+      const PRIVILEGED_ROLES = new Set(["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "attendance_clerk"]);
       const requestedRole = (role as string | undefined) || "viewer";
       if (PRIVILEGED_ROLES.has(requestedRole) && (req as any).currentUser?.role !== "admin") {
         return res.status(403).json({ error: "فقط المسؤولين يمكنهم منح هذا الدور" });
       }
-      if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "employee", "viewer", "attendance_clerk"].includes(requestedRole)) {
+      if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "employee", "viewer", "attendance_clerk"].includes(requestedRole)) {
         return res.status(400).json({ error: "دور غير صالح" });
       }
       
@@ -717,7 +717,7 @@ export async function registerRoutes(
       }
       
       if (role !== undefined) {
-        if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "employee", "viewer", "attendance_clerk"].includes(role)) {
+        if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "employee", "viewer", "attendance_clerk"].includes(role)) {
           return res.status(400).json({ error: "Invalid role" });
         }
         // SECURITY: Only admins can change user roles to prevent privilege escalation
@@ -1133,6 +1133,24 @@ export async function registerRoutes(
         }));
       }
 
+      // Operations Manager: merge the action-aware auto-granted operations modules
+      // so the frontend sidebar/landing/canView matches what the backend authorizes.
+      if (currentUser.role === "operations_manager") {
+        const merged = new Map<string, Set<string>>();
+        for (const p of permissions) {
+          merged.set(p.module, new Set(p.actions || []));
+        }
+        for (const [m, acts] of Object.entries(OPERATIONS_MANAGER_PERMISSIONS)) {
+          const set = merged.get(m) || new Set<string>();
+          for (const a of acts) set.add(a);
+          merged.set(m, set);
+        }
+        permissions = Array.from(merged.entries()).map(([module, actions]) => ({
+          module,
+          actions: Array.from(actions),
+        }));
+      }
+
       res.json(permissions);
     } catch (error) {
       console.error("Error fetching my permissions:", error);
@@ -1147,8 +1165,8 @@ export async function registerRoutes(
       const user = req.currentUser;
       
       // SECURITY: Filter branches based on user role and branch access
-      if (isUserAdmin(req) || user?.role === "financial_manager") {
-        // Admins and the cross-branch Financial Manager can see all branches
+      if (isUserAdmin(req) || user?.role === "financial_manager" || user?.role === "operations_manager") {
+        // Admins and the cross-branch Financial/Operations Managers can see all branches
         res.json(branches);
       } else if (user) {
         // Get user's allowed branches from user_branch_access table
@@ -7450,12 +7468,12 @@ export async function registerRoutes(
       
       // SECURITY: Only admins may assign privileged roles via this endpoint.
       // Non-admins with operations:create can only create regular "employee" accounts.
-      const OP_PRIVILEGED_ROLES = new Set(["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "attendance_clerk"]);
+      const OP_PRIVILEGED_ROLES = new Set(["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "attendance_clerk"]);
       const opRequestedRole = (role as string | undefined) || "employee";
       if (OP_PRIVILEGED_ROLES.has(opRequestedRole) && !isUserAdmin(req)) {
         return res.status(403).json({ error: "فقط المسؤولين يمكنهم منح هذا الدور" });
       }
-      if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "employee", "viewer", "attendance_clerk"].includes(opRequestedRole)) {
+      if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "employee", "viewer", "attendance_clerk"].includes(opRequestedRole)) {
         return res.status(400).json({ error: "دور غير صالح" });
       }
       

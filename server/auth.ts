@@ -173,6 +173,31 @@ function financialManagerActionsFor(module: string): string[] | undefined {
   );
 }
 
+// Modules auto-granted to users with role === "operations_manager" (مدير التشغيل).
+// Sourced from ROLE_PERMISSION_TEMPLATES.operations_manager (single source of truth)
+// so template and auto-grant never drift. Cross-branch SCOPE handled in
+// getAllowedBranchIds / canAccessBranch. Must also be merged into /api/my-permissions
+// (routes.ts) or the frontend sidebar/landing won't match backend authorization.
+export const OPERATIONS_MANAGER_PERMISSIONS: Record<string, string[]> =
+  Object.fromEntries(
+    ((ROLE_PERMISSION_TEMPLATES as any).operations_manager || []).map(
+      (e: { module: string; actions: string[] }) => [e.module, e.actions],
+    ),
+  );
+
+// Resolve a module's allowed actions for an operations_manager, tolerating the
+// historical attendance/attendance_check and quality/quality_control synonyms.
+function operationsManagerActionsFor(module: string): string[] | undefined {
+  return (
+    OPERATIONS_MANAGER_PERMISSIONS[module] ||
+    (module === "attendance_check" ? OPERATIONS_MANAGER_PERMISSIONS["attendance"] : undefined) ||
+    (module === "quality" ? OPERATIONS_MANAGER_PERMISSIONS["quality_control"] : undefined) ||
+    (module === "quality_control" ? OPERATIONS_MANAGER_PERMISSIONS["quality"] : undefined) ||
+    (module === "waste" ? OPERATIONS_MANAGER_PERMISSIONS["waste_tracking"] : undefined) ||
+    (module === "waste_tracking" ? OPERATIONS_MANAGER_PERMISSIONS["waste"] : undefined)
+  );
+}
+
 function setCachedAuth(userId: string, user: any, branchAccess: any[], permissions: any[]) {
   authCache.set(userId, { user, branchAccess, permissions, timestamp: Date.now() });
 }
@@ -753,8 +778,8 @@ export async function setupAuth(app: Express) {
       
       const allBranches = await allBranchesPromise;
       let filteredBranches: any[] = [];
-      if (user.role === "admin" || user.role === "financial_manager") {
-        // Financial Manager is a cross-branch role — sees every branch org-wide.
+      if (user.role === "admin" || user.role === "financial_manager" || user.role === "operations_manager") {
+        // Financial Manager & Operations Manager are cross-branch roles — see every branch org-wide.
         filteredBranches = allBranches;
       } else if (userBranches.length > 0) {
         const allowedIds = userBranches.map((b: any) => b.branchId);
@@ -1157,6 +1182,16 @@ export const requirePermission = (module: string, action?: string): RequestHandl
         return next();
       }
     }
+
+    // Operations Manager role: action-aware auto-grant for daily-operations modules
+    // across ALL branches (branch scope handled in getAllowedBranchIds). Modules
+    // not in the map fall through to the standard explicit-permission check below.
+    if (user.role === "operations_manager") {
+      const allowed = operationsManagerActionsFor(module);
+      if (allowed && (action == null || allowed.includes(action))) {
+        return next();
+      }
+    }
     
     // Use cached permissions (pre-fetched by isAuthenticated middleware)
     const permissions = getCachedPermissions(user.id) || await storage.getUserPermissions(user.id);
@@ -1271,6 +1306,15 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
         return next();
       }
     }
+
+    // Operations Manager: grant when ANY requested action is allowed for this module
+    // (mirrors requirePermission above).
+    if (user.role === "operations_manager") {
+      const allowed = operationsManagerActionsFor(module);
+      if (allowed && actions.some((a) => allowed.includes(a))) {
+        return next();
+      }
+    }
     
     // Use cached permissions (pre-fetched by isAuthenticated middleware)
     const permissions = getCachedPermissions(user.id) || await storage.getUserPermissions(user.id);
@@ -1323,6 +1367,10 @@ export async function canAccessBranch(req: any, branchId: string): Promise<boole
   // Financial Manager is a cross-branch role — can access every branch. Module-level
   // requirePermission still governs WHAT they can do; this only governs WHICH branch.
   if (user.role === "financial_manager") return true;
+
+  // Operations Manager is a cross-branch role — manages daily operations in every
+  // branch. Module-level requirePermission still governs WHAT they can do.
+  if (user.role === "operations_manager") return true;
   
   // Check if user has the required permission for the module linked to this branch
   // Users with event_pos permissions should access EVENT-BB branch
@@ -1437,6 +1485,12 @@ export function getAllowedBranchIds(req: any): string[] | null {
   // تبقى الوحدات مقيّدة بقالب صلاحياته (مالية + موارد بشرية للقراءة)، فالتوسّع هنا
   // على مستوى الفرع فقط لا على مستوى الوحدات.
   if (user.role === "financial_manager") {
+    return null; // كل الفروع
+  }
+
+  // Operations Manager: مدير التشغيل — نطاق تشغيلي على مستوى المنشأة، يدير
+  // العمليات اليومية عبر كل الفروع. الوحدات مقيّدة بقالب صلاحياته التشغيلية.
+  if (user.role === "operations_manager") {
     return null; // كل الفروع
   }
   

@@ -1652,6 +1652,54 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
     { module: "audit_logs", actions: ["view"] },
   ],
 
+  // Operations Manager: مدير التشغيل — إدارة العمليات اليومية عبر كل الفروع:
+  // التشغيل والإنتاج والجودة والهدر، الورديات والحضور والتايم شيت، المخزون
+  // والمخازن والصيانة، واعتماد الإجازات (وحدة hr_leaves تغطي مسار الاعتماد)،
+  // مع رؤية تشغيلية للتقارير والمبيعات. لا يشمل إدارة المستخدمين أو الإعدادات
+  // أو الاعتماد المالي/إغلاق الرواتب (نطاق المدير المالي).
+  operations_manager: [
+    { module: "dashboard", actions: ["view", "export"] },
+    // التشغيل والإنتاج والجودة
+    { module: "operations", actions: ["view", "create", "edit", "delete", "export", "print"] },
+    { module: "production", actions: ["view", "create", "edit", "export", "print"] },
+    { module: "daily_production", actions: ["view", "create", "edit", "export", "print"] },
+    { module: "advanced_production", actions: ["view", "create", "edit", "export"] },
+    { module: "quality_control", actions: ["view", "create", "edit", "export"] },
+    { module: "quality", actions: ["view", "create", "edit", "export"] },
+    { module: "products", actions: ["view", "create", "edit", "export"] },
+    { module: "waste_tracking", actions: ["view", "create", "edit", "export"] },
+    { module: "waste", actions: ["view", "create", "edit", "export"] },
+    // الورديات والحضور والتايم شيت
+    { module: "shifts", actions: ["view", "create", "edit", "export"] },
+    { module: "attendance", actions: ["view", "create", "edit", "export"] },
+    { module: "timesheet", actions: ["view", "create", "edit", "export", "print"] },
+    { module: "branch_closure", actions: ["view", "create", "edit", "export"] },
+    { module: "daily_closures", actions: ["view", "export", "print"] },
+    { module: "floor_plan", actions: ["view", "create", "edit"] },
+    // الإجازات: عرض وإنشاء واعتماد فقط — بدون edit حتى لا يصل للمسارات الإدارية
+    // الحساسة (أرصدة الإجازات، العطل الرسمية، التسويات، القيود المحاسبية) المحمية
+    // بصلاحية hr_leaves:edit صراحةً.
+    { module: "hr_leaves", actions: ["view", "create", "approve", "export"] },
+    // المخزون والمخازن والصيانة
+    { module: "inventory", actions: ["view", "create", "edit", "export"] },
+    { module: "asset_transfers", actions: ["view", "create", "edit", "export"] },
+    { module: "maintenance", actions: ["view", "create", "edit", "export"] },
+    { module: "inspections", actions: ["view", "create", "edit", "export"] },
+    { module: "warehouse", actions: ["view", "create", "edit", "export"] },
+    { module: "material_requests", actions: ["view", "create", "edit", "approve", "export"] },
+    { module: "transfer_requests", actions: ["view", "create", "edit", "approve", "export"] },
+    { module: "warehouse_inventory", actions: ["view", "create", "edit", "export"] },
+    // المتابعة والأداء (عرض وتصدير)
+    { module: "branch_employees", actions: ["view", "export"] },
+    { module: "employee_reports", actions: ["view", "export", "print"] },
+    { module: "reports", actions: ["view", "export", "print"] },
+    { module: "sales_analytics", actions: ["view", "export"] },
+    { module: "cashier_journal", actions: ["view", "export", "print"] },
+    { module: "targets", actions: ["view", "export"] },
+    { module: "targets_planning", actions: ["view", "export"] },
+    { module: "branches", actions: ["view"] },
+  ],
+
   // Viewer: View-only access to all modules
   viewer: SYSTEM_MODULES.filter((m) => m !== "users").map((module) => ({
     module,

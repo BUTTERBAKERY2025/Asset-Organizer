@@ -88,3 +88,26 @@ by a mix of role strings AND permissions on the client; the two must be kept in 
 per page. **How to apply:** when adding a permission-based role, grep client pages for
 `role === "..."` / `isHrManager` / `isAdmin ||` gates on the relevant feature and make
 them additive with the matching `canView/canEdit(module)`.
+
+
+## operations_manager (مدير التشغيل) mirrors this exact pattern (added 2026-07-12)
+Second cross-branch role wired through the SAME checklist above: template,
+auto-grant map + actionsFor synonyms (attendance_check/quality/waste),
+requirePermission + requireAnyPermission bypasses, getAllowedBranchIds null,
+canAccessBranch true, auth-init + /api/branches gates, my-permissions merge,
+users.tsx ROLES, platform-home NON_PORTAL_ROLES. When adding a THIRD cross-branch
+role, update both precedents or grep "financial_manager" and mirror every hit.
+Note: the role-validation arrays in routes.ts are THREE (users-create,
+users-update, operations-create), plus the two PRIVILEGED Sets.
+
+## hr_leaves module-presence trap (least-privilege lesson)
+Many /api/hr/leaves* routes were gated `requirePermission("hr_leaves")` with NO
+action — so ANY role/user with the module (even view-only, e.g. viewer template)
+could hit admin writes (leave balances, public holidays CRUD, settlements,
+apply-chains, leave PATCH/DELETE). Fixed 2026-07-12: those 11 sensitive routes
+now require `hr_leaves:edit` explicitly. operations_manager deliberately gets
+hr_leaves WITHOUT edit (view/create/approve/export) so it can review/approve
+leaves but not touch balances/holidays/settlements/provision-journal.
+**How to apply:** when granting hr_leaves to a new role, decide edit vs no-edit
+by whether it should reach those admin endpoints; review route needs only module
+presence (approval chains gate by job title on top).
