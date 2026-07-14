@@ -778,9 +778,15 @@ export async function setupAuth(app: Express) {
       
       const allBranches = await allBranchesPromise;
       let filteredBranches: any[] = [];
-      if (user.role === "admin" || user.role === "financial_manager" || user.role === "operations_manager") {
-        // Financial Manager & Operations Manager are cross-branch roles — see every branch org-wide.
+      if (user.role === "admin" || user.role === "financial_manager") {
+        // Financial Manager is a cross-branch role — sees every branch org-wide.
         filteredBranches = allBranches;
+      } else if (user.role === "operations_manager") {
+        // Operations Manager: all branches UNLESS the admin explicitly restricted
+        // the user to specific branches — then only those appear.
+        filteredBranches = userBranches.length > 0
+          ? allBranches.filter((b: any) => userBranches.some((ub: any) => ub.branchId === b.id))
+          : allBranches;
       } else if (userBranches.length > 0) {
         const allowedIds = userBranches.map((b: any) => b.branchId);
         filteredBranches = allBranches.filter((b: any) => allowedIds.includes(b.id));
@@ -1368,9 +1374,16 @@ export async function canAccessBranch(req: any, branchId: string): Promise<boole
   // requirePermission still governs WHAT they can do; this only governs WHICH branch.
   if (user.role === "financial_manager") return true;
 
-  // Operations Manager is a cross-branch role — manages daily operations in every
-  // branch. Module-level requirePermission still governs WHAT they can do.
-  if (user.role === "operations_manager") return true;
+  // Operations Manager: cross-branch BY DEFAULT, but if the admin explicitly
+  // restricted the user to specific branches (user_branch_access rows exist),
+  // those restrictions WIN — the role must not bypass them. No rows = all branches.
+  if (user.role === "operations_manager") {
+    const opsBranches = req.userBranchAccess || await storage.getUserBranchAccess(user.id);
+    if (Array.isArray(opsBranches) && opsBranches.length > 0) {
+      return opsBranches.some((access: any) => access.branchId === branchId);
+    }
+    return true;
+  }
   
   // Check if user has the required permission for the module linked to this branch
   // Users with event_pos permissions should access EVENT-BB branch
@@ -1488,9 +1501,14 @@ export function getAllowedBranchIds(req: any): string[] | null {
     return null; // كل الفروع
   }
 
-  // Operations Manager: مدير التشغيل — نطاق تشغيلي على مستوى المنشأة، يدير
-  // العمليات اليومية عبر كل الفروع. الوحدات مقيّدة بقالب صلاحياته التشغيلية.
+  // Operations Manager: مدير التشغيل — كل الفروع افتراضياً، لكن إذا حدّد الأدمن
+  // له "فروع مسموحة" معينة (صفوف user_branch_access) فهي المُلزِمة ولا يتجاوزها
+  // الدور. عدم وجود صفوف = كل الفروع.
   if (user.role === "operations_manager") {
+    const opsAccess = req.userBranchAccess || [];
+    if (Array.isArray(opsAccess) && opsAccess.length > 0) {
+      return opsAccess.map((access: any) => access.branchId);
+    }
     return null; // كل الفروع
   }
   

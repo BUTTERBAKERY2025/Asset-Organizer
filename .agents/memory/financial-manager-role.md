@@ -111,3 +111,14 @@ leaves but not touch balances/holidays/settlements/provision-journal.
 **How to apply:** when granting hr_leaves to a new role, decide edit vs no-edit
 by whether it should reach those admin endpoints; review route needs only module
 presence (approval chains gate by job title on top).
+
+## Branch restriction semantics differ between the two cross-branch roles (2026-07-14)
+operations_manager: all branches ONLY when the user has NO user_branch_access
+rows; if the admin ticked specific "الفروع المسموحة", those rows WIN (enforced in
+canAccessBranch, getAllowedBranchIds, auth-init filter, GET /api/branches — all
+four must stay in sync). financial_manager remains unconditionally all-branches.
+**Why:** admin unchecked a branch for an ops manager and the role bypass leaked
+that branch's data anyway — reported as a security hole.
+**How to apply:** any new cross-branch role must decide explicitly: hard
+all-branches (FM style) or restriction-respecting (ops style); implement the
+choice in ALL four surfaces.

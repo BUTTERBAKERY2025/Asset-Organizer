@@ -1165,9 +1165,19 @@ export async function registerRoutes(
       const user = req.currentUser;
       
       // SECURITY: Filter branches based on user role and branch access
-      if (isUserAdmin(req) || user?.role === "financial_manager" || user?.role === "operations_manager") {
-        // Admins and the cross-branch Financial/Operations Managers can see all branches
+      if (isUserAdmin(req) || user?.role === "financial_manager") {
+        // Admins and the cross-branch Financial Manager can see all branches
         res.json(branches);
+      } else if (user?.role === "operations_manager") {
+        // Operations Manager: all branches UNLESS the admin explicitly restricted
+        // the user to specific branches (user_branch_access rows) — then only those.
+        const opsAccess = await storage.getUserBranchAccess(user.id);
+        if (opsAccess.length > 0) {
+          const allowedIds = opsAccess.map((ba: any) => ba.branchId);
+          res.json(branches.filter((b: any) => allowedIds.includes(b.id)));
+        } else {
+          res.json(branches);
+        }
       } else if (user) {
         // Get user's allowed branches from user_branch_access table
         const userBranchAccess = await storage.getUserBranchAccess(user.id);
