@@ -25,6 +25,7 @@ import {
 import { LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS } from "@shared/schema";
 import butterLogo from "@assets/logo_-5_1765206843638.png";
 import { Layout } from "@/components/layout";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Link } from "wouter";
 import * as XLSX from "xlsx";
 
@@ -72,6 +73,10 @@ const serviceYears = (hireDate?: string | null): number | null => {
 export default function LeavesPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  // تعديل أرصدة الإجازات (والترحيل) يتطلب صلاحية "تعديل" على وحدة الإجازات —
+  // متاحة فقط لاختصاصي/مدير شؤون الموظفين والأدمن. الخادم يفرضها أيضاً.
+  const { hasPermission } = usePermissions();
+  const canEditBalances = hasPermission("hr_leaves", "edit");
   const currentYear = new Date().getFullYear();
 
   const [tab, setTab] = useState("requests");
@@ -1194,7 +1199,7 @@ export default function LeavesPage() {
                 <Button variant="outline" onClick={exportBalancesExcel} data-testid="button-export-balances">
                   <FileSpreadsheet className="h-4 w-4 ms-1" />تصدير Excel
                 </Button>
-                <Button
+                {canEditBalances && <Button
                   variant="outline"
                   className="text-purple-700 border-purple-300"
                   disabled={carryoverMutation.isPending}
@@ -1214,7 +1219,7 @@ export default function LeavesPage() {
                 >
                   <Wallet className="h-4 w-4 ms-1" />
                   {carryoverMutation.isPending ? "جارٍ الترحيل..." : `ترحيل أرصدة ${balYear - 1} ←`}
-                </Button>
+                </Button>}
                 <Button variant="outline" className="text-blue-700 border-blue-300" onClick={() => setCalcOpen(true)} data-testid="button-open-calculator">
                   <Calculator className="h-4 w-4 ms-1" />حاسبة الرصيد المستحق
                 </Button>
@@ -1255,9 +1260,9 @@ export default function LeavesPage() {
                         <td className={`p-2 tabular-nums font-bold ${b.remainingDays < 0 ? "text-red-600" : "text-emerald-600"}`} data-testid={`text-remaining-${b.branchEmployeeId}`}>{arNum(b.remainingDays)}</td>
                         <td className="p-2">
                           <div className="flex gap-1">
-                            <Button size="sm" variant="ghost" onClick={() => openEditBal(b)} data-testid={`button-edit-balance-${b.branchEmployeeId}`}>
+                            {canEditBalances && <Button size="sm" variant="ghost" onClick={() => openEditBal(b)} data-testid={`button-edit-balance-${b.branchEmployeeId}`}>
                               <Pencil className="h-3.5 w-3.5" />
-                            </Button>
+                            </Button>}
                             <Button size="sm" variant="ghost" className="text-blue-600" title="كشف حساب الإجازات"
                               onClick={() => { setStmtYear(balYear); setStmtEmpId(b.branchEmployeeId); }}
                               data-testid={`button-statement-${b.branchEmployeeId}`}>
