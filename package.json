@@ -78,6 +78,7 @@
     "express": "^4.21.2",
     "express-rate-limit": "^8.2.1",
     "express-session": "^1.18.1",
+    "form-data": "^4.0.6",
     "framer-motion": "^12.23.24",
     "google-auth-library": "^10.5.0",
     "helmet": "^8.1.0",
@@ -92,7 +93,7 @@
     "lucide-react": "^0.545.0",
     "memoizee": "^0.4.17",
     "memorystore": "^1.6.7",
-    "multer": "^2.0.2",
+    "multer": "^2.2.0",
     "next-themes": "^0.4.6",
     "node-forge": "^1.4.0",
     "openai": "^6.39.0",
@@ -124,7 +125,7 @@
     "twilio": "^5.12.0",
     "vaul": "^1.1.2",
     "wouter": "^3.3.5",
-    "ws": "^8.18.0",
+    "ws": "^8.21.0",
     "xlsx": "^0.18.5",
     "xlsx-js-style": "^1.2.0",
     "zod": "^3.25.76",
@@ -152,7 +153,7 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.22.3",
     "typescript": "5.6.3",
-    "vite": "^7.3.1"
+    "vite": "^7.3.5"
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
