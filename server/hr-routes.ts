@@ -878,6 +878,11 @@ export function registerHrRoutes(app: Express) {
 
   app.delete("/api/hr/leaves/:id", isAuthenticated, requirePermission("hr_leaves", "edit"), async (req, res) => {
     try {
+      // الحذف النهائي لطلب إجازة مقصور على الأدمن (طلب صاحب النظام).
+      const requester: any = (req as any).currentUser;
+      if (requester?.role !== "admin" && requester?.role !== "super_admin") {
+        return res.status(403).json({ error: "حذف طلبات الإجازة متاح للأدمن فقط" });
+      }
       const id = parseInt(req.params.id, 10);
       const { branchIds } = getBranchScope(req);
       const [existing] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id));

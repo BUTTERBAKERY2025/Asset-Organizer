@@ -75,8 +75,12 @@ export default function LeavesPage() {
   const qc = useQueryClient();
   // تعديل أرصدة الإجازات (والترحيل) يتطلب صلاحية "تعديل" على وحدة الإجازات —
   // متاحة فقط لاختصاصي/مدير شؤون الموظفين والأدمن. الخادم يفرضها أيضاً.
-  const { hasPermission } = usePermissions();
+  const { hasPermission, isAdmin } = usePermissions();
   const canEditBalances = hasPermission("hr_leaves", "edit");
+  // تصفية الرصيد (سند صرف) تتطلب صلاحية "تعديل" — الأدمن ومدير/اختصاصي شؤون الموظفين.
+  // حذف الطلب نهائياً للأدمن فقط (الخادم يفرض القاعدتين أيضاً).
+  const canSettle = canEditBalances;
+  const canDeleteLeave = isAdmin;
   const currentYear = new Date().getFullYear();
 
   const [tab, setTab] = useState("requests");
@@ -1152,7 +1156,7 @@ export default function LeavesPage() {
                                 <LogIn className="h-3.5 w-3.5" />
                               </Button>
                             )}
-                            {l.status === "approved" && l.leaveType === "annual" && (
+                            {canSettle && l.status === "approved" && l.leaveType === "annual" && (
                               <Button size="sm" variant="ghost" className="text-amber-600" title={l.settlementId ? "عرض/إلغاء التصفية" : "تصفية الرصيد (سند صرف)"} onClick={() => { setSettleForm({ days: "", useManual: false, manualAmount: "", note: "" }); setSettleLeave(l); }} data-testid={`button-settle-${l.id}`}>
                                 <Banknote className="h-3.5 w-3.5" />
                               </Button>
@@ -1163,9 +1167,9 @@ export default function LeavesPage() {
                             <Button size="sm" variant="ghost" title="كشف حساب الإجازات" onClick={() => { setStmtYear(Number(l.startDate?.slice(0, 4)) || currentYear); setStmtEmpId(l.branchEmployeeId); }} data-testid={`button-req-statement-${l.id}`}>
                               <FileText className="h-3.5 w-3.5 text-blue-600" />
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={() => { if (confirm("حذف هذا الطلب؟")) deleteMutation.mutate(l.id); }} data-testid={`button-delete-${l.id}`}>
+                            {canDeleteLeave && <Button size="sm" variant="ghost" onClick={() => { if (confirm("حذف هذا الطلب؟")) deleteMutation.mutate(l.id); }} data-testid={`button-delete-${l.id}`}>
                               <Trash2 className="h-3.5 w-3.5 text-red-600" />
-                            </Button>
+                            </Button>}
                           </div>
                         </td>
                       </tr>

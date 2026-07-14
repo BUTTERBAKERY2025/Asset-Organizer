@@ -81,5 +81,6 @@ export function usePermissions() {
     isViewer,
     isEmployee,
     isAttendanceClerk,
+    isAdmin,
   };
 }
