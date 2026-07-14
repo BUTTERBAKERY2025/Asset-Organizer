@@ -1680,6 +1680,8 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
     // الحساسة (أرصدة الإجازات، العطل الرسمية، التسويات، القيود المحاسبية) المحمية
     // بصلاحية hr_leaves:edit صراحةً.
     { module: "hr_leaves", actions: ["view", "create", "approve", "export"] },
+    // السلف: عرض + موافقة مبدئية فقط (القرار النهائي لمدير شؤون الموظفين)
+    { module: "hr_advances", actions: ["view", "approve", "export"] },
     // المخزون والمخازن والصيانة
     { module: "inventory", actions: ["view", "create", "edit", "export"] },
     { module: "asset_transfers", actions: ["view", "create", "edit", "export"] },
@@ -5997,7 +5999,10 @@ export const advanceRequests = pgTable("advance_requests", {
   reason: text("reason"), // سبب الطلب
   requestedMonth: text("requested_month").notNull(), // YYYY-MM الشهر المطلوب الخصم فيه
   installments: integer("installments").default(1), // عدد الأقساط (للعلم فقط)
-  status: text("status").notNull().default("pending"), // pending | approved | rejected | cancelled
+  status: text("status").notNull().default("pending"), // pending | pre_approved | approved | rejected | cancelled
+  preApprovedBy: varchar("pre_approved_by").references(() => users.id), // الموافقة المبدئية (مدير التشغيل)
+  preApprovedAt: timestamp("pre_approved_at"),
+  preApproverNote: text("pre_approver_note"),
   reviewedBy: varchar("reviewed_by").references(() => users.id),
   reviewedAt: timestamp("reviewed_at"),
   reviewerNote: text("reviewer_note"),
@@ -6032,6 +6037,7 @@ export type InsertAdvanceRequest = z.infer<typeof insertAdvanceRequestSchema>;
 
 export const ADVANCE_REQUEST_STATUS_LABELS: Record<string, string> = {
   pending: "قيد المراجعة",
+  pre_approved: "موافقة مبدئية",
   approved: "معتمدة",
   rejected: "مرفوضة",
   cancelled: "ملغاة",

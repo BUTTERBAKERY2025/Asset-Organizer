@@ -281,6 +281,7 @@
   },
   "advanceStatus": {
     "pending": "Pending",
+    "pre_approved": "Pre-approved",
     "approved": "Approved",
     "rejected": "Rejected",
     "cancelled": "Cancelled",

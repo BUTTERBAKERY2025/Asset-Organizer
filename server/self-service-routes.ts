@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { db } from "./db";
 import { eq, and, or, desc, inArray, like, isNotNull } from "drizzle-orm";
-import { isAuthenticated, requirePermission, getEffectiveBranchFilter, parseUserAgent } from "./auth";
+import { isAuthenticated, requirePermission, requireAnyPermission, getEffectiveBranchFilter, parseUserAgent, getCachedPermissionsForUser, HR_SPECIALIST_PERMISSIONS } from "./auth";
 import { storage } from "./storage";
 import {
   branchEmployees,
@@ -389,7 +389,7 @@ export function registerSelfServiceRoutes(app: Express) {
         .where(and(
           eq(advanceRequests.id, id),
           eq(advanceRequests.branchEmployeeId, emp.id),
-          eq(advanceRequests.status, "pending"),
+          inArray(advanceRequests.status, ["pending", "pre_approved"]),
         ))
         .returning();
       if (updated.length === 0) {
@@ -1105,7 +1105,30 @@ export function registerSelfServiceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/hr/advance-requests/:id/review", isAuthenticated, requirePermission("hr_advances"), async (req, res) => {
+  // هل يملك المستخدم صلاحية القرار النهائي على السلف؟
+  // مدير التشغيل = موافقة مبدئية فقط (حتى لو مُنح صلاحيات إضافية).
+  // الأدمن ومدير شؤون الموظفين والاختصاصي (edit) وأي مستخدم لديه hr_advances:edit = قرار نهائي.
+  async function hasAdvanceFinalAuthority(req: any): Promise<boolean> {
+    const user = req.currentUser;
+    if (!user) return false;
+    if (user.role === "operations_manager") return false;
+    if (user.role === "admin" || user.role === "super_admin" || user.role === "hr_manager") return true;
+    if (user.role === "hr_specialist") {
+      return (HR_SPECIALIST_PERMISSIONS["hr_advances"] || []).includes("edit");
+    }
+    const perms = getCachedPermissionsForUser(user.id) || (await storage.getUserPermissions(user.id)) || [];
+    const p = (perms as any[]).find((x) => x.module === "hr_advances");
+    if (!p) return false;
+    const raw = p.actions as unknown;
+    const actions: string[] = Array.isArray(raw)
+      ? raw
+      : typeof raw === "string"
+        ? raw.replace(/[{}]/g, "").split(",").map((a: string) => a.trim())
+        : [];
+    return actions.includes("edit");
+  }
+
+  app.post("/api/hr/advance-requests/:id/review", isAuthenticated, requireAnyPermission("hr_advances", ["approve", "edit"]), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const decision = z.object({
@@ -1121,39 +1144,109 @@ export function registerSelfServiceRoutes(app: Express) {
       if (branchIds !== null && !branchIds.includes(existing.branchId)) {
         return res.status(403).json({ error: "ليس لديك صلاحية على فرع هذا الطلب" });
       }
-      if (existing.status !== "pending") {
+      if (existing.status !== "pending" && existing.status !== "pre_approved") {
         return res.status(400).json({ error: "تمت معالجة هذا الطلب مسبقاً" });
       }
 
       const reviewerId = getUserId(req) || undefined;
+      const isFinal = await hasAdvanceFinalAuthority(req);
 
-      // القرار يغيّر الحالة فقط — لا يُنشأ خصم راتب تلقائياً (قرار المستخدم).
-      // الحارس الذري (status='pending') يمنع المعالجة المزدوجة عند التزامن.
-      const [updated] = await db.update(advanceRequests).set({
-        status: decision.decision,
-        reviewedBy: reviewerId,
-        reviewedAt: new Date(),
-        reviewerNote: decision.note,
-        updatedAt: new Date(),
-      }).where(and(eq(advanceRequests.id, id), eq(advanceRequests.status, "pending"))).returning();
-      if (!updated) {
-        return res.status(400).json({ error: "تمت معالجة هذا الطلب مسبقاً" });
+      // مرحلتان: الموافقة المبدئية (مدير التشغيل) ثم القرار النهائي (شؤون الموظفين).
+      if (!isFinal && existing.status === "pre_approved") {
+        return res.status(403).json({ error: "هذا الطلب بانتظار القرار النهائي من إدارة شؤون الموظفين" });
       }
 
-      // إشعار الموظف بالقرار (داخل التطبيق + واتساب) — لا يعطّل الاستجابة.
+      // الرفض ينهي الطلب من أي مرحلة.
+      if (decision.decision === "rejected") {
+        const [updated] = await db.update(advanceRequests).set({
+          status: "rejected",
+          reviewedBy: reviewerId,
+          reviewedAt: new Date(),
+          reviewerNote: decision.note,
+          updatedAt: new Date(),
+        }).where(and(eq(advanceRequests.id, id), inArray(advanceRequests.status, ["pending", "pre_approved"]))).returning();
+        if (!updated) return res.status(400).json({ error: "تمت معالجة هذا الطلب مسبقاً" });
+
+        const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, existing.branchEmployeeId));
+        if (emp) {
+          const noteLine = decision.note ? `\nملاحظة: ${decision.note}` : "";
+          await notifyEmployeeOfDecision({
+            emp,
+            title: "تم رفض طلب السلفة",
+            message: `طلب السلفة بمبلغ ${existing.amount} ر.س (شهر ${existing.requestedMonth}) تم رفضه.${noteLine}`,
+            linkUrl: "/my-portal",
+            relatedEntityId: id,
+          });
+        }
+        return res.json(updated);
+      }
+
+      // الموافقة المبدئية (مستخدم بصلاحية approve فقط، والطلب pending)
+      if (!isFinal) {
+        const [updated] = await db.update(advanceRequests).set({
+          status: "pre_approved",
+          preApprovedBy: reviewerId,
+          preApprovedAt: new Date(),
+          preApproverNote: decision.note,
+          updatedAt: new Date(),
+        }).where(and(eq(advanceRequests.id, id), eq(advanceRequests.status, "pending"))).returning();
+        if (!updated) return res.status(400).json({ error: "تمت معالجة هذا الطلب مسبقاً" });
+
+        const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, existing.branchEmployeeId));
+        if (emp) {
+          await notifyEmployeeOfDecision({
+            emp,
+            title: "موافقة مبدئية على طلب السلفة",
+            message: `طلب السلفة بمبلغ ${existing.amount} ر.س (شهر ${existing.requestedMonth}) حصل على موافقة مبدئية، وهو الآن بانتظار الاعتماد النهائي من إدارة شؤون الموظفين.`,
+            linkUrl: "/my-portal",
+            relatedEntityId: id,
+          });
+        }
+        return res.json(updated);
+      }
+
+      // الاعتماد النهائي: داخل معاملة ذرّية — إنشاء خصم الراتب تلقائياً وربطه بالطلب،
+      // فيدخل في إغلاق الرواتب الشهري للشهر المطلوب دون تسجيل يدوي.
+      const result = await db.transaction(async (tx) => {
+        const [updated] = await tx.update(advanceRequests).set({
+          status: "approved",
+          reviewedBy: reviewerId,
+          reviewedAt: new Date(),
+          reviewerNote: decision.note,
+          updatedAt: new Date(),
+        }).where(and(eq(advanceRequests.id, id), inArray(advanceRequests.status, ["pending", "pre_approved"]))).returning();
+        if (!updated) return null;
+
+        const [deduction] = await tx.insert(salaryDeductions).values({
+          branchEmployeeId: existing.branchEmployeeId,
+          branchId: existing.branchId,
+          month: existing.requestedMonth,
+          type: "advance",
+          amount: existing.amount,
+          description: `سلفة معتمدة (طلب رقم ${existing.id})${existing.reason ? ` — ${existing.reason}` : ""}`,
+          createdBy: reviewerId,
+        }).returning();
+
+        const [linked] = await tx.update(advanceRequests)
+          .set({ linkedDeductionId: deduction.id })
+          .where(eq(advanceRequests.id, id))
+          .returning();
+        return linked;
+      });
+      if (!result) return res.status(400).json({ error: "تمت معالجة هذا الطلب مسبقاً" });
+
       const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, existing.branchEmployeeId));
       if (emp) {
-        const verb = decision.decision === "approved" ? "اعتماد" : "رفض";
         const noteLine = decision.note ? `\nملاحظة: ${decision.note}` : "";
         await notifyEmployeeOfDecision({
           emp,
-          title: `تم ${verb} طلب السلفة`,
-          message: `طلب السلفة بمبلغ ${existing.amount} ر.س (شهر ${existing.requestedMonth}) تم ${verb}ه.${noteLine}`,
+          title: "تم اعتماد طلب السلفة",
+          message: `طلب السلفة بمبلغ ${existing.amount} ر.س تم اعتماده نهائياً وسيُخصم من راتب شهر ${existing.requestedMonth}.${noteLine}`,
           linkUrl: "/my-portal",
           relatedEntityId: id,
         });
       }
-      res.json(updated);
+      res.json(result);
     } catch (e: any) {
       if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
       console.error("[hr/advance-requests] review error:", e);

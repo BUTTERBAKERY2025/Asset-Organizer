@@ -14,6 +14,7 @@ import { Wallet, Plus, Trash2, TrendingDown, Calendar, ArrowRight, Clock, CheckC
 import { Layout } from "@/components/layout";
 import { Link } from "wouter";
 import { ADVANCE_REQUEST_STATUS_LABELS } from "@shared/schema";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type Adv = any;
 type Emp = { id: number; employeeName: string; jobTitle: string; branchId: string };
@@ -30,6 +31,12 @@ const initialForm = {
 export default function AdvancesPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { hasPermission } = usePermissions();
+  // القرار النهائي = من يملك صلاحية "تعديل" على السلف (الأدمن/شؤون الموظفين).
+  // مدير التشغيل (موافقة مبدئية فقط) لا يملكها.
+  const canFinal = hasPermission("hr_advances", "edit");
+  const canCreate = hasPermission("hr_advances", "create");
+  const canDelete = hasPermission("hr_advances", "delete");
   const [filterMonth, setFilterMonth] = useState<string>("");
   const [filterType, setFilterType] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -57,8 +64,14 @@ export default function AdvancesPage() {
   });
 
   const { data: pendingRequests = [] } = useQuery<any[]>({
-    queryKey: ["/api/hr/advance-requests", "pending"],
-    queryFn: async () => (await apiRequest("GET", "/api/hr/advance-requests?status=pending")).json(),
+    queryKey: ["/api/hr/advance-requests", "open"],
+    queryFn: async () => {
+      const [pending, preApproved] = await Promise.all([
+        (await apiRequest("GET", "/api/hr/advance-requests?status=pending")).json(),
+        (await apiRequest("GET", "/api/hr/advance-requests?status=pre_approved")).json(),
+      ]);
+      return [...pending, ...preApproved];
+    },
   });
 
   const reviewMutation = useMutation({
@@ -133,9 +146,11 @@ export default function AdvancesPage() {
             <p className="text-sm text-muted-foreground">إدارة السلف وأقساط القروض على الموظفين (تُخصم تلقائياً من الراتب)</p>
           </div>
         </div>
-        <Button onClick={() => setOpen(true)} data-testid="button-add-advance">
-          <Plus className="h-4 w-4 ms-2" />تسجيل سلفة / قسط
-        </Button>
+        {canCreate && (
+          <Button onClick={() => setOpen(true)} data-testid="button-add-advance">
+            <Plus className="h-4 w-4 ms-2" />تسجيل سلفة / قسط
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -168,21 +183,32 @@ export default function AdvancesPage() {
                     {r.reason && <div className="text-xs text-muted-foreground">{r.reason}</div>}
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="gap-1 bg-amber-50 text-amber-700 border-amber-200">
+                    <Badge variant="outline" className={`gap-1 ${r.status === "pre_approved" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
                       <Clock className="h-3 w-3" />{ADVANCE_REQUEST_STATUS_LABELS[r.status] || r.status}
                     </Badge>
-                    <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700"
-                      disabled={reviewMutation.isPending}
-                      onClick={() => { if (confirm("اعتماد طلب السلفة؟ سيتم إشعار الموظف بالقرار.")) reviewMutation.mutate({ id: r.id, decision: "approved" }); }}
-                      data-testid={`button-approve-${r.id}`}>
-                      <CheckCircle2 className="h-4 w-4 ms-1" />اعتماد
-                    </Button>
-                    <Button size="sm" variant="outline" className="text-destructive border-destructive/30"
-                      disabled={reviewMutation.isPending}
-                      onClick={() => { const note = prompt("سبب الرفض (اختياري):") ?? undefined; reviewMutation.mutate({ id: r.id, decision: "rejected", note }); }}
-                      data-testid={`button-reject-${r.id}`}>
-                      <XCircle className="h-4 w-4 ms-1" />رفض
-                    </Button>
+                    {(canFinal || r.status === "pending") ? (
+                      <>
+                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700"
+                          disabled={reviewMutation.isPending}
+                          onClick={() => {
+                            const msg = canFinal
+                              ? "اعتماد نهائي لطلب السلفة؟ سيُنشأ خصم الراتب تلقائياً في الشهر المطلوب وسيتم إشعار الموظف."
+                              : "موافقة مبدئية على طلب السلفة؟ سينتقل الطلب لإدارة شؤون الموظفين للقرار النهائي.";
+                            if (confirm(msg)) reviewMutation.mutate({ id: r.id, decision: "approved" });
+                          }}
+                          data-testid={`button-approve-${r.id}`}>
+                          <CheckCircle2 className="h-4 w-4 ms-1" />{canFinal ? "اعتماد نهائي" : "موافقة مبدئية"}
+                        </Button>
+                        <Button size="sm" variant="outline" className="text-destructive border-destructive/30"
+                          disabled={reviewMutation.isPending}
+                          onClick={() => { const note = prompt("سبب الرفض (اختياري):") ?? undefined; reviewMutation.mutate({ id: r.id, decision: "rejected", note }); }}
+                          data-testid={`button-reject-${r.id}`}>
+                          <XCircle className="h-4 w-4 ms-1" />رفض
+                        </Button>
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">بانتظار القرار النهائي من شؤون الموظفين</span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -236,9 +262,11 @@ export default function AdvancesPage() {
                     <td className="p-2 tabular-nums font-bold">{Number(a.amount).toLocaleString("ar-SA-u-nu-latn")}</td>
                     <td className="p-2 text-xs text-muted-foreground max-w-xs truncate" title={a.description}>{a.description || "-"}</td>
                     <td className="p-2">
-                      <Button size="sm" variant="ghost" onClick={() => { if (confirm("حذف هذه السلفة؟")) deleteMutation.mutate(a.id); }} data-testid={`button-delete-${a.id}`}>
-                        <Trash2 className="h-3.5 w-3.5 text-red-600" />
-                      </Button>
+                      {canDelete && (
+                        <Button size="sm" variant="ghost" onClick={() => { if (confirm("حذف هذه السلفة؟")) deleteMutation.mutate(a.id); }} data-testid={`button-delete-${a.id}`}>
+                          <Trash2 className="h-3.5 w-3.5 text-red-600" />
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}

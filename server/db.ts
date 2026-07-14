@@ -104,6 +104,10 @@ export async function runStartupMigrations() {
       `CREATE INDEX IF NOT EXISTS idx_attendance_records_branch ON attendance_records(branch_id)`,
       `CREATE INDEX IF NOT EXISTS idx_branch_employees_branch ON branch_employees(branch_id)`,
       `CREATE INDEX IF NOT EXISTS idx_display_bar_receipts_branch_date ON display_bar_receipts(branch_id, receipt_date)`,
+      // السلف: أعمدة الموافقة المبدئية (اعتماد على مرحلتين)
+      `ALTER TABLE advance_requests ADD COLUMN IF NOT EXISTS pre_approved_by varchar REFERENCES users(id)`,
+      `ALTER TABLE advance_requests ADD COLUMN IF NOT EXISTS pre_approved_at timestamp`,
+      `ALTER TABLE advance_requests ADD COLUMN IF NOT EXISTS pre_approver_note text`,
       // Phase 8: GPS columns on daily-log photos
       `ALTER TABLE project_daily_log_photos ADD COLUMN IF NOT EXISTS gps_latitude real`,
       `ALTER TABLE project_daily_log_photos ADD COLUMN IF NOT EXISTS gps_longitude real`,
