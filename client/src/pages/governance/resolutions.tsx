@@ -812,7 +812,8 @@ export default function ResolutionsPage() {
                                       : sig.status === 'declined'
                                         ? '<span class="sig-x">✗ رفض التوقيع</span>'
                                         : '<span class="sig-wait">في انتظار التوقيع</span>';
-                                    const dateLine = signed && sig.signedAt ? '<span class="sig-date">تاريخ التوقيع: ' + fmtG(sig.signedAt) + '</span>' : '';
+                                    // تاريخ التوقيع في المستند الرسمي = تاريخ القرار نفسه (وليس تاريخ التوقيع الفعلي في النظام)
+                                    const dateLine = signed ? '<span class="sig-date">تاريخ التوقيع: ' + dateStr + '</span>' : '';
                                     const okBadge = signed ? '<span class="sig-ok">✓ موقّع</span>' : sig.status === 'declined' ? '<span class="sig-rej">✗ مرفوض</span>' : '<span class="sig-pend">⏳ معلّق</span>';
                                     return '<div class="sig-card ' + (signed ? 'signed' : sig.status) + '">'
                                       + '<div class="sig-role">' + escapeHtml(translatePosition(sig.memberPosition)) + '</div>'

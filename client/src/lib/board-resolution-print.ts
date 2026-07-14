@@ -318,7 +318,6 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
 
   // قسم توقيعات أعضاء مجلس الإدارة المعتمدين للقرار (إن وُجدت طلبات توقيع).
   // التوقيعات تُجلب من نفس مصدر صفحة القرارات حتى تظهر هنا كما تظهر في قرارات الجمعية.
-  const fmtSigDate = (d: string): string => { try { return new Date(d).toLocaleDateString('en-GB'); } catch { return ''; } };
   // استبعاد رئيس مجلس الإدارة من شبكة البطاقات لأنه يظهر بالفعل في كتلة التوقيع
   // الرسمي بالأسفل (مع ختم الشركة) — منعاً لتكرار اسمه وتوقيعه.
   const boardMemberSigs = signatures.filter((sig) => {
@@ -336,7 +335,8 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
           : sig.status === 'declined'
             ? '<span class="sig-x">✗ رفض التوقيع</span>'
             : '<span class="sig-wait">في انتظار التوقيع</span>';
-        const dateLine = signed && sig.signedAt ? '<span class="sig-date">تاريخ التوقيع: ' + fmtSigDate(sig.signedAt) + '</span>' : '';
+        // تاريخ التوقيع في المستند الرسمي = تاريخ القرار نفسه (وليس تاريخ التوقيع الفعلي في النظام)
+        const dateLine = signed ? '<span class="sig-date">تاريخ التوقيع: ' + gregDateStr + '</span>' : '';
         const okBadge = signed ? '<span class="sig-ok">✓ موقّع</span>' : sig.status === 'declined' ? '<span class="sig-rej">✗ مرفوض</span>' : '<span class="sig-pend">⏳ معلّق</span>';
         return '<div class="sig-card ' + (signed ? 'signed' : sanitize(sig.status)) + '">' +
           '<div class="sig-role">' + sanitize(translateBoardPosition(sig.memberPosition)) + '</div>' +
