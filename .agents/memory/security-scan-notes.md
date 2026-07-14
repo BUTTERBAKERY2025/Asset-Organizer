@@ -25,3 +25,11 @@ description: Durable facts about this repo's recurring security-scan findings an
 
 ## drizzle-orm (CVE-2026-39356 escapeName identifier injection)
 - Only exploitable if attacker-controlled input reaches sql.identifier()/.as(); this repo doesn't. Still, upgrading 0.39.x -> 0.45.2 is non-major and app boots clean.
+
+## Lockfile firewall URLs break Render deploys (2026-07-14)
+npm installs inside Replit rewrite package-lock.json "resolved" fields to
+http://package-firewall.replit.local/npm/... which is unreachable on Render
+(ENOTFOUND at build). After ANY package install/upgrade here, before the user
+deploys: `grep -c package-firewall package-lock.json` and rewrite to
+https://registry.npmjs.org (integrity hashes stay valid). Local installs keep
+working — Replit's npm proxy config redirects registry URLs anyway.
