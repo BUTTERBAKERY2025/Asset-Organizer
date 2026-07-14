@@ -57,3 +57,12 @@ New role `branch_manager` (مدير فرع): branch-scoped (standard user_branch
 path, NO auth.ts bypasses — template rows only), designed as chain level 1
 (job title "مدير الفرع") before level 2 "مدير التشغيل"; reviewer matching stays
 job-title based, so the branch manager USER must have jobTitle "مدير الفرع".
+
+## Tolerant reviewer-step matching (2026-07-14)
+Exact job-title equality broke real setups ("مدير فرع" vs "مدير الفرع", or an
+empty users.jobTitle) → 403 "هذه المرحلة تتطلب اعتماد". Matching now uses
+normalizeJobTitle (trim, collapse spaces, strip tatweel + leading "ال" per
+word) AND a role-equivalence map (branch_manager ↔ مدير الفرع,
+operations_manager ↔ مدير التشغيل, hr_manager ↔ مدير شؤون الموظفين) in
+reviewerMatchesStep (server/leave-helpers.ts). Keep both paths in sync if new
+chain roles are added.

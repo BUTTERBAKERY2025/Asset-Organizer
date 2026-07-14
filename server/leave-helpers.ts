@@ -505,6 +505,43 @@ export async function getApplicableLeaveChain(
  * يحلّ المسمى الوظيفي للمستخدم المعتمِد: من users.jobTitle أولاً،
  * وإلا من ملف الموظف المرتبط (branch_employees.job_title عبر linked_user_id).
  */
+/**
+ * تطبيع المسمى الوظيفي للمقارنة: إزالة الفراغات الزائدة والتطويل وأداة التعريف
+ * "ال" من بداية كل كلمة، حتى لا يفشل الاعتماد بسبب فرق إملائي بسيط
+ * ("مدير فرع" مقابل "مدير الفرع").
+ */
+export function normalizeJobTitle(title?: string | null): string {
+  return (title || "")
+    .replace(/\u0640/g, "") // تطويل ـ
+    .trim()
+    .split(/\s+/)
+    .map((w) => w.replace(/^ال/, ""))
+    .join(" ");
+}
+
+/**
+ * الأدوار النظامية المكافئة لمسمى مرحلة الاعتماد: صاحب الدور يعتمد مرحلته حتى
+ * لو كان مسماه الوظيفي غير مضبوط حرفياً (المشكلة الشائعة عند الإعداد).
+ */
+const ROLE_STEP_EQUIV: Record<string, string[]> = {
+  branch_manager: ["مدير الفرع", "مدير فرع"],
+  operations_manager: ["مدير التشغيل", "مدير تشغيل"],
+  hr_manager: ["مدير شؤون الموظفين", "مدير الموارد البشرية"],
+};
+
+/** هل يحق للمراجِع اعتماد هذه المرحلة؟ (مطابقة مسمى مطبّعة أو دور نظامي مكافئ) */
+export function reviewerMatchesStep(opts: {
+  reviewerJobTitle?: string | null;
+  reviewerRole?: string | null;
+  expectedJobTitle: string;
+}): boolean {
+  const expected = normalizeJobTitle(opts.expectedJobTitle);
+  if (!expected) return true;
+  if (normalizeJobTitle(opts.reviewerJobTitle) === expected) return true;
+  const equiv = ROLE_STEP_EQUIV[(opts.reviewerRole || "").toLowerCase()] || [];
+  return equiv.some((t) => normalizeJobTitle(t) === expected);
+}
+
 export async function resolveReviewerJobTitle(userId?: string | null): Promise<string | null> {
   if (!userId) return null;
   const [u] = await db.select().from(users).where(eq(users.id, userId)).limit(1);

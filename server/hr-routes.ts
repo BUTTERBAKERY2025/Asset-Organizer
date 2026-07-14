@@ -54,7 +54,7 @@ import {
   syncAttendanceForLeave,
   reverseAttendanceForLeave,
   getApplicableLeaveChain,
-  resolveReviewerJobTitle,
+  resolveReviewerJobTitle, reviewerMatchesStep,
   markOverdueAbsences,
   clearOverdueAbsencesFrom,
   addDaysIso,
@@ -410,7 +410,7 @@ export function registerHrRoutes(app: Express) {
           const isAdmin = role === "admin" || role === "super_admin";
           if (!isAdmin) {
             const reviewerJobTitle = await resolveReviewerJobTitle(userId);
-            if (!reviewerJobTitle || reviewerJobTitle !== expected.jobTitle) {
+            if (!reviewerMatchesStep({ reviewerJobTitle, reviewerRole: user?.role, expectedJobTitle: expected.jobTitle })) {
               return res.status(403).json({
                 error: `هذه المرحلة تتطلب اعتماد: ${stepTitle}`,
                 requiredJobTitle: expected.jobTitle,
