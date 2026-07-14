@@ -1700,6 +1700,25 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
     { module: "branches", actions: ["view"] },
   ],
 
+  // Branch Manager: مدير الفرع — نطاق فرعه فقط (عبر الفروع المسموحة/فرعه
+  // الافتراضي، لا يتجاوز العزل الفرعي). مهمته الأساسية: اعتماد طلبات إجازات
+  // موظفي فرعه (hr_leaves بدون edit حتى لا يصل للمسارات الإدارية الحساسة —
+  // أرصدة الإجازات والعطل الرسمية والتسويات)، مع إدارة الحضور والورديات
+  // ومتابعة موظفي فرعه. لا رواتب ولا إعدادات ولا إدارة مستخدمين.
+  branch_manager: [
+    { module: "dashboard", actions: ["view"] },
+    { module: "hr_leaves", actions: ["view", "create", "approve", "export"] },
+    { module: "branch_employees", actions: ["view", "export"] },
+    { module: "employee_reports", actions: ["view", "export"] },
+    { module: "attendance", actions: ["view", "create", "edit", "export"] },
+    { module: "attendance_check", actions: ["view", "create", "edit"] },
+    { module: "shifts", actions: ["view", "create", "edit", "export"] },
+    { module: "timesheet", actions: ["view", "export"] },
+    { module: "operations", actions: ["view", "create", "edit", "export"] },
+    { module: "waste_tracking", actions: ["view", "create", "edit", "export"] },
+    { module: "waste", actions: ["view", "create", "edit", "export"] },
+  ],
+
   // Viewer: View-only access to all modules
   viewer: SYSTEM_MODULES.filter((m) => m !== "users").map((module) => ({
     module,

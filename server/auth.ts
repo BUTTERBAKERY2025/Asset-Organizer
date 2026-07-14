@@ -128,7 +128,9 @@ export const HR_MANAGER_MODULES: ReadonlySet<string> = new Set([
 // are enforced against the listed actions, so view-only modules stay view-only.
 export const HR_SPECIALIST_PERMISSIONS: Record<string, string[]> = {
   hr_management: ["view"],
-  hr_leaves: ["view", "create", "edit", "export"],
+  // "approve" مطلوب لمسار اعتماد/رفض طلبات الإجازة (يُقيَّد إضافياً بسلسلة
+  // الموافقات حسب المسمى الوظيفي إن كانت مفعّلة).
+  hr_leaves: ["view", "create", "edit", "approve", "export"],
   hr_documents: ["view", "create", "edit", "export"],
   hr_warnings: ["view", "create", "edit", "export"],
   hr_advances: ["view", "create", "edit", "export"],

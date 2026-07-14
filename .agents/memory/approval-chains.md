@@ -44,3 +44,16 @@ TOCTOU race — a reviewer can approve between the read and the write, and the b
 would clobber `currentLevel` back to 1 on an in-flight request. The UPDATE must re-assert
 the guards in its WHERE (`status='pending'`, chain empty, no `decision` in `approvalFlow`)
 and count only actually-affected rows.
+
+## Review route is action-gated + branch_manager role (2026-07-14)
+`/api/hr/leaves/:id/review` now requires `hr_leaves:approve` explicitly (it was
+bare requirePermission → POST inferred "create", so anyone who could SUBMIT a
+leave could also review one). Any role/user meant to approve leaves must carry
+the approve action: branch_manager & operations_manager templates and
+HR_SPECIALIST_PERMISSIONS.hr_leaves all include it; hr_manager passes via
+module bypass. Existing explicit user_permissions rows WITHOUT approve lose
+review — grant approve via the permissions dialog.
+New role `branch_manager` (مدير فرع): branch-scoped (standard user_branch_access
+path, NO auth.ts bypasses — template rows only), designed as chain level 1
+(job title "مدير الفرع") before level 2 "مدير التشغيل"; reviewer matching stays
+job-title based, so the branch manager USER must have jobTitle "مدير الفرع".

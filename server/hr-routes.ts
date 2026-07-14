@@ -371,7 +371,7 @@ export function registerHrRoutes(app: Express) {
   });
 
   // الموافقة/الرفض
-  app.post("/api/hr/leaves/:id/review", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+  app.post("/api/hr/leaves/:id/review", isAuthenticated, requirePermission("hr_leaves", "approve"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const decision = z.object({

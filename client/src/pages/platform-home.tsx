@@ -90,7 +90,7 @@ export default function PlatformHomePage() {
   // otherwise flip portalOnly true and redirect them to the portal mid-session.
   const NON_PORTAL_ROLES = new Set([
     "admin", "attendance_clerk", "hr_manager", "hr_specialist",
-    "financial_manager", "financial_accountant", "finance_manager", "operations_manager", "viewer",
+    "financial_manager", "financial_accountant", "finance_manager", "operations_manager", "branch_manager", "viewer",
   ]);
   const portalOnly =
     !isAdmin && !isAttendanceClerk && !permsLoading &&

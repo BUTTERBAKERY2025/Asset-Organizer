@@ -624,12 +624,12 @@ export async function registerRoutes(
       // SECURITY: Only admins may assign privileged roles. Non-admins can only
       // create "viewer" or "employee" accounts. This prevents privilege escalation
       // via the users:create permission (e.g., creating an admin or hr_manager).
-      const PRIVILEGED_ROLES = new Set(["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "attendance_clerk"]);
+      const PRIVILEGED_ROLES = new Set(["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "branch_manager", "attendance_clerk"]);
       const requestedRole = (role as string | undefined) || "viewer";
       if (PRIVILEGED_ROLES.has(requestedRole) && (req as any).currentUser?.role !== "admin") {
         return res.status(403).json({ error: "فقط المسؤولين يمكنهم منح هذا الدور" });
       }
-      if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "employee", "viewer", "attendance_clerk"].includes(requestedRole)) {
+      if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "branch_manager", "employee", "viewer", "attendance_clerk"].includes(requestedRole)) {
         return res.status(400).json({ error: "دور غير صالح" });
       }
       
@@ -717,7 +717,7 @@ export async function registerRoutes(
       }
       
       if (role !== undefined) {
-        if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "employee", "viewer", "attendance_clerk"].includes(role)) {
+        if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "branch_manager", "employee", "viewer", "attendance_clerk"].includes(role)) {
           return res.status(400).json({ error: "Invalid role" });
         }
         // SECURITY: Only admins can change user roles to prevent privilege escalation
@@ -7478,12 +7478,12 @@ export async function registerRoutes(
       
       // SECURITY: Only admins may assign privileged roles via this endpoint.
       // Non-admins with operations:create can only create regular "employee" accounts.
-      const OP_PRIVILEGED_ROLES = new Set(["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "attendance_clerk"]);
+      const OP_PRIVILEGED_ROLES = new Set(["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "branch_manager", "attendance_clerk"]);
       const opRequestedRole = (role as string | undefined) || "employee";
       if (OP_PRIVILEGED_ROLES.has(opRequestedRole) && !isUserAdmin(req)) {
         return res.status(403).json({ error: "فقط المسؤولين يمكنهم منح هذا الدور" });
       }
-      if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "employee", "viewer", "attendance_clerk"].includes(opRequestedRole)) {
+      if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "branch_manager", "employee", "viewer", "attendance_clerk"].includes(opRequestedRole)) {
         return res.status(400).json({ error: "دور غير صالح" });
       }
       
