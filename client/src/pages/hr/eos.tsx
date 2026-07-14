@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Calculator, Plus, CheckCircle2, DollarSign, Trash2, ArrowRight } from "lucide-react";
+import { Calculator, Plus, CheckCircle2, DollarSign, Trash2, ArrowRight, Printer } from "lucide-react";
+import { printEosSettlement } from "@/lib/eos-print";
 import { TERMINATION_TYPE_LABELS, EOS_STATUS_LABELS } from "@shared/schema";
 import { Layout } from "@/components/layout";
 import { Link } from "wouter";
@@ -216,6 +217,9 @@ export default function EOSPage() {
                         {r.status === "approved" && (
                           <Button size="sm" variant="ghost" className="text-emerald-600" onClick={() => payMutation.mutate(r.id)} data-testid={`button-pay-${r.id}`}>دفع</Button>
                         )}
+                        <Button size="sm" variant="ghost" onClick={() => printEosSettlement(r)} title="طباعة نموذج المخالصة" data-testid={`button-print-${r.id}`}>
+                          <Printer className="h-3.5 w-3.5 text-purple-600" />
+                        </Button>
                         <Button size="sm" variant="ghost" onClick={() => { if (confirm("حذف هذا السجل؟")) deleteMutation.mutate(r.id); }} data-testid={`button-delete-${r.id}`}>
                           <Trash2 className="h-3.5 w-3.5 text-red-600" />
                         </Button>
@@ -290,7 +294,19 @@ export default function EOSPage() {
                   <Row label="تاريخ بداية الخدمة" value={preview.startDate} />
                   <Row label="سنوات الخدمة" value={Number(preview.totalServiceYears).toFixed(3)} />
                   <Row label="الراتب الأساسي" value={`${fmt(preview.basicSalary)} ر.س`} />
-                  <Row label="الراتب الإجمالي" value={`${fmt(preview.totalSalary)} ر.س`} />
+                  <Row label="الأجر الأخير الشامل (أساس الحساب)" value={`${fmt(preview.totalSalary)} ر.س`} />
+                  {preview.appliedRule && (
+                    <div className="text-xs bg-amber-50 border border-amber-200 rounded p-2 my-1" data-testid="text-applied-rule">{preview.appliedRule}</div>
+                  )}
+                  {preview.firstFiveAmount != null && (
+                    <Row label={`نصف شهر × ${Number(preview.firstFiveYears).toFixed(2)} سنة`} value={`${fmt(preview.firstFiveAmount)} ر.س`} />
+                  )}
+                  {Number(preview.afterFiveYears) > 0 && (
+                    <Row label={`شهر كامل × ${Number(preview.afterFiveYears).toFixed(2)} سنة`} value={`${fmt(preview.afterFiveAmount)} ر.س`} />
+                  )}
+                  {preview.eosFraction != null && preview.eosFraction < 1 && (
+                    <Row label="نسبة الاستحقاق" value={preview.eosFraction === 0 ? "لا استحقاق" : preview.eosFraction === 1 / 3 ? "الثلث (1/3)" : "الثلثان (2/3)"} />
+                  )}
                   <Row label="مكافأة نهاية الخدمة" value={`${fmt(preview.eosAmount)} ر.س`} bold />
                   <Row label="قيمة رصيد الإجازات" value={`${fmt(preview.vacationAmount)} ر.س`} />
                   <Row label="مستحقات أخرى" value={`${fmt(preview.otherDues)} ر.س`} />

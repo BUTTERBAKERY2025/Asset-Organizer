@@ -12028,7 +12028,7 @@ export const eosCalculations = pgTable("eos_calculations", {
 ]);
 
 export const insertEosCalculationSchema = createInsertSchema(eosCalculations, {
-  terminationType: z.enum(["resignation", "termination", "end_of_contract", "retirement", "death"]),
+  terminationType: z.enum(["resignation", "termination", "termination_article_80", "resignation_marriage_childbirth", "force_majeure", "end_of_contract", "retirement", "death"]),
   status: z.enum(["draft", "approved", "paid"]).optional(),
   totalServiceYears: z.number().min(0),
   basicSalary: z.number().min(0),
@@ -12045,7 +12045,10 @@ export type InsertEosCalculation = z.infer<typeof insertEosCalculationSchema>;
 
 export const TERMINATION_TYPE_LABELS: Record<string, string> = {
   resignation: "استقالة",
-  termination: "فصل",
+  termination: "فصل (إنهاء من صاحب العمل)",
+  termination_article_80: "فصل بموجب المادة 80 (بدون مكافأة)",
+  resignation_marriage_childbirth: "استقالة لزواج/إنجاب (المادة 87)",
+  force_majeure: "ترك العمل لقوة قاهرة (المادة 87)",
   end_of_contract: "نهاية عقد",
   retirement: "تقاعد",
   death: "وفاة",

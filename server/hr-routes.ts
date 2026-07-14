@@ -2445,7 +2445,7 @@ export function registerHrRoutes(app: Express) {
       const schema = z.object({
         branchEmployeeId: z.number(),
         endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-        terminationType: z.enum(["resignation", "termination", "end_of_contract", "retirement", "death"]),
+        terminationType: z.enum(["resignation", "termination", "termination_article_80", "resignation_marriage_childbirth", "force_majeure", "end_of_contract", "retirement", "death"]),
         basicSalary: z.number().optional(),
         totalSalary: z.number().optional(),
         vacationBalance: z.number().optional(),
@@ -2469,22 +2469,36 @@ export function registerHrRoutes(app: Express) {
       const basic = input.basicSalary ?? (emp as any).salary ?? 0;
       const total = input.totalSalary ?? (emp as any).totalSalary ?? (emp as any).salary ?? basic;
 
-      // نظام العمل السعودي:
-      // - الفصل/نهاية عقد/تقاعد/وفاة: نصف شهر لكل سنة من الـ5 الأولى، شهر كامل لكل سنة بعدها (بناءً على الراتب الكامل)
-      // - الاستقالة: 1/3 إذا 2-5 سنوات، 2/3 إذا 5-10 سنوات، كامل إذا 10+ سنوات؛ لا شيء إذا أقل من سنتين
-      let eosAmount = 0;
+      // نظام العمل السعودي (المواد 84-87):
+      // - المادة 84: أجر نصف شهر عن كل سنة من السنوات الخمس الأولى، وأجر شهر عن كل
+      //   سنة تليها، على أساس الأجر الأخير (الأجر الفعلي الشامل)، وتُحتسب كسور السنة نسبياً.
+      // - المادة 85 (استقالة): 1/3 إذا 2-5 سنوات، 2/3 إذا 5-10 سنوات، كاملة إذا 10+؛ لا شيء أقل من سنتين.
+      // - المادة 87: مكافأة كاملة عند ترك العمل لقوة قاهرة، أو استقالة العاملة خلال
+      //   6 أشهر من الزواج أو 3 أشهر من الوضع.
+      // - المادة 80: الفصل لأحد أسبابها يُسقط المكافأة.
+      const wageBase = total; // الأجر الأخير الشامل (المادة 84)
       const firstFive = Math.min(5, years);
       const afterFive = Math.max(0, years - 5);
-      const fullEos = (basic * 0.5 * firstFive) + (basic * 1 * afterFive);
+      const firstFiveAmount = wageBase * 0.5 * firstFive;
+      const afterFiveAmount = wageBase * 1 * afterFive;
+      const fullEos = firstFiveAmount + afterFiveAmount;
 
+      let eosAmount = 0;
+      let eosFraction = 1;
+      let appliedRule = "";
       if (input.terminationType === "resignation") {
-        if (years < 2) eosAmount = 0;
-        else if (years < 5) eosAmount = fullEos / 3;
-        else if (years < 10) eosAmount = (fullEos * 2) / 3;
-        else eosAmount = fullEos;
+        if (years < 2) { eosFraction = 0; appliedRule = "المادة 85: خدمة أقل من سنتين — لا تستحق مكافأة"; }
+        else if (years < 5) { eosFraction = 1 / 3; appliedRule = "المادة 85: استقالة بين سنتين وخمس سنوات — ثلث المكافأة"; }
+        else if (years < 10) { eosFraction = 2 / 3; appliedRule = "المادة 85: استقالة بين خمس وعشر سنوات — ثلثا المكافأة"; }
+        else { eosFraction = 1; appliedRule = "المادة 85: استقالة بعد عشر سنوات — المكافأة كاملة"; }
+      } else if (input.terminationType === "termination_article_80") {
+        eosFraction = 0; appliedRule = "المادة 80: فصل لأحد الأسباب المنصوصة — لا تستحق مكافأة";
+      } else if (input.terminationType === "resignation_marriage_childbirth" || input.terminationType === "force_majeure") {
+        eosFraction = 1; appliedRule = "المادة 87: تستحق المكافأة كاملة";
       } else {
-        eosAmount = fullEos;
+        eosFraction = 1; appliedRule = "المادة 84: إنهاء العقد من صاحب العمل / انتهاء المدة / تقاعد / وفاة — المكافأة كاملة";
       }
+      eosAmount = fullEos * eosFraction;
 
       // تعبئة رصيد الإجازات تلقائياً من نظام الإجازات إذا لم يُدخل يدوياً (المادة 111: بدل الإجازة المستحقة)
       let vacationBalance = input.vacationBalance;
@@ -2511,6 +2525,14 @@ export function registerHrRoutes(app: Express) {
         basicSalary: basic,
         totalSalary: total,
         eosAmount: parseFloat(eosAmount.toFixed(2)),
+        fullEosAmount: parseFloat(fullEos.toFixed(2)),
+        firstFiveYears: parseFloat(firstFive.toFixed(3)),
+        afterFiveYears: parseFloat(afterFive.toFixed(3)),
+        firstFiveAmount: parseFloat(firstFiveAmount.toFixed(2)),
+        afterFiveAmount: parseFloat(afterFiveAmount.toFixed(2)),
+        eosFraction,
+        appliedRule,
+        dailyRate: parseFloat(dailyRate.toFixed(2)),
         vacationBalance: vacationBalance || 0,
         vacationAutoFilled,
         vacationAmount: parseFloat(vacationAmount.toFixed(2)),
