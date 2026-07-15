@@ -1006,12 +1006,12 @@ export default function LeavesPage() {
                     <table className="w-full text-sm">
                       <thead className="bg-red-50">
                         <tr>
-                          <th className="text-right p-2">الموظف</th>
-                          <th className="text-right p-2">نوع الإجازة</th>
-                          <th className="text-right p-2">نهاية الإجازة</th>
-                          <th className="text-right p-2">العودة المتوقعة</th>
-                          <th className="text-right p-2">أيام التأخير</th>
-                          <th className="text-right p-2">إجراء</th>
+                          <th className="text-right p-2 whitespace-nowrap">الموظف</th>
+                          <th className="text-center p-2 whitespace-nowrap">نوع الإجازة</th>
+                          <th className="text-center p-2 whitespace-nowrap">نهاية الإجازة</th>
+                          <th className="text-center p-2 whitespace-nowrap">العودة المتوقعة</th>
+                          <th className="text-center p-2 whitespace-nowrap">أيام التأخير</th>
+                          <th className="text-center p-2 whitespace-nowrap">إجراء</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1021,11 +1021,11 @@ export default function LeavesPage() {
                               <div className="font-medium">{m.employeeName}</div>
                               <div className="text-xs text-muted-foreground">{m.jobTitle}</div>
                             </td>
-                            <td className="p-2">{LEAVE_TYPE_LABELS[m.leaveType] || m.leaveType}</td>
-                            <td className="p-2 text-xs">{fmtDate(m.endDate)}</td>
-                            <td className="p-2 text-xs">{fmtDate(m.expectedReturn)}</td>
-                            <td className="p-2"><Badge className="bg-red-100 text-red-700">{arNum(m.lateDaysSoFar)} يوم</Badge></td>
-                            <td className="p-2">
+                            <td className="p-2 text-center">{LEAVE_TYPE_LABELS[m.leaveType] || m.leaveType}</td>
+                            <td className="p-2 text-xs text-center">{fmtDate(m.endDate)}</td>
+                            <td className="p-2 text-xs text-center">{fmtDate(m.expectedReturn)}</td>
+                            <td className="p-2 text-center"><Badge className="bg-red-100 text-red-700">{arNum(m.lateDaysSoFar)} يوم</Badge></td>
+                            <td className="p-2 text-center">
                               <Button
                                 size="sm" variant="outline" className="text-emerald-700 border-emerald-300 h-7 text-[11px]"
                                 onClick={() => { setReturnDate(new Date().toLocaleDateString("en-CA")); setReturnLeave(m); }}
@@ -1101,13 +1101,13 @@ export default function LeavesPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50">
                     <tr>
-                      <th className="text-right p-2">الموظف</th>
-                      <th className="text-right p-2">النوع</th>
-                      <th className="text-right p-2">من - إلى</th>
-                      <th className="text-right p-2">أيام</th>
-                      <th className="text-right p-2">الحالة</th>
-                      <th className="text-right p-2">المراجع</th>
-                      <th className="text-right p-2">إجراءات</th>
+                      <th className="text-right p-2 whitespace-nowrap">الموظف</th>
+                      <th className="text-center p-2 whitespace-nowrap">النوع</th>
+                      <th className="text-right p-2 whitespace-nowrap">من - إلى</th>
+                      <th className="text-center p-2 whitespace-nowrap">الأيام</th>
+                      <th className="text-center p-2 whitespace-nowrap">الحالة</th>
+                      <th className="text-right p-2 whitespace-nowrap">المراجع</th>
+                      <th className="text-center p-2 whitespace-nowrap">إجراءات</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1122,7 +1122,7 @@ export default function LeavesPage() {
                           </div>
                           <div className="text-xs text-muted-foreground">{l.employeeJob || ""}</div>
                         </td>
-                        <td className="p-2">{LEAVE_TYPE_LABELS[l.leaveType] || l.leaveType}</td>
+                        <td className="p-2 text-center">{LEAVE_TYPE_LABELS[l.leaveType] || l.leaveType}</td>
                         <td className="p-2 text-xs">
                           {l.startDate} → {l.endDate}
                           {l.status === "approved" && (
@@ -1154,7 +1154,7 @@ export default function LeavesPage() {
                             )}
                           </span>
                         </td>
-                        <td className="p-2 tabular-nums">
+                        <td className="p-2 text-center tabular-nums">
                           {arNum(l.totalDays)}
                           {l.requiredLevels > 1 && l.status === "pending" && (
                             <span className="block text-[10px] text-amber-600">موافقة {arNum(l.currentLevel)}/{arNum(l.requiredLevels)}</span>
@@ -1166,7 +1166,7 @@ export default function LeavesPage() {
                             </span>
                           )}
                         </td>
-                        <td className="p-2">{statusBadge(l.status)}</td>
+                        <td className="p-2 text-center">{statusBadge(l.status)}</td>
                         <td className="p-2 text-xs">
                           {l.status === "pending"
                             ? (() => {
@@ -1180,7 +1180,7 @@ export default function LeavesPage() {
                             : (l.reviewerName || "-")}
                         </td>
                         <td className="p-2">
-                          <div className="flex gap-1 items-center flex-nowrap">
+                          <div className="flex gap-1 items-center justify-center flex-nowrap">
                             {l.status === "pending" && (
                               <>
                                 <Button size="sm" variant="ghost" className="text-emerald-600" title="اعتماد" onClick={() => { setAllowOver(false); setReviewing({ id: l.id, decision: "approved", leave: l }); }} data-testid={`button-approve-${l.id}`}>
@@ -1397,14 +1397,14 @@ export default function LeavesPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50">
                     <tr>
-                      <th className="text-right p-2">الموظف</th>
-                      <th className="text-right p-2">الفرع</th>
-                      <th className="text-right p-2">المستحق</th>
-                      <th className="text-right p-2">المرحّل</th>
-                      <th className="text-right p-2">تعديل</th>
-                      <th className="text-right p-2">المستخدم</th>
-                      <th className="text-right p-2">المتبقي</th>
-                      <th className="text-right p-2"></th>
+                      <th className="text-right p-2 whitespace-nowrap">الموظف</th>
+                      <th className="text-right p-2 whitespace-nowrap">الفرع</th>
+                      <th className="text-center p-2 whitespace-nowrap">المستحق</th>
+                      <th className="text-center p-2 whitespace-nowrap">المرحّل</th>
+                      <th className="text-center p-2 whitespace-nowrap">تعديل</th>
+                      <th className="text-center p-2 whitespace-nowrap">المستخدم</th>
+                      <th className="text-center p-2 whitespace-nowrap">المتبقي</th>
+                      <th className="p-2 w-16"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1422,13 +1422,13 @@ export default function LeavesPage() {
                           </div>
                         </td>
                         <td className="p-2 text-xs">{b.branchName}</td>
-                        <td className="p-2 tabular-nums">{arNum(b.entitledDays)}{!b.hasRow && <span className="text-[10px] text-amber-500 me-1">مقترح</span>}</td>
-                        <td className="p-2 tabular-nums">{arNum(b.carriedOverDays)}</td>
-                        <td className="p-2 tabular-nums">{arNum(b.adjustmentDays)}</td>
-                        <td className="p-2 tabular-nums">{arNum(b.usedDays)}</td>
-                        <td className={`p-2 tabular-nums font-bold ${b.remainingDays < 0 ? "text-red-600" : "text-emerald-600"}`} data-testid={`text-remaining-${b.branchEmployeeId}`}>{arNum(b.remainingDays)}</td>
+                        <td className="p-2 text-center tabular-nums">{arNum(b.entitledDays)}{!b.hasRow && <span className="text-[10px] text-amber-500 me-1">مقترح</span>}</td>
+                        <td className="p-2 text-center tabular-nums">{arNum(b.carriedOverDays)}</td>
+                        <td className="p-2 text-center tabular-nums">{arNum(b.adjustmentDays)}</td>
+                        <td className="p-2 text-center tabular-nums">{arNum(b.usedDays)}</td>
+                        <td className={`p-2 text-center tabular-nums font-bold ${b.remainingDays < 0 ? "text-red-600" : "text-emerald-600"}`} data-testid={`text-remaining-${b.branchEmployeeId}`}>{arNum(b.remainingDays)}</td>
                         <td className="p-2">
-                          <div className="flex gap-1">
+                          <div className="flex gap-1 justify-center">
                             {canEditBalances && <Button size="sm" variant="ghost" onClick={() => openEditBal(b)} data-testid={`button-edit-balance-${b.branchEmployeeId}`}>
                               <Pencil className="h-3.5 w-3.5" />
                             </Button>}
@@ -1508,11 +1508,11 @@ export default function LeavesPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50">
                     <tr>
-                      <th className="text-right p-2">العطلة</th>
-                      <th className="text-right p-2">من - إلى</th>
-                      <th className="text-right p-2">الأيام</th>
-                      <th className="text-right p-2">الحالة</th>
-                      <th className="text-right p-2">إجراءات</th>
+                      <th className="text-right p-2 whitespace-nowrap">العطلة</th>
+                      <th className="text-right p-2 whitespace-nowrap">من - إلى</th>
+                      <th className="text-center p-2 whitespace-nowrap">الأيام</th>
+                      <th className="text-center p-2 whitespace-nowrap">الحالة</th>
+                      <th className="text-center p-2 whitespace-nowrap">إجراءات</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1526,14 +1526,14 @@ export default function LeavesPage() {
                           {h.note && <div className="text-xs text-muted-foreground">{h.note}</div>}
                         </td>
                         <td className="p-2 text-xs">{h.startDate} → {h.endDate}</td>
-                        <td className="p-2 tabular-nums">{arNum(calcDays(h.startDate, h.endDate))}</td>
-                        <td className="p-2">
+                        <td className="p-2 text-center tabular-nums">{arNum(calcDays(h.startDate, h.endDate))}</td>
+                        <td className="p-2 text-center">
                           {h.isActive
                             ? <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">مفعّلة</Badge>
                             : <Badge variant="secondary">موقوفة</Badge>}
                         </td>
                         <td className="p-2">
-                          <div className="flex gap-1">
+                          <div className="flex gap-1 justify-center">
                             <Button size="sm" variant="ghost" title={h.isActive ? "إيقاف" : "تفعيل"}
                               onClick={() => toggleHolidayMutation.mutate({ id: h.id, isActive: !h.isActive })}
                               data-testid={`button-toggle-holiday-${h.id}`}>
