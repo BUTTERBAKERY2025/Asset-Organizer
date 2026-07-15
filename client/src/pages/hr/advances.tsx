@@ -16,6 +16,8 @@ import { Link } from "wouter";
 import { ADVANCE_REQUEST_STATUS_LABELS } from "@shared/schema";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/hooks/useAuth";
+import { printAdvanceDocument } from "@/lib/advance-print";
+import { Printer } from "lucide-react";
 
 type Adv = any;
 type Emp = { id: number; employeeName: string; jobTitle: string; branchId: string };
@@ -71,7 +73,7 @@ export default function AdvancesPage() {
   const { data: pendingRequests = [] } = useQuery<any[]>({
     queryKey: ["/api/hr/advance-requests", "open"],
     queryFn: async () => {
-      const statuses = ["pending", "pre_approved", "awaiting_signature", "signed", "approved"];
+      const statuses = ["pending", "pre_approved", "awaiting_signature", "signed", "approved", "disbursed"];
       const lists = await Promise.all(
         statuses.map(async (s) => (await apiRequest("GET", `/api/hr/advance-requests?status=${s}`)).json()),
       );
@@ -231,6 +233,7 @@ export default function AdvancesPage() {
                   awaiting_signature: "bg-sky-50 text-sky-700 border-sky-200",
                   signed: "bg-indigo-50 text-indigo-700 border-indigo-200",
                   approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
+                  disbursed: "bg-teal-50 text-teal-700 border-teal-200",
                 };
                 return (
                 <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg border bg-card" data-testid={`row-request-${r.id}`}>
@@ -311,8 +314,17 @@ export default function AdvancesPage() {
                       </Button>
                     )}
 
+                    {/* طباعة النموذج الرسمي الموقّع (مستند) */}
+                    {["signed", "approved", "disbursed"].includes(r.status) && (
+                      <Button size="sm" variant="outline"
+                        onClick={() => printAdvanceDocument(r)}
+                        data-testid={`button-print-advance-${r.id}`}>
+                        <Printer className="h-4 w-4 ms-1" />طباعة النموذج
+                      </Button>
+                    )}
+
                     {/* الرفض متاح لشؤون الموظفين في كل المراحل، ولمدير التشغيل على الجديد فقط */}
-                    {((canFinal && r.status !== "approved") || (!canFinal && r.status === "pending")) && (
+                    {((canFinal && r.status !== "approved" && r.status !== "disbursed") || (!canFinal && r.status === "pending")) && (
                       <Button size="sm" variant="outline" className="text-destructive border-destructive/30"
                         disabled={reviewMutation.isPending}
                         onClick={() => { const note = prompt("سبب الرفض (اختياري):") ?? undefined; reviewMutation.mutate({ id: r.id, decision: "rejected", note }); }}
