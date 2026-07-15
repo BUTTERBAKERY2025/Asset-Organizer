@@ -389,7 +389,7 @@ export function registerSelfServiceRoutes(app: Express) {
         .where(and(
           eq(advanceRequests.id, id),
           eq(advanceRequests.branchEmployeeId, emp.id),
-          inArray(advanceRequests.status, ["pending", "pre_approved"]),
+          inArray(advanceRequests.status, ["pending", "pre_approved", "awaiting_signature"]),
         ))
         .returning();
       if (updated.length === 0) {
@@ -398,6 +398,49 @@ export function registerSelfServiceRoutes(app: Express) {
       res.json(updated[0]);
     } catch (e: any) {
       console.error("[my/advance-requests] cancel error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // توقيع الموظف على نموذج السلفة الرسمي (إقرار + توقيع مرسوم)
+  app.post("/api/my/advance-requests/:id/sign", isAuthenticated, async (req, res) => {
+    try {
+      const emp = await getMyEmployee(req);
+      if (!emp) return res.status(403).json({ error: "حسابك غير مرتبط بملف موظف" });
+      const id = parseInt(req.params.id, 10);
+      const body = z.object({
+        signatureData: z.string().min(50, "التوقيع مطلوب").regex(/^data:image\/(png|jpeg);base64,/, "صيغة التوقيع غير صحيحة"),
+        acknowledged: z.literal(true, { errorMap: () => ({ message: "يجب الإقرار بالموافقة على الاستقطاع" }) }),
+      }).parse(req.body);
+      if (body.signatureData.length > 500_000) {
+        return res.status(400).json({ error: "حجم التوقيع كبير جداً" });
+      }
+      const [existing] = await db.select().from(advanceRequests).where(eq(advanceRequests.id, id));
+      if (!existing || existing.branchEmployeeId !== emp.id) {
+        return res.status(404).json({ error: "الطلب غير موجود" });
+      }
+      // Atomic guard: sign only while awaiting signature and owned by this employee.
+      const updated = await db.update(advanceRequests)
+        .set({ status: "signed", signatureData: body.signatureData, signedAt: new Date(), updatedAt: new Date() })
+        .where(and(
+          eq(advanceRequests.id, id),
+          eq(advanceRequests.branchEmployeeId, emp.id),
+          eq(advanceRequests.status, "awaiting_signature"),
+        ))
+        .returning();
+      if (updated.length === 0) {
+        return res.status(400).json({ error: "هذا الطلب غير متاح للتوقيع" });
+      }
+      await notifyHrOfRequest(emp, {
+        title: "موظف وقّع نموذج سلفة",
+        message: `${emp.employeeName} وقّع نموذج السلفة (${existing.approvedAmount ?? existing.amount} ر.س على ${existing.installmentMonths ?? 1} قسطاً). الطلب جاهز للاعتماد النهائي من إدارة شؤون الموظفين.`,
+        linkUrl: "/hr/advances",
+        relatedEntityId: id,
+      });
+      res.json(updated[0]);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
+      console.error("[my/advance-requests] sign error:", e);
       res.status(500).json({ error: e.message });
     }
   });
@@ -1106,27 +1149,222 @@ export function registerSelfServiceRoutes(app: Express) {
   });
 
   // هل يملك المستخدم صلاحية القرار النهائي على السلف؟
-  // مدير التشغيل = موافقة مبدئية فقط (حتى لو مُنح صلاحيات إضافية).
-  // الأدمن ومدير شؤون الموظفين والاختصاصي (edit) وأي مستخدم لديه hr_advances:edit = قرار نهائي.
+  // القرار النهائي محصور في: الأدمن + مدير الموارد البشرية + اختصاصي الموارد البشرية (بصلاحية edit) — فقط.
+  // مدير التشغيل وغيرهم = موافقة مبدئية فقط مهما كانت صلاحياتهم.
   async function hasAdvanceFinalAuthority(req: any): Promise<boolean> {
     const user = req.currentUser;
     if (!user) return false;
-    if (user.role === "operations_manager") return false;
     if (user.role === "admin" || user.role === "super_admin" || user.role === "hr_manager") return true;
     if (user.role === "hr_specialist") {
       return (HR_SPECIALIST_PERMISSIONS["hr_advances"] || []).includes("edit");
     }
-    const perms = getCachedPermissionsForUser(user.id) || (await storage.getUserPermissions(user.id)) || [];
-    const p = (perms as any[]).find((x) => x.module === "hr_advances");
-    if (!p) return false;
-    const raw = p.actions as unknown;
-    const actions: string[] = Array.isArray(raw)
-      ? raw
-      : typeof raw === "string"
-        ? raw.replace(/[{}]/g, "").split(",").map((a: string) => a.trim())
-        : [];
-    return actions.includes("edit");
+    return false;
   }
+
+  // إضافة أشهر لصيغة YYYY-MM
+  function addMonths(month: string, add: number): string {
+    const [y, m] = month.split("-").map((v) => parseInt(v, 10));
+    const total = y * 12 + (m - 1) + add;
+    const ny = Math.floor(total / 12);
+    const nm = (total % 12) + 1;
+    return `${ny}-${String(nm).padStart(2, "0")}`;
+  }
+
+  // تقسيم متساوٍ: قسط شهري مقرّب لهللتين، والقسط الأخير يمتص الفرق
+  function buildInstallmentPlan(amount: number, months: number, startMonth: string) {
+    const monthly = Math.round((amount / months) * 100) / 100;
+    const plan: Array<{ month: string; amount: number }> = [];
+    let allocated = 0;
+    for (let i = 0; i < months; i++) {
+      const isLast = i === months - 1;
+      const a = isLast ? Math.round((amount - allocated) * 100) / 100 : monthly;
+      allocated = Math.round((allocated + a) * 100) / 100;
+      plan.push({ month: addMonths(startMonth, i), amount: a });
+    }
+    return { monthly, plan };
+  }
+
+  // إرسال الطلب لتوقيع الموظف بعد مراجعة شؤون الموظفين (تعديل القيمة + عدد الأشهر)
+  app.post("/api/hr/advance-requests/:id/send-for-signature", isAuthenticated, requireAnyPermission("hr_advances", ["approve", "edit"]), async (req, res) => {
+    try {
+      if (!(await hasAdvanceFinalAuthority(req))) {
+        return res.status(403).json({ error: "مراجعة السلفة وإرسالها للتوقيع من صلاحية إدارة شؤون الموظفين فقط" });
+      }
+      const id = parseInt(req.params.id, 10);
+      const body = z.object({
+        approvedAmount: z.number().positive("القيمة المعتمدة يجب أن تكون موجبة"),
+        installmentMonths: z.number().int().min(1, "عدد الأشهر يجب أن يكون 1 على الأقل").max(60, "الحد الأقصى 60 شهراً"),
+        startMonth: z.string().regex(/^\d{4}-\d{2}$/, "صيغة الشهر يجب أن تكون YYYY-MM"),
+        note: z.string().optional(),
+      }).parse(req.body);
+
+      const f = getEffectiveBranchFilter(req);
+      const [existing] = await db.select().from(advanceRequests).where(eq(advanceRequests.id, id));
+      if (!existing) return res.status(404).json({ error: "الطلب غير موجود" });
+      if (f.branchIds !== null && !f.branchIds.includes(existing.branchId)) {
+        return res.status(403).json({ error: "ليس لديك صلاحية على فرع هذا الطلب" });
+      }
+
+      const { monthly } = buildInstallmentPlan(body.approvedAmount, body.installmentMonths, body.startMonth);
+      const reviewerId = getUserId(req) || undefined;
+      const [updated] = await db.update(advanceRequests).set({
+        status: "awaiting_signature",
+        approvedAmount: body.approvedAmount,
+        installmentMonths: body.installmentMonths,
+        monthlyInstallment: monthly,
+        startMonth: body.startMonth,
+        sentForSignatureBy: reviewerId,
+        sentForSignatureAt: new Date(),
+        reviewerNote: body.note ?? existing.reviewerNote,
+        // إعادة الإرسال بعد تعديل تُلغي أي توقيع سابق
+        signatureData: null,
+        signedAt: null,
+        updatedAt: new Date(),
+      }).where(and(eq(advanceRequests.id, id), inArray(advanceRequests.status, ["pending", "pre_approved", "awaiting_signature", "signed"]))).returning();
+      if (!updated) return res.status(400).json({ error: "لا يمكن إرسال هذا الطلب للتوقيع في حالته الحالية" });
+
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, existing.branchEmployeeId));
+      if (emp) {
+        await notifyEmployeeOfDecision({
+          emp,
+          title: "طلب السلفة بانتظار توقيعك",
+          message: `تمت مراجعة طلب السلفة واعتماد مبلغ ${body.approvedAmount} ر.س على ${body.installmentMonths} قسطاً شهرياً (${monthly} ر.س شهرياً) بدءاً من ${body.startMonth}. الرجاء الدخول لبوابة الموظف وتوقيع نموذج الموافقة.`,
+          linkUrl: "/my-portal",
+          relatedEntityId: id,
+        });
+      }
+      res.json(updated);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
+      console.error("[hr/advance-requests] send-for-signature error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // تحويل السلفة المعتمدة للصرف المالي (الإدارة المالية / الأدمن)
+  app.post("/api/hr/advance-requests/:id/disburse", isAuthenticated, requirePermission("hr_advances"), async (req, res) => {
+    try {
+      const user = (req as any).currentUser;
+      const allowedRoles = ["admin", "super_admin", "financial_manager", "finance_manager", "hr_manager"];
+      if (!user || !allowedRoles.includes(user.role)) {
+        return res.status(403).json({ error: "صرف السلفة من صلاحية الإدارة المالية أو الأدمن فقط" });
+      }
+      const id = parseInt(req.params.id, 10);
+      const f = getEffectiveBranchFilter(req);
+      const [existing] = await db.select().from(advanceRequests).where(eq(advanceRequests.id, id));
+      if (!existing) return res.status(404).json({ error: "الطلب غير موجود" });
+      if (f.branchIds !== null && !f.branchIds.includes(existing.branchId)) {
+        return res.status(403).json({ error: "ليس لديك صلاحية على فرع هذا الطلب" });
+      }
+      const [updated] = await db.update(advanceRequests).set({
+        status: "disbursed",
+        disbursedBy: getUserId(req) || undefined,
+        disbursedAt: new Date(),
+        updatedAt: new Date(),
+      }).where(and(eq(advanceRequests.id, id), eq(advanceRequests.status, "approved"))).returning();
+      if (!updated) return res.status(400).json({ error: "الصرف متاح فقط للسلف المعتمدة نهائياً" });
+
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, existing.branchEmployeeId));
+      if (emp) {
+        await notifyEmployeeOfDecision({
+          emp,
+          title: "تم صرف السلفة",
+          message: `تم صرف سلفتك بمبلغ ${existing.approvedAmount ?? existing.amount} ر.س من الإدارة المالية.`,
+          linkUrl: "/my-portal",
+          relatedEntityId: id,
+        });
+      }
+      res.json(updated);
+    } catch (e: any) {
+      console.error("[hr/advance-requests] disburse error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // إدخال سلفة سابقة (قديمة): تُسجل معتمدة مباشرة بدون توقيع، مع خطة أقساط للمتبقي
+  app.post("/api/hr/advance-requests/legacy", isAuthenticated, requireAnyPermission("hr_advances", ["create", "edit"]), async (req, res) => {
+    try {
+      if (!(await hasAdvanceFinalAuthority(req))) {
+        return res.status(403).json({ error: "إدخال السلف السابقة من صلاحية إدارة شؤون الموظفين فقط" });
+      }
+      const body = z.object({
+        branchEmployeeId: z.number().int().positive(),
+        totalAmount: z.number().positive("قيمة السلفة يجب أن تكون موجبة"),
+        repaidAmount: z.number().min(0).default(0),
+        installmentMonths: z.number().int().min(1).max(60),
+        startMonth: z.string().regex(/^\d{4}-\d{2}$/, "صيغة الشهر يجب أن تكون YYYY-MM"),
+        reason: z.string().optional(),
+      }).parse(req.body);
+
+      const remaining = Math.round((body.totalAmount - body.repaidAmount) * 100) / 100;
+      if (remaining <= 0) return res.status(400).json({ error: "المبلغ المتبقي يجب أن يكون أكبر من صفر" });
+
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, body.branchEmployeeId));
+      if (!emp) return res.status(404).json({ error: "الموظف غير موجود" });
+      const f = getEffectiveBranchFilter(req);
+      if (f.branchIds !== null && !f.branchIds.includes(emp.branchId)) {
+        return res.status(403).json({ error: "ليس لديك صلاحية على فرع هذا الموظف" });
+      }
+
+      const { monthly, plan } = buildInstallmentPlan(remaining, body.installmentMonths, body.startMonth);
+      const reviewerId = getUserId(req) || undefined;
+
+      const created = await db.transaction(async (tx) => {
+        const [row] = await tx.insert(advanceRequests).values({
+          branchEmployeeId: emp.id,
+          branchId: emp.branchId,
+          amount: body.totalAmount,
+          reason: body.reason || "سلفة سابقة (إدخال يدوي)",
+          requestedMonth: body.startMonth,
+          installments: body.installmentMonths,
+          status: "approved",
+          isLegacy: true,
+          legacyRepaidAmount: body.repaidAmount,
+          approvedAmount: remaining,
+          installmentMonths: body.installmentMonths,
+          monthlyInstallment: monthly,
+          startMonth: body.startMonth,
+          reviewedBy: reviewerId,
+          reviewedAt: new Date(),
+          reviewerNote: "سلفة سابقة معتمدة مباشرة (بدون توقيع)",
+          createdBy: reviewerId,
+        }).returning();
+
+        let firstDeductionId: number | null = null;
+        for (const p of plan) {
+          const [d] = await tx.insert(salaryDeductions).values({
+            branchEmployeeId: emp.id,
+            branchId: emp.branchId,
+            month: p.month,
+            type: "advance",
+            amount: p.amount,
+            description: `قسط سلفة سابقة (طلب رقم ${row.id})${body.reason ? ` — ${body.reason}` : ""}`,
+            advanceRequestId: row.id,
+            createdBy: reviewerId,
+          }).returning();
+          if (firstDeductionId === null) firstDeductionId = d.id;
+        }
+        const [linked] = await tx.update(advanceRequests)
+          .set({ linkedDeductionId: firstDeductionId })
+          .where(eq(advanceRequests.id, row.id))
+          .returning();
+        return linked;
+      });
+
+      await notifyEmployeeOfDecision({
+        emp,
+        title: "تسجيل سلفة سابقة باسمك",
+        message: `تم تسجيل سلفة سابقة بقيمة ${body.totalAmount} ر.س (المتبقي ${remaining} ر.س) على ${body.installmentMonths} قسطاً شهرياً (${monthly} ر.س) بدءاً من ${body.startMonth}، وستُخصم تلقائياً من راتبك الشهري.`,
+        linkUrl: "/my-portal",
+        relatedEntityId: created.id,
+      });
+      res.status(201).json(created);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
+      console.error("[hr/advance-requests] legacy error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
 
   app.post("/api/hr/advance-requests/:id/review", isAuthenticated, requireAnyPermission("hr_advances", ["approve", "edit"]), async (req, res) => {
     try {
@@ -1144,7 +1382,8 @@ export function registerSelfServiceRoutes(app: Express) {
       if (branchIds !== null && !branchIds.includes(existing.branchId)) {
         return res.status(403).json({ error: "ليس لديك صلاحية على فرع هذا الطلب" });
       }
-      if (existing.status !== "pending" && existing.status !== "pre_approved") {
+      const REVIEWABLE = ["pending", "pre_approved", "awaiting_signature", "signed"];
+      if (!REVIEWABLE.includes(existing.status)) {
         return res.status(400).json({ error: "تمت معالجة هذا الطلب مسبقاً" });
       }
 
@@ -1152,8 +1391,8 @@ export function registerSelfServiceRoutes(app: Express) {
       const isFinal = await hasAdvanceFinalAuthority(req);
 
       // مرحلتان: الموافقة المبدئية (مدير التشغيل) ثم القرار النهائي (شؤون الموظفين).
-      if (!isFinal && existing.status === "pre_approved") {
-        return res.status(403).json({ error: "هذا الطلب بانتظار القرار النهائي من إدارة شؤون الموظفين" });
+      if (!isFinal && existing.status !== "pending") {
+        return res.status(403).json({ error: "هذا الطلب بانتظار إجراءات إدارة شؤون الموظفين" });
       }
 
       // الرفض ينهي الطلب من أي مرحلة.
@@ -1164,7 +1403,7 @@ export function registerSelfServiceRoutes(app: Express) {
           reviewedAt: new Date(),
           reviewerNote: decision.note,
           updatedAt: new Date(),
-        }).where(and(eq(advanceRequests.id, id), inArray(advanceRequests.status, ["pending", "pre_approved"]))).returning();
+        }).where(and(eq(advanceRequests.id, id), inArray(advanceRequests.status, REVIEWABLE))).returning();
         if (!updated) return res.status(400).json({ error: "تمت معالجة هذا الطلب مسبقاً" });
 
         const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, existing.branchEmployeeId));
@@ -1205,8 +1444,21 @@ export function registerSelfServiceRoutes(app: Express) {
         return res.json(updated);
       }
 
-      // الاعتماد النهائي: داخل معاملة ذرّية — إنشاء خصم الراتب تلقائياً وربطه بالطلب،
-      // فيدخل في إغلاق الرواتب الشهري للشهر المطلوب دون تسجيل يدوي.
+      // الاعتماد النهائي: لا يتم إلا بعد توقيع الموظف على النموذج الرسمي.
+      if (existing.status !== "signed") {
+        return res.status(400).json({
+          error: existing.status === "awaiting_signature"
+            ? "الطلب بانتظار توقيع الموظف — لا يمكن الاعتماد النهائي قبل التوقيع"
+            : "يجب أولاً مراجعة الطلب وإرساله لتوقيع الموظف (تحديد القيمة المعتمدة وعدد الأقساط)",
+        });
+      }
+      const advAmount = existing.approvedAmount ?? existing.amount;
+      const advMonths = existing.installmentMonths ?? 1;
+      const advStart = existing.startMonth ?? existing.requestedMonth;
+      const { monthly, plan } = buildInstallmentPlan(advAmount, advMonths, advStart);
+
+      // داخل معاملة ذرّية — إنشاء أقساط الخصم الشهرية وربطها بالطلب،
+      // فتدخل في إغلاق الرواتب الشهري تلقائياً دون تسجيل يدوي.
       const result = await db.transaction(async (tx) => {
         const [updated] = await tx.update(advanceRequests).set({
           status: "approved",
@@ -1214,21 +1466,27 @@ export function registerSelfServiceRoutes(app: Express) {
           reviewedAt: new Date(),
           reviewerNote: decision.note,
           updatedAt: new Date(),
-        }).where(and(eq(advanceRequests.id, id), inArray(advanceRequests.status, ["pending", "pre_approved"]))).returning();
+        }).where(and(eq(advanceRequests.id, id), eq(advanceRequests.status, "signed"))).returning();
         if (!updated) return null;
 
-        const [deduction] = await tx.insert(salaryDeductions).values({
-          branchEmployeeId: existing.branchEmployeeId,
-          branchId: existing.branchId,
-          month: existing.requestedMonth,
-          type: "advance",
-          amount: existing.amount,
-          description: `سلفة معتمدة (طلب رقم ${existing.id})${existing.reason ? ` — ${existing.reason}` : ""}`,
-          createdBy: reviewerId,
-        }).returning();
+        let firstDeductionId: number | null = null;
+        for (let i = 0; i < plan.length; i++) {
+          const p = plan[i];
+          const [d] = await tx.insert(salaryDeductions).values({
+            branchEmployeeId: existing.branchEmployeeId,
+            branchId: existing.branchId,
+            month: p.month,
+            type: "advance",
+            amount: p.amount,
+            description: `قسط سلفة ${i + 1}/${plan.length} (طلب رقم ${existing.id})${existing.reason ? ` — ${existing.reason}` : ""}`,
+            advanceRequestId: existing.id,
+            createdBy: reviewerId,
+          }).returning();
+          if (firstDeductionId === null) firstDeductionId = d.id;
+        }
 
         const [linked] = await tx.update(advanceRequests)
-          .set({ linkedDeductionId: deduction.id })
+          .set({ linkedDeductionId: firstDeductionId })
           .where(eq(advanceRequests.id, id))
           .returning();
         return linked;
@@ -1240,8 +1498,8 @@ export function registerSelfServiceRoutes(app: Express) {
         const noteLine = decision.note ? `\nملاحظة: ${decision.note}` : "";
         await notifyEmployeeOfDecision({
           emp,
-          title: "تم اعتماد طلب السلفة",
-          message: `طلب السلفة بمبلغ ${existing.amount} ر.س تم اعتماده نهائياً وسيُخصم من راتب شهر ${existing.requestedMonth}.${noteLine}`,
+          title: "تم اعتماد طلب السلفة نهائياً",
+          message: `طلب السلفة بمبلغ ${advAmount} ر.س تم اعتماده نهائياً وتحويله للإدارة المالية للصرف. سيُخصم على ${advMonths} قسطاً شهرياً (${monthly} ر.س) بدءاً من شهر ${advStart}.${noteLine}`,
           linkUrl: "/my-portal",
           relatedEntityId: id,
         });

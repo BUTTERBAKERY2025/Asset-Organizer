@@ -5768,6 +5768,7 @@ export const salaryDeductions = pgTable("salary_deductions", {
   type: text("type").notNull(), // advance (سلفة) | deduction (خصم) | loan_installment (قسط) | penalty (جزاء/مخالفة) | other
   amount: real("amount").notNull(), // المبلغ بالريال (موجب — يُخصم من الصافي)
   description: text("description"), // وصف اختياري (سبب السلفة/الخصم)
+  advanceRequestId: integer("advance_request_id"), // ربط القسط بطلب السلفة (بدون FK لتفادي مرجعية دائرية)
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -5999,10 +6000,25 @@ export const advanceRequests = pgTable("advance_requests", {
   reason: text("reason"), // سبب الطلب
   requestedMonth: text("requested_month").notNull(), // YYYY-MM الشهر المطلوب الخصم فيه
   installments: integer("installments").default(1), // عدد الأقساط (للعلم فقط)
-  status: text("status").notNull().default("pending"), // pending | pre_approved | approved | rejected | cancelled
+  status: text("status").notNull().default("pending"), // pending | pre_approved | awaiting_signature | signed | approved | disbursed | rejected | cancelled
   preApprovedBy: varchar("pre_approved_by").references(() => users.id), // الموافقة المبدئية (مدير التشغيل)
   preApprovedAt: timestamp("pre_approved_at"),
   preApproverNote: text("pre_approver_note"),
+  // مراجعة شؤون الموظفين: القيمة المعتمدة وتوزيع الأقساط (أقساط متساوية)
+  approvedAmount: real("approved_amount"), // القيمة المعتمدة من شؤون الموظفين (قد تختلف عن المطلوبة)
+  installmentMonths: integer("installment_months"), // عدد أشهر الاستقطاع
+  monthlyInstallment: real("monthly_installment"), // قيمة القسط الشهري (متساوي)
+  startMonth: text("start_month"), // YYYY-MM أول شهر استقطاع
+  sentForSignatureBy: varchar("sent_for_signature_by").references(() => users.id),
+  sentForSignatureAt: timestamp("sent_for_signature_at"),
+  // توقيع الموظف على النموذج الرسمي (إقرار + توقيع مرسوم)
+  signatureData: text("signature_data"), // صورة التوقيع base64
+  signedAt: timestamp("signed_at"),
+  // الصرف المالي بعد الاعتماد النهائي
+  disbursedBy: varchar("disbursed_by").references(() => users.id),
+  disbursedAt: timestamp("disbursed_at"),
+  isLegacy: boolean("is_legacy").default(false), // سلفة سابقة مُدخلة يدوياً (معتمدة مباشرة بدون توقيع)
+  legacyRepaidAmount: real("legacy_repaid_amount"), // ما سُدد سابقاً من السلفة القديمة
   reviewedBy: varchar("reviewed_by").references(() => users.id),
   reviewedAt: timestamp("reviewed_at"),
   reviewerNote: text("reviewer_note"),
@@ -6030,6 +6046,18 @@ export const insertAdvanceRequestSchema = createInsertSchema(advanceRequests, {
   reviewerNote: true,
   linkedDeductionId: true,
   createdBy: true,
+  approvedAmount: true,
+  installmentMonths: true,
+  monthlyInstallment: true,
+  startMonth: true,
+  sentForSignatureBy: true,
+  sentForSignatureAt: true,
+  signatureData: true,
+  signedAt: true,
+  disbursedBy: true,
+  disbursedAt: true,
+  isLegacy: true,
+  legacyRepaidAmount: true,
 });
 
 export type AdvanceRequest = typeof advanceRequests.$inferSelect;
@@ -6038,7 +6066,10 @@ export type InsertAdvanceRequest = z.infer<typeof insertAdvanceRequestSchema>;
 export const ADVANCE_REQUEST_STATUS_LABELS: Record<string, string> = {
   pending: "قيد المراجعة",
   pre_approved: "موافقة مبدئية",
+  awaiting_signature: "بانتظار توقيع الموظف",
+  signed: "موقعة — بانتظار الاعتماد النهائي",
   approved: "معتمدة",
+  disbursed: "تم الصرف",
   rejected: "مرفوضة",
   cancelled: "ملغاة",
 };

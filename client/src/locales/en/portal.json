@@ -253,7 +253,8 @@
     "send": "Submit request",
     "sending": "Sending...",
     "maxExceeded": "The maximum allowed advance is {{amount}} SAR",
-    "maxHint": "Maximum advance: {{amount}} SAR"
+    "maxHint": "Maximum advance: {{amount}} SAR",
+    "signNow": "Sign form"
   },
   "common": {
     "error": "Error",
@@ -285,7 +286,10 @@
     "approved": "Approved",
     "rejected": "Rejected",
     "cancelled": "Cancelled",
-    "paid": "Paid"
+    "paid": "Paid",
+    "awaiting_signature": "Awaiting your signature",
+    "signed": "Signed — pending final approval",
+    "disbursed": "Disbursed"
   },
   "warningLevels": {
     "verbal": "Verbal warning",
@@ -326,5 +330,21 @@
     "wed": "Wednesday",
     "thu": "Thursday",
     "fri": "Friday"
+  },
+  "advanceSigner": {
+    "title": "Advance & Salary Deduction Consent Form",
+    "docHeading": "Acknowledgment and Consent for Advance & Salary Deduction",
+    "docBody": "I, the employee {{name}}, hereby agree to receive an advance from the company in the amount of SAR {{amount}}, and irrevocably authorize the company to deduct this advance from my monthly salary in {{months}} equal monthly installments of SAR {{monthly}} each, starting from the salary of {{startMonth}} until the full amount is repaid. I acknowledge that this form is a binding official document, and that if my employment ends for any reason before full repayment, the company may deduct the remaining balance from my final entitlements.",
+    "installmentNo": "Installment",
+    "month": "Month",
+    "amount": "Amount (SAR)",
+    "ackLabel": "I acknowledge that I have read and understood this official document, and I consent to the deduction of the advance installments from my monthly salary as per the schedule above.",
+    "signHere": "Employee signature (draw your signature here)",
+    "close": "Close",
+    "submit": "Sign & Confirm Consent",
+    "signSuccess": "Advance form signed successfully",
+    "error": "Error",
+    "ackRequired": "Acknowledgment is required first",
+    "signatureRequired": "Signature is required"
   }
 }

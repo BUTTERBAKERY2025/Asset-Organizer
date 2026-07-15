@@ -36,3 +36,4 @@
 - [Leave provision journal](leave-provision-journal.md) — idempotent auto journal entries need advisory-lock-in-transaction (no unique ref constraint); entry numbering is COUNT+1 race-prone; old accounting routes lack permission gates.
 - [Leave exit/return/settlement](leave-exit-return-settlement.md) — adjust attendance BEFORE setting actualReturnDate (scheduler stops at that point); Drizzle unique violations live in e.cause.constraint, not e.message.
 - [requirePermission omitted action](require-permission-omitted-action.md) — single-arg guards infer action from HTTP method; module presence must never grant writes; POST-as-read routes need explicit "view".
+- [Advance lifecycle](advance-lifecycle.md) — signed-consent state machine; final approve only from signed; client canFinal must mirror hasAdvanceFinalAuthority roles.

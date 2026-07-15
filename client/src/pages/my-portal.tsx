@@ -26,6 +26,7 @@ import {
 } from "@shared/schema";
 import { PortalTimesheet } from "@/components/portal-timesheet";
 import { PortalWarningSigner } from "@/components/portal-warning-signer";
+import { PortalAdvanceSigner } from "@/components/portal-advance-signer";
 
 function fmtMoney(n: any): string {
   return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -60,6 +61,9 @@ const STATUS_STYLE: Record<string, { cls: string; icon: any }> = {
   approved: { cls: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-400", icon: CheckCircle2 },
   rejected: { cls: "bg-destructive/10 text-destructive border-destructive/30", icon: XCircle },
   cancelled: { cls: "bg-muted text-muted-foreground border-border", icon: Ban },
+  awaiting_signature: { cls: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400", icon: FileSignature },
+  signed: { cls: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400", icon: CheckCircle2 },
+  disbursed: { cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400", icon: Wallet },
 };
 
 function StatusBadge({ status, labels }: { status: string; labels: Record<string, string> }) {
@@ -89,6 +93,7 @@ export default function MyPortalPage() {
   const qc = useQueryClient();
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [advOpen, setAdvOpen] = useState(false);
+  const [signAdvance, setSignAdvance] = useState<any | null>(null);
   const [warningId, setWarningId] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -1254,16 +1259,25 @@ export default function MyPortalPage() {
                   <Card key={a.id} data-testid={`row-advance-${a.id}`}>
                     <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
                       <div className="space-y-1">
-                        <div className="font-semibold tabular-nums">{fmtMoney(a.amount)} {currency}</div>
+                        <div className="font-semibold tabular-nums">{fmtMoney(a.approvedAmount ?? a.amount)} {currency}</div>
                         <div className="text-sm text-muted-foreground">
-                          {t("advances.deductionMonth")}: {a.requestedMonth}{a.installments > 1 ? ` · ${a.installments} ${t("advances.installments")}` : ""}
+                          {a.installmentMonths
+                            ? `${a.installmentMonths} ${t("advances.installments")} × ${fmtMoney(a.monthlyInstallment)} ${currency} · ${t("advances.deductionMonth")}: ${a.startMonth || a.requestedMonth}`
+                            : `${t("advances.deductionMonth")}: ${a.requestedMonth}${a.installments > 1 ? ` · ${a.installments} ${t("advances.installments")}` : ""}`}
                         </div>
                         {a.reason && <div className="text-xs text-muted-foreground">{a.reason}</div>}
                         {a.reviewerNote && <div className="text-xs text-muted-foreground">{t("advances.reviewerNote")}: {a.reviewerNote}</div>}
                       </div>
                       <div className="flex items-center gap-2">
-                        <StatusBadge status={a.status} labels={{ pending: advanceStatusLabels("pending"), approved: advanceStatusLabels("approved"), rejected: advanceStatusLabels("rejected"), cancelled: advanceStatusLabels("cancelled"), paid: advanceStatusLabels("paid") }} />
-                        {a.status === "pending" && (
+                        <StatusBadge status={a.status} labels={{ pending: advanceStatusLabels("pending"), approved: advanceStatusLabels("approved"), rejected: advanceStatusLabels("rejected"), cancelled: advanceStatusLabels("cancelled"), paid: advanceStatusLabels("paid"), awaiting_signature: advanceStatusLabels("awaiting_signature"), signed: advanceStatusLabels("signed"), disbursed: advanceStatusLabels("disbursed") }} />
+                        {a.status === "awaiting_signature" && (
+                          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700"
+                            onClick={() => setSignAdvance(a)}
+                            data-testid={`button-sign-advance-${a.id}`}>
+                            <FileSignature className="h-4 w-4 ms-1" />{t("advances.signNow", { defaultValue: "توقيع النموذج" })}
+                          </Button>
+                        )}
+                        {(a.status === "pending" || a.status === "awaiting_signature") && (
                           <Button size="sm" variant="ghost" className="text-destructive"
                             onClick={() => { if (confirm(t("advances.confirmCancel"))) cancelAdvance.mutate(a.id); }}
                             data-testid={`button-cancel-advance-${a.id}`}>
@@ -1278,6 +1292,14 @@ export default function MyPortalPage() {
             </Tabs>
           </>
         )}
+
+        {/* توقيع نموذج السلفة الرسمي / advance signer */}
+        <PortalAdvanceSigner
+          advance={signAdvance}
+          employeeName={displayName}
+          open={signAdvance !== null}
+          onOpenChange={(v) => { if (!v) setSignAdvance(null); }}
+        />
 
         {/* عرض وتوقيع الإنذار الرسمي / warning signer */}
         <PortalWarningSigner
