@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -16,8 +16,11 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   CalendarDays, Plus, CheckCircle2, XCircle, Clock, Trash2, ArrowRight,
   Wallet, Printer, FileSpreadsheet, Ban, Paperclip, Pencil, ChevronRight, ChevronLeft, ListChecks, Sun, FileText, Calculator,
-  Banknote, LogOut, LogIn, AlertTriangle, LayoutDashboard, Coins, UserX,
+  Banknote, LogOut, LogIn, AlertTriangle, LayoutDashboard, Coins, UserX, MoreHorizontal,
 } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as ChartTooltip,
   CartesianGrid, PieChart, Pie, Cell, Legend,
@@ -126,6 +129,8 @@ export default function LeavesPage() {
 
   // الرصيد التراكمي "حتى تاريخه" (النظام التعاقدي)
   const [accrualSearch, setAccrualSearch] = useState("");
+  const [reqShown, setReqShown] = useState(50);
+  const [accrualShown, setAccrualShown] = useState(50);
   const [editAccrual, setEditAccrual] = useState<any | null>(null);
   const [accrualForm, setAccrualForm] = useState({ annualLeaveDays: "", leaveOpeningBalance: "", leaveOpeningBalanceDate: "" });
 
@@ -183,6 +188,8 @@ export default function LeavesPage() {
       toast({ title: "تم حفظ بيانات الاستحقاق" });
       setEditAccrual(null);
       qc.invalidateQueries({ queryKey: ["/api/hr/leave-accrual"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/leave-balances"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/leaves/stats"] });
     },
     onError: (e: any) => {
       let msg = e?.message || "خطأ غير متوقع";
@@ -368,9 +375,10 @@ export default function LeavesPage() {
     let list = leaves as any[];
     if (filterBranch !== "all") list = list.filter((l) => l.branchId === filterBranch);
     if (filterMonth !== "all") {
-      const mStart = `${filterMonth}-01`;
-      const mEnd = `${filterMonth}-31`;
-      list = list.filter((l) => l.startDate <= mEnd && l.endDate >= mStart);
+      // مقارنة على مستوى الشهر (YYYY-MM) لتغطية كل أطوال الشهور
+      list = list.filter((l) =>
+        (l.startDate || "").slice(0, 7) <= filterMonth && (l.endDate || "").slice(0, 7) >= filterMonth
+      );
     }
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -378,6 +386,10 @@ export default function LeavesPage() {
     }
     return list;
   }, [leaves, search, filterBranch, filterMonth]);
+
+  // إعادة ضبط "عرض المزيد" عند تغيير الفلاتر أو البحث
+  useEffect(() => { setReqShown(50); }, [search, filterStatus, filterType, filterBranch, filterMonth]);
+  useEffect(() => { setAccrualShown(50); }, [accrualSearch, balType]);
 
   const totalDays = calcDays(form.startDate, form.endDate);
 
@@ -1037,7 +1049,7 @@ export default function LeavesPage() {
         <TabsContent value="requests">
           <Card>
             <CardContent className="space-y-3 pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-2">
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
                 <Input placeholder="بحث باسم الموظف" value={search} onChange={(e) => setSearch(e.target.value)} data-testid="input-search-leaves" />
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
                   <SelectTrigger data-testid="select-filter-status"><SelectValue /></SelectTrigger>
@@ -1101,7 +1113,7 @@ export default function LeavesPage() {
                   <tbody>
                     {isLoading && <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">جاري التحميل...</td></tr>}
                     {!isLoading && filtered.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">لا توجد طلبات</td></tr>}
-                    {filtered.map((l: any) => (
+                    {filtered.slice(0, reqShown).map((l: any) => (
                       <tr key={l.id} className="border-t hover:bg-slate-50" data-testid={`row-leave-${l.id}`}>
                         <td className="p-2">
                           <div className="font-medium flex items-center gap-1">
@@ -1168,51 +1180,63 @@ export default function LeavesPage() {
                             : (l.reviewerName || "-")}
                         </td>
                         <td className="p-2">
-                          <div className="flex gap-1 flex-wrap">
+                          <div className="flex gap-1 items-center flex-nowrap">
                             {l.status === "pending" && (
                               <>
-                                <Button size="sm" variant="ghost" className="text-emerald-600" onClick={() => { setAllowOver(false); setReviewing({ id: l.id, decision: "approved", leave: l }); }} data-testid={`button-approve-${l.id}`}>
+                                <Button size="sm" variant="ghost" className="text-emerald-600" title="اعتماد" onClick={() => { setAllowOver(false); setReviewing({ id: l.id, decision: "approved", leave: l }); }} data-testid={`button-approve-${l.id}`}>
                                   <CheckCircle2 className="h-3.5 w-3.5" />
                                 </Button>
-                                <Button size="sm" variant="ghost" className="text-red-600" onClick={() => setReviewing({ id: l.id, decision: "rejected", leave: l })} data-testid={`button-reject-${l.id}`}>
+                                <Button size="sm" variant="ghost" className="text-red-600" title="رفض" onClick={() => setReviewing({ id: l.id, decision: "rejected", leave: l })} data-testid={`button-reject-${l.id}`}>
                                   <XCircle className="h-3.5 w-3.5" />
                                 </Button>
                               </>
-                            )}
-                            {(l.status === "approved" || l.status === "pending") && (
-                              <Button size="sm" variant="ghost" className="text-blue-600" title="تعديل التواريخ" onClick={() => { setDatesForm({ startDate: l.startDate, endDate: l.endDate, note: "" }); setEditingDates(l); }} data-testid={`button-edit-dates-${l.id}`}>
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                            {(l.status === "approved" || l.status === "pending") && (
-                              <Button size="sm" variant="ghost" className="text-orange-600" title="إلغاء/سحب" onClick={() => { setCancelReason(""); setCancelling(l); }} data-testid={`button-cancel-${l.id}`}>
-                                <Ban className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                            {l.status === "approved" && !l.exitConfirmedAt && (
-                              <Button size="sm" variant="ghost" className="text-sky-600" title="تأكيد مباشرة الخروج" onClick={() => { setExitDate(l.startDate); setExitLeave(l); }} data-testid={`button-confirm-exit-${l.id}`}>
-                                <LogOut className="h-3.5 w-3.5" />
-                              </Button>
                             )}
                             {l.status === "approved" && !l.returnConfirmedAt && (
                               <Button size="sm" variant="ghost" className="text-emerald-700" title="تسجيل مباشرة العمل" onClick={() => { setReturnDate(new Date().toLocaleDateString("en-CA")); setReturnLeave(l); }} data-testid={`button-confirm-return-${l.id}`}>
                                 <LogIn className="h-3.5 w-3.5" />
                               </Button>
                             )}
-                            {canSettle && l.status === "approved" && l.leaveType === "annual" && (
-                              <Button size="sm" variant="ghost" className="text-amber-600" title={l.settlementId ? "عرض/إلغاء التصفية" : "تصفية الرصيد (سند صرف)"} onClick={() => { setSettleForm({ days: "", useManual: false, manualAmount: "", note: "" }); setSettleLeave(l); }} data-testid={`button-settle-${l.id}`}>
-                                <Banknote className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                            <Button size="sm" variant="ghost" title="طباعة نموذج" onClick={() => setPrintLeave(l)} data-testid={`button-print-${l.id}`}>
-                              <Printer className="h-3.5 w-3.5 text-slate-600" />
-                            </Button>
-                            <Button size="sm" variant="ghost" title="كشف حساب الإجازات" onClick={() => { setStmtYear(Number(l.startDate?.slice(0, 4)) || currentYear); setStmtEmpId(l.branchEmployeeId); }} data-testid={`button-req-statement-${l.id}`}>
-                              <FileText className="h-3.5 w-3.5 text-blue-600" />
-                            </Button>
-                            {canDeleteLeave && <Button size="sm" variant="ghost" onClick={() => { if (confirm("حذف هذا الطلب؟")) deleteMutation.mutate(l.id); }} data-testid={`button-delete-${l.id}`}>
-                              <Trash2 className="h-3.5 w-3.5 text-red-600" />
-                            </Button>}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="sm" variant="ghost" title="المزيد من الإجراءات" data-testid={`button-more-${l.id}`}>
+                                  <MoreHorizontal className="h-4 w-4 text-slate-500" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="text-sm">
+                                {(l.status === "approved" || l.status === "pending") && (
+                                  <DropdownMenuItem onClick={() => { setDatesForm({ startDate: l.startDate, endDate: l.endDate, note: "" }); setEditingDates(l); }} data-testid={`button-edit-dates-${l.id}`}>
+                                    <Pencil className="h-3.5 w-3.5 ms-2 text-blue-600" />تعديل التواريخ
+                                  </DropdownMenuItem>
+                                )}
+                                {l.status === "approved" && !l.exitConfirmedAt && (
+                                  <DropdownMenuItem onClick={() => { setExitDate(l.startDate); setExitLeave(l); }} data-testid={`button-confirm-exit-${l.id}`}>
+                                    <LogOut className="h-3.5 w-3.5 ms-2 text-sky-600" />تأكيد مباشرة الخروج
+                                  </DropdownMenuItem>
+                                )}
+                                {canSettle && l.status === "approved" && l.leaveType === "annual" && (
+                                  <DropdownMenuItem onClick={() => { setSettleForm({ days: "", useManual: false, manualAmount: "", note: "" }); setSettleLeave(l); }} data-testid={`button-settle-${l.id}`}>
+                                    <Banknote className="h-3.5 w-3.5 ms-2 text-amber-600" />{l.settlementId ? "عرض/إلغاء التصفية" : "تصفية الرصيد (سند صرف)"}
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem onClick={() => setPrintLeave(l)} data-testid={`button-print-${l.id}`}>
+                                  <Printer className="h-3.5 w-3.5 ms-2 text-slate-600" />طباعة نموذج
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => { setStmtYear(Number(l.startDate?.slice(0, 4)) || currentYear); setStmtEmpId(l.branchEmployeeId); }} data-testid={`button-req-statement-${l.id}`}>
+                                  <FileText className="h-3.5 w-3.5 ms-2 text-blue-600" />كشف حساب الإجازات
+                                </DropdownMenuItem>
+                                {((l.status === "approved" || l.status === "pending") || canDeleteLeave) && <DropdownMenuSeparator />}
+                                {(l.status === "approved" || l.status === "pending") && (
+                                  <DropdownMenuItem className="text-orange-600 focus:text-orange-700" onClick={() => { setCancelReason(""); setCancelling(l); }} data-testid={`button-cancel-${l.id}`}>
+                                    <Ban className="h-3.5 w-3.5 ms-2" />إلغاء/سحب الطلب
+                                  </DropdownMenuItem>
+                                )}
+                                {canDeleteLeave && (
+                                  <DropdownMenuItem className="text-red-600 focus:text-red-700" onClick={() => { if (confirm("حذف هذا الطلب؟")) deleteMutation.mutate(l.id); }} data-testid={`button-delete-${l.id}`}>
+                                    <Trash2 className="h-3.5 w-3.5 ms-2" />حذف الطلب
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </td>
                       </tr>
@@ -1220,6 +1244,13 @@ export default function LeavesPage() {
                   </tbody>
                 </table>
               </div>
+              {filtered.length > reqShown && (
+                <div className="text-center">
+                  <Button variant="outline" size="sm" onClick={() => setReqShown((n) => n + 50)} data-testid="button-show-more-leaves">
+                    عرض المزيد ({arNum(filtered.length - reqShown)} طلب متبقٍ)
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1268,6 +1299,7 @@ export default function LeavesPage() {
                       {!accrualLoading && accruals.length === 0 && <tr><td colSpan={10} className="p-6 text-center text-muted-foreground">لا يوجد موظفون</td></tr>}
                       {accruals
                         .filter((a: any) => !accrualSearch.trim() || (a.employeeName || "").includes(accrualSearch.trim()))
+                        .slice(0, accrualShown)
                         .map((a: any) => (
                         <tr key={a.branchEmployeeId} className="border-t hover:bg-amber-50/40" data-testid={`row-accrual-${a.branchEmployeeId}`}>
                           <td className="p-2">
@@ -1302,6 +1334,16 @@ export default function LeavesPage() {
                     </tbody>
                   </table>
                 </div>
+                {(() => {
+                  const cnt = accruals.filter((a: any) => !accrualSearch.trim() || (a.employeeName || "").includes(accrualSearch.trim())).length;
+                  return cnt > accrualShown ? (
+                    <div className="text-center">
+                      <Button variant="outline" size="sm" onClick={() => setAccrualShown((n) => n + 50)} data-testid="button-show-more-accrual">
+                        عرض المزيد ({arNum(cnt - accrualShown)} موظف متبقٍ)
+                      </Button>
+                    </div>
+                  ) : null;
+                })()}
               </CardContent>
             </Card>
           )}
