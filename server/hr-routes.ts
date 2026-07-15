@@ -2364,11 +2364,30 @@ export function registerHrRoutes(app: Express) {
         .orderBy(desc(salaryDeductions.createdAt))
         .limit(1000);
 
+      // ربط خصومات العجز البيعي باليوميات المصدر (لعرض رابط "عرض اليوميات")
+      const deficitIds = rows.filter(r => r.d.type === "sales_deficit").map(r => r.d.id);
+      const journalInfo = new Map<number, { count: number; month: string }>();
+      if (deficitIds.length > 0) {
+        const js = await db
+          .select({ dedId: cashierSalesJournals.deficitDeductionId, journalDate: cashierSalesJournals.journalDate })
+          .from(cashierSalesJournals)
+          .where(inArray(cashierSalesJournals.deficitDeductionId, deficitIds));
+        for (const j of js) {
+          if (j.dedId == null) continue;
+          const cur = journalInfo.get(j.dedId) || { count: 0, month: "" };
+          cur.count += 1;
+          const m = (j.journalDate || "").slice(0, 7);
+          if (m && (!cur.month || m < cur.month)) cur.month = m;
+          journalInfo.set(j.dedId, cur);
+        }
+      }
+
       res.json(rows.map(r => ({
         ...r.d,
         employeeName: r.employeeName,
         employeeJob: r.employeeJob,
         branchName: r.branchName,
+        sourceJournals: journalInfo.get(r.d.id) || null,
       })));
     } catch (e: any) {
       console.error("[hr/advances] list error:", e);
@@ -2450,20 +2469,62 @@ export function registerHrRoutes(app: Express) {
       if (branchIds !== null && !branchIds.includes(existing.branchId)) {
         return res.status(403).json({ error: "ليس لديك صلاحية" });
       }
+      let deletedCount = 1;
       await db.transaction(async (tx) => {
-        // إذا كان الخصم عجزاً بيعياً مرحّلاً من يومية كاشير: فك ارتباط اليومية
-        // حتى تعود قابلة للترحيل من جديد من صفحة العجوزات
         if (existing.type === "sales_deficit") {
+          // حذف عجز بيعي = عكس الترحيل بالكامل (كل الأقساط الشقيقة معاً + فك ارتباط اليوميات)
+          // حتى لا يبقى قسط معلّق بينما تعود اليومية قابلة للترحيل (ازدواج خصم)
+          const baseDesc = (existing.description || "").replace(/ — قسط \d+\/\d+$/, "");
+          const siblings = await tx.select().from(salaryDeductions).where(and(
+            eq(salaryDeductions.branchEmployeeId, existing.branchEmployeeId),
+            eq(salaryDeductions.type, "sales_deficit"),
+          ));
+          const groupIds = siblings
+            .filter((s) => (s.description || "").replace(/ — قسط \d+\/\d+$/, "") === baseDesc)
+            .map((s) => s.id);
+          const ids = groupIds.length > 0 ? groupIds : [id];
           await tx
             .update(cashierSalesJournals)
             .set({ deficitDeductionId: null, deficitPostedBy: null, deficitPostedAt: null, updatedAt: new Date() })
-            .where(eq(cashierSalesJournals.deficitDeductionId, id));
+            .where(inArray(cashierSalesJournals.deficitDeductionId, ids));
+          await tx.delete(salaryDeductions).where(inArray(salaryDeductions.id, ids));
+          deletedCount = ids.length;
+        } else {
+          await tx.delete(salaryDeductions).where(eq(salaryDeductions.id, id));
         }
-        await tx.delete(salaryDeductions).where(eq(salaryDeductions.id, id));
       });
-      res.json({ success: true });
+      res.json({ success: true, deleted: deletedCount });
     } catch (e: any) {
       console.error("[hr/advances] delete error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // سداد مبكر: حذف أقساط قادمة (شهرها بعد الشهر الحالي) دفعة واحدة بعد سداد الموظف نقداً
+  app.post("/api/hr/advances/early-settle", isAuthenticated, requirePermission("hr_advances", "delete"), async (req, res) => {
+    try {
+      const body = z.object({ ids: z.array(z.number().int().positive()).min(1).max(100) }).parse(req.body);
+      const { branchIds } = getBranchScope(req);
+      const currentMonth = new Date().toISOString().slice(0, 7);
+
+      const rows = await db.select().from(salaryDeductions).where(inArray(salaryDeductions.id, body.ids));
+      if (rows.length !== body.ids.length) return res.status(400).json({ error: "بعض البنود غير موجودة" });
+      for (const r of rows) {
+        if (branchIds !== null && !branchIds.includes(r.branchId)) {
+          return res.status(403).json({ error: "ليس لديك صلاحية على فرع بعض البنود" });
+        }
+        if (!["advance", "loan_installment"].includes(r.type)) {
+          return res.status(400).json({ error: "السداد المبكر متاح لأقساط السلف والقروض فقط (وليس العجوزات)" });
+        }
+        if (r.month <= currentMonth) {
+          return res.status(400).json({ error: `القسط ${r.month} مستحق بالفعل — السداد المبكر للأقساط القادمة فقط` });
+        }
+      }
+      await db.delete(salaryDeductions).where(inArray(salaryDeductions.id, body.ids));
+      res.json({ success: true, deleted: rows.length });
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة" });
+      console.error("[hr/advances] early-settle error:", e);
       res.status(500).json({ error: e.message });
     }
   });
@@ -2610,6 +2671,8 @@ export function registerHrRoutes(app: Express) {
         month: z.string().regex(/^\d{4}-\d{2}$/),
         deductionMonth: z.string().regex(/^\d{4}-\d{2}$/),
         journalIds: z.array(z.number().int().positive()).min(1),
+        // تقسيط العجز على عدة شهور (اختياري — الافتراضي شهر واحد)
+        installments: z.number().int().min(1).max(6).optional(),
       }).parse(req.body);
 
       const { branchIds } = getBranchScope(req);
@@ -2658,25 +2721,65 @@ export function registerHrRoutes(app: Express) {
         if (total <= 0) return { error: "لا يوجد عجز في اليوميات المحددة" };
 
         const dates = journals.map((j) => j.journalDate).sort();
-        const [deduction] = await tx.insert(salaryDeductions).values({
+        const baseDesc = `عجز يوميات مبيعات شهر ${body.month} (${journals.length} يومية: ${dates[0]} → ${dates[dates.length - 1]})`;
+
+        // تقسيم المبلغ على الأقساط (القسط الأخير يمتص فرق التقريب)
+        const n = body.installments ?? 1;
+        const per = Math.round((total / n) * 100) / 100;
+        const nextMonth = (m: string, add: number) => {
+          const [y, mo] = m.split("-").map(Number);
+          const d = new Date(y, mo - 1 + add, 1);
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        };
+        const rows = Array.from({ length: n }, (_, i) => ({
           branchEmployeeId: emp.id,
           branchId: emp.branchId!,
-          month: body.deductionMonth,
-          type: "sales_deficit",
-          amount: total,
-          description: `عجز يوميات مبيعات شهر ${body.month} (${journals.length} يومية: ${dates[0]} → ${dates[dates.length - 1]})`,
+          month: nextMonth(body.deductionMonth, i),
+          type: "sales_deficit" as const,
+          amount: i === n - 1 ? Math.round((total - per * (n - 1)) * 100) / 100 : per,
+          description: n > 1 ? `${baseDesc} — قسط ${i + 1}/${n}` : baseDesc,
           createdBy: userId,
-        }).returning();
+        }));
+        const inserted = await tx.insert(salaryDeductions).values(rows).returning();
+        const deduction = inserted[0];
 
         const now = new Date();
         await tx.update(cashierSalesJournals)
           .set({ deficitDeductionId: deduction.id, deficitPostedBy: userId, deficitPostedAt: now, updatedAt: now })
           .where(inArray(cashierSalesJournals.id, journals.map((j) => j.id)));
 
-        return { deduction, journalCount: journals.length, total };
+        return { deduction, journalCount: journals.length, total, installments: n, employeeName: emp.employeeName, cashierUserId: emp.linkedUserId, empBranchId: emp.branchId };
       });
 
       if ("error" in result) return res.status(400).json({ error: result.error });
+
+      // إشعار الموظف في بوابته (جرس الإشعارات) — لا يوقف الترحيل إن فشل
+      try {
+        if (result.cashierUserId) {
+          const n = result.installments || 1;
+          const amountTxt = Number(result.total).toLocaleString("ar-SA-u-nu-latn");
+          await storage.createSystemNotification({
+            title: "خصم عجز يوميات مبيعات",
+            content:
+              `تم ترحيل عجز يوميات المبيعات لشهر ${body.month} بمبلغ إجمالي ${amountTxt} ر.س (${result.journalCount} يومية)` +
+              (n > 1
+                ? `، مقسّطاً على ${n} شهور بدءاً من ${body.deductionMonth}.`
+                : ` وسيُخصم من راتب شهر ${body.deductionMonth}.`) +
+              " لمراجعة التفاصيل تواصل مع إدارة الموارد البشرية.",
+            messageType: "announcement",
+            displayStyle: "banner",
+            priority: 2,
+            isActive: true,
+            targetAllBranches: false,
+            targetBranchIds: result.empBranchId ? [result.empBranchId] : [],
+            targetUserIds: [result.cashierUserId],
+            createdBy: userId,
+          } as any);
+        }
+      } catch (notifyErr) {
+        console.error("[hr/cashier-deficits] notify error (non-blocking):", notifyErr);
+      }
+
       res.status(201).json(result);
     } catch (e: any) {
       if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });

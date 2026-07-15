@@ -9,3 +9,5 @@ description: Sign conventions and posting rules for cashier sales-journal defici
 - Cashier user → employee: `branch_employees.linked_user_id` can match multiple profiles; pick the profile matching the journals' branch first (then active) or the deduction lands on the wrong employee record.
 
 - Deleting a sales_deficit deduction from /api/hr/advances DELETE must clear the journal link (deficit_deduction_id/posted_by/posted_at) in the same transaction, or the journal stays "posted" forever and can never be re-posted.
+- Posting may split a deficit into up to 6 monthly installments (sibling rows share the same base description + " — قسط i/N"; journals link only to the FIRST row). Deleting ANY sales_deficit row reverses the WHOLE posting group (all sibling installments + journal unlink) in one transaction to avoid double-charging.
+- Posting also creates an in-portal systemNotification targeted via targetUserIds=[linkedUserId].

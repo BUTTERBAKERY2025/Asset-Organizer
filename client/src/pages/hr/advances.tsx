@@ -25,7 +25,7 @@ import {
 } from "@/lib/advance-statement";
 
 type Adv = any;
-type Emp = { id: number; employeeName: string; jobTitle: string; branchId: string };
+type Emp = { id: number; employeeName: string; jobTitle: string; branchId: string; salary?: number };
 
 const initialForm = {
   branchEmployeeId: "",
@@ -56,6 +56,7 @@ export default function AdvancesPage() {
   const [form, setForm] = useState<typeof initialForm>(initialForm);
   const [stEmpSearch, setStEmpSearch] = useState("");
   const [stEmp, setStEmp] = useState<Emp | null>(null);
+  const [settleIds, setSettleIds] = useState<Set<number>>(new Set());
   const [reportMonth, setReportMonth] = useState<string>(new Date().toISOString().slice(0, 7));
   const [reportAll, setReportAll] = useState(false);
 
@@ -171,6 +172,37 @@ export default function AdvancesPage() {
       setOpen(false);
     },
     onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل الحفظ", variant: "destructive" }),
+  });
+
+  // تحذير تجاوز حد الالتزامات (30% من الراتب) عند تسجيل سلفة جديدة
+  const dlgEmpId = form.branchEmployeeId ? parseInt(form.branchEmployeeId, 10) : null;
+  const { data: dlgEmpRows = [] } = useQuery<any[]>({
+    queryKey: ["/api/hr/advances", "limit-check", dlgEmpId],
+    enabled: open && !!dlgEmpId,
+    queryFn: async () => (await apiRequest("GET", `/api/hr/advances/report?employeeId=${dlgEmpId}`)).json(),
+  });
+  const limitWarning = useMemo(() => {
+    if (!dlgEmpId || !form.month || !(Number(form.amount) > 0)) return null;
+    const emp = employees.find((e) => e.id === dlgEmpId);
+    const salary = Number((emp as any)?.salary || 0);
+    if (!salary) return null;
+    const monthTotal = dlgEmpRows.filter((r) => r.month === form.month).reduce((s, r) => s + Number(r.amount || 0), 0);
+    const newTotal = monthTotal + Number(form.amount);
+    const pct = Math.round((newTotal / salary) * 100);
+    if (newTotal <= salary * 0.3) return null;
+    return { monthTotal, newTotal, salary, pct };
+  }, [dlgEmpId, dlgEmpRows, form.month, form.amount, employees]);
+
+  const earlySettleMutation = useMutation({
+    mutationFn: async (ids: number[]) => (await apiRequest("POST", "/api/hr/advances/early-settle", { ids })).json(),
+    onSuccess: (r: any) => {
+      qc.invalidateQueries({ queryKey: ["/api/hr/advances"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/advances/stats"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/advances/report"] });
+      setSettleIds(new Set());
+      toast({ title: "تم السداد المبكر", description: `أُلغيت ${r.deleted} أقساط قادمة` });
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل السداد المبكر", variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
@@ -418,10 +450,24 @@ export default function AdvancesPage() {
                     </td>
                     <td className="p-2 font-mono text-xs">{a.month}</td>
                     <td className="p-2 tabular-nums font-bold">{Number(a.amount).toLocaleString("ar-SA-u-nu-latn")}</td>
-                    <td className="p-2 text-xs text-muted-foreground max-w-xs truncate" title={a.description}>{a.description || "-"}</td>
+                    <td className="p-2 text-xs text-muted-foreground max-w-xs">
+                      <div className="truncate" title={a.description}>{a.description || "-"}</div>
+                      {a.type === "sales_deficit" && a.sourceJournals && (
+                        <Link href={`/hr-cashier-deficits?month=${a.sourceJournals.month}`}>
+                          <span className="inline-flex items-center gap-1 text-sky-600 hover:underline cursor-pointer" data-testid={`link-journals-${a.id}`}>
+                            <TrendingDown className="h-3 w-3" />عرض اليوميات المصدر ({a.sourceJournals.count})
+                          </span>
+                        </Link>
+                      )}
+                    </td>
                     <td className="p-2">
                       {canDelete && (
-                        <Button size="sm" variant="ghost" onClick={() => { if (confirm("حذف هذه السلفة؟")) deleteMutation.mutate(a.id); }} data-testid={`button-delete-${a.id}`}>
+                        <Button size="sm" variant="ghost" onClick={() => {
+                          const msg = a.type === "sales_deficit"
+                            ? "حذف خصم العجز؟ سيتم إلغاء ترحيل العجز بالكامل (كل أقساطه إن وُجدت) وتعود اليوميات قابلة للترحيل من جديد."
+                            : "حذف هذه السلفة؟";
+                          if (confirm(msg)) deleteMutation.mutate(a.id);
+                        }} data-testid={`button-delete-${a.id}`}>
                           <Trash2 className="h-3.5 w-3.5 text-red-600" />
                         </Button>
                       )}
@@ -454,7 +500,7 @@ export default function AdvancesPage() {
                         .map((e) => (
                           <button key={e.id} type="button"
                             className="w-full text-right px-3 py-2 hover:bg-amber-50 text-sm"
-                            onClick={() => { setStEmp(e); setStEmpSearch(""); }}
+                            onClick={() => { setStEmp(e); setStEmpSearch(""); setSettleIds(new Set()); }}
                             data-testid={`option-statement-emp-${e.id}`}>
                             <span className="font-medium">{e.employeeName}</span>
                             <span className="text-xs text-muted-foreground"> — {e.jobTitle}</span>
@@ -485,9 +531,19 @@ export default function AdvancesPage() {
                 const rows = [...statementRows].sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : 0));
                 const s = buildStatementSummary(rows);
                 const empInfo = { employeeName: stEmp.employeeName, jobTitle: stEmp.jobTitle, branchName: rows.find((r) => r.branchName)?.branchName || "" };
+                const currentMonth = new Date().toISOString().slice(0, 7);
+                const settleable = (r: any) => ["advance", "loan_installment"].includes(r.type) && r.month > currentMonth;
+                const settleTotal = rows.filter((r) => settleIds.has(r.id)).reduce((sum, r) => sum + Number(r.amount || 0), 0);
+                const salary = Number((stEmp as any)?.salary || 0);
+                const monthDue = rows.filter((r) => r.month === currentMonth).reduce((sum, r) => sum + Number(r.amount || 0), 0);
                 let running = 0;
                 return (
                   <div className="space-y-3">
+                    {salary > 0 && monthDue > salary * 0.3 && (
+                      <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800" data-testid="text-limit-warning-statement">
+                        تنبيه: خصومات هذا الشهر ({monthDue.toLocaleString("ar-SA-u-nu-latn")} ر.س) تتجاوز 30% من راتب الموظف ({salary.toLocaleString("ar-SA-u-nu-latn")} ر.س) — نسبة الاستقطاع {Math.round((monthDue / salary) * 100)}%.
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       <div className="rounded-lg border p-3 bg-amber-50/60"><div className="text-xs text-muted-foreground">الإجمالي الكلي</div><div className="font-bold tabular-nums" data-testid="text-st-total">{s.total.toLocaleString("ar-SA-u-nu-latn")} ر.س</div></div>
                       <div className="rounded-lg border p-3 bg-emerald-50/60"><div className="text-xs text-muted-foreground">المستحق حتى {s.currentMonth}</div><div className="font-bold tabular-nums" data-testid="text-st-due">{s.due.toLocaleString("ar-SA-u-nu-latn")} ر.س</div></div>
@@ -506,12 +562,28 @@ export default function AdvancesPage() {
                         data-testid="button-statement-pdf">
                         <FileText className="h-4 w-4 ms-1 text-red-600" />طباعة / PDF
                       </Button>
+                      {canDelete && settleIds.size > 0 && (
+                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700"
+                          disabled={earlySettleMutation.isPending}
+                          onClick={() => {
+                            if (confirm(`تأكيد السداد المبكر؟ سيتم إلغاء ${settleIds.size} أقساط قادمة بإجمالي ${settleTotal.toLocaleString("ar-SA-u-nu-latn")} ر.س (بعد استلام المبلغ نقداً من الموظف).`)) {
+                              earlySettleMutation.mutate(Array.from(settleIds));
+                            }
+                          }}
+                          data-testid="button-early-settle">
+                          <CheckCircle2 className="h-4 w-4 ms-1" />سداد مبكر ({settleIds.size} أقساط — {settleTotal.toLocaleString("ar-SA-u-nu-latn")} ر.س)
+                        </Button>
+                      )}
                     </div>
+                    {canDelete && rows.some(settleable) && settleIds.size === 0 && (
+                      <div className="text-xs text-muted-foreground">لتسجيل سداد مبكر: حدّد الأقساط القادمة من العمود الأول ثم اضغط «سداد مبكر».</div>
+                    )}
 
                     <div className="overflow-auto border rounded-lg">
                       <table className="w-full text-sm">
                         <thead className="bg-slate-50">
                           <tr>
+                            {canDelete && <th className="text-right p-2 w-8"></th>}
                             <th className="text-right p-2">#</th>
                             <th className="text-right p-2">الشهر</th>
                             <th className="text-right p-2">النوع</th>
@@ -521,11 +593,24 @@ export default function AdvancesPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {rows.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">لا توجد سلف أو أقساط لهذا الموظف</td></tr>}
+                          {rows.length === 0 && <tr><td colSpan={canDelete ? 7 : 6} className="p-6 text-center text-muted-foreground">لا توجد سلف أو أقساط لهذا الموظف</td></tr>}
                           {rows.map((r: any, i: number) => {
                             running += Number(r.amount || 0);
                             return (
                               <tr key={r.id} className="border-t hover:bg-slate-50" data-testid={`row-statement-${r.id}`}>
+                                {canDelete && (
+                                  <td className="p-2">
+                                    {settleable(r) && (
+                                      <input type="checkbox" checked={settleIds.has(r.id)}
+                                        onChange={() => setSettleIds((prev) => {
+                                          const next = new Set(prev);
+                                          next.has(r.id) ? next.delete(r.id) : next.add(r.id);
+                                          return next;
+                                        })}
+                                        data-testid={`checkbox-settle-${r.id}`} />
+                                    )}
+                                  </td>
+                                )}
                                 <td className="p-2 text-muted-foreground">{i + 1}</td>
                                 <td className="p-2 font-mono text-xs">{r.month}</td>
                                 <td className="p-2">{TYPE_AR[r.type] || r.type}</td>
@@ -670,6 +755,13 @@ export default function AdvancesPage() {
               <Label>وصف / سبب السلفة</Label>
               <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} data-testid="textarea-description" />
             </div>
+            {limitWarning && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800" data-testid="text-limit-warning">
+                تنبيه: بعد هذا المبلغ سيصبح إجمالي خصومات شهر {form.month} على الموظف{" "}
+                <span className="font-bold tabular-nums">{limitWarning.newTotal.toLocaleString("ar-SA-u-nu-latn")} ر.س</span>{" "}
+                أي {limitWarning.pct}% من راتبه ({limitWarning.salary.toLocaleString("ar-SA-u-nu-latn")} ر.س) — يتجاوز الحد المنصوح به (30%). يمكنك المتابعة إذا كان ذلك مقصوداً.
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setForm(initialForm); setOpen(false); }}>إلغاء</Button>

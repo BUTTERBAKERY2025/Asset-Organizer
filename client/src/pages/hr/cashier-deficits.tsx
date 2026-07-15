@@ -47,10 +47,18 @@ export default function CashierDeficitsPage() {
   const { hasPermission } = usePermissions();
   const canPost = hasPermission("hr_advances", "edit");
 
-  const [month, setMonth] = useState<string>(new Date().toISOString().slice(0, 7));
+  // دعم فتح الصفحة على شهر محدد من رابط خارجي: /hr-cashier-deficits?month=YYYY-MM
+  const urlMonth = (() => {
+    try {
+      const m = new URLSearchParams(window.location.search).get("month");
+      return m && /^\d{4}-\d{2}$/.test(m) ? m : null;
+    } catch { return null; }
+  })();
+  const [month, setMonth] = useState<string>(urlMonth || new Date().toISOString().slice(0, 7));
   const [postTarget, setPostTarget] = useState<CashierGroup | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [deductionMonth, setDeductionMonth] = useState<string>(new Date().toISOString().slice(0, 7));
+  const [installments, setInstallments] = useState<string>("1");
 
   const { data, isLoading } = useQuery<{ month: string; cashiers: CashierGroup[] }>({
     queryKey: ["/api/hr/cashier-deficits", month],
@@ -61,7 +69,7 @@ export default function CashierDeficitsPage() {
   const totalAll = cashiers.reduce((s, c) => s + c.totalDeficit, 0);
 
   const postMutation = useMutation({
-    mutationFn: async (payload: { cashierId: string; month: string; deductionMonth: string; journalIds: number[] }) =>
+    mutationFn: async (payload: { cashierId: string; month: string; deductionMonth: string; journalIds: number[]; installments?: number }) =>
       (await apiRequest("POST", "/api/hr/cashier-deficits/post", payload)).json(),
     onSuccess: (r: any) => {
       toast({ title: "تم الترحيل", description: `تم إنشاء خصم راتب بمبلغ ${fmt(r.total)} ر.س (${r.journalCount} يومية)` });
@@ -76,6 +84,7 @@ export default function CashierDeficitsPage() {
     setPostTarget(c);
     setSelectedIds(new Set(c.journals.filter((j) => !j.posted).map((j) => j.id)));
     setDeductionMonth(new Date().toISOString().slice(0, 7));
+    setInstallments("1");
   };
 
   const toggleId = (id: number) => {
@@ -228,10 +237,32 @@ export default function CashierDeficitsPage() {
                 <span>المجموع المحدد:</span>
                 <span className="font-bold text-red-600" data-testid="text-selected-total">{fmt(selectedTotal)} ر.س</span>
               </div>
-              <div className="space-y-1">
-                <Label>شهر الخصم من الراتب</Label>
-                <Input type="month" value={deductionMonth} onChange={(e) => setDeductionMonth(e.target.value)} data-testid="input-deduction-month" />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>شهر بداية الخصم من الراتب</Label>
+                  <Input type="month" value={deductionMonth} onChange={(e) => setDeductionMonth(e.target.value)} data-testid="input-deduction-month" />
+                </div>
+                <div className="space-y-1">
+                  <Label>تقسيط الخصم</Label>
+                  <select
+                    className="w-full h-9 rounded-md border bg-background px-3 text-sm"
+                    value={installments}
+                    onChange={(e) => setInstallments(e.target.value)}
+                    data-testid="select-installments"
+                  >
+                    <option value="1">دفعة واحدة</option>
+                    <option value="2">على شهرين</option>
+                    <option value="3">على 3 شهور</option>
+                    <option value="4">على 4 شهور</option>
+                    <option value="6">على 6 شهور</option>
+                  </select>
+                </div>
               </div>
+              {Number(installments) > 1 && selectedTotal > 0 && (
+                <div className="rounded-lg border bg-muted/40 p-2 text-xs" data-testid="text-installment-preview">
+                  القسط الشهري التقريبي: <span className="font-bold tabular-nums">{fmt(selectedTotal / Number(installments))}</span> ر.س × {installments} شهور بدءاً من {deductionMonth}
+                </div>
+              )}
             </div>
             <DialogFooter className="gap-2">
               <Button variant="outline" onClick={() => setPostTarget(null)} data-testid="button-cancel-post">إلغاء</Button>
@@ -242,6 +273,7 @@ export default function CashierDeficitsPage() {
                   month,
                   deductionMonth,
                   journalIds: Array.from(selectedIds),
+                  installments: parseInt(installments, 10) || 1,
                 })}
                 data-testid="button-confirm-post"
               >
