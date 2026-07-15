@@ -55,6 +55,7 @@ export function printAdvanceDocument(r: any) {
 <style>
   @page { size: A4; margin: 18mm 15mm; }
   * { box-sizing: border-box; }
+  html, body { display: block !important; height: auto !important; width: auto !important; text-align: initial !important; }
   body { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; direction: rtl; color: #1a1a1a; margin: 0; font-size: 13px; line-height: 1.9; }
   .header { text-align: center; border-bottom: 3px double #b8860b; padding-bottom: 10px; margin-bottom: 14px; }
   .header h1 { font-size: 20px; margin: 0 0 2px; color: #7a5c00; }

@@ -16,6 +16,7 @@ export const TYPE_AR: Record<string, string> = {
 const BASE_CSS = `
   @page { size: A4; margin: 15mm 12mm; }
   * { box-sizing: border-box; }
+  html, body { display: block !important; height: auto !important; width: auto !important; text-align: initial !important; }
   body { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; direction: rtl; color: #1a1a1a; margin: 0; font-size: 12px; line-height: 1.7; }
   .header { text-align: center; border-bottom: 3px double #b8860b; padding-bottom: 8px; margin-bottom: 12px; }
   .header h1 { font-size: 18px; margin: 0; color: #7a5c00; }

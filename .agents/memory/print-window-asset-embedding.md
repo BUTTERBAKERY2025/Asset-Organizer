@@ -54,3 +54,5 @@ transient first-load failure locks the whole session into the fallback for that 
   concatenation. Numeric fields formatted via `fmt`/`toLocaleString` are safe.
 - **How to apply:** when adding a new print/PDF generator, escape text at the
   interpolation site (see `escapeHtml` in `salary-closing.tsx` accrued-salaries PDF).
+
+- print-document.html shell: its own <style> (flex-centering "جارٍ تجهيز") can leak into the written print doc in prod — shell now strips old <style> nodes before document.write, and print docs should include `html,body{display:block !important;height:auto !important}` reset as defense.

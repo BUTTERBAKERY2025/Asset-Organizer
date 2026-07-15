@@ -37,6 +37,11 @@
           try { html = key ? localStorage.getItem(key) : null; } catch (e) {}
           if (html) {
             try { localStorage.removeItem(key); } catch (e) {}
+            // إزالة تنسيقات صفحة التجهيز (flex التوسيط) حتى لا تتسرب لمستند الطباعة
+            try {
+              var olds = document.querySelectorAll("style");
+              for (var i = 0; i < olds.length; i++) olds[i].parentNode.removeChild(olds[i]);
+            } catch (e) {}
             document.open();
             document.write(html);
             document.close();
