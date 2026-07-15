@@ -2376,6 +2376,46 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
+  // تقرير شامل بدون حد الصفوف — للاستخدام في كشف الحساب والتقرير الشهري وتصدير الإدارة المالية
+  app.get("/api/hr/advances/report", isAuthenticated, requirePermission("hr_advances"), async (req, res) => {
+    try {
+      const { branchIds } = getBranchScope(req);
+      const employeeId = req.query.employeeId ? parseInt(req.query.employeeId as string, 10) : null;
+      const month = req.query.month as string | undefined;
+
+      const conds: any[] = [
+        inArray(salaryDeductions.type, ["advance", "loan_installment", "sales_deficit"]),
+      ];
+      const scopeCond = applyBranchScope(salaryDeductions, branchIds);
+      if (scopeCond !== undefined) conds.push(scopeCond);
+      if (employeeId) conds.push(eq(salaryDeductions.branchEmployeeId, employeeId));
+      if (month) conds.push(eq(salaryDeductions.month, month));
+
+      const rows = await db
+        .select({
+          d: salaryDeductions,
+          employeeName: branchEmployees.employeeName,
+          employeeJob: branchEmployees.jobTitle,
+          branchName: branches.name,
+        })
+        .from(salaryDeductions)
+        .leftJoin(branchEmployees, eq(salaryDeductions.branchEmployeeId, branchEmployees.id))
+        .leftJoin(branches, eq(salaryDeductions.branchId, branches.id))
+        .where(and(...conds))
+        .orderBy(salaryDeductions.month, salaryDeductions.branchEmployeeId);
+
+      res.json(rows.map(r => ({
+        ...r.d,
+        employeeName: r.employeeName,
+        employeeJob: r.employeeJob,
+        branchName: r.branchName,
+      })));
+    } catch (e: any) {
+      console.error("[hr/advances/report] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post("/api/hr/advances", isAuthenticated, requirePermission("hr_advances"), async (req, res) => {
     try {
       const parsed = insertSalaryDeductionSchema.parse(req.body);

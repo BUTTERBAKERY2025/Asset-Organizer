@@ -17,7 +17,12 @@ import { ADVANCE_REQUEST_STATUS_LABELS } from "@shared/schema";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/hooks/useAuth";
 import { printAdvanceDocument } from "@/lib/advance-print";
-import { Printer } from "lucide-react";
+import { Printer, FileSpreadsheet, FileText, Search } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  printEmployeeStatement, exportEmployeeStatementExcel,
+  printMonthlyReport, exportMonthlyReportExcel, buildStatementSummary, TYPE_AR,
+} from "@/lib/advance-statement";
 
 type Adv = any;
 type Emp = { id: number; employeeName: string; jobTitle: string; branchId: string };
@@ -49,6 +54,24 @@ export default function AdvancesPage() {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<typeof initialForm>(initialForm);
+  const [stEmpSearch, setStEmpSearch] = useState("");
+  const [stEmp, setStEmp] = useState<Emp | null>(null);
+  const [reportMonth, setReportMonth] = useState<string>(new Date().toISOString().slice(0, 7));
+  const [reportAll, setReportAll] = useState(false);
+
+  const { data: statementRows = [], isLoading: stLoading } = useQuery<any[]>({
+    queryKey: ["/api/hr/advances", "statement", stEmp?.id],
+    enabled: !!stEmp,
+    queryFn: async () => (await apiRequest("GET", `/api/hr/advances/report?employeeId=${stEmp!.id}`)).json(),
+  });
+
+  const { data: reportRows = [], isLoading: repLoading } = useQuery<any[]>({
+    queryKey: ["/api/hr/advances/report", reportAll ? "all" : reportMonth],
+    queryFn: async () => {
+      const q = reportAll ? "" : `?month=${reportMonth}`;
+      return (await apiRequest("GET", `/api/hr/advances/report${q}`)).json();
+    },
+  });
 
   const { data: advances = [], isLoading } = useQuery<Adv[]>({
     queryKey: ["/api/hr/advances", filterMonth, filterType],
@@ -341,6 +364,14 @@ export default function AdvancesPage() {
         </Card>
       )}
 
+      <Tabs defaultValue="ledger" dir="rtl">
+        <TabsList className="w-full justify-start flex-wrap h-auto">
+          <TabsTrigger value="ledger" data-testid="tab-ledger">سجل السلف والأقساط</TabsTrigger>
+          <TabsTrigger value="statement" data-testid="tab-statement">كشف حساب موظف</TabsTrigger>
+          <TabsTrigger value="report" data-testid="tab-report">التقرير الشهري الشامل</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="ledger">
       <Card>
         <CardContent className="space-y-3 pt-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
@@ -402,6 +433,202 @@ export default function AdvancesPage() {
           </div>
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="statement">
+          <Card>
+            <CardContent className="space-y-4 pt-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label className="mb-1 block">ابحث عن الموظف</Label>
+                  <div className="relative">
+                    <Search className="h-4 w-4 absolute top-3 end-3 text-muted-foreground" />
+                    <Input placeholder="اكتب اسم الموظف..." value={stEmpSearch}
+                      onChange={(e) => setStEmpSearch(e.target.value)} data-testid="input-statement-search" />
+                  </div>
+                  {stEmpSearch.trim() && (
+                    <div className="mt-1 border rounded-lg max-h-48 overflow-auto divide-y">
+                      {employees
+                        .filter((e) => e.employeeName?.toLowerCase().includes(stEmpSearch.trim().toLowerCase()))
+                        .slice(0, 15)
+                        .map((e) => (
+                          <button key={e.id} type="button"
+                            className="w-full text-right px-3 py-2 hover:bg-amber-50 text-sm"
+                            onClick={() => { setStEmp(e); setStEmpSearch(""); }}
+                            data-testid={`option-statement-emp-${e.id}`}>
+                            <span className="font-medium">{e.employeeName}</span>
+                            <span className="text-xs text-muted-foreground"> — {e.jobTitle}</span>
+                          </button>
+                        ))}
+                      {employees.filter((e) => e.employeeName?.toLowerCase().includes(stEmpSearch.trim().toLowerCase())).length === 0 && (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">لا توجد نتائج</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {stEmp && (
+                  <div className="flex items-end gap-2 flex-wrap">
+                    <Badge variant="outline" className="text-sm py-1.5 px-3 bg-amber-50">
+                      {stEmp.employeeName} — {stEmp.jobTitle}
+                    </Badge>
+                    <Button size="sm" variant="ghost" onClick={() => setStEmp(null)} data-testid="button-clear-statement-emp">
+                      <XCircle className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {!stEmp && <div className="text-center text-muted-foreground py-10">ابحث واختر موظفاً لعرض كشف حساب السلف الخاص به</div>}
+              {stEmp && stLoading && <div className="text-center text-muted-foreground py-10">جاري التحميل...</div>}
+
+              {stEmp && !stLoading && (() => {
+                const rows = [...statementRows].sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : 0));
+                const s = buildStatementSummary(rows);
+                const empInfo = { employeeName: stEmp.employeeName, jobTitle: stEmp.jobTitle, branchName: rows.find((r) => r.branchName)?.branchName || "" };
+                let running = 0;
+                return (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      <div className="rounded-lg border p-3 bg-amber-50/60"><div className="text-xs text-muted-foreground">الإجمالي الكلي</div><div className="font-bold tabular-nums" data-testid="text-st-total">{s.total.toLocaleString("ar-SA-u-nu-latn")} ر.س</div></div>
+                      <div className="rounded-lg border p-3 bg-emerald-50/60"><div className="text-xs text-muted-foreground">المستحق حتى {s.currentMonth}</div><div className="font-bold tabular-nums" data-testid="text-st-due">{s.due.toLocaleString("ar-SA-u-nu-latn")} ر.س</div></div>
+                      <div className="rounded-lg border p-3 bg-sky-50/60"><div className="text-xs text-muted-foreground">أقساط قادمة</div><div className="font-bold tabular-nums" data-testid="text-st-upcoming">{s.upcoming.toLocaleString("ar-SA-u-nu-latn")} ر.س</div></div>
+                      <div className="rounded-lg border p-3"><div className="text-xs text-muted-foreground">عدد البنود</div><div className="font-bold tabular-nums" data-testid="text-st-count">{rows.length}</div></div>
+                    </div>
+
+                    <div className="flex gap-2 flex-wrap">
+                      <Button size="sm" variant="outline" disabled={!rows.length}
+                        onClick={() => exportEmployeeStatementExcel(empInfo, rows)}
+                        data-testid="button-statement-excel">
+                        <FileSpreadsheet className="h-4 w-4 ms-1 text-emerald-600" />تصدير Excel
+                      </Button>
+                      <Button size="sm" variant="outline" disabled={!rows.length}
+                        onClick={() => printEmployeeStatement(empInfo, rows)}
+                        data-testid="button-statement-pdf">
+                        <FileText className="h-4 w-4 ms-1 text-red-600" />طباعة / PDF
+                      </Button>
+                    </div>
+
+                    <div className="overflow-auto border rounded-lg">
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-50">
+                          <tr>
+                            <th className="text-right p-2">#</th>
+                            <th className="text-right p-2">الشهر</th>
+                            <th className="text-right p-2">النوع</th>
+                            <th className="text-right p-2">المبلغ (ر.س)</th>
+                            <th className="text-right p-2">الرصيد التراكمي</th>
+                            <th className="text-right p-2">الوصف</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">لا توجد سلف أو أقساط لهذا الموظف</td></tr>}
+                          {rows.map((r: any, i: number) => {
+                            running += Number(r.amount || 0);
+                            return (
+                              <tr key={r.id} className="border-t hover:bg-slate-50" data-testid={`row-statement-${r.id}`}>
+                                <td className="p-2 text-muted-foreground">{i + 1}</td>
+                                <td className="p-2 font-mono text-xs">{r.month}</td>
+                                <td className="p-2">{TYPE_AR[r.type] || r.type}</td>
+                                <td className="p-2 tabular-nums font-bold">{Number(r.amount).toLocaleString("ar-SA-u-nu-latn")}</td>
+                                <td className="p-2 tabular-nums text-muted-foreground">{running.toLocaleString("ar-SA-u-nu-latn")}</td>
+                                <td className="p-2 text-xs text-muted-foreground max-w-xs truncate" title={r.description}>{r.description || "-"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="report">
+          <Card>
+            <CardContent className="space-y-4 pt-6">
+              <div className="flex items-end gap-3 flex-wrap">
+                <div>
+                  <Label className="mb-1 block">الشهر</Label>
+                  <Input type="month" value={reportMonth} disabled={reportAll}
+                    onChange={(e) => setReportMonth(e.target.value)} data-testid="input-report-month" />
+                </div>
+                <label className="flex items-center gap-2 pb-2 text-sm cursor-pointer">
+                  <input type="checkbox" checked={reportAll} onChange={(e) => setReportAll(e.target.checked)} data-testid="checkbox-report-all" />
+                  تقرير شامل لكل الشهور
+                </label>
+                <Button size="sm" variant="outline" disabled={repLoading || !reportRows.length}
+                  onClick={() => exportMonthlyReportExcel(reportAll ? "كل الشهور" : reportMonth, reportRows)}
+                  data-testid="button-report-excel">
+                  <FileSpreadsheet className="h-4 w-4 ms-1 text-emerald-600" />تصدير Excel
+                </Button>
+                <Button size="sm" variant="outline" disabled={repLoading || !reportRows.length}
+                  onClick={() => printMonthlyReport(reportAll ? "كل الشهور" : reportMonth, reportRows)}
+                  data-testid="button-report-pdf">
+                  <FileText className="h-4 w-4 ms-1 text-red-600" />طباعة / PDF
+                </Button>
+              </div>
+
+              {repLoading && <div className="text-center text-muted-foreground py-10">جاري التحميل...</div>}
+              {!repLoading && (() => {
+                const grand = reportRows.reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
+                const byEmp = new Map<string, { name: string; branch: string; count: number; total: number }>();
+                for (const r of reportRows as any[]) {
+                  const key = `${r.employeeName || "-"}|${r.branchName || "-"}`;
+                  if (!byEmp.has(key)) byEmp.set(key, { name: r.employeeName || "-", branch: r.branchName || "-", count: 0, total: 0 });
+                  const g = byEmp.get(key)!;
+                  g.count += 1;
+                  g.total += Number(r.amount || 0);
+                }
+                const groups = [...byEmp.values()].sort((a, b) => b.total - a.total);
+                return (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                      <div className="rounded-lg border p-3 bg-amber-50/60"><div className="text-xs text-muted-foreground">الإجمالي العام</div><div className="font-bold tabular-nums" data-testid="text-report-grand">{grand.toLocaleString("ar-SA-u-nu-latn")} ر.س</div></div>
+                      <div className="rounded-lg border p-3"><div className="text-xs text-muted-foreground">عدد الموظفين</div><div className="font-bold tabular-nums" data-testid="text-report-emps">{groups.length}</div></div>
+                      <div className="rounded-lg border p-3"><div className="text-xs text-muted-foreground">عدد البنود</div><div className="font-bold tabular-nums" data-testid="text-report-count">{reportRows.length}</div></div>
+                    </div>
+                    <div className="overflow-auto border rounded-lg">
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-50">
+                          <tr>
+                            <th className="text-right p-2">الموظف</th>
+                            <th className="text-right p-2">الفرع</th>
+                            <th className="text-right p-2">عدد البنود</th>
+                            <th className="text-right p-2">الإجمالي (ر.س)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {groups.length === 0 && <tr><td colSpan={4} className="p-6 text-center text-muted-foreground">لا توجد بيانات لهذه الفترة</td></tr>}
+                          {groups.map((g, i) => (
+                            <tr key={i} className="border-t hover:bg-slate-50" data-testid={`row-report-emp-${i}`}>
+                              <td className="p-2 font-medium">{g.name}</td>
+                              <td className="p-2 text-muted-foreground">{g.branch}</td>
+                              <td className="p-2 tabular-nums">{g.count}</td>
+                              <td className="p-2 tabular-nums font-bold">{g.total.toLocaleString("ar-SA-u-nu-latn")}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        {groups.length > 0 && (
+                          <tfoot>
+                            <tr className="border-t bg-amber-50 font-bold">
+                              <td className="p-2" colSpan={2}>الإجمالي العام</td>
+                              <td className="p-2 tabular-nums">{reportRows.length}</td>
+                              <td className="p-2 tabular-nums">{grand.toLocaleString("ar-SA-u-nu-latn")}</td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    </div>
+                    <div className="text-xs text-muted-foreground">ملاحظة: التصدير (Excel أو PDF) يشمل كل التفاصيل بند بند مع الإجماليات لكل موظف — جاهز لتسليمه للإدارة المالية.</div>
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={open} onOpenChange={(o) => { if (!o) { setForm(initialForm); setOpen(false); } else setOpen(true); }}>
         <DialogContent className="max-w-lg" dir="rtl">
