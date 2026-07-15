@@ -1124,6 +1124,8 @@ export function registerSelfServiceRoutes(app: Express) {
           r: advanceRequests,
           employeeName: branchEmployees.employeeName,
           employeeJob: branchEmployees.jobTitle,
+          bankName: branchEmployees.bankName,
+          bankAccountNumber: branchEmployees.bankAccountNumber,
           branchName: branches.name,
           reviewerName: users.firstName,
         })
@@ -1139,6 +1141,8 @@ export function registerSelfServiceRoutes(app: Express) {
         ...r.r,
         employeeName: r.employeeName,
         employeeJob: r.employeeJob,
+        bankName: r.bankName,
+        bankAccountNumber: r.bankAccountNumber,
         branchName: r.branchName,
         reviewerName: r.reviewerName,
       })));

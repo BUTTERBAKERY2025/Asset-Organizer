@@ -153,6 +153,17 @@ export async function printAdvanceDocument(r: any) {
     ${r.reason ? `<tr><th>سبب الطلب</th><td colspan="3">${escapeHtml(r.reason)}</td></tr>` : ""}
   </table>
 
+  <table>
+    <tr><th colspan="4" style="width:auto;text-align:center;background:#efe6c8">بيانات التحويل البنكي — للإدارة المالية (الصرف على حساب الموظف أدناه)</th></tr>
+    <tr>
+      <th>اسم صاحب الحساب</th><td>${escapeHtml(r.employeeName || "-")}</td>
+      <th>اسم البنك</th><td>${escapeHtml(r.bankName || "غير مسجل — يُستكمل يدوياً")}</td>
+    </tr>
+    <tr>
+      <th>رقم الحساب / الآيبان</th><td colspan="3" style="font-variant-numeric:tabular-nums;direction:ltr;text-align:right"><b>${escapeHtml(r.bankAccountNumber || "غير مسجل — يُستكمل يدوياً")}</b></td>
+    </tr>
+  </table>
+
   <div class="ack">
     أقر أنا الموظف <b>${escapeHtml(r.employeeName || "-")}</b> بموافقتي على الحصول على سلفة من
     ${escapeHtml(COMPANY.nameAr)} بمبلغ <b>${fmt(amount)} ريال سعودي</b>، وأفوض إدارة الشركة تفويضاً غير قابل
