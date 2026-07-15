@@ -7,3 +7,5 @@ description: Sign conventions and posting rules for cashier sales-journal defici
 - `netDiscrepancy` column exists but nothing writes it from the journal form (usually 0); treat it as optional override, fallback to `discrepancyAmount`, and subtract `inputErrorAmount` when `isInputError` (input errors are not charged to the cashier). Bank side: `bankDiscrepancyTotal` + `bankDiscrepancyStatus` same absolute convention.
 - Posting a deficit = one `salary_deductions` row (type `sales_deficit`) per cashier/month; journals stamped with `deficit_deduction_id` (atomic guard IS NULL + SELECT FOR UPDATE) to block double-posting. Salary closing sums ALL deduction types by month, so no closing change needed.
 - Cashier user → employee: `branch_employees.linked_user_id` can match multiple profiles; pick the profile matching the journals' branch first (then active) or the deduction lands on the wrong employee record.
+
+- Deleting a sales_deficit deduction from /api/hr/advances DELETE must clear the journal link (deficit_deduction_id/posted_by/posted_at) in the same transaction, or the journal stays "posted" forever and can never be re-posted.

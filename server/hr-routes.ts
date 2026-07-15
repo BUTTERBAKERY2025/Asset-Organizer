@@ -2450,7 +2450,17 @@ export function registerHrRoutes(app: Express) {
       if (branchIds !== null && !branchIds.includes(existing.branchId)) {
         return res.status(403).json({ error: "ليس لديك صلاحية" });
       }
-      await db.delete(salaryDeductions).where(eq(salaryDeductions.id, id));
+      await db.transaction(async (tx) => {
+        // إذا كان الخصم عجزاً بيعياً مرحّلاً من يومية كاشير: فك ارتباط اليومية
+        // حتى تعود قابلة للترحيل من جديد من صفحة العجوزات
+        if (existing.type === "sales_deficit") {
+          await tx
+            .update(cashierSalesJournals)
+            .set({ deficitDeductionId: null, deficitPostedBy: null, deficitPostedAt: null, updatedAt: new Date() })
+            .where(eq(cashierSalesJournals.deficitDeductionId, id));
+        }
+        await tx.delete(salaryDeductions).where(eq(salaryDeductions.id, id));
+      });
       res.json({ success: true });
     } catch (e: any) {
       console.error("[hr/advances] delete error:", e);
