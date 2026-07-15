@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { leaveRequests, leaveBalances, branchEmployees, attendanceRecords, publicHolidays } from "@shared/schema";
+import { leaveRequests, leaveBalances, leaveSettlements, branchEmployees, attendanceRecords, publicHolidays } from "@shared/schema";
 import { and, eq, ne, inArray, lte, gte, sql } from "drizzle-orm";
 
 // ============================================================
@@ -286,6 +286,115 @@ export async function getLeaveBalanceSummary(
     note: row?.note ?? null,
     hasRow: !!row,
   };
+}
+
+export interface AccruedLeaveBalance {
+  branchEmployeeId: number;
+  configured: boolean; // هل أُدخلت بيانات الاستحقاق (أيام العقد + نقطة البداية)؟
+  annualDays: number; // أيام الإجازة السنوية حسب العقد
+  annualDaysSource: "contract" | "suggested"; // من العقد أم مقترح حسب الأقدمية
+  openingBalance: number; // الرصيد المرحل عند نقطة البداية
+  accrualStart: string | null; // نقطة بداية الاحتساب (تاريخ الرصيد المرحل أو تاريخ التعيين)
+  elapsedDays: number; // الأيام المنقضية منذ نقطة البداية حتى اليوم
+  accruedToDate: number; // المستحق التراكمي حتى اليوم = المرحل + (المنقضي × السنوي ÷ 365)
+  usedToDate: number; // أيام إجازات سنوية معتمدة منقضية بعد نقطة البداية
+  upcomingDays: number; // أيام إجازات سنوية معتمدة قادمة (محجوزة من الرصيد)
+  settledDays: number; // أيام مصفّاة نقداً بعد نقطة البداية
+  remainingDays: number; // المتبقي = المستحق − المستخدم − القادم − المصفّى
+}
+
+/**
+ * الرصيد التراكمي للإجازة السنوية "حتى تاريخه" (النظام التعاقدي):
+ * يبدأ الاحتساب من تاريخ الرصيد المرحل (إن وُجد) وإلا من تاريخ التعيين،
+ * ويستحق الموظف يومياً (أيام العقد ÷ 365)، وتُخصم الإجازات السنوية المعتمدة
+ * والأيام المصفّاة نقداً الواقعة بعد نقطة البداية.
+ */
+export interface AccrualEmpInput {
+  id: number;
+  hireDate?: string | null;
+  annualLeaveDays?: number | null;
+  leaveOpeningBalance?: number | null;
+  leaveOpeningBalanceDate?: string | null;
+}
+
+/** حساب صافٍ (بدون استعلامات) — يُستخدم للقوائم الجماعية لتفادي N+1. */
+export function computeAccruedLeaveBalance(
+  emp: AccrualEmpInput,
+  approvedAnnualLeaves: { startDate: string; endDate: string }[],
+  activeAnnualSettlements: { settledDays: number | null; settlementDate: string }[],
+  todayISO?: string,
+): AccruedLeaveBalance {
+  const today = todayISO || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
+  const contractDays = emp.annualLeaveDays != null && Number(emp.annualLeaveDays) > 0 ? Number(emp.annualLeaveDays) : null;
+  const annualDays = contractDays ?? suggestedEntitlement(emp.hireDate);
+  const openingDate = emp.leaveOpeningBalanceDate && /^\d{4}-\d{2}-\d{2}$/.test(emp.leaveOpeningBalanceDate)
+    ? emp.leaveOpeningBalanceDate : null;
+  const accrualStart = openingDate || (emp.hireDate && /^\d{4}-\d{2}-\d{2}$/.test(emp.hireDate) ? emp.hireDate : null);
+  const openingBalance = openingDate ? Number(emp.leaveOpeningBalance || 0) : 0;
+  const configured = contractDays != null && accrualStart != null;
+
+  if (!accrualStart) {
+    return {
+      branchEmployeeId: emp.id, configured: false, annualDays,
+      annualDaysSource: contractDays != null ? "contract" : "suggested",
+      openingBalance: 0, accrualStart: null, elapsedDays: 0, accruedToDate: 0,
+      usedToDate: 0, upcomingDays: 0, settledDays: 0, remainingDays: 0,
+    };
+  }
+
+  const MS = 86400000;
+  const elapsedDays = Math.max(0, Math.round((new Date(today + "T00:00:00Z").getTime() - new Date(accrualStart + "T00:00:00Z").getTime()) / MS));
+  const accruedToDate = Math.round((openingBalance + elapsedDays * (annualDays / 365)) * 100) / 100;
+
+  // نحتسب فقط الأيام الواقعة "بعد" نقطة البداية (الرصيد المرحل يغطي ما قبلها)
+  const dayAfterStart = new Date(new Date(accrualStart + "T00:00:00Z").getTime() + MS).toISOString().slice(0, 10);
+  let usedToDate = 0;
+  let upcomingDays = 0;
+  for (const lr of approvedAnnualLeaves) {
+    if (lr.endDate < accrualStart) continue;
+    const segStart = lr.startDate > dayAfterStart ? lr.startDate : dayAfterStart;
+    if (segStart > lr.endDate) continue;
+    // الجزء المنقضي (حتى اليوم) والجزء القادم
+    const pastEnd = lr.endDate < today ? lr.endDate : today;
+    if (segStart <= pastEnd) usedToDate += isoDaysInclusive(segStart, pastEnd);
+    const futStart = segStart > today ? segStart : new Date(new Date(today + "T00:00:00Z").getTime() + MS).toISOString().slice(0, 10);
+    if (futStart <= lr.endDate) upcomingDays += isoDaysInclusive(futStart, lr.endDate);
+  }
+
+  // الأيام المصفّاة نقداً بعد نقطة البداية
+  const settledDays = activeAnnualSettlements
+    .filter((s) => s.settlementDate > accrualStart)
+    .reduce((s, r) => s + Number(r.settledDays || 0), 0);
+
+  const remainingDays = Math.round((accruedToDate - usedToDate - upcomingDays - settledDays) * 100) / 100;
+
+  return {
+    branchEmployeeId: emp.id, configured, annualDays,
+    annualDaysSource: contractDays != null ? "contract" : "suggested",
+    openingBalance, accrualStart, elapsedDays, accruedToDate,
+    usedToDate, upcomingDays, settledDays, remainingDays,
+  };
+}
+
+/** نسخة لموظف واحد (تجلب بياناته بنفسها) — للاستخدام في فحص الاعتماد ونحوه. */
+export async function getAccruedLeaveBalance(emp: AccrualEmpInput, todayISO?: string): Promise<AccruedLeaveBalance> {
+  const [approved, settlements] = await Promise.all([
+    db.select({ startDate: leaveRequests.startDate, endDate: leaveRequests.endDate })
+      .from(leaveRequests)
+      .where(and(
+        eq(leaveRequests.branchEmployeeId, emp.id),
+        eq(leaveRequests.leaveType, "annual"),
+        eq(leaveRequests.status, "approved"),
+      )),
+    db.select({ settledDays: leaveSettlements.settledDays, settlementDate: leaveSettlements.settlementDate })
+      .from(leaveSettlements)
+      .where(and(
+        eq(leaveSettlements.branchEmployeeId, emp.id),
+        eq(leaveSettlements.leaveType, "annual"),
+        eq(leaveSettlements.status, "active"),
+      )),
+  ]);
+  return computeAccruedLeaveBalance(emp, approved, settlements, todayISO);
 }
 
 const leaveMarker = (id: number) => `__leave:${id}`;

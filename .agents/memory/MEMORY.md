@@ -14,6 +14,7 @@
 - [Timesheet duplicate prevention](timesheet-duplicate-prevention.md) — unique index keys on version (not "active") because reissue inserts new version before superseding old; cross-identity dupes guarded at app pre-check.
 - [Portal attendance identity](portal-attendance-identity.md) — /api/my attendance reads must match 3 employee-id forms (branch_emp_<id>, branch_employee_id, linkedUserId UUID) or manager-entered records vanish.
 - [Shareholder portal](shareholder-portal.md) — /api/shareholder/* gated by role==="shareholder" AND linkedUserId in getMyShareholder; admin routes by governance_shareholders perm.
+- [Leave accrual system](leave-accrual-system.md) — accrual gates approval only when annualLeaveDays set (else year buckets); pure compute fn for bulk; HR lists must use getBranchScope.
 - [Leave requests invariants](leave-requests-invariants.md) — balance "used" = year-overlap not startDate; create routes must override status/approval fields (createInsertSchema leaks them); attendance sync non-blocking+idempotent.
 - [Salary-closing aggregate](salary-closing-aggregate.md) — "كل الفروع" view must be fully read-only; locked-line id ≠ branchEmployeeId so mutations keyed on emp.id target wrong employees.
 - [Audit log branch scoping](audit-log-branch-scoping.md) — audit query/analytics endpoints must gate branches via getEffectiveBranchFilter + storage branchIds enforcement; never trust client branchId.

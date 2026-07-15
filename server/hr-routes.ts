@@ -51,6 +51,8 @@ import {
   getSickTierBreakdown,
   findOverlappingLeave,
   getLeaveBalanceSummary,
+  getAccruedLeaveBalance,
+  computeAccruedLeaveBalance,
   suggestedEntitlement,
   syncAttendanceForLeave,
   reverseAttendanceForLeave,
@@ -423,16 +425,30 @@ export function registerHrRoutes(app: Express) {
       }
 
       // تحقق الرصيد عند الاعتماد (تحذير + إمكانية التجاوز)
-      if (decision.decision === "approved" && !decision.allowOverBalance) {
-        const bal = await getLeaveBalanceSummary(existing.branchEmployeeId, year, existing.leaveType, emp?.hireDate);
-        const projected = bal.remainingDays - Number(existing.totalDays);
-        if (projected < 0 && existing.leaveType !== "unpaid") {
-          return res.status(409).json({
-            error: "balance_exceeded",
-            message: `الرصيد المتبقي (${bal.remainingDays} يوم) لا يكفي لهذه الإجازة (${existing.totalDays} يوم).`,
-            balance: bal,
-            requestedDays: Number(existing.totalDays),
-          });
+      if (decision.decision === "approved" && !decision.allowOverBalance && existing.leaveType !== "unpaid") {
+        // للإجازة السنوية مع نظام الاستحقاق التعاقدي: التحقق من الرصيد المستحق حتى تاريخه
+        const useAccrual = existing.leaveType === "annual" && emp && (emp as any).annualLeaveDays != null;
+        if (useAccrual) {
+          const acc = await getAccruedLeaveBalance(emp as any);
+          if (acc.remainingDays - Number(existing.totalDays) < 0) {
+            return res.status(409).json({
+              error: "balance_exceeded",
+              message: `الرصيد المستحق حتى تاريخه (${acc.remainingDays} يوم) لا يكفي لهذه الإجازة (${existing.totalDays} يوم).`,
+              accrual: acc,
+              requestedDays: Number(existing.totalDays),
+            });
+          }
+        } else {
+          const bal = await getLeaveBalanceSummary(existing.branchEmployeeId, year, existing.leaveType, emp?.hireDate);
+          const projected = bal.remainingDays - Number(existing.totalDays);
+          if (projected < 0) {
+            return res.status(409).json({
+              error: "balance_exceeded",
+              message: `الرصيد المتبقي (${bal.remainingDays} يوم) لا يكفي لهذه الإجازة (${existing.totalDays} يوم).`,
+              balance: bal,
+              requestedDays: Number(existing.totalDays),
+            });
+          }
         }
       }
 
@@ -1526,6 +1542,138 @@ export function registerHrRoutes(app: Express) {
       res.json(results);
     } catch (e: any) {
       console.error("[hr/leave-balances] list error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ===== الرصيد التراكمي "حتى تاريخه" (النظام التعاقدي) =====
+  // قائمة أرصدة الإجازة السنوية المستحقة حتى اليوم لكل الموظفين النشطين (ضمن نطاق الفروع)
+  app.get("/api/hr/leave-accrual", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const { branchIds } = getBranchScope(req);
+      if (branchIds !== null && branchIds.length === 0) return res.json([]);
+      const branchId = req.query.branchId as string | undefined;
+
+      const conds: any[] = [eq(branchEmployees.status, "active")];
+      const scopeCond = applyBranchScope(branchEmployees, branchIds);
+      if (scopeCond !== undefined) conds.push(scopeCond);
+      if (branchId) conds.push(eq(branchEmployees.branchId, branchId));
+
+      const emps = await db
+        .select({
+          id: branchEmployees.id,
+          employeeName: branchEmployees.employeeName,
+          jobTitle: branchEmployees.jobTitle,
+          branchId: branchEmployees.branchId,
+          branchName: branches.name,
+          hireDate: branchEmployees.hireDate,
+          annualLeaveDays: branchEmployees.annualLeaveDays,
+          leaveOpeningBalance: branchEmployees.leaveOpeningBalance,
+          leaveOpeningBalanceDate: branchEmployees.leaveOpeningBalanceDate,
+        })
+        .from(branchEmployees)
+        .leftJoin(branches, eq(branchEmployees.branchId, branches.id))
+        .where(and(...conds))
+        .orderBy(branchEmployees.employeeName)
+        .limit(2000);
+
+      const empIds = emps.map((e) => e.id);
+      if (empIds.length === 0) return res.json([]);
+
+      // تحميل جماعي (استعلامان فقط) بدل استعلامين لكل موظف
+      const [approvedRows, settlementRows] = await Promise.all([
+        db.select({
+          branchEmployeeId: leaveRequests.branchEmployeeId,
+          startDate: leaveRequests.startDate,
+          endDate: leaveRequests.endDate,
+        }).from(leaveRequests).where(and(
+          inArray(leaveRequests.branchEmployeeId, empIds),
+          eq(leaveRequests.leaveType, "annual"),
+          eq(leaveRequests.status, "approved"),
+        )),
+        db.select({
+          branchEmployeeId: leaveSettlements.branchEmployeeId,
+          settledDays: leaveSettlements.settledDays,
+          settlementDate: leaveSettlements.settlementDate,
+        }).from(leaveSettlements).where(and(
+          inArray(leaveSettlements.branchEmployeeId, empIds),
+          eq(leaveSettlements.leaveType, "annual"),
+          eq(leaveSettlements.status, "active"),
+        )),
+      ]);
+      const leavesByEmp = new Map<number, { startDate: string; endDate: string }[]>();
+      for (const r of approvedRows) {
+        const arr = leavesByEmp.get(r.branchEmployeeId) || [];
+        arr.push({ startDate: r.startDate, endDate: r.endDate });
+        leavesByEmp.set(r.branchEmployeeId, arr);
+      }
+      const settlementsByEmp = new Map<number, { settledDays: number | null; settlementDate: string }[]>();
+      for (const r of settlementRows) {
+        const arr = settlementsByEmp.get(r.branchEmployeeId) || [];
+        arr.push({ settledDays: r.settledDays, settlementDate: r.settlementDate });
+        settlementsByEmp.set(r.branchEmployeeId, arr);
+      }
+
+      const results = emps.map((e) => {
+        const acc = computeAccruedLeaveBalance(e, leavesByEmp.get(e.id) || [], settlementsByEmp.get(e.id) || []);
+        return {
+          ...acc,
+          employeeName: e.employeeName,
+          jobTitle: e.jobTitle,
+          branchId: e.branchId,
+          branchName: e.branchName,
+          hireDate: e.hireDate,
+          // القيم الخام المخزّنة (للتعديل في النموذج)
+          rawAnnualLeaveDays: e.annualLeaveDays,
+          rawOpeningBalance: e.leaveOpeningBalance,
+          rawOpeningBalanceDate: e.leaveOpeningBalanceDate,
+        };
+      });
+      res.json(results);
+    } catch (e: any) {
+      console.error("[hr/leave-accrual] list error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // تحديث بيانات الاستحقاق التعاقدي لموظف: أيام العقد + الرصيد المرحل وتاريخه
+  app.patch("/api/hr/leave-accrual/:employeeId", isAuthenticated, requirePermission("hr_leaves", "edit"), async (req, res) => {
+    try {
+      const employeeId = parseInt(req.params.employeeId, 10);
+      if (!Number.isFinite(employeeId)) return res.status(400).json({ error: "معرّف غير صحيح" });
+
+      const schema = z.object({
+        annualLeaveDays: z.number().min(0).max(90).nullable(),
+        leaveOpeningBalance: z.number().min(-365).max(365).nullable(),
+        leaveOpeningBalanceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "تاريخ غير صحيح").nullable(),
+      }).refine(
+        (v) => (v.leaveOpeningBalance == null) === (v.leaveOpeningBalanceDate == null),
+        { message: "الرصيد المرحل وتاريخه يجب إدخالهما معاً أو تركهما فارغين معاً" },
+      );
+      const body = schema.parse({
+        annualLeaveDays: req.body.annualLeaveDays === "" || req.body.annualLeaveDays == null ? null : Number(req.body.annualLeaveDays),
+        leaveOpeningBalance: req.body.leaveOpeningBalance === "" || req.body.leaveOpeningBalance == null ? null : Number(req.body.leaveOpeningBalance),
+        leaveOpeningBalanceDate: req.body.leaveOpeningBalanceDate || null,
+      });
+
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, employeeId));
+      if (!emp) return res.status(404).json({ error: "الموظف غير موجود" });
+      const f = getEffectiveBranchFilter(req);
+      if (f.branchIds !== null && !f.branchIds.includes(emp.branchId)) {
+        return res.status(403).json({ error: "ليس لديك صلاحية على هذا الفرع" });
+      }
+
+      await db.update(branchEmployees).set({
+        annualLeaveDays: body.annualLeaveDays,
+        leaveOpeningBalance: body.leaveOpeningBalance,
+        leaveOpeningBalanceDate: body.leaveOpeningBalanceDate,
+      } as any).where(eq(branchEmployees.id, employeeId));
+
+      const acc = await getAccruedLeaveBalance({ ...emp, ...body } as any);
+      res.json({ success: true, accrual: acc });
+    } catch (e: any) {
+      if (e?.issues) return res.status(400).json({ error: e.issues[0]?.message || "بيانات غير صحيحة" });
+      console.error("[hr/leave-accrual] update error:", e);
       res.status(500).json({ error: e.message });
     }
   });

@@ -124,6 +124,11 @@ export default function LeavesPage() {
   const [editBal, setEditBal] = useState<Balance | null>(null);
   const [balForm, setBalForm] = useState({ entitledDays: "21", carriedOverDays: "0", adjustmentDays: "0", note: "" });
 
+  // الرصيد التراكمي "حتى تاريخه" (النظام التعاقدي)
+  const [accrualSearch, setAccrualSearch] = useState("");
+  const [editAccrual, setEditAccrual] = useState<any | null>(null);
+  const [accrualForm, setAccrualForm] = useState({ annualLeaveDays: "", leaveOpeningBalance: "", leaveOpeningBalanceDate: "" });
+
   // calendar state
   const [calMonth, setCalMonth] = useState(() => new Date().toISOString().slice(0, 7));
 
@@ -157,6 +162,44 @@ export default function LeavesPage() {
       (await apiRequest("GET", `/api/hr/leave-balances?year=${balYear}&type=${balType}`)).json(),
     enabled: tab === "balances",
   });
+
+  // الرصيد المستحق حتى تاريخه لكل الموظفين (الإجازة السنوية فقط)
+  const { data: accruals = [], isLoading: accrualLoading } = useQuery<any[]>({
+    queryKey: ["/api/hr/leave-accrual"],
+    queryFn: async () => (await apiRequest("GET", "/api/hr/leave-accrual")).json(),
+    enabled: tab === "balances" && balType === "annual",
+  });
+
+  const accrualMutation = useMutation({
+    mutationFn: async (payload: { employeeId: number; annualLeaveDays: string; leaveOpeningBalance: string; leaveOpeningBalanceDate: string }) => {
+      const res = await apiRequest("PATCH", `/api/hr/leave-accrual/${payload.employeeId}`, {
+        annualLeaveDays: payload.annualLeaveDays === "" ? null : Number(payload.annualLeaveDays),
+        leaveOpeningBalance: payload.leaveOpeningBalance === "" ? null : Number(payload.leaveOpeningBalance),
+        leaveOpeningBalanceDate: payload.leaveOpeningBalanceDate || null,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "تم حفظ بيانات الاستحقاق" });
+      setEditAccrual(null);
+      qc.invalidateQueries({ queryKey: ["/api/hr/leave-accrual"] });
+    },
+    onError: (e: any) => {
+      let msg = e?.message || "خطأ غير متوقع";
+      const idx = msg.indexOf("{");
+      if (idx >= 0) { try { msg = JSON.parse(msg.slice(idx)).error || msg; } catch {} }
+      toast({ title: "تعذّر الحفظ", description: msg, variant: "destructive" });
+    },
+  });
+
+  const openEditAccrual = (row: any) => {
+    setAccrualForm({
+      annualLeaveDays: row.rawAnnualLeaveDays != null ? String(row.rawAnnualLeaveDays) : "",
+      leaveOpeningBalance: row.rawOpeningBalance != null ? String(row.rawOpeningBalance) : "",
+      leaveOpeningBalanceDate: row.rawOpeningBalanceDate || "",
+    });
+    setEditAccrual(row);
+  };
 
   // balance for the employee selected in the create form
   const { data: formBalance } = useQuery<Balance>({
@@ -1182,7 +1225,87 @@ export default function LeavesPage() {
         </TabsContent>
 
         {/* ---------- BALANCES TAB ---------- */}
-        <TabsContent value="balances">
+        <TabsContent value="balances" className="space-y-4">
+          {balType === "annual" && (
+            <Card className="border-amber-200">
+              <CardContent className="space-y-3 pt-6">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <div className="font-bold text-amber-800 flex items-center gap-2">
+                      <Calculator className="h-4 w-4" />
+                      الرصيد المستحق حتى تاريخه (حسب العقد)
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      يُحتسب يومياً من تاريخ الرصيد المرحل (أو تاريخ التعيين) × أيام العقد ÷ 365، وتُخصم منه الإجازات المعتمدة والأيام المصفّاة نقداً.
+                    </div>
+                  </div>
+                  <Input
+                    className="w-56"
+                    placeholder="بحث بالاسم..."
+                    value={accrualSearch}
+                    onChange={(e) => setAccrualSearch(e.target.value)}
+                    data-testid="input-accrual-search"
+                  />
+                </div>
+                <div className="overflow-auto border rounded-lg">
+                  <table className="w-full text-sm">
+                    <thead className="bg-amber-50">
+                      <tr>
+                        <th className="text-right p-2">الموظف</th>
+                        <th className="text-right p-2">أيام العقد/سنة</th>
+                        <th className="text-right p-2">الرصيد المرحل</th>
+                        <th className="text-right p-2">بداية الاحتساب</th>
+                        <th className="text-right p-2">المستحق حتى اليوم</th>
+                        <th className="text-right p-2">المستخدم</th>
+                        <th className="text-right p-2">محجوز قادم</th>
+                        <th className="text-right p-2">مصفّى</th>
+                        <th className="text-right p-2">المتبقي</th>
+                        <th className="text-right p-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {accrualLoading && <tr><td colSpan={10} className="p-6 text-center text-muted-foreground">جاري التحميل...</td></tr>}
+                      {!accrualLoading && accruals.length === 0 && <tr><td colSpan={10} className="p-6 text-center text-muted-foreground">لا يوجد موظفون</td></tr>}
+                      {accruals
+                        .filter((a: any) => !accrualSearch.trim() || (a.employeeName || "").includes(accrualSearch.trim()))
+                        .map((a: any) => (
+                        <tr key={a.branchEmployeeId} className="border-t hover:bg-amber-50/40" data-testid={`row-accrual-${a.branchEmployeeId}`}>
+                          <td className="p-2">
+                            <div className="font-medium">{a.employeeName}</div>
+                            <div className="text-xs text-muted-foreground">{a.jobTitle} • {a.branchName}</div>
+                          </td>
+                          <td className="p-2 tabular-nums">
+                            {arNum(a.annualDays)}
+                            {a.annualDaysSource === "suggested" && <span className="text-[10px] text-amber-500 me-1">مقترح</span>}
+                          </td>
+                          <td className="p-2 tabular-nums">{a.rawOpeningBalanceDate ? arNum(a.openingBalance) : "—"}</td>
+                          <td className="p-2 text-xs">
+                            {a.accrualStart || "—"}
+                            {a.accrualStart && !a.rawOpeningBalanceDate && <span className="text-[10px] text-slate-400 block">من تاريخ التعيين</span>}
+                          </td>
+                          <td className="p-2 tabular-nums font-medium text-blue-700" data-testid={`text-accrued-${a.branchEmployeeId}`}>{a.accrualStart ? arNum(a.accruedToDate) : "—"}</td>
+                          <td className="p-2 tabular-nums">{arNum(a.usedToDate)}</td>
+                          <td className="p-2 tabular-nums">{arNum(a.upcomingDays)}</td>
+                          <td className="p-2 tabular-nums">{arNum(a.settledDays)}</td>
+                          <td className={`p-2 tabular-nums font-bold ${a.remainingDays < 0 ? "text-red-600" : "text-emerald-600"}`} data-testid={`text-accrual-remaining-${a.branchEmployeeId}`}>
+                            {a.accrualStart ? arNum(a.remainingDays) : "—"}
+                          </td>
+                          <td className="p-2">
+                            {canEditBalances && (
+                              <Button size="sm" variant="ghost" onClick={() => openEditAccrual(a)} data-testid={`button-edit-accrual-${a.branchEmployeeId}`}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardContent className="space-y-3 pt-6">
               <div className="flex items-center gap-2 flex-wrap">
@@ -1708,6 +1831,62 @@ export default function LeavesPage() {
             <Button variant="outline" onClick={() => setEditBal(null)}>إلغاء</Button>
             <Button onClick={submitBal} disabled={saveBalMutation.isPending} data-testid="button-save-balance">
               {saveBalMutation.isPending ? "..." : "حفظ"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* تعديل بيانات الاستحقاق التعاقدي */}
+      <Dialog open={!!editAccrual} onOpenChange={(o) => { if (!o) setEditAccrual(null); }}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader><DialogTitle>بيانات استحقاق الإجازة — {editAccrual?.employeeName}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>أيام الإجازة السنوية حسب العقد</Label>
+              <Input
+                type="number" inputMode="decimal" min={0} max={90}
+                placeholder="مثال: 21 أو 30"
+                value={accrualForm.annualLeaveDays}
+                onChange={(e) => setAccrualForm({ ...accrualForm, annualLeaveDays: e.target.value })}
+                data-testid="input-accrual-annual-days"
+              />
+              <div className="text-[11px] text-muted-foreground mt-1">
+                اتركه فارغاً لاستخدام المقترح حسب الأقدمية (21 يوم، و30 بعد 5 سنوات خدمة).
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>الرصيد المرحل (أيام)</Label>
+                <Input
+                  type="number" inputMode="decimal"
+                  placeholder="مثال: 12.5"
+                  value={accrualForm.leaveOpeningBalance}
+                  onChange={(e) => setAccrualForm({ ...accrualForm, leaveOpeningBalance: e.target.value })}
+                  data-testid="input-accrual-opening-balance"
+                />
+              </div>
+              <div>
+                <Label>حتى تاريخ</Label>
+                <Input
+                  type="date"
+                  value={accrualForm.leaveOpeningBalanceDate}
+                  onChange={(e) => setAccrualForm({ ...accrualForm, leaveOpeningBalanceDate: e.target.value })}
+                  data-testid="input-accrual-opening-date"
+                />
+              </div>
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              الرصيد المرحل هو رصيد الموظف المتجمّع حتى التاريخ المحدد — يبدأ النظام الاحتساب اليومي بعد هذا التاريخ. إن تُرك فارغاً يبدأ الاحتساب من تاريخ التعيين{editAccrual?.hireDate ? ` (${editAccrual.hireDate})` : ""}.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditAccrual(null)}>إلغاء</Button>
+            <Button
+              onClick={() => accrualMutation.mutate({ employeeId: editAccrual.branchEmployeeId, ...accrualForm })}
+              disabled={accrualMutation.isPending}
+              data-testid="button-save-accrual"
+            >
+              {accrualMutation.isPending ? "..." : "حفظ"}
             </Button>
           </DialogFooter>
         </DialogContent>

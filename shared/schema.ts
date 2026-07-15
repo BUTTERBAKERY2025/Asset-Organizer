@@ -5700,6 +5700,9 @@ export const branchEmployees = pgTable("branch_employees", {
   emergencyContact: text("emergency_contact"), // رقم الطوارئ
   bankName: text("bank_name"), // اسم البنك
   bankAccountNumber: text("bank_account_number"), // رقم الحساب البنكي
+  annualLeaveDays: real("annual_leave_days"), // أيام الإجازة السنوية حسب العقد (21 أو 30)
+  leaveOpeningBalance: real("leave_opening_balance"), // الرصيد المرحل حتى تاريخ معين
+  leaveOpeningBalanceDate: text("leave_opening_balance_date"), // تاريخ الرصيد المرحل YYYY-MM-DD
   status: text("status").default("active").notNull(), // active, inactive, terminated, on_leave
   contractType: text("contract_type").default("full_time"), // full_time, part_time, contract
   workPermitNumber: text("work_permit_number"), // رقم رخصة العمل

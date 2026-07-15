@@ -128,6 +128,10 @@ export async function runStartupMigrations() {
       `ALTER TABLE cashier_sales_journals ADD COLUMN IF NOT EXISTS deficit_posted_by varchar REFERENCES users(id)`,
       `ALTER TABLE cashier_sales_journals ADD COLUMN IF NOT EXISTS deficit_posted_at timestamp`,
       `CREATE INDEX IF NOT EXISTS idx_cashier_journals_deficit_posted ON cashier_sales_journals(deficit_deduction_id)`,
+      // نظام رصيد الإجازات التراكمي: أيام العقد السنوية + الرصيد المرحل حتى تاريخه
+      `ALTER TABLE branch_employees ADD COLUMN IF NOT EXISTS annual_leave_days real`,
+      `ALTER TABLE branch_employees ADD COLUMN IF NOT EXISTS leave_opening_balance real`,
+      `ALTER TABLE branch_employees ADD COLUMN IF NOT EXISTS leave_opening_balance_date text`,
       // Phase 8: GPS columns on daily-log photos
       `ALTER TABLE project_daily_log_photos ADD COLUMN IF NOT EXISTS gps_latitude real`,
       `ALTER TABLE project_daily_log_photos ADD COLUMN IF NOT EXISTS gps_longitude real`,
