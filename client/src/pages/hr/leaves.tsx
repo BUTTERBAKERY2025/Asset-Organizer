@@ -1251,16 +1251,16 @@ export default function LeavesPage() {
                   <table className="w-full text-sm">
                     <thead className="bg-amber-50">
                       <tr>
-                        <th className="text-right p-2">الموظف</th>
-                        <th className="text-right p-2">أيام العقد/سنة</th>
-                        <th className="text-right p-2">الرصيد المرحل</th>
-                        <th className="text-right p-2">بداية الاحتساب</th>
-                        <th className="text-right p-2">المستحق حتى اليوم</th>
-                        <th className="text-right p-2">المستخدم</th>
-                        <th className="text-right p-2">محجوز قادم</th>
-                        <th className="text-right p-2">مصفّى</th>
-                        <th className="text-right p-2">المتبقي</th>
-                        <th className="text-right p-2"></th>
+                        <th className="text-right p-2 whitespace-nowrap">الموظف</th>
+                        <th className="text-center p-2 whitespace-nowrap">أيام العقد/سنة</th>
+                        <th className="text-center p-2 whitespace-nowrap">الرصيد المرحل</th>
+                        <th className="text-center p-2 whitespace-nowrap">بداية الاحتساب</th>
+                        <th className="text-center p-2 whitespace-nowrap">المستحق حتى اليوم</th>
+                        <th className="text-center p-2 whitespace-nowrap">المستخدم</th>
+                        <th className="text-center p-2 whitespace-nowrap">محجوز قادم</th>
+                        <th className="text-center p-2 whitespace-nowrap">مصفّى</th>
+                        <th className="text-center p-2 whitespace-nowrap">المتبقي</th>
+                        <th className="p-2 w-10"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1274,23 +1274,23 @@ export default function LeavesPage() {
                             <div className="font-medium">{a.employeeName}</div>
                             <div className="text-xs text-muted-foreground">{a.jobTitle} • {a.branchName}</div>
                           </td>
-                          <td className="p-2 tabular-nums">
+                          <td className="p-2 text-center tabular-nums">
                             {arNum(a.annualDays)}
                             {a.annualDaysSource === "suggested" && <span className="text-[10px] text-amber-500 me-1">مقترح</span>}
                           </td>
-                          <td className="p-2 tabular-nums">{a.rawOpeningBalanceDate ? arNum(a.openingBalance) : "—"}</td>
-                          <td className="p-2 text-xs">
+                          <td className="p-2 text-center tabular-nums">{a.rawOpeningBalanceDate ? arNum(a.openingBalance) : "—"}</td>
+                          <td className="p-2 text-center text-xs">
                             {a.accrualStart || "—"}
                             {a.accrualStart && !a.rawOpeningBalanceDate && <span className="text-[10px] text-slate-400 block">من تاريخ التعيين</span>}
                           </td>
-                          <td className="p-2 tabular-nums font-medium text-blue-700" data-testid={`text-accrued-${a.branchEmployeeId}`}>{a.accrualStart ? arNum(a.accruedToDate) : "—"}</td>
-                          <td className="p-2 tabular-nums">{arNum(a.usedToDate)}</td>
-                          <td className="p-2 tabular-nums">{arNum(a.upcomingDays)}</td>
-                          <td className="p-2 tabular-nums">{arNum(a.settledDays)}</td>
-                          <td className={`p-2 tabular-nums font-bold ${a.remainingDays < 0 ? "text-red-600" : "text-emerald-600"}`} data-testid={`text-accrual-remaining-${a.branchEmployeeId}`}>
+                          <td className="p-2 text-center tabular-nums font-medium text-blue-700" data-testid={`text-accrued-${a.branchEmployeeId}`}>{a.accrualStart ? arNum(a.accruedToDate) : "—"}</td>
+                          <td className="p-2 text-center tabular-nums">{arNum(a.usedToDate)}</td>
+                          <td className="p-2 text-center tabular-nums">{arNum(a.upcomingDays)}</td>
+                          <td className="p-2 text-center tabular-nums">{arNum(a.settledDays)}</td>
+                          <td className={`p-2 text-center tabular-nums font-bold ${a.remainingDays < 0 ? "text-red-600" : "text-emerald-600"}`} data-testid={`text-accrual-remaining-${a.branchEmployeeId}`}>
                             {a.accrualStart ? arNum(a.remainingDays) : "—"}
                           </td>
-                          <td className="p-2">
+                          <td className="p-2 text-center">
                             {canEditBalances && (
                               <Button size="sm" variant="ghost" onClick={() => openEditAccrual(a)} data-testid={`button-edit-accrual-${a.branchEmployeeId}`}>
                                 <Pencil className="h-3.5 w-3.5" />
