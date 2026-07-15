@@ -1,5 +1,14 @@
 // كشف حساب سلف موظف + التقرير الشهري الشامل — تصدير Excel وطباعة PDF
 import { openPrintWindow, renderToPrintWindow } from "./print-window";
+import { getCompanyLogoDataUri } from "./company-logo-data";
+
+const COMPANY = {
+  nameAr: "شركة الزبد الأفضل التجارية",
+  nameEn: "THE BUTTER BEST TRADING COMPANY",
+  cr: "7026155296",
+  details: "شركة مساهمة مقفلة | المملكة العربية السعودية",
+  city: "خميس مشيط",
+};
 
 const escapeHtml = (s: any) =>
   String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -18,8 +27,12 @@ const BASE_CSS = `
   * { box-sizing: border-box; }
   html, body { display: block !important; height: auto !important; width: auto !important; text-align: initial !important; }
   body { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; direction: rtl; color: #1a1a1a; margin: 0; font-size: 12px; line-height: 1.7; }
-  .header { text-align: center; border-bottom: 3px double #b8860b; padding-bottom: 8px; margin-bottom: 12px; }
-  .header h1 { font-size: 18px; margin: 0; color: #7a5c00; }
+  .letterhead { text-align: center; border-bottom: 2.5px solid #b8860b; padding-bottom: 6px; margin-bottom: 10px; }
+  .lh-row { display: flex; align-items: center; justify-content: center; gap: 12px; }
+  .lh-logo { width: 52px; height: 52px; object-fit: contain; }
+  .lh-co-ar { font-size: 15pt; font-weight: 800; color: #7a5c00; }
+  .lh-co-en { font-size: 7.5pt; color: #666; letter-spacing: 1px; }
+  .lh-co-meta { font-size: 8pt; color: #555; margin-top: 1px; }
   h2.doc-title { text-align: center; font-size: 15px; margin: 8px 0 2px; }
   .doc-sub { text-align: center; font-size: 11px; color: #666; margin-bottom: 12px; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
@@ -32,15 +45,24 @@ const BASE_CSS = `
   .info { background: #fbf7ec; border: 1px solid #d9c98a; border-radius: 6px; padding: 6px 12px; margin-bottom: 10px; font-size: 12px; }
 `;
 
-function docShell(title: string, sub: string, body: string) {
+function docShell(title: string, sub: string, body: string, logo: string | null) {
   return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8" />
 <title>${escapeHtml(title)}</title><style>${BASE_CSS}</style></head>
 <body>
-  <div class="header"><h1>مخبز الزبدة — Butter Bakery</h1></div>
+  <div class="letterhead">
+    <div class="lh-row">
+      ${logo ? `<img class="lh-logo" src="${logo}" alt="${escapeHtml(COMPANY.nameAr)}" />` : ""}
+      <div>
+        <div class="lh-co-ar">${escapeHtml(COMPANY.nameAr)}</div>
+        <div class="lh-co-en">${escapeHtml(COMPANY.nameEn)}</div>
+        <div class="lh-co-meta">${escapeHtml(COMPANY.details)} — س.ت ${escapeHtml(COMPANY.cr)} — مدينة ${escapeHtml(COMPANY.city)}</div>
+      </div>
+    </div>
+  </div>
   <h2 class="doc-title">${escapeHtml(title)}</h2>
   <div class="doc-sub">${escapeHtml(sub)}</div>
   ${body}
-  <div class="footer">تاريخ الإصدار: ${new Date().toLocaleDateString("ar-SA-u-nu-latn")} — نظام إدارة مخبز الزبدة</div>
+  <div class="footer">${escapeHtml(COMPANY.nameAr)} — س.ت ${escapeHtml(COMPANY.cr)} — تاريخ الإصدار: ${new Date().toLocaleDateString("ar-SA-u-nu-latn")}</div>
   <script>window.addEventListener('load', function(){ setTimeout(function(){ window.print(); }, 300); });</script>
 </body></html>`;
 }
@@ -61,8 +83,9 @@ export function buildStatementSummary(rows: StatementRow[]) {
   return { total, due, upcoming, byType, currentMonth };
 }
 
-export function printEmployeeStatement(emp: { employeeName: string; jobTitle?: string; branchName?: string }, rows: StatementRow[]) {
+export async function printEmployeeStatement(emp: { employeeName: string; jobTitle?: string; branchName?: string }, rows: StatementRow[]) {
   const target = openPrintWindow();
+  const logo = await getCompanyLogoDataUri();
   const sorted = [...rows].sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : 0));
   const s = buildStatementSummary(sorted);
   let running = 0;
@@ -92,7 +115,7 @@ export function printEmployeeStatement(emp: { employeeName: string; jobTitle?: s
     <tr><th>أقساط قادمة (لم تُستقطع بعد)</th><td class="num">${fmt(s.upcoming)} ر.س</td></tr>
     ${Object.entries(s.byType).map(([t, v]) => `<tr><th>إجمالي ${escapeHtml(TYPE_AR[t] || t)}</th><td class="num">${fmt(v)} ر.س</td></tr>`).join("")}
   </table>`;
-  renderToPrintWindow(target, docShell("كشف حساب سلف وقروض", `الموظف: ${emp.employeeName}`, body));
+  renderToPrintWindow(target, docShell("كشف حساب سلف وقروض", `الموظف: ${emp.employeeName}`, body, logo));
 }
 
 export async function exportEmployeeStatementExcel(emp: { employeeName: string; jobTitle?: string; branchName?: string }, rows: StatementRow[]) {
@@ -145,8 +168,9 @@ function groupByEmployee(rows: ReportRow[]) {
   return [...map.values()].sort((a, b) => a.branch.localeCompare(b.branch, "ar") || a.name.localeCompare(b.name, "ar"));
 }
 
-export function printMonthlyReport(monthLabel: string, rows: ReportRow[]) {
+export async function printMonthlyReport(monthLabel: string, rows: ReportRow[]) {
   const target = openPrintWindow();
+  const logo = await getCompanyLogoDataUri();
   const groups = groupByEmployee(rows);
   const grand = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
   const byType: Record<string, number> = {};
@@ -172,7 +196,7 @@ export function printMonthlyReport(monthLabel: string, rows: ReportRow[]) {
     ${Object.entries(byType).map(([t, v]) => `<tr><th>إجمالي ${escapeHtml(TYPE_AR[t] || t)}</th><td class="num">${fmt(v)} ر.س</td></tr>`).join("")}
     <tr class="grand"><td>الإجمالي العام</td><td class="num">${fmt(grand)} ر.س</td></tr>
   </table>`;
-  renderToPrintWindow(target, docShell("التقرير الشهري الشامل للسلف والقروض", `الفترة: ${monthLabel}`, body));
+  renderToPrintWindow(target, docShell("التقرير الشهري الشامل للسلف والقروض", `الفترة: ${monthLabel}`, body, logo));
 }
 
 export async function exportMonthlyReportExcel(monthLabel: string, rows: ReportRow[]) {
