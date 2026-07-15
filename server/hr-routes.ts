@@ -13,6 +13,7 @@ import {
 } from "@shared/warning-templates";
 import {
   employeeDocuments,
+  cashierSalesJournals,
   leaveRequests,
   leaveBalances,
   leaveSettlements,
@@ -2341,7 +2342,7 @@ export function registerHrRoutes(app: Express) {
       const type = req.query.type as string | undefined;
 
       const conds: any[] = [
-        inArray(salaryDeductions.type, ["advance", "loan_installment"]),
+        inArray(salaryDeductions.type, ["advance", "loan_installment", "sales_deficit"]),
       ];
       const scopeCond = applyBranchScope(salaryDeductions, branchIds);
       if (scopeCond !== undefined) conds.push(scopeCond);
@@ -2421,7 +2422,7 @@ export function registerHrRoutes(app: Express) {
     try {
       const { branchIds } = getBranchScope(req);
       const scopeCond = applyBranchScope(salaryDeductions, branchIds);
-      const conds: any[] = [inArray(salaryDeductions.type, ["advance", "loan_installment"])];
+      const conds: any[] = [inArray(salaryDeductions.type, ["advance", "loan_installment", "sales_deficit"])];
       if (scopeCond !== undefined) conds.push(scopeCond);
       const all = await db.select().from(salaryDeductions).where(and(...conds));
       const total = all.length;
@@ -2431,6 +2432,205 @@ export function registerHrRoutes(app: Express) {
       res.json({ total, totalAmount, thisMonthAmount });
     } catch (e: any) {
       console.error("[hr/advances/stats] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ========================================================================
+  // 4-ب) العجوزات البيعية للكاشير  /api/hr/cashier-deficits
+  // كشف شهري بعجوزات يوميات المبيعات + ترحيلها إلى السلف والقروض (خصم راتب)
+  // ========================================================================
+
+  // مبلغ العجز في يومية: العجز النقدي (بعد استبعاد أخطاء الإدخال) + العجز البنكي
+  // ملاحظة: discrepancyAmount يُخزَّن كقيمة مطلقة والحالة (shortage/surplus) تحدد الاتجاه.
+  function journalDeficitAmount(j: any): number {
+    let total = 0;
+    if (j.discrepancyStatus === "shortage") {
+      let cash = Math.abs((j.netDiscrepancy || 0) !== 0 ? j.netDiscrepancy : (j.discrepancyAmount || 0));
+      // استبعاد مبلغ خطأ الإدخال إن وُجد (لا يُحمَّل على الكاشير)
+      if (j.isInputError && (j.netDiscrepancy || 0) === 0) {
+        cash = Math.max(0, cash - Math.abs(j.inputErrorAmount || 0));
+      }
+      total += cash;
+    }
+    if (j.bankDiscrepancyStatus === "shortage") {
+      total += Math.abs(j.bankDiscrepancyTotal || 0);
+    }
+    return Math.round(total * 100) / 100;
+  }
+
+  app.get("/api/hr/cashier-deficits", isAuthenticated, requirePermission("hr_advances"), async (req, res) => {
+    try {
+      const { branchIds } = getBranchScope(req);
+      const month = (req.query.month as string) || new Date().toISOString().slice(0, 7);
+      if (!/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: "صيغة الشهر غير صحيحة" });
+
+      const conds: any[] = [
+        gte(cashierSalesJournals.journalDate, `${month}-01`),
+        lte(cashierSalesJournals.journalDate, `${month}-31`),
+        eq(cashierSalesJournals.status, "approved"),
+        sql`(${cashierSalesJournals.discrepancyStatus} = 'shortage' OR ${cashierSalesJournals.bankDiscrepancyStatus} = 'shortage')`,
+      ];
+      const scopeCond = applyBranchScope(cashierSalesJournals, branchIds);
+      if (scopeCond !== undefined) conds.push(scopeCond);
+
+      const rows = await db
+        .select({
+          j: cashierSalesJournals,
+          branchName: branches.name,
+        })
+        .from(cashierSalesJournals)
+        .leftJoin(branches, eq(cashierSalesJournals.branchId, branches.id))
+        .where(and(...conds))
+        .orderBy(desc(cashierSalesJournals.journalDate))
+        .limit(2000);
+
+      // ربط الكاشير (user) بملف الموظف عبر linked_user_id
+      const cashierIds = Array.from(new Set(rows.map((r) => r.j.cashierId)));
+      const links = cashierIds.length
+        ? await db.select({
+            id: branchEmployees.id,
+            linkedUserId: branchEmployees.linkedUserId,
+            employeeName: branchEmployees.employeeName,
+            branchId: branchEmployees.branchId,
+            isActive: branchEmployees.isActive,
+          }).from(branchEmployees).where(inArray(branchEmployees.linkedUserId, cashierIds))
+        : [];
+      const empByUser = new Map<string, any>();
+      for (const l of links) {
+        // نفضّل الملف النشط إن وُجد أكثر من ملف مرتبط بنفس المستخدم
+        const prev = empByUser.get(l.linkedUserId!);
+        if (!prev || (l.isActive && !prev.isActive)) empByUser.set(l.linkedUserId!, l);
+      }
+
+      // تجميع لكل كاشير
+      const byCashier = new Map<string, any>();
+      for (const r of rows) {
+        const j = r.j;
+        const amount = journalDeficitAmount(j);
+        if (amount <= 0) continue;
+        const key = j.cashierId;
+        if (!byCashier.has(key)) {
+          const emp = empByUser.get(key);
+          byCashier.set(key, {
+            cashierId: key,
+            cashierName: j.cashierName,
+            branchEmployeeId: emp?.id ?? null,
+            employeeName: emp?.employeeName ?? null,
+            linked: !!emp,
+            journals: [],
+            totalDeficit: 0,
+            unpostedDeficit: 0,
+            unpostedCount: 0,
+          });
+        }
+        const g = byCashier.get(key);
+        const posted = j.deficitDeductionId != null;
+        g.journals.push({
+          id: j.id,
+          journalDate: j.journalDate,
+          branchName: r.branchName,
+          shiftType: j.shiftType,
+          cashShortage: journalDeficitAmount({ ...j, bankDiscrepancyStatus: null }),
+          bankShortage: j.bankDiscrepancyStatus === "shortage" ? Math.abs(j.bankDiscrepancyTotal || 0) : 0,
+          amount,
+          posted,
+          deficitDeductionId: j.deficitDeductionId,
+          deficitPostedAt: j.deficitPostedAt,
+        });
+        g.totalDeficit = Math.round((g.totalDeficit + amount) * 100) / 100;
+        if (!posted) {
+          g.unpostedDeficit = Math.round((g.unpostedDeficit + amount) * 100) / 100;
+          g.unpostedCount += 1;
+        }
+      }
+
+      res.json({ month, cashiers: Array.from(byCashier.values()) });
+    } catch (e: any) {
+      console.error("[hr/cashier-deficits] list error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ترحيل عجوزات شهر لكاشير معيّن → خصم راتب واحد (بند: عجز يوميات مبيعات)
+  app.post("/api/hr/cashier-deficits/post", isAuthenticated, requirePermission("hr_advances", "edit"), async (req, res) => {
+    try {
+      const body = z.object({
+        cashierId: z.string().min(1),
+        month: z.string().regex(/^\d{4}-\d{2}$/),
+        deductionMonth: z.string().regex(/^\d{4}-\d{2}$/),
+        journalIds: z.array(z.number().int().positive()).min(1),
+      }).parse(req.body);
+
+      const { branchIds } = getBranchScope(req);
+      const userId = getUserId(req) || undefined;
+
+      // ملفات الموظف المرتبطة بحساب الكاشير (قد تتعدد بين الفروع)
+      const empLinks = await db.select().from(branchEmployees)
+        .where(eq(branchEmployees.linkedUserId, body.cashierId));
+      if (empLinks.length === 0) {
+        return res.status(400).json({ error: "حساب الكاشير غير مرتبط بملف موظف — اربط الحساب من صفحة الموظفين أولاً" });
+      }
+
+      const result = await db.transaction(async (tx) => {
+        // قفل اليوميات المطلوبة والتحقق منها
+        const journals = await tx.select().from(cashierSalesJournals)
+          .where(and(
+            inArray(cashierSalesJournals.id, body.journalIds),
+            eq(cashierSalesJournals.cashierId, body.cashierId),
+            eq(cashierSalesJournals.status, "approved"),
+            sql`${cashierSalesJournals.deficitDeductionId} IS NULL`,
+            gte(cashierSalesJournals.journalDate, `${body.month}-01`),
+            lte(cashierSalesJournals.journalDate, `${body.month}-31`),
+          ))
+          .for("update");
+
+        if (journals.length === 0) return { error: "لا توجد يوميات صالحة للترحيل (قد تكون رُحّلت مسبقاً)" };
+        if (journals.length !== body.journalIds.length) {
+          return { error: "بعض اليوميات المحددة غير صالحة للترحيل (مرحّلة مسبقاً أو غير معتمدة)" };
+        }
+        if (branchIds !== null && journals.some((j) => !branchIds.includes(j.branchId))) {
+          return { error: "ليس لديك صلاحية على فرع بعض اليوميات" };
+        }
+
+        // اختيار ملف الموظف بحسب فرع اليوميات نفسها (ثم النشط كاحتياط)
+        const journalBranchIds = new Set(journals.map((j) => j.branchId));
+        const emp =
+          empLinks.find((e) => e.isActive && e.branchId && journalBranchIds.has(e.branchId)) ||
+          empLinks.find((e) => e.branchId && journalBranchIds.has(e.branchId)) ||
+          empLinks.find((e) => e.isActive) ||
+          empLinks[0];
+        if (branchIds !== null && (!emp.branchId || !branchIds.includes(emp.branchId))) {
+          return { error: "ليس لديك صلاحية على فرع هذا الموظف" };
+        }
+
+        const total = Math.round(journals.reduce((s, j) => s + journalDeficitAmount(j), 0) * 100) / 100;
+        if (total <= 0) return { error: "لا يوجد عجز في اليوميات المحددة" };
+
+        const dates = journals.map((j) => j.journalDate).sort();
+        const [deduction] = await tx.insert(salaryDeductions).values({
+          branchEmployeeId: emp.id,
+          branchId: emp.branchId!,
+          month: body.deductionMonth,
+          type: "sales_deficit",
+          amount: total,
+          description: `عجز يوميات مبيعات شهر ${body.month} (${journals.length} يومية: ${dates[0]} → ${dates[dates.length - 1]})`,
+          createdBy: userId,
+        }).returning();
+
+        const now = new Date();
+        await tx.update(cashierSalesJournals)
+          .set({ deficitDeductionId: deduction.id, deficitPostedBy: userId, deficitPostedAt: now, updatedAt: now })
+          .where(inArray(cashierSalesJournals.id, journals.map((j) => j.id)));
+
+        return { deduction, journalCount: journals.length, total };
+      });
+
+      if ("error" in result) return res.status(400).json({ error: result.error });
+      res.status(201).json(result);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
+      console.error("[hr/cashier-deficits] post error:", e);
       res.status(500).json({ error: e.message });
     }
   });

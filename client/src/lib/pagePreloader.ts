@@ -7,6 +7,7 @@ const pageImports: Record<string, () => Promise<any>> = {
   "hr/leaves": () => import("@/pages/hr/leaves"),
   "hr/warnings": () => import("@/pages/hr/warnings"),
   "hr/advances": () => import("@/pages/hr/advances"),
+  "hr/cashier-deficits": () => import("@/pages/hr/cashier-deficits"),
   "hr/eos": () => import("@/pages/hr/eos"),
   "dashboard": () => import("@/pages/dashboard"),
   "inventory": () => import("@/pages/inventory"),

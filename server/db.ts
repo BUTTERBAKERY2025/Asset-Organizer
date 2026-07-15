@@ -123,6 +123,11 @@ export async function runStartupMigrations() {
       `ALTER TABLE advance_requests ADD COLUMN IF NOT EXISTS legacy_repaid_amount real`,
       `ALTER TABLE salary_deductions ADD COLUMN IF NOT EXISTS advance_request_id integer`,
       `CREATE INDEX IF NOT EXISTS idx_salary_deductions_advance_request ON salary_deductions(advance_request_id)`,
+      // ترحيل عجوزات يوميات المبيعات إلى السلف والقروض
+      `ALTER TABLE cashier_sales_journals ADD COLUMN IF NOT EXISTS deficit_deduction_id integer`,
+      `ALTER TABLE cashier_sales_journals ADD COLUMN IF NOT EXISTS deficit_posted_by varchar REFERENCES users(id)`,
+      `ALTER TABLE cashier_sales_journals ADD COLUMN IF NOT EXISTS deficit_posted_at timestamp`,
+      `CREATE INDEX IF NOT EXISTS idx_cashier_journals_deficit_posted ON cashier_sales_journals(deficit_deduction_id)`,
       // Phase 8: GPS columns on daily-log photos
       `ALTER TABLE project_daily_log_photos ADD COLUMN IF NOT EXISTS gps_latitude real`,
       `ALTER TABLE project_daily_log_photos ADD COLUMN IF NOT EXISTS gps_longitude real`,

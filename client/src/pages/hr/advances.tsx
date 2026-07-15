@@ -191,6 +191,11 @@ export default function AdvancesPage() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <Link href="/hr-cashier-deficits">
+            <Button variant="outline" data-testid="button-cashier-deficits">
+              <TrendingDown className="h-4 w-4 ms-2" />العجوزات البيعية للكاشير
+            </Button>
+          </Link>
           {canFinal && (
             <Button variant="outline" onClick={() => setLegacyOpen(true)} data-testid="button-add-legacy-advance">
               <History className="h-4 w-4 ms-2" />إدخال سلفة سابقة
@@ -335,6 +340,7 @@ export default function AdvancesPage() {
                 <SelectItem value="all">كل الأنواع</SelectItem>
                 <SelectItem value="advance">سلفة</SelectItem>
                 <SelectItem value="loan_installment">قسط قرض</SelectItem>
+                <SelectItem value="sales_deficit">عجز يوميات مبيعات</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -363,7 +369,9 @@ export default function AdvancesPage() {
                     <td className="p-2">
                       {a.type === "advance"
                         ? <Badge className="bg-amber-100 text-amber-700">سلفة</Badge>
-                        : <Badge className="bg-blue-100 text-blue-700">قسط قرض</Badge>}
+                        : a.type === "sales_deficit"
+                          ? <Badge className="bg-red-100 text-red-700">عجز يوميات مبيعات</Badge>
+                          : <Badge className="bg-blue-100 text-blue-700">قسط قرض</Badge>}
                     </td>
                     <td className="p-2 font-mono text-xs">{a.month}</td>
                     <td className="p-2 tabular-nums font-bold">{Number(a.amount).toLocaleString("ar-SA-u-nu-latn")}</td>

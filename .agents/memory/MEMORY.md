@@ -32,6 +32,7 @@
 - [Assembly per-clause voting](assembly-per-clause-voting.md) — resolutions can have بنود; if any exist, whole-resolution vote is rejected (strict mode) and clauses freeze once ANY resolution-level vote exists; DB partial-unique guards both vote shapes.
 - [Governance resolution print routing](governance-resolution-printers.md) — assembly-typed resolutions often live in board_resolutions and print via board-resolution-print.ts (not assembly-resolution-print.ts); confirm table+source before editing a PDF.
 - [EOS Saudi calc](eos-saudi-calc.md) — gratuity base = last total wage (Art 84), Art 80/85/87 cases; reuse server calc endpoint, keep 3 enum spots in sync.
+- [Cashier deficit posting](cashier-deficit-posting.md) — journal discrepancyAmount is ABSOLUTE (status gives direction); netDiscrepancy unwritten; one sales_deficit deduction per post, FOR UPDATE guard.
 - [Assembly re-vote grants](assembly-revote-grants.md) — one-time revote tokens: claim atomically (UPDATE ... WHERE status='open' + rowcount==1) before casting; whole-resolution grants forbidden when clauses exist.
 - [Leave provision journal](leave-provision-journal.md) — idempotent auto journal entries need advisory-lock-in-transaction (no unique ref constraint); entry numbering is COUNT+1 race-prone; old accounting routes lack permission gates.
 - [Leave exit/return/settlement](leave-exit-return-settlement.md) — adjust attendance BEFORE setting actualReturnDate (scheduler stops at that point); Drizzle unique violations live in e.cause.constraint, not e.message.

@@ -191,6 +191,7 @@ const HREmployeeDocumentsPage = makeLazy("hr/employee-documents");
 const HRLeavesPage = makeLazy("hr/leaves");
 const HRWarningsPage = makeLazy("hr/warnings");
 const HRAdvancesPage = makeLazy("hr/advances");
+const CashierDeficitsPage = makeLazy("hr/cashier-deficits");
 const HREosPage = makeLazy("hr/eos");
 
 function AppLoadingFallback() {
@@ -333,6 +334,7 @@ const Router = React.memo(function Router() {
       <Route path="/hr/leaves">{() => <ModulePage component={HRLeavesPage} module="hr_leaves" />}</Route>
       <Route path="/hr/warnings">{() => <ModulePage component={HRWarningsPage} module="hr_warnings" />}</Route>
       <Route path="/hr/advances">{() => <ModulePage component={HRAdvancesPage} module="hr_advances" />}</Route>
+      <Route path="/hr-cashier-deficits">{() => <ModulePage component={CashierDeficitsPage} module="hr_advances" />}</Route>
       <Route path="/hr/eos">{() => <ModulePage component={HREosPage} module="hr_eos" />}</Route>
       <Route path="/branch-employees">{() => <ModulePage component={BranchEmployeesPage} module="branch_employees" />}</Route>
       <Route path="/terminated-employees">{() => <ModulePage component={TerminatedEmployeesPage} module="branch_employees" />}</Route>

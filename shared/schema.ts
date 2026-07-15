@@ -2527,6 +2527,12 @@ export const cashierSalesJournals = pgTable("cashier_sales_journals", {
   approvedAt: timestamp("approved_at"),
 
   notes: text("notes"),
+
+  // ترحيل العجز إلى السلف والقروض (خصم راتب) — منع الترحيل المزدوج
+  deficitDeductionId: integer("deficit_deduction_id"), // معرف خصم الراتب المرحَّل إليه
+  deficitPostedBy: varchar("deficit_posted_by").references(() => users.id),
+  deficitPostedAt: timestamp("deficit_posted_at"),
+
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -5781,7 +5787,7 @@ export const salaryDeductions = pgTable("salary_deductions", {
 
 export const insertSalaryDeductionSchema = createInsertSchema(salaryDeductions, {
   amount: z.number().positive("المبلغ يجب أن يكون موجب"),
-  type: z.enum(["advance", "deduction", "loan_installment", "penalty", "other"]),
+  type: z.enum(["advance", "deduction", "loan_installment", "penalty", "sales_deficit", "other"]),
   month: z.string().regex(/^\d{4}-\d{2}$/, "صيغة الشهر يجب أن تكون YYYY-MM"),
 }).omit({
   id: true,
@@ -5797,6 +5803,7 @@ export const SALARY_DEDUCTION_TYPE_LABELS: Record<string, string> = {
   deduction: "خصم يدوي",
   loan_installment: "قسط قرض",
   penalty: "جزاء/مخالفة",
+  sales_deficit: "عجز يوميات مبيعات",
   other: "أخرى",
 };
 
