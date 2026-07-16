@@ -300,17 +300,17 @@ export function registerOnboardingRoutes(app: Express) {
         if (!offer) return res.status(404).json({ error: "عرض العمل غير موجود" });
         if (offer.status !== "accepted") return res.status(400).json({ error: "العرض لم يُقبل بعد" });
 
-        // إذا كان العرض بدون فرع، نقبل الفرع من نموذج الإنشاء
+        // الفرع: إن أُرسل فرع من النموذج نعتمده (يتيح تغيير الفرع قبل الإرسال)، وإلا نستخدم فرع العرض
         let effectiveBranchId: string | null = offer.branchId;
         let effectiveBranchName: string | null = offer.branchName;
-        if (!effectiveBranchId) {
-          if (!bodyBranchId) {
-            return res.status(400).json({ error: "العرض بدون فرع — اختر الفرع في النموذج" });
-          }
+        if (bodyBranchId) {
           const [b] = await db.select().from(branches).where(eq(branches.id, String(bodyBranchId))).limit(1);
           if (!b) return res.status(400).json({ error: "الفرع المحدد غير موجود" });
           effectiveBranchId = b.id;
           effectiveBranchName = b.name;
+        }
+        if (!effectiveBranchId) {
+          return res.status(400).json({ error: "العرض بدون فرع — اختر الفرع في النموذج" });
         }
 
         if (!checkBranchAccess(req, effectiveBranchId)) return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
