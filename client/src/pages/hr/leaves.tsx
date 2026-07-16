@@ -173,8 +173,17 @@ export default function LeavesPage() {
   const { data: accruals = [], isLoading: accrualLoading } = useQuery<any[]>({
     queryKey: ["/api/hr/leave-accrual"],
     queryFn: async () => (await apiRequest("GET", "/api/hr/leave-accrual")).json(),
-    enabled: tab === "balances" && balType === "annual",
+    enabled: (tab === "balances" && balType === "annual") || tab === "dashboard",
   });
+
+  // موظفون برصيد إجازات مرتفع (30 يوماً فأكثر) — تنبيه التزام مالي
+  const highAccrualEmployees = useMemo(
+    () =>
+      (accruals as any[])
+        .filter((a) => Number(a.remainingDays) >= 30)
+        .sort((a, b) => Number(b.remainingDays) - Number(a.remainingDays)),
+    [accruals]
+  );
 
   const accrualMutation = useMutation({
     mutationFn: async (payload: { employeeId: number; annualLeaveDays: string; leaveOpeningBalance: string; leaveOpeningBalanceDate: string }) => {
@@ -1051,6 +1060,53 @@ export default function LeavesPage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* تنبيه الأرصدة المرتفعة */}
+            {highAccrualEmployees.length > 0 && (
+              <Card className="border-orange-300 bg-orange-50/50" data-testid="card-high-balances">
+                <CardContent className="pt-4 space-y-2">
+                  <div className="text-sm font-bold text-orange-800 flex items-center gap-1">
+                    <AlertTriangle className="h-4 w-4" />
+                    موظفون برصيد إجازات مرتفع — {arNum(highAccrualEmployees.length)} موظف تجاوز رصيده ٣٠ يوماً
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    الأرصدة المتراكمة التزام مالي على الشركة — يُنصح بجدولة إجازاتهم أو تصفية جزء من الرصيد.
+                  </div>
+                  <div className="overflow-auto border rounded-lg bg-white">
+                    <table className="w-full text-sm">
+                      <thead className="bg-orange-100/60">
+                        <tr>
+                          <th className="text-right p-2 whitespace-nowrap">الموظف</th>
+                          <th className="text-right p-2 whitespace-nowrap">الفرع</th>
+                          <th className="text-center p-2 whitespace-nowrap">الرصيد المتبقي</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {highAccrualEmployees.slice(0, 10).map((a: any) => (
+                          <tr key={a.branchEmployeeId} className="border-t" data-testid={`row-high-balance-${a.branchEmployeeId}`}>
+                            <td className="p-2">
+                              <div className="font-medium">{a.employeeName}</div>
+                              <div className="text-xs text-muted-foreground">{a.jobTitle}</div>
+                            </td>
+                            <td className="p-2 text-xs">{a.branchName}</td>
+                            <td className="p-2 text-center">
+                              <Badge className={Number(a.remainingDays) >= 45 ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"}>
+                                {arNum(a.remainingDays)} يوم
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {highAccrualEmployees.length > 10 && (
+                    <div className="text-[11px] text-muted-foreground text-center">
+                      +{arNum(highAccrualEmployees.length - 10)} آخرون — راجع تبويب الأرصدة لعرض القائمة كاملة
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* الرسوم البيانية */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
