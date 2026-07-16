@@ -722,6 +722,108 @@ export default function LeavesPage() {
     XLSX.writeFile(wb, `leave_balances_${balYear}.xlsx`);
   };
 
+  // تقرير شهري إداري شامل (متعدد الأوراق)
+  const exportMonthlyReport = async () => {
+    // بيانات الأرصدة قد لا تكون محمّلة إن لم يُفتح تبويب الأرصدة بعد
+    let accrualData: any[] = accruals as any[];
+    if (!accrualData.length) {
+      try {
+        accrualData = await (await apiRequest("GET", "/api/hr/leave-accrual")).json();
+      } catch { accrualData = []; }
+    }
+    const month = filterMonth !== "all" ? filterMonth : new Date().toISOString().slice(0, 7);
+    const monthLeaves = (leaves as any[]).filter(
+      (l) => (l.startDate || "").slice(0, 7) <= month && (l.endDate || "").slice(0, 7) >= month
+    );
+    const wb = XLSX.utils.book_new();
+
+    // ورقة 1: ملخص
+    const summary = [
+      { "البند": "الشهر", "القيمة": month },
+      { "البند": "إجمالي طلبات الإجازة المتقاطعة مع الشهر", "القيمة": monthLeaves.length },
+      { "البند": "المعتمدة", "القيمة": monthLeaves.filter((l) => l.status === "approved").length },
+      { "البند": "قيد الموافقة", "القيمة": monthLeaves.filter((l) => l.status === "pending").length },
+      { "البند": "المرفوضة", "القيمة": monthLeaves.filter((l) => l.status === "rejected").length },
+      { "البند": "إجمالي أيام الإجازات المعتمدة", "القيمة": monthLeaves.filter((l) => l.status === "approved").reduce((s, l) => s + (Number(l.totalDays) || 0), 0) },
+      { "البند": "المتأخرون عن العودة حالياً", "القيمة": (stats?.overdueReturns || []).length },
+      { "البند": "تاريخ إصدار التقرير", "القيمة": new Date().toLocaleDateString("en-CA") },
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), "الملخص");
+
+    // ورقة 2: إجازات الشهر
+    const leavesRows = monthLeaves.map((l) => ({
+      "الموظف": l.employeeName || "",
+      "الوظيفة": l.employeeJob || "",
+      "الفرع": l.branchName || "",
+      "النوع": LEAVE_TYPE_LABELS[l.leaveType] || l.leaveType,
+      "من": l.startDate,
+      "إلى": l.endDate,
+      "الأيام": Number(l.totalDays),
+      "الحالة": LEAVE_STATUS_LABELS[l.status] || l.status,
+      "المعتمد": l.reviewerName || "",
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(leavesRows.length ? leavesRows : [{ "ملاحظة": "لا توجد إجازات خلال الشهر" }]), "إجازات الشهر");
+
+    // ورقة 3: المتأخرون عن العودة
+    const overdueRows = (stats?.overdueReturns || []).map((m: any) => ({
+      "الموظف": m.employeeName || "",
+      "الوظيفة": m.jobTitle || "",
+      "نوع الإجازة": LEAVE_TYPE_LABELS[m.leaveType] || m.leaveType,
+      "نهاية الإجازة": m.endDate,
+      "العودة المتوقعة": m.expectedReturn,
+      "أيام التأخير": Number(m.lateDaysSoFar) || 0,
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(overdueRows.length ? overdueRows : [{ "ملاحظة": "لا يوجد متأخرون عن العودة" }]), "المتأخرون");
+
+    // ورقة 4: أرصدة مرتفعة (التزام مالي)
+    const highBalances = accrualData
+      .filter((a) => Number(a.remainingDays) >= 30)
+      .sort((a, b) => Number(b.remainingDays) - Number(a.remainingDays))
+      .map((a) => ({
+        "الموظف": a.employeeName || "",
+        "الوظيفة": a.jobTitle || "",
+        "الفرع": a.branchName || "",
+        "الرصيد المتبقي (يوم)": Number(a.remainingDays),
+      }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(highBalances.length ? highBalances : [{ "ملاحظة": "لا يوجد موظفون برصيد 30 يوماً فأكثر" }]), "أرصدة مرتفعة");
+
+    XLSX.writeFile(wb, `leave_monthly_report_${month}.xlsx`);
+    toast({ title: "تم تصدير التقرير الشهري", description: `4 أوراق: الملخص، إجازات ${month}، المتأخرون، الأرصدة المرتفعة` });
+  };
+
+  // تصدير كشف حساب الموظف إكسل
+  const exportStatementExcel = () => {
+    if (!statement) return;
+    const wb = XLSX.utils.book_new();
+    const emp = statement.employee || {};
+    const info = [
+      { "البند": "اسم الموظف", "القيمة": emp.employeeName || "" },
+      { "البند": "الوظيفة", "القيمة": emp.jobTitle || "" },
+      { "البند": "الفرع", "القيمة": emp.branchName || "" },
+      { "البند": "تاريخ التعيين", "القيمة": emp.hireDate || "" },
+      { "البند": "السنة", "القيمة": statement.year },
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(info), "بيانات الموظف");
+    const balRows = (statement.balances || []).map((b: any) => ({
+      "نوع الإجازة": LEAVE_TYPE_LABELS[b.leaveType] || b.leaveType,
+      "المستحق": Number(b.entitledDays),
+      "المرحّل": Number(b.carriedOverDays),
+      "تعديلات": Number(b.adjustmentDays),
+      "المستخدم": Number(b.usedDays),
+      "المتبقي": Number(b.remainingDays),
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(balRows.length ? balRows : [{ "ملاحظة": "لا أرصدة" }]), "الأرصدة");
+    const movRows = (statement.movements || []).map((m: any) => ({
+      "النوع": LEAVE_TYPE_LABELS[m.leaveType] || m.leaveType,
+      "من": m.startDate,
+      "إلى": m.endDate,
+      "أيام ضمن السنة": Number(m.daysInYear),
+      "الحالة": LEAVE_STATUS_LABELS[m.status] || m.status,
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(movRows.length ? movRows : [{ "ملاحظة": "لا حركات" }]), "الحركات");
+    XLSX.writeFile(wb, `leave_statement_${emp.employeeName || stmtEmpId}_${statement.year}.xlsx`);
+  };
+
   const statusBadge = (s: string) => {
     const map: Record<string, string> = {
       pending: "bg-amber-100 text-amber-700",
@@ -1082,6 +1184,9 @@ export default function LeavesPage() {
                 </Select>
                 <Button variant="outline" onClick={exportLeavesExcel} data-testid="button-export-leaves">
                   <FileSpreadsheet className="h-4 w-4 ms-1" />تصدير Excel
+                </Button>
+                <Button variant="outline" className="text-emerald-700 border-emerald-300" onClick={exportMonthlyReport} data-testid="button-export-monthly-report">
+                  <FileSpreadsheet className="h-4 w-4 ms-1" />التقرير الشهري الشامل
                 </Button>
                 <Button
                   variant="outline"
@@ -1981,16 +2086,26 @@ export default function LeavesPage() {
                     </div>
                   </div>
                   <div className="text-end text-[11px] text-gray-600 leading-relaxed">
-                    <div>رقم الطلب: <span className="font-bold text-black">#{printLeave.id}</span></div>
+                    <div>الرقم المرجعي: <span className="font-bold text-black">LV-{(printLeave.startDate || "").slice(0, 4)}-{String(printLeave.id).padStart(4, "0")}</span></div>
                     <div>الفرع: <span className="font-bold text-black">{printLeave.branchName || "-"}</span></div>
-                    <div>التاريخ: <span className="font-bold text-black">{new Date().toLocaleDateString("ar-SA-u-nu-latn")}</span></div>
+                    <div>تاريخ الإصدار: <span className="font-bold text-black">{new Date().toLocaleDateString("ar-SA-u-nu-latn")}</span></div>
                   </div>
                 </div>
-                <div className="text-center mb-6">
+                <div className="text-center mb-4">
                   <h3 className="inline-block text-lg font-bold px-8 py-1.5 rounded" style={{ backgroundColor: "#FBF3E0", color: "#8A6212" }}>
-                    نموذج طلب / اعتماد إجازة
+                    {printLeave.status === "approved" ? "قرار اعتماد إجازة" : "نموذج طلب إجازة"}
                   </h3>
                 </div>
+                {printLeave.status === "approved" && (
+                  <p className="text-sm leading-7 text-justify mb-4 text-gray-800">
+                    بناءً على طلب الموظف الموضحة بياناته أدناه، واستناداً إلى نظام العمل السعودي ولائحة تنظيم العمل الداخلية للشركة،
+                    وبعد التحقق من رصيد الإجازات المستحق، فقد تقرر اعتماد منح الموظف <span className="font-bold">{printLeave.employeeName}</span> إجازة
+                    {" "}<span className="font-bold">{LEAVE_TYPE_LABELS[printLeave.leaveType] || printLeave.leaveType}</span> لمدة
+                    {" "}<span className="font-bold">{arNum(printLeave.totalDays)} يوماً</span>، تبدأ من تاريخ
+                    {" "}<span className="font-bold">{printLeave.startDate}</span> وتنتهي بتاريخ
+                    {" "}<span className="font-bold">{printLeave.endDate}</span>، على أن يباشر الموظف عمله في يوم العمل التالي لانتهائها مباشرة.
+                  </p>
+                )}
                 <table className="w-full text-sm border-collapse mb-4">
                   <tbody>
                     <PrintRow label="اسم الموظف" value={printLeave.employeeName} />
@@ -2481,6 +2596,9 @@ export default function LeavesPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setStmtEmpId(null)}>إغلاق</Button>
+            <Button variant="outline" onClick={exportStatementExcel} disabled={!statement} data-testid="button-export-statement-excel">
+              <FileSpreadsheet className="h-4 w-4 ms-1" />تصدير Excel
+            </Button>
             <Button onClick={printStatement} disabled={!statement} data-testid="button-print-statement">
               <Printer className="h-4 w-4 ms-1" />طباعة
             </Button>
