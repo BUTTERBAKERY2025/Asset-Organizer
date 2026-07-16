@@ -834,7 +834,7 @@ export default function LeavesPage() {
       "المرحّل": Number(b.carriedOverDays),
       "تعديل": Number(b.adjustmentDays),
       "المستخدم": Number(b.usedDays),
-      "المتبقي": Number(b.remainingDays),
+      "المتبقي": balType === "annual" ? "— (الرصيد الصحيح في تبويب الرصيد الفعلي التلقائي)" : Number(b.remainingDays),
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -1664,6 +1664,16 @@ export default function LeavesPage() {
                   سجل يدوي لكل سنة على حدة — تستخدمه لترحيل رصيد سنة سابقة، أو تعديل رصيد موظف يدوياً، أو تصدير كشف السنة. أما "الرصيد الفعلي حتى اليوم" فيُحتسب تلقائياً من العقد ولا يحتاج إدخال يدوي.
                 </div>
               </div>
+              {balType === "annual" && (
+                <div className="text-xs bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-3 leading-relaxed" data-testid="banner-yearly-annual-note">
+                  <b>تنبيه — الإجازة السنوية تُدار بالنظام التلقائي:</b> الرصيد الصحيح المعتمد هو الظاهر في تبويب
+                  {" "}
+                  <button className="underline font-bold text-amber-900" onClick={() => { setBalView("accrual"); setBalType("annual"); }} data-testid="link-goto-accrual">
+                    «الرصيد الفعلي حتى اليوم (تلقائي)»
+                  </button>
+                  . هذا السجل أرشيف يدوي فقط (ترحيل/تعديل)، لذلك لا يُعرض فيه "المتبقي" للسنوية حتى لا تختلط الأرقام.
+                </div>
+              )}
               <div className="flex items-center gap-2 flex-wrap">
                 <Select value={String(balYear)} onValueChange={(v) => setBalYear(parseInt(v, 10))}>
                   <SelectTrigger className="w-32" data-testid="select-bal-year"><SelectValue /></SelectTrigger>
@@ -1740,7 +1750,9 @@ export default function LeavesPage() {
                         <td className="p-2 text-center tabular-nums">{arNum(b.carriedOverDays)}</td>
                         <td className="p-2 text-center tabular-nums">{arNum(b.adjustmentDays)}</td>
                         <td className="p-2 text-center tabular-nums">{arNum(b.usedDays)}</td>
-                        <td className={`p-2 text-center tabular-nums font-bold ${b.remainingDays < 0 ? "text-red-600" : "text-emerald-600"}`} data-testid={`text-remaining-${b.branchEmployeeId}`}>{arNum(b.remainingDays)}</td>
+                        <td className={`p-2 text-center tabular-nums font-bold ${b.remainingDays < 0 ? "text-red-600" : "text-emerald-600"}`} data-testid={`text-remaining-${b.branchEmployeeId}`}>
+                          {balType === "annual" ? <span className="text-slate-400 font-normal" title="الرصيد الصحيح في تبويب الرصيد الفعلي حتى اليوم (تلقائي)">—</span> : arNum(b.remainingDays)}
+                        </td>
                         <td className="p-2">
                           <div className="flex gap-1 justify-center">
                             {canEditBalances && <Button size="sm" variant="ghost" onClick={() => openEditBal(b)} data-testid={`button-edit-balance-${b.branchEmployeeId}`}>
