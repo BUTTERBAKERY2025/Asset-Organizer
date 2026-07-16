@@ -268,6 +268,67 @@ export default function LeavesPage() {
     onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
   });
 
+  // ===== خطة الإجازات السنوية =====
+  const [planYear, setPlanYear] = useState(currentYear);
+  const [planBranch, setPlanBranch] = useState("all");
+  const [planOpen, setPlanOpen] = useState(false);
+  const [editPlan, setEditPlan] = useState<any | null>(null);
+  const [planForm, setPlanForm] = useState({ branchEmployeeId: "", plannedStartDate: "", plannedEndDate: "", note: "" });
+  const { data: planEntries = [], isLoading: planLoading } = useQuery<any[]>({
+    queryKey: ["/api/hr/leave-plan", planYear],
+    queryFn: async () => (await apiRequest("GET", `/api/hr/leave-plan?year=${planYear}`)).json(),
+    enabled: tab === "plan",
+  });
+  const { data: planHolidays = [] } = useQuery<any[]>({
+    queryKey: ["/api/hr/public-holidays", planYear],
+    queryFn: async () => (await apiRequest("GET", `/api/hr/public-holidays?year=${planYear}`)).json(),
+    enabled: tab === "plan",
+  });
+  const savePlanMutation = useMutation({
+    mutationFn: async (body: any) => {
+      if (editPlan) return (await apiRequest("PATCH", `/api/hr/leave-plan/${editPlan.id}`, body)).json();
+      return (await apiRequest("POST", "/api/hr/leave-plan", body)).json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/hr/leave-plan"] });
+      setPlanOpen(false);
+      setEditPlan(null);
+      setPlanForm({ branchEmployeeId: "", plannedStartDate: "", plannedEndDate: "", note: "" });
+      toast({ title: editPlan ? "تم تعديل الإجازة المخططة" : "تمت إضافة الإجازة المخططة" });
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
+  });
+  const deletePlanMutation = useMutation({
+    mutationFn: async (id: number) => (await apiRequest("DELETE", `/api/hr/leave-plan/${id}`)).json(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/hr/leave-plan"] });
+      toast({ title: "تم حذف الإجازة المخططة" });
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
+  });
+
+  // كشف التعارضات: تداخل إجازات مخططة لموظفَين أو أكثر بنفس الفرع + تداخل مع عطلة رسمية (موسم ذروة)
+  const planAnalysis = useMemo(() => {
+    const visible = planEntries.filter((p: any) => p.status !== "cancelled" && (planBranch === "all" || p.branchId === planBranch));
+    const overlapIds = new Set<number>();
+    const holidayIds = new Set<number>();
+    for (let i = 0; i < visible.length; i++) {
+      const a = visible[i];
+      for (let j = i + 1; j < visible.length; j++) {
+        const b = visible[j];
+        if (a.branchId === b.branchId && a.plannedStartDate <= b.plannedEndDate && b.plannedStartDate <= a.plannedEndDate) {
+          overlapIds.add(a.id); overlapIds.add(b.id);
+        }
+      }
+      for (const h of planHolidays as any[]) {
+        if (h.isActive !== false && a.plannedStartDate <= h.endDate && h.startDate <= a.plannedEndDate) {
+          holidayIds.add(a.id);
+        }
+      }
+    }
+    return { visible, overlapIds, holidayIds };
+  }, [planEntries, planBranch, planHolidays]);
+
   // تفصيل مراحل الإجازة المرضية (المادة 117) — معاينة في نموذج الإنشاء
   const { data: sickPreview } = useQuery<any>({
     queryKey: ["/api/hr/leaves/sick-tier-preview", form.branchEmployeeId, form.startDate, form.endDate],
@@ -990,6 +1051,7 @@ export default function LeavesPage() {
           <TabsTrigger value="balances" data-testid="tab-balances"><Wallet className="h-4 w-4 ms-1" />الأرصدة</TabsTrigger>
           <TabsTrigger value="calendar" data-testid="tab-calendar"><CalendarDays className="h-4 w-4 ms-1" />التقويم</TabsTrigger>
           <TabsTrigger value="holidays" data-testid="tab-holidays"><Sun className="h-4 w-4 ms-1" />العطلات الرسمية</TabsTrigger>
+          <TabsTrigger value="plan" data-testid="tab-plan"><CalendarDays className="h-4 w-4 ms-1" />الخطة السنوية</TabsTrigger>
         </TabsList>
 
         {/* ---------- DASHBOARD TAB ---------- */}
@@ -1743,7 +1805,167 @@ export default function LeavesPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* ---------- ANNUAL PLAN TAB ---------- */}
+        <TabsContent value="plan">
+          <Card>
+            <CardContent className="space-y-3 pt-6">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Select value={String(planYear)} onValueChange={(v) => setPlanYear(Number(v))}>
+                    <SelectTrigger className="w-28" data-testid="select-plan-year"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
+                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={planBranch} onValueChange={setPlanBranch}>
+                    <SelectTrigger className="w-44" data-testid="select-plan-branch"><SelectValue placeholder="كل الفروع" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">كل الفروع</SelectItem>
+                      {Array.from(new Map((planEntries as any[]).map((p) => [p.branchId, p.branchName || p.branchId])).entries()).map(([id, name]) => (
+                        <SelectItem key={id} value={id as string}>{name as string}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {canEditBalances && (
+                  <Button size="sm" onClick={() => { setEditPlan(null); setPlanForm({ branchEmployeeId: "", plannedStartDate: "", plannedEndDate: "", note: "" }); setPlanOpen(true); }} data-testid="button-add-plan">
+                    <Plus className="h-4 w-4 ms-1" />إضافة إجازة مخططة
+                  </Button>
+                )}
+              </div>
+
+              <div className="text-xs text-muted-foreground">
+                خطط إجازات موظفيك مقدماً على مستوى السنة. الصف الأحمر يعني تعارض: موظفان أو أكثر من نفس الفرع في إجازة بنفس الفترة. شارة ☀️ تعني أن الإجازة تتداخل مع موسم عطلة رسمية (ذروة عمل للمخبز).
+              </div>
+
+              {planAnalysis.overlapIds.size > 0 && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 flex items-center gap-1" data-testid="alert-plan-conflicts">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  يوجد {arNum(planAnalysis.overlapIds.size)} إجازة مخططة متعارضة (نفس الفرع ونفس الفترة) — راجع الصفوف المظللة بالأحمر وعدّل التواريخ.
+                </div>
+              )}
+
+              {planLoading ? (
+                <div className="p-8 text-center text-muted-foreground">جارٍ التحميل...</div>
+              ) : (
+                <div className="space-y-3">
+                  {MONTHS_AR.map((monthName, mi) => {
+                    const mm = String(mi + 1).padStart(2, "0");
+                    const monthEntries = planAnalysis.visible.filter((p: any) => p.plannedStartDate.slice(5, 7) === mm);
+                    if (monthEntries.length === 0) return null;
+                    return (
+                      <div key={mm} className="border rounded-lg overflow-hidden" data-testid={`plan-month-${mm}`}>
+                        <div className="bg-slate-100 px-3 py-1.5 text-sm font-bold flex items-center justify-between">
+                          <span>{monthName} {arNum(planYear)}</span>
+                          <span className="text-xs font-normal text-muted-foreground">{arNum(monthEntries.length)} إجازة مخططة</span>
+                        </div>
+                        <table className="w-full text-sm">
+                          <tbody>
+                            {monthEntries.map((p: any) => {
+                              const conflict = planAnalysis.overlapIds.has(p.id);
+                              const nearHoliday = planAnalysis.holidayIds.has(p.id);
+                              return (
+                                <tr key={p.id} className={`border-t ${conflict ? "bg-red-50" : "hover:bg-slate-50"}`} data-testid={`row-plan-${p.id}`}>
+                                  <td className="p-2">
+                                    <div className="font-medium flex items-center gap-1">
+                                      {p.employeeName}
+                                      {conflict && <AlertTriangle className="h-3.5 w-3.5 text-red-600" />}
+                                      {nearHoliday && <span title="تتداخل مع عطلة رسمية (موسم ذروة)">☀️</span>}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">{p.jobTitle} • {p.branchName}</div>
+                                  </td>
+                                  <td className="p-2 text-xs whitespace-nowrap">{p.plannedStartDate} → {p.plannedEndDate}</td>
+                                  <td className="p-2 text-center tabular-nums whitespace-nowrap">{arNum(p.days)} يوم</td>
+                                  <td className="p-2 text-center">
+                                    {p.status === "converted"
+                                      ? <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">تحوّلت لطلب</Badge>
+                                      : <Badge variant="secondary">مخططة</Badge>}
+                                  </td>
+                                  <td className="p-2">
+                                    {canEditBalances && (
+                                      <div className="flex gap-1 justify-center">
+                                        <Button size="sm" variant="ghost" title="تعديل"
+                                          onClick={() => { setEditPlan(p); setPlanForm({ branchEmployeeId: String(p.branchEmployeeId), plannedStartDate: p.plannedStartDate, plannedEndDate: p.plannedEndDate, note: p.note || "" }); setPlanOpen(true); }}
+                                          data-testid={`button-edit-plan-${p.id}`}>
+                                          <Pencil className="h-3.5 w-3.5 text-blue-600" />
+                                        </Button>
+                                        <Button size="sm" variant="ghost" title="حذف"
+                                          onClick={() => { if (confirm(`حذف الإجازة المخططة لـ ${p.employeeName}؟`)) deletePlanMutation.mutate(p.id); }}
+                                          data-testid={`button-delete-plan-${p.id}`}>
+                                          <Trash2 className="h-3.5 w-3.5 text-red-600" />
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })}
+                  {planAnalysis.visible.length === 0 && (
+                    <div className="p-8 text-center text-muted-foreground border rounded-lg">
+                      لا توجد إجازات مخططة لسنة {arNum(planYear)} — ابدأ بإضافة مواعيد إجازات موظفيك المقترحة لتجنب تعارض المواعيد في المواسم.
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* Plan entry dialog */}
+      <Dialog open={planOpen} onOpenChange={(o) => { setPlanOpen(o); if (!o) setEditPlan(null); }}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader><DialogTitle>{editPlan ? "تعديل إجازة مخططة" : "إضافة إجازة مخططة"}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>الموظف</Label>
+              <Select value={planForm.branchEmployeeId} onValueChange={(v) => setPlanForm({ ...planForm, branchEmployeeId: v })} disabled={!!editPlan}>
+                <SelectTrigger data-testid="select-plan-employee"><SelectValue placeholder="اختر الموظف" /></SelectTrigger>
+                <SelectContent>
+                  {employees.map((e) => <SelectItem key={e.id} value={String(e.id)}>{e.employeeName} — {e.jobTitle}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>من تاريخ</Label>
+                <Input type="date" value={planForm.plannedStartDate} onChange={(e) => setPlanForm({ ...planForm, plannedStartDate: e.target.value, plannedEndDate: planForm.plannedEndDate || e.target.value })} data-testid="input-plan-start" />
+              </div>
+              <div>
+                <Label>إلى تاريخ</Label>
+                <Input type="date" value={planForm.plannedEndDate} onChange={(e) => setPlanForm({ ...planForm, plannedEndDate: e.target.value })} data-testid="input-plan-end" />
+              </div>
+            </div>
+            {planForm.plannedStartDate && planForm.plannedEndDate && planForm.plannedEndDate >= planForm.plannedStartDate && (
+              <div className="text-sm text-muted-foreground">عدد الأيام: <span className="font-bold tabular-nums">{arNum(calcDays(planForm.plannedStartDate, planForm.plannedEndDate))}</span></div>
+            )}
+            <div>
+              <Label>ملاحظة (اختياري)</Label>
+              <Input value={planForm.note} onChange={(e) => setPlanForm({ ...planForm, note: e.target.value })} placeholder="مثال: سفر عائلي" data-testid="input-plan-note" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setPlanOpen(false); setEditPlan(null); }}>إلغاء</Button>
+            <Button
+              onClick={() => savePlanMutation.mutate(editPlan
+                ? { plannedStartDate: planForm.plannedStartDate, plannedEndDate: planForm.plannedEndDate, note: planForm.note.trim() || null }
+                : { branchEmployeeId: Number(planForm.branchEmployeeId), plannedStartDate: planForm.plannedStartDate, plannedEndDate: planForm.plannedEndDate, note: planForm.note.trim() || undefined })}
+              disabled={savePlanMutation.isPending || (!editPlan && !planForm.branchEmployeeId) || !planForm.plannedStartDate || !planForm.plannedEndDate || planForm.plannedEndDate < planForm.plannedStartDate}
+              data-testid="button-save-plan"
+            >
+              {savePlanMutation.isPending ? "جاري الحفظ..." : "حفظ"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add holiday dialog */}
       <Dialog open={holOpen} onOpenChange={setHolOpen}>

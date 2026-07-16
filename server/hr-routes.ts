@@ -36,6 +36,8 @@ import {
   approvalWorkflowSteps,
   publicHolidays,
   insertPublicHolidaySchema,
+  leavePlanEntries,
+  insertLeavePlanEntrySchema,
   insertEmployeeDocumentSchema,
   insertLeaveRequestSchema,
   insertEmployeeWarningSchema,
@@ -1881,6 +1883,151 @@ export function registerHrRoutes(app: Express) {
       res.json({ success: true });
     } catch (e: any) {
       console.error("[hr/public-holidays] delete error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ===== خطة الإجازات السنوية =====
+  app.get("/api/hr/leave-plan", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const { branchIds } = getBranchScope(req);
+      const year = Number(req.query.year) || new Date().getFullYear();
+      const branchId = req.query.branchId as string | undefined;
+
+      const conds: any[] = [eq(leavePlanEntries.year, year)];
+      const scopeCond = applyBranchScope(leavePlanEntries, branchIds);
+      if (scopeCond !== undefined) conds.push(scopeCond);
+      if (branchId) conds.push(eq(leavePlanEntries.branchId, branchId));
+
+      const rows = await db
+        .select({
+          entry: leavePlanEntries,
+          employeeName: branchEmployees.employeeName,
+          jobTitle: branchEmployees.jobTitle,
+          branchName: branches.name,
+        })
+        .from(leavePlanEntries)
+        .leftJoin(branchEmployees, eq(leavePlanEntries.branchEmployeeId, branchEmployees.id))
+        .leftJoin(branches, eq(leavePlanEntries.branchId, branches.id))
+        .where(and(...conds))
+        .orderBy(leavePlanEntries.plannedStartDate);
+
+      res.json(rows.map(r => ({
+        ...r.entry,
+        employeeName: r.employeeName,
+        jobTitle: r.jobTitle,
+        branchName: r.branchName,
+      })));
+    } catch (e: any) {
+      console.error("[hr/leave-plan] list error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/hr/leave-plan", isAuthenticated, requirePermission("hr_leaves", "edit"), async (req, res) => {
+    try {
+      const parsed = insertLeavePlanEntrySchema.parse(req.body);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(parsed.plannedStartDate) || !/^\d{4}-\d{2}-\d{2}$/.test(parsed.plannedEndDate)) {
+        return res.status(400).json({ error: "صيغة التاريخ غير صحيحة (YYYY-MM-DD)" });
+      }
+      if (parsed.plannedEndDate < parsed.plannedStartDate) {
+        return res.status(400).json({ error: "تاريخ النهاية يجب أن يكون بعد تاريخ البداية" });
+      }
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, parsed.branchEmployeeId));
+      if (!emp) return res.status(404).json({ error: "الموظف غير موجود" });
+      const { branchIds } = getBranchScope(req);
+      if (branchIds && !branchIds.includes(emp.branchId)) {
+        return res.status(403).json({ error: "لا تملك صلاحية على فرع هذا الموظف" });
+      }
+      const year = Number(parsed.plannedStartDate.slice(0, 4));
+      const days = Math.round(
+        (new Date(parsed.plannedEndDate).getTime() - new Date(parsed.plannedStartDate).getTime()) / 86400000
+      ) + 1;
+      const [created] = await db.insert(leavePlanEntries).values({
+        ...parsed,
+        branchId: emp.branchId,
+        year,
+        days,
+        createdBy: getUserId(req) || undefined,
+      }).returning();
+      await auditEvent({
+        req, module: "hr_leaves", entityId: created.id, action: "create_plan_entry",
+        entityName: emp.employeeName, branchId: emp.branchId,
+        description: `إضافة إجازة مخططة: ${emp.employeeName} (${created.plannedStartDate}→${created.plannedEndDate})`,
+        targetId: emp.id,
+      });
+      res.status(201).json(created);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
+      console.error("[hr/leave-plan] create error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.patch("/api/hr/leave-plan/:id", isAuthenticated, requirePermission("hr_leaves", "edit"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const body = z.object({
+        plannedStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        plannedEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        note: z.string().nullable().optional(),
+        status: z.enum(["planned", "converted", "cancelled"]).optional(),
+      }).parse(req.body);
+      const [existing] = await db.select().from(leavePlanEntries).where(eq(leavePlanEntries.id, id));
+      if (!existing) return res.status(404).json({ error: "السجل غير موجود" });
+      const { branchIds } = getBranchScope(req);
+      if (branchIds && !branchIds.includes(existing.branchId)) {
+        return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
+      }
+      const start = body.plannedStartDate ?? existing.plannedStartDate;
+      const end = body.plannedEndDate ?? existing.plannedEndDate;
+      if (end < start) return res.status(400).json({ error: "تاريخ النهاية يجب أن يكون بعد تاريخ البداية" });
+      if (body.status === "converted" && !existing.leaveRequestId) {
+        return res.status(400).json({ error: "لا يمكن وضع الحالة 'تحوّلت لطلب' يدوياً — تُحدَّث تلقائياً عند ربطها بطلب إجازة" });
+      }
+      const days = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000) + 1;
+      const [updated] = await db.update(leavePlanEntries).set({
+        ...body,
+        plannedStartDate: start,
+        plannedEndDate: end,
+        year: Number(start.slice(0, 4)),
+        days,
+        updatedAt: new Date(),
+      }).where(eq(leavePlanEntries.id, id)).returning();
+      await auditEvent({
+        req, module: "hr_leaves", entityId: id, action: "update_plan_entry",
+        branchId: existing.branchId,
+        description: `تعديل إجازة مخططة (${start}→${end})`,
+        details: body,
+        targetId: existing.branchEmployeeId,
+      });
+      res.json(updated);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
+      console.error("[hr/leave-plan] update error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete("/api/hr/leave-plan/:id", isAuthenticated, requirePermission("hr_leaves", "edit"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const [existing] = await db.select().from(leavePlanEntries).where(eq(leavePlanEntries.id, id));
+      if (!existing) return res.status(404).json({ error: "السجل غير موجود" });
+      const { branchIds } = getBranchScope(req);
+      if (branchIds && !branchIds.includes(existing.branchId)) {
+        return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
+      }
+      await db.delete(leavePlanEntries).where(eq(leavePlanEntries.id, id));
+      await auditEvent({
+        req, module: "hr_leaves", entityId: id, action: "delete_plan_entry",
+        branchId: existing.branchId,
+        description: `حذف إجازة مخططة (${existing.plannedStartDate}→${existing.plannedEndDate})`,
+        targetId: existing.branchEmployeeId,
+      });
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error("[hr/leave-plan] delete error:", e);
       res.status(500).json({ error: e.message });
     }
   });

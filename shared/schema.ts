@@ -11807,6 +11807,40 @@ export const insertPublicHolidaySchema = createInsertSchema(publicHolidays).omit
 export type InsertPublicHoliday = z.infer<typeof insertPublicHolidaySchema>;
 export type PublicHoliday = typeof publicHolidays.$inferSelect;
 
+// ===== خطة الإجازات السنوية (حجز مواعيد مقترحة مقدماً لكل فرع) =====
+export const leavePlanEntries = pgTable("leave_plan_entries", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  year: integer("year").notNull(),
+  plannedStartDate: text("planned_start_date").notNull(), // YYYY-MM-DD
+  plannedEndDate: text("planned_end_date").notNull(), // YYYY-MM-DD (شامل)
+  days: real("days").notNull(), // أيام تقويمية شاملة
+  status: text("status").notNull().default("planned"), // planned | converted | cancelled
+  leaveRequestId: integer("leave_request_id").references(() => leaveRequests.id, { onDelete: "set null" }),
+  note: text("note"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_leave_plan_branch_year").on(table.branchId, table.year),
+  index("idx_leave_plan_employee").on(table.branchEmployeeId),
+]);
+
+export const insertLeavePlanEntrySchema = createInsertSchema(leavePlanEntries).omit({
+  id: true,
+  branchId: true,
+  year: true,
+  days: true,
+  status: true,
+  leaveRequestId: true,
+  createdBy: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertLeavePlanEntry = z.infer<typeof insertLeavePlanEntrySchema>;
+export type LeavePlanEntry = typeof leavePlanEntries.$inferSelect;
+
 // ===== نظام الموافقات والاعتمادات (Approval Chains) =====
 // سلسلة موافقات واحدة لكل (فرع + نوع طلب). branchId = null تعني سلسلة افتراضية لكل الفروع.
 export const approvalWorkflows = pgTable("approval_workflows", {
