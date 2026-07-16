@@ -924,12 +924,12 @@ export default function LeavesPage() {
       { "البند": "السنة", "القيمة": statement.year },
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(info), "بيانات الموظف");
-    const balRows = (statement.balances || []).map((b: any) => {
+    const balRows = (statement.balances || []).filter((b: any) => !(b.leaveType === "sick" && !b.hasRow && Number(b.usedDays) === 0)).map((b: any) => {
       const acc = b.leaveType === "annual" && statement.accrual?.configured ? statement.accrual : null;
       if (acc) {
         return {
           "نوع الإجازة": `${LEAVE_TYPE_LABELS[b.leaveType]} (فعلي تلقائي)`,
-          "المستحق": Number(acc.annualDays),
+          "المستحق السنوي حسب العقد": Number(acc.annualDays),
           "المرحّل": Number(acc.openingBalance),
           "تعديلات": 0,
           "المستخدم": Math.round((Number(acc.usedToDate) + Number(acc.upcomingDays) + Number(acc.settledDays)) * 100) / 100,
@@ -938,7 +938,7 @@ export default function LeavesPage() {
       }
       return {
       "نوع الإجازة": LEAVE_TYPE_LABELS[b.leaveType] || b.leaveType,
-      "المستحق": Number(b.entitledDays),
+      "المستحق السنوي حسب العقد": Number(b.entitledDays),
       "المرحّل": Number(b.carriedOverDays),
       "تعديلات": Number(b.adjustmentDays),
       "المستخدم": Number(b.usedDays),
@@ -3009,13 +3009,13 @@ export default function LeavesPage() {
               <table className="w-full text-xs border-collapse mb-4">
                 <thead>
                   <tr style={{ backgroundColor: "#FBF3E0" }}>
-                    {["نوع الإجازة", "المستحق", "المرحّل", "تعديلات", "المستخدم", "المتبقي"].map((h) => (
+                    {["نوع الإجازة", "المستحق السنوي حسب العقد", "المرحّل", "تعديلات", "المستخدم", "المتبقي"].map((h) => (
                       <th key={h} className="border p-1.5 font-bold" style={{ borderColor: "#E5C98F", color: "#8A6212" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {(statement.balances || []).map((b: any) => {
+                  {(statement.balances || []).filter((b: any) => !(b.leaveType === "sick" && !b.hasRow && Number(b.usedDays) === 0)).map((b: any) => {
                     const acc = b.leaveType === "annual" && statement.accrual?.configured ? statement.accrual : null;
                     if (acc) {
                       return (
@@ -3059,9 +3059,11 @@ export default function LeavesPage() {
                   سطر الإجازة السنوية يعرض الرصيد الفعلي التراكمي حتى اليوم (النظام التلقائي): المستحق = الاستحقاق السنوي بالعقد، المرحّل = الرصيد الافتتاحي بتاريخ {statement.accrual.accrualStart}، المستخدم يشمل الإجازات المعتمدة (المنقضية والقادمة) والتصفيات النقدية منذ ذلك التاريخ.
                 </div>
               )}
-              <div className="text-[10px] text-purple-800 mb-4 leading-relaxed">
-                الإجازة المرضية لا ترتبط برصيد سنوي مثل السنوية — استحقاقها حسب نظام العمل السعودي (المادة 117): أول ٣٠ يوماً بأجر كامل، ثم ٦٠ يوماً بثلاثة أرباع الأجر، ثم ٣٠ يوماً بلا أجر خلال السنة الواحدة، ويظهر هنا فقط عدد الأيام المستخدمة.
-              </div>
+              {(statement.balances || []).some((b: any) => b.leaveType === "sick" && (b.hasRow || Number(b.usedDays) > 0)) && (
+                <div className="text-[10px] text-purple-800 mb-4 leading-relaxed">
+                  الإجازة المرضية لا ترتبط برصيد سنوي مثل السنوية — استحقاقها حسب نظام العمل السعودي (المادة 117): أول ٣٠ يوماً بأجر كامل، ثم ٦٠ يوماً بثلاثة أرباع الأجر، ثم ٣٠ يوماً بلا أجر خلال السنة الواحدة، ويظهر هنا فقط عدد الأيام المستخدمة.
+                </div>
+              )}
 
               {/* سجل الحركات */}
               <h4 className="font-bold text-sm mb-1.5" style={{ color: "#8A6212" }}>سجل الحركات خلال السنة</h4>
