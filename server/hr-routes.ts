@@ -1463,13 +1463,13 @@ export function registerHrRoutes(app: Express) {
           s: leaveSettlements,
           employeeName: branchEmployees.employeeName,
           jobTitle: branchEmployees.jobTitle,
-          branchName: branches.nameAr,
+          branchName: branches.name,
           leaveStart: leaveRequests.startDate,
           leaveEnd: leaveRequests.endDate,
           leaveTotalDays: leaveRequests.totalDays,
           approvalFlow: leaveRequests.approvalFlow,
           reviewedAt: leaveRequests.reviewedAt,
-          reviewerName: users.fullName,
+          reviewerName: sql<string>`TRIM(CONCAT(COALESCE(${users.firstName}, ''), ' ', COALESCE(${users.lastName}, '')))`,
         })
         .from(leaveSettlements)
         .innerJoin(branchEmployees, eq(leaveSettlements.branchEmployeeId, branchEmployees.id))
@@ -1510,13 +1510,13 @@ export function registerHrRoutes(app: Express) {
           employeeName: branchEmployees.employeeName,
           jobTitle: branchEmployees.jobTitle,
           employeeNumber: branchEmployees.employeeNumber,
-          branchName: branches.nameAr,
+          branchName: branches.name,
           leaveStart: leaveRequests.startDate,
           leaveEnd: leaveRequests.endDate,
           leaveTotalDays: leaveRequests.totalDays,
           approvalFlow: leaveRequests.approvalFlow,
           reviewedAt: leaveRequests.reviewedAt,
-          reviewerName: users.fullName,
+          reviewerName: sql<string>`TRIM(CONCAT(COALESCE(${users.firstName}, ''), ' ', COALESCE(${users.lastName}, '')))`,
         })
         .from(leaveSettlements)
         .innerJoin(branchEmployees, eq(leaveSettlements.branchEmployeeId, branchEmployees.id))
@@ -1556,7 +1556,7 @@ export function registerHrRoutes(app: Express) {
           reviewedAt: leaveRequests.reviewedAt,
           employeeName: branchEmployees.employeeName,
           jobTitle: branchEmployees.jobTitle,
-          branchName: branches.nameAr,
+          branchName: branches.name,
         })
         .from(leaveRequests)
         .innerJoin(branchEmployees, eq(leaveRequests.branchEmployeeId, branchEmployees.id))
