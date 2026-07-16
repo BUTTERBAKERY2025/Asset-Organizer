@@ -1444,6 +1444,228 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
+  // قائمة التصفيات (مع دورة العمل) — فلاتر: workflow / from / to / employeeId
+  app.get("/api/hr/leave-settlements", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const { branchIds } = getBranchScope(req);
+      const workflow = (req.query.workflow as string) || "";
+      const from = (req.query.from as string) || "";
+      const to = (req.query.to as string) || "";
+      const employeeId = req.query.employeeId ? parseInt(req.query.employeeId as string, 10) : null;
+      const conds: any[] = [eq(leaveSettlements.status, "active")];
+      if (branchIds !== null) conds.push(inArray(leaveSettlements.branchId, branchIds));
+      if (workflow) conds.push(eq(leaveSettlements.workflowStatus, workflow));
+      if (from) conds.push(gte(leaveSettlements.settlementDate, from));
+      if (to) conds.push(lte(leaveSettlements.settlementDate, to));
+      if (employeeId) conds.push(eq(leaveSettlements.branchEmployeeId, employeeId));
+      const rows = await db
+        .select({
+          s: leaveSettlements,
+          employeeName: branchEmployees.employeeName,
+          jobTitle: branchEmployees.jobTitle,
+          branchName: branches.nameAr,
+          leaveStart: leaveRequests.startDate,
+          leaveEnd: leaveRequests.endDate,
+          leaveTotalDays: leaveRequests.totalDays,
+          approvalFlow: leaveRequests.approvalFlow,
+          reviewedAt: leaveRequests.reviewedAt,
+          reviewerName: users.fullName,
+        })
+        .from(leaveSettlements)
+        .innerJoin(branchEmployees, eq(leaveSettlements.branchEmployeeId, branchEmployees.id))
+        .leftJoin(branches, eq(leaveSettlements.branchId, branches.id))
+        .leftJoin(leaveRequests, eq(leaveSettlements.leaveRequestId, leaveRequests.id))
+        .leftJoin(users, eq(leaveRequests.reviewedBy, users.id))
+        .where(and(...conds))
+        .orderBy(desc(leaveSettlements.id))
+        .limit(300);
+      res.json(rows.map((r) => ({
+        ...r.s,
+        signatureData: undefined, // لا نرسل صورة التوقيع في القائمة (حجم كبير)
+        hasSignature: !!r.s.signatureData,
+        employeeName: r.employeeName,
+        jobTitle: r.jobTitle,
+        branchName: r.branchName,
+        leaveStart: r.leaveStart,
+        leaveEnd: r.leaveEnd,
+        leaveTotalDays: r.leaveTotalDays,
+        approvalFlow: r.approvalFlow,
+        reviewedAt: r.reviewedAt,
+        reviewerName: r.reviewerName,
+      })));
+    } catch (e: any) {
+      console.error("[hr/leave-settlements] list error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // تفاصيل تصفية (للطباعة — تشمل التوقيع وسلسلة الاعتمادات)
+  app.get("/api/hr/leave-settlements/:id", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const { branchIds } = getBranchScope(req);
+      const [row] = await db
+        .select({
+          s: leaveSettlements,
+          employeeName: branchEmployees.employeeName,
+          jobTitle: branchEmployees.jobTitle,
+          employeeNumber: branchEmployees.employeeNumber,
+          branchName: branches.nameAr,
+          leaveStart: leaveRequests.startDate,
+          leaveEnd: leaveRequests.endDate,
+          leaveTotalDays: leaveRequests.totalDays,
+          approvalFlow: leaveRequests.approvalFlow,
+          reviewedAt: leaveRequests.reviewedAt,
+          reviewerName: users.fullName,
+        })
+        .from(leaveSettlements)
+        .innerJoin(branchEmployees, eq(leaveSettlements.branchEmployeeId, branchEmployees.id))
+        .leftJoin(branches, eq(leaveSettlements.branchId, branches.id))
+        .leftJoin(leaveRequests, eq(leaveSettlements.leaveRequestId, leaveRequests.id))
+        .leftJoin(users, eq(leaveRequests.reviewedBy, users.id))
+        .where(eq(leaveSettlements.id, id));
+      if (!row) return res.status(404).json({ error: "التصفية غير موجودة" });
+      if (branchIds !== null && !branchIds.includes(row.s.branchId)) {
+        return res.status(403).json({ error: "ليس لديك صلاحية" });
+      }
+      res.json({ ...row.s, ...row, s: undefined });
+    } catch (e: any) {
+      console.error("[hr/leave-settlements] detail error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // الإجازات المعتمدة الجاهزة للتصفية (بدون تصفية نشطة)
+  app.get("/api/hr/leaves/settlement-candidates", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const { branchIds } = getBranchScope(req);
+      const conds: any[] = [
+        eq(leaveRequests.status, "approved"),
+        eq(leaveRequests.leaveType, "annual"),
+        sql`NOT EXISTS (SELECT 1 FROM leave_settlements ls WHERE ls.leave_request_id = ${leaveRequests.id} AND ls.status = 'active')`,
+      ];
+      if (branchIds !== null) conds.push(inArray(leaveRequests.branchId, branchIds));
+      const rows = await db
+        .select({
+          id: leaveRequests.id,
+          branchEmployeeId: leaveRequests.branchEmployeeId,
+          branchId: leaveRequests.branchId,
+          startDate: leaveRequests.startDate,
+          endDate: leaveRequests.endDate,
+          totalDays: leaveRequests.totalDays,
+          reviewedAt: leaveRequests.reviewedAt,
+          employeeName: branchEmployees.employeeName,
+          jobTitle: branchEmployees.jobTitle,
+          branchName: branches.nameAr,
+        })
+        .from(leaveRequests)
+        .innerJoin(branchEmployees, eq(leaveRequests.branchEmployeeId, branchEmployees.id))
+        .leftJoin(branches, eq(leaveRequests.branchId, branches.id))
+        .where(and(...conds))
+        .orderBy(desc(leaveRequests.startDate))
+        .limit(200);
+      res.json(rows);
+    } catch (e: any) {
+      console.error("[hr/leaves] settlement-candidates error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // تحويل التصفية للإدارة المالية + إشعار الموظف للتوقيع
+  app.post("/api/hr/leave-settlements/:id/send-finance", isAuthenticated, requirePermission("hr_leaves", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const { branchIds } = getBranchScope(req);
+      const [existing] = await db.select().from(leaveSettlements).where(eq(leaveSettlements.id, id));
+      if (!existing) return res.status(404).json({ error: "التصفية غير موجودة" });
+      if (branchIds !== null && !branchIds.includes(existing.branchId)) {
+        return res.status(403).json({ error: "ليس لديك صلاحية" });
+      }
+      if (existing.status !== "active") return res.status(400).json({ error: "التصفية ملغاة" });
+      if (existing.workflowStatus !== "issued") {
+        return res.status(400).json({ error: "التصفية حُوّلت للمالية مسبقاً" });
+      }
+      const userId = getUserId(req) || undefined;
+      const [upd] = await db.update(leaveSettlements).set({
+        workflowStatus: "awaiting_signature",
+        sentFinanceAt: new Date(),
+        sentFinanceBy: userId,
+      }).where(and(eq(leaveSettlements.id, id), eq(leaveSettlements.workflowStatus, "issued"), eq(leaveSettlements.status, "active"))).returning();
+      if (!upd) return res.status(409).json({ error: "التصفية حُوّلت مسبقاً" });
+
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, existing.branchEmployeeId));
+      if (emp) {
+        await notifyEmployeeOfDecision({
+          emp: emp as any,
+          title: "تصفية إجازة بانتظار توقيعك",
+          message: `تم إصدار تصفية إجازة بمبلغ ${existing.finalAmount} ريال (${existing.settledDays} يوم). الرجاء الدخول إلى بوابتي والتوقيع والإقرار بالاستلام ليتم تحويل المبلغ لحسابك.`,
+          linkUrl: "/my-portal",
+          relatedEntityId: id,
+        });
+      }
+      await auditEvent({
+        req, module: "hr_leaves", entityId: existing.leaveRequestId, action: "settlement_send_finance",
+        entityName: emp?.employeeName, branchId: existing.branchId,
+        description: `تحويل تصفية إجازة للإدارة المالية وإشعار الموظف للتوقيع (${existing.settledDays} يوم / ${existing.finalAmount} ريال)`,
+        details: { settlementId: id },
+        targetId: existing.branchEmployeeId,
+      });
+      res.json(upd);
+    } catch (e: any) {
+      console.error("[hr/leave-settlements] send-finance error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // تأكيد الصرف (بعد توقيع الموظف) — تُحفظ ضمن "تصفيات الإجازات المصروفة"
+  app.post("/api/hr/leave-settlements/:id/disburse", isAuthenticated, requirePermission("hr_leaves", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const body = z.object({ note: z.string().max(500).optional() }).parse(req.body || {});
+      const { branchIds } = getBranchScope(req);
+      const [existing] = await db.select().from(leaveSettlements).where(eq(leaveSettlements.id, id));
+      if (!existing) return res.status(404).json({ error: "التصفية غير موجودة" });
+      if (branchIds !== null && !branchIds.includes(existing.branchId)) {
+        return res.status(403).json({ error: "ليس لديك صلاحية" });
+      }
+      if (existing.status !== "active") return res.status(400).json({ error: "التصفية ملغاة" });
+      if (existing.workflowStatus !== "signed") {
+        return res.status(400).json({ error: "لا يمكن تأكيد الصرف قبل توقيع الموظف وإقراره بالاستلام" });
+      }
+      const userId = getUserId(req) || undefined;
+      const [upd] = await db.update(leaveSettlements).set({
+        workflowStatus: "disbursed",
+        disbursedAt: new Date(),
+        disbursedBy: userId,
+        disbursementNote: body.note || null,
+      }).where(and(eq(leaveSettlements.id, id), eq(leaveSettlements.workflowStatus, "signed"), eq(leaveSettlements.status, "active"))).returning();
+      if (!upd) return res.status(409).json({ error: "حالة التصفية تغيّرت — حدّث الصفحة" });
+
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, existing.branchEmployeeId));
+      if (emp) {
+        await notifyEmployeeOfDecision({
+          emp: emp as any,
+          title: "تم صرف تصفية الإجازة",
+          message: `تم تحويل مبلغ تصفية الإجازة (${existing.finalAmount} ريال) إلى حسابك.`,
+          linkUrl: "/my-portal",
+          relatedEntityId: id,
+        });
+      }
+      await auditEvent({
+        req, module: "hr_leaves", entityId: existing.leaveRequestId, action: "settlement_disburse",
+        entityName: emp?.employeeName, branchId: existing.branchId,
+        description: `تأكيد صرف تصفية إجازة (${existing.settledDays} يوم / ${existing.finalAmount} ريال)`,
+        details: { settlementId: id, note: body.note },
+        targetId: existing.branchEmployeeId,
+      });
+      res.json(upd);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
+      console.error("[hr/leave-settlements] disburse error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ------------------------------------------------------------------
   // أرصدة الإجازات  /api/hr/leave-balances
   // ------------------------------------------------------------------

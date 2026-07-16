@@ -11943,6 +11943,17 @@ export const leaveSettlements = pgTable("leave_settlements", {
   cancelledBy: varchar("cancelled_by").references(() => users.id),
   cancelledAt: timestamp("cancelled_at"),
   cancelReason: text("cancel_reason"),
+  // ===== دورة عمل التصفية (Phase: كشف الحساب والتصفيات) =====
+  // issued → awaiting_signature (حُوّلت للمالية وأُشعر الموظف) → signed (وقّع الموظف) → disbursed (مصروفة)
+  workflowStatus: text("workflow_status").notNull().default("issued"),
+  sentFinanceAt: timestamp("sent_finance_at"),
+  sentFinanceBy: varchar("sent_finance_by").references(() => users.id),
+  signatureData: text("signature_data"), // data:image/png;base64 توقيع الموظف
+  signedAt: timestamp("signed_at"),
+  acknowledgedAt: timestamp("acknowledged_at"), // إقرار الاستلام
+  disbursedAt: timestamp("disbursed_at"),
+  disbursedBy: varchar("disbursed_by").references(() => users.id),
+  disbursementNote: text("disbursement_note"),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [

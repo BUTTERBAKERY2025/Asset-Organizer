@@ -27,6 +27,7 @@ import {
 import { PortalTimesheet } from "@/components/portal-timesheet";
 import { PortalWarningSigner } from "@/components/portal-warning-signer";
 import { PortalAdvanceSigner } from "@/components/portal-advance-signer";
+import { PortalSettlementSigner } from "@/components/portal-settlement-signer";
 
 function fmtMoney(n: any): string {
   return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -94,6 +95,7 @@ export default function MyPortalPage() {
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [advOpen, setAdvOpen] = useState(false);
   const [signAdvance, setSignAdvance] = useState<any | null>(null);
+  const [signSettlement, setSignSettlement] = useState<any | null>(null);
   const [warningId, setWarningId] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -161,6 +163,13 @@ export default function MyPortalPage() {
   const { data: leaves = [] } = useQuery<any[]>({
     queryKey: ["/api/my/leaves"],
     queryFn: async () => (await apiRequest("GET", "/api/my/leaves")).json(),
+    enabled: !!hasEmployee,
+  });
+
+  // تصفيات الإجازات (للتوقيع والإقرار بالاستلام)
+  const { data: mySettlements = [] } = useQuery<any[]>({
+    queryKey: ["/api/my/leave-settlements"],
+    queryFn: async () => (await apiRequest("GET", "/api/my/leave-settlements")).json(),
     enabled: !!hasEmployee,
   });
 
@@ -1202,6 +1211,44 @@ export default function MyPortalPage() {
 
               {/* الإجازات / leaves */}
               <TabsContent value="leaves" className="space-y-3">
+                {/* تصفيات الإجازات — توقيع وإقرار بالاستلام */}
+                {mySettlements.length > 0 && (
+                  <Card className="border-emerald-200" data-testid="card-my-settlements">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="font-semibold text-sm flex items-center gap-1">
+                        <FileSignature className="h-4 w-4 text-emerald-600" />
+                        {t("settlements.title", { defaultValue: "تصفيات رصيد الإجازات" })}
+                      </div>
+                      {mySettlements.map((s: any) => (
+                        <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 border rounded-lg p-3" data-testid={`row-my-settlement-${s.id}`}>
+                          <div className="space-y-0.5">
+                            <div className="font-semibold tabular-nums">{fmtMoney(s.finalAmount)} {currency}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {s.settledDays} {t("leaves.days")} × {fmtMoney(s.dailyRate)} {currency}
+                              {s.leaveStart ? ` · ${s.leaveStart} → ${s.leaveEnd}` : ""}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {s.workflowStatus === "awaiting_signature" && (
+                              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700"
+                                onClick={() => setSignSettlement(s)}
+                                data-testid={`button-sign-settlement-${s.id}`}>
+                                <FileSignature className="h-4 w-4 ms-1" />
+                                {t("settlements.signNow", { defaultValue: "توقيع وإقرار بالاستلام" })}
+                              </Button>
+                            )}
+                            {s.workflowStatus === "signed" && (
+                              <span className="text-xs text-blue-700 flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" />{t("settlements.signed", { defaultValue: "وقّعت — بانتظار تحويل المبلغ" })}</span>
+                            )}
+                            {s.workflowStatus === "disbursed" && (
+                              <span className="text-xs text-emerald-700 flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" />{t("settlements.disbursed", { defaultValue: "تم صرف المبلغ" })}</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
                 {allowLeaveRequests && (
                   <div className="flex justify-end">
                     <Button onClick={() => setLeaveOpen(true)} data-testid="button-new-leave">
@@ -1299,6 +1346,14 @@ export default function MyPortalPage() {
           employeeName={displayName}
           open={signAdvance !== null}
           onOpenChange={(v) => { if (!v) setSignAdvance(null); }}
+        />
+
+        {/* توقيع تصفية الإجازة / settlement signer */}
+        <PortalSettlementSigner
+          settlement={signSettlement}
+          employeeName={displayName}
+          open={signSettlement !== null}
+          onOpenChange={(v) => { if (!v) setSignSettlement(null); }}
         />
 
         {/* عرض وتوقيع الإنذار الرسمي / warning signer */}

@@ -118,6 +118,14 @@ export default function LeavesPage() {
   const [settleLeave, setSettleLeave] = useState<Leave | null>(null);
   const [settleForm, setSettleForm] = useState({ days: "", useManual: false, manualAmount: "", note: "" });
   const [receiptSettlement, setReceiptSettlement] = useState<any | null>(null);
+
+  // ===== تبويب كشف الحساب والتصفيات =====
+  const [wfStatus, setWfStatus] = useState("all");
+  const [wfFrom, setWfFrom] = useState("");
+  const [wfTo, setWfTo] = useState("");
+  const [wfEmpId, setWfEmpId] = useState("all");
+  const [disbursing, setDisbursing] = useState<any | null>(null);
+  const [disburseNote, setDisburseNote] = useState("");
   const receiptPrintRef = useRef<HTMLDivElement>(null);
   const printReceipt = useReactToPrint({ contentRef: receiptPrintRef });
 
@@ -633,6 +641,117 @@ export default function LeavesPage() {
     onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل الإلغاء", variant: "destructive" }),
   });
 
+  // ===== تبويب كشف الحساب والتصفيات: بيانات وعمليات =====
+  const { data: wfSettlements = [], isLoading: wfLoading } = useQuery<any[]>({
+    queryKey: ["/api/hr/leave-settlements", wfStatus, wfFrom, wfTo, wfEmpId],
+    queryFn: async () => {
+      const p = new URLSearchParams();
+      if (wfStatus !== "all") p.set("workflow", wfStatus);
+      if (wfFrom) p.set("from", wfFrom);
+      if (wfTo) p.set("to", wfTo);
+      if (wfEmpId !== "all") p.set("employeeId", wfEmpId);
+      return (await apiRequest("GET", `/api/hr/leave-settlements?${p}`)).json();
+    },
+    enabled: tab === "settlements",
+  });
+
+  const { data: settleCandidates = [], isLoading: candLoading } = useQuery<any[]>({
+    queryKey: ["/api/hr/leaves/settlement-candidates"],
+    queryFn: async () => (await apiRequest("GET", "/api/hr/leaves/settlement-candidates")).json(),
+    enabled: tab === "settlements",
+  });
+
+  const sendFinanceMutation = useMutation({
+    mutationFn: async (id: number) => (await apiRequest("POST", `/api/hr/leave-settlements/${id}/send-finance`)).json(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/hr/leave-settlements"] });
+      toast({ title: "تم التحويل للإدارة المالية", description: "أُشعر الموظف عبر بوابتي والواتساب للتوقيع والإقرار بالاستلام" });
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل التحويل", variant: "destructive" }),
+  });
+
+  const disburseMutation = useMutation({
+    mutationFn: async ({ id, note }: any) => (await apiRequest("POST", `/api/hr/leave-settlements/${id}/disburse`, { note })).json(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/hr/leave-settlements"] });
+      toast({ title: "تم تأكيد الصرف", description: "حُفظت التصفية ضمن تصفيات الإجازات المصروفة" });
+      setDisbursing(null);
+      setDisburseNote("");
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل تأكيد الصرف", variant: "destructive" }),
+  });
+
+  // طباعة سند تصفية رسمي مع سلسلة الاعتمادات وتوقيع الموظف
+  const printSettlementDoc = async (id: number) => {
+    try {
+      const d = await (await apiRequest("GET", `/api/hr/leave-settlements/${id}`)).json();
+      const esc = (v: any) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      const flow: any[] = Array.isArray(d.approvalFlow) ? d.approvalFlow : [];
+      const flowRows = flow.filter((f) => f?.decision === "approved").map((f, i) =>
+        `<tr><td>${arNum(f.level ?? i + 1)}</td><td>${esc(f.title || "—")}</td><td>${esc(f.approverName || "—")}</td><td>${f.at ? esc(fmtDate(String(f.at).slice(0, 10))) : "—"}</td><td>${esc(f.note || "—")}</td></tr>`
+      ).join("");
+      const fallbackApproval = !flowRows && d.reviewerName
+        ? `<tr><td>١</td><td>الاعتماد</td><td>${esc(d.reviewerName)}</td><td>${d.reviewedAt ? esc(fmtDate(String(d.reviewedAt).slice(0, 10))) : "—"}</td><td>—</td></tr>` : "";
+      const wfLabel: any = { issued: "صادرة", awaiting_signature: "محوّلة للمالية — بانتظار توقيع الموظف", signed: "موقّعة من الموظف", disbursed: "مصروفة" };
+      const w = window.open("", "_blank", "width=900,height=700");
+      if (!w) return;
+      w.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>سند تصفية إجازة</title>
+<style>
+  body{font-family:'Cairo','Segoe UI',Tahoma,sans-serif;padding:28px;color:#222;font-size:13px}
+  h1{font-size:18px;text-align:center;margin:4px 0}
+  .sub{text-align:center;color:#666;font-size:11px;margin-bottom:14px}
+  table{width:100%;border-collapse:collapse;margin:8px 0}
+  th,td{border:1px solid #bbb;padding:6px 8px;text-align:right;font-size:12px}
+  th{background:#f6f1e7}
+  .box{border:1px solid #bbb;border-radius:6px;padding:10px 14px;margin:8px 0}
+  .row{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .sig{margin-top:18px;display:flex;justify-content:space-between;gap:24px}
+  .sig div{flex:1;text-align:center}
+  .sig img{max-height:70px}
+  .line{border-top:1px solid #999;margin-top:46px;padding-top:4px;font-size:11px}
+  .badge{display:inline-block;border:1px solid #b58a2e;color:#8a6414;border-radius:4px;padding:1px 8px;font-size:11px}
+  @media print{.noprint{display:none}}
+</style></head><body>
+<h1>سند تصفية رصيد إجازة سنوية</h1>
+<div class="sub">مخبز باتر — إدارة شؤون الموظفين · رقم التصفية: ${arNum(d.id)} · الحالة: <span class="badge">${esc(wfLabel[d.workflowStatus] || d.workflowStatus)}</span></div>
+<div class="box row">
+  <span><b>الموظف:</b> ${esc(d.employeeName)}</span>
+  <span><b>المسمى:</b> ${esc(d.jobTitle || "—")}</span>
+  <span><b>الفرع:</b> ${esc(d.branchName || "—")}</span>
+  ${d.employeeNumber ? `<span><b>الرقم الوظيفي:</b> ${esc(d.employeeNumber)}</span>` : ""}
+</div>
+<table>
+  <tr><th>فترة الإجازة</th><th>الأيام المصفاة</th><th>بدل اليوم (ر.س)</th><th>المبلغ المستحق (ر.س)</th><th>تاريخ التصفية</th></tr>
+  <tr>
+    <td>${d.leaveStart ? `${esc(fmtDate(d.leaveStart))} → ${esc(fmtDate(d.leaveEnd))}` : "—"}</td>
+    <td>${arNum(d.settledDays)}</td>
+    <td>${arNum(d.dailyRate)}</td>
+    <td><b>${arNum(d.finalAmount)}</b></td>
+    <td>${esc(fmtDate(d.settlementDate))}</td>
+  </tr>
+</table>
+${d.note ? `<div class="box"><b>ملاحظات:</b> ${esc(d.note)}</div>` : ""}
+<h1 style="font-size:14px;text-align:right;margin-top:14px">سلسلة الاعتمادات على طلب الإجازة</h1>
+${flowRows || fallbackApproval
+  ? `<table><tr><th>المستوى</th><th>الصفة</th><th>المعتمد</th><th>التاريخ</th><th>ملاحظة</th></tr>${flowRows || fallbackApproval}</table>`
+  : `<div class="box" style="color:#777">لا توجد سلسلة اعتمادات مسجلة على الطلب</div>`}
+${d.workflowStatus === "disbursed" ? `<div class="box"><b>الصرف:</b> تم الصرف بتاريخ ${d.disbursedAt ? esc(fmtDate(String(d.disbursedAt).slice(0, 10))) : "—"}${d.disbursementNote ? ` — ${esc(d.disbursementNote)}` : ""}</div>` : ""}
+<div class="sig">
+  <div>
+    <b>توقيع الموظف والإقرار بالاستلام</b><br/>
+    ${d.signatureData ? `<img src="${d.signatureData.startsWith("data:image/") ? d.signatureData : ""}" alt="توقيع"/><div style="font-size:11px;color:#555">وقّع بتاريخ ${d.signedAt ? esc(fmtDate(String(d.signedAt).slice(0, 10))) : "—"}</div>` : `<div class="line">الاسم والتوقيع</div>`}
+  </div>
+  <div><b>الإدارة المالية</b><div class="line">الاسم والتوقيع</div></div>
+  <div><b>شؤون الموظفين</b><div class="line">الاسم والتوقيع</div></div>
+</div>
+<div class="noprint" style="text-align:center;margin-top:18px"><button onclick="window.print()" style="padding:8px 26px;font-family:inherit">طباعة</button></div>
+</body></html>`);
+      w.document.close();
+    } catch (e: any) {
+      toast({ title: "خطأ", description: e?.message || "تعذر تحميل بيانات التصفية", variant: "destructive" });
+    }
+  };
+
   const confirmExitMutation = useMutation({
     mutationFn: async ({ id, actualExitDate }: any) => {
       const res = await apiRequest("POST", `/api/hr/leaves/${id}/confirm-exit`, { actualExitDate });
@@ -1116,6 +1235,7 @@ export default function LeavesPage() {
           <TabsTrigger value="holidays" data-testid="tab-holidays"><Sun className="h-4 w-4 ms-1" />العطلات الرسمية</TabsTrigger>
           <TabsTrigger value="plan" data-testid="tab-plan"><CalendarDays className="h-4 w-4 ms-1" />الخطة السنوية</TabsTrigger>
           <TabsTrigger value="docs" data-testid="tab-docs"><Paperclip className="h-4 w-4 ms-1" />المستندات</TabsTrigger>
+          <TabsTrigger value="settlements" data-testid="tab-settlements"><Banknote className="h-4 w-4 ms-1" />كشف الحساب والتصفيات</TabsTrigger>
         </TabsList>
 
         {/* ---------- DASHBOARD TAB ---------- */}
@@ -2068,7 +2188,208 @@ export default function LeavesPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* ---------- SETTLEMENTS TAB ---------- */}
+        <TabsContent value="settlements">
+          <div className="space-y-4">
+            {/* كشف حساب موظف */}
+            <Card>
+              <CardContent className="pt-4 space-y-2">
+                <div className="text-sm font-bold flex items-center gap-1"><FileText className="h-4 w-4" />كشف حساب الإجازات لموظف</div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Select value={wfEmpId} onValueChange={setWfEmpId}>
+                    <SelectTrigger className="w-64" data-testid="select-wf-employee"><SelectValue placeholder="اختر الموظف" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">كل الموظفين</SelectItem>
+                      {employees.map((e) => (
+                        <SelectItem key={e.id} value={String(e.id)}>{e.employeeName} — {e.jobTitle}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={wfEmpId === "all"}
+                    onClick={() => { setStmtYear(currentYear); setStmtEmpId(Number(wfEmpId)); }}
+                    data-testid="button-open-statement"
+                  >
+                    <FileText className="h-4 w-4 ms-1" />عرض كشف الحساب
+                  </Button>
+                  <span className="text-xs text-muted-foreground">اختر موظفاً لعرض كشف حسابه التفصيلي، أو اترك «كل الموظفين» لعرض كل التصفيات أدناه.</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* إجازات معتمدة جاهزة للتصفية */}
+            <Card className="border-amber-200">
+              <CardContent className="pt-4 space-y-2">
+                <div className="text-sm font-bold text-amber-800 flex items-center gap-1">
+                  <Banknote className="h-4 w-4" />إجازات سنوية معتمدة بانتظار التصفية ({arNum(settleCandidates.length)})
+                </div>
+                {candLoading ? (
+                  <div className="p-4 text-center text-muted-foreground text-sm">جارٍ التحميل...</div>
+                ) : settleCandidates.length === 0 ? (
+                  <div className="p-4 text-center text-muted-foreground text-sm border rounded-lg">لا توجد إجازات معتمدة بحاجة إلى تصفية</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead><tr className="bg-amber-50 text-xs">
+                        <th className="p-2 text-right">الموظف</th><th className="p-2 text-right">الفرع</th>
+                        <th className="p-2 text-center">الفترة</th><th className="p-2 text-center">الأيام</th><th className="p-2 text-center">إجراء</th>
+                      </tr></thead>
+                      <tbody>
+                        {settleCandidates.map((c: any) => (
+                          <tr key={c.id} className="border-t" data-testid={`row-candidate-${c.id}`}>
+                            <td className="p-2"><div className="font-medium">{c.employeeName}</div><div className="text-xs text-muted-foreground">{c.jobTitle}</div></td>
+                            <td className="p-2 text-xs">{c.branchName || "—"}</td>
+                            <td className="p-2 text-center text-xs">{fmtDate(c.startDate)} → {fmtDate(c.endDate)}</td>
+                            <td className="p-2 text-center tabular-nums">{arNum(c.totalDays)}</td>
+                            <td className="p-2 text-center">
+                              <Button size="sm" className="h-7 text-xs" onClick={() => { setSettleForm({ days: "", useManual: false, manualAmount: "", note: "" }); setSettleLeave(c); }} data-testid={`button-candidate-settle-${c.id}`}>
+                                <Banknote className="h-3.5 w-3.5 ms-1" />تصفية الرصيد
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* سجل التصفيات ودورة العمل */}
+            <Card>
+              <CardContent className="pt-4 space-y-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="text-sm font-bold flex items-center gap-1"><ListChecks className="h-4 w-4" />سجل التصفيات</div>
+                  <Select value={wfStatus} onValueChange={setWfStatus}>
+                    <SelectTrigger className="w-56" data-testid="select-wf-status"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">كل الحالات</SelectItem>
+                      <SelectItem value="issued">صادرة (لم تُحوّل للمالية)</SelectItem>
+                      <SelectItem value="awaiting_signature">بانتظار توقيع الموظف</SelectItem>
+                      <SelectItem value="signed">موقّعة — جاهزة للصرف</SelectItem>
+                      <SelectItem value="disbursed">تصفيات مصروفة (الأرشيف)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="flex items-center gap-1 text-xs">
+                    <span>من</span>
+                    <Input type="date" className="w-36 h-8" value={wfFrom} onChange={(e) => setWfFrom(e.target.value)} data-testid="input-wf-from" />
+                    <span>إلى</span>
+                    <Input type="date" className="w-36 h-8" value={wfTo} onChange={(e) => setWfTo(e.target.value)} data-testid="input-wf-to" />
+                  </div>
+                  <span className="text-xs text-muted-foreground mr-auto" data-testid="text-wf-count">{arNum(wfSettlements.length)} تصفية</span>
+                </div>
+
+                {wfStatus === "disbursed" && wfSettlements.length > 0 && (
+                  <div className="text-xs bg-emerald-50 border border-emerald-200 rounded p-2 text-emerald-800" data-testid="text-disbursed-total">
+                    إجمالي المصروف في الفترة المحددة: <b>{arNum(wfSettlements.reduce((s: number, x: any) => s + (x.finalAmount || 0), 0))} ر.س</b> عن {arNum(wfSettlements.reduce((s: number, x: any) => s + (x.settledDays || 0), 0))} يوم
+                  </div>
+                )}
+
+                {wfLoading ? (
+                  <div className="p-6 text-center text-muted-foreground text-sm">جارٍ التحميل...</div>
+                ) : wfSettlements.length === 0 ? (
+                  <div className="p-6 text-center text-muted-foreground text-sm border rounded-lg">لا توجد تصفيات مطابقة للفلتر الحالي</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead><tr className="bg-slate-100 text-xs">
+                        <th className="p-2 text-right">الموظف</th>
+                        <th className="p-2 text-center">فترة الإجازة</th>
+                        <th className="p-2 text-center">الأيام</th>
+                        <th className="p-2 text-center">المبلغ (ر.س)</th>
+                        <th className="p-2 text-center">تاريخ التصفية</th>
+                        <th className="p-2 text-center">الحالة</th>
+                        <th className="p-2 text-center">إجراءات</th>
+                      </tr></thead>
+                      <tbody>
+                        {wfSettlements.map((s: any) => {
+                          const wfBadge = s.workflowStatus === "disbursed"
+                            ? <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200" data-testid={`badge-wf-${s.id}`}>مصروفة</Badge>
+                            : s.workflowStatus === "signed"
+                            ? <Badge className="bg-blue-100 text-blue-800 border-blue-200" data-testid={`badge-wf-${s.id}`}>موقّعة — جاهزة للصرف</Badge>
+                            : s.workflowStatus === "awaiting_signature"
+                            ? <Badge className="bg-amber-100 text-amber-800 border-amber-200" data-testid={`badge-wf-${s.id}`}>بانتظار توقيع الموظف</Badge>
+                            : <Badge variant="outline" data-testid={`badge-wf-${s.id}`}>صادرة</Badge>;
+                          return (
+                            <tr key={s.id} className="border-t hover:bg-slate-50" data-testid={`row-settlement-${s.id}`}>
+                              <td className="p-2"><div className="font-medium">{s.employeeName}</div><div className="text-xs text-muted-foreground">{s.jobTitle}{s.branchName ? ` • ${s.branchName}` : ""}</div></td>
+                              <td className="p-2 text-center text-xs">{s.leaveStart ? `${fmtDate(s.leaveStart)} → ${fmtDate(s.leaveEnd)}` : "—"}</td>
+                              <td className="p-2 text-center tabular-nums">{arNum(s.settledDays)}</td>
+                              <td className="p-2 text-center tabular-nums font-semibold">{arNum(s.finalAmount)}</td>
+                              <td className="p-2 text-center text-xs">{fmtDate(s.settlementDate)}</td>
+                              <td className="p-2 text-center">{wfBadge}</td>
+                              <td className="p-2 text-center">
+                                <div className="flex items-center justify-center gap-1 flex-wrap">
+                                  {s.workflowStatus === "issued" && (
+                                    <Button size="sm" variant="outline" className="h-7 text-xs text-amber-700 border-amber-300"
+                                      disabled={sendFinanceMutation.isPending}
+                                      onClick={() => {
+                                        if (window.confirm(`سيتم تحويل التصفية للإدارة المالية وإشعار ${s.employeeName} للتوقيع والإقرار بالاستلام. متابعة؟`)) sendFinanceMutation.mutate(s.id);
+                                      }}
+                                      data-testid={`button-send-finance-${s.id}`}>
+                                      <ArrowRight className="h-3.5 w-3.5 ms-1" />تحويل للمالية
+                                    </Button>
+                                  )}
+                                  {s.workflowStatus === "signed" && (
+                                    <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700"
+                                      onClick={() => { setDisburseNote(""); setDisbursing(s); }}
+                                      data-testid={`button-disburse-${s.id}`}>
+                                      <CheckCircle2 className="h-3.5 w-3.5 ms-1" />تأكيد الصرف
+                                    </Button>
+                                  )}
+                                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => printSettlementDoc(s.id)} data-testid={`button-print-settlement-${s.id}`}>
+                                    <Printer className="h-3.5 w-3.5 ms-1" />سند التصفية
+                                  </Button>
+                                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setStmtYear(Number(s.settlementDate?.slice(0, 4)) || currentYear); setStmtEmpId(s.branchEmployeeId); }} data-testid={`button-settlement-statement-${s.id}`}>
+                                    <FileText className="h-3.5 w-3.5 ms-1" />كشف الحساب
+                                  </Button>
+                                </div>
+                                {s.workflowStatus === "awaiting_signature" && <div className="text-[10px] text-muted-foreground mt-1">أُشعر الموظف — بانتظار توقيعه من بوابتي</div>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
       </Tabs>
+
+      {/* تأكيد صرف تصفية */}
+      <Dialog open={!!disbursing} onOpenChange={(o) => { if (!o) setDisbursing(null); }}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader><DialogTitle>تأكيد صرف التصفية</DialogTitle></DialogHeader>
+          {disbursing && (
+            <div className="space-y-3">
+              <div className="bg-slate-50 rounded p-3 text-sm">
+                <div className="font-semibold">{disbursing.employeeName}</div>
+                <div className="text-xs text-muted-foreground">{arNum(disbursing.settledDays)} يوم × {arNum(disbursing.dailyRate)} ر.س</div>
+                <div className="text-lg font-bold text-emerald-700 mt-1">{arNum(disbursing.finalAmount)} ر.س</div>
+                {disbursing.signedAt && <div className="text-xs text-emerald-700 mt-1">وقّع الموظف وأقرّ بالاستلام بتاريخ {fmtDate(String(disbursing.signedAt).slice(0, 10))}</div>}
+              </div>
+              <div>
+                <Label className="text-xs">ملاحظة الصرف (اختياري — مثل رقم الحوالة)</Label>
+                <Input value={disburseNote} onChange={(e) => setDisburseNote(e.target.value)} placeholder="مثال: حوالة بنكية رقم 12345" data-testid="input-disburse-note" />
+              </div>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => setDisbursing(null)}>إلغاء</Button>
+                <Button className="bg-emerald-600 hover:bg-emerald-700" disabled={disburseMutation.isPending}
+                  onClick={() => disburseMutation.mutate({ id: disbursing.id, note: disburseNote || undefined })}
+                  data-testid="button-confirm-disburse">
+                  {disburseMutation.isPending ? "جارٍ التأكيد..." : "تأكيد الصرف وحفظها في الأرشيف"}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Plan entry dialog */}
       <Dialog open={planOpen} onOpenChange={(o) => { setPlanOpen(o); if (!o) setEditPlan(null); }}>

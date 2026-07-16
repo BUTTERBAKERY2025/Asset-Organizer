@@ -7,6 +7,7 @@ import {
   branchEmployees,
   branches,
   leaveRequests,
+  leaveSettlements,
   advanceRequests,
   salaryDeductions,
   employeeSchedules,
@@ -441,6 +442,89 @@ export function registerSelfServiceRoutes(app: Express) {
     } catch (e: any) {
       if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
       console.error("[my/advance-requests] sign error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ===== تصفيات الإجازات الخاصة بالموظف (للتوقيع والإقرار بالاستلام) =====
+  app.get("/api/my/leave-settlements", isAuthenticated, async (req, res) => {
+    try {
+      const emp = await getMyEmployee(req);
+      if (!emp) return res.json([]);
+      const rows = await db
+        .select({
+          id: leaveSettlements.id,
+          settledDays: leaveSettlements.settledDays,
+          finalAmount: leaveSettlements.finalAmount,
+          dailyRate: leaveSettlements.dailyRate,
+          settlementDate: leaveSettlements.settlementDate,
+          workflowStatus: leaveSettlements.workflowStatus,
+          signedAt: leaveSettlements.signedAt,
+          disbursedAt: leaveSettlements.disbursedAt,
+          leaveStart: leaveRequests.startDate,
+          leaveEnd: leaveRequests.endDate,
+        })
+        .from(leaveSettlements)
+        .leftJoin(leaveRequests, eq(leaveSettlements.leaveRequestId, leaveRequests.id))
+        .where(and(
+          eq(leaveSettlements.branchEmployeeId, emp.id),
+          eq(leaveSettlements.status, "active"),
+          inArray(leaveSettlements.workflowStatus, ["awaiting_signature", "signed", "disbursed"]),
+        ))
+        .orderBy(desc(leaveSettlements.id))
+        .limit(20);
+      res.json(rows);
+    } catch (e: any) {
+      console.error("[my/leave-settlements] list error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // توقيع الموظف على تصفية الإجازة + الإقرار بالاستلام
+  app.post("/api/my/leave-settlements/:id/sign", isAuthenticated, async (req, res) => {
+    try {
+      const emp = await getMyEmployee(req);
+      if (!emp) return res.status(403).json({ error: "حسابك غير مرتبط بملف موظف" });
+      const id = parseInt(req.params.id, 10);
+      const body = z.object({
+        signatureData: z.string().min(50, "التوقيع مطلوب").regex(/^data:image\/(png|jpeg);base64,/, "صيغة التوقيع غير صحيحة"),
+        acknowledged: z.literal(true, { errorMap: () => ({ message: "يجب الإقرار بالاستلام" }) }),
+      }).parse(req.body);
+      if (body.signatureData.length > 500_000) {
+        return res.status(400).json({ error: "حجم التوقيع كبير جداً" });
+      }
+      const [existing] = await db.select().from(leaveSettlements).where(eq(leaveSettlements.id, id));
+      if (!existing || existing.branchEmployeeId !== emp.id) {
+        return res.status(404).json({ error: "التصفية غير موجودة" });
+      }
+      // Atomic guard: sign only while awaiting signature and owned by this employee.
+      const updated = await db.update(leaveSettlements)
+        .set({
+          workflowStatus: "signed",
+          signatureData: body.signatureData,
+          signedAt: new Date(),
+          acknowledgedAt: new Date(),
+        })
+        .where(and(
+          eq(leaveSettlements.id, id),
+          eq(leaveSettlements.branchEmployeeId, emp.id),
+          eq(leaveSettlements.workflowStatus, "awaiting_signature"),
+          eq(leaveSettlements.status, "active"),
+        ))
+        .returning();
+      if (updated.length === 0) {
+        return res.status(400).json({ error: "هذه التصفية غير متاحة للتوقيع" });
+      }
+      await notifyHrOfRequest(emp, {
+        title: "موظف وقّع تصفية إجازة",
+        message: `${emp.employeeName} وقّع تصفية الإجازة (${existing.settledDays} يوم / ${existing.finalAmount} ر.س) وأقرّ بالاستلام. جاهزة لتأكيد الصرف وحفظها ضمن التصفيات المصروفة.`,
+        linkUrl: "/hr/leaves",
+        relatedEntityId: id,
+      });
+      res.json({ ...updated[0], signatureData: undefined });
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
+      console.error("[my/leave-settlements] sign error:", e);
       res.status(500).json({ error: e.message });
     }
   });
