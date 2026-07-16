@@ -307,6 +307,30 @@ export default function LeavesPage() {
     onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
   });
 
+  // ===== أرشيف مستندات الإجازات =====
+  const [docSearch, setDocSearch] = useState("");
+  const [docType, setDocType] = useState("all");
+  const { data: allLeavesForDocs = [], isLoading: docsLoading } = useQuery<Leave[]>({
+    queryKey: ["/api/hr/leaves", "docs-archive"],
+    queryFn: async () => (await apiRequest("GET", "/api/hr/leaves")).json(),
+    enabled: tab === "docs",
+  });
+  const docsByEmployee = useMemo(() => {
+    const withDocs = (allLeavesForDocs as any[]).filter((l) => {
+      if (!l.attachmentUrl) return false;
+      if (docType !== "all" && l.leaveType !== docType) return false;
+      if (docSearch.trim() && !(l.employeeName || "").includes(docSearch.trim())) return false;
+      return true;
+    });
+    const map = new Map<number, { employeeName: string; jobTitle: string; branchName: string; docs: any[] }>();
+    for (const l of withDocs) {
+      const g = map.get(l.branchEmployeeId) || { employeeName: l.employeeName || "-", jobTitle: l.employeeJob || "", branchName: l.branchName || "", docs: [] };
+      g.docs.push(l);
+      map.set(l.branchEmployeeId, g);
+    }
+    return Array.from(map.entries()).sort((a, b) => a[1].employeeName.localeCompare(b[1].employeeName, "ar"));
+  }, [allLeavesForDocs, docSearch, docType]);
+
   // كشف التعارضات: تداخل إجازات مخططة لموظفَين أو أكثر بنفس الفرع + تداخل مع عطلة رسمية (موسم ذروة)
   const planAnalysis = useMemo(() => {
     const visible = planEntries.filter((p: any) => p.status !== "cancelled" && (planBranch === "all" || p.branchId === planBranch));
@@ -1052,6 +1076,7 @@ export default function LeavesPage() {
           <TabsTrigger value="calendar" data-testid="tab-calendar"><CalendarDays className="h-4 w-4 ms-1" />التقويم</TabsTrigger>
           <TabsTrigger value="holidays" data-testid="tab-holidays"><Sun className="h-4 w-4 ms-1" />العطلات الرسمية</TabsTrigger>
           <TabsTrigger value="plan" data-testid="tab-plan"><CalendarDays className="h-4 w-4 ms-1" />الخطة السنوية</TabsTrigger>
+          <TabsTrigger value="docs" data-testid="tab-docs"><Paperclip className="h-4 w-4 ms-1" />المستندات</TabsTrigger>
         </TabsList>
 
         {/* ---------- DASHBOARD TAB ---------- */}
@@ -1913,6 +1938,80 @@ export default function LeavesPage() {
                       لا توجد إجازات مخططة لسنة {arNum(planYear)} — ابدأ بإضافة مواعيد إجازات موظفيك المقترحة لتجنب تعارض المواعيد في المواسم.
                     </div>
                   )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ---------- DOCUMENTS ARCHIVE TAB ---------- */}
+        <TabsContent value="docs">
+          <Card>
+            <CardContent className="space-y-3 pt-6">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Input
+                  className="w-56"
+                  placeholder="بحث باسم الموظف..."
+                  value={docSearch}
+                  onChange={(e) => setDocSearch(e.target.value)}
+                  data-testid="input-doc-search"
+                />
+                <Select value={docType} onValueChange={setDocType}>
+                  <SelectTrigger className="w-44" data-testid="select-doc-type"><SelectValue placeholder="كل الأنواع" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">كل الأنواع</SelectItem>
+                    {Object.entries(LEAVE_TYPE_LABELS).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>{v as string}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="text-xs text-muted-foreground mr-auto" data-testid="text-docs-count">
+                  {arNum(docsByEmployee.reduce((s, [, g]) => s + g.docs.length, 0))} مستند لـ {arNum(docsByEmployee.length)} موظف
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                كل المرفقات المرفوعة مع طلبات الإجازات (تقارير طبية، تذاكر سفر، مستندات...) مجمعة حسب الموظف في مكان واحد.
+              </div>
+
+              {docsLoading ? (
+                <div className="p-8 text-center text-muted-foreground">جارٍ التحميل...</div>
+              ) : docsByEmployee.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground border rounded-lg">
+                  لا توجد مستندات مرفقة{docSearch || docType !== "all" ? " مطابقة للفلتر الحالي" : " — المرفقات تُضاف عند إنشاء طلب إجازة"}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {docsByEmployee.map(([empId, g]) => (
+                    <div key={empId} className="border rounded-lg overflow-hidden" data-testid={`docs-employee-${empId}`}>
+                      <div className="bg-slate-100 px-3 py-1.5 flex items-center justify-between">
+                        <div>
+                          <span className="text-sm font-bold">{g.employeeName}</span>
+                          <span className="text-xs text-muted-foreground mr-2">{g.jobTitle}{g.branchName ? ` • ${g.branchName}` : ""}</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">{arNum(g.docs.length)} مستند</span>
+                      </div>
+                      <table className="w-full text-sm">
+                        <tbody>
+                          {g.docs.map((l: any) => (
+                            <tr key={l.id} className="border-t hover:bg-slate-50" data-testid={`row-doc-${l.id}`}>
+                              <td className="p-2">
+                                <div className="font-medium text-xs">{LEAVE_TYPE_LABELS[l.leaveType] || l.leaveType}</div>
+                                <div className="text-xs text-muted-foreground">{l.startDate} → {l.endDate} ({arNum(l.totalDays)} يوم)</div>
+                              </td>
+                              <td className="p-2 text-center">{statusBadge(l.status)}</td>
+                              <td className="p-2 text-center">
+                                <a href={l.attachmentUrl} target="_blank" rel="noreferrer" data-testid={`link-doc-${l.id}`}>
+                                  <Button size="sm" variant="outline" className="h-7 text-xs">
+                                    <Paperclip className="h-3.5 w-3.5 ms-1" />عرض المستند
+                                  </Button>
+                                </a>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
                 </div>
               )}
             </CardContent>
