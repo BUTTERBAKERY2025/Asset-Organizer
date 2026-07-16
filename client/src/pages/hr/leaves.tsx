@@ -226,6 +226,14 @@ export default function LeavesPage() {
     enabled: open && !!form.branchEmployeeId && form.leaveType !== "unpaid",
   });
 
+  // سجل إجازات الموظف المختار في نموذج الإنشاء (آخر إجازة + هستري مختصر)
+  const { data: formHistory } = useQuery<any>({
+    queryKey: ["/api/hr/leaves/employee-history", form.branchEmployeeId],
+    queryFn: async () =>
+      (await apiRequest("GET", `/api/hr/leaves/employee-history/${form.branchEmployeeId}`)).json(),
+    enabled: open && !!form.branchEmployeeId,
+  });
+
   // مسار الاعتماد المطبّق على فرع الموظف المختار (لعرضه داخل النموذج)
   const { data: applicableChainResp } = useQuery<{ chain: any[] }>({
     queryKey: ["/api/hr/leaves/applicable-chain", form.branchId],
@@ -573,6 +581,14 @@ export default function LeavesPage() {
       setEditingDates(null);
     },
     onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل التعديل", variant: "destructive" }),
+  });
+
+  // سجل إجازات الموظف عند فتح نافذة التصفية
+  const { data: settleHistory } = useQuery<any>({
+    queryKey: ["/api/hr/leaves/employee-history", settleLeave?.branchEmployeeId],
+    queryFn: async () =>
+      (await apiRequest("GET", `/api/hr/leaves/employee-history/${settleLeave!.branchEmployeeId}`)).json(),
+    enabled: !!settleLeave?.branchEmployeeId,
   });
 
   // ===== معاينة التصفية (عند فتح نافذة التصفية) =====
@@ -2168,6 +2184,33 @@ export default function LeavesPage() {
                 )}
               </div>
             ) : null}
+            {form.branchEmployeeId && formHistory && (
+              <div className="text-xs bg-slate-50 border rounded p-2 space-y-1" data-testid="box-form-history">
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold text-slate-700">آخر إجازة للموظف</span>
+                  {formHistory.lastApproved ? (
+                    <span className="tabular-nums text-slate-700">
+                      {LEAVE_TYPE_LABELS[formHistory.lastApproved.leaveType] || formHistory.lastApproved.leaveType} · {formHistory.lastApproved.startDate} → {formHistory.lastApproved.endDate}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">لا توجد إجازات سابقة معتمدة</span>
+                  )}
+                </div>
+                {(formHistory.history || []).length > 0 && (
+                  <details className="text-[10px]">
+                    <summary className="cursor-pointer text-blue-700">عرض سجل الإجازات ({arNum((formHistory.history || []).length)})</summary>
+                    <div className="mt-1 space-y-0.5">
+                      {(formHistory.history || []).map((h: any) => (
+                        <div key={h.id} className="flex justify-between border-b border-dashed border-slate-200 pb-0.5" data-testid={`row-form-history-${h.id}`}>
+                          <span>{LEAVE_TYPE_LABELS[h.leaveType] || h.leaveType} ({LEAVE_STATUS_LABELS[h.status] || h.status})</span>
+                          <span className="tabular-nums">{h.startDate} → {h.endDate} · {arNum(h.totalDays)} يوم</span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
             {form.leaveType === "sick" && sickPreview && (
               <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 text-xs space-y-1.5" data-testid="box-sick-tiers">
                 <div className="font-semibold text-purple-800">توزيع الأجر حسب نظام العمل (المادة 117)</div>
@@ -2760,6 +2803,33 @@ export default function LeavesPage() {
                   <div className="font-semibold">{settleLeave.employeeName}</div>
                   <div className="text-xs text-muted-foreground">إجازة سنوية · {settleLeave.startDate} → {settleLeave.endDate}</div>
                 </div>
+                {settleHistory && (
+                  <div className="text-xs bg-slate-50 border rounded p-2 space-y-1" data-testid="box-settle-history">
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold text-slate-700">آخر إجازة للموظف</span>
+                      {settleHistory.lastApproved ? (
+                        <span className="tabular-nums text-slate-700">
+                          {LEAVE_TYPE_LABELS[settleHistory.lastApproved.leaveType] || settleHistory.lastApproved.leaveType} · {settleHistory.lastApproved.startDate} → {settleHistory.lastApproved.endDate}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">لا توجد إجازات سابقة معتمدة</span>
+                      )}
+                    </div>
+                    {(settleHistory.history || []).length > 0 && (
+                      <details className="text-[10px]">
+                        <summary className="cursor-pointer text-blue-700">عرض سجل الإجازات ({arNum((settleHistory.history || []).length)})</summary>
+                        <div className="mt-1 space-y-0.5">
+                          {(settleHistory.history || []).map((h: any) => (
+                            <div key={h.id} className="flex justify-between border-b border-dashed border-slate-200 pb-0.5" data-testid={`row-settle-history-${h.id}`}>
+                              <span>{LEAVE_TYPE_LABELS[h.leaveType] || h.leaveType} ({LEAVE_STATUS_LABELS[h.status] || h.status})</span>
+                              <span className="tabular-nums">{h.startDate} → {h.endDate} · {arNum(h.totalDays)} يوم</span>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2 text-xs bg-blue-50 rounded p-2" data-testid="box-settle-preview">
                   <div>الراتب الإجمالي: <b>{arNum(p.grossSalary)}</b> ر.س</div>
                   <div>قيمة اليوم (÷{arNum(p.divisor)}): <b>{arNum(p.dailyRate)}</b> ر.س</div>
@@ -2959,6 +3029,18 @@ export default function LeavesPage() {
                         </tr>
                       );
                     }
+                    if (b.leaveType === "sick" && !b.hasRow) {
+                      return (
+                        <tr key={b.leaveType} data-testid={`row-stmt-bal-${b.leaveType}`}>
+                          <td className="border p-1.5 font-semibold" style={{ borderColor: "#E5C98F" }}>{LEAVE_TYPE_LABELS[b.leaveType]} <span className="text-[9px] text-purple-700">(حسب نظام العمل)</span></td>
+                          <td className="border p-1.5 text-center text-[10px]" style={{ borderColor: "#E5C98F" }}>١٢٠ يوم نظاماً</td>
+                          <td className="border p-1.5 text-center" style={{ borderColor: "#E5C98F" }}>—</td>
+                          <td className="border p-1.5 text-center" style={{ borderColor: "#E5C98F" }}>—</td>
+                          <td className="border p-1.5 tabular-nums text-center" style={{ borderColor: "#E5C98F" }}>{arNum(b.usedDays)}</td>
+                          <td className="border p-1.5 text-center" style={{ borderColor: "#E5C98F" }}>—</td>
+                        </tr>
+                      );
+                    }
                     return (
                     <tr key={b.leaveType} data-testid={`row-stmt-bal-${b.leaveType}`}>
                       <td className="border p-1.5 font-semibold" style={{ borderColor: "#E5C98F" }}>{LEAVE_TYPE_LABELS[b.leaveType] || b.leaveType}</td>
@@ -2977,6 +3059,9 @@ export default function LeavesPage() {
                   سطر الإجازة السنوية يعرض الرصيد الفعلي التراكمي حتى اليوم (النظام التلقائي): المستحق = الاستحقاق السنوي بالعقد، المرحّل = الرصيد الافتتاحي بتاريخ {statement.accrual.accrualStart}، المستخدم يشمل الإجازات المعتمدة (المنقضية والقادمة) والتصفيات النقدية منذ ذلك التاريخ.
                 </div>
               )}
+              <div className="text-[10px] text-purple-800 mb-4 leading-relaxed">
+                الإجازة المرضية لا ترتبط برصيد سنوي مثل السنوية — استحقاقها حسب نظام العمل السعودي (المادة 117): أول ٣٠ يوماً بأجر كامل، ثم ٦٠ يوماً بثلاثة أرباع الأجر، ثم ٣٠ يوماً بلا أجر خلال السنة الواحدة، ويظهر هنا فقط عدد الأيام المستخدمة.
+              </div>
 
               {/* سجل الحركات */}
               <h4 className="font-bold text-sm mb-1.5" style={{ color: "#8A6212" }}>سجل الحركات خلال السنة</h4>

@@ -1703,6 +1703,33 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
+  // سجل إجازات الموظف (الهستري) — آخر الإجازات لعرضها عند إنشاء طلب أو تصفية
+  app.get("/api/hr/leaves/employee-history/:employeeId", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const employeeId = parseInt(req.params.employeeId, 10);
+      if (!Number.isFinite(employeeId)) return res.status(400).json({ error: "معرّف غير صحيح" });
+
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, employeeId));
+      if (!emp) return res.status(404).json({ error: "الموظف غير موجود" });
+      const { branchIds } = getBranchScope(req);
+      if (branchIds !== null && (!emp.branchId || !branchIds.includes(emp.branchId))) {
+        return res.status(403).json({ error: "ليس لديك صلاحية على فرع الموظف" });
+      }
+
+      const history = await db.select().from(leaveRequests)
+        .where(eq(leaveRequests.branchEmployeeId, employeeId))
+        .orderBy(desc(leaveRequests.startDate), desc(leaveRequests.id))
+        .limit(10);
+
+      const todayISO = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
+      const lastApproved = history.find((h) => h.status === "approved" && h.startDate <= todayISO) || null;
+      res.json({ history, lastApproved });
+    } catch (e: any) {
+      console.error("[hr/leaves/employee-history] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // رصيد موظف واحد (لعرض البطاقة عند الإنشاء/الطباعة)
   app.get("/api/hr/leave-balances/:employeeId", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
     try {
