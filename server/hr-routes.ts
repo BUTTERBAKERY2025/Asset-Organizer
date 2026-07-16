@@ -1680,6 +1680,29 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
+  // الرصيد الفعلي التراكمي لموظف واحد حتى تاريخ محدد (لحاسبة الاحتساب وكشف الحساب)
+  app.get("/api/hr/leave-accrual/:employeeId", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
+    try {
+      const employeeId = parseInt(req.params.employeeId, 10);
+      if (!Number.isFinite(employeeId)) return res.status(400).json({ error: "معرّف غير صحيح" });
+      const asOf = typeof req.query.asOf === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.asOf)
+        ? req.query.asOf : undefined;
+
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, employeeId));
+      if (!emp) return res.status(404).json({ error: "الموظف غير موجود" });
+      const { branchIds } = getBranchScope(req);
+      if (branchIds !== null && (!emp.branchId || !branchIds.includes(emp.branchId))) {
+        return res.status(403).json({ error: "ليس لديك صلاحية على فرع الموظف" });
+      }
+
+      const acc = await getAccruedLeaveBalance(emp as any, asOf);
+      res.json(acc);
+    } catch (e: any) {
+      console.error("[hr/leave-accrual] single error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // رصيد موظف واحد (لعرض البطاقة عند الإنشاء/الطباعة)
   app.get("/api/hr/leave-balances/:employeeId", isAuthenticated, requirePermission("hr_leaves"), async (req, res) => {
     try {
@@ -2099,6 +2122,20 @@ export function registerHrRoutes(app: Express) {
         balances.push(await getLeaveBalanceSummary(branchEmployeeId, year, t, emp.hireDate));
       }
 
+      // الرصيد الفعلي التراكمي للإجازة السنوية (النظام التلقائي — نفس أرقام تبويب الأرصدة)
+      let accrual: any = null;
+      try {
+        accrual = await getAccruedLeaveBalance({
+          id: emp.id,
+          hireDate: emp.hireDate,
+          annualLeaveDays: (emp as any).annualLeaveDays,
+          leaveOpeningBalance: (emp as any).leaveOpeningBalance,
+          leaveOpeningBalanceDate: (emp as any).leaveOpeningBalanceDate,
+        });
+      } catch (err) {
+        console.error("[hr/leaves/employee-statement] accrual calc failed:", err);
+      }
+
       // تصفيات الرصيد النشطة ضمن السنة (تظهر كحركات في كشف الحساب)
       const settlements = await db.select().from(leaveSettlements)
         .where(and(
@@ -2122,6 +2159,7 @@ export function registerHrRoutes(app: Express) {
         },
         year,
         balances,
+        accrual,
         movements: withDaysInYear,
         settlements,
       });

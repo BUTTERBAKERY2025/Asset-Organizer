@@ -379,8 +379,11 @@ export default function LeavesPage() {
     for (const b of statement.balances || []) {
       running[b.leaveType] = Number(b.entitledDays) + Number(b.carriedOverDays) + Number(b.adjustmentDays);
     }
+    const accrualConfigured = !!statement.accrual?.configured;
     return (statement.movements || []).map((m: any) => {
       let after: number | null = null;
+      // السنوية تُدار بالنظام التلقائي — لا نعرض رصيداً متحركاً من سجل السنوات كي لا تظهر أرقام سالبة مضللة
+      if (accrualConfigured && m.leaveType === "annual") return { ...m, balanceAfter: null };
       if (m.status === "approved" && m.leaveType !== "unpaid" && running[m.leaveType] !== undefined) {
         running[m.leaveType] -= m.daysInYear;
         after = running[m.leaveType];
@@ -400,6 +403,13 @@ export default function LeavesPage() {
     queryFn: async () =>
       (await apiRequest("GET", `/api/hr/leave-balances/${calcEmpId}?year=${calcYear}&type=${calcType}`)).json(),
     enabled: calcOpen && !!calcEmpId && calcType !== "unpaid",
+  });
+  // الرصيد الفعلي التراكمي (النظام التلقائي) — للإجازة السنوية فقط
+  const { data: calcAccrual } = useQuery<any>({
+    queryKey: ["/api/hr/leave-accrual/single", calcEmpId, calcAsOf],
+    queryFn: async () =>
+      (await apiRequest("GET", `/api/hr/leave-accrual/${calcEmpId}?asOf=${calcAsOf}`)).json(),
+    enabled: calcOpen && !!calcEmpId && calcType === "annual" && !!calcAsOf,
   });
   const calcResult = useMemo(() => {
     if (!calcEmpId || !calcBalance || !calcAsOf) return null;
@@ -898,14 +908,27 @@ export default function LeavesPage() {
       { "البند": "السنة", "القيمة": statement.year },
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(info), "بيانات الموظف");
-    const balRows = (statement.balances || []).map((b: any) => ({
+    const balRows = (statement.balances || []).map((b: any) => {
+      const acc = b.leaveType === "annual" && statement.accrual?.configured ? statement.accrual : null;
+      if (acc) {
+        return {
+          "نوع الإجازة": `${LEAVE_TYPE_LABELS[b.leaveType]} (فعلي تلقائي)`,
+          "المستحق": Number(acc.annualDays),
+          "المرحّل": Number(acc.openingBalance),
+          "تعديلات": 0,
+          "المستخدم": Math.round((Number(acc.usedToDate) + Number(acc.upcomingDays) + Number(acc.settledDays)) * 100) / 100,
+          "المتبقي": Number(acc.remainingDays),
+        };
+      }
+      return {
       "نوع الإجازة": LEAVE_TYPE_LABELS[b.leaveType] || b.leaveType,
       "المستحق": Number(b.entitledDays),
       "المرحّل": Number(b.carriedOverDays),
       "تعديلات": Number(b.adjustmentDays),
       "المستخدم": Number(b.usedDays),
       "المتبقي": Number(b.remainingDays),
-    }));
+      };
+    });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(balRows.length ? balRows : [{ "ملاحظة": "لا أرصدة" }]), "الأرصدة");
     const movRows = (statement.movements || []).map((m: any) => ({
       "النوع": LEAVE_TYPE_LABELS[m.leaveType] || m.leaveType,
@@ -2559,8 +2582,32 @@ export default function LeavesPage() {
                   <div className="flex justify-between"><span className="text-muted-foreground">الموظف</span><span className="font-semibold">{calcResult.empName}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">تاريخ التعيين</span><span className="font-semibold tabular-nums">{calcResult.hireDate || "-"}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">مدة الخدمة حتى {calcAsOf}</span><span className="font-semibold">{calcResult.serviceText}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">الاستحقاق السنوي ({LEAVE_TYPE_LABELS[calcType]})</span><span className="font-semibold tabular-nums">{arNum(calcResult.entitled)} يوم ({arNum(calcResult.monthlyAccrual)} يوم/شهر)</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">الاستحقاق السنوي ({LEAVE_TYPE_LABELS[calcType]})</span><span className="font-semibold tabular-nums">{arNum(calcType === "annual" && calcAccrual?.configured ? calcAccrual.annualDays : calcResult.entitled)} يوم</span></div>
                 </div>
+                {calcType === "annual" && calcAccrual?.configured ? (
+                  <>
+                    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs space-y-1" data-testid="box-calc-accrual">
+                      <div className="font-bold text-amber-800 mb-1">الرصيد الفعلي حتى {calcAsOf} (تلقائي)</div>
+                      <div className="flex justify-between"><span>الرصيد الافتتاحي {calcAccrual.accrualStart ? `(${calcAccrual.accrualStart})` : ""}</span><span className="font-semibold tabular-nums">{arNum(calcAccrual.openingBalance)} يوم</span></div>
+                      <div className="flex justify-between"><span>+ المكتسب حتى التاريخ ({arNum(calcAccrual.elapsedDays)} يوم عمل × {arNum(calcAccrual.annualDays)}÷365)</span><span className="font-semibold tabular-nums" data-testid="text-calc-accrual-accrued">{arNum(Math.round((calcAccrual.accruedToDate - calcAccrual.openingBalance) * 100) / 100)} يوم</span></div>
+                      <div className="flex justify-between"><span>− الإجازات السنوية المعتمدة المنقضية</span><span className="font-semibold tabular-nums text-red-600">{arNum(calcAccrual.usedToDate)} يوم</span></div>
+                      {Number(calcAccrual.upcomingDays) > 0 && (
+                        <div className="flex justify-between"><span>− إجازات معتمدة قادمة (محجوزة)</span><span className="font-semibold tabular-nums text-red-600">{arNum(calcAccrual.upcomingDays)} يوم</span></div>
+                      )}
+                      {Number(calcAccrual.settledDays) > 0 && (
+                        <div className="flex justify-between"><span>− أيام مصفّاة نقداً</span><span className="font-semibold tabular-nums text-red-600">{arNum(calcAccrual.settledDays)} يوم</span></div>
+                      )}
+                      <div className="flex justify-between border-t border-amber-300 pt-1 mt-1">
+                        <span className="font-bold">الرصيد المتبقي الفعلي</span>
+                        <span className={`font-bold tabular-nums ${calcAccrual.remainingDays < 0 ? "text-red-600" : "text-emerald-700"}`} data-testid="text-calc-accrual-remaining">{arNum(calcAccrual.remainingDays)} يوم</span>
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground leading-relaxed">
+                      هذا هو نفس الرقم الظاهر في تبويب الأرصدة — «الرصيد الفعلي حتى اليوم (تلقائي)» — ويُحسب من الرصيد الافتتاحي المُدخل مضافاً إليه الاكتساب اليومي ومخصوماً منه الإجازات السنوية المعتمدة والتصفيات النقدية.
+                    </div>
+                  </>
+                ) : (
+                <>
                 <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs space-y-1">
                   <div className="font-bold text-blue-800 mb-1">الرصيد المتراكم حتى {calcAsOf}</div>
                   <div className="flex justify-between"><span>المستحق تراكمياً (نسبة وتناسب)</span><span className="font-semibold tabular-nums" data-testid="text-calc-accrued">{arNum(calcResult.accrued)} يوم</span></div>
@@ -2579,6 +2626,8 @@ export default function LeavesPage() {
                 <div className="text-[10px] text-muted-foreground leading-relaxed">
                   المستحق التراكمي يُحسب نسبةً من الاستحقاق السنوي بعدد الأيام المنقضية من بداية السنة (أو من تاريخ التعيين إن كان خلالها) حتى التاريخ المختار. الاستحقاق السنوي حسب نظام العمل: 21 يومًا، ويصبح 30 يومًا بعد إتمام 5 سنوات خدمة.
                 </div>
+                </>
+                )}
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" className="flex-1" onClick={() => { setStmtYear(calcYear); setStmtEmpId(Number(calcEmpId)); }} data-testid="button-calc-to-statement">
                     <FileText className="h-3.5 w-3.5 ms-1" />عرض كشف الحساب الكامل
@@ -2896,7 +2945,21 @@ export default function LeavesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(statement.balances || []).map((b: any) => (
+                  {(statement.balances || []).map((b: any) => {
+                    const acc = b.leaveType === "annual" && statement.accrual?.configured ? statement.accrual : null;
+                    if (acc) {
+                      return (
+                        <tr key={b.leaveType} data-testid={`row-stmt-bal-${b.leaveType}`} style={{ backgroundColor: "#FFFBEB" }}>
+                          <td className="border p-1.5 font-semibold" style={{ borderColor: "#E5C98F" }}>{LEAVE_TYPE_LABELS[b.leaveType]} <span className="text-[9px] text-amber-700">(فعلي تلقائي)</span></td>
+                          <td className="border p-1.5 tabular-nums text-center" style={{ borderColor: "#E5C98F" }}>{arNum(acc.annualDays)}</td>
+                          <td className="border p-1.5 tabular-nums text-center" style={{ borderColor: "#E5C98F" }}>{arNum(acc.openingBalance)}</td>
+                          <td className="border p-1.5 tabular-nums text-center" style={{ borderColor: "#E5C98F" }}>—</td>
+                          <td className="border p-1.5 tabular-nums text-center" style={{ borderColor: "#E5C98F" }}>{arNum(Math.round((Number(acc.usedToDate) + Number(acc.upcomingDays) + Number(acc.settledDays)) * 100) / 100)}</td>
+                          <td className={`border p-1.5 tabular-nums text-center font-bold ${acc.remainingDays < 0 ? "text-red-600" : ""}`} style={{ borderColor: "#E5C98F" }}>{arNum(acc.remainingDays)}</td>
+                        </tr>
+                      );
+                    }
+                    return (
                     <tr key={b.leaveType} data-testid={`row-stmt-bal-${b.leaveType}`}>
                       <td className="border p-1.5 font-semibold" style={{ borderColor: "#E5C98F" }}>{LEAVE_TYPE_LABELS[b.leaveType] || b.leaveType}</td>
                       <td className="border p-1.5 tabular-nums text-center" style={{ borderColor: "#E5C98F" }}>{arNum(b.entitledDays)}{!b.hasRow && b.leaveType === "annual" ? " (مقترح)" : ""}</td>
@@ -2905,9 +2968,15 @@ export default function LeavesPage() {
                       <td className="border p-1.5 tabular-nums text-center" style={{ borderColor: "#E5C98F" }}>{arNum(b.usedDays)}</td>
                       <td className={`border p-1.5 tabular-nums text-center font-bold ${b.remainingDays < 0 ? "text-red-600" : ""}`} style={{ borderColor: "#E5C98F" }}>{arNum(b.remainingDays)}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
+              {statement.accrual?.configured && (
+                <div className="text-[10px] text-amber-800 -mt-3 mb-4 leading-relaxed">
+                  سطر الإجازة السنوية يعرض الرصيد الفعلي التراكمي حتى اليوم (النظام التلقائي): المستحق = الاستحقاق السنوي بالعقد، المرحّل = الرصيد الافتتاحي بتاريخ {statement.accrual.accrualStart}، المستخدم يشمل الإجازات المعتمدة (المنقضية والقادمة) والتصفيات النقدية منذ ذلك التاريخ.
+                </div>
+              )}
 
               {/* سجل الحركات */}
               <h4 className="font-bold text-sm mb-1.5" style={{ color: "#8A6212" }}>سجل الحركات خلال السنة</h4>
