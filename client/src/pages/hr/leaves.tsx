@@ -129,6 +129,7 @@ export default function LeavesPage() {
 
   // الرصيد التراكمي "حتى تاريخه" (النظام التعاقدي)
   const [accrualSearch, setAccrualSearch] = useState("");
+  const [balView, setBalView] = useState<"accrual" | "yearly">("accrual");
   const [reqShown, setReqShown] = useState(50);
   const [accrualShown, setAccrualShown] = useState(50);
   const [editAccrual, setEditAccrual] = useState<any | null>(null);
@@ -1257,7 +1258,23 @@ export default function LeavesPage() {
 
         {/* ---------- BALANCES TAB ---------- */}
         <TabsContent value="balances" className="space-y-4">
-          {balType === "annual" && (
+          <div className="flex rounded-lg border overflow-hidden w-fit" data-testid="switch-balance-view">
+            <button
+              className={`px-4 py-2 text-sm font-medium transition-colors ${balView === "accrual" ? "bg-amber-500 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+              onClick={() => { setBalView("accrual"); setBalType("annual"); }}
+              data-testid="button-view-accrual"
+            >
+              الرصيد الفعلي حتى اليوم (تلقائي)
+            </button>
+            <button
+              className={`px-4 py-2 text-sm font-medium transition-colors border-r ${balView === "yearly" ? "bg-slate-700 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+              onClick={() => setBalView("yearly")}
+              data-testid="button-view-yearly"
+            >
+              سجل السنوات (للترحيل والتعديل)
+            </button>
+          </div>
+          {balView === "accrual" && balType === "annual" && (
             <Card className="border-amber-200">
               <CardContent className="space-y-3 pt-6">
                 <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1348,8 +1365,18 @@ export default function LeavesPage() {
             </Card>
           )}
 
+          {balView === "yearly" && (
           <Card>
             <CardContent className="space-y-3 pt-6">
+              <div>
+                <div className="font-bold text-slate-700 flex items-center gap-2">
+                  <Wallet className="h-4 w-4" />
+                  سجل أرصدة السنوات
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  سجل يدوي لكل سنة على حدة — تستخدمه لترحيل رصيد سنة سابقة، أو تعديل رصيد موظف يدوياً، أو تصدير كشف السنة. أما "الرصيد الفعلي حتى اليوم" فيُحتسب تلقائياً من العقد ولا يحتاج إدخال يدوي.
+                </div>
+              </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <Select value={String(balYear)} onValueChange={(v) => setBalYear(parseInt(v, 10))}>
                   <SelectTrigger className="w-32" data-testid="select-bal-year"><SelectValue /></SelectTrigger>
@@ -1446,6 +1473,7 @@ export default function LeavesPage() {
               </div>
             </CardContent>
           </Card>
+          )}
         </TabsContent>
 
         {/* ---------- CALENDAR TAB ---------- */}
