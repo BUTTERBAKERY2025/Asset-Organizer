@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -107,6 +107,21 @@ export default function AdvancesPage() {
     },
   });
 
+  // تنظيم الطلبات الجارية: مجموعات حسب المرحلة + بحث
+  const [reqFilter, setReqFilter] = useState<"action" | "signature" | "done" | "all">("action");
+  const [reqSearch, setReqSearch] = useState("");
+  const reqGroups = useMemo(() => {
+    const action = pendingRequests.filter((r: any) => ["pending", "pre_approved", "signed", "approved"].includes(r.status));
+    const signature = pendingRequests.filter((r: any) => r.status === "awaiting_signature");
+    const done = pendingRequests.filter((r: any) => r.status === "disbursed");
+    return { action, signature, done };
+  }, [pendingRequests]);
+  const visibleRequests = useMemo(() => {
+    const base = reqFilter === "all" ? pendingRequests : reqGroups[reqFilter];
+    const q = reqSearch.trim().toLowerCase();
+    return q ? base.filter((r: any) => (r.employeeName || "").toLowerCase().includes(q)) : base;
+  }, [pendingRequests, reqGroups, reqFilter, reqSearch]);
+
   const reviewMutation = useMutation({
     mutationFn: async ({ id, decision, note }: { id: number; decision: "approved" | "rejected"; note?: string }) =>
       (await apiRequest("POST", `/api/hr/advance-requests/${id}/review`, { decision, note })).json(),
@@ -165,6 +180,12 @@ export default function AdvancesPage() {
     const q = search.toLowerCase();
     return advances.filter((a: any) => (a.employeeName || "").toLowerCase().includes(q));
   }, [advances, search]);
+
+  // ترقيم صفحات لسجل الأقساط (الجدول يطول مع كثرة الحركات)
+  const PAGE_SIZE = 25;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const pagedRows = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, filterMonth, filterType]);
 
   const saveMutation = useMutation({
     mutationFn: async (payload: any) => (await apiRequest("POST", "/api/hr/advances", payload)).json(),
@@ -317,13 +338,38 @@ export default function AdvancesPage() {
       {pendingRequests.length > 0 && (
         <Card className="border-amber-300 dark:border-amber-800">
           <CardContent className="pt-6 space-y-3">
-            <div className="flex items-center gap-2">
-              <Inbox className="h-5 w-5 text-amber-600" />
-              <h2 className="text-lg font-bold">طلبات السلف الجارية</h2>
-              <Badge className="bg-amber-100 text-amber-700">{pendingRequests.length}</Badge>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Inbox className="h-5 w-5 text-amber-600" />
+                <h2 className="text-lg font-bold">طلبات السلف الجارية</h2>
+                <Badge className="bg-amber-100 text-amber-700">{pendingRequests.length}</Badge>
+              </div>
+              <div className="relative w-full sm:w-56">
+                <Search className="h-4 w-4 absolute top-2.5 end-3 text-muted-foreground" />
+                <Input className="h-9" placeholder="بحث باسم الموظف..." value={reqSearch}
+                  onChange={(e) => setReqSearch(e.target.value)} data-testid="input-request-search" />
+              </div>
             </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {([
+                ["action", "تحتاج إجراءً", reqGroups.action.length, "bg-amber-600 text-white", "border-amber-300 text-amber-700"],
+                ["signature", "بانتظار التوقيع", reqGroups.signature.length, "bg-sky-600 text-white", "border-sky-300 text-sky-700"],
+                ["done", "مصروفة (مكتملة)", reqGroups.done.length, "bg-teal-600 text-white", "border-teal-300 text-teal-700"],
+                ["all", "الكل", pendingRequests.length, "bg-slate-700 text-white", "border-slate-300 text-slate-700"],
+              ] as const).map(([key, label, count, active, idle]) => (
+                <button key={key} type="button"
+                  className={`px-3 py-1 rounded-full text-xs font-semibold border transition ${reqFilter === key ? active : `bg-card ${idle}`}`}
+                  onClick={() => setReqFilter(key)}
+                  data-testid={`pill-req-${key}`}>
+                  {label} <span className="tabular-nums">({count})</span>
+                </button>
+              ))}
+            </div>
+            {visibleRequests.length === 0 && (
+              <div className="text-sm text-muted-foreground text-center py-4">لا توجد طلبات في هذه المجموعة</div>
+            )}
             <div className="space-y-2">
-              {pendingRequests.map((r: any) => {
+              {visibleRequests.map((r: any) => {
                 const statusCls: Record<string, string> = {
                   pending: "bg-amber-50 text-amber-700 border-amber-200",
                   pre_approved: "bg-blue-50 text-blue-700 border-blue-200",
@@ -477,7 +523,7 @@ export default function AdvancesPage() {
               <tbody>
                 {isLoading && <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">جاري التحميل...</td></tr>}
                 {!isLoading && filtered.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">لا توجد سلف</td></tr>}
-                {filtered.map((a: any) => (
+                {pagedRows.map((a: any) => (
                   <tr key={a.id} className="border-t hover:bg-slate-50" data-testid={`row-advance-${a.id}`}>
                     <td className="p-2">
                       <div className="font-medium">{a.employeeName || "-"}</div>
@@ -539,6 +585,18 @@ export default function AdvancesPage() {
               </tbody>
             </table>
           </div>
+          {filtered.length > 0 && (
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="text-xs text-muted-foreground" data-testid="text-rows-count">
+                عرض {Math.min(visibleCount, filtered.length).toLocaleString("ar-SA-u-nu-latn")} من {filtered.length.toLocaleString("ar-SA-u-nu-latn")} حركة
+              </div>
+              {filtered.length > visibleCount && (
+                <Button variant="outline" size="sm" onClick={() => setVisibleCount((c) => c + PAGE_SIZE)} data-testid="button-load-more">
+                  عرض المزيد ({(filtered.length - visibleCount).toLocaleString("ar-SA-u-nu-latn")} متبقية)
+                </Button>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
         </TabsContent>
