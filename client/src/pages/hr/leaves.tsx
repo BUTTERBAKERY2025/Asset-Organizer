@@ -103,6 +103,36 @@ export default function LeavesPage() {
     enabled: !!reviewing && reviewing.decision === "approved",
     staleTime: 30_000,
   });
+  // لوحة المراجعة الذكية: سجل الموظف + رصيده + تداخل العطلات الرسمية
+  const { data: reviewHistory } = useQuery<any>({
+    queryKey: ["/api/hr/leaves/employee-history", reviewing?.leave?.branchEmployeeId, "review"],
+    queryFn: async () => (await apiRequest("GET", `/api/hr/leaves/employee-history/${reviewing!.leave.branchEmployeeId}`)).json(),
+    enabled: !!reviewing?.leave?.branchEmployeeId,
+    staleTime: 30_000,
+  });
+  const { data: reviewBalance } = useQuery<any>({
+    queryKey: ["/api/hr/leave-balances", reviewing?.leave?.branchEmployeeId, reviewing?.leave?.leaveType, reviewing?.leave?.startDate, "review"],
+    queryFn: async () => {
+      const yr = String(reviewing!.leave.startDate || "").slice(0, 4) || String(new Date().getFullYear());
+      return (await apiRequest("GET", `/api/hr/leave-balances/${reviewing!.leave.branchEmployeeId}?type=${reviewing!.leave.leaveType}&year=${yr}`)).json();
+    },
+    enabled: !!reviewing?.leave?.branchEmployeeId && reviewing?.leave?.leaveType !== "unpaid",
+    staleTime: 30_000,
+  });
+  const { data: reviewHolidays = [] } = useQuery<any[]>({
+    queryKey: ["/api/hr/public-holidays", "review"],
+    queryFn: async () => (await apiRequest("GET", "/api/hr/public-holidays")).json(),
+    enabled: !!reviewing,
+    staleTime: 300_000,
+  });
+  // العطلات الرسمية المتداخلة مع فترة الطلب قيد المراجعة
+  const reviewHolidayOverlap = useMemo(() => {
+    if (!reviewing?.leave?.startDate || !reviewing?.leave?.endDate) return [];
+    const s = reviewing.leave.startDate, e = reviewing.leave.endDate;
+    return (reviewHolidays || []).filter((h: any) =>
+      h.isActive !== false && h.startDate && h.endDate && h.startDate <= e && h.endDate >= s
+    );
+  }, [reviewing?.leave?.startDate, reviewing?.leave?.endDate, reviewHolidays]);
   const [allowOver, setAllowOver] = useState(false);
   const [cancelling, setCancelling] = useState<Leave | null>(null);
   const [cancelReason, setCancelReason] = useState("");
@@ -2685,6 +2715,52 @@ ${d.workflowStatus === "disbursed" ? `<div class="box"><b>الصرف:</b> تم �
             <DialogTitle>{reviewing?.decision === "approved" ? "اعتماد طلب الإجازة" : "رفض طلب الإجازة"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
+            {/* ملخص الطلب */}
+            {reviewing && (
+              <div className="text-xs bg-slate-50 border rounded p-2 flex flex-wrap gap-x-4 gap-y-1" data-testid="text-review-summary">
+                <span><strong>{reviewing.leave?.employeeName}</strong></span>
+                <span>{LEAVE_TYPE_LABELS[reviewing.leave?.leaveType] || reviewing.leave?.leaveType}</span>
+                <span className="tabular-nums">{reviewing.leave?.startDate} ← {reviewing.leave?.endDate} ({arNum(reviewing.leave?.totalDays)} يوم)</span>
+              </div>
+            )}
+            {/* بطاقة الرصيد */}
+            {reviewing?.leave?.leaveType !== "unpaid" && reviewBalance && !reviewBalance.error && (
+              <div className="grid grid-cols-3 gap-1 text-center text-xs" data-testid="text-review-balance">
+                <div className="bg-blue-50 rounded p-1.5">
+                  <div className="text-blue-500">المستحق</div>
+                  <div className="font-bold tabular-nums">{arNum((reviewBalance.entitledDays || 0) + (reviewBalance.carriedOverDays || 0) + (reviewBalance.adjustmentDays || 0))}</div>
+                </div>
+                <div className="bg-amber-50 rounded p-1.5">
+                  <div className="text-amber-600">المستخدم</div>
+                  <div className="font-bold tabular-nums">{arNum(reviewBalance.usedDays)}</div>
+                </div>
+                <div className={`rounded p-1.5 ${(reviewBalance.remainingDays ?? 0) < (reviewing?.leave?.totalDays ?? 0) ? "bg-red-50" : "bg-emerald-50"}`}>
+                  <div className={(reviewBalance.remainingDays ?? 0) < (reviewing?.leave?.totalDays ?? 0) ? "text-red-600" : "text-emerald-600"}>المتبقي</div>
+                  <div className="font-bold tabular-nums">{arNum(reviewBalance.remainingDays)}</div>
+                </div>
+              </div>
+            )}
+            {/* تداخل مع عطلة رسمية */}
+            {reviewHolidayOverlap.length > 0 && (
+              <div className="text-xs bg-purple-50 text-purple-800 rounded p-2" data-testid="text-holiday-overlap">
+                <span className="font-semibold">تنبيه موسم:</span> الفترة تتداخل مع {reviewHolidayOverlap.map((h: any) => h.name).join("، ")} — قد يكون الفرع بحاجة لكامل الطاقم.
+              </div>
+            )}
+            {/* آخر إجازات الموظف */}
+            {(reviewHistory?.history?.filter((h: any) => h.id !== reviewing?.id && h.status === "approved").length ?? 0) > 0 && (
+              <div className="text-xs bg-slate-50 border rounded p-2 space-y-0.5" data-testid="text-review-history">
+                <div className="font-semibold text-slate-600">آخر إجازات الموظف:</div>
+                {reviewHistory.history
+                  .filter((h: any) => h.id !== reviewing?.id && h.status === "approved")
+                  .slice(0, 3)
+                  .map((h: any) => (
+                    <div key={h.id} className="flex justify-between text-slate-600">
+                      <span>{LEAVE_TYPE_LABELS[h.leaveType] || h.leaveType}</span>
+                      <span className="tabular-nums">{h.startDate} ← {h.endDate} ({arNum(h.totalDays)} يوم)</span>
+                    </div>
+                  ))}
+              </div>
+            )}
             {(reviewing?.leave?.requiredLevels ?? 0) > 1 && (
               <div className="text-xs bg-amber-50 text-amber-700 rounded p-2">
                 هذا الطلب يتطلب {arNum(reviewing?.leave?.requiredLevels)} مستويات موافقة — أنت على المستوى {arNum(reviewing?.leave?.currentLevel)}.
