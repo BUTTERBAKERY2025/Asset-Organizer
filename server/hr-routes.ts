@@ -3447,19 +3447,42 @@ export function registerHrRoutes(app: Express) {
       eosAmount = fullEos * eosFraction;
 
       // تعبئة رصيد الإجازات تلقائياً من نظام الإجازات إذا لم يُدخل يدوياً (المادة 111: بدل الإجازة المستحقة)
+      // نفس منطق اعتماد الإجازات: موظف بأيام عقد محددة → الرصيد التراكمي التلقائي حتى تاريخ نهاية الخدمة،
+      // وإلا → سجل السنة اليدوي.
       let vacationBalance = input.vacationBalance;
       let vacationAutoFilled = false;
+      let vacationSource: "manual" | "accrual" | "yearly" = "manual";
       if (vacationBalance == null) {
         try {
-          const endYear = parseInt(input.endDate.slice(0, 4), 10);
-          const bal = await getLeaveBalanceSummary(emp.id, endYear, "annual", (emp as any).hireDate);
-          vacationBalance = Math.max(0, Number(bal.remainingDays) || 0);
+          if ((emp as any).annualLeaveDays != null) {
+            const acc = await getAccruedLeaveBalance(emp as any, input.endDate);
+            vacationBalance = Math.max(0, Number(acc.remainingDays) || 0);
+            vacationSource = "accrual";
+          } else {
+            const endYear = parseInt(input.endDate.slice(0, 4), 10);
+            const bal = await getLeaveBalanceSummary(emp.id, endYear, "annual", (emp as any).hireDate);
+            vacationBalance = Math.max(0, Number(bal.remainingDays) || 0);
+            vacationSource = "yearly";
+          }
           vacationAutoFilled = true;
         } catch (balErr) {
           console.error("[hr/eos/calculate] leave balance auto-fill failed:", balErr);
           vacationBalance = 0;
         }
       }
+
+      // تفصيل مدة الخدمة (سنوات/أشهر/أيام) للعرض
+      const sd = new Date(startDate); const ed = new Date(input.endDate);
+      let sy = ed.getFullYear() - sd.getFullYear();
+      let sm = ed.getMonth() - sd.getMonth();
+      let sdd = ed.getDate() - sd.getDate();
+      if (sdd < 0) { sm -= 1; sdd += new Date(ed.getFullYear(), ed.getMonth(), 0).getDate(); }
+      if (sm < 0) { sy -= 1; sm += 12; }
+      const serviceDurationText = years <= 0 ? "—" : [
+        sy > 0 ? `${sy} سنة` : null,
+        sm > 0 ? `${sm} شهر` : null,
+        sdd > 0 ? `${sdd} يوم` : null,
+      ].filter(Boolean).join(" و") || "أقل من يوم";
 
       const dailyRate = total / 30;
       const vacationAmount = (vacationBalance || 0) * dailyRate;
@@ -3481,6 +3504,9 @@ export function registerHrRoutes(app: Express) {
         dailyRate: parseFloat(dailyRate.toFixed(2)),
         vacationBalance: vacationBalance || 0,
         vacationAutoFilled,
+        vacationSource,
+        serviceDurationText,
+        endDate: input.endDate,
         vacationAmount: parseFloat(vacationAmount.toFixed(2)),
         otherDues: input.otherDues || 0,
         totalDeductions: input.totalDeductions || 0,

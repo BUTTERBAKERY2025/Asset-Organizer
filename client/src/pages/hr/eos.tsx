@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Calculator, Plus, CheckCircle2, DollarSign, Trash2, ArrowRight, Printer } from "lucide-react";
+import { Calculator, Plus, CheckCircle2, DollarSign, Trash2, ArrowRight, Printer, Eye, FileSpreadsheet, CalendarClock, Wallet, ExternalLink } from "lucide-react";
+import * as XLSX from "xlsx";
 import { printEosSettlement } from "@/lib/eos-print";
 import { TERMINATION_TYPE_LABELS, EOS_STATUS_LABELS } from "@shared/schema";
 import { Layout } from "@/components/layout";
@@ -29,21 +30,31 @@ const initialForm = {
   notes: "",
 };
 
+const fmt = (n: any) => Number(n || 0).toLocaleString("ar-SA-u-nu-latn", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function serviceText(years: any) {
+  const y = Number(years) || 0;
+  if (y <= 0) return "—";
+  const whole = Math.floor(y);
+  const months = Math.round((y - whole) * 12);
+  if (months >= 12) return `${whole + 1} سنة`;
+  const parts = [whole > 0 ? `${whole} سنة` : null, months > 0 ? `${months} شهر` : null].filter(Boolean);
+  return parts.length ? parts.join(" و") : "أقل من شهر";
+}
+
 export default function EOSPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<typeof initialForm>(initialForm);
   const [preview, setPreview] = useState<any | null>(null);
+  const [viewRow, setViewRow] = useState<any | null>(null);
 
-  const { data: rows = [], isLoading } = useQuery<Eos[]>({
-    queryKey: ["/api/hr/eos", filterStatus],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (filterStatus !== "all") params.set("status", filterStatus);
-      return (await apiRequest("GET", `/api/hr/eos?${params}`)).json();
-    },
+  const { data: allRows = [], isLoading } = useQuery<Eos[]>({
+    queryKey: ["/api/hr/eos"],
+    queryFn: async () => (await apiRequest("GET", "/api/hr/eos")).json(),
   });
 
   const { data: employees = [] } = useQuery<Emp[]>({
@@ -51,14 +62,21 @@ export default function EOSPage() {
     queryFn: async () => (await apiRequest("GET", "/api/branch-employees")).json(),
   });
 
+  const rows = useMemo(() => allRows.filter((r: any) => {
+    if (filterStatus !== "all" && r.status !== filterStatus) return false;
+    if (search.trim() && !(r.employeeName || "").includes(search.trim())) return false;
+    return true;
+  }), [allRows, filterStatus, search]);
+
   const stats = useMemo(() => {
-    const total = rows.length;
-    const draft = rows.filter((r: any) => r.status === "draft").length;
-    const approved = rows.filter((r: any) => r.status === "approved").length;
-    const paid = rows.filter((r: any) => r.status === "paid").length;
-    const totalAmount = rows.reduce((s: number, r: any) => s + (r.netAmount || 0), 0);
-    return { total, draft, approved, paid, totalAmount };
-  }, [rows]);
+    const total = allRows.length;
+    const draft = allRows.filter((r: any) => r.status === "draft").length;
+    const approved = allRows.filter((r: any) => r.status === "approved").length;
+    const paid = allRows.filter((r: any) => r.status === "paid").length;
+    const totalAmount = allRows.reduce((s: number, r: any) => s + (Number(r.netAmount) || 0), 0);
+    const paidAmount = allRows.filter((r: any) => r.status === "paid").reduce((s: number, r: any) => s + (Number(r.netAmount) || 0), 0);
+    return { total, draft, approved, paid, totalAmount, paidAmount };
+  }, [allRows]);
 
   const calcMutation = useMutation({
     mutationFn: async (payload: any) => (await apiRequest("POST", "/api/hr/eos/calculate", payload)).json(),
@@ -81,16 +99,19 @@ export default function EOSPage() {
   const approveMutation = useMutation({
     mutationFn: async (id: number) => (await apiRequest("POST", `/api/hr/eos/${id}/approve`, {})).json(),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/hr/eos"] }); toast({ title: "تم الاعتماد" }); },
+    onError: (e: any) => toast({ title: "خطأ", description: e?.message, variant: "destructive" }),
   });
 
   const payMutation = useMutation({
     mutationFn: async (id: number) => (await apiRequest("POST", `/api/hr/eos/${id}/pay`, {})).json(),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/hr/eos"] }); toast({ title: "تم تسجيل الدفع" }); },
+    onError: (e: any) => toast({ title: "خطأ", description: e?.message, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/hr/eos/${id}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/hr/eos"] }); toast({ title: "تم الحذف" }); },
+    onError: (e: any) => toast({ title: "خطأ", description: e?.message, variant: "destructive" }),
   });
 
   const doCalculate = () => {
@@ -132,6 +153,38 @@ export default function EOSPage() {
     });
   };
 
+  const exportExcel = () => {
+    if (rows.length === 0) {
+      toast({ title: "لا توجد سجلات للتصدير", variant: "destructive" });
+      return;
+    }
+    const data = rows.map((r: any) => ({
+      "الموظف": r.employeeName || "-",
+      "الوظيفة": r.employeeJob || "",
+      "الفرع": r.branchName || "",
+      "سبب الإنهاء": TERMINATION_TYPE_LABELS[r.terminationType] || r.terminationType,
+      "بداية الخدمة": r.startDate || "",
+      "نهاية الخدمة": r.endDate || "",
+      "سنوات الخدمة": Number(r.totalServiceYears || 0),
+      "الأجر الشامل (ر.س)": Number(r.totalSalary || 0),
+      "مكافأة نهاية الخدمة (ر.س)": Number(r.eosAmount || 0),
+      "رصيد الإجازات (يوم)": Number(r.vacationBalance || 0),
+      "بدل الإجازات (ر.س)": Number(r.vacationAmount || 0),
+      "مستحقات أخرى (ر.س)": Number(r.otherDues || 0),
+      "خصومات (ر.س)": Number(r.totalDeductions || 0),
+      "الصافي (ر.س)": Number(r.netAmount || 0),
+      "الحالة": EOS_STATUS_LABELS[r.status] || r.status,
+      "ملاحظات": r.notes || "",
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    if (!wb.Workbook) wb.Workbook = {};
+    if (!wb.Workbook.Views) wb.Workbook.Views = [];
+    wb.Workbook.Views[0] = { RTL: true };
+    XLSX.utils.book_append_sheet(wb, ws, "نهاية الخدمة");
+    XLSX.writeFile(wb, `نهاية_الخدمة_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   const statusBadge = (s: string) => {
     const map: Record<string, string> = {
       draft: "bg-slate-100 text-slate-700",
@@ -141,7 +194,17 @@ export default function EOSPage() {
     return <Badge className={map[s] || ""}>{EOS_STATUS_LABELS[s] || s}</Badge>;
   };
 
-  const fmt = (n: any) => Number(n || 0).toLocaleString("ar-SA-u-nu-latn", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const kpiCard = (label: string, value: any, sub: string | null, active: boolean, onClick: () => void, accent: string, testid: string) => (
+    <button onClick={onClick} className="text-right" data-testid={testid}>
+      <Card className={`transition-all ${active ? "ring-2 ring-purple-400 shadow-sm" : "hover:shadow-sm"}`}>
+        <CardContent className="p-3">
+          <div className="text-xs text-muted-foreground">{label}</div>
+          <div className={`text-xl font-bold tabular-nums ${accent}`}>{value}</div>
+          {sub && <div className="text-[11px] text-muted-foreground tabular-nums">{sub}</div>}
+        </CardContent>
+      </Card>
+    </button>
+  );
 
   return (
     <Layout>
@@ -156,73 +219,106 @@ export default function EOSPage() {
           <Calculator className="h-7 w-7 text-purple-600" />
           <div>
             <h1 className="text-2xl font-bold">نهاية الخدمة</h1>
-            <p className="text-sm text-muted-foreground">حساب مستحقات نهاية الخدمة وفق نظام العمل السعودي</p>
+            <p className="text-sm text-muted-foreground">حساب مستحقات نهاية الخدمة وفق نظام العمل السعودي (المواد 80، 84، 85، 87، 111)</p>
           </div>
         </div>
-        <Button onClick={() => { setForm(initialForm); setPreview(null); setOpen(true); }} data-testid="button-add-eos">
-          <Plus className="h-4 w-4 ms-2" />حساب جديد
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Link href="/hr/leaves">
+            <Button variant="outline" data-testid="button-goto-leaves">
+              <Wallet className="h-4 w-4 ms-1" />أرصدة الإجازات
+            </Button>
+          </Link>
+          <Button variant="outline" onClick={exportExcel} data-testid="button-export-eos">
+            <FileSpreadsheet className="h-4 w-4 ms-1" />تصدير Excel
+          </Button>
+          <Button onClick={() => { setForm(initialForm); setPreview(null); setOpen(true); }} data-testid="button-add-eos">
+            <Plus className="h-4 w-4 ms-2" />حساب جديد
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <StatCard label="إجمالي السجلات" value={stats.total} icon={<Calculator className="h-5 w-5" />} />
-        <StatCard label="مسودات" value={stats.draft} icon={<Calculator className="h-5 w-5" />} accent="amber" />
-        <StatCard label="معتمدة" value={stats.approved} icon={<CheckCircle2 className="h-5 w-5" />} accent="blue" />
-        <StatCard label="مدفوعة" value={stats.paid} icon={<DollarSign className="h-5 w-5" />} accent="emerald" />
-        <StatCard label="إجمالي المستحقات (ر.س)" value={fmt(stats.totalAmount)} icon={<DollarSign className="h-5 w-5" />} accent="emerald" />
+        {kpiCard("إجمالي السجلات", stats.total, `الإجمالي ${fmt(stats.totalAmount)} ر.س`, filterStatus === "all", () => setFilterStatus("all"), "text-slate-800", "card-eos-all")}
+        {kpiCard("مسودات", stats.draft, "بانتظار الاعتماد", filterStatus === "draft", () => setFilterStatus("draft"), "text-amber-600", "card-eos-draft")}
+        {kpiCard("معتمدة", stats.approved, "بانتظار الدفع", filterStatus === "approved", () => setFilterStatus("approved"), "text-blue-600", "card-eos-approved")}
+        {kpiCard("مدفوعة", stats.paid, `${fmt(stats.paidAmount)} ر.س`, filterStatus === "paid", () => setFilterStatus("paid"), "text-emerald-600", "card-eos-paid")}
+        <Card>
+          <CardContent className="p-3">
+            <div className="text-xs text-muted-foreground">إجمالي المستحقات (ر.س)</div>
+            <div className="text-xl font-bold tabular-nums text-purple-700" data-testid="text-eos-total-amount">{fmt(stats.totalAmount)}</div>
+            <div className="text-[11px] text-muted-foreground">حسب كل السجلات</div>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
         <CardContent className="space-y-3 pt-6">
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="max-w-xs" data-testid="select-filter-status"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">كل الحالات</SelectItem>
-              {Object.entries(EOS_STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-44" data-testid="select-filter-status"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل الحالات</SelectItem>
+                {Object.entries(EOS_STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Input className="w-56" placeholder="بحث باسم الموظف..." value={search} onChange={(e) => setSearch(e.target.value)} data-testid="input-eos-search" />
+            {rows.length > 0 && (
+              <div className="text-xs text-muted-foreground me-auto tabular-nums" data-testid="text-eos-filtered-total">
+                {rows.length} سجل — صافي المعروض: <b>{fmt(rows.reduce((s: number, r: any) => s + (Number(r.netAmount) || 0), 0))} ر.س</b>
+              </div>
+            )}
+          </div>
 
           <div className="overflow-auto border rounded-lg">
             <table className="w-full text-sm">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="text-right p-2">الموظف</th>
-                  <th className="text-right p-2">سبب الإنهاء</th>
-                  <th className="text-right p-2">سنوات الخدمة</th>
-                  <th className="text-right p-2">مكافأة (ر.س)</th>
-                  <th className="text-right p-2">الصافي (ر.س)</th>
-                  <th className="text-right p-2">الحالة</th>
-                  <th className="text-right p-2">إجراءات</th>
+                  <th className="text-right p-2 whitespace-nowrap">الموظف</th>
+                  <th className="text-right p-2 whitespace-nowrap">سبب الإنهاء</th>
+                  <th className="text-center p-2 whitespace-nowrap">نهاية الخدمة</th>
+                  <th className="text-center p-2 whitespace-nowrap">مدة الخدمة</th>
+                  <th className="text-center p-2 whitespace-nowrap">مكافأة (ر.س)</th>
+                  <th className="text-center p-2 whitespace-nowrap">بدل إجازات (ر.س)</th>
+                  <th className="text-center p-2 whitespace-nowrap">الصافي (ر.س)</th>
+                  <th className="text-center p-2 whitespace-nowrap">الحالة</th>
+                  <th className="text-center p-2 whitespace-nowrap">إجراءات</th>
                 </tr>
               </thead>
               <tbody>
-                {isLoading && <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">جاري التحميل...</td></tr>}
-                {!isLoading && rows.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">لا توجد سجلات</td></tr>}
+                {isLoading && <tr><td colSpan={9} className="p-6 text-center text-muted-foreground">جاري التحميل...</td></tr>}
+                {!isLoading && rows.length === 0 && <tr><td colSpan={9} className="p-6 text-center text-muted-foreground">لا توجد سجلات</td></tr>}
                 {rows.map((r: any) => (
                   <tr key={r.id} className="border-t hover:bg-slate-50" data-testid={`row-eos-${r.id}`}>
                     <td className="p-2">
                       <div className="font-medium">{r.employeeName || "-"}</div>
-                      <div className="text-xs text-muted-foreground">{r.employeeJob || ""}</div>
+                      <div className="text-xs text-muted-foreground">{r.employeeJob || ""}{r.branchName ? ` • ${r.branchName}` : ""}</div>
                     </td>
-                    <td className="p-2">{TERMINATION_TYPE_LABELS[r.terminationType] || r.terminationType}</td>
-                    <td className="p-2 tabular-nums">{Number(r.totalServiceYears).toFixed(2)}</td>
-                    <td className="p-2 tabular-nums">{fmt(r.eosAmount)}</td>
-                    <td className="p-2 tabular-nums font-bold">{fmt(r.netAmount)}</td>
-                    <td className="p-2">{statusBadge(r.status)}</td>
+                    <td className="p-2 text-xs">{TERMINATION_TYPE_LABELS[r.terminationType] || r.terminationType}</td>
+                    <td className="p-2 text-center text-xs tabular-nums">{r.endDate || "—"}</td>
+                    <td className="p-2 text-center text-xs whitespace-nowrap">{serviceText(r.totalServiceYears)}</td>
+                    <td className="p-2 text-center tabular-nums">{fmt(r.eosAmount)}</td>
+                    <td className="p-2 text-center tabular-nums">{fmt(r.vacationAmount)}</td>
+                    <td className="p-2 text-center tabular-nums font-bold">{fmt(r.netAmount)}</td>
+                    <td className="p-2 text-center">{statusBadge(r.status)}</td>
                     <td className="p-2">
-                      <div className="flex gap-1 flex-wrap">
+                      <div className="flex gap-1 flex-wrap justify-center">
+                        <Button size="sm" variant="ghost" title="عرض التفاصيل" onClick={() => setViewRow(r)} data-testid={`button-view-${r.id}`}>
+                          <Eye className="h-3.5 w-3.5 text-slate-600" />
+                        </Button>
                         {r.status === "draft" && (
                           <Button size="sm" variant="ghost" className="text-blue-600" onClick={() => approveMutation.mutate(r.id)} data-testid={`button-approve-${r.id}`}>اعتماد</Button>
                         )}
                         {r.status === "approved" && (
-                          <Button size="sm" variant="ghost" className="text-emerald-600" onClick={() => payMutation.mutate(r.id)} data-testid={`button-pay-${r.id}`}>دفع</Button>
+                          <Button size="sm" variant="ghost" className="text-emerald-600" onClick={() => { if (confirm("تسجيل دفع هذا المستحق؟ لا يمكن التراجع بسهولة.")) payMutation.mutate(r.id); }} data-testid={`button-pay-${r.id}`}>دفع</Button>
                         )}
                         <Button size="sm" variant="ghost" onClick={() => printEosSettlement(r)} title="طباعة نموذج المخالصة" data-testid={`button-print-${r.id}`}>
                           <Printer className="h-3.5 w-3.5 text-purple-600" />
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => { if (confirm("حذف هذا السجل؟")) deleteMutation.mutate(r.id); }} data-testid={`button-delete-${r.id}`}>
-                          <Trash2 className="h-3.5 w-3.5 text-red-600" />
-                        </Button>
+                        {r.status !== "paid" && (
+                          <Button size="sm" variant="ghost" onClick={() => { if (confirm("حذف هذا السجل؟")) deleteMutation.mutate(r.id); }} data-testid={`button-delete-${r.id}`}>
+                            <Trash2 className="h-3.5 w-3.5 text-red-600" />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -233,14 +329,64 @@ export default function EOSPage() {
         </CardContent>
       </Card>
 
+      {/* ---------- View details dialog ---------- */}
+      <Dialog open={!!viewRow} onOpenChange={(o) => { if (!o) setViewRow(null); }}>
+        <DialogContent className="max-w-lg" dir="rtl">
+          <DialogHeader><DialogTitle>تفاصيل مستحقات نهاية الخدمة</DialogTitle></DialogHeader>
+          {viewRow && (
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-bold text-base">{viewRow.employeeName}</div>
+                  <div className="text-xs text-muted-foreground">{viewRow.employeeJob}{viewRow.branchName ? ` • ${viewRow.branchName}` : ""}</div>
+                </div>
+                {statusBadge(viewRow.status)}
+              </div>
+              <Card className="bg-slate-50">
+                <CardContent className="pt-4 space-y-1">
+                  <Row label="سبب الإنهاء" value={TERMINATION_TYPE_LABELS[viewRow.terminationType] || viewRow.terminationType} />
+                  <Row label="بداية الخدمة" value={viewRow.startDate || "—"} />
+                  <Row label="نهاية الخدمة" value={viewRow.endDate || "—"} />
+                  <Row label="مدة الخدمة" value={`${serviceText(viewRow.totalServiceYears)} (${Number(viewRow.totalServiceYears || 0).toFixed(2)} سنة)`} />
+                  <Row label="الأجر الأخير الشامل (أساس الحساب)" value={`${fmt(viewRow.totalSalary)} ر.س`} />
+                </CardContent>
+              </Card>
+              <Card className="bg-purple-50 border-purple-200">
+                <CardContent className="pt-4 space-y-1">
+                  <Row label="مكافأة نهاية الخدمة" value={`${fmt(viewRow.eosAmount)} ر.س`} bold />
+                  <Row label={`بدل رصيد الإجازات (${Number(viewRow.vacationBalance || 0)} يوم)`} value={`${fmt(viewRow.vacationAmount)} ر.س`} />
+                  <Row label="مستحقات أخرى" value={`${fmt(viewRow.otherDues)} ر.س`} />
+                  <Row label="خصومات" value={`- ${fmt(viewRow.totalDeductions)} ر.س`} />
+                  <div className="border-t pt-2 mt-2">
+                    <Row label="الصافي المستحق" value={`${fmt(viewRow.netAmount)} ر.س`} bold accent />
+                  </div>
+                </CardContent>
+              </Card>
+              {viewRow.notes && <div className="text-xs bg-amber-50 border border-amber-200 rounded p-2">📝 {viewRow.notes}</div>}
+              <div className="flex gap-2 flex-wrap">
+                <Button variant="outline" size="sm" onClick={() => printEosSettlement(viewRow)} data-testid="button-view-print">
+                  <Printer className="h-4 w-4 ms-1" />طباعة المخالصة
+                </Button>
+                <Link href="/hr/leaves">
+                  <Button variant="outline" size="sm" data-testid="button-view-goto-leaves">
+                    <ExternalLink className="h-4 w-4 ms-1" />رصيد إجازات الموظف
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ---------- New calculation dialog ---------- */}
       <Dialog open={open} onOpenChange={(o) => { if (!o) { setForm(initialForm); setPreview(null); setOpen(false); } else setOpen(true); }}>
-        <DialogContent className="max-w-2xl" dir="rtl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
           <DialogHeader><DialogTitle>حساب مستحقات نهاية الخدمة</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>الموظف</Label>
-                <Select value={form.branchEmployeeId} onValueChange={(v) => setForm({ ...form, branchEmployeeId: v })}>
+                <Select value={form.branchEmployeeId} onValueChange={(v) => { setForm({ ...form, branchEmployeeId: v }); setPreview(null); }}>
                   <SelectTrigger data-testid="select-employee"><SelectValue placeholder="اختر الموظف" /></SelectTrigger>
                   <SelectContent>
                     {employees.map((e) => <SelectItem key={e.id} value={String(e.id)}>{e.employeeName} — {e.jobTitle}</SelectItem>)}
@@ -249,7 +395,7 @@ export default function EOSPage() {
               </div>
               <div>
                 <Label>سبب نهاية الخدمة</Label>
-                <Select value={form.terminationType} onValueChange={(v) => setForm({ ...form, terminationType: v })}>
+                <Select value={form.terminationType} onValueChange={(v) => { setForm({ ...form, terminationType: v }); setPreview(null); }}>
                   <SelectTrigger data-testid="select-termination-type"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(TERMINATION_TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
@@ -260,22 +406,22 @@ export default function EOSPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>تاريخ نهاية الخدمة</Label>
-                <Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} data-testid="input-end-date" />
+                <Input type="date" value={form.endDate} onChange={(e) => { setForm({ ...form, endDate: e.target.value }); setPreview(null); }} data-testid="input-end-date" />
               </div>
               <div>
                 <Label>رصيد الإجازات (أيام)</Label>
-                <Input type="number" step="0.5" placeholder="تلقائي من نظام الإجازات" value={form.vacationBalance} onChange={(e) => setForm({ ...form, vacationBalance: e.target.value })} data-testid="input-vacation-balance" />
-                <p className="text-xs text-muted-foreground mt-1">اتركه فارغاً ليُجلب الرصيد المتبقي تلقائياً</p>
+                <Input type="number" step="0.5" placeholder="تلقائي من نظام الإجازات" value={form.vacationBalance} onChange={(e) => { setForm({ ...form, vacationBalance: e.target.value }); setPreview(null); }} data-testid="input-vacation-balance" />
+                <p className="text-xs text-muted-foreground mt-1">اتركه فارغاً ليُجلب الرصيد تلقائياً حتى تاريخ نهاية الخدمة</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>مستحقات أخرى (ر.س)</Label>
-                <Input type="number" step="0.01" value={form.otherDues} onChange={(e) => setForm({ ...form, otherDues: e.target.value })} data-testid="input-other-dues" />
+                <Input type="number" step="0.01" value={form.otherDues} onChange={(e) => { setForm({ ...form, otherDues: e.target.value }); setPreview(null); }} data-testid="input-other-dues" />
               </div>
               <div>
                 <Label>خصومات (سلف..) (ر.س)</Label>
-                <Input type="number" step="0.01" value={form.totalDeductions} onChange={(e) => setForm({ ...form, totalDeductions: e.target.value })} data-testid="input-deductions" />
+                <Input type="number" step="0.01" value={form.totalDeductions} onChange={(e) => { setForm({ ...form, totalDeductions: e.target.value }); setPreview(null); }} data-testid="input-deductions" />
               </div>
             </div>
             <div>
@@ -289,10 +435,10 @@ export default function EOSPage() {
 
             {preview && (
               <Card className="bg-purple-50 border-purple-200">
-                <CardHeader className="pb-2"><CardTitle className="text-sm">نتيجة الحساب</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><CalendarClock className="h-4 w-4" />نتيجة الحساب</CardTitle></CardHeader>
                 <CardContent className="text-sm space-y-1">
                   <Row label="تاريخ بداية الخدمة" value={preview.startDate} />
-                  <Row label="سنوات الخدمة" value={Number(preview.totalServiceYears).toFixed(3)} />
+                  <Row label="مدة الخدمة" value={`${preview.serviceDurationText || serviceText(preview.totalServiceYears)} (${Number(preview.totalServiceYears).toFixed(3)} سنة)`} />
                   <Row label="الراتب الأساسي" value={`${fmt(preview.basicSalary)} ر.س`} />
                   <Row label="الأجر الأخير الشامل (أساس الحساب)" value={`${fmt(preview.totalSalary)} ر.س`} />
                   {preview.appliedRule && (
@@ -308,7 +454,14 @@ export default function EOSPage() {
                     <Row label="نسبة الاستحقاق" value={preview.eosFraction === 0 ? "لا استحقاق" : preview.eosFraction === 1 / 3 ? "الثلث (1/3)" : "الثلثان (2/3)"} />
                   )}
                   <Row label="مكافأة نهاية الخدمة" value={`${fmt(preview.eosAmount)} ر.س`} bold />
-                  <Row label="قيمة رصيد الإجازات" value={`${fmt(preview.vacationAmount)} ر.س`} />
+                  <Row label={`قيمة رصيد الإجازات (${Number(preview.vacationBalance || 0)} يوم × ${fmt(preview.dailyRate)} ر.س)`} value={`${fmt(preview.vacationAmount)} ر.س`} />
+                  {preview.vacationAutoFilled && (
+                    <div className="text-[11px] text-muted-foreground" data-testid="text-vacation-source">
+                      {preview.vacationSource === "accrual"
+                        ? "✓ رصيد الإجازات جُلب تلقائياً من الرصيد التراكمي (أيام العقد) حتى تاريخ نهاية الخدمة"
+                        : "✓ رصيد الإجازات جُلب تلقائياً من سجل السنة اليدوي"}
+                    </div>
+                  )}
                   <Row label="مستحقات أخرى" value={`${fmt(preview.otherDues)} ر.س`} />
                   <Row label="خصومات" value={`- ${fmt(preview.totalDeductions)} ر.س`} />
                   <div className="border-t pt-2 mt-2">
@@ -333,29 +486,9 @@ export default function EOSPage() {
 
 function Row({ label, value, bold, accent }: { label: string; value: any; bold?: boolean; accent?: boolean }) {
   return (
-    <div className="flex justify-between">
+    <div className="flex justify-between gap-3">
       <span className={accent ? "text-purple-700" : ""}>{label}</span>
-      <span className={`tabular-nums ${bold ? "font-bold" : ""} ${accent ? "text-purple-700 text-base" : ""}`}>{value}</span>
+      <span className={`tabular-nums whitespace-nowrap ${bold ? "font-bold" : ""} ${accent ? "text-purple-700 text-base" : ""}`}>{value}</span>
     </div>
-  );
-}
-
-function StatCard({ label, value, icon, accent = "purple" }: { label: string; value: any; icon: any; accent?: string }) {
-  const accents: Record<string, string> = {
-    amber: "bg-amber-50 text-amber-700",
-    emerald: "bg-emerald-50 text-emerald-700",
-    blue: "bg-blue-50 text-blue-700",
-    purple: "bg-purple-50 text-purple-700",
-  };
-  return (
-    <Card>
-      <CardContent className="p-4 flex items-center justify-between">
-        <div>
-          <div className="text-xs text-muted-foreground mb-1">{label}</div>
-          <div className="text-xl font-bold tabular-nums">{typeof value === "string" ? value : Number(value).toLocaleString("ar-SA-u-nu-latn")}</div>
-        </div>
-        <div className={`p-2 rounded-lg ${accents[accent] || accents.purple}`}>{icon}</div>
-      </CardContent>
-    </Card>
   );
 }
