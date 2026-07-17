@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Wallet, Plus, Trash2, TrendingDown, Calendar, ArrowRight, Clock, CheckCircle2, XCircle, Inbox, FileSignature, Banknote, History } from "lucide-react";
+import { Wallet, Plus, Trash2, TrendingDown, Calendar, ArrowRight, Clock, CheckCircle2, XCircle, Inbox, FileSignature, Banknote, History, Pencil } from "lucide-react";
 import { Layout } from "@/components/layout";
 import { Link } from "wouter";
 import { ADVANCE_REQUEST_STATUS_LABELS } from "@shared/schema";
@@ -49,6 +49,8 @@ export default function AdvancesPage() {
     (role === "hr_specialist" && hasPermission("hr_advances", "edit"));
   const canCreate = hasPermission("hr_advances", "create");
   const canDelete = hasPermission("hr_advances", "delete");
+  const canEdit = hasPermission("hr_advances", "edit");
+  const currentMonthStr = new Date().toISOString().slice(0, 7);
   const [filterMonth, setFilterMonth] = useState<string>("");
   const [filterType, setFilterType] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -112,6 +114,7 @@ export default function AdvancesPage() {
       qc.invalidateQueries({ queryKey: ["/api/hr/advance-requests"] });
       qc.invalidateQueries({ queryKey: ["/api/hr/advances"] });
       qc.invalidateQueries({ queryKey: ["/api/hr/advances/stats"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/advances/report"] });
       toast({ title: vars.decision === "approved" ? "تم اعتماد الطلب" : "تم رفض الطلب" });
     },
     onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل تنفيذ الإجراء", variant: "destructive" }),
@@ -149,6 +152,7 @@ export default function AdvancesPage() {
       qc.invalidateQueries({ queryKey: ["/api/hr/advance-requests"] });
       qc.invalidateQueries({ queryKey: ["/api/hr/advances"] });
       qc.invalidateQueries({ queryKey: ["/api/hr/advances/stats"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/advances/report"] });
       toast({ title: "تم تسجيل السلفة السابقة وربط أقساطها بالراتب" });
       setLegacyOpen(false);
       setLegacyForm({ branchEmployeeId: "", totalAmount: "", repaidAmount: "0", installmentMonths: "1", startMonth: new Date().toISOString().slice(0, 7), reason: "" });
@@ -167,6 +171,7 @@ export default function AdvancesPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/hr/advances"] });
       qc.invalidateQueries({ queryKey: ["/api/hr/advances/stats"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/advances/report"] });
       toast({ title: "تم التسجيل" });
       setForm(initialForm);
       setOpen(false);
@@ -210,8 +215,38 @@ export default function AdvancesPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/hr/advances"] });
       qc.invalidateQueries({ queryKey: ["/api/hr/advances/stats"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/advances/report"] });
       toast({ title: "تم الحذف" });
     },
+    onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل الحذف", variant: "destructive" }),
+  });
+
+  // تعديل قسط (المبلغ / الشهر / الوصف)
+  const [editRow, setEditRow] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({ amount: "", month: "", description: "" });
+  const editMutation = useMutation({
+    mutationFn: async ({ id, payload }: { id: number; payload: any }) =>
+      (await apiRequest("PATCH", `/api/hr/advances/${id}`, payload)).json(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/hr/advances"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/advances/stats"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/advances/report"] });
+      toast({ title: "تم تعديل القسط" });
+      setEditRow(null);
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل التعديل", variant: "destructive" }),
+  });
+
+  // تأجيل قسط (وإزاحة الأقساط التالية له شهراً)
+  const deferMutation = useMutation({
+    mutationFn: async (id: number) => (await apiRequest("POST", `/api/hr/advances/${id}/defer`)).json(),
+    onSuccess: (r: any) => {
+      qc.invalidateQueries({ queryKey: ["/api/hr/advances"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/advances/stats"] });
+      qc.invalidateQueries({ queryKey: ["/api/hr/advances/report"] });
+      toast({ title: "تم التأجيل", description: `أُزيح ${r.shifted} من الأقساط شهراً واحداً للأمام` });
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل التأجيل", variant: "destructive" }),
   });
 
   const submit = () => {
@@ -266,10 +301,17 @@ export default function AdvancesPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <StatCard label="إجمالي السلف" value={stats?.total ?? 0} icon={<Wallet className="h-5 w-5" />} />
-        <StatCard label="إجمالي المبالغ (ر.س)" value={Number(stats?.totalAmount || 0).toFixed(2)} icon={<TrendingDown className="h-5 w-5" />} accent="amber" />
-        <StatCard label="هذا الشهر (ر.س)" value={Number(stats?.thisMonthAmount || 0).toFixed(2)} icon={<Calendar className="h-5 w-5" />} accent="blue" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard label="إجمالي المبالغ (ر.س)" value={Number(stats?.totalAmount || 0).toFixed(2)} icon={<Wallet className="h-5 w-5" />} accent="amber"
+          hint={`${stats?.total ?? 0} بنداً — اضغط لعرض الكل`}
+          onClick={() => { setFilterMonth(""); setFilterType("all"); setSearch(""); }} />
+        <StatCard label="هذا الشهر (ر.س)" value={Number(stats?.thisMonthAmount || 0).toFixed(2)} icon={<Calendar className="h-5 w-5" />} accent="blue"
+          hint="اضغط لفلترة الشهر الحالي"
+          onClick={() => { setFilterMonth(new Date().toISOString().slice(0, 7)); setFilterType("all"); }} />
+        <StatCard label="مستحق حتى الآن (ر.س)" value={Number(stats?.dueAmount || 0).toFixed(2)} icon={<TrendingDown className="h-5 w-5" />} accent="emerald"
+          hint="أقساط شهرها الحالي أو سابق" />
+        <StatCard label="دين قائم — أقساط قادمة (ر.س)" value={Number(stats?.upcomingAmount || 0).toFixed(2)} icon={<Clock className="h-5 w-5" />} accent="sky"
+          hint={`${stats?.upcomingCount ?? 0} قسطاً على ${stats?.debtors ?? 0} موظفاً`} />
       </div>
 
       {pendingRequests.length > 0 && (
@@ -461,16 +503,36 @@ export default function AdvancesPage() {
                       )}
                     </td>
                     <td className="p-2">
-                      {canDelete && (
-                        <Button size="sm" variant="ghost" onClick={() => {
-                          const msg = a.type === "sales_deficit"
-                            ? "حذف خصم العجز؟ سيتم إلغاء ترحيل العجز بالكامل (كل أقساطه إن وُجدت) وتعود اليوميات قابلة للترحيل من جديد."
-                            : "حذف هذه السلفة؟";
-                          if (confirm(msg)) deleteMutation.mutate(a.id);
-                        }} data-testid={`button-delete-${a.id}`}>
-                          <Trash2 className="h-3.5 w-3.5 text-red-600" />
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {canEdit && ["advance", "loan_installment"].includes(a.type) && a.month >= currentMonthStr && (
+                          <>
+                            <Button size="sm" variant="ghost" title="تعديل القسط"
+                              onClick={() => {
+                                setEditForm({ amount: String(a.amount ?? ""), month: a.month, description: a.description || "" });
+                                setEditRow(a);
+                              }} data-testid={`button-edit-${a.id}`}>
+                              <Pencil className="h-3.5 w-3.5 text-slate-600" />
+                            </Button>
+                            <Button size="sm" variant="ghost" title="تأجيل شهراً (يُزيح الأقساط التالية أيضاً)"
+                              disabled={deferMutation.isPending}
+                              onClick={() => {
+                                if (confirm(`تأجيل قسط ${a.month} شهراً واحداً؟ ستُزاح الأقساط التالية لنفس السلفة تلقائياً للحفاظ على التتابع.`)) deferMutation.mutate(a.id);
+                              }} data-testid={`button-defer-${a.id}`}>
+                              <Clock className="h-3.5 w-3.5 text-sky-600" />
+                            </Button>
+                          </>
+                        )}
+                        {canDelete && (
+                          <Button size="sm" variant="ghost" onClick={() => {
+                            const msg = a.type === "sales_deficit"
+                              ? "تنبيه: حذف خصم العجز سيلغي ترحيل العجز بالكامل — ستُحذف كل الأقساط الشقيقة المرتبطة بنفس العجز (وليس هذا القسط فقط) وتعود اليوميات قابلة للترحيل من جديد. هل أنت متأكد؟"
+                              : "حذف هذه السلفة؟";
+                            if (confirm(msg)) deleteMutation.mutate(a.id);
+                          }} data-testid={`button-delete-${a.id}`}>
+                            <Trash2 className="h-3.5 w-3.5 text-red-600" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -884,24 +946,77 @@ export default function AdvancesPage() {
               </div>
             )}
             <div>
-              <Label>ملاحظة / سبب (اختياري)</Label>
-              <Textarea value={legacyForm.reason} onChange={(e) => setLegacyForm({ ...legacyForm, reason: e.target.value })} data-testid="textarea-legacy-reason" />
+              <Label>سبب الإدخال (إلزامي — يُبلَّغ الموظف بالتسجيل)</Label>
+              <Textarea value={legacyForm.reason} placeholder="مثال: سلفة قائمة قبل تطبيق النظام بموجب سند رقم..."
+                onChange={(e) => setLegacyForm({ ...legacyForm, reason: e.target.value })} data-testid="textarea-legacy-reason" />
+              {legacyForm.reason.trim().length > 0 && legacyForm.reason.trim().length < 5 && (
+                <div className="text-xs text-destructive mt-1">السبب قصير جداً (5 أحرف على الأقل)</div>
+              )}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLegacyOpen(false)}>إلغاء</Button>
             <Button
-              disabled={legacyMutation.isPending || !legacyForm.branchEmployeeId || !(Number(legacyForm.totalAmount) > 0) || Number(legacyForm.repaidAmount || 0) >= Number(legacyForm.totalAmount) || !(Number(legacyForm.installmentMonths) >= 1) || !legacyForm.startMonth}
+              disabled={legacyMutation.isPending || !legacyForm.branchEmployeeId || !(Number(legacyForm.totalAmount) > 0) || Number(legacyForm.repaidAmount || 0) >= Number(legacyForm.totalAmount) || !(Number(legacyForm.installmentMonths) >= 1) || !legacyForm.startMonth || legacyForm.reason.trim().length < 5}
               onClick={() => legacyMutation.mutate({
                 branchEmployeeId: parseInt(legacyForm.branchEmployeeId, 10),
                 totalAmount: Number(legacyForm.totalAmount),
                 repaidAmount: Number(legacyForm.repaidAmount || 0),
                 installmentMonths: parseInt(legacyForm.installmentMonths, 10),
                 startMonth: legacyForm.startMonth,
-                reason: legacyForm.reason || undefined,
+                reason: legacyForm.reason.trim(),
               })}
               data-testid="button-save-legacy">
               <History className="h-4 w-4 ms-1" />{legacyMutation.isPending ? "جاري الحفظ..." : "تسجيل السلفة السابقة"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* تعديل قسط سلفة/قرض */}
+      <Dialog open={editRow !== null} onOpenChange={(o) => { if (!o) setEditRow(null); }}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader><DialogTitle>تعديل القسط</DialogTitle></DialogHeader>
+          {editRow && (
+            <div className="space-y-3">
+              <div className="text-sm text-muted-foreground">
+                الموظف: <span className="font-semibold text-foreground">{editRow.employeeName || "-"}</span>
+                {" · "}النوع: <span className="text-foreground">{editRow.type === "advance" ? "سلفة" : "قسط قرض"}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>المبلغ (ر.س)</Label>
+                  <Input type="number" step="0.01" value={editForm.amount}
+                    onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })} data-testid="input-edit-amount" />
+                </div>
+                <div>
+                  <Label>شهر الخصم</Label>
+                  <Input type="month" min={currentMonthStr} value={editForm.month}
+                    onChange={(e) => setEditForm({ ...editForm, month: e.target.value })} data-testid="input-edit-month" />
+                </div>
+              </div>
+              <div>
+                <Label>الوصف</Label>
+                <Textarea value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} data-testid="textarea-edit-description" />
+              </div>
+              <p className="text-xs text-muted-foreground">التعديل متاح لأقساط الشهر الحالي والقادمة فقط — الأقساط السابقة خُصمت في مسيرات مغلقة.</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditRow(null)}>إلغاء</Button>
+            <Button
+              disabled={editMutation.isPending || !editRow || !(Number(editForm.amount) > 0) || !editForm.month || editForm.month < currentMonthStr}
+              onClick={() => editMutation.mutate({
+                id: editRow.id,
+                payload: {
+                  amount: Number(editForm.amount),
+                  month: editForm.month,
+                  description: editForm.description,
+                },
+              })}
+              data-testid="button-save-edit">
+              <Pencil className="h-4 w-4 ms-1" />{editMutation.isPending ? "جاري الحفظ..." : "حفظ التعديل"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -911,18 +1026,20 @@ export default function AdvancesPage() {
   );
 }
 
-function StatCard({ label, value, icon, accent = "emerald" }: { label: string; value: any; icon: any; accent?: string }) {
+function StatCard({ label, value, icon, accent = "emerald", hint, onClick }: { label: string; value: any; icon: any; accent?: string; hint?: string; onClick?: () => void }) {
   const accents: Record<string, string> = {
     amber: "bg-amber-50 text-amber-700",
     emerald: "bg-emerald-50 text-emerald-700",
     blue: "bg-blue-50 text-blue-700",
+    sky: "bg-sky-50 text-sky-700",
   };
   return (
-    <Card>
+    <Card className={onClick ? "cursor-pointer transition hover:shadow-md hover:border-amber-300" : undefined} onClick={onClick}>
       <CardContent className="p-4 flex items-center justify-between">
         <div>
           <div className="text-xs text-muted-foreground mb-1">{label}</div>
           <div className="text-2xl font-bold tabular-nums">{typeof value === "string" ? value : Number(value).toLocaleString("ar-SA-u-nu-latn")}</div>
+          {hint && <div className="text-[11px] text-muted-foreground mt-0.5">{hint}</div>}
         </div>
         <div className={`p-2 rounded-lg ${accents[accent] || accents.emerald}`}>{icon}</div>
       </CardContent>

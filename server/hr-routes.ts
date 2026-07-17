@@ -3093,6 +3093,97 @@ export function registerHrRoutes(app: Express) {
     }
   });
 
+  // تعديل قسط سلفة/قرض (المبلغ / الشهر / الوصف) — للشهر الحالي والقادم فقط
+  app.patch("/api/hr/advances/:id", isAuthenticated, requirePermission("hr_advances", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const body = z.object({
+        amount: z.number().positive("المبلغ يجب أن يكون موجباً").optional(),
+        month: z.string().regex(/^\d{4}-\d{2}$/, "صيغة الشهر يجب أن تكون YYYY-MM").optional(),
+        description: z.string().optional(),
+      }).parse(req.body);
+      if (body.amount === undefined && body.month === undefined && body.description === undefined) {
+        return res.status(400).json({ error: "لا يوجد ما يُعدَّل" });
+      }
+      const { branchIds } = getBranchScope(req);
+      const [existing] = await db.select().from(salaryDeductions).where(eq(salaryDeductions.id, id));
+      if (!existing) return res.status(404).json({ error: "القسط غير موجود" });
+      if (branchIds !== null && !branchIds.includes(existing.branchId)) {
+        return res.status(403).json({ error: "ليس لديك صلاحية على فرع هذا القسط" });
+      }
+      if (!["advance", "loan_installment"].includes(existing.type)) {
+        return res.status(400).json({ error: "تعديل الأقساط متاح للسلف والقروض فقط — عجوزات الكاشير تُصحَّح من صفحة العجوزات" });
+      }
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      if (existing.month < currentMonth) {
+        return res.status(400).json({ error: `القسط لشهر ${existing.month} سبق استحقاقه وربما خُصم في مسير سابق — لا يمكن تعديله` });
+      }
+      if (body.month !== undefined && body.month < currentMonth) {
+        return res.status(400).json({ error: "لا يمكن نقل القسط إلى شهر سابق" });
+      }
+      const [updated] = await db.update(salaryDeductions).set({
+        ...(body.amount !== undefined ? { amount: body.amount } : {}),
+        ...(body.month !== undefined ? { month: body.month } : {}),
+        ...(body.description !== undefined ? { description: body.description } : {}),
+      }).where(eq(salaryDeductions.id, id)).returning();
+      res.json(updated);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
+      console.error("[hr/advances] patch error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // تأجيل قسط: إزاحة القسط وكل الأقساط التالية له (نفس السلفة) شهراً واحداً للأمام
+  app.post("/api/hr/advances/:id/defer", isAuthenticated, requirePermission("hr_advances", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const addOneMonth = (month: string): string => {
+        const [y, m] = month.split("-").map((v) => parseInt(v, 10));
+        const total = y * 12 + (m - 1) + 1;
+        return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
+      };
+      const { branchIds } = getBranchScope(req);
+      const [existing] = await db.select().from(salaryDeductions).where(eq(salaryDeductions.id, id));
+      if (!existing) return res.status(404).json({ error: "القسط غير موجود" });
+      if (branchIds !== null && !branchIds.includes(existing.branchId)) {
+        return res.status(403).json({ error: "ليس لديك صلاحية على فرع هذا القسط" });
+      }
+      if (!["advance", "loan_installment"].includes(existing.type)) {
+        return res.status(400).json({ error: "التأجيل متاح لأقساط السلف والقروض فقط" });
+      }
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      if (existing.month < currentMonth) {
+        return res.status(400).json({ error: "لا يمكن تأجيل قسط سبق استحقاقه" });
+      }
+      let shifted = 0;
+      await db.transaction(async (tx) => {
+        // قفل صفوف على مستوى القاعدة لمنع تأجيل متزامن يزيح الأقساط مرتين
+        // ثم إعادة قراءة القسط داخل القفل للتأكد أن شهره لم يتغيّر بطلب متوازٍ
+        const locked = existing.advanceRequestId
+          ? await tx.execute(sql`SELECT id, month FROM salary_deductions WHERE advance_request_id = ${existing.advanceRequestId} AND type = ${existing.type} FOR UPDATE`)
+          : await tx.execute(sql`SELECT id, month FROM salary_deductions WHERE id = ${id} FOR UPDATE`);
+        const lockedRows = (locked as any).rows as { id: number; month: string }[];
+        const target = lockedRows.find((r) => r.id === id);
+        if (!target || target.month !== existing.month) {
+          throw new Error("تغيّر القسط أثناء التنفيذ — أعد المحاولة");
+        }
+        // أقساط نفس السلفة من هذا الشهر فصاعداً — تُزاح كلها للحفاظ على التتابع (من الأبعد حتى لا تتصادم الشهور)
+        const ordered = lockedRows
+          .filter((r) => r.month >= existing.month)
+          .sort((a, b) => (a.month < b.month ? 1 : -1));
+        for (const s of ordered) {
+          await tx.update(salaryDeductions).set({ month: addOneMonth(s.month) }).where(eq(salaryDeductions.id, s.id));
+          shifted++;
+        }
+      });
+      res.json({ success: true, shifted });
+    } catch (e: any) {
+      console.error("[hr/advances] defer error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // سداد مبكر: حذف أقساط قادمة (شهرها بعد الشهر الحالي) دفعة واحدة بعد سداد الموظف نقداً
   app.post("/api/hr/advances/early-settle", isAuthenticated, requirePermission("hr_advances", "delete"), async (req, res) => {
     try {
@@ -3133,7 +3224,16 @@ export function registerHrRoutes(app: Express) {
       const totalAmount = all.reduce((s, d) => s + (d.amount || 0), 0);
       const thisMonth = new Date().toISOString().slice(0, 7);
       const thisMonthAmount = all.filter(d => d.month === thisMonth).reduce((s, d) => s + (d.amount || 0), 0);
-      res.json({ total, totalAmount, thisMonthAmount });
+      // مستحق حتى الآن (شهر القسط <= الشهر الحالي) وأقساط قادمة (بعد الشهر الحالي)
+      const dueAmount = all.filter(d => d.month <= thisMonth).reduce((s, d) => s + (d.amount || 0), 0);
+      const upcomingAmount = all.filter(d => d.month > thisMonth).reduce((s, d) => s + (d.amount || 0), 0);
+      const upcomingCount = all.filter(d => d.month > thisMonth).length;
+      // أعلى 5 موظفين بأقساط قادمة (دين قائم)
+      const byEmp = new Map<number, number>();
+      for (const d of all) {
+        if (d.month > thisMonth) byEmp.set(d.branchEmployeeId, (byEmp.get(d.branchEmployeeId) || 0) + (d.amount || 0));
+      }
+      res.json({ total, totalAmount, thisMonthAmount, dueAmount, upcomingAmount, upcomingCount, debtors: byEmp.size });
     } catch (e: any) {
       console.error("[hr/advances/stats] error:", e);
       res.status(500).json({ error: e.message });

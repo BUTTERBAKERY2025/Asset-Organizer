@@ -1381,8 +1381,18 @@ export function registerSelfServiceRoutes(app: Express) {
         repaidAmount: z.number().min(0).default(0),
         installmentMonths: z.number().int().min(1).max(60),
         startMonth: z.string().regex(/^\d{4}-\d{2}$/, "صيغة الشهر يجب أن تكون YYYY-MM"),
-        reason: z.string().optional(),
+        reason: z.string().trim().min(5, "سبب الإدخال إلزامي (5 أحرف على الأقل) — السلف السابقة تُسجَّل بدون توقيع الموظف"),
       }).parse(req.body);
+      // ضابط تجاوز التوقيع: السلفة السابقة يجب أن تكون قائمة فعلاً قبل النظام —
+      // لا يُسمح ببدء الخصم بعد أكثر من شهرين من الآن (السلفة الجديدة تمر بمسار التوقيع الإلزامي)
+      {
+        const now = new Date();
+        const [sy, sm] = body.startMonth.split("-").map((v) => parseInt(v, 10));
+        const diff = (sy * 12 + sm) - (now.getFullYear() * 12 + now.getMonth() + 1);
+        if (diff > 2) {
+          return res.status(400).json({ error: "شهر بداية الخصم بعيد جداً — السلف السابقة تبدأ خصمها خلال شهرين كحد أقصى. السلف الجديدة تُسجَّل عبر مسار الطلب والتوقيع الإلكتروني" });
+        }
+      }
 
       const remaining = Math.round((body.totalAmount - body.repaidAmount) * 100) / 100;
       if (remaining <= 0) return res.status(400).json({ error: "المبلغ المتبقي يجب أن يكون أكبر من صفر" });
