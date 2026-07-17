@@ -1870,6 +1870,7 @@ ${d.workflowStatus === "disbursed" ? `<div class="box"><b>الصرف:</b> تم �
                     «الرصيد الفعلي حتى اليوم (تلقائي)»
                   </button>
                   . هذا السجل أرشيف يدوي فقط (ترحيل/تعديل)، لذلك لا يُعرض فيه "المتبقي" للسنوية حتى لا تختلط الأرقام.
+                  {" "}بجانب اسم كل موظف علامة توضح النظام المعتمد له: <b>«المعتمد: تلقائي»</b> (أيام العقد محددة) أو <b>«المعتمد: هذا السجل»</b> (بدون أيام عقد) — مرّر الفأرة على العلامة لمعرفة التفاصيل.
                 </div>
               )}
               <div className="flex items-center gap-2 flex-wrap">
@@ -1935,7 +1936,24 @@ ${d.workflowStatus === "disbursed" ? `<div class="box"><b>الصرف:</b> تم �
                     {balances.map((b: any) => (
                       <tr key={b.branchEmployeeId} className="border-t hover:bg-slate-50" data-testid={`row-balance-${b.branchEmployeeId}`}>
                         <td className="p-2">
-                          <div className="font-medium">{b.employeeName}</div>
+                          <div className="font-medium flex items-center gap-1.5 flex-wrap">
+                            {b.employeeName}
+                            {balType === "annual" && (
+                              b.accrualGoverned ? (
+                                <span
+                                  className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap"
+                                  title="أيام الإجازة السنوية محددة في عقد هذا الموظف، لذا الرصيد المعتمد عند اعتماد الإجازات هو الرصيد التلقائي — التعديل هنا لا يؤثر على قرار الاعتماد"
+                                  data-testid={`badge-governed-accrual-${b.branchEmployeeId}`}
+                                >المعتمد: تلقائي</span>
+                              ) : (
+                                <span
+                                  className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-300 whitespace-nowrap"
+                                  title="لا توجد أيام إجازة سنوية في عقد هذا الموظف، لذا هذا السجل هو المرجع عند اعتماد الإجازات — لجعله تلقائياً حدّد أيام الإجازة من زر التعديل في تبويب الرصيد الفعلي"
+                                  data-testid={`badge-governed-yearly-${b.branchEmployeeId}`}
+                                >المعتمد: هذا السجل</span>
+                              )
+                            )}
+                          </div>
                           <div className="text-xs text-muted-foreground">
                             {b.jobTitle}
                             {serviceYears(b.hireDate) != null && (

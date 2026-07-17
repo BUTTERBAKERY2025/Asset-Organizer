@@ -1701,6 +1701,7 @@ export function registerHrRoutes(app: Express) {
           branchId: branchEmployees.branchId,
           branchName: branches.name,
           hireDate: branchEmployees.hireDate,
+          annualLeaveDays: branchEmployees.annualLeaveDays,
         })
         .from(branchEmployees)
         .leftJoin(branches, eq(branchEmployees.branchId, branches.id))
@@ -1769,6 +1770,8 @@ export function registerHrRoutes(app: Express) {
           branchName: e.branchName,
           hireDate: e.hireDate,
           suggestedEntitlement: suggestedEntitlement(e.hireDate, year),
+          // نفس شرط الاعتماد المستخدم في مسار المراجعة: سنوية + أيام عقد محددة → النظام التلقائي هو الحَكَم
+          accrualGoverned: leaveType === "annual" && e.annualLeaveDays != null,
         };
       });
       res.json(results);
