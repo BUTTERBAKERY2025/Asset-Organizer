@@ -1408,22 +1408,30 @@ export function registerHrRoutes(app: Express) {
       if (existing.status !== "active") {
         return res.status(400).json({ error: "هذه التصفية ملغاة مسبقاً" });
       }
+      if (existing.workflowStatus === "disbursed") {
+        return res.status(400).json({ error: "لا يمكن إلغاء تصفية مصروفة — المبلغ حُوّل للموظف بالفعل" });
+      }
       const userId = getUserId(req) || undefined;
+      // الشرط داخل UPDATE نفسه (وليس فقط الفحص المسبق) لمنع سباق: صرف متزامن ثم إلغاء
       const updated = await db.transaction(async (tx) => {
         const [upd] = await tx.update(leaveSettlements).set({
           status: "cancelled",
           cancelledBy: userId,
           cancelledAt: new Date(),
           cancelReason: body.reason,
-        }).where(and(eq(leaveSettlements.id, id), eq(leaveSettlements.status, "active"))).returning();
-        if (!upd) throw new Error("التصفية ملغاة مسبقاً");
+        }).where(and(
+          eq(leaveSettlements.id, id),
+          eq(leaveSettlements.status, "active"),
+          sql`${leaveSettlements.workflowStatus} <> 'disbursed'`,
+        )).returning();
+        if (!upd) throw Object.assign(new Error("حالة التصفية تغيّرت (ملغاة أو مصروفة) — حدّث الصفحة"), { statusCode: 409 });
         await tx.update(leaveBalances).set({
-          settledDays: sql`GREATEST(${leaveBalances.settledDays} - ${existing.settledDays}, 0)`,
+          settledDays: sql`GREATEST(${leaveBalances.settledDays} - ${upd.settledDays}, 0)`,
           updatedAt: new Date(),
         }).where(and(
-          eq(leaveBalances.branchEmployeeId, existing.branchEmployeeId),
-          eq(leaveBalances.year, existing.year),
-          eq(leaveBalances.leaveType, existing.leaveType),
+          eq(leaveBalances.branchEmployeeId, upd.branchEmployeeId),
+          eq(leaveBalances.year, upd.year),
+          eq(leaveBalances.leaveType, upd.leaveType),
         ));
         return upd;
       });
@@ -1440,7 +1448,7 @@ export function registerHrRoutes(app: Express) {
     } catch (e: any) {
       if (e instanceof z.ZodError) return res.status(400).json({ error: "بيانات غير صحيحة", details: e.errors });
       console.error("[hr/leave-settlements] cancel error:", e);
-      res.status(500).json({ error: e.message });
+      res.status(e?.statusCode === 409 ? 409 : 500).json({ error: e.message });
     }
   });
 
@@ -1478,7 +1486,7 @@ export function registerHrRoutes(app: Express) {
         .leftJoin(users, eq(leaveRequests.reviewedBy, users.id))
         .where(and(...conds))
         .orderBy(desc(leaveSettlements.id))
-        .limit(300);
+        .limit(1000);
       res.json(rows.map((r) => ({
         ...r.s,
         signatureData: undefined, // لا نرسل صورة التوقيع في القائمة (حجم كبير)
