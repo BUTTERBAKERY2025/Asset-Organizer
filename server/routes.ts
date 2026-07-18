@@ -29654,9 +29654,28 @@ export async function registerRoutes(
         }
         if (branchList.length === 0) return res.status(403).json({ error: "لا توجد فروع مصرّح بها" });
 
-        const perBranch = await Promise.all(
-          branchList.map(async (b) => ({ branch: b, ...(await buildBranchPreview(b.id, month)) })),
-        );
+        // معالجة على دفعات (3 فروع معاً) بدل الكل دفعة واحدة — حتى لا يُستنزف مجمّع الاتصالات
+        // وخطأ فرع واحد لا يُسقط الطلب كاملاً؛ نُبلغ عن الفروع المتعذّرة بدل فشل الصفحة
+        const perBranch: any[] = [];
+        const failedBranches: { branchId: string; branchName: string }[] = [];
+        const CHUNK = 3;
+        for (let i = 0; i < branchList.length; i += CHUNK) {
+          const chunk = branchList.slice(i, i + CHUNK);
+          const results = await Promise.allSettled(
+            chunk.map(async (b) => ({ branch: b, ...(await buildBranchPreview(b.id, month)) })),
+          );
+          results.forEach((r, idx) => {
+            if (r.status === "fulfilled") {
+              perBranch.push(r.value);
+            } else {
+              console.error(`[salary-closing/preview all] branch ${chunk[idx].id} failed:`, r.reason);
+              failedBranches.push({ branchId: chunk[idx].id, branchName: chunk[idx].name });
+            }
+          });
+        }
+        if (perBranch.length === 0) {
+          return res.status(500).json({ error: "فشل حساب المعاينة لجميع الفروع" });
+        }
 
         const lines: any[] = [];
         const unlinked: any[] = [];
@@ -29703,6 +29722,7 @@ export async function registerRoutes(
           isLocked: false,
           isAllBranches: true,
           branchBreakdown,
+          failedBranches,
         });
       }
 

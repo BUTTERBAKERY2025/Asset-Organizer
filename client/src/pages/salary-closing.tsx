@@ -937,6 +937,8 @@ export default function SalaryClosingPage() {
     },
     enabled: dataActive && !!month,
     staleTime: 30_000,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(2000 * (attempt + 1), 5000),
   });
   const salaryClosingPreview = salaryClosingPreviewQuery.data;
   const previewLoading = salaryClosingPreviewQuery.isLoading;
@@ -2340,6 +2342,20 @@ export default function SalaryClosingPage() {
                   )}
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {isAllBranches && ((salaryClosingPreview as any)?.failedBranches?.length ?? 0) > 0 && (
+          <Card className="border-orange-300 bg-orange-50 dark:bg-orange-950/20">
+            <CardContent className="pt-4 pb-4 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-orange-800 dark:text-orange-300" data-testid="text-failed-branches">
+                تعذّر حساب معاينة {((salaryClosingPreview as any).failedBranches.length)} من الفروع:{" "}
+                {((salaryClosingPreview as any).failedBranches as any[]).map((b) => b.branchName).join("، ")} — الأرقام الظاهرة لا تشملها.
+              </p>
+              <Button variant="outline" size="sm" onClick={() => salaryClosingPreviewQuery.refetch()} data-testid="button-retry-failed-branches">
+                إعادة المحاولة
+              </Button>
             </CardContent>
           </Card>
         )}
