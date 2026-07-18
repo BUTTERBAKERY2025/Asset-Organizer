@@ -442,8 +442,10 @@ export function registerHrRoutes(app: Express) {
           }
         } else {
           const bal = await getLeaveBalanceSummary(existing.branchEmployeeId, year, existing.leaveType, emp?.hireDate);
+          // الأنواع غير السنوية بدون سجل رصيد معرّف لا تُحاسَب على رصيد (لا يوجد استحقاق لها أصلاً)
+          const enforceable = existing.leaveType === "annual" || bal.hasRow;
           const projected = bal.remainingDays - Number(existing.totalDays);
-          if (projected < 0) {
+          if (enforceable && projected < 0) {
             return res.status(409).json({
               error: "balance_exceeded",
               message: `الرصيد المتبقي (${bal.remainingDays} يوم) لا يكفي لهذه الإجازة (${existing.totalDays} يوم).`,
@@ -2002,7 +2004,16 @@ export function registerHrRoutes(app: Express) {
         return res.status(403).json({ error: "ليس لديك صلاحية على فرع الموظف" });
       }
       const bal = await getLeaveBalanceSummary(employeeId, year, leaveType, emp.hireDate);
-      res.json({ ...bal, suggestedEntitlement: suggestedEntitlement(emp.hireDate, year) });
+      // للإجازة السنوية مع نظام الاستحقاق التعاقدي: أرفق الرصيد الفعلي حتى تاريخه
+      // ليعرضه المراجع بدلاً من رصيد السنة اليدوي (الأدق للاعتماد).
+      let accrual: any = null;
+      if (leaveType === "annual" && emp.annualLeaveDays != null && Number(emp.annualLeaveDays) > 0) {
+        try {
+          const acc = await getAccruedLeaveBalance(emp as any);
+          if (acc.configured) accrual = acc;
+        } catch {}
+      }
+      res.json({ ...bal, suggestedEntitlement: suggestedEntitlement(emp.hireDate, year), accrual });
     } catch (e: any) {
       console.error("[hr/leave-balances/:id] error:", e);
       res.status(500).json({ error: e.message });

@@ -2959,23 +2959,60 @@ ${d.workflowStatus === "disbursed" ? `<div class="box"><b>الصرف:</b> تم �
                 <span className="tabular-nums">{reviewing.leave?.startDate} ← {reviewing.leave?.endDate} ({arNum(reviewing.leave?.totalDays)} يوم)</span>
               </div>
             )}
-            {/* بطاقة الرصيد */}
-            {reviewing?.leave?.leaveType !== "unpaid" && reviewBalance && !reviewBalance.error && (
-              <div className="grid grid-cols-3 gap-1 text-center text-xs" data-testid="text-review-balance">
-                <div className="bg-blue-50 rounded p-1.5">
-                  <div className="text-blue-500">المستحق</div>
-                  <div className="font-bold tabular-nums">{arNum((reviewBalance.entitledDays || 0) + (reviewBalance.carriedOverDays || 0) + (reviewBalance.adjustmentDays || 0))}</div>
-                </div>
-                <div className="bg-amber-50 rounded p-1.5">
-                  <div className="text-amber-600">المستخدم</div>
-                  <div className="font-bold tabular-nums">{arNum(reviewBalance.usedDays)}</div>
-                </div>
-                <div className={`rounded p-1.5 ${(reviewBalance.remainingDays ?? 0) < (reviewing?.leave?.totalDays ?? 0) ? "bg-red-50" : "bg-emerald-50"}`}>
-                  <div className={(reviewBalance.remainingDays ?? 0) < (reviewing?.leave?.totalDays ?? 0) ? "text-red-600" : "text-emerald-600"}>المتبقي</div>
-                  <div className="font-bold tabular-nums">{arNum(reviewBalance.remainingDays)}</div>
-                </div>
+            {/* سبب الطلب */}
+            {reviewing?.leave?.reason && (
+              <div className="text-xs bg-slate-50 border rounded p-2" data-testid="text-review-reason">
+                <span className="font-semibold text-slate-600">سبب الطلب:</span> {reviewing.leave.reason}
               </div>
             )}
+            {/* بطاقة الرصيد */}
+            {reviewing?.leave?.leaveType !== "unpaid" && reviewBalance && !reviewBalance.error && (() => {
+              const acc = reviewBalance.accrual;
+              const entitled = acc
+                ? acc.accruedToDate
+                : (reviewBalance.entitledDays || 0) + (reviewBalance.carriedOverDays || 0) + (reviewBalance.adjustmentDays || 0);
+              const used = acc ? (acc.usedToDate + acc.upcomingDays + acc.settledDays) : reviewBalance.usedDays;
+              const remaining = acc ? acc.remainingDays : reviewBalance.remainingDays;
+              const reqDays = Number(reviewing?.leave?.totalDays ?? 0);
+              const after = Math.round(((remaining ?? 0) - reqDays) * 10) / 10;
+              const noBalanceRow = !acc && !reviewBalance.hasRow && reviewing?.leave?.leaveType !== "annual";
+              return (
+                <div className="space-y-1">
+                  {noBalanceRow ? (
+                    <div className="text-xs bg-amber-50 text-amber-800 rounded p-2" data-testid="text-no-balance-note">
+                      لا يوجد رصيد معرّف لنوع «{LEAVE_TYPE_LABELS[reviewing?.leave?.leaveType] || reviewing?.leave?.leaveType}» لهذه السنة — هذا الطلب لا يُخصم من رصيد الإجازة السنوية.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-3 gap-1 text-center text-xs" data-testid="text-review-balance">
+                        <div className="bg-blue-50 rounded p-1.5">
+                          <div className="text-blue-500">{acc ? "المستحق حتى اليوم" : "المستحق"}</div>
+                          <div className="font-bold tabular-nums">{arNum(Math.round(entitled * 10) / 10)}</div>
+                        </div>
+                        <div className="bg-amber-50 rounded p-1.5">
+                          <div className="text-amber-600">{acc ? "المخصوم/المحجوز" : "المستخدم"}</div>
+                          <div className="font-bold tabular-nums">{arNum(Math.round(used * 10) / 10)}</div>
+                        </div>
+                        <div className={`rounded p-1.5 ${(remaining ?? 0) < reqDays ? "bg-red-50" : "bg-emerald-50"}`}>
+                          <div className={(remaining ?? 0) < reqDays ? "text-red-600" : "text-emerald-600"}>المتبقي</div>
+                          <div className="font-bold tabular-nums">{arNum(Math.round((remaining ?? 0) * 10) / 10)}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-xs px-1">
+                        <span className="text-muted-foreground">
+                          {acc ? "الرصيد الفعلي حسب العقد (يستحق يومياً)" : "رصيد السنة المسجل يدوياً"}
+                        </span>
+                        {reviewing?.decision === "approved" && (
+                          <span className={`font-semibold tabular-nums ${after < 0 ? "text-red-600" : "text-emerald-700"}`} data-testid="text-balance-after">
+                            المتبقي بعد الاعتماد: {arNum(after)}
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
             {/* تداخل مع عطلة رسمية */}
             {reviewHolidayOverlap.length > 0 && (
               <div className="text-xs bg-purple-50 text-purple-800 rounded p-2" data-testid="text-holiday-overlap">

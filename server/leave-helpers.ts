@@ -267,7 +267,9 @@ export async function getLeaveBalanceSummary(
     const days = Math.round((new Date(segEnd).getTime() - new Date(segStart).getTime()) / MS_PER_DAY) + 1;
     if (days > 0) usedDays += days;
   }
-  const entitledDays = row ? Number(row.entitledDays) : suggestedEntitlement(hireDate, year);
+  // الاستحقاق المقترح (21/30 يوم) يخص الإجازة السنوية فقط — الأنواع الأخرى
+  // (مرضية/أخرى/...) بدون سجل رصيد = صفر، حتى لا يظهر رقم مضلل في شاشة الاعتماد.
+  const entitledDays = row ? Number(row.entitledDays) : (leaveType === "annual" ? suggestedEntitlement(hireDate, year) : 0);
   const carriedOverDays = row ? Number(row.carriedOverDays) : 0;
   const adjustmentDays = row ? Number(row.adjustmentDays) : 0;
   const settledDays = row ? Number((row as any).settledDays ?? 0) : 0;
