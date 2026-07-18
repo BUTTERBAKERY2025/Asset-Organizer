@@ -673,6 +673,7 @@ export interface LeaveCarryoverResult {
   leaveType: string;
   carried: number;
   skippedZero: number;
+  skippedAccrual: number;
   unchanged: number;
   capped: number;
   details: { employeeName: string; amount: number }[];
@@ -701,7 +702,7 @@ export async function runLeaveCarryover(opts: {
   if (opts.branchIds != null) conds.push(inArray(branchEmployees.branchId, opts.branchIds.length ? opts.branchIds : ["__none__"]));
   if (opts.branchId) conds.push(eq(branchEmployees.branchId, opts.branchId));
   const emps = await db
-    .select({ id: branchEmployees.id, employeeName: branchEmployees.employeeName, branchId: branchEmployees.branchId, hireDate: branchEmployees.hireDate })
+    .select({ id: branchEmployees.id, employeeName: branchEmployees.employeeName, branchId: branchEmployees.branchId, hireDate: branchEmployees.hireDate, annualLeaveDays: branchEmployees.annualLeaveDays })
     .from(branchEmployees)
     .where(and(...conds));
 
@@ -711,8 +712,14 @@ export async function runLeaveCarryover(opts: {
 
   // المرحلة 1: حساب المبالغ (قراءات فقط)
   const plans: { emp: typeof emps[number]; amount: number }[] = [];
-  let skippedZero = 0, capped = 0;
+  let skippedZero = 0, capped = 0, skippedAccrual = 0;
   for (const emp of emps) {
+    // موظف عليه أيام إجازة سنوية بالعقد → رصيده المعتمد يُحسب بالنظام التلقائي
+    // (الرصيد الافتتاحي اليدوي في ملفه)، فلا نرحّل له أرقاماً قد تخالف الصحيح
+    if (leaveType === "annual" && emp.annualLeaveDays != null && Number(emp.annualLeaveDays) > 0) {
+      skippedAccrual++;
+      continue;
+    }
     const prev = await getLeaveBalanceSummary(emp.id, fromYear, leaveType, emp.hireDate);
     let amount = Math.max(0, prev.remainingDays);
     if (amount <= 0) { skippedZero++; continue; }
@@ -757,5 +764,5 @@ export async function runLeaveCarryover(opts: {
     }
   });
 
-  return { fromYear, toYear, leaveType, carried, skippedZero, unchanged, capped, details };
+  return { fromYear, toYear, leaveType, carried, skippedZero, skippedAccrual, unchanged, capped, details };
 }

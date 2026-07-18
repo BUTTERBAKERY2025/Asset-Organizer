@@ -901,6 +901,7 @@ ${d.workflowStatus === "disbursed" ? `<div class="box"><b>الصرف:</b> تم �
       if (r?.capped) parts.push(`${arNum(r.capped)} طُبّق عليهم السقف`);
       if (r?.unchanged) parts.push(`${arNum(r.unchanged)} بدون تغيير (مرحّل مسبقاً)`);
       if (r?.skippedZero) parts.push(`${arNum(r.skippedZero)} بلا رصيد متبقٍ`);
+      if (r?.skippedAccrual) parts.push(`${arNum(r.skippedAccrual)} مستثنى (رصيده معتمد بالنظام التلقائي)`);
       toast({ title: "اكتمل الترحيل", description: parts.join(" • ") });
     },
     onError: (e: any) => toast({ title: "خطأ", description: e?.message || "فشل الترحيل", variant: "destructive" }),
@@ -1756,7 +1757,7 @@ ${d.workflowStatus === "disbursed" ? `<div class="box"><b>الصرف:</b> تم �
               onClick={() => setBalView("yearly")}
               data-testid="button-view-yearly"
             >
-              سجل السنوات (للترحيل والتعديل)
+              سجل السنوات (أرشيف يدوي)
             </button>
           </div>
           {balView === "accrual" && balType === "annual" && (
@@ -1870,6 +1871,7 @@ ${d.workflowStatus === "disbursed" ? `<div class="box"><b>الصرف:</b> تم �
                     «الرصيد الفعلي حتى اليوم (تلقائي)»
                   </button>
                   . هذا السجل أرشيف يدوي فقط (ترحيل/تعديل)، لذلك لا يُعرض فيه "المتبقي" للسنوية حتى لا تختلط الأرقام.
+                  {" "}كما أن زر «ترحيل الأرصدة» <b>يستثني تلقائياً</b> كل موظف معتمد بالنظام التلقائي — رصيده الصحيح محفوظ في ملفه ولن يتأثر.
                   {" "}بجانب اسم كل موظف علامة توضح النظام المعتمد له: <b>«المعتمد: تلقائي»</b> (أيام العقد محددة) أو <b>«المعتمد: هذا السجل»</b> (بدون أيام عقد) — مرّر الفأرة على العلامة لمعرفة التفاصيل.
                 </div>
               )}
