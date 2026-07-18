@@ -1929,7 +1929,30 @@ export function registerHrRoutes(app: Express) {
       }
 
       const acc = await getAccruedLeaveBalance(emp as any, asOf);
-      res.json(acc);
+
+      // بيانات الراتب تُعرض فقط لمن يملك صلاحية "تعديل" على الإجازات (نفس صلاحية تنفيذ التصفية)
+      // — صلاحية العرض وحدها لا تكفي لكشف الرواتب.
+      const canSeeSalary = await new Promise<boolean>((resolve) => {
+        const fakeRes: any = { status: () => ({ json: () => resolve(false) }) };
+        try {
+          requirePermission("hr_leaves", "edit")(req as any, fakeRes, () => resolve(true));
+        } catch { resolve(false); }
+      });
+
+      if (!canSeeSalary) return res.json(acc);
+
+      // تقدير القيمة النقدية للرصيد (بنفس قاعدة تصفية الرصيد: الراتب ÷ 30 أو ÷ 21)
+      const grossSalary = Number((emp as any).totalSalary || (emp as any).salary || 0);
+      const divisor = Number(acc.annualDays) >= 30 ? 30 : 21;
+      const dailyRate = grossSalary > 0 ? Math.round((grossSalary / divisor) * 100) / 100 : 0;
+      const settleableDays = Math.max(0, Number(acc.remainingDays) || 0);
+      res.json({
+        ...acc,
+        grossSalary,
+        divisor,
+        dailyRate,
+        estimatedAmount: Math.round(settleableDays * dailyRate * 100) / 100,
+      });
     } catch (e: any) {
       console.error("[hr/leave-accrual] single error:", e);
       res.status(500).json({ error: e.message });

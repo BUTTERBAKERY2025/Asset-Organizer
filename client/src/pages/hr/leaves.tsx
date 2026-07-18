@@ -167,6 +167,8 @@ export default function LeavesPage() {
   const [wfFrom, setWfFrom] = useState("");
   const [wfTo, setWfTo] = useState("");
   const [wfEmpId, setWfEmpId] = useState("all");
+  const [wfEmpSearch, setWfEmpSearch] = useState("");
+  const [wfEmpBranch, setWfEmpBranch] = useState("all");
   const [disbursing, setDisbursing] = useState<any | null>(null);
   const [disburseNote, setDisburseNote] = useState("");
   const receiptPrintRef = useRef<HTMLDivElement>(null);
@@ -211,6 +213,13 @@ export default function LeavesPage() {
   const { data: employees = [] } = useQuery<Emp[]>({
     queryKey: ["/api/branch-employees"],
     queryFn: async () => (await apiRequest("GET", "/api/branch-employees")).json(),
+  });
+
+  // قائمة الفروع الكاملة (لفلتر الفرع في تبويب كشف الحساب والتصفيات)
+  const { data: allBranches = [] } = useQuery<any[]>({
+    queryKey: ["/api/branches"],
+    queryFn: async () => (await apiRequest("GET", "/api/branches")).json(),
+    enabled: tab === "settlements",
   });
 
   const { data: balances = [], isLoading: balLoading } = useQuery<Balance[]>({
@@ -501,6 +510,73 @@ export default function LeavesPage() {
       monthlyAccrual: Math.round((entitled / 12) * 100) / 100,
     } as any;
   }, [calcEmpId, calcBalance, calcAsOf, employees, calcYear]);
+
+  // طباعة وتصدير نتيجة حاسبة الاحتساب
+  const buildCalcRows = () => {
+    if (!calcResult || calcResult.error) return null;
+    const isAccrual = calcType === "annual" && calcAccrual?.configured;
+    const rows: [string, string][] = [
+      ["الموظف", String(calcResult.empName || "")],
+      ["المسمى الوظيفي", String(calcResult.jobTitle || "")],
+      ["تاريخ التعيين", String(calcResult.hireDate || "-")],
+      ["حتى تاريخ", calcAsOf],
+      ["نوع الإجازة", LEAVE_TYPE_LABELS[calcType] || calcType],
+      ["الاستحقاق السنوي", `${arNum(isAccrual ? calcAccrual.annualDays : calcResult.entitled)} يوم`],
+    ];
+    if (isAccrual) {
+      rows.push(
+        ["الرصيد الافتتاحي", `${arNum(calcAccrual.openingBalance)} يوم${calcAccrual.accrualStart ? ` (بتاريخ ${calcAccrual.accrualStart})` : ""}`],
+        ["المكتسب حتى التاريخ", `${arNum(Math.round((calcAccrual.accruedToDate - calcAccrual.openingBalance) * 100) / 100)} يوم`],
+        ["الإجازات المعتمدة المنقضية", `${arNum(calcAccrual.usedToDate)} يوم`],
+        ["إجازات معتمدة قادمة (محجوزة)", `${arNum(calcAccrual.upcomingDays)} يوم`],
+        ["أيام مصفّاة نقداً", `${arNum(calcAccrual.settledDays)} يوم`],
+        ["الرصيد المتبقي الفعلي", `${arNum(calcAccrual.remainingDays)} يوم`],
+      );
+      if (Number(calcAccrual.grossSalary) > 0) {
+        rows.push(
+          ["قيمة اليوم الواحد (الراتب ÷ " + arNum(calcAccrual.divisor) + ")", `${arNum(calcAccrual.dailyRate)} ر.س`],
+          ["القيمة النقدية التقديرية للرصيد", `${arNum(calcAccrual.estimatedAmount)} ر.س`],
+        );
+      }
+    } else {
+      rows.push(
+        ["المستحق تراكمياً", `${arNum(calcResult.accrued)} يوم`],
+        ["المرحّل من سنوات سابقة", `${arNum(calcResult.carried)} يوم`],
+        ["تعديلات يدوية", `${arNum(calcResult.adjust)} يوم`],
+        ["المستخدم خلال " + arNum(calcYear), `${arNum(calcResult.used)} يوم`],
+        ["الصافي المتراكم المستحق", `${arNum(calcResult.accruedNet)} يوم`],
+      );
+    }
+    return rows;
+  };
+
+  const exportCalcXlsx = () => {
+    const rows = buildCalcRows();
+    if (!rows) return;
+    const ws = XLSX.utils.json_to_sheet(rows.map(([k, v]) => ({ "البند": k, "القيمة": v })));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "احتساب الإجازة");
+    XLSX.writeFile(wb, `leave_calc_${calcResult?.empName || calcEmpId}_${calcAsOf}.xlsx`);
+  };
+
+  const printCalcResult = () => {
+    const rows = buildCalcRows();
+    if (!rows) return;
+    const esc = (v: any) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const w = window.open("", "_blank", "width=800,height=900");
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>احتساب رصيد إجازة</title>
+<style>body{font-family:'Cairo',Tahoma,Arial,sans-serif;padding:24px;color:#222}h2{color:#8a6d1d;margin:0 0 4px}
+.sub{font-size:12px;color:#777;margin-bottom:16px}table{width:100%;border-collapse:collapse;font-size:13px}
+td{border:1px solid #E5C98F;padding:8px}td:first-child{background:#FBF4E4;font-weight:700;width:45%}
+.foot{margin-top:16px;font-size:11px;color:#999}</style></head><body>
+<h2>احتساب رصيد إجازة موظف</h2>
+<div class="sub">حلواني باتر — إدارة الموارد البشرية · طُبع بتاريخ ${esc(new Date().toLocaleDateString("en-CA"))}</div>
+<table>${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("")}</table>
+<div class="foot">القيمة النقدية تقدير استرشادي بنفس قاعدة سند التصفية — المبلغ النهائي يُحدد عند تنفيذ التصفية فعلياً.</div>
+<script>window.onload=function(){window.print()}<\/script></body></html>`);
+    w.document.close();
+  };
 
   // أيام العطلات ضمن الشهر المعروض في التقويم
   const holidayDatesSet = useMemo(() => {
@@ -2315,28 +2391,65 @@ ${d.workflowStatus === "disbursed" ? `<div class="box"><b>الصرف:</b> تم �
             {/* كشف حساب موظف */}
             <Card>
               <CardContent className="pt-4 space-y-2">
-                <div className="text-sm font-bold flex items-center gap-1"><FileText className="h-4 w-4" />كشف حساب الإجازات لموظف</div>
+                <div className="text-sm font-bold flex items-center gap-1"><FileText className="h-4 w-4" />كشف حساب واحتساب إجازة موظف</div>
                 <div className="flex items-center gap-2 flex-wrap">
+                  <Input
+                    className="w-48 h-9"
+                    placeholder="🔍 بحث بالاسم..."
+                    value={wfEmpSearch}
+                    onChange={(e) => {
+                      setWfEmpSearch(e.target.value);
+                      const q = e.target.value.trim();
+                      if (q) {
+                        const matches = employees.filter((x) =>
+                          (wfEmpBranch === "all" || x.branchId === wfEmpBranch) && (x.employeeName || "").includes(q));
+                        if (matches.length === 1) setWfEmpId(String(matches[0].id));
+                      }
+                    }}
+                    data-testid="input-wf-emp-search"
+                  />
+                  {allBranches.length > 1 && (
+                    <Select value={wfEmpBranch} onValueChange={(v) => { setWfEmpBranch(v); setWfEmpId("all"); }}>
+                      <SelectTrigger className="w-40 h-9" data-testid="select-wf-emp-branch"><SelectValue placeholder="كل الفروع" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">كل الفروع</SelectItem>
+                        {allBranches.map((b: any) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Select value={wfEmpId} onValueChange={setWfEmpId}>
-                    <SelectTrigger className="w-64" data-testid="select-wf-employee"><SelectValue placeholder="اختر الموظف" /></SelectTrigger>
+                    <SelectTrigger className="w-64 h-9" data-testid="select-wf-employee"><SelectValue placeholder="اختر الموظف" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">كل الموظفين</SelectItem>
-                      {employees.map((e) => (
-                        <SelectItem key={e.id} value={String(e.id)}>{e.employeeName} — {e.jobTitle}</SelectItem>
-                      ))}
+                      {employees
+                        .filter((e) => (wfEmpBranch === "all" || e.branchId === wfEmpBranch)
+                          && (!wfEmpSearch.trim() || (e.employeeName || "").includes(wfEmpSearch.trim())))
+                        .map((e) => (
+                          <SelectItem key={e.id} value={String(e.id)}>{e.employeeName} — {e.jobTitle}</SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                   <Button
+                    size="sm"
+                    className="h-9 bg-blue-600 hover:bg-blue-700 text-white"
+                    disabled={wfEmpId === "all"}
+                    onClick={() => { setCalcType("annual"); setCalcEmpId(wfEmpId); setCalcOpen(true); }}
+                    data-testid="button-wf-calc"
+                  >
+                    <Calculator className="h-4 w-4 ms-1" />احتساب إجازة الموظف
+                  </Button>
+                  <Button
                     variant="outline"
                     size="sm"
+                    className="h-9"
                     disabled={wfEmpId === "all"}
                     onClick={() => { setStmtYear(currentYear); setStmtEmpId(Number(wfEmpId)); }}
                     data-testid="button-open-statement"
                   >
                     <FileText className="h-4 w-4 ms-1" />عرض كشف الحساب
                   </Button>
-                  <span className="text-xs text-muted-foreground">اختر موظفاً لعرض كشف حسابه التفصيلي، أو اترك «كل الموظفين» لعرض كل التصفيات أدناه.</span>
                 </div>
+                <div className="text-xs text-muted-foreground">ابحث بالاسم أو صفِّ بالفرع للوصول السريع، ثم «احتساب إجازة الموظف» لعرض الرصيد والقيمة النقدية التقديرية، أو «عرض كشف الحساب» للكشف التفصيلي القابل للطباعة والتصدير.</div>
               </CardContent>
             </Card>
 
@@ -3165,6 +3278,18 @@ ${d.workflowStatus === "disbursed" ? `<div class="box"><b>الصرف:</b> تم �
                     <div className="text-[10px] text-muted-foreground leading-relaxed">
                       هذا هو نفس الرقم الظاهر في تبويب الأرصدة — «الرصيد الفعلي حتى اليوم (تلقائي)» — ويُحسب من الرصيد الافتتاحي المُدخل مضافاً إليه الاكتساب اليومي ومخصوماً منه الإجازات السنوية المعتمدة والتصفيات النقدية.
                     </div>
+                    {Number(calcAccrual.grossSalary) > 0 && (
+                      <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-xs space-y-1" data-testid="box-calc-money">
+                        <div className="font-bold text-emerald-800 mb-1 flex items-center gap-1"><Banknote className="h-3.5 w-3.5" />القيمة النقدية التقديرية للرصيد (لو صُفّي اليوم)</div>
+                        <div className="flex justify-between"><span>الراتب الإجمالي</span><span className="font-semibold tabular-nums">{arNum(calcAccrual.grossSalary)} ر.س</span></div>
+                        <div className="flex justify-between"><span>قيمة اليوم الواحد (الراتب ÷ {arNum(calcAccrual.divisor)})</span><span className="font-semibold tabular-nums">{arNum(calcAccrual.dailyRate)} ر.س</span></div>
+                        <div className="flex justify-between border-t border-emerald-300 pt-1 mt-1">
+                          <span className="font-bold">{arNum(Math.max(0, calcAccrual.remainingDays))} يوم × {arNum(calcAccrual.dailyRate)} ر.س</span>
+                          <span className="font-bold tabular-nums text-emerald-700" data-testid="text-calc-estimated-amount">{arNum(calcAccrual.estimatedAmount)} ر.س</span>
+                        </div>
+                        <div className="text-[10px] text-emerald-700">تقدير استرشادي بنفس قاعدة سند التصفية — المبلغ النهائي يُحدد عند تنفيذ التصفية فعلياً.</div>
+                      </div>
+                    )}
                   </>
                 ) : (
                 <>
@@ -3188,9 +3313,15 @@ ${d.workflowStatus === "disbursed" ? `<div class="box"><b>الصرف:</b> تم �
                 </div>
                 </>
                 )}
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <Button variant="outline" size="sm" className="flex-1" onClick={() => { setStmtYear(calcYear); setStmtEmpId(Number(calcEmpId)); }} data-testid="button-calc-to-statement">
                     <FileText className="h-3.5 w-3.5 ms-1" />عرض كشف الحساب الكامل
+                  </Button>
+                  <Button variant="outline" size="sm" className="flex-1" onClick={printCalcResult} data-testid="button-calc-print">
+                    <Printer className="h-3.5 w-3.5 ms-1" />طباعة
+                  </Button>
+                  <Button variant="outline" size="sm" className="flex-1" onClick={exportCalcXlsx} data-testid="button-calc-export">
+                    <Download className="h-3.5 w-3.5 ms-1" />تصدير Excel
                   </Button>
                 </div>
               </div>
