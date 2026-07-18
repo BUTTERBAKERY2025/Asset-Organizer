@@ -169,6 +169,7 @@ export default function LeavesPage() {
   const [wfEmpId, setWfEmpId] = useState("all");
   const [wfEmpSearch, setWfEmpSearch] = useState("");
   const [wfEmpBranch, setWfEmpBranch] = useState("all");
+  const [wfShowInactive, setWfShowInactive] = useState(false);
   const [disbursing, setDisbursing] = useState<any | null>(null);
   const [disburseNote, setDisburseNote] = useState("");
   const receiptPrintRef = useRef<HTMLDivElement>(null);
@@ -2402,7 +2403,9 @@ ${d.workflowStatus === "disbursed" ? `<div class="box"><b>الصرف:</b> تم �
                       const q = e.target.value.trim();
                       if (q) {
                         const matches = employees.filter((x) =>
-                          (wfEmpBranch === "all" || x.branchId === wfEmpBranch) && (x.employeeName || "").includes(q));
+                          (wfShowInactive || (x.status ?? "active") === "active")
+                          && (wfEmpBranch === "all" || x.branchId === wfEmpBranch)
+                          && (x.employeeName || "").includes(q));
                         if (matches.length === 1) setWfEmpId(String(matches[0].id));
                       }
                     }}
@@ -2417,15 +2420,27 @@ ${d.workflowStatus === "disbursed" ? `<div class="box"><b>الصرف:</b> تم �
                       </SelectContent>
                     </Select>
                   )}
+                  <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer select-none" data-testid="toggle-wf-show-inactive">
+                    <input
+                      type="checkbox"
+                      className="accent-amber-600"
+                      checked={wfShowInactive}
+                      onChange={(e) => { setWfShowInactive(e.target.checked); setWfEmpId("all"); }}
+                    />
+                    إظهار غير النشطين
+                  </label>
                   <Select value={wfEmpId} onValueChange={setWfEmpId}>
                     <SelectTrigger className="w-64 h-9" data-testid="select-wf-employee"><SelectValue placeholder="اختر الموظف" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">كل الموظفين</SelectItem>
                       {employees
-                        .filter((e) => (wfEmpBranch === "all" || e.branchId === wfEmpBranch)
+                        .filter((e) => (wfShowInactive || (e.status ?? "active") === "active")
+                          && (wfEmpBranch === "all" || e.branchId === wfEmpBranch)
                           && (!wfEmpSearch.trim() || (e.employeeName || "").includes(wfEmpSearch.trim())))
                         .map((e) => (
-                          <SelectItem key={e.id} value={String(e.id)}>{e.employeeName} — {e.jobTitle}</SelectItem>
+                          <SelectItem key={e.id} value={String(e.id)}>
+                            {e.employeeName} — {e.jobTitle}{(e.status ?? "active") !== "active" ? " (غير نشط)" : ""}
+                          </SelectItem>
                         ))}
                     </SelectContent>
                   </Select>
