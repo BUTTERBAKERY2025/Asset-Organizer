@@ -29577,7 +29577,11 @@ export async function registerRoutes(
     return [u.firstName, u.lastName].filter(Boolean).join(" ") || u.username || "غير معروف";
   };
 
-  const isValidMonth = (m: any): m is string => typeof m === "string" && /^\d{4}-\d{2}$/.test(m);
+  const isValidMonth = (m: any): m is string => {
+    if (typeof m !== "string" || !/^\d{4}-\d{2}$/.test(m)) return false;
+    const mm = parseInt(m.slice(5, 7), 10);
+    return mm >= 1 && mm <= 12;
+  };
 
   // يبني معاينة فرع واحد: لقطة مقفلة محفوظة إن وُجدت، وإلا احتساب حيّ على الخادم
   const buildBranchPreview = async (branchId: string, month: string) => {
@@ -29915,6 +29919,9 @@ export async function registerRoutes(
       if (!closure) return res.status(404).json({ error: "الإغلاق غير موجود" });
       const hasAccess = await canAccessBranch(req, closure.branchId);
       if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      if (closure.status !== "closed") {
+        return res.status(409).json({ error: "هذا الإغلاق مُعاد فتحه بالفعل أو غير مغلق" });
+      }
       const updated = await storage.reopenSalaryClosure(id, {
         reopenedBy: req.currentUser?.id,
         reopenedByName: currentUserName(req),
@@ -30048,8 +30055,18 @@ export async function registerRoutes(
         for (const b of candidate) {
           if (await canAccessBranch(req, b.id)) accessibleIds.push(b.id);
         }
-        const rowsArr = await Promise.all(accessibleIds.map((id) => storage.getSalaryPaymentsByBranchAndMonth(id, month)));
-        return res.json(rowsArr.flat());
+        // على دفعات + تحمّل فشل فرع واحد (نفس نمط المعاينة)
+        const rows: any[] = [];
+        const CHUNK = 3;
+        for (let i = 0; i < accessibleIds.length; i += CHUNK) {
+          const chunk = accessibleIds.slice(i, i + CHUNK);
+          const results = await Promise.allSettled(chunk.map((id) => storage.getSalaryPaymentsByBranchAndMonth(id, month)));
+          results.forEach((r, idx) => {
+            if (r.status === "fulfilled") rows.push(...r.value);
+            else console.error(`[salary-closing/payments all] branch ${chunk[idx]} failed:`, r.reason);
+          });
+        }
+        return res.json(rows);
       }
 
       const hasAccess = await canAccessBranch(req, branchId);

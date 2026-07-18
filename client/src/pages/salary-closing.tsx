@@ -1246,16 +1246,26 @@ export default function SalaryClosingPage() {
   // (السلف/الخصومات اليدوية وتعديلات أيام الحضور) في الملف المصدَّر حتى على الاتصال البطيء،
   // إذ قد يُنقر زر التصدير قبل اكتمال إعادة التحميل الخلفية بعد التعديل.
   const fetchLatestClosing = async (): Promise<any> => {
+    let data: any;
     try {
       const r = await salaryClosingPreviewQuery.refetch();
-      return r.data ?? salaryClosingPreview;
+      data = r.data ?? salaryClosingPreview;
     } catch {
-      return salaryClosingPreview;
+      data = salaryClosingPreview;
     }
+    // في وضع "كل الفروع": لو فشل حساب بعض الفروع، لا نصدّر بيانات ناقصة بدون تأكيد صريح
+    const failed = (data as any)?.failedBranches as any[] | undefined;
+    if (isAllBranches && failed && failed.length > 0) {
+      const names = failed.map((b) => b.branchName).join("، ");
+      const ok = confirm(`تنبيه: تعذّر حساب ${failed.length} من الفروع (${names}) — الملف المصدَّر لن يشملها وستكون الأرقام ناقصة.\n\nهل تريد المتابعة رغم ذلك؟`);
+      if (!ok) return null;
+    }
+    return data;
   };
 
   const exportSalaryClosingToExcel = async () => {
     const fresh = await fetchLatestClosing();
+    if (fresh === null) return; // ألغى المستخدم التصدير بسبب فروع متعذّرة
     const lines: any[] = fresh?.lines ?? salaryClosingData;
     const unlinkedRecords: AttendanceRecord[] = fresh?.unlinked ?? salaryClosingUnlinkedRecords;
     const unlinkedSummary = fresh?.unlinkedSummary ?? salaryClosingUnlinkedSummary;
@@ -1348,6 +1358,7 @@ export default function SalaryClosingPage() {
   // تصدير مخصص: الرواتب المدفوعة أو المتبقية (حسب حالة الصرف وطريقة الدفع)
   const exportPaymentsExcel = async (mode: "paid" | "remaining") => {
     const fresh = await fetchLatestClosing();
+    if (fresh === null) return; // ألغى المستخدم التصدير بسبب فروع متعذّرة
     const lines: any[] = fresh?.lines ?? salaryClosingData;
     const payMap = await fetchLatestPayments();
     const isPaid = (emp: any) => payMap.has(Number(emp.branchEmployeeId ?? emp.id));
@@ -1411,6 +1422,7 @@ export default function SalaryClosingPage() {
   // تصدير ملف البنك (نموذج بنك الرياض - نظام مدد) المطابق للتنسيق المعتمد
   const exportBankFile = async (dueDateISO: string) => {
     const fresh = await fetchLatestClosing();
+    if (fresh === null) return; // ألغى المستخدم التصدير بسبب فروع متعذّرة
     const lines: any[] = fresh?.lines ?? salaryClosingData;
     if (lines.length === 0) return;
     const xlsxMod: any = await import("xlsx-js-style");
@@ -1601,6 +1613,7 @@ export default function SalaryClosingPage() {
 
   const exportSalaryClosingToPDF = async () => {
     const fresh = await fetchLatestClosing();
+    if (fresh === null) return; // ألغى المستخدم التصدير بسبب فروع متعذّرة
     const lines: any[] = fresh?.lines ?? salaryClosingData;
     if (lines.length === 0) {
       alert(isRTL ? "لا توجد بيانات للتصدير" : "No data to export");
@@ -1731,6 +1744,7 @@ export default function SalaryClosingPage() {
 
   const exportAccruedSalariesExcel = async () => {
     const fresh = await fetchLatestClosing();
+    if (fresh === null) return; // ألغى المستخدم التصدير بسبب فروع متعذّرة
     const lines: any[] = fresh?.lines ?? salaryClosingData;
     if (lines.length === 0) {
       alert(isRTL ? "لا توجد بيانات للتصدير" : "No data to export");
@@ -1851,6 +1865,7 @@ export default function SalaryClosingPage() {
 
   const exportAccruedSalariesPDF = async () => {
     const fresh = await fetchLatestClosing();
+    if (fresh === null) return; // ألغى المستخدم التصدير بسبب فروع متعذّرة
     const lines: any[] = fresh?.lines ?? salaryClosingData;
     if (lines.length === 0) {
       alert(isRTL ? "لا توجد بيانات للتصدير" : "No data to export");
