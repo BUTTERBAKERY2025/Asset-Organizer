@@ -2375,6 +2375,62 @@ export default function SalaryClosingPage() {
           </Card>
         )}
 
+        {isAllBranches && (((salaryClosingPreview as any)?.branchBreakdown?.length ?? 0) > 0) && (() => {
+          const bb = ((salaryClosingPreview as any).branchBreakdown as any[]);
+          const closedCount = bb.filter((b) => b.isLocked).length;
+          return (
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <CardTitle className="text-lg">حالة الفروع — {month}</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground" data-testid="text-closing-progress">
+                      أُغلق {closedCount} من {bb.length} فرعاً
+                    </span>
+                    <div className="w-32 h-2 rounded-full bg-slate-200 overflow-hidden">
+                      <div className="h-full bg-emerald-500 transition-all" style={{ width: `${bb.length ? Math.round((closedCount / bb.length) * 100) : 0}%` }} />
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-auto border rounded-lg">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="text-right p-2">الفرع</th>
+                        <th className="text-right p-2">الموظفون</th>
+                        <th className="text-right p-2">صافي الرواتب (ر.س)</th>
+                        <th className="text-right p-2">الحالة</th>
+                        <th className="text-right p-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bb.map((b) => (
+                        <tr key={b.branchId} className="border-t hover:bg-slate-50" data-testid={`row-branch-status-${b.branchId}`}>
+                          <td className="p-2 font-medium">{b.branchName}</td>
+                          <td className="p-2 tabular-nums">{b.employeeCount}</td>
+                          <td className="p-2 tabular-nums font-bold">{formatCurrency(b.totalNet || 0)}</td>
+                          <td className="p-2">
+                            {b.isLocked
+                              ? <Badge className="bg-emerald-100 text-emerald-700">مغلق ✓</Badge>
+                              : <Badge className="bg-amber-100 text-amber-700">لم يُغلق بعد</Badge>}
+                          </td>
+                          <td className="p-2">
+                            <Button variant="outline" size="sm" onClick={() => setBranch(b.branchId)} data-testid={`button-open-branch-${b.branchId}`}>
+                              فتح الفرع
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
+
         {dataActive && salaryClosingData.length > 0 && (
           <>
             {/* ملخص الرواتب */}
