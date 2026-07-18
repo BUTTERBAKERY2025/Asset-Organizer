@@ -1261,7 +1261,7 @@ export function registerHrRoutes(app: Express) {
       const year = parseInt(existing.startDate.slice(0, 4), 10);
       const bal = await getLeaveBalanceSummary(existing.branchEmployeeId, year, "annual", emp.hireDate);
       const grossSalary = Number(emp.totalSalary || emp.salary || 0);
-      const divisor = bal.entitledDays >= 30 ? 30 : 21;
+      const divisor = 30; // قيمة اليوم = الراتب ÷ 30 دائماً (أيام الشهر)
       const dailyRate = divisor > 0 ? grossSalary / divisor : 0;
       const suggestedDays = Math.max(0, bal.remainingDays);
       const [activeSettlement] = await db.select().from(leaveSettlements)
@@ -1324,7 +1324,7 @@ export function registerHrRoutes(app: Express) {
       if (grossSalary <= 0) {
         return res.status(400).json({ error: "لا يوجد راتب مسجّل للموظف — لا يمكن حساب مبلغ التصفية" });
       }
-      const divisor = bal.entitledDays >= 30 ? 30 : 21;
+      const divisor = 30; // قيمة اليوم = الراتب ÷ 30 دائماً (أيام الشهر)
       const dailyRate = grossSalary / divisor;
       const calculatedAmount = Math.round(dailyRate * body.days * 100) / 100;
       const finalAmount = body.manualAmount !== undefined ? body.manualAmount : calculatedAmount;
@@ -1943,9 +1943,9 @@ export function registerHrRoutes(app: Express) {
 
       if (!canSeeSalary) return res.json(acc);
 
-      // تقدير القيمة النقدية للرصيد (بنفس قاعدة تصفية الرصيد: الراتب ÷ 30 أو ÷ 21)
+      // تقدير القيمة النقدية للرصيد (بنفس قاعدة تصفية الرصيد: الراتب ÷ 30)
       const grossSalary = Number((emp as any).totalSalary || (emp as any).salary || 0);
-      const divisor = Number(acc.annualDays) >= 30 ? 30 : 21;
+      const divisor = 30; // قيمة اليوم = الراتب ÷ 30 دائماً (أيام الشهر)
       const dailyRate = grossSalary > 0 ? Math.round((grossSalary / divisor) * 100) / 100 : 0;
       const settleableDays = Math.max(0, Number(acc.remainingDays) || 0);
       res.json({
