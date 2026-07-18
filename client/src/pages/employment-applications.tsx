@@ -107,6 +107,10 @@ export default function EmploymentApplicationsPage() {
   const [tab, setTab] = useState("applications");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
+  const [visibleCount, setVisibleCount] = useState(25);
   const [showCreate, setShowCreate] = useState(false);
   const [showVacancy, setShowVacancy] = useState(false);
   const [viewApp, setViewApp] = useState<EmploymentApplication | null>(null);
@@ -164,16 +168,33 @@ export default function EmploymentApplicationsPage() {
   });
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return applications;
-    const q = search.toLowerCase();
-    return applications.filter(
-      (a) =>
+    const q = search.trim().toLowerCase();
+    const appDate = (a: EmploymentApplication) => String((a as any).submittedAt || (a as any).createdAt || "");
+    let list = applications.filter((a) => {
+      if (q && !(
         a.fullNameAr?.toLowerCase().includes(q) ||
         a.phone?.toLowerCase().includes(q) ||
         a.applicationNumber?.toLowerCase().includes(q) ||
-        a.email?.toLowerCase().includes(q)
-    );
-  }, [applications, search]);
+        a.email?.toLowerCase().includes(q) ||
+        a.targetPosition?.toLowerCase().includes(q)
+      )) return false;
+      const d = appDate(a).slice(0, 10);
+      if (dateFrom && (!d || d < dateFrom)) return false;
+      if (dateTo && (!d || d > dateTo)) return false;
+      return true;
+    });
+    const byDate = (a: EmploymentApplication, b: EmploymentApplication) => appDate(b).localeCompare(appDate(a));
+    switch (sortBy) {
+      case "oldest": list = [...list].sort((a, b) => byDate(b, a)); break;
+      case "name": list = [...list].sort((a, b) => (a.fullNameAr || "").localeCompare(b.fullNameAr || "", "ar")); break;
+      case "rating": list = [...list].sort((a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0) || byDate(a, b)); break;
+      default: list = [...list].sort(byDate); // الأحدث أولاً
+    }
+    return list;
+  }, [applications, search, dateFrom, dateTo, sortBy]);
+
+  // إعادة ضبط عدد الظاهر عند تغيير أي فلتر
+  React.useEffect(() => { setVisibleCount(25); }, [search, statusFilter, dateFrom, dateTo, sortBy]);
 
   const createMut = useMutation({
     mutationFn: async () => {
@@ -403,9 +424,34 @@ export default function EmploymentApplicationsPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <Select value={sortBy} onValueChange={setSortBy}>
+                    <SelectTrigger className="w-[160px]" data-testid="select-sort">
+                      <SelectValue placeholder="الترتيب" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="newest">الأحدث أولاً</SelectItem>
+                      <SelectItem value="oldest">الأقدم أولاً</SelectItem>
+                      <SelectItem value="name">الاسم (أبجدي)</SelectItem>
+                      <SelectItem value="rating">الأعلى تقييماً</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Button variant="outline" size="icon" onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/hr/applications"] })}>
                     <RefreshCw className="w-4 h-4" />
                   </Button>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 mt-3">
+                  <span className="text-sm text-gray-500">تاريخ التقديم:</span>
+                  <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-[160px] h-9" data-testid="input-date-from" />
+                  <span className="text-gray-400">←</span>
+                  <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-[160px] h-9" data-testid="input-date-to" />
+                  {(dateFrom || dateTo || search || statusFilter) && (
+                    <Button variant="ghost" size="sm" className="text-red-600" onClick={() => { setDateFrom(""); setDateTo(""); setSearch(""); setStatusFilter(""); }} data-testid="button-clear-filters">
+                      مسح الفلاتر
+                    </Button>
+                  )}
+                  <span className="text-sm text-gray-500 mr-auto" data-testid="text-results-count">
+                    {filtered.length} من {applications.length} طلب
+                  </span>
                 </div>
               </CardContent>
             </Card>
@@ -416,7 +462,7 @@ export default function EmploymentApplicationsPage() {
               <Card><CardContent className="py-10 text-center text-gray-500">لا توجد طلبات</CardContent></Card>
             ) : (
               <div className="grid gap-3">
-                {filtered.map((app) => (
+                {filtered.slice(0, visibleCount).map((app) => (
                   <Card key={app.id} className="hover:shadow-md transition" data-testid={`card-application-${app.id}`}>
                     <CardContent className="pt-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -433,6 +479,11 @@ export default function EmploymentApplicationsPage() {
                           <div className="text-sm text-gray-600 mt-2 flex flex-wrap gap-x-4 gap-y-1">
                             <span>#{app.applicationNumber}</span>
                             <span>{app.phone}</span>
+                            {((app as any).submittedAt || (app as any).createdAt) && (
+                              <span className="text-gray-500" data-testid={`text-date-${app.id}`}>
+                                {new Date((app as any).submittedAt || (app as any).createdAt).toLocaleDateString("ar-SA-u-nu-latn")}
+                              </span>
+                            )}
                             {app.targetPosition && <span>الوظيفة: {app.targetPosition}</span>}
                             {app.targetBranchName && <span>الفرع: {app.targetBranchName}</span>}
                             {app.rating ? (
@@ -469,6 +520,11 @@ export default function EmploymentApplicationsPage() {
                     </CardContent>
                   </Card>
                 ))}
+                {filtered.length > visibleCount && (
+                  <Button variant="outline" className="w-full" onClick={() => setVisibleCount((c) => c + 25)} data-testid="button-show-more">
+                    عرض المزيد ({filtered.length - visibleCount} طلب متبقٍ)
+                  </Button>
+                )}
               </div>
             )}
           </TabsContent>
