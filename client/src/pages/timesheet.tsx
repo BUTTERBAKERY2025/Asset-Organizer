@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
-import { Calendar, FileText, Pen, Download, Loader2, CheckCircle, Clock, AlertCircle, User, Check, XCircle, LayoutDashboard, Users, Sparkles, Eye, FilePlus2, AlertTriangle, FileDown, Wand2, Lock, History, RefreshCw, Wallet, TrendingDown, Activity, CalendarOff, MinusCircle, Search, ListFilter, X, ChevronLeft, ChevronRight, ArrowUpDown } from "lucide-react";
+import { Calendar, FileText, Pen, Download, Loader2, CheckCircle, Clock, AlertCircle, User, Check, XCircle, LayoutDashboard, Users, Sparkles, Eye, FilePlus2, AlertTriangle, FileDown, Wand2, Lock, History, RefreshCw, Wallet, TrendingDown, Activity, CalendarOff, MinusCircle, Search, ListFilter, X, ChevronLeft, ChevronRight, ArrowUpDown, Info } from "lucide-react";
 import { useLocation } from "wouter";
 import SignatureCanvas from "react-signature-canvas";
 
@@ -178,6 +178,46 @@ export default function TimesheetPage() {
 
   const NOT_GENERATED_BADGE = { label: t("timesheet.dashboard.notGenerated"), color: "bg-rose-50 text-rose-700 border border-rose-200" };
 
+  // تلميح "ما المطلوب الآن؟" لكل حالة تقرير — يظهر تحت الحالة وفي tooltip
+  const STATUS_NEXT_ACTION: Record<string, string> = {
+    pending: "مسودة — راجع البيانات ثم أرسلها للموظف ليوقع",
+    pending_employee_signature: "بانتظار الموظف — اطلب من الموظف فتح بوابته والتوقيع على التقرير",
+    pending_manager_signature: "دورك الآن — افتح التقرير وراجعه ثم وقّع كمدير",
+    finalized: "مكتمل ✓ — التقرير موقّع ومقفل، لا يلزم أي إجراء",
+    rejected: "مرفوض — راجع سبب الرفض وأعد إنشاء التقرير بعد التصحيح",
+    not_generated: "غير منشأ — اضغط زر «إنشاء» لتوليد تقرير هذا الموظف",
+  };
+
+  // تحويل أخطاء الخادم المقتضبة إلى رسائل واضحة: المشكلة + السبب + الحل
+  const friendlyTsError = (msg: string): { title: string; description: string } => {
+    const m = msg || "";
+    if (m.includes("مقفل") || m.includes("إعادة الإصدار") || m.toLowerCase().includes("locked")) {
+      return {
+        title: "التقرير مقفل لهذه الفترة",
+        description: "يوجد تقرير مكتمل وموقّع لهذا الموظف في نفس الشهر. لا يمكن إنشاء تقرير جديد فوقه — إذا كنت تحتاج تعديلاً، افتح التقرير القديم واستخدم «إعادة الإصدار» مع ذكر السبب.",
+      };
+    }
+    if (m.includes("لا ينتمي") || m.includes("فرع آخر") || m.toLowerCase().includes("branch")) {
+      return {
+        title: "الموظف لا يتبع هذا الفرع",
+        description: "هذا الموظف مسجّل في فرع آخر. أنشئ تقريره من صفحة فرعه الصحيح، أو تحقق من نقل الموظف في إدارة الموظفين.",
+      };
+    }
+    if (m.includes("موجود") && m.includes("تقرير")) {
+      return {
+        title: "يوجد تقرير سابق لنفس الشهر",
+        description: "تم إنشاء تقرير لهذا الموظف في هذا الشهر من قبل. ابحث عنه في القائمة أدناه أو في تبويب «السجلات السابقة».",
+      };
+    }
+    if (m.includes("توقيع") || m.toLowerCase().includes("sign")) {
+      return {
+        title: "تعذر التوقيع",
+        description: m + " — تأكد أن التقرير في المرحلة الصحيحة (توقيع الموظف يسبق توقيع المدير).",
+      };
+    }
+    return { title: t("common.error"), description: m || t("timesheet.reportError") };
+  };
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { branches, userBranchId, canSelectBranch } = useBranches();
@@ -189,6 +229,16 @@ export default function TimesheetPage() {
   const [employeeMode, setEmployeeMode] = useState<"active" | "attendance">("active");
   const [activeTab, setActiveTab] = useState("dashboard");
   const [dashboardSearch, setDashboardSearch] = useState("");
+  const [showGuide, setShowGuide] = useState<boolean>(() => {
+    try { return localStorage.getItem("timesheet_guide_dismissed") !== "1"; } catch { return true; }
+  });
+  const toggleGuide = () => {
+    setShowGuide(prev => {
+      const next = !prev;
+      try { localStorage.setItem("timesheet_guide_dismissed", next ? "0" : "1"); } catch {}
+      return next;
+    });
+  };
   const [dashboardSort, setDashboardSort] = useState<string>("default");
   const [dashboardStatusFilter, setDashboardStatusFilter] = useState<string>("all");
   const [entryStatusFilter, setEntryStatusFilter] = useState<string>("all");
@@ -560,7 +610,8 @@ export default function TimesheetPage() {
       setActiveTab("view");
     },
     onError: (error: Error) => {
-      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+      const fe = friendlyTsError(error.message);
+      toast({ title: fe.title, description: fe.description, variant: "destructive" });
     },
   });
 
@@ -589,7 +640,8 @@ export default function TimesheetPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/timesheet-reports"] });
     },
     onError: (error: Error) => {
-      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+      const fe = friendlyTsError(error.message);
+      toast({ title: fe.title, description: fe.description, variant: "destructive" });
     },
   });
 
@@ -614,7 +666,8 @@ export default function TimesheetPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/timesheet-reports", data.id, "audit-log"] });
     },
     onError: (error: Error) => {
-      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+      const fe = friendlyTsError(error.message);
+      toast({ title: fe.title, description: fe.description, variant: "destructive" });
     },
   });
 
@@ -653,7 +706,8 @@ export default function TimesheetPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/timesheet-reports"] });
     },
     onError: (error: Error) => {
-      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+      const fe = friendlyTsError(error.message);
+      toast({ title: fe.title, description: fe.description, variant: "destructive" });
     },
   });
 
@@ -685,7 +739,8 @@ export default function TimesheetPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/timesheet-reports", data.id, "audit-log"] });
     },
     onError: (error: Error) => {
-      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+      const fe = friendlyTsError(error.message);
+      toast({ title: fe.title, description: fe.description, variant: "destructive" });
     },
   });
 
@@ -719,12 +774,37 @@ export default function TimesheetPage() {
     reissueMutation.mutate({ id: reissuingFor.id, reason: reissueReason.trim() });
   };
 
+  // ====== فحص الجاهزية قبل الإنشاء (نقطة 2) ======
+  const monthNotEnded = useMemo(() => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    return today < monthBounds.endDate;
+  }, [monthBounds.endDate]);
+
+  const confirmReadiness = (context: "single" | "bulk", employeeId?: string): boolean => {
+    const warnings: string[] = [];
+    if (monthNotEnded) {
+      warnings.push("• الشهر لم ينتهِ بعد — التقرير سيغطي الأيام المسجلة حتى الآن فقط، وقد تحتاج لإعادة إصداره لاحقاً.");
+    }
+    if (context === "single" && employeeId) {
+      const row = dashboardRows.find(r => r.id === employeeId);
+      if (row && typeof row.attendanceDays === "number" && row.attendanceDays === 0) {
+        warnings.push("• لا يوجد أي حضور مسجل لهذا الموظف في الشهر المحدد — سيصدر التقرير بأصفار.");
+      }
+    }
+    if (warnings.length === 0) return true;
+    return window.confirm(
+      "⚠️ تنبيه قبل إنشاء التقرير:\n\n" + warnings.join("\n") +
+      "\n\nالأفضل إنشاء التقارير بعد نهاية الشهر واكتمال تسجيل الحضور.\n\nهل تريد المتابعة رغم ذلك؟"
+    );
+  };
+
   // ====== Action handlers ======
   const handleGenerateForEmployee = (employeeId: string) => {
     if (!selectedBranch || selectedBranch === "all") {
       toast({ title: t("common.alert"), description: t("timesheet.selectBranchAlert"), variant: "destructive" });
       return;
     }
+    if (!confirmReadiness("single", employeeId)) return;
     setGeneratingFor(employeeId);
     generateMutation.mutate(
       { employeeId, branchId: selectedBranch, startDate: monthBounds.startDate, endDate: monthBounds.endDate },
@@ -742,6 +822,7 @@ export default function TimesheetPage() {
       toast({ title: t("common.alert"), description: t("timesheet.dashboard.bulkGenerateNone") });
       return;
     }
+    if (!confirmReadiness("bulk")) return;
     setIsBulkGenerating(true);
     bulkGenerateMutation.mutate(
       { branchId: selectedBranch, startDate: monthBounds.startDate, endDate: monthBounds.endDate, employeeIds: missingIds },
@@ -1223,6 +1304,92 @@ export default function TimesheetPage() {
                 </div>
                 <p className="text-[11px] text-muted-foreground -mt-1" data-testid="text-kpi-filter-hint">{t("timesheet.filters.kpiHint")}</p>
 
+                {/* شريط خطوات الشهر (نقطة 1) */}
+                {(() => {
+                  const created = kpis.signed + kpis.pendingMgr + kpis.pendingEmp + kpis.draft;
+                  const genTotal = created + kpis.notGen;
+                  const empSigned = kpis.signed + kpis.pendingMgr;
+                  const stepTone = (done: number, total: number) =>
+                    total === 0 ? "bg-gray-100 text-gray-500 border-gray-200"
+                    : done >= total ? "bg-green-50 text-green-800 border-green-300"
+                    : done > 0 ? "bg-amber-50 text-amber-800 border-amber-300"
+                    : "bg-gray-50 text-gray-600 border-gray-200";
+                  const steps = [
+                    {
+                      num: 1,
+                      title: "الورديات والحضور",
+                      sub: monthNotEnded ? "⚠️ الشهر لم ينتهِ بعد" : "الشهر مكتمل ✓",
+                      tone: monthNotEnded ? "bg-amber-50 text-amber-800 border-amber-300" : "bg-green-50 text-green-800 border-green-300",
+                      tip: "قبل إنشاء التقارير: تأكد من إعداد ورديات الشهر واكتمال تسجيل الحضور (البصمة). الأفضل الإنشاء بعد نهاية الشهر.",
+                    },
+                    {
+                      num: 2,
+                      title: "إنشاء التقارير",
+                      sub: `${created} / ${genTotal}`,
+                      tone: stepTone(created, genTotal),
+                      tip: "أنشئ تقريراً لكل موظف — استخدم زر «إنشاء تقارير لكل من لم يُنشأ» للإنشاء الجماعي.",
+                    },
+                    {
+                      num: 3,
+                      title: "توقيع الموظفين",
+                      sub: `${empSigned} / ${created}`,
+                      tone: stepTone(empSigned, created),
+                      tip: "كل موظف يوقّع تقريره من بوابته الشخصية. التقارير «بانتظار الموظف» تحتاج تذكير الموظف.",
+                    },
+                    {
+                      num: 4,
+                      title: "توقيع المدير والاكتمال",
+                      sub: `${kpis.signed} / ${created}`,
+                      tone: stepTone(kpis.signed, created),
+                      tip: "بعد توقيع الموظف، افتح التقرير ووقّع كمدير — عندها يكتمل التقرير ويُقفل تلقائياً.",
+                    },
+                  ];
+                  return (
+                    <div className="flex flex-col sm:flex-row gap-2" data-testid="bar-month-steps">
+                      {steps.map((s, i) => (
+                        <div key={s.num} className={`flex-1 flex items-center gap-2 rounded-lg border px-3 py-2 ${s.tone}`} title={s.tip} data-testid={`step-${s.num}`}>
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-white/80 border border-current flex items-center justify-center text-xs font-bold">{s.num}</span>
+                          <div className="min-w-0">
+                            <div className="text-xs font-semibold truncate">{s.title}</div>
+                            <div className="text-[11px] opacity-80">{s.sub}</div>
+                          </div>
+                          {i < steps.length - 1 && <ChevronLeft className="w-4 h-4 opacity-40 ms-auto hidden sm:block rtl:rotate-0 ltr:rotate-180" />}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+
+                {/* دليل سريع قابل للطي (نقطة 5) */}
+                <Card className="border-blue-200 bg-blue-50/40">
+                  <CardHeader className="py-3 cursor-pointer select-none" onClick={toggleGuide} data-testid="btn-toggle-guide">
+                    <CardTitle className="text-sm flex items-center justify-between text-blue-900">
+                      <span className="flex items-center gap-2">
+                        <Info className="w-4 h-4" />
+                        دليل سريع: كيف تعمل تقارير التايم شيت؟
+                      </span>
+                      <span className="text-xs font-normal text-blue-700">{showGuide ? "إخفاء ▲" : "عرض ▼"}</span>
+                    </CardTitle>
+                  </CardHeader>
+                  {showGuide && (
+                    <CardContent className="pt-0 pb-4 text-sm text-blue-950 space-y-2" data-testid="content-guide">
+                      <ol className="list-decimal ps-5 space-y-1.5">
+                        <li><b>جهّز الشهر أولاً:</b> تأكد من إعداد ورديات الموظفين واكتمال تسجيل الحضور (البصمة) — يفضّل إنشاء التقارير بعد نهاية الشهر.</li>
+                        <li><b>أنشئ التقارير:</b> اضغط «إنشاء» بجانب كل موظف، أو زر «إنشاء تقارير لكل من لم يُنشأ» لإنشائها دفعة واحدة.</li>
+                        <li><b>توقيع الموظف:</b> بعد الإنشاء تصبح الحالة «بانتظار الموظف» — يفتح الموظف بوابته الشخصية ويوقّع على تقريره.</li>
+                        <li><b>توقيع المدير:</b> بعد توقيع الموظف تصبح الحالة «بانتظار المدير» — افتح التقرير وراجع الغيابات والتأخيرات ثم وقّع.</li>
+                        <li><b>الاكتمال والقفل:</b> بعد توقيع المدير يصبح التقرير «مكتمل وموقّع» ويُقفل تلقائياً — أي تعديل لاحق يتطلب «إعادة إصدار» مع ذكر السبب.</li>
+                      </ol>
+                      <div className="rounded-md bg-white/70 border border-blue-200 p-2.5 text-xs space-y-1">
+                        <p><b>ملاحظات مهمة:</b></p>
+                        <p>• «غير منشأ» بالأحمر = الموظف بلا تقرير لهذا الشهر — اضغط «إنشاء».</p>
+                        <p>• إذا ظهر خطأ «تقرير مقفل» فهذا يعني وجود تقرير مكتمل سابق — استخدم «إعادة الإصدار» بدل إنشاء جديد.</p>
+                        <p>• الموظف المنقول من فرع آخر يظهر «عرض فقط» — أنشئ تقريره من فرعه الحالي.</p>
+                      </div>
+                    </CardContent>
+                  )}
+                </Card>
+
                 {/* Quick Actions */}
                 <Card>
                   <CardHeader className="pb-3">
@@ -1400,7 +1567,23 @@ export default function TimesheetPage() {
                                 </TableCell>
                                 <TableCell className="text-center">
                                   <div className="flex flex-col items-center gap-1">
-                                    <Badge className={badge?.color}>{badge?.label}</Badge>
+                                    <Badge
+                                      className={`${badge?.color} cursor-help`}
+                                      title={STATUS_NEXT_ACTION[isMissing ? (row.canGenerate ? "not_generated" : "") : r!.status] || ""}
+                                      data-testid={`badge-status-${row.id}`}
+                                    >
+                                      {badge?.label}
+                                    </Badge>
+                                    {(() => {
+                                      const hint = isMissing
+                                        ? (row.canGenerate ? STATUS_NEXT_ACTION.not_generated : "عرض فقط — الموظف يتبع فرعاً آخر حالياً")
+                                        : STATUS_NEXT_ACTION[r!.status];
+                                      return hint ? (
+                                        <span className="text-[10px] text-muted-foreground max-w-[180px] leading-snug hidden sm:block" data-testid={`hint-status-${row.id}`}>
+                                          {hint}
+                                        </span>
+                                      ) : null;
+                                    })()}
                                     {r?.isLocked && (
                                       <span
                                         className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300"
