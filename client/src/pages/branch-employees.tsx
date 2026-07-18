@@ -1487,11 +1487,15 @@ export default function BranchEmployeesPage() {
         return false;
       }
     }
-    if (selectedNationality !== "all" && emp.nationality !== selectedNationality) {
-      return false;
+    if (selectedNationality !== "all") {
+      if (selectedNationality === "__missing__" ? !!emp.nationality : emp.nationality !== selectedNationality) {
+        return false;
+      }
     }
-    if (selectedJobTitle !== "all" && emp.jobTitle !== selectedJobTitle) {
-      return false;
+    if (selectedJobTitle !== "all") {
+      if (selectedJobTitle === "__missing__" ? !!emp.jobTitle : emp.jobTitle !== selectedJobTitle) {
+        return false;
+      }
     }
     // Status filter applied server-side via queryKey; no client re-filter needed
     if (salaryMin !== undefined && emp.salary < salaryMin) {
@@ -1508,6 +1512,33 @@ export default function BranchEmployeesPage() {
     }
     return true;
   });
+
+  // إحصاءات محسوبة من القائمة بعد تطبيق كل الفلاتر — حتى تتطابق المؤشرات مع ما يراه المستخدم
+  const derivedStats = React.useMemo(() => {
+    const natMap = new Map<string, number>();
+    const jobMap = new Map<string, number>();
+    let totalSalaries = 0;
+    for (const emp of filteredEmployees) {
+      const nat = emp.nationality || "__missing__";
+      const job = emp.jobTitle || "__missing__";
+      natMap.set(nat, (natMap.get(nat) || 0) + 1);
+      jobMap.set(job, (jobMap.get(job) || 0) + 1);
+      totalSalaries += (emp as any).totalSalary || emp.salary || 0;
+    }
+    const missingLabel = isRTL ? "غير محدد" : "N/A";
+    const toRows = (map: Map<string, number>) =>
+      Array.from(map.entries()).map(([value, count]) => ({
+        value,
+        label: value === "__missing__" ? missingLabel : value,
+        count,
+      }));
+    return {
+      totalEmployees: filteredEmployees.length,
+      totalSalaries,
+      byNationality: toRows(natMap),
+      byJobTitle: toRows(jobMap),
+    };
+  }, [filteredEmployees, isRTL]);
 
   const totalPages = Math.ceil(filteredEmployees.length / pageSize);
   const startIndex = (currentPage - 1) * pageSize;
@@ -1833,15 +1864,15 @@ export default function BranchEmployeesPage() {
     </div>
     <div class="summary-item">
       <div class="label">إجمالي الرواتب</div>
-      <div class="value">${formatCurrency(stats?.totalSalaries)}</div>
+      <div class="value">${formatCurrency(derivedStats.totalSalaries)}</div>
     </div>
     <div class="summary-item">
       <div class="label">عدد الجنسيات</div>
-      <div class="value">${formatNumber(stats?.byNationality?.length || 0)}</div>
+      <div class="value">${formatNumber(derivedStats.byNationality.length)}</div>
     </div>
     <div class="summary-item">
       <div class="label">عدد الوظائف</div>
-      <div class="value">${formatNumber(stats?.byJobTitle?.length || 0)}</div>
+      <div class="value">${formatNumber(derivedStats.byJobTitle.length)}</div>
     </div>
   </div>
 
@@ -1887,7 +1918,7 @@ export default function BranchEmployeesPage() {
         <td>${formatCurrency(filteredEmployees.reduce((sum: number, emp: BranchEmployee) => sum + (emp.housingAllowance || 0), 0))}</td>
         <td>${formatCurrency(filteredEmployees.reduce((sum: number, emp: BranchEmployee) => sum + (emp.transportAllowance || 0), 0))}</td>
         <td class="deduction">${formatCurrency(filteredEmployees.reduce((sum: number, emp: BranchEmployee) => sum + (emp.socialInsuranceDeduction || 0), 0))}</td>
-        <td class="amount">${formatCurrency(stats?.totalSalaries)}</td>
+        <td class="amount">${formatCurrency(derivedStats.totalSalaries)}</td>
         <td></td>
       </tr>
     </tfoot>
@@ -2333,10 +2364,10 @@ export default function BranchEmployeesPage() {
           <TabsContent value="employees" className="space-y-4 sm:space-y-6 mt-4 sm:mt-6">
         <div className="kpi-grid">
           {[
-            { label: isRTL ? "إجمالي الموظفين" : "Total Employees", value: formatNumber(stats?.totalEmployees || 0), Icon: Users, iconBg: "bg-violet-100", iconColor: "text-violet-700", border: "border-violet-200", testid: "text-total-employees" },
-            { label: isRTL ? "إجمالي الرواتب" : "Total Salaries", value: stats ? formatCurrency(stats?.totalSalaries, isRTL) : "—", Icon: DollarSign, iconBg: "bg-emerald-100", iconColor: "text-emerald-700", border: "border-emerald-200", testid: "text-total-salaries" },
-            { label: isRTL ? "عدد الجنسيات" : "Nationalities", value: formatNumber(stats?.byNationality?.length || 0), Icon: Globe, iconBg: "bg-fuchsia-100", iconColor: "text-fuchsia-700", border: "border-fuchsia-200", testid: "text-nationalities-count" },
-            { label: isRTL ? "عدد الوظائف" : "Job Titles", value: formatNumber(stats?.byJobTitle?.length || 0), Icon: Briefcase, iconBg: "bg-indigo-100", iconColor: "text-indigo-700", border: "border-indigo-200", testid: "text-jobs-count" },
+            { label: isRTL ? "إجمالي الموظفين" : "Total Employees", value: formatNumber(derivedStats.totalEmployees), Icon: Users, iconBg: "bg-violet-100", iconColor: "text-violet-700", border: "border-violet-200", testid: "text-total-employees" },
+            { label: isRTL ? "إجمالي الرواتب" : "Total Salaries", value: employees ? formatCurrency(derivedStats.totalSalaries, isRTL) : "—", Icon: DollarSign, iconBg: "bg-emerald-100", iconColor: "text-emerald-700", border: "border-emerald-200", testid: "text-total-salaries" },
+            { label: isRTL ? "عدد الجنسيات" : "Nationalities", value: formatNumber(derivedStats.byNationality.length), Icon: Globe, iconBg: "bg-fuchsia-100", iconColor: "text-fuchsia-700", border: "border-fuchsia-200", testid: "text-nationalities-count" },
+            { label: isRTL ? "عدد الوظائف" : "Job Titles", value: formatNumber(derivedStats.byJobTitle.length), Icon: Briefcase, iconBg: "bg-indigo-100", iconColor: "text-indigo-700", border: "border-indigo-200", testid: "text-jobs-count" },
           ].map((kpi, i) => (
             <Card key={i} className={`border ${kpi.border} hover:shadow-md transition-shadow`}>
               <CardContent className="pt-6">
@@ -2432,6 +2463,7 @@ export default function BranchEmployeesPage() {
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-y-auto">
                 <SelectItem value="all">{isRTL ? "جميع الجنسيات" : "All Nationalities"}</SelectItem>
+                <SelectItem value="__missing__">{isRTL ? "غير محدد" : "N/A"}</SelectItem>
                 {settingsByCategory.nationality?.filter(s => s.isActive).map((nat) => (
                   <SelectItem key={nat.id} value={nat.labelAr}>{nat.labelAr}</SelectItem>
                 ))}
@@ -2446,6 +2478,7 @@ export default function BranchEmployeesPage() {
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-y-auto">
                 <SelectItem value="all">جميع الوظائف</SelectItem>
+                <SelectItem value="__missing__">{isRTL ? "غير محدد" : "N/A"}</SelectItem>
                 {settingsByCategory.job_title?.filter(s => s.isActive).map((job) => (
                   <SelectItem key={job.id} value={job.labelAr}>{job.labelAr}</SelectItem>
                 ))}
@@ -2679,17 +2712,29 @@ export default function BranchEmployeesPage() {
         </Card>
         </div>
 
-        {stats && (stats.byNationality?.length > 0 || stats.byJobTitle?.length > 0) && (() => {
-          const totalEmp = stats.totalEmployees || 0;
-          const sortedNat = [...(stats.byNationality || [])].sort((a: any, b: any) => b.count - a.count);
-          const sortedJob = [...(stats.byJobTitle || [])].sort((a: any, b: any) => b.count - a.count);
+        {(derivedStats.byNationality.length > 0 || derivedStats.byJobTitle.length > 0) && (() => {
+          const totalEmp = derivedStats.totalEmployees || 0;
+          const sortedNat = [...derivedStats.byNationality].sort((a, b) => b.count - a.count);
+          const sortedJob = [...derivedStats.byJobTitle].sort((a, b) => b.count - a.count);
           const maxNat = sortedNat[0]?.count || 1;
           const maxJob = sortedJob[0]?.count || 1;
-          const renderRow = (label: string, count: number, max: number, gradient: string, idx: number) => {
+          const renderRow = (label: string, value: string, count: number, max: number, gradient: string, idx: number, kind: "nationality" | "job") => {
             const pct = totalEmp ? Math.round((count / totalEmp) * 100) : 0;
             const barPct = max ? (count / max) * 100 : 0;
+            const isSelected = kind === "nationality" ? selectedNationality === value : selectedJobTitle === value;
+            const onClick = () => {
+              if (kind === "nationality") setSelectedNationality(isSelected ? "all" : value);
+              else setSelectedJobTitle(isSelected ? "all" : value);
+            };
             return (
-              <div key={`${label}-${idx}`} className="group relative px-3 py-2.5 rounded-xl hover:bg-violet-50/50 transition-colors">
+              <button
+                type="button"
+                onClick={onClick}
+                key={`${label}-${idx}`}
+                title={isSelected ? (isRTL ? "اضغط لإلغاء الفلتر" : "Click to clear filter") : (isRTL ? "اضغط للفلترة على هذه الفئة" : "Click to filter by this")}
+                className={`w-full text-start group relative px-3 py-2.5 rounded-xl transition-colors ${isSelected ? "ring-2 ring-violet-400 bg-violet-50" : "hover:bg-violet-50/50"}`}
+                data-testid={`row-dist-${kind}-${idx}`}
+              >
                 <div className={`absolute inset-y-0 ${isRTL ? 'right-0' : 'left-0'} rounded-xl opacity-[0.08] ${gradient}`} style={{ width: `${barPct}%` }} />
                 <div className="relative flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2 min-w-0">
@@ -2701,7 +2746,7 @@ export default function BranchEmployeesPage() {
                     <span className="px-2.5 py-0.5 rounded-full bg-violet-100 text-violet-700 text-xs font-semibold tabular-nums min-w-[2rem] text-center">{formatNumber(count)}</span>
                   </div>
                 </div>
-              </div>
+              </button>
             );
           };
           return (
@@ -2722,8 +2767,8 @@ export default function BranchEmployeesPage() {
                 </CardHeader>
                 <CardContent className="pt-2">
                   <div className="space-y-0.5 max-h-[360px] overflow-y-auto pr-1">
-                    {sortedNat.map((item: { nationality: string; count: number }, i: number) =>
-                      renderRow(item.nationality, item.count, maxNat, "bg-gradient-to-l from-violet-500 to-fuchsia-500", i)
+                    {sortedNat.map((item, i) =>
+                      renderRow(item.label, item.value, item.count, maxNat, "bg-gradient-to-l from-violet-500 to-fuchsia-500", i, "nationality")
                     )}
                   </div>
                 </CardContent>
@@ -2744,8 +2789,8 @@ export default function BranchEmployeesPage() {
                 </CardHeader>
                 <CardContent className="pt-2">
                   <div className="space-y-0.5 max-h-[360px] overflow-y-auto pr-1">
-                    {sortedJob.map((item: { jobTitle: string; count: number }, i: number) =>
-                      renderRow(item.jobTitle, item.count, maxJob, "bg-gradient-to-l from-fuchsia-500 to-violet-500", i)
+                    {sortedJob.map((item, i) =>
+                      renderRow(item.label, item.value, item.count, maxJob, "bg-gradient-to-l from-fuchsia-500 to-violet-500", i, "job")
                     )}
                   </div>
                 </CardContent>
