@@ -70,7 +70,7 @@ import {
 } from "lucide-react";
 import type { BranchEmployee, EmployeeSetting, EmployeeTransferRequest, Branch } from "@shared/schema";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle, XCircle, ArrowRight, History, TrendingUp, RefreshCw, Copy, MessageCircle } from "lucide-react";
+import { CheckCircle, XCircle, ArrowRight, History, TrendingUp, RefreshCw, Copy, MessageCircle, UserX } from "lucide-react";
 
 // تمت إزالة JOB_TITLES و NATIONALITIES - الآن يتم استخدام البيانات من قاعدة البيانات
 
@@ -2625,9 +2625,30 @@ export default function BranchEmployeesPage() {
                     <TableRow key={emp.id} data-testid={`row-employee-${emp.id}`}>
                       <TableCell className={`font-mono text-xs sm:text-sm text-amber-700 hidden md:table-cell ${isRTL ? "text-right" : "text-left"}`}>{emp.employeeNumber || "--"}</TableCell>
                       <TableCell className={isRTL ? "text-right" : "text-left"}>
-                        <div>
-                          <p className="font-medium text-xs sm:text-sm">{emp.employeeName}</p>
-                          {emp.employeeNameEn && <p className="text-xs text-gray-500 hidden sm:block" dir="ltr">{emp.employeeNameEn}</p>}
+                        <div className="flex items-center gap-1.5">
+                          {user?.role === "admin" && (
+                            emp.linkedUserId ? (
+                              <span
+                                className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 shrink-0"
+                                title={isRTL ? "لديه حساب بوابتي" : "Has portal account"}
+                                data-testid={`portal-linked-${emp.id}`}
+                              >
+                                <UserCheck className="w-3 h-3" />
+                              </span>
+                            ) : (
+                              <span
+                                className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 text-gray-400 shrink-0"
+                                title={isRTL ? "لا يوجد حساب بوابتي" : "No portal account"}
+                                data-testid={`portal-unlinked-${emp.id}`}
+                              >
+                                <UserX className="w-3 h-3" />
+                              </span>
+                            )
+                          )}
+                          <div>
+                            <p className="font-medium text-xs sm:text-sm">{emp.employeeName}</p>
+                            {emp.employeeNameEn && <p className="text-xs text-gray-500 hidden sm:block" dir="ltr">{emp.employeeNameEn}</p>}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className={`text-xs sm:text-sm ${isRTL ? "text-right" : "text-left"}`}>{getBranchName(emp.branchId)}</TableCell>
