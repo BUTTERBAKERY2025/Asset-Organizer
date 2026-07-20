@@ -60,7 +60,7 @@
     "@uppy/core": "^5.2.0",
     "@uppy/dashboard": "^5.1.0",
     "@uppy/react": "^5.1.1",
-    "adm-zip": "^0.5.16",
+    "adm-zip": "^0.6.0",
     "arabic-reshaper": "^1.1.0",
     "baseline-browser-mapping": "^2.9.15",
     "bcrypt": "^6.0.0",
@@ -153,7 +153,7 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.22.3",
     "typescript": "5.6.3",
-    "vite": "^7.3.5"
+    "vite": "^7.3.6"
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
