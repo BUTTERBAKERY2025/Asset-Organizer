@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   CalendarDays, Plus, CheckCircle2, XCircle, Clock, Trash2, ArrowRight,
   Wallet, Printer, FileSpreadsheet, Ban, Paperclip, Pencil, ChevronRight, ChevronLeft, ListChecks, Sun, FileText, Calculator,
-  Banknote, LogOut, LogIn, AlertTriangle, LayoutDashboard, Coins, UserX, MoreHorizontal, Download,
+  Banknote, LogOut, LogIn, AlertTriangle, LayoutDashboard, Coins, UserX, MoreHorizontal, Download, History,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
@@ -108,6 +108,7 @@ export default function LeavesPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<typeof initialForm>(initialForm);
   const [reviewing, setReviewing] = useState<{ id: number; decision: "approved" | "rejected"; leave: Leave } | null>(null);
+  const [viewingFlow, setViewingFlow] = useState<Leave | null>(null);
   const [reviewNote, setReviewNote] = useState("");
   // تغطية الفرع عند مراجعة الاعتماد: هل هناك إجازات معتمدة متداخلة لموظفين آخرين؟
   const { data: coverage } = useQuery<any>({
@@ -1834,6 +1835,11 @@ ${d.workflowStatus === "disbursed" ? `<div class="box"><b>الصرف:</b> تم �
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="text-sm">
+                                {Array.isArray((l as any).approvalFlow) && (l as any).approvalFlow.length > 0 && (
+                                  <DropdownMenuItem onClick={() => setViewingFlow(l)} data-testid={`button-view-flow-${l.id}`}>
+                                    <History className="h-3.5 w-3.5 ms-2 text-slate-600" />سجل الاعتماد
+                                  </DropdownMenuItem>
+                                )}
                                 {(l.status === "approved" || l.status === "pending") && (
                                   <DropdownMenuItem onClick={() => { setDatesForm({ startDate: l.startDate, endDate: l.endDate, note: "" }); setEditingDates(l); }} data-testid={`button-edit-dates-${l.id}`}>
                                     <Pencil className="h-3.5 w-3.5 ms-2 text-blue-600" />تعديل التواريخ
@@ -3022,6 +3028,50 @@ ${d.workflowStatus === "disbursed" ? `<div class="box"><b>الصرف:</b> تم �
       </Dialog>
 
       {/* Review dialog */}
+      {/* سجل الاعتماد (الهستري) */}
+      <Dialog open={!!viewingFlow} onOpenChange={(o) => { if (!o) setViewingFlow(null); }}>
+        <DialogContent className="max-w-lg" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><History className="h-4 w-4" />سجل اعتماد طلب الإجازة</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {(Array.isArray((viewingFlow as any)?.approvalFlow) ? (viewingFlow as any).approvalFlow : []).map((f: any, i: number) => (
+              <div
+                key={i}
+                className={`rounded-lg border p-3 text-sm ${
+                  f.decision === "approved" ? "border-emerald-200 bg-emerald-50/60" :
+                  f.decision === "rejected" ? "border-red-200 bg-red-50/60" :
+                  f.decision === "bypassed" ? "border-amber-300 bg-amber-50/70" : "border-slate-200"
+                }`}
+                data-testid={`flow-step-${i}`}
+              >
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="font-medium flex items-center gap-1.5">
+                    {f.decision === "approved" && <CheckCircle2 className="h-4 w-4 text-emerald-600" />}
+                    {f.decision === "rejected" && <XCircle className="h-4 w-4 text-red-600" />}
+                    {f.decision === "bypassed" && <AlertTriangle className="h-4 w-4 text-amber-600" />}
+                    المستوى {arNum(f.level)}{f.title ? ` — ${f.title}` : ""}
+                  </div>
+                  <Badge variant="outline" className={
+                    f.decision === "approved" ? "text-emerald-700 border-emerald-300" :
+                    f.decision === "rejected" ? "text-red-700 border-red-300" :
+                    "text-amber-700 border-amber-400"
+                  }>
+                    {f.decision === "approved" ? "اعتماد" : f.decision === "rejected" ? "رفض" : "تم التجاوز"}
+                  </Badge>
+                </div>
+                {f.approverName && <div className="text-xs text-muted-foreground mt-1">بواسطة: {f.approverName}</div>}
+                {f.note && <div className={`text-xs mt-1 ${f.decision === "bypassed" ? "text-amber-800 font-medium" : "text-muted-foreground"}`}>{f.note}</div>}
+                {f.at && <div className="text-[10px] text-muted-foreground mt-1">{String(f.at).slice(0, 16).replace("T", " ")}</div>}
+              </div>
+            ))}
+            {(!Array.isArray((viewingFlow as any)?.approvalFlow) || (viewingFlow as any).approvalFlow.length === 0) && (
+              <div className="text-center text-muted-foreground text-sm py-4">لا يوجد سجل اعتماد</div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!reviewing} onOpenChange={(o) => { if (!o) { setReviewing(null); setReviewNote(""); setAllowOver(false); } }}>
         <DialogContent className="max-w-md" dir="rtl">
           <DialogHeader>

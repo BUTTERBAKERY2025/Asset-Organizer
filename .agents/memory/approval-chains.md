@@ -66,3 +66,14 @@ word) AND a role-equivalence map (branch_manager ↔ مدير الفرع,
 operations_manager ↔ مدير التشغيل, hr_manager ↔ مدير شؤون الموظفين) in
 reviewerMatchesStep (server/leave-helpers.ts). Keep both paths in sync if new
 chain roles are added.
+
+## Higher-authority bypass (2026-07-20)
+A reviewer matching a HIGHER chain level than the pending one is accepted: lower
+levels are recorded in approvalFlow as `decision:"bypassed"` entries (with Arabic
+note + bypassedBy), the real decision is logged at `effectiveLevel`, and the request
+continues to levels ABOVE the reviewer if requiredLevels is higher (it does NOT
+fully approve). Reject follows the same matching. **Why:** ops manager outranks
+branch manager and must not be blocked by a pending lower step, but transparency
+requires the bypass be explicit in history. **How to apply:** any progression/audit/
+notification logic in the review route must use effectiveLevel, never
+existing.currentLevel.

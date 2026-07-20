@@ -407,6 +407,10 @@ export function registerHrRoutes(app: Express) {
       // تطبيق سلسلة الموافقات: يجب أن يطابق المسمى الوظيفي للمراجِع مرحلة الاعتماد الحالية
       // (للاعتماد والرفض معاً)، مع استثناء المدير العام/المدير.
       let stepTitle: string | null = null;
+      // تجاوز السلطة الأعلى: إذا كان المعتمِد يطابق مستوى أعلى في السلسلة، يُقبل اعتماده
+      // وتُعتبر المستويات الأدنى متجاوَزة (تُسجّل في سجل الاعتماد بشكل صريح).
+      let effectiveLevel = existing.currentLevel;
+      let bypassedSteps: any[] = [];
       if ((decision.decision === "approved" || decision.decision === "rejected") && chain.length > 0) {
         const expected = chain.find((c) => Number(c.level) === existing.currentLevel);
         if (expected?.jobTitle) {
@@ -416,11 +420,23 @@ export function registerHrRoutes(app: Express) {
           if (!isAdmin) {
             const reviewerJobTitle = await resolveReviewerJobTitle(userId);
             if (!reviewerMatchesStep({ reviewerJobTitle, reviewerRole: user?.role, expectedJobTitle: expected.jobTitle })) {
-              return res.status(403).json({
-                error: `هذه المرحلة تتطلب اعتماد: ${stepTitle}`,
-                requiredJobTitle: expected.jobTitle,
-                level: existing.currentLevel,
-              });
+              // هل يطابق المعتمِد مستوى أعلى في السلسلة؟
+              const higherStep = chain
+                .filter((c) => Number(c.level) > existing.currentLevel && c?.jobTitle)
+                .sort((a, b) => Number(a.level) - Number(b.level))
+                .find((c) => reviewerMatchesStep({ reviewerJobTitle, reviewerRole: user?.role, expectedJobTitle: c.jobTitle }));
+              if (!higherStep) {
+                return res.status(403).json({
+                  error: `هذه المرحلة تتطلب اعتماد: ${stepTitle}`,
+                  requiredJobTitle: expected.jobTitle,
+                  level: existing.currentLevel,
+                });
+              }
+              effectiveLevel = Number(higherStep.level);
+              bypassedSteps = chain
+                .filter((c) => Number(c.level) >= existing.currentLevel && Number(c.level) < effectiveLevel)
+                .sort((a, b) => Number(a.level) - Number(b.level));
+              stepTitle = higherStep.stepName || higherStep.jobTitle;
             }
           }
         }
@@ -458,22 +474,37 @@ export function registerHrRoutes(app: Express) {
 
       // سلسلة الموافقات (تدرّج)
       const flow: any[] = Array.isArray(existing.approvalFlow) ? [...(existing.approvalFlow as any[])] : [];
+      // تسجيل المستويات المتجاوَزة في السجل بشكل صريح قبل قرار السلطة الأعلى
+      for (const b of bypassedSteps) {
+        flow.push({
+          level: Number(b.level),
+          title: b.stepName || b.jobTitle || null,
+          approverId: null,
+          approverName: null,
+          decision: "bypassed",
+          note: `تم تجاوز هذه المرحلة (${b.stepName || b.jobTitle || "—"}) بقرار من المستوى الوظيفي الأعلى: ${stepTitle || "—"} — ${approverName}`,
+          bypassedBy: approverName,
+          bypassedByLevel: effectiveLevel,
+          at: now.toISOString(),
+        });
+      }
       flow.push({
-        level: existing.currentLevel,
+        level: effectiveLevel,
         title: stepTitle || null,
         approverId: userId || null,
         approverName,
         decision: decision.decision,
         note: decision.note || null,
+        ...(bypassedSteps.length > 0 ? { bypassedLevels: bypassedSteps.map((b) => Number(b.level)) } : {}),
         at: now.toISOString(),
       });
 
       let finalStatus: "approved" | "rejected" | "pending" = decision.decision;
-      let nextLevel = existing.currentLevel;
+      let nextLevel = effectiveLevel;
       // إذا اعتُمد ولكن تبقّت مستويات موافقة أعلى → ينتقل للمستوى التالي ويبقى معلّقاً
-      if (decision.decision === "approved" && existing.currentLevel < existing.requiredLevels) {
+      if (decision.decision === "approved" && effectiveLevel < existing.requiredLevels) {
         finalStatus = "pending";
-        nextLevel = existing.currentLevel + 1;
+        nextLevel = effectiveLevel + 1;
       }
 
       const isFinal = finalStatus !== "pending";
@@ -504,8 +535,8 @@ export function registerHrRoutes(app: Express) {
         req, module: "hr_leaves", entityId: id,
         action: finalStatus === "pending" ? "approve_level" : finalStatus,
         entityName: emp?.employeeName, branchId: existing.branchId,
-        description: `${decision.decision === "approved" ? "اعتماد" : "رفض"} طلب إجازة (مستوى ${existing.currentLevel}/${existing.requiredLevels})`,
-        details: { decision: decision.decision, level: existing.currentLevel, finalStatus, note: decision.note },
+        description: `${decision.decision === "approved" ? "اعتماد" : "رفض"} طلب إجازة (مستوى ${effectiveLevel}/${existing.requiredLevels})${bypassedSteps.length > 0 ? ` — بتجاوز ${bypassedSteps.length} مستوى أدنى بالسلطة الأعلى` : ""}`,
+        details: { decision: decision.decision, level: effectiveLevel, finalStatus, note: decision.note, ...(bypassedSteps.length > 0 ? { bypassedLevels: bypassedSteps.map((b) => Number(b.level)) } : {}) },
         targetId: existing.branchEmployeeId,
       });
 
@@ -526,7 +557,7 @@ export function registerHrRoutes(app: Express) {
         await notifyEmployeeOfDecision({
           emp,
           title: "تقدّم طلب إجازتك",
-          message: `تم اعتماد المستوى ${existing.currentLevel} من ${existing.requiredLevels} لطلب إجازتك (${existing.startDate} إلى ${existing.endDate})، بانتظار الاعتماد التالي.`,
+          message: `تم اعتماد المستوى ${effectiveLevel} من ${existing.requiredLevels} لطلب إجازتك (${existing.startDate} إلى ${existing.endDate})، بانتظار الاعتماد التالي.`,
           linkUrl: "/my-portal",
           relatedEntityId: id,
           channels: ["whatsapp", "sms"],
