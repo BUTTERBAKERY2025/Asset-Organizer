@@ -1117,6 +1117,73 @@ ${d.workflowStatus === "disbursed" ? `<div class="box"><b>الصرف:</b> تم �
     XLSX.writeFile(wb, `leave_balances_${balYear}.xlsx`);
   };
 
+  // تصدير تقرير الرصيد الفعلي حتى اليوم (Excel)
+  const filteredAccruals = () =>
+    (accruals as any[]).filter((a: any) => !accrualSearch.trim() || (a.employeeName || "").includes(accrualSearch.trim()));
+
+  const exportAccrualExcel = () => {
+    const rows = filteredAccruals().map((a: any) => ({
+      "الموظف": a.employeeName || "—",
+      "الوظيفة": a.jobTitle || "—",
+      "الفرع": a.branchName || "—",
+      "أيام العقد/سنة": a.annualDays ?? 0,
+      "الرصيد المرحل": a.rawOpeningBalanceDate ? (a.openingBalance ?? 0) : "—",
+      "بداية الاحتساب": a.accrualStart || "—",
+      "المستحق حتى اليوم": a.accrualStart ? (a.accruedToDate ?? 0) : "—",
+      "المستخدم": a.usedToDate ?? 0,
+      "محجوز قادم": a.upcomingDays ?? 0,
+      "مصفّى": a.settledDays ?? 0,
+      "المتبقي": a.accrualStart ? (a.remainingDays ?? 0) : "—",
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "ملاحظة": "لا يوجد موظفون" }]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "الرصيد الفعلي");
+    XLSX.writeFile(wb, `leave_accrual_report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  // تصدير تقرير الرصيد الفعلي حتى اليوم (PDF عبر الطباعة)
+  const printAccrualReport = () => {
+    const esc = (v: any) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const data = filteredAccruals();
+    const w = window.open("", "_blank", "width=1000,height=800");
+    if (!w) return;
+    const body = data.map((a: any, i: number) => `<tr>
+      <td>${arNum(i + 1)}</td>
+      <td class="name">${esc(a.employeeName || "—")}<div class="sub2">${esc(a.jobTitle || "")} • ${esc(a.branchName || "")}</div></td>
+      <td>${arNum(a.annualDays)}</td>
+      <td>${a.rawOpeningBalanceDate ? arNum(a.openingBalance) : "—"}</td>
+      <td>${esc(a.accrualStart || "—")}</td>
+      <td>${a.accrualStart ? arNum(a.accruedToDate) : "—"}</td>
+      <td>${arNum(a.usedToDate)}</td>
+      <td>${arNum(a.upcomingDays)}</td>
+      <td>${arNum(a.settledDays)}</td>
+      <td class="${(a.remainingDays ?? 0) < 0 ? "neg" : "pos"}">${a.accrualStart ? arNum(a.remainingDays) : "—"}</td>
+    </tr>`).join("");
+    w.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>تقرير الرصيد الفعلي حتى اليوم</title>
+<style>
+  body{font-family:'Cairo',Tahoma,Arial,sans-serif;padding:20px;color:#222}
+  h2{color:#8a6d1d;margin:0 0 4px}
+  .sub{font-size:11px;color:#777;margin-bottom:12px}
+  table{width:100%;border-collapse:collapse;font-size:11px}
+  th,td{border:1px solid #E5C98F;padding:5px 6px;text-align:center}
+  th{background:#FBF4E4;font-weight:700;white-space:nowrap}
+  td.name{text-align:right;font-weight:600}
+  .sub2{font-size:9px;color:#888;font-weight:400}
+  .neg{color:#c0392b;font-weight:700}.pos{color:#1e8449;font-weight:700}
+  .foot{margin-top:12px;font-size:10px;color:#999}
+  @media print{@page{size:A4 landscape;margin:10mm}}
+</style></head><body>
+<h2>تقرير الرصيد الفعلي للإجازات حتى اليوم (حسب العقد)</h2>
+<div class="sub">حلواني باتر — إدارة الموارد البشرية · عدد الموظفين: ${arNum(data.length)} · طُبع بتاريخ ${esc(new Date().toLocaleDateString("en-CA"))}</div>
+<table><thead><tr>
+  <th>م</th><th>الموظف</th><th>أيام العقد/سنة</th><th>الرصيد المرحل</th><th>بداية الاحتساب</th>
+  <th>المستحق حتى اليوم</th><th>المستخدم</th><th>محجوز قادم</th><th>مصفّى</th><th>المتبقي</th>
+</tr></thead><tbody>${body || `<tr><td colspan="10">لا يوجد موظفون</td></tr>`}</tbody></table>
+<div class="foot">يُحتسب الرصيد يومياً من تاريخ الرصيد المرحل (أو تاريخ التعيين) × أيام العقد ÷ 365، وتُخصم منه الإجازات المعتمدة والأيام المصفّاة نقداً.</div>
+<script>window.onload=function(){window.print()}<\/script></body></html>`);
+    w.document.close();
+  };
+
   // تقرير شهري إداري شامل (متعدد الأوراق)
   const exportMonthlyReport = async () => {
     // بيانات الأرصدة قد لا تكون محمّلة إن لم يُفتح تبويب الأرصدة بعد
@@ -1850,13 +1917,23 @@ ${d.workflowStatus === "disbursed" ? `<div class="box"><b>الصرف:</b> تم �
                       يُحتسب يومياً من تاريخ الرصيد المرحل (أو تاريخ التعيين) × أيام العقد ÷ 365، وتُخصم منه الإجازات المعتمدة والأيام المصفّاة نقداً.
                     </div>
                   </div>
-                  <Input
-                    className="w-56"
-                    placeholder="بحث بالاسم..."
-                    value={accrualSearch}
-                    onChange={(e) => setAccrualSearch(e.target.value)}
-                    data-testid="input-accrual-search"
-                  />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Input
+                      className="w-56"
+                      placeholder="بحث بالاسم..."
+                      value={accrualSearch}
+                      onChange={(e) => setAccrualSearch(e.target.value)}
+                      data-testid="input-accrual-search"
+                    />
+                    <Button variant="outline" size="sm" onClick={exportAccrualExcel} data-testid="button-export-accrual-excel">
+                      <FileSpreadsheet className="h-4 w-4 ms-1" />
+                      Excel
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={printAccrualReport} data-testid="button-export-accrual-pdf">
+                      <Printer className="h-4 w-4 ms-1" />
+                      PDF
+                    </Button>
+                  </div>
                 </div>
                 <div className="overflow-auto border rounded-lg">
                   <table className="w-full text-sm">
