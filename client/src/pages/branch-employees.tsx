@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -847,6 +848,7 @@ export default function BranchEmployeesPage() {
   const [viewingEmployee, setViewingEmployee] = useState<BranchEmployee | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [selectedUserToLink, setSelectedUserToLink] = useState<string>("");
+  const [linkUserPopoverOpen, setLinkUserPopoverOpen] = useState(false);
   const [accountMode, setAccountMode] = useState<"create" | "link">("create");
   const [newAccountUsername, setNewAccountUsername] = useState<string>("");
   const [newAccountPassword, setNewAccountPassword] = useState<string>("");
@@ -3262,18 +3264,59 @@ export default function BranchEmployeesPage() {
                             </div>
                           ) : (
                             <div className="flex items-center gap-3">
-                              <Select value={selectedUserToLink} onValueChange={setSelectedUserToLink}>
-                                <SelectTrigger className="w-64 bg-white">
-                                  <SelectValue placeholder="اختر مستخدم للربط" />
-                                </SelectTrigger>
-                                <SelectContent className="max-h-60 overflow-y-auto">
-                                  {systemUsers?.map((user: any) => (
-                                    <SelectItem key={user.id} value={user.id}>
-                                      {user.displayName || user.username || user.id}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <Popover open={linkUserPopoverOpen} onOpenChange={setLinkUserPopoverOpen}>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={linkUserPopoverOpen}
+                                    className="w-64 justify-between bg-white font-normal"
+                                    data-testid="button-select-user-to-link"
+                                  >
+                                    <span className="truncate">
+                                      {selectedUserToLink
+                                        ? (() => {
+                                            const u = systemUsers?.find((x: any) => x.id === selectedUserToLink);
+                                            return u ? (u.displayName || u.username || u.id) : "اختر مستخدم للربط";
+                                          })()
+                                        : "اختر مستخدم للربط"}
+                                    </span>
+                                    <ChevronLeft className="h-4 w-4 shrink-0 opacity-50 -rotate-90" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-72 p-0" align="start" dir="rtl">
+                                  <Command
+                                    filter={(value, search) => {
+                                      const u = systemUsers?.find((x: any) => x.id === value);
+                                      const text = `${u?.displayName || ""} ${u?.username || ""}`.toLowerCase();
+                                      return text.includes(search.toLowerCase()) ? 1 : 0;
+                                    }}
+                                  >
+                                    <CommandInput placeholder="ابحث بالاسم أو اسم المستخدم..." data-testid="input-search-user-to-link" />
+                                    <CommandList className="max-h-60">
+                                      <CommandEmpty>لا توجد نتائج مطابقة</CommandEmpty>
+                                      <CommandGroup>
+                                        {systemUsers?.map((user: any) => (
+                                          <CommandItem
+                                            key={user.id}
+                                            value={user.id}
+                                            onSelect={() => { setSelectedUserToLink(user.id); setLinkUserPopoverOpen(false); }}
+                                            data-testid={`option-link-user-${user.id}`}
+                                          >
+                                            <UserCheck className={`h-3.5 w-3.5 ms-2 ${selectedUserToLink === user.id ? "opacity-100 text-emerald-600" : "opacity-0"}`} />
+                                            <div className="flex flex-col">
+                                              <span>{user.displayName || user.username || user.id}</span>
+                                              {user.username && user.displayName && (
+                                                <span className="text-[10px] text-muted-foreground" dir="ltr">{user.username}</span>
+                                              )}
+                                            </div>
+                                          </CommandItem>
+                                        ))}
+                                      </CommandGroup>
+                                    </CommandList>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
                               <Button
                                 size="sm"
                                 disabled={!selectedUserToLink || linkUserMutation.isPending}
