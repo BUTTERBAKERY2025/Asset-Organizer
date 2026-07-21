@@ -1,8 +1,13 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "GErE5HaW1DvFUhEvU6cw4"
 uri = "file://attached_assets/generated_images/butter_bakery_team_celebration.png"
 type = "image"
 title = "butter bakery mixed team celebration"
+
+[[outputs]]
+id = "lP9wMbQcQ6DdPKOerwspJ"
+uri = "file://bulk-approve-cashier-journals.txt"
+type = "text"
+title = "كود اعتماد اليوميات الجماعي — ينفّذ في Supabase SQL Editor"
