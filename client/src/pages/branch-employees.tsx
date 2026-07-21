@@ -3150,15 +3150,17 @@ export default function BranchEmployeesPage() {
                             >
                               إنشاء حساب جديد
                             </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant={accountMode === "link" ? "default" : "outline"}
-                              onClick={() => setAccountMode("link")}
-                              data-testid="button-mode-link"
-                            >
-                              ربط بحساب موجود
-                            </Button>
+                            {user?.role === "admin" && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant={accountMode === "link" ? "default" : "outline"}
+                                onClick={() => setAccountMode("link")}
+                                data-testid="button-mode-link"
+                              >
+                                ربط بحساب موجود
+                              </Button>
+                            )}
                           </div>
 
                           {accountMode === "create" ? (
@@ -3352,21 +3354,23 @@ export default function BranchEmployeesPage() {
                           >
                             إعادة تعيين كلمة المرور
                           </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="text-red-600 border-red-200 hover:bg-red-50"
-                            disabled={unlinkUserMutation.isPending}
-                            onClick={() => {
-                              if (viewingEmployee && window.confirm("سيتم فك ارتباط الموظف بحسابه (لن يُحذف الحساب). متابعة؟")) {
-                                unlinkUserMutation.mutate(viewingEmployee.id);
-                              }
-                            }}
-                            data-testid="button-unlink-user"
-                          >
-                            {unlinkUserMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "فك الارتباط"}
-                          </Button>
+                          {user?.role === "admin" && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="text-red-600 border-red-200 hover:bg-red-50"
+                              disabled={unlinkUserMutation.isPending}
+                              onClick={() => {
+                                if (viewingEmployee && window.confirm("سيتم فك ارتباط الموظف بحسابه (لن يُحذف الحساب). متابعة؟")) {
+                                  unlinkUserMutation.mutate(viewingEmployee.id);
+                                }
+                              }}
+                              data-testid="button-unlink-user"
+                            >
+                              {unlinkUserMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "فك الارتباط"}
+                            </Button>
+                          )}
                         </div>
                         {showResetPassword && (
                           <div className="flex items-end gap-2 bg-white rounded-md p-3 border">

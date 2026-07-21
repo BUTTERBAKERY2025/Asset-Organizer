@@ -30588,6 +30588,9 @@ export async function registerRoutes(
   // Link branch employee to user account
   app.put("/api/branch-employees/:id/link-user", isAuthenticated, requirePermission("branch_employees", "edit"), async (req, res) => {
     try {
+      if (!isUserAdmin(req)) {
+        return res.status(403).json({ error: "ربط الموظف بحساب موجود متاح لمدير النظام فقط" });
+      }
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       
@@ -30729,18 +30732,15 @@ export async function registerRoutes(
   // فك ارتباط الموظف بحسابه (لا يحذف الحساب)
   app.post("/api/branch-employees/:id/unlink-user", isAuthenticated, requirePermission("branch_employees", "edit"), async (req, res) => {
     try {
+      if (!isUserAdmin(req)) {
+        return res.status(403).json({ error: "فك ربط الموظف بحسابه متاح لمدير النظام فقط" });
+      }
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
 
       const employee = await storage.getBranchEmployee(id);
       if (!employee) {
         return res.status(404).json({ error: "الموظف غير موجود" });
-      }
-      if (!isUserAdmin(req)) {
-        const hasAccess = await canAccessBranch(req, employee.branchId);
-        if (!hasAccess) {
-          return res.status(403).json({ error: "غير مصرح" });
-        }
       }
 
       const updated = await storage.unlinkBranchEmployeeUser(id);
