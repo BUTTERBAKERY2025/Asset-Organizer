@@ -159,6 +159,46 @@ const ROLE_LABELS: Record<string, string> = {
   user: "مستخدم",
 };
 
+const AUDIT_ACTION_META: Record<string, { label: string; className: string }> = {
+  grant: { label: "منح", className: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300" },
+  revoke: { label: "سحب", className: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" },
+  modify: { label: "تعديل", className: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" },
+  apply_template: { label: "تطبيق قالب", className: "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300" },
+  role_change: { label: "تغيير دور", className: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300" },
+  status_change: { label: "تفعيل/تعطيل", className: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300" },
+};
+
+const STATUS_VALUE_LABELS: Record<string, string> = {
+  active: "نشط",
+  inactive: "معطل",
+};
+
+interface PermissionAuditLogEntry {
+  id: number;
+  targetUserId: string;
+  changedByUserId: string;
+  action: string;
+  module: string | null;
+  oldActions: string[] | null;
+  newActions: string[] | null;
+  templateApplied: string | null;
+  createdAt: string;
+  targetUserName: string;
+  changedByUserName: string;
+}
+
+interface PermissionAuditLogsResponse {
+  total: number;
+  logs: PermissionAuditLogEntry[];
+}
+
+function formatAuditValue(action: string, values: string[] | null): string {
+  if (!values || values.length === 0) return "—";
+  if (action === "role_change") return values.map((v) => ROLE_LABELS[v] || v).join("، ");
+  if (action === "status_change") return values.map((v) => STATUS_VALUE_LABELS[v] || v).join("، ");
+  return values.map((v) => ALL_ACTION_LABELS[v] || v).join("، ");
+}
+
 interface EffectivePermissionsResponse {
   userId: string;
   username: string;
@@ -204,6 +244,9 @@ export default function RBACManagementPage() {
   const [effectiveUserId, setEffectiveUserId] = useState<string>("");
   const [effectiveUserFilter, setEffectiveUserFilter] = useState("");
   const [effectiveSearch, setEffectiveSearch] = useState("");
+  const [auditUserId, setAuditUserId] = useState<string>("all");
+  const [auditAction, setAuditAction] = useState<string>("all");
+  const [auditSearch, setAuditSearch] = useState("");
 
   const hasUsersViewPermission = isAdmin || canView("users");
   const hasUsersEditPermission = isAdmin || canEdit("users");
@@ -301,6 +344,20 @@ export default function RBACManagementPage() {
       return res.json();
     },
     enabled: !!effectiveUserId && hasUsersViewPermission,
+  });
+
+  const { data: auditData, isLoading: auditLoading, isError: auditError } = useQuery<PermissionAuditLogsResponse>({
+    queryKey: ["/api/permission-audit-logs", auditUserId, auditAction],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (auditUserId !== "all") params.set("userId", auditUserId);
+      if (auditAction !== "all") params.set("action", auditAction);
+      params.set("limit", "300");
+      const res = await fetch(`/api/permission-audit-logs?${params.toString()}`);
+      if (!res.ok) throw new Error("Failed to fetch audit logs");
+      return res.json();
+    },
+    enabled: hasUsersViewPermission && activeTab === "audit",
   });
 
   const { data: rolePermissions = [], refetch: refetchRolePerms } = useQuery<RolePermission[]>({
@@ -577,12 +634,13 @@ export default function RBACManagementPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className={`grid w-full grid-cols-2 sm:grid-cols-5 ${SECURITY_TABS_LIST}`}>
+          <TabsList className={`grid w-full grid-cols-2 sm:grid-cols-6 ${SECURITY_TABS_LIST}`}>
             <TabsTrigger value="users" className={SECURITY_TAB_TRIGGER} data-testid="tab-users">المستخدمين</TabsTrigger>
             <TabsTrigger value="roles" className={SECURITY_TAB_TRIGGER} data-testid="tab-roles">الأدوار</TabsTrigger>
             <TabsTrigger value="departments" className={SECURITY_TAB_TRIGGER} data-testid="tab-departments">الأقسام</TabsTrigger>
             <TabsTrigger value="permissions" className={SECURITY_TAB_TRIGGER} data-testid="tab-permissions">الصلاحيات</TabsTrigger>
             <TabsTrigger value="effective" className={SECURITY_TAB_TRIGGER} data-testid="tab-effective">الصلاحيات الفعلية</TabsTrigger>
+            <TabsTrigger value="audit" className={SECURITY_TAB_TRIGGER} data-testid="tab-audit">سجل التدقيق</TabsTrigger>
           </TabsList>
 
           <TabsContent value="users" className="space-y-4">
@@ -1029,6 +1087,156 @@ export default function RBACManagementPage() {
                     )}
                   </div>
                 ) : null}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="audit" className="space-y-4">
+            <Card>
+              <CardHeader className="p-3 sm:p-4 md:p-6">
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  سجل تدقيق الصلاحيات
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  كل تغيير على الصلاحيات: من قام بالتغيير، لمن، ماذا تغيّر، ومتى
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 p-3 sm:p-4 md:p-6 pt-0">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <Label>المستخدم المستهدف</Label>
+                    <Select value={auditUserId} onValueChange={setAuditUserId}>
+                      <SelectTrigger data-testid="select-audit-user">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">كل المستخدمين</SelectItem>
+                        {users.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.firstName || u.username}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>نوع التغيير</Label>
+                    <Select value={auditAction} onValueChange={setAuditAction}>
+                      <SelectTrigger data-testid="select-audit-action">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">كل الأنواع</SelectItem>
+                        {Object.entries(AUDIT_ACTION_META).map(([key, meta]) => (
+                          <SelectItem key={key} value={key}>{meta.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>بحث (وحدة / اسم / ملاحظة)</Label>
+                    <div className="relative">
+                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={auditSearch}
+                        onChange={(e) => setAuditSearch(e.target.value)}
+                        placeholder="مثال: الرواتب، أحمد…"
+                        className="pr-9"
+                        data-testid="input-audit-search"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {auditLoading ? (
+                  <div className="flex justify-center py-10">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                ) : auditError ? (
+                  <Alert variant="destructive">
+                    <AlertDescription>تعذر جلب سجل التدقيق — حاول مرة أخرى</AlertDescription>
+                  </Alert>
+                ) : (() => {
+                  const q = auditSearch.trim().toLowerCase();
+                  const filtered = (auditData?.logs || []).filter((log) => {
+                    if (!q) return true;
+                    const moduleLabel = log.module ? (MODULE_LABELS[log.module] || log.module) : "";
+                    return (
+                      moduleLabel.toLowerCase().includes(q) ||
+                      (log.module || "").toLowerCase().includes(q) ||
+                      log.targetUserName.toLowerCase().includes(q) ||
+                      log.changedByUserName.toLowerCase().includes(q) ||
+                      (log.templateApplied || "").toLowerCase().includes(q)
+                    );
+                  });
+                  return (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant="secondary" data-testid="badge-audit-count">
+                          {filtered.length} سجل معروض
+                        </Badge>
+                        {auditData && auditData.total > (auditData.logs?.length || 0) && (
+                          <span>يُعرض أحدث {auditData.logs.length} من إجمالي {auditData.total}</span>
+                        )}
+                      </div>
+                      {filtered.length === 0 ? (
+                        <div className="text-center text-muted-foreground py-10 text-sm">
+                          لا توجد سجلات مطابقة
+                        </div>
+                      ) : (
+                        <div className="border rounded-lg overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-right whitespace-nowrap">التاريخ والوقت</TableHead>
+                                <TableHead className="text-right whitespace-nowrap">قام بالتغيير</TableHead>
+                                <TableHead className="text-right whitespace-nowrap">المستخدم المستهدف</TableHead>
+                                <TableHead className="text-right whitespace-nowrap">النوع</TableHead>
+                                <TableHead className="text-right whitespace-nowrap">الوحدة</TableHead>
+                                <TableHead className="text-right whitespace-nowrap">قبل</TableHead>
+                                <TableHead className="text-right whitespace-nowrap">بعد</TableHead>
+                                <TableHead className="text-right whitespace-nowrap">ملاحظة</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {filtered.map((log) => {
+                                const meta = AUDIT_ACTION_META[log.action] || { label: log.action, className: "bg-gray-100 text-gray-800" };
+                                return (
+                                  <TableRow key={log.id} data-testid={`row-audit-${log.id}`}>
+                                    <TableCell className="whitespace-nowrap text-xs">
+                                      {new Date(log.createdAt).toLocaleString("ar-SA", {
+                                        year: "numeric", month: "2-digit", day: "2-digit",
+                                        hour: "2-digit", minute: "2-digit",
+                                      })}
+                                    </TableCell>
+                                    <TableCell className="whitespace-nowrap font-medium text-sm">{log.changedByUserName}</TableCell>
+                                    <TableCell className="whitespace-nowrap font-medium text-sm">{log.targetUserName}</TableCell>
+                                    <TableCell>
+                                      <Badge className={`text-[11px] ${meta.className}`}>{meta.label}</Badge>
+                                    </TableCell>
+                                    <TableCell className="whitespace-nowrap text-sm">
+                                      {log.module ? (MODULE_LABELS[log.module] || log.module) : "—"}
+                                    </TableCell>
+                                    <TableCell className="text-xs text-muted-foreground max-w-[180px]">
+                                      {formatAuditValue(log.action, log.oldActions)}
+                                    </TableCell>
+                                    <TableCell className="text-xs max-w-[180px]">
+                                      {formatAuditValue(log.action, log.newActions)}
+                                    </TableCell>
+                                    <TableCell className="text-xs text-muted-foreground max-w-[220px]">
+                                      {log.templateApplied || "—"}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
           </TabsContent>

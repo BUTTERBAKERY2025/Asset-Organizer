@@ -1975,7 +1975,11 @@ export const permissionAuditLogs = pgTable("permission_audit_logs", {
   newActions: text("new_actions").array(), // New actions
   templateApplied: text("template_applied"), // If a template was applied (e.g., 'admin', 'employee', 'viewer')
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_permission_audit_logs_target_user").on(table.targetUserId),
+  index("idx_permission_audit_logs_changed_by").on(table.changedByUserId),
+  index("idx_permission_audit_logs_created_at").on(table.createdAt),
+]);
 
 export const insertPermissionAuditLogSchema = createInsertSchema(
   permissionAuditLogs,

@@ -784,11 +784,44 @@ export async function registerRoutes(
         updateData.isActive = isActive;
       }
       
+      // Snapshot old values for permission audit logging (role / activation changes)
+      const beforeUpdate = await storage.getUser(req.params.id);
+
       const user = await storage.updateUser(req.params.id, updateData);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
-      
+
+      // AUDIT: log role and activation changes (affect effective permissions)
+      try {
+        if (beforeUpdate) {
+          if (updateData.role !== undefined && beforeUpdate.role !== updateData.role) {
+            await storage.createPermissionAuditLog({
+              targetUserId: req.params.id,
+              changedByUserId: currentUser.id,
+              action: "role_change",
+              module: null,
+              oldActions: [beforeUpdate.role],
+              newActions: [updateData.role],
+              templateApplied: null,
+            });
+          }
+          if (updateData.isActive !== undefined && beforeUpdate.isActive !== updateData.isActive) {
+            await storage.createPermissionAuditLog({
+              targetUserId: req.params.id,
+              changedByUserId: currentUser.id,
+              action: "status_change",
+              module: null,
+              oldActions: [beforeUpdate.isActive],
+              newActions: [updateData.isActive],
+              templateApplied: null,
+            });
+          }
+        }
+      } catch (auditError) {
+        console.error("Failed to write permission audit log (user update):", auditError);
+      }
+
       // Update branch access based on selected branches array
       if (updateBranchAccess && validBranchIds !== null) {
         const existingAccess = await storage.getUserBranchAccess(req.params.id);
@@ -1001,6 +1034,23 @@ export async function registerRoutes(
       }
       
       await storage.setPermissionOverride(targetUserId, permissionId, allow, currentUser.id, reason);
+
+      // AUDIT: log override set (who, to whom, which module/action)
+      try {
+        const perm = permExists[0];
+        await storage.createPermissionAuditLog({
+          targetUserId,
+          changedByUserId: currentUser.id,
+          action: allow ? "grant" : "revoke",
+          module: perm?.module || null,
+          oldActions: [],
+          newActions: perm ? [perm.action] : [],
+          templateApplied: reason ? `استثناء صلاحية: ${reason}` : "استثناء صلاحية",
+        });
+      } catch (auditError) {
+        console.error("Failed to write permission audit log (legacy override set):", auditError);
+      }
+
       res.json({ success: true });
     } catch (error) {
       console.error("Error setting permission override:", error);
@@ -1023,6 +1073,23 @@ export async function registerRoutes(
       }
       
       await storage.removePermissionOverride(targetUserId, permissionId);
+
+      // AUDIT: log override removal
+      try {
+        const perm = await storage.getPermission(permissionId);
+        await storage.createPermissionAuditLog({
+          targetUserId,
+          changedByUserId: currentUser.id,
+          action: "modify",
+          module: perm?.module || null,
+          oldActions: perm ? [perm.action] : [],
+          newActions: [],
+          templateApplied: "إزالة استثناء صلاحية",
+        });
+      } catch (auditError) {
+        console.error("Failed to write permission audit log (legacy override remove):", auditError);
+      }
+
       res.json({ success: true });
     } catch (error) {
       console.error("Error removing permission override:", error);
@@ -1030,12 +1097,33 @@ export async function registerRoutes(
     }
   });
 
-  // Permission Audit Logs
+  // Permission Audit Logs (enriched with user names + filters)
   app.get("/api/permission-audit-logs", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {
       const userId = req.query.userId as string | undefined;
-      const logs = await storage.getPermissionAuditLogs(userId);
-      res.json(logs);
+      const action = req.query.action as string | undefined;
+      const module = req.query.module as string | undefined;
+      const rawLimit = parseInt((req.query.limit as string) || "300");
+      const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 300, 1), 1000);
+
+      let logs = await storage.getPermissionAuditLogs(userId);
+      if (action) logs = logs.filter((l) => l.action === action);
+      if (module) logs = logs.filter((l) => l.module === module);
+      const total = logs.length;
+      logs = logs.slice(0, limit);
+
+      // Enrich with user display names (single pass over users list)
+      const allUsers = await storage.getAllUsers();
+      const nameById = new Map(
+        allUsers.map((u: any) => [u.id, u.firstName || u.username || u.id])
+      );
+      const enriched = logs.map((l) => ({
+        ...l,
+        targetUserName: nameById.get(l.targetUserId) || l.targetUserId,
+        changedByUserName: nameById.get(l.changedByUserId) || l.changedByUserId,
+      }));
+
+      res.json({ total, logs: enriched });
     } catch (error) {
       console.error("Error fetching permission audit logs:", error);
       res.status(500).json({ error: "Failed to fetch permission audit logs" });
@@ -21397,7 +21485,23 @@ export async function registerRoutes(
         grantedBy,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
       });
-      
+
+      // AUDIT: log override creation (who, to whom, which module/action)
+      try {
+        const perm = await storage.getPermission(permissionId);
+        await storage.createPermissionAuditLog({
+          targetUserId: userId,
+          changedByUserId: currentUser.id,
+          action: allow ? "grant" : "revoke",
+          module: perm?.module || null,
+          oldActions: [],
+          newActions: perm ? [perm.action] : [],
+          templateApplied: reason ? `استثناء صلاحية: ${reason}` : "استثناء صلاحية",
+        });
+      } catch (auditError) {
+        console.error("Failed to write permission audit log (override create):", auditError);
+      }
+
       invalidateAuthCache(userId);
       res.status(201).json(override);
     } catch (error) {
@@ -21417,7 +21521,36 @@ export async function registerRoutes(
       }
       
       const overrideId = parseInt(req.params.overrideId);
+      if (isNaN(overrideId)) {
+        return res.status(400).json({ error: "معرف الاستثناء غير صالح" });
+      }
+
+      // SECURITY + AUDIT: the override must belong to the user in the URL
+      const existing = await storage.getUserPermissionOverrides(userId);
+      const deletedOverride = existing.find((o: any) => o.id === overrideId) || null;
+      if (!deletedOverride) {
+        return res.status(404).json({ error: "الاستثناء غير موجود لهذا المستخدم" });
+      }
+
       await storage.deleteUserPermissionOverride(overrideId);
+
+      try {
+        if (deletedOverride) {
+          const perm = await storage.getPermission(deletedOverride.permissionId);
+          await storage.createPermissionAuditLog({
+            targetUserId: userId,
+            changedByUserId: currentUser.id,
+            action: "modify",
+            module: perm?.module || null,
+            oldActions: perm ? [perm.action] : [],
+            newActions: [],
+            templateApplied: deletedOverride.allow ? "إزالة استثناء منح" : "إزالة استثناء حظر",
+          });
+        }
+      } catch (auditError) {
+        console.error("Failed to write permission audit log (override delete):", auditError);
+      }
+
       invalidateAuthCache(userId);
       res.status(204).send();
     } catch (error) {
