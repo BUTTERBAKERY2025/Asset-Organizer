@@ -446,8 +446,116 @@ export default function PurchasingRequestsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0 sm:p-6 sm:pt-0">
-            <div className="overflow-x-auto">
-              <Table className="min-w-[700px]">
+            {/* عرض البطاقات للموبايل */}
+            <div className="md:hidden space-y-2 p-3">
+              {filteredRequests.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-sm border rounded-md">
+                  {isRTL ? "لا توجد طلبات مشتريات" : "No purchasing requests found"}
+                </div>
+              ) : (
+                filteredRequests.map((request) => (
+                  <div key={request.id} className="rounded-lg border p-3" data-testid={`card-request-${request.id}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-mono font-semibold text-sm">{request.requestNumber}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          <span>{getBranchName(request.branchId)}</span>
+                          {request.vendorName && <span>{request.vendorName}</span>}
+                          {request.createdAt && <span>{new Date(request.createdAt).toLocaleDateString("en-GB")}</span>}
+                        </div>
+                      </div>
+                      <div className="shrink-0 flex flex-col items-end gap-1">
+                        <span className="text-[10px]">{getStatusBadge(request.status, isRTL)}</span>
+                        <span className="text-[10px]">{getPriorityBadge(request.priority, isRTL)}</span>
+                      </div>
+                    </div>
+                    {request.totalEstimatedCost && (
+                      <p className="mt-1 text-sm font-bold">
+                        {parseFloat(request.totalEstimatedCost).toLocaleString()} ر.س
+                      </p>
+                    )}
+                    <div className="mt-2 pt-2 border-t flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9 flex-1 min-w-[80px]"
+                        onClick={() => fetchRequestDetails(request.id)}
+                        data-testid={`btn-card-view-${request.id}`}
+                      >
+                        <Eye className="w-4 h-4 ml-1" />
+                        {isRTL ? "عرض" : "View"}
+                      </Button>
+                      {request.status === "pending" && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-9 flex-1 min-w-[80px] text-green-600 border-green-600/30"
+                            onClick={() => updateStatusMutation.mutate({ id: request.id, status: "approved" })}
+                            disabled={updateStatusMutation.isPending}
+                            data-testid={`btn-card-approve-${request.id}`}
+                          >
+                            <CheckCircle className="w-4 h-4 ml-1" />
+                            {isRTL ? "اعتماد" : "Approve"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-9 flex-1 min-w-[80px] text-red-600 border-red-600/30"
+                            onClick={() => updateStatusMutation.mutate({ id: request.id, status: "rejected" })}
+                            disabled={updateStatusMutation.isPending}
+                            data-testid={`btn-card-reject-${request.id}`}
+                          >
+                            <XCircle className="w-4 h-4 ml-1" />
+                            {isRTL ? "رفض" : "Reject"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-9 flex-1 min-w-[80px] text-gray-500"
+                            onClick={() => updateStatusMutation.mutate({ id: request.id, status: "cancelled" })}
+                            disabled={updateStatusMutation.isPending}
+                            data-testid={`btn-card-cancel-${request.id}`}
+                          >
+                            <AlertTriangle className="w-4 h-4 ml-1" />
+                            {isRTL ? "إلغاء" : "Cancel"}
+                          </Button>
+                        </>
+                      )}
+                      {request.status === "approved" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 flex-1 min-w-[80px] text-blue-600 border-blue-600/30"
+                          onClick={() => updateStatusMutation.mutate({ id: request.id, status: "ordered" })}
+                          disabled={updateStatusMutation.isPending}
+                          data-testid={`btn-card-order-${request.id}`}
+                        >
+                          <Package className="w-4 h-4 ml-1" />
+                          {isRTL ? "تم الطلب" : "Ordered"}
+                        </Button>
+                      )}
+                      {request.status === "ordered" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 flex-1 min-w-[80px] text-cyan-600 border-cyan-600/30"
+                          onClick={() => updateStatusMutation.mutate({ id: request.id, status: "received" })}
+                          disabled={updateStatusMutation.isPending}
+                          data-testid={`btn-card-receive-${request.id}`}
+                        >
+                          <Truck className="w-4 h-4 ml-1" />
+                          {isRTL ? "تم الاستلام" : "Received"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="table-scroll hidden md:block">
+              <Table className="min-w-[700px] table-actions-sticky">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-xs sm:text-sm">{isRTL ? "رقم الطلب" : "Request #"}</TableHead>

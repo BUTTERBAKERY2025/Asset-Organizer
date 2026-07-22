@@ -517,7 +517,7 @@ export default function AuditLogsPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className={`grid w-full grid-cols-3 lg:grid-cols-5 ${SECURITY_TABS_LIST}`}>
+          <TabsList className={`flex w-full sm:grid sm:grid-cols-3 lg:grid-cols-5 ${SECURITY_TABS_LIST}`}>
             <TabsTrigger value="logs" className={`flex items-center gap-2 ${SECURITY_TAB_TRIGGER}`} data-testid="tab-logs">
               <FileText className="w-4 h-4" /> سجل العمليات
             </TabsTrigger>
