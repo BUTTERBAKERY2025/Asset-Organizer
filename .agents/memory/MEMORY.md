@@ -35,8 +35,9 @@
 - [EOS Saudi calc](eos-saudi-calc.md) — gratuity base = last total wage (Art 84), Art 80/85/87 cases; reuse server calc endpoint, keep 3 enum spots in sync.
 - [Cashier deficit posting](cashier-deficit-posting.md) — journal discrepancyAmount is ABSOLUTE (status gives direction); netDiscrepancy unwritten; one sales_deficit deduction per post, FOR UPDATE guard.
 - [Assembly re-vote grants](assembly-revote-grants.md) — one-time revote tokens: claim atomically (UPDATE ... WHERE status='open' + rowcount==1) before casting; whole-resolution grants forbidden when clauses exist.
-- [Leave provision journal](leave-provision-journal.md) — idempotent auto journal entries need advisory-lock-in-transaction (no unique ref constraint); entry numbering is COUNT+1 race-prone; old accounting routes lack permission gates.
+- [Leave provision journal](leave-provision-journal.md) — idempotent auto journal entries need advisory-lock-in-transaction (no unique ref constraint); entry numbering is COUNT+1 race-prone.
 - [Leave exit/return/settlement](leave-exit-return-settlement.md) — adjust attendance BEFORE setting actualReturnDate (scheduler stops at that point); Drizzle unique violations live in e.cause.constraint, not e.message.
 - [requirePermission omitted action](require-permission-omitted-action.md) — single-arg guards infer action from HTTP method; module presence must never grant writes; POST-as-read routes need explicit "view".
 - [Permission module aliases](permission-module-aliases.md) — runtime auth accepts directional module synonyms (attendance→attendance_check, pnl↔pnl_dashboard…); effective-perm views must mirror, never collapse.
+- [Route guard parity](route-guard-parity.md) — harden auth-only routes with the consuming PAGE's module; dual-page consumers need either-module guards; admin/branch-scoped/my-* routes stay auth-only.
 - [Advance lifecycle](advance-lifecycle.md) — signed-consent state machine; final approve only from signed; client canFinal must mirror hasAdvanceFinalAuthority roles.

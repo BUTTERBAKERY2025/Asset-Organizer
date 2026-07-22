@@ -4596,7 +4596,7 @@ export async function registerRoutes(
   });
 
   // Create template (admin / construction managers)
-  app.post("/api/field-checklist-templates", isAuthenticated, async (req, res) => {
+  app.post("/api/field-checklist-templates", isAuthenticated, requireAnyPermission("construction_projects", ["create", "edit"]), async (req, res) => {
     try {
       const userRole = (req as any).currentUser?.role;
       const allowed = ["admin", "ceo", "general_manager", "construction_manager", "project_manager"];
@@ -4626,7 +4626,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/field-checklist-templates/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/field-checklist-templates/:id", isAuthenticated, requireAnyPermission("construction_projects", ["create", "edit"]), async (req, res) => {
     try {
       const userRole = (req as any).currentUser?.role;
       const allowed = ["admin", "ceo", "general_manager", "construction_manager", "project_manager"];
@@ -4658,7 +4658,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/field-checklist-templates/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/field-checklist-templates/:id", isAuthenticated, requireAnyPermission("construction_projects", ["delete", "edit"]), async (req, res) => {
     try {
       const userRole = (req as any).currentUser?.role;
       const allowed = ["admin", "ceo", "general_manager", "construction_manager"];
@@ -6242,7 +6242,7 @@ export async function registerRoutes(
   });
 
   // Twilio Status - GET endpoint for checking connection status
-  app.get("/api/integrations/twilio/status", isAuthenticated, async (req, res) => {
+  app.get("/api/integrations/twilio/status", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
     try {
       const { isTwilioConfigured } = await import("./twilio-service");
       const configured = isTwilioConfigured();
@@ -6727,7 +6727,7 @@ export async function registerRoutes(
   // Accounting Integration - التكامل المحاسبي
   // ============================================
 
-  app.get("/api/accounting/journal-entries", isAuthenticated, async (req, res) => {
+  app.get("/api/accounting/journal-entries", isAuthenticated, requirePermission("integrations", "view"), async (req, res) => {
     try {
       const { branchId, entryType, status, dateFrom, dateTo, reconciliationStatus } = req.query;
       const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
@@ -6753,7 +6753,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/accounting/journal-entries/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/accounting/journal-entries/:id", isAuthenticated, requirePermission("integrations", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const entry = await storage.getJournalEntry(id);
@@ -6766,7 +6766,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/accounting/journal-entries/generate-sales", isAuthenticated, async (req, res) => {
+  app.post("/api/accounting/journal-entries/generate-sales", isAuthenticated, requireAnyPermission("integrations", ["create", "edit"]), async (req, res) => {
     try {
       const { dateFrom, dateTo, branchId } = req.body;
       if (!dateFrom || !dateTo) return res.status(400).json({ error: "dateFrom and dateTo are required" });
@@ -6782,7 +6782,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/accounting/journal-entries/generate-waste", isAuthenticated, async (req, res) => {
+  app.post("/api/accounting/journal-entries/generate-waste", isAuthenticated, requireAnyPermission("integrations", ["create", "edit"]), async (req, res) => {
     try {
       const { dateFrom, dateTo, branchId } = req.body;
       if (!dateFrom || !dateTo) return res.status(400).json({ error: "dateFrom and dateTo are required" });
@@ -6798,7 +6798,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/accounting/journal-entries/:id/status", isAuthenticated, async (req, res) => {
+  app.patch("/api/accounting/journal-entries/:id/status", isAuthenticated, requireAnyPermission("integrations", ["edit", "approve"]), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const { status, reconciliationStatus, reconciliationNotes } = req.body;
@@ -6821,7 +6821,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/accounting/journal-entries-summary", isAuthenticated, async (req, res) => {
+  app.get("/api/accounting/journal-entries-summary", isAuthenticated, requirePermission("integrations", "view"), async (req, res) => {
     try {
       const { dateFrom, dateTo, branchId } = req.query;
       if (!dateFrom || !dateTo) return res.status(400).json({ error: "dateFrom and dateTo are required" });
@@ -6838,7 +6838,7 @@ export async function registerRoutes(
   });
 
   // Reconciliation routes
-  app.get("/api/accounting/reconciliations", isAuthenticated, async (req, res) => {
+  app.get("/api/accounting/reconciliations", isAuthenticated, requirePermission("integrations", "view"), async (req, res) => {
     try {
       const { branchId, status } = req.query;
       const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
@@ -6859,7 +6859,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/accounting/reconciliations/generate", isAuthenticated, async (req, res) => {
+  app.post("/api/accounting/reconciliations/generate", isAuthenticated, requireAnyPermission("integrations", ["create", "edit"]), async (req, res) => {
     try {
       const { periodFrom, periodTo, branchId } = req.body;
       if (!periodFrom || !periodTo) return res.status(400).json({ error: "periodFrom and periodTo are required" });
@@ -6875,7 +6875,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/accounting/reconciliations/:id/status", isAuthenticated, async (req, res) => {
+  app.patch("/api/accounting/reconciliations/:id/status", isAuthenticated, requireAnyPermission("integrations", ["edit", "approve"]), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const { status, notes } = req.body;
@@ -6895,7 +6895,7 @@ export async function registerRoutes(
   });
 
   // Chart of Accounts
-  app.get("/api/accounting/chart-of-accounts", isAuthenticated, async (req, res) => {
+  app.get("/api/accounting/chart-of-accounts", isAuthenticated, requirePermission("integrations", "view"), async (req, res) => {
     try {
       const accounts = await storage.getAllChartOfAccounts();
       res.json(accounts);
@@ -6905,7 +6905,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/accounting/chart-of-accounts", isAuthenticated, async (req, res) => {
+  app.post("/api/accounting/chart-of-accounts", isAuthenticated, requireAnyPermission("integrations", ["create", "edit"]), async (req, res) => {
     try {
       const account = await storage.createChartOfAccount(req.body);
       res.json(account);
@@ -6916,7 +6916,7 @@ export async function registerRoutes(
   });
 
   // Export journal entries as CSV for accounting software
-  app.get("/api/accounting/export-csv", isAuthenticated, async (req, res) => {
+  app.get("/api/accounting/export-csv", isAuthenticated, requirePermission("integrations", "view"), async (req, res) => {
     try {
       const { dateFrom, dateTo, branchId, format } = req.query;
       const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
@@ -8933,7 +8933,7 @@ export async function registerRoutes(
   });
 
   // Get audit logs for a specific cashier journal (admin only)
-  app.get("/api/cashier-journals/:id/audit-logs", isAuthenticated, async (req, res) => {
+  app.get("/api/cashier-journals/:id/audit-logs", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
     try {
       if (!isUserAdmin(req)) {
         return res.status(403).json({ error: "سجل التدقيق مخصّص للمسؤول فقط" });
@@ -9325,7 +9325,7 @@ export async function registerRoutes(
   // Streams the legacy base64 `file_data` for a single attachment as a binary
   // response. Used as a lazy fallback for pre-migration attachments so that
   // listing endpoints stay light (no MB-sized blobs in JSON payloads).
-  app.get("/api/journal-attachments/:id/legacy-data", isAuthenticated, async (req, res) => {
+  app.get("/api/journal-attachments/:id/legacy-data", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
@@ -10245,7 +10245,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/pnl/global-settings", isAuthenticated, async (req, res) => {
+  app.put("/api/pnl/global-settings", isAuthenticated, requirePermission("pnl", "edit"), async (req, res) => {
     try {
       if (!isUserAdmin(req)) {
         return res.status(403).json({ error: "هذا الإعداد للأدمن فقط" });
@@ -24913,7 +24913,7 @@ export async function registerRoutes(
   });
 
   // Marketing Alerts - تنبيهات التسويق
-  app.get("/api/marketing/alerts", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/alerts", isAuthenticated, requirePermission("marketing", "view"), async (req, res) => {
     try {
       const { targetUserId, isRead } = req.query;
       const filters: { targetUserId?: string; isRead?: boolean } = {};
@@ -24928,7 +24928,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/alerts", isAuthenticated, async (req, res) => {
+  app.post("/api/marketing/alerts", isAuthenticated, requireAnyPermission("marketing", ["create", "edit"]), async (req, res) => {
     try {
       const validatedData = insertMarketingAlertSchema.parse(req.body);
       const alert = await storage.createMarketingAlert(validatedData);
@@ -24942,7 +24942,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/marketing/alerts/:id/read", isAuthenticated, async (req, res) => {
+  app.patch("/api/marketing/alerts/:id/read", isAuthenticated, requirePermission("marketing", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -24959,7 +24959,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/marketing/alerts/:id/acknowledge", isAuthenticated, async (req, res) => {
+  app.patch("/api/marketing/alerts/:id/acknowledge", isAuthenticated, requirePermission("marketing", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -26243,7 +26243,7 @@ export async function registerRoutes(
   });
 
   // Schedule Change Audit Trail - سجل تتبع تعديلات الجدول
-  app.get("/api/schedule-change-audit", isAuthenticated, async (req, res) => {
+  app.get("/api/schedule-change-audit", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
     try {
       const { branchId, weekStartDate, employeeId, limit: limitParam } = req.query;
       
@@ -27872,7 +27872,7 @@ export async function registerRoutes(
   });
 
   // Time Entries - التوقيعات
-  app.get("/api/time-entries/:attendanceId", isAuthenticated, async (req, res) => {
+  app.get("/api/time-entries/:attendanceId", isAuthenticated, requirePermission("timesheet", "view"), async (req, res) => {
     try {
       const attendanceId = parseInt(req.params.attendanceId);
       if (isNaN(attendanceId)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -36677,8 +36677,15 @@ export async function registerRoutes(
     }
   });
 
-  // Get visitor stats
-  app.get("/api/visitor-stats", isAuthenticated, async (req, res) => {
+  // Get visitor stats — consumed by both /visitors (executive_visitors) and
+  // /executive/reports (executive_reports) pages, so accept either module.
+  const requireVisitorStatsAccess: any = (req: any, res: any, next: any) => {
+    const fakeRes: any = {
+      status: () => ({ json: () => requirePermission("executive_reports", "view")(req, res, next) }),
+    };
+    requirePermission("executive_visitors", "view")(req, fakeRes, next);
+  };
+  app.get("/api/visitor-stats", isAuthenticated, requireVisitorStatsAccess, async (req, res) => {
     try {
       // SECURITY: Apply branch filter
       const branchFilter = getEffectiveBranchFilter(req, parseQueryString(req.query.branchId));
@@ -37122,7 +37129,7 @@ export async function registerRoutes(
   });
 
   // Export meetings to JSON (for Excel export on frontend)
-  app.get("/api/executive/meetings/export", isAuthenticated, async (req, res) => {
+  app.get("/api/executive/meetings/export", isAuthenticated, requirePermission("executive_reports", "view"), async (req, res) => {
     try {
       const meetings = await storage.getExecMeetings();
       res.json(meetings);
