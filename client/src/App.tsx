@@ -29,6 +29,7 @@ const BranchesPage = makeLazy("branches");
 const MaintenancePage = makeLazy("maintenance");
 const InspectionsPage = makeLazy("inspections");
 const UsersPage = makeLazy("users");
+const UserPermissionsPage = makeLazy("user-permissions");
 const ConstructionProjectsPage = makeLazy("construction-projects");
 const FieldHubPage = makeLazy("field-hub");
 const FieldChecklistTemplatesPage = makeLazy("field-checklist-templates");
@@ -447,6 +448,7 @@ const Router = React.memo(function Router() {
       <Route path="/settings">{() => <ModulePage component={SettingsDashboardPage} module="settings" />}</Route>
       <Route path="/security-management">{() => <AdminPage component={SecurityManagementPage} module="rbac_management" />}</Route>
       <Route path="/users">{() => <AdminPage component={UsersPage} module="users" />}</Route>
+      <Route path="/user-permissions/:userId">{() => <AdminPage component={UserPermissionsPage} module="users" />}</Route>
       <Route path="/rbac-management">{() => <AdminPage component={RBACManagementPage} module="rbac_management" />}</Route>
       <Route path="/integrations">{() => <AdminPage component={IntegrationsPage} module="integrations" />}</Route>
       <Route path="/audit-logs">{() => <AdminPage component={AuditLogsPage} module="audit_logs" />}</Route>

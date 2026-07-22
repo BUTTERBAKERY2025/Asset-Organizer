@@ -16,6 +16,7 @@ const pageImports: Record<string, () => Promise<any>> = {
   "maintenance": () => import("@/pages/maintenance"),
   "inspections": () => import("@/pages/inspections"),
   "users": () => import("@/pages/users"),
+  "user-permissions": () => import("@/pages/user-permissions"),
   "construction-projects": () => import("@/pages/construction-projects"),
   "field-hub": () => import("@/pages/field-hub"),
   "field-checklist-templates": () => import("@/pages/field-checklist-templates"),

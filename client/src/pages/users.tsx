@@ -2,6 +2,7 @@ import { Layout } from "@/components/layout";
 import { SecurityHero } from "@/components/security/security-hero";
 import { ExportButtons } from "@/components/export-buttons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -124,6 +125,7 @@ interface PermissionState {
 export default function UsersPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const { user: currentUser, isAdmin, isLoading: authLoading, isAuthenticated } = useAuth();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -388,11 +390,7 @@ export default function UsersPage() {
   });
 
   const openPermissionsDialog = (user: SafeUser) => {
-    setSelectedUser(user);
-    setPermissionState({});
-    setPermissionSources(new Map());
-    setAppliedTemplate(null);
-    setIsPermissionsDialogOpen(true);
+    navigate(`/user-permissions/${user.id}`);
   };
 
   const openEditDialog = async (user: SafeUser) => {
