@@ -547,7 +547,7 @@ export default function SalesDataUploadsPage() {
                                 </DialogHeader>
                                 
                                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                                  <TabsList className="grid w-full grid-cols-3">
+                                  <TabsList className="flex w-full sm:grid sm:grid-cols-3">
                                     <TabsTrigger value="analytics" className="flex items-center gap-2">
                                       <TrendingUp className="w-4 h-4" />
                                       التحليل

@@ -395,7 +395,7 @@ export default function BoardMembersPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-2xl grid-cols-4 h-auto">
+          <TabsList className="flex w-full sm:grid sm:max-w-2xl sm:grid-cols-4 h-auto">
             <TabsTrigger value="members" className="gap-1 sm:gap-2 text-[10px] sm:text-sm py-1.5 sm:py-2 px-1 sm:px-3">
               <Users className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">الأعضاء</span>

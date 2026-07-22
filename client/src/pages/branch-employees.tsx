@@ -2370,7 +2370,7 @@ export default function BranchEmployeesPage() {
 
         {/* Main Tabs */}
         <Tabs value={mainTab} onValueChange={setMainTab} className="w-full">
-          <TabsList className="grid grid-cols-3 w-full max-w-[450px]">
+          <TabsList className="flex w-full sm:grid sm:grid-cols-3 sm:max-w-[450px]">
             <TabsTrigger value="employees" className="flex items-center gap-2">
               <Users className="w-4 h-4" />
               {t("branchEmployees.tabs.employees")}

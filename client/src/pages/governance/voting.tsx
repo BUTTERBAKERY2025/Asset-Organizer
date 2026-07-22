@@ -526,7 +526,7 @@ export default function VotingPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-lg grid-cols-3 text-xs sm:text-sm">
+          <TabsList className="flex w-full sm:grid sm:max-w-lg sm:grid-cols-3 text-xs sm:text-sm">
             <TabsTrigger value="active" className="gap-1 sm:gap-2 px-1 sm:px-3">
               <Vote className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">جارية</span> ({votingResolutions.length})

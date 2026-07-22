@@ -461,7 +461,7 @@ export default function CompliancePage() {
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-lg grid-cols-3">
+          <TabsList className="flex w-full sm:grid sm:max-w-lg sm:grid-cols-3">
             <TabsTrigger value="requirements" className="gap-2">
               <Shield className="h-4 w-4" />
               المتطلبات

@@ -553,7 +553,7 @@ function RoleFormDialog({
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           <Tabs defaultValue="basic" className="w-full">
-            <TabsList className="grid grid-cols-3 w-full">
+            <TabsList className="flex w-full sm:grid sm:grid-cols-3">
               <TabsTrigger value="basic">{t("orgStructure.basicData")}</TabsTrigger>
               <TabsTrigger value="responsibilities">{t("orgStructure.tasks")}</TabsTrigger>
               <TabsTrigger value="qualifications">{t("orgStructure.qualifications")}</TabsTrigger>

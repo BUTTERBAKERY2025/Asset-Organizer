@@ -1042,7 +1042,7 @@ export default function MarketingCalendarPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full sm:w-auto grid grid-cols-4 h-auto">
+          <TabsList className="w-full sm:w-auto flex sm:grid sm:grid-cols-4 h-auto">
             <TabsTrigger value="calendar" className="gap-2 py-2">
               <Calendar className="w-4 h-4" />
               <span className="hidden sm:inline">التقويم</span>

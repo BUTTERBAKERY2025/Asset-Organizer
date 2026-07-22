@@ -664,7 +664,7 @@ export default function ResolutionsPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-xl grid-cols-5">
+          <TabsList className="flex w-full sm:grid sm:max-w-xl sm:grid-cols-5">
             <TabsTrigger value="all">الكل</TabsTrigger>
             <TabsTrigger value="pending">قيد المعالجة</TabsTrigger>
             <TabsTrigger value="approved">معتمدة</TabsTrigger>

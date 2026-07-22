@@ -526,7 +526,7 @@ export default function GeneralAssemblyPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid grid-cols-4 w-full max-w-2xl text-xs sm:text-sm">
+        <TabsList className="flex w-full sm:grid sm:grid-cols-4 sm:max-w-2xl text-xs sm:text-sm">
           <TabsTrigger value="overview" className="gap-1 sm:gap-2 px-1 sm:px-3">
             <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">نظرة عامة</span>

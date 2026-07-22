@@ -416,7 +416,7 @@ export default function SecurityManagementPage() {
         />
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className={`grid w-full grid-cols-3 sm:grid-cols-5 mb-4 sm:mb-6 ${SECURITY_TABS_LIST}`}>
+          <TabsList className={`flex w-full sm:grid sm:grid-cols-5 mb-4 sm:mb-6 ${SECURITY_TABS_LIST}`}>
             <TabsTrigger value="settings" className={`flex items-center gap-1 sm:gap-2 ${SECURITY_TAB_TRIGGER}`} data-testid="tab-security-settings">
               <Key className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">الإعدادات</span>

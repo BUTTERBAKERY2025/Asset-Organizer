@@ -810,7 +810,7 @@ export default function NotificationsManagement() {
           <div className="flex flex-col md:flex-row h-[calc(90vh-120px)]">
             <div className="flex-1 overflow-hidden">
               <Tabs defaultValue="content" className="h-full flex flex-col">
-                <TabsList className="mx-4 mt-2 grid grid-cols-5 bg-gray-100" data-testid="dialog-tabs">
+                <TabsList className="mx-4 mt-2 flex sm:grid sm:grid-cols-5 bg-gray-100" data-testid="dialog-tabs">
                   <TabsTrigger value="content" data-testid="tab-content" className="text-xs gap-1">
                     <FileText className="w-3 h-3" />
                     المحتوى

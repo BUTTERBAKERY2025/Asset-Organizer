@@ -2225,7 +2225,7 @@ export default function OperationsReportsDashboardPage() {
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <div className="space-y-2">
               {/* الصف الأول: التقارير الرئيسية */}
-              <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto gap-1 p-1 bg-muted/50">
+              <TabsList className="flex w-full sm:grid sm:grid-cols-6 h-auto gap-1 p-1 bg-muted/50">
                 {visibleTabs.includes("overview") && (
                   <TabsTrigger value="overview" data-testid="tab-overview" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-amber-100 dark:data-[state=active]:bg-amber-950/40 data-[state=active]:text-amber-800 dark:data-[state=active]:text-amber-300">
                     <PieChartIcon className="w-4 h-4" />
@@ -2267,7 +2267,7 @@ export default function OperationsReportsDashboardPage() {
 
               {/* الصف الثاني: التقارير التفصيلية والتحليلية */}
               {visibleTabs.length > 6 && (
-                <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto gap-1 p-1 bg-muted/50 border border-border">
+                <TabsList className="flex w-full sm:grid sm:grid-cols-6 h-auto gap-1 p-1 bg-muted/50 border border-border">
                   {visibleTabs.includes("apps") && (
                     <TabsTrigger value="apps" data-testid="tab-apps" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-indigo-100 dark:data-[state=active]:bg-indigo-950/40 data-[state=active]:text-indigo-800 dark:data-[state=active]:text-indigo-300">
                       <Truck className="w-4 h-4" />

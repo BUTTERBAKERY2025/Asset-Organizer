@@ -3590,7 +3590,7 @@ export default function SalaryClosingPage() {
                 <p className="text-center text-gray-500 py-8">لا توجد إغلاقات محفوظة بعد.</p>
               )}
               {!closuresHistoryQuery.isLoading && closuresHistory.length > 0 && (
-                <Table>
+                <Table className="table-actions-sticky">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-center">الفرع</TableHead>

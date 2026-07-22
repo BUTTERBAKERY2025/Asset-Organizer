@@ -197,7 +197,7 @@ export default function SecurityPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} data-testid="security-tabs">
-        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 h-auto gap-1 p-1">
+        <TabsList className="flex w-full sm:grid sm:grid-cols-5 h-auto gap-1 p-1">
           <TabsTrigger value="overview" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-2" data-testid="tab-overview">
             <Activity className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden xs:inline">نظرة عامة</span>

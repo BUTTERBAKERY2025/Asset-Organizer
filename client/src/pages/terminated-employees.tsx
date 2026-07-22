@@ -253,7 +253,7 @@ export default function TerminatedEmployeesPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <Table>
+              <Table className="table-actions-sticky">
                 <TableHeader className="bg-muted/50">
                   <TableRow>
                     <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الرقم الوظيفي" : "Employee ID"}</TableHead>
