@@ -706,7 +706,62 @@ export default function ManagePage() {
               </Select>
             </div>
 
-            <div className="rounded-md border table-scroll">
+            {/* عرض البطاقات للموبايل */}
+            <div className="md:hidden space-y-2">
+              {filteredItems.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-sm border rounded-md">لا توجد نتائج</div>
+              ) : (
+                filteredItems.map((item) => (
+                  <div key={item.id} className="rounded-lg border p-3" data-testid={`card-manage-${item.id}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate">{item.name}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          <span>{branchMap[item.branchId]}</span>
+                          {item.category && <span>{item.category}</span>}
+                          <span>الكمية: <b className="text-foreground">{item.quantity}</b></span>
+                        </div>
+                      </div>
+                      <div className="scale-90 origin-left shrink-0">{getStatusBadge(item.status)}</div>
+                    </div>
+                    <div className="mt-2 pt-2 border-t flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9 flex-1"
+                        onClick={() => { setSelectedItem(item); setIsDetailsDialogOpen(true); }}
+                        data-testid={`button-card-details-${item.id}`}
+                      >
+                        <Eye className="w-4 h-4 ml-1" />
+                        عرض
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9 flex-1"
+                        onClick={() => handleEdit(item)}
+                        data-testid={`button-card-edit-${item.id}`}
+                      >
+                        <Pencil className="w-4 h-4 ml-1" />
+                        تعديل
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9 flex-1 text-destructive border-destructive/30"
+                        onClick={() => handleDelete(item)}
+                        data-testid={`button-card-delete-${item.id}`}
+                      >
+                        <Trash2 className="w-4 h-4 ml-1" />
+                        حذف
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="rounded-md border table-scroll hidden md:block">
               <Table className="min-w-[600px] table-actions-sticky">
                 <TableHeader>
                   <TableRow>

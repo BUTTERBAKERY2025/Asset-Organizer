@@ -2630,7 +2630,7 @@ export default function BranchEmployeesPage() {
               </div>
             ) : (
               <div className="table-scroll">
-              <Table>
+              <Table className="table-actions-sticky">
                 <TableHeader className="bg-muted/50">
                   <TableRow>
                     <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden md:table-cell whitespace-nowrap`}>{isRTL ? "الرقم الوظيفي" : "Employee ID"}</TableHead>
