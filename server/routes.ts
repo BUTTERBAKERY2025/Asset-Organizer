@@ -29343,7 +29343,7 @@ export async function registerRoutes(
               return allEmps.flat();
             }
             return [];
-          } catch (e) { return []; }
+          } catch (e) { console.error("[employee-reports/bundle] section failed:", e); return []; }
         })(),
         (async () => {
           try {
@@ -29357,7 +29357,7 @@ export async function registerRoutes(
               records = records.filter((r: any) => allowedSet.has(r.branchId));
             }
             return records;
-          } catch (e) { return []; }
+          } catch (e) { console.error("[employee-reports/bundle] section failed:", e); return []; }
         })(),
         (async () => {
           try {
@@ -29376,7 +29376,7 @@ export async function registerRoutes(
               return allSchedules.flat();
             }
             return [];
-          } catch (e) { return []; }
+          } catch (e) { console.error("[employee-reports/bundle] section failed:", e); return []; }
         })(),
         (async () => {
           try {
@@ -29395,7 +29395,7 @@ export async function registerRoutes(
               return allReports.flat();
             }
             return [];
-          } catch (e) { return []; }
+          } catch (e) { console.error("[employee-reports/bundle] section failed:", e); return []; }
         })(),
         (async () => {
           try {
@@ -29416,7 +29416,7 @@ export async function registerRoutes(
               return await storage.getAllSalaryDeductionsByMonth(month);
             }
             return [];
-          } catch (e) { return []; }
+          } catch (e) { console.error("[employee-reports/bundle] section failed:", e); return []; }
         })(),
       ]);
 

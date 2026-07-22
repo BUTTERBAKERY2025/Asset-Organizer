@@ -820,8 +820,16 @@ export default function SalaryClosingPage() {
 
   const { branches, userBranchId } = useBranches();
 
-  const [branch, setBranch] = useState<string>("");
-  const [month, setMonth] = useState<string>(new Date().toISOString().slice(0, 7));
+  // قراءة الفرع والشهر من رابط الصفحة إن وُجدا (قادمة من صفحة التقارير الشاملة)
+  const urlParams = useMemo(() => {
+    const sp = new URLSearchParams(window.location.search);
+    return { branch: sp.get("branch") || "", month: sp.get("month") || "" };
+  }, []);
+
+  const [branch, setBranch] = useState<string>(urlParams.branch);
+  const [month, setMonth] = useState<string>(
+    /^\d{4}-\d{2}$/.test(urlParams.month) ? urlParams.month : new Date().toISOString().slice(0, 7)
+  );
 
   // تهيئة الفرع الافتراضي
   useEffect(() => {

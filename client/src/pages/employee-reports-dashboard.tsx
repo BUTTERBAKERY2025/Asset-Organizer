@@ -89,7 +89,7 @@ import {
   AlertTriangle,
   FileX,
 } from "lucide-react";
-import type { BranchEmployee, AttendanceRecord, TimesheetReport, SalaryDeduction } from "@shared/schema";
+import type { BranchEmployee, AttendanceRecord, SalaryDeduction } from "@shared/schema";
 import { SALARY_DEDUCTION_TYPE_LABELS } from "@shared/schema";
 
 
@@ -155,7 +155,7 @@ export default function EmployeeReportsDashboardPage() {
     }
   }, [userBranchId, canSelectBranch]);
 
-  const { data: bundle, isLoading: bundleLoading } = useQuery<{
+  const { data: bundle, isLoading: bundleLoading, isError: bundleError, refetch: refetchBundle } = useQuery<{
     employees: BranchEmployee[];
     attendance: AttendanceRecord[];
     schedules: any[];
@@ -181,17 +181,10 @@ export default function EmployeeReportsDashboardPage() {
   const employeesLoading = bundleLoading;
   const attendanceLoading = bundleLoading;
 
-  const { data: timesheetReports } = useQuery<TimesheetReport[]>({
-    queryKey: ["/api/timesheet-reports"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
-    enabled: activeTab === "timesheets",
-    staleTime: 60_000,
-  });
-
   const { data: cashierJournals } = useQuery<{ id: number; branchId: string; cashierName: string; cashierId: string; reportDate: string; totalSales: number; totalCash: number; status: string }[]>({
     queryKey: ["/api/cashier-journals"],
     queryFn: getQueryFn({ on401: "returnNull" }),
-    enabled: activeTab === "performance",
+    enabled: activeTab === "analytics",
     staleTime: 60_000,
   });
 
@@ -246,9 +239,9 @@ export default function EmployeeReportsDashboardPage() {
     };
   }, [filteredEmployees]);
 
-  // Filtered and sorted employees for salary tab — active only
+  // Filtered and sorted employees for salary tab — يحترم مفتاح "النشطون فقط" الموحّد
   const salaryFilteredEmployees = useMemo(() => {
-    let result = filteredEmployees.filter(emp => emp.status === "active");
+    let result = [...filteredEmployees];
     
     // Apply search filter
     if (salarySearchQuery.trim()) {
@@ -305,7 +298,7 @@ export default function EmployeeReportsDashboardPage() {
     return attendanceRecords.filter(rec => {
       if (selectedBranch !== "all" && rec.branchId !== selectedBranch) return false;
       if (rec.attendanceDate < monthStart || rec.attendanceDate > monthEnd) return false;
-      if (selectedJobTitle !== "all" || selectedEmployee !== "all") {
+      if (selectedJobTitle !== "all" || selectedEmployee !== "all" || activeOnly) {
         const matchesByBranchEmployeeId = rec.branchEmployeeId && filteredEmployeeLookup.ids.has(rec.branchEmployeeId);
         const matchesByEmployeeId = filteredEmployeeLookup.employeeIds.has(rec.employeeId);
         const matchesByName = rec.employeeName && filteredEmployees.some(emp => emp.employeeName === rec.employeeName && emp.branchId === rec.branchId);
@@ -313,7 +306,7 @@ export default function EmployeeReportsDashboardPage() {
       }
       return true;
     });
-  }, [attendanceRecords, selectedBranch, selectedMonth, selectedJobTitle, selectedEmployee, filteredEmployeeLookup, filteredEmployees]);
+  }, [attendanceRecords, selectedBranch, selectedMonth, selectedJobTitle, selectedEmployee, activeOnly, filteredEmployeeLookup, filteredEmployees]);
 
   const jobTitles = useMemo(() => {
     if (!employees) return [];
@@ -345,7 +338,7 @@ export default function EmployeeReportsDashboardPage() {
         return sum + Math.round(baseSalary * 0.0975);
       }, 0);
     
-    const attendanceData = (selectedJobTitle !== "all" || selectedEmployee !== "all") 
+    const attendanceData = (selectedJobTitle !== "all" || selectedEmployee !== "all" || activeOnly) 
       ? filteredAttendance 
       : allBranchMonthAttendance;
     const attendanceCount = attendanceData.length;
@@ -366,7 +359,7 @@ export default function EmployeeReportsDashboardPage() {
       lateCount,
       attendanceRate,
     };
-  }, [filteredEmployees, allBranchMonthAttendance, filteredAttendance, selectedJobTitle, selectedEmployee]);
+  }, [filteredEmployees, allBranchMonthAttendance, filteredAttendance, selectedJobTitle, selectedEmployee, activeOnly]);
 
   const employeeLookupByRecord = useMemo(() => {
     if (!filteredEmployees) return new Map<string, number>();
@@ -1156,7 +1149,7 @@ export default function EmployeeReportsDashboardPage() {
   const productivityMetrics = useMemo(() => {
     const totalSalary = overviewStats.totalSalaries;
     const employeeCount = overviewStats.totalEmployees;
-    const attendanceData = (selectedJobTitle !== "all" || selectedEmployee !== "all") 
+    const attendanceData = (selectedJobTitle !== "all" || selectedEmployee !== "all" || activeOnly) 
       ? filteredAttendance 
       : allBranchMonthAttendance;
     const totalHours = attendanceData.reduce((sum, r) => sum + (Number(r.workingHours) || 0), 0);
@@ -1180,7 +1173,7 @@ export default function EmployeeReportsDashboardPage() {
       totalWorkingHours: Math.round(totalHours),
       branchProductivity,
     };
-  }, [overviewStats, allBranchMonthAttendance, filteredAttendance, branchComparisonData, selectedJobTitle, selectedEmployee]);
+  }, [overviewStats, allBranchMonthAttendance, filteredAttendance, branchComparisonData, selectedJobTitle, selectedEmployee, activeOnly]);
 
   // 3. مؤشرات الدوران الوظيفي
   const turnoverMetrics = useMemo(() => {
@@ -1243,7 +1236,7 @@ export default function EmployeeReportsDashboardPage() {
     const allowancePercentage = totalCost > 0 ? Math.round((totalAllowances / totalCost) * 100) : 0;
     const insurancePercentage = totalCost > 0 ? Math.round((totalInsurance / totalCost) * 100) : 0;
     
-    const attendanceData = (selectedJobTitle !== "all" || selectedEmployee !== "all") 
+    const attendanceData = (selectedJobTitle !== "all" || selectedEmployee !== "all" || activeOnly) 
       ? filteredAttendance 
       : allBranchMonthAttendance;
     const totalOvertimeHours = attendanceData.reduce((sum, r) => {
@@ -1282,7 +1275,7 @@ export default function EmployeeReportsDashboardPage() {
       overtimeCost,
       costDistribution,
     };
-  }, [filteredEmployees, overviewStats, allBranchMonthAttendance, filteredAttendance, selectedJobTitle, selectedEmployee]);
+  }, [filteredEmployees, overviewStats, allBranchMonthAttendance, filteredAttendance, selectedJobTitle, selectedEmployee, activeOnly]);
 
   // 5. تنبيهات ذكية
   const smartAlerts = useMemo(() => {
@@ -2481,18 +2474,28 @@ export default function EmployeeReportsDashboardPage() {
           description={isRTL ? "تقارير تحليلية شاملة لموظفي الفروع والحضور والرواتب" : "Comprehensive analytics reports for branch employees, attendance, and salaries"}
           backHref="/attendance-dashboard"
           actions={
-            canCloseSalary ? (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-9 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
-                onClick={() => navigate("/salary-closing")}
-                data-testid="button-salary-closing"
-              >
-                <Wallet className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
-                {isRTL ? "إغلاق الرواتب الشهرية" : "Monthly Salary Closing"}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="outline" className="h-9" onClick={() => navigate("/branch-employees")} data-testid="button-goto-branch-employees">
+                <Users className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+                {isRTL ? "موظفو الفروع" : "Branch Employees"}
               </Button>
-            ) : null
+              <Button size="sm" variant="outline" className="h-9" onClick={() => navigate("/timesheet")} data-testid="button-goto-timesheet">
+                <Calendar className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+                {isRTL ? "مسير الدوام" : "Timesheet"}
+              </Button>
+              {canCloseSalary && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+                  onClick={() => navigate(`/salary-closing?branch=${selectedBranch !== "all" ? selectedBranch : ""}&month=${selectedMonth}`)}
+                  data-testid="button-salary-closing"
+                >
+                  <Wallet className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+                  {isRTL ? "إغلاق الرواتب الشهرية" : "Monthly Salary Closing"}
+                </Button>
+              )}
+            </div>
           }
         />
 
@@ -2599,17 +2602,34 @@ export default function EmployeeReportsDashboardPage() {
           </CardContent>
         </Card>
 
+        {bundleError && (
+          <Card className="border-red-200 bg-red-50/50 dark:border-red-900/50 dark:bg-red-950/10">
+            <CardContent className="py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-red-600" />
+                <p className="text-sm font-medium text-red-700 dark:text-red-400">
+                  {isRTL ? "تعذر تحميل بيانات التقرير — تحقق من الاتصال ثم أعد المحاولة" : "Failed to load report data — check connection and retry"}
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => refetchBundle()} data-testid="button-retry-bundle">
+                <RefreshCw className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+                {isRTL ? "إعادة المحاولة" : "Retry"}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="kpi-grid">
           <KpiCard
             label={isRTL ? "إجمالي الموظفين" : "Total Employees"}
-            value={overviewStats.totalEmployees}
+            value={bundleLoading ? "…" : overviewStats.totalEmployees}
             icon={Users}
             tone="people"
             data-testid="kpi-total-employees"
           />
           <KpiCard
             label={isRTL ? "نسبة الحضور" : "Attendance Rate"}
-            value={overviewStats.attendanceRate}
+            value={bundleLoading ? "…" : overviewStats.attendanceRate}
             unit="%"
             icon={CheckCircle}
             tone="money"
@@ -2617,28 +2637,28 @@ export default function EmployeeReportsDashboardPage() {
           />
           <KpiCard
             label={isRTL ? "أيام الغياب" : "Absent Days"}
-            value={overviewStats.absentCount}
+            value={bundleLoading ? "…" : overviewStats.absentCount}
             icon={XCircle}
             tone="alert"
             data-testid="kpi-absent-days"
           />
           <KpiCard
             label={isRTL ? "إجمالي الرواتب" : "Total Salaries"}
-            value={formatCurrency(overviewStats.totalSalaries, isRTL)}
+            value={bundleLoading ? "…" : formatCurrency(overviewStats.totalSalaries, isRTL)}
             icon={DollarSign}
             tone="inventory"
             data-testid="kpi-total-salaries"
           />
           <KpiCard
             label={isRTL ? "الموظفين السعوديين" : "Saudi Employees"}
-            value={overviewStats.saudiEmployees}
+            value={bundleLoading ? "…" : overviewStats.saudiEmployees}
             icon={Building2}
             tone="production"
             data-testid="kpi-saudi-employees"
           />
           <KpiCard
             label={isRTL ? "التأمينات الاجتماعية" : "Social Insurance"}
-            value={formatCurrency(overviewStats.totalInsurance, isRTL)}
+            value={bundleLoading ? "…" : formatCurrency(overviewStats.totalInsurance, isRTL)}
             icon={Wallet}
             tone="violet"
             data-testid="kpi-total-insurance"
