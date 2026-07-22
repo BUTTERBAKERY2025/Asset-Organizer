@@ -2703,58 +2703,58 @@ export default function EmployeeReportsDashboardPage() {
           </div>
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <div className="overflow-x-auto pb-2 scrollbar-thin">
-              <TabsList className="inline-flex h-auto flex-wrap gap-1 p-1 bg-muted/50 rounded-lg">
-              <TabsTrigger value="overview" className="text-xs px-3 py-2 whitespace-nowrap" data-testid="tab-overview">
-                <BarChart3 className={`w-3.5 h-3.5 ${isRTL ? "ml-1" : "mr-1"}`} />
-                {isRTL ? "نظرة عامة" : "Overview"}
-              </TabsTrigger>
-              <TabsTrigger value="data-quality" className="text-xs px-3 py-2 whitespace-nowrap" data-testid="tab-data-quality">
-                <AlertCircle className={`w-3.5 h-3.5 ${isRTL ? "ml-1" : "mr-1"}`} />
-                {isRTL ? "جودة البيانات" : "Data Quality"}
-              </TabsTrigger>
-              <TabsTrigger value="compliance" className="text-xs px-3 py-2 whitespace-nowrap" data-testid="tab-compliance">
-                <CheckCircle className={`w-3.5 h-3.5 ${isRTL ? "ml-1" : "mr-1"}`} />
-                {isRTL ? "الامتثال" : "Compliance"}
-              </TabsTrigger>
-              <TabsTrigger value="turnover" className="text-xs px-3 py-2 whitespace-nowrap" data-testid="tab-turnover">
-                <RefreshCw className={`w-3.5 h-3.5 ${isRTL ? "ml-1" : "mr-1"}`} />
-                {isRTL ? "الدوران" : "Turnover"}
-              </TabsTrigger>
-              <TabsTrigger value="branch-comparison" className="text-xs px-3 py-2 whitespace-nowrap" data-testid="tab-branch-comparison">
-                <Building2 className={`w-3.5 h-3.5 ${isRTL ? "ml-1" : "mr-1"}`} />
-                {isRTL ? "الفروع" : "Branches"}
-              </TabsTrigger>
-              <TabsTrigger value="job-comparison" className="text-xs px-3 py-2 whitespace-nowrap" data-testid="tab-job-comparison">
-                <Users className={`w-3.5 h-3.5 ${isRTL ? "ml-1" : "mr-1"}`} />
-                {isRTL ? "الوظائف" : "Job Titles"}
-              </TabsTrigger>
-              <TabsTrigger value="attendance" className="text-xs px-3 py-2 whitespace-nowrap" data-testid="tab-attendance">
-                <Calendar className={`w-3.5 h-3.5 ${isRTL ? "ml-1" : "mr-1"}`} />
-                {isRTL ? "الحضور" : "Attendance"}
-              </TabsTrigger>
-              <TabsTrigger value="salaries" className="text-xs px-3 py-2 whitespace-nowrap" data-testid="tab-salaries">
-                <DollarSign className={`w-3.5 h-3.5 ${isRTL ? "ml-1" : "mr-1"}`} />
-                {isRTL ? "الرواتب" : "Salaries"}
-              </TabsTrigger>
-              <TabsTrigger value="analytics" className="text-xs px-3 py-2 whitespace-nowrap" data-testid="tab-analytics">
-                <TrendingUp className={`w-3.5 h-3.5 ${isRTL ? "ml-1" : "mr-1"}`} />
-                {isRTL ? "التحليلات" : "Analytics"}
-              </TabsTrigger>
-              <TabsTrigger value="kpis" className="text-xs px-3 py-2 whitespace-nowrap" data-testid="tab-kpis">
-                <PieChartIcon className={`w-3.5 h-3.5 ${isRTL ? "ml-1" : "mr-1"}`} />
-                {isRTL ? "المؤشرات" : "KPIs"}
-              </TabsTrigger>
-              <TabsTrigger value="health-certificates" className="text-xs px-3 py-2 whitespace-nowrap" data-testid="tab-health-certificates">
-                <CheckCircle className={`w-3.5 h-3.5 ${isRTL ? "ml-1" : "mr-1"}`} />
-                {isRTL ? "الشهادات الصحية" : "Health Certs"}
-              </TabsTrigger>
-              <TabsTrigger value="comparisons" className="text-xs px-3 py-2 whitespace-nowrap" data-testid="tab-comparisons">
-                <BarChart3 className={`w-3.5 h-3.5 ${isRTL ? "ml-1" : "mr-1"}`} />
-                {isRTL ? "المقارنات" : "Comparisons"}
-              </TabsTrigger>
-              </TabsList>
-            </div>
+            <Card className="border-gray-100 dark:border-border">
+              <CardContent className="py-3">
+                <div className="flex flex-wrap items-start gap-x-6 gap-y-3">
+                  {([
+                    {
+                      group: isRTL ? "الرئيسية" : "Main",
+                      tabs: [
+                        { value: "overview", label: isRTL ? "نظرة عامة" : "Overview", Icon: BarChart3 },
+                        { value: "attendance", label: isRTL ? "الحضور" : "Attendance", Icon: Calendar },
+                        { value: "salaries", label: isRTL ? "الرواتب" : "Salaries", Icon: DollarSign },
+                      ],
+                    },
+                    {
+                      group: isRTL ? "التحليلات والمؤشرات" : "Analytics & KPIs",
+                      tabs: [
+                        { value: "analytics", label: isRTL ? "التحليلات" : "Analytics", Icon: TrendingUp },
+                        { value: "kpis", label: isRTL ? "المؤشرات" : "KPIs", Icon: PieChartIcon },
+                        { value: "turnover", label: isRTL ? "الدوران" : "Turnover", Icon: RefreshCw },
+                      ],
+                    },
+                    {
+                      group: isRTL ? "المقارنات" : "Comparisons",
+                      tabs: [
+                        { value: "branch-comparison", label: isRTL ? "الفروع" : "Branches", Icon: Building2 },
+                        { value: "job-comparison", label: isRTL ? "الوظائف" : "Job Titles", Icon: Users },
+                        { value: "comparisons", label: isRTL ? "مقارنات متقدمة" : "Advanced", Icon: BarChart3 },
+                      ],
+                    },
+                    {
+                      group: isRTL ? "الجودة والامتثال" : "Quality & Compliance",
+                      tabs: [
+                        { value: "data-quality", label: isRTL ? "جودة البيانات" : "Data Quality", Icon: AlertCircle },
+                        { value: "compliance", label: isRTL ? "الامتثال" : "Compliance", Icon: CheckCircle },
+                        { value: "health-certificates", label: isRTL ? "الشهادات الصحية" : "Health Certs", Icon: CheckCircle },
+                      ],
+                    },
+                  ]).map((g) => (
+                    <div key={g.group} className="space-y-1.5">
+                      <p className="text-[11px] font-medium text-gray-400 dark:text-muted-foreground px-1">{g.group}</p>
+                      <TabsList className="inline-flex h-auto gap-1 p-1 bg-muted/50 rounded-lg">
+                        {g.tabs.map(({ value, label, Icon }) => (
+                          <TabsTrigger key={value} value={value} className="text-xs px-3 py-2 whitespace-nowrap" data-testid={`tab-${value}`}>
+                            <Icon className={`w-3.5 h-3.5 ${isRTL ? "ml-1" : "mr-1"}`} />
+                            {label}
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
 
             <TabsContent value="overview" className="space-y-4">
               {/* KPI Cards */}
