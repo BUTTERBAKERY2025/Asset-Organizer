@@ -9,18 +9,13 @@ import { useLocation } from "wouter";
 import type { InventoryItem } from "@shared/schema";
 
 const systemModules = [
-  { id: "production", name: "الإنتاج", icon: Factory, color: "#f59e0b", path: "/production-orders" },
-  { id: "inventory", name: "المخزون", icon: Package, color: "#3b82f6", path: "/inventory" },
-  { id: "cashier", name: "الكاشير", icon: CreditCard, color: "#22c55e", path: "/cashier-journals" },
-  { id: "warehouse", name: "المخازن", icon: Warehouse, color: "#f97316", path: "/warehouse" },
-  { id: "employees", name: "الموظفين", icon: Users, color: "#8b5cf6", path: "/branch-employees" },
-  { id: "governance", name: "الحوكمة", icon: Shield, color: "#1e40af", path: "/governance" },
-  { id: "executive", name: "السكرتارية", icon: ClipboardList, color: "#ec4899", path: "/executive" },
-  { id: "reports", name: "التقارير", icon: BarChart3, color: "#ef4444", path: "/reports" },
-  { id: "documents", name: "الوثائق", icon: FileText, color: "#06b6d4", path: "/documents" },
-  { id: "transfers", name: "التحويلات", icon: Truck, color: "#84cc16", path: "/asset-transfers" },
-  { id: "attendance", name: "الحضور", icon: Calendar, color: "#a855f7", path: "/attendance" },
-  { id: "analytics", name: "التحليلات", icon: TrendingUp, color: "#14b8a6", path: "/command-center" },
+  { id: "inventory", name: "جرد الأصول", icon: Package, color: "#3b82f6", path: "/inventory" },
+  { id: "manage", name: "إدارة الأصول", icon: ClipboardList, color: "#f59e0b", path: "/manage" },
+  { id: "transfers", name: "تحويلات الأصول", icon: Truck, color: "#84cc16", path: "/asset-transfers" },
+  { id: "branches", name: "إدارة الفروع", icon: Building2, color: "#8b5cf6", path: "/branches" },
+  { id: "inspections", name: "الفحص الدوري", icon: Calendar, color: "#14b8a6", path: "/inspections" },
+  { id: "maintenance", name: "تقرير الصيانة", icon: AlertTriangle, color: "#ef4444", path: "/maintenance" },
+  { id: "reports", name: "تقارير الأصول", icon: BarChart3, color: "#06b6d4", path: "/reports" },
 ];
 
 const COLORS = ["#f59e0b", "#22c55e", "#3b82f6", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"];
@@ -113,13 +108,13 @@ export default function DashboardPage() {
     <Layout>
       <div className="page-container space-y-6" dir="rtl">
         <div>
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-dashboard-title">لوحة التحكم الرئيسية</h1>
-          <p className="text-muted-foreground mt-1 text-sm sm:text-base">نظام إدارة مخبز باتر - CEO Command</p>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-dashboard-title">لوحة الأصول</h1>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">إدارة الأصول والجرد - مخبز باتر</p>
         </div>
 
         {/* أقسام النظام - تصميم محسّن */}
         <div className="bg-gray-50 rounded-2xl p-3 sm:p-4 md:p-6">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-700 mb-3 sm:mb-4">أقسام النظام</h2>
+          <h2 className="text-base sm:text-lg font-semibold text-gray-700 mb-3 sm:mb-4">أقسام الأصول والجرد</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {systemModules.map((module) => {
               const IconComponent = module.icon;
