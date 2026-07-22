@@ -1158,6 +1158,142 @@ export async function registerRoutes(
     }
   });
 
+  // الصلاحيات الفعلية التفصيلية لمستخدم — تحاكي منطق requirePermission الفعلي بالضبط
+  // sources: admin | role_auto (منح تلقائي من الدور) | direct (منح يدوي / قالب)
+  app.get("/api/rbac/users/:id/effective-permissions-detailed", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const targetUserId = req.params.id;
+      const targetUser = await storage.getUser(targetUserId);
+      if (!targetUser) {
+        return res.status(404).json({ error: "المستخدم غير موجود" });
+      }
+
+      type SourceType = "admin" | "role_auto" | "direct";
+      // module -> action -> Set of sources
+      const merged = new Map<string, Map<string, Set<SourceType>>>();
+      const addPerm = (module: string, action: string, source: SourceType) => {
+        let mod = merged.get(module);
+        if (!mod) { mod = new Map(); merged.set(module, mod); }
+        let srcs = mod.get(action);
+        if (!srcs) { srcs = new Set(); mod.set(action, srcs); }
+        srcs.add(source);
+      };
+      // Runtime auth (server/auth.ts requirePermission) accepts historical module
+      // synonyms. Mirror grants across those synonym pairs so the effective view
+      // matches actual route-level behavior.
+      // - direct grants: attendance → attendance_check (one-way), pnl ↔ pnl_dashboard
+      // - operations_manager auto-grants: attendance↔attendance_check,
+      //   quality↔quality_control, waste↔waste_tracking (via operationsManagerActionsFor)
+      // - financial_manager auto-grants: pnl ↔ pnl_dashboard
+      const addPermMirrored = (
+        module: string,
+        action: string,
+        source: SourceType,
+        mirrors: Record<string, string[]>,
+      ) => {
+        addPerm(module, action, source);
+        for (const m of mirrors[module] || []) addPerm(m, action, source);
+      };
+      const DIRECT_MIRRORS: Record<string, string[]> = {
+        attendance: ["attendance_check"],
+        pnl: ["pnl_dashboard"],
+        pnl_dashboard: ["pnl"],
+      };
+      const OPS_MIRRORS: Record<string, string[]> = {
+        attendance: ["attendance_check"],
+        attendance_check: ["attendance"],
+        quality: ["quality_control"],
+        quality_control: ["quality"],
+        waste: ["waste_tracking"],
+        waste_tracking: ["waste"],
+      };
+      const FIN_MIRRORS: Record<string, string[]> = {
+        pnl: ["pnl_dashboard"],
+        pnl_dashboard: ["pnl"],
+      };
+
+      let note: string | null = null;
+
+      if (targetUser.role === "admin") {
+        for (const module of SYSTEM_MODULES) {
+          for (const action of MODULE_ACTIONS) addPerm(module, action, "admin");
+        }
+        note = "مدير النظام يملك جميع الصلاحيات تلقائيًا";
+      } else if (targetUser.role === "attendance_clerk") {
+        for (const action of ["view", "create", "edit"]) {
+          addPerm("attendance_check", action, "role_auto");
+        }
+        note = "مسجل الحضور مقيّد بتسجيل الحضور فقط — أي منح أخرى لا تُطبَّق";
+      } else {
+        // 1) المنح التلقائية حسب الدور (تطابق requirePermission في auth.ts)
+        if (targetUser.role === "hr_manager") {
+          for (const m of HR_MANAGER_MODULES) {
+            for (const action of MODULE_ACTIONS) addPerm(m, action, "role_auto");
+          }
+        }
+        if (targetUser.role === "hr_specialist") {
+          for (const [m, acts] of Object.entries(HR_SPECIALIST_PERMISSIONS)) {
+            for (const action of acts) addPerm(m, action, "role_auto");
+          }
+        }
+        if (targetUser.role === "financial_manager") {
+          for (const [m, acts] of Object.entries(FINANCIAL_MANAGER_PERMISSIONS)) {
+            for (const action of acts) addPermMirrored(m, action, "role_auto", FIN_MIRRORS);
+          }
+        }
+        if (targetUser.role === "operations_manager") {
+          for (const [m, acts] of Object.entries(OPERATIONS_MANAGER_PERMISSIONS)) {
+            for (const action of acts) addPermMirrored(m, action, "role_auto", OPS_MIRRORS);
+          }
+        }
+
+        // 2) المنح اليدوية المخزنة في user_permissions (تشمل القوالب المطبقة)
+        const directPerms = await storage.getUserPermissions(targetUserId);
+        for (const p of directPerms) {
+          const raw = p.actions as unknown;
+          const actions: string[] = Array.isArray(raw)
+            ? (raw as string[])
+            : typeof raw === "string"
+              ? (raw as string).replace(/[{}]/g, "").split(",").map((a) => a.trim()).filter(Boolean)
+              : [];
+          for (const action of actions) addPermMirrored(p.module, action, "direct", DIRECT_MIRRORS);
+        }
+
+        // 3) قيد دور "المشاهد": أي إجراء غير العرض لا يُنفَّذ فعليًا
+        if (targetUser.role === "viewer") {
+          for (const [, mod] of merged) {
+            for (const action of Array.from(mod.keys())) {
+              if (action !== "view") mod.delete(action);
+            }
+          }
+          note = "دور المشاهد: يُسمح بإجراءات العرض فقط مهما كانت المنح الأخرى";
+        }
+      }
+
+      const permissions = Array.from(merged.entries())
+        .filter(([, mod]) => mod.size > 0)
+        .map(([module, mod]) => ({
+          module,
+          actions: Array.from(mod.entries()).map(([action, sources]) => ({
+            action,
+            sources: Array.from(sources),
+          })),
+        }));
+
+      res.json({
+        userId: targetUser.id,
+        username: targetUser.username,
+        firstName: targetUser.firstName || null,
+        role: targetUser.role,
+        note,
+        permissions,
+      });
+    } catch (error) {
+      console.error("Error fetching detailed effective permissions:", error);
+      res.status(500).json({ error: "فشل في جلب الصلاحيات الفعلية" });
+    }
+  });
+
   // Branches - Returns all branches for admins, only assigned branch for non-admins
   app.get("/api/branches", isAuthenticated, async (req, res) => {
     try {

@@ -18,7 +18,9 @@ import { Loader2, Shield, Users, Building2, Key, UserPlus, Pencil, Trash2, Chevr
 import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
 import { useState, useEffect } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { MODULE_LABELS as SHARED_MODULE_LABELS, ALL_ACTION_LABELS, ACTION_CATEGORIES } from "@shared/schema";
+import { MODULE_LABELS as SHARED_MODULE_LABELS, ALL_ACTION_LABELS, ACTION_CATEGORIES, getGroupedModules } from "@shared/schema";
+import { Search, Eye } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Department {
   id: number;
@@ -109,6 +111,66 @@ const MODULE_LABELS: Record<string, string> = {
 
 const ACTION_LABELS: Record<string, string> = ALL_ACTION_LABELS;
 
+// ترتيب وتجميع الوحدات في أقسام (من المصدر الموحد) — الوحدات غير المصنفة تظهر في "أخرى (توافق قديم)"
+function groupModuleEntries(moduleKeys: string[]): { label: string; modules: string[] }[] {
+  const present = new Set(moduleKeys);
+  const groups: { label: string; modules: string[] }[] = [];
+  const placed = new Set<string>();
+  for (const g of getGroupedModules()) {
+    const mods = g.modules.filter((m) => present.has(m));
+    if (mods.length > 0) {
+      groups.push({ label: g.label, modules: mods });
+      mods.forEach((m) => placed.add(m));
+    }
+  }
+  const leftovers = moduleKeys.filter((m) => !placed.has(m));
+  if (leftovers.length > 0) {
+    groups.push({ label: "أخرى (توافق قديم)", modules: leftovers });
+  }
+  return groups;
+}
+
+// هل تطابق الوحدة نص البحث؟ (اسم الوحدة العربي أو المفتاح الإنجليزي)
+function moduleMatchesSearch(module: string, search: string): boolean {
+  if (!search.trim()) return true;
+  const q = search.trim().toLowerCase();
+  return (
+    (MODULE_LABELS[module] || "").toLowerCase().includes(q) ||
+    module.toLowerCase().includes(q)
+  );
+}
+
+const SOURCE_META: Record<string, { label: string; className: string }> = {
+  admin: { label: "مدير النظام", className: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" },
+  role_auto: { label: "تلقائي من الدور", className: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300" },
+  direct: { label: "منح يدوي / قالب", className: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300" },
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: "مدير النظام",
+  viewer: "مشاهد",
+  attendance_clerk: "مسجل حضور",
+  hr_manager: "مدير موارد بشرية",
+  hr_specialist: "أخصائي موارد بشرية",
+  financial_manager: "مدير مالي",
+  operations_manager: "مدير عمليات",
+  branch_manager: "مدير فرع",
+  shareholder: "مساهم",
+  user: "مستخدم",
+};
+
+interface EffectivePermissionsResponse {
+  userId: string;
+  username: string;
+  firstName: string | null;
+  role: string;
+  note: string | null;
+  permissions: {
+    module: string;
+    actions: { action: string; sources: string[] }[];
+  }[];
+}
+
 const HIERARCHY_LABELS: Record<number, { label: string; color: string }> = {
   0: { label: "مدير عام", color: "bg-red-500" },
   1: { label: "مدير", color: "bg-orange-500" },
@@ -137,6 +199,11 @@ export default function RBACManagementPage() {
   const [assignmentRoleId, setAssignmentRoleId] = useState<string>("");
   const [assignmentBranchId, setAssignmentBranchId] = useState<string>("all_branches");
   const [assignmentDepartmentId, setAssignmentDepartmentId] = useState<string>("");
+  const [permSearch, setPermSearch] = useState("");
+  const [matrixSearch, setMatrixSearch] = useState("");
+  const [effectiveUserId, setEffectiveUserId] = useState<string>("");
+  const [effectiveUserFilter, setEffectiveUserFilter] = useState("");
+  const [effectiveSearch, setEffectiveSearch] = useState("");
 
   const hasUsersViewPermission = isAdmin || canView("users");
   const hasUsersEditPermission = isAdmin || canEdit("users");
@@ -224,6 +291,16 @@ export default function RBACManagementPage() {
       return res.json();
     },
     enabled: !!selectedUser && hasUsersViewPermission,
+  });
+
+  const { data: effectivePerms, isLoading: effectiveLoading, isError: effectiveError } = useQuery<EffectivePermissionsResponse>({
+    queryKey: ["/api/rbac/users", effectiveUserId, "effective-permissions-detailed"],
+    queryFn: async () => {
+      const res = await fetch(`/api/rbac/users/${effectiveUserId}/effective-permissions-detailed`);
+      if (!res.ok) throw new Error("Failed to fetch effective permissions");
+      return res.json();
+    },
+    enabled: !!effectiveUserId && hasUsersViewPermission,
   });
 
   const { data: rolePermissions = [], refetch: refetchRolePerms } = useQuery<RolePermission[]>({
@@ -500,11 +577,12 @@ export default function RBACManagementPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className={`grid w-full grid-cols-2 sm:grid-cols-4 ${SECURITY_TABS_LIST}`}>
+          <TabsList className={`grid w-full grid-cols-2 sm:grid-cols-5 ${SECURITY_TABS_LIST}`}>
             <TabsTrigger value="users" className={SECURITY_TAB_TRIGGER} data-testid="tab-users">المستخدمين</TabsTrigger>
             <TabsTrigger value="roles" className={SECURITY_TAB_TRIGGER} data-testid="tab-roles">الأدوار</TabsTrigger>
             <TabsTrigger value="departments" className={SECURITY_TAB_TRIGGER} data-testid="tab-departments">الأقسام</TabsTrigger>
             <TabsTrigger value="permissions" className={SECURITY_TAB_TRIGGER} data-testid="tab-permissions">الصلاحيات</TabsTrigger>
+            <TabsTrigger value="effective" className={SECURITY_TAB_TRIGGER} data-testid="tab-effective">الصلاحيات الفعلية</TabsTrigger>
           </TabsList>
 
           <TabsContent value="users" className="space-y-4">
@@ -694,7 +772,7 @@ export default function RBACManagementPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex flex-wrap gap-2 mb-4 pb-4 border-b">
+                <div className="flex flex-wrap gap-2 mb-2 pb-4 border-b">
                   <span className="text-sm text-muted-foreground ml-2">تصنيف الإجراءات:</span>
                   {Object.entries(ACTION_CATEGORIES).map(([key, cat]) => (
                     <Badge key={key} className={cat.color}>
@@ -702,65 +780,255 @@ export default function RBACManagementPage() {
                     </Badge>
                   ))}
                 </div>
-                {Object.entries(permissionsByModule).map(([module, modulePerms]) => {
-                  const permsByCategory = Object.entries(ACTION_CATEGORIES).map(([catKey, cat]) => ({
-                    key: catKey,
-                    ...cat,
-                    perms: modulePerms.filter(p => cat.actions.includes(p.action)),
-                  })).filter(c => c.perms.length > 0);
-
+                <div className="relative">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={permSearch}
+                    onChange={(e) => setPermSearch(e.target.value)}
+                    placeholder="بحث سريع عن وحدة… (مثال: الإجازات، المخزون، hr)"
+                    className="pr-9"
+                    data-testid="input-perm-search"
+                  />
+                </div>
+                {groupModuleEntries(Object.keys(permissionsByModule)).map((group) => {
+                  const visibleModules = group.modules.filter((m) => moduleMatchesSearch(m, permSearch));
+                  if (visibleModules.length === 0) return null;
                   return (
-                    <Collapsible
-                      key={module}
-                      open={expandedModules.includes(module)}
-                      onOpenChange={() => toggleModule(module)}
-                      className="border rounded-lg"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <Button variant="ghost" className="w-full justify-between p-4 h-auto" data-testid={`button-module-${module}`}>
-                          <div className="flex items-center gap-3">
-                            <Key className="h-4 w-4 text-primary" />
-                            <span className="font-semibold">{MODULE_LABELS[module] || module}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary">{modulePerms.length} صلاحية</Badge>
-                            {expandedModules.includes(module) ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </div>
-                        </Button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="px-4 pb-4">
-                        <div className="space-y-4">
-                          {permsByCategory.map((category) => (
-                            <div key={category.key} className="space-y-2">
-                              <Badge className={category.color}>{category.label}</Badge>
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                                {category.perms.map((perm) => (
-                                  <div
-                                    key={perm.id}
-                                    className="flex items-center gap-2 p-3 border rounded-lg bg-gray-50/50"
-                                    data-testid={`permission-${perm.id}`}
-                                  >
-                                    <Key className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                    <div className="min-w-0">
-                                      <div className="text-sm font-medium truncate">{perm.name}</div>
-                                      <div className="text-xs text-muted-foreground">
-                                        {ACTION_LABELS[perm.action] || perm.action}
-                                      </div>
+                    <div key={group.label} className="space-y-2">
+                      <div className="flex items-center gap-2 pt-2">
+                        <span className="font-bold text-sm text-primary">{group.label}</span>
+                        <Badge variant="outline" className="text-[10px]">{visibleModules.length} وحدة</Badge>
+                        <div className="flex-1 border-b" />
+                      </div>
+                      {visibleModules.map((module) => {
+                        const modulePerms = permissionsByModule[module];
+                        const permsByCategory = Object.entries(ACTION_CATEGORIES).map(([catKey, cat]) => ({
+                          key: catKey,
+                          ...cat,
+                          perms: modulePerms.filter(p => cat.actions.includes(p.action)),
+                        })).filter(c => c.perms.length > 0);
+
+                        return (
+                          <Collapsible
+                            key={module}
+                            open={expandedModules.includes(module)}
+                            onOpenChange={() => toggleModule(module)}
+                            className="border rounded-lg"
+                          >
+                            <CollapsibleTrigger asChild>
+                              <Button variant="ghost" className="w-full justify-between p-4 h-auto" data-testid={`button-module-${module}`}>
+                                <div className="flex items-center gap-3">
+                                  <Key className="h-4 w-4 text-primary" />
+                                  <span className="font-semibold">{MODULE_LABELS[module] || module}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="secondary">{modulePerms.length} صلاحية</Badge>
+                                  {expandedModules.includes(module) ? (
+                                    <ChevronUp className="h-4 w-4" />
+                                  ) : (
+                                    <ChevronDown className="h-4 w-4" />
+                                  )}
+                                </div>
+                              </Button>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="px-4 pb-4">
+                              <div className="space-y-4">
+                                {permsByCategory.map((category) => (
+                                  <div key={category.key} className="space-y-2">
+                                    <Badge className={category.color}>{category.label}</Badge>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                      {category.perms.map((perm) => (
+                                        <div
+                                          key={perm.id}
+                                          className="flex items-center gap-2 p-3 border rounded-lg bg-gray-50/50 dark:bg-muted/30"
+                                          data-testid={`permission-${perm.id}`}
+                                        >
+                                          <Key className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                          <div className="min-w-0">
+                                            <div className="text-sm font-medium truncate">{perm.name}</div>
+                                            <div className="text-xs text-muted-foreground">
+                                              {ACTION_LABELS[perm.action] || perm.action}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
                                     </div>
                                   </div>
                                 ))}
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
+                            </CollapsibleContent>
+                          </Collapsible>
+                        );
+                      })}
+                    </div>
                   );
                 })}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="effective" className="space-y-4">
+            <Card>
+              <CardHeader className="p-3 sm:p-4 md:p-6">
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                  <Eye className="h-5 w-5" />
+                  الصلاحيات الفعلية لمستخدم
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  عرض ما يستطيع المستخدم فعله فعليًا في النظام — مع بيان مصدر كل صلاحية (دوره التلقائي أو منح يدوي/قالب)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 p-3 sm:p-4 md:p-6 pt-0">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>المستخدم</Label>
+                    <Select value={effectiveUserId} onValueChange={setEffectiveUserId}>
+                      <SelectTrigger data-testid="select-effective-user">
+                        <SelectValue placeholder="اختر المستخدم" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <div className="p-2 sticky top-0 bg-popover z-10">
+                          <Input
+                            value={effectiveUserFilter}
+                            onChange={(e) => setEffectiveUserFilter(e.target.value)}
+                            placeholder="بحث عن مستخدم…"
+                            onKeyDown={(e) => e.stopPropagation()}
+                            data-testid="input-effective-user-filter"
+                          />
+                        </div>
+                        {users
+                          .filter((u) => {
+                            const q = effectiveUserFilter.trim().toLowerCase();
+                            if (!q) return true;
+                            return (
+                              (u.firstName || "").toLowerCase().includes(q) ||
+                              (u.username || "").toLowerCase().includes(q) ||
+                              (u.email || "").toLowerCase().includes(q)
+                            );
+                          })
+                          .map((u) => (
+                            <SelectItem key={u.id} value={u.id}>
+                              {u.firstName || u.username}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>بحث في الوحدات</Label>
+                    <div className="relative">
+                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={effectiveSearch}
+                        onChange={(e) => setEffectiveSearch(e.target.value)}
+                        placeholder="مثال: الرواتب، المشاريع…"
+                        className="pr-9"
+                        disabled={!effectiveUserId}
+                        data-testid="input-effective-search"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {!effectiveUserId ? (
+                  <div className="text-center text-muted-foreground py-10 text-sm">
+                    اختر مستخدمًا لعرض صلاحياته الفعلية
+                  </div>
+                ) : effectiveLoading ? (
+                  <div className="flex justify-center py-10">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                ) : effectiveError ? (
+                  <Alert variant="destructive">
+                    <AlertDescription>تعذر جلب الصلاحيات الفعلية — حاول مرة أخرى</AlertDescription>
+                  </Alert>
+                ) : effectivePerms ? (
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-2 p-3 border rounded-lg bg-muted/30">
+                      <Users className="h-4 w-4 text-primary" />
+                      <span className="font-semibold text-sm" data-testid="text-effective-username">
+                        {effectivePerms.firstName || effectivePerms.username}
+                      </span>
+                      <Badge variant="outline" data-testid="badge-effective-role">
+                        الدور: {ROLE_LABELS[effectivePerms.role] || effectivePerms.role}
+                      </Badge>
+                      <Badge variant="secondary" data-testid="badge-effective-modules-count">
+                        {effectivePerms.permissions.length} وحدة
+                      </Badge>
+                      <Badge variant="secondary" data-testid="badge-effective-actions-count">
+                        {effectivePerms.permissions.reduce((s, p) => s + p.actions.length, 0)} صلاحية
+                      </Badge>
+                      <span className="text-xs text-muted-foreground mr-auto">مفاتيح المصادر:</span>
+                      {Object.entries(SOURCE_META).map(([key, meta]) => (
+                        <Badge key={key} className={`text-[10px] ${meta.className}`}>{meta.label}</Badge>
+                      ))}
+                    </div>
+
+                    {effectivePerms.note && (
+                      <Alert>
+                        <AlertDescription className="text-sm">{effectivePerms.note}</AlertDescription>
+                      </Alert>
+                    )}
+
+                    {effectivePerms.permissions.length === 0 ? (
+                      <div className="text-center text-muted-foreground py-8 text-sm">
+                        لا توجد صلاحيات فعلية لهذا المستخدم
+                      </div>
+                    ) : (
+                      groupModuleEntries(effectivePerms.permissions.map((p) => p.module)).map((group) => {
+                        const visible = group.modules.filter((m) => moduleMatchesSearch(m, effectiveSearch));
+                        if (visible.length === 0) return null;
+                        const byModule = new Map(effectivePerms.permissions.map((p) => [p.module, p.actions]));
+                        return (
+                          <div key={group.label} className="space-y-2">
+                            <div className="flex items-center gap-2 pt-1">
+                              <span className="font-bold text-sm text-primary">{group.label}</span>
+                              <Badge variant="outline" className="text-[10px]">{visible.length} وحدة</Badge>
+                              <div className="flex-1 border-b" />
+                            </div>
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                              {visible.map((module) => {
+                                const actions = byModule.get(module) || [];
+                                return (
+                                  <div key={module} className="border rounded-lg p-3 space-y-2" data-testid={`effective-module-${module}`}>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="font-semibold text-sm">{MODULE_LABELS[module] || module}</span>
+                                      <Badge variant="secondary" className="text-[10px]">{actions.length} إجراء</Badge>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {actions.map(({ action, sources }) => {
+                                        const primarySource = sources.includes("direct") && sources.length === 1
+                                          ? "direct"
+                                          : sources.includes("admin")
+                                            ? "admin"
+                                            : sources.includes("role_auto")
+                                              ? "role_auto"
+                                              : sources[0];
+                                        const meta = SOURCE_META[primarySource] || SOURCE_META.direct;
+                                        const multi = sources.length > 1;
+                                        return (
+                                          <span
+                                            key={action}
+                                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${meta.className}`}
+                                            title={sources.map((s) => SOURCE_META[s]?.label || s).join(" + ")}
+                                            data-testid={`effective-action-${module}-${action}`}
+                                          >
+                                            {ACTION_LABELS[action] || action}
+                                            {multi && <span className="opacity-70">+</span>}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           </TabsContent>
@@ -777,8 +1045,29 @@ export default function RBACManagementPage() {
                 حدد الصلاحيات التي تريد منحها لهذا الدور - مصنفة حسب الوحدة والفئة
               </DialogDescription>
             </DialogHeader>
+            <div className="relative">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={matrixSearch}
+                onChange={(e) => setMatrixSearch(e.target.value)}
+                placeholder="بحث سريع عن وحدة…"
+                className="pr-9"
+                data-testid="input-matrix-search"
+              />
+            </div>
             <div className="space-y-6 py-4">
-              {Object.entries(permissionsByModule).map(([module, modulePerms]) => {
+              {groupModuleEntries(Object.keys(permissionsByModule)).map((group) => {
+                const visibleModules = group.modules.filter((m) => moduleMatchesSearch(m, matrixSearch));
+                if (visibleModules.length === 0) return null;
+                return (
+                  <div key={group.label} className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm text-primary">{group.label}</span>
+                      <Badge variant="outline" className="text-[10px]">{visibleModules.length} وحدة</Badge>
+                      <div className="flex-1 border-b" />
+                    </div>
+              {visibleModules.map((module) => {
+                const modulePerms = permissionsByModule[module];
                 const grantedCount = modulePerms.filter(p => isPermissionGranted(p.id)).length;
                 const permsByCategory = Object.entries(ACTION_CATEGORIES).map(([catKey, cat]) => ({
                   key: catKey,
@@ -853,6 +1142,9 @@ export default function RBACManagementPage() {
                       </div>
                     </CollapsibleContent>
                   </Collapsible>
+                );
+              })}
+                  </div>
                 );
               })}
             </div>
