@@ -1320,7 +1320,7 @@ function AccountingSection({ exports }: { exports: AccountingExport[] }) {
   return (
     <div className="space-y-4">
       <Tabs value={acctTab} onValueChange={setAcctTab}>
-        <TabsList className="grid grid-cols-5 w-full">
+        <TabsList className="flex w-full sm:grid sm:grid-cols-5">
           <TabsTrigger value="journal" data-testid="tab-acct-journal">القيود المحاسبية</TabsTrigger>
           <TabsTrigger value="reconciliation" data-testid="tab-acct-reconciliation">التسوية المالية</TabsTrigger>
           <TabsTrigger value="accounts" data-testid="tab-acct-accounts">دليل الحسابات</TabsTrigger>

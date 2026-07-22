@@ -614,7 +614,7 @@ export default function UserPermissionsPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="flex w-full sm:grid sm:grid-cols-4">
             <TabsTrigger value="matrix" data-testid="tab-matrix"><ListChecks className="w-4 h-4 ml-1" /> مصفوفة الصلاحيات</TabsTrigger>
             <TabsTrigger value="effective" data-testid="tab-effective"><Eye className="w-4 h-4 ml-1" /> الصلاحيات الفعلية</TabsTrigger>
             <TabsTrigger value="overrides" data-testid="tab-overrides"><SlidersHorizontal className="w-4 h-4 ml-1" /> الاستثناءات</TabsTrigger>

@@ -2013,7 +2013,7 @@ export default function BranchEmployeesPage() {
                 }
               })} className="space-y-6">
                 <Tabs defaultValue="basic" className="w-full">
-                  <TabsList className="grid grid-cols-4 w-full">
+                  <TabsList className="flex w-full sm:grid sm:grid-cols-4">
                     <TabsTrigger value="basic">البيانات الأساسية</TabsTrigger>
                     <TabsTrigger value="salary">الراتب والبدلات</TabsTrigger>
                     <TabsTrigger value="documents">المستندات</TabsTrigger>
@@ -3047,7 +3047,7 @@ export default function BranchEmployeesPage() {
             
             {viewingEmployee && (
               <Tabs defaultValue="info" className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="flex w-full sm:grid sm:grid-cols-4">
                   <TabsTrigger value="info">{isRTL ? "معلومات الموظف" : "Employee Info"}</TabsTrigger>
                   <TabsTrigger value="attendance">{isRTL ? "سجلات الحضور" : "Attendance"}</TabsTrigger>
                   <TabsTrigger value="schedules">{isRTL ? "جداول الدوام" : "Schedules"}</TabsTrigger>

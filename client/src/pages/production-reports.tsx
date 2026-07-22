@@ -1130,7 +1130,7 @@ export default function ProductionReportsPage() {
         </Card>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid grid-cols-5 md:grid-cols-11 gap-1 h-auto p-1">
+          <TabsList className="flex w-full gap-1 h-auto p-1">
             <TabsTrigger value="data" className="text-xs py-1.5 bg-amber-100" data-testid="tab-data">
               <FileSpreadsheet className="h-3 w-3 ml-1" />
               البيانات

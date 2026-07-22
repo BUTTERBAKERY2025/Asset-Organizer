@@ -1258,7 +1258,7 @@ export default function TimesheetPage() {
         </Card>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5 h-auto p-1">
+          <TabsList className="flex w-full sm:grid sm:grid-cols-5 h-auto p-1">
             <TabsTrigger value="dashboard" className="gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm py-2" data-testid="tab-dashboard">
               <LayoutDashboard className="w-3 h-3 sm:w-4 sm:h-4" />
               <span className="hidden sm:inline">{t("timesheet.dashboard.tabLabel")}</span>

@@ -1030,7 +1030,7 @@ function ConvertDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: 
           }
         })} className="space-y-6">
           <Tabs defaultValue="basic" className="w-full">
-            <TabsList className="grid grid-cols-5 w-full">
+            <TabsList className="flex w-full sm:grid sm:grid-cols-5">
               <TabsTrigger value="basic">البيانات الأساسية</TabsTrigger>
               <TabsTrigger value="salary">الراتب والبدلات</TabsTrigger>
               <TabsTrigger value="documents">المستندات</TabsTrigger>

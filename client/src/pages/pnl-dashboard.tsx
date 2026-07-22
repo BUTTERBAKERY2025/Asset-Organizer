@@ -3085,7 +3085,7 @@ export default function PnLDashboard() {
         {selectedPeriodId && (
           <>
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="flex w-full sm:grid sm:grid-cols-5">
                 <TabsTrigger value="overview" data-testid="tab-overview">
                   <BarChart3 className="h-4 w-4 ml-2" />
                   نظرة عامة

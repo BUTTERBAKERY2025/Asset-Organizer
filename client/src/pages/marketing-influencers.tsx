@@ -1794,7 +1794,7 @@ export default function MarketingInfluencersPage() {
 
             {selectedInfluencer && (
               <Tabs defaultValue="info" className="mt-6">
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="flex w-full sm:grid sm:grid-cols-4">
                   <TabsTrigger value="info" data-testid="tab-info">معلومات</TabsTrigger>
                   <TabsTrigger value="campaigns" data-testid="tab-campaigns">الحملات</TabsTrigger>
                   <TabsTrigger value="contacts" data-testid="tab-contacts">التواصل</TabsTrigger>

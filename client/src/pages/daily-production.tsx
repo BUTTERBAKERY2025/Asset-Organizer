@@ -1063,7 +1063,7 @@ export default function DailyProductionPage() {
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+          <TabsList className="flex w-full sm:grid sm:grid-cols-4 lg:w-auto lg:inline-grid">
             <TabsTrigger value="entry" className="gap-2">
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">تسجيل</span>
