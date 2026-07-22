@@ -638,7 +638,135 @@ export default function CashierJournalsPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="rounded-md border table-scroll -mx-3 sm:mx-0">
+                {/* عرض البطاقات للموبايل */}
+                <div className="md:hidden space-y-2">
+                  {journals?.map((journal) => {
+                    const discrepancy = DISCREPANCY_ICONS[journal.discrepancyStatus];
+                    const status = STATUS_ICONS[journal.status];
+                    const DiscrepancyIcon = discrepancy?.icon || Minus;
+                    return (
+                      <div
+                        key={journal.id}
+                        className="rounded-lg border p-3 active:bg-muted/30 transition-colors"
+                        data-testid={`journal-card-${journal.id}`}
+                      >
+                        <Link href={`/cashier-journals/${journal.id}`} className="block">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="font-semibold text-sm truncate">{journal.cashierName}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {journal.journalDate} · {getBranchName(journal.branchId)}
+                              </p>
+                            </div>
+                            <Badge variant={status?.variant || "secondary"} className="text-[10px] px-1.5 shrink-0">
+                              {t(`statuses.${journal.status}`)}
+                            </Badge>
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                            <span>{t("table.sales")}: <b className="font-mono">{formatCurrency(journal.totalSales)}</b></span>
+                            <span className={`flex items-center gap-1 ${discrepancy?.color}`}>
+                              <DiscrepancyIcon className="w-3 h-3" />
+                              {formatCurrency(Math.abs(journal.discrepancyAmount || 0))}
+                            </span>
+                            {Number((journal as any).attachmentCount || 0) > 0 && (
+                              <span className="flex items-center gap-1 text-muted-foreground">
+                                <Paperclip className="w-3 h-3" />
+                                {Number((journal as any).attachmentCount || 0)}
+                              </span>
+                            )}
+                          </div>
+                        </Link>
+                        {(journal.status === "submitted" || isAdmin) && (
+                          <div className="mt-2 pt-2 border-t flex flex-wrap items-center gap-2">
+                            {journal.status === "submitted" && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-9 flex-1 text-green-700 border-green-200"
+                                  onClick={() => approveMutation.mutate(journal.id)}
+                                  data-testid={`button-card-approve-${journal.id}`}
+                                >
+                                  <CheckCircle className="w-4 h-4 ml-1" />
+                                  {t("statuses.approved")}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-9 flex-1 text-red-700 border-red-200"
+                                  onClick={() => rejectMutation.mutate({ id: journal.id })}
+                                  data-testid={`button-card-reject-${journal.id}`}
+                                >
+                                  <XCircle className="w-4 h-4 ml-1" />
+                                  {t("statuses.rejected")}
+                                </Button>
+                              </>
+                            )}
+                            {isAdmin && (journal.status === "posted" || journal.status === "submitted") && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-9 w-9 text-amber-600"
+                                onClick={() => setUnpostTarget({ id: journal.id, cashierName: journal.cashierName, date: journal.journalDate })}
+                                data-testid={`button-card-unpost-${journal.id}`}
+                                title="إلغاء الترحيل"
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {isAdmin && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-9 w-9 text-primary"
+                                onClick={() => setAuditTarget({ id: journal.id, cashierName: journal.cashierName, date: journal.journalDate })}
+                                data-testid={`button-card-audit-${journal.id}`}
+                                title="سجل التدقيق"
+                              >
+                                <History className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {isAdmin && journal.status !== "approved" && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-9 w-9 text-red-600"
+                                    data-testid={`button-card-delete-${journal.id}`}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent className="max-w-md" dir="rtl">
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>{t("deleteDialog.title")}</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      {t("deleteDialog.description", { cashier: journal.cashierName, date: journal.journalDate })}
+                                      <br />
+                                      <span className="text-red-500 font-medium">{t("deleteDialog.warning")}</span>
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter className="flex-row-reverse gap-2">
+                                    <AlertDialogCancel>{t("deleteDialog.cancel")}</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      className="bg-red-600 hover:bg-red-700"
+                                      onClick={() => deleteMutation.mutate(journal.id)}
+                                    >
+                                      {t("deleteDialog.confirm")}
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="rounded-md border table-scroll -mx-3 sm:mx-0 hidden md:block">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/50">

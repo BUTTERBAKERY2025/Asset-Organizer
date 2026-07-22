@@ -356,7 +356,55 @@ export default function InventoryPage() {
             </Badge>
           </div>
           
-          <Card className="overflow-hidden border-none shadow-sm ring-1 ring-border/50 break-inside-avoid mb-6">
+          {/* عرض البطاقات للموبايل */}
+          <div className="md:hidden print:hidden space-y-2 mb-4">
+            {paginatedItems.map((item, index) => {
+              const total = (item.price || 0) * item.quantity;
+              const totalWithVat = total * 1.15;
+              const globalIndex = (currentPage - 1) * ITEMS_PER_PAGE + index + 1;
+              return (
+                <Card
+                  key={item.id}
+                  className="cursor-pointer active:bg-muted/30 transition-colors"
+                  data-testid={`card-item-${item.id}`}
+                  onClick={() => { setSelectedItem(item); setIsItemCardOpen(true); }}
+                >
+                  <CardContent className="p-3 flex gap-3 items-start">
+                    {item.imageUrl ? (
+                      <img
+                        src={item.imageUrl}
+                        alt={item.name}
+                        className="w-14 h-14 object-cover rounded-md border border-border shrink-0"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                    ) : (
+                      <div className="w-14 h-14 bg-muted/50 rounded-md flex items-center justify-center text-muted-foreground/50 text-xs shrink-0">-</div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-semibold text-sm leading-tight truncate">
+                          <span className="text-muted-foreground font-mono text-xs ml-1">{formatNumber(globalIndex)}.</span>
+                          {item.name}
+                        </p>
+                        <div className="scale-90 origin-left shrink-0">{getStatusBadge(item.status)}</div>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        {isGlobalSearch && item.branchName && <span className="text-primary font-medium">{item.branchName}</span>}
+                        {item.category && <span>{item.category}</span>}
+                        <span>الكمية: <b className="font-mono text-foreground">{formatNumber(item.quantity)}</b></span>
+                        {showPrices && item.price ? (
+                          <span>الصافي: <b className="font-mono text-green-700">{formatCurrency(totalWithVat)}</b></span>
+                        ) : null}
+                      </div>
+                      {item.lastCheck && <div className="text-[10px] text-muted-foreground mt-1">آخر فحص: {item.lastCheck}</div>}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          <Card className="overflow-hidden border-none shadow-sm ring-1 ring-border/50 break-inside-avoid mb-6 hidden md:block print:block">
             <CardContent className="p-0 table-scroll">
               <Table className="min-w-[600px]">
                 <TableHeader className="bg-muted/30 print:bg-transparent">
