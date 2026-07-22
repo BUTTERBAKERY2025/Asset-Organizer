@@ -11,3 +11,9 @@ id = "lP9wMbQcQ6DdPKOerwspJ"
 uri = "file://bulk-approve-cashier-journals.txt"
 type = "text"
 title = "كود الاعتماد من 2026-01-01 إلى 2026-07-20 — ينفّذ في Supabase SQL Editor"
+
+[[outputs]]
+id = "TWnSada3b4oYUoPQMqOry"
+uri = "file://add-sponsorship-column.txt"
+type = "text"
+title = "كود SQL - عمود نوع الكفالة (نفّذه في Supabase قبل النشر)"

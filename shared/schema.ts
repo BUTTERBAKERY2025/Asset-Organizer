@@ -5681,6 +5681,7 @@ export const branchEmployees = pgTable("branch_employees", {
   jobTitle: text("job_title").notNull(), // الوظيفة
   department: text("department"), // القسم (مطبخ، صالة، إلخ)
   nationality: text("nationality").notNull(), // الجنسية
+  sponsorshipType: text("sponsorship_type").default("company"), // نوع الكفالة: company (كفالة الشركة), external (كفالة خارجية)
   salary: real("salary").notNull(), // الراتب الأساسي
   housingAllowance: real("housing_allowance").default(0), // بدل السكن
   transportAllowance: real("transport_allowance").default(0), // بدل المواصلات

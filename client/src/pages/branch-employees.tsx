@@ -110,6 +110,7 @@ const employeeFormSchema = z.object({
   jobTitle: z.string().min(1, "الوظيفة مطلوبة"),
   department: z.string().optional(),
   nationality: z.string().min(1, "الجنسية مطلوبة"),
+  sponsorshipType: z.enum(["company", "external"]).default("company"),
   salary: z.coerce.number().min(0, "الراتب يجب أن يكون رقم موجب"),
   housingAllowance: z.coerce.number().min(0).optional(),
   transportAllowance: z.coerce.number().min(0).optional(),
@@ -1312,6 +1313,7 @@ export default function BranchEmployeesPage() {
       employeeName: "",
       jobTitle: "",
       nationality: "",
+      sponsorshipType: "company",
       salary: 0,
       housingAllowance: 0,
       transportAllowance: 0,
@@ -1445,6 +1447,7 @@ export default function BranchEmployeesPage() {
       jobTitle: employee.jobTitle,
       department: employee.department || "",
       nationality: employee.nationality,
+      sponsorshipType: (employee as any).sponsorshipType || "company",
       salary: employee.salary,
       housingAllowance: employee.housingAllowance || 0,
       transportAllowance: employee.transportAllowance || 0,
@@ -1635,6 +1638,7 @@ export default function BranchEmployeesPage() {
               employeeName,
               jobTitle: row["الوظيفة"] || "عامل",
               nationality: row["الجنسية"] || "أخرى",
+              sponsorshipType: String(row["الكفالة"] ?? "").includes("خارج") ? "external" : "company",
               salary: Number(row["الراتب"] || row["الراتب الأساسي"] || 0),
               housingAllowance: Number(row["بدل السكن"] || 0),
               transportAllowance: Number(row["بدل المواصلات"] || row["بدل انتقال"] || 0),
@@ -1741,6 +1745,7 @@ export default function BranchEmployeesPage() {
       "الوظيفة": emp.jobTitle,
       "القسم": emp.department || "--",
       "الجنسية": emp.nationality,
+      "الكفالة": (emp as any).sponsorshipType === "external" ? "كفالة خارجية" : "كفالة الشركة",
       "الراتب الأساسي": emp.salary,
       "بدل السكن": emp.housingAllowance || 0,
       "بدل المواصلات": emp.transportAllowance || 0,
@@ -1887,6 +1892,7 @@ export default function BranchEmployeesPage() {
         <th>الفرع</th>
         <th>الوظيفة</th>
         <th>الجنسية</th>
+        <th>الكفالة</th>
         <th>الراتب الأساسي</th>
         <th>بدل السكن</th>
         <th>بدل المواصلات</th>
@@ -1904,6 +1910,7 @@ export default function BranchEmployeesPage() {
           <td>${getBranchName(emp.branchId)}</td>
           <td>${emp.jobTitle}</td>
           <td>${emp.nationality}</td>
+          <td>${(emp as any).sponsorshipType === "external" ? "خارجية" : "الشركة"}</td>
           <td class="amount">${formatNumber(emp.salary)}</td>
           <td>${formatNumber(emp.housingAllowance || 0)}</td>
           <td>${formatNumber(emp.transportAllowance || 0)}</td>
@@ -1915,7 +1922,7 @@ export default function BranchEmployeesPage() {
     </tbody>
     <tfoot>
       <tr style="background: #f5f5f5; font-weight: bold;">
-        <td colspan="6">الإجمالي</td>
+        <td colspan="7">الإجمالي</td>
         <td class="amount">${formatCurrency(filteredEmployees.reduce((sum: number, emp: BranchEmployee) => sum + (emp.salary || 0), 0))}</td>
         <td>${formatCurrency(filteredEmployees.reduce((sum: number, emp: BranchEmployee) => sum + (emp.housingAllowance || 0), 0))}</td>
         <td>${formatCurrency(filteredEmployees.reduce((sum: number, emp: BranchEmployee) => sum + (emp.transportAllowance || 0), 0))}</td>
@@ -2119,6 +2126,21 @@ export default function BranchEmployeesPage() {
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>نوع الكفالة</Label>
+                        <Select
+                          value={form.watch("sponsorshipType") || "company"}
+                          onValueChange={(v) => form.setValue("sponsorshipType", v as "company" | "external")}
+                        >
+                          <SelectTrigger data-testid="select-sponsorship-type">
+                            <SelectValue placeholder="اختر نوع الكفالة" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="company">على كفالة الشركة</SelectItem>
+                            <SelectItem value="external">كفالة خارجية</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <div className="space-y-2">
                         <Label>القسم</Label>
                         <Select value={watchedDepartment || ""} onValueChange={(v) => form.setValue("department", v)}>
@@ -3084,6 +3106,7 @@ export default function BranchEmployeesPage() {
                         <div className="flex justify-between"><span className="text-gray-500">{isRTL ? "الفرع:" : "Branch:"}</span><span>{getBranchName(viewingEmployee.branchId)}</span></div>
                         <div className="flex justify-between"><span className="text-gray-500">{isRTL ? "الوظيفة:" : "Job Title:"}</span><span>{viewingEmployee.jobTitle}</span></div>
                         <div className="flex justify-between"><span className="text-gray-500">{isRTL ? "الجنسية:" : "Nationality:"}</span><span>{viewingEmployee.nationality}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">{isRTL ? "نوع الكفالة:" : "Sponsorship:"}</span><span data-testid="text-sponsorship-type">{(viewingEmployee as any).sponsorshipType === "external" ? "كفالة خارجية" : "على كفالة الشركة"}</span></div>
                         <div className="flex justify-between"><span className="text-gray-500">{isRTL ? "الحالة:" : "Status:"}</span>{getStatusBadge(viewingEmployee.status, isRTL)}</div>
                         {(viewingEmployee as any).statusChangedAt && (
                           <div className="flex justify-between">
