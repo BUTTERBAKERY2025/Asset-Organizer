@@ -20,7 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
 import type { User, UserPermission, Branch } from "@shared/schema";
-import { SYSTEM_MODULES, MODULE_ACTIONS, MODULE_LABELS, ACTION_LABELS, ROLE_PERMISSION_TEMPLATES, MODULE_GROUPS } from "@shared/schema";
+import { SYSTEM_MODULES, MODULE_ACTIONS, MODULE_LABELS, ACTION_LABELS, ROLE_PERMISSION_TEMPLATES, getGroupedModules } from "@shared/schema";
 import React, { useEffect, useState } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Info, Lock, Unlock } from "lucide-react";
@@ -549,7 +549,7 @@ export default function UsersPage() {
 
   const toggleAllForAction = (action: string) => {
     setPermissionState(prev => {
-      const allModules = MODULE_GROUPS.flatMap(g => g.modules);
+      const allModules = getGroupedModules().flatMap(g => g.modules);
       const allHaveAction = allModules.every(m => (prev[m] || []).includes(action));
       
       const newState = { ...prev };
@@ -674,7 +674,7 @@ export default function UsersPage() {
         { module: "inventory", actions: ["view"] },
         { module: "shifts", actions: ["view", "create", "edit", "delete"] },
       ],
-      viewer: MODULE_GROUPS.flatMap(g => g.modules).filter(m => m !== "users").map(module => ({
+      viewer: getGroupedModules().flatMap(g => g.modules).filter(m => m !== "users").map(module => ({
         module,
         actions: ["view"],
       })),
@@ -1408,7 +1408,7 @@ export default function UsersPage() {
                         </TableHead>
                       ) : (
                         MODULE_ACTIONS.map(action => {
-                          const allModules = MODULE_GROUPS.flatMap(g => g.modules);
+                          const allModules = getGroupedModules().flatMap(g => g.modules);
                           const allHaveAction = allModules.every(m => (permissionState[m] || []).includes(action));
                           return (
                             <TableHead key={action} className="text-center w-20">
@@ -1431,7 +1431,7 @@ export default function UsersPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {MODULE_GROUPS.map((group) => (
+                    {getGroupedModules().map((group) => (
                       <React.Fragment key={group.label}>
                         <TableRow className="bg-muted/50">
                           <TableCell 

@@ -32,6 +32,7 @@ import { SecurityHero, SECURITY_TABS_LIST, SECURITY_TAB_TRIGGER } from "@/compon
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { SystemAuditLog, User } from "@shared/schema";
+import { MODULE_LABELS as SHARED_MODULE_LABELS } from "@shared/schema";
 import { ExportButtons } from "@/components/export-buttons";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, ResponsiveContainer,
@@ -85,11 +86,14 @@ const MODULES = [
   { value: "assets", label: "الأصول" },
 ];
 
-// خريطة أسماء الأقسام للعرض (أوسع من قائمة الفلترة)
-const MODULE_LABELS: Record<string, string> = MODULES.reduce((acc, m) => {
-  acc[m.value] = m.label;
-  return acc;
-}, {} as Record<string, string>);
+// خريطة أسماء الأقسام للعرض — تعتمد المصدر الموحد في shared/schema.ts مع أسماء الفلترة المحلية
+const MODULE_LABELS: Record<string, string> = {
+  ...SHARED_MODULE_LABELS,
+  ...MODULES.reduce((acc, m) => {
+    acc[m.value] = m.label;
+    return acc;
+  }, {} as Record<string, string>),
+};
 
 const ACTIONS = [
   { value: "create", label: "إنشاء", color: "bg-green-500" },

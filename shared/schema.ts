@@ -1403,6 +1403,51 @@ export const ACTION_LABELS: Record<ModuleAction, string> = {
   advanced: "متقدم",
 };
 
+// أفعال قديمة/خاصة قد تكون مخزنة في قاعدة البيانات (للتوافق مع البيانات الحالية)
+// Legacy/special actions that may exist in stored permissions — kept for backward compatibility
+export const LEGACY_ACTION_LABELS: Record<string, string> = {
+  view_own: "عرض بياناتي فقط",
+  view_all_branches: "عرض جميع الفروع",
+  transfer: "تحويل",
+  maintenance: "صيانة",
+  permissions: "صلاحيات",
+};
+
+// خريطة موحدة لعرض اسم أي فعل (الحالية + القديمة) — تستخدمها الواجهة والسيرفر
+export const ALL_ACTION_LABELS: Record<string, string> = {
+  ...ACTION_LABELS,
+  ...LEGACY_ACTION_LABELS,
+};
+
+// تصنيف الأفعال لعرضها في شاشة الصلاحيات (مصدر واحد للواجهة)
+export const ACTION_CATEGORIES: Record<string, { label: string; color: string; actions: string[] }> = {
+  basic: {
+    label: "الأساسية",
+    color: "bg-blue-100 text-blue-800",
+    actions: ["view", "view_list", "view_details", "create", "edit", "delete"],
+  },
+  workflow: {
+    label: "سير العمل",
+    color: "bg-amber-100 text-amber-800",
+    actions: ["submit", "approve", "reject", "reopen", "change_status", "assign_reviewer"],
+  },
+  export: {
+    label: "التصدير والطباعة",
+    color: "bg-green-100 text-green-800",
+    actions: ["export", "print"],
+  },
+  special: {
+    label: "الخاصة",
+    color: "bg-purple-100 text-purple-800",
+    actions: ["sign", "view_signatures", "manage_attachments", "notify", "transfer", "maintenance", "permissions", "advanced"],
+  },
+  scope: {
+    label: "نطاق العرض",
+    color: "bg-orange-100 text-orange-800",
+    actions: ["view_own", "view_all_branches"],
+  },
+};
+
 // Module groups for UI organization
 export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
   {
@@ -1442,6 +1487,12 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
       "hr_employment_applications",
       "hr_job_offers",
       "hr_onboarding",
+      "hr_documents",
+      "hr_leaves",
+      "hr_warnings",
+      "hr_eos",
+      "hr_advances",
+      "salary_closing",
     ],
   },
   {
@@ -1548,9 +1599,27 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
   },
   {
     label: "نقطة بيع الفعاليات",
-    modules: ["event_pos"],
+    modules: ["event_pos", "floor_plan"],
   },
 ];
+
+// وحدات "مرادفة" قديمة للتوافق فقط — لا تُعرض في شاشات منح الصلاحيات
+// Legacy alias modules kept for backward compatibility; intentionally NOT grantable via UI.
+export const ALIAS_MODULES: SystemModule[] = ["quality", "cashier", "waste", "construction"];
+
+// دالة موحدة: تعيد المجموعات + مجموعة "أخرى" تلقائيًا لأي وحدة جديدة غير مصنفة
+// Guarantees every NEW module in SYSTEM_MODULES appears in the permissions UI even if
+// someone forgets to add it to MODULE_GROUPS. Alias modules are excluded so the
+// grantable surface stays identical to before.
+export function getGroupedModules(): { label: string; modules: SystemModule[] }[] {
+  const grouped = new Set<string>(MODULE_GROUPS.flatMap((g) => g.modules));
+  const ungrouped = SYSTEM_MODULES.filter(
+    (m) => !grouped.has(m) && !ALIAS_MODULES.includes(m),
+  );
+  return ungrouped.length > 0
+    ? [...MODULE_GROUPS, { label: "أخرى", modules: ungrouped }]
+    : MODULE_GROUPS;
+}
 
 // Role permission templates - قوالب الصلاحيات الافتراضية لكل دور
 export const ROLE_PERMISSION_TEMPLATES: Record<

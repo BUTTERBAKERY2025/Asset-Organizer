@@ -18,6 +18,7 @@ import { Loader2, Shield, Users, Building2, Key, UserPlus, Pencil, Trash2, Chevr
 import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
 import { useState, useEffect } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { MODULE_LABELS as SHARED_MODULE_LABELS, ALL_ACTION_LABELS, ACTION_CATEGORIES } from "@shared/schema";
 
 interface Department {
   id: number;
@@ -98,147 +99,15 @@ interface UserBranchAccess {
   isDefault: boolean;
 }
 
+// مصدر واحد موحّد من shared/schema.ts — مع أسماء قديمة إضافية قد تظهر في بيانات قاعدة البيانات
 const MODULE_LABELS: Record<string, string> = {
-  // الأساسية
-  dashboard: "لوحة التحكم",
-  platform_home: "الصفحة الرئيسية",
-  settings: "الإعدادات",
-  
-  // المخزون والأصول
-  inventory: "المخزون والأصول",
-  asset_transfers: "تحويلات الأصول",
-  inspections: "التفتيش والجرد",
-  maintenance: "الصيانة",
+  ...SHARED_MODULE_LABELS,
+  // أسماء وحدات قديمة قد تكون مخزنة في جدول الصلاحيات (للتوافق فقط)
   assets: "الأصول",
-  
-  // الإنتاج والتشغيل
-  production: "الإنتاج",
-  daily_production: "الإنتاج اليومي",
-  advanced_production: "الإنتاج المتقدم",
-  quality_control: "مراقبة الجودة",
-  quality: "الجودة",
-  products: "المنتجات",
-  operations: "العمليات",
-  ai_production_planner: "تخطيط الإنتاج الذكي",
-  
-  // الورديات والحضور
-  shifts: "الورديات",
-  attendance: "الحضور والانصراف",
-  attendance_check: "تسجيل الحضور والانصراف",
-  biometric_settings: "إعدادات البصمة",
-  timesheet: "سجل الدوام",
-  
-  // الموظفين والموارد البشرية
-  users: "المستخدمين",
-  branch_employees: "موظفي الفروع",
-  branches: "الفروع",
-  organizational_structure: "الهيكل التنظيمي",
-  employee_reports: "تقارير الموظفين",
-  employee_transfers: "نقل الموظفين",
-  hr_management: "إدارة الموارد البشرية",
-  hr_employment_applications: "طلبات التوظيف",
-  hr_job_offers: "عروض العمل",
-  hr_onboarding: "مباشرة العمل (إشعار)",
-  
-  // المالية
-  cashier: "الكاشير",
-  cashier_journal: "يومية الكاشير",
-  cashier_performance: "أداء الكاشير",
-  pnl_dashboard: "لوحة الأرباح والخسائر",
-  incentives: "الحوافز",
-  sales_analytics: "تحليلات المبيعات",
-  sales_uploads: "رفع المبيعات",
-  
-  // الأهداف والأداء
-  targets: "الأهداف",
-  targets_planning: "تخطيط الأهداف",
-  waste_tracking: "تتبع الهدر",
-  waste: "الهدر",
-  
-  // مشاريع الإنشاء
-  construction: "المشاريع الإنشائية",
-  construction_projects: "مشاريع الإنشاء",
-  construction_work_items: "بنود الأعمال",
-  construction_reports: "تقارير الإنشاء",
-  contractors: "المقاولين",
-  contracts: "العقود",
-  budget_planning: "تخطيط الميزانية",
-  payment_requests: "طلبات الدفع",
   projects: "المشاريع",
-  
-  // التسويق (complete list from SYSTEM_MODULES)
-  marketing: "التسويق",
-  marketing_campaigns: "الحملات التسويقية",
-  marketing_influencers: "المؤثرين",
-  marketing_tasks: "مهام التسويق",
-  marketing_goals: "أهداف التسويق",
-  marketing_calendar: "تقويم التسويق",
-  marketing_alerts: "تنبيهات التسويق",
-  marketing_assets: "أصول التسويق",
-  marketing_expenses: "مصاريف التسويق",
-  marketing_reports: "تقارير التسويق",
-  marketing_team: "فريق التسويق",
-  
-  // النظام والإدارة
-  rbac_management: "إدارة الصلاحيات",
-  audit_logs: "سجلات المراجعة",
-  backups: "النسخ الاحتياطي",
-  integrations: "التكاملات",
-  reports: "التقارير",
-  
-  // فتح وإغلاق الفروع
-  branch_closure: "نظام فتح وإغلاق الفروع",
-  
-  // نقطة بيع الفعاليات
-  event_pos: "نقطة بيع الفعاليات",
 };
 
-const ACTION_CATEGORIES: Record<string, { label: string; color: string; actions: string[] }> = {
-  basic: {
-    label: "الأساسية",
-    color: "bg-blue-100 text-blue-800",
-    actions: ["view", "create", "edit", "delete"],
-  },
-  workflow: {
-    label: "سير العمل",
-    color: "bg-amber-100 text-amber-800",
-    actions: ["approve", "change_status"],
-  },
-  export: {
-    label: "التصدير والطباعة",
-    color: "bg-green-100 text-green-800",
-    actions: ["export", "print"],
-  },
-  special: {
-    label: "الخاصة",
-    color: "bg-purple-100 text-purple-800",
-    actions: ["sign", "notify", "transfer", "maintenance", "permissions", "advanced"],
-  },
-  scope: {
-    label: "نطاق العرض",
-    color: "bg-orange-100 text-orange-800",
-    actions: ["view_own", "view_all_branches"],
-  },
-};
-
-const ACTION_LABELS: Record<string, string> = {
-  view: "عرض",
-  create: "إنشاء",
-  edit: "تعديل",
-  delete: "حذف",
-  approve: "موافقة",
-  export: "تصدير",
-  print: "طباعة",
-  sign: "توقيع إلكتروني",
-  notify: "إرسال إشعارات",
-  change_status: "تغيير الحالة",
-  view_own: "عرض بياناتي فقط",
-  view_all_branches: "عرض جميع الفروع",
-  transfer: "تحويل",
-  maintenance: "صيانة",
-  advanced: "متقدم",
-  permissions: "صلاحيات",
-};
+const ACTION_LABELS: Record<string, string> = ALL_ACTION_LABELS;
 
 const HIERARCHY_LABELS: Record<number, { label: string; color: string }> = {
   0: { label: "مدير عام", color: "bg-red-500" },
