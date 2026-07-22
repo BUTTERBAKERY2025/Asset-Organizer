@@ -2759,76 +2759,76 @@ export default function EmployeeReportsDashboardPage() {
             <TabsContent value="overview" className="space-y-4">
               {/* KPI Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 dark:from-blue-950/30 dark:to-blue-900/20 dark:border-blue-900/40">
                   <CardContent className="pt-4">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-blue-600 font-medium">{isRTL ? "إجمالي الموظفين" : "Total Employees"}</p>
-                        <p className="text-3xl font-bold text-blue-800">{formatNumber(overviewStats.totalEmployees)}</p>
-                        <p className="text-xs text-blue-500 mt-1">
+                      <div className="min-w-0">
+                        <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">{isRTL ? "إجمالي الموظفين" : "Total Employees"}</p>
+                        <p className="text-3xl font-bold text-blue-800 dark:text-blue-300 tabular-nums">{formatNumber(overviewStats.totalEmployees)}</p>
+                        <p className="text-xs text-blue-500 dark:text-blue-400/80 mt-1">
                           {isRTL ? "نشط:" : "Active:"} {formatNumber(overviewStats.activeEmployees)}
                         </p>
                       </div>
-                      <div className="p-3 bg-blue-200 rounded-full">
-                        <Users className="w-6 h-6 text-blue-700" />
+                      <div className="p-3 bg-blue-200 dark:bg-blue-900/40 rounded-full shrink-0">
+                        <Users className="w-6 h-6 text-blue-700 dark:text-blue-300" />
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+                <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 dark:from-green-950/30 dark:to-green-900/20 dark:border-green-900/40">
                   <CardContent className="pt-4">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-green-600 font-medium">{isRTL ? "إجمالي الرواتب" : "Total Salaries"}</p>
-                        <p className="text-2xl font-bold text-green-800">{formatCurrency(overviewStats.totalSalaries, isRTL)}</p>
-                        <p className="text-xs text-green-500 mt-1">
+                      <div className="min-w-0">
+                        <p className="text-sm text-green-600 dark:text-green-400 font-medium">{isRTL ? "إجمالي الرواتب" : "Total Salaries"}</p>
+                        <p className="text-2xl font-bold text-green-800 dark:text-green-300 tabular-nums truncate">{formatCurrency(overviewStats.totalSalaries, isRTL)}</p>
+                        <p className="text-xs text-green-500 dark:text-green-400/80 mt-1">
                           {isRTL ? "تأمينات:" : "Insurance:"} {formatCurrency(overviewStats.totalInsurance, isRTL)}
                         </p>
                       </div>
-                      <div className="p-3 bg-green-200 rounded-full">
-                        <DollarSign className="w-6 h-6 text-green-700" />
+                      <div className="p-3 bg-green-200 dark:bg-green-900/40 rounded-full shrink-0">
+                        <DollarSign className="w-6 h-6 text-green-700 dark:text-green-300" />
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
+                <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200 dark:from-amber-950/30 dark:to-amber-900/20 dark:border-amber-900/40">
                   <CardContent className="pt-4">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-amber-600 font-medium">{isRTL ? "نسبة السعودة" : "Saudization Rate"}</p>
-                        <p className="text-3xl font-bold text-amber-800">
+                      <div className="min-w-0">
+                        <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">{isRTL ? "نسبة السعودة" : "Saudization Rate"}</p>
+                        <p className="text-3xl font-bold text-amber-800 dark:text-amber-300 tabular-nums">
                           {overviewStats.totalEmployees > 0 ? Math.round((overviewStats.saudiEmployees / overviewStats.totalEmployees) * 100) : 0}%
                         </p>
-                        <p className="text-xs text-amber-500 mt-1">
+                        <p className="text-xs text-amber-500 dark:text-amber-400/80 mt-1">
                           {isRTL ? `${formatNumber(overviewStats.saudiEmployees)} سعودي من ${formatNumber(overviewStats.totalEmployees)}` : `${formatNumber(overviewStats.saudiEmployees)} Saudi of ${formatNumber(overviewStats.totalEmployees)}`}
                         </p>
                       </div>
-                      <div className="p-3 bg-amber-200 rounded-full">
-                        <Shield className="w-6 h-6 text-amber-700" />
+                      <div className="p-3 bg-amber-200 dark:bg-amber-900/40 rounded-full shrink-0">
+                        <Shield className="w-6 h-6 text-amber-700 dark:text-amber-300" />
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+                <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200 dark:from-purple-950/30 dark:to-purple-900/20 dark:border-purple-900/40">
                   <CardContent className="pt-4">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-purple-600 font-medium">{isRTL ? "معدل الحضور" : "Attendance Rate"}</p>
-                        <p className="text-3xl font-bold text-purple-800">{overviewStats.attendanceRate}%</p>
+                      <div className="min-w-0">
+                        <p className="text-sm text-purple-600 dark:text-purple-400 font-medium">{isRTL ? "معدل الحضور" : "Attendance Rate"}</p>
+                        <p className="text-3xl font-bold text-purple-800 dark:text-purple-300 tabular-nums">{overviewStats.attendanceRate}%</p>
                         <div className="flex items-center gap-2 mt-1">
                           {previousMonthStats && (
-                            <span className={`text-xs flex items-center gap-1 ${getChangeIndicator(overviewStats.attendanceRate, previousMonthStats.attendanceRate).isPositive ? "text-green-600" : "text-red-600"}`}>
+                            <span className={`text-xs flex items-center gap-1 ${getChangeIndicator(overviewStats.attendanceRate, previousMonthStats.attendanceRate).isPositive ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
                               {getChangeIndicator(overviewStats.attendanceRate, previousMonthStats.attendanceRate).isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingUp className="w-3 h-3 rotate-180" />}
                               {Math.abs(getChangeIndicator(overviewStats.attendanceRate, previousMonthStats.attendanceRate).change)}% {isRTL ? "من الشهر السابق" : "from last month"}
                             </span>
                           )}
                         </div>
                       </div>
-                      <div className="p-3 bg-purple-200 rounded-full">
-                        <Clock className="w-6 h-6 text-purple-700" />
+                      <div className="p-3 bg-purple-200 dark:bg-purple-900/40 rounded-full shrink-0">
+                        <Clock className="w-6 h-6 text-purple-700 dark:text-purple-300" />
                       </div>
                     </div>
                   </CardContent>
@@ -2839,7 +2839,7 @@ export default function EmployeeReportsDashboardPage() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Nationality Distribution - Clean Donut with Summary */}
                 <Card className="overflow-hidden">
-                  <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 border-b">
+                  <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/10 border-b">
                     <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-foreground">
                       <PieChartIcon className="w-5 h-5 text-amber-600" />
                       {isRTL ? "توزيع الموظفين حسب الجنسية" : "Employee Distribution by Nationality"}
@@ -2881,17 +2881,17 @@ export default function EmployeeReportsDashboardPage() {
                           const total = nationalityChartData.reduce((sum, i) => sum + i.value, 0);
                           const percent = total > 0 ? Math.round((item.value / total) * 100) : 0;
                           return (
-                            <div key={item.name} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50">
+                            <div key={item.name} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50 dark:hover:bg-muted/50">
                               <div className="flex items-center gap-2">
                                 <div 
                                   className="w-3 h-3 rounded-full flex-shrink-0" 
                                   style={{ backgroundColor: COLORS[index % COLORS.length] }}
                                 />
-                                <span className="text-sm font-medium text-gray-700">{item.name}</span>
+                                <span className="text-sm font-medium text-gray-700 dark:text-foreground">{item.name}</span>
                               </div>
                               <div className="flex items-center gap-3">
-                                <span className="text-sm font-bold text-gray-900">{formatNumber(item.value)}</span>
-                                <span className="text-xs text-gray-500 w-10 text-left">{percent}%</span>
+                                <span className="text-sm font-bold text-gray-900 dark:text-foreground tabular-nums">{formatNumber(item.value)}</span>
+                                <span className="text-xs text-gray-500 dark:text-muted-foreground w-10 text-left tabular-nums">{percent}%</span>
                               </div>
                             </div>
                           );
@@ -2903,7 +2903,7 @@ export default function EmployeeReportsDashboardPage() {
 
                 {/* Job Title Distribution - Clean Horizontal Bars */}
                 <Card className="overflow-hidden">
-                  <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
+                  <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/10 border-b">
                     <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-foreground">
                       <BarChart3 className="w-5 h-5 text-emerald-600" />
                       {isRTL ? "توزيع الموظفين حسب الوظيفة" : "Employee Distribution by Job Title"}
@@ -2928,12 +2928,12 @@ export default function EmployeeReportsDashboardPage() {
                         return (
                           <div key={item.name} className="group">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-sm font-medium text-gray-700 truncate max-w-[150px]" title={item.name}>
+                              <span className="text-sm font-medium text-gray-700 dark:text-foreground truncate max-w-[150px]" title={item.name}>
                                 {item.name}
                               </span>
-                              <span className="text-sm font-bold text-gray-900">{formatNumber(item.value)}</span>
+                              <span className="text-sm font-bold text-gray-900 dark:text-foreground tabular-nums">{formatNumber(item.value)}</span>
                             </div>
-                            <div className="w-full bg-gray-100 rounded-full h-6 overflow-hidden">
+                            <div className="w-full bg-gray-100 dark:bg-muted rounded-full h-6 overflow-hidden">
                               <div 
                                 className={`h-full bg-gradient-to-r ${gradientColors[index % gradientColors.length]} rounded-full transition-all duration-500 flex items-center justify-end pr-2`}
                                 style={{ width: `${percent}%` }}
@@ -4314,7 +4314,7 @@ export default function EmployeeReportsDashboardPage() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       {/* Salary by Branch Chart */}
                       <Card>
-                        <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
+                        <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/10 border-b">
                           <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-foreground">
                             <Building2 className="w-5 h-5 text-emerald-600" />
                             {isRTL ? "توزيع الرواتب حسب الفرع" : "Salary Distribution by Branch"}
