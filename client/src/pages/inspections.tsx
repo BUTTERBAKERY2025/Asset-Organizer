@@ -255,7 +255,7 @@ export default function InspectionsPage() {
               <CardDescription>هذه الأصول تجاوزت موعد الفحص المحدد</CardDescription>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
-              <Table className="min-w-[600px]">
+              <Table className="min-w-[600px] table-actions-sticky">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-right">الأصل</TableHead>
@@ -314,7 +314,7 @@ export default function InspectionsPage() {
                 لا توجد أصول مجدولة للفحص
               </div>
             ) : (
-              <Table className="min-w-[600px]">
+              <Table className="min-w-[600px] table-actions-sticky">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-right">الأصل</TableHead>
@@ -374,7 +374,7 @@ export default function InspectionsPage() {
                 جميع الأصول لها جدولة فحص
               </div>
             ) : (
-              <Table className="min-w-[500px]">
+              <Table className="min-w-[500px] table-actions-sticky">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-right">الأصل</TableHead>

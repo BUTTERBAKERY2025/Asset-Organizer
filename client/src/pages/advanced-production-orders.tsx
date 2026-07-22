@@ -378,7 +378,7 @@ export default function AdvancedProductionOrdersPage() {
         ) : (
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
-              <Table>
+              <Table className="table-actions-sticky">
                 <TableHeader className="bg-muted/50 sticky top-0">
                   <TableRow>
                     <TableHead className="text-right font-semibold w-[120px]">رقم الأمر</TableHead>

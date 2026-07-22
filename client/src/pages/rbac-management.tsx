@@ -655,7 +655,7 @@ export default function RBACManagementPage() {
                     <Loader2 className="h-6 w-6 animate-spin" />
                   </div>
                 ) : (
-                  <Table className="min-w-[500px]">
+                  <Table className="min-w-[500px] table-actions-sticky">
                     <TableHeader>
                       <TableRow>
                         <TableHead className="text-right text-xs sm:text-sm">المستخدم</TableHead>
@@ -727,7 +727,7 @@ export default function RBACManagementPage() {
                 </Button>
               </CardHeader>
               <CardContent>
-                <Table>
+                <Table className="table-actions-sticky">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-right">الدور</TableHead>

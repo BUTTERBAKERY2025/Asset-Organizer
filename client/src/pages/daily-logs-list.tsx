@@ -228,7 +228,7 @@ export default function DailyLogsListPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <Table>
+                <Table className="table-actions-sticky">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-right">التاريخ</TableHead>

@@ -2727,7 +2727,7 @@ export default function IncentivesManagement() {
                     <div className="text-center py-8 text-gray-500">لا توجد سجلات حوافز</div>
                   ) : (
                     <div className="overflow-x-auto">
-                      <Table className="min-w-[600px]">
+                      <Table className="min-w-[600px] table-actions-sticky">
                         <TableHeader>
                           <TableRow>
                             <TableHead>الفرع</TableHead>

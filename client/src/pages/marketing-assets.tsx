@@ -653,7 +653,7 @@ export default function MarketingAssetsPage() {
           <CardContent className="p-0">
             {filteredAssets.length > 0 ? (
               <div className="overflow-x-auto">
-                <Table className="min-w-[700px]">
+                <Table className="min-w-[700px] table-actions-sticky">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-right">اسم الأصل</TableHead>

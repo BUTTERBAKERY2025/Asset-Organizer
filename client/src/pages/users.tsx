@@ -1156,8 +1156,8 @@ export default function UsersPage() {
                     </p>
                   </div>
                   
-                  <div className="rounded-md border overflow-x-auto">
-                    <Table className="min-w-[600px]">
+                  <div className="rounded-md border table-scroll">
+                    <Table className="min-w-[600px] table-actions-sticky">
                       <TableHeader>
                         <TableRow className="bg-muted/50">
                           <TableHead className="text-right font-semibold text-xs sm:text-sm">المستخدم</TableHead>

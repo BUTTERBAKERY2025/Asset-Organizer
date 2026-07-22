@@ -1245,7 +1245,7 @@ export default function MarketingInfluencersPage() {
           <Card>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
-              <Table className="min-w-[800px]">
+              <Table className="min-w-[800px] table-actions-sticky">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-right">المؤثر</TableHead>
@@ -1523,7 +1523,7 @@ export default function MarketingInfluencersPage() {
                 </div>
 
                 <div className="border rounded-lg overflow-hidden">
-                  <Table>
+                  <Table className="table-actions-sticky">
                     <TableHeader>
                       <TableRow className="bg-muted/50">
                         <TableHead className="text-right">المؤثر</TableHead>

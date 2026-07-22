@@ -1100,7 +1100,7 @@ export default function PaymentRequestsPage() {
 
             {/* Desktop Table View */}
             <div className="hidden sm:block overflow-x-auto">
-              <Table>
+              <Table className="table-actions-sticky">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-right">#</TableHead>

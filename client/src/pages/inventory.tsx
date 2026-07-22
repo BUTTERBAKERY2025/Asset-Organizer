@@ -357,7 +357,7 @@ export default function InventoryPage() {
           </div>
           
           <Card className="overflow-hidden border-none shadow-sm ring-1 ring-border/50 break-inside-avoid mb-6">
-            <CardContent className="p-0 overflow-x-auto">
+            <CardContent className="p-0 table-scroll">
               <Table className="min-w-[600px]">
                 <TableHeader className="bg-muted/30 print:bg-transparent">
                   <TableRow className="hover:bg-transparent">

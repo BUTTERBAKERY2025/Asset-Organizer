@@ -95,7 +95,7 @@ export default function MarketingOpeningCampaignsPage() {
                 <p>لا توجد حملات افتتاح بعد. اضغط "حملة جديدة" لإنشاء أول حملة.</p>
               </div>
             ) : (
-              <Table>
+              <Table className="table-actions-sticky">
                 <TableHeader>
                   <TableRow>
                     <TableHead>الفرع</TableHead>

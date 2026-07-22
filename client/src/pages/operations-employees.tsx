@@ -504,7 +504,7 @@ export default function OperationsEmployeesPage() {
             </div>
 
             <div className="border rounded-lg overflow-x-auto">
-              <Table className="min-w-[600px]">
+              <Table className="min-w-[600px] table-actions-sticky">
                 <TableHeader>
                   <TableRow>
                     <TableHead>الموظف</TableHead>

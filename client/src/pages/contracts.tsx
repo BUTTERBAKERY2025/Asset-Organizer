@@ -482,7 +482,7 @@ export default function ContractsPage() {
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
-              <Table className="min-w-[800px]">
+              <Table className="min-w-[800px] table-actions-sticky">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-right">رقم العقد</TableHead>

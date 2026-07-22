@@ -706,8 +706,8 @@ export default function ManagePage() {
               </Select>
             </div>
 
-            <div className="rounded-md border overflow-x-auto">
-              <Table className="min-w-[600px]">
+            <div className="rounded-md border table-scroll">
+              <Table className="min-w-[600px] table-actions-sticky">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-right w-[80px] hidden sm:table-cell">المعرف</TableHead>

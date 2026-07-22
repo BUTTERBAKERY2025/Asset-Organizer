@@ -629,7 +629,7 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
               <p>{isRTL ? "لا توجد طلبات نقل" : "No transfer requests"}</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="table-scroll">
             <Table className="min-w-[600px]">
               <TableHeader>
                 <TableRow>
@@ -2629,7 +2629,7 @@ export default function BranchEmployeesPage() {
                 )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="table-scroll">
               <Table>
                 <TableHeader className="bg-muted/50">
                   <TableRow>

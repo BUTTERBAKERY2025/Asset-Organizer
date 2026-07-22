@@ -5,21 +5,40 @@ import { cn } from "@/lib/utils"
 const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
->(({ className, ...props }, ref) => (
-  <div
-    className="relative w-full overflow-x-auto scroll-smooth rounded-md border border-border/40 md:border-0"
-    style={{ WebkitOverflowScrolling: 'touch' }}
-  >
-    <table
-      ref={ref}
+>(({ className, ...props }, ref) => {
+  const wrapperRef = React.useRef<HTMLDivElement>(null)
+  const [hasOverflow, setHasOverflow] = React.useState(false)
+
+  React.useEffect(() => {
+    const el = wrapperRef.current
+    if (!el) return
+    const check = () => setHasOverflow(el.scrollWidth > el.clientWidth + 1)
+    check()
+    const ro = new ResizeObserver(check)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  return (
+    <div
+      ref={wrapperRef}
       className={cn(
-        "w-full caption-bottom text-xs sm:text-sm min-w-[560px] md:min-w-0",
-        className
+        "relative w-full overflow-x-auto scroll-smooth rounded-md border border-border/40 md:border-0",
+        hasOverflow && "table-fade"
       )}
-      {...props}
-    />
-  </div>
-))
+      style={{ WebkitOverflowScrolling: 'touch' }}
+    >
+      <table
+        ref={ref}
+        className={cn(
+          "w-full caption-bottom text-xs sm:text-sm min-w-[560px] md:min-w-0",
+          className
+        )}
+        {...props}
+      />
+    </div>
+  )
+})
 Table.displayName = "Table"
 
 const TableHeader = React.forwardRef<

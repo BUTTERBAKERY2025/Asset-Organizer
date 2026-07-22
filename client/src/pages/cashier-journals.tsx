@@ -638,7 +638,7 @@ export default function CashierJournalsPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="rounded-md border overflow-x-auto -mx-3 sm:mx-0">
+                <div className="rounded-md border table-scroll -mx-3 sm:mx-0">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/50">

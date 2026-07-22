@@ -979,7 +979,7 @@ export default function ProductionComparisonsPage() {
                   </div>
                 ) : comparisons.length > 0 ? (
                   <div className="overflow-x-auto">
-                    <Table>
+                    <Table className="table-actions-sticky">
                       <TableHeader>
                         <TableRow>
                           <TableHead>التاريخ</TableHead>

@@ -214,7 +214,7 @@
   .kpi-grid {
     display: grid;
     gap: 0.75rem;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(1, minmax(0, 1fr));
   }
   @media (min-width: 360px) {
     .kpi-grid {
@@ -251,12 +251,44 @@
   .table-actions-sticky thead th:last-child {
     position: sticky;
     inset-inline-end: 0;
+    z-index: 10;
     background: var(--color-card);
     box-shadow: -6px 0 8px -6px rgba(0,0,0,0.08);
   }
   [dir="rtl"] .table-actions-sticky tbody td:last-child,
   [dir="rtl"] .table-actions-sticky thead th:last-child {
     box-shadow: 6px 0 8px -6px rgba(0,0,0,0.08);
+  }
+
+  /* Horizontally scrolling wrapper (plain, no fade) — kept as a
+     semantic alias for table containers. */
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  /* Edge fade hint for the ACTUAL horizontal scroller. Applied by the
+     base Table component wrapper below lg, and only when the content
+     actually overflows (guarded via scrollable check in table.tsx or
+     harmless soft dim otherwise). Works in RTL and LTR. */
+  @media (max-width: 1023.98px) {
+    .table-fade {
+      mask-image: linear-gradient(
+        to left,
+        rgba(0, 0, 0, 0.45) 0,
+        black 14px,
+        black calc(100% - 14px),
+        rgba(0, 0, 0, 0.45) 100%
+      );
+      -webkit-mask-image: linear-gradient(
+        to left,
+        rgba(0, 0, 0, 0.45) 0,
+        black 14px,
+        black calc(100% - 14px),
+        rgba(0, 0, 0, 0.45) 100%
+      );
+    }
   }
   
   /* Smooth scrolling */

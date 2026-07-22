@@ -456,7 +456,7 @@ export default function SalesDataUploadsPage() {
               </div>
             ) : (
               <div className="overflow-x-auto -mx-3 sm:mx-0">
-                <Table className="min-w-[700px]">
+                <Table className="min-w-[700px] table-actions-sticky">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-right text-xs sm:text-sm">اسم الملف</TableHead>

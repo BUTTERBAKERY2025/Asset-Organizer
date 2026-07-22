@@ -553,7 +553,7 @@ export default function InfluencerContractsPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <Table className="min-w-[700px]">
+                <Table className="min-w-[700px] table-actions-sticky">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="hidden sm:table-cell">رقم العقد</TableHead>

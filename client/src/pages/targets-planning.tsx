@@ -997,7 +997,7 @@ export default function TargetsPlanning() {
                   </div>
                 ) : (
                   <>
-                  <Table>
+                  <Table className="table-actions-sticky">
                     <TableHeader>
                       <TableRow>
                         <TableHead>الفرع</TableHead>
