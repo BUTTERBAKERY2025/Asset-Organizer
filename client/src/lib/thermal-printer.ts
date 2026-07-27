@@ -219,18 +219,28 @@ export async function ensurePrinterConnection(): Promise<boolean> {
 }
 
 // إعادة الاتصال تلقائياً عند الرجوع للتطبيق (تغيير تبويبات المتصفح / قفل الشاشة)
+// + مراقب دائم يفحص الاتصال كل 10 ثوانٍ ويعيده إذا انقطع أثناء التنقل بين الصفحات
 let visibilityHookInstalled = false;
+let watchdogTimer: ReturnType<typeof setInterval> | null = null;
+
+function silentReconnect() {
+  if (intentionalDisconnect || reconnecting) return;
+  if (!getSavedPrinter() || isPrinterConnected()) return;
+  void ensurePrinterConnection().then((ok) => {
+    const saved = getSavedPrinter();
+    if (ok && saved) onReconnectCb?.(saved);
+  });
+}
+
 export function installAutoReconnectOnVisibility(): void {
   if (visibilityHookInstalled || typeof document === "undefined") return;
   visibilityHookInstalled = true;
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && getSavedPrinter() && !isPrinterConnected()) {
-      void ensurePrinterConnection().then((ok) => {
-        const saved = getSavedPrinter();
-        if (ok && saved) onReconnectCb?.(saved);
-      });
-    }
+    if (document.visibilityState === "visible") silentReconnect();
   });
+  watchdogTimer = setInterval(() => {
+    if (typeof document !== "undefined" && document.visibilityState === "visible") silentReconnect();
+  }, 10000);
 }
 
 export function disconnectPrinter(): void {
