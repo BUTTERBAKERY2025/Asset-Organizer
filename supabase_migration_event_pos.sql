@@ -92,3 +92,7 @@ CREATE INDEX IF NOT EXISTS idx_pos_sales_event ON pos_sales(event_id);
 CREATE INDEX IF NOT EXISTS idx_pos_sales_shift ON pos_sales(shift_id);
 
 -- تم — لا حاجة لأي بيانات أولية
+
+-- ===== حماية من تكرار الفواتير (Idempotency) =====
+ALTER TABLE pos_sales ADD COLUMN IF NOT EXISTS idempotency_key text;
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_pos_sales_idempotency ON pos_sales (branch_id, idempotency_key) WHERE idempotency_key IS NOT NULL;

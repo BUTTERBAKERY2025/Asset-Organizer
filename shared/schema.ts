@@ -10997,6 +10997,7 @@ export const posSales = pgTable("pos_sales", {
   eventId: integer("event_id"),
   shiftId: integer("shift_id"),
   notes: text("notes"),
+  idempotencyKey: text("idempotency_key"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_pos_sales_branch_date").on(table.branchId, table.saleDate),

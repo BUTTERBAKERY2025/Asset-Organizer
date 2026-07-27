@@ -557,8 +557,21 @@ export default function EventPosPage() {
     setDiscountValue("");
   }, []);
 
+  // مفتاح تمييز عملية البيع: يبقى ثابتاً عند إعادة المحاولة بعد فشل الشبكة،
+  // فلا تتكرر الفاتورة أبداً — ويتجدد فقط بعد نجاح البيع
+  const checkoutKeyRef = useRef<string | null>(null);
+  const checkoutPendingRef = useRef(false);
+  useEffect(() => {
+    // تعديل السلة = عملية بيع مختلفة → مفتاح جديد (إلا أثناء إرسال جارٍ)
+    if (!checkoutPendingRef.current) checkoutKeyRef.current = null;
+  }, [cart]);
+
   const createSaleMutation = useMutation({
     mutationFn: async () => {
+      checkoutPendingRef.current = true;
+      if (!checkoutKeyRef.current) {
+        checkoutKeyRef.current = (crypto as any)?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+      }
       const now = new Date();
       let finalPaymentMethod = paymentMethod;
       let cashAmt = 0;
@@ -573,6 +586,7 @@ export default function EventPosPage() {
         networkAmt = cartTotal.total;
       }
       const saleData = {
+        idempotencyKey: checkoutKeyRef.current,
         branchId: EVENT_BRANCH_ID,
         eventId: selectedEventId || undefined,
         cashierId: user?.id || "",
@@ -607,6 +621,7 @@ export default function EventPosPage() {
       return res.json();
     },
     onSuccess: (data: any) => {
+      checkoutKeyRef.current = null; // عملية جديدة = مفتاح جديد
       setLastSale({ ...data, items: cart.map(item => ({
         productName: item.productName,
         quantity: item.quantity,
@@ -630,6 +645,9 @@ export default function EventPosPage() {
     },
     onError: (err: any) => {
       toast({ title: "خطأ في إتمام البيع", description: err?.message, variant: "destructive" });
+    },
+    onSettled: () => {
+      checkoutPendingRef.current = false;
     },
   });
 

@@ -1626,6 +1626,7 @@ export interface IStorage {
 
   // Event POS - Sales
   createPosSale(sale: InsertPosSale, items: InsertPosSaleItem[], afterInsert?: (tx: any, newSale: PosSale) => Promise<void>): Promise<PosSale>;
+  getPosSaleByIdempotencyKey(branchId: string, key: string): Promise<PosSale | undefined>;
   getPosSales(branchId: string, dateFrom?: string, dateTo?: string): Promise<PosSale[]>;
   getPosSaleById(id: number): Promise<PosSale | undefined>;
   getPosSaleItems(saleId: number): Promise<PosSaleItem[]>;
@@ -18114,6 +18115,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Event POS - Sales
+  async getPosSaleByIdempotencyKey(branchId: string, key: string): Promise<PosSale | undefined> {
+    const [row] = await db.select().from(posSales)
+      .where(and(eq(posSales.branchId, branchId), eq(posSales.idempotencyKey, key)))
+      .limit(1);
+    return row;
+  }
+
   async createPosSale(
     sale: InsertPosSale,
     items: InsertPosSaleItem[],

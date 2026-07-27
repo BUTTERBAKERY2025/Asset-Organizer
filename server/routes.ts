@@ -38695,6 +38695,21 @@ export async function registerRoutes(
         return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
       }
 
+      // ===== مفتاح تمييز العملية (Idempotency): إعادة المحاولة تعيد نفس الفاتورة بدل إنشاء مكررة =====
+      let idempotencyKey: string | null = null;
+      if (saleData.idempotencyKey != null) {
+        const k = String(saleData.idempotencyKey);
+        if (!/^[A-Za-z0-9-]{8,64}$/.test(k)) {
+          return res.status(400).json({ error: "مفتاح العملية غير صالح" });
+        }
+        idempotencyKey = k;
+        const existing = await storage.getPosSaleByIdempotencyKey(saleData.branchId, k);
+        if (existing) {
+          return res.status(200).json(existing);
+        }
+      }
+      saleData.idempotencyKey = idempotencyKey;
+
       // ===== إعادة احتساب جميع القيم المالية في الخادم (لا نثق بقيم العميل) =====
       const branchCatalog = await storage.getBranchProducts(saleData.branchId);
       const catalogMap = new Map<number, any>(branchCatalog.map((bp: any) => [bp.productId, bp]));
@@ -38810,7 +38825,18 @@ export async function registerRoutes(
           }
         : undefined;
 
-      const sale = await storage.createPosSale(saleData, serverItems, afterInsert);
+      let sale;
+      try {
+        sale = await storage.createPosSale(saleData, serverItems, afterInsert);
+      } catch (e: any) {
+        // سباق نادر: طلبان بنفس مفتاح العملية وصلا معاً — نعيد الفاتورة الأصلية
+        const constraint = e?.cause?.constraint || e?.constraint || "";
+        if (idempotencyKey && String(constraint).includes("idempotency")) {
+          const existing = await storage.getPosSaleByIdempotencyKey(saleData.branchId, idempotencyKey);
+          if (existing) return res.status(200).json(existing);
+        }
+        throw e;
+      }
       res.status(201).json(sale);
     } catch (error: any) {
       // Loyalty redemption failures are validation errors (Arabic message) — surface to cashier
