@@ -41,4 +41,5 @@
 - [Permission module aliases](permission-module-aliases.md) — runtime auth accepts directional module synonyms (attendance→attendance_check, pnl↔pnl_dashboard…); effective-perm views must mirror, never collapse.
 - [Route guard parity](route-guard-parity.md) — harden auth-only routes with the consuming PAGE's module; dual-page consumers need either-module guards; admin/branch-scoped/my-* routes stay auth-only.
 - [Advance lifecycle](advance-lifecycle.md) — signed-consent state machine; final approve only from signed; client canFinal must mirror hasAdvanceFinalAuthority roles.
+- [BT cashier printer](bt-printer-web-bluetooth.md) — GATT dies only on full page reload (chunk-error reload after deploys); reconnect must be App-level + keepalive; user tests on prod, needs deploy+hard refresh.
 - [Event POS shift reconciliation](event-pos-shift-reconciliation.md) — full refund = exclude sale from stats, partial = pos_refunds row; close stats via tx; sale insert re-locks shift.
