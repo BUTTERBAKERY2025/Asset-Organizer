@@ -20,6 +20,7 @@ import type { SystemModule } from "@shared/schema";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
 import { makeLazy, startAggressivePreload, prefetchAdjacentPages } from "@/lib/pagePreloader";
+import { installAutoReconnectOnVisibility, ensurePrinterConnection, getSavedPrinter, isPrinterConnected } from "@/lib/thermal-printer";
 
 const PlatformHomePage = makeLazy("platform-home");
 const DashboardPage = makeLazy("dashboard");
@@ -522,6 +523,12 @@ const Router = React.memo(function Router() {
 function App() {
   useEffect(() => {
     startAggressivePreload();
+    // طابعة الكاشير: مراقبة الاتصال وإعادته تلقائياً على مستوى التطبيق كله
+    // (حتى بعد إعادة تحميل كاملة للصفحة أو التنقل بين الصفحات)
+    if (getSavedPrinter()) {
+      installAutoReconnectOnVisibility();
+      if (!isPrinterConnected()) void ensurePrinterConnection();
+    }
   }, []);
 
   return (
