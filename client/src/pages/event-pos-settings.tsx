@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -365,9 +366,9 @@ export default function EventPosSettingsPage() {
             </div>
             <h2 className="text-[22px] font-black text-[#1C1411]">غير مصرح بالوصول</h2>
             <p className="text-[14px] text-[#A69587] font-bold">هذه الصفحة متاحة فقط للمديرين والمستخدمين ذوي صلاحية التعديل</p>
-            <a href="/event-pos" className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 text-white rounded-xl font-bold text-sm hover:bg-orange-600 transition-colors">
+            <Link href="/event-pos" className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 text-white rounded-xl font-bold text-sm hover:bg-orange-600 transition-colors">
               العودة لنقطة البيع
-            </a>
+            </Link>
           </div>
         </div>
       </Layout>
@@ -394,14 +395,14 @@ export default function EventPosSettingsPage() {
                 </p>
               </div>
             </div>
-            <a
+            <Link
               href="/event-pos"
               className="flex items-center gap-2 bg-[#1C1411] text-[#D4A373] text-[13px] font-black px-5 py-3 rounded-[16px] transition-all hover:bg-[#2C201A] shadow-lg"
             >
               <Store className="w-4 h-4" />
               الذهاب لشاشة البيع
               <ChevronRight className="w-3.5 h-3.5 rotate-180" />
-            </a>
+            </Link>
           </div>
         </div>
 

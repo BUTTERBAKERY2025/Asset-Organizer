@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -910,22 +911,22 @@ export default function EventPosPage() {
               >
                 <ListOrdered className="w-5 h-5 text-[#D4A373]" />
               </button>
-              <a
+              <Link
                 href="/event-reports"
                 className="w-10 h-10 rounded-xl bg-[#2C201A] flex items-center justify-center hover:bg-[#3D2D25] transition-all active:scale-90 touch-manipulation border border-[#4A372D]"
                 title="تقارير الإيفنتات"
                 data-testid="button-event-reports"
               >
                 <FileText className="w-5 h-5 text-[#D4A373]" />
-              </a>
-              <a
+              </Link>
+              <Link
                 href="/event-pos-settings"
                 className="w-10 h-10 rounded-xl bg-[#2C201A] flex items-center justify-center hover:bg-[#3D2D25] transition-all active:scale-90 touch-manipulation border border-[#4A372D]"
                 title="الإعدادات"
                 data-testid="button-settings"
               >
                 <Settings className="w-5 h-5 text-[#D4A373]" />
-              </a>
+              </Link>
             </>
           )}
         </div>
@@ -1079,10 +1080,10 @@ export default function EventPosPage() {
                 <p className="text-[22px] font-black text-[#A69587] mb-2">لا توجد أصناف</p>
                 <p className="text-[14px] font-bold text-[#C2B4A7] mb-6">{isManager ? "أضف منتجات من صفحة الإعدادات" : "تواصل مع المدير لإضافة المنتجات"}</p>
                 {isManager && (
-                  <a href="/event-pos-settings" className="inline-flex items-center gap-2 px-6 py-3.5 bg-[#1C1411] text-[#D4A373] rounded-[16px] font-black text-[14px] hover:bg-[#2C201A] transition-all shadow-lg active:scale-95 touch-manipulation" data-testid="link-add-products">
+                  <Link href="/event-pos-settings" className="inline-flex items-center gap-2 px-6 py-3.5 bg-[#1C1411] text-[#D4A373] rounded-[16px] font-black text-[14px] hover:bg-[#2C201A] transition-all shadow-lg active:scale-95 touch-manipulation" data-testid="link-add-products">
                     <Settings className="w-4 h-4" />
                     إعدادات نقطة البيع
-                  </a>
+                  </Link>
                 )}
               </div>
             ) : (
