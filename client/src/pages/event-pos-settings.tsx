@@ -17,8 +17,14 @@ import {
   FileText, Hash, Phone, MapPin, Building2,
   Sparkles, Loader2, AlertCircle, Eye, EyeOff,
   GripVertical, DollarSign, Tag, ChevronRight,
-  ImageIcon, Upload, PartyPopper, Pencil, CalendarDays
+  ImageIcon, Upload, PartyPopper, Pencil, CalendarDays,
+  Bluetooth, BluetoothConnected, Printer, Unlink, Wifi
 } from "lucide-react";
+import {
+  isBluetoothSupported, scanAndConnect, reconnectSavedPrinter, disconnectPrinter,
+  forgetPrinter, getSavedPrinter, isPrinterConnected, printTest,
+  getPaperWidth, setPaperWidth, onPrinterDisconnect, type SavedPrinter, type PaperWidth,
+} from "@/lib/thermal-printer";
 
 const EVENT_BRANCH_ID = "EVENT-BB";
 
@@ -31,6 +37,70 @@ export default function EventPosSettingsPage() {
   const [productSearch, setProductSearch] = useState("");
   const [editingPrice, setEditingPrice] = useState<{ id: number; price: string } | null>(null);
   const hasEditAccess = isAdmin || canEdit("event_pos");
+
+  // إعدادات ربط طابعة الكاشير (بلوتوث)
+  const [savedPrinter, setSavedPrinter] = useState<SavedPrinter | null>(() => getSavedPrinter());
+  const [printerConnected, setPrinterConnected] = useState(false);
+  const [printerBusy, setPrinterBusy] = useState<"scan" | "reconnect" | "test" | null>(null);
+  const [paperWidth, setPaperWidthState] = useState<PaperWidth>(() => getPaperWidth());
+  const btSupported = isBluetoothSupported();
+
+  useEffect(() => {
+    setPrinterConnected(isPrinterConnected());
+    onPrinterDisconnect(() => setPrinterConnected(false));
+    return () => onPrinterDisconnect(null);
+  }, []);
+
+  const handleScanConnect = async () => {
+    setPrinterBusy("scan");
+    try {
+      const p = await scanAndConnect();
+      setSavedPrinter(p);
+      setPrinterConnected(true);
+      toast({ title: "تم ربط الطابعة بنجاح", description: p.name });
+    } catch (e: any) {
+      if (e?.name !== "NotFoundError") {
+        toast({ title: "تعذر ربط الطابعة", description: e?.message || "", variant: "destructive" });
+      }
+    } finally {
+      setPrinterBusy(null);
+    }
+  };
+
+  const handleReconnect = async () => {
+    setPrinterBusy("reconnect");
+    try {
+      const p = await reconnectSavedPrinter();
+      if (p) {
+        setSavedPrinter(p);
+        setPrinterConnected(true);
+        toast({ title: "تمت إعادة الاتصال بالطابعة", description: p.name });
+      } else {
+        toast({ title: "لم يتم العثور على الطابعة المحفوظة", description: "اضغط \"بحث عن طابعات\" واختر الطابعة من القائمة.", variant: "destructive" });
+      }
+    } finally {
+      setPrinterBusy(null);
+    }
+  };
+
+  const handleTestPrint = async () => {
+    setPrinterBusy("test");
+    try {
+      await printTest();
+      toast({ title: "تم إرسال الطباعة التجريبية" });
+    } catch (e: any) {
+      toast({ title: "فشل اختبار الطباعة", description: e?.message || "", variant: "destructive" });
+    } finally {
+      setPrinterBusy(null);
+    }
+  };
+
+  const handleForgetPrinter = () => {
+    forgetPrinter();
+    setSavedPrinter(null);
+    setPrinterConnected(false);
+    toast({ title: "تم إلغاء ربط الطابعة" });
+  };
 
   const { data: branchProducts = [], isLoading: productsLoading } = useQuery({
     queryKey: ["/api/pos/branch-products", EVENT_BRANCH_ID],
@@ -346,6 +416,10 @@ export default function EventPosSettingsPage() {
             <TabsTrigger value="general" className="gap-2 rounded-[14px] px-5 py-2.5 font-bold transition-all text-[#A69587] hover:text-[#5C422E] hover:bg-[#FAF8F5] data-[state=active]:bg-[#1C1411] data-[state=active]:text-[#D4A373] data-[state=active]:shadow-md" data-testid="settings-tab-general">
               <Settings className="w-3.5 h-3.5" />
               إعدادات عامة
+            </TabsTrigger>
+            <TabsTrigger value="printer" className="gap-2 rounded-[14px] px-5 py-2.5 font-bold transition-all text-[#A69587] hover:text-[#5C422E] hover:bg-[#FAF8F5] data-[state=active]:bg-[#1C1411] data-[state=active]:text-[#D4A373] data-[state=active]:shadow-md" data-testid="settings-tab-printer">
+              <Printer className="w-3.5 h-3.5" />
+              ربط طابعة الكاشير
             </TabsTrigger>
           </TabsList>
 
@@ -992,6 +1066,140 @@ export default function EventPosSettingsPage() {
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-500">طرق الدفع</span>
                     <span className="font-medium text-gray-800">نقد / شبكة</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Cashier Printer Tab */}
+          <TabsContent value="printer" className="mt-0 space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card className="rounded-[24px] border border-[#EBE3D8] shadow-sm overflow-hidden bg-[#FFFFFF]">
+                <CardHeader className="pb-3 border-b border-[#EBE3D8] bg-[#FAF8F5]">
+                  <CardTitle className="text-sm flex items-center gap-2 text-[#1C1411] font-black">
+                    <Bluetooth className="w-4 h-4 text-[#B38250]" />
+                    ربط طابعة الكاشير (بلوتوث)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 space-y-4">
+                  {!btSupported && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-700 leading-relaxed" data-testid="printer-bt-unsupported">
+                      <div className="font-bold mb-1 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" /> متصفحك لا يدعم البلوتوث</div>
+                      البحث عن الطابعات عبر البلوتوث يعمل على متصفح <strong>Chrome</strong> أو <strong>Edge</strong> على أجهزة أندرويد والكمبيوتر.
+                      غير مدعوم حالياً على أجهزة آبل (iPhone / iPad — متصفح Safari).
+                    </div>
+                  )}
+
+                  <div className={`rounded-xl border p-4 ${printerConnected ? "bg-emerald-50 border-emerald-200" : "bg-[#FAF8F5] border-[#EBE3D8]"}`} data-testid="printer-status-box">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${printerConnected ? "bg-emerald-100" : "bg-[#EBE3D8]"}`}>
+                        {printerConnected
+                          ? <BluetoothConnected className="w-5 h-5 text-emerald-600" />
+                          : <Printer className="w-5 h-5 text-[#A69587]" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-bold text-[#1C1411] truncate" data-testid="printer-name">
+                          {savedPrinter ? savedPrinter.name : "لا توجد طابعة مرتبطة"}
+                        </div>
+                        <div className={`text-[11px] font-bold ${printerConnected ? "text-emerald-600" : "text-[#A69587]"}`} data-testid="printer-status">
+                          {printerConnected ? "متصلة الآن وجاهزة للطباعة" : savedPrinter ? "مرتبطة سابقاً — غير متصلة حالياً" : "اضغط بحث عن طابعات للبدء"}
+                        </div>
+                      </div>
+                      {printerConnected && <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      onClick={handleScanConnect}
+                      disabled={!btSupported || printerBusy !== null}
+                      className="bg-[#1C1411] hover:bg-[#2A1F19] text-[#D4A373] rounded-xl gap-2 h-10 font-bold"
+                      data-testid="button-scan-printers"
+                    >
+                      {printerBusy === "scan" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                      بحث عن طابعات
+                    </Button>
+                    {savedPrinter && !printerConnected && (
+                      <Button
+                        onClick={handleReconnect}
+                        disabled={!btSupported || printerBusy !== null}
+                        variant="outline"
+                        className="rounded-xl gap-2 h-10 font-bold border-[#D4A373] text-[#B38250]"
+                        data-testid="button-reconnect-printer"
+                      >
+                        {printerBusy === "reconnect" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bluetooth className="w-4 h-4" />}
+                        إعادة الاتصال
+                      </Button>
+                    )}
+                    {printerConnected && (
+                      <Button
+                        onClick={handleTestPrint}
+                        disabled={printerBusy !== null}
+                        variant="outline"
+                        className="rounded-xl gap-2 h-10 font-bold border-emerald-300 text-emerald-700"
+                        data-testid="button-test-print"
+                      >
+                        {printerBusy === "test" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Receipt className="w-4 h-4" />}
+                        طباعة تجريبية
+                      </Button>
+                    )}
+                    {savedPrinter && (
+                      <Button
+                        onClick={handleForgetPrinter}
+                        disabled={printerBusy !== null}
+                        variant="outline"
+                        className="rounded-xl gap-2 h-10 font-bold border-red-200 text-red-600"
+                        data-testid="button-forget-printer"
+                      >
+                        <Unlink className="w-4 h-4" />
+                        إلغاء الربط
+                      </Button>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-[#5C422E] mb-2 block">عرض ورق الطابعة</label>
+                    <div className="flex gap-2">
+                      {(["80", "58"] as PaperWidth[]).map((w) => (
+                        <button
+                          key={w}
+                          onClick={() => { setPaperWidth(w); setPaperWidthState(w); }}
+                          className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all ${paperWidth === w ? "bg-[#1C1411] text-[#D4A373] border-[#1C1411]" : "bg-white text-[#A69587] border-[#EBE3D8] hover:border-[#D4A373]"}`}
+                          data-testid={`button-paper-${w}`}
+                        >
+                          {w} ملم
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-[#A69587] mt-1">أغلب طابعات الكاشير الصغيرة 58 ملم، وطابعات الكاونتر 80 ملم.</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-[24px] border border-[#EBE3D8] shadow-sm overflow-hidden bg-[#FFFFFF]">
+                <CardHeader className="pb-3 border-b border-[#EBE3D8] bg-[#FAF8F5]">
+                  <CardTitle className="text-sm flex items-center gap-2 text-[#1C1411] font-black">
+                    <Wifi className="w-4 h-4 text-[#B38250]" />
+                    ملاحظات مهمة
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 space-y-3 text-xs text-[#5C422E] leading-relaxed">
+                  <div className="bg-[#FAF8F5] border border-[#EBE3D8] rounded-xl p-3">
+                    <div className="font-bold mb-1">كيف يعمل الربط؟</div>
+                    ١. شغّل الطابعة وفعّل البلوتوث فيها. ٢. اضغط "بحث عن طابعات" واختر الطابعة من القائمة. ٣. اضغط "طباعة تجريبية" للتأكد. بعدها ستجد زر "طباعة بلوتوث" في شاشة الفاتورة يطبع مباشرة على الطابعة بدون نافذة الطباعة.
+                  </div>
+                  <div className="bg-[#FAF8F5] border border-[#EBE3D8] rounded-xl p-3">
+                    <div className="font-bold mb-1">المتصفحات المدعومة</div>
+                    Chrome أو Edge على أندرويد والكمبيوتر. أجهزة آبل (iPhone/iPad) لا تسمح للمتصفح بالوصول للبلوتوث — على الآيباد استخدم زر "طباعة" العادي مع تطبيق الطابعة أو AirPrint.
+                  </div>
+                  <div className="bg-[#FAF8F5] border border-[#EBE3D8] rounded-xl p-3">
+                    <div className="font-bold mb-1">طابعات الواي فاي</div>
+                    المتصفح لا يستطيع الاتصال المباشر بطابعات الشبكة (واي فاي). إذا كانت طابعتك واي فاي: عرّفها على نفس الجهاز (كمبيوتر/تابلت) كطابعة نظام ثم استخدم زر "طباعة" العادي وستظهر ضمن قائمة الطابعات.
+                  </div>
+                  <div className="bg-[#FAF8F5] border border-[#EBE3D8] rounded-xl p-3">
+                    <div className="font-bold mb-1">الطباعة بالعربي</div>
+                    النظام يطبع الإيصال كصورة، لذلك تظهر الأسماء العربية بشكل صحيح حتى لو كانت الطابعة لا تدعم العربية.
                   </div>
                 </CardContent>
               </Card>

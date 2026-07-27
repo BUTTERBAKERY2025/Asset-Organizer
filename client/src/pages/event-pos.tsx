@@ -18,6 +18,7 @@ import {
   DoorOpen, LogOut, Undo2, MapPin
 } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
+import { isPrinterConnected, printElement, reconnectSavedPrinter, getSavedPrinter } from "@/lib/thermal-printer";
 import { QRCodeSVG } from "qrcode.react";
 
 const EVENT_BRANCH_ID = "EVENT-BB";
@@ -93,6 +94,24 @@ export default function EventPosPage() {
   const queryClient = useQueryClient();
   const receiptRef = useRef<HTMLDivElement>(null);
   const zReportRef = useRef<HTMLDivElement>(null);
+  const [btPrinting, setBtPrinting] = useState(false);
+
+  const handleBtPrint = async () => {
+    if (!receiptRef.current) return;
+    setBtPrinting(true);
+    try {
+      if (!isPrinterConnected()) {
+        const p = await reconnectSavedPrinter();
+        if (!p) throw new Error("الطابعة غير متصلة. افتح إعدادات ربط طابعة الكاشير واضغط إعادة الاتصال أو بحث عن طابعات.");
+      }
+      await printElement(receiptRef.current);
+      toast({ title: "تم إرسال الفاتورة للطابعة" });
+    } catch (e: any) {
+      toast({ title: "فشلت الطباعة عبر البلوتوث", description: e?.message || "", variant: "destructive" });
+    } finally {
+      setBtPrinting(false);
+    }
+  };
   const isManager = canEdit("event_pos");
   const canVoid = canDelete("event_pos");
   
@@ -1773,6 +1792,17 @@ export default function EventPosPage() {
           )}
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setShowReceipt(false)} className="rounded-xl h-12 text-[15px] font-bold">إغلاق</Button>
+            {getSavedPrinter() && (
+              <Button
+                onClick={handleBtPrint}
+                disabled={btPrinting}
+                className="gap-2 rounded-xl bg-[#1C1411] hover:bg-[#2A1F19] text-[#D4A373] h-12 text-[15px] font-bold active:scale-95 touch-manipulation"
+                data-testid="button-bt-print-receipt"
+              >
+                {btPrinting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Printer className="w-5 h-5" />}
+                طباعة بلوتوث
+              </Button>
+            )}
             <Button onClick={() => handlePrint()} className="gap-2 rounded-xl bg-orange-500 hover:bg-orange-600 h-12 text-[15px] font-bold active:scale-95 touch-manipulation" data-testid="button-print-receipt">
               <Printer className="w-5 h-5" />
               طباعة
