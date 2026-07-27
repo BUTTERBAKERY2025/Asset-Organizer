@@ -302,8 +302,10 @@ export default function EventPosSettingsPage() {
     <Layout>
       <div className="page-container" dir="rtl">
         {/* Header */}
-        <div className="bg-gradient-to-l from-orange-500 to-amber-500 rounded-2xl p-5 mb-6 shadow-lg shadow-orange-200/40">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="relative overflow-hidden bg-gradient-to-l from-amber-500 via-orange-500 to-orange-600 rounded-2xl p-5 mb-6 shadow-lg shadow-orange-200/40">
+          <div className="absolute -top-12 -left-12 w-44 h-44 rounded-full bg-white/10 pointer-events-none" />
+          <div className="absolute -bottom-16 right-1/4 w-36 h-36 rounded-full bg-white/10 pointer-events-none" />
+          <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
                 <Settings className="w-6 h-6 text-white" />
@@ -328,20 +330,20 @@ export default function EventPosSettingsPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-5 bg-white border shadow-sm h-auto flex-wrap">
-            <TabsTrigger value="events" className="gap-1.5 data-[state=active]:bg-orange-50 data-[state=active]:text-orange-700" data-testid="settings-tab-events">
+          <TabsList className="mb-5 bg-white border shadow-sm h-auto flex-wrap rounded-2xl p-1.5 gap-1">
+            <TabsTrigger value="events" className="gap-1.5 rounded-xl px-4 py-2 transition-all data-[state=active]:bg-gradient-to-l data-[state=active]:from-amber-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-orange-200" data-testid="settings-tab-events">
               <PartyPopper className="w-3.5 h-3.5" />
               الإيفنتات
             </TabsTrigger>
-            <TabsTrigger value="products" className="gap-1.5 data-[state=active]:bg-orange-50 data-[state=active]:text-orange-700" data-testid="settings-tab-products">
+            <TabsTrigger value="products" className="gap-1.5 rounded-xl px-4 py-2 transition-all data-[state=active]:bg-gradient-to-l data-[state=active]:from-amber-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-orange-200" data-testid="settings-tab-products">
               <Package className="w-3.5 h-3.5" />
               إدارة الأصناف
             </TabsTrigger>
-            <TabsTrigger value="invoice" className="gap-1.5 data-[state=active]:bg-orange-50 data-[state=active]:text-orange-700" data-testid="settings-tab-invoice">
+            <TabsTrigger value="invoice" className="gap-1.5 rounded-xl px-4 py-2 transition-all data-[state=active]:bg-gradient-to-l data-[state=active]:from-amber-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-orange-200" data-testid="settings-tab-invoice">
               <Receipt className="w-3.5 h-3.5" />
               إعدادات الفاتورة
             </TabsTrigger>
-            <TabsTrigger value="general" className="gap-1.5 data-[state=active]:bg-orange-50 data-[state=active]:text-orange-700" data-testid="settings-tab-general">
+            <TabsTrigger value="general" className="gap-1.5 rounded-xl px-4 py-2 transition-all data-[state=active]:bg-gradient-to-l data-[state=active]:from-amber-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-orange-200" data-testid="settings-tab-general">
               <Settings className="w-3.5 h-3.5" />
               إعدادات عامة
             </TabsTrigger>
@@ -419,7 +421,10 @@ export default function EventPosSettingsPage() {
                   <div className="text-center py-10 text-sm text-gray-400">لا توجد إيفنتات بعد — أنشئ أول إيفنت للبدء</div>
                 ) : (
                   (posEvents as any[]).map((ev: any) => (
-                    <div key={ev.id} className="px-4 py-3 flex flex-wrap items-center gap-3" data-testid={`row-event-${ev.id}`}>
+                    <div key={ev.id} className={`px-4 py-3 flex flex-wrap items-center gap-3 border-r-4 transition-colors hover:bg-orange-50/40 ${ev.status === "active" ? "border-r-emerald-400" : ev.status === "closed" ? "border-r-gray-300" : "border-r-gray-200"}`} data-testid={`row-event-${ev.id}`}>
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${ev.status === "active" ? "bg-gradient-to-br from-amber-400 to-orange-500 shadow-sm shadow-orange-200" : "bg-gray-100"}`}>
+                        <PartyPopper className={`w-4.5 h-4.5 ${ev.status === "active" ? "text-white" : "text-gray-400"}`} />
+                      </div>
                       <div className="flex-1 min-w-[180px]">
                         <div className="font-bold text-sm text-gray-800 flex items-center gap-2">
                           {ev.name}
