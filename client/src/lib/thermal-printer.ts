@@ -361,8 +361,12 @@ function buildBoostedClone(el: HTMLElement, fontBoost: number): { target: HTMLEl
     const fs = parseFloat(cs.fontSize);
     if (fs) {
       c.style.fontSize = `${Math.round(fs * fontBoost * 10) / 10}px`;
-      c.style.lineHeight = "1.35";
+      c.style.lineHeight = "1.6";
     }
+    // منع تقطيع النصوص: نسمح بالالتفاف لأسطر جديدة بدل القص أو النقاط (...)
+    c.style.overflow = "visible";
+    if (cs.textOverflow === "ellipsis") c.style.textOverflow = "clip";
+    if (cs.whiteSpace === "nowrap" && c.tagName !== "TD" && c.tagName !== "TH") c.style.whiteSpace = "normal";
     // خطوط رفيعة تظهر باهتة على الطابعة الحرارية — نرفعها لدرجة أوضح
     const weight = parseInt(cs.fontWeight, 10);
     if (!isNaN(weight) && weight < 600) c.style.fontWeight = "600";

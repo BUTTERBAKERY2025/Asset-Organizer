@@ -707,6 +707,27 @@ export default function EventPosPage() {
     `,
   });
 
+  const handleSmartZReportPrint = async () => {
+    // إن وُجدت طابعة كاشير محفوظة نطبع عليها مباشرة، وإلا نفتح الطباعة العادية
+    if (getSavedPrinter() && zReportRef.current) {
+      setBtPrinting(true);
+      try {
+        if (!isPrinterConnected()) {
+          const p = await reconnectSavedPrinter();
+          if (!p) throw new Error("الطابعة غير متصلة");
+        }
+        await printElement(zReportRef.current, { fontBoost: 1.5 });
+        toast({ title: "تمت طباعة تقرير الإغلاق على طابعة الكاشير" });
+        return;
+      } catch (e: any) {
+        toast({ title: "تعذرت الطباعة عبر البلوتوث", description: (e?.message || "") + " — سيتم فتح الطباعة العادية.", variant: "destructive" });
+      } finally {
+        setBtPrinting(false);
+      }
+    }
+    handleZReportPrint();
+  };
+
   const handleZReportPrint = useReactToPrint({
     contentRef: zReportRef,
     pageStyle: `
@@ -1703,7 +1724,7 @@ export default function EventPosPage() {
                 <tbody>
                   {lastSale.items?.map((item: any, i: number) => (
                     <tr key={i} style={{ borderBottom: "1px dotted #ccc" }}>
-                      <td style={{ padding: "2px 2px", fontSize: "9px", wordBreak: "break-word", overflow: "hidden", textAlign: "right" }}>{item.productName}</td>
+                      <td style={{ padding: "3px 2px", fontSize: "9px", wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "normal", textAlign: "right", lineHeight: 1.5 }}>{item.productName}</td>
                       <td style={{ textAlign: "center", padding: "2px 2px", fontSize: "9px" }}>{item.quantity}</td>
                       <td style={{ textAlign: "center", padding: "2px 2px", fontSize: "9px" }}>{item.unitPrice?.toFixed(2)}</td>
                       <td style={{ textAlign: "left", padding: "2px 2px", fontSize: "9px" }}>{item.totalPrice?.toFixed(2)}</td>
@@ -2243,9 +2264,9 @@ export default function EventPosPage() {
 
           <div className="p-4 border-t flex gap-3 shrink-0">
             <Button variant="outline" onClick={() => setShowZReport(false)} className="rounded-xl h-12 font-bold">إغلاق</Button>
-            <Button onClick={() => handleZReportPrint()} className="flex-1 rounded-xl h-12 bg-purple-600 hover:bg-purple-700 font-bold text-[15px] gap-2" data-testid="button-print-zreport">
+            <Button onClick={() => handleSmartZReportPrint()} disabled={btPrinting} className="flex-1 rounded-xl h-12 bg-purple-600 hover:bg-purple-700 font-bold text-[15px] gap-2" data-testid="button-print-zreport">
               <Printer className="w-5 h-5" />
-              طباعة التقرير
+              {btPrinting ? "جارٍ الطباعة..." : getSavedPrinter() ? "طباعة مباشرة" : "طباعة التقرير"}
             </Button>
           </div>
         </DialogContent>
