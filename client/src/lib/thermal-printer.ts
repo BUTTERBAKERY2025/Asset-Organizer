@@ -329,15 +329,68 @@ export function setPaperWidth(w: PaperWidth) {
   } catch {}
 }
 
-/** طباعة عنصر HTML (مثل الإيصال) على الطابعة الحرارية */
-export async function printElement(el: HTMLElement): Promise<void> {
-  const html2canvas = (await import("html2canvas")).default;
-  const canvas = await html2canvas(el, {
-    backgroundColor: "#ffffff",
-    scale: 2,
-    useCORS: true,
-    logging: false,
+/**
+ * تجهيز نسخة مكبّرة من الإيصال للطباعة الحرارية:
+ * نضاعف حجم الخطوط والشعار مع تثبيت عرض التخطيط، فيخرج الكلام أكبر وأوضح على الورق.
+ */
+function buildBoostedClone(el: HTMLElement, fontBoost: number): { target: HTMLElement; cleanup: () => void } {
+  const wrapper = document.createElement("div");
+  const width = el.offsetWidth || 300;
+  wrapper.style.cssText = `position:fixed;left:-10000px;top:0;width:${width}px;background:#fff;z-index:-1;`;
+  const clone = el.cloneNode(true) as HTMLElement;
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+
+  const origEls: Element[] = [el, ...Array.from(el.querySelectorAll("*"))];
+  const cloneEls: Element[] = [clone, ...Array.from(clone.querySelectorAll("*"))];
+  origEls.forEach((o, i) => {
+    const c = cloneEls[i] as HTMLElement | undefined;
+    if (!c || !(c instanceof HTMLElement)) return;
+    const cs = window.getComputedStyle(o);
+    const fs = parseFloat(cs.fontSize);
+    if (fs) {
+      c.style.fontSize = `${Math.round(fs * fontBoost * 10) / 10}px`;
+      c.style.lineHeight = "1.35";
+    }
+    // خطوط رفيعة تظهر باهتة على الطابعة الحرارية — نرفعها لدرجة أوضح
+    const weight = parseInt(cs.fontWeight, 10);
+    if (!isNaN(weight) && weight < 600) c.style.fontWeight = "600";
+    // تكبير الشعار والصور بنفس النسبة (مع سقف 80% من عرض الورقة)
+    if (c.tagName === "IMG") {
+      const h = (o as HTMLElement).clientHeight || parseFloat(cs.height) || 0;
+      const w = (o as HTMLElement).clientWidth || 0;
+      if (h) {
+        c.style.maxHeight = `${Math.round(h * fontBoost * 1.25)}px`;
+        c.style.height = "auto";
+      }
+      if (w) c.style.maxWidth = `${Math.min(Math.round(width * 0.8), Math.round(w * fontBoost * 1.25))}px`;
+    }
   });
+  return { target: clone, cleanup: () => wrapper.remove() };
+}
+
+/** طباعة عنصر HTML (مثل الإيصال) على الطابعة الحرارية */
+export async function printElement(el: HTMLElement, opts?: { fontBoost?: number }): Promise<void> {
+  const html2canvas = (await import("html2canvas")).default;
+  const boost = opts?.fontBoost ?? 1;
+  let target: HTMLElement = el;
+  let cleanup: (() => void) | null = null;
+  if (boost !== 1) {
+    const built = buildBoostedClone(el, boost);
+    target = built.target;
+    cleanup = built.cleanup;
+  }
+  let canvas: HTMLCanvasElement;
+  try {
+    canvas = await html2canvas(target, {
+      backgroundColor: "#ffffff",
+      scale: 2,
+      useCORS: true,
+      logging: false,
+    });
+  } finally {
+    cleanup?.();
+  }
   const dots = getPaperWidth() === "58" ? 384 : 576;
   const init = new Uint8Array([0x1b, 0x40]); // ESC @ تهيئة
   const raster = canvasToRaster(canvas, dots);

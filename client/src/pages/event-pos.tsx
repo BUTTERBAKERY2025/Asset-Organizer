@@ -113,7 +113,7 @@ export default function EventPosPage() {
         const p = await reconnectSavedPrinter();
         if (!p) throw new Error("الطابعة غير متصلة. افتح إعدادات ربط طابعة الكاشير واضغط إعادة الاتصال أو بحث عن طابعات.");
       }
-      await printElement(receiptRef.current);
+      await printElement(receiptRef.current, { fontBoost: 1.7 });
       toast({ title: "تمت طباعة الفاتورة على طابعة الكاشير" });
       return true;
     } catch (e: any) {
