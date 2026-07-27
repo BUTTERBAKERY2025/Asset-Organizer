@@ -18581,6 +18581,14 @@ export class DatabaseStorage implements IStorage {
     return await db.transaction(async (tx) => {
       const [sale] = await tx.select().from(posSales).where(eq(posSales.id, params.saleId)).for("update");
       if (!sale) return { error: "الفاتورة غير موجودة" };
+      // إعادة فحص المفتاح بعد امتلاك القفل: طلب متزامن بنفس المفتاح قد يكون أكمل العملية
+      // (وربما غيّر حالة الفاتورة إلى refunded) — نعيد سطر الاسترجاع الموجود بدل الخطأ
+      if (params.idempotencyKey) {
+        const [existing] = await tx.select().from(posRefunds)
+          .where(and(eq(posRefunds.saleId, params.saleId), eq(posRefunds.idempotencyKey, params.idempotencyKey)))
+          .limit(1);
+        if (existing) return { refund: existing };
+      }
       if (!["completed", "partially_refunded"].includes(sale.status)) {
         return { error: "لا يمكن الاسترجاع من هذه الفاتورة (حالتها: " + sale.status + ")" };
       }
