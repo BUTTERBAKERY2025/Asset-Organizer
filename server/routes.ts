@@ -38924,9 +38924,26 @@ export async function registerRoutes(
         return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
       }
       const currentUser = getCurrentUser(req);
-      const result = await storage.refundPosSale(saleId, reason, currentUser.id);
-      if (!result) return res.status(400).json({ error: "لا يمكن استرداد هذه العملية" });
-      res.json(result);
+      // ربط الاسترجاع بوردية الكاشير الحالية المفتوحة إن وُجدت (لدقة التسوية)
+      let shiftId: number | null = null;
+      if (targetSale.eventId) {
+        const openShift = await storage.getOpenPosShift(targetSale.eventId, currentUser.id);
+        if (openShift) shiftId = openShift.id;
+      }
+      // طريقة إرجاع المبلغ: من العميل إن أُرسلت، وإلا حسب طريقة الدفع الأصلية
+      const refundMethod = req.body.refundMethod === "network" || req.body.refundMethod === "cash"
+        ? req.body.refundMethod
+        : (targetSale.paymentMethod === "network" ? "network" : "cash");
+      const result = await storage.refundPosSaleFull({
+        saleId,
+        refundMethod,
+        reason,
+        refundedBy: currentUser.id,
+        refundedByName: (currentUser as any)?.fullName || (currentUser as any)?.username,
+        shiftId,
+      });
+      if (result.error || !result.sale) return res.status(400).json({ error: result.error || "لا يمكن استرداد هذه العملية" });
+      res.json(result.sale);
     } catch (error: any) {
       console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
