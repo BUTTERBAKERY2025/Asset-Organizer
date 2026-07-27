@@ -18194,14 +18194,14 @@ export class DatabaseStorage implements IStorage {
         COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN total_amount ELSE 0 END), 0) as "cashTotal",
         COALESCE(SUM(CASE WHEN payment_method != 'cash' THEN total_amount ELSE 0 END), 0) as "networkTotal"
       FROM pos_sales 
-      WHERE branch_id = ${branchId} AND sale_date = ${date} AND status IN ('completed', 'partially_refunded')
+      WHERE branch_id = ${branchId} AND sale_date = ${date} AND (status IN ('completed', 'partially_refunded') OR (status = 'refunded' AND EXISTS (SELECT 1 FROM pos_refunds pr2 WHERE pr2.sale_id = pos_sales.id)))
     `);
     const refundsRes2 = await db.execute(sql`
       SELECT COALESCE(SUM(r.total_amount), 0) as "refundsTotal",
         COALESCE(SUM(CASE WHEN r.refund_method = 'cash' THEN r.total_amount ELSE 0 END), 0) as "refundsCash",
         COALESCE(SUM(CASE WHEN r.refund_method != 'cash' THEN r.total_amount ELSE 0 END), 0) as "refundsNetwork"
       FROM pos_refunds r JOIN pos_sales s ON s.id = r.sale_id
-      WHERE s.branch_id = ${branchId} AND s.sale_date = ${date} AND s.status = 'partially_refunded'
+      WHERE s.branch_id = ${branchId} AND s.sale_date = ${date} AND s.status IN ('partially_refunded', 'refunded')
     `);
     const result: any = (resultRes as any).rows?.[0] || (resultRes as any)[0] || {};
     const refunds: any = (refundsRes2 as any).rows?.[0] || (refundsRes2 as any)[0] || {};
