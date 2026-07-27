@@ -17,7 +17,7 @@ import {
   FileText, Hash, Phone, MapPin, Building2,
   Sparkles, Loader2, AlertCircle, Eye, EyeOff,
   GripVertical, DollarSign, Tag, ChevronRight,
-  ImageIcon, Upload
+  ImageIcon, Upload, PartyPopper, Pencil, CalendarDays
 } from "lucide-react";
 
 const EVENT_BRANCH_ID = "EVENT-BB";
@@ -45,6 +45,78 @@ export default function EventPosSettingsPage() {
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/products");
       return res.json();
+    },
+  });
+
+  const [eventForm, setEventForm] = useState({ name: "", location: "", startDate: "", endDate: "", invoicePrefix: "", notes: "" });
+  const [editingEventId, setEditingEventId] = useState<number | null>(null);
+  const [showEventForm, setShowEventForm] = useState(false);
+
+  const { data: posEvents = [], isLoading: eventsLoading } = useQuery({
+    queryKey: ["/api/pos/events", EVENT_BRANCH_ID],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/pos/events?branchId=${EVENT_BRANCH_ID}`);
+      return res.json();
+    },
+  });
+
+  const resetEventForm = () => {
+    setEventForm({ name: "", location: "", startDate: "", endDate: "", invoicePrefix: "", notes: "" });
+    setEditingEventId(null);
+    setShowEventForm(false);
+  };
+
+  const saveEventMutation = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        name: eventForm.name.trim(),
+        location: eventForm.location.trim() || null,
+        startDate: eventForm.startDate || null,
+        endDate: eventForm.endDate || null,
+        invoicePrefix: eventForm.invoicePrefix.trim() || null,
+        notes: eventForm.notes.trim() || null,
+      };
+      if (editingEventId) {
+        const res = await apiRequest("PATCH", `/api/pos/events/${editingEventId}`, payload);
+        return res.json();
+      }
+      const res = await apiRequest("POST", "/api/pos/events", { ...payload, branchId: EVENT_BRANCH_ID, status: "active" });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pos/events"] });
+      toast({ title: editingEventId ? "تم تحديث الإيفنت" : "تم إنشاء الإيفنت بنجاح" });
+      resetEventForm();
+    },
+    onError: () => toast({ title: "خطأ في حفظ الإيفنت", variant: "destructive" }),
+  });
+
+  const eventStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: string }) => {
+      const res = await apiRequest("PATCH", `/api/pos/events/${id}`, { status });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pos/events"] });
+      toast({ title: "تم تحديث حالة الإيفنت" });
+    },
+    onError: () => toast({ title: "خطأ في تحديث الحالة", variant: "destructive" }),
+  });
+
+  const deleteEventMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("DELETE", `/api/pos/events/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pos/events"] });
+      toast({ title: "تم حذف الإيفنت" });
+    },
+    onError: (err: any) => {
+      let msg = err?.message || "";
+      const m = msg.match(/^\d+:\s*(.*)$/s);
+      if (m) { try { msg = JSON.parse(m[1]).error || m[1]; } catch { msg = m[1]; } }
+      toast({ title: "لا يمكن حذف الإيفنت", description: msg, variant: "destructive" });
     },
   });
 
@@ -257,6 +329,10 @@ export default function EventPosSettingsPage() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-5 bg-white border shadow-sm h-auto flex-wrap">
+            <TabsTrigger value="events" className="gap-1.5 data-[state=active]:bg-orange-50 data-[state=active]:text-orange-700" data-testid="settings-tab-events">
+              <PartyPopper className="w-3.5 h-3.5" />
+              الإيفنتات
+            </TabsTrigger>
             <TabsTrigger value="products" className="gap-1.5 data-[state=active]:bg-orange-50 data-[state=active]:text-orange-700" data-testid="settings-tab-products">
               <Package className="w-3.5 h-3.5" />
               إدارة الأصناف
@@ -270,6 +346,126 @@ export default function EventPosSettingsPage() {
               إعدادات عامة
             </TabsTrigger>
           </TabsList>
+
+          {/* Events Management Tab */}
+          <TabsContent value="events" className="mt-0 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm text-gray-700 flex items-center gap-2">
+                <PartyPopper className="w-4 h-4 text-orange-500" />
+                إدارة الإيفنتات
+              </h3>
+              {hasEditAccess && !showEventForm && (
+                <Button onClick={() => { resetEventForm(); setShowEventForm(true); }} className="rounded-xl bg-orange-500 hover:bg-orange-600 gap-1.5 h-10" data-testid="button-new-event">
+                  <Plus className="w-4 h-4" />
+                  إيفنت جديد
+                </Button>
+              )}
+            </div>
+
+            {showEventForm && (
+              <Card className="rounded-2xl border-orange-200 shadow-sm overflow-hidden">
+                <div className="bg-orange-50 px-4 py-3 border-b border-orange-100">
+                  <h4 className="font-bold text-sm text-orange-800">{editingEventId ? "تعديل الإيفنت" : "إيفنت جديد"}</h4>
+                </div>
+                <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 mb-1 block">اسم الإيفنت *</label>
+                    <Input value={eventForm.name} onChange={e => setEventForm(f => ({ ...f, name: e.target.value }))} placeholder="مثال: مهرجان الرياض" className="rounded-xl" data-testid="input-event-name" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 mb-1 block">الموقع</label>
+                    <Input value={eventForm.location} onChange={e => setEventForm(f => ({ ...f, location: e.target.value }))} placeholder="مثال: بوليفارد الرياض" className="rounded-xl" data-testid="input-event-location" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 mb-1 block">تاريخ البداية</label>
+                    <Input type="date" value={eventForm.startDate} onChange={e => setEventForm(f => ({ ...f, startDate: e.target.value }))} className="rounded-xl" data-testid="input-event-start" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 mb-1 block">تاريخ النهاية</label>
+                    <Input type="date" value={eventForm.endDate} onChange={e => setEventForm(f => ({ ...f, endDate: e.target.value }))} className="rounded-xl" data-testid="input-event-end" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 mb-1 block">بادئة رقم الفاتورة (اختياري)</label>
+                    <Input value={eventForm.invoicePrefix} onChange={e => setEventForm(f => ({ ...f, invoicePrefix: e.target.value }))} placeholder="مثال: RYD" className="rounded-xl" data-testid="input-event-prefix" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 mb-1 block">ملاحظات</label>
+                    <Input value={eventForm.notes} onChange={e => setEventForm(f => ({ ...f, notes: e.target.value }))} className="rounded-xl" data-testid="input-event-notes" />
+                  </div>
+                  <div className="md:col-span-2 flex gap-2 justify-end pt-1">
+                    <Button variant="outline" onClick={resetEventForm} className="rounded-xl">إلغاء</Button>
+                    <Button
+                      onClick={() => {
+                        if (!eventForm.name.trim()) { toast({ title: "اسم الإيفنت مطلوب", variant: "destructive" }); return; }
+                        saveEventMutation.mutate();
+                      }}
+                      disabled={saveEventMutation.isPending}
+                      className="rounded-xl bg-orange-500 hover:bg-orange-600 gap-1.5"
+                      data-testid="button-save-event"
+                    >
+                      {saveEventMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      حفظ
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <Card className="rounded-2xl border-gray-200 shadow-sm overflow-hidden">
+              <div className="divide-y divide-gray-50">
+                {eventsLoading ? (
+                  <div className="flex items-center justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-gray-300" /></div>
+                ) : posEvents.length === 0 ? (
+                  <div className="text-center py-10 text-sm text-gray-400">لا توجد إيفنتات بعد — أنشئ أول إيفنت للبدء</div>
+                ) : (
+                  (posEvents as any[]).map((ev: any) => (
+                    <div key={ev.id} className="px-4 py-3 flex flex-wrap items-center gap-3" data-testid={`row-event-${ev.id}`}>
+                      <div className="flex-1 min-w-[180px]">
+                        <div className="font-bold text-sm text-gray-800 flex items-center gap-2">
+                          {ev.name}
+                          {ev.status === "active" && <Badge className="bg-green-100 text-green-700 hover:bg-green-100 text-[10px]">نشط</Badge>}
+                          {ev.status === "closed" && <Badge className="bg-gray-100 text-gray-600 hover:bg-gray-100 text-[10px]">مغلق</Badge>}
+                          {ev.status === "archived" && <Badge className="bg-gray-100 text-gray-400 hover:bg-gray-100 text-[10px]">مؤرشف</Badge>}
+                        </div>
+                        <div className="text-[11px] text-gray-400 flex items-center gap-3 mt-0.5 flex-wrap">
+                          {ev.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{ev.location}</span>}
+                          {(ev.startDate || ev.endDate) && <span className="flex items-center gap-1"><CalendarDays className="w-3 h-3" />{ev.startDate || "؟"} ← {ev.endDate || "؟"}</span>}
+                          {ev.invoicePrefix && <span className="flex items-center gap-1"><Hash className="w-3 h-3" />{ev.invoicePrefix}</span>}
+                        </div>
+                      </div>
+                      {hasEditAccess && (
+                        <div className="flex items-center gap-1.5">
+                          {ev.status === "active" ? (
+                            <Button variant="outline" size="sm" onClick={() => eventStatusMutation.mutate({ id: ev.id, status: "closed" })} className="rounded-lg h-8 text-xs" data-testid={`button-close-event-${ev.id}`}>إغلاق</Button>
+                          ) : (
+                            <Button variant="outline" size="sm" onClick={() => eventStatusMutation.mutate({ id: ev.id, status: "active" })} className="rounded-lg h-8 text-xs text-green-600 border-green-200 hover:bg-green-50" data-testid={`button-activate-event-${ev.id}`}>تفعيل</Button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setEditingEventId(ev.id);
+                              setEventForm({ name: ev.name || "", location: ev.location || "", startDate: ev.startDate || "", endDate: ev.endDate || "", invoicePrefix: ev.invoicePrefix || "", notes: ev.notes || "" });
+                              setShowEventForm(true);
+                            }}
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                            data-testid={`button-edit-event-${ev.id}`}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => { if (confirm(`حذف الإيفنت "${ev.name}"؟ لا يمكن الحذف إذا كانت هناك مبيعات مسجلة عليه.`)) deleteEventMutation.mutate(ev.id); }}
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            data-testid={`button-delete-event-${ev.id}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </Card>
+          </TabsContent>
 
           {/* Products Management Tab */}
           <TabsContent value="products" className="mt-0 space-y-4">

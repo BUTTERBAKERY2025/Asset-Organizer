@@ -84,6 +84,7 @@ import {
   employeeSchedules,
   notificationQueue,
   notificationShareLinks,
+  insertPosEventSchema,
 } from "@shared/schema";
 import { computeSalaryClosing, type SalaryClosingRaw } from "./salary-closing-calc";
 import { 
@@ -38704,11 +38705,28 @@ export async function registerRoutes(
           return res.status(400).json({ error: "مجموع النقد والشبكة لا يتطابق مع الإجمالي" });
         }
       }
+      const saleCashierId = (req as any).currentUser?.id || req.session?.userId;
+      // ربط البيع بالإيفنت والوردية المفتوحة (إلزامي إذا حُدد إيفنت)
+      let eventPrefix: string | null = null;
+      if (saleData.eventId != null) {
+        const eventId = parseInt(String(saleData.eventId), 10);
+        const posEvent = Number.isFinite(eventId) ? await storage.getPosEventById(eventId) : undefined;
+        if (!posEvent) return res.status(400).json({ error: "الإيفنت غير موجود" });
+        if (posEvent.status !== "active") return res.status(400).json({ error: "الإيفنت غير نشط" });
+        if (posEvent.branchId !== saleData.branchId) return res.status(400).json({ error: "الإيفنت لا يتبع هذا الفرع" });
+        const openShift = await storage.getOpenPosShift(eventId, saleCashierId);
+        if (!openShift) return res.status(400).json({ error: "يجب فتح وردية أولًا قبل البيع" });
+        saleData.eventId = eventId;
+        saleData.shiftId = openShift.id;
+        eventPrefix = posEvent.invoicePrefix || null;
+      } else {
+        delete saleData.shiftId;
+      }
       const invoiceNum = await storage.incrementInvoiceNumber(saleData.branchId);
       const settings = await storage.getPosInvoiceSettings(saleData.branchId);
-      const prefix = settings?.invoicePrefix || "EV";
+      const prefix = eventPrefix || settings?.invoicePrefix || "EV";
       saleData.invoiceNumber = `${prefix}-${String(invoiceNum).padStart(6, '0')}`;
-      saleData.cashierId = (req as any).currentUser?.id || req.session?.userId;
+      saleData.cashierId = saleCashierId;
 
       const parsedMemberId = loyaltyMemberId != null ? parseInt(String(loyaltyMemberId)) : null;
       // Authoritative pre-discount gross computed server-side from the persisted
@@ -38737,7 +38755,7 @@ export async function registerRoutes(
       res.status(201).json(sale);
     } catch (error: any) {
       // Loyalty redemption failures are validation errors (Arabic message) — surface to cashier
-      if (error?.message && /بطاقة|الولاء|استنفاد|الحملة|الفرع/.test(error.message)) {
+      if (error?.message && /بطاقة|الولاء|استنفاد|الحملة|الفرع|الوردية/.test(error.message)) {
         return res.status(400).json({ error: error.message });
       }
       console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
@@ -38890,6 +38908,246 @@ export async function registerRoutes(
       const endDate = (req.query.endDate as string) || new Date().toISOString().slice(0, 10);
       const details = await storage.getPosProductSalesDetails(branchId, startDate, endDate);
       res.json(details);
+    } catch (error: any) {
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
+    }
+  });
+
+  // ===== Event POS: الإيفنتات + الورديات + الاسترجاع الجزئي =====
+
+  app.get("/api/pos/events", isAuthenticated, requirePermission("event_pos", "view"), async (req, res) => {
+    try {
+      const branchId = (req.query.branchId as string) || "";
+      if (!branchId) return res.status(400).json({ error: "branchId مطلوب" });
+      if (!await canAccessBranch(req, branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      res.json(await storage.getPosEvents(branchId));
+    } catch (error: any) {
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
+    }
+  });
+
+  app.post("/api/pos/events", isAuthenticated, requirePermission("event_pos", "create"), async (req, res) => {
+    try {
+      const parsed = insertPosEventSchema.safeParse({ ...req.body, createdBy: (req as any).currentUser?.id || req.session?.userId });
+      if (!parsed.success) return res.status(400).json({ error: "بيانات الإيفنت غير صالحة" });
+      if (!await canAccessBranch(req, parsed.data.branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      res.status(201).json(await storage.createPosEvent(parsed.data));
+    } catch (error: any) {
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
+    }
+  });
+
+  app.patch("/api/pos/events/:id", isAuthenticated, requirePermission("event_pos", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const event = await storage.getPosEventById(id);
+      if (!event) return res.status(404).json({ error: "الإيفنت غير موجود" });
+      if (!await canAccessBranch(req, event.branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const { name, location, startDate, endDate, status, invoicePrefix, notes } = req.body;
+      const updated = await storage.updatePosEvent(id, { name, location, startDate, endDate, status, invoicePrefix, notes });
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
+    }
+  });
+
+  app.delete("/api/pos/events/:id", isAuthenticated, requirePermission("event_pos", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const event = await storage.getPosEventById(id);
+      if (!event) return res.status(404).json({ error: "الإيفنت غير موجود" });
+      if (!await canAccessBranch(req, event.branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const result = await storage.deletePosEvent(id);
+      if (!result.ok) return res.status(400).json({ error: result.error });
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
+    }
+  });
+
+  app.get("/api/pos/events/:id/report", isAuthenticated, requirePermission("event_pos", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const event = await storage.getPosEventById(id);
+      if (!event) return res.status(404).json({ error: "الإيفنت غير موجود" });
+      if (!await canAccessBranch(req, event.branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const report = await storage.getPosEventReport(id);
+      res.json({ event, ...report });
+    } catch (error: any) {
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
+    }
+  });
+
+  app.get("/api/pos/events/:id/shifts", isAuthenticated, requirePermission("event_pos", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const event = await storage.getPosEventById(id);
+      if (!event) return res.status(404).json({ error: "الإيفنت غير موجود" });
+      if (!await canAccessBranch(req, event.branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      res.json(await storage.getPosShifts(id));
+    } catch (error: any) {
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
+    }
+  });
+
+  app.get("/api/pos/shifts/current", isAuthenticated, requirePermission("event_pos", "view"), async (req, res) => {
+    try {
+      const eventId = parseInt(req.query.eventId as string, 10);
+      if (!Number.isFinite(eventId)) return res.status(400).json({ error: "eventId مطلوب" });
+      const event = await storage.getPosEventById(eventId);
+      if (!event) return res.status(404).json({ error: "الإيفنت غير موجود" });
+      if (!await canAccessBranch(req, event.branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const cashierId = (req as any).currentUser?.id || req.session?.userId;
+      const shift = await storage.getOpenPosShift(eventId, cashierId);
+      res.json(shift || null);
+    } catch (error: any) {
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
+    }
+  });
+
+  app.post("/api/pos/shifts/open", isAuthenticated, requirePermission("event_pos", "create"), async (req, res) => {
+    try {
+      const eventId = parseInt(String(req.body.eventId), 10);
+      if (!Number.isFinite(eventId)) return res.status(400).json({ error: "eventId مطلوب" });
+      const event = await storage.getPosEventById(eventId);
+      if (!event) return res.status(404).json({ error: "الإيفنت غير موجود" });
+      if (event.status !== "active") return res.status(400).json({ error: "الإيفنت غير نشط" });
+      if (!await canAccessBranch(req, event.branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const currentUser = (req as any).currentUser;
+      const cashierId = currentUser?.id || req.session?.userId;
+      const openingCash = Math.max(0, Number(req.body.openingCash) || 0);
+      const shift = await storage.openPosShift({
+        eventId,
+        branchId: event.branchId,
+        cashierId,
+        cashierName: currentUser?.fullName || currentUser?.username || "كاشير",
+        openingCash,
+        status: "open",
+      });
+      res.status(201).json(shift);
+    } catch (error: any) {
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
+    }
+  });
+
+  app.get("/api/pos/shifts/:id/stats", isAuthenticated, requirePermission("event_pos", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const shift = await storage.getPosShiftById(id);
+      if (!shift) return res.status(404).json({ error: "الوردية غير موجودة" });
+      if (!await canAccessBranch(req, shift.branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const stats = await storage.getPosShiftStats(id);
+      const expectedCash = Math.round(((shift.openingCash || 0) + stats.cashTotal - stats.refundsCash) * 100) / 100;
+      const expectedNetwork = Math.round((stats.networkTotal - stats.refundsNetwork) * 100) / 100;
+      res.json({ shift, ...stats, expectedCash, expectedNetwork });
+    } catch (error: any) {
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
+    }
+  });
+
+  app.post("/api/pos/shifts/:id/close", isAuthenticated, requirePermission("event_pos", "create"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const shift = await storage.getPosShiftById(id);
+      if (!shift) return res.status(404).json({ error: "الوردية غير موجودة" });
+      if (!await canAccessBranch(req, shift.branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const closeUser = (req as any).currentUser;
+      const currentUserId = closeUser?.id || req.session?.userId;
+      // الكاشير يغلق ورديته فقط، والمدير (صلاحية تعديل) يغلق أي وردية
+      let isManagerReq = closeUser?.role === "admin";
+      if (!isManagerReq && currentUserId) {
+        const perms = await storage.getUserPermissions(currentUserId);
+        const mp = perms.find((p: any) => p.module === "event_pos");
+        const raw = mp?.actions as unknown;
+        const acts = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.replace(/[{}]/g, "").split(",").map((a: string) => a.trim()) : [];
+        isManagerReq = acts.includes("edit");
+      }
+      if (shift.cashierId !== currentUserId && !isManagerReq) {
+        return res.status(403).json({ error: "لا يمكنك إغلاق وردية كاشير آخر" });
+      }
+      const actualCash = Number(req.body.actualCash);
+      const actualNetwork = Number(req.body.actualNetwork) || 0;
+      if (!Number.isFinite(actualCash) || actualCash < 0) {
+        return res.status(400).json({ error: "المبلغ النقدي الفعلي مطلوب" });
+      }
+      const closed = await storage.closePosShift(id, {
+        actualCash,
+        actualNetwork,
+        notes: req.body.notes,
+        closedBy: currentUserId,
+      });
+      if (!closed) return res.status(400).json({ error: "الوردية مغلقة بالفعل" });
+      res.json(closed);
+    } catch (error: any) {
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
+    }
+  });
+
+  app.get("/api/pos/sales/:id/refunds", isAuthenticated, requirePermission("event_pos", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const sale = await storage.getPosSaleById(id);
+      if (!sale) return res.status(404).json({ error: "الفاتورة غير موجودة" });
+      if (!await canAccessBranch(req, sale.branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const items = await storage.getPosSaleItems(id);
+      const refunds = await storage.getPosRefundsBySale(id);
+      res.json({ sale, items, refunds });
+    } catch (error: any) {
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
+    }
+  });
+
+  app.post("/api/pos/sales/:id/partial-refund", isAuthenticated, requirePermission("event_pos", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const sale = await storage.getPosSaleById(id);
+      if (!sale) return res.status(404).json({ error: "الفاتورة غير موجودة" });
+      if (!await canAccessBranch(req, sale.branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const items = Array.isArray(req.body.items) ? req.body.items : [];
+      if (items.length === 0) return res.status(400).json({ error: "حدد الأصناف المراد استرجاعها" });
+      const currentUser = (req as any).currentUser;
+      const currentUserId = currentUser?.id || req.session?.userId;
+      // إذا كان للكاشير الحالي وردية مفتوحة على نفس الإيفنت اربط الاسترجاع بها
+      let shiftId: number | null = null;
+      if (sale.eventId) {
+        const openShift = await storage.getOpenPosShift(sale.eventId, currentUserId);
+        if (openShift) shiftId = openShift.id;
+      }
+      const result = await storage.createPosPartialRefund({
+        saleId: id,
+        items: items.map((it: any) => ({ saleItemId: parseInt(String(it.saleItemId), 10), quantity: parseInt(String(it.quantity), 10) })),
+        refundMethod: req.body.refundMethod === "network" ? "network" : "cash",
+        reason: req.body.reason,
+        refundedBy: currentUserId,
+        refundedByName: currentUser?.fullName || currentUser?.username,
+        shiftId,
+      });
+      if (result.error) return res.status(400).json({ error: result.error });
+      res.status(201).json(result.refund);
     } catch (error: any) {
       console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }

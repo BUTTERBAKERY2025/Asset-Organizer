@@ -600,6 +600,17 @@ import {
   posHeldOrders,
   type PosHeldOrder,
   type InsertPosHeldOrder,
+  posEvents,
+  type PosEvent,
+  type InsertPosEvent,
+  posShifts,
+  type PosShift,
+  type InsertPosShift,
+  posRefunds,
+  type PosRefund,
+  type InsertPosRefund,
+  posRefundItems,
+  type PosRefundItem,
   // Phase 8: Field Hub
   fieldChecklistTemplates,
   type FieldChecklistTemplate,
@@ -1627,6 +1638,21 @@ export interface IStorage {
   // Event POS - Held Orders
   createHeldOrder(data: InsertPosHeldOrder): Promise<PosHeldOrder>;
   getHeldOrders(branchId: string): Promise<PosHeldOrder[]>;
+  createPosEvent(data: InsertPosEvent): Promise<PosEvent>;
+  getPosEvents(branchId?: string): Promise<PosEvent[]>;
+  getPosEventById(id: number): Promise<PosEvent | undefined>;
+  updatePosEvent(id: number, data: Partial<InsertPosEvent>): Promise<PosEvent | undefined>;
+  deletePosEvent(id: number): Promise<{ ok: boolean; error?: string }>;
+  getOpenPosShift(eventId: number, cashierId: string): Promise<PosShift | undefined>;
+  openPosShift(data: InsertPosShift): Promise<PosShift>;
+  getPosShifts(eventId: number): Promise<PosShift[]>;
+  getPosShiftById(id: number): Promise<PosShift | undefined>;
+  getPosShiftStats(shiftId: number): Promise<{ salesCount: number; salesTotal: number; cashTotal: number; networkTotal: number; refundsTotal: number; refundsCash: number; refundsNetwork: number }>;
+  closePosShift(shiftId: number, params: { actualCash: number; actualNetwork: number; notes?: string; closedBy: string }): Promise<PosShift | undefined>;
+  getPosSaleItemsWithRefunds(saleId: number): Promise<PosSaleItem[]>;
+  createPosPartialRefund(params: { saleId: number; items: { saleItemId: number; quantity: number }[]; refundMethod: string; reason?: string; refundedBy: string; refundedByName?: string; shiftId?: number | null }): Promise<{ refund?: PosRefund; error?: string }>;
+  getPosRefundsBySale(saleId: number): Promise<(PosRefund & { items: PosRefundItem[] })[]>;
+  getPosEventReport(eventId: number): Promise<any>;
   deleteHeldOrder(id: number): Promise<boolean>;
 
   getPosSalesReport(branchId: string, startDate: string, endDate: string): Promise<{
@@ -18094,6 +18120,13 @@ export class DatabaseStorage implements IStorage {
     afterInsert?: (tx: any, newSale: PosSale) => Promise<void>
   ): Promise<PosSale> {
     return await db.transaction(async (tx) => {
+      // إعادة التحقق من حالة الوردية داخل المعاملة لمنع سباق الإغلاق/البيع
+      if ((sale as any).shiftId != null) {
+        const [shiftRow] = await tx.select().from(posShifts).where(eq(posShifts.id, (sale as any).shiftId)).for("update");
+        if (!shiftRow || shiftRow.status !== "open") {
+          throw new Error("الوردية مغلقة — افتح وردية جديدة قبل البيع");
+        }
+      }
       const [newSale] = await tx.insert(posSales).values(sale).returning();
       if (items && items.length > 0) {
         const saleItems = items.map(item => ({ ...item, saleId: newSale.id }));
@@ -18292,6 +18325,300 @@ export class DatabaseStorage implements IStorage {
       paymentMethod: r.paymentMethod || '',
       invoiceNumber: r.invoiceNumber || '',
     }));
+  }
+
+  // ============================================================
+  // Event POS: الإيفنتات المتعددة + الورديات + الاسترجاع الجزئي
+  // ============================================================
+
+  async createPosEvent(data: InsertPosEvent): Promise<PosEvent> {
+    const [event] = await db.insert(posEvents).values(data).returning();
+    return event;
+  }
+
+  async getPosEvents(branchId?: string): Promise<PosEvent[]> {
+    if (branchId) {
+      return await db.select().from(posEvents).where(eq(posEvents.branchId, branchId)).orderBy(desc(posEvents.createdAt));
+    }
+    return await db.select().from(posEvents).orderBy(desc(posEvents.createdAt));
+  }
+
+  async getPosEventById(id: number): Promise<PosEvent | undefined> {
+    const [event] = await db.select().from(posEvents).where(eq(posEvents.id, id));
+    return event || undefined;
+  }
+
+  async updatePosEvent(id: number, data: Partial<InsertPosEvent>): Promise<PosEvent | undefined> {
+    const [updated] = await db.update(posEvents).set(data).where(eq(posEvents.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deletePosEvent(id: number): Promise<{ ok: boolean; error?: string }> {
+    const salesCount = await db.execute(sql`SELECT COUNT(*)::int as c FROM pos_sales WHERE event_id = ${id}`);
+    const c = Number(((salesCount as any).rows?.[0] || (salesCount as any)[0])?.c) || 0;
+    if (c > 0) return { ok: false, error: "لا يمكن حذف إيفنت عليه مبيعات — يمكنك إغلاقه أو أرشفته" };
+    await db.delete(posShifts).where(eq(posShifts.eventId, id));
+    await db.delete(posEvents).where(eq(posEvents.id, id));
+    return { ok: true };
+  }
+
+  async getOpenPosShift(eventId: number, cashierId: string): Promise<PosShift | undefined> {
+    const [shift] = await db.select().from(posShifts)
+      .where(and(eq(posShifts.eventId, eventId), eq(posShifts.cashierId, cashierId), eq(posShifts.status, "open")));
+    return shift || undefined;
+  }
+
+  async openPosShift(data: InsertPosShift): Promise<PosShift> {
+    return await db.transaction(async (tx) => {
+      const existing = await tx.select().from(posShifts)
+        .where(and(eq(posShifts.eventId, data.eventId), eq(posShifts.cashierId, data.cashierId), eq(posShifts.status, "open")))
+        .for("update");
+      if (existing.length > 0) return existing[0];
+      const [shift] = await tx.insert(posShifts).values({ ...data, status: "open" }).returning();
+      return shift;
+    });
+  }
+
+  async getPosShifts(eventId: number): Promise<PosShift[]> {
+    return await db.select().from(posShifts).where(eq(posShifts.eventId, eventId)).orderBy(desc(posShifts.openedAt));
+  }
+
+  async getPosShiftById(id: number): Promise<PosShift | undefined> {
+    const [shift] = await db.select().from(posShifts).where(eq(posShifts.id, id));
+    return shift || undefined;
+  }
+
+  // إحصائيات الوردية الحالية (تُحسب من المبيعات المرتبطة بالوردية)
+  async getPosShiftStats(shiftId: number, dbx: any = db): Promise<{ salesCount: number; salesTotal: number; cashTotal: number; networkTotal: number; refundsTotal: number; refundsCash: number; refundsNetwork: number }> {
+    const salesRes = await dbx.execute(sql`
+      SELECT
+        COUNT(*)::int as "salesCount",
+        COALESCE(SUM(total_amount), 0) as "salesTotal",
+        COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN total_amount WHEN payment_method = 'split' THEN COALESCE(cash_amount, 0) ELSE 0 END), 0) as "cashTotal",
+        COALESCE(SUM(CASE WHEN payment_method = 'network' THEN total_amount WHEN payment_method = 'split' THEN COALESCE(network_amount, 0) ELSE 0 END), 0) as "networkTotal"
+      FROM pos_sales
+      WHERE shift_id = ${shiftId} AND status IN ('completed', 'partially_refunded')
+    `);
+    const s: any = (salesRes as any).rows?.[0] || (salesRes as any)[0] || {};
+    const refundsRes = await dbx.execute(sql`
+      SELECT
+        COALESCE(SUM(total_amount), 0) as "refundsTotal",
+        COALESCE(SUM(CASE WHEN refund_method = 'cash' THEN total_amount ELSE 0 END), 0) as "refundsCash",
+        COALESCE(SUM(CASE WHEN refund_method = 'network' THEN total_amount ELSE 0 END), 0) as "refundsNetwork"
+      FROM pos_refunds WHERE shift_id = ${shiftId}
+    `);
+    const r: any = (refundsRes as any).rows?.[0] || (refundsRes as any)[0] || {};
+    return {
+      salesCount: Number(s.salesCount) || 0,
+      salesTotal: Number(s.salesTotal) || 0,
+      cashTotal: Number(s.cashTotal) || 0,
+      networkTotal: Number(s.networkTotal) || 0,
+      refundsTotal: Number(r.refundsTotal) || 0,
+      refundsCash: Number(r.refundsCash) || 0,
+      refundsNetwork: Number(r.refundsNetwork) || 0,
+    };
+  }
+
+  async closePosShift(shiftId: number, params: { actualCash: number; actualNetwork: number; notes?: string; closedBy: string }): Promise<PosShift | undefined> {
+    return await db.transaction(async (tx) => {
+      const [shift] = await tx.select().from(posShifts).where(eq(posShifts.id, shiftId)).for("update");
+      if (!shift || shift.status !== "open") return undefined;
+      const stats = await this.getPosShiftStats(shiftId, tx);
+      const expectedCash = (shift.openingCash || 0) + stats.cashTotal - stats.refundsCash;
+      const expectedNetwork = stats.networkTotal - stats.refundsNetwork;
+      const cashDiscrepancy = Math.round(((params.actualCash || 0) - expectedCash) * 100) / 100;
+      const [updated] = await tx.update(posShifts).set({
+        status: "closed",
+        closedAt: new Date(),
+        expectedCash: Math.round(expectedCash * 100) / 100,
+        expectedNetwork: Math.round(expectedNetwork * 100) / 100,
+        actualCash: params.actualCash,
+        actualNetwork: params.actualNetwork,
+        cashDiscrepancy,
+        salesCount: stats.salesCount,
+        salesTotal: Math.round(stats.salesTotal * 100) / 100,
+        refundsTotal: Math.round(stats.refundsTotal * 100) / 100,
+        notes: params.notes || null,
+        closedBy: params.closedBy,
+      }).where(eq(posShifts.id, shiftId)).returning();
+      return updated || undefined;
+    });
+  }
+
+  async getPosSaleItemsWithRefunds(saleId: number): Promise<PosSaleItem[]> {
+    return await db.select().from(posSaleItems).where(eq(posSaleItems.saleId, saleId));
+  }
+
+  // استرجاع جزئي ذري
+  async createPosPartialRefund(params: {
+    saleId: number;
+    items: { saleItemId: number; quantity: number }[];
+    refundMethod: string;
+    reason?: string;
+    refundedBy: string;
+    refundedByName?: string;
+    shiftId?: number | null;
+  }): Promise<{ refund?: PosRefund; error?: string }> {
+    return await db.transaction(async (tx) => {
+      const [sale] = await tx.select().from(posSales).where(eq(posSales.id, params.saleId)).for("update");
+      if (!sale) return { error: "الفاتورة غير موجودة" };
+      if (!["completed", "partially_refunded"].includes(sale.status)) {
+        return { error: "لا يمكن الاسترجاع من هذه الفاتورة (حالتها: " + sale.status + ")" };
+      }
+      const saleItems = await tx.select().from(posSaleItems).where(eq(posSaleItems.saleId, params.saleId)).for("update");
+      const itemMap = new Map(saleItems.map((it) => [it.id, it]));
+
+      let subtotal = 0, vatTotal = 0, total = 0;
+      const refundItemRows: any[] = [];
+      for (const reqItem of params.items) {
+        const it = itemMap.get(reqItem.saleItemId);
+        if (!it) return { error: "صنف غير موجود في الفاتورة" };
+        const qty = Math.floor(Number(reqItem.quantity) || 0);
+        if (qty <= 0) continue;
+        const remaining = it.quantity - (it.refundedQuantity || 0);
+        if (qty > remaining) {
+          return { error: `الكمية المطلوب استرجاعها من "${it.productName}" أكبر من المتبقي (${remaining})` };
+        }
+        const lineTotal = Math.round((it.totalPrice / it.quantity) * qty * 100) / 100;
+        const lineVat = Math.round((it.vatAmount / it.quantity) * qty * 100) / 100;
+        subtotal += lineTotal - lineVat;
+        vatTotal += lineVat;
+        total += lineTotal;
+        refundItemRows.push({
+          saleItemId: it.id,
+          productId: it.productId,
+          productName: it.productName,
+          quantity: qty,
+          unitPrice: it.unitPrice,
+          vatAmount: lineVat,
+          totalPrice: lineTotal,
+        });
+      }
+      if (refundItemRows.length === 0) return { error: "لم يتم تحديد أصناف للاسترجاع" };
+
+      // خصم تناسبي إذا كانت الفاتورة عليها خصم
+      const saleGross = saleItems.reduce((s, it) => s + it.totalPrice, 0);
+      const discount = sale.discountAmount || 0;
+      if (discount > 0 && saleGross > 0) {
+        const ratio = total / saleGross;
+        const discountShare = Math.round(discount * ratio * 100) / 100;
+        total = Math.round((total - discountShare) * 100) / 100;
+        subtotal = Math.round((subtotal - discountShare) * 100) / 100;
+      }
+
+      const countRes = await tx.execute(sql`SELECT COUNT(*)::int as c FROM pos_refunds WHERE sale_id = ${params.saleId}`);
+      const seq = (Number(((countRes as any).rows?.[0] || (countRes as any)[0])?.c) || 0) + 1;
+      const refundNumber = `${sale.invoiceNumber}-R${seq}`;
+
+      const [refund] = await tx.insert(posRefunds).values({
+        saleId: params.saleId,
+        eventId: sale.eventId,
+        shiftId: params.shiftId ?? sale.shiftId,
+        refundNumber,
+        subtotal: Math.round(subtotal * 100) / 100,
+        vatAmount: Math.round(vatTotal * 100) / 100,
+        totalAmount: Math.round(total * 100) / 100,
+        refundMethod: params.refundMethod === "network" ? "network" : "cash",
+        reason: params.reason || null,
+        refundedBy: params.refundedBy,
+        refundedByName: params.refundedByName || null,
+      }).returning();
+
+      await tx.insert(posRefundItems).values(refundItemRows.map((r) => ({ ...r, refundId: refund.id })));
+
+      for (const r of refundItemRows) {
+        await tx.update(posSaleItems)
+          .set({ refundedQuantity: sql`${posSaleItems.refundedQuantity} + ${r.quantity}` })
+          .where(eq(posSaleItems.id, r.saleItemId));
+      }
+
+      const updatedItems = await tx.select().from(posSaleItems).where(eq(posSaleItems.saleId, params.saleId));
+      const fullyRefunded = updatedItems.every((it) => (it.refundedQuantity || 0) >= it.quantity);
+      await tx.update(posSales).set({
+        status: fullyRefunded ? "refunded" : "partially_refunded",
+        refundReason: params.reason || sale.refundReason,
+        refundedBy: params.refundedBy,
+        refundedAt: new Date(),
+      }).where(eq(posSales.id, params.saleId));
+
+      return { refund };
+    });
+  }
+
+  async getPosRefundsBySale(saleId: number): Promise<(PosRefund & { items: PosRefundItem[] })[]> {
+    const refunds = await db.select().from(posRefunds).where(eq(posRefunds.saleId, saleId)).orderBy(desc(posRefunds.createdAt));
+    const result: (PosRefund & { items: PosRefundItem[] })[] = [];
+    for (const r of refunds) {
+      const items = await db.select().from(posRefundItems).where(eq(posRefundItems.refundId, r.id));
+      result.push({ ...r, items });
+    }
+    return result;
+  }
+
+  // تقرير شامل لإيفنت واحد
+  async getPosEventReport(eventId: number): Promise<any> {
+    const summaryRes = await db.execute(sql`
+      SELECT
+        COALESCE(SUM(CASE WHEN status IN ('completed','partially_refunded') THEN total_amount ELSE 0 END), 0) as "totalSales",
+        COALESCE(SUM(CASE WHEN status IN ('completed','partially_refunded') THEN 1 ELSE 0 END), 0)::int as "totalTransactions",
+        COALESCE(SUM(CASE WHEN status IN ('completed','partially_refunded') THEN COALESCE(vat_amount,0) ELSE 0 END), 0) as "vatTotal",
+        COALESCE(SUM(CASE WHEN status IN ('completed','partially_refunded') THEN COALESCE(discount_amount,0) ELSE 0 END), 0) as "discountTotal",
+        COALESCE(SUM(CASE WHEN status IN ('completed','partially_refunded') AND payment_method = 'cash' THEN total_amount WHEN status IN ('completed','partially_refunded') AND payment_method = 'split' THEN COALESCE(cash_amount,0) ELSE 0 END), 0) as "cashTotal",
+        COALESCE(SUM(CASE WHEN status IN ('completed','partially_refunded') AND payment_method = 'network' THEN total_amount WHEN status IN ('completed','partially_refunded') AND payment_method = 'split' THEN COALESCE(network_amount,0) ELSE 0 END), 0) as "networkTotal",
+        COALESCE(SUM(CASE WHEN status = 'voided' THEN 1 ELSE 0 END), 0)::int as "voidedCount"
+      FROM pos_sales WHERE event_id = ${eventId}
+    `);
+    const summary: any = (summaryRes as any).rows?.[0] || (summaryRes as any)[0] || {};
+
+    const refundsRes = await db.execute(sql`
+      SELECT COALESCE(SUM(total_amount), 0) as "refundsTotal", COUNT(*)::int as "refundsCount"
+      FROM pos_refunds WHERE event_id = ${eventId}
+    `);
+    const refunds: any = (refundsRes as any).rows?.[0] || (refundsRes as any)[0] || {};
+
+    const dailyRes = await db.execute(sql`
+      SELECT sale_date as "date", COALESCE(SUM(total_amount), 0) as "sales", COUNT(*)::int as "transactions"
+      FROM pos_sales WHERE event_id = ${eventId} AND status IN ('completed','partially_refunded')
+      GROUP BY sale_date ORDER BY sale_date
+    `);
+    const daily: any[] = (dailyRes as any).rows || (dailyRes as any) || [];
+
+    const productsRes = await db.execute(sql`
+      SELECT psi.product_id as "productId", psi.product_name as "productName",
+        SUM(psi.quantity)::int as "totalQuantity",
+        SUM(psi.total_price) as "totalRevenue",
+        SUM(psi.refunded_quantity)::int as "refundedQuantity"
+      FROM pos_sale_items psi
+      INNER JOIN pos_sales ps ON psi.sale_id = ps.id
+      WHERE ps.event_id = ${eventId} AND ps.status IN ('completed','partially_refunded')
+      GROUP BY psi.product_id, psi.product_name
+      ORDER BY SUM(psi.total_price) DESC
+    `);
+    const products: any[] = (productsRes as any).rows || (productsRes as any) || [];
+
+    const shifts = await this.getPosShifts(eventId);
+
+    return {
+      totalSales: Number(summary.totalSales) || 0,
+      totalTransactions: Number(summary.totalTransactions) || 0,
+      vatTotal: Number(summary.vatTotal) || 0,
+      discountTotal: Number(summary.discountTotal) || 0,
+      cashTotal: Number(summary.cashTotal) || 0,
+      networkTotal: Number(summary.networkTotal) || 0,
+      voidedCount: Number(summary.voidedCount) || 0,
+      refundsTotal: Number(refunds.refundsTotal) || 0,
+      refundsCount: Number(refunds.refundsCount) || 0,
+      netSales: (Number(summary.totalSales) || 0) - (Number(refunds.refundsTotal) || 0),
+      dailySales: daily.map((r: any) => ({ date: r.date, sales: Number(r.sales) || 0, transactions: Number(r.transactions) || 0 })),
+      productSales: products.map((r: any) => ({
+        productId: Number(r.productId) || 0,
+        productName: r.productName || "",
+        totalQuantity: Number(r.totalQuantity) || 0,
+        totalRevenue: Number(r.totalRevenue) || 0,
+        refundedQuantity: Number(r.refundedQuantity) || 0,
+      })),
+      shifts,
+    };
   }
 
   // ============================================================

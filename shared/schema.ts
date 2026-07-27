@@ -10994,10 +10994,14 @@ export const posSales = pgTable("pos_sales", {
   refundedBy: varchar("refunded_by"),
   refundedAt: timestamp("refunded_at"),
   originalSaleId: integer("original_sale_id"),
+  eventId: integer("event_id"),
+  shiftId: integer("shift_id"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_pos_sales_branch_date").on(table.branchId, table.saleDate),
+  index("idx_pos_sales_event").on(table.eventId),
+  index("idx_pos_sales_shift").on(table.shiftId),
   index("idx_pos_sales_cashier").on(table.cashierId),
   index("idx_pos_sales_invoice").on(table.invoiceNumber),
   index("idx_pos_sales_status").on(table.status),
@@ -11021,6 +11025,7 @@ export const posSaleItems = pgTable("pos_sale_items", {
   vatRate: doublePrecision("vat_rate").default(0.15).notNull(),
   vatAmount: doublePrecision("vat_amount").default(0).notNull(),
   totalPrice: doublePrecision("total_price").notNull(),
+  refundedQuantity: integer("refunded_quantity").default(0).notNull(),
 }, (table) => [
   index("idx_pos_sale_items_sale").on(table.saleId),
   index("idx_pos_sale_items_product").on(table.productId),
@@ -11045,6 +11050,7 @@ export const posHeldOrders = pgTable("pos_held_orders", {
   discountType: text("discount_type"),
   discountValue: doublePrecision("discount_value").default(0),
   totalAmount: doublePrecision("total_amount").default(0),
+  eventId: integer("event_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_pos_held_orders_branch").on(table.branchId),
@@ -11057,6 +11063,112 @@ export const insertPosHeldOrderSchema = createInsertSchema(posHeldOrders).omit({
 });
 export type PosHeldOrder = typeof posHeldOrders.$inferSelect;
 export type InsertPosHeldOrder = z.infer<typeof insertPosHeldOrderSchema>;
+
+// الإيفنتات الموسمية المتعددة
+export const posEvents = pgTable("pos_events", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  location: text("location"),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  startDate: text("start_date"),
+  endDate: text("end_date"),
+  status: text("status").default("active").notNull(), // active | closed | archived
+  invoicePrefix: text("invoice_prefix"),
+  notes: text("notes"),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_pos_events_branch").on(table.branchId),
+  index("idx_pos_events_status").on(table.status),
+]);
+
+export const insertPosEventSchema = createInsertSchema(posEvents).omit({
+  id: true,
+  createdAt: true,
+});
+export type PosEvent = typeof posEvents.$inferSelect;
+export type InsertPosEvent = z.infer<typeof insertPosEventSchema>;
+
+// ورديات كاشير الإيفنت
+export const posShifts = pgTable("pos_shifts", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").notNull().references(() => posEvents.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  cashierId: varchar("cashier_id").notNull().references(() => users.id),
+  cashierName: text("cashier_name").notNull(),
+  openedAt: timestamp("opened_at").defaultNow().notNull(),
+  closedAt: timestamp("closed_at"),
+  openingCash: doublePrecision("opening_cash").default(0).notNull(),
+  expectedCash: doublePrecision("expected_cash"),
+  expectedNetwork: doublePrecision("expected_network"),
+  actualCash: doublePrecision("actual_cash"),
+  actualNetwork: doublePrecision("actual_network"),
+  cashDiscrepancy: doublePrecision("cash_discrepancy"),
+  salesCount: integer("sales_count"),
+  salesTotal: doublePrecision("sales_total"),
+  refundsTotal: doublePrecision("refunds_total"),
+  status: text("status").default("open").notNull(), // open | closed
+  notes: text("notes"),
+  closedBy: varchar("closed_by"),
+}, (table) => [
+  index("idx_pos_shifts_event").on(table.eventId),
+  index("idx_pos_shifts_cashier").on(table.cashierId),
+  index("idx_pos_shifts_status").on(table.status),
+]);
+
+export const insertPosShiftSchema = createInsertSchema(posShifts).omit({
+  id: true,
+  openedAt: true,
+});
+export type PosShift = typeof posShifts.$inferSelect;
+export type InsertPosShift = z.infer<typeof insertPosShiftSchema>;
+
+// الاسترجاع الجزئي
+export const posRefunds = pgTable("pos_refunds", {
+  id: serial("id").primaryKey(),
+  saleId: integer("sale_id").notNull().references(() => posSales.id, { onDelete: "cascade" }),
+  eventId: integer("event_id").references(() => posEvents.id),
+  shiftId: integer("shift_id").references(() => posShifts.id),
+  refundNumber: text("refund_number").notNull(),
+  subtotal: doublePrecision("subtotal").default(0).notNull(),
+  vatAmount: doublePrecision("vat_amount").default(0).notNull(),
+  totalAmount: doublePrecision("total_amount").default(0).notNull(),
+  refundMethod: text("refund_method").default("cash").notNull(), // cash | network
+  reason: text("reason"),
+  refundedBy: varchar("refunded_by").notNull(),
+  refundedByName: text("refunded_by_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_pos_refunds_sale").on(table.saleId),
+  index("idx_pos_refunds_event").on(table.eventId),
+]);
+
+export const insertPosRefundSchema = createInsertSchema(posRefunds).omit({
+  id: true,
+  createdAt: true,
+});
+export type PosRefund = typeof posRefunds.$inferSelect;
+export type InsertPosRefund = z.infer<typeof insertPosRefundSchema>;
+
+export const posRefundItems = pgTable("pos_refund_items", {
+  id: serial("id").primaryKey(),
+  refundId: integer("refund_id").notNull().references(() => posRefunds.id, { onDelete: "cascade" }),
+  saleItemId: integer("sale_item_id").notNull().references(() => posSaleItems.id),
+  productId: integer("product_id").notNull(),
+  productName: text("product_name").notNull(),
+  quantity: integer("quantity").notNull(),
+  unitPrice: doublePrecision("unit_price").notNull(),
+  vatAmount: doublePrecision("vat_amount").default(0).notNull(),
+  totalPrice: doublePrecision("total_price").notNull(),
+}, (table) => [
+  index("idx_pos_refund_items_refund").on(table.refundId),
+]);
+
+export const insertPosRefundItemSchema = createInsertSchema(posRefundItems).omit({
+  id: true,
+});
+export type PosRefundItem = typeof posRefundItems.$inferSelect;
+export type InsertPosRefundItem = z.infer<typeof insertPosRefundItemSchema>;
 
 // المرحلة 11: جداول جدولة التقارير الشهرية الآلية
 export const reportSchedules = pgTable("report_schedules", {

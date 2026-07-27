@@ -78,6 +78,7 @@ const AdvancedProductionOrderDetailsPage = makeLazy("advanced-production-order-d
 const SalesDataUploadsPage = makeLazy("sales-data-uploads");
 const EventPosPage = makeLazy("event-pos");
 const EventPosSettingsPage = makeLazy("event-pos-settings");
+const EventReportsPage = makeLazy("event-reports");
 const ProductionDashboardPage = makeLazy("production-dashboard");
 const DailyProductionPage = makeLazy("daily-production");
 const ProductionReportsPage = makeLazy("production-reports");
@@ -383,6 +384,7 @@ const Router = React.memo(function Router() {
       <Route path="/branch-daily-closing">{() => <ModulePage component={BranchDailyClosingPage} module="daily_closures" />}</Route>
       <Route path="/sales-analytics">{() => <ModulePage component={SalesAnalyticsPage} module="sales_analytics" />}</Route>
       <Route path="/event-pos-settings">{() => <ModulePage component={EventPosSettingsPage} module="event_pos" />}</Route>
+      <Route path="/event-reports">{() => <ModulePage component={EventReportsPage} module="event_pos" />}</Route>
       <Route path="/event-pos">{() => <ModulePage component={EventPosPage} module="event_pos" />}</Route>
       <Route path="/targets-planning">{() => <ModulePage component={TargetsPlanningPage} module="targets_planning" />}</Route>
       <Route path="/targets-dashboard">{() => <ModulePage component={TargetsDashboardPage} module="targets" />}</Route>

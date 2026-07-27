@@ -14,7 +14,8 @@ import {
   Sparkles, TrendingUp, Hash, Clock, Loader2,
   ListOrdered, Zap, Coffee, Pause, Play, Ban,
   RotateCcw, FileText, Download, Filter, AlertTriangle,
-  SplitSquareHorizontal, Calendar, Gift
+  SplitSquareHorizontal, Calendar, Gift, PartyPopper,
+  DoorOpen, LogOut, Undo2, MapPin
 } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
 import { QRCodeSVG } from "qrcode.react";
@@ -128,6 +129,27 @@ export default function EventPosPage() {
   const [voidAction, setVoidAction] = useState<"void" | "refund">("void");
 
   const [showZReport, setShowZReport] = useState(false);
+  const [showMobileCart, setShowMobileCart] = useState(false);
+
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(() => {
+    const v = localStorage.getItem("pos_selected_event");
+    const n = v ? parseInt(v, 10) : NaN;
+    return Number.isFinite(n) ? n : null;
+  });
+  const [showShiftOpen, setShowShiftOpen] = useState(false);
+  const [openingCash, setOpeningCash] = useState("");
+  const [showShiftClose, setShowShiftClose] = useState(false);
+  const [actualCashInput, setActualCashInput] = useState("");
+  const [actualNetworkInput, setActualNetworkInput] = useState("");
+  const [shiftCloseNotes, setShiftCloseNotes] = useState("");
+  const [closedShiftResult, setClosedShiftResult] = useState<any>(null);
+
+  const [showPartialRefund, setShowPartialRefund] = useState(false);
+  const [refundSaleData, setRefundSaleData] = useState<any>(null);
+  const [refundLoading, setRefundLoading] = useState(false);
+  const [refundQtys, setRefundQtys] = useState<Record<number, number>>({});
+  const [refundMethod, setRefundMethod] = useState<string>("cash");
+  const [refundReason, setRefundReason] = useState("");
 
   const [historyDateFrom, setHistoryDateFrom] = useState<string>(new Date().toISOString().slice(0, 10));
   const [historyDateTo, setHistoryDateTo] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -156,6 +178,137 @@ export default function EventPosPage() {
       localStorage.removeItem("pos_cart_backup");
     }
   }, [cart]);
+
+  useEffect(() => {
+    if (selectedEventId != null) localStorage.setItem("pos_selected_event", String(selectedEventId));
+    else localStorage.removeItem("pos_selected_event");
+  }, [selectedEventId]);
+
+  const { data: posEvents = [] } = useQuery({
+    queryKey: ["/api/pos/events", EVENT_BRANCH_ID],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/pos/events?branchId=${EVENT_BRANCH_ID}`);
+      return res.json();
+    },
+  });
+
+  const activeEvents = useMemo(() => (posEvents as any[]).filter((e: any) => e.status === "active"), [posEvents]);
+  const selectedEvent = useMemo(() => (posEvents as any[]).find((e: any) => e.id === selectedEventId) || null, [posEvents, selectedEventId]);
+
+  useEffect(() => {
+    // اختيار تلقائي إذا كان هناك إيفنت نشط واحد فقط، وإلغاء الاختيار إذا لم يعد نشطاً
+    if (selectedEventId != null && posEvents.length > 0) {
+      const ev = (posEvents as any[]).find((e: any) => e.id === selectedEventId);
+      if (!ev || ev.status !== "active") setSelectedEventId(null);
+    } else if (selectedEventId == null && activeEvents.length === 1) {
+      setSelectedEventId(activeEvents[0].id);
+    }
+  }, [posEvents, activeEvents, selectedEventId]);
+
+  const { data: currentShift, refetch: refetchShift } = useQuery({
+    queryKey: ["/api/pos/shifts/current", selectedEventId],
+    enabled: selectedEventId != null,
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/pos/shifts/current?eventId=${selectedEventId}`);
+      return res.json();
+    },
+  });
+
+  const { data: shiftStats } = useQuery({
+    queryKey: ["/api/pos/shifts/stats", currentShift?.id, showShiftClose],
+    enabled: showShiftClose && !!currentShift?.id,
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/pos/shifts/${currentShift.id}/stats`);
+      return res.json();
+    },
+  });
+
+  const openShiftMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/pos/shifts/open", {
+        eventId: selectedEventId,
+        openingCash: parseFloat(openingCash) || 0,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      setShowShiftOpen(false);
+      setOpeningCash("");
+      refetchShift();
+      toast({ title: "تم فتح الوردية بنجاح" });
+    },
+    onError: (err: any) => {
+      toast({ title: "خطأ في فتح الوردية", description: err?.message, variant: "destructive" });
+    },
+  });
+
+  const closeShiftMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/pos/shifts/${currentShift.id}/close`, {
+        actualCash: parseFloat(actualCashInput),
+        actualNetwork: parseFloat(actualNetworkInput) || 0,
+        notes: shiftCloseNotes || undefined,
+      });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      setClosedShiftResult(data);
+      setActualCashInput("");
+      setActualNetworkInput("");
+      setShiftCloseNotes("");
+      refetchShift();
+      queryClient.invalidateQueries({ queryKey: ["/api/pos/shifts/current"] });
+      toast({ title: "تم إغلاق الوردية" });
+    },
+    onError: (err: any) => {
+      toast({ title: "خطأ في إغلاق الوردية", description: err?.message, variant: "destructive" });
+    },
+  });
+
+  const openPartialRefund = async (saleId: number) => {
+    setRefundLoading(true);
+    setShowPartialRefund(true);
+    setRefundQtys({});
+    setRefundMethod("cash");
+    setRefundReason("");
+    setRefundSaleData(null);
+    try {
+      const res = await apiRequest("GET", `/api/pos/sales/${saleId}/refunds`);
+      setRefundSaleData(await res.json());
+    } catch {
+      toast({ title: "خطأ", description: "فشل في تحميل بيانات الفاتورة", variant: "destructive" });
+      setShowPartialRefund(false);
+    } finally {
+      setRefundLoading(false);
+    }
+  };
+
+  const partialRefundMutation = useMutation({
+    mutationFn: async () => {
+      const items = Object.entries(refundQtys)
+        .filter(([, q]) => q > 0)
+        .map(([saleItemId, quantity]) => ({ saleItemId: parseInt(saleItemId, 10), quantity }));
+      const res = await apiRequest("POST", `/api/pos/sales/${refundSaleData.sale.id}/partial-refund`, {
+        items,
+        refundMethod,
+        reason: refundReason,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      setShowPartialRefund(false);
+      setRefundSaleData(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/pos/sales"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pos/summary"] });
+      toast({ title: "تم تسجيل الاسترجاع الجزئي بنجاح" });
+    },
+    onError: (err: any) => {
+      let msg = err?.message || "";
+      const m = msg.match(/^\d+:\s*(.*)$/s);
+      if (m) { try { msg = JSON.parse(m[1]).error || m[1]; } catch { msg = m[1]; } }
+      toast({ title: "خطأ في الاسترجاع", description: msg, variant: "destructive" });
+    },
+  });
 
   const { data: branchProducts = [], isLoading: productsLoading } = useQuery({
     queryKey: ["/api/pos/branch-products", EVENT_BRANCH_ID],
@@ -379,6 +532,7 @@ export default function EventPosPage() {
       }
       const saleData = {
         branchId: EVENT_BRANCH_ID,
+        eventId: selectedEventId || undefined,
         cashierId: user?.id || "",
         cashierName: (user as any)?.fullName || user?.username || "",
         saleDate: now.toISOString().slice(0, 10),
@@ -527,6 +681,15 @@ export default function EventPosPage() {
 
   const handleCheckout = () => {
     if (cart.length === 0) return;
+    if (activeEvents.length > 0 && selectedEventId == null) {
+      toast({ title: "اختر الإيفنت أولاً", description: "حدد الإيفنت من أعلى الشاشة قبل البيع", variant: "destructive" });
+      return;
+    }
+    if (selectedEventId != null && !currentShift) {
+      toast({ title: "يجب فتح وردية أولاً", description: "افتح ورديتك قبل تسجيل المبيعات", variant: "destructive" });
+      setShowShiftOpen(true);
+      return;
+    }
     if (!splitMode && paymentMethod === "cash") {
       setAmountPaid(String(cartTotal.total));
     }
@@ -608,8 +771,27 @@ export default function EventPosPage() {
               <p className="text-[10px] text-gray-400 leading-tight">{(user as any)?.fullName || user?.username}</p>
             </div>
           </div>
-          <div className="h-8 w-px bg-gray-200" />
-          <div className="text-[11px] text-gray-400">
+          {activeEvents.length > 0 && (
+            <>
+              <div className="h-8 w-px bg-gray-200" />
+              <div className="flex items-center gap-1.5">
+                <PartyPopper className="w-4 h-4 text-orange-500 shrink-0" />
+                <select
+                  value={selectedEventId ?? ""}
+                  onChange={e => setSelectedEventId(e.target.value ? parseInt(e.target.value, 10) : null)}
+                  className="text-[12px] font-bold text-gray-800 bg-orange-50 border border-orange-200 rounded-lg px-2 py-1.5 outline-none max-w-[160px]"
+                  data-testid="select-event"
+                >
+                  <option value="">اختر الإيفنت...</option>
+                  {activeEvents.map((ev: any) => (
+                    <option key={ev.id} value={ev.id}>{ev.name}</option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+          <div className="h-8 w-px bg-gray-200 hidden md:block" />
+          <div className="text-[11px] text-gray-400 hidden md:block">
             <span>{dateStr}</span>
             <span className="mx-1.5">|</span>
             <span className="font-mono font-bold text-gray-600">{timeStr}</span>
@@ -617,6 +799,28 @@ export default function EventPosPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {selectedEventId != null && (
+            currentShift ? (
+              <button
+                onClick={() => { setClosedShiftResult(null); setShowShiftClose(true); }}
+                className="flex items-center gap-1.5 bg-green-50 text-green-700 rounded-lg px-3 py-1.5 border border-green-200 hover:bg-green-100 transition-all active:scale-95 touch-manipulation"
+                data-testid="button-shift-status"
+              >
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-xs font-bold">وردية مفتوحة</span>
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowShiftOpen(true)}
+                className="flex items-center gap-1.5 bg-orange-500 text-white rounded-lg px-3 py-1.5 hover:bg-orange-600 transition-all active:scale-95 touch-manipulation shadow-sm"
+                data-testid="button-open-shift"
+              >
+                <DoorOpen className="w-3.5 h-3.5" />
+                <span className="text-xs font-bold">فتح وردية</span>
+              </button>
+            )
+          )}
           {heldOrders.length > 0 && (
             <button
               onClick={() => setShowHeld(true)}
@@ -661,6 +865,14 @@ export default function EventPosPage() {
                 <ListOrdered className="w-4.5 h-4.5 text-gray-600" />
               </button>
               <a
+                href="/event-reports"
+                className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all active:scale-90 touch-manipulation"
+                title="تقارير الإيفنتات"
+                data-testid="button-event-reports"
+              >
+                <FileText className="w-4.5 h-4.5 text-gray-600" />
+              </a>
+              <a
                 href="/event-pos-settings"
                 className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all active:scale-90 touch-manipulation"
                 title="الإعدادات"
@@ -674,7 +886,7 @@ export default function EventPosPage() {
       </header>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-hidden px-3 py-2 md:px-4 md:py-3">
+      <div className="flex-1 overflow-hidden px-3 pt-2 pb-16 md:px-4 md:py-3">
       <div className="page-container h-full flex gap-3 overflow-hidden">
         {/* RIGHT: Products Section */}
         <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-2xl shadow-sm border border-gray-200">
@@ -812,7 +1024,7 @@ export default function EventPosPage() {
         </div>
 
         {/* LEFT: Cart Panel */}
-        <div className="w-[300px] bg-white flex flex-col rounded-2xl shadow-sm border border-gray-200 shrink-0 overflow-hidden">
+        <div className={`${showMobileCart ? "fixed inset-x-2 bottom-2 top-16 z-50 flex shadow-2xl" : "hidden"} md:static md:flex md:inset-auto md:z-auto md:shadow-sm w-auto md:w-[300px] bg-white flex-col rounded-2xl border border-gray-200 shrink-0 overflow-hidden`}>
           <div className="px-3 py-2.5 border-b border-gray-100 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
@@ -826,6 +1038,13 @@ export default function EventPosPage() {
               </div>
             </div>
             <div className="flex items-center gap-1">
+              <button
+                onClick={() => setShowMobileCart(false)}
+                className="md:hidden w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors touch-manipulation"
+                data-testid="button-close-mobile-cart"
+              >
+                <X className="w-5 h-5" />
+              </button>
               {cart.length > 0 && (
                 <>
                   <button
@@ -1022,6 +1241,32 @@ export default function EventPosPage() {
         </div>
       </div>
       </div>
+
+      {/* Mobile bottom bar */}
+      {!showMobileCart && (
+        <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 px-3 py-2 flex items-center gap-2 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+          <button
+            onClick={() => setShowMobileCart(true)}
+            className="flex items-center gap-2 bg-gray-100 rounded-xl px-4 py-3 font-bold text-[13px] text-gray-700 active:scale-95 touch-manipulation relative"
+            data-testid="button-open-mobile-cart"
+          >
+            <ShoppingCart className="w-5 h-5" />
+            السلة
+            {cartItemsCount > 0 && (
+              <span className="absolute -top-1.5 -left-1.5 min-w-[22px] h-[22px] bg-orange-500 text-white rounded-full text-[11px] px-1 flex items-center justify-center font-black">{cartItemsCount}</span>
+            )}
+          </button>
+          <button
+            onClick={handleCheckout}
+            disabled={cart.length === 0 || createSaleMutation.isPending}
+            className="flex-1 bg-gradient-to-l from-orange-500 to-amber-500 disabled:from-gray-200 disabled:to-gray-300 disabled:text-gray-400 text-white font-black text-[14px] py-3 rounded-xl flex items-center justify-center gap-2 active:scale-[0.97] touch-manipulation"
+            data-testid="button-mobile-checkout"
+          >
+            <Receipt className="w-5 h-5" />
+            إتمام الطلب {cartTotal.total > 0 && <span className="bg-white/20 px-2.5 py-0.5 rounded-lg text-[13px]">{cartTotal.total.toFixed(2)} ر.س</span>}
+          </button>
+        </div>
+      )}
 
       {/* Discount Dialog */}
       <Dialog open={showDiscount} onOpenChange={setShowDiscount}>
@@ -1323,6 +1568,10 @@ export default function EventPosPage() {
               <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "3px 0" }} />
               <div style={{ textAlign: "center", padding: "2px 0" }}>
                 <div style={{ fontWeight: "bold", fontSize: "11px" }}>فاتورة ضريبية مبسطة</div>
+                {(() => {
+                  const ev = (posEvents as any[]).find((e: any) => e.id === lastSale.eventId) || selectedEvent;
+                  return ev ? <div style={{ fontSize: "9px", fontWeight: "600", color: "#333" }}>الإيفنت: {ev.name}{ev.location ? ` — ${ev.location}` : ""}</div> : null;
+                })()}
                 <div style={{ fontSize: "9px", color: "#333" }}>رقم الفاتورة: {lastSale.invoiceNumber}</div>
                 <div style={{ fontSize: "9px", color: "#333" }}>{lastSale.saleDate} - {lastSale.saleTime}</div>
               </div>
@@ -1678,6 +1927,7 @@ export default function EventPosPage() {
                       {sale.invoiceNumber}
                       {sale.status === "voided" && <span className="text-[10px] bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 px-1.5 py-0.5 rounded-full font-bold">ملغاة</span>}
                       {sale.status === "refunded" && <span className="text-[10px] bg-amber-100 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold">مسترجعة</span>}
+                      {sale.status === "partially_refunded" && <span className="text-[10px] bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-300 px-1.5 py-0.5 rounded-full font-bold">استرجاع جزئي</span>}
                     </div>
                     <div className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
                       <Clock className="w-3 h-3" />
@@ -1700,12 +1950,30 @@ export default function EventPosPage() {
                       <button
                         onClick={() => { setVoidSaleId(sale.id); setVoidAction("refund"); setVoidReason(""); setShowVoid(true); }}
                         className="w-8 h-8 rounded-lg flex items-center justify-center text-amber-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                        title="استرجاع"
+                        title="استرجاع كامل"
                         data-testid={`button-refund-${sale.id}`}
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                       </button>
+                      <button
+                        onClick={() => openPartialRefund(sale.id)}
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-orange-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                        title="استرجاع جزئي"
+                        data-testid={`button-partial-refund-${sale.id}`}
+                      >
+                        <Undo2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
+                  )}
+                  {sale.status === "partially_refunded" && canVoid && (
+                    <button
+                      onClick={() => openPartialRefund(sale.id)}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-orange-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                      title="استرجاع جزئي"
+                      data-testid={`button-partial-refund-${sale.id}`}
+                    >
+                      <Undo2 className="w-3.5 h-3.5" />
+                    </button>
                   )}
                   <Button
                     variant="ghost"
@@ -1854,6 +2122,243 @@ export default function EventPosPage() {
               طباعة التقرير
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Open Shift Dialog */}
+      <Dialog open={showShiftOpen} onOpenChange={setShowShiftOpen}>
+        <DialogContent className="max-w-[380px] rounded-3xl p-0 overflow-hidden" dir="rtl">
+          <div className="bg-gradient-to-l from-orange-600 to-amber-500 p-5">
+            <DialogTitle className="flex items-center gap-3 text-white text-lg font-black">
+              <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
+                <DoorOpen className="w-5 h-5 text-white" />
+              </div>
+              فتح وردية جديدة
+            </DialogTitle>
+            {selectedEvent && <p className="text-orange-100 text-xs mt-1 flex items-center gap-1"><PartyPopper className="w-3 h-3" /> {selectedEvent.name}</p>}
+          </div>
+          <div className="p-5 space-y-4">
+            <div>
+              <label className="text-sm font-bold text-gray-600 mb-2 block">النقد الافتتاحي في الصندوق (ر.س)</label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                value={openingCash}
+                onChange={e => setOpeningCash(e.target.value)}
+                placeholder="0.00"
+                className="text-2xl text-center font-black h-14 rounded-xl"
+                autoFocus
+                data-testid="input-opening-cash"
+              />
+              <div className="flex gap-2 mt-3">
+                {[0, 100, 200, 500].map(v => (
+                  <button key={v} onClick={() => setOpeningCash(String(v))} className="flex-1 py-2.5 rounded-lg text-sm font-bold bg-gray-100 hover:bg-orange-50 hover:text-orange-600 transition-colors touch-manipulation" data-testid={`button-opening-quick-${v}`}>{v}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="px-5 pb-5 flex gap-2">
+            <Button variant="outline" onClick={() => setShowShiftOpen(false)} className="rounded-xl h-12 font-bold">إلغاء</Button>
+            <Button
+              onClick={() => openShiftMutation.mutate()}
+              disabled={openShiftMutation.isPending || selectedEventId == null}
+              className="flex-1 rounded-xl h-12 bg-orange-500 hover:bg-orange-600 font-bold text-[15px]"
+              data-testid="button-confirm-open-shift"
+            >
+              {openShiftMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin ml-1" /> : <DoorOpen className="w-4 h-4 ml-1" />}
+              فتح الوردية
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Close Shift Dialog */}
+      <Dialog open={showShiftClose} onOpenChange={v => { setShowShiftClose(v); if (!v) setClosedShiftResult(null); }}>
+        <DialogContent className="max-w-md rounded-3xl p-0 overflow-hidden max-h-[90vh] flex flex-col" dir="rtl">
+          <div className="bg-gradient-to-l from-purple-700 to-purple-600 p-5 shrink-0">
+            <DialogTitle className="flex items-center gap-3 text-white text-lg font-black">
+              <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
+                <LogOut className="w-5 h-5 text-white" />
+              </div>
+              {closedShiftResult ? "نتيجة إغلاق الوردية" : "إغلاق الوردية وتسوية الصندوق"}
+            </DialogTitle>
+            {selectedEvent && <p className="text-purple-200 text-xs mt-1">{selectedEvent.name}</p>}
+          </div>
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            {closedShiftResult ? (
+              <div className="space-y-3">
+                <div className={`rounded-2xl p-5 text-center border-2 ${Math.abs(closedShiftResult.cashDiscrepancy || 0) < 0.01 ? "bg-green-50 border-green-200" : (closedShiftResult.cashDiscrepancy || 0) > 0 ? "bg-blue-50 border-blue-200" : "bg-red-50 border-red-200"}`}>
+                  <div className="text-xs font-bold text-gray-500 mb-1">فرق النقد</div>
+                  <div className={`text-3xl font-black ${Math.abs(closedShiftResult.cashDiscrepancy || 0) < 0.01 ? "text-green-600" : (closedShiftResult.cashDiscrepancy || 0) > 0 ? "text-blue-600" : "text-red-600"}`} data-testid="text-cash-discrepancy">
+                    {(closedShiftResult.cashDiscrepancy || 0) > 0 ? "+" : ""}{(closedShiftResult.cashDiscrepancy || 0).toFixed(2)} ر.س
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    {Math.abs(closedShiftResult.cashDiscrepancy || 0) < 0.01 ? "الصندوق مطابق تماماً" : (closedShiftResult.cashDiscrepancy || 0) > 0 ? "زيادة في الصندوق" : "عجز في الصندوق"}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-center">
+                  <div className="bg-gray-50 rounded-xl p-3">
+                    <div className="text-[11px] text-gray-400 font-bold">النقد المتوقع</div>
+                    <div className="text-base font-black text-gray-800">{(closedShiftResult.expectedCash || 0).toFixed(2)}</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl p-3">
+                    <div className="text-[11px] text-gray-400 font-bold">النقد الفعلي</div>
+                    <div className="text-base font-black text-gray-800">{(closedShiftResult.actualCash || 0).toFixed(2)}</div>
+                  </div>
+                </div>
+                <Button onClick={() => { setShowShiftClose(false); setClosedShiftResult(null); }} className="w-full rounded-xl h-12 font-bold bg-purple-600 hover:bg-purple-700" data-testid="button-close-shift-done">تم</Button>
+              </div>
+            ) : (
+              <>
+                {shiftStats ? (
+                  <div className="bg-gray-50 rounded-2xl p-4 space-y-2 text-sm">
+                    <div className="flex justify-between"><span className="text-gray-500">عدد الفواتير</span><span className="font-bold">{shiftStats.salesCount}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">إجمالي المبيعات</span><span className="font-bold">{(shiftStats.totalSales || 0).toFixed(2)} ر.س</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">النقد الافتتاحي</span><span className="font-bold">{(shiftStats.shift?.openingCash || 0).toFixed(2)} ر.س</span></div>
+                    <div className="flex justify-between border-t pt-2"><span className="text-gray-600 font-bold">النقد المتوقع في الصندوق</span><span className="font-black text-green-600" data-testid="text-expected-cash">{(shiftStats.expectedCash || 0).toFixed(2)} ر.س</span></div>
+                    <div className="flex justify-between"><span className="text-gray-600 font-bold">الشبكة المتوقعة</span><span className="font-black text-blue-600">{(shiftStats.expectedNetwork || 0).toFixed(2)} ر.س</span></div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-gray-300" /></div>
+                )}
+                <div>
+                  <label className="text-sm font-bold text-gray-600 mb-2 block">النقد الفعلي المعدود في الصندوق *</label>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    value={actualCashInput}
+                    onChange={e => setActualCashInput(e.target.value)}
+                    placeholder="0.00"
+                    className="text-2xl text-center font-black h-14 rounded-xl border-2 border-green-200 focus:border-green-400"
+                    data-testid="input-actual-cash"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-bold text-gray-600 mb-2 block">إجمالي الشبكة الفعلي (من جهاز الشبكة)</label>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    value={actualNetworkInput}
+                    onChange={e => setActualNetworkInput(e.target.value)}
+                    placeholder="0.00"
+                    className="text-xl text-center font-black h-12 rounded-xl border-2 border-blue-200 focus:border-blue-400"
+                    data-testid="input-actual-network"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-bold text-gray-600 mb-2 block">ملاحظات (اختياري)</label>
+                  <Input value={shiftCloseNotes} onChange={e => setShiftCloseNotes(e.target.value)} className="rounded-xl h-11" data-testid="input-shift-close-notes" />
+                </div>
+              </>
+            )}
+          </div>
+          {!closedShiftResult && (
+            <div className="p-4 border-t flex gap-2 shrink-0">
+              <Button variant="outline" onClick={() => setShowShiftClose(false)} className="rounded-xl h-12 font-bold">إلغاء</Button>
+              <Button
+                onClick={() => {
+                  const v = parseFloat(actualCashInput);
+                  if (!Number.isFinite(v) || v < 0) { toast({ title: "أدخل النقد الفعلي المعدود", variant: "destructive" }); return; }
+                  closeShiftMutation.mutate();
+                }}
+                disabled={closeShiftMutation.isPending}
+                className="flex-1 rounded-xl h-12 bg-purple-600 hover:bg-purple-700 font-bold text-[15px]"
+                data-testid="button-confirm-close-shift"
+              >
+                {closeShiftMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin ml-1" /> : <LogOut className="w-4 h-4 ml-1" />}
+                إغلاق الوردية
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Partial Refund Dialog */}
+      <Dialog open={showPartialRefund} onOpenChange={setShowPartialRefund}>
+        <DialogContent className="max-w-md rounded-3xl p-0 overflow-hidden max-h-[90vh] flex flex-col" dir="rtl">
+          <div className="bg-gradient-to-l from-orange-600 to-amber-500 p-5 shrink-0">
+            <DialogTitle className="flex items-center gap-3 text-white text-lg font-black">
+              <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
+                <Undo2 className="w-5 h-5 text-white" />
+              </div>
+              استرجاع جزئي
+            </DialogTitle>
+            {refundSaleData?.sale && <p className="text-orange-100 text-xs mt-1">فاتورة {refundSaleData.sale.invoiceNumber}</p>}
+          </div>
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            {refundLoading || !refundSaleData ? (
+              <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-gray-300" /></div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  {refundSaleData.items.map((item: any) => {
+                    const remaining = item.quantity - (item.refundedQuantity || 0);
+                    const qty = refundQtys[item.id] || 0;
+                    return (
+                      <div key={item.id} className={`rounded-xl border p-3 ${remaining <= 0 ? "opacity-40 bg-gray-50" : "bg-white"}`} data-testid={`refund-item-${item.id}`}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="text-sm font-bold text-gray-800">{item.productName}</div>
+                          <div className="text-xs text-gray-400">{item.unitPrice?.toFixed(2)} ر.س × {item.quantity}{(item.refundedQuantity || 0) > 0 ? ` (مسترجع ${item.refundedQuantity})` : ""}</div>
+                        </div>
+                        {remaining > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-500">كمية الاسترجاع (متاح {remaining})</span>
+                            <div className="flex items-center bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+                              <button onClick={() => setRefundQtys(p => ({ ...p, [item.id]: Math.max(0, (p[item.id] || 0) - 1) }))} className="w-10 h-9 flex items-center justify-center hover:bg-gray-100 touch-manipulation" data-testid={`button-refund-dec-${item.id}`}><Minus className="w-4 h-4 text-gray-500" /></button>
+                              <span className="w-10 text-center font-black text-gray-800" data-testid={`text-refund-qty-${item.id}`}>{qty}</span>
+                              <button onClick={() => setRefundQtys(p => ({ ...p, [item.id]: Math.min(remaining, (p[item.id] || 0) + 1) }))} className="w-10 h-9 flex items-center justify-center hover:bg-orange-50 touch-manipulation" data-testid={`button-refund-inc-${item.id}`}><Plus className="w-4 h-4 text-gray-500" /></button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => setRefundMethod("cash")} className={`flex items-center justify-center gap-1.5 py-3 rounded-xl text-sm font-bold border-2 transition-all touch-manipulation ${refundMethod === "cash" ? "bg-green-50 border-green-500 text-green-700" : "bg-white border-gray-200 text-gray-600"}`} data-testid="button-refund-cash">
+                    <Banknote className="w-4 h-4" /> استرجاع نقدي
+                  </button>
+                  <button onClick={() => setRefundMethod("network")} className={`flex items-center justify-center gap-1.5 py-3 rounded-xl text-sm font-bold border-2 transition-all touch-manipulation ${refundMethod === "network" ? "bg-blue-50 border-blue-500 text-blue-700" : "bg-white border-gray-200 text-gray-600"}`} data-testid="button-refund-network">
+                    <CreditCard className="w-4 h-4" /> على الشبكة
+                  </button>
+                </div>
+                <div>
+                  <label className="text-sm font-bold text-gray-600 mb-2 block">سبب الاسترجاع *</label>
+                  <Input value={refundReason} onChange={e => setRefundReason(e.target.value)} placeholder="اكتب السبب..." className="rounded-xl h-11" data-testid="input-refund-reason" />
+                </div>
+                {refundSaleData.refunds?.length > 0 && (
+                  <div className="bg-amber-50 rounded-xl p-3 border border-amber-200 text-xs text-amber-700">
+                    <div className="font-bold mb-1">استرجاعات سابقة:</div>
+                    {refundSaleData.refunds.map((r: any) => (
+                      <div key={r.id} className="flex justify-between py-0.5">
+                        <span>{r.refundDate} {r.refundTime?.slice(0, 5)}</span>
+                        <span className="font-bold">{(r.totalAmount || 0).toFixed(2)} ر.س</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          {refundSaleData && (
+            <div className="p-4 border-t flex gap-2 shrink-0">
+              <Button variant="outline" onClick={() => setShowPartialRefund(false)} className="rounded-xl h-12 font-bold">إلغاء</Button>
+              <Button
+                onClick={() => {
+                  const anyQty = Object.values(refundQtys).some(q => q > 0);
+                  if (!anyQty) { toast({ title: "حدد كمية الاسترجاع لصنف واحد على الأقل", variant: "destructive" }); return; }
+                  if (!refundReason.trim()) { toast({ title: "يجب كتابة سبب الاسترجاع", variant: "destructive" }); return; }
+                  partialRefundMutation.mutate();
+                }}
+                disabled={partialRefundMutation.isPending}
+                className="flex-1 rounded-xl h-12 bg-orange-500 hover:bg-orange-600 font-bold text-[15px]"
+                data-testid="button-confirm-partial-refund"
+              >
+                {partialRefundMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin ml-1" /> : <Undo2 className="w-4 h-4 ml-1" />}
+                تأكيد الاسترجاع
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
