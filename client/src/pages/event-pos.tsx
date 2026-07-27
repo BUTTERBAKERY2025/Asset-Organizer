@@ -1843,7 +1843,7 @@ export default function EventPosPage() {
               {invoiceSettings?.showQrCode !== false && invoiceSettings?.vatNumber && (
                 <div style={{ textAlign: "center", padding: "2px 0" }}>
                   <QRCodeSVG
-                    value={generateZatcaQrBase64(invoiceSettings?.businessName || "باتر بيكري", invoiceSettings?.vatNumber || "", new Date(`${lastSale.saleDate}T${lastSale.saleTime}`).toISOString(), lastSale.totalAmount?.toFixed(2) || "0.00", lastSale.vatAmount?.toFixed(2) || "0.00")}
+                    value={generateZatcaQrBase64(invoiceSettings?.businessName || "باتر بيكري", invoiceSettings?.vatNumber || "", new Date(`${lastSale.saleDate}T${lastSale.saleTime}+03:00`).toISOString(), lastSale.totalAmount?.toFixed(2) || "0.00", lastSale.vatAmount?.toFixed(2) || "0.00")}
                     size={90} level="L" style={{ margin: "0 auto", width: "26mm", height: "26mm" }} data-testid="img-zatca-qr"
                   />
                   <div style={{ fontSize: "7px", color: "#666", marginTop: "1px" }}>فاتورة ضريبية مبسطة - ZATCA</div>
