@@ -8,3 +8,5 @@ description: Why the POS thermal printer drops connection and how the app keeps 
 - **Why:** Web Bluetooth connections die on any document unload; only `navigator.bluetooth.getDevices()` (Chrome desktop/Android) allows silent reconnect without a user gesture.
 - **How to apply:** auto-reconnect must live at App level (App.tsx mount + visibilitychange + 10s watchdog in client/src/lib/thermal-printer.ts), never only inside POS pages. Arabic receipts print as canvas raster (GS v 0) so printer font support is irrelevant. Paper width stored in localStorage (58/80mm → 384/576 dots).
 - User tests on production (thebutterbakery.com via Render); fixes are invisible until pushed to GitHub + Render deploy + hard refresh. Always state this explicitly.
+
+**Root cause found (2026-07-27):** the "disconnects when navigating to sales screen" bug was raw `<a href>` anchors between event-pos ↔ event-pos-settings ↔ event-reports causing FULL page navigations (kills GATT instantly). Fixed by converting to wouter `<Link>`. Rule: any internal navigation on pages that hold a live Web Bluetooth connection must use SPA Link — grep for `<a href="/` when this class of bug reappears.
