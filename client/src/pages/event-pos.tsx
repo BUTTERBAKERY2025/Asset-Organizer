@@ -1137,7 +1137,7 @@ export default function EventPosPage() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(118px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(128px,1fr))] gap-2.5">
                 {displayProducts.map((bp: BranchProductWithDetails) => {
                   const price = bp.priceOverride ?? bp.product?.basePrice ?? 0;
                   const inCart = cart.find(c => c.productId === bp.productId);
@@ -1183,7 +1183,7 @@ export default function EventPosPage() {
         </div>
 
         {/* LEFT: Cart Panel */}
-        <div className={`${showMobileCart ? "fixed inset-x-2 bottom-2 top-16 z-50 flex shadow-[0_30px_60px_rgba(0,0,0,0.15)]" : "hidden"} md:static md:flex md:inset-auto md:z-auto md:shadow-[0_8px_24px_rgba(28,20,17,0.04)] w-auto md:w-[340px] bg-[#FFFFFF] flex-col rounded-[24px] border border-[#EBE3D8] shrink-0 overflow-hidden`}>
+        <div className={`${showMobileCart ? "fixed inset-x-2 bottom-2 top-16 z-50 flex shadow-[0_30px_60px_rgba(0,0,0,0.15)]" : "hidden"} md:static md:flex md:inset-auto md:z-auto md:shadow-[0_8px_24px_rgba(28,20,17,0.04)] w-auto md:w-[300px] lg:w-[340px] xl:w-[380px] bg-[#FFFFFF] flex-col rounded-[24px] border border-[#EBE3D8] shrink-0 overflow-hidden`}>
           <div className="px-4 py-4 border-b border-[#EBE3D8] flex items-center justify-between shrink-0 bg-[#FAF8F5]/50">
             <div className="flex items-center gap-2">
               <div className="w-10 h-10 bg-[#F4EBE1] rounded-[12px] flex items-center justify-center border border-[#EBE3D8]">
@@ -2050,7 +2050,7 @@ export default function EventPosPage() {
           </div>
 
           {todaySummary && historyDateFrom === ksaToday() && historyDateTo === ksaToday() && (
-            <div className="grid grid-cols-4 gap-2 p-4 shrink-0 bg-gray-50 border-b">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-4 shrink-0 bg-gray-50 border-b">
               <div className="bg-white rounded-xl p-3 text-center border border-gray-100">
                 <TrendingUp className="w-4 h-4 text-green-500 mx-auto mb-1" />
                 <div className="text-base font-black text-gray-800">{(todaySummary.totalSales || 0).toFixed(0)}</div>
