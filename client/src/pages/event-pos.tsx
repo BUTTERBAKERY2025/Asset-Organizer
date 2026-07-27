@@ -1664,7 +1664,7 @@ export default function EventPosPage() {
             <div ref={receiptRef} className="receipt-print bg-white text-black" dir="rtl" style={{ fontFamily: "Cairo, sans-serif", width: "100%", maxWidth: "80mm", padding: "2mm 3mm", fontSize: "9px", lineHeight: 1.3, boxSizing: "border-box", overflow: "hidden", wordWrap: "break-word", direction: "rtl" }}>
               <div style={{ textAlign: "center", paddingBottom: "2px", overflow: "hidden" }}>
                 {invoiceSettings?.logoUrl && (
-                  <img src={invoiceSettings.logoUrl} alt="شعار" style={{ maxHeight: "35px", maxWidth: "40mm", margin: "0 auto 2px", display: "block", objectFit: "contain" }} data-testid="img-receipt-logo" />
+                  <img src={invoiceSettings.logoUrl} alt="شعار" style={{ maxHeight: "64px", maxWidth: "58mm", margin: "0 auto 3px", display: "block", objectFit: "contain" }} data-testid="img-receipt-logo" />
                 )}
                 <div style={{ fontWeight: "bold", fontSize: "12px", marginBottom: "1px" }}>{invoiceSettings?.businessName || "باتر بيكري"}</div>
                 {invoiceSettings?.businessNameEn && <div style={{ fontSize: "8px", color: "#555", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{invoiceSettings.businessNameEn}</div>}
@@ -1676,7 +1676,7 @@ export default function EventPosPage() {
               </div>
               <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "3px 0" }} />
               <div style={{ textAlign: "center", padding: "2px 0" }}>
-                <div style={{ fontWeight: "bold", fontSize: "11px" }}>فاتورة ضريبية مبسطة</div>
+                <div style={{ fontWeight: "bold", fontSize: "13px" }}>فاتورة ضريبية مبسطة</div>
                 {(() => {
                   const ev = (posEvents as any[]).find((e: any) => e.id === lastSale.eventId) || selectedEvent;
                   return ev ? <div style={{ fontSize: "9px", fontWeight: "600", color: "#333" }}>الإيفنت: {ev.name}{ev.location ? ` — ${ev.location}` : ""}</div> : null;
@@ -1742,8 +1742,8 @@ export default function EventPosPage() {
                 </colgroup>
                 <tbody>
                   <tr>
-                    <td style={{ textAlign: "right", padding: "3px 2px", fontWeight: "bold", fontSize: "12px" }}>الإجمالي</td>
-                    <td style={{ textAlign: "left", padding: "3px 2px", fontWeight: "bold", fontSize: "12px", whiteSpace: "nowrap" }}>{lastSale.totalAmount?.toFixed(2)} ر.س</td>
+                    <td style={{ textAlign: "right", padding: "4px 2px", fontWeight: "bold", fontSize: "14px" }}>الإجمالي شامل الضريبة</td>
+                    <td style={{ textAlign: "left", padding: "4px 2px", fontWeight: "bold", fontSize: "14px", whiteSpace: "nowrap" }}>{lastSale.totalAmount?.toFixed(2)} ر.س</td>
                   </tr>
                 </tbody>
               </table>
@@ -1800,7 +1800,7 @@ export default function EventPosPage() {
                 <div style={{ textAlign: "center", padding: "2px 0" }}>
                   <QRCodeSVG
                     value={generateZatcaQrBase64(invoiceSettings?.businessName || "باتر بيكري", invoiceSettings?.vatNumber || "", new Date(`${lastSale.saleDate}T${lastSale.saleTime}`).toISOString(), lastSale.totalAmount?.toFixed(2) || "0.00", lastSale.vatAmount?.toFixed(2) || "0.00")}
-                    size={65} level="L" style={{ margin: "0 auto", width: "20mm", height: "20mm" }} data-testid="img-zatca-qr"
+                    size={90} level="L" style={{ margin: "0 auto", width: "26mm", height: "26mm" }} data-testid="img-zatca-qr"
                   />
                   <div style={{ fontSize: "7px", color: "#666", marginTop: "1px" }}>فاتورة ضريبية مبسطة - ZATCA</div>
                 </div>

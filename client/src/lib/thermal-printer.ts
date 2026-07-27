@@ -255,10 +255,11 @@ export function disconnectPrinter(): void {
 }
 
 const CHUNK_SIZE = 180; // حجم آمن لمعظم طابعات BLE
-const CHUNK_DELAY_MS = 25;
 
 async function writeBytes(data: Uint8Array): Promise<void> {
   if (!writeChar) throw new Error("الطابعة غير متصلة. اربط الطابعة من إعدادات ربط طابعة الكاشير.");
+  // بدون تأكيد استلام نقدر نسرّع الإرسال بشكل ملحوظ؛ مع التأكيد نبقي فاصلاً أطول للأمان
+  const delayMs = writeChar.properties.writeWithoutResponse ? 6 : 18;
   for (let i = 0; i < data.length; i += CHUNK_SIZE) {
     const chunk = data.slice(i, i + CHUNK_SIZE);
     if (writeChar.properties.writeWithoutResponse) {
@@ -266,7 +267,7 @@ async function writeBytes(data: Uint8Array): Promise<void> {
     } else {
       await writeChar.writeValue(chunk);
     }
-    await new Promise((r) => setTimeout(r, CHUNK_DELAY_MS));
+    await new Promise((r) => setTimeout(r, delayMs));
   }
 }
 
@@ -289,7 +290,7 @@ function canvasToRaster(canvas: HTMLCanvasElement, maxWidthDots = 384): Uint8Arr
   const { width, height } = src;
   const img = ctx.getImageData(0, 0, width, height).data;
   const bytesPerRow = Math.ceil(width / 8);
-  const raster = new Uint8Array(bytesPerRow * height);
+  let raster = new Uint8Array(bytesPerRow * height);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = (y * width + x) * 4;
@@ -301,11 +302,21 @@ function canvasToRaster(canvas: HTMLCanvasElement, maxWidthDots = 384): Uint8Arr
       }
     }
   }
+  // قص الفراغ الأبيض في أسفل الإيصال — بيانات أقل = طباعة أسرع وورق أوفر
+  let lastRow = height - 1;
+  outer: for (; lastRow >= 0; lastRow--) {
+    const start = lastRow * bytesPerRow;
+    for (let b = 0; b < bytesPerRow; b++) {
+      if (raster[start + b] !== 0) break outer;
+    }
+  }
+  const trimmedHeight = Math.max(1, lastRow + 1);
+  if (trimmedHeight < height) raster = raster.slice(0, trimmedHeight * bytesPerRow);
   // GS v 0 — أمر طباعة صورة نقطية
   const header = new Uint8Array([
     0x1d, 0x76, 0x30, 0x00,
     bytesPerRow & 0xff, (bytesPerRow >> 8) & 0xff,
-    height & 0xff, (height >> 8) & 0xff,
+    trimmedHeight & 0xff, (trimmedHeight >> 8) & 0xff,
   ]);
   const out = new Uint8Array(header.length + raster.length);
   out.set(header, 0);
@@ -364,6 +375,16 @@ function buildBoostedClone(el: HTMLElement, fontBoost: number): { target: HTMLEl
         c.style.height = "auto";
       }
       if (w) c.style.maxWidth = `${Math.min(Math.round(width * 0.8), Math.round(w * fontBoost * 1.25))}px`;
+    }
+    // تكبير رمز QR (عنصر SVG) بنفس النسبة ليكون واضحاً وسهل المسح
+    if (c.tagName.toLowerCase() === "svg") {
+      const w = (o as HTMLElement).clientWidth || 0;
+      const h = (o as HTMLElement).clientHeight || 0;
+      if (w && h) {
+        const s = Math.min(Math.round(width * 0.6), Math.round(w * fontBoost));
+        c.style.width = `${s}px`;
+        c.style.height = `${Math.round((h / w) * s)}px`;
+      }
     }
   });
   return { target: clone, cleanup: () => wrapper.remove() };
