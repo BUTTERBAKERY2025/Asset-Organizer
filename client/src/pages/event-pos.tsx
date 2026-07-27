@@ -2275,7 +2275,7 @@ export default function EventPosPage() {
                 {shiftStats ? (
                   <div className="bg-gray-50 rounded-2xl p-4 space-y-2 text-sm">
                     <div className="flex justify-between"><span className="text-gray-500">عدد الفواتير</span><span className="font-bold">{shiftStats.salesCount}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-500">إجمالي المبيعات</span><span className="font-bold">{(shiftStats.totalSales || 0).toFixed(2)} ر.س</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">إجمالي المبيعات</span><span className="font-bold">{(shiftStats.salesTotal || 0).toFixed(2)} ر.س</span></div>
                     <div className="flex justify-between"><span className="text-gray-500">النقد الافتتاحي</span><span className="font-bold">{(shiftStats.shift?.openingCash || 0).toFixed(2)} ر.س</span></div>
                     <div className="flex justify-between border-t pt-2"><span className="text-gray-600 font-bold">النقد المتوقع في الصندوق</span><span className="font-black text-green-600" data-testid="text-expected-cash">{(shiftStats.expectedCash || 0).toFixed(2)} ر.س</span></div>
                     <div className="flex justify-between"><span className="text-gray-600 font-bold">الشبكة المتوقعة</span><span className="font-black text-blue-600">{(shiftStats.expectedNetwork || 0).toFixed(2)} ر.س</span></div>
@@ -2393,7 +2393,7 @@ export default function EventPosPage() {
                     <div className="font-bold mb-1">استرجاعات سابقة:</div>
                     {refundSaleData.refunds.map((r: any) => (
                       <div key={r.id} className="flex justify-between py-0.5">
-                        <span>{r.refundDate} {r.refundTime?.slice(0, 5)}</span>
+                        <span>{r.createdAt ? new Date(r.createdAt).toLocaleString("ar-SA", { dateStyle: "short", timeStyle: "short" }) : ""}</span>
                         <span className="font-bold">{(r.totalAmount || 0).toFixed(2)} ر.س</span>
                       </div>
                     ))}

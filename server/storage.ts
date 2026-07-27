@@ -18163,13 +18163,20 @@ export class DatabaseStorage implements IStorage {
         COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN total_amount ELSE 0 END), 0) as "cashTotal",
         COALESCE(SUM(CASE WHEN payment_method != 'cash' THEN total_amount ELSE 0 END), 0) as "networkTotal"
       FROM pos_sales 
-      WHERE branch_id = ${branchId} AND sale_date = ${date} AND status = 'completed'
+      WHERE branch_id = ${branchId} AND sale_date = ${date} AND status IN ('completed', 'partially_refunded')
+    `);
+    const [refunds] = await db.execute(sql`
+      SELECT COALESCE(SUM(r.total_amount), 0) as "refundsTotal",
+        COALESCE(SUM(CASE WHEN r.refund_method = 'cash' THEN r.total_amount ELSE 0 END), 0) as "refundsCash",
+        COALESCE(SUM(CASE WHEN r.refund_method != 'cash' THEN r.total_amount ELSE 0 END), 0) as "refundsNetwork"
+      FROM pos_refunds r JOIN pos_sales s ON s.id = r.sale_id
+      WHERE s.branch_id = ${branchId} AND s.sale_date = ${date} AND s.status = 'partially_refunded'
     `);
     return {
-      totalSales: Number(result.totalSales) || 0,
+      totalSales: (Number(result.totalSales) || 0) - (Number((refunds as any)?.refundsTotal) || 0),
       totalTransactions: Number(result.totalTransactions) || 0,
-      cashTotal: Number(result.cashTotal) || 0,
-      networkTotal: Number(result.networkTotal) || 0,
+      cashTotal: (Number(result.cashTotal) || 0) - (Number((refunds as any)?.refundsCash) || 0),
+      networkTotal: (Number(result.networkTotal) || 0) - (Number((refunds as any)?.refundsNetwork) || 0),
     };
   }
 
@@ -18208,6 +18215,11 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(posHeldOrders.createdAt));
   }
 
+  async getHeldOrderById(id: number): Promise<PosHeldOrder | undefined> {
+    const [order] = await db.select().from(posHeldOrders).where(eq(posHeldOrders.id, id));
+    return order || undefined;
+  }
+
   async deleteHeldOrder(id: number): Promise<boolean> {
     const result = await db.delete(posHeldOrders).where(eq(posHeldOrders.id, id)).returning();
     return result.length > 0;
@@ -18216,21 +18228,36 @@ export class DatabaseStorage implements IStorage {
   async getPosSalesReport(branchId: string, startDate: string, endDate: string): Promise<any> {
     const summaryResult = await db.execute(sql`
       SELECT 
-        COALESCE(SUM(CASE WHEN status = 'completed' THEN total_amount ELSE 0 END), 0) as "totalSales",
-        COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) as "totalTransactions",
-        COALESCE(SUM(CASE WHEN status = 'completed' AND payment_method = 'cash' THEN total_amount ELSE 0 END), 0) as "cashTotal",
-        COALESCE(SUM(CASE WHEN status = 'completed' AND payment_method = 'network' THEN total_amount ELSE 0 END), 0) as "networkTotal",
-        COALESCE(SUM(CASE WHEN status = 'completed' AND payment_method = 'split' THEN total_amount ELSE 0 END), 0) as "splitTotal",
+        COALESCE(SUM(CASE WHEN status IN ('completed', 'partially_refunded') THEN total_amount ELSE 0 END), 0) as "totalSales",
+        COALESCE(SUM(CASE WHEN status IN ('completed', 'partially_refunded') THEN 1 ELSE 0 END), 0) as "totalTransactions",
+        COALESCE(SUM(CASE WHEN status IN ('completed', 'partially_refunded') AND payment_method = 'cash' THEN total_amount ELSE 0 END), 0) as "cashTotal",
+        COALESCE(SUM(CASE WHEN status IN ('completed', 'partially_refunded') AND payment_method = 'network' THEN total_amount ELSE 0 END), 0) as "networkTotal",
+        COALESCE(SUM(CASE WHEN status IN ('completed', 'partially_refunded') AND payment_method = 'split' THEN total_amount ELSE 0 END), 0) as "splitTotal",
         COALESCE(SUM(CASE WHEN status = 'voided' THEN 1 ELSE 0 END), 0) as "voidedCount",
         COALESCE(SUM(CASE WHEN status = 'voided' THEN total_amount ELSE 0 END), 0) as "voidedAmount",
         COALESCE(SUM(CASE WHEN status = 'refunded' THEN 1 ELSE 0 END), 0) as "refundedCount",
         COALESCE(SUM(CASE WHEN status = 'refunded' THEN total_amount ELSE 0 END), 0) as "refundedAmount",
-        COALESCE(SUM(CASE WHEN status = 'completed' THEN COALESCE(discount_amount, 0) ELSE 0 END), 0) as "discountTotal",
-        COALESCE(SUM(CASE WHEN status = 'completed' THEN COALESCE(vat_amount, 0) ELSE 0 END), 0) as "vatTotal"
+        COALESCE(SUM(CASE WHEN status IN ('completed', 'partially_refunded') THEN COALESCE(discount_amount, 0) ELSE 0 END), 0) as "discountTotal",
+        COALESCE(SUM(CASE WHEN status IN ('completed', 'partially_refunded') THEN COALESCE(vat_amount, 0) ELSE 0 END), 0) as "vatTotal"
       FROM pos_sales 
       WHERE branch_id = ${branchId} AND sale_date >= ${startDate} AND sale_date <= ${endDate}
     `);
     const summary: any = (summaryResult as any).rows?.[0] || summaryResult[0] || {};
+    // خصم الاسترجاعات الجزئية من الإجماليات
+    const partialRefundsResult = await db.execute(sql`
+      SELECT COALESCE(SUM(r.total_amount), 0) as "partialRefundsTotal",
+        COALESCE(SUM(CASE WHEN r.refund_method = 'cash' THEN r.total_amount ELSE 0 END), 0) as "partialRefundsCash",
+        COALESCE(SUM(CASE WHEN r.refund_method != 'cash' THEN r.total_amount ELSE 0 END), 0) as "partialRefundsNetwork",
+        COUNT(*)::int as "partialRefundsCount"
+      FROM pos_refunds r JOIN pos_sales s ON s.id = r.sale_id
+      WHERE s.branch_id = ${branchId} AND s.sale_date >= ${startDate} AND s.sale_date <= ${endDate} AND s.status = 'partially_refunded'
+    `);
+    const pr: any = (partialRefundsResult as any).rows?.[0] || (partialRefundsResult as any)[0] || {};
+    summary.partialRefundsTotal = Number(pr.partialRefundsTotal) || 0;
+    summary.partialRefundsCount = Number(pr.partialRefundsCount) || 0;
+    summary.totalSales = (Number(summary.totalSales) || 0) - summary.partialRefundsTotal;
+    summary.cashTotal = (Number(summary.cashTotal) || 0) - (Number(pr.partialRefundsCash) || 0);
+    summary.networkTotal = (Number(summary.networkTotal) || 0) - (Number(pr.partialRefundsNetwork) || 0);
 
     const dailyResult = await db.execute(sql`
       SELECT sale_date as "date", 
@@ -18376,6 +18403,13 @@ export class DatabaseStorage implements IStorage {
       if (existing.length > 0) return existing[0];
       const [shift] = await tx.insert(posShifts).values({ ...data, status: "open" }).returning();
       return shift;
+    }).catch(async (e: any) => {
+      // سباق فتح ورديتين: الفهرس الفريد الجزئي يمنع التكرار — نعيد الوردية الموجودة
+      if (e?.cause?.constraint === "uniq_pos_shifts_open" || e?.code === "23505" || e?.cause?.code === "23505") {
+        const existing = await this.getOpenPosShift(data.eventId, data.cashierId);
+        if (existing) return existing;
+      }
+      throw e;
     });
   }
 
@@ -18465,6 +18499,15 @@ export class DatabaseStorage implements IStorage {
       if (!["completed", "partially_refunded"].includes(sale.status)) {
         return { error: "لا يمكن الاسترجاع من هذه الفاتورة (حالتها: " + sale.status + ")" };
       }
+      // قفل الوردية المستهدفة داخل المعاملة: إن كانت مغلقة لا نربط الاسترجاع بها
+      // حتى لا يختل حساب التسوية بعد الإغلاق (سباق الإغلاق/الاسترجاع)
+      let effectiveShiftId: number | null = params.shiftId ?? sale.shiftId ?? null;
+      if (effectiveShiftId != null) {
+        const [shiftRow] = await tx.select().from(posShifts).where(eq(posShifts.id, effectiveShiftId)).for("update");
+        if (!shiftRow || shiftRow.status !== "open") {
+          effectiveShiftId = null;
+        }
+      }
       const saleItems = await tx.select().from(posSaleItems).where(eq(posSaleItems.saleId, params.saleId)).for("update");
       const itemMap = new Map(saleItems.map((it) => [it.id, it]));
 
@@ -18513,7 +18556,7 @@ export class DatabaseStorage implements IStorage {
       const [refund] = await tx.insert(posRefunds).values({
         saleId: params.saleId,
         eventId: sale.eventId,
-        shiftId: params.shiftId ?? sale.shiftId,
+        shiftId: effectiveShiftId,
         refundNumber,
         subtotal: Math.round(subtotal * 100) / 100,
         vatAmount: Math.round(vatTotal * 100) / 100,

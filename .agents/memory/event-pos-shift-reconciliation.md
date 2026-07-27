@@ -12,3 +12,10 @@ Rules:
 
 **Why:** architect review found overstated expected cash and a close/sale race in the first implementation.
 **How to apply:** any change to POS refunds, shift close, or sale creation must preserve these invariants together.
+
+## Post-deep-review invariants (2026-07-27)
+- Sale creation recomputes ALL money server-side from branch_products (priceOverride ?? basePrice, vatRate) — client totals/prices are never trusted.
+- Partial refund locks its target shift FOR UPDATE; if shift is closed the refund is detached (shift_id NULL) so closed-shift reconciliation never drifts.
+- `uniq_pos_shifts_open` partial unique index on (event_id, cashier_id) WHERE status='open'; openPosShift catches 23505 and returns the existing shift.
+- Void/full-refund/held-order-delete routes must fetch the resource and enforce canAccessBranch; shift stats are owner-or-edit-permission only.
+- Sales reports/summary count status IN ('completed','partially_refunded') then subtract pos_refunds (joined only on partially_refunded sales; fully 'refunded' sales are already excluded).

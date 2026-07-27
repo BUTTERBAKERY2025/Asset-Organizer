@@ -11114,6 +11114,8 @@ export const posShifts = pgTable("pos_shifts", {
   index("idx_pos_shifts_event").on(table.eventId),
   index("idx_pos_shifts_cashier").on(table.cashierId),
   index("idx_pos_shifts_status").on(table.status),
+  // وردية مفتوحة واحدة فقط لكل (إيفنت، كاشير)
+  uniqueIndex("uniq_pos_shifts_open").on(table.eventId, table.cashierId).where(sql`status = 'open'`),
 ]);
 
 export const insertPosShiftSchema = createInsertSchema(posShifts).omit({

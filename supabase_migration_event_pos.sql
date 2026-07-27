@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS pos_shifts (
 CREATE INDEX IF NOT EXISTS idx_pos_shifts_event ON pos_shifts(event_id);
 CREATE INDEX IF NOT EXISTS idx_pos_shifts_cashier ON pos_shifts(cashier_id);
 CREATE INDEX IF NOT EXISTS idx_pos_shifts_status ON pos_shifts(status);
+-- وردية مفتوحة واحدة فقط لكل (إيفنت، كاشير) — يمنع سباق فتح ورديتين
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_pos_shifts_open ON pos_shifts(event_id, cashier_id) WHERE status = 'open';
 
 -- 3) جدول الاسترجاعات (الجزئية)
 CREATE TABLE IF NOT EXISTS pos_refunds (

@@ -38694,16 +38694,75 @@ export async function registerRoutes(
       if (!await canAccessBranch(req, saleData.branchId)) {
         return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
       }
+
+      // ===== إعادة احتساب جميع القيم المالية في الخادم (لا نثق بقيم العميل) =====
+      const branchCatalog = await storage.getBranchProducts(saleData.branchId);
+      const catalogMap = new Map<number, any>(branchCatalog.map((bp: any) => [bp.productId, bp]));
+      const serverItems: any[] = [];
+      let rawSubtotal = 0, rawVat = 0;
+      for (const it of items) {
+        const productId = parseInt(String(it.productId), 10);
+        const quantity = parseInt(String(it.quantity), 10);
+        if (!Number.isFinite(productId) || !Number.isFinite(quantity) || quantity <= 0 || quantity > 10000) {
+          return res.status(400).json({ error: "بيانات أصناف غير صالحة" });
+        }
+        const bp = catalogMap.get(productId);
+        if (!bp || bp.isActive === false) {
+          return res.status(400).json({ error: "صنف غير متاح في هذا الفرع" });
+        }
+        const unitPrice = Number(bp.priceOverride ?? bp.product?.basePrice) || 0;
+        const vatRate = Number(bp.product?.vatRate ?? 0.15);
+        const priceExclVat = unitPrice / (1 + vatRate);
+        rawSubtotal += priceExclVat * quantity;
+        rawVat += (unitPrice - priceExclVat) * quantity;
+        serverItems.push({
+          productId,
+          productName: bp.product?.name || String(it.productName || ""),
+          quantity,
+          unitPrice,
+          vatRate,
+          vatAmount: Math.round((unitPrice - priceExclVat) * quantity * 100) / 100,
+          totalPrice: Math.round(unitPrice * quantity * 100) / 100,
+        });
+      }
+      const rawTotal = rawSubtotal + rawVat;
+      let discountAmt = 0;
+      const discountValueNum = Math.max(0, Number(saleData.discountValue) || 0);
+      if (saleData.discountType === "percentage") {
+        if (discountValueNum > 100) return res.status(400).json({ error: "نسبة الخصم غير صالحة" });
+        discountAmt = rawTotal * discountValueNum / 100;
+      } else if (saleData.discountType === "fixed") {
+        discountAmt = discountValueNum;
+      } else {
+        saleData.discountType = null;
+        saleData.discountValue = 0;
+      }
+      discountAmt = Math.min(discountAmt, rawTotal);
+      const discountRatio = rawTotal > 0 ? discountAmt / rawTotal : 0;
+      const adjSubtotal = rawSubtotal * (1 - discountRatio);
+      const adjVat = rawVat * (1 - discountRatio);
+      const serverTotal = Math.round((adjSubtotal + adjVat) * 100) / 100;
+      saleData.subtotal = Math.round(adjSubtotal * 100) / 100;
+      saleData.vatAmount = Math.round(adjVat * 100) / 100;
+      saleData.totalAmount = serverTotal;
+      saleData.discountAmount = Math.round(discountAmt * 100) / 100;
+      saleData.status = "completed";
+
       if (saleData.paymentMethod === "split") {
         const cashAmt = Number(saleData.cashAmount) || 0;
         const networkAmt = Number(saleData.networkAmount) || 0;
         if (cashAmt < 0 || networkAmt < 0) {
           return res.status(400).json({ error: "مبالغ الدفع المقسم غير صالحة" });
         }
-        const totalAmt = Number(saleData.totalAmount) || 0;
-        if (Math.abs(cashAmt + networkAmt - totalAmt) > 0.02) {
+        if (Math.abs(cashAmt + networkAmt - serverTotal) > 0.02) {
           return res.status(400).json({ error: "مجموع النقد والشبكة لا يتطابق مع الإجمالي" });
         }
+      } else if (saleData.paymentMethod === "cash") {
+        saleData.cashAmount = serverTotal;
+        saleData.networkAmount = 0;
+      } else {
+        saleData.cashAmount = 0;
+        saleData.networkAmount = serverTotal;
       }
       const saleCashierId = (req as any).currentUser?.id || req.session?.userId;
       // ربط البيع بالإيفنت والوردية المفتوحة (إلزامي إذا حُدد إيفنت)
@@ -38733,7 +38792,7 @@ export async function registerRoutes(
       // line items (VAT-inclusive line totals), NOT from a client-supplied field.
       // Inflating item totals would inflate the recorded sale itself, so this is
       // safe for the minimum-order check inside redeemLoyaltyInTx.
-      const loyaltyGross = items.reduce(
+      const loyaltyGross = serverItems.reduce(
         (sum: number, it: any) => sum + (Number(it.totalPrice) || 0),
         0,
       );
@@ -38751,7 +38810,7 @@ export async function registerRoutes(
           }
         : undefined;
 
-      const sale = await storage.createPosSale(saleData, items, afterInsert);
+      const sale = await storage.createPosSale(saleData, serverItems, afterInsert);
       res.status(201).json(sale);
     } catch (error: any) {
       // Loyalty redemption failures are validation errors (Arabic message) — surface to cashier
@@ -38813,6 +38872,11 @@ export async function registerRoutes(
       if (isNaN(saleId)) return res.status(400).json({ error: "معرف غير صالح" });
       const { reason } = req.body;
       if (!reason) return res.status(400).json({ error: "سبب الإلغاء مطلوب" });
+      const targetSale = await storage.getPosSaleById(saleId);
+      if (!targetSale) return res.status(404).json({ error: "الفاتورة غير موجودة" });
+      if (!await canAccessBranch(req, targetSale.branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
       const currentUser = getCurrentUser(req);
       const result = await storage.voidPosSale(saleId, reason, currentUser.id);
       if (!result) return res.status(400).json({ error: "لا يمكن إلغاء هذه العملية" });
@@ -38828,6 +38892,11 @@ export async function registerRoutes(
       if (isNaN(saleId)) return res.status(400).json({ error: "معرف غير صالح" });
       const { reason } = req.body;
       if (!reason) return res.status(400).json({ error: "سبب الاسترداد مطلوب" });
+      const targetSale = await storage.getPosSaleById(saleId);
+      if (!targetSale) return res.status(404).json({ error: "الفاتورة غير موجودة" });
+      if (!await canAccessBranch(req, targetSale.branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
       const currentUser = getCurrentUser(req);
       const result = await storage.refundPosSale(saleId, reason, currentUser.id);
       if (!result) return res.status(400).json({ error: "لا يمكن استرداد هذه العملية" });
@@ -38852,15 +38921,19 @@ export async function registerRoutes(
 
   app.post("/api/pos/held-orders", isAuthenticated, requirePermission("event_pos", "create"), async (req, res) => {
     try {
-      const { branchId, cashierId, cashierName, label, cartData, paymentMethod, customerName, discountType, discountValue, totalAmount } = req.body;
-      if (!branchId || !cashierId || !cashierName || !cartData) {
+      const { branchId, label, cartData, paymentMethod, customerName, discountType, discountValue, totalAmount } = req.body;
+      if (!branchId || !cartData) {
         return res.status(400).json({ error: "بيانات ناقصة" });
       }
       if (!await canAccessBranch(req, branchId)) {
         return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
       }
+      const holdUser = (req as any).currentUser;
       const order = await storage.createHeldOrder({
-        branchId, cashierId, cashierName, label, cartData, paymentMethod, customerName, discountType, discountValue, totalAmount,
+        branchId,
+        cashierId: holdUser?.id || req.session?.userId,
+        cashierName: holdUser?.fullName || holdUser?.username || "كاشير",
+        label, cartData, paymentMethod, customerName, discountType, discountValue, totalAmount,
       });
       res.status(201).json(order);
     } catch (error: any) {
@@ -38872,6 +38945,11 @@ export async function registerRoutes(
     try {
       const id = Number(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const heldOrder = await storage.getHeldOrderById(id);
+      if (!heldOrder) return res.status(404).json({ error: "الطلب غير موجود" });
+      if (!await canAccessBranch(req, heldOrder.branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
       const deleted = await storage.deleteHeldOrder(id);
       if (!deleted) return res.status(404).json({ error: "الطلب غير موجود" });
       res.json({ success: true });
@@ -39053,6 +39131,18 @@ export async function registerRoutes(
       if (!shift) return res.status(404).json({ error: "الوردية غير موجودة" });
       if (!await canAccessBranch(req, shift.branchId)) {
         return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      // الكاشير يرى إحصائيات ورديته فقط، والمدير (صلاحية تعديل) يرى الكل
+      const statsUser = (req as any).currentUser;
+      const statsUserId = statsUser?.id || req.session?.userId;
+      if (shift.cashierId !== statsUserId && statsUser?.role !== "admin") {
+        const perms = await storage.getUserPermissions(statsUserId);
+        const mp = perms.find((p: any) => p.module === "event_pos");
+        const raw = mp?.actions as unknown;
+        const acts = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.replace(/[{}]/g, "").split(",").map((a: string) => a.trim()) : [];
+        if (!acts.includes("edit")) {
+          return res.status(403).json({ error: "لا يمكنك عرض إحصائيات وردية كاشير آخر" });
+        }
       }
       const stats = await storage.getPosShiftStats(id);
       const expectedCash = Math.round(((shift.openingCash || 0) + stats.cashTotal - stats.refundsCash) * 100) / 100;
