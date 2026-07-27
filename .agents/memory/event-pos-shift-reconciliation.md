@@ -4,6 +4,7 @@ description: Invariants for pos_shifts cash reconciliation, refund accounting, a
 ---
 
 Rules:
+- Refund/void retries are idempotent: pos_refunds has (sale_id, idempotency_key) partial unique index; createPosPartialRefund checks the key BOTH before the tx AND again after locking the sale (a same-key concurrent request may have completed and flipped status to refunded) + catches 23505; void returns the sale as-is when already voided.
 - Refund accounting is LEDGER-BASED (since 2026-07-27): full AND partial refunds both write pos_refunds rows (full refund = refundPosSaleFull → createPosPartialRefund on all remaining quantities). refund_method (cash|network) drives expected-cash/network subtraction.
 - Countable-sale predicate everywhere in stats (shift stats, daily summary, range summary, event report): `status IN ('completed','partially_refunded') OR (status='refunded' AND EXISTS pos_refunds row)`. Legacy fully-refunded sales (pre-ledger, no pos_refunds rows) stay excluded and must NOT be added back — they have nothing offsetting them.
 - Refund-subtraction queries join pos_refunds and filter sale status IN ('partially_refunded','refunded') (not just partially_refunded), otherwise ledger-based full refunds double-subtract or leak.
