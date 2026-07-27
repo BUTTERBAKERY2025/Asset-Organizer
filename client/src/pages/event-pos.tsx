@@ -96,8 +96,8 @@ export default function EventPosPage() {
   const zReportRef = useRef<HTMLDivElement>(null);
   const [btPrinting, setBtPrinting] = useState(false);
 
-  const handleBtPrint = async () => {
-    if (!receiptRef.current) return;
+  const handleBtPrint = async (): Promise<boolean> => {
+    if (!receiptRef.current) return false;
     setBtPrinting(true);
     try {
       if (!isPrinterConnected()) {
@@ -105,12 +105,23 @@ export default function EventPosPage() {
         if (!p) throw new Error("الطابعة غير متصلة. افتح إعدادات ربط طابعة الكاشير واضغط إعادة الاتصال أو بحث عن طابعات.");
       }
       await printElement(receiptRef.current);
-      toast({ title: "تم إرسال الفاتورة للطابعة" });
+      toast({ title: "تمت طباعة الفاتورة على طابعة الكاشير" });
+      return true;
     } catch (e: any) {
-      toast({ title: "فشلت الطباعة عبر البلوتوث", description: e?.message || "", variant: "destructive" });
+      toast({ title: "تعذرت الطباعة عبر البلوتوث", description: (e?.message || "") + " — سيتم فتح الطباعة العادية.", variant: "destructive" });
+      return false;
     } finally {
       setBtPrinting(false);
     }
+  };
+
+  // زر طباعة ذكي: إذا فيه طابعة كاشير مرتبطة يطبع عليها مباشرة، وإلا يفتح الطباعة العادية
+  const handleSmartPrint = async () => {
+    if (getSavedPrinter()) {
+      const ok = await handleBtPrint();
+      if (ok) return;
+    }
+    handlePrint();
   };
   const isManager = canEdit("event_pos");
   const canVoid = canDelete("event_pos");
@@ -1792,20 +1803,14 @@ export default function EventPosPage() {
           )}
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setShowReceipt(false)} className="rounded-xl h-12 text-[15px] font-bold">إغلاق</Button>
-            {getSavedPrinter() && (
-              <Button
-                onClick={handleBtPrint}
-                disabled={btPrinting}
-                className="gap-2 rounded-xl bg-[#1C1411] hover:bg-[#2A1F19] text-[#D4A373] h-12 text-[15px] font-bold active:scale-95 touch-manipulation"
-                data-testid="button-bt-print-receipt"
-              >
-                {btPrinting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Printer className="w-5 h-5" />}
-                طباعة بلوتوث
-              </Button>
-            )}
-            <Button onClick={() => handlePrint()} className="gap-2 rounded-xl bg-orange-500 hover:bg-orange-600 h-12 text-[15px] font-bold active:scale-95 touch-manipulation" data-testid="button-print-receipt">
-              <Printer className="w-5 h-5" />
-              طباعة
+            <Button
+              onClick={handleSmartPrint}
+              disabled={btPrinting}
+              className="gap-2 rounded-xl bg-orange-500 hover:bg-orange-600 h-12 text-[15px] font-bold active:scale-95 touch-manipulation"
+              data-testid="button-print-receipt"
+            >
+              {btPrinting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Printer className="w-5 h-5" />}
+              {getSavedPrinter() ? "طباعة مباشرة" : "طباعة"}
             </Button>
           </DialogFooter>
         </DialogContent>

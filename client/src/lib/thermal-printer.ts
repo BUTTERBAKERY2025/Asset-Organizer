@@ -84,9 +84,82 @@ export async function scanAndConnect(): Promise<SavedPrinter> {
   return connectToDevice(dev);
 }
 
+// ===== إبقاء الاتصال حيّاً + إعادة اتصال تلقائية =====
+// كثير من الطابعات تفصل البلوتوث تلقائياً إذا لم تستقبل بيانات لفترة قصيرة (توفير طاقة)
+
+let keepAliveTimer: ReturnType<typeof setInterval> | null = null;
+let reconnecting = false;
+let intentionalDisconnect = false;
+let onReconnectCb: ((p: SavedPrinter) => void) | null = null;
+
+export function onPrinterReconnect(cb: ((p: SavedPrinter) => void) | null) {
+  onReconnectCb = cb;
+}
+
+const KEEPALIVE_MS = 15000;
+// DLE EOT 1 — طلب حالة الطابعة (لا يطبع شيئاً، فقط يُبقي القناة نشطة)
+const KEEPALIVE_BYTES = new Uint8Array([0x10, 0x04, 0x01]);
+
+function startKeepAlive() {
+  stopKeepAlive();
+  keepAliveTimer = setInterval(async () => {
+    if (!writeChar || !device?.gatt?.connected) return;
+    try {
+      if (writeChar.properties.writeWithoutResponse) {
+        await writeChar.writeValueWithoutResponse(KEEPALIVE_BYTES);
+      } else {
+        await writeChar.writeValue(KEEPALIVE_BYTES);
+      }
+    } catch {
+      // فشل النبضة — سيتكفل حدث الانقطاع بإعادة الاتصال
+    }
+  }, KEEPALIVE_MS);
+}
+
+function stopKeepAlive() {
+  if (keepAliveTimer) {
+    clearInterval(keepAliveTimer);
+    keepAliveTimer = null;
+  }
+}
+
+async function tryAutoReconnect() {
+  if (reconnecting || intentionalDisconnect || !device?.gatt) return;
+  reconnecting = true;
+  try {
+    // 3 محاولات بفواصل متزايدة
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      await new Promise((r) => setTimeout(r, attempt * 1500));
+      if (intentionalDisconnect || !device?.gatt) return;
+      try {
+        const server = await device.gatt.connect();
+        const ch = await findWritableCharacteristic(server);
+        if (ch) {
+          writeChar = ch;
+          startKeepAlive();
+          const saved = getSavedPrinter();
+          if (saved) onReconnectCb?.(saved);
+          return;
+        }
+      } catch {
+        // نحاول مرة أخرى
+      }
+    }
+    onDisconnectCb?.();
+  } finally {
+    reconnecting = false;
+  }
+}
+
 function handleGattDisconnected() {
   writeChar = null;
-  onDisconnectCb?.();
+  stopKeepAlive();
+  if (!intentionalDisconnect) {
+    // لا نبلغ الواجهة فوراً — نحاول إعادة الاتصال بصمت أولاً
+    void tryAutoReconnect();
+  } else {
+    onDisconnectCb?.();
+  }
 }
 
 async function connectToDevice(dev: BluetoothDevice): Promise<SavedPrinter> {
@@ -106,8 +179,10 @@ async function connectToDevice(dev: BluetoothDevice): Promise<SavedPrinter> {
   }
   device = dev;
   writeChar = ch;
+  intentionalDisconnect = false;
   dev.removeEventListener("gattserverdisconnected", handleGattDisconnected);
   dev.addEventListener("gattserverdisconnected", handleGattDisconnected);
+  startKeepAlive();
   const saved: SavedPrinter = {
     id: dev.id,
     name: dev.name || "طابعة بلوتوث",
@@ -137,6 +212,8 @@ export async function reconnectSavedPrinter(): Promise<SavedPrinter | null> {
 }
 
 export function disconnectPrinter(): void {
+  intentionalDisconnect = true;
+  stopKeepAlive();
   try {
     device?.removeEventListener("gattserverdisconnected", handleGattDisconnected);
     device?.gatt?.disconnect();
