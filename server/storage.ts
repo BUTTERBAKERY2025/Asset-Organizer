@@ -18139,11 +18139,33 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async getPosSales(branchId: string, dateFrom?: string, dateTo?: string): Promise<PosSale[]> {
+  async getPosSales(branchId: string, dateFrom?: string, dateTo?: string): Promise<any[]> {
     const conditions = [eq(posSales.branchId, branchId)];
     if (dateFrom) conditions.push(gte(posSales.saleDate, dateFrom));
     if (dateTo) conditions.push(lte(posSales.saleDate, dateTo));
-    return await db.select().from(posSales).where(and(...conditions)).orderBy(desc(posSales.createdAt));
+    const sales = await db.select().from(posSales).where(and(...conditions)).orderBy(desc(posSales.createdAt));
+    if (sales.length === 0) return sales;
+    // إجماليات الاسترجاع الجزئي لكل فاتورة (حسب طريقة الاسترجاع)
+    const ids = sales.map((s) => s.id);
+    const refRes = await db.execute(sql`
+      SELECT sale_id as "saleId",
+        COALESCE(SUM(total_amount), 0) as "refundedAmount",
+        COALESCE(SUM(CASE WHEN refund_method = 'cash' THEN total_amount ELSE 0 END), 0) as "refundedCash",
+        COALESCE(SUM(CASE WHEN refund_method != 'cash' THEN total_amount ELSE 0 END), 0) as "refundedNetwork"
+      FROM pos_refunds WHERE sale_id IN (${sql.join(ids.map((i) => sql`${i}`), sql`, `)})
+      GROUP BY sale_id
+    `);
+    const refRows: any[] = (refRes as any).rows || (refRes as any) || [];
+    const refMap = new Map(refRows.map((r: any) => [Number(r.saleId), r]));
+    return sales.map((s) => {
+      const r: any = refMap.get(s.id);
+      return {
+        ...s,
+        refundedAmount: r ? Number(r.refundedAmount) || 0 : 0,
+        refundedCash: r ? Number(r.refundedCash) || 0 : 0,
+        refundedNetwork: r ? Number(r.refundedNetwork) || 0 : 0,
+      };
+    });
   }
 
   async getPosSaleById(id: number): Promise<PosSale | undefined> {

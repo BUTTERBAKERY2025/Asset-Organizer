@@ -256,8 +256,10 @@ export default function EventPosPage() {
       setActualCashInput("");
       setActualNetworkInput("");
       setShiftCloseNotes("");
-      refetchShift();
+      queryClient.setQueryData(["/api/pos/shifts/current", selectedEventId], null);
       queryClient.invalidateQueries({ queryKey: ["/api/pos/shifts/current"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pos/shifts/stats"] });
+      refetchShift();
       toast({ title: "تم إغلاق الوردية" });
     },
     onError: (err: any) => {
@@ -300,6 +302,7 @@ export default function EventPosPage() {
       setRefundSaleData(null);
       queryClient.invalidateQueries({ queryKey: ["/api/pos/sales"] });
       queryClient.invalidateQueries({ queryKey: ["/api/pos/summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pos/shifts/stats"] });
       toast({ title: "تم تسجيل الاسترجاع الجزئي بنجاح" });
     },
     onError: (err: any) => {
@@ -599,6 +602,7 @@ export default function EventPosPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/pos/sales"] });
       queryClient.invalidateQueries({ queryKey: ["/api/pos/summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pos/shifts/stats"] });
       setShowVoid(false);
       setVoidReason("");
       setVoidSaleId(null);
@@ -740,10 +744,14 @@ export default function EventPosPage() {
   }, [cart, cartTotal]);
 
   const zReportData = useMemo(() => {
-    const completedSales = todaySales.filter((s: any) => s.status === "completed");
+    // الفواتير المسترجعة جزئيًا تبقى ضمن المبيعات ويُخصم منها مبلغ الاسترجاع
+    const completedSales = todaySales.filter((s: any) => s.status === "completed" || s.status === "partially_refunded");
     const voidedSales = todaySales.filter((s: any) => s.status === "voided");
     const refundedSales = todaySales.filter((s: any) => s.status === "refunded");
-    const totalSales = completedSales.reduce((sum: number, s: any) => sum + (s.totalAmount || 0), 0);
+    const partialRefundsTotal = completedSales.reduce((sum: number, s: any) => sum + (s.refundedAmount || 0), 0);
+    const partialRefundsCash = completedSales.reduce((sum: number, s: any) => sum + (s.refundedCash || 0), 0);
+    const partialRefundsNetwork = completedSales.reduce((sum: number, s: any) => sum + (s.refundedNetwork || 0), 0);
+    const totalSales = completedSales.reduce((sum: number, s: any) => sum + (s.totalAmount || 0), 0) - partialRefundsTotal;
     const cashTotal = completedSales.filter((s: any) => s.paymentMethod === "cash").reduce((sum: number, s: any) => sum + (s.totalAmount || 0), 0);
     const networkTotal = completedSales.filter((s: any) => s.paymentMethod === "network").reduce((sum: number, s: any) => sum + (s.totalAmount || 0), 0);
     const splitTotal = completedSales.filter((s: any) => s.paymentMethod === "split").reduce((sum: number, s: any) => sum + (s.totalAmount || 0), 0);
@@ -751,35 +759,35 @@ export default function EventPosPage() {
     const splitNetwork = completedSales.filter((s: any) => s.paymentMethod === "split").reduce((sum: number, s: any) => sum + (s.networkAmount || 0), 0);
     const totalDiscount = completedSales.reduce((sum: number, s: any) => sum + (s.discountAmount || 0), 0);
     const totalVat = completedSales.reduce((sum: number, s: any) => sum + (s.vatAmount || 0), 0);
-    return { completedSales, voidedSales, refundedSales, totalSales, cashTotal, networkTotal, splitTotal, splitCash, splitNetwork, totalDiscount, totalVat, totalCashInDrawer: cashTotal + splitCash };
+    return { completedSales, voidedSales, refundedSales, totalSales, cashTotal, networkTotal, splitTotal, splitCash, splitNetwork, totalDiscount, totalVat, partialRefundsTotal, partialRefundsCash, partialRefundsNetwork, totalCashInDrawer: cashTotal + splitCash - partialRefundsCash };
   }, [todaySales]);
 
   const timeStr = currentTime.toLocaleTimeString("ar-SA-u-nu-latn", { hour: "2-digit", minute: "2-digit" });
   const dateStr = currentTime.toLocaleDateString("ar-SA-u-nu-latn", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-[#f0f2f5] overflow-hidden select-none" dir="rtl">
+    <div className="h-[100dvh] flex flex-col bg-[#FAF8F5] overflow-hidden select-none" dir="rtl">
       {/* Top Navigation Bar */}
-      <header className="bg-white border-b border-gray-200 px-5 py-2 flex items-center justify-between shrink-0 shadow-sm">
+      <header className="bg-[#1C1411] border-b border-[#362720] px-5 py-3 flex items-center justify-between shrink-0 shadow-md">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 bg-gradient-to-br from-orange-500 to-amber-400 rounded-xl flex items-center justify-center shadow-sm">
-              <Zap className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 bg-gradient-to-br from-[#D4A373] to-[#B38250] rounded-xl flex items-center justify-center shadow-inner">
+              <Zap className="w-6 h-6 text-[#1C1411]" />
             </div>
             <div>
-              <h1 className="text-sm font-black text-gray-900 leading-tight" data-testid="text-pos-title">إيفنت موسمي</h1>
-              <p className="text-[10px] text-gray-400 leading-tight">{(user as any)?.fullName || user?.username}</p>
+              <h1 className="text-base font-black text-[#F4EBE1] leading-tight" data-testid="text-pos-title">إيفنت موسمي</h1>
+              <p className="text-[11px] text-[#A69587] leading-tight">{(user as any)?.fullName || user?.username}</p>
             </div>
           </div>
           {activeEvents.length > 0 && (
             <>
-              <div className="h-8 w-px bg-gray-200" />
+              <div className="h-8 w-px bg-[#362720]" />
               <div className="flex items-center gap-1.5">
-                <PartyPopper className="w-4 h-4 text-orange-500 shrink-0" />
+                <Store className="w-4 h-4 text-[#D4A373] shrink-0" />
                 <select
                   value={selectedEventId ?? ""}
                   onChange={e => setSelectedEventId(e.target.value ? parseInt(e.target.value, 10) : null)}
-                  className="text-[12px] font-bold text-gray-800 bg-orange-50 border border-orange-200 rounded-lg px-2 py-1.5 outline-none max-w-[160px]"
+                  className="text-[12px] font-bold text-[#1C1411] bg-[#F4EBE1] border border-[#D4A373] rounded-xl px-3 py-1.5 outline-none max-w-[180px] shadow-sm"
                   data-testid="select-event"
                 >
                   <option value="">اختر الإيفنت...</option>
@@ -790,11 +798,11 @@ export default function EventPosPage() {
               </div>
             </>
           )}
-          <div className="h-8 w-px bg-gray-200 hidden md:block" />
-          <div className="text-[11px] text-gray-400 hidden md:block">
+          <div className="h-8 w-px bg-[#362720] hidden md:block" />
+          <div className="text-[11px] text-[#A69587] hidden md:block">
             <span>{dateStr}</span>
             <span className="mx-1.5">|</span>
-            <span className="font-mono font-bold text-gray-600">{timeStr}</span>
+            <span className="font-mono font-bold text-[#D4A373]">{timeStr}</span>
           </div>
         </div>
 
@@ -803,17 +811,17 @@ export default function EventPosPage() {
             currentShift ? (
               <button
                 onClick={() => { setClosedShiftResult(null); setShowShiftClose(true); }}
-                className="flex items-center gap-1.5 bg-green-50 text-green-700 rounded-lg px-3 py-1.5 border border-green-200 hover:bg-green-100 transition-all active:scale-95 touch-manipulation"
+                className="flex items-center gap-1.5 bg-[#2E3C2B] text-[#86C275] rounded-xl px-4 py-2 border border-[#455A41] hover:bg-[#394B35] transition-all active:scale-95 touch-manipulation shadow-sm"
                 data-testid="button-shift-status"
               >
-                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="w-2.5 h-2.5 rounded-full bg-[#86C275] animate-pulse shadow-[0_0_8px_#86C275]" />
                 <span className="text-xs font-bold">وردية مفتوحة</span>
                 <LogOut className="w-3.5 h-3.5" />
               </button>
             ) : (
               <button
                 onClick={() => setShowShiftOpen(true)}
-                className="flex items-center gap-1.5 bg-orange-500 text-white rounded-lg px-3 py-1.5 hover:bg-orange-600 transition-all active:scale-95 touch-manipulation shadow-sm"
+                className="flex items-center gap-2 bg-gradient-to-r from-[#D4A373] to-[#B38250] text-[#1C1411] rounded-xl px-5 py-2 hover:from-[#E1B68A] hover:to-[#C29263] transition-all active:scale-95 touch-manipulation shadow-md"
                 data-testid="button-open-shift"
               >
                 <DoorOpen className="w-3.5 h-3.5" />
@@ -824,7 +832,7 @@ export default function EventPosPage() {
           {heldOrders.length > 0 && (
             <button
               onClick={() => setShowHeld(true)}
-              className="relative flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 rounded-lg px-3 py-1.5 border border-amber-200 dark:border-amber-900 hover:bg-amber-100 dark:hover:bg-amber-950/60 transition-all active:scale-95 touch-manipulation"
+              className="relative flex items-center gap-1.5 bg-[#4A3320] text-[#E8C49C] rounded-xl px-4 py-2 border border-[#6B4B31] hover:bg-[#5C3F28] transition-all active:scale-95 touch-manipulation shadow-sm"
               data-testid="button-held-orders"
             >
               <Pause className="w-3.5 h-3.5" />
@@ -833,52 +841,52 @@ export default function EventPosPage() {
           )}
           {isManager && todaySummary && (
             <>
-              <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 rounded-lg px-3 py-1.5 border border-emerald-200 dark:border-emerald-900">
+              <div className="flex items-center gap-2 bg-[#212E27] text-[#93C986] rounded-xl px-4 py-2 border border-[#3A5043]">
                 <TrendingUp className="w-3.5 h-3.5" />
                 <span className="text-xs font-bold">{(todaySummary.totalSales || 0).toFixed(0)}</span>
-                <span className="text-[10px] text-emerald-500 dark:text-emerald-400">ر.س</span>
+                <span className="text-[10px] text-[#699E5C]">ر.س</span>
               </div>
-              <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 rounded-lg px-3 py-1.5 border border-blue-200 dark:border-blue-900">
+              <div className="flex items-center gap-2 bg-[#1E2B38] text-[#86A8D2] rounded-xl px-4 py-2 border border-[#314457]">
                 <Receipt className="w-3.5 h-3.5" />
                 <span className="text-xs font-bold">{todaySummary.totalTransactions || 0}</span>
-                <span className="text-[10px] text-blue-500 dark:text-blue-400">فاتورة</span>
+                <span className="text-[10px] text-[#5E83A8]">فاتورة</span>
               </div>
             </>
           )}
           {isManager && (
             <>
-              <div className="h-8 w-px bg-gray-200 mx-1" />
+              <div className="h-8 w-px bg-[#362720] mx-2" />
               <button
                 onClick={() => setShowZReport(true)}
-                className="w-9 h-9 rounded-xl bg-violet-50 dark:bg-violet-950/40 flex items-center justify-center hover:bg-violet-100 dark:hover:bg-violet-950/60 transition-all active:scale-90 touch-manipulation border border-violet-200 dark:border-violet-900"
+                className="w-10 h-10 rounded-xl bg-[#2D2235] flex items-center justify-center hover:bg-[#3D2F47] transition-all active:scale-90 touch-manipulation border border-[#4C3A5A]"
                 title="تقرير الوردية (F4)"
                 data-testid="button-zreport"
               >
-                <FileText className="w-4.5 h-4.5 text-violet-600 dark:text-violet-300" />
+                <FileText className="w-5 h-5 text-[#B898D9]" />
               </button>
               <button
                 onClick={() => setShowHistory(true)}
-                className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all active:scale-90 touch-manipulation"
+                className="w-10 h-10 rounded-xl bg-[#2C201A] flex items-center justify-center hover:bg-[#3D2D25] transition-all active:scale-90 touch-manipulation border border-[#4A372D]"
                 title="سجل المبيعات"
                 data-testid="button-history"
               >
-                <ListOrdered className="w-4.5 h-4.5 text-gray-600" />
+                <ListOrdered className="w-5 h-5 text-[#D4A373]" />
               </button>
               <a
                 href="/event-reports"
-                className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all active:scale-90 touch-manipulation"
+                className="w-10 h-10 rounded-xl bg-[#2C201A] flex items-center justify-center hover:bg-[#3D2D25] transition-all active:scale-90 touch-manipulation border border-[#4A372D]"
                 title="تقارير الإيفنتات"
                 data-testid="button-event-reports"
               >
-                <FileText className="w-4.5 h-4.5 text-gray-600" />
+                <FileText className="w-5 h-5 text-[#D4A373]" />
               </a>
               <a
                 href="/event-pos-settings"
-                className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all active:scale-90 touch-manipulation"
+                className="w-10 h-10 rounded-xl bg-[#2C201A] flex items-center justify-center hover:bg-[#3D2D25] transition-all active:scale-90 touch-manipulation border border-[#4A372D]"
                 title="الإعدادات"
                 data-testid="button-settings"
               >
-                <Settings className="w-4.5 h-4.5 text-gray-600" />
+                <Settings className="w-5 h-5 text-[#D4A373]" />
               </a>
             </>
           )}
@@ -888,13 +896,13 @@ export default function EventPosPage() {
       {/* No event selected prompt */}
       {!selectedEvent && activeEvents.length > 0 && (
         <div className="shrink-0 px-3 pt-2 md:px-4">
-          <div className="rounded-2xl border-2 border-dashed border-orange-300 bg-orange-50/60 px-4 py-2.5 flex items-center gap-3">
-            <div className="w-9 h-9 bg-orange-100 rounded-xl flex items-center justify-center shrink-0">
-              <PartyPopper className="w-4.5 h-4.5 text-orange-500" />
+          <div className="rounded-[20px] border-2 border-dashed border-[#D4A373]/40 bg-[#D4A373]/5 px-5 py-3.5 flex items-center gap-4">
+            <div className="w-12 h-12 bg-[#D4A373]/10 rounded-2xl flex items-center justify-center shrink-0">
+              <PartyPopper className="w-6 h-6 text-[#D4A373]" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[13px] font-black text-orange-800">اختر الإيفنت للبدء</div>
-              <div className="text-[11px] text-orange-600/80">حدّد الإيفنت من القائمة في الأعلى ثم افتح وردية لبدء البيع</div>
+              <div className="text-[15px] font-black text-[#5C422E]">اختر الإيفنت للبدء</div>
+              <div className="text-[12px] text-[#8C6C50]">حدّد الإيفنت من القائمة في الأعلى ثم افتح وردية لبدء البيع</div>
             </div>
           </div>
         </div>
@@ -903,16 +911,16 @@ export default function EventPosPage() {
       {/* Event Banner */}
       {selectedEvent && (
         <div className="shrink-0 px-3 pt-2 md:px-4">
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-l from-amber-500 via-orange-500 to-orange-600 px-4 py-2.5 flex items-center justify-between gap-3 shadow-md shadow-orange-200/50">
-            <div className="absolute -top-10 -left-10 w-36 h-36 rounded-full bg-white/10 pointer-events-none" />
-            <div className="absolute -bottom-12 right-1/3 w-28 h-28 rounded-full bg-white/10 pointer-events-none" />
+          <div className="relative overflow-hidden rounded-[20px] bg-gradient-to-r from-[#B38250] to-[#D4A373] px-5 py-3.5 flex items-center justify-between gap-4 shadow-lg shadow-[#D4A373]/20">
+            <div className="absolute -top-16 -left-16 w-48 h-48 rounded-full bg-white/20 pointer-events-none blur-xl" />
+            <div className="absolute -bottom-16 right-1/4 w-40 h-40 rounded-full bg-[#1C1411]/5 pointer-events-none blur-xl" />
             <div className="relative flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center shrink-0">
-                <PartyPopper className="w-5 h-5 text-white" />
+              <div className="w-12 h-12 bg-[#1C1411]/10 backdrop-blur-md rounded-[16px] flex items-center justify-center shrink-0 shadow-inner">
+                <PartyPopper className="w-6 h-6 text-[#1C1411]" />
               </div>
               <div className="min-w-0">
-                <div className="text-white font-black text-[14px] truncate leading-tight" data-testid="text-event-banner-name">{selectedEvent.name}</div>
-                <div className="text-white/80 text-[10px] flex items-center gap-2.5 flex-wrap mt-0.5">
+                <div className="text-[#1C1411] font-black text-[16px] truncate leading-tight" data-testid="text-event-banner-name">{selectedEvent.name}</div>
+                <div className="text-[#4A3219] text-[11px] font-bold flex items-center gap-3 flex-wrap mt-1">
                   {selectedEvent.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{selectedEvent.location}</span>}
                   {(selectedEvent.startDate || selectedEvent.endDate) && (
                     <span className="hidden sm:flex items-center gap-1"><CalendarDays className="w-3 h-3" />{selectedEvent.startDate || "؟"} ← {selectedEvent.endDate || "؟"}</span>
@@ -923,11 +931,11 @@ export default function EventPosPage() {
             </div>
             <div className="relative shrink-0">
               {currentShift ? (
-                <div className="flex items-center gap-2 bg-white/15 backdrop-blur rounded-xl px-3 py-1.5">
+                <div className="flex items-center gap-3 bg-[#1C1411]/10 backdrop-blur-md rounded-[16px] px-4 py-2 shadow-inner">
                   <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse shrink-0" />
-                  <div className="text-white text-[10px] leading-tight">
+                  <div className="text-[#1C1411] text-[11px] leading-tight">
                     <div className="font-bold">وردية مفتوحة · {currentShift.cashierName}</div>
-                    <div className="text-white/70 hidden sm:block">
+                    <div className="text-[#4A3219] hidden sm:block font-semibold mt-0.5">
                       افتتاح {(currentShift.openingCash || 0).toFixed(0)} ر.س · منذ {currentShift.openedAt ? new Date(currentShift.openedAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }) : "—"}
                     </div>
                   </div>
@@ -935,7 +943,7 @@ export default function EventPosPage() {
               ) : (
                 <button
                   onClick={() => setShowShiftOpen(true)}
-                  className="flex items-center gap-1.5 bg-white text-orange-600 rounded-xl px-3.5 py-2 text-[11px] font-black shadow-sm hover:bg-orange-50 transition-all active:scale-95 touch-manipulation"
+                  className="flex items-center gap-2 bg-[#1C1411] text-[#D4A373] rounded-[14px] px-5 py-2.5 text-[12px] font-black shadow-lg hover:bg-[#2C201A] transition-all active:scale-95 touch-manipulation"
                   data-testid="button-banner-open-shift"
                 >
                   <DoorOpen className="w-4 h-4" />
@@ -951,19 +959,19 @@ export default function EventPosPage() {
       <div className="flex-1 overflow-hidden px-3 pt-2 pb-16 md:px-4 md:py-3">
       <div className="page-container h-full flex gap-3 overflow-hidden">
         {/* RIGHT: Products Section */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-2xl shadow-sm border border-gray-200">
+        <div className="flex-1 flex flex-col overflow-hidden bg-[#FFFFFF] rounded-[24px] shadow-sm border border-[#EBE3D8]">
           <div className="px-3 pt-3 pb-1.5 shrink-0">
             <div className="relative">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[#A69587]" />
               <Input
                 placeholder="ابحث عن منتج بالاسم أو الفئة..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="pr-10 pl-9 bg-white border-gray-200 h-10 text-[13px] rounded-xl shadow-sm focus:shadow-md transition-shadow"
+                className="pr-10 pl-9 bg-[#FAF8F5] border-[#EBE3D8] h-11 text-[13px] rounded-[16px] focus:bg-white focus:border-[#D4A373] focus:ring-2 focus:ring-[#D4A373]/20 transition-all placeholder:text-[#A69587] text-[#5C422E] font-bold"
                 data-testid="input-search-product"
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery("")} className="absolute left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors" data-testid="button-clear-search">
+                <button onClick={() => setSearchQuery("")} className="absolute left-3 top-1/2 -translate-y-1/2 w-7 h-7 bg-[#EBE3D8] hover:bg-[#D4A373] hover:text-[#1C1411] rounded-full flex items-center justify-center transition-colors" data-testid="button-clear-search">
                   <X className="w-3.5 h-3.5 text-gray-500" />
                 </button>
               )}
@@ -975,16 +983,16 @@ export default function EventPosPage() {
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                 <button
                   onClick={() => setSelectedCategory("all")}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-bold whitespace-nowrap transition-all active:scale-95 touch-manipulation border ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-bold whitespace-nowrap transition-all active:scale-95 touch-manipulation border ${
                     selectedCategory === "all"
-                      ? "bg-gray-900 text-white border-gray-900 shadow-md"
-                      : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
+                      ? "bg-[#1C1411] text-[#D4A373] border-[#1C1411] shadow-md"
+                      : "bg-[#FFFFFF] text-[#8C6C50] border-[#EBE3D8] hover:border-[#D4A373]/50 hover:bg-[#FAF8F5]"
                   }`}
                   data-testid="category-all"
                 >
                   <Sparkles className="w-3 h-3" />
                   الكل
-                  <span className={`text-[10px] font-bold ${selectedCategory === "all" ? "text-gray-400" : "text-gray-400"}`}>
+                  <span className={`text-[11px] font-bold px-1.5 rounded-full ${selectedCategory === "all" ? "bg-[#362720] text-[#D4A373]" : "bg-[#FAF8F5] text-[#A69587]"}`}>
                     {filteredProducts.length}
                   </span>
                 </button>
@@ -995,16 +1003,16 @@ export default function EventPosPage() {
                     <button
                       key={cat}
                       onClick={() => setSelectedCategory(cat)}
-                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-bold whitespace-nowrap transition-all active:scale-95 touch-manipulation border ${
+                      className={`flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-bold whitespace-nowrap transition-all active:scale-95 touch-manipulation border ${
                         selectedCategory === cat
-                          ? "bg-orange-500 text-white border-orange-500 shadow-md"
-                          : "bg-white text-gray-600 border-gray-200 hover:border-orange-300"
+                          ? "bg-gradient-to-r from-[#B38250] to-[#D4A373] text-[#1C1411] border-transparent shadow-md"
+                          : "bg-[#FFFFFF] text-[#8C6C50] border-[#EBE3D8] hover:border-[#D4A373]/50 hover:bg-[#FAF8F5]"
                       }`}
                       data-testid={`category-${cat}`}
                     >
                       <IconComp className="w-3 h-3" />
                       {cat}
-                      <span className={`text-[11px] font-bold ${selectedCategory === cat ? "text-orange-200" : "text-gray-400"}`}>
+                      <span className={`text-[11px] font-bold px-1.5 rounded-full ${selectedCategory === cat ? "bg-[#1C1411]/20 text-[#1C1411]" : "bg-[#FAF8F5] text-[#A69587]"}`}>
                         {count}
                       </span>
                     </button>
@@ -1020,20 +1028,20 @@ export default function EventPosPage() {
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
                   <div className="w-16 h-16 bg-orange-100 rounded-3xl flex items-center justify-center mx-auto mb-4 animate-pulse">
-                    <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
+                    <Loader2 className="w-10 h-10 text-[#D4A373] animate-spin" />
                   </div>
                   <p className="text-base text-gray-400 font-medium">جاري تحميل المنتجات...</p>
                 </div>
               </div>
             ) : displayProducts.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full">
-                <div className="w-28 h-28 bg-gray-100 rounded-[2rem] flex items-center justify-center mb-5">
-                  <Package className="w-14 h-14 text-gray-300" />
+                <div className="w-32 h-32 bg-[#FAF8F5] rounded-[32px] flex items-center justify-center mb-6 shadow-inner border border-[#EBE3D8]">
+                  <Package className="w-16 h-16 text-[#C2B4A7]" />
                 </div>
-                <p className="text-xl font-bold text-gray-400 mb-2">لا توجد أصناف</p>
-                <p className="text-sm text-gray-300 mb-4">{isManager ? "أضف منتجات من صفحة الإعدادات" : "تواصل مع المدير لإضافة المنتجات"}</p>
+                <p className="text-[22px] font-black text-[#A69587] mb-2">لا توجد أصناف</p>
+                <p className="text-[14px] font-bold text-[#C2B4A7] mb-6">{isManager ? "أضف منتجات من صفحة الإعدادات" : "تواصل مع المدير لإضافة المنتجات"}</p>
                 {isManager && (
-                  <a href="/event-pos-settings" className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 text-white rounded-xl font-bold text-sm hover:bg-orange-600 transition-colors active:scale-95 touch-manipulation" data-testid="link-add-products">
+                  <a href="/event-pos-settings" className="inline-flex items-center gap-2 px-6 py-3.5 bg-[#1C1411] text-[#D4A373] rounded-[16px] font-black text-[14px] hover:bg-[#2C201A] transition-all shadow-lg active:scale-95 touch-manipulation" data-testid="link-add-products">
                     <Settings className="w-4 h-4" />
                     إعدادات نقطة البيع
                   </a>
@@ -1048,34 +1056,34 @@ export default function EventPosPage() {
                     <button
                       key={bp.id}
                       onClick={() => addToCart(bp)}
-                      className={`group relative bg-white rounded-xl p-2.5 text-center transition-all duration-150 active:scale-[0.96] select-none touch-manipulation ${
+                      className={`group relative bg-[#FFFFFF] rounded-[20px] p-3 text-center transition-all duration-150 active:scale-[0.96] select-none touch-manipulation ${
                         inCart 
-                          ? "ring-2 ring-orange-400 shadow-lg shadow-orange-100/60" 
-                          : "shadow-sm hover:shadow-md border border-gray-100 hover:border-orange-200"
+                          ? "ring-2 ring-[#D4A373] shadow-lg shadow-[#D4A373]/20 border-transparent bg-[#FAF8F5]" 
+                          : "shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_16px_rgba(0,0,0,0.04)] border border-[#EBE3D8] hover:border-[#D4A373]/40"
                       }`}
                       data-testid={`product-card-${bp.productId}`}
                     >
                       {inCart && (
-                        <div className="absolute -top-1.5 -left-1.5 min-w-[24px] h-6 bg-orange-500 text-white rounded-lg text-[11px] px-1.5 flex items-center justify-center font-black shadow-md shadow-orange-300/50 z-10">
+                        <div className="absolute -top-2 -left-2 min-w-[28px] h-7 bg-[#1C1411] text-[#D4A373] rounded-xl text-[13px] px-2 flex items-center justify-center font-black shadow-lg shadow-[#1C1411]/20 z-10 ring-2 ring-[#FFFFFF]">
                           {inCart.quantity}
                         </div>
                       )}
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-1.5 transition-colors ${
+                      <div className={`w-12 h-12 rounded-[14px] flex items-center justify-center mx-auto mb-2.5 transition-all ${
                         inCart 
-                          ? "bg-orange-500 shadow-sm" 
-                          : "bg-gradient-to-br from-orange-50 to-amber-50 group-hover:from-orange-100 group-hover:to-amber-100"
+                          ? "bg-gradient-to-br from-[#B38250] to-[#D4A373] shadow-md scale-110" 
+                          : "bg-[#FAF8F5] group-hover:bg-[#F4EBE1] border border-[#EBE3D8]"
                       }`}>
-                        <Package className={`w-5 h-5 ${inCart ? "text-white" : "text-orange-400"}`} />
+                        <Package className={`w-6 h-6 ${inCart ? "text-[#1C1411]" : "text-[#D4A373]"}`} />
                       </div>
-                      <div className="text-[12px] font-bold text-gray-800 mb-0.5 line-clamp-2 leading-tight min-h-[32px] flex items-center justify-center">
+                      <div className="text-[13px] font-black text-[#2C201A] mb-1 line-clamp-2 leading-tight min-h-[36px] flex items-center justify-center">
                         {bp.product?.name}
                       </div>
-                      <div className="text-[10px] text-gray-400 mb-1.5 font-medium">{bp.product?.category}</div>
-                      <div className={`rounded-lg py-1.5 px-2 transition-colors ${
-                        inCart ? "bg-orange-50 border border-orange-200" : "bg-gray-50"
+                      <div className="text-[11px] text-[#A69587] mb-2 font-bold">{bp.product?.category}</div>
+                      <div className={`rounded-[12px] py-2 px-2 transition-colors ${
+                        inCart ? "bg-[#1C1411] text-[#D4A373]" : "bg-[#FAF8F5] text-[#5C422E] group-hover:bg-[#F4EBE1]"
                       }`}>
-                        <span className="text-orange-600 font-black text-[15px]">{price.toFixed(2)}</span>
-                        <span className="text-[10px] text-orange-400 mr-0.5 font-bold">ر.س</span>
+                        <span className="font-black text-[16px] tracking-tight">{price.toFixed(2)}</span>
+                        <span className="text-[11px] mr-1 font-bold opacity-80">ر.س</span>
                       </div>
                     </button>
                   );
@@ -1086,15 +1094,15 @@ export default function EventPosPage() {
         </div>
 
         {/* LEFT: Cart Panel */}
-        <div className={`${showMobileCart ? "fixed inset-x-2 bottom-2 top-16 z-50 flex shadow-2xl" : "hidden"} md:static md:flex md:inset-auto md:z-auto md:shadow-sm w-auto md:w-[300px] bg-white flex-col rounded-2xl border border-gray-200 shrink-0 overflow-hidden`}>
-          <div className="px-3 py-2.5 border-b border-gray-100 flex items-center justify-between shrink-0">
+        <div className={`${showMobileCart ? "fixed inset-x-2 bottom-2 top-16 z-50 flex shadow-[0_30px_60px_rgba(0,0,0,0.15)]" : "hidden"} md:static md:flex md:inset-auto md:z-auto md:shadow-[0_8px_24px_rgba(28,20,17,0.04)] w-auto md:w-[340px] bg-[#FFFFFF] flex-col rounded-[24px] border border-[#EBE3D8] shrink-0 overflow-hidden`}>
+          <div className="px-4 py-4 border-b border-[#EBE3D8] flex items-center justify-between shrink-0 bg-[#FAF8F5]/50">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
-                <ShoppingCart className="w-4 h-4 text-orange-600" />
+              <div className="w-10 h-10 bg-[#F4EBE1] rounded-[12px] flex items-center justify-center border border-[#EBE3D8]">
+                <ShoppingCart className="w-5 h-5 text-[#D4A373]" />
               </div>
               <div>
-                <h2 className="font-black text-[13px] text-gray-800 leading-tight">الطلب الحالي</h2>
-                <p className="text-[10px] text-gray-400 mt-0.5">
+                <h2 className="font-black text-[15px] text-[#2C201A] leading-tight">الطلب الحالي</h2>
+                <p className="text-[11px] text-[#A69587] mt-0.5 font-bold">
                   {cartItemsCount > 0 ? `${cartItemsCount} صنف` : "لا توجد أصناف"}
                 </p>
               </div>
@@ -1102,7 +1110,7 @@ export default function EventPosPage() {
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setShowMobileCart(false)}
-                className="md:hidden w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors touch-manipulation"
+                className="md:hidden w-10 h-10 rounded-[12px] flex items-center justify-center text-[#A69587] hover:text-[#5C422E] hover:bg-[#FAF8F5] transition-colors touch-manipulation border border-transparent hover:border-[#EBE3D8]"
                 data-testid="button-close-mobile-cart"
               >
                 <X className="w-5 h-5" />
@@ -1111,7 +1119,7 @@ export default function EventPosPage() {
                 <>
                   <button
                     onClick={() => setShowHoldDialog(true)}
-                    className="flex items-center gap-1 text-[11px] font-bold text-amber-500 hover:text-amber-700 px-2 py-1.5 rounded-lg hover:bg-amber-50 transition-colors active:scale-95 touch-manipulation"
+                    className="flex items-center gap-1.5 text-[12px] font-bold text-[#B38250] hover:text-[#8C6C50] px-3 py-2 rounded-xl hover:bg-[#F4EBE1] transition-colors active:scale-95 touch-manipulation border border-transparent hover:border-[#EBE3D8]"
                     title="تعليق الطلب (F2)"
                     data-testid="button-hold-order"
                   >
@@ -1119,7 +1127,7 @@ export default function EventPosPage() {
                   </button>
                   <button 
                     onClick={clearCart} 
-                    className="flex items-center gap-1 text-[12px] font-bold text-red-400 hover:text-red-600 px-2 py-1.5 rounded-lg hover:bg-red-50 transition-colors active:scale-95 touch-manipulation" 
+                    className="flex items-center gap-1.5 text-[12px] font-bold text-[#E07A5F] hover:text-[#C85A3F] px-3 py-2 rounded-xl hover:bg-[#FDF5F3] transition-colors active:scale-95 touch-manipulation border border-transparent hover:border-[#F9E8E4]" 
                     data-testid="button-clear-cart"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -1133,15 +1141,15 @@ export default function EventPosPage() {
           <div className="flex-1 overflow-y-auto">
             {cart.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full px-4">
-                <div className="w-14 h-14 bg-gray-50 rounded-xl flex items-center justify-center mb-3">
-                  <ShoppingCart className="w-7 h-7 text-gray-200" />
+                <div className="w-16 h-16 bg-[#FAF8F5] rounded-2xl flex items-center justify-center mb-4 border border-[#EBE3D8]">
+                  <ShoppingCart className="w-8 h-8 text-[#D4A373]/50" />
                 </div>
-                <p className="text-[13px] font-bold text-gray-300 mb-1">السلة فارغة</p>
-                <p className="text-[11px] text-gray-300 text-center">اضغط على أي منتج لإضافته للطلب</p>
-                <div className="mt-3 flex gap-1.5 text-[9px] text-gray-300">
-                  <span className="bg-gray-100 px-1.5 py-0.5 rounded">F1 إتمام</span>
-                  <span className="bg-gray-100 px-1.5 py-0.5 rounded">F2 تعليق</span>
-                  <span className="bg-gray-100 px-1.5 py-0.5 rounded">F3 معلق</span>
+                <p className="text-[15px] font-black text-[#A69587] mb-1">السلة فارغة</p>
+                <p className="text-[12px] text-[#C2B4A7] text-center">اضغط على أي منتج لإضافته للطلب</p>
+                <div className="mt-4 flex gap-2 text-[10px] text-[#A69587] font-bold">
+                  <span className="bg-[#FAF8F5] border border-[#EBE3D8] px-2 py-1 rounded-md">F1 إتمام</span>
+                  <span className="bg-[#FAF8F5] border border-[#EBE3D8] px-2 py-1 rounded-md">F2 تعليق</span>
+                  <span className="bg-[#FAF8F5] border border-[#EBE3D8] px-2 py-1 rounded-md">F3 معلق</span>
                 </div>
               </div>
             ) : (
@@ -1149,48 +1157,48 @@ export default function EventPosPage() {
                 {cart.map((item) => (
                   <div 
                     key={item.productId} 
-                    className="bg-gray-50/80 rounded-xl p-2.5 transition-all" 
+                    className="bg-[#FAF8F5] rounded-[16px] p-3 transition-all border border-transparent hover:border-[#EBE3D8]" 
                     data-testid={`cart-item-${item.productId}`}
                   >
                     <div className="flex items-start justify-between mb-1.5">
                       <div className="flex-1 min-w-0 ml-1.5">
-                        <div className="text-[12px] font-bold text-gray-800 truncate leading-tight">{item.productName}</div>
-                        <div className="text-[10px] text-gray-400 mt-0.5">{item.unitPrice.toFixed(2)} ر.س</div>
+                        <div className="text-[14px] font-black text-[#2C201A] truncate leading-tight">{item.productName}</div>
+                        <div className="text-[11px] text-[#A69587] mt-0.5 font-bold">{item.unitPrice.toFixed(2)} ر.س</div>
                       </div>
                       <button 
                         onClick={() => removeFromCart(item.productId)} 
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all active:scale-90 touch-manipulation shrink-0" 
+                        className="w-8 h-8 rounded-xl flex items-center justify-center text-[#C2B4A7] hover:text-[#E07A5F] hover:bg-[#FDF5F3] transition-all active:scale-90 touch-manipulation shrink-0" 
                         data-testid={`button-remove-${item.productId}`}
                       >
                         <X className="w-4 h-4" />
                       </button>
                     </div>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center bg-white rounded-xl border border-gray-200 overflow-hidden">
+                      <div className="flex items-center bg-[#FFFFFF] rounded-[14px] border border-[#EBE3D8] overflow-hidden shadow-sm">
                         <button 
                           onClick={() => updateQuantity(item.productId, -1)} 
-                          className="w-10 h-9 flex items-center justify-center hover:bg-red-50 transition-colors active:scale-90 touch-manipulation border-l border-gray-200" 
+                          className="w-11 h-10 flex items-center justify-center hover:bg-[#FAF8F5] transition-colors active:scale-90 touch-manipulation border-l border-[#EBE3D8]" 
                           data-testid={`button-decrease-${item.productId}`}
                         >
-                          <Minus className="w-4 h-4 text-gray-500" />
+                          <Minus className="w-4 h-4 text-[#8C6C50]" />
                         </button>
                         <input
                           type="number"
                           value={item.quantity}
                           onChange={e => setQuantityDirect(item.productId, parseInt(e.target.value) || 0)}
-                          className="w-12 text-center text-[14px] font-black text-gray-800 bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          className="w-12 text-center text-[15px] font-black text-[#1C1411] bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           data-testid={`input-qty-${item.productId}`}
                         />
                         <button 
                           onClick={() => updateQuantity(item.productId, 1)} 
-                          className="w-10 h-9 flex items-center justify-center hover:bg-green-50 transition-colors active:scale-90 touch-manipulation border-r border-gray-200" 
+                          className="w-11 h-10 flex items-center justify-center hover:bg-[#FAF8F5] transition-colors active:scale-90 touch-manipulation border-r border-[#EBE3D8]" 
                           data-testid={`button-increase-${item.productId}`}
                         >
-                          <Plus className="w-4 h-4 text-gray-500" />
+                          <Plus className="w-4 h-4 text-[#8C6C50]" />
                         </button>
                       </div>
-                      <div className="text-[15px] font-black text-gray-800">
-                        {(item.unitPrice * item.quantity).toFixed(2)} <span className="text-[11px] font-bold text-gray-400">ر.س</span>
+                      <div className="text-[16px] font-black text-[#1C1411]">
+                        {(item.unitPrice * item.quantity).toFixed(2)} <span className="text-[11px] font-bold text-[#A69587]">ر.س</span>
                       </div>
                     </div>
                   </div>
@@ -1201,14 +1209,14 @@ export default function EventPosPage() {
 
           {/* Cart Footer */}
           <div className="border-t border-gray-100 shrink-0">
-            <div className="px-3 py-2 space-y-1 bg-gray-50/50">
+            <div className="px-4 py-3 space-y-1.5 bg-[#FAF8F5]">
               <div className="flex justify-between text-[11px]">
-                <span className="text-gray-400">المجموع بدون ضريبة</span>
-                <span className="text-gray-500 font-bold">{cartTotal.subtotal.toFixed(2)}</span>
+                <span className="text-[#8C6C50] font-bold">المجموع بدون ضريبة</span>
+                <span className="text-[#5C422E] font-black">{cartTotal.subtotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-[11px]">
-                <span className="text-gray-400">ضريبة القيمة المضافة 15%</span>
-                <span className="text-gray-500 font-bold">{cartTotal.vat.toFixed(2)}</span>
+                <span className="text-[#8C6C50] font-bold">ضريبة القيمة المضافة 15%</span>
+                <span className="text-[#5C422E] font-black">{cartTotal.vat.toFixed(2)}</span>
               </div>
               {cartTotal.discount > 0 && (
                 <div className="flex justify-between text-[11px]">
@@ -1219,9 +1227,9 @@ export default function EventPosPage() {
                   <span className="text-red-500 font-bold">-{cartTotal.discount.toFixed(2)}</span>
                 </div>
               )}
-              <div className="flex justify-between items-center pt-1.5 border-t border-gray-200">
-                <span className="text-[13px] font-black text-gray-800">الإجمالي</span>
-                <span className="text-[18px] font-black text-orange-600" data-testid="text-cart-total">
+              <div className="flex justify-between items-center pt-2.5 mt-1 border-t border-[#EBE3D8]">
+                <span className="text-[16px] font-black text-[#1C1411]">الإجمالي</span>
+                <span className="text-[24px] font-black text-[#1C1411] tracking-tight" data-testid="text-cart-total">
                   {cartTotal.total.toFixed(2)} <span className="text-[11px]">ر.س</span>
                 </span>
               </div>
@@ -1232,10 +1240,10 @@ export default function EventPosPage() {
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowDiscount(true)}
-                  className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-[11px] font-bold transition-all active:scale-95 touch-manipulation border ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-bold transition-all active:scale-95 touch-manipulation border ${
                     discountType
-                      ? "bg-red-50 text-red-600 border-red-200"
-                      : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
+                      ? "bg-[#FDF5F3] text-[#E07A5F] border-[#F9E8E4]"
+                      : "bg-[#FFFFFF] text-[#8C6C50] border-[#EBE3D8] hover:bg-[#FAF8F5]"
                   }`}
                   data-testid="button-discount"
                 >
@@ -1244,10 +1252,10 @@ export default function EventPosPage() {
                 </button>
                 <button
                   onClick={() => { setSplitMode(!splitMode); if (!splitMode) setPaymentMethod("split"); else setPaymentMethod("cash"); }}
-                  className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-[11px] font-bold transition-all active:scale-95 touch-manipulation border ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-bold transition-all active:scale-95 touch-manipulation border ${
                     splitMode
-                      ? "bg-purple-50 text-purple-600 border-purple-200"
-                      : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
+                      ? "bg-[#FDF7F2] text-[#B38250] border-[#EBE3D8]"
+                      : "bg-[#FFFFFF] text-[#8C6C50] border-[#EBE3D8] hover:bg-[#FAF8F5]"
                   }`}
                   data-testid="button-split-payment"
                 >
@@ -1261,10 +1269,10 @@ export default function EventPosPage() {
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => setPaymentMethod("cash")}
-                    className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-bold transition-all active:scale-95 touch-manipulation ${
+                    className={`flex items-center justify-center gap-2 py-3 rounded-[16px] text-[13px] font-black transition-all active:scale-95 touch-manipulation ${
                       paymentMethod === "cash"
-                        ? "bg-green-500 text-white shadow-md shadow-green-500/25"
-                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                        ? "bg-[#86C275] text-[#1C1411] shadow-lg shadow-[#86C275]/20"
+                        : "bg-[#FAF8F5] text-[#8C6C50] hover:bg-[#F4EBE1] border border-[#EBE3D8]"
                     }`}
                     data-testid="button-payment-cash"
                   >
@@ -1273,10 +1281,10 @@ export default function EventPosPage() {
                   </button>
                   <button
                     onClick={() => setPaymentMethod("network")}
-                    className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-bold transition-all active:scale-95 touch-manipulation ${
+                    className={`flex items-center justify-center gap-2 py-3 rounded-[16px] text-[13px] font-black transition-all active:scale-95 touch-manipulation ${
                       paymentMethod === "network"
-                        ? "bg-blue-500 text-white shadow-md shadow-blue-500/25"
-                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                        ? "bg-[#86A8D2] text-[#1C1411] shadow-lg shadow-[#86A8D2]/20"
+                        : "bg-[#FAF8F5] text-[#8C6C50] hover:bg-[#F4EBE1] border border-[#EBE3D8]"
                     }`}
                     data-testid="button-payment-network"
                   >
@@ -1287,7 +1295,7 @@ export default function EventPosPage() {
               )}
 
               <button
-                className="w-full bg-gradient-to-l from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 disabled:from-gray-200 disabled:to-gray-300 disabled:text-gray-400 text-white font-black text-[14px] py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-500/20 disabled:shadow-none active:scale-[0.97] touch-manipulation"
+                className="w-full bg-gradient-to-r from-[#D4A373] to-[#B38250] hover:from-[#E1B68A] hover:to-[#C29263] disabled:from-[#EBE3D8] disabled:to-[#EBE3D8] disabled:text-[#A69587] text-[#1C1411] font-black text-[16px] py-3.5 rounded-[16px] flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#D4A373]/30 disabled:shadow-none active:scale-[0.97] touch-manipulation"
                 disabled={cart.length === 0 || createSaleMutation.isPending}
                 onClick={handleCheckout}
                 data-testid="button-checkout"
@@ -1295,7 +1303,7 @@ export default function EventPosPage() {
                 {createSaleMutation.isPending ? (
                   <><Loader2 className="w-5 h-5 animate-spin" /> جاري المعالجة...</>
                 ) : (
-                  <><Receipt className="w-5 h-5" /> إتمام الطلب (F1) {cartTotal.total > 0 && <span className="bg-white/20 px-3 py-0.5 rounded-lg text-[13px]">{cartTotal.total.toFixed(2)} ر.س</span>}</>
+                  <><Receipt className="w-5 h-5" /> إتمام الطلب (F1) {cartTotal.total > 0 && <span className="bg-[#1C1411]/10 px-3 py-1 rounded-[10px] text-[14px]">{cartTotal.total.toFixed(2)} ر.س</span>}</>
                 )}
               </button>
             </div>
@@ -1306,37 +1314,37 @@ export default function EventPosPage() {
 
       {/* Mobile bottom bar */}
       {!showMobileCart && (
-        <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 px-3 py-2 flex items-center gap-2 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+        <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#FFFFFF] border-t border-[#EBE3D8] px-4 py-3 flex items-center gap-3 shadow-[0_-10px_40px_rgba(28,20,17,0.08)]">
           <button
             onClick={() => setShowMobileCart(true)}
-            className="flex items-center gap-2 bg-gray-100 rounded-xl px-4 py-3 font-bold text-[13px] text-gray-700 active:scale-95 touch-manipulation relative"
+            className="flex items-center gap-2 bg-[#FAF8F5] border border-[#EBE3D8] rounded-[16px] px-5 py-3.5 font-black text-[14px] text-[#5C422E] active:scale-95 touch-manipulation relative"
             data-testid="button-open-mobile-cart"
           >
             <ShoppingCart className="w-5 h-5" />
             السلة
             {cartItemsCount > 0 && (
-              <span className="absolute -top-1.5 -left-1.5 min-w-[22px] h-[22px] bg-orange-500 text-white rounded-full text-[11px] px-1 flex items-center justify-center font-black">{cartItemsCount}</span>
+              <span className="absolute -top-2 -left-2 min-w-[24px] h-[24px] bg-[#1C1411] text-[#D4A373] rounded-full text-[12px] px-1 flex items-center justify-center font-black ring-2 ring-[#FFFFFF]">{cartItemsCount}</span>
             )}
           </button>
           <button
             onClick={handleCheckout}
             disabled={cart.length === 0 || createSaleMutation.isPending}
-            className="flex-1 bg-gradient-to-l from-orange-500 to-amber-500 disabled:from-gray-200 disabled:to-gray-300 disabled:text-gray-400 text-white font-black text-[14px] py-3 rounded-xl flex items-center justify-center gap-2 active:scale-[0.97] touch-manipulation"
+            className="flex-1 bg-gradient-to-r from-[#D4A373] to-[#B38250] disabled:from-[#EBE3D8] disabled:to-[#EBE3D8] disabled:text-[#A69587] text-[#1C1411] font-black text-[15px] py-3.5 rounded-[16px] flex items-center justify-center gap-2 active:scale-[0.97] touch-manipulation shadow-lg shadow-[#D4A373]/20"
             data-testid="button-mobile-checkout"
           >
             <Receipt className="w-5 h-5" />
-            إتمام الطلب {cartTotal.total > 0 && <span className="bg-white/20 px-2.5 py-0.5 rounded-lg text-[13px]">{cartTotal.total.toFixed(2)} ر.س</span>}
+            إتمام الطلب {cartTotal.total > 0 && <span className="bg-[#1C1411]/10 px-2.5 py-1 rounded-[10px] text-[14px]">{cartTotal.total.toFixed(2)} ر.س</span>}
           </button>
         </div>
       )}
 
       {/* Discount Dialog */}
       <Dialog open={showDiscount} onOpenChange={setShowDiscount}>
-        <DialogContent className="max-w-[380px] rounded-3xl p-0 overflow-hidden" dir="rtl">
-          <div className="bg-gradient-to-l from-red-500 to-pink-500 p-5">
-            <DialogTitle className="flex items-center gap-3 text-white text-lg font-black">
-              <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
-                <Percent className="w-5 h-5 text-white" />
+        <DialogContent className="max-w-[400px] rounded-[32px] p-0 overflow-hidden border border-[#EBE3D8] shadow-2xl" dir="rtl">
+          <div className="bg-gradient-to-r from-[#D4A373] to-[#B38250] p-6">
+            <DialogTitle className="flex items-center gap-3 text-[#1C1411] text-[20px] font-black">
+              <div className="w-12 h-12 bg-[#1C1411]/10 backdrop-blur-md rounded-[16px] flex items-center justify-center shadow-inner">
+                <Percent className="w-6 h-6 text-[#1C1411]" />
               </div>
               إضافة خصم
             </DialogTitle>
@@ -1345,14 +1353,14 @@ export default function EventPosPage() {
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setDiscountType("percentage")}
-                className={`py-3 rounded-xl text-sm font-bold transition-all ${discountType === "percentage" ? "bg-red-500 text-white" : "bg-gray-100 text-gray-600"}`}
+                className={`py-3.5 rounded-[16px] text-[14px] font-black transition-all ${discountType === "percentage" ? "bg-[#1C1411] text-[#D4A373] shadow-lg shadow-[#1C1411]/20" : "bg-[#FFFFFF] text-[#8C6C50] border border-[#EBE3D8]"}`}
                 data-testid="button-discount-percentage"
               >
                 نسبة مئوية %
               </button>
               <button
                 onClick={() => setDiscountType("fixed")}
-                className={`py-3 rounded-xl text-sm font-bold transition-all ${discountType === "fixed" ? "bg-red-500 text-white" : "bg-gray-100 text-gray-600"}`}
+                className={`py-3.5 rounded-[16px] text-[14px] font-black transition-all ${discountType === "fixed" ? "bg-[#1C1411] text-[#D4A373] shadow-lg shadow-[#1C1411]/20" : "bg-[#FFFFFF] text-[#8C6C50] border border-[#EBE3D8]"}`}
                 data-testid="button-discount-fixed"
               >
                 مبلغ ثابت
@@ -1376,7 +1384,7 @@ export default function EventPosPage() {
                 {discountType === "percentage" && (
                   <div className="flex gap-2 mt-3">
                     {[5, 10, 15, 20, 25, 50].map(v => (
-                      <button key={v} onClick={() => setDiscountValue(String(v))} className="flex-1 py-2 rounded-lg text-xs font-bold bg-gray-100 hover:bg-red-50 hover:text-red-600 transition-colors" data-testid={`button-discount-quick-${v}`}>{v}%</button>
+                      <button key={v} onClick={() => setDiscountValue(String(v))} className="flex-1 py-2.5 rounded-[12px] text-[13px] font-black bg-[#FFFFFF] border border-[#EBE3D8] text-[#8C6C50] hover:bg-[#F4EBE1] hover:text-[#5C422E] transition-all" data-testid={`button-discount-quick-${v}`}>{v}%</button>
                     ))}
                   </div>
                 )}
@@ -1398,9 +1406,9 @@ export default function EventPosPage() {
 
       {/* Checkout Dialog */}
       <Dialog open={showCheckout} onOpenChange={setShowCheckout}>
-        <DialogContent className="max-w-[420px] rounded-3xl p-0 overflow-hidden" dir="rtl">
+        <DialogContent className="max-w-[440px] rounded-[32px] p-0 overflow-hidden border border-[#EBE3D8] shadow-2xl" dir="rtl">
           <div className="bg-gradient-to-l from-green-600 to-emerald-500 p-6">
-            <DialogTitle className="flex items-center gap-3 text-white text-lg font-black">
+            <DialogTitle className="flex items-center gap-3 text-[#1C1411] text-[20px] font-black">
               <div className="w-11 h-11 bg-white/20 rounded-2xl flex items-center justify-center">
                 <Receipt className="w-6 h-6 text-white" />
               </div>
@@ -1410,7 +1418,7 @@ export default function EventPosPage() {
           <div className="p-6 space-y-5">
             <div className="bg-gradient-to-l from-orange-50 to-amber-50 rounded-2xl p-6 text-center border border-orange-100">
               <div className="text-sm text-gray-500 mb-2">الإجمالي المطلوب</div>
-              <div className="text-[42px] font-black text-orange-600 leading-tight">{cartTotal.total.toFixed(2)} <span className="text-lg">ر.س</span></div>
+              <div className="text-[48px] font-black text-[#1C1411] tracking-tight leading-tight">{cartTotal.total.toFixed(2)} <span className="text-lg">ر.س</span></div>
               {cartTotal.discount > 0 && <div className="text-xs text-red-500 mt-1">شامل خصم {cartTotal.discount.toFixed(2)} ر.س</div>}
             </div>
 
@@ -1514,7 +1522,7 @@ export default function EventPosPage() {
                   <button
                     onClick={() => setPaymentMethod("cash")}
                     className={`flex items-center justify-center gap-2 py-4 rounded-2xl text-base font-bold transition-all active:scale-95 touch-manipulation ${
-                      paymentMethod === "cash" ? "bg-green-500 text-white shadow-lg shadow-green-500/30" : "bg-gray-100 text-gray-600"
+                      paymentMethod === "cash" ? "bg-[#86C275] text-[#1C1411] shadow-lg shadow-[#86C275]/20" : "bg-[#FFFFFF] text-[#8C6C50] border border-[#EBE3D8]"
                     }`}
                     data-testid="button-checkout-cash"
                   >
@@ -1523,7 +1531,7 @@ export default function EventPosPage() {
                   <button
                     onClick={() => setPaymentMethod("network")}
                     className={`flex items-center justify-center gap-2 py-4 rounded-2xl text-base font-bold transition-all active:scale-95 touch-manipulation ${
-                      paymentMethod === "network" ? "bg-blue-500 text-white shadow-lg shadow-blue-500/30" : "bg-gray-100 text-gray-600"
+                      paymentMethod === "network" ? "bg-[#86A8D2] text-[#1C1411] shadow-lg shadow-[#86A8D2]/20" : "bg-[#FFFFFF] text-[#8C6C50] border border-[#EBE3D8]"
                     }`}
                     data-testid="button-checkout-network"
                   >
@@ -1578,9 +1586,9 @@ export default function EventPosPage() {
                     )}
                     <div className="grid grid-cols-4 gap-2">
                       {[5, 10, 20, 50, 100, 200, 500].map(v => (
-                        <button key={v} onClick={() => setAmountPaid(String(v))} className="py-3.5 rounded-xl text-[15px] font-bold bg-gray-100 hover:bg-orange-100 hover:text-orange-700 transition-colors active:scale-95 touch-manipulation" data-testid={`button-quick-amount-${v}`}>{v}</button>
+                        <button key={v} onClick={() => setAmountPaid(String(v))} className="py-4 rounded-[16px] text-[16px] font-black bg-[#FFFFFF] border border-[#EBE3D8] text-[#5C422E] hover:bg-[#F4EBE1] hover:border-[#D4A373]/50 transition-all active:scale-95 touch-manipulation" data-testid={`button-quick-amount-${v}`}>{v}</button>
                       ))}
-                      <button onClick={() => setAmountPaid(String(cartTotal.total))} className="py-3.5 rounded-xl text-[13px] font-bold bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors active:scale-95 touch-manipulation" data-testid="button-quick-amount-exact">مطابق</button>
+                      <button onClick={() => setAmountPaid(String(cartTotal.total))} className="py-4 rounded-[16px] text-[14px] font-black bg-[#EBE3D8] text-[#5C422E] hover:bg-[#D4A373] hover:text-[#1C1411] transition-all active:scale-95 touch-manipulation" data-testid="button-quick-amount-exact">مطابق</button>
                     </div>
                   </div>
                 )}
@@ -1608,7 +1616,7 @@ export default function EventPosPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-black">
               <div className="w-9 h-9 bg-orange-100 rounded-xl flex items-center justify-center">
-                <Receipt className="w-5 h-5 text-orange-600" />
+                <Receipt className="w-6 h-6 text-[#D4A373]" />
               </div>
               الفاتورة الضريبية المبسطة
             </DialogTitle>
@@ -1775,11 +1783,11 @@ export default function EventPosPage() {
 
       {/* Hold Order Dialog */}
       <Dialog open={showHoldDialog} onOpenChange={setShowHoldDialog}>
-        <DialogContent className="max-w-[380px] rounded-3xl p-0 overflow-hidden" dir="rtl">
+        <DialogContent className="max-w-[400px] rounded-[32px] p-0 overflow-hidden border border-[#EBE3D8] shadow-2xl" dir="rtl">
           <div className="bg-gradient-to-l from-amber-500 to-yellow-500 p-5">
-            <DialogTitle className="flex items-center gap-3 text-white text-lg font-black">
-              <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
-                <Pause className="w-5 h-5 text-white" />
+            <DialogTitle className="flex items-center gap-3 text-[#1C1411] text-[20px] font-black">
+              <div className="w-12 h-12 bg-[#1C1411]/10 backdrop-blur-md rounded-[16px] flex items-center justify-center shadow-inner">
+                <Pause className="w-6 h-6 text-[#1C1411]" />
               </div>
               تعليق الطلب
             </DialogTitle>
@@ -1817,9 +1825,9 @@ export default function EventPosPage() {
       <Dialog open={showHeld} onOpenChange={setShowHeld}>
         <DialogContent className="max-w-md rounded-3xl max-h-[80vh] overflow-hidden flex flex-col p-0" dir="rtl">
           <div className="bg-gradient-to-l from-amber-600 to-yellow-500 p-5 shrink-0">
-            <DialogTitle className="flex items-center gap-3 text-white text-lg font-black">
+            <DialogTitle className="flex items-center gap-3 text-[#1C1411] text-[20px] font-black">
               <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
-                <Pause className="w-5 h-5 text-white" />
+                <Pause className="w-6 h-6 text-[#1C1411]" />
               </div>
               الطلبات المعلقة ({heldOrders.length})
             </DialogTitle>
@@ -1845,14 +1853,14 @@ export default function EventPosPage() {
                         {order.cashierName}
                       </div>
                     </div>
-                    <span className="font-black text-orange-600 text-base">{(order.totalAmount || 0).toFixed(2)} <span className="text-[10px] text-gray-400">ر.س</span></span>
+                    <span className="font-black text-[#1C1411] text-[18px]">{(order.totalAmount || 0).toFixed(2)} <span className="text-[11px] text-[#A69587] font-bold">ر.س</span></span>
                   </div>
                   <div className="text-[11px] text-gray-400 mb-3">{items.map(i => `${i.productName} ×${i.quantity}`).join(" • ")}</div>
                   <div className="flex gap-2">
                     <Button
                       size="sm"
                       onClick={() => recallHeldOrder(order)}
-                      className="flex-1 rounded-lg h-9 bg-green-500 hover:bg-green-600 text-white font-bold text-xs gap-1"
+                      className="flex-1 rounded-[12px] h-10 bg-[#86C275] hover:bg-[#6A9A5C] text-[#1C1411] font-black text-[13px] gap-1.5 shadow-sm"
                       data-testid={`button-recall-${order.id}`}
                     >
                       <Play className="w-3.5 h-3.5" />
@@ -1879,9 +1887,9 @@ export default function EventPosPage() {
       <Dialog open={showVoid} onOpenChange={setShowVoid}>
         <DialogContent className="max-w-[400px] rounded-3xl p-0 overflow-hidden" dir="rtl">
           <div className={`p-5 ${voidAction === "void" ? "bg-gradient-to-l from-red-600 to-red-500" : "bg-gradient-to-l from-amber-600 to-amber-500"}`}>
-            <DialogTitle className="flex items-center gap-3 text-white text-lg font-black">
-              <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
-                {voidAction === "void" ? <Ban className="w-5 h-5 text-white" /> : <RotateCcw className="w-5 h-5 text-white" />}
+            <DialogTitle className="flex items-center gap-3 text-[#1C1411] text-[20px] font-black">
+              <div className="w-12 h-12 bg-[#1C1411]/10 backdrop-blur-md rounded-[16px] flex items-center justify-center shadow-inner">
+                {voidAction === "void" ? <Ban className="w-6 h-6 text-[#1C1411]" /> : <RotateCcw className="w-6 h-6 text-[#1C1411]" />}
               </div>
               {voidAction === "void" ? "إلغاء الفاتورة" : "استرجاع الفاتورة"}
             </DialogTitle>
@@ -1925,9 +1933,9 @@ export default function EventPosPage() {
       <Dialog open={showHistory} onOpenChange={setShowHistory}>
         <DialogContent className="max-w-2xl rounded-3xl max-h-[85vh] overflow-hidden flex flex-col p-0" dir="rtl">
           <div className="bg-gradient-to-l from-gray-900 to-gray-800 p-5 shrink-0">
-            <DialogTitle className="flex items-center gap-3 text-white text-lg font-black">
+            <DialogTitle className="flex items-center gap-3 text-[#1C1411] text-[20px] font-black">
               <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
-                <CalendarDays className="w-5 h-5 text-white" />
+                <CalendarDays className="w-6 h-6 text-[#1C1411]" />
               </div>
               سجل المبيعات
             </DialogTitle>
@@ -1989,7 +1997,7 @@ export default function EventPosPage() {
                       {sale.invoiceNumber}
                       {sale.status === "voided" && <span className="text-[10px] bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 px-1.5 py-0.5 rounded-full font-bold">ملغاة</span>}
                       {sale.status === "refunded" && <span className="text-[10px] bg-amber-100 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold">مسترجعة</span>}
-                      {sale.status === "partially_refunded" && <span className="text-[10px] bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-300 px-1.5 py-0.5 rounded-full font-bold">استرجاع جزئي</span>}
+                      {sale.status === "partially_refunded" && <span className="text-[11px] bg-[#FAF8F5] text-[#D4A373] border border-[#EBE3D8] px-2 py-0.5 rounded-md font-black">استرجاع جزئي</span>}
                     </div>
                     <div className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
                       <Clock className="w-3 h-3" />
@@ -2019,7 +2027,7 @@ export default function EventPosPage() {
                       </button>
                       <button
                         onClick={() => openPartialRefund(sale.id)}
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-orange-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                        className="w-10 h-10 rounded-[12px] flex items-center justify-center text-[#D4A373] hover:text-[#B38250] hover:bg-[#FAF8F5] border border-transparent hover:border-[#EBE3D8] transition-colors"
                         title="استرجاع جزئي"
                         data-testid={`button-partial-refund-${sale.id}`}
                       >
@@ -2030,7 +2038,7 @@ export default function EventPosPage() {
                   {sale.status === "partially_refunded" && canVoid && (
                     <button
                       onClick={() => openPartialRefund(sale.id)}
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-orange-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                      className="w-10 h-10 rounded-[12px] flex items-center justify-center text-[#D4A373] hover:text-[#B38250] hover:bg-[#FAF8F5] border border-transparent hover:border-[#EBE3D8] transition-colors"
                       title="استرجاع جزئي"
                       data-testid={`button-partial-refund-${sale.id}`}
                     >
@@ -2040,7 +2048,7 @@ export default function EventPosPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 w-8 p-0 rounded-lg hover:bg-orange-100 text-orange-500 hover:text-orange-700 touch-manipulation"
+                    className="h-10 w-10 p-0 rounded-[12px] hover:bg-[#FAF8F5] border border-transparent hover:border-[#EBE3D8] text-[#D4A373] hover:text-[#B38250] touch-manipulation"
                     onClick={async () => {
                       try {
                         const res = await apiRequest("GET", `/api/pos/sale/${sale.id}`);
@@ -2075,9 +2083,9 @@ export default function EventPosPage() {
       <Dialog open={showZReport} onOpenChange={setShowZReport}>
         <DialogContent className="max-w-lg rounded-3xl max-h-[90vh] overflow-hidden flex flex-col p-0" dir="rtl">
           <div className="bg-gradient-to-l from-purple-700 to-purple-600 p-5 shrink-0">
-            <DialogTitle className="flex items-center gap-3 text-white text-lg font-black">
+            <DialogTitle className="flex items-center gap-3 text-[#1C1411] text-[20px] font-black">
               <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
-                <FileText className="w-5 h-5 text-white" />
+                <FileText className="w-6 h-6 text-[#1C1411]" />
               </div>
               تقرير إقفال الوردية (Z-Report)
             </DialogTitle>
@@ -2142,6 +2150,18 @@ export default function EventPosPage() {
                     </div>
                   </>
                 )}
+                {zReportData.partialRefundsTotal > 0 && (
+                  <>
+                    <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "3px 0" }}>
+                      <span>استرجاع جزئي (نقد)</span>
+                      <span style={{ fontWeight: "bold" }}>-{zReportData.partialRefundsCash.toFixed(2)} ر.س</span>
+                    </div>
+                    <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "3px 0" }}>
+                      <span>استرجاع جزئي (شبكة)</span>
+                      <span style={{ fontWeight: "bold" }}>-{zReportData.partialRefundsNetwork.toFixed(2)} ر.س</span>
+                    </div>
+                  </>
+                )}
               </div>
               <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "6px 0" }} />
               
@@ -2189,15 +2209,15 @@ export default function EventPosPage() {
 
       {/* Open Shift Dialog */}
       <Dialog open={showShiftOpen} onOpenChange={setShowShiftOpen}>
-        <DialogContent className="max-w-[380px] rounded-3xl p-0 overflow-hidden" dir="rtl">
+        <DialogContent className="max-w-[400px] rounded-[32px] p-0 overflow-hidden border border-[#EBE3D8] shadow-2xl" dir="rtl">
           <div className="bg-gradient-to-l from-orange-600 to-amber-500 p-5">
-            <DialogTitle className="flex items-center gap-3 text-white text-lg font-black">
-              <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
-                <DoorOpen className="w-5 h-5 text-white" />
+            <DialogTitle className="flex items-center gap-3 text-[#1C1411] text-[20px] font-black">
+              <div className="w-12 h-12 bg-[#1C1411]/10 backdrop-blur-md rounded-[16px] flex items-center justify-center shadow-inner">
+                <DoorOpen className="w-6 h-6 text-[#1C1411]" />
               </div>
               فتح وردية جديدة
             </DialogTitle>
-            {selectedEvent && <p className="text-orange-100 text-xs mt-1 flex items-center gap-1"><PartyPopper className="w-3 h-3" /> {selectedEvent.name}</p>}
+            {selectedEvent && <p className="text-[#4A3219] text-[13px] font-bold mt-2 flex items-center gap-1.5"><PartyPopper className="w-3 h-3" /> {selectedEvent.name}</p>}
           </div>
           <div className="p-5 space-y-4">
             <div>
@@ -2214,7 +2234,7 @@ export default function EventPosPage() {
               />
               <div className="flex gap-2 mt-3">
                 {[0, 100, 200, 500].map(v => (
-                  <button key={v} onClick={() => setOpeningCash(String(v))} className="flex-1 py-2.5 rounded-lg text-sm font-bold bg-gray-100 hover:bg-orange-50 hover:text-orange-600 transition-colors touch-manipulation" data-testid={`button-opening-quick-${v}`}>{v}</button>
+                  <button key={v} onClick={() => setOpeningCash(String(v))} className="flex-1 py-3 rounded-[12px] text-[14px] font-black bg-[#FFFFFF] border border-[#EBE3D8] hover:bg-[#FAF8F5] text-[#5C422E] hover:text-[#2C201A] transition-all touch-manipulation" data-testid={`button-opening-quick-${v}`}>{v}</button>
                 ))}
               </div>
             </div>
@@ -2238,9 +2258,9 @@ export default function EventPosPage() {
       <Dialog open={showShiftClose} onOpenChange={v => { setShowShiftClose(v); if (!v) setClosedShiftResult(null); }}>
         <DialogContent className="max-w-md rounded-3xl p-0 overflow-hidden max-h-[90vh] flex flex-col" dir="rtl">
           <div className="bg-gradient-to-l from-purple-700 to-purple-600 p-5 shrink-0">
-            <DialogTitle className="flex items-center gap-3 text-white text-lg font-black">
+            <DialogTitle className="flex items-center gap-3 text-[#1C1411] text-[20px] font-black">
               <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
-                <LogOut className="w-5 h-5 text-white" />
+                <LogOut className="w-6 h-6 text-[#1C1411]" />
               </div>
               {closedShiftResult ? "نتيجة إغلاق الوردية" : "إغلاق الوردية وتسوية الصندوق"}
             </DialogTitle>
@@ -2281,7 +2301,7 @@ export default function EventPosPage() {
                     <div className="flex justify-between"><span className="text-gray-600 font-bold">الشبكة المتوقعة</span><span className="font-black text-blue-600">{(shiftStats.expectedNetwork || 0).toFixed(2)} ر.س</span></div>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-gray-300" /></div>
+                  <div className="flex items-center justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-[#A69587]" /></div>
                 )}
                 <div>
                   <label className="text-sm font-bold text-gray-600 mb-2 block">النقد الفعلي المعدود في الصندوق *</label>
@@ -2339,17 +2359,17 @@ export default function EventPosPage() {
       <Dialog open={showPartialRefund} onOpenChange={setShowPartialRefund}>
         <DialogContent className="max-w-md rounded-3xl p-0 overflow-hidden max-h-[90vh] flex flex-col" dir="rtl">
           <div className="bg-gradient-to-l from-orange-600 to-amber-500 p-5 shrink-0">
-            <DialogTitle className="flex items-center gap-3 text-white text-lg font-black">
-              <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
-                <Undo2 className="w-5 h-5 text-white" />
+            <DialogTitle className="flex items-center gap-3 text-[#1C1411] text-[20px] font-black">
+              <div className="w-12 h-12 bg-[#1C1411]/10 backdrop-blur-md rounded-[16px] flex items-center justify-center shadow-inner">
+                <Undo2 className="w-6 h-6 text-[#1C1411]" />
               </div>
               استرجاع جزئي
             </DialogTitle>
-            {refundSaleData?.sale && <p className="text-orange-100 text-xs mt-1">فاتورة {refundSaleData.sale.invoiceNumber}</p>}
+            {refundSaleData?.sale && <p className="text-[#1C1411]/70 text-[13px] font-bold mt-2">فاتورة {refundSaleData.sale.invoiceNumber}</p>}
           </div>
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
             {refundLoading || !refundSaleData ? (
-              <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-gray-300" /></div>
+              <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-[#A69587]" /></div>
             ) : (
               <>
                 <div className="space-y-2">
@@ -2366,9 +2386,9 @@ export default function EventPosPage() {
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-gray-500">كمية الاسترجاع (متاح {remaining})</span>
                             <div className="flex items-center bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
-                              <button onClick={() => setRefundQtys(p => ({ ...p, [item.id]: Math.max(0, (p[item.id] || 0) - 1) }))} className="w-10 h-9 flex items-center justify-center hover:bg-gray-100 touch-manipulation" data-testid={`button-refund-dec-${item.id}`}><Minus className="w-4 h-4 text-gray-500" /></button>
+                              <button onClick={() => setRefundQtys(p => ({ ...p, [item.id]: Math.max(0, (p[item.id] || 0) - 1) }))} className="w-10 h-9 flex items-center justify-center hover:bg-gray-100 touch-manipulation" data-testid={`button-refund-dec-${item.id}`}><Minus className="w-4 h-4 text-[#8C6C50]" /></button>
                               <span className="w-10 text-center font-black text-gray-800" data-testid={`text-refund-qty-${item.id}`}>{qty}</span>
-                              <button onClick={() => setRefundQtys(p => ({ ...p, [item.id]: Math.min(remaining, (p[item.id] || 0) + 1) }))} className="w-10 h-9 flex items-center justify-center hover:bg-orange-50 touch-manipulation" data-testid={`button-refund-inc-${item.id}`}><Plus className="w-4 h-4 text-gray-500" /></button>
+                              <button onClick={() => setRefundQtys(p => ({ ...p, [item.id]: Math.min(remaining, (p[item.id] || 0) + 1) }))} className="w-10 h-9 flex items-center justify-center hover:bg-orange-50 touch-manipulation" data-testid={`button-refund-inc-${item.id}`}><Plus className="w-4 h-4 text-[#8C6C50]" /></button>
                             </div>
                           </div>
                         )}

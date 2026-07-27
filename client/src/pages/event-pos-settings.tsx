@@ -287,8 +287,8 @@ export default function EventPosSettingsPage() {
             <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto">
               <Shield className="w-8 h-8 text-red-500" />
             </div>
-            <h2 className="text-xl font-black text-gray-800">غير مصرح بالوصول</h2>
-            <p className="text-sm text-gray-500">هذه الصفحة متاحة فقط للمديرين والمستخدمين ذوي صلاحية التعديل</p>
+            <h2 className="text-[22px] font-black text-[#1C1411]">غير مصرح بالوصول</h2>
+            <p className="text-[14px] text-[#A69587] font-bold">هذه الصفحة متاحة فقط للمديرين والمستخدمين ذوي صلاحية التعديل</p>
             <a href="/event-pos" className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 text-white rounded-xl font-bold text-sm hover:bg-orange-600 transition-colors">
               العودة لنقطة البيع
             </a>
@@ -300,19 +300,19 @@ export default function EventPosSettingsPage() {
 
   return (
     <Layout>
-      <div className="page-container" dir="rtl">
+      <div className="page-container min-h-[100dvh] bg-[#FAF8F5]" dir="rtl">
         {/* Header */}
-        <div className="relative overflow-hidden bg-gradient-to-l from-amber-500 via-orange-500 to-orange-600 rounded-2xl p-5 mb-6 shadow-lg shadow-orange-200/40">
-          <div className="absolute -top-12 -left-12 w-44 h-44 rounded-full bg-white/10 pointer-events-none" />
-          <div className="absolute -bottom-16 right-1/4 w-36 h-36 rounded-full bg-white/10 pointer-events-none" />
+        <div className="relative overflow-hidden bg-gradient-to-r from-[#B38250] to-[#D4A373] rounded-[24px] p-6 mb-6 shadow-lg shadow-[#D4A373]/20">
+          <div className="absolute -top-16 -left-16 w-48 h-48 rounded-full bg-white/20 pointer-events-none blur-xl" />
+          <div className="absolute -bottom-16 right-1/4 w-40 h-40 rounded-full bg-[#1C1411]/5 pointer-events-none blur-xl" />
           <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                <Settings className="w-6 h-6 text-white" />
+              <div className="w-14 h-14 bg-[#1C1411]/10 backdrop-blur-md rounded-[16px] flex items-center justify-center shadow-inner">
+                <Settings className="w-7 h-7 text-[#1C1411]" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-white">إعدادات نقطة البيع الموسمية</h1>
-                <p className="text-xs text-white/70 mt-0.5 flex items-center gap-1">
+                <h1 className="text-2xl font-black text-[#1C1411]">إعدادات نقطة البيع الموسمية</h1>
+                <p className="text-sm font-bold text-[#4A3219] mt-1 flex items-center gap-1.5">
                   <Store className="w-3 h-3" />
                   مرتبطة بفرع: إيفنت موسمي (EVENT-BB)
                 </p>
@@ -320,7 +320,7 @@ export default function EventPosSettingsPage() {
             </div>
             <a
               href="/event-pos"
-              className="flex items-center gap-1.5 bg-white/15 hover:bg-white/25 text-white text-xs font-medium px-4 py-2 rounded-xl transition-colors"
+              className="flex items-center gap-2 bg-[#1C1411] text-[#D4A373] text-[13px] font-black px-5 py-3 rounded-[16px] transition-all hover:bg-[#2C201A] shadow-lg"
             >
               <Store className="w-4 h-4" />
               الذهاب لشاشة البيع
@@ -330,20 +330,20 @@ export default function EventPosSettingsPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-5 bg-white border shadow-sm h-auto flex-wrap rounded-2xl p-1.5 gap-1">
-            <TabsTrigger value="events" className="gap-1.5 rounded-xl px-4 py-2 transition-all data-[state=active]:bg-gradient-to-l data-[state=active]:from-amber-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-orange-200" data-testid="settings-tab-events">
+          <TabsList className="mb-6 bg-[#FFFFFF] border border-[#EBE3D8] shadow-sm h-auto flex-wrap rounded-[20px] p-2 gap-2">
+            <TabsTrigger value="events" className="gap-2 rounded-[14px] px-5 py-2.5 font-bold transition-all text-[#A69587] hover:text-[#5C422E] hover:bg-[#FAF8F5] data-[state=active]:bg-[#1C1411] data-[state=active]:text-[#D4A373] data-[state=active]:shadow-md" data-testid="settings-tab-events">
               <PartyPopper className="w-3.5 h-3.5" />
               الإيفنتات
             </TabsTrigger>
-            <TabsTrigger value="products" className="gap-1.5 rounded-xl px-4 py-2 transition-all data-[state=active]:bg-gradient-to-l data-[state=active]:from-amber-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-orange-200" data-testid="settings-tab-products">
+            <TabsTrigger value="products" className="gap-2 rounded-[14px] px-5 py-2.5 font-bold transition-all text-[#A69587] hover:text-[#5C422E] hover:bg-[#FAF8F5] data-[state=active]:bg-[#1C1411] data-[state=active]:text-[#D4A373] data-[state=active]:shadow-md" data-testid="settings-tab-products">
               <Package className="w-3.5 h-3.5" />
               إدارة الأصناف
             </TabsTrigger>
-            <TabsTrigger value="invoice" className="gap-1.5 rounded-xl px-4 py-2 transition-all data-[state=active]:bg-gradient-to-l data-[state=active]:from-amber-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-orange-200" data-testid="settings-tab-invoice">
+            <TabsTrigger value="invoice" className="gap-2 rounded-[14px] px-5 py-2.5 font-bold transition-all text-[#A69587] hover:text-[#5C422E] hover:bg-[#FAF8F5] data-[state=active]:bg-[#1C1411] data-[state=active]:text-[#D4A373] data-[state=active]:shadow-md" data-testid="settings-tab-invoice">
               <Receipt className="w-3.5 h-3.5" />
               إعدادات الفاتورة
             </TabsTrigger>
-            <TabsTrigger value="general" className="gap-1.5 rounded-xl px-4 py-2 transition-all data-[state=active]:bg-gradient-to-l data-[state=active]:from-amber-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-orange-200" data-testid="settings-tab-general">
+            <TabsTrigger value="general" className="gap-2 rounded-[14px] px-5 py-2.5 font-bold transition-all text-[#A69587] hover:text-[#5C422E] hover:bg-[#FAF8F5] data-[state=active]:bg-[#1C1411] data-[state=active]:text-[#D4A373] data-[state=active]:shadow-md" data-testid="settings-tab-general">
               <Settings className="w-3.5 h-3.5" />
               إعدادات عامة
             </TabsTrigger>
@@ -352,12 +352,12 @@ export default function EventPosSettingsPage() {
           {/* Events Management Tab */}
           <TabsContent value="events" className="mt-0 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-sm text-gray-700 flex items-center gap-2">
-                <PartyPopper className="w-4 h-4 text-orange-500" />
+              <h3 className="font-black text-[16px] text-[#1C1411] flex items-center gap-2">
+                <PartyPopper className="w-5 h-5 text-[#D4A373]" />
                 إدارة الإيفنتات
               </h3>
               {hasEditAccess && !showEventForm && (
-                <Button onClick={() => { resetEventForm(); setShowEventForm(true); }} className="rounded-xl bg-orange-500 hover:bg-orange-600 gap-1.5 h-10" data-testid="button-new-event">
+                <Button onClick={() => { resetEventForm(); setShowEventForm(true); }} className="rounded-[14px] bg-gradient-to-r from-[#D4A373] to-[#B38250] text-[#1C1411] font-black hover:from-[#E1B68A] hover:to-[#C29263] gap-2 h-11 shadow-sm" data-testid="button-new-event">
                   <Plus className="w-4 h-4" />
                   إيفنت جديد
                 </Button>
@@ -365,37 +365,37 @@ export default function EventPosSettingsPage() {
             </div>
 
             {showEventForm && (
-              <Card className="rounded-2xl border-orange-200 shadow-sm overflow-hidden">
-                <div className="bg-orange-50 px-4 py-3 border-b border-orange-100">
-                  <h4 className="font-bold text-sm text-orange-800">{editingEventId ? "تعديل الإيفنت" : "إيفنت جديد"}</h4>
+              <Card className="rounded-[24px] border border-[#D4A373]/40 shadow-sm overflow-hidden bg-[#FFFFFF]">
+                <div className="bg-[#FAF8F5] px-5 py-4 border-b border-[#EBE3D8]">
+                  <h4 className="font-black text-[15px] text-[#2C201A]">{editingEventId ? "تعديل الإيفنت" : "إيفنت جديد"}</h4>
                 </div>
                 <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-bold text-gray-500 mb-1 block">اسم الإيفنت *</label>
-                    <Input value={eventForm.name} onChange={e => setEventForm(f => ({ ...f, name: e.target.value }))} placeholder="مثال: مهرجان الرياض" className="rounded-xl" data-testid="input-event-name" />
+                    <label className="text-[13px] font-black text-[#8C6C50] mb-1.5 block">اسم الإيفنت *</label>
+                    <Input value={eventForm.name} onChange={e => setEventForm(f => ({ ...f, name: e.target.value }))} placeholder="مثال: مهرجان الرياض" className="rounded-[14px] bg-[#FAF8F5] border-[#EBE3D8] focus-visible:ring-[#D4A373] focus-visible:border-[#D4A373]" data-testid="input-event-name" />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-gray-500 mb-1 block">الموقع</label>
-                    <Input value={eventForm.location} onChange={e => setEventForm(f => ({ ...f, location: e.target.value }))} placeholder="مثال: بوليفارد الرياض" className="rounded-xl" data-testid="input-event-location" />
+                    <label className="text-[13px] font-black text-[#8C6C50] mb-1.5 block">الموقع</label>
+                    <Input value={eventForm.location} onChange={e => setEventForm(f => ({ ...f, location: e.target.value }))} placeholder="مثال: بوليفارد الرياض" className="rounded-[14px] bg-[#FAF8F5] border-[#EBE3D8] focus-visible:ring-[#D4A373] focus-visible:border-[#D4A373]" data-testid="input-event-location" />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-gray-500 mb-1 block">تاريخ البداية</label>
-                    <Input type="date" value={eventForm.startDate} onChange={e => setEventForm(f => ({ ...f, startDate: e.target.value }))} className="rounded-xl" data-testid="input-event-start" />
+                    <label className="text-[13px] font-black text-[#8C6C50] mb-1.5 block">تاريخ البداية</label>
+                    <Input type="date" value={eventForm.startDate} onChange={e => setEventForm(f => ({ ...f, startDate: e.target.value }))} className="rounded-[14px] bg-[#FAF8F5] border-[#EBE3D8] focus-visible:ring-[#D4A373] focus-visible:border-[#D4A373]" data-testid="input-event-start" />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-gray-500 mb-1 block">تاريخ النهاية</label>
-                    <Input type="date" value={eventForm.endDate} onChange={e => setEventForm(f => ({ ...f, endDate: e.target.value }))} className="rounded-xl" data-testid="input-event-end" />
+                    <label className="text-[13px] font-black text-[#8C6C50] mb-1.5 block">تاريخ النهاية</label>
+                    <Input type="date" value={eventForm.endDate} onChange={e => setEventForm(f => ({ ...f, endDate: e.target.value }))} className="rounded-[14px] bg-[#FAF8F5] border-[#EBE3D8] focus-visible:ring-[#D4A373] focus-visible:border-[#D4A373]" data-testid="input-event-end" />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-gray-500 mb-1 block">بادئة رقم الفاتورة (اختياري)</label>
-                    <Input value={eventForm.invoicePrefix} onChange={e => setEventForm(f => ({ ...f, invoicePrefix: e.target.value }))} placeholder="مثال: RYD" className="rounded-xl" data-testid="input-event-prefix" />
+                    <label className="text-[13px] font-black text-[#8C6C50] mb-1.5 block">بادئة رقم الفاتورة (اختياري)</label>
+                    <Input value={eventForm.invoicePrefix} onChange={e => setEventForm(f => ({ ...f, invoicePrefix: e.target.value }))} placeholder="مثال: RYD" className="rounded-[14px] bg-[#FAF8F5] border-[#EBE3D8] focus-visible:ring-[#D4A373] focus-visible:border-[#D4A373]" data-testid="input-event-prefix" />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-gray-500 mb-1 block">ملاحظات</label>
-                    <Input value={eventForm.notes} onChange={e => setEventForm(f => ({ ...f, notes: e.target.value }))} className="rounded-xl" data-testid="input-event-notes" />
+                    <label className="text-[13px] font-black text-[#8C6C50] mb-1.5 block">ملاحظات</label>
+                    <Input value={eventForm.notes} onChange={e => setEventForm(f => ({ ...f, notes: e.target.value }))} className="rounded-[14px] bg-[#FAF8F5] border-[#EBE3D8] focus-visible:ring-[#D4A373] focus-visible:border-[#D4A373]" data-testid="input-event-notes" />
                   </div>
                   <div className="md:col-span-2 flex gap-2 justify-end pt-1">
-                    <Button variant="outline" onClick={resetEventForm} className="rounded-xl">إلغاء</Button>
+                    <Button variant="outline" onClick={resetEventForm} className="rounded-[14px] bg-[#FAF8F5] border-[#EBE3D8] focus-visible:ring-[#D4A373] focus-visible:border-[#D4A373]">إلغاء</Button>
                     <Button
                       onClick={() => {
                         if (!eventForm.name.trim()) { toast({ title: "اسم الإيفنت مطلوب", variant: "destructive" }); return; }
@@ -413,26 +413,26 @@ export default function EventPosSettingsPage() {
               </Card>
             )}
 
-            <Card className="rounded-2xl border-gray-200 shadow-sm overflow-hidden">
+            <Card className="rounded-[24px] border border-[#EBE3D8] shadow-sm overflow-hidden bg-[#FFFFFF]">
               <div className="divide-y divide-gray-50">
                 {eventsLoading ? (
-                  <div className="flex items-center justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-gray-300" /></div>
+                  <div className="flex items-center justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-[#D4A373]" /></div>
                 ) : posEvents.length === 0 ? (
-                  <div className="text-center py-10 text-sm text-gray-400">لا توجد إيفنتات بعد — أنشئ أول إيفنت للبدء</div>
+                  <div className="text-center py-12 text-[15px] font-black text-[#A69587]">لا توجد إيفنتات بعد — أنشئ أول إيفنت للبدء</div>
                 ) : (
                   (posEvents as any[]).map((ev: any) => (
-                    <div key={ev.id} className={`px-4 py-3 flex flex-wrap items-center gap-3 border-r-4 transition-colors hover:bg-orange-50/40 ${ev.status === "active" ? "border-r-emerald-400" : ev.status === "closed" ? "border-r-gray-300" : "border-r-gray-200"}`} data-testid={`row-event-${ev.id}`}>
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${ev.status === "active" ? "bg-gradient-to-br from-amber-400 to-orange-500 shadow-sm shadow-orange-200" : "bg-gray-100"}`}>
-                        <PartyPopper className={`w-4.5 h-4.5 ${ev.status === "active" ? "text-white" : "text-gray-400"}`} />
+                    <div key={ev.id} className={`px-4 py-3 flex flex-wrap items-center gap-3 border-r-4 transition-colors hover:bg-[#FAF8F5] ${ev.status === "active" ? "border-r-[#86C275]" : ev.status === "closed" ? "border-r-[#C2B4A7]" : "border-r-[#EBE3D8]"}`} data-testid={`row-event-${ev.id}`}>
+                      <div className={`w-12 h-12 rounded-[14px] flex items-center justify-center shrink-0 ${ev.status === "active" ? "bg-gradient-to-br from-[#D4A373] to-[#B38250] shadow-sm" : "bg-[#FAF8F5] border border-[#EBE3D8]"}`}>
+                        <PartyPopper className={`w-6 h-6 ${ev.status === "active" ? "text-[#1C1411]" : "text-[#A69587]"}`} />
                       </div>
                       <div className="flex-1 min-w-[180px]">
-                        <div className="font-bold text-sm text-gray-800 flex items-center gap-2">
+                        <div className="font-black text-[15px] text-[#2C201A] flex items-center gap-2">
                           {ev.name}
-                          {ev.status === "active" && <Badge className="bg-green-100 text-green-700 hover:bg-green-100 text-[10px]">نشط</Badge>}
-                          {ev.status === "closed" && <Badge className="bg-gray-100 text-gray-600 hover:bg-gray-100 text-[10px]">مغلق</Badge>}
-                          {ev.status === "archived" && <Badge className="bg-gray-100 text-gray-400 hover:bg-gray-100 text-[10px]">مؤرشف</Badge>}
+                          {ev.status === "active" && <Badge className="bg-[#2E3C2B] text-[#86C275] hover:bg-[#2E3C2B] text-[11px] font-bold border-0 px-2 py-0.5 rounded-md">نشط</Badge>}
+                          {ev.status === "closed" && <Badge className="bg-[#EBE3D8] text-[#5C422E] hover:bg-[#EBE3D8] text-[11px] font-bold border-0 px-2 py-0.5 rounded-md">مغلق</Badge>}
+                          {ev.status === "archived" && <Badge className="bg-[#FAF8F5] text-[#A69587] border border-[#EBE3D8] hover:bg-[#FAF8F5] text-[11px] font-bold px-2 py-0.5 rounded-md">مؤرشف</Badge>}
                         </div>
-                        <div className="text-[11px] text-gray-400 flex items-center gap-3 mt-0.5 flex-wrap">
+                        <div className="text-[12px] font-bold text-[#A69587] flex items-center gap-3 mt-1 flex-wrap">
                           {ev.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{ev.location}</span>}
                           {(ev.startDate || ev.endDate) && <span className="flex items-center gap-1"><CalendarDays className="w-3 h-3" />{ev.startDate || "؟"} ← {ev.endDate || "؟"}</span>}
                           {ev.invoicePrefix && <span className="flex items-center gap-1"><Hash className="w-3 h-3" />{ev.invoicePrefix}</span>}
@@ -441,9 +441,9 @@ export default function EventPosSettingsPage() {
                       {hasEditAccess && (
                         <div className="flex items-center gap-1.5">
                           {ev.status === "active" ? (
-                            <Button variant="outline" size="sm" onClick={() => eventStatusMutation.mutate({ id: ev.id, status: "closed" })} className="rounded-lg h-8 text-xs" data-testid={`button-close-event-${ev.id}`}>إغلاق</Button>
+                            <Button variant="outline" size="sm" onClick={() => eventStatusMutation.mutate({ id: ev.id, status: "closed" })} className="rounded-[10px] h-9 px-3 text-[12px] font-black text-[#5C422E] border-[#EBE3D8] hover:bg-[#FAF8F5] bg-transparent" data-testid={`button-close-event-${ev.id}`}>إغلاق</Button>
                           ) : (
-                            <Button variant="outline" size="sm" onClick={() => eventStatusMutation.mutate({ id: ev.id, status: "active" })} className="rounded-lg h-8 text-xs text-green-600 border-green-200 hover:bg-green-50" data-testid={`button-activate-event-${ev.id}`}>تفعيل</Button>
+                            <Button variant="outline" size="sm" onClick={() => eventStatusMutation.mutate({ id: ev.id, status: "active" })} className="rounded-[10px] h-9 px-3 text-[12px] font-black text-[#86C275] border-[#86C275]/30 hover:bg-[#86C275]/10 bg-transparent" data-testid={`button-activate-event-${ev.id}`}>تفعيل</Button>
                           )}
                           <button
                             onClick={() => {
@@ -451,14 +451,14 @@ export default function EventPosSettingsPage() {
                               setEventForm({ name: ev.name || "", location: ev.location || "", startDate: ev.startDate || "", endDate: ev.endDate || "", invoicePrefix: ev.invoicePrefix || "", notes: ev.notes || "" });
                               setShowEventForm(true);
                             }}
-                            className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                            className="w-10 h-10 rounded-[12px] flex items-center justify-center text-[#A69587] hover:text-[#D4A373] hover:bg-[#FAF8F5] transition-colors"
                             data-testid={`button-edit-event-${ev.id}`}
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => { if (confirm(`حذف الإيفنت "${ev.name}"؟ لا يمكن الحذف إذا كانت هناك مبيعات مسجلة عليه.`)) deleteEventMutation.mutate(ev.id); }}
-                            className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            className="w-10 h-10 rounded-[12px] flex items-center justify-center text-[#A69587] hover:text-[#E07A5F] hover:bg-[#FDF5F3] transition-colors"
                             data-testid={`button-delete-event-${ev.id}`}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -477,20 +477,20 @@ export default function EventPosSettingsPage() {
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
               {/* Current Products */}
               <div className="lg:col-span-3">
-                <Card className="rounded-2xl border-gray-200 shadow-sm overflow-hidden">
-                  <div className="bg-green-50 px-4 py-3 border-b border-green-100 flex items-center justify-between">
-                    <h3 className="font-bold text-sm text-green-800 flex items-center gap-2">
-                      <Check className="w-4 h-4 text-green-600" />
+                <Card className="rounded-[24px] border border-[#EBE3D8] shadow-sm overflow-hidden bg-[#FFFFFF]">
+                  <div className="bg-[#FAF8F5] px-5 py-4 border-b border-[#EBE3D8] flex items-center justify-between">
+                    <h3 className="font-black text-[15px] text-[#2C201A] flex items-center gap-2">
+                      <Check className="w-5 h-5 text-[#86C275]" />
                       الأصناف المضافة لنقطة البيع
-                      <span className="bg-green-200 text-green-800 text-[10px] font-bold rounded-full px-2 py-0.5">{branchProducts.length}</span>
+                      <span className="bg-[#1C1411] text-[#D4A373] text-[11px] font-black rounded-full px-2.5 py-0.5">{branchProducts.length}</span>
                     </h3>
                   </div>
 
                   {/* Category summary */}
                   {productCategories.size > 0 && (
-                    <div className="px-4 py-2 border-b bg-gray-50 flex gap-2 flex-wrap">
+                    <div className="px-5 py-3 border-b border-[#EBE3D8] bg-[#FAF8F5]/50 flex gap-2.5 flex-wrap">
                       {Array.from(productCategories.entries()).map(([cat, count]) => (
-                        <span key={cat} className="text-[10px] bg-white border border-gray-200 rounded-full px-2 py-0.5 text-gray-600">
+                        <span key={cat} className="text-[11px] font-bold bg-[#FFFFFF] border border-[#EBE3D8] rounded-full px-3 py-1 text-[#8C6C50] shadow-sm">
                           {cat}: <strong>{count}</strong>
                         </span>
                       ))}
@@ -499,17 +499,17 @@ export default function EventPosSettingsPage() {
 
                   <div className="max-h-[55vh] overflow-y-auto divide-y divide-gray-50">
                     {productsLoading ? (
-                      <div className="p-8 text-center text-gray-400">
+                      <div className="p-10 text-center text-[15px] font-bold text-[#A69587]">
                         <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
                         جاري تحميل المنتجات...
                       </div>
                     ) : branchProducts.length === 0 ? (
                       <div className="p-10 text-center">
-                        <div className="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                          <Package className="w-7 h-7 text-gray-300" />
+                        <div className="w-16 h-16 bg-[#FAF8F5] rounded-[20px] flex items-center justify-center mx-auto mb-4 border border-[#EBE3D8]">
+                          <Package className="w-8 h-8 text-[#C2B4A7]" />
                         </div>
-                        <p className="text-sm text-gray-500 font-medium">لم يتم إضافة أصناف بعد</p>
-                        <p className="text-xs text-gray-400 mt-1">أضف أصناف من القائمة المتاحة على اليسار</p>
+                        <p className="text-[15px] text-[#A69587] font-black">لم يتم إضافة أصناف بعد</p>
+                        <p className="text-[13px] text-[#C2B4A7] mt-1.5 font-bold">أضف أصناف من القائمة المتاحة على اليسار</p>
                       </div>
                     ) : branchProducts.map((bp: any) => {
                       const effectivePrice = bp.priceOverride ?? bp.product?.basePrice ?? 0;
@@ -518,17 +518,17 @@ export default function EventPosSettingsPage() {
 
                       return (
                         <div key={bp.id} className={`px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50/50 transition-colors ${!bp.isActive ? "opacity-50" : ""}`} data-testid={`settings-product-${bp.id}`}>
-                          <div className="w-8 h-8 bg-orange-50 rounded-lg flex items-center justify-center shrink-0">
-                            <Package className="w-4 h-4 text-orange-400" />
+                          <div className="w-10 h-10 bg-[#FAF8F5] rounded-[12px] flex items-center justify-center shrink-0 border border-[#EBE3D8]">
+                            <Package className="w-5 h-5 text-[#D4A373]" />
                           </div>
 
                           <div className="flex-1 min-w-0">
-                            <div className="text-xs font-semibold text-gray-800 truncate">{bp.product?.name || `منتج #${bp.productId}`}</div>
-                            <div className="text-[10px] text-gray-400 flex items-center gap-2 mt-0.5">
+                            <div className="text-[14px] font-black text-[#2C201A] truncate">{bp.product?.name || `منتج #${bp.productId}`}</div>
+                            <div className="text-[12px] font-bold text-[#A69587] flex items-center gap-2 mt-1">
                               <span>{bp.product?.category}</span>
                               {bp.product?.unit && <span>• {bp.product.unit}</span>}
                               {hasOverride && (
-                                <span className="text-orange-500 font-medium flex items-center gap-0.5">
+                                <span className="text-[#D4A373] font-black flex items-center gap-1 bg-[#FAF8F5] px-1.5 py-0.5 rounded-md border border-[#EBE3D8]">
                                   <Tag className="w-2.5 h-2.5" />
                                   سعر مخصص
                                 </span>
@@ -544,7 +544,7 @@ export default function EventPosSettingsPage() {
                                   type="number"
                                   value={editingPrice.price}
                                   onChange={e => setEditingPrice({ id: bp.id, price: e.target.value })}
-                                  className="w-20 h-7 text-xs text-center rounded-lg"
+                                  className="w-20 h-8 text-[13px] text-center font-bold rounded-[10px] border-[#D4A373] focus-visible:ring-[#D4A373] focus-visible:border-[#D4A373]"
                                   autoFocus
                                   onKeyDown={e => {
                                     if (e.key === "Enter") {
@@ -559,11 +559,11 @@ export default function EventPosSettingsPage() {
                                     const val = parseFloat(editingPrice!.price);
                                     updatePriceMutation.mutate({ id: bp.id, priceOverride: isNaN(val) ? null : val });
                                   }}
-                                  className="w-6 h-6 rounded bg-green-100 text-green-600 flex items-center justify-center hover:bg-green-200"
+                                  className="w-8 h-8 rounded-[10px] bg-[#2E3C2B] text-[#86C275] flex items-center justify-center hover:bg-[#394B35]"
                                 >
                                   <Check className="w-3 h-3" />
                                 </button>
-                                <button onClick={() => setEditingPrice(null)} className="w-6 h-6 rounded bg-gray-100 text-gray-500 flex items-center justify-center hover:bg-gray-200">
+                                <button onClick={() => setEditingPrice(null)} className="w-8 h-8 rounded-[10px] bg-[#FAF8F5] text-[#8C6C50] flex items-center justify-center hover:bg-[#F4EBE1] border border-[#EBE3D8]">
                                   <X className="w-3 h-3" />
                                 </button>
                               </div>
@@ -605,7 +605,7 @@ export default function EventPosSettingsPage() {
                 <Card className="rounded-2xl border-gray-200 shadow-sm overflow-hidden sticky top-4">
                   <div className="bg-blue-50 px-4 py-3 border-b border-blue-100">
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-bold text-sm text-blue-800 flex items-center gap-2">
+                      <h3 className="font-black text-[15px] text-[#1E2B38] flex items-center gap-2">
                         <Plus className="w-4 h-4 text-blue-600" />
                         أصناف متاحة للإضافة
                         <span className="bg-blue-200 text-blue-800 text-[10px] font-bold rounded-full px-2 py-0.5">{availableToAdd.length}</span>
@@ -626,7 +626,7 @@ export default function EventPosSettingsPage() {
                         placeholder="ابحث عن صنف..."
                         value={productSearch}
                         onChange={e => setProductSearch(e.target.value)}
-                        className="pr-8 h-8 text-xs bg-white border-blue-200 rounded-lg"
+                        className="pr-9 h-10 text-[13px] font-bold bg-[#FFFFFF] border-[#86A8D2]/40 rounded-[12px] focus-visible:ring-[#86A8D2]"
                         data-testid="input-search-available-products"
                       />
                     </div>
@@ -634,7 +634,7 @@ export default function EventPosSettingsPage() {
 
                   <div className="max-h-[50vh] overflow-y-auto divide-y divide-gray-50">
                     {availableToAdd.length === 0 ? (
-                      <div className="p-8 text-center text-gray-400">
+                      <div className="p-10 text-center text-[15px] font-bold text-[#A69587]">
                         <Check className="w-8 h-8 mx-auto mb-2 text-green-300" />
                         <p className="text-xs">تم إضافة جميع المنتجات المتاحة</p>
                       </div>
@@ -757,7 +757,7 @@ export default function EventPosSettingsPage() {
                   ) : (
                     <label className="flex flex-col items-center justify-center gap-3 p-6 bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-orange-300 hover:bg-orange-50/30 transition-colors" data-testid="label-upload-logo">
                       <div className="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center">
-                        <Upload className="w-7 h-7 text-gray-300" />
+                        <Upload className="w-8 h-8 text-[#C2B4A7]" />
                       </div>
                       <div className="text-center">
                         <p className="text-xs font-bold text-gray-500">اضغط لرفع الشعار</p>
