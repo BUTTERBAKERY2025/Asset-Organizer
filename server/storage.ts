@@ -1627,7 +1627,7 @@ export interface IStorage {
   // Event POS - Sales
   createPosSale(sale: InsertPosSale, items: InsertPosSaleItem[], afterInsert?: (tx: any, newSale: PosSale) => Promise<void>): Promise<PosSale>;
   getPosSaleByIdempotencyKey(branchId: string, key: string): Promise<PosSale | undefined>;
-  refundPosSaleFull(params: { saleId: number; refundMethod: string; reason?: string; refundedBy: string; refundedByName?: string; shiftId?: number | null }): Promise<{ sale?: PosSale; error?: string }>;
+  refundPosSaleFull(params: { saleId: number; refundMethod: string; reason?: string; refundedBy: string; refundedByName?: string; shiftId?: number | null; idempotencyKey?: string | null }): Promise<{ sale?: PosSale; error?: string }>;
   getPosSales(branchId: string, dateFrom?: string, dateTo?: string): Promise<PosSale[]>;
   getPosSaleById(id: number): Promise<PosSale | undefined>;
   getPosSaleItems(saleId: number): Promise<PosSaleItem[]>;
@@ -1652,7 +1652,7 @@ export interface IStorage {
   getPosShiftStats(shiftId: number): Promise<{ salesCount: number; salesTotal: number; cashTotal: number; networkTotal: number; refundsTotal: number; refundsCash: number; refundsNetwork: number }>;
   closePosShift(shiftId: number, params: { actualCash: number; actualNetwork: number; notes?: string; closedBy: string }): Promise<PosShift | undefined>;
   getPosSaleItemsWithRefunds(saleId: number): Promise<PosSaleItem[]>;
-  createPosPartialRefund(params: { saleId: number; items: { saleItemId: number; quantity: number }[]; refundMethod: string; reason?: string; refundedBy: string; refundedByName?: string; shiftId?: number | null }): Promise<{ refund?: PosRefund; error?: string }>;
+  createPosPartialRefund(params: { saleId: number; items: { saleItemId: number; quantity: number }[]; refundMethod: string; reason?: string; refundedBy: string; refundedByName?: string; shiftId?: number | null; idempotencyKey?: string | null }): Promise<{ refund?: PosRefund; error?: string }>;
   getPosRefundsBySale(saleId: number): Promise<(PosRefund & { items: PosRefundItem[] })[]>;
   getPosEventReport(eventId: number): Promise<any>;
   deleteHeldOrder(id: number): Promise<boolean>;
@@ -18249,7 +18249,18 @@ export class DatabaseStorage implements IStorage {
     refundedBy: string;
     refundedByName?: string;
     shiftId?: number | null;
+    idempotencyKey?: string | null;
   }): Promise<{ sale?: PosSale; error?: string }> {
+    // إعادة المحاولة بنفس المفتاح بعد نجاح سابق: نعيد الفاتورة كما هي دون تكرار
+    if (params.idempotencyKey) {
+      const [existing] = await db.select().from(posRefunds)
+        .where(and(eq(posRefunds.saleId, params.saleId), eq(posRefunds.idempotencyKey, params.idempotencyKey)))
+        .limit(1);
+      if (existing) {
+        const sale = await this.getPosSaleById(params.saleId);
+        return { sale };
+      }
+    }
     const saleItems = await db.select().from(posSaleItems).where(eq(posSaleItems.saleId, params.saleId));
     const remaining = saleItems
       .filter((it) => it.quantity - (it.refundedQuantity || 0) > 0)
@@ -18263,6 +18274,7 @@ export class DatabaseStorage implements IStorage {
       refundedBy: params.refundedBy,
       refundedByName: params.refundedByName,
       shiftId: params.shiftId,
+      idempotencyKey: params.idempotencyKey,
     });
     if (result.error) return { error: result.error };
     const sale = await this.getPosSaleById(params.saleId);
@@ -18557,7 +18569,15 @@ export class DatabaseStorage implements IStorage {
     refundedBy: string;
     refundedByName?: string;
     shiftId?: number | null;
+    idempotencyKey?: string | null;
   }): Promise<{ refund?: PosRefund; error?: string }> {
+    // مفتاح تمييز العملية: إعادة المحاولة بنفس المفتاح تعيد نفس سطر الاسترجاع بدل التكرار
+    if (params.idempotencyKey) {
+      const [existing] = await db.select().from(posRefunds)
+        .where(and(eq(posRefunds.saleId, params.saleId), eq(posRefunds.idempotencyKey, params.idempotencyKey)))
+        .limit(1);
+      if (existing) return { refund: existing };
+    }
     return await db.transaction(async (tx) => {
       const [sale] = await tx.select().from(posSales).where(eq(posSales.id, params.saleId)).for("update");
       if (!sale) return { error: "الفاتورة غير موجودة" };
@@ -18631,6 +18651,7 @@ export class DatabaseStorage implements IStorage {
         reason: params.reason || null,
         refundedBy: params.refundedBy,
         refundedByName: params.refundedByName || null,
+        idempotencyKey: params.idempotencyKey || null,
       }).returning();
 
       await tx.insert(posRefundItems).values(refundItemRows.map((r) => ({ ...r, refundId: refund.id })));
@@ -18651,6 +18672,17 @@ export class DatabaseStorage implements IStorage {
       }).where(eq(posSales.id, params.saleId));
 
       return { refund };
+    }).catch(async (e: any) => {
+      // سباق طلبين متزامنين بنفس المفتاح: الفهرس الفريد يمنع التكرار — نعيد السطر الموجود
+      const constraint = e?.cause?.constraint || e?.constraint || "";
+      const isUnique = e?.code === "23505" || e?.cause?.code === "23505";
+      if (params.idempotencyKey && isUnique && String(constraint).includes("idempotency")) {
+        const [existing] = await db.select().from(posRefunds)
+          .where(and(eq(posRefunds.saleId, params.saleId), eq(posRefunds.idempotencyKey, params.idempotencyKey!)))
+          .limit(1);
+        if (existing) return { refund: existing };
+      }
+      throw e;
     });
   }
 

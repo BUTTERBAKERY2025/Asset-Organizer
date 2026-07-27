@@ -38909,6 +38909,8 @@ export async function registerRoutes(
         return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
       }
       const currentUser = getCurrentUser(req);
+      // إعادة المحاولة بعد نجاح سابق: الفاتورة ملغاة أصلاً — نعيدها كما هي دون خطأ
+      if (targetSale.status === "voided") return res.json(targetSale);
       const result = await storage.voidPosSale(saleId, reason, currentUser.id);
       if (!result) return res.status(400).json({ error: "لا يمكن إلغاء هذه العملية" });
       res.json(result);
@@ -38928,6 +38930,13 @@ export async function registerRoutes(
       if (!await canAccessBranch(req, targetSale.branchId)) {
         return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
       }
+      // مفتاح تمييز العملية (اختياري): إعادة المحاولة لا تكرر الاسترجاع
+      let refundIdemKey: string | null = null;
+      if (req.body.idempotencyKey != null) {
+        const k = String(req.body.idempotencyKey);
+        if (!/^[A-Za-z0-9-]{8,64}$/.test(k)) return res.status(400).json({ error: "مفتاح العملية غير صالح" });
+        refundIdemKey = k;
+      }
       const currentUser = getCurrentUser(req);
       // ربط الاسترجاع بوردية الكاشير الحالية المفتوحة إن وُجدت (لدقة التسوية)
       let shiftId: number | null = null;
@@ -38946,6 +38955,7 @@ export async function registerRoutes(
         refundedBy: currentUser.id,
         refundedByName: (currentUser as any)?.fullName || (currentUser as any)?.username,
         shiftId,
+        idempotencyKey: refundIdemKey,
       });
       if (result.error || !result.sale) return res.status(400).json({ error: result.error || "لا يمكن استرداد هذه العملية" });
       res.json(result.sale);
@@ -39267,6 +39277,13 @@ export async function registerRoutes(
       }
       const items = Array.isArray(req.body.items) ? req.body.items : [];
       if (items.length === 0) return res.status(400).json({ error: "حدد الأصناف المراد استرجاعها" });
+      // مفتاح تمييز العملية (اختياري): إعادة المحاولة لا تكرر الاسترجاع
+      let partialIdemKey: string | null = null;
+      if (req.body.idempotencyKey != null) {
+        const k = String(req.body.idempotencyKey);
+        if (!/^[A-Za-z0-9-]{8,64}$/.test(k)) return res.status(400).json({ error: "مفتاح العملية غير صالح" });
+        partialIdemKey = k;
+      }
       const currentUser = (req as any).currentUser;
       const currentUserId = currentUser?.id || req.session?.userId;
       // إذا كان للكاشير الحالي وردية مفتوحة على نفس الإيفنت اربط الاسترجاع بها
@@ -39283,6 +39300,7 @@ export async function registerRoutes(
         refundedBy: currentUserId,
         refundedByName: currentUser?.fullName || currentUser?.username,
         shiftId,
+        idempotencyKey: partialIdemKey,
       });
       if (result.error) return res.status(400).json({ error: result.error });
       res.status(201).json(result.refund);

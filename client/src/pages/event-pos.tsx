@@ -194,6 +194,9 @@ export default function EventPosPage() {
   const [refundQtys, setRefundQtys] = useState<Record<number, number>>({});
   const [refundMethod, setRefundMethod] = useState<string>("cash");
   const [refundReason, setRefundReason] = useState("");
+  // مفاتيح تمييز عمليات الاسترجاع/الإلغاء: ثابتة طوال جلسة النافذة الواحدة
+  const refundKeyRef = useRef<string | null>(null);
+  const voidKeyRef = useRef<string | null>(null);
 
   const [historyDateFrom, setHistoryDateFrom] = useState<string>(ksaToday());
   const [historyDateTo, setHistoryDateTo] = useState<string>(ksaToday());
@@ -314,6 +317,8 @@ export default function EventPosPage() {
   const openPartialRefund = async (saleId: number) => {
     setRefundLoading(true);
     setShowPartialRefund(true);
+    // مفتاح ثابت لجلسة الاسترجاع هذه: إعادة المحاولة بضعف الشبكة لا تكرر العملية
+    refundKeyRef.current = (crypto as any)?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
     setRefundQtys({});
     setRefundMethod("cash");
     setRefundReason("");
@@ -338,6 +343,7 @@ export default function EventPosPage() {
         items,
         refundMethod,
         reason: refundReason,
+        idempotencyKey: refundKeyRef.current,
       });
       return res.json();
     },
@@ -658,7 +664,7 @@ export default function EventPosPage() {
 
   const voidMutation = useMutation({
     mutationFn: async ({ saleId, reason, action }: { saleId: number; reason: string; action: string }) => {
-      const res = await apiRequest("POST", `/api/pos/sales/${saleId}/${action}`, { reason });
+      const res = await apiRequest("POST", `/api/pos/sales/${saleId}/${action}`, { reason, idempotencyKey: voidKeyRef.current });
       return res.json();
     },
     onSuccess: () => {
@@ -2098,7 +2104,7 @@ export default function EventPosPage() {
                   {sale.status === "completed" && canVoid && (
                     <div className="flex gap-1">
                       <button
-                        onClick={() => { setVoidSaleId(sale.id); setVoidAction("void"); setVoidReason(""); setShowVoid(true); }}
+                        onClick={() => { setVoidSaleId(sale.id); setVoidAction("void"); setVoidReason(""); voidKeyRef.current = (crypto as any)?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`; setShowVoid(true); }}
                         className="w-8 h-8 rounded-lg flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                         title="إلغاء الفاتورة"
                         data-testid={`button-void-${sale.id}`}
@@ -2106,7 +2112,7 @@ export default function EventPosPage() {
                         <Ban className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={() => { setVoidSaleId(sale.id); setVoidAction("refund"); setVoidReason(""); setShowVoid(true); }}
+                        onClick={() => { setVoidSaleId(sale.id); setVoidAction("refund"); setVoidReason(""); voidKeyRef.current = (crypto as any)?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`; setShowVoid(true); }}
                         className="w-8 h-8 rounded-lg flex items-center justify-center text-amber-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
                         title="استرجاع كامل"
                         data-testid={`button-refund-${sale.id}`}

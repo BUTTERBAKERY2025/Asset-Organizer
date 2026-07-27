@@ -11140,6 +11140,7 @@ export const posRefunds = pgTable("pos_refunds", {
   reason: text("reason"),
   refundedBy: varchar("refunded_by").notNull(),
   refundedByName: text("refunded_by_name"),
+  idempotencyKey: text("idempotency_key"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_pos_refunds_sale").on(table.saleId),
