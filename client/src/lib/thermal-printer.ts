@@ -211,6 +211,28 @@ export async function reconnectSavedPrinter(): Promise<SavedPrinter | null> {
   }
 }
 
+/** ضمان اتصال الطابعة: إذا فيه طابعة محفوظة وغير متصلة، أعد الاتصال بها بصمت */
+export async function ensurePrinterConnection(): Promise<boolean> {
+  if (isPrinterConnected()) return true;
+  const p = await reconnectSavedPrinter();
+  return !!p;
+}
+
+// إعادة الاتصال تلقائياً عند الرجوع للتطبيق (تغيير تبويبات المتصفح / قفل الشاشة)
+let visibilityHookInstalled = false;
+export function installAutoReconnectOnVisibility(): void {
+  if (visibilityHookInstalled || typeof document === "undefined") return;
+  visibilityHookInstalled = true;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && getSavedPrinter() && !isPrinterConnected()) {
+      void ensurePrinterConnection().then((ok) => {
+        const saved = getSavedPrinter();
+        if (ok && saved) onReconnectCb?.(saved);
+      });
+    }
+  });
+}
+
 export function disconnectPrinter(): void {
   intentionalDisconnect = true;
   stopKeepAlive();

@@ -18,7 +18,7 @@ import {
   DoorOpen, LogOut, Undo2, MapPin
 } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
-import { isPrinterConnected, printElement, reconnectSavedPrinter, getSavedPrinter } from "@/lib/thermal-printer";
+import { isPrinterConnected, printElement, reconnectSavedPrinter, getSavedPrinter, ensurePrinterConnection, installAutoReconnectOnVisibility } from "@/lib/thermal-printer";
 import { QRCodeSVG } from "qrcode.react";
 
 const EVENT_BRANCH_ID = "EVENT-BB";
@@ -95,6 +95,14 @@ export default function EventPosPage() {
   const receiptRef = useRef<HTMLDivElement>(null);
   const zReportRef = useRef<HTMLDivElement>(null);
   const [btPrinting, setBtPrinting] = useState(false);
+
+  // إعادة ربط طابعة الكاشير بصمت عند فتح نقطة البيع أو الرجوع لها
+  useEffect(() => {
+    installAutoReconnectOnVisibility();
+    if (getSavedPrinter() && !isPrinterConnected()) {
+      void ensurePrinterConnection();
+    }
+  }, []);
 
   const handleBtPrint = async (): Promise<boolean> => {
     if (!receiptRef.current) return false;

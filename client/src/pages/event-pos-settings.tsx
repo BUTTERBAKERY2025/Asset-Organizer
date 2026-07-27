@@ -23,7 +23,8 @@ import {
 import {
   isBluetoothSupported, scanAndConnect, reconnectSavedPrinter, disconnectPrinter,
   forgetPrinter, getSavedPrinter, isPrinterConnected, printTest,
-  getPaperWidth, setPaperWidth, onPrinterDisconnect, onPrinterReconnect, type SavedPrinter, type PaperWidth,
+  getPaperWidth, setPaperWidth, onPrinterDisconnect, onPrinterReconnect,
+  ensurePrinterConnection, installAutoReconnectOnVisibility, type SavedPrinter, type PaperWidth,
 } from "@/lib/thermal-printer";
 
 const EVENT_BRANCH_ID = "EVENT-BB";
@@ -46,9 +47,13 @@ export default function EventPosSettingsPage() {
   const btSupported = isBluetoothSupported();
 
   useEffect(() => {
+    installAutoReconnectOnVisibility();
     setPrinterConnected(isPrinterConnected());
     onPrinterDisconnect(() => setPrinterConnected(false));
     onPrinterReconnect(() => setPrinterConnected(true));
+    if (getSavedPrinter() && !isPrinterConnected()) {
+      void ensurePrinterConnection().then((ok) => { if (ok) setPrinterConnected(true); });
+    }
     return () => { onPrinterDisconnect(null); onPrinterReconnect(null); };
   }, []);
 
