@@ -24,6 +24,11 @@ import { QRCodeSVG } from "qrcode.react";
 
 const EVENT_BRANCH_ID = "EVENT-BB";
 
+// تاريخ اليوم بتوقيت السعودية (وليس UTC حتى لا ينزاح اليوم بعد منتصف الليل)
+function ksaToday(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
 interface CartItem {
   productId: number;
   productName: string;
@@ -190,8 +195,8 @@ export default function EventPosPage() {
   const [refundMethod, setRefundMethod] = useState<string>("cash");
   const [refundReason, setRefundReason] = useState("");
 
-  const [historyDateFrom, setHistoryDateFrom] = useState<string>(new Date().toISOString().slice(0, 10));
-  const [historyDateTo, setHistoryDateTo] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [historyDateFrom, setHistoryDateFrom] = useState<string>(ksaToday());
+  const [historyDateTo, setHistoryDateTo] = useState<string>(ksaToday());
 
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -380,7 +385,7 @@ export default function EventPosPage() {
   const { data: todaySummary } = useQuery({
     queryKey: ["/api/pos/summary", EVENT_BRANCH_ID],
     queryFn: async () => {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = ksaToday();
       const res = await apiRequest("GET", `/api/pos/summary/${EVENT_BRANCH_ID}/${today}`);
       return res.json();
     },
@@ -2035,10 +2040,10 @@ export default function EventPosPage() {
               <span className="text-xs font-bold text-gray-500">إلى:</span>
               <input type="date" value={historyDateTo} onChange={e => setHistoryDateTo(e.target.value)} className="text-xs bg-white border border-gray-200 rounded-lg px-2 py-1.5" data-testid="input-date-to" />
             </div>
-            <button onClick={() => { const today = new Date().toISOString().slice(0,10); setHistoryDateFrom(today); setHistoryDateTo(today); }} className="text-[11px] font-bold text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-3 py-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-950/60 transition-colors" data-testid="button-today-filter">اليوم</button>
+            <button onClick={() => { const today = ksaToday(); setHistoryDateFrom(today); setHistoryDateTo(today); }} className="text-[11px] font-bold text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-3 py-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-950/60 transition-colors" data-testid="button-today-filter">اليوم</button>
           </div>
 
-          {todaySummary && historyDateFrom === new Date().toISOString().slice(0,10) && historyDateTo === new Date().toISOString().slice(0,10) && (
+          {todaySummary && historyDateFrom === ksaToday() && historyDateTo === ksaToday() && (
             <div className="grid grid-cols-4 gap-2 p-4 shrink-0 bg-gray-50 border-b">
               <div className="bg-white rounded-xl p-3 text-center border border-gray-100">
                 <TrendingUp className="w-4 h-4 text-green-500 mx-auto mb-1" />

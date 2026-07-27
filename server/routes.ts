@@ -38763,6 +38763,11 @@ export async function registerRoutes(
       saleData.discountAmount = Math.round(discountAmt * 100) / 100;
       saleData.status = "completed";
 
+      // ===== ختم التاريخ والوقت من السيرفر بتوقيت السعودية (لا نثق بساعة جهاز العميل) =====
+      const ksaStampNow = new Date();
+      saleData.saleDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(ksaStampNow);
+      saleData.saleTime = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Riyadh', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(ksaStampNow);
+
       if (saleData.paymentMethod === "split") {
         const cashAmt = Number(saleData.cashAmount) || 0;
         const networkAmt = Number(saleData.networkAmount) || 0;
