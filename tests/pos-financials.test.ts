@@ -57,6 +57,11 @@ async function makeSale(opts: {
 }
 
 beforeAll(async () => {
+  // حارس أمان: هذه الاختبارات تكتب وتحذف بيانات — ممنوع تشغيلها على قاعدة الإنتاج
+  const dbUrl = process.env.DATABASE_URL || "";
+  if (process.env.NODE_ENV === "production" || /supabase|pooler\.supabase|render\.com/i.test(dbUrl)) {
+    throw new Error("رفض التشغيل: يبدو أن الاتصال موجه لقاعدة بيانات الإنتاج");
+  }
   const u: any = await db.execute(sql`SELECT id FROM users LIMIT 1`);
   uid = (u.rows || u)[0].id;
   const p: any = await db.execute(sql`SELECT id FROM products LIMIT 1`);
@@ -65,10 +70,13 @@ beforeAll(async () => {
 });
 
 afterEach(async () => {
-  // تنظيف كل ما أنشأته الاختبارات (تاريخ 2001-01-01 معزول عن أي بيانات حقيقية)
-  await db.execute(sql`DELETE FROM pos_refund_items WHERE refund_id IN (SELECT r.id FROM pos_refunds r JOIN pos_sales s ON s.id = r.sale_id WHERE s.invoice_number LIKE 'GTEST-%')`);
-  await db.execute(sql`DELETE FROM pos_refunds WHERE sale_id IN (SELECT id FROM pos_sales WHERE invoice_number LIKE 'GTEST-%')`);
-  await db.execute(sql`DELETE FROM pos_sales WHERE invoice_number LIKE 'GTEST-%'`);
+  // تنظيف بالمعرّفات الدقيقة للفواتير التي أنشأتها الاختبارات فقط
+  if (createdSaleIds.length > 0) {
+    const ids = sql.join(createdSaleIds.map((id) => sql`${id}`), sql`, `);
+    await db.execute(sql`DELETE FROM pos_refund_items WHERE refund_id IN (SELECT id FROM pos_refunds WHERE sale_id IN (${ids}))`);
+    await db.execute(sql`DELETE FROM pos_refunds WHERE sale_id IN (${ids})`);
+    await db.execute(sql`DELETE FROM pos_sales WHERE id IN (${ids})`);
+  }
   createdSaleIds.length = 0;
 });
 
