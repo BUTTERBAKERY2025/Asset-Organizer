@@ -227,6 +227,22 @@ const SHIFT_TYPES = [
   { value: "night", label: "ليلي" },
 ];
 
+// تحديد الوردية تلقائياً حسب توقيت السعودية:
+// صباحي 6:00ص – 5:59م | مسائي 6:00م – 1:29ص | ليلي 1:30ص – 5:59ص
+function detectShiftByKsaTime(): string {
+  const hm = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Riyadh",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date());
+  const [h, m] = hm.split(":").map(Number);
+  const t = h * 60 + m;
+  if (t >= 6 * 60 && t < 18 * 60) return "morning";
+  if (t >= 18 * 60 || t < 90) return "evening";
+  return "night";
+}
+
 interface PaymentBreakdownInput {
   paymentMethod: string;
   amount: number;
@@ -392,7 +408,7 @@ export default function CashierJournalFormPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
@@ -428,7 +444,7 @@ export default function CashierJournalFormPage() {
   const [formData, setFormData] = useState({
     branchId: "",
     journalDate: new Date().toISOString().split("T")[0],
-    shiftType: "morning",
+    shiftType: detectShiftByKsaTime(),
     cashierName: "",
     cashierId: "",
     openingBalance: 0,
@@ -1878,8 +1894,11 @@ export default function CashierJournalFormPage() {
                     <Label className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
                       <Clock className="w-3 h-3 text-primary/70" />
                       الوردية *
+                      {!isAdmin && (
+                        <span className="text-[9px] text-muted-foreground/70 font-normal">(تلقائي حسب الوقت)</span>
+                      )}
                     </Label>
-                    <Select value={formData.shiftType} onValueChange={(v) => setFormData({ ...formData, shiftType: v })} disabled={isReadOnly}>
+                    <Select value={formData.shiftType} onValueChange={(v) => setFormData({ ...formData, shiftType: v })} disabled={isReadOnly || !isAdmin}>
                       <SelectTrigger className="h-9 text-xs" data-testid="select-shift">
                         <SelectValue />
                       </SelectTrigger>
