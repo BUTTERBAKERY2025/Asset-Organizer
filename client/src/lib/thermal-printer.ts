@@ -254,20 +254,32 @@ export function disconnectPrinter(): void {
   writeChar = null;
 }
 
-const CHUNK_SIZE = 180; // حجم آمن لمعظم طابعات BLE
-
+// إرسال بيانات الطباعة بشكل موثوق:
+// المشكلة السابقة: الإرسال "بدون تأكيد استلام" وبسرعة أعلى من قدرة الطابعة كان يُفيض
+// ذاكرتها فتسقط أجزاء من الصورة — أول جزء (الشعار) يخرج سليماً ثم يتهشم الباقي.
+// الحل: نفضّل الكتابة "مع تأكيد استلام" (تحكم تدفق مضمون على مستوى البلوتوث)،
+// وإن لم تدعمها الطابعة نرسل قطعاً أصغر مع فواصل أطول واستراحة دورية لتفريغ الذاكرة.
 async function writeBytes(data: Uint8Array): Promise<void> {
   if (!writeChar) throw new Error("الطابعة غير متصلة. اربط الطابعة من إعدادات ربط طابعة الكاشير.");
-  // بدون تأكيد استلام نقدر نسرّع الإرسال بشكل ملحوظ؛ مع التأكيد نبقي فاصلاً أطول للأمان
-  const delayMs = writeChar.properties.writeWithoutResponse ? 6 : 18;
-  for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-    const chunk = data.slice(i, i + CHUNK_SIZE);
-    if (writeChar.properties.writeWithoutResponse) {
-      await writeChar.writeValueWithoutResponse(chunk);
-    } else {
-      await writeChar.writeValue(chunk);
+  if (writeChar.properties.write) {
+    // موثوق: كل قطعة تُؤكَّد قبل إرسال التالية — لا يمكن فقدان بيانات
+    const CH = 180;
+    for (let i = 0; i < data.length; i += CH) {
+      await writeChar.writeValue(data.slice(i, i + CH));
     }
-    await new Promise((r) => setTimeout(r, delayMs));
+    return;
+  }
+  // بدون تأكيد: قطع صغيرة (ضمن حدود MTU الشائعة) + إبطاء + استراحة كل ~2كيلوبايت
+  const CH = 96;
+  let sentSinceRest = 0;
+  for (let i = 0; i < data.length; i += CH) {
+    await writeChar.writeValueWithoutResponse(data.slice(i, i + CH));
+    sentSinceRest += CH;
+    await new Promise((r) => setTimeout(r, 25));
+    if (sentSinceRest >= 2048) {
+      sentSinceRest = 0;
+      await new Promise((r) => setTimeout(r, 250)); // مهلة لتفريغ ذاكرة الطابعة
+    }
   }
 }
 
@@ -312,15 +324,24 @@ function canvasToRaster(canvas: HTMLCanvasElement, maxWidthDots = 384): Uint8Arr
   }
   const trimmedHeight = Math.max(1, lastRow + 1);
   if (trimmedHeight < height) raster = raster.slice(0, trimmedHeight * bytesPerRow);
-  // GS v 0 — أمر طباعة صورة نقطية
-  const header = new Uint8Array([
-    0x1d, 0x76, 0x30, 0x00,
-    bytesPerRow & 0xff, (bytesPerRow >> 8) & 0xff,
-    trimmedHeight & 0xff, (trimmedHeight >> 8) & 0xff,
-  ]);
-  const out = new Uint8Array(header.length + raster.length);
-  out.set(header, 0);
-  out.set(raster, header.length);
+  // GS v 0 — طباعة الصورة على شكل شرائح مستقلة (كل شريحة أمر كامل بذاته)
+  // حتى لو حدث خلل في نقل شريحة، لا يمتد التشوه لباقي الفاتورة
+  const BAND_ROWS = 64;
+  const bandCount = Math.ceil(trimmedHeight / BAND_ROWS);
+  const out = new Uint8Array(bandCount * 8 + raster.length);
+  let off = 0;
+  for (let b = 0; b < bandCount; b++) {
+    const rows = Math.min(BAND_ROWS, trimmedHeight - b * BAND_ROWS);
+    out.set([
+      0x1d, 0x76, 0x30, 0x00,
+      bytesPerRow & 0xff, (bytesPerRow >> 8) & 0xff,
+      rows & 0xff, (rows >> 8) & 0xff,
+    ], off);
+    off += 8;
+    const start = b * BAND_ROWS * bytesPerRow;
+    out.set(raster.subarray(start, start + rows * bytesPerRow), off);
+    off += rows * bytesPerRow;
+  }
   return out;
 }
 
