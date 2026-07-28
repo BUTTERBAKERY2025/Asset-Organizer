@@ -274,7 +274,27 @@ async function writeBytes(data: Uint8Array): Promise<void> {
 
 async function writeBytesInner(data: Uint8Array): Promise<void> {
   if (!writeChar) throw new Error("الطابعة غير متصلة.");
-  if (writeChar.properties.write) {
+  const props = writeChar.properties;
+
+  // الأسرع والموثوق معاً: إرسال سريع بدون تأكيد، مع "حاجز تأكيد" كل ~1.5كيلوبايت
+  // (قطعة واحدة تُرسل مع تأكيد الاستلام فتضمن أن الطابعة فرّغت ما قبلها — لا تفيض الذاكرة ولا نُبطئ)
+  if (props.write && props.writeWithoutResponse) {
+    const CH = 180;
+    const BARRIER_EVERY = 8; // 8 قطع بدون تأكيد ثم قطعة مؤكَّدة
+    let n = 0;
+    for (let i = 0; i < data.length; i += CH) {
+      const chunk = data.slice(i, i + CH);
+      n++;
+      if (n % BARRIER_EVERY === 0 || i + CH >= data.length) {
+        await writeChar.writeValue(chunk); // حاجز: يؤكد تفريغ كل ما سبق
+      } else {
+        await writeChar.writeValueWithoutResponse(chunk);
+      }
+    }
+    return;
+  }
+
+  if (props.write) {
     // موثوق: كل قطعة تُؤكَّد قبل إرسال التالية — لا يمكن فقدان بيانات
     // نبدأ بقطع كبيرة (أسرع)، وإن رفضتها الطابعة نتراجع تلقائياً لقطع أصغر
     let i = 0;
@@ -294,16 +314,16 @@ async function writeBytesInner(data: Uint8Array): Promise<void> {
     }
     return;
   }
-  // بدون تأكيد: قطع صغيرة (ضمن حدود MTU الشائعة) + إبطاء + استراحة كل ~4كيلوبايت
+  // بدون تأكيد فقط: قطع صغيرة (ضمن حدود MTU الشائعة) + إبطاء + استراحة كل ~4كيلوبايت
   const CH = 96;
   let sentSinceRest = 0;
   for (let i = 0; i < data.length; i += CH) {
     await writeChar.writeValueWithoutResponse(data.slice(i, i + CH));
     sentSinceRest += CH;
-    await new Promise((r) => setTimeout(r, 12));
+    await new Promise((r) => setTimeout(r, 8));
     if (sentSinceRest >= 4096) {
       sentSinceRest = 0;
-      await new Promise((r) => setTimeout(r, 200)); // مهلة لتفريغ ذاكرة الطابعة
+      await new Promise((r) => setTimeout(r, 150)); // مهلة لتفريغ ذاكرة الطابعة
     }
   }
 }
