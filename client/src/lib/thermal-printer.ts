@@ -100,10 +100,12 @@ const KEEPALIVE_MS = 15000;
 // DLE EOT 1 — طلب حالة الطابعة (لا يطبع شيئاً، فقط يُبقي القناة نشطة)
 const KEEPALIVE_BYTES = new Uint8Array([0x10, 0x04, 0x01]);
 
+let printing = false; // أثناء الطباعة نمنع أي كتابة أخرى (النبضة) حتى لا تُحقن وسط بيانات الصورة
+
 function startKeepAlive() {
   stopKeepAlive();
   keepAliveTimer = setInterval(async () => {
-    if (!writeChar || !device?.gatt?.connected) return;
+    if (printing || !writeChar || !device?.gatt?.connected) return;
     try {
       if (writeChar.properties.writeWithoutResponse) {
         await writeChar.writeValueWithoutResponse(KEEPALIVE_BYTES);
@@ -261,6 +263,16 @@ export function disconnectPrinter(): void {
 // وإن لم تدعمها الطابعة نرسل قطعاً أصغر مع فواصل أطول واستراحة دورية لتفريغ الذاكرة.
 async function writeBytes(data: Uint8Array): Promise<void> {
   if (!writeChar) throw new Error("الطابعة غير متصلة. اربط الطابعة من إعدادات ربط طابعة الكاشير.");
+  printing = true;
+  try {
+    await writeBytesInner(data);
+  } finally {
+    printing = false;
+  }
+}
+
+async function writeBytesInner(data: Uint8Array): Promise<void> {
+  if (!writeChar) throw new Error("الطابعة غير متصلة.");
   if (writeChar.properties.write) {
     // موثوق: كل قطعة تُؤكَّد قبل إرسال التالية — لا يمكن فقدان بيانات
     const CH = 180;
