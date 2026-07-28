@@ -100,7 +100,8 @@ const KEEPALIVE_MS = 15000;
 // DLE EOT 1 — طلب حالة الطابعة (لا يطبع شيئاً، فقط يُبقي القناة نشطة)
 const KEEPALIVE_BYTES = new Uint8Array([0x10, 0x04, 0x01]);
 
-let printing = false; // أثناء الطباعة نمنع أي كتابة أخرى (النبضة) حتى لا تُحقن وسط بيانات الصورة
+let printing = false;
+let preferredWriteChunk = 480; // قطع كبيرة = طباعة أسرع؛ تتراجع تلقائياً إن لم تدعمها الطابعة // أثناء الطباعة نمنع أي كتابة أخرى (النبضة) حتى لا تُحقن وسط بيانات الصورة
 
 function startKeepAlive() {
   stopKeepAlive();
@@ -275,22 +276,34 @@ async function writeBytesInner(data: Uint8Array): Promise<void> {
   if (!writeChar) throw new Error("الطابعة غير متصلة.");
   if (writeChar.properties.write) {
     // موثوق: كل قطعة تُؤكَّد قبل إرسال التالية — لا يمكن فقدان بيانات
-    const CH = 180;
-    for (let i = 0; i < data.length; i += CH) {
-      await writeChar.writeValue(data.slice(i, i + CH));
+    // نبدأ بقطع كبيرة (أسرع)، وإن رفضتها الطابعة نتراجع تلقائياً لقطع أصغر
+    let i = 0;
+    let ch = preferredWriteChunk;
+    while (i < data.length) {
+      try {
+        await writeChar.writeValue(data.slice(i, i + ch));
+        i += ch;
+      } catch (e) {
+        if (ch > 180) {
+          ch = 180;
+          preferredWriteChunk = 180; // تذكّر للفواتير القادمة
+        } else {
+          throw e;
+        }
+      }
     }
     return;
   }
-  // بدون تأكيد: قطع صغيرة (ضمن حدود MTU الشائعة) + إبطاء + استراحة كل ~2كيلوبايت
+  // بدون تأكيد: قطع صغيرة (ضمن حدود MTU الشائعة) + إبطاء + استراحة كل ~4كيلوبايت
   const CH = 96;
   let sentSinceRest = 0;
   for (let i = 0; i < data.length; i += CH) {
     await writeChar.writeValueWithoutResponse(data.slice(i, i + CH));
     sentSinceRest += CH;
-    await new Promise((r) => setTimeout(r, 25));
-    if (sentSinceRest >= 2048) {
+    await new Promise((r) => setTimeout(r, 12));
+    if (sentSinceRest >= 4096) {
       sentSinceRest = 0;
-      await new Promise((r) => setTimeout(r, 250)); // مهلة لتفريغ ذاكرة الطابعة
+      await new Promise((r) => setTimeout(r, 200)); // مهلة لتفريغ ذاكرة الطابعة
     }
   }
 }
