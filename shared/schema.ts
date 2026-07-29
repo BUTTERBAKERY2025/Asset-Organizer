@@ -12217,6 +12217,9 @@ export const employeeWarnings = pgTable("employee_warnings", {
   signedIp: text("signed_ip"),
   signedUserAgent: text("signed_user_agent"),
   companyNameSnapshot: text("company_name_snapshot"),
+  // تذكيرات التوقيع التلقائية (بحد أقصى تذكيرين لكل إنذار)
+  reminderCount: integer("reminder_count").default(0).notNull(),
+  lastReminderAt: timestamp("last_reminder_at"),
   status: text("status").notNull().default("active"), // active | appealed | cancelled | expired
   expiresAt: text("expires_at"), // YYYY-MM-DD
   createdAt: timestamp("created_at").defaultNow().notNull(),

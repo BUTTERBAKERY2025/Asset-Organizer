@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { and, eq, lte, lt, gte, sql, desc } from "drizzle-orm";
-import { notificationQueue, reportSchedules, reportRuns, systemNotifications, notificationAutomations, branchEmployees, leaveRequests, notifications } from "@shared/schema";
+import { notificationQueue, reportSchedules, reportRuns, systemNotifications, notificationAutomations, branchEmployees, leaveRequests, notifications, employeeWarnings, WARNING_LEVEL_LABELS } from "@shared/schema";
 import { sendWhatsAppMessage, sendSMS, isTwilioConfigured } from "./twilio-service";
 import { markOverdueAbsences, addDaysIso, runLeaveCarryover } from "./leave-helpers";
 import { storage } from "./storage";
@@ -462,6 +462,109 @@ export async function processAnnualLeaveCarryover(force = false): Promise<{ ran:
   return { ran: true, carried: result.carried };
 }
 
+/**
+ * تذكير تلقائي بالإنذارات غير الموقَّعة:
+ * الإنذار الساري غير الموقَّع الذي مضى على إصداره (أو آخر تذكير له) 3 أيام
+ * يُرسَل لصاحبه تذكير واتساب برابط التوقيع — بحد أقصى تذكيرين لكل إنذار،
+ * مع إشعار تجميعي لإدارة الموارد البشرية. تعمل مرة يومياً بعد 9 صباحاً بتوقيت الرياض.
+ */
+const WARNING_REMINDER_MAX = 2;
+const WARNING_REMINDER_GAP_DAYS = 3;
+let lastWarningReminderDate: string | null = null;
+
+function normalizePhoneIntl(raw: string): string {
+  let p = (raw || "").replace(/\D/g, "");
+  if (!p) return "";
+  if (p.startsWith("00")) p = p.slice(2);
+  if (p.startsWith("966")) return p;
+  if (p.startsWith("05") && p.length === 10) return "966" + p.slice(1);
+  if (p.startsWith("5") && p.length === 9) return "966" + p;
+  if (p.startsWith("0")) return "966" + p.slice(1);
+  return p;
+}
+
+export async function processWarningSignatureReminders(force = false): Promise<{ queued: number; skipped: number }> {
+  const todayRiyadh = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
+  if (!force && lastWarningReminderDate === todayRiyadh) return { queued: 0, skipped: 0 };
+
+  const threshold = new Date(Date.now() - WARNING_REMINDER_GAP_DAYS * 86400000);
+  const rows = await db
+    .select({
+      id: employeeWarnings.id,
+      level: employeeWarnings.level,
+      reason: employeeWarnings.reason,
+      publicToken: employeeWarnings.publicToken,
+      reminderCount: employeeWarnings.reminderCount,
+      branchId: employeeWarnings.branchId,
+      employeeName: branchEmployees.employeeName,
+      phoneNumber: branchEmployees.phoneNumber,
+    })
+    .from(employeeWarnings)
+    .innerJoin(branchEmployees, eq(employeeWarnings.branchEmployeeId, branchEmployees.id))
+    .where(and(
+      eq(employeeWarnings.status, "active"),
+      isNull(employeeWarnings.signedAt),
+      sql`${employeeWarnings.publicToken} IS NOT NULL`,
+      lt(employeeWarnings.reminderCount, WARNING_REMINDER_MAX),
+      lte(employeeWarnings.createdAt, threshold),
+      sql`(${employeeWarnings.lastReminderAt} IS NULL OR ${employeeWarnings.lastReminderAt} <= ${threshold})`,
+    ));
+
+  let queued = 0, skipped = 0;
+  const baseUrl = process.env.APP_PUBLIC_URL || "https://thebutterbakery.com";
+  const remindedByBranch = new Map<string, string[]>();
+
+  for (const w of rows) {
+    try {
+      const phone = normalizePhoneIntl(w.phoneNumber || "");
+      if (!phone) { skipped++; continue; }
+      const link = `${baseUrl}/warning/${w.publicToken}`;
+      const message = `تذكير من شركة الزبد الأفضل التجارية:\n\nعزيزنا ${w.employeeName}،\nلديكم ${WARNING_LEVEL_LABELS[w.level] || "إنذار"} بشأن: ${w.reason}\nلم يتم توقيعه حتى الآن. يرجى فتح الرابط أدناه للاطلاع والتوقيع إلكترونيًا:\n${link}\n\nإدارة الموارد البشرية`;
+      await db.insert(notificationQueue).values({
+        recipientPhone: phone,
+        recipientName: w.employeeName,
+        channel: "whatsapp",
+        message,
+        relatedModule: "warning_signature_reminder",
+        relatedEntityId: `${w.id}:${(w.reminderCount || 0) + 1}`,
+      }).onConflictDoNothing();
+      await db.update(employeeWarnings)
+        .set({ reminderCount: (w.reminderCount || 0) + 1, lastReminderAt: new Date(), updatedAt: new Date() })
+        .where(eq(employeeWarnings.id, w.id));
+      const arr = remindedByBranch.get(w.branchId) || [];
+      arr.push(w.employeeName || "");
+      remindedByBranch.set(w.branchId, arr);
+      queued++;
+    } catch (err: any) {
+      console.error(`[scheduler] warning-reminder error for warning ${w.id}:`, err.message);
+      skipped++;
+    }
+  }
+
+  // إشعار تجميعي لإدارة الموارد البشرية عبر جرس الإشعارات (لكل فرع فيه متأخرون)
+  for (const [branchId, names] of Array.from(remindedByBranch.entries())) {
+    try {
+      await db.insert(systemNotifications).values({
+        title: "⏰ إنذارات بانتظار التوقيع — تم إرسال تذكير",
+        content: `تم اليوم إرسال تذكير واتساب للموظفين التالين لعدم توقيعهم إنذاراتهم خلال ${WARNING_REMINDER_GAP_DAYS} أيام:\n• ${names.join("\n• ")}\n\nيمكن متابعة الحالة من صفحة الإنذارات والمخالفات.`,
+        messageType: "announcement",
+        displayStyle: "toast",
+        priority: 3,
+        isActive: true,
+        targetAllBranches: false,
+        targetBranchIds: [branchId],
+        targetRoleIds: ["hr_manager", "admin"],
+        autoGenerated: true,
+        autoSource: "warning_signature_reminder",
+      } as any);
+    } catch (e: any) { console.error("[scheduler] warning-reminder HR notify failed:", e.message); }
+  }
+
+  lastWarningReminderDate = todayRiyadh;
+  if (queued > 0) console.log(`[scheduler] warning-reminders: queued ${queued}, skipped ${skipped}`);
+  return { queued, skipped };
+}
+
 async function tick() {
   if (tickRunning) {
     console.log("[scheduler] tick skipped - previous tick still running");
@@ -491,6 +594,11 @@ async function tick() {
       const hRiyadh = Number(new Date().toLocaleString("en-US", { timeZone: "Asia/Riyadh", hour: "2-digit", hour12: false }));
       if (hRiyadh >= 6) await processAnnualLeaveCarryover(false);
     } catch (e: any) { console.error("[scheduler] processAnnualLeaveCarryover error:", e.message); }
+    // تذكير الإنذارات غير الموقَّعة — بعد 9 صباحاً بتوقيت الرياض، مرة يومياً.
+    try {
+      const hRiyadh = Number(new Date().toLocaleString("en-US", { timeZone: "Asia/Riyadh", hour: "2-digit", hour12: false }));
+      if (hRiyadh >= 9) await processWarningSignatureReminders(false);
+    } catch (e: any) { console.error("[scheduler] processWarningSignatureReminders error:", e.message); }
   } finally {
     tickRunning = false;
   }

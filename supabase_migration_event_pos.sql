@@ -100,3 +100,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_pos_sales_idempotency ON pos_sales (branc
 -- ===== حماية من تكرار الاسترجاعات (Idempotency) =====
 ALTER TABLE pos_refunds ADD COLUMN IF NOT EXISTS idempotency_key text;
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_pos_refunds_idempotency ON pos_refunds (sale_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+
+-- تذكيرات توقيع الإنذارات (Task #23)
+ALTER TABLE employee_warnings ADD COLUMN IF NOT EXISTS reminder_count integer NOT NULL DEFAULT 0;
+ALTER TABLE employee_warnings ADD COLUMN IF NOT EXISTS last_reminder_at timestamp;
