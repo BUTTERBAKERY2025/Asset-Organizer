@@ -368,6 +368,13 @@ export default function EvaluationsPage() {
                   <div className="text-xs text-muted-foreground border-t pt-2 space-y-0.5">
                     {viewRow.evaluatorName && <div>المقيِّم: {viewRow.evaluatorName}</div>}
                     {viewRow.approvedByName && <div>اعتمده: {viewRow.approvedByName}</div>}
+                    {viewRow.status === "approved" && (
+                      viewRow.employeeAckAt ? (
+                        <div className="text-emerald-600">✓ اطّلع عليه الموظف{viewRow.employeeAckComment ? ` — تعليقه: ${viewRow.employeeAckComment}` : ""}</div>
+                      ) : (
+                        <div className="text-amber-600">لم يطّلع عليه الموظف بعد (يظهر له في بوابته)</div>
+                      )
+                    )}
                   </div>
                 </div>
                 <DialogFooter className="gap-2">

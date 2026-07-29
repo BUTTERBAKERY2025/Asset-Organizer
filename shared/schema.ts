@@ -6309,6 +6309,7 @@ export const PORTAL_SETTING_KEYS = {
   SHOW_WARNINGS: "show_warnings",
   SHOW_DOCUMENTS: "show_documents",
   SHOW_INCENTIVES: "show_incentives",
+  SHOW_EVALUATIONS: "show_evaluations",
   ALLOW_SELF_CHECKIN: "allow_self_checkin",
   // Business rules
   ALLOW_LEAVE_REQUESTS: "allow_leave_requests",
@@ -6328,6 +6329,7 @@ export const PORTAL_BOOLEAN_KEYS: string[] = [
   PORTAL_SETTING_KEYS.SHOW_WARNINGS,
   PORTAL_SETTING_KEYS.SHOW_DOCUMENTS,
   PORTAL_SETTING_KEYS.SHOW_INCENTIVES,
+  PORTAL_SETTING_KEYS.SHOW_EVALUATIONS,
   PORTAL_SETTING_KEYS.ALLOW_SELF_CHECKIN,
   PORTAL_SETTING_KEYS.ALLOW_LEAVE_REQUESTS,
   PORTAL_SETTING_KEYS.ALLOW_ADVANCE_REQUESTS,
@@ -6342,6 +6344,7 @@ export const PORTAL_SETTING_DEFAULTS: Record<string, string> = {
   show_warnings: "true",
   show_documents: "true",
   show_incentives: "true",
+  show_evaluations: "true",
   allow_self_checkin: "true",
   allow_leave_requests: "true",
   allow_advance_requests: "true",
@@ -12297,6 +12300,9 @@ export const employeeEvaluations = pgTable("employee_evaluations", {
   approvedBy: varchar("approved_by").references(() => users.id),
   approvedByName: text("approved_by_name"),
   approvedAt: timestamp("approved_at"),
+  // إقرار الموظف بالاطلاع من بوابته (بعد الاعتماد)
+  employeeAckAt: timestamp("employee_ack_at"),
+  employeeAckComment: text("employee_ack_comment"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
@@ -12326,6 +12332,7 @@ export const insertEmployeeEvaluationSchema = createInsertSchema(employeeEvaluat
   overallScore: true, status: true,
   evaluatorId: true, evaluatorName: true,
   approvedBy: true, approvedByName: true, approvedAt: true,
+  employeeAckAt: true, employeeAckComment: true,
 });
 
 export type EmployeeEvaluation = typeof employeeEvaluations.$inferSelect;

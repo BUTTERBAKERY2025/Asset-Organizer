@@ -19,7 +19,7 @@ import {
   Briefcase, Building2, Hash, AlertTriangle, LayoutDashboard, CalendarRange,
   ClipboardCheck, ShieldAlert, FileText, ChevronLeft, ChevronRight,
   MapPin, LogIn, LogOut, Loader2, Fingerprint, Eraser, Languages, Globe, Phone,
-  Bell, FileSignature, RefreshCw,
+  Bell, FileSignature, RefreshCw, Star,
 } from "lucide-react";
 import {
   LEAVE_TYPE_LABELS,
@@ -219,7 +219,7 @@ export default function MyPortalPage() {
   const { data: portalConfig } = useQuery<{
     showSalary: boolean; showSchedule: boolean; showAttendance: boolean;
     showLeaves: boolean; showAdvances: boolean; showWarnings: boolean;
-    showDocuments: boolean; showIncentives: boolean; allowSelfCheckin: boolean;
+    showDocuments: boolean; showIncentives: boolean; showEvaluations: boolean; allowSelfCheckin: boolean;
     allowLeaveRequests: boolean; allowAdvanceRequests: boolean;
     maxAdvanceAmount: number; defaultLanguage: string;
   }>({
@@ -236,6 +236,7 @@ export default function MyPortalPage() {
   const showAdvances = cfgFlag(portalConfig?.showAdvances);
   const showWarnings = cfgFlag(portalConfig?.showWarnings);
   const showDocuments = cfgFlag(portalConfig?.showDocuments);
+  const showEvaluations = cfgFlag(portalConfig?.showEvaluations);
   const allowLeaveRequests = cfgFlag(portalConfig?.allowLeaveRequests);
   const allowAdvanceRequests = cfgFlag(portalConfig?.allowAdvanceRequests);
   const maxAdvanceAmount = portalConfig?.maxAdvanceAmount ?? 0;
@@ -292,6 +293,28 @@ export default function MyPortalPage() {
     enabled: !!hasEmployee && showSalary,
   });
   const [openPayslip, setOpenPayslip] = useState<string | null>(null);
+
+  // تقييمات الأداء المعتمدة
+  const { data: myEvaluations = [] } = useQuery<any[]>({
+    queryKey: ["/api/my/evaluations"],
+    queryFn: async () => (await apiRequest("GET", "/api/my/evaluations")).json(),
+    enabled: !!hasEmployee && showEvaluations,
+  });
+  const [viewEvaluation, setViewEvaluation] = useState<any | null>(null);
+  const [evalAckComment, setEvalAckComment] = useState("");
+  const ackEvaluationMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("POST", `/api/my/evaluations/${id}/acknowledge`, { comment: evalAckComment || undefined });
+      return res.json();
+    },
+    onSuccess: (row) => {
+      qc.invalidateQueries({ queryKey: ["/api/my/evaluations"] });
+      setViewEvaluation(row);
+      setEvalAckComment("");
+      toast({ title: "تم تسجيل اطلاعك على التقييم" });
+    },
+    onError: (e: any) => toast({ title: "تعذر تسجيل الإقرار", description: e.message, variant: "destructive" }),
+  });
 
   // ---- تسجيل الحضور الذاتي / self check-in ----
   const allowSelfCheckin = !!portalConfig?.allowSelfCheckin;
@@ -692,6 +715,11 @@ export default function MyPortalPage() {
                 {showSalary && (
                   <TabsTrigger value="salary" data-testid="tab-salary">
                     <Wallet className="h-4 w-4 ms-1" />{t("tabs.salary")}
+                  </TabsTrigger>
+                )}
+                {showEvaluations && (
+                  <TabsTrigger value="evaluations" data-testid="tab-evaluations">
+                    <Star className="h-4 w-4 ms-1" />{t("tabs.evaluations")}
                   </TabsTrigger>
                 )}
               </TabsList>
@@ -1257,6 +1285,45 @@ export default function MyPortalPage() {
                 </TabsContent>
               )}
 
+              {/* تقييم الأداء / performance evaluations */}
+              {showEvaluations && (
+                <TabsContent value="evaluations" className="space-y-3">
+                  {myEvaluations.length === 0 ? (
+                    <Card><CardContent className="p-8 text-center text-muted-foreground text-sm" data-testid="text-no-evaluations">لا توجد تقييمات معتمدة بعد</CardContent></Card>
+                  ) : myEvaluations.map((ev: any) => (
+                    <Card key={ev.id} data-testid={`card-my-evaluation-${ev.id}`}>
+                      <CardContent className="p-4 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <div className="font-semibold text-sm flex items-center gap-1">
+                              <Star className="h-4 w-4 text-amber-500" />
+                              تقييم {ev.periodType === "quarterly" ? "ربع سنوي" : ev.periodType === "semi_annual" ? "نصف سنوي" : ev.periodType === "annual" ? "سنوي" : "فترة تجربة"}
+                            </div>
+                            <div className="text-xs text-muted-foreground tabular-nums">{ev.periodStart} ← {ev.periodEnd}</div>
+                          </div>
+                          <div className="text-end">
+                            <div className={`text-xl font-bold tabular-nums ${ev.overallScore >= 4.5 ? "text-emerald-600" : ev.overallScore >= 3.5 ? "text-lime-600" : ev.overallScore >= 2.5 ? "text-amber-600" : "text-red-600"}`}>
+                              {Number(ev.overallScore || 0).toLocaleString("ar-SA-u-nu-latn", { minimumFractionDigits: 1, maximumFractionDigits: 2 })} / 5
+                            </div>
+                            <div className="text-[11px] text-muted-foreground">{ev.overallScore >= 4.5 ? "ممتاز" : ev.overallScore >= 3.5 ? "جيد جداً" : ev.overallScore >= 2.5 ? "جيد" : ev.overallScore >= 1.5 ? "مقبول" : "ضعيف"}</div>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          {ev.employeeAckAt ? (
+                            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700"><CheckCircle2 className="h-3 w-3 ms-1" /> تم الاطلاع</Badge>
+                          ) : (
+                            <Badge variant="secondary" className="bg-amber-100 text-amber-700">بانتظار اطلاعك</Badge>
+                          )}
+                          <Button size="sm" variant="outline" onClick={() => { setViewEvaluation(ev); setEvalAckComment(""); }} data-testid={`button-view-evaluation-${ev.id}`}>
+                            عرض التفاصيل
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </TabsContent>
+              )}
+
               {/* الإجازات / leaves */}
               <TabsContent value="leaves" className="space-y-3">
                 {/* تصفيات الإجازات — توقيع وإقرار بالاستلام */}
@@ -1410,6 +1477,56 @@ export default function MyPortalPage() {
           open={warningId !== null}
           onOpenChange={(v) => { if (!v) setWarningId(null); }}
         />
+
+        {/* تفاصيل التقييم وإقرار الاطلاع / evaluation detail + acknowledgment */}
+        <Dialog open={!!viewEvaluation} onOpenChange={(v) => { if (!v) setViewEvaluation(null); }}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" dir={dir}>
+            {viewEvaluation && (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2"><Star className="h-5 w-5 text-amber-500" /> تفاصيل تقييم الأداء</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>{viewEvaluation.periodType === "quarterly" ? "ربع سنوي" : viewEvaluation.periodType === "semi_annual" ? "نصف سنوي" : viewEvaluation.periodType === "annual" ? "سنوي" : "فترة تجربة"}</span>
+                    <span className="tabular-nums">{viewEvaluation.periodStart} ← {viewEvaluation.periodEnd}</span>
+                  </div>
+                  <div className={`text-center py-3 border rounded-lg font-bold text-2xl ${viewEvaluation.overallScore >= 4.5 ? "text-emerald-600" : viewEvaluation.overallScore >= 3.5 ? "text-lime-600" : viewEvaluation.overallScore >= 2.5 ? "text-amber-600" : "text-red-600"}`}>
+                    {Number(viewEvaluation.overallScore || 0).toLocaleString("ar-SA-u-nu-latn", { minimumFractionDigits: 1, maximumFractionDigits: 2 })} / 5
+                  </div>
+                  {Array.isArray(viewEvaluation.criteria) && viewEvaluation.criteria.map((c: any) => (
+                    <div key={c.key} className="flex items-center justify-between border-b pb-1.5">
+                      <div>
+                        <div>{c.label} <span className="text-xs text-muted-foreground">({c.weight}%)</span></div>
+                        {c.comment && <div className="text-xs text-muted-foreground">{c.comment}</div>}
+                      </div>
+                      <span className="font-bold tabular-nums">{c.score}/5</span>
+                    </div>
+                  ))}
+                  {viewEvaluation.strengths && <div><span className="font-semibold">نقاط القوة: </span>{viewEvaluation.strengths}</div>}
+                  {viewEvaluation.improvements && <div><span className="font-semibold">جوانب التحسين: </span>{viewEvaluation.improvements}</div>}
+                  {viewEvaluation.goals && <div><span className="font-semibold">أهداف الفترة القادمة: </span>{viewEvaluation.goals}</div>}
+                  {viewEvaluation.evaluatorName && <div className="text-xs text-muted-foreground border-t pt-2">المقيِّم: {viewEvaluation.evaluatorName}{viewEvaluation.approvedByName ? ` — اعتمده: ${viewEvaluation.approvedByName}` : ""}</div>}
+
+                  {viewEvaluation.employeeAckAt ? (
+                    <div className="border rounded-lg p-3 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 text-sm flex items-center gap-2" data-testid="text-evaluation-acked">
+                      <CheckCircle2 className="h-4 w-4" /> أقررت بالاطلاع على هذا التقييم
+                      {viewEvaluation.employeeAckComment && <span className="text-xs text-muted-foreground">— تعليقك: {viewEvaluation.employeeAckComment}</span>}
+                    </div>
+                  ) : (
+                    <div className="border rounded-lg p-3 space-y-2">
+                      <Label className="text-sm">تعليقك على التقييم (اختياري)</Label>
+                      <Textarea rows={2} value={evalAckComment} onChange={(e) => setEvalAckComment(e.target.value)} placeholder="أي ملاحظة تود إيصالها لإدارة الموارد البشرية" data-testid="textarea-evaluation-comment" />
+                      <Button className="w-full" onClick={() => ackEvaluationMutation.mutate(viewEvaluation.id)} disabled={ackEvaluationMutation.isPending} data-testid="button-acknowledge-evaluation">
+                        <CheckCircle2 className="h-4 w-4 ms-1" /> أقر بأنني اطلعت على هذا التقييم
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* نموذج طلب إجازة / leave dialog */}
         <Dialog open={leaveOpen} onOpenChange={setLeaveOpen}>

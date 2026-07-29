@@ -85,6 +85,7 @@ export default function PortalSettingsPage() {
     { key: "show_warnings", icon: ShieldAlert, title: "تبويب الإنذارات", description: "عرض الإنذارات والمخالفات للموظف." },
     { key: "show_documents", icon: FileText, title: "تبويب الوثائق", description: "عرض وثائق الموظف (الهوية/الإقامة/الشهادة الصحية...)." },
     { key: "show_incentives", icon: Award, title: "تبويب الحوافز والنقاط", description: "عرض نقاط وحوافز الموظف." },
+    { key: "show_evaluations", icon: Award, title: "تبويب تقييم الأداء", description: "عرض تقييمات الأداء المعتمدة للموظف مع إمكانية الإقرار بالاطلاع عليها." },
     { key: "show_salary", icon: Wallet, title: "تبويب الراتب", description: "عند التفعيل يرى الموظف تفاصيل راتبه. مخفي افتراضياً." },
   ] as const;
 

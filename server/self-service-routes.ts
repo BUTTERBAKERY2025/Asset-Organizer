@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { db } from "./db";
-import { eq, and, or, desc, inArray, like, isNotNull } from "drizzle-orm";
+import { eq, and, or, desc, inArray, like, isNotNull, isNull } from "drizzle-orm";
 import { isAuthenticated, requirePermission, requireAnyPermission, getEffectiveBranchFilter, parseUserAgent, getCachedPermissionsForUser, HR_SPECIALIST_PERMISSIONS } from "./auth";
 import { storage } from "./storage";
 import {
@@ -13,6 +13,7 @@ import {
   employeeSchedules,
   attendanceRecords,
   employeeWarnings,
+  employeeEvaluations,
   employeeDocuments,
   incentiveAwards,
   notifications,
@@ -540,7 +541,7 @@ export function registerSelfServiceRoutes(app: Express) {
     try {
       const [
         showSalary, showSchedule, showAttendance, showLeaves, showAdvances,
-        showWarnings, showDocuments, showIncentives, allowSelfCheckin,
+        showWarnings, showDocuments, showIncentives, showEvaluations, allowSelfCheckin,
         allowLeaveRequests, allowAdvanceRequests,
       ] = await Promise.all([
         portalFlag(PORTAL_SETTING_KEYS.SHOW_SALARY),
@@ -551,6 +552,7 @@ export function registerSelfServiceRoutes(app: Express) {
         portalFlag(PORTAL_SETTING_KEYS.SHOW_WARNINGS),
         portalFlag(PORTAL_SETTING_KEYS.SHOW_DOCUMENTS),
         portalFlag(PORTAL_SETTING_KEYS.SHOW_INCENTIVES),
+        portalFlag(PORTAL_SETTING_KEYS.SHOW_EVALUATIONS),
         portalFlag(PORTAL_SETTING_KEYS.ALLOW_SELF_CHECKIN),
         portalFlag(PORTAL_SETTING_KEYS.ALLOW_LEAVE_REQUESTS),
         portalFlag(PORTAL_SETTING_KEYS.ALLOW_ADVANCE_REQUESTS),
@@ -562,7 +564,7 @@ export function registerSelfServiceRoutes(app: Express) {
         (await storage.getPortalSetting(PORTAL_SETTING_KEYS.DEFAULT_LANGUAGE)) === "en" ? "en" : "ar";
       res.json({
         showSalary, showSchedule, showAttendance, showLeaves, showAdvances,
-        showWarnings, showDocuments, showIncentives, allowSelfCheckin,
+        showWarnings, showDocuments, showIncentives, showEvaluations, allowSelfCheckin,
         allowLeaveRequests, allowAdvanceRequests, maxAdvanceAmount, defaultLanguage,
       });
     } catch (e: any) {
@@ -958,6 +960,56 @@ export function registerSelfServiceRoutes(app: Express) {
       res.json(rows);
     } catch (e: any) {
       console.error("[my/incentives] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // تقييماتي المعتمدة — محجوبة خلف إعداد show_evaluations
+  app.get("/api/my/evaluations", isAuthenticated, async (req, res) => {
+    try {
+      if (!(await portalFlag(PORTAL_SETTING_KEYS.SHOW_EVALUATIONS))) return res.status(403).json({ error: "عرض التقييمات غير مفعّل", disabled: true });
+      const emp = await getMyEmployee(req);
+      if (!emp) return res.json([]);
+      // المعتمدة فقط — المسودات وما ينتظر الاعتماد لا يظهر للموظف
+      const rows = await db.select().from(employeeEvaluations)
+        .where(and(eq(employeeEvaluations.branchEmployeeId, emp.id), eq(employeeEvaluations.status, "approved")))
+        .orderBy(desc(employeeEvaluations.periodStart))
+        .limit(50);
+      res.json(rows);
+    } catch (e: any) {
+      console.error("[my/evaluations] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // إقرار الموظف بالاطلاع على تقييمه المعتمد
+  app.post("/api/my/evaluations/:id/acknowledge", isAuthenticated, async (req, res) => {
+    try {
+      if (!(await portalFlag(PORTAL_SETTING_KEYS.SHOW_EVALUATIONS))) return res.status(403).json({ error: "عرض التقييمات غير مفعّل", disabled: true });
+      const emp = await getMyEmployee(req);
+      if (!emp) return res.status(404).json({ error: "لا يوجد ملف موظف مرتبط بحسابك" });
+      const id = parseInt(req.params.id, 10);
+      const comment = typeof req.body?.comment === "string" ? req.body.comment.slice(0, 1000) : null;
+      // تحديث ذري: تقييم الموظف نفسه، معتمد، ولم يُقر عليه سابقاً
+      const [row] = await db.update(employeeEvaluations)
+        .set({ employeeAckAt: new Date(), employeeAckComment: comment, updatedAt: new Date() })
+        .where(and(
+          eq(employeeEvaluations.id, id),
+          eq(employeeEvaluations.branchEmployeeId, emp.id),
+          eq(employeeEvaluations.status, "approved"),
+          isNull(employeeEvaluations.employeeAckAt),
+        ))
+        .returning();
+      if (!row) return res.status(409).json({ error: "التقييم غير موجود أو سبق الإقرار عليه" });
+      await notifyHrOfRequest(emp, {
+        title: "موظف اطّلع على تقييمه",
+        message: `${emp.employeeName} أقرّ بالاطلاع على تقييم أدائه (${row.periodStart} → ${row.periodEnd})${comment ? ` — تعليقه: ${comment}` : ""}`,
+        linkUrl: "/hr/evaluations",
+        relatedEntityId: id,
+      });
+      res.json(row);
+    } catch (e: any) {
+      console.error("[my/evaluations] acknowledge error:", e);
       res.status(500).json({ error: e.message });
     }
   });

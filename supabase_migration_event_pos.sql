@@ -133,3 +133,7 @@ CREATE INDEX IF NOT EXISTS idx_employee_evaluations_employee ON employee_evaluat
 CREATE INDEX IF NOT EXISTS idx_employee_evaluations_branch ON employee_evaluations (branch_id);
 CREATE INDEX IF NOT EXISTS idx_employee_evaluations_status ON employee_evaluations (status);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_employee_evaluations_period ON employee_evaluations (branch_employee_id, period_type, period_start);
+
+-- ===== 2026-07-30: evaluation employee acknowledgment =====
+ALTER TABLE employee_evaluations ADD COLUMN IF NOT EXISTS employee_ack_at timestamp;
+ALTER TABLE employee_evaluations ADD COLUMN IF NOT EXISTS employee_ack_comment text;
