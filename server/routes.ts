@@ -9,7 +9,7 @@ import { evaluateWasteGovernance, checkApprovalGate } from "./waste-governance";
 import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, gt, sql, or, isNull, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
-import { shifts as shiftsTable, cashierPointsLedger, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS } from "@shared/schema";
+import { shifts as shiftsTable, cashierPointsLedger, cashierDailyChallenges, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS } from "@shared/schema";
 import { auditEvent, getApprovalThresholds, APPROVAL_THRESHOLDS } from "./audit-helpers";
 import { randomInt } from "crypto";
 
@@ -12712,6 +12712,31 @@ export async function registerRoutes(
     }
   });
 
+  // يمنع وجود تحديين نشطين متطابقين (نفس النوع/الفرع/الكاشير/الشفت) بفترتين متداخلتين
+  // حتى لا تُضاعف النقاط للكاشير عن نفس الإنجاز.
+  async function findOverlappingChallenge(c: {
+    challengeType: string; branchId: string | null; cashierId: string | null;
+    shiftType: string | null; validFrom: string; validTo: string | null; excludeId?: number;
+  }): Promise<string | null> {
+    if (!c.challengeType || !c.validFrom) return null;
+    const rows = await db.select().from(cashierDailyChallenges).where(and(
+      eq(cashierDailyChallenges.isActive, true),
+      eq(cashierDailyChallenges.challengeType, c.challengeType),
+      c.branchId ? eq(cashierDailyChallenges.branchId, c.branchId) : isNull(cashierDailyChallenges.branchId),
+      c.cashierId ? eq(cashierDailyChallenges.cashierId, c.cashierId) : isNull(cashierDailyChallenges.cashierId),
+      c.shiftType ? eq(cashierDailyChallenges.shiftType, c.shiftType) : isNull(cashierDailyChallenges.shiftType),
+    ));
+    const overlap = rows.find((r) => {
+      if (c.excludeId && r.id === c.excludeId) return false;
+      const aFrom = c.validFrom, aTo = c.validTo || "9999-12-31";
+      const bFrom = r.validFrom, bTo = r.validTo || "9999-12-31";
+      return aFrom <= bTo && bFrom <= aTo;
+    });
+    return overlap
+      ? `يوجد تحدٍ نشط مطابق («${overlap.name}») بنفس النوع والفرع والكاشير والشفت وبفترة متداخلة (${overlap.validFrom} → ${overlap.validTo || "بدون نهاية"}). عدّل التواريخ أو أوقف التحدي القائم أولاً.`
+      : null;
+  }
+
   app.post("/api/smart-incentives/challenges", isAuthenticated, requirePermission("smart_incentives_challenges", "create"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
@@ -12738,6 +12763,14 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بإنشاء تحدي لهذا الفرع" });
       }
       if (body.shiftType === 'null' || body.shiftType === '') body.shiftType = null;
+      if (body.validFrom && body.validTo && String(body.validTo) < String(body.validFrom)) {
+        return res.status(400).json({ error: "تاريخ النهاية يجب أن يكون بعد تاريخ البداية أو مساوياً له" });
+      }
+      const dupError = await findOverlappingChallenge({
+        challengeType: body.challengeType, branchId: body.branchId ?? null, cashierId: body.cashierId ?? null,
+        shiftType: body.shiftType ?? null, validFrom: body.validFrom, validTo: body.validTo ?? null,
+      });
+      if (dupError) return res.status(400).json({ error: dupError });
       const challenge = await storage.createDailyChallenge(body);
       res.json(challenge);
     } catch (error) {
@@ -12772,6 +12805,22 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بتعديل تحدي لهذا الفرع" });
       }
       if (body.shiftType === 'null' || body.shiftType === '') body.shiftType = null;
+      const effFrom = body.validFrom !== undefined ? body.validFrom : existingChallenge.validFrom;
+      const effTo = body.validTo !== undefined ? body.validTo : existingChallenge.validTo;
+      if (effFrom && effTo && String(effTo) < String(effFrom)) {
+        return res.status(400).json({ error: "تاريخ النهاية يجب أن يكون بعد تاريخ البداية أو مساوياً له" });
+      }
+      const effActive = body.isActive !== undefined ? body.isActive : existingChallenge.isActive;
+      if (effActive) {
+        const dupError = await findOverlappingChallenge({
+          challengeType: body.challengeType !== undefined ? body.challengeType : existingChallenge.challengeType,
+          branchId: body.branchId !== undefined ? body.branchId : existingChallenge.branchId,
+          cashierId: body.cashierId !== undefined ? body.cashierId : existingChallenge.cashierId,
+          shiftType: body.shiftType !== undefined ? body.shiftType : existingChallenge.shiftType,
+          validFrom: effFrom, validTo: effTo, excludeId: id,
+        });
+        if (dupError) return res.status(400).json({ error: dupError });
+      }
       const challenge = await storage.updateDailyChallenge(id, body);
       res.json(challenge);
     } catch (error) {
@@ -12799,6 +12848,34 @@ export async function registerRoutes(
   });
 
   // Daily Challenges as Targets - تحويل التحديات اليومية إلى أهداف
+  // التحديات النشطة اليوم للكاشير الحالي — لعرض تقدمه لحظياً في نموذج اليومية.
+  // auth-only عمداً: تُرجع فقط تحديات فرع/شفت المستخدم نفسه ولا تكشف بيانات غيره.
+  app.get("/api/my/daily-challenges", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const date = String(req.query.date || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" })).slice(0, 10);
+      const shiftType = req.query.shiftType ? String(req.query.shiftType) : null;
+      const branchId = req.query.branchId ? String(req.query.branchId) : (user.branchId || null);
+      const rows = await db.select().from(cashierDailyChallenges).where(and(
+        eq(cashierDailyChallenges.isActive, true),
+        lte(cashierDailyChallenges.validFrom, date),
+        or(isNull(cashierDailyChallenges.validTo), gte(cashierDailyChallenges.validTo, date)),
+        branchId ? or(isNull(cashierDailyChallenges.branchId), eq(cashierDailyChallenges.branchId, branchId))! : isNull(cashierDailyChallenges.branchId),
+        or(isNull(cashierDailyChallenges.cashierId), eq(cashierDailyChallenges.cashierId, user.id)),
+      ));
+      const filtered = shiftType ? rows.filter(r => !r.shiftType || r.shiftType === shiftType) : rows;
+      res.json(filtered.map(r => ({
+        id: r.id, name: r.name, challengeType: r.challengeType,
+        targetValue: r.targetValue, basePoints: r.basePoints,
+        bonusPointsPerUnit: r.bonusPointsPerUnit, shiftType: r.shiftType,
+        validFrom: r.validFrom, validTo: r.validTo,
+      })));
+    } catch (error) {
+      console.error("Error fetching my daily challenges:", error);
+      res.status(500).json({ error: "فشل في جلب التحديات" });
+    }
+  });
+
   app.get("/api/smart-incentives/challenges-as-targets", isAuthenticated, requirePermission("smart_incentives_challenges", "view"), async (req, res) => {
     try {
       const user = getCurrentUser(req);

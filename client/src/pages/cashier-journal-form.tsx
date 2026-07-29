@@ -545,6 +545,15 @@ export default function CashierJournalFormPage() {
     }
   }, [userBranchId, formData.branchId, isEdit]);
 
+  // التحديات اليومية النشطة لهذا الفرع/الشفت — لعرض تقدم الكاشير لحظياً أثناء تعبئة اليومية
+  const { data: myChallenges = [] } = useQuery<Array<{
+    id: number; name: string; challengeType: string; targetValue: number;
+    basePoints: number; bonusPointsPerUnit: number | null; shiftType: string | null;
+  }>>({
+    queryKey: [`/api/my/daily-challenges?date=${formData.journalDate}&shiftType=${formData.shiftType}&branchId=${formData.branchId}`],
+    enabled: !!formData.branchId,
+  });
+
   const { data: existingJournal, isLoading: loadingJournal } = useQuery<CashierSalesJournal & { 
     paymentBreakdowns: CashierPaymentBreakdown[];
     signatures?: { signatureType: string; signerName: string; signatureData: string; signedAt: string }[];
@@ -2000,6 +2009,50 @@ export default function CashierJournalFormPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {myChallenges.length > 0 && (
+              <Card className="shadow-sm border-amber-200 bg-amber-50/40 dark:bg-amber-950/10 dark:border-amber-900">
+                <CardHeader className="py-1.5 px-2.5">
+                  <CardTitle className="text-sm flex items-center gap-1.5">
+                    <TrendingUp className="w-4 h-4 text-amber-600" />
+                    تحديات اليوم — تقدمك الحالي
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-2.5 pb-2.5 space-y-2">
+                  {myChallenges.map((ch) => {
+                    const target = Number(ch.targetValue) || 0;
+                    let actual = 0;
+                    if (ch.challengeType === "avg_ticket") actual = averageTicket;
+                    else if (ch.challengeType === "customer_count") actual = Number(formData.customerCount) || 0;
+                    else if (ch.challengeType === "shift_sales") actual = Number(formData.totalSales) || 0;
+                    const pct = target > 0 ? Math.min(100, Math.round((actual / target) * 100)) : 0;
+                    const met = target > 0 && actual >= target;
+                    const bonus = met ? Math.floor(Math.max(0, actual - target) * (Number(ch.bonusPointsPerUnit) || 0)) : 0;
+                    const pts = met ? (Number(ch.basePoints) || 0) + bonus : 0;
+                    const typeLabel = ch.challengeType === "avg_ticket" ? "متوسط الفاتورة" : ch.challengeType === "customer_count" ? "عدد العملاء" : "مبيعات الوردية";
+                    const fmt = (n: number) => ch.challengeType === "customer_count" ? String(Math.round(n)) : n.toFixed(2);
+                    return (
+                      <div key={ch.id} className="rounded-lg border border-border bg-card p-2" data-testid={`challenge-progress-${ch.id}`}>
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="font-semibold truncate">{ch.name}</span>
+                          <span className={`shrink-0 font-bold ${met ? "text-green-600" : "text-muted-foreground"}`}>
+                            {met ? `✓ ${pts} نقطة` : `${pct}%`}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 h-2 rounded-full bg-muted overflow-hidden">
+                          <div className={`h-full rounded-full transition-all ${met ? "bg-green-500" : "bg-amber-500"}`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <div className="mt-1 flex items-center justify-between text-[10px] text-muted-foreground">
+                          <span>{typeLabel}: {fmt(actual)} / {fmt(target)}</span>
+                          <span>{met && bonus > 0 ? `${ch.basePoints} أساسية + ${bonus} إضافية` : `الجائزة: ${ch.basePoints} نقطة${Number(ch.bonusPointsPerUnit) ? " + إضافي عن التجاوز" : ""}`}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <p className="text-[10px] text-muted-foreground">النقاط تُعتمد رسمياً بعد اعتماد اليومية من الإدارة.</p>
+                </CardContent>
+              </Card>
+            )}
 
             <Card className="shadow-sm">
               <CardHeader className="py-1.5 px-2.5">
