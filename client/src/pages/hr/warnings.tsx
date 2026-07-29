@@ -536,12 +536,23 @@ function ViewDialog({
   const templateBody = template
     ? renderWarningBody(template.body, { name: employee?.employeeName || warning.employeeName, date: warning.issuedDate })
     : null;
-  const phone = (employee?.phoneNumber || employee?.mobile || "").replace(/\D/g, "");
+  // تحويل الرقم للصيغة الدولية التي يشترطها واتساب (9665xxxxxxxx)
+  const normalizePhoneForWa = (raw: string): string => {
+    let p = (raw || "").replace(/\D/g, "");
+    if (!p) return "";
+    if (p.startsWith("00")) p = p.slice(2);          // 00966... → 966...
+    if (p.startsWith("966")) return p;                // دولي جاهز
+    if (p.startsWith("05") && p.length === 10) return "966" + p.slice(1); // 05xxxxxxxx
+    if (p.startsWith("5") && p.length === 9) return "966" + p;            // 5xxxxxxxx
+    if (p.startsWith("0")) return "966" + p.slice(1); // أي رقم محلي آخر يبدأ بصفر
+    return p;
+  };
+  const phone = normalizePhoneForWa(employee?.phoneNumber || employee?.mobile || "");
   const waMessage = encodeURIComponent(
     `إشعار رسمي من شركة الزبد الأفضل التجارية:\n\nصدر بحقكم ${WARNING_LEVEL_LABELS[warning.level] || ""} بشأن: ${warning.reason}\n\nيرجى فتح الرابط أدناه للاطلاع والتوقيع إلكترونيًا:\n${publicUrl}`,
   );
   const waUrl = phone
-    ? `https://wa.me/${phone.startsWith("00") ? phone.slice(2) : phone}?text=${waMessage}`
+    ? `https://wa.me/${phone}?text=${waMessage}`
     : `https://wa.me/?text=${waMessage}`;
 
   const copyLink = async () => {
