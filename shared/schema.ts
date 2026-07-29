@@ -6314,6 +6314,7 @@ export const PORTAL_SETTING_KEYS = {
   // Business rules
   ALLOW_LEAVE_REQUESTS: "allow_leave_requests",
   ALLOW_ADVANCE_REQUESTS: "allow_advance_requests",
+  ALLOW_EVALUATION_ACK: "allow_evaluation_ack",
   MAX_ADVANCE_AMOUNT: "max_advance_amount",
   DEFAULT_LANGUAGE: "default_language",
 } as const;
@@ -6333,6 +6334,7 @@ export const PORTAL_BOOLEAN_KEYS: string[] = [
   PORTAL_SETTING_KEYS.ALLOW_SELF_CHECKIN,
   PORTAL_SETTING_KEYS.ALLOW_LEAVE_REQUESTS,
   PORTAL_SETTING_KEYS.ALLOW_ADVANCE_REQUESTS,
+  PORTAL_SETTING_KEYS.ALLOW_EVALUATION_ACK,
 ];
 
 export const PORTAL_SETTING_DEFAULTS: Record<string, string> = {
@@ -6348,6 +6350,7 @@ export const PORTAL_SETTING_DEFAULTS: Record<string, string> = {
   allow_self_checkin: "true",
   allow_leave_requests: "true",
   allow_advance_requests: "true",
+  allow_evaluation_ack: "true",
   max_advance_amount: "0",
   default_language: "ar",
 };

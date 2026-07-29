@@ -542,7 +542,7 @@ export function registerSelfServiceRoutes(app: Express) {
       const [
         showSalary, showSchedule, showAttendance, showLeaves, showAdvances,
         showWarnings, showDocuments, showIncentives, showEvaluations, allowSelfCheckin,
-        allowLeaveRequests, allowAdvanceRequests,
+        allowLeaveRequests, allowAdvanceRequests, allowEvaluationAck,
       ] = await Promise.all([
         portalFlag(PORTAL_SETTING_KEYS.SHOW_SALARY),
         portalFlag(PORTAL_SETTING_KEYS.SHOW_SCHEDULE),
@@ -556,6 +556,7 @@ export function registerSelfServiceRoutes(app: Express) {
         portalFlag(PORTAL_SETTING_KEYS.ALLOW_SELF_CHECKIN),
         portalFlag(PORTAL_SETTING_KEYS.ALLOW_LEAVE_REQUESTS),
         portalFlag(PORTAL_SETTING_KEYS.ALLOW_ADVANCE_REQUESTS),
+        portalFlag(PORTAL_SETTING_KEYS.ALLOW_EVALUATION_ACK),
       ]);
       const maxAdvanceAmount = Number(
         (await storage.getPortalSetting(PORTAL_SETTING_KEYS.MAX_ADVANCE_AMOUNT)) ?? "0",
@@ -565,7 +566,7 @@ export function registerSelfServiceRoutes(app: Express) {
       res.json({
         showSalary, showSchedule, showAttendance, showLeaves, showAdvances,
         showWarnings, showDocuments, showIncentives, showEvaluations, allowSelfCheckin,
-        allowLeaveRequests, allowAdvanceRequests, maxAdvanceAmount, defaultLanguage,
+        allowLeaveRequests, allowAdvanceRequests, allowEvaluationAck, maxAdvanceAmount, defaultLanguage,
       });
     } catch (e: any) {
       console.error("[my/portal-config] error:", e);
@@ -986,6 +987,7 @@ export function registerSelfServiceRoutes(app: Express) {
   app.post("/api/my/evaluations/:id/acknowledge", isAuthenticated, async (req, res) => {
     try {
       if (!(await portalFlag(PORTAL_SETTING_KEYS.SHOW_EVALUATIONS))) return res.status(403).json({ error: "عرض التقييمات غير مفعّل", disabled: true });
+      if (!(await portalFlag(PORTAL_SETTING_KEYS.ALLOW_EVALUATION_ACK))) return res.status(403).json({ error: "الإقرار على التقييم غير مفعّل", disabled: true });
       const emp = await getMyEmployee(req);
       if (!emp) return res.status(404).json({ error: "لا يوجد ملف موظف مرتبط بحسابك" });
       const id = parseInt(req.params.id, 10);

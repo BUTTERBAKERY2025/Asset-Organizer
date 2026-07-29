@@ -92,6 +92,7 @@ export default function PortalSettingsPage() {
   const ruleToggles = [
     { key: "allow_leave_requests", icon: CalendarDays, title: "السماح بتقديم طلبات الإجازات", description: "عند الإيقاف يقدر الموظف يشوف إجازاته لكن ما يقدر يقدّم طلب جديد." },
     { key: "allow_advance_requests", icon: Wallet, title: "السماح بتقديم طلبات السلف", description: "عند الإيقاف يقدر الموظف يشوف سلفه لكن ما يقدر يقدّم طلب جديد." },
+    { key: "allow_evaluation_ack", icon: Award, title: "السماح بالإقرار على التقييم", description: "عند الإيقاف يشوف الموظف تقييمه المعتمد لكن ما يقدر يسجّل إقراره بالاطلاع." },
   ] as const;
 
   // Local state for value settings (saved on demand)

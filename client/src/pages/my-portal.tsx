@@ -19,7 +19,7 @@ import {
   Briefcase, Building2, Hash, AlertTriangle, LayoutDashboard, CalendarRange,
   ClipboardCheck, ShieldAlert, FileText, ChevronLeft, ChevronRight,
   MapPin, LogIn, LogOut, Loader2, Fingerprint, Eraser, Languages, Globe, Phone,
-  Bell, FileSignature, RefreshCw, Star,
+  Bell, FileSignature, RefreshCw, Star, Gift, TrendingUp,
 } from "lucide-react";
 import {
   LEAVE_TYPE_LABELS,
@@ -220,7 +220,7 @@ export default function MyPortalPage() {
     showSalary: boolean; showSchedule: boolean; showAttendance: boolean;
     showLeaves: boolean; showAdvances: boolean; showWarnings: boolean;
     showDocuments: boolean; showIncentives: boolean; showEvaluations: boolean; allowSelfCheckin: boolean;
-    allowLeaveRequests: boolean; allowAdvanceRequests: boolean;
+    allowLeaveRequests: boolean; allowAdvanceRequests: boolean; allowEvaluationAck: boolean;
     maxAdvanceAmount: number; defaultLanguage: string;
   }>({
     queryKey: ["/api/my/portal-config"],
@@ -237,6 +237,8 @@ export default function MyPortalPage() {
   const showWarnings = cfgFlag(portalConfig?.showWarnings);
   const showDocuments = cfgFlag(portalConfig?.showDocuments);
   const showEvaluations = cfgFlag(portalConfig?.showEvaluations);
+  const showIncentives = cfgFlag(portalConfig?.showIncentives);
+  const allowEvaluationAck = cfgFlag(portalConfig?.allowEvaluationAck);
   const allowLeaveRequests = cfgFlag(portalConfig?.allowLeaveRequests);
   const allowAdvanceRequests = cfgFlag(portalConfig?.allowAdvanceRequests);
   const maxAdvanceAmount = portalConfig?.maxAdvanceAmount ?? 0;
@@ -300,6 +302,13 @@ export default function MyPortalPage() {
     queryFn: async () => (await apiRequest("GET", "/api/my/evaluations")).json(),
     enabled: !!hasEmployee && showEvaluations,
   });
+  // حوافزي — مكافآت الأداء الممنوحة
+  const { data: myIncentives = [] } = useQuery<any[]>({
+    queryKey: ["/api/my/incentives"],
+    queryFn: async () => (await apiRequest("GET", "/api/my/incentives")).json(),
+    enabled: !!hasEmployee && !!portalConfig && showIncentives,
+  });
+
   const [viewEvaluation, setViewEvaluation] = useState<any | null>(null);
   const [evalAckComment, setEvalAckComment] = useState("");
   const ackEvaluationMutation = useMutation({
@@ -720,6 +729,11 @@ export default function MyPortalPage() {
                 {showEvaluations && (
                   <TabsTrigger value="evaluations" data-testid="tab-evaluations">
                     <Star className="h-4 w-4 ms-1" />{t("tabs.evaluations")}
+                  </TabsTrigger>
+                )}
+                {showIncentives && (
+                  <TabsTrigger value="incentives" data-testid="tab-incentives">
+                    <Gift className="h-4 w-4 ms-1" />{t("tabs.incentives")}
                   </TabsTrigger>
                 )}
               </TabsList>
@@ -1311,9 +1325,9 @@ export default function MyPortalPage() {
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           {ev.employeeAckAt ? (
                             <Badge variant="secondary" className="bg-emerald-100 text-emerald-700"><CheckCircle2 className="h-3 w-3 ms-1" /> تم الاطلاع</Badge>
-                          ) : (
+                          ) : allowEvaluationAck ? (
                             <Badge variant="secondary" className="bg-amber-100 text-amber-700">بانتظار اطلاعك</Badge>
-                          )}
+                          ) : <span />}
                           <Button size="sm" variant="outline" onClick={() => { setViewEvaluation(ev); setEvalAckComment(""); }} data-testid={`button-view-evaluation-${ev.id}`}>
                             عرض التفاصيل
                           </Button>
@@ -1321,6 +1335,58 @@ export default function MyPortalPage() {
                       </CardContent>
                     </Card>
                   ))}
+                </TabsContent>
+              )}
+
+              {/* حوافزي / incentives */}
+              {showIncentives && (
+                <TabsContent value="incentives" className="space-y-3">
+                  {myIncentives.length === 0 ? (
+                    <Card><CardContent className="p-8 text-center text-muted-foreground text-sm" data-testid="text-no-incentives">لا توجد حوافز ممنوحة بعد</CardContent></Card>
+                  ) : (
+                    <>
+                      <Card className="border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20">
+                        <CardContent className="p-4 flex items-center justify-between">
+                          <div className="flex items-center gap-2 font-semibold text-sm"><Gift className="h-5 w-5 text-emerald-600" /> إجمالي الحوافز المعتمدة</div>
+                          <div className="text-xl font-bold tabular-nums text-emerald-600" data-testid="text-incentives-total">
+                            {fmtMoney(myIncentives.filter((a: any) => a.status === "approved" || a.status === "paid").reduce((s: number, a: any) => s + (a.finalReward || 0), 0))} {currency}
+                          </div>
+                        </CardContent>
+                      </Card>
+                      {myIncentives.map((a: any) => (
+                        <Card key={a.id} data-testid={`card-my-incentive-${a.id}`}>
+                          <CardContent className="p-4 space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                <div className="font-semibold text-sm flex items-center gap-1">
+                                  <TrendingUp className="h-4 w-4 text-primary" />
+                                  {a.awardType === "daily" ? "حافز يومي" : a.awardType === "monthly" ? "حافز شهري" : "حافز خاص"}
+                                </div>
+                                <div className="text-xs text-muted-foreground tabular-nums">{a.periodStart}{a.periodEnd && a.periodEnd !== a.periodStart ? ` ← ${a.periodEnd}` : ""}</div>
+                              </div>
+                              <div className="text-end">
+                                <div className="text-lg font-bold tabular-nums text-primary">{fmtMoney(a.finalReward)} {currency}</div>
+                                <Badge variant="secondary" className={
+                                  a.status === "paid" ? "bg-emerald-100 text-emerald-700"
+                                  : a.status === "approved" ? "bg-blue-100 text-blue-700"
+                                  : a.status === "cancelled" ? "bg-red-100 text-red-700"
+                                  : "bg-amber-100 text-amber-700"
+                                }>
+                                  {a.status === "paid" ? "مصروف" : a.status === "approved" ? "معتمد" : a.status === "cancelled" ? "ملغي" : "قيد المراجعة"}
+                                </Badge>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground border-t pt-2">
+                              <div>الهدف: <span className="tabular-nums font-medium text-foreground">{fmtMoney(a.targetAmount)}</span></div>
+                              <div>المحقق: <span className="tabular-nums font-medium text-foreground">{fmtMoney(a.achievedAmount)}</span></div>
+                              <div>الإنجاز: <span className="tabular-nums font-medium text-foreground">{Math.round(a.achievementPercent || 0)}%</span></div>
+                            </div>
+                            {a.notes && <div className="text-xs text-muted-foreground">{a.notes}</div>}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </>
+                  )}
                 </TabsContent>
               )}
 
@@ -1513,7 +1579,7 @@ export default function MyPortalPage() {
                       <CheckCircle2 className="h-4 w-4" /> أقررت بالاطلاع على هذا التقييم
                       {viewEvaluation.employeeAckComment && <span className="text-xs text-muted-foreground">— تعليقك: {viewEvaluation.employeeAckComment}</span>}
                     </div>
-                  ) : (
+                  ) : allowEvaluationAck ? (
                     <div className="border rounded-lg p-3 space-y-2">
                       <Label className="text-sm">تعليقك على التقييم (اختياري)</Label>
                       <Textarea rows={2} value={evalAckComment} onChange={(e) => setEvalAckComment(e.target.value)} placeholder="أي ملاحظة تود إيصالها لإدارة الموارد البشرية" data-testid="textarea-evaluation-comment" />
@@ -1521,7 +1587,7 @@ export default function MyPortalPage() {
                         <CheckCircle2 className="h-4 w-4 ms-1" /> أقر بأنني اطلعت على هذا التقييم
                       </Button>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               </>
             )}
