@@ -405,7 +405,7 @@ export function EmployeeFileDialog({
                       </Section>
                       <Section title="الهوية والوثائق" titleEn="Identity & Documents">
                         <div className="grid grid-cols-2 gap-x-3">
-                          <Field label="رقم الإقامة" value={emp.iqamaNumber} />
+                          <Field label="رقم الإقامة / رقم الهوية" value={emp.iqamaNumber} />
                           <Field label="انتهاء الإقامة" value={emp.iqamaExpiry} />
                           <Field label="رقم الجواز" value={emp.passportNumber} />
                           <Field label="انتهاء الجواز" value={emp.passportExpiry} />

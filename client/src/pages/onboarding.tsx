@@ -1218,11 +1218,11 @@ function ConvertDialog({ row, onClose, onSuccess }: { row: Row | null; onClose: 
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>رقم الإقامة</Label>
-                  <Input {...form.register("iqamaNumber")} placeholder="أدخل رقم الإقامة" dir="ltr" data-testid="input-iqama" />
+                  <Label>رقم الإقامة / رقم الهوية</Label>
+                  <Input {...form.register("iqamaNumber")} placeholder="أدخل رقم الإقامة أو الهوية" dir="ltr" data-testid="input-iqama" />
                 </div>
                 <div className="space-y-2">
-                  <Label>تاريخ انتهاء الإقامة</Label>
+                  <Label>تاريخ انتهاء الإقامة / الهوية</Label>
                   <Input type="date" {...form.register("iqamaExpiry")} data-testid="input-iqama-expiry" />
                 </div>
               </div>
