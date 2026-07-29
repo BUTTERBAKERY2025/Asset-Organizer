@@ -5,11 +5,12 @@ description: Durable facts about this repo's recurring security-scan findings an
 
 # Security scan recurring findings
 
-## xlsx (CVE-2023-30533 prototype pollution, CVE-2024-22363 ReDoS)
-- The repo PARSES untrusted uploads (XLSX.read + sheet_to_json) both client-side and server-side (server/routes.ts buffer parse), so these CVEs are relevant, not theoretical.
-- **No fix on the npm registry** — SheetJS stopped publishing there; latest npm is 0.18.5. The patched build (>=0.20.x) lives only on `https://cdn.sheetjs.com/...tgz`.
-- **The Replit package firewall blocks URL/tarball installs** (npm gets a wrapped arg and fails). So xlsx cannot be auto-upgraded in this environment.
-- **How to apply:** treat as a MANUAL production step — on Render, set package.json `"xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"` and deploy. Do NOT put the URL in package.json inside Replit; the env's npm reconcile will fail on it.
+## xlsx (CVE-2023-30533 prototype pollution, CVE-2024-22363 ReDoS) — FIXED 2026-07-29
+- The repo PARSES untrusted uploads (XLSX.read + sheet_to_json) both client-side and server-side (server/routes.ts buffer parse), so these CVEs were relevant, not theoretical.
+- **No fix on the npm registry** — patched build (>=0.20.x) lives only on `https://cdn.sheetjs.com/...tgz`.
+- As of 2026-07-29 the CDN tarball install WORKS inside Replit (earlier firewall block no longer applies). package.json now pins `"xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"`; Render fetches the CDN fine at build.
+- Quirk: npm install may fail once with ENOTEMPTY rename on node_modules — `rm -rf node_modules/<pkg> node_modules/.<pkg>-*` and retry.
+- xlsx 0.20.x package.json has strict `exports` (no `./package.json` subpath) — check versions via fs read, not require.
 
 ## False positives to not waste time on
 - HoundDog flags `server/scheduler.ts` `[scheduler] starting (tick=..., twilio=configured)` as CRITICAL AUTH-TOKEN+PHONE-NUMBER. It logs only the string "configured"/"disabled" — no token, no phone. Confirmed false positive.
