@@ -24,6 +24,36 @@ import { WarningDocument } from "@/components/warning-document";
 type Emp = { id: number; employeeName: string; jobTitle: string; branchId: string; phoneNumber?: string; mobile?: string };
 type Branch = { id: string; name: string; nameAr?: string };
 
+// تحويل الرقم للصيغة الدولية التي يشترطها واتساب (9665xxxxxxxx)
+function normalizePhoneForWa(raw: string): string {
+  let p = (raw || "").replace(/\D/g, "");
+  if (!p) return "";
+  if (p.startsWith("00")) p = p.slice(2);
+  if (p.startsWith("966")) return p;
+  if (p.startsWith("05") && p.length === 10) return "966" + p.slice(1);
+  if (p.startsWith("5") && p.length === 9) return "966" + p;
+  if (p.startsWith("0")) return "966" + p.slice(1);
+  return p;
+}
+
+function buildWaShare(warning: any, employee?: Emp): { url: string; phone: string; publicUrl: string } {
+  const publicUrl = warning?.publicToken
+    ? `${typeof window !== "undefined" ? window.location.origin : ""}/warning/${warning.publicToken}`
+    : "";
+  const phone = normalizePhoneForWa(employee?.phoneNumber || employee?.mobile || "");
+  const msg = encodeURIComponent(
+    `إشعار رسمي من شركة الزبد الأفضل التجارية:\n\nصدر بحقكم ${WARNING_LEVEL_LABELS[warning?.level] || ""} بشأن: ${warning?.reason || ""}\n\nيرجى فتح الرابط أدناه للاطلاع والتوقيع إلكترونيًا:\n${publicUrl}`,
+  );
+  return { url: phone ? `https://wa.me/${phone}?text=${msg}` : `https://wa.me/?text=${msg}`, phone, publicUrl };
+}
+
+// سلّم التدرج التأديبي — الدرجة التالية المقترحة
+const ESCALATION_ORDER = ["verbal", "written_1", "written_2", "written_3", "final", "termination"];
+function nextLevelAfter(level: string): string | null {
+  const i = ESCALATION_ORDER.indexOf(level);
+  return i >= 0 && i < ESCALATION_ORDER.length - 1 ? ESCALATION_ORDER[i + 1] : null;
+}
+
 const initialForm = {
   branchEmployeeId: "",
   branchId: "",
@@ -42,6 +72,8 @@ export default function WarningsPage() {
   const qc = useQueryClient();
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterLevel, setFilterLevel] = useState<string>("all");
+  const [filterBranch, setFilterBranch] = useState<string>("all");
+  const [pendingOnly, setPendingOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<typeof initialForm>(initialForm);
@@ -74,13 +106,32 @@ export default function WarningsPage() {
   });
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return warnings;
-    const q = search.toLowerCase();
-    return warnings.filter((w: any) =>
-      (w.employeeName || "").toLowerCase().includes(q) ||
-      (w.reason || "").toLowerCase().includes(q),
-    );
-  }, [warnings, search]);
+    const q = search.trim().toLowerCase();
+    return warnings.filter((w: any) => {
+      if (filterBranch !== "all" && w.branchId !== filterBranch) return false;
+      if (pendingOnly && (w.signedAt || !w.publicToken)) return false;
+      if (q && !((w.employeeName || "").toLowerCase().includes(q) || (w.reason || "").toLowerCase().includes(q))) return false;
+      return true;
+    });
+  }, [warnings, search, filterBranch, pendingOnly]);
+
+  // عدد الإنذارات السارية لكل موظف — لإظهار مؤشر التكرار وسلّم التدرج
+  const activeByEmp = useMemo(() => {
+    const m = new Map<number, any[]>();
+    warnings.forEach((w: any) => {
+      if (w.status !== "active") return;
+      const arr = m.get(w.branchEmployeeId) || [];
+      arr.push(w);
+      m.set(w.branchEmployeeId, arr);
+    });
+    return m;
+  }, [warnings]);
+
+  const pendingCount = useMemo(
+    () => warnings.filter((w: any) => !w.signedAt && w.publicToken && w.status === "active").length,
+    [warnings],
+  );
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   const employeesById = useMemo(() => {
     const m = new Map<number, Emp>();
@@ -213,14 +264,23 @@ export default function WarningsPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard label="إجمالي الإنذارات" value={stats?.total ?? 0} icon={<AlertOctagon className="h-5 w-5" />} accent="red" />
         <StatCard label="السارية حالياً" value={stats?.active ?? 0} icon={<AlertTriangle className="h-5 w-5" />} accent="amber" />
-        <StatCard label="إنذارات شفهية" value={stats?.byLevel?.verbal ?? 0} icon={<AlertOctagon className="h-5 w-5" />} />
+        <button className="text-right" onClick={() => setPendingOnly((v) => !v)} data-testid="button-filter-pending" title="اضغط لعرض ما ينتظر التوقيع فقط">
+          <StatCard label={pendingOnly ? "بانتظار التوقيع (مفعّل)" : "بانتظار التوقيع"} value={pendingCount} icon={<History className="h-5 w-5" />} accent={pendingOnly ? "red" : "amber"} />
+        </button>
         <StatCard label="إجمالي الجزاءات (ر.س)" value={Number(stats?.totalDeductions || 0).toFixed(2)} icon={<AlertOctagon className="h-5 w-5" />} accent="red" />
       </div>
 
       <Card>
         <CardContent className="space-y-3 pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
             <Input placeholder="بحث (اسم موظف أو سبب)" value={search} onChange={(e) => setSearch(e.target.value)} data-testid="input-search" />
+            <Select value={filterBranch} onValueChange={setFilterBranch}>
+              <SelectTrigger data-testid="select-filter-branch"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل الفروع</SelectItem>
+                {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.nameAr || b.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger data-testid="select-filter-status"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -262,11 +322,26 @@ export default function WarningsPage() {
                         data-testid={`button-employee-history-${w.id}`}
                         title="عرض كشف حساب الجزاءات لهذا الموظف"
                       >
-                        <div className="font-medium">{w.employeeName || "-"}</div>
-                        <div className="text-xs text-muted-foreground">{w.employeeJob || ""}</div>
+                        <div className="font-medium flex items-center gap-1.5">
+                          {w.employeeName || "-"}
+                          {(activeByEmp.get(w.branchEmployeeId)?.length || 0) >= 2 && (
+                            <Badge className="bg-red-100 text-red-700 text-[10px] px-1.5" title="عدد الإنذارات السارية لهذا الموظف">
+                              {activeByEmp.get(w.branchEmployeeId)!.length} سارية
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {w.employeeJob || ""}
+                          {(() => { const b = branches.find((x) => x.id === w.branchId); return b ? ` — ${b.nameAr || b.name}` : ""; })()}
+                        </div>
                       </button>
                     </td>
-                    <td className="p-2">{levelBadge(w.level)}</td>
+                    <td className="p-2">
+                      {levelBadge(w.level)}
+                      {w.expiresAt && w.expiresAt < todayStr && w.status === "active" && (
+                        <div className="text-[10px] text-muted-foreground mt-0.5">انتهت مدته</div>
+                      )}
+                    </td>
                     <td className="p-2 max-w-xs truncate" title={w.reason}>{w.reason}</td>
                     <td className="p-2 text-xs">{w.issuedDate}</td>
                     <td className="p-2 tabular-nums">{Number(w.deductionAmount || 0).toLocaleString("ar-SA-u-nu-latn")} ر.س</td>
@@ -286,6 +361,27 @@ export default function WarningsPage() {
                         <Button size="sm" variant="ghost" onClick={() => setViewing(w)} data-testid={`button-view-${w.id}`} title="عرض / إرسال للواتساب">
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
+                        {w.publicToken && !w.signedAt && (
+                          <a href={buildWaShare(w, employeesById.get(w.branchEmployeeId)).url} target="_blank" rel="noopener noreferrer">
+                            <Button size="sm" variant="ghost" className="text-emerald-600" data-testid={`button-wa-${w.id}`} title="إرسال رابط التوقيع عبر الواتساب">
+                              <MessageCircle className="h-3.5 w-3.5" />
+                            </Button>
+                          </a>
+                        )}
+                        {w.publicToken && (
+                          <Button
+                            size="sm" variant="ghost"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(buildWaShare(w, undefined).publicUrl);
+                                toast({ title: "تم نسخ رابط التوقيع" });
+                              } catch { toast({ title: "تعذّر النسخ", variant: "destructive" }); }
+                            }}
+                            data-testid={`button-copylink-${w.id}`} title="نسخ رابط التوقيع"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                         <Button size="sm" variant="ghost" onClick={() => { if (confirm("حذف هذا الإنذار؟")) deleteMutation.mutate(w.id); }} data-testid={`button-delete-${w.id}`}>
                           <Trash2 className="h-3.5 w-3.5 text-red-600" />
                         </Button>
@@ -353,6 +449,37 @@ export default function WarningsPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* سلّم التدرج التأديبي — يظهر تلقائياً عند اختيار الموظف */}
+            {form.branchEmployeeId && (() => {
+              const list = (activeByEmp.get(parseInt(form.branchEmployeeId, 10)) || [])
+                .slice()
+                .sort((a: any, b: any) => (a.issuedDate < b.issuedDate ? 1 : -1));
+              if (list.length === 0) {
+                return (
+                  <div className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded p-2">
+                    لا توجد إنذارات سارية سابقة لهذا الموظف — هذه أول مخالفة مسجلة.
+                  </div>
+                );
+              }
+              const last = list[0];
+              const suggested = nextLevelAfter(last.level);
+              return (
+                <div className="text-[11px] text-amber-900 bg-amber-50 border border-amber-300 rounded p-2 space-y-0.5">
+                  <div className="font-semibold">⚠ لهذا الموظف {list.length} إنذار سارٍ — آخرها: {WARNING_LEVEL_LABELS[last.level]} بتاريخ {last.issuedDate}</div>
+                  {suggested && (
+                    <div>
+                      الدرجة التالية المقترحة حسب سلّم التدرج: <b>{WARNING_LEVEL_LABELS[suggested]}</b>
+                      {form.level !== suggested && (
+                        <Button variant="link" size="sm" className="h-auto p-0 mr-1 text-[11px]" onClick={() => setForm((f) => ({ ...f, level: suggested }))} data-testid="button-apply-suggested-level">
+                          تطبيقها
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Level + Reason Category */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -536,17 +663,6 @@ function ViewDialog({
   const templateBody = template
     ? renderWarningBody(template.body, { name: employee?.employeeName || warning.employeeName, date: warning.issuedDate })
     : null;
-  // تحويل الرقم للصيغة الدولية التي يشترطها واتساب (9665xxxxxxxx)
-  const normalizePhoneForWa = (raw: string): string => {
-    let p = (raw || "").replace(/\D/g, "");
-    if (!p) return "";
-    if (p.startsWith("00")) p = p.slice(2);          // 00966... → 966...
-    if (p.startsWith("966")) return p;                // دولي جاهز
-    if (p.startsWith("05") && p.length === 10) return "966" + p.slice(1); // 05xxxxxxxx
-    if (p.startsWith("5") && p.length === 9) return "966" + p;            // 5xxxxxxxx
-    if (p.startsWith("0")) return "966" + p.slice(1); // أي رقم محلي آخر يبدأ بصفر
-    return p;
-  };
   const phone = normalizePhoneForWa(employee?.phoneNumber || employee?.mobile || "");
   const waMessage = encodeURIComponent(
     `إشعار رسمي من شركة الزبد الأفضل التجارية:\n\nصدر بحقكم ${WARNING_LEVEL_LABELS[warning.level] || ""} بشأن: ${warning.reason}\n\nيرجى فتح الرابط أدناه للاطلاع والتوقيع إلكترونيًا:\n${publicUrl}`,
