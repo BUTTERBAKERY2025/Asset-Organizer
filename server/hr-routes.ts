@@ -4729,6 +4729,9 @@ export function registerHrRoutes(app: Express) {
       const user = (req as any).currentUser;
       const [existing] = await db.select().from(employeeEvaluations).where(eq(employeeEvaluations.id, id)).limit(1);
       if (!existing) return res.status(404).json({ error: "التقييم غير موجود" });
+      if (existing.status !== "submitted") {
+        return res.status(409).json({ error: existing.status === "approved" ? "التقييم معتمد مسبقاً" : "يجب إرسال التقييم للاعتماد أولاً" });
+      }
       const f = getEffectiveBranchFilter(req);
       if (f.branchIds !== null && !f.branchIds.includes(existing.branchId)) {
         return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
