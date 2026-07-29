@@ -853,7 +853,7 @@ export function registerSelfServiceRoutes(app: Express) {
         },
         employee: {
           id: emp.id, employeeName: emp.employeeName, jobTitle: emp.jobTitle,
-          nationalId: (emp as any).nationalId,
+          nationalId: emp.iqamaNumber,
         },
         branch: br ? { id: br.id, name: br.name, nameAr: (br as any).nameAr } : null,
         template: template ? { id: template.id, label: template.label, body: renderedBody } : null,

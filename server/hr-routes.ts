@@ -2875,7 +2875,7 @@ export function registerHrRoutes(app: Express) {
       res.json({
         employee: {
           id: emp.id, employeeName: emp.employeeName, jobTitle: emp.jobTitle,
-          branchId: emp.branchId, nationalId: (emp as any).nationalId,
+          branchId: emp.branchId, nationalId: emp.iqamaNumber,
         },
         summary: { totalWarnings, activeWarnings, signedWarnings, totalDeductions, byLevel },
         warnings: rows,
@@ -2913,7 +2913,7 @@ export function registerHrRoutes(app: Express) {
         },
         employee: emp ? {
           id: emp.id, employeeName: emp.employeeName, jobTitle: emp.jobTitle,
-          nationalId: (emp as any).nationalId,
+          nationalId: emp.iqamaNumber,
         } : null,
         branch: br ? { id: br.id, name: br.name, nameAr: (br as any).nameAr } : null,
         template: template ? { id: template.id, label: template.label, body: renderedBody } : null,

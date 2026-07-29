@@ -147,7 +147,7 @@ export const WarningDocument = forwardRef<HTMLDivElement, WarningDocumentProps>(
             <td style={cellValue}>{employee?.jobTitle || "—"}</td>
           </tr>
           <tr>
-            <td style={cellLabel}>رقم الهوية</td>
+            <td style={cellLabel}>رقم الهوية / الإقامة</td>
             <td style={cellValue}>{employee?.nationalId || "—"}</td>
             <td style={cellLabel}>الفرع</td>
             <td style={cellValue}>{branchName || "—"}</td>

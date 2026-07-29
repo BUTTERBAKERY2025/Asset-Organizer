@@ -796,7 +796,7 @@ function ViewDialog({
               }}
               employee={employee ? {
                 employeeName: employee.employeeName, jobTitle: employee.jobTitle,
-                nationalId: (employee as any).nationalId,
+                nationalId: (employee as any).iqamaNumber,
               } : { employeeName: warning.employeeName, jobTitle: warning.employeeJob }}
               templateBody={templateBody}
               reasonCategoryLabel={reasonCategoryLabel}

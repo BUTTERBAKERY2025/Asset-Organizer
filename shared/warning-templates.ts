@@ -36,7 +36,7 @@ export const WARNING_TEMPLATES: WarningTemplate[] = [
     label: "لفت نظر",
     defaultLevel: "verbal",
     defaultReasonCategory: "non_compliance_instructions",
-    body: `الأخ/ {name} المحترم،
+    body: `الأخ / الأخت {name} المحترم/ـة،
 
 نلفت نظركم بشأن المخالفة الموضّحة أدناه، ونأمل الالتزام بتعليمات العمل وضوابط المنشأة مستقبلًا، تفاديًا لاتخاذ إجراءات تأديبية أكثر صرامة وفقًا للائحة تنظيم العمل المعتمدة ونظام العمل السعودي.
 
@@ -49,7 +49,7 @@ export const WARNING_TEMPLATES: WarningTemplate[] = [
     label: "إنذار — تكرار التأخير",
     defaultLevel: "written_1",
     defaultReasonCategory: "late_repeated",
-    body: `الأخ/ {name} المحترم،
+    body: `الأخ / الأخت {name} المحترم/ـة،
 
 نظرًا لتكرار تأخركم عن مواعيد العمل المحددة على الرغم من التنبيه السابق، فإن المنشأة توجّه إليكم هذا الإنذار الكتابي وفقًا لما تقضي به المادة (80) من نظام العمل السعودي ولائحة الجزاءات المعتمدة.
 
@@ -62,7 +62,7 @@ export const WARNING_TEMPLATES: WarningTemplate[] = [
     label: "إنذار — الغياب بدون عذر",
     defaultLevel: "written_1",
     defaultReasonCategory: "absence_unexcused",
-    body: `الأخ/ {name} المحترم،
+    body: `الأخ / الأخت {name} المحترم/ـة،
 
 نفيدكم بأنه قد تم رصد غيابكم عن العمل دون تقديم عذر مقبول أو إشعار مسبق للإدارة، وهو ما يُعدّ مخالفة صريحة لأحكام نظام العمل السعودي وللائحة الجزاءات المعتمدة لدى المنشأة.
 
@@ -75,7 +75,7 @@ export const WARNING_TEMPLATES: WarningTemplate[] = [
     label: "إنذار — الزي والنظافة الشخصية",
     defaultLevel: "written_1",
     defaultReasonCategory: "non_compliance_uniform",
-    body: `الأخ/ {name} المحترم،
+    body: `الأخ / الأخت {name} المحترم/ـة،
 
 لاحظت الإدارة عدم التزامكم بالزي الرسمي المعتمد و/أو معايير النظافة الشخصية المطلوبة، مما يخالف ضوابط العمل في قطاع الأغذية ولائحة المنشأة.
 
@@ -88,7 +88,7 @@ export const WARNING_TEMPLATES: WarningTemplate[] = [
     label: "إنذار — سوء التعامل مع العملاء",
     defaultLevel: "written_2",
     defaultReasonCategory: "misconduct_customer",
-    body: `الأخ/ {name} المحترم،
+    body: `الأخ / الأخت {name} المحترم/ـة،
 
 ورد إلى الإدارة بلاغ موثّق بشأن سوء تعاملكم مع أحد العملاء على النحو المبيّن في تفاصيل الإنذار. وحيث إن خدمة العميل من أولويات المنشأة، فإن هذا السلوك يُعدّ مخالفة جسيمة تستوجب توجيه إنذار كتابي مشدّد.
 
@@ -101,7 +101,7 @@ export const WARNING_TEMPLATES: WarningTemplate[] = [
     label: "إنذار — الإهمال في العمل",
     defaultLevel: "written_2",
     defaultReasonCategory: "negligence_duties",
-    body: `الأخ/ {name} المحترم،
+    body: `الأخ / الأخت {name} المحترم/ـة،
 
 تبيّن للإدارة وجود إهمال واضح في أداء واجباتكم الوظيفية على النحو الموثّق أدناه، الأمر الذي ترتّب عليه إخلال بسير العمل وتأثير على جودة الخدمة.
 
@@ -114,7 +114,7 @@ export const WARNING_TEMPLATES: WarningTemplate[] = [
     label: "إنذار — إتلاف ممتلكات",
     defaultLevel: "written_2",
     defaultReasonCategory: "damage_property",
-    body: `الأخ/ {name} المحترم،
+    body: `الأخ / الأخت {name} المحترم/ـة،
 
 تبيّن للإدارة قيامكم بإتلاف أو سوء استخدام إحدى ممتلكات المنشأة على النحو المبيّن في تفاصيل الإنذار، وهو ما يخالف لائحة العمل المعتمدة ويُرتّب مسؤولية مالية.
 
@@ -127,7 +127,7 @@ export const WARNING_TEMPLATES: WarningTemplate[] = [
     label: "إنذار نهائي قبل الفصل",
     defaultLevel: "final",
     defaultReasonCategory: "non_compliance_instructions",
-    body: `الأخ/ {name} المحترم،
+    body: `الأخ / الأخت {name} المحترم/ـة،
 
 نظرًا لتكرار المخالفات السابقة وعدم استجابتكم للإنذارات الموجّهة إليكم، فإن المنشأة توجّه إليكم هذا الإنذار النهائي وفقًا لأحكام نظام العمل السعودي ولائحة الجزاءات المعتمدة.
 
