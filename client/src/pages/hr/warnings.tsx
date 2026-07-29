@@ -109,7 +109,7 @@ export default function WarningsPage() {
     const q = search.trim().toLowerCase();
     return warnings.filter((w: any) => {
       if (filterBranch !== "all" && w.branchId !== filterBranch) return false;
-      if (pendingOnly && (w.signedAt || !w.publicToken)) return false;
+      if (pendingOnly && (w.signedAt || !w.publicToken || w.status !== "active")) return false;
       if (q && !((w.employeeName || "").toLowerCase().includes(q) || (w.reason || "").toLowerCase().includes(q))) return false;
       return true;
     });
