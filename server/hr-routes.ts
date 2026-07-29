@@ -3365,14 +3365,14 @@ export function registerHrRoutes(app: Express) {
             linkedUserId: branchEmployees.linkedUserId,
             employeeName: branchEmployees.employeeName,
             branchId: branchEmployees.branchId,
-            isActive: branchEmployees.isActive,
+            status: branchEmployees.status,
           }).from(branchEmployees).where(inArray(branchEmployees.linkedUserId, cashierIds))
         : [];
       const empByUser = new Map<string, any>();
       for (const l of links) {
         // نفضّل الملف النشط إن وُجد أكثر من ملف مرتبط بنفس المستخدم
         const prev = empByUser.get(l.linkedUserId!);
-        if (!prev || (l.isActive && !prev.isActive)) empByUser.set(l.linkedUserId!, l);
+        if (!prev || (l.status === "active" && prev.status !== "active")) empByUser.set(l.linkedUserId!, l);
       }
 
       // تجميع لكل كاشير
@@ -3470,9 +3470,9 @@ export function registerHrRoutes(app: Express) {
         // اختيار ملف الموظف بحسب فرع اليوميات نفسها (ثم النشط كاحتياط)
         const journalBranchIds = new Set(journals.map((j) => j.branchId));
         const emp =
-          empLinks.find((e) => e.isActive && e.branchId && journalBranchIds.has(e.branchId)) ||
+          empLinks.find((e) => e.status === "active" && e.branchId && journalBranchIds.has(e.branchId)) ||
           empLinks.find((e) => e.branchId && journalBranchIds.has(e.branchId)) ||
-          empLinks.find((e) => e.isActive) ||
+          empLinks.find((e) => e.status === "active") ||
           empLinks[0];
         if (branchIds !== null && (!emp.branchId || !branchIds.includes(emp.branchId))) {
           return { error: "ليس لديك صلاحية على فرع هذا الموظف" };
