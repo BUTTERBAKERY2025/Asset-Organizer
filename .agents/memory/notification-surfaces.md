@@ -63,3 +63,5 @@ saw nothing. Fix was to write `systemNotifications` rows instead.
 - Root cause is NOT code (send-targeted, the create endpoint, and getActiveNotificationsForUser all correctly resolve a position to exact linked-account `targetUserIds`). It's prod schema drift: Supabase `system_notifications` missing `target_user_ids` so old/insert path falls back to branch+role broadcast.
 - Note: the database-skill "production" environment is a Replit Neon replica (`neondb`), NOT the user's real Render+Supabase prod — it has no `system_notifications` table, so you cannot inspect the real prod that way.
 - Fix path matches user pref: run `supabase_notifications_targeting_fix.sql` (idempotent ADD COLUMN IF NOT EXISTS) in Supabase FIRST, then manual deploy on Render. Deploying new code BEFORE adding the column makes it worse (select enumerates the column → throws → no notifications at all).
+
+- Scheduler daily digests (e.g. document-expiry alerts) dedupe across restarts by querying systemNotifications for same autoSource + branch created today; targetBranchIds/targetRoleIds are text[] arrays — use `@> ARRAY[...]::text[]`, NOT jsonb containment.
