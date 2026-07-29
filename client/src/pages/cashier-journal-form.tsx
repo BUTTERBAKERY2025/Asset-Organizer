@@ -2049,7 +2049,7 @@ export default function CashierJournalFormPage() {
                       </div>
                     );
                   })}
-                  <p className="text-[10px] text-muted-foreground">النقاط تُعتمد رسمياً بعد اعتماد اليومية من الإدارة.</p>
+                  <p className="text-[10px] text-muted-foreground">الأرقام أعلاه تقديرية — النقاط النهائية تُحتسب عند اعتماد اليومية (وقد تتأثر بمضاعف الموسم وسقف النقاط اليومي).</p>
                 </CardContent>
               </Card>
             )}

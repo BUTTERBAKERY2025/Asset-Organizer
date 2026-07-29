@@ -12805,6 +12805,12 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بتعديل تحدي لهذا الفرع" });
       }
       if (body.shiftType === 'null' || body.shiftType === '') body.shiftType = null;
+      if (body.validFrom && isNaN(Date.parse(body.validFrom))) {
+        return res.status(400).json({ error: "تاريخ البداية غير صالح" });
+      }
+      if (body.validTo && isNaN(Date.parse(body.validTo))) {
+        return res.status(400).json({ error: "تاريخ النهاية غير صالح" });
+      }
       const effFrom = body.validFrom !== undefined ? body.validFrom : existingChallenge.validFrom;
       const effTo = body.validTo !== undefined ? body.validTo : existingChallenge.validTo;
       if (effFrom && effTo && String(effTo) < String(effFrom)) {
@@ -12855,7 +12861,11 @@ export async function registerRoutes(
       const user = getCurrentUser(req);
       const date = String(req.query.date || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" })).slice(0, 10);
       const shiftType = req.query.shiftType ? String(req.query.shiftType) : null;
-      const branchId = req.query.branchId ? String(req.query.branchId) : (user.branchId || null);
+      let branchId = req.query.branchId ? String(req.query.branchId) : (user.branchId || null);
+      // لا نثق بمعرّف الفرع القادم من العميل — يجب أن يكون فرعاً مصرّحاً له به
+      if (branchId && branchId !== user.branchId && user.role !== 'admin' && !(await canAccessBranch(req, branchId))) {
+        branchId = user.branchId || null;
+      }
       const rows = await db.select().from(cashierDailyChallenges).where(and(
         eq(cashierDailyChallenges.isActive, true),
         lte(cashierDailyChallenges.validFrom, date),
