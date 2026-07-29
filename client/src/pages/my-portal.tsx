@@ -19,8 +19,9 @@ import {
   Briefcase, Building2, Hash, AlertTriangle, LayoutDashboard, CalendarRange,
   ClipboardCheck, ShieldAlert, FileText, ChevronLeft, ChevronRight,
   MapPin, LogIn, LogOut, Loader2, Fingerprint, Eraser, Languages, Globe, Phone,
-  Bell, FileSignature, RefreshCw, Star, Gift, TrendingUp,
+  Bell, FileSignature, RefreshCw, Star, Gift, TrendingUp, MoreHorizontal,
 } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   LEAVE_TYPE_LABELS,
 } from "@shared/schema";
@@ -209,6 +210,10 @@ export default function MyPortalPage() {
   useEffect(() => {
     const el = tabsListRef.current?.querySelector<HTMLElement>('[data-state="active"]');
     el?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    // على الجوال: عند تبديل التبويب ارجع لأعلى الصفحة حتى لا يبدأ الموظف من منتصف محتوى قديم
+    if (typeof window !== "undefined" && window.innerWidth < 640) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }, [activeTab]);
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -239,6 +244,7 @@ export default function MyPortalPage() {
   const showEvaluations = cfgFlag(portalConfig?.showEvaluations);
   const showIncentives = cfgFlag(portalConfig?.showIncentives);
   const allowEvaluationAck = cfgFlag(portalConfig?.allowEvaluationAck);
+  const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const allowLeaveRequests = cfgFlag(portalConfig?.allowLeaveRequests);
   const allowAdvanceRequests = cfgFlag(portalConfig?.allowAdvanceRequests);
   const maxAdvanceAmount = portalConfig?.maxAdvanceAmount ?? 0;
@@ -497,6 +503,24 @@ export default function MyPortalPage() {
     onError: (e: any) => toast({ title: t("common.error"), description: e?.message || t("common.cancelFailed"), variant: "destructive" }),
   });
 
+  // تعريف موحد للتبويبات المفعّلة — يُستخدم في الشريط العلوي وشريط التنقل السفلي للجوال
+  const enabledTabs = [
+    { value: "overview", icon: LayoutDashboard, show: true },
+    { value: "checkin", icon: Fingerprint, show: allowSelfCheckin },
+    { value: "schedule", icon: CalendarRange, show: showSchedule },
+    { value: "attendance", icon: ClipboardCheck, show: showAttendance },
+    { value: "timesheet", icon: FileSignature, show: true },
+    { value: "leaves", icon: CalendarDays, show: showLeaves },
+    { value: "advances", icon: Wallet, show: showAdvances },
+    { value: "warnings", icon: ShieldAlert, show: showWarnings },
+    { value: "documents", icon: FileText, show: showDocuments },
+    { value: "salary", icon: Wallet, show: showSalary },
+    { value: "evaluations", icon: Star, show: showEvaluations },
+    { value: "incentives", icon: Gift, show: showIncentives },
+  ].filter((tb) => tb.show);
+  const bottomNavMain = enabledTabs.slice(0, 4);
+  const bottomNavMore = enabledTabs.slice(4);
+
   const pendingLeaves = leaves.filter((l) => l.status === "pending").length;
   const pendingAdvances = advances.filter((a) => a.status === "pending").length;
   const PrevIcon = isRTL ? ChevronRight : ChevronLeft;
@@ -505,7 +529,7 @@ export default function MyPortalPage() {
 
   return (
     <Layout>
-      <div className="container mx-auto max-w-3xl p-3 sm:p-4 space-y-3 sm:space-y-4 pb-10" dir={dir} data-testid="page-my-portal">
+      <div className="container mx-auto max-w-3xl p-3 sm:p-4 space-y-3 sm:space-y-4 pb-24 sm:pb-10" dir={dir} data-testid="page-my-portal">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl bg-primary/10">
             <UserCircle className="h-7 w-7 text-primary" />
@@ -556,7 +580,7 @@ export default function MyPortalPage() {
         </div>
 
         <Dialog open={notifOpen} onOpenChange={setNotifOpen}>
-          <DialogContent className="max-w-md" dir={dir}>
+          <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto" dir={dir}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Bell className="h-5 w-5" />
@@ -1518,6 +1542,63 @@ export default function MyPortalPage() {
                 ))}
               </TabsContent>
             </Tabs>
+
+            {/* شريط تنقل سفلي ثابت للجوال — أهم التبويبات + "المزيد" */}
+            <nav className="sm:hidden fixed bottom-0 inset-x-0 z-30 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85 pb-[env(safe-area-inset-bottom)]" data-testid="nav-mobile-bottom">
+              <div className="grid grid-cols-5">
+                {bottomNavMain.map((tb) => {
+                  const Icon = tb.icon;
+                  const active = activeTab === tb.value;
+                  return (
+                    <button
+                      key={tb.value}
+                      onClick={() => setActiveTab(tb.value)}
+                      className={`flex flex-col items-center justify-center gap-0.5 py-2 min-h-[56px] text-[11px] font-medium transition-colors ${active ? "text-primary" : "text-muted-foreground"}`}
+                      data-testid={`bottomnav-${tb.value}`}
+                    >
+                      <Icon className={`h-5 w-5 ${active ? "text-primary" : ""}`} />
+                      <span className="truncate max-w-[64px]">{t(`tabs.${tb.value}`)}</span>
+                    </button>
+                  );
+                })}
+                {bottomNavMore.length > 0 && (
+                  <button
+                    onClick={() => setMoreSheetOpen(true)}
+                    className={`flex flex-col items-center justify-center gap-0.5 py-2 min-h-[56px] text-[11px] font-medium transition-colors ${bottomNavMore.some((tb) => tb.value === activeTab) ? "text-primary" : "text-muted-foreground"}`}
+                    data-testid="bottomnav-more"
+                  >
+                    <MoreHorizontal className="h-5 w-5" />
+                    <span>{t("tabs.more", { defaultValue: "المزيد" })}</span>
+                  </button>
+                )}
+              </div>
+            </nav>
+
+            {/* قائمة "المزيد" — بقية التبويبات */}
+            <Sheet open={moreSheetOpen} onOpenChange={setMoreSheetOpen}>
+              <SheetContent side="bottom" className="rounded-t-2xl pb-[max(env(safe-area-inset-bottom),1rem)]" dir={dir}>
+                <SheetHeader>
+                  <SheetTitle className="text-start">{t("tabs.more", { defaultValue: "المزيد" })}</SheetTitle>
+                </SheetHeader>
+                <div className="grid grid-cols-3 gap-2 mt-3">
+                  {bottomNavMore.map((tb) => {
+                    const Icon = tb.icon;
+                    const active = activeTab === tb.value;
+                    return (
+                      <button
+                        key={tb.value}
+                        onClick={() => { setActiveTab(tb.value); setMoreSheetOpen(false); }}
+                        className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-xs font-medium transition-colors ${active ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"}`}
+                        data-testid={`moresheet-${tb.value}`}
+                      >
+                        <Icon className="h-6 w-6" />
+                        <span className="truncate w-full text-center">{t(`tabs.${tb.value}`)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </SheetContent>
+            </Sheet>
           </>
         )}
 
@@ -1596,7 +1677,7 @@ export default function MyPortalPage() {
 
         {/* نموذج طلب إجازة / leave dialog */}
         <Dialog open={leaveOpen} onOpenChange={setLeaveOpen}>
-          <DialogContent className="max-w-lg" dir={dir}>
+          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto" dir={dir}>
             <DialogHeader><DialogTitle>{t("leaves.new")}</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <div>
@@ -1639,7 +1720,7 @@ export default function MyPortalPage() {
 
         {/* نموذج طلب سلفة / advance dialog */}
         <Dialog open={advOpen} onOpenChange={setAdvOpen}>
-          <DialogContent className="max-w-lg" dir={dir}>
+          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto" dir={dir}>
             <DialogHeader><DialogTitle>{t("advances.new")}</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
