@@ -43,7 +43,16 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          // Keep bundler helper/virtual modules (vite preload helper, commonjs
+          // helpers) in the eagerly-loaded react chunk. Without this they can
+          // land inside a huge lazy vendor chunk (e.g. vendor-print), forcing
+          // the entry to statically import ~4MB before first paint.
+          if (id.includes("vite/preload-helper") || id.includes("vite/modulepreload-polyfill") || id.includes("commonjsHelpers")) return "vendor-react";
           if (!id.includes("node_modules")) return;
+          // Shared runtime helpers used by both eager and lazy code must live
+          // in an eager chunk, otherwise they drag huge lazy chunks into the
+          // initial load.
+          if (id.includes("@babel/runtime") || id.includes("tslib") || id.includes("regenerator-runtime")) return "vendor-react";
           if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
           if (id.includes("xlsx") || id.includes("exceljs")) return "vendor-xlsx";
           if (id.includes("framer-motion")) return "vendor-motion";
