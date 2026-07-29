@@ -520,14 +520,17 @@ export async function processWarningSignatureReminders(force = false): Promise<{
       if (!phone) { skipped++; continue; }
       const link = `${baseUrl}/warning/${w.publicToken}`;
       const message = `تذكير من شركة الزبد الأفضل التجارية:\n\nعزيزنا ${w.employeeName}،\nلديكم ${WARNING_LEVEL_LABELS[w.level] || "إنذار"} بشأن: ${w.reason}\nلم يتم توقيعه حتى الآن. يرجى فتح الرابط أدناه للاطلاع والتوقيع إلكترونيًا:\n${link}\n\nإدارة الموارد البشرية`;
-      await db.insert(notificationQueue).values({
+      // فهرس فريد جزئي (uq_notification_queue_warning_reminder) يمنع تكرار نفس التذكير
+      // حتى مع إعادة تشغيل السيرفر — ولا نستهلك محاولة التذكير إلا إذا أُدرج صف فعلاً.
+      const inserted = await db.insert(notificationQueue).values({
         recipientPhone: phone,
         recipientName: w.employeeName,
         channel: "whatsapp",
         message,
         relatedModule: "warning_signature_reminder",
         relatedEntityId: `${w.id}:${(w.reminderCount || 0) + 1}`,
-      }).onConflictDoNothing();
+      }).onConflictDoNothing().returning({ id: notificationQueue.id });
+      if (inserted.length === 0) { skipped++; continue; }
       await db.update(employeeWarnings)
         .set({ reminderCount: (w.reminderCount || 0) + 1, lastReminderAt: new Date(), updatedAt: new Date() })
         .where(eq(employeeWarnings.id, w.id));

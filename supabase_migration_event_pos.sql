@@ -104,3 +104,4 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_pos_refunds_idempotency ON pos_refunds (s
 -- تذكيرات توقيع الإنذارات (Task #23)
 ALTER TABLE employee_warnings ADD COLUMN IF NOT EXISTS reminder_count integer NOT NULL DEFAULT 0;
 ALTER TABLE employee_warnings ADD COLUMN IF NOT EXISTS last_reminder_at timestamp;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_queue_warning_reminder ON notification_queue (related_module, related_entity_id, channel) WHERE related_module = 'warning_signature_reminder';
