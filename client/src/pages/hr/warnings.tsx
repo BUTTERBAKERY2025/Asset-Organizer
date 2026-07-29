@@ -112,8 +112,35 @@ export default function WarningsPage() {
       if (pendingOnly && (w.signedAt || !w.publicToken || w.status !== "active")) return false;
       if (q && !((w.employeeName || "").toLowerCase().includes(q) || (w.reason || "").toLowerCase().includes(q))) return false;
       return true;
-    });
+    }).sort((a: any, b: any) => (a.issuedDate === b.issuedDate ? b.id - a.id : a.issuedDate < b.issuedDate ? 1 : -1));
   }, [warnings, search, filterBranch, pendingOnly]);
+
+  // تصدير الكشف الحالي (بعد الفلاتر) كملف Excel/CSV بترميز عربي سليم
+  const exportCsv = () => {
+    const badge = (w: any) => (w.signedAt ? "موقَّع" : w.publicToken ? "بانتظار التوقيع" : "بدون رابط");
+    const branchName = (id: string) => { const b = branches.find((x) => x.id === id); return b ? (b.nameAr || b.name) : ""; };
+    const rows = [
+      ["الموظف", "الوظيفة", "الفرع", "الدرجة", "الموضوع", "التاريخ", "الجزاء (ر.س)", "حالة التوقيع", "الحالة"],
+      ...filtered.map((w: any) => [
+        w.employeeName || "", w.employeeJob || "", branchName(w.branchId),
+        WARNING_LEVEL_LABELS[w.level] || w.level, w.reason || "", w.issuedDate || "",
+        Number(w.deductionAmount || 0).toFixed(2), badge(w), WARNING_STATUS_LABELS[w.status] || w.status,
+      ]),
+    ];
+    const csv = "\uFEFF" + rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `كشف_الإنذارات_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const daysSince = (iso?: string) => {
+    if (!iso) return null;
+    const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+    return d >= 0 ? d : null;
+  };
 
   // عدد الإنذارات السارية لكل موظف — لإظهار مؤشر التكرار وسلّم التدرج
   const activeByEmp = useMemo(() => {
@@ -297,6 +324,13 @@ export default function WarningsPage() {
             </Select>
           </div>
 
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-xs text-muted-foreground">{filtered.length} نتيجة</span>
+            <Button size="sm" variant="outline" onClick={exportCsv} disabled={filtered.length === 0} className="gap-1.5" data-testid="button-export-csv">
+              <FileDown className="h-3.5 w-3.5" /> تصدير الكشف (Excel)
+            </Button>
+          </div>
+
           <div className="overflow-auto border rounded-lg">
             <table className="w-full text-sm">
               <thead className="bg-slate-50">
@@ -351,7 +385,12 @@ export default function WarningsPage() {
                           <CheckCircle2 className="h-3 w-3" /> موقَّع
                         </Badge>
                       ) : w.publicToken ? (
-                        <Badge variant="outline" className="border-amber-400 text-amber-700">بانتظار التوقيع</Badge>
+                        <div className="space-y-0.5">
+                          <Badge variant="outline" className={(daysSince(w.createdAt) ?? 0) >= 3 ? "border-red-400 text-red-700" : "border-amber-400 text-amber-700"}>بانتظار التوقيع</Badge>
+                          {(daysSince(w.createdAt) ?? 0) >= 1 && (
+                            <div className="text-[10px] text-muted-foreground">منذ {daysSince(w.createdAt)} يوم</div>
+                          )}
+                        </div>
                       ) : (
                         <Badge variant="outline">قديم — بدون رابط</Badge>
                       )}
