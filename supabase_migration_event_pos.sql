@@ -137,3 +137,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_employee_evaluations_period ON employee_eva
 -- ===== 2026-07-30: evaluation employee acknowledgment =====
 ALTER TABLE employee_evaluations ADD COLUMN IF NOT EXISTS employee_ack_at timestamp;
 ALTER TABLE employee_evaluations ADD COLUMN IF NOT EXISTS employee_ack_comment text;
+
+-- ===== 022: cashier deficit posting (applied to prod 2026-07-29) =====
+-- 022: ترحيل عجوزات يوميات المبيعات للكاشير إلى السلف والقروض
+-- نفّذ هذا الملف في Supabase SQL Editor قبل نشر التحديث على Render
+
+ALTER TABLE cashier_sales_journals ADD COLUMN IF NOT EXISTS deficit_deduction_id integer;
+ALTER TABLE cashier_sales_journals ADD COLUMN IF NOT EXISTS deficit_posted_by varchar REFERENCES users(id);
+ALTER TABLE cashier_sales_journals ADD COLUMN IF NOT EXISTS deficit_posted_at timestamp;
+CREATE INDEX IF NOT EXISTS idx_cashier_journals_deficit_posted ON cashier_sales_journals(deficit_deduction_id);
