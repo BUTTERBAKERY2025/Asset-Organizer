@@ -44,4 +44,5 @@
 - [BT cashier printer](bt-printer-web-bluetooth.md) — GATT dies only on full page reload (chunk-error reload after deploys); reconnect must be App-level + keepalive; user tests on prod, needs deploy+hard refresh.
 - [Render lockfile firewall URLs](render-lockfile-firewall-urls.md) — any npm install here writes package-firewall.replit.local URLs into package-lock; sed them to registry.npmjs.org before push or Render build fails.
 - [Vite chunk helper pitfall](vite-chunk-helper-pitfall.md) — helper modules must be routed to eager vendor-react in manualChunks or entry force-loads vendor-print/xlsx (~4.8MB) before first paint; verify index.html modulepreloads after chunk changes.
+- [Drizzle undefined select field](drizzle-undefined-select-field.md) — selecting a non-existent schema prop throws "Cannot convert undefined or null to object"; branch_employees has status, not isActive.
 - [Event POS shift reconciliation](event-pos-shift-reconciliation.md) — full refund = exclude sale from stats, partial = pos_refunds row; close stats via tx; sale insert re-locks shift.
