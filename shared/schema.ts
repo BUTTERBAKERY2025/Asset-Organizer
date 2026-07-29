@@ -1082,6 +1082,7 @@ export const SYSTEM_MODULES = [
   "hr_warnings",       // الإنذارات والمخالفات الإدارية
   "hr_eos",            // حسابات نهاية الخدمة
   "hr_advances",       // السلف والقروض على الموظفين
+  "hr_evaluations",    // تقييم الأداء الدوري للموظفين
   "salary_closing",    // إغلاق الرواتب الشهرية (صلاحية منفصلة لاعتماد الإغلاق وتصدير تقريره)
   
   // المالية
@@ -1282,6 +1283,7 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   hr_leaves: "طلبات الإجازات",
   hr_warnings: "الإنذارات والمخالفات",
   hr_eos: "نهاية الخدمة",
+  hr_evaluations: "تقييم الأداء",
   hr_advances: "السلف والقروض",
   salary_closing: "إغلاق الرواتب الشهرية",
   
@@ -1492,6 +1494,7 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
       "hr_warnings",
       "hr_eos",
       "hr_advances",
+      "hr_evaluations",
       "salary_closing",
     ],
   },
@@ -12272,6 +12275,76 @@ export const WARNING_STATUS_LABELS: Record<string, string> = {
   cancelled: "ملغي",
   expired: "منتهي",
 };
+
+// 3.5) تقييم الأداء الدوري للموظفين
+export const employeeEvaluations = pgTable("employee_evaluations", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  periodType: text("period_type").notNull().default("quarterly"), // quarterly | semi_annual | annual | probation
+  periodStart: text("period_start").notNull(), // YYYY-MM-DD
+  periodEnd: text("period_end").notNull(),     // YYYY-MM-DD
+  // معايير التقييم: [{ key, label, weight (0-100), score (1-5), comment? }]
+  criteria: jsonb("criteria").notNull(),
+  overallScore: real("overall_score").default(0).notNull(), // محسوبة على الخادم (1-5 موزونة)
+  strengths: text("strengths"),
+  improvements: text("improvements"),
+  goals: text("goals"),
+  notes: text("notes"),
+  status: text("status").notNull().default("draft"), // draft | submitted | approved
+  evaluatorId: varchar("evaluator_id").references(() => users.id),
+  evaluatorName: text("evaluator_name"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedByName: text("approved_by_name"),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_employee_evaluations_employee").on(table.branchEmployeeId),
+  index("idx_employee_evaluations_branch").on(table.branchId),
+  index("idx_employee_evaluations_status").on(table.status),
+  // منع تقييمين لنفس الموظف بنفس النوع ونفس بداية الفترة
+  uniqueIndex("uq_employee_evaluations_period").on(table.branchEmployeeId, table.periodType, table.periodStart),
+]);
+
+export const evaluationCriterionSchema = z.object({
+  key: z.string().min(1),
+  label: z.string().min(1),
+  weight: z.number().min(0).max(100),
+  score: z.number().min(1).max(5),
+  comment: z.string().optional(),
+});
+
+// ملاحظة: نحجب الحقول التي يتحكم بها الخادم (الحالة/الاعتماد/الدرجة) حتى لا تتسرب من العميل
+export const insertEmployeeEvaluationSchema = createInsertSchema(employeeEvaluations, {
+  periodType: z.enum(["quarterly", "semi_annual", "annual", "probation"]),
+  periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  criteria: z.array(evaluationCriterionSchema).min(1),
+}).omit({
+  id: true, createdAt: true, updatedAt: true,
+  overallScore: true, status: true,
+  evaluatorId: true, evaluatorName: true,
+  approvedBy: true, approvedByName: true, approvedAt: true,
+});
+
+export type EmployeeEvaluation = typeof employeeEvaluations.$inferSelect;
+export type InsertEmployeeEvaluation = z.infer<typeof insertEmployeeEvaluationSchema>;
+
+export const EVALUATION_PERIOD_LABELS: Record<string, string> = {
+  quarterly: "ربع سنوي",
+  semi_annual: "نصف سنوي",
+  annual: "سنوي",
+  probation: "فترة تجربة",
+};
+
+export const DEFAULT_EVALUATION_CRITERIA: { key: string; label: string; weight: number }[] = [
+  { key: "work_quality", label: "جودة العمل وإتقانه", weight: 25 },
+  { key: "attendance", label: "الالتزام بالحضور والمواعيد", weight: 20 },
+  { key: "customer_service", label: "التعامل مع العملاء والزملاء", weight: 20 },
+  { key: "teamwork", label: "العمل الجماعي والتعاون", weight: 15 },
+  { key: "compliance", label: "الالتزام بالتعليمات والسياسات", weight: 20 },
+];
 
 // 4) حسابات نهاية الخدمة (EOS)
 export const eosCalculations = pgTable("eos_calculations", {

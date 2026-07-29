@@ -285,6 +285,14 @@ export default function MyPortalPage() {
     enabled: !!hasEmployee && showSalary,
   });
 
+  // قسائم الرواتب المعتمدة (الأشهر المُقفلة)
+  const { data: payslips = [] } = useQuery<any[]>({
+    queryKey: ["/api/my/payslips"],
+    queryFn: async () => (await apiRequest("GET", "/api/my/payslips")).json(),
+    enabled: !!hasEmployee && showSalary,
+  });
+  const [openPayslip, setOpenPayslip] = useState<string | null>(null);
+
   // ---- تسجيل الحضور الذاتي / self check-in ----
   const allowSelfCheckin = !!portalConfig?.allowSelfCheckin;
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1201,6 +1209,46 @@ export default function MyPortalPage() {
                           <div key={d.id} className="flex justify-between text-sm" data-testid={`row-deduction-${d.id}`}>
                             <span className="text-muted-foreground">{d.description || d.type}</span>
                             <span className="tabular-nums text-destructive">-{fmtMoney(d.amount)}</span>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* قسائم الرواتب المعتمدة — من لقطات الإقفال الشهري */}
+                  {payslips.length > 0 && (
+                    <Card data-testid="card-payslips">
+                      <CardContent className="p-4 space-y-2">
+                        <div className="font-semibold text-sm mb-2">قسائم الرواتب المعتمدة</div>
+                        {payslips.map((p: any) => (
+                          <div key={p.month} className="border rounded-lg" data-testid={`row-payslip-${p.month}`}>
+                            <button
+                              type="button"
+                              className="w-full flex items-center justify-between p-3 text-sm"
+                              onClick={() => setOpenPayslip(openPayslip === p.month ? null : p.month)}
+                              data-testid={`button-payslip-${p.month}`}
+                            >
+                              <span className="font-medium">{p.month}</span>
+                              <span className="tabular-nums font-bold text-primary">{fmtMoney(p.netSalary)} {currency}</span>
+                            </button>
+                            {openPayslip === p.month && (
+                              <div className="px-3 pb-3 space-y-1.5 text-sm border-t pt-2">
+                                <div className="flex justify-between"><span className="text-muted-foreground">أيام الحضور</span><span className="tabular-nums">{p.presentDays}</span></div>
+                                {p.paidLeaveDays > 0 && <div className="flex justify-between"><span className="text-muted-foreground">إجازة مدفوعة</span><span className="tabular-nums">{p.paidLeaveDays}</span></div>}
+                                {p.absentDays > 0 && <div className="flex justify-between"><span className="text-muted-foreground">أيام الغياب</span><span className="tabular-nums text-destructive">{p.absentDays}</span></div>}
+                                <div className="flex justify-between"><span className="text-muted-foreground">الراتب الأساسي</span><span className="tabular-nums">{fmtMoney(p.baseSalary)}</span></div>
+                                <div className="flex justify-between"><span className="text-muted-foreground">البدلات</span><span className="tabular-nums">{fmtMoney(p.allowances)}</span></div>
+                                <div className="flex justify-between"><span className="text-muted-foreground">الإجمالي</span><span className="tabular-nums">{fmtMoney(p.grossSalary)}</span></div>
+                                {p.absenceDeduction > 0 && <div className="flex justify-between text-destructive"><span>خصم الغياب</span><span className="tabular-nums">-{fmtMoney(p.absenceDeduction)}</span></div>}
+                                {p.sickLeaveDeduction > 0 && <div className="flex justify-between text-destructive"><span>خصم إجازة مرضية</span><span className="tabular-nums">-{fmtMoney(p.sickLeaveDeduction)}</span></div>}
+                                {p.socialInsurance > 0 && <div className="flex justify-between text-destructive"><span>التأمينات الاجتماعية</span><span className="tabular-nums">-{fmtMoney(p.socialInsurance)}</span></div>}
+                                {p.manualDeductionsTotal > 0 && <div className="flex justify-between text-destructive"><span>خصومات أخرى</span><span className="tabular-nums">-{fmtMoney(p.manualDeductionsTotal)}</span></div>}
+                                {Array.isArray(p.manualDeductions) && p.manualDeductions.map((d: any, i: number) => (
+                                  <div key={i} className="flex justify-between text-xs text-muted-foreground ps-3"><span>{d.description || d.type}</span><span className="tabular-nums">-{fmtMoney(d.amount)}</span></div>
+                                ))}
+                                <div className="flex justify-between border-t pt-1.5 font-bold"><span>الصافي</span><span className="tabular-nums text-primary">{fmtMoney(p.netSalary)} {currency}</span></div>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </CardContent>

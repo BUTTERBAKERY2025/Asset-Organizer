@@ -43,6 +43,9 @@ import {
   insertEmployeeWarningSchema,
   insertEosCalculationSchema,
   insertSalaryDeductionSchema,
+  employeeEvaluations,
+  insertEmployeeEvaluationSchema,
+  evaluationCriterionSchema,
 } from "@shared/schema";
 import { z } from "zod";
 import { notifyEmployeeOfDecision } from "./notify-helpers";
@@ -4590,6 +4593,179 @@ export function registerHrRoutes(app: Express) {
       const msg = e?.message || "فشل توليد الرؤى بالذكاء الاصطناعي";
       const status = e?.status === 401 || e?.status === 403 ? 503 : 500;
       res.status(status).json({ error: "AI_FAILED", message: msg });
+    }
+  });
+
+  // ========================================================================
+  // تقييم الأداء الدوري  /api/hr/evaluations
+  // ========================================================================
+
+  // الدرجة الموزونة (1-5) تُحسب على الخادم دائماً — لا نثق بقيمة من العميل
+  function computeOverallScore(criteria: { weight: number; score: number }[]): number {
+    const totalWeight = criteria.reduce((s, c) => s + (c.weight || 0), 0);
+    if (totalWeight <= 0) return 0;
+    const weighted = criteria.reduce((s, c) => s + c.score * c.weight, 0);
+    return Math.round((weighted / totalWeight) * 100) / 100;
+  }
+
+  app.get("/api/hr/evaluations", isAuthenticated, requirePermission("hr_evaluations"), async (req, res) => {
+    try {
+      const { branchIds } = getBranchScope(req);
+      const conds: any[] = [];
+      const scopeCond = applyBranchScope(employeeEvaluations, branchIds);
+      if (scopeCond !== undefined) conds.push(scopeCond);
+      const employeeId = req.query.employeeId ? parseInt(req.query.employeeId as string, 10) : null;
+      if (employeeId) conds.push(eq(employeeEvaluations.branchEmployeeId, employeeId));
+      if (req.query.status) conds.push(eq(employeeEvaluations.status, req.query.status as string));
+      if (req.query.branchId) conds.push(eq(employeeEvaluations.branchId, req.query.branchId as string));
+      if (req.query.periodType) conds.push(eq(employeeEvaluations.periodType, req.query.periodType as string));
+
+      const rows = await db
+        .select({
+          evaluation: employeeEvaluations,
+          employeeName: branchEmployees.employeeName,
+          employeeJob: branchEmployees.jobTitle,
+          branchName: branches.name,
+        })
+        .from(employeeEvaluations)
+        .leftJoin(branchEmployees, eq(employeeEvaluations.branchEmployeeId, branchEmployees.id))
+        .leftJoin(branches, eq(employeeEvaluations.branchId, branches.id))
+        .where(conds.length ? and(...conds) : undefined)
+        .orderBy(desc(employeeEvaluations.createdAt))
+        .limit(1000);
+      res.json(rows.map(r => ({ ...r.evaluation, employeeName: r.employeeName, employeeJob: r.employeeJob, branchName: r.branchName })));
+    } catch (e: any) {
+      console.error("[hr/evaluations] list error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/hr/evaluations", isAuthenticated, requirePermission("hr_evaluations", "create"), async (req, res) => {
+    try {
+      const parsed = insertEmployeeEvaluationSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten() });
+      const data = parsed.data;
+      if (data.periodEnd < data.periodStart) return res.status(400).json({ error: "نهاية الفترة قبل بدايتها" });
+
+      // الموظف يجب أن يتبع الفرع المحدد، والفرع ضمن نطاق صلاحية المستخدم (للكتابة لا رفع نطاق)
+      const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, data.branchEmployeeId)).limit(1);
+      if (!emp) return res.status(404).json({ error: "الموظف غير موجود" });
+      if (emp.branchId !== data.branchId) return res.status(400).json({ error: "الموظف لا يتبع هذا الفرع" });
+      const f = getEffectiveBranchFilter(req);
+      if (f.branchIds !== null && !f.branchIds.includes(data.branchId)) {
+        return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
+      }
+
+      const user = (req as any).currentUser;
+      const overallScore = computeOverallScore(data.criteria as any);
+      const [row] = await db.insert(employeeEvaluations).values({
+        ...data,
+        overallScore,
+        status: "draft",
+        evaluatorId: user?.id || null,
+        evaluatorName: user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username : null,
+      } as any).returning();
+      res.status(201).json(row);
+    } catch (e: any) {
+      if (e?.cause?.constraint === "uq_employee_evaluations_period" || e?.message?.includes("uq_employee_evaluations_period")) {
+        return res.status(409).json({ error: "يوجد تقييم لهذا الموظف بنفس النوع ونفس بداية الفترة" });
+      }
+      console.error("[hr/evaluations] create error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.patch("/api/hr/evaluations/:id", isAuthenticated, requirePermission("hr_evaluations", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const [existing] = await db.select().from(employeeEvaluations).where(eq(employeeEvaluations.id, id)).limit(1);
+      if (!existing) return res.status(404).json({ error: "التقييم غير موجود" });
+      if (existing.status === "approved") return res.status(423).json({ error: "التقييم معتمد ولا يمكن تعديله" });
+      const f = getEffectiveBranchFilter(req);
+      if (f.branchIds !== null && !f.branchIds.includes(existing.branchId)) {
+        return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
+      }
+
+      // نسمح بتعديل حقول المحتوى فقط — لا فرع/موظف/حالة عبر هذا المسار
+      const patchSchema = z.object({
+        criteria: z.array(evaluationCriterionSchema).min(1).optional(),
+        strengths: z.string().nullable().optional(),
+        improvements: z.string().nullable().optional(),
+        goals: z.string().nullable().optional(),
+        notes: z.string().nullable().optional(),
+        periodType: z.enum(["quarterly", "semi_annual", "annual", "probation"]).optional(),
+        periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        submit: z.boolean().optional(), // تحويل من مسودة إلى مُرسل
+      });
+      const parsed = patchSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "بيانات غير صالحة", details: parsed.error.flatten() });
+      const p = parsed.data;
+      const ps = p.periodStart ?? existing.periodStart;
+      const pe = p.periodEnd ?? existing.periodEnd;
+      if (pe < ps) return res.status(400).json({ error: "نهاية الفترة قبل بدايتها" });
+
+      const set: any = { updatedAt: new Date() };
+      for (const k of ["criteria", "strengths", "improvements", "goals", "notes", "periodType", "periodStart", "periodEnd"] as const) {
+        if (p[k] !== undefined) set[k] = p[k];
+      }
+      if (p.criteria) set.overallScore = computeOverallScore(p.criteria as any);
+      if (p.submit) set.status = "submitted";
+      const [row] = await db.update(employeeEvaluations).set(set).where(eq(employeeEvaluations.id, id)).returning();
+      res.json(row);
+    } catch (e: any) {
+      if (e?.cause?.constraint === "uq_employee_evaluations_period" || e?.message?.includes("uq_employee_evaluations_period")) {
+        return res.status(409).json({ error: "يوجد تقييم لهذا الموظف بنفس النوع ونفس بداية الفترة" });
+      }
+      console.error("[hr/evaluations] update error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // الاعتماد النهائي — action "approve" (لا تمنحه HR_SPECIALIST_PERMISSIONS)
+  app.post("/api/hr/evaluations/:id/approve", isAuthenticated, requirePermission("hr_evaluations", "approve"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const user = (req as any).currentUser;
+      const [existing] = await db.select().from(employeeEvaluations).where(eq(employeeEvaluations.id, id)).limit(1);
+      if (!existing) return res.status(404).json({ error: "التقييم غير موجود" });
+      const f = getEffectiveBranchFilter(req);
+      if (f.branchIds !== null && !f.branchIds.includes(existing.branchId)) {
+        return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
+      }
+      const [row] = await db.update(employeeEvaluations)
+        .set({
+          status: "approved",
+          approvedBy: user?.id || null,
+          approvedByName: user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username : null,
+          approvedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(employeeEvaluations.id, id), ne(employeeEvaluations.status, "approved")))
+        .returning();
+      if (!row) return res.status(409).json({ error: "التقييم معتمد مسبقاً" });
+      res.json(row);
+    } catch (e: any) {
+      console.error("[hr/evaluations] approve error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete("/api/hr/evaluations/:id", isAuthenticated, requirePermission("hr_evaluations", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const [existing] = await db.select().from(employeeEvaluations).where(eq(employeeEvaluations.id, id)).limit(1);
+      if (!existing) return res.status(404).json({ error: "التقييم غير موجود" });
+      if (existing.status === "approved") return res.status(423).json({ error: "التقييم معتمد ولا يمكن حذفه" });
+      const f = getEffectiveBranchFilter(req);
+      if (f.branchIds !== null && !f.branchIds.includes(existing.branchId)) {
+        return res.status(403).json({ error: "لا تملك صلاحية على هذا الفرع" });
+      }
+      await db.delete(employeeEvaluations).where(eq(employeeEvaluations.id, id));
+      res.json({ ok: true });
+    } catch (e: any) {
+      console.error("[hr/evaluations] delete error:", e);
+      res.status(500).json({ error: e.message });
     }
   });
 }

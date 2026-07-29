@@ -18,6 +18,8 @@ import {
   notifications,
   users,
   employmentApplications,
+  salaryClosures,
+  salaryClosureLines,
   PORTAL_SETTING_KEYS,
 } from "@shared/schema";
 import { z } from "zod";
@@ -988,6 +990,44 @@ export function registerSelfServiceRoutes(app: Express) {
       });
     } catch (e: any) {
       console.error("[my/salary] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // قسائم رواتبي المعتمدة (من لقطات إقفال الرواتب المغلقة) — محجوبة خلف إعداد show_salary
+  app.get("/api/my/payslips", isAuthenticated, async (req, res) => {
+    try {
+      if (!(await portalFlag(PORTAL_SETTING_KEYS.SHOW_SALARY))) return res.status(403).json({ error: "عرض الراتب غير مفعّل", disabled: true });
+      const emp = await getMyEmployee(req);
+      if (!emp) return res.json([]);
+      // فقط الإقفالات المغلقة (closed) — المعاد فتحها ليست قسيمة معتمدة
+      const rows = await db
+        .select({ line: salaryClosureLines, month: salaryClosures.month, closedAt: salaryClosures.closedAt, closureStatus: salaryClosures.status })
+        .from(salaryClosureLines)
+        .innerJoin(salaryClosures, eq(salaryClosureLines.closureId, salaryClosures.id))
+        .where(and(eq(salaryClosureLines.branchEmployeeId, emp.id), eq(salaryClosures.status, "closed")))
+        .orderBy(desc(salaryClosures.month))
+        .limit(24);
+      res.json(rows.map(r => ({
+        month: r.month,
+        closedAt: r.closedAt,
+        presentDays: r.line.presentDays,
+        absentDays: r.line.absentDays,
+        offDays: r.line.offDays,
+        paidLeaveDays: r.line.paidLeaveDays,
+        unpaidLeaveDays: r.line.unpaidLeaveDays,
+        baseSalary: r.line.baseSalary,
+        allowances: r.line.allowances,
+        grossSalary: r.line.grossSalary,
+        absenceDeduction: r.line.absenceDeduction,
+        sickLeaveDeduction: r.line.sickLeaveDeduction || 0,
+        socialInsurance: r.line.socialInsurance,
+        manualDeductionsTotal: r.line.manualDeductionsTotal,
+        manualDeductions: r.line.manualDeductions || [],
+        netSalary: r.line.netSalary,
+      })));
+    } catch (e: any) {
+      console.error("[my/payslips] error:", e);
       res.status(500).json({ error: e.message });
     }
   });

@@ -1651,6 +1651,8 @@ export default function HRHubPage() {
           <StatTile testId="tile-advances"        value={advanceStats?.total || 0} label="سلف مسجّلة"             icon={TrendingDown}   tone="orange"   href="/hr/advances"
             delta={comparisons?.advances?.deltaPct ?? null} deltaIsPercent deltaInverted deltaLabel="مقارنة بالشهر السابق" />
           <StatTile testId="tile-eos"             value={eosStats.total}         label="حسابات نهاية الخدمة"    icon={FileText}       tone="lime"     href="/hr/eos" />
+          <StatTile testId="tile-evaluations"     value="فتح"                    label="تقييم الأداء الدوري"    icon={ClipboardCheck} tone="violet"   href="/hr/evaluations" />
+          <StatTile testId="tile-cashier-deficits" value="فتح"                   label="عجوزات الكاشير"         icon={TrendingDown}   tone="orange"   href="/hr-cashier-deficits" />
           <StatTile testId="tile-branches"        value={branches.length}        label="إجمالي الفروع"          icon={Building}       tone="teal"     href="/branches" />
         </div>
 

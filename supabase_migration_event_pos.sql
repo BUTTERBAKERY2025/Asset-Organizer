@@ -105,3 +105,31 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_pos_refunds_idempotency ON pos_refunds (s
 ALTER TABLE employee_warnings ADD COLUMN IF NOT EXISTS reminder_count integer NOT NULL DEFAULT 0;
 ALTER TABLE employee_warnings ADD COLUMN IF NOT EXISTS last_reminder_at timestamp;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_queue_warning_reminder ON notification_queue (related_module, related_entity_id, channel) WHERE related_module = 'warning_signature_reminder';
+
+-- ===== 2026-07-29: performance evaluations (task #28) =====
+CREATE TABLE IF NOT EXISTS employee_evaluations (
+  id serial PRIMARY KEY,
+  branch_employee_id integer NOT NULL REFERENCES branch_employees(id) ON DELETE CASCADE,
+  branch_id varchar NOT NULL REFERENCES branches(id),
+  period_type text NOT NULL DEFAULT 'quarterly',
+  period_start text NOT NULL,
+  period_end text NOT NULL,
+  criteria jsonb NOT NULL,
+  overall_score real NOT NULL DEFAULT 0,
+  strengths text,
+  improvements text,
+  goals text,
+  notes text,
+  status text NOT NULL DEFAULT 'draft',
+  evaluator_id varchar REFERENCES users(id),
+  evaluator_name text,
+  approved_by varchar REFERENCES users(id),
+  approved_by_name text,
+  approved_at timestamp,
+  created_at timestamp NOT NULL DEFAULT now(),
+  updated_at timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_employee_evaluations_employee ON employee_evaluations (branch_employee_id);
+CREATE INDEX IF NOT EXISTS idx_employee_evaluations_branch ON employee_evaluations (branch_id);
+CREATE INDEX IF NOT EXISTS idx_employee_evaluations_status ON employee_evaluations (status);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_employee_evaluations_period ON employee_evaluations (branch_employee_id, period_type, period_start);

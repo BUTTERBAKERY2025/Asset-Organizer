@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { and, eq, lte, lt, gte, sql, desc } from "drizzle-orm";
-import { notificationQueue, reportSchedules, reportRuns, systemNotifications, notificationAutomations, branchEmployees, leaveRequests, notifications, employeeWarnings, WARNING_LEVEL_LABELS } from "@shared/schema";
+import { notificationQueue, reportSchedules, reportRuns, systemNotifications, notificationAutomations, branchEmployees, leaveRequests, notifications, employeeWarnings, employeeDocuments, WARNING_LEVEL_LABELS } from "@shared/schema";
 import { sendWhatsAppMessage, sendSMS, isTwilioConfigured } from "./twilio-service";
 import { markOverdueAbsences, addDaysIso, runLeaveCarryover } from "./leave-helpers";
 import { storage } from "./storage";
@@ -568,6 +568,133 @@ export async function processWarningSignatureReminders(force = false): Promise<{
   return { queued, skipped };
 }
 
+// ============================================================================
+// تنبيهات انتهاء وثائق الموظفين (إقامات/شهادات صحية/عقود/رخص...) — مرة يومياً.
+// ينشئ إشعار جرس تجميعياً لكل فرع لمسؤولي HR والأدمن، ويحدّث حالة الوثائق
+// (expiring_soon/expired). الحماية من التكرار عبر بوابة تاريخ بالذاكرة + فحص
+// إشعار اليوم نفسه في قاعدة البيانات (يصمد أمام إعادة تشغيل السيرفر).
+// ============================================================================
+const DOC_EXPIRY_WINDOW_DAYS = 30;
+const DOC_TYPE_LABELS: Record<string, string> = {
+  id_card: "هوية", residence: "إقامة", passport: "جواز سفر", driving_license: "رخصة قيادة",
+  health_certificate: "شهادة صحية", work_permit: "رخصة عمل", contract: "عقد عمل", other: "وثيقة",
+};
+let lastDocExpiryAlertDate: string | null = null;
+
+export async function processDocumentExpiryAlerts(force = false): Promise<{ notified: number }> {
+  const todayRiyadh = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
+  if (!force && lastDocExpiryAlertDate === todayRiyadh) return { notified: 0 };
+
+  const soonIso = addDaysIso(todayRiyadh, DOC_EXPIRY_WINDOW_DAYS);
+
+  // حدّث حالات الوثائق أولاً حتى تتطابق الصفحات مع التنبيهات
+  await db.update(employeeDocuments)
+    .set({ status: "expired", updatedAt: new Date() })
+    .where(and(
+      sql`${employeeDocuments.status} IN ('active','expiring_soon')`,
+      sql`${employeeDocuments.expiryDate} IS NOT NULL AND ${employeeDocuments.expiryDate} < ${todayRiyadh}`,
+    ));
+  await db.update(employeeDocuments)
+    .set({ status: "expiring_soon", updatedAt: new Date() })
+    .where(and(
+      eq(employeeDocuments.status, "active"),
+      sql`${employeeDocuments.expiryDate} IS NOT NULL AND ${employeeDocuments.expiryDate} >= ${todayRiyadh} AND ${employeeDocuments.expiryDate} <= ${soonIso}`,
+    ));
+
+  // وثائق الموظفين النشطين المنتهية أو التي ستنتهي خلال النافذة (سجلات الوثائق)
+  const docRows = await db
+    .select({
+      docType: employeeDocuments.documentType,
+      expiryDate: employeeDocuments.expiryDate,
+      branchId: branchEmployees.branchId,
+      employeeName: branchEmployees.employeeName,
+    })
+    .from(employeeDocuments)
+    .innerJoin(branchEmployees, eq(employeeDocuments.branchEmployeeId, branchEmployees.id))
+    .where(and(
+      eq(branchEmployees.status, "active"),
+      sql`${employeeDocuments.status} IN ('expired','expiring_soon')`,
+      sql`${employeeDocuments.expiryDate} IS NOT NULL AND ${employeeDocuments.expiryDate} <= ${soonIso}`,
+    ));
+
+  // حقول الإقامة/الشهادة الصحية على ملف الموظف مباشرة (قد لا يكون لها سجل وثيقة)
+  const empRows = await db
+    .select({
+      branchId: branchEmployees.branchId,
+      employeeName: branchEmployees.employeeName,
+      iqamaExpiry: branchEmployees.iqamaExpiry,
+      healthCertificateExpiry: branchEmployees.healthCertificateExpiry,
+    })
+    .from(branchEmployees)
+    .where(and(
+      eq(branchEmployees.status, "active"),
+      sql`(
+        (${branchEmployees.iqamaExpiry} IS NOT NULL AND ${branchEmployees.iqamaExpiry} <> '' AND ${branchEmployees.iqamaExpiry} <= ${soonIso})
+        OR (${branchEmployees.healthCertificateExpiry} IS NOT NULL AND ${branchEmployees.healthCertificateExpiry} <> '' AND ${branchEmployees.healthCertificateExpiry} <= ${soonIso})
+      )`,
+    ));
+
+  // اجمع البنود لكل فرع مع إزالة التكرار (وثيقة مسجلة + حقل الملف لنفس الموظف)
+  type Item = { name: string; label: string; expiry: string };
+  const byBranch = new Map<string, Map<string, Item>>();
+  const push = (branchId: string | null, name: string | null, label: string, expiry: string | null) => {
+    if (!branchId || !name || !expiry) return;
+    const m = byBranch.get(branchId) || new Map<string, Item>();
+    const key = `${name}|${label}`;
+    const ex = m.get(key);
+    if (!ex || expiry < ex.expiry) m.set(key, { name, label, expiry });
+    byBranch.set(branchId, m);
+  };
+  for (const d of docRows) push(d.branchId, d.employeeName, DOC_TYPE_LABELS[d.docType] || "وثيقة", d.expiryDate);
+  for (const e of empRows) {
+    if (e.iqamaExpiry && e.iqamaExpiry <= soonIso) push(e.branchId, e.employeeName, "إقامة", e.iqamaExpiry);
+    if (e.healthCertificateExpiry && e.healthCertificateExpiry <= soonIso) push(e.branchId, e.employeeName, "شهادة صحية", e.healthCertificateExpiry);
+  }
+
+  let notified = 0;
+  for (const [branchId, items] of Array.from(byBranch.entries())) {
+    try {
+      // منع التكرار عبر إعادة التشغيل: هل أُرسل إشعار اليوم لهذا الفرع؟
+      const [already] = await db.select({ id: systemNotifications.id }).from(systemNotifications)
+        .where(and(
+          eq(systemNotifications.autoSource, "document_expiry_alert"),
+          sql`${systemNotifications.createdAt} >= ${todayRiyadh + "T00:00:00+03:00"}`,
+          sql`${systemNotifications.targetBranchIds} @> ARRAY[${branchId}]::text[]`,
+        )).limit(1);
+      if (already) continue;
+
+      const sorted = Array.from(items.values()).sort((a, b) => a.expiry.localeCompare(b.expiry));
+      const expired = sorted.filter(i => i.expiry < todayRiyadh);
+      const expiring = sorted.filter(i => i.expiry >= todayRiyadh);
+      const fmtLine = (i: Item) => `• ${i.name} — ${i.label} (${i.expiry < todayRiyadh ? "منتهية منذ" : "تنتهي في"} ${i.expiry})`;
+      const parts: string[] = [];
+      if (expired.length) parts.push(`⛔ وثائق منتهية (${expired.length}):\n${expired.slice(0, 15).map(fmtLine).join("\n")}${expired.length > 15 ? `\n… و${expired.length - 15} أخرى` : ""}`);
+      if (expiring.length) parts.push(`⚠️ ستنتهي خلال ${DOC_EXPIRY_WINDOW_DAYS} يوماً (${expiring.length}):\n${expiring.slice(0, 15).map(fmtLine).join("\n")}${expiring.length > 15 ? `\n… و${expiring.length - 15} أخرى` : ""}`);
+
+      await db.insert(systemNotifications).values({
+        title: `📄 متابعة وثائق الموظفين — ${expired.length + expiring.length} وثيقة تحتاج إجراء`,
+        content: `${parts.join("\n\n")}\n\nيمكن المتابعة والتجديد من صفحة وثائق الموظفين.`,
+        messageType: "announcement",
+        displayStyle: "toast",
+        priority: expired.length > 0 ? 4 : 3,
+        isActive: true,
+        targetAllBranches: false,
+        targetBranchIds: [branchId],
+        targetRoleIds: ["hr_manager", "admin"],
+        autoGenerated: true,
+        autoSource: "document_expiry_alert",
+      } as any);
+      notified++;
+    } catch (e: any) {
+      console.error(`[scheduler] doc-expiry alert failed for branch ${branchId}:`, e.message);
+    }
+  }
+
+  lastDocExpiryAlertDate = todayRiyadh;
+  if (notified > 0) console.log(`[scheduler] document-expiry alerts: notified ${notified} branches`);
+  return { notified };
+}
+
 async function tick() {
   if (tickRunning) {
     console.log("[scheduler] tick skipped - previous tick still running");
@@ -602,6 +729,11 @@ async function tick() {
       const hRiyadh = Number(new Date().toLocaleString("en-US", { timeZone: "Asia/Riyadh", hour: "2-digit", hour12: false }));
       if (hRiyadh >= 9) await processWarningSignatureReminders(false);
     } catch (e: any) { console.error("[scheduler] processWarningSignatureReminders error:", e.message); }
+    // تنبيهات انتهاء الوثائق (إقامات/شهادات/عقود) — بعد 9 صباحاً بتوقيت الرياض، مرة يومياً.
+    try {
+      const hRiyadh = Number(new Date().toLocaleString("en-US", { timeZone: "Asia/Riyadh", hour: "2-digit", hour12: false }));
+      if (hRiyadh >= 9) await processDocumentExpiryAlerts(false);
+    } catch (e: any) { console.error("[scheduler] processDocumentExpiryAlerts error:", e.message); }
   } finally {
     tickRunning = false;
   }

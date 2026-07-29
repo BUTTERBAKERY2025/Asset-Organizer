@@ -196,6 +196,7 @@ const HRWarningsPage = makeLazy("hr/warnings");
 const HRAdvancesPage = makeLazy("hr/advances");
 const CashierDeficitsPage = makeLazy("hr/cashier-deficits");
 const HREosPage = makeLazy("hr/eos");
+const HREvaluationsPage = makeLazy("hr/evaluations");
 
 function AppLoadingFallback() {
   // Render nothing: the static #initial-loader in index.html stays visible
@@ -339,6 +340,7 @@ const Router = React.memo(function Router() {
       <Route path="/hr/advances">{() => <ModulePage component={HRAdvancesPage} module="hr_advances" />}</Route>
       <Route path="/hr-cashier-deficits">{() => <ModulePage component={CashierDeficitsPage} module="hr_advances" />}</Route>
       <Route path="/hr/eos">{() => <ModulePage component={HREosPage} module="hr_eos" />}</Route>
+      <Route path="/hr/evaluations">{() => <ModulePage component={HREvaluationsPage} module="hr_evaluations" />}</Route>
       <Route path="/branch-employees">{() => <ModulePage component={BranchEmployeesPage} module="branch_employees" />}</Route>
       <Route path="/terminated-employees">{() => <ModulePage component={TerminatedEmployeesPage} module="branch_employees" />}</Route>
       <Route path="/organizational-structure">{() => <ModulePage component={OrganizationalStructurePage} module="organizational_structure" />}</Route>

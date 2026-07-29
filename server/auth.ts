@@ -100,6 +100,7 @@ export const HR_MANAGER_MODULES: ReadonlySet<string> = new Set([
   "hr_warnings",
   "hr_advances",
   "hr_eos",
+  "hr_evaluations",
   "salary_closing",
   // Employees & org
   "branch_employees",
@@ -134,6 +135,8 @@ export const HR_SPECIALIST_PERMISSIONS: Record<string, string[]> = {
   hr_documents: ["view", "create", "edit", "export"],
   hr_warnings: ["view", "create", "edit", "export"],
   hr_advances: ["view", "create", "edit", "export"],
+  // تقييم الأداء — إنشاء وتحرير المسودات، الاعتماد النهائي لمدير HR/الأدمن فقط
+  hr_evaluations: ["view", "create", "edit", "export"],
   // Employees — can add & edit employee records (delete stays admin/HR-manager only)
   branch_employees: ["view", "create", "edit", "export"],
   // Reports — view only
