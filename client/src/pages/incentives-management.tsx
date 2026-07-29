@@ -281,8 +281,8 @@ export default function IncentivesManagement() {
         body: JSON.stringify({
           name: data.name,
           challengeType: data.challengeType,
-          branchId: data.branchId || null,
-          cashierId: data.cashierId || null,
+          branchId: data.branchId && data.branchId !== "all" ? data.branchId : null,
+          cashierId: data.cashierId && data.cashierId !== "all" ? data.cashierId : null,
           targetValue: parseFloat(data.targetValue),
           basePoints: parseInt(data.basePoints),
           bonusPointsPerUnit: parseFloat(data.bonusPointsPerUnit) || 0,
@@ -292,7 +292,10 @@ export default function IncentivesManagement() {
           isActive: true,
         }),
       });
-      if (!res.ok) throw new Error("Failed to create challenge");
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || "Failed to create challenge");
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -301,8 +304,8 @@ export default function IncentivesManagement() {
       setNewChallenge({ name: "", challengeType: "avg_ticket", branchId: "", cashierId: "", targetValue: "", basePoints: "", bonusPointsPerUnit: "0", shiftType: "", validFrom: "", validTo: "" });
       toast({ title: "تم إنشاء التحدي بنجاح" });
     },
-    onError: () => {
-      toast({ title: "خطأ في إنشاء التحدي", variant: "destructive" });
+    onError: (e: any) => {
+      toast({ title: "خطأ في إنشاء التحدي", description: e?.message && e.message !== "Failed to create challenge" ? e.message : undefined, variant: "destructive" });
     },
   });
 

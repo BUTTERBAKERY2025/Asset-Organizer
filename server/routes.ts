@@ -12731,6 +12731,9 @@ export async function registerRoutes(
       if (body.validTo && isNaN(Date.parse(body.validTo))) {
         return res.status(400).json({ error: "تاريخ النهاية غير صالح" });
       }
+      // "all" / "" تعني كل الفروع أو كل الكاشيرات — تُخزَّن كـ NULL وليست معرّفات حقيقية
+      if (body.branchId === 'all' || body.branchId === '') body.branchId = null;
+      if (body.cashierId === 'all' || body.cashierId === '') body.cashierId = null;
       if (user.role !== 'admin' && body.branchId && !(await canAccessBranch(req, body.branchId))) {
         return res.status(403).json({ error: "غير مصرح بإنشاء تحدي لهذا الفرع" });
       }
@@ -12758,6 +12761,8 @@ export async function registerRoutes(
       if (body.basePoints !== undefined && (isNaN(Number(body.basePoints)) || Number(body.basePoints) < 0)) {
         return res.status(400).json({ error: "النقاط الأساسية يجب أن تكون رقماً موجباً" });
       }
+      if (body.branchId === 'all' || body.branchId === '') body.branchId = null;
+      if (body.cashierId === 'all' || body.cashierId === '') body.cashierId = null;
       const existingChallenge = await storage.getDailyChallenge(id);
       if (!existingChallenge) return res.status(404).json({ error: "التحدي غير موجود" });
       if (user.role !== 'admin' && existingChallenge.branchId && !(await canAccessBranch(req, existingChallenge.branchId))) {
