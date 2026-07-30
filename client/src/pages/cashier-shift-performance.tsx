@@ -217,7 +217,9 @@ export default function CashierShiftPerformance() {
       const res = await fetch(`/api/smart-incentives/challenges-as-targets?${params}`);
       if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
-    }
+    },
+    // تحديث لحظي: إعادة الجلب كل 30 ثانية طالما الصفحة ظاهرة
+    refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 30000),
   });
 
   const { data: productSales = [], refetch: refetchProductSales } = useQuery<any[]>({
@@ -268,6 +270,8 @@ export default function CashierShiftPerformance() {
       return res.json();
     },
     staleTime: 30 * 1000,
+    // تحديث لحظي: إعادة الجلب كل 30 ثانية طالما الصفحة ظاهرة
+    refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 30000),
   });
 
   const cashierSales = perfBundle?.cashierSales || [];
@@ -455,7 +459,7 @@ export default function CashierShiftPerformance() {
     challenges: Array<{ id: number; name: string; challengeType: string; targetValue: number; basePoints: number; shiftType: string; validFrom: string; validTo: string | null }>;
     dailyDetails: Array<{
       date: string;
-      challenges: Array<{ name: string; type: string; targetValue: number; actualValue: number; achievementPercent: number; achieved: boolean; basePoints: number; shiftType: string | null }>;
+      challenges: Array<{ name: string; type: string; targetValue: number; actualValue: number; achievementPercent: number; achieved: boolean; live?: boolean; basePoints: number; shiftType: string | null }>;
       ledgerEntries: Array<{ pointsType: string; sourceName: string | null; pointsEarned: number; amountEarned: number; status: string; shiftType: string | null }>;
       totalPoints: number;
       totalAmount: number;
@@ -472,6 +476,8 @@ export default function CashierShiftPerformance() {
       return res.json();
     },
     enabled: !canViewAllCashiers,
+    // تحديث لحظي: إعادة الجلب كل 30 ثانية طالما الصفحة ظاهرة
+    refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 30000),
   });
 
   const createStatementMutation = useMutation({
@@ -2303,6 +2309,11 @@ export default function CashierShiftPerformance() {
                                                 <Badge variant="outline" className="text-[9px] h-4 px-1">
                                                   {ch.type === 'avg_ticket' ? 'متوسط فاتورة' : ch.type === 'customer_count' ? 'عدد العملاء' : 'مبيعات'}
                                                 </Badge>
+                                                {ch.live && (
+                                                  <Badge className="bg-red-50 text-red-600 border-red-200 text-[9px] h-4 px-1 animate-pulse">
+                                                    ● لحظي
+                                                  </Badge>
+                                                )}
                                               </div>
                                               <div className="flex items-center gap-2">
                                                 <span className="text-[10px] text-gray-500">

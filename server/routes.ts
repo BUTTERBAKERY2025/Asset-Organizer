@@ -13660,6 +13660,38 @@ export async function registerRoutes(
       });
       const myJournals = journals.filter(j => j.cashierId === user.id);
       
+      // تقدم لحظي (Task: لحظة بلحظة): مبيعات نقطة البيع الحية لليوم الحالي قبل إقفال اليومية
+      const todayStr = new Date().toISOString().split('T')[0];
+      let liveToday: { totalSales: number; txCount: number; avgTicket: number } | null = null;
+      if (myChallenges.length > 0 && todayStr >= effectiveDateFrom && todayStr <= effectiveDateTo) {
+        try {
+          const salesRes: any = await db.execute(sql`
+            SELECT COALESCE(SUM(total_amount), 0) AS "totalSales", COUNT(*) AS "txCount"
+            FROM pos_sales
+            WHERE cashier_id = ${user.id} AND sale_date = ${todayStr}
+              AND status IN ('completed', 'partially_refunded')
+          `);
+          const refundsRes: any = await db.execute(sql`
+            SELECT COALESCE(SUM(r.total_amount), 0) AS "refundsTotal"
+            FROM pos_refunds r JOIN pos_sales s ON s.id = r.sale_id
+            WHERE s.cashier_id = ${user.id} AND s.sale_date = ${todayStr} AND s.status = 'partially_refunded'
+          `);
+          const sRow: any = (salesRes as any).rows?.[0] || (salesRes as any)[0] || {};
+          const rRow: any = (refundsRes as any).rows?.[0] || (refundsRes as any)[0] || {};
+          const liveTotal = Math.max(0, (Number(sRow.totalSales) || 0) - (Number(rRow.refundsTotal) || 0));
+          const liveTx = Number(sRow.txCount) || 0;
+          if (liveTx > 0) {
+            liveToday = {
+              totalSales: Math.round(liveTotal * 100) / 100,
+              txCount: liveTx,
+              avgTicket: Math.round((liveTotal / liveTx) * 100) / 100,
+            };
+          }
+        } catch (liveErr) {
+          console.error('[my-incentive-summary] live pos stats error (non-blocking):', liveErr);
+        }
+      }
+      
       // Build daily data: combine journal data with ledger and challenges
       // Include all dates in range where challenges are active (even without journals)
       const allDates = new Set<string>();
@@ -13748,6 +13780,21 @@ export async function registerRoutes(
             if (val > actualValue) actualValue = val;
           }
           
+          // اليوم الحالي: استخدام مبيعات نقطة البيع الحية إن كانت أعلى من اليومية (تقدم لحظي)
+          let isLive = false;
+          if (date === todayStr && liveToday) {
+            let liveVal = 0;
+            switch (ch.challengeType) {
+              case 'shift_sales': liveVal = liveToday.totalSales; break;
+              case 'customer_count': liveVal = liveToday.txCount; break;
+              case 'avg_ticket': liveVal = liveToday.avgTicket; break;
+            }
+            if (liveVal > actualValue) {
+              actualValue = liveVal;
+              isLive = true;
+            }
+          }
+          
           const achievementPercent = targetValue > 0 ? Math.min(Math.round((actualValue / targetValue) * 100), 999) : 0;
           const achieved = actualValue >= targetValue;
           
@@ -13758,6 +13805,7 @@ export async function registerRoutes(
             actualValue,
             achievementPercent,
             achieved,
+            live: isLive,
             basePoints: ch.basePoints,
             shiftType: ch.shiftType,
           };
