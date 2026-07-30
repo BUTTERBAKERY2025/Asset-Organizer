@@ -24,7 +24,7 @@ function parseEnabledTabs(): Map<string, string> {
   const block = src.match(/const enabledTabs = \[([\s\S]*?)\]\.filter/);
   expect(block, "لم يتم العثور على مصفوفة enabledTabs").toBeTruthy();
   const map = new Map<string, string>();
-  for (const m of block![1].matchAll(/\{\s*value:\s*"([a-zA-Z]+)"\s*,[^}]*?show:\s*([^,}]+)/g)) {
+  for (const m of block![1].matchAll(/\{\s*value:\s*"([^"]+)"\s*,[^}]*?show:\s*([^,}]+)/g)) {
     map.set(m[1], m[2].trim());
   }
   return map;
@@ -36,17 +36,22 @@ function parseTopTabs(): Map<string, string> {
   expect(listBlock, "لم يتم العثور على TabsList").toBeTruthy();
   const map = new Map<string, string>();
   for (const m of listBlock![0].matchAll(
-    /(?:\{\s*([A-Za-z0-9_]+)\s*&&\s*\(\s*)?<TabsTrigger value="([a-zA-Z]+)"/g,
+    /(?:\{\s*([A-Za-z0-9_]+)\s*&&\s*\(\s*)?<TabsTrigger value="([^"]+)"/g,
   )) {
     map.set(m[2], (m[1] ?? "true").trim());
   }
   return map;
 }
 
-function parseTabsContents(): Set<string> {
-  const set = new Set<string>();
-  for (const m of src.matchAll(/<TabsContent value="([a-zA-Z]+)"/g)) set.add(m[1]);
-  return set;
+/** محتوى التبويبات مع حارس العرض إن وُجد ({cond && (<TabsContent ...) */
+function parseTabsContents(): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const m of src.matchAll(
+    /(?:\{\s*([A-Za-z0-9_]+)\s*&&\s*\(\s*)?<TabsContent value="([^"]+)"/g,
+  )) {
+    map.set(m[2], (m[1] ?? "true").trim());
+  }
+  return map;
 }
 
 describe("تطابق تبويبات البوابة بين الشريط العلوي والسفلي", () => {
@@ -84,5 +89,16 @@ describe("تطابق تبويبات البوابة بين الشريط العل�
   it("كل تبويب له محتوى TabsContent (وإلا فتح صفحة فارغة)", () => {
     const missing = [...enabled.keys()].filter((v) => !contents.has(v));
     expect(missing, `تبويبات بلا محتوى: ${missing.join(", ")}`).toEqual([]);
+  });
+
+  it("حارس عرض TabsContent إما دائم الظهور أو مطابق لشرط التبويب", () => {
+    const mismatches: string[] = [];
+    for (const [value, show] of enabled) {
+      const guard = contents.get(value);
+      if (guard !== undefined && guard !== "true" && guard !== show) {
+        mismatches.push(`${value}: شرط التبويب=(${show}) وحارس المحتوى=(${guard})`);
+      }
+    }
+    expect(mismatches, `حراس محتوى مخالفة لشرط التبويب — قد تفتح صفحة فارغة:\n${mismatches.join("\n")}`).toEqual([]);
   });
 });
