@@ -45,4 +45,5 @@
 - [Render lockfile firewall URLs](render-lockfile-firewall-urls.md) — any npm install here writes package-firewall.replit.local URLs into package-lock; sed them to registry.npmjs.org before push or Render build fails.
 - [Vite chunk helper pitfall](vite-chunk-helper-pitfall.md) — helper modules must be routed to eager vendor-react in manualChunks or entry force-loads vendor-print/xlsx (~4.8MB) before first paint; verify index.html modulepreloads after chunk changes.
 - [Drizzle undefined select field](drizzle-undefined-select-field.md) — selecting a non-existent schema prop throws "Cannot convert undefined or null to object"; branch_employees has status, not isActive.
+- [Journal attachments DB weight](journal-attachments-weight.md) — file_data base64 ≈15GB of prod DB; never select it in lists, lazy-stream via legacy-data endpoint; migration route doesn't null blobs.
 - [Event POS shift reconciliation](event-pos-shift-reconciliation.md) — full refund = exclude sale from stats, partial = pos_refunds row; close stats via tx; sale insert re-locks shift.
