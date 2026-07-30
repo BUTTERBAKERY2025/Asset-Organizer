@@ -223,6 +223,24 @@ export function registerSelfServiceRoutes(app: Express) {
     }
   });
 
+  // رصيد إجازتي السنوية — المستحق والمستخدم والمتبقي للسنة الحالية
+  app.get("/api/my/leave-balance", isAuthenticated, async (req, res) => {
+    try {
+      const emp = await getMyEmployee(req);
+      if (!emp) return res.json(null);
+      const { getLeaveBalanceSummary } = await import("./leave-helpers");
+      const yearParam = parseInt(String(req.query.year ?? ""), 10);
+      const year = Number.isFinite(yearParam) && yearParam >= 2000 && yearParam <= 2100
+        ? yearParam
+        : parseInt(saudiDate().slice(0, 4), 10);
+      const bal = await getLeaveBalanceSummary(emp.id, year, "annual", emp.hireDate);
+      res.json(bal);
+    } catch (e: any) {
+      console.error("[my/leave-balance] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post("/api/my/leaves", isAuthenticated, async (req, res) => {
     try {
       const emp = await getMyEmployee(req);

@@ -218,6 +218,11 @@
     "deductionsTitle": "خصومات شهر"
   },
   "leaves": {
+    "balanceTitle": "رصيد إجازتي السنوية",
+    "balanceEntitled": "المستحق",
+    "balanceUsed": "المستخدم",
+    "balanceRemaining": "المتبقي",
+    "balanceYear": "لسنة",
     "new": "طلب إجازة جديد",
     "empty": "لا توجد طلبات إجازة بعد",
     "from": "من",

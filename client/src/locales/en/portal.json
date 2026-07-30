@@ -218,6 +218,11 @@
     "deductionsTitle": "Deductions for"
   },
   "leaves": {
+    "balanceTitle": "My annual leave balance",
+    "balanceEntitled": "Entitled",
+    "balanceUsed": "Used",
+    "balanceRemaining": "Remaining",
+    "balanceYear": "for",
     "new": "New leave request",
     "empty": "No leave requests yet",
     "from": "From",

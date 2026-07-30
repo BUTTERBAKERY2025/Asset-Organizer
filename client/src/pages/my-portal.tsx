@@ -166,6 +166,11 @@ export default function MyPortalPage() {
     queryFn: async () => (await apiRequest("GET", "/api/my/leaves")).json(),
     enabled: !!hasEmployee,
   });
+  const { data: leaveBalance } = useQuery<any>({
+    queryKey: ["/api/my/leave-balance"],
+    queryFn: async () => (await apiRequest("GET", "/api/my/leave-balance")).json(),
+    enabled: !!hasEmployee,
+  });
 
   // تصفيات الإجازات (للتوقيع والإقرار بالاستلام)
   const { data: mySettlements = [] } = useQuery<any[]>({
@@ -1416,6 +1421,37 @@ export default function MyPortalPage() {
 
               {/* الإجازات / leaves */}
               <TabsContent value="leaves" className="space-y-3">
+                {/* رصيد الإجازة السنوية */}
+                {leaveBalance && (
+                  <Card data-testid="card-leave-balance">
+                    <CardContent className="p-4">
+                      <div className="font-semibold text-sm flex items-center gap-1 mb-3">
+                        <CalendarDays className="h-4 w-4 text-primary" />
+                        {t("leaves.balanceTitle")} <span className="text-muted-foreground font-normal">({t("leaves.balanceYear")} {leaveBalance.year})</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-lg bg-muted/50 p-3">
+                          <div className="text-lg font-bold tabular-nums" data-testid="text-balance-entitled">
+                            {(leaveBalance.entitledDays ?? 0) + (leaveBalance.carriedOverDays ?? 0) + (leaveBalance.adjustmentDays ?? 0)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">{t("leaves.balanceEntitled")}</div>
+                        </div>
+                        <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 p-3">
+                          <div className="text-lg font-bold tabular-nums text-amber-700 dark:text-amber-400" data-testid="text-balance-used">
+                            {(leaveBalance.usedDays ?? 0) + (leaveBalance.settledDays ?? 0)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">{t("leaves.balanceUsed")}</div>
+                        </div>
+                        <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 p-3">
+                          <div className="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400" data-testid="text-balance-remaining">
+                            {leaveBalance.remainingDays ?? 0}
+                          </div>
+                          <div className="text-xs text-muted-foreground">{t("leaves.balanceRemaining")}</div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
                 {/* تصفيات الإجازات — توقيع وإقرار بالاستلام */}
                 {mySettlements.length > 0 && (
                   <Card className="border-emerald-200" data-testid="card-my-settlements">
