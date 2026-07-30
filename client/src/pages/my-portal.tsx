@@ -1427,18 +1427,18 @@ export default function MyPortalPage() {
                     <CardContent className="p-4">
                       <div className="font-semibold text-sm flex items-center gap-1 mb-3">
                         <CalendarDays className="h-4 w-4 text-primary" />
-                        {t("leaves.balanceTitle")} <span className="text-muted-foreground font-normal">({t("leaves.balanceYear")} {leaveBalance.year})</span>
+                        {t("leaves.balanceTitle")} <span className="text-muted-foreground font-normal">({t("leaves.balanceAsOf")} {leaveBalance.asOf})</span>
                       </div>
                       <div className="grid grid-cols-3 gap-2 text-center">
                         <div className="rounded-lg bg-muted/50 p-3">
                           <div className="text-lg font-bold tabular-nums" data-testid="text-balance-entitled">
-                            {(leaveBalance.entitledDays ?? 0) + (leaveBalance.carriedOverDays ?? 0) + (leaveBalance.adjustmentDays ?? 0)}
+                            {leaveBalance.accruedToDate ?? 0}
                           </div>
                           <div className="text-xs text-muted-foreground">{t("leaves.balanceEntitled")}</div>
                         </div>
                         <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 p-3">
                           <div className="text-lg font-bold tabular-nums text-amber-700 dark:text-amber-400" data-testid="text-balance-used">
-                            {(leaveBalance.usedDays ?? 0) + (leaveBalance.settledDays ?? 0)}
+                            {leaveBalance.usedDays ?? 0}
                           </div>
                           <div className="text-xs text-muted-foreground">{t("leaves.balanceUsed")}</div>
                         </div>
@@ -1449,6 +1449,11 @@ export default function MyPortalPage() {
                           <div className="text-xs text-muted-foreground">{t("leaves.balanceRemaining")}</div>
                         </div>
                       </div>
+                      {(leaveBalance.upcomingDays ?? 0) > 0 && (
+                        <div className="text-xs text-muted-foreground mt-2 text-center" data-testid="text-balance-upcoming">
+                          {t("leaves.balanceUpcoming")}: {leaveBalance.upcomingDays} {t("leaves.days")}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 )}

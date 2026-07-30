@@ -223,18 +223,39 @@ export function registerSelfServiceRoutes(app: Express) {
     }
   });
 
-  // رصيد إجازتي السنوية — المستحق والمستخدم والمتبقي للسنة الحالية
+  // رصيد إجازتي السنوية — الصافي المستحق "حتى تاريخه" (النظام التراكمي، نفس
+  // منطق شاشة الموارد البشرية). إن لم تُدخل بيانات الاستحقاق للموظف نعود
+  // لرصيد السنة (leave_balances) حتى لا يظهر صفر مضلل.
   app.get("/api/my/leave-balance", isAuthenticated, async (req, res) => {
     try {
       const emp = await getMyEmployee(req);
       if (!emp) return res.json(null);
-      const { getLeaveBalanceSummary } = await import("./leave-helpers");
-      const yearParam = parseInt(String(req.query.year ?? ""), 10);
-      const year = Number.isFinite(yearParam) && yearParam >= 2000 && yearParam <= 2100
-        ? yearParam
-        : parseInt(saudiDate().slice(0, 4), 10);
+      const { getAccruedLeaveBalance, getLeaveBalanceSummary } = await import("./leave-helpers");
+      const acc = await getAccruedLeaveBalance(emp as any, saudiDate());
+      if (acc.configured || acc.accrualStart) {
+        return res.json({
+          mode: "accrual",
+          asOf: saudiDate(),
+          accruedToDate: acc.accruedToDate,
+          usedDays: Math.round((acc.usedToDate + acc.settledDays) * 100) / 100,
+          upcomingDays: acc.upcomingDays,
+          remainingDays: acc.remainingDays,
+          annualDays: acc.annualDays,
+        });
+      }
+      // لا تاريخ تعيين ولا رصيد افتتاحي — آخر ملاذ: رصيد السنة الحالية
+      const year = parseInt(saudiDate().slice(0, 4), 10);
       const bal = await getLeaveBalanceSummary(emp.id, year, "annual", emp.hireDate);
-      res.json(bal);
+      return res.json({
+        mode: "year",
+        asOf: saudiDate(),
+        accruedToDate: bal.entitledDays + bal.carriedOverDays + bal.adjustmentDays,
+        usedDays: bal.usedDays + bal.settledDays,
+        upcomingDays: 0,
+        remainingDays: bal.remainingDays,
+        annualDays: bal.entitledDays,
+        year,
+      });
     } catch (e: any) {
       console.error("[my/leave-balance] error:", e);
       res.status(500).json({ error: e.message });
