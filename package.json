@@ -10,6 +10,7 @@
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "test:pos": "vitest run --config vitest.config.ts tests/pos-financials.test.ts",
+    "test:portal": "vitest run --config vitest.config.ts tests/portal-evaluations.test.ts",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
