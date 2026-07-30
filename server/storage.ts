@@ -5824,7 +5824,9 @@ export class DatabaseStorage implements IStorage {
         fileName: journalAttachments.fileName,
         filePath: journalAttachments.filePath,
         downloadUrl: journalAttachments.downloadUrl,
-        fileData: journalAttachments.fileData,
+        // الأداء: لا نجلب file_data (قد يكون ميغابايتات base64 لكل صف) —
+        // نكتفي بعلم وجوده ونوجّه العميل لمسار البث الكسول legacy-data
+        hasFileData: sql<boolean>`(${journalAttachments.fileData} IS NOT NULL)`,
         mimeType: journalAttachments.mimeType,
         fileSize: journalAttachments.fileSize,
         notes: journalAttachments.notes,
@@ -5846,17 +5848,14 @@ export class DatabaseStorage implements IStorage {
       let url: string | null = r.downloadUrl ?? null;
       if (!url && r.filePath) {
         url = `/api/uploads/file/${r.filePath}`;
-      } else if (!url && r.fileData) {
-        const raw = String(r.fileData);
-        url = raw.startsWith("data:")
-          ? raw
-          : `data:${r.mimeType || "image/png"};base64,${raw}`;
+      } else if (!url && r.hasFileData) {
+        // Legacy base64 row: point to the lazy streaming endpoint instead of
+        // inlining megabytes of base64 into the JSON list response.
+        url = `/api/journal-attachments/${r.id}/legacy-data`;
       }
+      const { hasFileData, ...rest } = r as any;
       return {
-        ...r,
-        // Strip the heavy column from the response — it's either already
-        // inlined into the data URI above or it's a Supabase row that
-        // doesn't need it on the client.
+        ...rest,
         fileData: null,
         downloadUrl: url,
       };

@@ -577,3 +577,9 @@ ALTER TABLE ONLY public.shareholders
 
 \unrestrict VejCNbU80sKn9IiGUTvBPyhQUh3DuLm8XoXkxuqF8tjpYqNuKuzC8wjkP4WDDla
 
+
+-- ============================================================
+-- 2026-07-29: أداء — فهرس توقيعات الكاشير على journal_id
+-- (كان الجدول 24MB يُمسح تسلسلياً 21 ألف مرة بدون أي فهرس)
+-- ============================================================
+CREATE INDEX IF NOT EXISTS idx_cashier_signatures_journal ON cashier_signatures (journal_id);
