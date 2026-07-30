@@ -13661,7 +13661,8 @@ export async function registerRoutes(
       const myJournals = journals.filter(j => j.cashierId === user.id);
       
       // تقدم لحظي (Task: لحظة بلحظة): مبيعات نقطة البيع الحية لليوم الحالي قبل إقفال اليومية
-      const todayStr = new Date().toISOString().split('T')[0];
+      // اليوم بتوقيت السعودية — نفس أساس sale_date في نقطة البيع
+      const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
       let liveToday: { totalSales: number; txCount: number; avgTicket: number } | null = null;
       if (myChallenges.length > 0 && todayStr >= effectiveDateFrom && todayStr <= effectiveDateTo) {
         try {
@@ -13781,8 +13782,11 @@ export async function registerRoutes(
           }
           
           // اليوم الحالي: استخدام مبيعات نقطة البيع الحية إن كانت أعلى من اليومية (تقدم لحظي)
+          // ملاحظة: المبيعات الحية غير مقسّمة على الورديات، فنطبّقها فقط على التحديات العامة
+          // (غير المخصصة لوردية محددة) حتى لا تُحسب مبيعات المساء على تحدي صباحي والعكس
+          const isShiftSpecific = ch.shiftType && ch.shiftType !== 'null' && ch.shiftType !== 'all';
           let isLive = false;
-          if (date === todayStr && liveToday) {
+          if (date === todayStr && liveToday && !isShiftSpecific) {
             let liveVal = 0;
             switch (ch.challengeType) {
               case 'shift_sales': liveVal = liveToday.totalSales; break;
