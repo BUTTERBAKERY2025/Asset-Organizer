@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { TrendingDown, ArrowRight, Send, CheckCircle2, AlertTriangle, User } from "lucide-react";
+import { TrendingDown, ArrowRight, Send, CheckCircle2, AlertTriangle, User, Search, X } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Layout } from "@/components/layout";
 import { Link } from "wouter";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -64,7 +65,41 @@ export default function CashierDeficitsPage() {
     queryKey: ["/api/hr/cashier-deficits", month],
     queryFn: async () => (await apiRequest("GET", `/api/hr/cashier-deficits?month=${month}`)).json(),
   });
-  const cashiers = data?.cashiers || [];
+  const allCashiers = data?.cashiers || [];
+
+  // البحث بالاسم + فلتر الفرع (فلترة على المتصفح دون طلبات إضافية)
+  const [search, setSearch] = useState("");
+  const [branchFilter, setBranchFilter] = useState<string>("all");
+
+  const branchOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of allCashiers) for (const j of c.journals) if (j.branchName) set.add(j.branchName);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "ar"));
+  }, [allCashiers]);
+
+  const cashiers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return allCashiers
+      .map((c) => {
+        const journals = branchFilter === "all" ? c.journals : c.journals.filter((j) => j.branchName === branchFilter);
+        if (journals.length === 0) return null;
+        const name = `${c.employeeName || ""} ${c.cashierName || ""}`.toLowerCase();
+        if (q && !name.includes(q)) return null;
+        if (journals === c.journals) return c;
+        // إعادة حساب الإجماليات حسب اليوميات المعروضة بعد فلتر الفرع
+        const unposted = journals.filter((j) => !j.posted);
+        return {
+          ...c,
+          journals,
+          totalDeficit: journals.reduce((s, j) => s + j.amount, 0),
+          unpostedDeficit: unposted.reduce((s, j) => s + j.amount, 0),
+          unpostedCount: unposted.length,
+        };
+      })
+      .filter((c): c is CashierGroup => c !== null);
+  }, [allCashiers, search, branchFilter]);
+
+  const hasActiveFilter = search.trim() !== "" || branchFilter !== "all";
   const totalUnposted = cashiers.reduce((s, c) => s + c.unpostedDeficit, 0);
   const totalAll = cashiers.reduce((s, c) => s + c.totalDeficit, 0);
 
@@ -122,6 +157,40 @@ export default function CashierDeficitsPage() {
           </div>
         </div>
 
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute end-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="بحث باسم الكاشير أو الموظف..."
+              className="pe-9"
+              data-testid="input-search-cashier"
+            />
+          </div>
+          <Select value={branchFilter} onValueChange={setBranchFilter}>
+            <SelectTrigger className="w-full sm:w-52" data-testid="select-branch-filter">
+              <SelectValue placeholder="كل الفروع" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">كل الفروع</SelectItem>
+              {branchOptions.map((b) => (
+                <SelectItem key={b} value={b}>{b}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {hasActiveFilter && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setSearch(""); setBranchFilter("all"); }}
+              data-testid="button-clear-filters"
+            >
+              <X className="h-4 w-4 ms-1" />مسح الفلاتر
+            </Button>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <Card><CardContent className="pt-6">
             <div className="text-sm text-muted-foreground">عدد الكاشيرات بعجوزات</div>
@@ -141,7 +210,7 @@ export default function CashierDeficitsPage() {
           <Card><CardContent className="py-12 text-center text-muted-foreground">جاري التحميل...</CardContent></Card>
         ) : cashiers.length === 0 ? (
           <Card><CardContent className="py-12 text-center text-muted-foreground" data-testid="text-empty">
-            لا توجد عجوزات معتمدة في هذا الشهر
+            {hasActiveFilter ? "لا توجد نتائج مطابقة للبحث أو الفرع المحدد" : "لا توجد عجوزات معتمدة في هذا الشهر"}
           </CardContent></Card>
         ) : (
           <div className="space-y-3">
