@@ -46,4 +46,5 @@
 - [Vite chunk helper pitfall](vite-chunk-helper-pitfall.md) — helper modules must be routed to eager vendor-react in manualChunks or entry force-loads vendor-print/xlsx (~4.8MB) before first paint; verify index.html modulepreloads after chunk changes.
 - [Drizzle undefined select field](drizzle-undefined-select-field.md) — selecting a non-existent schema prop throws "Cannot convert undefined or null to object"; branch_employees has status, not isActive.
 - [Journal attachments DB weight](journal-attachments-weight.md) — file_data base64 ≈15GB of prod DB; never select it in lists, lazy-stream via legacy-data endpoint; migration route doesn't null blobs.
+- [SW stale-cache skeleton](sw-stale-cache-skeleton.md) — SW must never answer failed JS with empty 503 (use Response.error()), must timeout JS fetches, and must re-cache "/" per navigation via waitUntil; else some users get infinite skeletons after deploys.
 - [Event POS shift reconciliation](event-pos-shift-reconciliation.md) — full refund = exclude sale from stats, partial = pos_refunds row; close stats via tx; sale insert re-locks shift.
