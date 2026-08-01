@@ -91,7 +91,11 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request).then((response) => {
         if (response.ok) {
-          caches.open(STATIC_CACHE).then((c) => c.put('/', response.clone()));
+          // ننسخ الاستجابة فوراً ونربط الكتابة بعمر الحدث حتى لا يُنهى الـ SW قبل اكتمالها
+          const copy = response.clone();
+          event.waitUntil(
+            caches.open(STATIC_CACHE).then((c) => c.put('/', copy)).catch(() => {})
+          );
         }
         return response;
       }).catch(async () => (await caches.match('/')) || new Response('Offline', { status: 503 }))
