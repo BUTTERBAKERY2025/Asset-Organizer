@@ -1,4 +1,5 @@
 import React, { Suspense, useEffect, useTransition, useCallback, useState } from "react";
+import { useStuckPageWatchdog, StuckPageMessage } from "@/hooks/useStuckPageWatchdog";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -212,6 +213,8 @@ function DelayedFallback() {
   // synchronously. For the rare uncached chunk, a brief blank moment is
   // preferable to a visible skeleton block.
   const [showSlow, setShowSlow] = useState(false);
+  // شبكة أمان (#42): إذا بقي الهيكل عالقاً >15 ثانية → إعادة تحميل تلقائية مرة واحدة
+  const stuck = useStuckPageWatchdog();
   useEffect(() => {
     // Show a loading skeleton quickly (>200ms) so navigation feels responsive
     // instead of "frozen". Fast cached chunks still resolve before this fires,
@@ -219,6 +222,7 @@ function DelayedFallback() {
     const t = setTimeout(() => setShowSlow(true), 200);
     return () => clearTimeout(t);
   }, []);
+  if (stuck) return <StuckPageMessage />;
   if (!showSlow) return null;
   return (
     <div className="min-h-[60vh] p-6 space-y-5 skeleton-delayed" dir="rtl">

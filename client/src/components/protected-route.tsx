@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuthReady } from "@/contexts/AuthContext";
 import { Loader2, ShieldX, Lock } from "lucide-react";
+import { useStuckPageWatchdog, StuckPageMessage } from "@/hooks/useStuckPageWatchdog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { SystemModule } from "@shared/schema";
@@ -88,10 +89,13 @@ function InlineSkeleton() {
   // don't flash a loader on every navigation. Matches the 350ms threshold used
   // by DelayedFallback in App.tsx so the user sees a stable, flicker-free UI.
   const [show, setShow] = useState(false);
+  // شبكة أمان (#42): إذا علق التحقق من الجلسة >15 ثانية → إعادة تحميل تلقائية مرة واحدة
+  const stuck = useStuckPageWatchdog();
   useEffect(() => {
     const t = setTimeout(() => setShow(true), 800);
     return () => clearTimeout(t);
   }, []);
+  if (stuck) return <StuckPageMessage />;
   if (!show) return <div className="min-h-[200px]" data-testid="inline-skeleton-placeholder" />;
   return (
     <div className="min-h-[200px] flex items-center justify-center" data-testid="inline-skeleton">
