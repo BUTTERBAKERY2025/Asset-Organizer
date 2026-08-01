@@ -1,7 +1,7 @@
-const CACHE_NAME = 'butter-v7';
-const STATIC_CACHE = 'butter-static-v7';
+const CACHE_NAME = 'butter-v8';
+const STATIC_CACHE = 'butter-static-v8';
 const FONT_CACHE = 'butter-fonts-v4';
-const API_CACHE = 'butter-api-v6';
+const API_CACHE = 'butter-api-v7';
 
 const STATIC_ASSETS = [
   '/',
@@ -86,8 +86,15 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (event.request.mode === 'navigate') {
+    // نجدد نسخة "/" المخزنة مع كل تحميل ناجح حتى لا يعلق المستخدم على index.html
+    // قديم يشير إلى ملفات جافاسكربت محذوفة من السيرفر بعد نشر جديد.
     event.respondWith(
-      fetch(event.request).catch(() => caches.match('/') || new Response('Offline', { status: 503 }))
+      fetch(event.request).then((response) => {
+        if (response.ok) {
+          caches.open(STATIC_CACHE).then((c) => c.put('/', response.clone()));
+        }
+        return response;
+      }).catch(async () => (await caches.match('/')) || new Response('Offline', { status: 503 }))
     );
     return;
   }
@@ -96,17 +103,24 @@ self.addEventListener('fetch', (event) => {
 });
 
 async function networkFirstJs(request) {
+  // مهلة زمنية: لو علّقت الشبكة لا يبقى استيراد الصفحة معلقاً للأبد (هيكل رمادي دائم)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
   try {
-    const response = await fetch(request);
+    const response = await fetch(request, { signal: controller.signal });
+    clearTimeout(timeoutId);
     if (response.ok) {
       const cache = await caches.open(STATIC_CACHE);
       cache.put(request, response.clone());
     }
     return response;
   } catch (e) {
+    clearTimeout(timeoutId);
     const cached = await caches.match(request);
     if (cached) return cached;
-    return new Response('', { status: 503 });
+    // خطأ شبكة صريح بدل استجابة فارغة 503: استجابة فارغة تجعل import() يعلق/يفشل
+    // بصمت والصفحة تبقى على الهيكل الرمادي؛ الخطأ الصريح يفعّل منطق إعادة التحميل.
+    return Response.error();
   }
 }
 
@@ -121,7 +135,7 @@ async function cacheFirst(request, cacheName) {
     }
     return response;
   } catch (e) {
-    return new Response('', { status: 503 });
+    return Response.error();
   }
 }
 
