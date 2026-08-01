@@ -1,17 +1,20 @@
 import { useEffect, useState } from "react";
 
-const RELOAD_COUNT_KEY = "__stuck_reload_count";
-const RELOAD_AT_KEY = "__stuck_reload_at";
+// نفس مفاتيح حارس إعادة التحميل المستخدمة في pagePreloader (فشل تحميل الأجزاء)
+// حتى يكون هناك سقف واحد مشترك: إعادة تحميل تلقائية واحدة فقط لكل حادثة (60 ثانية)
+// مهما كان مصدرها — بعدها تظهر رسالة الاسترداد اليدوية بدل تكرار التحميل.
+const RELOAD_COUNT_KEY = "__chunk_reload_count";
+const RELOAD_AT_KEY = "__chunk_reload_at";
 const RELOAD_WINDOW_MS = 60_000;
 
 /**
  * شبكة أمان ضد الصفحات العالقة (المهمة #42):
- * إذا بقيت شاشة التحميل ظاهرة أكثر من timeoutMs (افتراضياً 15 ثانية)
+ * إذا بقيت شاشة التحميل ظاهرة أكثر من timeoutMs (افتراضياً 20 ثانية)
  * تُعاد محاولة تحميل الصفحة تلقائياً مرة واحدة فقط خلال نافذة 60 ثانية
  * (حارس ضد حلقة إعادة التحميل اللانهائية). إن فشلت المحاولة أيضاً،
  * يُرجِع الخطاف true حتى تعرض الشاشة رسالة واضحة مع زر تحديث يدوي.
  */
-export function useStuckPageWatchdog(timeoutMs = 15_000): boolean {
+export function useStuckPageWatchdog(timeoutMs = 20_000): boolean {
   const [stuck, setStuck] = useState(false);
 
   useEffect(() => {

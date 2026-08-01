@@ -89,7 +89,7 @@ function InlineSkeleton() {
   // don't flash a loader on every navigation. Matches the 350ms threshold used
   // by DelayedFallback in App.tsx so the user sees a stable, flicker-free UI.
   const [show, setShow] = useState(false);
-  // شبكة أمان (#42): إذا علق التحقق من الجلسة >15 ثانية → إعادة تحميل تلقائية مرة واحدة
+  // شبكة أمان (#42): إذا علق التحقق من الجلسة >20 ثانية → إعادة تحميل تلقائية مرة واحدة (سقف مشترك مع حارس تحميل الأجزاء)
   const stuck = useStuckPageWatchdog();
   useEffect(() => {
     const t = setTimeout(() => setShow(true), 800);

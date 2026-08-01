@@ -213,7 +213,7 @@ function DelayedFallback() {
   // synchronously. For the rare uncached chunk, a brief blank moment is
   // preferable to a visible skeleton block.
   const [showSlow, setShowSlow] = useState(false);
-  // شبكة أمان (#42): إذا بقي الهيكل عالقاً >15 ثانية → إعادة تحميل تلقائية مرة واحدة
+  // شبكة أمان (#42): إذا بقي الهيكل عالقاً >20 ثانية → إعادة تحميل تلقائية مرة واحدة (سقف مشترك مع حارس تحميل الأجزاء)
   const stuck = useStuckPageWatchdog();
   useEffect(() => {
     // Show a loading skeleton quickly (>200ms) so navigation feels responsive
