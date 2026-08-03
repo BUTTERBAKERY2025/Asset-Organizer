@@ -409,6 +409,10 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
     '</div>' +
     '<div class="doc-note">مستند رسمي صادر إلكترونياً عبر نظام إدارة حوكمة الشركات | تاريخ الطباعة: ' + printNow.toLocaleDateString('en-GB') + ' — ' + printNow.toLocaleTimeString('en-GB') + ' | رقم القرار ' + (sanitize(resolution.resolutionNumber) || '-') + '</div>';
 
+  // نسخة مضغوطة من كتلة الختم والتوقيعات: يستخدمها المُرقّم عندما لا تتسع الكتلة
+  // الكاملة في نهاية الصفحة — حتى لا يظهر الختم وحيداً في صفحة ثانية.
+  const signBlockCompactHtml = '<div class="sign-compact">' + signBlockHtml + '</div>';
+
   // Inject runtime data into the print window's pagination script. Escaping `</`
   // prevents any data URI / SVG string from prematurely closing the <script> tag.
   const toJs = (v: unknown) => JSON.stringify(v).replace(/<\//g, '<\\/');
@@ -425,6 +429,7 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
     rowHtmls: tableRowHtmls,
     totalsHtml: totalsBlockHtml,
     signHtml: signBlockHtml,
+    signHtmlCompact: signBlockCompactHtml,
   });
 
   const printContent = `
@@ -501,6 +506,12 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
         .stamp-lbl { font-size: 9px; color: #888; margin-bottom: 4px; }
         .stamp-svg { display: inline-block; }
         .stamp-svg svg { width: 240px; height: 240px; }
+        /* الوضع المضغوط: ختم أصغر وهوامش أقل ليتسع الختم في نفس صفحة المحتوى */
+        .sign-compact .stamp-svg svg { width: 150px; height: 150px; }
+        .sign-compact .sign-row { margin-top: 4px; }
+        .sign-compact .sig-card { padding: 4px 8px 3px; }
+        .sign-compact .sig-img2 { max-height: 34px; }
+        .sign-compact .doc-note { margin-top: 4px; }
 
         /* بطاقات توقيع أعضاء مجلس الإدارة (مطابقة لأسلوب صفحة القرارات) */
         .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 8px; }
@@ -546,6 +557,7 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
         var rowHtmls = __D__.rowHtmls || [];
         var totalsHtml = __D__.totalsHtml || '';
         var signHtml = __D__.signHtml || '';
+        var signHtmlCompact = __D__.signHtmlCompact || signHtml;
 
         var measure = document.getElementById('measure');
         function mk(html) { var d = document.createElement('div'); d.innerHTML = html; return d.firstElementChild; }
@@ -715,7 +727,15 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
           }
 
           add(totalsHtml, measureHtml(totalsHtml));
-          add(signHtml, measureHtml(signHtml));
+          // كتلة الختم والتوقيعات: إن لم تتسع كاملةً في بقية الصفحة نجرب النسخة
+          // المضغوطة (ختم أصغر) قبل اللجوء لصفحة جديدة — حتى لا يطلع الختم وحده في صفحة.
+          (function () {
+            var fullH = measureHtml(signHtml);
+            if (curH + fullH <= AVAIL || !cur.length) { cur.push(signHtml); curH += fullH; return; }
+            var compactH = measureHtml(signHtmlCompact);
+            if (curH + compactH <= AVAIL) { cur.push(signHtmlCompact); curH += compactH; return; }
+            flush(); cur.push(signHtml); curH += fullH;
+          })();
           flush();
 
           if (measure.parentNode) measure.parentNode.removeChild(measure);
