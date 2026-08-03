@@ -839,6 +839,18 @@ export default function VotingPage() {
                                 <div className="text-sm text-gray-600">{results.total.toLocaleString()}</div>
                                 <div className="text-xs text-gray-500">إجمالي</div>
                               </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                                disabled={!!(resolution as any).isLocked}
+                                title={(resolution as any).isLocked ? "القرار مقفل نهائياً" : "لعرض الروابط أو إعادة التصويت لعضو (مثلاً عند فقدان التوقيع)"}
+                                onClick={() => openVotingLinksDialog(resolution)}
+                                data-testid={`share-voting-links-completed-${resolution.id}`}
+                              >
+                                <Share2 className="h-4 w-4 ml-1" />
+                                روابط التصويت
+                              </Button>
                             </div>
                           </div>
                         </div>
