@@ -12,6 +12,7 @@
     "test:pos": "vitest run --config vitest.config.ts tests/pos-financials.test.ts",
     "test:portal": "vitest run --config vitest.config.ts tests/portal-evaluations.test.ts",
     "test:portal-tabs": "vitest run --config vitest.config.ts tests/portal-tabs-sync.test.ts",
+    "test:hq-schedule": "vitest run --config vitest.config.ts tests/hq-monthly-schedule.test.ts",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
