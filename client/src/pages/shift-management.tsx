@@ -26,6 +26,7 @@ import { ar, enUS } from "date-fns/locale";
 import { useTranslation } from "react-i18next";
 import type { User, Branch, SchedulePeriod, EmployeeSchedule, AttendanceRecord, BranchEmployee, WeeklyScheduleLock, ScheduleChangeAudit } from "@shared/schema";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
+import HQMonthlySchedule, { HQ_BRANCH_ID } from "@/components/hq-monthly-schedule";
 
 const DAYS_AR = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"];
 const DAYS_EN = ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"];
@@ -1974,6 +1975,10 @@ export default function ShiftManagementPage() {
             </TabsList>
 
             <TabsContent value="schedule" className="space-y-4 mt-4">
+              {/* المركز الرئيسي (الإدارة المركزية) يُجدول شهرياً بوردية موحدة — باقي الفروع تبقى على الجدولة الأسبوعية */}
+              {selectedBranch === HQ_BRANCH_ID ? (
+                <HQMonthlySchedule branchId={selectedBranch} branchName={getBranchName(selectedBranch)} />
+              ) : (
               <Card>
                 <CardHeader className="pb-4">
                   <div className="flex items-center justify-between">
@@ -2346,6 +2351,7 @@ export default function ShiftManagementPage() {
                   )}
                 </CardContent>
               </Card>
+              )}
             </TabsContent>
 
             <TabsContent value="attendance" className="space-y-4 mt-4">

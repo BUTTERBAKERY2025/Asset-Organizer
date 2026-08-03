@@ -25730,8 +25730,13 @@ export async function registerRoutes(
     employeeName?: string | null;
     scheduleDate: string;
     isOff?: boolean | null;
+    branchId?: string | null;
   }[]): Promise<string[]> {
-    const valid = rows.filter((r) => CANONICAL_DATE.test(String(r.scheduleDate || "")));
+    // المركز الرئيسي (الإدارة المركزية) مستثنى من حد الراحة الشهري:
+    // الجمعة إجازة للجميع، وبعض الشهور فيها 5 جُمَع فيتجاوز الحد الأسبوعي (4) بشكل مشروع.
+    const valid = rows.filter((r) =>
+      CANONICAL_DATE.test(String(r.scheduleDate || "")) && r.branchId !== "main_warehouse"
+    );
     if (valid.length === 0) return [];
 
     // Resolve user-UUID employeeIds to canonical branchEmployee ids.
@@ -26049,6 +26054,51 @@ export async function registerRoutes(
         return res.status(400).json({ error: "لا توجد بيانات صالحة للحفظ" });
       }
 
+      // HQ INVARIANT: المركز الرئيسي (الإدارة المركزية) — الجمعة إجازة أسبوعية للجميع دائماً.
+      // يُفرض على مستوى السيرفر حتى لا يتجاوزه أي عميل قديم أو طلب مباشر.
+      for (const s of validatedSchedules) {
+        if (s.branchId === "main_warehouse" && s.dayOfWeek === "fri" && !s.isOff) {
+          s.isOff = true;
+          s.startTime = null;
+          s.endTime = null;
+          s.shiftType = null;
+        }
+      }
+
+      // APPROVED-LEAVE GUARD: أيام الإجازات المعتمدة من نظام الإجازات لا تُكتب من الجدولة أبداً.
+      // نحذف أي صف يتقاطع مع إجازة معتمدة (حماية سيرفرية — الواجهة تتخطاها أصلاً).
+      let __leaveSkipped = 0;
+      {
+        const __beIds = [...new Set(validatedSchedules.map((s: any) => s.branchEmployeeId).filter((n: any) => n != null))] as number[];
+        if (__beIds.length > 0) {
+          const __dates = validatedSchedules.map((s: any) => s.scheduleDate).filter((d: string) => CANONICAL_DATE.test(d));
+          const __minD = __dates.reduce((a: string, b: string) => (a < b ? a : b), "9999-12-31");
+          const __maxD = __dates.reduce((a: string, b: string) => (a > b ? a : b), "0000-01-01");
+          const __leaves = await db
+            .select({ branchEmployeeId: leaveRequests.branchEmployeeId, startDate: leaveRequests.startDate, endDate: leaveRequests.endDate })
+            .from(leaveRequests)
+            .where(and(
+              eq(leaveRequests.status, "approved"),
+              inArray(leaveRequests.branchEmployeeId, __beIds),
+              lte(leaveRequests.startDate, __maxD),
+              gte(leaveRequests.endDate, __minD),
+            ));
+          if (__leaves.length > 0) {
+            const __before = validatedSchedules.length;
+            const __kept = validatedSchedules.filter((s: any) =>
+              !s.branchEmployeeId ||
+              !__leaves.some(l => l.branchEmployeeId === s.branchEmployeeId && l.startDate <= s.scheduleDate && s.scheduleDate <= l.endDate)
+            );
+            __leaveSkipped = __before - __kept.length;
+            validatedSchedules.length = 0;
+            validatedSchedules.push(...__kept);
+            if (validatedSchedules.length === 0) {
+              return res.status(400).json({ error: "كل الأيام المرسلة مغطاة بإجازات معتمدة — لا يوجد ما يُحفظ" });
+            }
+          }
+        }
+      }
+
       // TIME VALIDATION (#7): reject invalid times instead of silently coercing to 08:00/16:00.
       const __timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
       const __timeErrors: string[] = [];
@@ -26225,6 +26275,7 @@ export async function registerRoutes(
           employeeId: partialData.employeeId ?? __patchExisting?.employeeId,
           branchEmployeeId: partialData.branchEmployeeId ?? __patchExisting?.branchEmployeeId,
           employeeName: (partialData as any).employeeName ?? __patchExisting?.employeeName,
+          branchId: partialData.branchId ?? __patchExisting?.branchId,
           scheduleDate: __mergedDate,
           isOff: true,
         }];
