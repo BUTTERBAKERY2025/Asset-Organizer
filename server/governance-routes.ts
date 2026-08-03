@@ -3310,6 +3310,7 @@ export function registerGovernanceRoutes(app: Express) {
           boardMemberName: boardMembers.fullName,
           boardMemberEmail: boardMembers.email,
           boardMemberPhone: boardMembers.phone,
+          boardMemberPosition: boardMembers.position,
         })
         .from(votingTokens)
         .leftJoin(shareholders, eq(votingTokens.shareholderId, shareholders.id))
@@ -3430,6 +3431,7 @@ export function registerGovernanceRoutes(app: Express) {
           boardMemberName: boardMembers.fullName,
           boardMemberEmail: boardMembers.email,
           boardMemberPhone: boardMembers.phone,
+          boardMemberPosition: boardMembers.position,
           status: votingTokens.status,
           expiresAt: votingTokens.expiresAt,
           vote: votingTokens.vote,

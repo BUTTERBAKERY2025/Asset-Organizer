@@ -17,6 +17,9 @@ export interface VotingTokenData {
   votedAt?: string;
   signatureData?: string;
   comments?: string;
+  voterType?: string; // 'board_member' | 'shareholder'
+  boardMemberPosition?: string | null; // chairman | vice_chairman | managing_director | member ...
+  voteWeight?: number | null;
 }
 
 // توقيعات أعضاء مجلس الإدارة المعتمدين للقرار — مصدرها جدول resolution_signatures
@@ -121,22 +124,66 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
   };
 
   // Validate signature data format (must be data:image/ URI)
+  // حماية XSS: توقيع صالح = data URI كامل وصارم (MIME + base64 فقط) —
+  // أي محرف خارج أبجدية base64 (مثل علامة اقتباس لكسر السمة) يرفض التوقيع بالكامل.
   const isValidSignature = (data: string | undefined | null): boolean => {
     if (!data) return false;
-    return data.startsWith('data:image/png') || data.startsWith('data:image/jpeg');
+    return /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(data);
   };
+
+  // ترتيب المصوتين حسب المنصب: الرئيس ← نائب الرئيس ← العضو المنتدب ← أمين السر ← الأعضاء
+  // (لأعضاء مجلس الإدارة فقط؛ المساهمون يبقون بترتيبهم الأصلي)
+  const POSITION_RANK: Record<string, number> = {
+    chairman: 0,
+    vice_chairman: 1,
+    managing_director: 2,
+    ceo: 3,
+    secretary: 4,
+    member: 5,
+    board_member: 5,
+  };
+  const positionRank = (t: VotingTokenData): number =>
+    POSITION_RANK[t.boardMemberPosition || ''] ?? 9;
 
   // Calculate vote summary
   const forVotes = votedTokens.filter(t => t.vote === 'for').length;
   const againstVotes = votedTokens.filter(t => t.vote === 'against').length;
   const abstainVotes = votedTokens.filter(t => t.vote === 'abstain').length;
   const totalSharesVoted = votedTokens.reduce((sum, t) => sum + (t.numberOfShares || 0), 0);
+
+  // قرارات مجلس الإدارة تُحتسب بعدد الأصوات (صوت لكل عضو) وليس بالأسهم —
+  // بخلاف قرارات الجمعيات التي تُحتسب بالأسهم حسب نظام الشركات.
+  // التصنيف: وجود مصوّت من نوع عضو مجلس، أو (قرار غير جمعوي وأسهمه صفر) —
+  // قرارات الجمعيات لا تتحول أبداً للاحتساب بالرأس حتى لو كانت الأسهم صفراً.
+  const isAssemblyResolution =
+    resolution.resolutionType === 'extraordinary' ||
+    resolution.resolutionType === 'extraordinary_assembly' ||
+    resolution.resolutionType === 'general_assembly' ||
+    resolution.resolutionType === 'ordinary_assembly';
+  const isBoardVote =
+    votedTokens.some(t => t.voterType === 'board_member') ||
+    (!isAssemblyResolution && votedTokens.length > 0 && totalSharesVoted === 0);
+
+  // ترتيب المصوتين حسب المنصب لقرارات المجلس فقط؛ المساهمون يبقون بترتيبهم الأصلي.
+  const orderedTokens = isBoardVote
+    ? [...votedTokens].sort((a, b) => {
+        const ra = positionRank(a);
+        const rb = positionRank(b);
+        if (ra !== rb) return ra - rb;
+        return (a.votedAt || '').localeCompare(b.votedAt || '');
+      })
+    : votedTokens;
   const forShares = votedTokens.filter(t => t.vote === 'for').reduce((sum, t) => sum + (t.numberOfShares || 0), 0);
-  const approvalPercentage = totalSharesVoted > 0 ? ((forShares / totalSharesVoted) * 100).toFixed(2) : '0';
+  const approvalPercentage = isBoardVote
+    ? (votedTokens.length > 0 ? ((forVotes / votedTokens.length) * 100).toFixed(2) : '0')
+    : (totalSharesVoted > 0 ? ((forShares / totalSharesVoted) * 100).toFixed(2) : '0');
 
   // حساب الأغلبية المطلوبة حسب نظام الشركات السعودي 1443هـ
   const requiredMajorityInfo = getRequiredMajority(resolution);
   const isApproved = Number(approvalPercentage) >= requiredMajorityInfo.percentage;
+  const isUnanimous = isApproved && forVotes === votedTokens.length && votedTokens.length > 0;
+  const resultLabel = isApproved ? (isUnanimous ? 'معتمد بالإجماع' : 'معتمد') : 'غير معتمد';
+  const voterNoun = isBoardVote ? 'عضو' : 'مساهم';
 
   // توقيع رئيس مجلس الإدارة (عبدالحافظ احمد إبراهيم ال مكوش) — يُؤخذ من توقيعه الإلكتروني
   const normalizeAr = (s: string | undefined | null) =>
@@ -255,9 +302,11 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
       '<div class="info-strip">' +
         '<div class="info-cell"><div class="lbl">نوع القرار</div><div class="val">' + typeLabel + '</div></div>' +
         '<div class="info-cell"><div class="lbl">الأغلبية المطلوبة</div><div class="val">' + requiredMajorityInfo.percentage + '%</div></div>' +
-        '<div class="info-cell"><div class="lbl">عدد المصوتين</div><div class="val">' + votedTokens.length + ' مساهم</div></div>' +
-        '<div class="info-cell"><div class="lbl">الأسهم المصوتة</div><div class="val">' + totalSharesVoted.toLocaleString('en-US') + '</div></div>' +
-        '<div class="info-cell"><div class="lbl">نتيجة التصويت</div><div class="val ' + (isApproved ? 'ok' : 'reject') + '">' + approvalPercentage + '% ' + (isApproved ? 'معتمد' : 'غير معتمد') + '</div></div>' +
+        '<div class="info-cell"><div class="lbl">عدد المصوتين</div><div class="val">' + votedTokens.length + ' ' + voterNoun + '</div></div>' +
+        (isBoardVote
+          ? '<div class="info-cell"><div class="lbl">الأصوات</div><div class="val">' + forVotes + ' موافق من ' + votedTokens.length + '</div></div>'
+          : '<div class="info-cell"><div class="lbl">الأسهم المصوتة</div><div class="val">' + totalSharesVoted.toLocaleString('en-US') + '</div></div>') +
+        '<div class="info-cell"><div class="lbl">نتيجة التصويت</div><div class="val ' + (isApproved ? 'ok' : 'reject') + '">' + approvalPercentage + '% ' + resultLabel + '</div></div>' +
       '</div>' },
     { kind: 'html', html: '<div class="section-head">نص القرار</div>', head: true },
   ];
@@ -283,24 +332,24 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
   const tableHeadHtml =
     '<tr>' +
       '<th style="width:5%;">#</th>' +
-      '<th class="name" style="width:25%;">اسم المساهم</th>' +
-      '<th style="width:13%;">عدد الأسهم</th>' +
+      '<th class="name" style="width:25%;">' + (isBoardVote ? 'اسم العضو' : 'اسم المساهم') + '</th>' +
+      '<th style="width:13%;">' + (isBoardVote ? 'الصفة' : 'عدد الأسهم') + '</th>' +
       '<th style="width:11%;">التصويت</th>' +
       '<th style="width:20%;">تاريخ ووقت التصويت</th>' +
       '<th style="width:26%;">التوقيع</th>' +
     '</tr>';
 
-  const tableRowHtmls: string[] = votedTokens.map((token, idx) => {
+  const tableRowHtmls: string[] = orderedTokens.map((token, idx) => {
     const voteClass = token.vote === 'for' ? 'vt-for' : token.vote === 'against' ? 'vt-against' : 'vt-abstain';
     const voteText = voteLabels[token.vote || ''] || sanitize(token.vote || '');
     const dateStr = token.votedAt ? new Date(token.votedAt).toLocaleTimeString('en-GB') + ' — ' + new Date(token.votedAt).toLocaleDateString('en-GB') : '-';
     const signTxt = isValidSignature(token.signatureData)
-      ? '<img class="vt-sign-img" src="' + token.signatureData + '" alt="توقيع المساهم" /><span class="sign-elec">موقّع إلكترونياً</span>'
+      ? '<img class="vt-sign-img" src="' + token.signatureData + '" alt="توقيع ' + voterNoun + '" /><span class="sign-elec">موقّع إلكترونياً</span>'
       : '<span style="color:#bbb;">-</span>';
     return '<tr>' +
       '<td>' + (idx + 1) + '</td>' +
       '<td class="name">' + sanitize(token.shareholderName) + '</td>' +
-      '<td>' + (token.numberOfShares || 0).toLocaleString('en-US') + '</td>' +
+      '<td>' + (isBoardVote ? sanitize(translateBoardPosition(token.boardMemberPosition)) : (token.numberOfShares || 0).toLocaleString('en-US')) + '</td>' +
       '<td><span class="vt-badge ' + voteClass + '">' + voteText + '</span></td>' +
       '<td>' + dateStr + '</td>' +
       '<td>' + signTxt + '</td>' +
@@ -311,8 +360,8 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
   // place it cleanly after the last chunk of rows.
   const totalsBlockHtml =
     '<div class="vt-total">' +
-      '<span>الإجمالي: ' + votedTokens.length + ' مساهم</span>' +
-      '<span>إجمالي الأسهم: ' + totalSharesVoted.toLocaleString('en-US') + '</span>' +
+      '<span>الإجمالي: ' + votedTokens.length + ' ' + voterNoun + '</span>' +
+      (isBoardVote ? '' : '<span>إجمالي الأسهم: ' + totalSharesVoted.toLocaleString('en-US') + '</span>') +
       '<span>نسبة الموافقة ' + approvalPercentage + '% (' + forVotes + ' موافق / ' + againstVotes + ' رافض / ' + abstainVotes + ' ممتنع)</span>' +
     '</div>';
 
@@ -320,10 +369,13 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
   // التوقيعات تُجلب من نفس مصدر صفحة القرارات حتى تظهر هنا كما تظهر في قرارات الجمعية.
   // استبعاد رئيس مجلس الإدارة من شبكة البطاقات لأنه يظهر بالفعل في كتلة التوقيع
   // الرسمي بالأسفل (مع ختم الشركة) — منعاً لتكرار اسمه وتوقيعه.
-  const boardMemberSigs = signatures.filter((sig) => {
-    const n = normalizeAr(sig.memberName);
-    return !(n.startsWith('عبدالحافظ') && n.includes('مكوش'));
-  });
+  const boardMemberSigs = signatures
+    .filter((sig) => {
+      const n = normalizeAr(sig.memberName);
+      return !(n.startsWith('عبدالحافظ') && n.includes('مكوش'));
+    })
+    // ترتيب بطاقات التوقيعات حسب المنصب أيضاً: نائب الرئيس ← العضو المنتدب ← الأعضاء
+    .sort((a, b) => (POSITION_RANK[a.memberPosition || ''] ?? 9) - (POSITION_RANK[b.memberPosition || ''] ?? 9));
   const memberSignaturesHtml = boardMemberSigs.length
     ? '<div class="section-head" style="margin-top:10px;">توقيعات أعضاء مجلس الإدارة</div>' +
       '<div class="sig-grid">' +
