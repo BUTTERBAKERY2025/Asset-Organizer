@@ -71,6 +71,15 @@ dialog applies ONLY to apply-to-all (default Friday, index 6 with Saturday week 
 **Why:** per-employee quick-apply intentionally stays fixed on Friday — sharing the dialog's
 state silently changed individual applies (review-flagged UX ambiguity). Keep them decoupled.
 
+**HQ monthly mode (2026-08-03):** branch `main_warehouse` (المركز الرئيسي) schedules MONTHLY, not weekly —
+component `client/src/components/hq-monthly-schedule.tsx` (exports HQ_BRANCH_ID) replaces the weekly grid in
+shift-management.tsx for that branch only. Invariants: one unified shift for everyone (default 09:00–18:00,
+break note 12–13), Friday isOff for ALL (enforced client + coerced server-side in bulk route), save always
+synthesizes the FULL month matrix per active employee (skipping approved-leave days) so attendance check-in
+never lacks a row. Bulk route also now strips rows overlapping approved leave_requests (server guard), and
+`validateMonthlyWeeklyRestCap` exempts main_warehouse rows (months with 5 Fridays legitimately exceed the
+4-off cap). HQ save sends force:true (skips weekly scheduleVersion conflict), weekly locks still apply.
+
 **Still-open gaps (not yet fixed):**
 - Invalid times silently coerced to 08:00/16:00 in storage (console.warn only).
 
