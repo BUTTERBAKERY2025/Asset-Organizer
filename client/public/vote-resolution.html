@@ -644,7 +644,17 @@
         const wrapper = signatureCanvas.parentElement;
         const width = wrapper ? wrapper.clientWidth - 20 : 300;
         const height = 150;
-        
+
+        // Preserve any existing drawing: resizing a canvas wipes it
+        // (iOS Safari fires resize when the toolbar hides/shows while scrolling).
+        let snapshot = null;
+        if (hasSignature && signatureCanvas.width > 0 && signatureCanvas.height > 0) {
+          snapshot = document.createElement('canvas');
+          snapshot.width = signatureCanvas.width;
+          snapshot.height = signatureCanvas.height;
+          snapshot.getContext('2d').drawImage(signatureCanvas, 0, 0);
+        }
+
         signatureCanvas.width = width;
         signatureCanvas.height = height;
         signatureCanvas.style.width = width + 'px';
@@ -656,6 +666,10 @@
         signatureCtx.lineWidth = 2;
         signatureCtx.lineCap = 'round';
         signatureCtx.lineJoin = 'round';
+
+        if (snapshot) {
+          signatureCtx.drawImage(snapshot, 0, 0, snapshot.width, snapshot.height, 0, 0, width, height);
+        }
       }
       
       setupCanvas();
@@ -745,8 +759,35 @@
       updateSubmitButton();
     }
 
+    function canvasHasInk() {
+      try {
+        const { width, height } = signatureCanvas;
+        if (!width || !height) return false;
+        const data = signatureCtx.getImageData(0, 0, width, height).data;
+        let ink = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          // Non-white, visible pixel = ink
+          if (data[i + 3] > 10 && (data[i] < 240 || data[i + 1] < 240 || data[i + 2] < 240)) {
+            ink++;
+            if (ink >= 40) return true;
+          }
+        }
+        return false;
+      } catch (e) {
+        // If pixel inspection fails, fall back to the flag
+        return hasSignature;
+      }
+    }
+
     function getSignatureData() {
       if (!hasSignature) return null;
+      // Guard against a blank (wiped) canvas being submitted as a signature
+      if (!canvasHasInk()) {
+        hasSignature = false;
+        updateSubmitButton();
+        alert('يبدو أن التوقيع فارغ — الرجاء التوقيع مرة أخرى داخل المربع');
+        return null;
+      }
       return signatureCanvas.toDataURL('image/png');
     }
 
@@ -784,6 +825,12 @@
 
       const comments = document.getElementById('comments').value.trim();
       const signatureData = getSignatureData();
+      if (!signatureData) {
+        // Blank/wiped canvas — do not submit a vote without a real signature
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = originalContent;
+        return;
+      }
 
       try {
         const apiBase = window.location.origin;
