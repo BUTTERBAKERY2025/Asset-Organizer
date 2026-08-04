@@ -15,3 +15,5 @@ Rules worth keeping in sync:
 - PROD CSP GOTCHA: helmet in production sets `script-src 'self'`, which silently kills the inline `<script>` of any public static signing page (page sticks at "جاري التحميل"). Every new public HTML page (like vote-resolution.html / sign-resolution.html / sign-financial.html) MUST be added to the CSP exemption list in server/index.ts. Dev never reproduces this (helmet disabled outside production).
 
 **Why:** review round flagged out-of-turn decline, non-transactional decline, and reopen leaving downstream signatures — all financial-record integrity bugs.
+- Stamped-copy download compatibility: save PDFs with useObjectStreams:false, delay revokeObjectURL (~2min) and copy bytes before Blob — otherwise some viewers report the file corrupt or it "opens then closes"; keep the approval-overlay PNG ≲2200px wide (huge alpha PNGs crash picky viewers).
+- When local `npx vite build` hangs at "transforming..." even on a clean baseline (environment slowness), verify instead via dev-server transform (curl localhost:5000/src/<file> → 200) + esbuild per-file transform, then push and let Render build.
