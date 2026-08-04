@@ -131,10 +131,13 @@ async function renderApprovalOverlay(
   const FOOTER_H = 34;
   const H = PAD + TITLE_H + rows * (cellH + GAP) + STAMP_H + FOOTER_H;
 
+  // رسم بدقة مضاعفة (x2) لوضوح أعلى عند الطباعة
+  const SS = 2;
   const canvas = document.createElement("canvas");
-  canvas.width = W;
-  canvas.height = H;
+  canvas.width = W * SS;
+  canvas.height = H * SS;
   const ctx = canvas.getContext("2d")!;
+  ctx.scale(SS, SS);
   // شفاف بالكامل — لا خلفية ولا إطار
 
   ctx.textAlign = "center";
@@ -248,9 +251,11 @@ async function renderApprovalOverlay(
   return { dataUrl: canvas.toDataURL("image/png"), w: W, h: H };
 }
 
-// تحديد أدنى نقطة للمحتوى في آخر صفحة (بالنقاط من أعلى الصفحة) عبر pdf.js
-// حتى يُطبع شريط الاعتماد مباشرة تحت النص بدون فراغ كبير
-async function detectContentBottom(pdfBytes: ArrayBuffer): Promise<number | null> {
+// تحليل آخر صفحة عبر pdf.js وإرجاع «الفراغات الرأسية» فيها (بالنقاط من أعلى الصفحة)
+// حتى يوضع شريط الاعتماد في أقرب فراغ بعد آخر نص — حتى لو كان هناك تذييل أسفل الصفحة
+async function detectVerticalGaps(
+  pdfBytes: ArrayBuffer
+): Promise<{ topPt: number; heightPt: number }[] | null> {
   try {
     const pdfjs = await import("pdfjs-dist");
     // @ts-ignore — استيراد رابط الـ worker عبر Vite
@@ -268,8 +273,8 @@ async function detectContentBottom(pdfBytes: ArrayBuffer): Promise<number | null
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvasContext: ctx, viewport } as any).promise;
     const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-    // من الأسفل للأعلى: أول صف فيه بكسلات داكنة فعلية (نص/جداول وليس خلفية فاتحة)
-    for (let y = canvas.height - 1; y >= 0; y--) {
+    // هل يحتوي الصف على محتوى فعلي (نص/جداول/صور)؟
+    const rowHasContent = (y: number): boolean => {
       let hits = 0;
       const rowOff = y * canvas.width * 4;
       for (let x = 0; x < canvas.width; x += 2) {
@@ -277,18 +282,28 @@ async function detectContentBottom(pdfBytes: ArrayBuffer): Promise<number | null
         const lum = 0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2];
         if (lum < 190) {
           hits++;
-          if (hits >= 3) break;
+          if (hits >= 3) return true;
         }
       }
-      if (hits >= 3) {
-        loaded.destroy();
-        return y / scale; // بالنقاط من أعلى الصفحة
+      return false;
+    };
+    const gaps: { topPt: number; heightPt: number }[] = [];
+    let gapStart: number | null = 0;
+    for (let y = 0; y < canvas.height; y++) {
+      if (rowHasContent(y)) {
+        if (gapStart != null) {
+          gaps.push({ topPt: gapStart / scale, heightPt: (y - gapStart) / scale });
+          gapStart = null;
+        }
+      } else if (gapStart == null) {
+        gapStart = y;
       }
     }
+    if (gapStart != null) gaps.push({ topPt: gapStart / scale, heightPt: (canvas.height - gapStart) / scale });
     loaded.destroy();
-    return null;
+    return gaps;
   } catch {
-    return null; // أي فشل → نرجع للوضع الافتراضي (أسفل الصفحة)
+    return null; // أي فشل → نرجع للوضع الافتراضي
   }
 }
 
@@ -318,31 +333,37 @@ export async function buildApprovedPdf(
     drawW = drawH * (overlay.w / overlay.h);
   }
 
-  // أين ينتهي المحتوى في آخر صفحة؟
-  const contentBottomFromTop = await detectContentBottom(originalPdfBytes);
+  // البحث عن أنسب فراغ في آخر صفحة: أقرب فراغ كافٍ بعد آخر نص (يتجاوز تذييل الصفحة)
+  const gaps = await detectVerticalGaps(originalPdfBytes);
   let placePage = lastPage;
   let yTop: number; // موضع أعلى الشريط بالقياس من أعلى الصفحة
-  const gap = 16; // مسافة صغيرة بين النص والشريط
-  if (contentBottomFromTop != null) {
-    yTop = contentBottomFromTop + gap;
-    const available = ph - yTop - bottomMargin;
-    if (available < drawH) {
-      if (available >= 150) {
-        // نضغط الشريط ليدخل في المساحة المتبقية
-        drawH = available;
+  const gapPad = 14; // مسافة صغيرة بين النص والشريط
+  if (gaps && gaps.length) {
+    const fits = gaps.filter((g) => g.heightPt >= drawH + gapPad + 8 && g.topPt > 40);
+    if (fits.length) {
+      // آخر فراغ كافٍ في الصفحة = مباشرة بعد آخر كتلة نص قبله
+      const g = fits[fits.length - 1];
+      yTop = g.topPt + gapPad;
+      // لو الفراغ أكبر بكثير من الشريط لا نلصقه بأسفل الفراغ بل بعد النص مباشرة (وهذا ما يحدث تلقائياً)
+    } else {
+      // لا فراغ كافٍ → جرّب أكبر فراغ مع تصغير الشريط، وإلا صفحة جديدة
+      const largest = gaps.reduce((a, b) => (b.heightPt > a.heightPt ? b : a));
+      const usable = largest.heightPt - gapPad - 8;
+      if (usable >= 130) {
+        drawH = usable;
         drawW = drawH * (overlay.w / overlay.h);
         if (drawW > pw - sideMargin * 2) {
           drawW = pw - sideMargin * 2;
           drawH = drawW * (overlay.h / overlay.w);
         }
+        yTop = largest.topPt + gapPad;
       } else {
-        // لا مساحة كافية → صفحة جديدة بنفس المقاس ويُوضع الشريط أعلاها
         placePage = pdfDoc.addPage([pw, ph]);
         yTop = 40;
       }
     }
   } else {
-    // تعذّر الكشف → أسفل الصفحة كما السابق
+    // تعذّر التحليل → أسفل الصفحة كما السابق
     yTop = ph - bottomMargin - drawH;
   }
 
