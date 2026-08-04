@@ -142,6 +142,7 @@ const pageImports: Record<string, () => Promise<any>> = {
   "governance-assembly-minutes": () => import("@/pages/governance/assembly-minutes"),
   "governance-resolutions": () => import("@/pages/governance/resolutions"),
   "governance-compliance": () => import("@/pages/governance/compliance"),
+  "governance-financial-statements": () => import("@/pages/governance/financial-statements"),
   "governance-share-transfers": () => import("@/pages/governance/share-transfers"),
   "governance-disclosures": () => import("@/pages/governance/disclosures"),
   "governance-dividends": () => import("@/pages/governance/dividends"),

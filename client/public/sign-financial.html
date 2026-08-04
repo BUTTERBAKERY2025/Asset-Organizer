@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>توقيع القوائم المالية</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f5f2ec; min-height: 100vh; padding: 16px; color: #2c3347; }
+    .container { max-width: 640px; margin: 0 auto; }
+    .card { background: #fff; border-radius: 14px; box-shadow: 0 2px 14px rgba(0,0,0,0.08); padding: 22px; margin-bottom: 16px; }
+    .header { background: #2c3347; color: #fff; border-radius: 14px; padding: 20px 22px; margin-bottom: 16px; text-align: center; }
+    .header h1 { font-size: 19px; margin-bottom: 4px; }
+    .header p { font-size: 13px; opacity: .85; }
+    .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #eee; font-size: 14px; }
+    .row:last-child { border-bottom: none; }
+    .row .label { color: #8a8f9e; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; }
+    .badge.ok { background: #e6f6ea; color: #1c7c31; }
+    .badge.wait { background: #fdf3d7; color: #9a7409; }
+    .btn { display: block; width: 100%; padding: 14px; border: none; border-radius: 10px; font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .btn-primary { background: #1c7c31; color: #fff; }
+    .btn-primary:disabled { background: #b9c2b9; cursor: not-allowed; }
+    .btn-outline { background: #fff; color: #2c3347; border: 1.5px solid #cfd4de; margin-top: 10px; }
+    .btn-danger-link { background: none; color: #b3261e; border: none; margin-top: 14px; font-size: 13px; text-decoration: underline; cursor: pointer; width: 100%; font-family: inherit; }
+    .sig-wrap { border: 2px dashed #cfd4de; border-radius: 10px; padding: 10px; background: #fbfbfb; }
+    canvas { display: block; touch-action: none; border-radius: 6px; background: #fff; }
+    .sig-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+    .clear-btn { background: none; border: none; color: #8a8f9e; font-size: 13px; text-decoration: underline; cursor: pointer; font-family: inherit; }
+    .hint { font-size: 12.5px; color: #8a8f9e; margin: 8px 0 14px; text-align: center; }
+    .center { text-align: center; }
+    .big-icon { font-size: 46px; margin-bottom: 10px; }
+    .hidden { display: none; }
+    .signers-list { margin-top: 10px; }
+    .signer-item { display: flex; align-items: center; gap: 8px; padding: 7px 0; font-size: 14px; border-bottom: 1px dashed #f0ede4; }
+    .signer-item:last-child { border-bottom: none; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+    .dot.signed { background: #1c7c31; }
+    .dot.pending { background: #e0b53a; }
+    .dot.declined { background: #b3261e; }
+    textarea { width: 100%; border: 1.5px solid #cfd4de; border-radius: 8px; padding: 10px; font-family: inherit; font-size: 14px; min-height: 70px; margin-top: 8px; }
+    h3 { font-size: 15.5px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>شركة الزبد الأفضل</h1>
+      <p>اعتماد وتوقيع القوائم المالية</p>
+    </div>
+
+    <div id="loading" class="card center">جاري التحميل...</div>
+
+    <div id="errorBox" class="card center hidden">
+      <div class="big-icon">⚠️</div>
+      <h3 id="errorTitle">خطأ</h3>
+      <p id="errorMsg" style="color:#8a8f9e; font-size:14px;"></p>
+    </div>
+
+    <div id="content" class="hidden">
+      <div class="card">
+        <h3>بيانات المستند</h3>
+        <div class="row"><span class="label">الدورة</span><span id="cycleTitle"></span></div>
+        <div class="row"><span class="label">الفترة</span><span id="period"></span></div>
+        <div class="row"><span class="label">المستند</span><span id="docTitle"></span></div>
+        <div class="row"><span class="label">الموقّع</span><span id="signerName"></span></div>
+        <div class="row"><span class="label">الصفة</span><span id="signerPosition"></span></div>
+        <button class="btn btn-outline" onclick="viewPdf()">📄 عرض المستند (PDF)</button>
+      </div>
+
+      <div class="card">
+        <h3>تسلسل التوقيعات</h3>
+        <div class="signers-list" id="signersList"></div>
+      </div>
+
+      <div class="card hidden" id="notTurnBox">
+        <div class="center">
+          <div class="big-icon">⏳</div>
+          <p>لم يحن دورك في التوقيع بعد</p>
+          <p id="waitingFor" style="color:#8a8f9e; font-size:13.5px; margin-top:6px;"></p>
+        </div>
+      </div>
+
+      <div class="card hidden" id="signBox">
+        <h3>التوقيع الإلكتروني</h3>
+        <p class="hint">وقّع داخل المربع بإصبعك أو بالفأرة — توقيعك يعني اعتماد هذا المستند</p>
+        <div class="sig-wrap"><canvas id="signatureCanvas"></canvas></div>
+        <div class="sig-actions">
+          <button class="clear-btn" onclick="clearSignature()">مسح وإعادة التوقيع</button>
+        </div>
+        <div style="margin-top:14px;">
+          <button class="btn btn-primary" id="submitBtn" disabled onclick="submitSignature()">اعتماد وتوقيع المستند</button>
+          <button class="btn-danger-link" onclick="toggleDecline()">لدي ملاحظات — الاعتذار عن التوقيع</button>
+          <div id="declineForm" class="hidden">
+            <textarea id="declineReason" placeholder="سبب الاعتذار أو الملاحظات على القوائم..."></textarea>
+            <button class="btn btn-outline" onclick="submitDecline()">إرسال الاعتذار</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card hidden center" id="doneBox">
+        <div class="big-icon">✅</div>
+        <h3>تم اعتماد المستند وتوقيعه بنجاح</h3>
+        <p style="color:#8a8f9e; font-size:13.5px; margin-top:6px;" id="doneMsg"></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, '') || window.location.search);
+    const token = params.get('token');
+    let canvas, ctx, isDrawing = false, hasSignature = false, lastX = 0, lastY = 0;
+    let info = null;
+
+    function show(id) { document.getElementById(id).classList.remove('hidden'); }
+    function hide(id) { document.getElementById(id).classList.add('hidden'); }
+
+    function showError(title, msg) {
+      hide('loading'); hide('content');
+      document.getElementById('errorTitle').textContent = title;
+      document.getElementById('errorMsg').textContent = msg || '';
+      show('errorBox');
+    }
+
+    function viewPdf() {
+      window.open('/api/public/fin-sign/' + token + '/file', '_blank');
+    }
+
+    const POSITIONS = { cfo: 'المدير المالي', ceo: 'الرئيس التنفيذي', chairman: 'رئيس مجلس الإدارة', vice_chairman: 'نائب رئيس مجلس الإدارة', board_member: 'عضو مجلس الإدارة', auditor: 'المراجع الداخلي' };
+    function posLabel(p) { return POSITIONS[p] || p; }
+
+    async function load() {
+      if (!token) return showError('رابط غير صالح', 'لا يوجد رمز توقيع في الرابط');
+      try {
+        const res = await fetch('/api/public/fin-sign/' + token);
+        const data = await res.json();
+        if (!res.ok) return showError('تعذر فتح الرابط', data.error);
+        info = data;
+        document.getElementById('cycleTitle').textContent = data.cycleTitle || '-';
+        document.getElementById('period').textContent = (data.periodStart || '') + ' — ' + (data.periodEnd || '');
+        document.getElementById('docTitle').textContent = data.documentTitle;
+        document.getElementById('signerName').textContent = data.signerName;
+        document.getElementById('signerPosition').textContent = posLabel(data.signerPosition);
+
+        const list = document.getElementById('signersList');
+        list.innerHTML = '';
+        (data.signers || []).forEach(function(s, i) {
+          const div = document.createElement('div');
+          div.className = 'signer-item';
+          const dot = document.createElement('span');
+          dot.className = 'dot ' + (s.status === 'signed' ? 'signed' : s.status === 'declined' ? 'declined' : 'pending');
+          const txt = document.createElement('span');
+          txt.textContent = (i + 1) + '. ' + s.name + ' — ' + posLabel(s.position) + (s.status === 'signed' ? ' (وقّع)' : s.status === 'declined' ? ' (اعتذر)' : '');
+          div.appendChild(dot); div.appendChild(txt);
+          list.appendChild(div);
+        });
+
+        hide('loading'); show('content');
+
+        if (data.status === 'signed') {
+          document.getElementById('doneMsg').textContent = 'سبق أن وقّعت هذا المستند';
+          show('doneBox');
+        } else if (data.status === 'declined') {
+          showError('تم الاعتذار عن التوقيع', 'سبق أن سجّلت اعتذارك عن توقيع هذا المستند');
+        } else if (!data.isMyTurn) {
+          document.getElementById('waitingFor').textContent = 'بانتظار توقيع: ' + (data.waitingFor || []).map(function(w){ return w.name; }).join('، ');
+          show('notTurnBox');
+        } else {
+          show('signBox');
+          initCanvas();
+        }
+      } catch (e) {
+        showError('خطأ في الاتصال', 'تعذر الاتصال بالخادم');
+      }
+    }
+
+    function initCanvas() {
+      canvas = document.getElementById('signatureCanvas');
+      ctx = canvas.getContext('2d');
+
+      function resizeCanvas() {
+        const wrapper = canvas.parentElement;
+        // Preserve any existing drawing: resizing wipes the canvas
+        // (iOS Safari fires resize when the toolbar hides/shows while scrolling).
+        let snapshot = null;
+        if (hasSignature && canvas.width > 0 && canvas.height > 0) {
+          snapshot = document.createElement('canvas');
+          snapshot.width = canvas.width;
+          snapshot.height = canvas.height;
+          snapshot.getContext('2d').drawImage(canvas, 0, 0);
+        }
+        canvas.width = wrapper.clientWidth - 20;
+        canvas.height = 180;
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = '#1a2340';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        if (snapshot) {
+          ctx.drawImage(snapshot, 0, 0, snapshot.width, snapshot.height, 0, 0, canvas.width, canvas.height);
+        }
+      }
+
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+
+      function getPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        if (e.touches && e.touches.length > 0) {
+          return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+        }
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      }
+
+      function start(e) {
+        e.preventDefault();
+        isDrawing = true;
+        const pos = getPos(e);
+        lastX = pos.x; lastY = pos.y;
+        ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
+      }
+      function move(e) {
+        if (!isDrawing) return;
+        e.preventDefault();
+        const pos = getPos(e);
+        ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(pos.x, pos.y); ctx.stroke();
+        lastX = pos.x; lastY = pos.y;
+        hasSignature = true;
+        document.getElementById('submitBtn').disabled = false;
+      }
+      function stop() { isDrawing = false; }
+
+      canvas.addEventListener('mousedown', start);
+      canvas.addEventListener('mousemove', move);
+      canvas.addEventListener('mouseup', stop);
+      canvas.addEventListener('mouseout', stop);
+      canvas.addEventListener('touchstart', start, { passive: false });
+      canvas.addEventListener('touchmove', move, { passive: false });
+      canvas.addEventListener('touchend', stop);
+      canvas.addEventListener('touchcancel', stop);
+    }
+
+    function clearSignature() {
+      if (!ctx) return;
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      hasSignature = false;
+      document.getElementById('submitBtn').disabled = true;
+    }
+
+    function canvasHasInk() {
+      try {
+        if (!canvas.width || !canvas.height) return false;
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        let ink = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i + 3] > 10 && (data[i] < 240 || data[i + 1] < 240 || data[i + 2] < 240)) {
+            ink++;
+            if (ink >= 40) return true;
+          }
+        }
+        return false;
+      } catch (e) { return hasSignature; }
+    }
+
+    async function submitSignature() {
+      if (!hasSignature) { alert('الرجاء التوقيع أولاً'); return; }
+      if (!canvasHasInk()) {
+        hasSignature = false;
+        document.getElementById('submitBtn').disabled = true;
+        alert('يبدو أن التوقيع فارغ — الرجاء التوقيع مرة أخرى داخل المربع');
+        return;
+      }
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = 'جاري الإرسال...';
+      try {
+        const res = await fetch('/api/public/fin-sign/' + token, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ signatureData: canvas.toDataURL('image/png') })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || 'فشل في حفظ التوقيع');
+          btn.disabled = false;
+          btn.textContent = 'اعتماد وتوقيع المستند';
+          return;
+        }
+        hide('signBox');
+        document.getElementById('doneMsg').textContent = data.completed
+          ? 'اكتملت جميع التوقيعات — المستند معتمد نهائياً 🎉'
+          : 'تم توقيعك بنجاح، وسيُرسل المستند للموقّع التالي';
+        show('doneBox');
+      } catch (e) {
+        alert('فشل في الاتصال بالخادم');
+        btn.disabled = false;
+        btn.textContent = 'اعتماد وتوقيع المستند';
+      }
+    }
+
+    function toggleDecline() {
+      document.getElementById('declineForm').classList.toggle('hidden');
+    }
+
+    async function submitDecline() {
+      const reason = document.getElementById('declineReason').value.trim();
+      if (!reason) { alert('اكتب سبب الاعتذار أو ملاحظاتك'); return; }
+      if (!confirm('تأكيد الاعتذار عن توقيع هذا المستند؟')) return;
+      try {
+        const res = await fetch('/api/public/fin-sign/' + token + '/decline', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason })
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || 'فشل في إرسال الاعتذار'); return; }
+        hide('signBox');
+        showError('تم تسجيل الاعتذار', 'أُبلغت الإدارة المالية بملاحظاتك');
+      } catch (e) { alert('فشل في الاتصال بالخادم'); }
+    }
+
+    load();
+  </script>
+</body>
+</html>

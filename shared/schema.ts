@@ -9591,6 +9591,80 @@ export const resolutionSignatures = pgTable("resolution_signatures", {
   index("idx_resolution_signatures_status").on(table.status),
 ]);
 
+// دورات مراجعة القوائم المالية - Financial Statements Review Cycles
+export const financialReviewCycles = pgTable("financial_review_cycles", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(), // مثل: القوائم المالية النصف سنوية
+  periodStart: text("period_start").notNull(), // YYYY-MM-DD
+  periodEnd: text("period_end").notNull(),
+  status: text("status").default("active").notNull(), // active, closed
+  notes: text("notes"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertFinancialReviewCycleSchema = createInsertSchema(financialReviewCycles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// مستندات القوائم المالية - Financial Review Documents (PDF files)
+export const financialDocuments = pgTable("financial_documents", {
+  id: serial("id").primaryKey(),
+  cycleId: integer("cycle_id").notNull().references(() => financialReviewCycles.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  category: text("category"), // ميزانية، قائمة دخل، تدفقات نقدية، إيضاحات، أخرى
+  fileName: text("file_name").notNull(),
+  storagePath: text("storage_path").notNull(), // Supabase storage path
+  fileSize: integer("file_size"),
+  status: text("status").default("pending_signatures").notNull(), // pending_signatures, completed, declined
+  uploadedBy: text("uploaded_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_financial_documents_cycle").on(table.cycleId),
+]);
+
+export const insertFinancialDocumentSchema = createInsertSchema(financialDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// موقّعو مستندات القوائم المالية - Financial Document Signers (sequential)
+export const financialDocSigners = pgTable("financial_doc_signers", {
+  id: serial("id").primaryKey(),
+  documentId: integer("document_id").notNull().references(() => financialDocuments.id, { onDelete: "cascade" }),
+  signerName: text("signer_name").notNull(),
+  signerPosition: text("signer_position").notNull(), // cfo, ceo, chairman, other (free text label allowed)
+  signOrder: integer("sign_order").notNull(), // 1 = first
+  signToken: text("sign_token").notNull().unique(),
+  status: text("status").default("pending").notNull(), // pending, signed, declined
+  signatureData: text("signature_data"),
+  signedAt: timestamp("signed_at"),
+  declineReason: text("decline_reason"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_financial_doc_signers_document").on(table.documentId),
+  index("idx_financial_doc_signers_token").on(table.signToken),
+]);
+
+export const insertFinancialDocSignerSchema = createInsertSchema(financialDocSigners).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type FinancialReviewCycle = typeof financialReviewCycles.$inferSelect;
+export type FinancialDocument = typeof financialDocuments.$inferSelect;
+export type FinancialDocSigner = typeof financialDocSigners.$inferSelect;
+
 export const insertResolutionSignatureSchema = createInsertSchema(resolutionSignatures).omit({
   id: true,
   createdAt: true,

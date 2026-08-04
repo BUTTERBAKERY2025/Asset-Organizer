@@ -99,6 +99,15 @@ const governanceModules: GovernanceModule[] = [
     href: "/governance/investor-portal",
   },
   {
+    id: "financial-statements",
+    title: "القوائم المالية ومراجعتها",
+    description: "دورات مراجعة القوائم المالية، رفع الملفات، التوقيعات التسلسلية والختم الرسمي",
+    icon: FileText,
+    color: "text-emerald-600",
+    bgColor: "bg-emerald-100",
+    href: "/governance/financial-statements",
+  },
+  {
     id: "resolutions",
     title: "قرارات مجلس الإدارة",
     description: "توثيق ومتابعة قرارات المجلس",

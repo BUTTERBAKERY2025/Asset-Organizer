@@ -120,6 +120,7 @@ import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS, hasCrossBranchHrReadAccess } from "./auth";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
+import { registerFinancialReviewRoutes } from "./financial-review-routes";
 import { registerJobOfferRoutes } from "./job-offers-routes";
 import { registerOnboardingRoutes } from "./onboarding-routes";
 import { registerHrRoutes } from "./hr-routes";
@@ -429,6 +430,7 @@ export async function registerRoutes(
 
   // Register governance routes
   registerGovernanceRoutes(app);
+  registerFinancialReviewRoutes(app);
   registerJobOfferRoutes(app);
   registerOnboardingRoutes(app);
   registerHrRoutes(app);
