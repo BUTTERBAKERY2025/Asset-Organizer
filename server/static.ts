@@ -96,11 +96,24 @@ export function serveStatic(app: Express) {
     }));
   }
 
+  // صفحات التوقيع العامة يجب ألا تُخزَّن في كاش المتصفح: أي إصلاح فيها
+  // يجب أن يصل للموقّع فوراً (متصفح واتساب لا يمكنه عمل hard refresh)
+  const NO_CACHE_HTML = new Set([
+    "/sign-financial.html",
+    "/sign-resolution.html",
+    "/vote-resolution.html",
+  ]);
+
   app.use(servePrecompressed(distPath));
   app.use(express.static(distPath, {
     maxAge: "1h",
     etag: true,
     index: false,
+    setHeaders: (res, filePath) => {
+      if (NO_CACHE_HTML.has("/" + path.basename(filePath))) {
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      }
+    },
   }));
 
   app.use("*", (_req, res) => {
