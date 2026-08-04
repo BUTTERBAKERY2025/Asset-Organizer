@@ -157,7 +157,10 @@ export function registerFinancialReviewRoutes(app: Express) {
             if (!decoded.includes("\uFFFD")) originalName = decoded;
           } catch {}
 
-          const uploaded = await uploadToSupabase(req.file.buffer, originalName, "application/pdf");
+          // مفتاح التخزين في Supabase يجب أن يكون ASCII فقط (الحروف العربية مرفوضة
+          // في أسماء الكائنات) — الاسم العربي الجميل يبقى في قاعدة البيانات للعرض
+          const storageName = `financial_doc_${Date.now()}.pdf`;
+          const uploaded = await uploadToSupabase(req.file.buffer, storageName, "application/pdf");
           if (!uploaded) return res.status(500).json({ error: "فشل رفع الملف إلى التخزين" });
 
           const expiresAt = new Date();
