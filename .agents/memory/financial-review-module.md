@@ -11,4 +11,6 @@ Rules worth keeping in sync:
 - Stamped/approved copy is generated client-side with pdf-lib: an A4 approval page is drawn on canvas (Arabic-safe) and appended as a JPEG page; stamp date = last signedAt (deterministic). Server-side archival is a proposed follow-up.
 - Tables financial_review_cycles / financial_documents / financial_doc_signers were created with manual CREATE TABLE SQL on BOTH dev and prod (never drizzle-kit push here).
 
+- PROD CSP GOTCHA: helmet in production sets `script-src 'self'`, which silently kills the inline `<script>` of any public static signing page (page sticks at "جاري التحميل"). Every new public HTML page (like vote-resolution.html / sign-resolution.html / sign-financial.html) MUST be added to the CSP exemption list in server/index.ts. Dev never reproduces this (helmet disabled outside production).
+
 **Why:** review round flagged out-of-turn decline, non-transactional decline, and reopen leaving downstream signatures — all financial-record integrity bugs.
