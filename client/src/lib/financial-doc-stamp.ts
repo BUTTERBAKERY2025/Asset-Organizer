@@ -398,6 +398,63 @@ export async function buildApprovedPdf(
   return await pdfDoc.save();
 }
 
+
+// ====== الختم السريع: ختم أي ملف PDF على صفحة محددة وبموضع محدد (بدون توقيعات) ======
+export type QuickStampPosition =
+  | "bottom-right" | "bottom-center" | "bottom-left"
+  | "center"
+  | "top-right" | "top-center" | "top-left";
+
+export async function getPdfPageCount(pdfBytes: ArrayBuffer): Promise<number> {
+  const d = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+  return d.getPageCount();
+}
+
+export async function quickStampPdf(
+  originalPdfBytes: ArrayBuffer,
+  pageIndex: number, // 0-based
+  position: QuickStampPosition,
+  sizePt: number // قطر الختم بالنقاط (72pt = بوصة)
+): Promise<Uint8Array> {
+  const pdfDoc = await PDFDocument.load(originalPdfBytes, { ignoreEncryption: true });
+  const pages = pdfDoc.getPages();
+  const page = pages[Math.min(Math.max(pageIndex, 0), pages.length - 1)];
+  const { width: pw, height: ph } = page.getSize();
+
+  // تجهيز صورة الختم الشفافة بدقة عالية وميل خفيف
+  const stampImg = await getStampImage();
+  const inked = toTransparentInk(stampImg);
+  const SS = 2.2; // دقة إضافية
+  const px = Math.round(sizePt * SS * 2);
+  const c = document.createElement("canvas");
+  c.width = px;
+  c.height = px;
+  const cx = c.getContext("2d")!;
+  cx.translate(px / 2, px / 2);
+  cx.rotate(-0.08);
+  cx.globalAlpha = 0.93;
+  const s = px * 0.86; // هامش يمنع قص الحواف بعد الدوران
+  cx.drawImage(inked, -s / 2, -s / 2, s, s);
+  const pngBytes = Uint8Array.from(atob(c.toDataURL("image/png").split(",")[1]), (ch) => ch.charCodeAt(0));
+  const png = await pdfDoc.embedPng(pngBytes);
+
+  const m = 24; // هامش من حواف الصفحة
+  const drawSize = sizePt / 0.86;
+  const xs: Record<string, number> = {
+    left: m,
+    center: (pw - drawSize) / 2,
+    right: pw - m - drawSize,
+  };
+  const ys: Record<string, number> = {
+    top: ph - m - drawSize,
+    middle: (ph - drawSize) / 2,
+    bottom: m,
+  };
+  const [vPos, hPos] = position === "center" ? ["middle", "center"] : (position.split("-") as [string, string]);
+  page.drawImage(png, { x: xs[hPos], y: ys[vPos], width: drawSize, height: drawSize });
+  return await pdfDoc.save();
+}
+
 export function downloadPdf(bytes: Uint8Array, fileName: string) {
   const blob = new Blob([bytes as any], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);

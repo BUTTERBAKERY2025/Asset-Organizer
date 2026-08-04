@@ -18,7 +18,8 @@ import {
   FileText, Plus, Upload, Trash2, Copy, MessageCircle, RefreshCw,
   Download, Eye, CheckCircle, Clock, XCircle, ArrowRight, Stamp, ChevronDown, ChevronUp,
 } from "lucide-react";
-import { buildApprovedPdf, downloadPdf, positionLabel } from "@/lib/financial-doc-stamp";
+import { buildApprovedPdf, downloadPdf, positionLabel, quickStampPdf, getPdfPageCount, type QuickStampPosition } from "@/lib/financial-doc-stamp";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface Cycle {
   id: number;
@@ -281,6 +282,12 @@ export default function FinancialStatementsPage() {
           </Button>
         </div>
 
+        <Tabs defaultValue="cycles" dir="rtl">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="cycles" data-testid="tab-cycles">دورات المراجعة</TabsTrigger>
+            <TabsTrigger value="quick-stamp" data-testid="tab-quick-stamp"><Stamp className="h-4 w-4 ml-1" /> الختم الإلكتروني</TabsTrigger>
+          </TabsList>
+          <TabsContent value="cycles" className="mt-4 space-y-4">
         {isLoading ? (
           <Card><CardContent className="py-10 text-center text-gray-500">جاري التحميل...</CardContent></Card>
         ) : cycles.length === 0 ? (
@@ -319,6 +326,11 @@ export default function FinancialStatementsPage() {
             ))}
           </div>
         )}
+          </TabsContent>
+          <TabsContent value="quick-stamp" className="mt-4">
+            <QuickStampSection />
+          </TabsContent>
+        </Tabs>
 
         <Dialog open={showNewCycle} onOpenChange={setShowNewCycle}>
           <DialogContent className="max-w-md" dir="rtl">
@@ -613,5 +625,147 @@ export default function FinancialStatementsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+
+// ================== الختم الإلكتروني السريع ==================
+// رفع PDF → اختيار الصفحة والموضع والحجم → ختم وتحميل (كل شيء داخل المتصفح، لا يُرفع الملف لأي مكان)
+function QuickStampSection() {
+  const { toast } = useToast();
+  const [file, setFile] = useState<File | null>(null);
+  const [bytes, setBytes] = useState<ArrayBuffer | null>(null);
+  const [pageCount, setPageCount] = useState(0);
+  const [pageNum, setPageNum] = useState("1"); // 1-based
+  const [position, setPosition] = useState<QuickStampPosition>("bottom-center");
+  const [size, setSize] = useState("110");
+  const [working, setWorking] = useState(false);
+
+  const onFile = async (f: File | null) => {
+    setFile(f);
+    setBytes(null);
+    setPageCount(0);
+    if (!f) return;
+    if (f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) {
+      toast({ title: "الملف يجب أن يكون PDF", variant: "destructive" });
+      setFile(null);
+      return;
+    }
+    try {
+      const buf = await f.arrayBuffer();
+      const count = await getPdfPageCount(buf);
+      setBytes(buf);
+      setPageCount(count);
+      setPageNum(String(count)); // افتراضياً آخر صفحة
+    } catch {
+      toast({ title: "تعذّر قراءة الملف — تأكد أنه PDF سليم", variant: "destructive" });
+      setFile(null);
+    }
+  };
+
+  const doStamp = async () => {
+    if (!bytes || !file) return;
+    setWorking(true);
+    try {
+      const out = await quickStampPdf(bytes.slice(0), Number(pageNum) - 1, position, Number(size));
+      const base = file.name.replace(/\.pdf$/i, "");
+      downloadPdf(out, base + " - مختوم.pdf");
+      toast({ title: "تم ختم الملف وتحميله ✔" });
+    } catch (e) {
+      toast({ title: "فشل ختم الملف", description: String(e), variant: "destructive" });
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const POS_OPTIONS: { value: QuickStampPosition; label: string }[] = [
+    { value: "bottom-right", label: "أسفل يمين" },
+    { value: "bottom-center", label: "أسفل الوسط" },
+    { value: "bottom-left", label: "أسفل يسار" },
+    { value: "center", label: "منتصف الصفحة" },
+    { value: "top-right", label: "أعلى يمين" },
+    { value: "top-center", label: "أعلى الوسط" },
+    { value: "top-left", label: "أعلى يسار" },
+  ];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Stamp className="h-5 w-5 text-blue-800" /> ختم إلكتروني سريع — ارفع ملف PDF واختمه وحمّله فوراً
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="border-2 border-dashed rounded-lg p-6 text-center bg-gray-50/50">
+          <Input
+            type="file"
+            accept="application/pdf,.pdf"
+            onChange={(e) => onFile(e.target.files?.[0] || null)}
+            className="max-w-sm mx-auto"
+            data-testid="quick-stamp-file"
+          />
+          {file && pageCount > 0 && (
+            <p className="text-sm text-gray-600 mt-2">
+              {file.name} • {(file.size / 1024 / 1024).toFixed(1)}MB • عدد الصفحات: {pageCount}
+            </p>
+          )}
+        </div>
+
+        {pageCount > 0 && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <Label>الصفحة المطلوب ختمها</Label>
+                <Select value={pageNum} onValueChange={setPageNum}>
+                  <SelectTrigger data-testid="quick-stamp-page"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: pageCount }, (_, i) => (
+                      <SelectItem key={i + 1} value={String(i + 1)}>
+                        صفحة {i + 1}{i + 1 === pageCount ? " (الأخيرة)" : i === 0 ? " (الأولى)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>موضع الختم</Label>
+                <Select value={position} onValueChange={(v) => setPosition(v as QuickStampPosition)}>
+                  <SelectTrigger data-testid="quick-stamp-position"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {POS_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>حجم الختم</Label>
+                <Select value={size} onValueChange={setSize}>
+                  <SelectTrigger data-testid="quick-stamp-size"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="85">صغير</SelectItem>
+                    <SelectItem value="110">متوسط</SelectItem>
+                    <SelectItem value="145">كبير</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <Button
+              onClick={doStamp}
+              disabled={working}
+              className="w-full bg-blue-800 hover:bg-blue-900"
+              data-testid="quick-stamp-download"
+            >
+              <Download className="h-4 w-4 ml-1" />
+              {working ? "جاري الختم..." : "ختم الملف وتحميله"}
+            </Button>
+            <p className="text-xs text-gray-500 text-center">
+              يتم الختم داخل متصفحك مباشرة — الملف لا يُرفع ولا يُخزَّن في النظام
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
