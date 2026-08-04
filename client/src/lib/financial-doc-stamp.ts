@@ -156,8 +156,8 @@ async function renderApprovalOverlay(
   const FOOTER_H = 34;
   const H = PAD + TITLE_H + rows * (cellH + GAP) + STAMP_H + FOOTER_H;
 
-  // رسم بدقة مضاعفة (x2) لوضوح أعلى عند الطباعة
-  const SS = 2;
+  // رسم بدقة أعلى (x1.6) — وضوح جيد مع حجم صورة متوافق مع كل العارضات
+  const SS = 1.6;
   const canvas = document.createElement("canvas");
   canvas.width = W * SS;
   canvas.height = H * SS;
@@ -395,7 +395,7 @@ export async function buildApprovedPdf(
     width: drawW,
     height: drawH,
   });
-  return await pdfDoc.save();
+  return await pdfDoc.save({ useObjectStreams: false });
 }
 
 
@@ -452,19 +452,22 @@ export async function quickStampPdf(
   };
   const [vPos, hPos] = position === "center" ? ["middle", "center"] : (position.split("-") as [string, string]);
   page.drawImage(png, { x: xs[hPos], y: ys[vPos], width: drawSize, height: drawSize });
-  return await pdfDoc.save();
+  return await pdfDoc.save({ useObjectStreams: false });
 }
 
 export function downloadPdf(bytes: Uint8Array, fileName: string) {
-  const blob = new Blob([bytes as any], { type: "application/pdf" });
+  // نسخة مستقلة من البايتات + تأخير إلغاء الرابط — بعض المتصفحات/العارضات
+  // تفتح الملف قبل اكتمال قراءته فيبدو تالفاً أو «يفتح ويقفل»
+  const copy = new Uint8Array(bytes.length);
+  copy.set(bytes);
+  const blob = new Blob([copy.buffer], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = fileName;
+  a.rel = "noopener";
   document.body.appendChild(a);
   a.click();
-  setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 500);
+  setTimeout(() => document.body.removeChild(a), 1000);
+  setTimeout(() => URL.revokeObjectURL(url), 120000);
 }
