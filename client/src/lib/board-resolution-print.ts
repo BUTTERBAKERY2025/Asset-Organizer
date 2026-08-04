@@ -492,7 +492,7 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
         .sign-elec { color: #8a8a8a; font-size: 7px; display: block; }
         /* Fixed height (not max-height) so row height is deterministic before the
            data-URI image finishes decoding -> accurate measurement. */
-        .vt-sign-img { height: 18px; width: auto; max-width: 86px; display: block; margin: 0 auto 1px; }
+        .vt-sign-img { height: 18px; width: auto; max-width: 86px; display: block; margin: 0 auto 1px; mix-blend-mode: multiply; }
 
         .vt-total { display: flex; justify-content: space-between; gap: 8px; background: #f3ead2; color: #5a4a1e; font-weight: 700; padding: 6px 10px; font-size: 9px; border-radius: 4px; margin-bottom: 8px; }
 
@@ -521,7 +521,7 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
         .sig-role { font-size: 8px; color: #b8962f; font-weight: 700; margin-bottom: 2px; }
         .sig-name { font-size: 11px; font-weight: 700; color: #2b3a4f; margin-bottom: 3px; }
         .sig-img-wrap { height: 38px; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; border-bottom: 1px solid #e7e2d4; padding-bottom: 3px; }
-        .sig-img2 { max-height: 36px; max-width: 160px; }
+        .sig-img2 { max-height: 36px; max-width: 160px; mix-blend-mode: multiply; }
         .sig-wait { font-size: 8px; color: #b0a98f; }
         .sig-x { font-size: 8px; color: #c0392b; }
         .sig-foot { display: flex; justify-content: center; gap: 8px; align-items: center; flex-wrap: wrap; }
