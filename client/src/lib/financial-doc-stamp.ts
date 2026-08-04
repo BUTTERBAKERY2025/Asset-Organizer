@@ -44,6 +44,31 @@ function isValidSignature(sig: string | null): sig is string {
   return !!sig && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(sig);
 }
 
+
+// تحويل صورة (توقيع/ختم) إلى شفافة: البكسلات الفاتحة تختفي ويبقى الحبر فقط
+// حتى تُطبع مباشرة على خلفية الملف الأصلي بدون مربع أبيض تحتها
+function toTransparentInk(img: HTMLImageElement): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = img.width;
+  c.height = img.height;
+  const cx = c.getContext("2d")!;
+  cx.drawImage(img, 0, 0);
+  const imgData = cx.getImageData(0, 0, c.width, c.height);
+  const d = imgData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    if (d[i + 3] === 0) continue; // شفاف أصلاً
+    if (lum >= 235) {
+      d[i + 3] = 0; // أبيض → شفاف
+    } else if (lum > 160) {
+      // تدرّج ناعم على الحواف
+      d[i + 3] = Math.round(d[i + 3] * ((235 - lum) / 75));
+    }
+  }
+  cx.putImageData(imgData, 0, 0);
+  return c;
+}
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -192,10 +217,7 @@ async function renderApprovalOverlay(
         const maxW = cellW - 60, maxH = 66;
         const ratio = Math.min(maxW / img.width, maxH / img.height);
         const iw = img.width * ratio, ih = img.height * ratio;
-        ctx.save();
-        ctx.globalCompositeOperation = "multiply";
-        ctx.drawImage(img, x + (cellW - iw) / 2, cy + 66, iw, ih);
-        ctx.restore();
+        ctx.drawImage(toTransparentInk(img), x + (cellW - iw) / 2, cy + 66, iw, ih);
       } catch { /* تجاهل صورة تالفة */ }
     }
     // خط توقيع رفيع تحت التوقيع
@@ -223,7 +245,7 @@ async function renderApprovalOverlay(
     ctx.translate(W / 2, stampTop + sh / 2);
     ctx.rotate(-0.07);
     ctx.globalAlpha = 0.92;
-    ctx.drawImage(stamp, -sw / 2, -sh / 2, sw, sh);
+    ctx.drawImage(toTransparentInk(stamp), -sw / 2, -sh / 2, sw, sh);
     ctx.restore();
   } catch { /* في حال تعذّر تحميل الختم نتجاوزه */ }
   if (lastSignedAt) {
