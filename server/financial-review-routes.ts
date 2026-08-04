@@ -150,7 +150,14 @@ export function registerFinancialReviewRoutes(app: Express) {
             }
           }
 
-          const uploaded = await uploadToSupabase(req.file.buffer, req.file.originalname || "document.pdf", "application/pdf");
+          // multer يفك اسم الملف بترميز latin1 — نعيد فك أسماء الملفات العربية إلى UTF-8
+          let originalName = req.file.originalname || "document.pdf";
+          try {
+            const decoded = Buffer.from(originalName, "latin1").toString("utf8");
+            if (!decoded.includes("\uFFFD")) originalName = decoded;
+          } catch {}
+
+          const uploaded = await uploadToSupabase(req.file.buffer, originalName, "application/pdf");
           if (!uploaded) return res.status(500).json({ error: "فشل رفع الملف إلى التخزين" });
 
           const expiresAt = new Date();
@@ -160,7 +167,7 @@ export function registerFinancialReviewRoutes(app: Express) {
             cycleId,
             title,
             category,
-            fileName: req.file.originalname || "document.pdf",
+            fileName: originalName,
             storagePath: uploaded.path,
             fileSize: req.file.size,
             uploadedBy: req.user?.username || req.user?.id || null,

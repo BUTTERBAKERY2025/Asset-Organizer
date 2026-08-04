@@ -126,7 +126,7 @@
       window.open('/api/public/fin-sign/' + token + '/file', '_blank');
     }
 
-    const POSITIONS = { cfo: 'المدير المالي', ceo: 'الرئيس التنفيذي', chairman: 'رئيس مجلس الإدارة', vice_chairman: 'نائب رئيس مجلس الإدارة', board_member: 'عضو مجلس الإدارة', auditor: 'المراجع الداخلي' };
+    const POSITIONS = { cfo: 'المدير المالي', ceo: 'الرئيس التنفيذي', chairman: 'رئيس مجلس الإدارة', vice_chairman: 'نائب رئيس مجلس الإدارة', board_member: 'عضو مجلس الإدارة', auditor: 'المراجع الداخلي', hr_manager: 'مدير الموارد البشرية', procurement_manager: 'مدير المشتريات', accounts_supervisor: 'مشرف الحسابات', operations_manager: 'مدير التشغيل', marketing_manager: 'مدير التسويق', it_manager: 'مدير تقنية المعلومات', branch_manager: 'مدير فرع', general_manager: 'المدير العام' };
     function posLabel(p) { return POSITIONS[p] || p; }
 
     async function load() {

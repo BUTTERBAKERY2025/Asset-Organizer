@@ -26,6 +26,14 @@ const POSITION_LABELS: Record<string, string> = {
   vice_chairman: "نائب رئيس مجلس الإدارة",
   board_member: "عضو مجلس الإدارة",
   auditor: "المراجع الداخلي",
+  hr_manager: "مدير الموارد البشرية",
+  procurement_manager: "مدير المشتريات",
+  accounts_supervisor: "مشرف الحسابات",
+  operations_manager: "مدير التشغيل",
+  marketing_manager: "مدير التسويق",
+  it_manager: "مدير تقنية المعلومات",
+  branch_manager: "مدير فرع",
+  general_manager: "المدير العام",
 };
 export function positionLabel(p: string): string {
   return POSITION_LABELS[p] || p;

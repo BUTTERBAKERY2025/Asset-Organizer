@@ -61,6 +61,15 @@ const POSITIONS = [
   { value: "vice_chairman", label: "نائب رئيس مجلس الإدارة" },
   { value: "board_member", label: "عضو مجلس الإدارة" },
   { value: "auditor", label: "المراجع الداخلي" },
+  { value: "general_manager", label: "المدير العام" },
+  { value: "hr_manager", label: "مدير الموارد البشرية" },
+  { value: "procurement_manager", label: "مدير المشتريات" },
+  { value: "accounts_supervisor", label: "مشرف الحسابات" },
+  { value: "operations_manager", label: "مدير التشغيل" },
+  { value: "marketing_manager", label: "مدير التسويق" },
+  { value: "it_manager", label: "مدير تقنية المعلومات" },
+  { value: "branch_manager", label: "مدير فرع" },
+  { value: "__custom", label: "منصب آخر (اكتبه بنفسك)..." },
 ];
 
 const CATEGORIES = ["قائمة المركز المالي", "قائمة الدخل", "قائمة التدفقات النقدية", "قائمة التغيرات في حقوق الملكية", "الإيضاحات المتممة", "تقرير المراجع", "أخرى"];
@@ -84,7 +93,7 @@ export default function FinancialStatementsPage() {
   const [docTitle, setDocTitle] = useState("");
   const [docCategory, setDocCategory] = useState("");
   const [docFile, setDocFile] = useState<File | null>(null);
-  const [signersForm, setSignersForm] = useState<Array<{ name: string; position: string }>>([
+  const [signersForm, setSignersForm] = useState<Array<{ name: string; position: string; customPosition?: string }>>([
     { name: "", position: "cfo" },
   ]);
 
@@ -147,11 +156,17 @@ export default function FinancialStatementsPage() {
       if (!docFile) throw new Error("اختر ملف PDF");
       const validSigners = signersForm.filter((s) => s.name.trim().length >= 2);
       if (validSigners.length === 0) throw new Error("أدخل اسم موقّع واحد على الأقل");
+      if (validSigners.some((s) => s.position === "__custom" && !(s.customPosition || "").trim())) {
+        throw new Error("اكتب اسم المنصب المخصص للموقّعين الذين اخترت لهم «منصب آخر»");
+      }
       const fd = new FormData();
       fd.append("file", docFile);
       fd.append("title", docTitle.trim());
       if (docCategory) fd.append("category", docCategory);
-      fd.append("signers", JSON.stringify(validSigners.map((s) => ({ name: s.name.trim(), position: s.position }))));
+      fd.append("signers", JSON.stringify(validSigners.map((s) => ({
+        name: s.name.trim(),
+        position: s.position === "__custom" ? (s.customPosition || "").trim() : s.position,
+      }))));
       const res = await fetch(`/api/governance/financial-cycles/${selectedCycle!.id}/documents`, {
         method: "POST",
         credentials: "include",
@@ -546,15 +561,25 @@ export default function FinancialStatementsPage() {
                       onChange={(e) => setSignersForm((prev) => prev.map((p, j) => (j === i ? { ...p, name: e.target.value } : p)))}
                       data-testid={`signer-name-${i}`}
                     />
-                    <Select
-                      value={s.position}
-                      onValueChange={(v) => setSignersForm((prev) => prev.map((p, j) => (j === i ? { ...p, position: v } : p)))}
-                    >
-                      <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {POSITIONS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <div className="w-48 space-y-1.5">
+                      <Select
+                        value={s.position}
+                        onValueChange={(v) => setSignersForm((prev) => prev.map((p, j) => (j === i ? { ...p, position: v } : p)))}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {POSITIONS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      {s.position === "__custom" && (
+                        <Input
+                          placeholder="اكتب المنصب — مثل: مدير الجودة"
+                          value={s.customPosition || ""}
+                          onChange={(e) => setSignersForm((prev) => prev.map((p, j) => (j === i ? { ...p, customPosition: e.target.value } : p)))}
+                          data-testid={`signer-custom-position-${i}`}
+                        />
+                      )}
+                    </div>
                     {signersForm.length > 1 && (
                       <Button size="sm" variant="ghost" className="text-red-500" onClick={() => setSignersForm((prev) => prev.filter((_, j) => j !== i))}>
                         <Trash2 className="h-4 w-4" />
