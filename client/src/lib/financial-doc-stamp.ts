@@ -104,125 +104,154 @@ function drawStamp(ctx: CanvasRenderingContext2D, cx: number, cy: number, scale 
   ctx.restore();
 }
 
-// إنشاء صورة صفحة الاعتماد A4
-async function renderApprovalPage(doc: StampDocInfo, signers: StampSigner[]): Promise<string> {
-  const W = 1240, H = 1754; // A4 @150dpi
+// إنشاء «شريط الاعتماد» المضغوط الذي يُطبع أسفل آخر صفحة من المستند نفسه
+// (لوحة بيضاء بإطار ذهبي: خلايا التوقيعات في صف + الختم بجانبها/أسفلها)
+async function renderApprovalOverlay(
+  doc: StampDocInfo,
+  signers: StampSigner[]
+): Promise<{ dataUrl: string; w: number; h: number }> {
+  const signed = signers.filter((s) => s.status === "signed");
+  const W = 1500;
+  const PAD = 34;
+  const TITLE_H = 64;
+  const perRow = Math.min(Math.max(signed.length, 1), 4);
+  const rows = Math.max(1, Math.ceil(signed.length / perRow));
+  const GAP = 18;
+  const cellW = (W - PAD * 2 - GAP * (perRow - 1)) / perRow;
+  const cellH = 195;
+  const STAMP_H = 150;
+  const FOOTER_H = 40;
+  const H = PAD + TITLE_H + rows * (cellH + GAP) + STAMP_H + FOOTER_H;
+
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "#faf7f0";
-  ctx.fillRect(0, 0, W, H);
 
-  // إطار الصفحة الرسمي
+  // لوحة بيضاء بحواف دائرية وإطار ذهبي مزدوج
+  const rr = (x: number, y: number, ww: number, hh: number, rad: number) => {
+    ctx.beginPath();
+    ctx.moveTo(x + rad, y);
+    ctx.arcTo(x + ww, y, x + ww, y + hh, rad);
+    ctx.arcTo(x + ww, y + hh, x, y + hh, rad);
+    ctx.arcTo(x, y + hh, x, y, rad);
+    ctx.arcTo(x, y, x + ww, y, rad);
+    ctx.closePath();
+  };
+  ctx.fillStyle = "rgba(255,253,248,0.97)";
+  rr(2, 2, W - 4, H - 4, 18);
+  ctx.fill();
   ctx.strokeStyle = "#b9a25c";
   ctx.lineWidth = 3;
-  ctx.strokeRect(40, 40, W - 80, H - 80);
+  rr(2, 2, W - 4, H - 4, 18);
+  ctx.stroke();
   ctx.lineWidth = 1;
-  ctx.strokeRect(52, 52, W - 104, H - 104);
-
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#1a2340";
-  ctx.font = "bold 46px 'Segoe UI', Tahoma, Arial";
-  ctx.fillText("شركة الزبد الأفضل", W / 2, 150);
-  ctx.font = "bold 34px 'Segoe UI', Tahoma, Arial";
-  ctx.fillStyle = "#8a6d1f";
-  ctx.fillText("صفحة اعتماد القوائم المالية", W / 2, 215);
-
-  ctx.strokeStyle = "#b9a25c";
-  ctx.beginPath();
-  ctx.moveTo(200, 250);
-  ctx.lineTo(W - 200, 250);
+  rr(10, 10, W - 20, H - 20, 12);
   ctx.stroke();
 
-  // بيانات المستند
-  ctx.fillStyle = "#2c3347";
-  ctx.font = "26px 'Segoe UI', Tahoma, Arial";
-  let y = 320;
-  const line = (label: string, value: string) => {
-    if (!value) return;
-    ctx.font = "bold 26px 'Segoe UI', Tahoma, Arial";
-    ctx.fillText(label + ": " + value, W / 2, y);
-    y += 52;
-  };
-  line("الدورة", doc.cycleTitle || "");
-  if (doc.periodStart && doc.periodEnd) line("الفترة المالية", `${doc.periodStart} إلى ${doc.periodEnd}`);
-  line("المستند", doc.title);
-  if (doc.category) line("النوع", doc.category);
-
-  y += 30;
-  ctx.font = "bold 30px 'Segoe UI', Tahoma, Arial";
+  // العنوان
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
   ctx.fillStyle = "#1a2340";
-  ctx.fillText("الاعتمادات والتوقيعات", W / 2, y);
-  y += 30;
+  ctx.font = "bold 34px 'Segoe UI', Tahoma, Arial";
+  ctx.fillText("اعتمادات وتوقيعات — شركة الزبد الأفضل", W / 2, PAD + 18);
+  ctx.strokeStyle = "#d8c990";
+  ctx.beginPath();
+  ctx.moveTo(PAD + 40, PAD + TITLE_H - 16);
+  ctx.lineTo(W - PAD - 40, PAD + TITLE_H - 16);
+  ctx.stroke();
 
-  // بطاقات التوقيعات
-  const signed = signers.filter((s) => s.status === "signed");
-  const cardW = 480, cardH = 240, gap = 60;
-  const perRow = 2;
+  // خلايا التوقيعات (من اليمين إلى اليسار)
+  const top = PAD + TITLE_H;
   for (let i = 0; i < signed.length; i++) {
     const col = i % perRow;
     const row = Math.floor(i / perRow);
     const rowCount = Math.min(perRow, signed.length - row * perRow);
-    const totalW = rowCount * cardW + (rowCount - 1) * gap;
-    const x = (W - totalW) / 2 + col * (cardW + gap);
-    const cy = y + 30 + row * (cardH + 40);
+    const totalW = rowCount * cellW + (rowCount - 1) * GAP;
+    const startX = (W - totalW) / 2;
+    // RTL: أول موقّع في أقصى اليمين
+    const x = startX + (rowCount - 1 - col) * (cellW + GAP);
+    const cy = top + row * (cellH + GAP);
     ctx.strokeStyle = "#cfc39a";
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(x, cy, cardW, cardH);
-    ctx.fillStyle = "#f3eee1";
-    ctx.fillRect(x, cy, cardW, 46);
+    ctx.lineWidth = 1.4;
+    rr(x, cy, cellW, cellH, 10);
+    ctx.stroke();
+    ctx.fillStyle = "#f5f0e2";
+    rr(x, cy, cellW, 40, 10);
+    ctx.fill();
     ctx.fillStyle = "#1a2340";
-    ctx.font = "bold 24px 'Segoe UI', Tahoma, Arial";
-    ctx.fillText(positionLabel(signed[i].signerPosition), x + cardW / 2, cy + 31);
-    ctx.font = "bold 25px 'Segoe UI', Tahoma, Arial";
-    ctx.fillText(signed[i].signerName, x + cardW / 2, cy + 85);
+    ctx.font = "bold 22px 'Segoe UI', Tahoma, Arial";
+    ctx.fillText(positionLabel(signed[i].signerPosition), x + cellW / 2, cy + 21);
+    ctx.font = "bold 22px 'Segoe UI', Tahoma, Arial";
+    ctx.fillText(signed[i].signerName, x + cellW / 2, cy + 62);
     if (isValidSignature(signed[i].signatureData)) {
       try {
         const img = await loadImage(signed[i].signatureData!);
-        const maxW = cardW - 120, maxH = 85;
+        const maxW = cellW - 70, maxH = 72;
         const ratio = Math.min(maxW / img.width, maxH / img.height);
         const iw = img.width * ratio, ih = img.height * ratio;
         ctx.save();
         ctx.globalCompositeOperation = "multiply";
-        ctx.drawImage(img, x + (cardW - iw) / 2, cy + 100, iw, ih);
+        ctx.drawImage(img, x + (cellW - iw) / 2, cy + 80, iw, ih);
         ctx.restore();
       } catch { /* تجاهل صورة تالفة */ }
     }
     ctx.fillStyle = "#8a8f9e";
-    ctx.font = "19px 'Segoe UI', Tahoma, Arial";
-    ctx.fillText("موقّع إلكترونياً — " + fmtDate(signed[i].signedAt), x + cardW / 2, cy + cardH - 18);
+    ctx.font = "17px 'Segoe UI', Tahoma, Arial";
+    ctx.fillText("موقّع إلكترونياً — " + fmtDate(signed[i].signedAt), x + cellW / 2, cy + cellH - 20);
   }
 
-  const rows = Math.ceil(signed.length / perRow);
-  const afterCards = y + 30 + rows * (cardH + 40);
-
-  // الختم — تاريخه هو تاريخ آخر توقيع مكتمل
+  // الختم — تاريخه = تاريخ آخر توقيع مكتمل
   const lastSignedAt = signed
     .map((s) => (s.signedAt ? new Date(s.signedAt).getTime() : 0))
     .reduce((a, b) => Math.max(a, b), 0);
-  drawStamp(ctx, W / 2, Math.min(H - 260, afterCards + 180), 1.15, lastSignedAt ? new Date(lastSignedAt) : undefined);
+  const stampCy = top + rows * (cellH + GAP) + STAMP_H / 2 - 6;
+  drawStamp(ctx, W / 2, stampCy, 0.82, lastSignedAt ? new Date(lastSignedAt) : undefined);
 
   // تذييل
-  ctx.fillStyle = "#8a8f9e";
-  ctx.font = "18px 'Segoe UI', Tahoma, Arial";
-  ctx.fillText("هذه الصفحة أُنشئت إلكترونياً وتُعد جزءاً لا يتجزأ من المستند المرفق", W / 2, H - 90);
+  ctx.fillStyle = "#9aa0ad";
+  ctx.font = "16px 'Segoe UI', Tahoma, Arial";
+  const parts = [doc.cycleTitle, doc.title].filter(Boolean).join(" — ");
+  ctx.fillText(
+    (parts ? parts + " · " : "") + "اعتماد إلكتروني موثّق أُنشئ آلياً ويُعد جزءاً من هذا المستند",
+    W / 2,
+    H - PAD + 6
+  );
 
-  return canvas.toDataURL("image/jpeg", 0.92);
+  return { dataUrl: canvas.toDataURL("image/png"), w: W, h: H };
 }
 
-// الدالة الرئيسية: تستلم بايتات PDF الأصلي وتعيد بايتات النسخة المعتمدة
+// الدالة الرئيسية: تستلم بايتات PDF الأصلي وتعيد النسخة المعتمدة
+// بطباعة شريط الاعتماد والختم أسفل آخر صفحة من الملف نفسه
 export async function buildApprovedPdf(
   originalPdfBytes: ArrayBuffer,
   doc: StampDocInfo,
   signers: StampSigner[]
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.load(originalPdfBytes, { ignoreEncryption: true });
-  const pageImgDataUrl = await renderApprovalPage(doc, signers);
-  const jpgBytes = Uint8Array.from(atob(pageImgDataUrl.split(",")[1]), (c) => c.charCodeAt(0));
-  const jpg = await pdfDoc.embedJpg(jpgBytes);
-  const page = pdfDoc.addPage([595.28, 841.89]); // A4 pt
-  page.drawImage(jpg, { x: 0, y: 0, width: 595.28, height: 841.89 });
+  const overlay = await renderApprovalOverlay(doc, signers);
+  const pngBytes = Uint8Array.from(atob(overlay.dataUrl.split(",")[1]), (c) => c.charCodeAt(0));
+  const png = await pdfDoc.embedPng(pngBytes);
+
+  const pages = pdfDoc.getPages();
+  const lastPage = pages[pages.length - 1];
+  const { width: pw, height: ph } = lastPage.getSize();
+
+  // عرض الشريط = عرض الصفحة مع هوامش، مع سقف للارتفاع = 40% من الصفحة
+  const margin = 18;
+  let drawW = pw - margin * 2;
+  let drawH = drawW * (overlay.h / overlay.w);
+  const maxH = ph * 0.4;
+  if (drawH > maxH) {
+    drawH = maxH;
+    drawW = drawH * (overlay.w / overlay.h);
+  }
+  lastPage.drawImage(png, {
+    x: (pw - drawW) / 2,
+    y: margin,
+    width: drawW,
+    height: drawH,
+  });
   return await pdfDoc.save();
 }
 
