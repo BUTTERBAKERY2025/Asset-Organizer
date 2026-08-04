@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>توقيع القوائم المالية</title>
+  <title>توقيع القوائم المالية | Financial Statements Signing</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f5f2ec; min-height: 100vh; padding: 16px; color: #2c3347; }
@@ -40,67 +40,68 @@
     .dot.declined { background: #b3261e; }
     textarea { width: 100%; border: 1.5px solid #cfd4de; border-radius: 8px; padding: 10px; font-family: inherit; font-size: 14px; min-height: 70px; margin-top: 8px; }
     h3 { font-size: 15.5px; margin-bottom: 8px; }
+    .en-sub { color:#9aa0ad; font-size:12px; font-weight:normal; margin-inline-start:6px; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
       <h1>شركة الزبد الأفضل</h1>
-      <p>اعتماد وتوقيع القوائم المالية</p>
+      <p>اعتماد وتوقيع القوائم المالية<br><span style="opacity:.8;font-size:12px;">Financial Statements Approval &amp; Signature</span></p>
     </div>
 
-    <div id="loading" class="card center">جاري التحميل...</div>
+    <div id="loading" class="card center">جاري التحميل... | Loading...</div>
 
     <div id="errorBox" class="card center hidden">
       <div class="big-icon">⚠️</div>
-      <h3 id="errorTitle">خطأ</h3>
+      <h3 id="errorTitle">خطأ | Error</h3>
       <p id="errorMsg" style="color:#8a8f9e; font-size:14px;"></p>
     </div>
 
     <div id="content" class="hidden">
       <div class="card">
-        <h3>بيانات المستند</h3>
-        <div class="row"><span class="label">الدورة</span><span id="cycleTitle"></span></div>
-        <div class="row"><span class="label">الفترة</span><span id="period"></span></div>
-        <div class="row"><span class="label">المستند</span><span id="docTitle"></span></div>
-        <div class="row"><span class="label">الموقّع</span><span id="signerName"></span></div>
-        <div class="row"><span class="label">الصفة</span><span id="signerPosition"></span></div>
-        <button class="btn btn-outline" onclick="viewPdf()">📄 عرض المستند (PDF)</button>
+        <h3>بيانات المستند <span class="en-sub">Document Details</span></h3>
+        <div class="row"><span class="label">الدورة · Cycle</span><span id="cycleTitle"></span></div>
+        <div class="row"><span class="label">الفترة · Period</span><span id="period"></span></div>
+        <div class="row"><span class="label">المستند · Document</span><span id="docTitle"></span></div>
+        <div class="row"><span class="label">الموقّع · Signer</span><span id="signerName"></span></div>
+        <div class="row"><span class="label">الصفة · Capacity</span><span id="signerPosition"></span></div>
+        <button class="btn btn-outline" onclick="viewPdf()">📄 عرض المستند (PDF) · View Document</button>
       </div>
 
       <div class="card">
-        <h3>تسلسل التوقيعات</h3>
+        <h3>تسلسل التوقيعات <span class="en-sub">Signing Sequence</span></h3>
         <div class="signers-list" id="signersList"></div>
       </div>
 
       <div class="card hidden" id="notTurnBox">
         <div class="center">
           <div class="big-icon">⏳</div>
-          <p>لم يحن دورك في التوقيع بعد</p>
+          <p>لم يحن دورك في التوقيع بعد<br><span style="color:#8a8f9e;font-size:13px;">It is not your turn to sign yet</span></p>
           <p id="waitingFor" style="color:#8a8f9e; font-size:13.5px; margin-top:6px;"></p>
         </div>
       </div>
 
       <div class="card hidden" id="signBox">
-        <h3>التوقيع الإلكتروني</h3>
-        <p class="hint">وقّع داخل المربع بإصبعك أو بالفأرة — توقيعك يعني اعتماد هذا المستند</p>
+        <h3>التوقيع الإلكتروني <span class="en-sub">Electronic Signature</span></h3>
+        <p class="hint">وقّع داخل المربع بإصبعك أو بالفأرة — توقيعك يعني اعتماد هذا المستند<br><span style="color:#8a8f9e;">Sign inside the box — your signature approves this document</span></p>
         <div class="sig-wrap"><canvas id="signatureCanvas"></canvas></div>
         <div class="sig-actions">
-          <button class="clear-btn" onclick="clearSignature()">مسح وإعادة التوقيع</button>
+          <button class="clear-btn" onclick="clearSignature()">مسح وإعادة التوقيع · Clear</button>
         </div>
         <div style="margin-top:14px;">
-          <button class="btn btn-primary" id="submitBtn" disabled onclick="submitSignature()">اعتماد وتوقيع المستند</button>
-          <button class="btn-danger-link" onclick="toggleDecline()">لدي ملاحظات — الاعتذار عن التوقيع</button>
+          <button class="btn btn-primary" id="submitBtn" disabled onclick="submitSignature()">اعتماد وتوقيع المستند · Approve &amp; Sign</button>
+          <button class="btn-danger-link" onclick="toggleDecline()">لدي ملاحظات — الاعتذار عن التوقيع · Decline with comments</button>
           <div id="declineForm" class="hidden">
-            <textarea id="declineReason" placeholder="سبب الاعتذار أو الملاحظات على القوائم..."></textarea>
-            <button class="btn btn-outline" onclick="submitDecline()">إرسال الاعتذار</button>
+            <textarea id="declineReason" placeholder="سبب الاعتذار أو الملاحظات... | Reason or comments..."></textarea>
+            <button class="btn btn-outline" onclick="submitDecline()">إرسال الاعتذار · Submit</button>
           </div>
         </div>
       </div>
 
       <div class="card hidden center" id="doneBox">
         <div class="big-icon">✅</div>
-        <h3>تم اعتماد المستند وتوقيعه بنجاح</h3>
+        <h3>تم اعتماد المستند وتوقيعه بنجاح<br><span style="color:#8a8f9e;font-size:13px;font-weight:normal;">Document approved and signed successfully</span></h3>
         <p style="color:#8a8f9e; font-size:13.5px; margin-top:6px;" id="doneMsg"></p>
       </div>
     </div>
@@ -126,11 +127,11 @@
       window.open('/api/public/fin-sign/' + token + '/file', '_blank');
     }
 
-    const POSITIONS = { cfo: 'المدير المالي', ceo: 'الرئيس التنفيذي', chairman: 'رئيس مجلس الإدارة', vice_chairman: 'نائب رئيس مجلس الإدارة', board_member: 'عضو مجلس الإدارة', auditor: 'المراجع الداخلي', hr_manager: 'مدير الموارد البشرية', procurement_manager: 'مدير المشتريات', accounts_supervisor: 'مشرف الحسابات', operations_manager: 'مدير التشغيل', marketing_manager: 'مدير التسويق', it_manager: 'مدير تقنية المعلومات', branch_manager: 'مدير فرع', general_manager: 'المدير العام' };
+    const POSITIONS = { cfo: 'المدير المالي · CFO', ceo: 'الرئيس التنفيذي · CEO', chairman: 'رئيس مجلس الإدارة · Chairman', vice_chairman: 'نائب رئيس مجلس الإدارة · Vice Chairman', board_member: 'عضو مجلس الإدارة · Board Member', auditor: 'المراجع الداخلي · Internal Auditor', hr_manager: 'مدير الموارد البشرية · HR Manager', procurement_manager: 'مدير المشتريات · Procurement Manager', accounts_supervisor: 'مشرف الحسابات · Accounts Supervisor', operations_manager: 'مدير التشغيل · Operations Manager', marketing_manager: 'مدير التسويق · Marketing Manager', it_manager: 'مدير تقنية المعلومات · IT Manager', branch_manager: 'مدير فرع · Branch Manager', general_manager: 'المدير العام · General Manager' };
     function posLabel(p) { return POSITIONS[p] || p; }
 
     async function load() {
-      if (!token) return showError('رابط غير صالح', 'لا يوجد رمز توقيع في الرابط');
+      if (!token) return showError('رابط غير صالح | Invalid link', 'لا يوجد رمز توقيع في الرابط | No signing token found in the link');
       try {
         const res = await fetch('/api/public/fin-sign/' + token);
         const data = await res.json();
@@ -158,12 +159,12 @@
         hide('loading'); show('content');
 
         if (data.status === 'signed') {
-          document.getElementById('doneMsg').textContent = 'سبق أن وقّعت هذا المستند';
+          document.getElementById('doneMsg').textContent = 'سبق أن وقّعت هذا المستند | You have already signed this document';
           show('doneBox');
         } else if (data.status === 'declined') {
-          showError('تم الاعتذار عن التوقيع', 'سبق أن سجّلت اعتذارك عن توقيع هذا المستند');
+          showError('تم الاعتذار عن التوقيع | Declined', 'سبق أن سجّلت اعتذارك عن توقيع هذا المستند | You have already declined to sign this document');
         } else if (!data.isMyTurn) {
-          document.getElementById('waitingFor').textContent = 'بانتظار توقيع: ' + (data.waitingFor || []).map(function(w){ return w.name; }).join('، ');
+          document.getElementById('waitingFor').textContent = 'بانتظار توقيع | Waiting for: ' + (data.waitingFor || []).map(function(w){ return w.name; }).join('، ');
           show('notTurnBox');
         } else {
           show('signBox');
@@ -265,11 +266,11 @@
     }
 
     async function submitSignature() {
-      if (!hasSignature) { alert('الرجاء التوقيع أولاً'); return; }
+      if (!hasSignature) { alert('الرجاء التوقيع أولاً | Please sign first'); return; }
       if (!canvasHasInk()) {
         hasSignature = false;
         document.getElementById('submitBtn').disabled = true;
-        alert('يبدو أن التوقيع فارغ — الرجاء التوقيع مرة أخرى داخل المربع');
+        alert('يبدو أن التوقيع فارغ — الرجاء التوقيع مرة أخرى | Signature looks empty — please sign again');
         return;
       }
       const btn = document.getElementById('submitBtn');
@@ -283,15 +284,15 @@
         });
         const data = await res.json();
         if (!res.ok) {
-          alert(data.error || 'فشل في حفظ التوقيع');
+          alert(data.error || 'فشل في حفظ التوقيع | Failed to save signature');
           btn.disabled = false;
           btn.textContent = 'اعتماد وتوقيع المستند';
           return;
         }
         hide('signBox');
         document.getElementById('doneMsg').textContent = data.completed
-          ? 'اكتملت جميع التوقيعات — المستند معتمد نهائياً 🎉'
-          : 'تم توقيعك بنجاح، وسيُرسل المستند للموقّع التالي';
+          ? 'اكتملت جميع التوقيعات — المستند معتمد نهائياً 🎉 | All signatures completed — document fully approved'
+          : 'تم توقيعك بنجاح، وسيُرسل المستند للموقّع التالي | Signed successfully — forwarded to the next signer';
         show('doneBox');
       } catch (e) {
         alert('فشل في الاتصال بالخادم');
@@ -307,7 +308,7 @@
     async function submitDecline() {
       const reason = document.getElementById('declineReason').value.trim();
       if (!reason) { alert('اكتب سبب الاعتذار أو ملاحظاتك'); return; }
-      if (!confirm('تأكيد الاعتذار عن توقيع هذا المستند؟')) return;
+      if (!confirm('تأكيد الاعتذار عن توقيع هذا المستند؟ | Confirm declining to sign this document?')) return;
       try {
         const res = await fetch('/api/public/fin-sign/' + token + '/decline', {
           method: 'POST',
