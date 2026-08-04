@@ -47,5 +47,6 @@
 - [Drizzle undefined select field](drizzle-undefined-select-field.md) — selecting a non-existent schema prop throws "Cannot convert undefined or null to object"; branch_employees has status, not isActive.
 - [Journal attachments DB weight](journal-attachments-weight.md) — file_data base64 ≈15GB of prod DB; never select it in lists, lazy-stream via legacy-data endpoint; migration route doesn't null blobs.
 - [SW stale-cache skeleton](sw-stale-cache-skeleton.md) — SW must never answer failed JS with empty 503 (use Response.error()), must timeout JS fetches, and must re-cache "/" per navigation via waitUntil; else some users get infinite skeletons after deploys.
+- [Financial review module](financial-review-module.md) — sequential PDF signing: sign/decline transactional + turn-checked; reopen resets downstream signers; stamped copy client-side via pdf-lib canvas page.
 - [Signature canvas iOS wipe](signature-canvas-ios-wipe.md) — resize handlers wipe signature canvases (iOS toolbar); must snapshot+restore and pixel-check ink before submit; board re-vote = reset voting_tokens row.
 - [Event POS shift reconciliation](event-pos-shift-reconciliation.md) — full refund = exclude sale from stats, partial = pos_refunds row; close stats via tx; sale insert re-locks shift.
