@@ -23,14 +23,15 @@ async function getCtx(req: any): Promise<Ctx | null> {
   const userId = req.session?.userId;
   if (!userId) return null;
   const [u] = await db
-    .select({ id: users.id, name: users.name, username: users.username, role: users.role, isActive: users.isActive })
+    .select({ id: users.id, firstName: users.firstName, lastName: users.lastName, username: users.username, role: users.role, isActive: users.isActive })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
   if (!u || u.isActive !== "active") return null;
   const isTeam = u.role === "admin" || u.role === "financial_manager";
   const isAuditor = u.role === "external_auditor";
-  return { id: u.id, name: u.name || u.username || "مستخدم", role: u.role, isAuditor, isTeam };
+  const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ");
+  return { id: u.id, name: fullName || u.username || "مستخدم", role: u.role, isAuditor, isTeam };
 }
 
 // فريق الإدارة المالية فقط (إدارة كاملة)
@@ -413,7 +414,7 @@ export function registerAuditPortalRoutes(app: Express) {
 
   app.get("/api/audit/auditor-accounts", isAuthenticated, requireAdminOnly, async (_req, res) => {
     try {
-      const rows = await db.select({ id: users.id, username: users.username, name: users.name, isActive: users.isActive, createdAt: users.createdAt })
+      const rows = await db.select({ id: users.id, username: users.username, name: users.firstName, isActive: users.isActive, createdAt: users.createdAt })
         .from(users).where(eq(users.role, "external_auditor")).orderBy(desc(users.createdAt));
       res.json(rows);
     } catch (e: any) { res.status(500).json({ error: e.message }); }
@@ -430,12 +431,12 @@ export function registerAuditPortalRoutes(app: Express) {
       const [exists] = await db.select({ id: users.id }).from(users).where(eq(users.username, username)).limit(1);
       if (exists) return res.status(400).json({ error: "اسم المستخدم مستخدم مسبقاً" });
       const user = await storage.createUser({
-        username, password, name,
+        username, password, firstName: name,
         role: "external_auditor",
         isActive: "active",
       } as any);
       await logActivity(null, req.auditCtx, "create_auditor_account", username);
-      res.json({ id: user.id, username: user.username, name: user.name });
+      res.json({ id: user.id, username: user.username, name: user.firstName });
     } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
