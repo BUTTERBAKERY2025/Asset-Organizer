@@ -317,7 +317,7 @@ export function registerAuditPortalRoutes(app: Express) {
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Content-Type", f.mimeType || "application/octet-stream");
       res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(f.fileName)}`);
-      res.send(Buffer.from(await data.arrayBuffer()));
+      res.send(Buffer.from(await data.data.arrayBuffer()));
     } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
@@ -338,7 +338,7 @@ export function registerAuditPortalRoutes(app: Express) {
       res.setHeader("Content-Type", mime);
       res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(f.fileName)}`);
       res.setHeader("Cache-Control", "private, max-age=300");
-      res.send(Buffer.from(await data.arrayBuffer()));
+      res.send(Buffer.from(await data.data.arrayBuffer()));
     } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
