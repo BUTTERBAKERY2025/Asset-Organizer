@@ -227,14 +227,17 @@ export function registerAuditPortalRoutes(app: Express) {
           if (ALLOWED_MIME.has(file.mimetype) || ALLOWED_EXT.test(file.originalname || "")) cb(null, true);
           else cb(new Error("نوع الملف غير مدعوم — المسموح: PDF, Excel, Word, CSV, صور, ZIP"));
         },
-      }).single("file");
+      }).fields([{ name: "file", maxCount: 1 }, { name: "files", maxCount: 20 }]);
 
       upload(req, res, async (err: any) => {
         if (err) return res.status(400).json({ error: err.message || "فشل رفع الملف" });
         try {
-          if (!req.file) return res.status(400).json({ error: "لم يتم إرفاق ملف" });
-          const title = String(req.body.title || "").trim();
-          if (title.length < 2 || title.length > 300) return res.status(400).json({ error: "عنوان الملف مطلوب" });
+          const incoming: Express.Multer.File[] = [
+            ...(((req.files as any)?.file as Express.Multer.File[]) || []),
+            ...(((req.files as any)?.files as Express.Multer.File[]) || []),
+          ];
+          if (!incoming.length) return res.status(400).json({ error: "لم يتم إرفاق ملف" });
+          if (incoming.length > 20) return res.status(400).json({ error: "الحد الأقصى 20 ملفاً في الدفعة الواحدة" });
           const category = FILE_CATEGORIES.has(req.body.category) ? req.body.category : "other";
           let requirementId: number | null = null;
           if (req.body.requirementId) {
@@ -246,40 +249,57 @@ export function registerAuditPortalRoutes(app: Express) {
             if (r.status === "not_applicable") return res.status(400).json({ error: "البند «غير منطبق» — غيّر حالته أولاً قبل رفع ملف عليه" });
             requirementId = rid;
           }
-
-          let originalName = req.file.originalname || "file";
-          try {
-            const decoded = Buffer.from(originalName, "latin1").toString("utf8");
-            if (!decoded.includes("\uFFFD")) originalName = decoded;
-          } catch {}
-          const extMatch = originalName.match(ALLOWED_EXT);
-          if (!extMatch) return res.status(400).json({ error: "امتداد الملف غير مدعوم" });
-          const ext = extMatch[0].toLowerCase();
-          const sniffed = sniffBuffer(req.file.buffer);
-          if (!extAllowsSniff(ext, sniffed, req.file.buffer)) {
-            return res.status(400).json({ error: "محتوى الملف لا يطابق امتداده — تم رفض الرفع" });
+          const baseTitle = String(req.body.title || "").trim();
+          if (incoming.length === 1 && baseTitle && (baseTitle.length < 2 || baseTitle.length > 300)) {
+            return res.status(400).json({ error: "عنوان الملف غير صالح" });
           }
-          const storageName = `audit_${periodId}_${Date.now()}${ext}`;
-          const uploadedFile = await uploadToSupabase(req.file.buffer, storageName, req.file.mimetype || "application/octet-stream");
-          if (!uploadedFile) return res.status(500).json({ error: "فشل رفع الملف إلى التخزين" });
 
-          const [row] = await db.insert(auditFiles).values({
-            periodId, requirementId, category, title,
-            fileName: originalName,
-            storagePath: uploadedFile.path,
-            fileSize: req.file.size,
-            mimeType: req.file.mimetype,
-            uploadedByName: req.auditCtx.name,
-          }).returning();
+          const uploadedRows: any[] = [];
+          const failed: { fileName: string; error: string }[] = [];
+          let seq = 0;
+          for (const f of incoming) {
+            seq++;
+            let originalName = f.originalname || "file";
+            try {
+              const decoded = Buffer.from(originalName, "latin1").toString("utf8");
+              if (!decoded.includes("\uFFFD")) originalName = decoded;
+            } catch {}
+            const extMatch = originalName.match(ALLOWED_EXT);
+            if (!extMatch) { failed.push({ fileName: originalName, error: "امتداد الملف غير مدعوم" }); continue; }
+            const ext = extMatch[0].toLowerCase();
+            const sniffed = sniffBuffer(f.buffer);
+            if (!extAllowsSniff(ext, sniffed, f.buffer)) {
+              failed.push({ fileName: originalName, error: "محتوى الملف لا يطابق امتداده" }); continue;
+            }
+            const storageName = `audit_${periodId}_${Date.now()}_${seq}${ext}`;
+            const uploadedFile = await uploadToSupabase(f.buffer, storageName, f.mimetype || "application/octet-stream");
+            if (!uploadedFile) { failed.push({ fileName: originalName, error: "فشل الرفع إلى التخزين" }); continue; }
+            // عنوان الملف: المُرسل (لملف واحد) أو اسم الملف بدون الامتداد
+            const title = (incoming.length === 1 && baseTitle) ? baseTitle : originalName.replace(ALLOWED_EXT, "").slice(0, 300) || originalName;
+            const [row] = await db.insert(auditFiles).values({
+              periodId, requirementId, category, title,
+              fileName: originalName,
+              storagePath: uploadedFile.path,
+              fileSize: f.size,
+              mimeType: f.mimetype,
+              uploadedByName: req.auditCtx.name,
+            }).returning();
+            uploadedRows.push(row);
+          }
 
+          if (!uploadedRows.length) {
+            return res.status(400).json({ error: failed.map((x) => `${x.fileName}: ${x.error}`).join(" • ") || "فشل رفع الملفات" });
+          }
           // ربط بمتطلب → حالته تصبح «مرفوع»
           if (requirementId) {
             await db.update(auditRequirements)
               .set({ status: "uploaded", updatedAt: new Date() })
               .where(and(eq(auditRequirements.id, requirementId), inArray(auditRequirements.status, ["requested", "in_progress", "ready", "waiting_sample", "rejected"])));
           }
-          await logActivity(periodId, req.auditCtx, "upload", `${title} (${originalName})`);
-          res.json(row);
+          await logActivity(periodId, req.auditCtx, "upload", uploadedRows.length === 1
+            ? `${uploadedRows[0].title} (${uploadedRows[0].fileName})`
+            : `رفع ${uploadedRows.length} ملفات دفعة واحدة`);
+          res.json({ uploaded: uploadedRows, failed, ok: true });
         } catch (e: any) { res.status(500).json({ error: e.message }); }
       });
     } catch (e: any) { res.status(500).json({ error: e.message }); }

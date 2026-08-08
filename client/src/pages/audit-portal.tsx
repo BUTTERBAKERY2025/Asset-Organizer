@@ -19,6 +19,7 @@ import {
   ShieldCheck, FolderOpen, Plus, Upload, Download, Trash2, MessageSquare,
   CheckCircle2, XCircle, Clock, FileText, Landmark, ListChecks, Activity, UserPlus, LogOut,
   ChevronDown, ShieldAlert, CalendarDays,
+  Search, Filter, X,
 } from "lucide-react";
 
 // ===== ثوابت العرض =====
@@ -157,6 +158,8 @@ function PortalBody({ isAuditor, userName }: { isAuditor: boolean; userName: str
   const qc = useQueryClient();
   const { toast } = useToast();
   const [periodId, setPeriodId] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState("requirements");
+  const [focusSection, setFocusSection] = useState<string | null>(null);
 
   const periodsQ = useQuery<any[]>({ queryKey: ["/api/audit/periods"], queryFn: () => api("/api/audit/periods") });
   useEffect(() => {
@@ -212,6 +215,13 @@ function PortalBody({ isAuditor, userName }: { isAuditor: boolean; userName: str
 
       {o && (
         <>
+          <AuditCommandCenter
+            o={o}
+            onSectionClick={(section) => {
+              setFocusSection(section);
+              setActiveTab("requirements");
+            }}
+          />
           {/* شريط التقدم */}
           <Card className="overflow-hidden border-[#cfdfd5] bg-[#102f35] text-white shadow-xl shadow-[#102f35]/10">
             <CardContent className="py-5 px-5 sm:px-6 flex items-center gap-6 flex-wrap">
@@ -232,7 +242,7 @@ function PortalBody({ isAuditor, userName }: { isAuditor: boolean; userName: str
             </CardContent>
           </Card>
 
-          <Tabs defaultValue="requirements">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="flex-wrap h-auto">
               <TabsTrigger value="requirements"><ListChecks className="h-4 w-4 ml-1" /> المتطلبات</TabsTrigger>
               <TabsTrigger value="files"><FolderOpen className="h-4 w-4 ml-1" /> مكتبة الملفات</TabsTrigger>
@@ -241,7 +251,7 @@ function PortalBody({ isAuditor, userName }: { isAuditor: boolean; userName: str
             </TabsList>
 
             <TabsContent value="requirements" className="mt-4">
-              <RequirementsTab o={o} isAuditor={isAuditor} periodId={periodId!} onDone={refresh} />
+              <RequirementsTab o={o} isAuditor={isAuditor} periodId={periodId!} onDone={refresh} focusSection={focusSection} />
             </TabsContent>
             <TabsContent value="files" className="mt-4">
               <FilesTab o={o} isAuditor={isAuditor} periodId={periodId!} onDone={refresh} />
@@ -310,11 +320,33 @@ function NewPeriodDialog({ onDone }: { onDone: () => void }) {
   );
 }
 
+function AuditCommandCenter({ o, onSectionClick }: { o: any; onSectionClick: (section: string) => void }) {
+  const groups = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    (o.requirements || []).forEach((r: any) => (map[r.section || "بنود عامة"] ||= []).push(r));
+    return Object.entries(map);
+  }, [o.requirements]);
+  const attention = (o.requirements || []).filter((r: any) => r.status === "rejected" || (r.priority === "high" && !["approved", "not_applicable"].includes(r.status)));
+  return <section className="rounded-2xl border border-[#d5e3da] bg-white shadow-sm overflow-hidden">
+    <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[#e3ebe5] px-5 py-4"><div><p className="text-xs font-bold tracking-widest text-[#a7803e]">لوحة القيادة</p><h2 className="text-xl font-extrabold text-[#17363a] mt-1">نظرة تنفيذية على ملف المراجعة</h2></div><div className="text-left"><span className="text-3xl font-extrabold text-[#287052]">{o.stats.progress}%</span><p className="text-xs text-slate-400">جاهزية الاعتماد</p></div></div>
+    <div className="grid lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x lg:divide-x-reverse divide-[#e3ebe5]">
+      <div className="p-5"><p className="text-xs font-bold text-slate-400 mb-3">توزيع الحالات</p><div className="grid grid-cols-2 gap-2">{Object.entries(REQ_STATUS).map(([key, meta]) => { const n = (o.requirements || []).filter((r: any) => r.status === key).length; return <div key={key} className="rounded-xl bg-[#f7faf8] p-3"><p className="text-xl font-extrabold text-[#17363a]">{n}</p><p className="text-[11px] text-slate-500 truncate">{meta.label}</p></div>; })}</div></div>
+      <div className="p-5"><div className="flex justify-between mb-3"><p className="text-xs font-bold text-slate-400">الأقسام المحاسبية</p><span className="text-xs text-slate-400">{groups.length} قسم</span></div><div className="space-y-2 max-h-44 overflow-auto">{groups.map(([name, items]) => { const done = items.filter((r: any) => ["approved", "uploaded", "ready", "not_applicable"].includes(r.status)).length; return <button key={name} onClick={() => onSectionClick(name)} className="w-full text-right group"><div className="flex justify-between text-xs mb-1"><span className="font-semibold text-[#345258] group-hover:text-[#287052]">{name}</span><span className="text-slate-400">{done}/{items.length}</span></div><div className="h-1.5 rounded-full bg-[#e6eee8]"><div className="h-full rounded-full bg-[#4b9a72]" style={{ width: `${Math.round(done / items.length * 100)}%` }} /></div></button>; })}</div></div>
+      <div className="p-5"><p className="text-xs font-bold text-slate-400 mb-3">يحتاج انتباهك أولاً</p><div className="space-y-2 max-h-32 overflow-auto">{attention.slice(0, 4).map((r: any) => <div key={r.id} className="flex items-start gap-2 text-xs"><span className={`mt-1 h-2 w-2 rounded-full shrink-0 ${r.status === "rejected" ? "bg-[#c35d55]" : "bg-[#c79b4d]"}`} /><span className="font-semibold text-[#345258]">{r.title}</span></div>)}{!attention.length && <div className="rounded-xl bg-[#edf6ef] p-3 text-xs text-[#287052]">لا توجد بنود عاجلة حالياً</div>}</div><div className="mt-4 border-t border-[#e3ebe5] pt-3 flex justify-between text-xs"><span className="text-slate-400">إجمالي الملفات</span><b>{o.files.length}</b></div></div>
+    </div>
+  </section>;
+}
+
 // ===== تبويب المتطلبات =====
-function RequirementsTab({ o, isAuditor, periodId, onDone }: { o: any; isAuditor: boolean; periodId: number; onDone: () => void }) {
+function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection }: { o: any; isAuditor: boolean; periodId: number; onDone: () => void; focusSection?: string | null }) {
   const { toast } = useToast();
   const [expanded, setExpanded] = useState<number | null>(null);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [sectionFilter, setSectionFilter] = useState("all");
+  const [attentionOnly, setAttentionOnly] = useState(false);
 
   const setStatus = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) =>
@@ -337,6 +369,12 @@ function RequirementsTab({ o, isAuditor, periodId, onDone }: { o: any; isAuditor
     sections[secIdx.get(key)!].items.push(r);
   }
   const doneStates = new Set(["approved", "uploaded", "ready", "not_applicable"]);
+  useEffect(() => { if (focusSection) setOpenSections((p) => ({ ...p, [focusSection]: true })); }, [focusSection]);
+  const sectionNames = sections.map((s) => s.name);
+  const filteredSections = sections.map((sec) => ({ ...sec, items: sec.items.filter((r: any) => {
+    const q = search.trim().toLowerCase();
+    return (!q || [r.title, r.titleEn, r.assigneeName].some((v) => String(v || "").toLowerCase().includes(q))) && (statusFilter === "all" || r.status === statusFilter) && (priorityFilter === "all" || r.priority === priorityFilter) && (sectionFilter === "all" || sec.name === sectionFilter) && (!attentionOnly || r.status === "rejected" || (r.priority === "high" && !["approved", "not_applicable"].includes(r.status)));
+  }) })).filter((s) => s.items.length);
 
   const renderReq = (r: any) => {
         const st = REQ_STATUS[r.status] || REQ_STATUS.requested;
@@ -402,13 +440,14 @@ function RequirementsTab({ o, isAuditor, periodId, onDone }: { o: any; isAuditor
 
   return (
     <div className="space-y-4">
-      <NewRequirementDialog periodId={periodId} isAuditor={isAuditor} onDone={onDone} />
+      <div className="rounded-2xl border border-[#d5e3da] bg-white p-3 shadow-sm space-y-3"><div className="flex flex-wrap gap-2 items-center"><div className="relative flex-1 min-w-52"><Search className="absolute right-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث في العنوان أو المسؤول..." className="pr-9 border-[#dbe5df]" /></div><Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-40"><Filter className="h-4 w-4 ml-1 text-[#a7803e]" /><SelectValue placeholder="الحالة" /></SelectTrigger><SelectContent><SelectItem value="all">كل الحالات</SelectItem>{Object.entries(REQ_STATUS).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}</SelectContent></Select><Select value={priorityFilter} onValueChange={setPriorityFilter}><SelectTrigger className="w-32"><SelectValue placeholder="الأولوية" /></SelectTrigger><SelectContent><SelectItem value="all">كل الأولويات</SelectItem><SelectItem value="high">عاجل</SelectItem><SelectItem value="normal">عادي</SelectItem><SelectItem value="low">منخفض</SelectItem></SelectContent></Select><Select value={sectionFilter} onValueChange={setSectionFilter}><SelectTrigger className="w-40"><SelectValue placeholder="القسم" /></SelectTrigger><SelectContent><SelectItem value="all">كل الأقسام</SelectItem>{sectionNames.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><Button size="sm" variant={attentionOnly ? "default" : "outline"} onClick={() => setAttentionOnly(!attentionOnly)} className={attentionOnly ? "bg-[#17363a]" : ""}>يحتاج انتباه</Button></div><div className="flex justify-between text-xs text-slate-400"><span>عرض {filteredSections.reduce((n, s) => n + s.items.length, 0)} من {o.requirements.length} متطلب</span>{(search || statusFilter !== "all" || priorityFilter !== "all" || sectionFilter !== "all" || attentionOnly) && <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setStatusFilter("all"); setPriorityFilter("all"); setSectionFilter("all"); setAttentionOnly(false); }} className="h-7 text-[#287052]">مسح الفلاتر <X className="h-3 w-3 mr-1" /></Button>}</div></div><NewRequirementDialog periodId={periodId} isAuditor={isAuditor} onDone={onDone} />
       {!o.requirements.length && (
         <Card><CardContent className="py-8 text-center text-gray-500">
           لا توجد متطلبات بعد — {isAuditor ? "أضف أول طلب للفريق" : "سجّل متطلبات المراجع أو جهّز بنودك الداخلية"}
         </CardContent></Card>
       )}
-      {sections.map((sec) => {
+      {!filteredSections.length && o.requirements.length > 0 && <Card><CardContent className="py-10 text-center text-slate-500"><Search className="h-8 w-8 mx-auto mb-2 text-slate-300" />لا توجد نتائج مطابقة للفلاتر الحالية</CardContent></Card>}
+      {filteredSections.map((sec) => {
         const done = sec.items.filter((r: any) => doneStates.has(r.status)).length;
         const isOpen = openSections[sec.name] ?? false;
         return (
@@ -573,24 +612,26 @@ function UploadFileDialog({ periodId, requirementId, onDone, small }: { periodId
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("other");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [result, setResult] = useState<{ uploaded: any[]; failed: any[] } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const doUpload = async () => {
-    if (!file || title.trim().length < 2) { toast({ title: "العنوان والملف مطلوبان", variant: "destructive" }); return; }
+    if (!files.length) { toast({ title: "اختر ملفاً واحداً على الأقل", variant: "destructive" }); return; }
     setBusy(true);
     try {
       const fd = new FormData();
-      fd.append("file", file);
-      fd.append("title", title.trim());
+       files.forEach((item) => fd.append("files", item));
+       if (files.length === 1 && title.trim()) fd.append("title", title.trim());
       fd.append("category", category);
       if (requirementId) fd.append("requirementId", String(requirementId));
       const res = await fetch(`/api/audit/periods/${periodId}/files`, { method: "POST", credentials: "include", body: fd });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "فشل الرفع");
-      toast({ title: "تم رفع الملف ✔" });
-      setOpen(false); setTitle(""); setFile(null);
-      onDone();
+       if (!res.ok) throw new Error(data.error || "فشل الرفع");
+       setResult({ uploaded: data.uploaded || [], failed: data.failed || [] });
+       toast({ title: data.failed?.length ? `تم رفع ${data.uploaded?.length || 0} ملف مع وجود أخطاء` : `تم رفع ${data.uploaded?.length || files.length} ملف` });
+        if (data.uploaded?.length) onDone(); // تحديث القائمة حتى مع نجاح جزئي
+       if (!data.failed?.length) { setOpen(false); setTitle(""); setFiles([]); }
     } catch (e: any) {
       toast({ title: e.message, variant: "destructive" });
     } finally { setBusy(false); }
@@ -603,10 +644,10 @@ function UploadFileDialog({ periodId, requirementId, onDone, small }: { periodId
           ? <Button size="sm" variant="outline"><Upload className="h-4 w-4 ml-1" /> رفع ملف</Button>
           : <Button className="bg-emerald-700 hover:bg-emerald-800" data-testid="audit-upload-file"><Upload className="h-4 w-4 ml-1" /> رفع ملف جديد</Button>}
       </DialogTrigger>
-      <DialogContent dir="rtl">
+      <DialogContent dir="rtl" className="sm:max-w-lg">
         <DialogHeader><DialogTitle>{requirementId ? "رفع ملف على المتطلب" : "رفع ملف للفترة"}</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <div><Label>عنوان الملف</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="مثال: قائمة المركز المالي 30/06/2026" /></div>
+          {files.length <= 1 && <div><Label>عنوان الملف</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="مثال: قائمة المركز المالي 30/06/2026" /></div>}
           {!requirementId && (
             <div>
               <Label>التصنيف</Label>
@@ -616,10 +657,9 @@ function UploadFileDialog({ periodId, requirementId, onDone, small }: { periodId
               </Select>
             </div>
           )}
-          <div>
-            <Label>الملف (PDF / Excel / Word / صور / ZIP — حتى 50MB)</Label>
-            <Input type="file" accept=".pdf,.xlsx,.xls,.csv,.docx,.doc,.png,.jpg,.jpeg,.zip" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-          </div>
+           <div><Label>الملفات (حتى 20 ملفاً، 50MB للملف)</Label><label className="mt-2 flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#cbded1] bg-[#f8fbf9] text-center hover:bg-[#edf6ef]"><Upload className="h-7 w-7 text-[#4b9a72] mb-2" /><span className="text-sm font-semibold text-[#345258]">اسحب الملفات هنا أو انقر للاختيار</span><span className="text-xs text-slate-400 mt-1">PDF · Excel · Word · صور · ZIP</span><Input className="hidden" type="file" multiple accept=".pdf,.xlsx,.xls,.csv,.docx,.doc,.png,.jpg,.jpeg,.zip" onChange={(e) => { const picked = Array.from(e.target.files || []).slice(0, 20); setFiles(picked); setResult(null); }} /></label></div>
+          {!!files.length && <div className="max-h-36 overflow-auto space-y-1">{files.map((item, i) => <div key={`${item.name}-${i}`} className="flex items-center justify-between rounded-lg bg-[#f3f8f4] px-3 py-2 text-sm"><span className="truncate">{item.name} <small className="text-slate-400">({fmtSize(item.size)})</small></span><Button type="button" variant="ghost" size="sm" onClick={() => setFiles((p) => p.filter((_, idx) => idx !== i))}><X className="h-4 w-4" /></Button></div>)}</div>}
+          {result && result.failed.length > 0 && <div className="rounded-lg bg-red-50 p-3 text-xs text-red-700">{result.failed.map((f, i) => <div key={i}>{f.fileName}: {f.error}</div>)}</div>}
           <Button className="w-full bg-emerald-700 hover:bg-emerald-800" disabled={busy} onClick={doUpload}>{busy ? "جاري الرفع..." : "رفع"}</Button>
         </div>
       </DialogContent>
