@@ -96,6 +96,11 @@ function PortalTheme() {
       .audit-portal .audit-count { animation:auditCount .5s cubic-bezier(.22,1,.36,1) both; }
       .audit-portal .audit-preview-image { max-height:calc(85dvh - 120px); }
       .audit-portal .audit-preview-shimmer { width:180px; height:14px; border-radius:999px; background:linear-gradient(90deg,#17363a 20%,#2c5556 50%,#17363a 80%); background-size:200% 100%; animation:auditShimmer 1.4s ease-in-out infinite; }
+      .audit-portal .audit-workspace { max-width:1400px; margin-inline:auto; }
+      .audit-portal .audit-desktop-grid { display:grid; gap:1rem; }
+      .audit-portal .audit-section-rail { min-width:0; }
+      .audit-portal .audit-command-status { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.5rem; }
+      .audit-portal .audit-file-row { display:grid; grid-template-columns:minmax(220px,1.7fr) minmax(120px,1fr) 90px minmax(140px,1fr) 150px auto; align-items:center; gap:1rem; }
       @keyframes auditCount { from { opacity:.35; transform:translateY(3px); } to { opacity:1; transform:translateY(0); } }
       @keyframes auditShimmer { from { background-position:200% 0; } to { background-position:-200% 0; } }
       @keyframes auditRise { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
@@ -103,6 +108,23 @@ function PortalTheme() {
         .audit-portal .audit-requirement { border-radius:12px; }
         .audit-portal [role="tablist"] { width:100%; overflow-x:auto; flex-wrap:nowrap; justify-content:flex-start; }
         .audit-portal [role="tab"] { flex:0 0 auto; white-space:nowrap; }
+      }
+      @media (min-width:1024px) {
+        .audit-portal .audit-period-bar { display:flex; flex-wrap:nowrap; justify-content:space-between; }
+        .audit-portal .audit-tabs > [role="tablist"] { display:flex; flex-wrap:nowrap; }
+        .audit-portal .audit-files-workspace .audit-file-row { min-height:48px; }
+        .audit-portal .audit-command-grid { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1.7fr) minmax(220px,.9fr); }
+        .audit-portal .audit-desktop-grid { grid-template-columns:220px minmax(0,1fr); align-items:start; }
+        .audit-portal .audit-section-rail { position:sticky; top:4.5rem; max-height:calc(100dvh - 6rem); overflow:auto; }
+        .audit-portal .audit-section-rail > div { flex-direction:column; align-items:stretch; overflow:visible; }
+        .audit-portal .audit-rail-chip { width:100%; text-align:right; }
+        .audit-portal .audit-requirement > div { padding-block:.6rem; }
+        .audit-portal .audit-requirement .audit-req-head { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; }
+        .audit-portal .audit-preview-dialog { width:min(96vw,1500px); max-width:none; }
+      }
+      @media (min-width:1280px) {
+        .audit-portal .audit-desktop-grid { grid-template-columns:240px minmax(0,1fr); gap:1.25rem; }
+        .audit-portal .audit-command-grid { grid-template-columns:minmax(280px,1.05fr) minmax(440px,1.7fr) minmax(260px,.9fr); }
       }
       @media (prefers-reduced-motion:reduce) { .audit-portal .audit-requirement, .audit-portal .audit-count, .audit-portal .audit-preview-shimmer { animation:none; transition:none; } }
     `}</style>
@@ -198,7 +220,7 @@ function PortalBody({ isAuditor, userName }: { isAuditor: boolean; userName: str
   const o = overviewQ.data;
 
   return (
-    <div dir="rtl" className={`${isAuditor ? "space-y-5" : "page-container space-y-5"} audit-portal`}>
+    <div dir="rtl" className={`${isAuditor ? "space-y-5" : "page-container space-y-5"} audit-portal audit-workspace`}>
       <PortalTheme />
       {!isAuditor && (
         <div className="flex items-start justify-between flex-wrap gap-3 border-b border-[#dce5df] pb-5">
@@ -212,7 +234,7 @@ function PortalBody({ isAuditor, userName }: { isAuditor: boolean; userName: str
       )}
 
       {/* اختيار الفترة */}
-      <div className="flex items-center gap-3 flex-wrap rounded-2xl border border-[#dbe5df] bg-white px-4 py-3 shadow-sm">
+      <div className="audit-period-bar flex items-center gap-3 flex-wrap rounded-2xl border border-[#dbe5df] bg-white px-4 py-3 shadow-sm">
         <Label className="shrink-0 font-bold text-[#17363a]">الفترة المالية:</Label>
         <Select value={periodId ? String(periodId) : ""} onValueChange={(v) => setPeriodId(Number(v))}>
           <SelectTrigger className="w-72 border-[#dbe5df] bg-[#f8faf8]" data-testid="audit-period-select"><CalendarDays className="h-4 w-4 ml-2 text-[#a7803e]" /><SelectValue placeholder="اختر فترة" /></SelectTrigger>
@@ -258,7 +280,7 @@ function PortalBody({ isAuditor, userName }: { isAuditor: boolean; userName: str
             </CardContent>
           </Card>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="audit-tabs">
             <TabsList className="sticky top-2 z-20 flex-wrap h-auto bg-white/95 backdrop-blur border border-[#d5e3da] shadow-sm">
               <TabsTrigger value="requirements"><ListChecks className="h-4 w-4 ml-1" /> المتطلبات <span className="mr-1 text-[10px] opacity-60">{o.requirements.length}</span></TabsTrigger>
               <TabsTrigger value="files"><FolderOpen className="h-4 w-4 ml-1" /> مكتبة الملفات <span className="mr-1 text-[10px] opacity-60">{o.files.length}</span></TabsTrigger>
@@ -345,7 +367,7 @@ function AuditCommandCenter({ o, onSectionClick }: { o: any; onSectionClick: (se
   const attention = (o.requirements || []).filter((r: any) => r.status === "rejected" || (r.priority === "high" && !["approved", "not_applicable"].includes(r.status)));
   return <section className="rounded-2xl border border-[#d5e3da] bg-white shadow-sm overflow-hidden">
     <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[#e3ebe5] px-5 py-4"><div><p className="text-xs font-bold tracking-widest text-[#a7803e]">لوحة القيادة</p><h2 className="text-xl font-extrabold text-[#17363a] mt-1">نظرة تنفيذية على ملف المراجعة</h2></div><div className="text-left"><span className="text-3xl font-extrabold text-[#287052]">{o.stats.progress}%</span><p className="text-xs text-slate-400">جاهزية الاعتماد</p></div></div>
-    <div className="grid lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x lg:divide-x-reverse divide-[#e3ebe5]">
+    <div className="audit-command-grid grid lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x lg:divide-x-reverse divide-[#e3ebe5]">
       <div className="p-5"><p className="text-xs font-bold text-slate-400 mb-3">توزيع الحالات</p><div className="grid grid-cols-2 gap-2">{Object.entries(REQ_STATUS).map(([key, meta]) => { const n = (o.requirements || []).filter((r: any) => r.status === key).length; return <div key={key} className="rounded-xl bg-[#f7faf8] p-3"><p className="audit-count text-xl font-extrabold text-[#17363a]">{n}</p><p className="text-[11px] text-slate-500 truncate">{meta.label}</p></div>; })}</div></div>
       <div className="p-5"><div className="flex justify-between mb-3"><p className="text-xs font-bold text-slate-400">الأقسام المحاسبية</p><span className="text-xs text-slate-400">{groups.length} قسم</span></div><div className="space-y-2 max-h-44 overflow-auto">{groups.map(([name, items]) => { const done = items.filter((r: any) => ["approved", "uploaded", "ready", "not_applicable"].includes(r.status)).length; return <button key={name} onClick={() => onSectionClick(name)} className="w-full text-right group"><div className="flex justify-between text-xs mb-1"><span className="font-semibold text-[#345258] group-hover:text-[#287052]">{name}</span><span className="text-slate-400">{done}/{items.length}</span></div><div className="h-1.5 rounded-full bg-[#e6eee8]"><div className="h-full rounded-full bg-[#4b9a72]" style={{ width: `${Math.round(done / items.length * 100)}%` }} /></div></button>; })}</div></div>
       <div className="p-5"><p className="text-xs font-bold text-slate-400 mb-3">يحتاج انتباهك أولاً</p><div className="space-y-2 max-h-32 overflow-auto">{attention.slice(0, 4).map((r: any) => <div key={r.id} className="flex items-start gap-2 text-xs"><span className={`mt-1 h-2 w-2 rounded-full shrink-0 ${r.status === "rejected" ? "bg-[#c35d55]" : "bg-[#c79b4d]"}`} /><span className="font-semibold text-[#345258]">{r.title}</span></div>)}{!attention.length && <div className="rounded-xl bg-[#edf6ef] p-3 text-xs text-[#287052]">لا توجد بنود عاجلة حالياً</div>}</div><div className="mt-4 border-t border-[#e3ebe5] pt-3 flex justify-between text-xs"><span className="text-slate-400">إجمالي الملفات</span><b>{o.files.length}</b></div></div>
@@ -402,7 +424,7 @@ function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection }: { o: 
         return (
           <Card key={r.id} className={`audit-requirement border-[#dfe8e2] bg-white shadow-sm ${r.status === "approved" ? "audit-approved" : r.status === "rejected" ? "audit-rejected" : ""}`}>
             <CardContent className="py-2.5 px-3 space-y-2">
-              <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="audit-req-head flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-bold text-sm text-[#17363a]">{r.title}</p>
@@ -466,9 +488,11 @@ function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection }: { o: 
           لا توجد متطلبات بعد — {isAuditor ? "أضف أول طلب للفريق" : "سجّل متطلبات المراجع أو جهّز بنودك الداخلية"}
         </CardContent></Card>
       )}
-      {!!sections.length && <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+      {!!sections.length && <div className="audit-desktop-grid">
+        <aside className="audit-section-rail rounded-xl border border-[#d5e3da] bg-white p-2 shadow-sm"><p className="px-2 py-2 text-xs font-bold text-slate-400">فهرس الأقسام</p><div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
         {sections.map((sec) => <button key={sec.name} onClick={() => { setActiveSection(sec.name); setOpenSections({ [sec.name]: true }); }} className={`audit-rail-chip shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold ${activeSection === sec.name ? "border-[#287052] bg-[#e3f0e8] text-[#22634d]" : "border-[#d5e3da] bg-white text-slate-500 hover:bg-[#f2f8f3]"}`}>{sec.name}<span className="mr-1 opacity-60">{sec.items.length}</span></button>)}
-      </div>}
+        </div></aside>
+        <div className="min-w-0">
       {!filteredSections.length && o.requirements.length > 0 && <Card><CardContent className="py-10 text-center text-slate-500"><Search className="h-8 w-8 mx-auto mb-2 text-slate-300" />لا توجد نتائج مطابقة للفلاتر الحالية</CardContent></Card>}
       {filteredSections.map((sec) => {
         const done = sec.items.filter((r: any) => doneStates.has(r.status)).length;
@@ -495,6 +519,8 @@ function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection }: { o: 
           </div>
         );
       })}
+        </div>
+      </div>}
     </div>
   );
 }
@@ -590,7 +616,7 @@ function FilesTab({ o, isAuditor, periodId, onDone }: { o: any; isAuditor: boole
     return g;
   }, [o.files, query, categoryFilter, limit]);
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 audit-files-workspace">
       {!isAuditor && <UploadFileDialog periodId={periodId} onDone={onDone} />}
       <div className="flex flex-wrap gap-2"><div className="relative flex-1 min-w-52"><Search className="absolute right-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={query} onChange={(e) => { setQuery(e.target.value); setLimit(30); }} placeholder="ابحث في الملفات..." className="pr-9" /></div><Select value={categoryFilter} onValueChange={setCategoryFilter}><SelectTrigger className="w-44"><Filter className="h-4 w-4 ml-1" /><SelectValue placeholder="التصنيف" /></SelectTrigger><SelectContent><SelectItem value="all">كل التصنيفات</SelectItem>{Object.entries(CATEGORY_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select></div>
       {!o.files.length && <Card><CardContent className="py-8 text-center text-gray-500">لا توجد ملفات مرفوعة بعد</CardContent></Card>}
@@ -617,7 +643,7 @@ function FileRow({ f, isAuditor, onDone, compact, onPreview }: { f: any; isAudit
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
   return (
-    <div className={`flex items-center justify-between gap-2 rounded-lg ${compact ? "bg-gray-50 px-3 py-1.5" : "border px-3 py-2"}`}>
+    <div className={`audit-file-row flex items-center justify-between gap-2 rounded-lg ${compact ? "bg-gray-50 px-3 py-1.5" : "border px-3 py-2"}`}>
       <div className="flex items-center gap-2 min-w-0">
         <FileText className="h-4 w-4 text-blue-700 shrink-0" />
         <div className="min-w-0">
