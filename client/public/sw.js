@@ -53,7 +53,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (url.pathname.startsWith('/api/')) {
-    if (url.pathname.includes('/export') || url.pathname.includes('/download') || url.pathname.includes('/pdf') || url.pathname.includes('/file/')) {
+    if (url.pathname.includes('/export') || url.pathname.includes('/download') || url.pathname.includes('/preview') || url.pathname.includes('/pdf') || url.pathname.includes('/file/')) {
       return;
     }
     if (url.pathname.startsWith('/api/auth/')) {
