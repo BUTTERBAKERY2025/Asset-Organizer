@@ -341,7 +341,7 @@ function RequirementsTab({ o, isAuditor, periodId, onDone }: { o: any; isAuditor
                       <SelectContent>{TEAM_STATUSES.map((s) => <SelectItem key={s} value={s}>{REQ_STATUS[s].label}</SelectItem>)}</SelectContent>
                     </Select>
                   )}
-                  {!isAuditor && <UploadFileDialog periodId={periodId} requirementId={r.id} onDone={onDone} small />}
+                  {!isAuditor && !["approved", "not_applicable"].includes(r.status) && <UploadFileDialog periodId={periodId} requirementId={r.id} onDone={onDone} small />}
                   {isAuditor && r.status === "uploaded" && (
                     <>
                       <Button size="sm" className="bg-emerald-700 hover:bg-emerald-800" onClick={() => setStatus.mutate({ id: r.id, status: "approved" })}>
@@ -352,7 +352,7 @@ function RequirementsTab({ o, isAuditor, periodId, onDone }: { o: any; isAuditor
                       </Button>
                     </>
                   )}
-                  {!isAuditor && (
+                  {!isAuditor && r.status !== "approved" && (
                     <Button size="sm" variant="ghost" className="text-red-500" onClick={() => { if (confirm("حذف هذا المتطلب؟")) delReq.mutate(r.id); }}>
                       <Trash2 className="h-4 w-4" />
                     </Button>

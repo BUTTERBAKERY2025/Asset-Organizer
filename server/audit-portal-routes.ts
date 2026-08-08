@@ -242,6 +242,8 @@ export function registerAuditPortalRoutes(app: Express) {
             const [r] = await db.select().from(auditRequirements)
               .where(and(eq(auditRequirements.id, rid), eq(auditRequirements.periodId, periodId)));
             if (!r) return res.status(400).json({ error: "المتطلب غير موجود في هذه الفترة" });
+            if (r.status === "approved") return res.status(400).json({ error: "البند معتمد من المراجع — أعده للتعديل أولاً قبل إرفاق ملفات جديدة" });
+            if (r.status === "not_applicable") return res.status(400).json({ error: "البند «غير منطبق» — غيّر حالته أولاً قبل رفع ملف عليه" });
             requirementId = rid;
           }
 
@@ -274,7 +276,7 @@ export function registerAuditPortalRoutes(app: Express) {
           if (requirementId) {
             await db.update(auditRequirements)
               .set({ status: "uploaded", updatedAt: new Date() })
-              .where(and(eq(auditRequirements.id, requirementId), inArray(auditRequirements.status, ["requested", "in_progress", "rejected"])));
+              .where(and(eq(auditRequirements.id, requirementId), inArray(auditRequirements.status, ["requested", "in_progress", "ready", "waiting_sample", "rejected"])));
           }
           await logActivity(periodId, req.auditCtx, "upload", `${title} (${originalName})`);
           res.json(row);
@@ -306,6 +308,10 @@ export function registerAuditPortalRoutes(app: Express) {
       if (!f) return res.status(404).json({ error: "الملف غير موجود" });
       const [fPeriod] = await db.select().from(auditPeriods).where(eq(auditPeriods.id, f.periodId));
       if (fPeriod?.status === "closed") return res.status(400).json({ error: "الفترة مغلقة — لا يمكن حذف ملفاتها" });
+      if (f.requirementId) {
+        const [fr] = await db.select({ status: auditRequirements.status }).from(auditRequirements).where(eq(auditRequirements.id, f.requirementId));
+        if (fr?.status === "approved") return res.status(400).json({ error: "الملف مرتبط ببند معتمد من المراجع — لا يمكن حذفه" });
+      }
       try { await deleteFromSupabase(f.storagePath); } catch {}
       await db.delete(auditFiles).where(eq(auditFiles.id, id));
       await logActivity(f.periodId, req.auditCtx, "delete_file", f.title);
@@ -355,10 +361,11 @@ export function registerAuditPortalRoutes(app: Express) {
         // مصفوفة الانتقالات: المراجع يعتمد/يرجع فقط ما هو «مرفوع»، والفريق لا يغيّر بنداً معتمداً
         const allowedByRole = ctx.isAuditor
           ? ["approved", "rejected"]
-          : ["requested", "in_progress", "ready", "waiting_sample", "not_applicable", "uploaded"];
+          : ["requested", "in_progress", "ready", "waiting_sample", "not_applicable"]; // «مرفوع» تتم فقط عبر رفع ملف فعلي
         if (!allowedByRole.includes(status)) return res.status(403).json({ error: "لا تملك تغيير الحالة إلى هذه القيمة" });
         if (ctx.isAuditor && r.status !== "uploaded") return res.status(400).json({ error: "لا يمكن اعتماد/إرجاع بند غير مرفوع" });
         if (!ctx.isAuditor && r.status === "approved") return res.status(400).json({ error: "البند معتمد من المراجع — لا يمكن تغيير حالته" });
+        if (!ctx.isAuditor && r.status === "uploaded") return res.status(400).json({ error: "البند مرفوع وبانتظار المراجع — لا يمكن إرجاع حالته يدوياً" });
         patch.status = status;
       }
       // الفريق فقط يعدّل المسؤول عن التجهيز
@@ -379,6 +386,7 @@ export function registerAuditPortalRoutes(app: Express) {
       const id = parseInt(req.params.id);
       const [rExisting] = await db.select().from(auditRequirements).where(eq(auditRequirements.id, id));
       if (!rExisting) return res.status(404).json({ error: "المتطلب غير موجود" });
+      if (rExisting.status === "approved") return res.status(400).json({ error: "البند معتمد من المراجع — لا يمكن حذفه" });
       const [rPeriod] = await db.select().from(auditPeriods).where(eq(auditPeriods.id, rExisting.periodId));
       if (rPeriod?.status === "closed") return res.status(400).json({ error: "الفترة مغلقة — لا يمكن حذف متطلباتها" });
       const [r] = await db.delete(auditRequirements).where(eq(auditRequirements.id, id)).returning();
