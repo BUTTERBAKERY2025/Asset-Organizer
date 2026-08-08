@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
@@ -270,6 +271,11 @@ const upcomingItems = [
 
 export default function GovernancePage() {
   const [activeTab, setActiveTab] = useState("overview");
+  const { user } = useAuth();
+  // بطاقة القوائم المالية والختم الإلكتروني تظهر للأدمن فقط
+  const visibleModules = governanceModules.filter(
+    (m) => m.id !== "financial-statements" || user?.role === "admin"
+  );
   const { data: independence } = useQuery<IndependenceData>({
     queryKey: ["/api/governance/board-members/_compliance/independence"],
   });
@@ -363,7 +369,7 @@ export default function GovernancePage() {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {governanceModules.map((module) => (
+              {visibleModules.map((module) => (
                 <Link href={module.href} key={module.id}>
                   <Card 
                     className="hover:shadow-lg transition-shadow cursor-pointer group relative h-full"

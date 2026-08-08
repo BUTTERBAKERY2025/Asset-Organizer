@@ -26,9 +26,26 @@ function checkRateLimit(ip: string): boolean {
 
 const TOKEN_RE = /^[a-f0-9]{64}$/;
 
+// تحصين إضافي: كل مسارات إدارة القوائم المالية والختم مقصورة على دور admin فقط
+// (فوق فحص الجلسة وصلاحية governance_compliance) — يُقرأ الدور من قاعدة البيانات وليس من الجلسة
+import { users } from "@shared/schema";
+const requireAdminRole: import("express").RequestHandler = async (req: any, res, next) => {
+  try {
+    const userId = req.session?.userId;
+    if (!userId) return res.status(401).json({ message: "غير مصرح" });
+    const [u] = await db.select({ role: users.role, isActive: users.isActive }).from(users).where(eq(users.id, userId)).limit(1);
+    if (!u || u.role !== "admin" || u.isActive !== "active") {
+      return res.status(403).json({ message: "هذه الصفحة متاحة للمدير العام فقط" });
+    }
+    next();
+  } catch {
+    res.status(500).json({ message: "خطأ في التحقق من الصلاحية" });
+  }
+};
+
 export function registerFinancialReviewRoutes(app: Express) {
   // ===== Cycles =====
-  app.get("/api/governance/financial-cycles", isAuthenticated, requirePermission("governance_compliance", "view"), async (_req, res) => {
+  app.get("/api/governance/financial-cycles", isAuthenticated, requireAdminRole, requirePermission("governance_compliance", "view"), async (_req, res) => {
     try {
       const cycles = await db.select().from(financialReviewCycles).orderBy(desc(financialReviewCycles.id));
       const counts = await db.select({
@@ -41,7 +58,7 @@ export function registerFinancialReviewRoutes(app: Express) {
     } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
-  app.post("/api/governance/financial-cycles", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req: any, res) => {
+  app.post("/api/governance/financial-cycles", isAuthenticated, requireAdminRole, requirePermission("governance_compliance", "edit"), async (req: any, res) => {
     try {
       const schema = z.object({
         title: z.string().min(3).max(300),
@@ -60,7 +77,7 @@ export function registerFinancialReviewRoutes(app: Express) {
     } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
-  app.patch("/api/governance/financial-cycles/:id", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req, res) => {
+  app.patch("/api/governance/financial-cycles/:id", isAuthenticated, requireAdminRole, requirePermission("governance_compliance", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const schema = z.object({
@@ -78,7 +95,7 @@ export function registerFinancialReviewRoutes(app: Express) {
     } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
-  app.delete("/api/governance/financial-cycles/:id", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req, res) => {
+  app.delete("/api/governance/financial-cycles/:id", isAuthenticated, requireAdminRole, requirePermission("governance_compliance", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const docs = await db.select().from(financialDocuments).where(eq(financialDocuments.cycleId, id));
@@ -92,7 +109,7 @@ export function registerFinancialReviewRoutes(app: Express) {
   });
 
   // ===== Documents =====
-  app.get("/api/governance/financial-cycles/:id/documents", isAuthenticated, requirePermission("governance_compliance", "view"), async (req, res) => {
+  app.get("/api/governance/financial-cycles/:id/documents", isAuthenticated, requireAdminRole, requirePermission("governance_compliance", "view"), async (req, res) => {
     try {
       const cycleId = parseInt(req.params.id);
       const docs = await db.select().from(financialDocuments)
@@ -109,7 +126,7 @@ export function registerFinancialReviewRoutes(app: Express) {
     } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
-  app.post("/api/governance/financial-cycles/:id/documents", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req: any, res) => {
+  app.post("/api/governance/financial-cycles/:id/documents", isAuthenticated, requireAdminRole, requirePermission("governance_compliance", "edit"), async (req: any, res) => {
     try {
       const cycleId = parseInt(req.params.id);
       const [cycle] = await db.select().from(financialReviewCycles).where(eq(financialReviewCycles.id, cycleId));
@@ -198,7 +215,7 @@ export function registerFinancialReviewRoutes(app: Express) {
     } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
-  app.delete("/api/governance/financial-documents/:id", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req, res) => {
+  app.delete("/api/governance/financial-documents/:id", isAuthenticated, requireAdminRole, requirePermission("governance_compliance", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const [doc] = await db.select().from(financialDocuments).where(eq(financialDocuments.id, id));
@@ -210,7 +227,7 @@ export function registerFinancialReviewRoutes(app: Express) {
   });
 
   // Admin: stream the original PDF
-  app.get("/api/governance/financial-documents/:id/file", isAuthenticated, requirePermission("governance_compliance", "view"), async (req, res) => {
+  app.get("/api/governance/financial-documents/:id/file", isAuthenticated, requireAdminRole, requirePermission("governance_compliance", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const [doc] = await db.select().from(financialDocuments).where(eq(financialDocuments.id, id));
@@ -225,7 +242,7 @@ export function registerFinancialReviewRoutes(app: Express) {
   });
 
   // Admin: regenerate/reopen a signer link (e.g. lost/blank signature)
-  app.post("/api/governance/financial-documents/:id/signers/:signerId/reopen", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req, res) => {
+  app.post("/api/governance/financial-documents/:id/signers/:signerId/reopen", isAuthenticated, requireAdminRole, requirePermission("governance_compliance", "edit"), async (req, res) => {
     try {
       const documentId = parseInt(req.params.id);
       const signerId = parseInt(req.params.signerId);

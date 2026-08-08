@@ -504,7 +504,7 @@ const Router = React.memo(function Router() {
       <Route path="/governance/assembly-minutes">{() => <ModulePage component={AssemblyMinutesPage} module="governance_meetings" />}</Route>
       <Route path="/governance/resolutions">{() => <ModulePage component={ResolutionsPage} module="governance_resolutions" />}</Route>
       <Route path="/governance/compliance">{() => <ModulePage component={CompliancePage} module="governance_compliance" />}</Route>
-      <Route path="/governance/financial-statements">{() => <ModulePage component={FinancialStatementsPage} module="governance_compliance" />}</Route>
+      <Route path="/governance/financial-statements">{() => <AdminPage component={FinancialStatementsPage} module="governance_compliance" />}</Route>
       <Route path="/governance/transfers">{() => <ModulePage component={ShareTransfersPage} module="governance_transfers" />}</Route>
       <Route path="/governance/disclosures">{() => <ModulePage component={DisclosuresPage} module="governance_disclosures" />}</Route>
       <Route path="/governance/dividends">{() => <ModulePage component={DividendsPage} module="governance_dividends" />}</Route>
