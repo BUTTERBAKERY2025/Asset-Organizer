@@ -716,7 +716,7 @@ function QuickStampSection() {
           <>
             <div>
               <Label>نوع الختم</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-1">
                 {(Object.keys(STAMP_LABELS) as StampKind[]).map((k) => (
                   <button
                     key={k}

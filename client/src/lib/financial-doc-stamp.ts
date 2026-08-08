@@ -5,6 +5,7 @@ import { PDFDocument } from "pdf-lib";
 import stampUrl from "@/assets/finance-stamp.png";
 import hrStampUrl from "@/assets/hr-stamp.svg";
 import mainStampUrl from "@/assets/main-stamp.svg";
+import chairmanSigUrl from "@/assets/chairman-signature.png";
 
 export interface StampSigner {
   signerName: string;
@@ -133,16 +134,18 @@ function drawStamp(ctx: CanvasRenderingContext2D, cx: number, cy: number, scale 
 }
 
 // أنواع الأختام المتاحة (المالية PNG، والبقية SVG بنفس الطراز الدائري)
-export type StampKind = "finance" | "hr" | "main";
+export type StampKind = "finance" | "hr" | "main" | "chairman";
 export const STAMP_LABELS: Record<StampKind, string> = {
   finance: "ختم الإدارة المالية",
   hr: "ختم شؤون الموظفين",
   main: "الختم الرئيسي (الإدارة العامة)",
+  chairman: "توقيع رئيس مجلس الإدارة",
 };
 const STAMP_URLS: Record<StampKind, string> = {
   finance: stampUrl,
   hr: hrStampUrl,
   main: mainStampUrl,
+  chairman: chairmanSigUrl,
 };
 
 // تحميل صورة الختم (تُحوَّل لعنصر صورة مرة واحدة لكل نوع)
@@ -440,34 +443,37 @@ export async function quickStampPdf(
   // تجهيز صورة الختم الشفافة بدقة عالية وميل خفيف
   const stampImg = await getStampImage(stampKind);
   const inked = toTransparentInk(stampImg);
+  // نسبة أبعاد الصورة (التوقيع عريض، الأختام مربعة) — نحافظ عليها بدون تشويه
+  const ar = inked.height / inked.width;
   const SS = 2.2; // دقة إضافية
   const px = Math.round(sizePt * SS * 2);
   const c = document.createElement("canvas");
   c.width = px;
-  c.height = px;
+  c.height = Math.round(px * ar);
   const cx = c.getContext("2d")!;
-  cx.translate(px / 2, px / 2);
+  cx.translate(c.width / 2, c.height / 2);
   cx.rotate(-0.08);
   cx.globalAlpha = 0.93;
   const s = px * 0.86; // هامش يمنع قص الحواف بعد الدوران
-  cx.drawImage(inked, -s / 2, -s / 2, s, s);
+  cx.drawImage(inked, -s / 2, (-s * ar) / 2, s, s * ar);
   const pngBytes = Uint8Array.from(atob(c.toDataURL("image/png").split(",")[1]), (ch) => ch.charCodeAt(0));
   const png = await pdfDoc.embedPng(pngBytes);
 
   const m = 24; // هامش من حواف الصفحة
-  const drawSize = sizePt / 0.86;
+  const drawW = sizePt / 0.86;
+  const drawH = drawW * ar;
   const xs: Record<string, number> = {
     left: m,
-    center: (pw - drawSize) / 2,
-    right: pw - m - drawSize,
+    center: (pw - drawW) / 2,
+    right: pw - m - drawW,
   };
   const ys: Record<string, number> = {
-    top: ph - m - drawSize,
-    middle: (ph - drawSize) / 2,
+    top: ph - m - drawH,
+    middle: (ph - drawH) / 2,
     bottom: m,
   };
   const [vPos, hPos] = position === "center" ? ["middle", "center"] : (position.split("-") as [string, string]);
-  page.drawImage(png, { x: xs[hPos], y: ys[vPos], width: drawSize, height: drawSize });
+  page.drawImage(png, { x: xs[hPos], y: ys[vPos], width: drawW, height: drawH });
   return await pdfDoc.save({ useObjectStreams: false });
 }
 
