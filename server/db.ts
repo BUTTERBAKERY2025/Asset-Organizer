@@ -533,6 +533,32 @@ export async function runStartupMigrations() {
       console.error("[SCHEDULE CLEANUP] Error:", schedErr?.message);
     }
 
+    // إشعارات الجوال (Web Push): جداول الاشتراكات ومفاتيح VAPID + عمود منع الإرسال المزدوج
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+          id serial PRIMARY KEY,
+          user_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          endpoint text NOT NULL UNIQUE,
+          p256dh text NOT NULL,
+          auth text NOT NULL,
+          user_agent text,
+          created_at timestamp DEFAULT now() NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id);
+        CREATE TABLE IF NOT EXISTS push_vapid_config (
+          id serial PRIMARY KEY,
+          public_key text NOT NULL,
+          private_key text NOT NULL,
+          created_at timestamp DEFAULT now() NOT NULL
+        );
+        ALTER TABLE system_notifications ADD COLUMN IF NOT EXISTS push_sent_at timestamp;
+      `);
+      console.log("[PUSH] Web Push tables verified");
+    } catch (pushErr: any) {
+      console.error("[PUSH] Migration error:", pushErr?.message);
+    }
+
     console.log("Startup migrations completed successfully");
   } catch (err) {
     console.error("Startup migration error:", err);

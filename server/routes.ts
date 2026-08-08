@@ -38033,7 +38033,7 @@ export async function registerRoutes(
       const endpoint = req.body?.endpoint;
       if (endpoint) {
         const { removePushSubscription } = await import("./push-service");
-        await removePushSubscription(endpoint);
+        await removePushSubscription(req.session.userId, endpoint);
       }
       res.json({ success: true });
     } catch (error) {

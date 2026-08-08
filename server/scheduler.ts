@@ -745,4 +745,11 @@ export function startScheduler() {
   console.log(`[scheduler] starting (tick=${TICK_MS}ms, twilio=${isTwilioConfigured() ? "configured" : "disabled"})`);
   setTimeout(tick, 5000);
   setInterval(tick, TICK_MS);
+  // إشعارات الجوال المجدولة: مسح دوري كل 5 دقائق لإرسال ما حان وقته
+  const pushSweep = () =>
+    import("./push-service")
+      .then((m) => m.sweepScheduledPush())
+      .catch(() => {});
+  setTimeout(pushSweep, 20_000);
+  setInterval(pushSweep, 5 * 60_000);
 }
