@@ -50,3 +50,4 @@
 - [Financial review module](financial-review-module.md) — sequential PDF signing: sign/decline transactional + turn-checked; reopen resets downstream signers; stamped copy client-side via pdf-lib canvas page.
 - [Signature canvas iOS wipe](signature-canvas-ios-wipe.md) — resize handlers wipe signature canvases (iOS toolbar); must snapshot+restore and pixel-check ink before submit; board re-vote = reset voting_tokens row.
 - [Event POS shift reconciliation](event-pos-shift-reconciliation.md) — full refund = exclude sale from stats, partial = pos_refunds row; close stats via tx; sale insert re-locks shift.
+- [Web Push notifications](web-push-notifications.md) — VAPID auto-stored in DB (read oldest row, never regenerate); targeting mirrors bell logic; push_sent_at conditional-UPDATE prevents double sends.
