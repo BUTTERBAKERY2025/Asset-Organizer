@@ -18,6 +18,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   ShieldCheck, FolderOpen, Plus, Upload, Download, Trash2, MessageSquare,
   CheckCircle2, XCircle, Clock, FileText, Landmark, ListChecks, Activity, UserPlus, LogOut,
+  ChevronDown, ShieldAlert, CalendarDays,
 } from "lucide-react";
 
 // ===== ثوابت العرض =====
@@ -70,6 +71,26 @@ function fmtSize(b?: number | null) {
   return b > 1024 * 1024 ? (b / 1024 / 1024).toFixed(1) + "MB" : Math.round(b / 1024) + "KB";
 }
 
+function PortalTheme() {
+  return (
+    <style>{`
+      .audit-portal { --audit-ink:#17363a; --audit-deep:#102f35; --audit-gold:#b48b46; }
+      .audit-portal .border { border-color:#dfe8e2; }
+      .audit-portal [data-state="active"] { background:#e3f0e8; color:#22634d; box-shadow:none; }
+      .audit-portal .bg-emerald-700 { background-color:#287052 !important; }
+      .audit-portal .audit-requirement { animation: auditRise .35s ease both; }
+      .audit-portal .audit-section-items > :nth-child(2) { animation-delay:40ms; }
+      .audit-portal .audit-section-items > :nth-child(3) { animation-delay:80ms; }
+      .audit-portal .audit-section-items > :nth-child(4) { animation-delay:120ms; }
+      .audit-portal .audit-section-items > :nth-child(5) { animation-delay:160ms; }
+      .audit-portal .audit-approved { border-inline-start:3px solid #4b9a72; }
+      .audit-portal .audit-rejected { border-inline-start:3px solid #c35d55; background:#fffafa; }
+      @keyframes auditRise { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
+      @media (prefers-reduced-motion:reduce) { .audit-portal .audit-requirement { animation:none; } }
+    `}</style>
+  );
+}
+
 export default function AuditPortalPage() {
   const ctxQ = useQuery<{ name: string; role: "team" | "auditor" }>({
     queryKey: ["/api/audit/portal-context"],
@@ -78,15 +99,16 @@ export default function AuditPortalPage() {
   });
 
   if (ctxQ.isLoading) {
-    return <div className="min-h-screen flex items-center justify-center text-gray-500">جاري التحميل...</div>;
+    return <div dir="rtl" className="audit-portal min-h-[100dvh] flex items-center justify-center text-slate-500"><div className="w-full max-w-xl space-y-3 px-6"><div className="h-12 w-48 rounded-xl skeleton-pro ml-auto" /><div className="h-32 rounded-2xl skeleton-pro" /><div className="h-20 rounded-2xl skeleton-pro" /></div></div>;
   }
   if (ctxQ.isError || !ctxQ.data) {
     return (
-      <div className="min-h-screen flex items-center justify-center" dir="rtl">
-        <Card className="max-w-md text-center p-8">
-          <ShieldCheck className="h-10 w-10 mx-auto text-gray-400 mb-3" />
-          <p className="font-bold">بوابة المراجعة المالية</p>
-          <p className="text-sm text-gray-500 mt-2">هذه البوابة متاحة لفريق الإدارة المالية ومكتب المراجعة المعتمد فقط</p>
+      <div className="audit-portal min-h-[100dvh] flex items-center justify-center bg-[#f5f7f4]" dir="rtl">
+        <Card className="max-w-md text-center p-8 border-0 shadow-xl shadow-slate-900/10 bg-white/90">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#102f35] text-[#d8b56d]"><ShieldAlert className="h-8 w-8" /></div>
+          <p className="font-extrabold text-xl text-[#102f35]">بوابة المراجعة المالية</p>
+          <p className="text-sm text-slate-500 mt-3 leading-7">هذه البوابة متاحة لفريق الإدارة المالية ومكتب المراجعة المعتمد فقط</p>
+          <div className="mt-5 border-t border-slate-100 pt-4 text-xs text-slate-400">الوصول محمي ومسجّل بالكامل</div>
         </Card>
       </div>
     );
@@ -105,26 +127,26 @@ function AuditorShell({ userName, children }: { userName: string; children: Reac
     window.location.href = "/login";
   };
   return (
-    <div dir="rtl" className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div dir="rtl" className="audit-portal min-h-[100dvh] bg-[#f4f7f5] text-[#17363a]">
+      <header className="sticky top-0 z-40 border-b border-[#dbe5df] bg-[#102f35] text-white shadow-lg shadow-[#102f35]/10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-emerald-700 text-white p-2"><Landmark className="h-5 w-5" /></div>
+            <div className="rounded-xl bg-[#d8b56d] text-[#102f35] p-2.5"><Landmark className="h-5 w-5" /></div>
             <div>
-              <p className="font-extrabold text-gray-900 leading-tight">بوابة المراجعة المالية</p>
-              <p className="text-xs text-gray-500">شركة الزبد الأفضل التجارية — مدخل مكتب المراجعة</p>
+              <p className="font-extrabold leading-tight">بوابة المراجعة المالية</p>
+              <p className="text-xs text-[#b9cbc4] mt-0.5">شركة الزبد الأفضل التجارية · مدخل مكتب المراجعة</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-600 hidden sm:block">{userName}</span>
-            <Button variant="ghost" size="sm" onClick={logout} className="text-gray-500">
+            <span className="text-sm text-[#dce8e2] hidden sm:block">{userName}</span>
+            <Button variant="ghost" size="sm" onClick={logout} className="text-[#dce8e2] hover:bg-white/10 hover:text-white">
               <LogOut className="h-4 w-4 ml-1" /> خروج
             </Button>
           </div>
         </div>
       </header>
-      <main className="max-w-6xl mx-auto px-4 py-6">{children}</main>
-      <footer className="text-center text-xs text-gray-400 py-6">جميع العمليات على هذه البوابة مسجَّلة بالاسم والوقت</footer>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">{children}</main>
+      <footer className="text-center text-xs text-slate-400 py-8">جميع العمليات على هذه البوابة مسجَّلة بالاسم والوقت</footer>
     </div>
   );
 }
@@ -155,29 +177,31 @@ function PortalBody({ isAuditor, userName }: { isAuditor: boolean; userName: str
   const o = overviewQ.data;
 
   return (
-    <div dir="rtl" className={isAuditor ? "space-y-5" : "page-container space-y-5"}>
+    <div dir="rtl" className={`${isAuditor ? "space-y-5" : "page-container space-y-5"} audit-portal`}>
+      <PortalTheme />
       {!isAuditor && (
-        <div className="flex items-start justify-between flex-wrap gap-3">
+        <div className="flex items-start justify-between flex-wrap gap-3 border-b border-[#dce5df] pb-5">
           <div>
-            <h1 className="text-2xl font-extrabold flex items-center gap-2"><Landmark className="h-6 w-6 text-emerald-700" /> بوابة المراجعة المالية</h1>
-            <p className="text-sm text-gray-500 mt-1">تجهيز القوائم المالية ومتطلبات مكتب المراجعة — كل شيء منظم ومسجَّل</p>
+            <div className="flex items-center gap-2 text-xs font-semibold tracking-wide text-[#a7803e] mb-2"><span className="h-2 w-2 rounded-full bg-[#c79b4d]" /> غرفة الاعتماد المالي</div>
+            <h1 className="text-2xl font-extrabold flex items-center gap-2 text-[#17363a]"><Landmark className="h-6 w-6 text-[#b48b46]" /> بوابة المراجعة المالية</h1>
+            <p className="text-sm text-slate-500 mt-1">ملف المراجعة الخارجي · مكتب مهام كابيتال</p>
           </div>
           <NewPeriodDialog onDone={refresh} />
         </div>
       )}
 
       {/* اختيار الفترة */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <Label className="shrink-0">الفترة المالية:</Label>
+      <div className="flex items-center gap-3 flex-wrap rounded-2xl border border-[#dbe5df] bg-white px-4 py-3 shadow-sm">
+        <Label className="shrink-0 font-bold text-[#17363a]">الفترة المالية:</Label>
         <Select value={periodId ? String(periodId) : ""} onValueChange={(v) => setPeriodId(Number(v))}>
-          <SelectTrigger className="w-72" data-testid="audit-period-select"><SelectValue placeholder="اختر فترة" /></SelectTrigger>
+          <SelectTrigger className="w-72 border-[#dbe5df] bg-[#f8faf8]" data-testid="audit-period-select"><CalendarDays className="h-4 w-4 ml-2 text-[#a7803e]" /><SelectValue placeholder="اختر فترة" /></SelectTrigger>
           <SelectContent>
             {(periodsQ.data || []).map((p) => (
               <SelectItem key={p.id} value={String(p.id)}>{p.title} — {PERIOD_TYPES[p.periodType] || p.periodType}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-        {o?.period && <Badge variant="secondary">{PERIOD_STATUS[o.period.status] || o.period.status}</Badge>}
+        {o?.period && <Badge className="bg-[#e7f1ec] text-[#22634d] border border-[#c9dfd3]">{PERIOD_STATUS[o.period.status] || o.period.status}</Badge>}
       </div>
 
       {!periodsQ.data?.length && !periodsQ.isLoading && (
@@ -189,20 +213,21 @@ function PortalBody({ isAuditor, userName }: { isAuditor: boolean; userName: str
       {o && (
         <>
           {/* شريط التقدم */}
-          <Card className="border-emerald-100">
-            <CardContent className="py-4 flex items-center gap-6 flex-wrap">
+          <Card className="overflow-hidden border-[#cfdfd5] bg-[#102f35] text-white shadow-xl shadow-[#102f35]/10">
+            <CardContent className="py-5 px-5 sm:px-6 flex items-center gap-6 flex-wrap">
               <div className="flex-1 min-w-52">
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="font-semibold">نسبة اعتماد المتطلبات</span>
-                  <span className="font-bold text-emerald-700">{o.stats.progress}%</span>
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="font-semibold text-[#dbe9e2]">جاهزية ملف المراجعة</span>
+                  <span className="font-bold text-[#e1bf78]">{o.stats.progress}%</span>
                 </div>
-                <Progress value={o.stats.progress} className="h-3" />
+                <Progress value={o.stats.progress} className="h-2.5 bg-white/15 [&>div]:bg-[#d8b56d]" />
+                <p className="text-xs text-[#a9c0b6] mt-2">المعتمد والمرفوع من إجمالي متطلبات الفترة</p>
               </div>
-              <div className="flex gap-5 text-center text-sm">
-                <div><p className="font-extrabold text-lg">{o.stats.total}</p><p className="text-gray-500">إجمالي البنود</p></div>
-                <div><p className="font-extrabold text-lg text-blue-700">{o.stats.uploaded}</p><p className="text-gray-500">بانتظار المراجع</p></div>
-                <div><p className="font-extrabold text-lg text-emerald-700">{o.stats.approved}</p><p className="text-gray-500">معتمدة</p></div>
-                <div><p className="font-extrabold text-lg">{o.files.length}</p><p className="text-gray-500">الملفات</p></div>
+              <div className="grid grid-cols-2 sm:flex gap-x-6 gap-y-3 text-center text-sm">
+                <div><p className="font-extrabold text-xl">{o.stats.total}</p><p className="text-[#a9c0b6] text-xs">إجمالي البنود</p></div>
+                <div><p className="font-extrabold text-xl text-[#8fc6b0]">{o.stats.uploaded}</p><p className="text-[#a9c0b6] text-xs">بانتظار المراجع</p></div>
+                <div><p className="font-extrabold text-xl text-[#e1bf78]">{o.stats.approved}</p><p className="text-[#a9c0b6] text-xs">معتمدة</p></div>
+                <div><p className="font-extrabold text-xl">{o.files.length}</p><p className="text-[#a9c0b6] text-xs">الملفات</p></div>
               </div>
             </CardContent>
           </Card>
@@ -318,12 +343,12 @@ function RequirementsTab({ o, isAuditor, periodId, onDone }: { o: any; isAuditor
         const files = o.files.filter((f: any) => f.requirementId === r.id);
         const comments = o.comments.filter((c: any) => c.requirementId === r.id);
         return (
-          <Card key={r.id} className={r.status === "approved" ? "border-emerald-200" : r.status === "rejected" ? "border-red-200" : ""}>
+          <Card key={r.id} className={`audit-requirement border-[#dfe8e2] bg-white shadow-sm ${r.status === "approved" ? "audit-approved" : r.status === "rejected" ? "audit-rejected" : ""}`}>
             <CardContent className="py-4 space-y-3">
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-bold">{r.title}</p>
+                    <p className="font-bold text-[#17363a]">{r.title}</p>
                     <Badge className={st.cls}>{st.label}</Badge>
                     {r.priority === "high" && <Badge className="bg-red-100 text-red-700">عاجل</Badge>}
                     <Badge variant="outline">{r.source === "auditor" ? "طلب المراجع" : "بند داخلي"}</Badge>
@@ -388,23 +413,23 @@ function RequirementsTab({ o, isAuditor, periodId, onDone }: { o: any; isAuditor
         const isOpen = openSections[sec.name] ?? false;
         return (
           <div key={sec.name} className="space-y-2">
-            <button
-              className="w-full flex items-center justify-between rounded-lg border bg-gray-50 hover:bg-gray-100 px-4 py-2.5"
+             <button
+               className="audit-section-toggle w-full flex items-center justify-between rounded-xl border border-[#d7e4dc] bg-[#f8faf8] hover:bg-[#edf5ef] px-4 py-3 transition-colors"
               onClick={() => setOpenSections((p) => ({ ...p, [sec.name]: !isOpen }))}
               data-testid={`audit-section-${sec.name}`}
             >
               <span className="font-bold text-sm flex items-center gap-2">
-                <ListChecks className="h-4 w-4 text-emerald-700" /> {sec.name}
-                <Badge variant="secondary" className="font-normal">{done} / {sec.items.length}</Badge>
+                 <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#e3f0e8] text-[#287052]"><ListChecks className="h-4 w-4" /></span> {sec.name}
+                 <Badge variant="secondary" className="font-normal bg-white border border-[#d5e3da]">{done} / {sec.items.length}</Badge>
               </span>
               <span className="flex items-center gap-3">
-                <span className="w-28 h-2 rounded bg-gray-200 overflow-hidden hidden sm:block">
-                  <span className="block h-full bg-emerald-600" style={{ width: `${sec.items.length ? Math.round((done / sec.items.length) * 100) : 0}%` }} />
+                   <span className="w-28 h-2 rounded bg-[#dce8df] overflow-hidden hidden sm:block">
+                   <span className="block h-full bg-[#4b9a72] transition-all" style={{ width: `${sec.items.length ? Math.round((done / sec.items.length) * 100) : 0}%` }} />
                 </span>
-                <span className="text-xs text-gray-500">{isOpen ? "إخفاء" : "عرض"}</span>
+                 <span className="text-xs text-slate-500 flex items-center gap-1">{isOpen ? "إخفاء" : "عرض"}<ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`} /></span>
               </span>
             </button>
-            {isOpen && <div className="space-y-2">{sec.items.map(renderReq)}</div>}
+             {isOpen && <div className="space-y-2 audit-section-items">{sec.items.map(renderReq)}</div>}
           </div>
         );
       })}
