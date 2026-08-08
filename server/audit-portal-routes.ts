@@ -321,6 +321,27 @@ export function registerAuditPortalRoutes(app: Express) {
     } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
+  // ===== معاينة ملف داخل المتصفح (PDF وصور فقط — inline بدون تنزيل) =====
+  const PREVIEWABLE_MIME = new Set([
+    "application/pdf", "image/png", "image/jpeg", "image/webp", "image/gif",
+  ]);
+  app.get("/api/audit/files/:id/preview", isAuthenticated, requireTeamOrAuditor, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [f] = await db.select().from(auditFiles).where(eq(auditFiles.id, id));
+      if (!f) return res.status(404).json({ error: "الملف غير موجود" });
+      const mime = f.mimeType || "application/octet-stream";
+      if (!PREVIEWABLE_MIME.has(mime)) return res.status(415).json({ error: "هذا النوع لا يدعم المعاينة — حمّل الملف لعرضه" });
+      const data = await downloadFromSupabase(f.storagePath);
+      if (!data) return res.status(404).json({ error: "تعذر جلب الملف من التخزين" });
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Content-Type", mime);
+      res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(f.fileName)}`);
+      res.setHeader("Cache-Control", "private, max-age=300");
+      res.send(Buffer.from(await data.arrayBuffer()));
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
   app.delete("/api/audit/files/:id", isAuthenticated, requireTeam, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);

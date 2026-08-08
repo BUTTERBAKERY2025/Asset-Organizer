@@ -20,6 +20,7 @@ import {
   CheckCircle2, XCircle, Clock, FileText, Landmark, ListChecks, Activity, UserPlus, LogOut,
   ChevronDown, ShieldAlert, CalendarDays,
   Search, Filter, X,
+  Eye, ArrowRight, ArrowLeft, AlertTriangle,
 } from "lucide-react";
 
 // ===== ثوابت العرض =====
@@ -160,6 +161,7 @@ function PortalBody({ isAuditor, userName }: { isAuditor: boolean; userName: str
   const [periodId, setPeriodId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState("requirements");
   const [focusSection, setFocusSection] = useState<string | null>(null);
+  const [showCommandCenter, setShowCommandCenter] = useState(true);
 
   const periodsQ = useQuery<any[]>({ queryKey: ["/api/audit/periods"], queryFn: () => api("/api/audit/periods") });
   useEffect(() => {
@@ -215,13 +217,11 @@ function PortalBody({ isAuditor, userName }: { isAuditor: boolean; userName: str
 
       {o && (
         <>
-          <AuditCommandCenter
-            o={o}
-            onSectionClick={(section) => {
-              setFocusSection(section);
-              setActiveTab("requirements");
-            }}
-          />
+          <div className="flex items-center justify-between rounded-xl border border-[#d5e3da] bg-white px-4 py-2.5 shadow-sm">
+            <div><span className="text-xs font-bold text-[#a7803e]">لوحة القيادة</span><span className="text-sm font-bold text-[#17363a] mr-3">جاهزية الملف {o.stats.progress}% · {o.stats.total} متطلب</span></div>
+            <Button variant="ghost" size="sm" onClick={() => setShowCommandCenter(!showCommandCenter)}>{showCommandCenter ? "إخفاء الملخص" : "عرض الملخص"} <ChevronDown className={`h-4 w-4 mr-1 transition-transform ${showCommandCenter ? "rotate-180" : ""}`} /></Button>
+          </div>
+          {showCommandCenter && <AuditCommandCenter o={o} onSectionClick={(section) => { setFocusSection(section); setActiveTab("requirements"); }} />}
           {/* شريط التقدم */}
           <Card className="overflow-hidden border-[#cfdfd5] bg-[#102f35] text-white shadow-xl shadow-[#102f35]/10">
             <CardContent className="py-5 px-5 sm:px-6 flex items-center gap-6 flex-wrap">
@@ -243,9 +243,9 @@ function PortalBody({ isAuditor, userName }: { isAuditor: boolean; userName: str
           </Card>
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="flex-wrap h-auto">
-              <TabsTrigger value="requirements"><ListChecks className="h-4 w-4 ml-1" /> المتطلبات</TabsTrigger>
-              <TabsTrigger value="files"><FolderOpen className="h-4 w-4 ml-1" /> مكتبة الملفات</TabsTrigger>
+            <TabsList className="sticky top-2 z-20 flex-wrap h-auto bg-white/95 backdrop-blur border border-[#d5e3da] shadow-sm">
+              <TabsTrigger value="requirements"><ListChecks className="h-4 w-4 ml-1" /> المتطلبات <span className="mr-1 text-[10px] opacity-60">{o.requirements.length}</span></TabsTrigger>
+              <TabsTrigger value="files"><FolderOpen className="h-4 w-4 ml-1" /> مكتبة الملفات <span className="mr-1 text-[10px] opacity-60">{o.files.length}</span></TabsTrigger>
               {!isAuditor && <TabsTrigger value="activity"><Activity className="h-4 w-4 ml-1" /> سجل النشاط</TabsTrigger>}
               {isAdmin && <TabsTrigger value="accounts"><UserPlus className="h-4 w-4 ml-1" /> حسابات المراجعين</TabsTrigger>}
             </TabsList>
@@ -347,6 +347,9 @@ function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection }: { o: 
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [sectionFilter, setSectionFilter] = useState("all");
   const [attentionOnly, setAttentionOnly] = useState(false);
+  const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const previewFiles = useMemo(() => o.files.filter((f: any) => /^(application\/pdf|image\/(png|jpeg|jpg|webp|gif))$/i.test(f.mimeType || "")), [o.files]);
 
   const setStatus = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) =>
@@ -369,7 +372,7 @@ function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection }: { o: 
     sections[secIdx.get(key)!].items.push(r);
   }
   const doneStates = new Set(["approved", "uploaded", "ready", "not_applicable"]);
-  useEffect(() => { if (focusSection) setOpenSections((p) => ({ ...p, [focusSection]: true })); }, [focusSection]);
+  useEffect(() => { if (focusSection) { setActiveSection(focusSection); setOpenSections({ [focusSection]: true }); } }, [focusSection]);
   const sectionNames = sections.map((s) => s.name);
   const filteredSections = sections.map((sec) => ({ ...sec, items: sec.items.filter((r: any) => {
     const q = search.trim().toLowerCase();
@@ -382,11 +385,11 @@ function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection }: { o: 
         const comments = o.comments.filter((c: any) => c.requirementId === r.id);
         return (
           <Card key={r.id} className={`audit-requirement border-[#dfe8e2] bg-white shadow-sm ${r.status === "approved" ? "audit-approved" : r.status === "rejected" ? "audit-rejected" : ""}`}>
-            <CardContent className="py-4 space-y-3">
+            <CardContent className="py-2.5 px-3 space-y-2">
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-bold text-[#17363a]">{r.title}</p>
+                    <p className="font-bold text-sm text-[#17363a]">{r.title}</p>
                     <Badge className={st.cls}>{st.label}</Badge>
                     {r.priority === "high" && <Badge className="bg-red-100 text-red-700">عاجل</Badge>}
                     <Badge variant="outline">{r.source === "auditor" ? "طلب المراجع" : "بند داخلي"}</Badge>
@@ -425,9 +428,10 @@ function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection }: { o: 
 
               {files.length > 0 && (
                 <div className="space-y-1">
-                  {files.map((f: any) => <FileRow key={f.id} f={f} isAuditor={isAuditor} onDone={onDone} compact />)}
+                  {files.map((f: any) => <FileRow key={f.id} f={f} isAuditor={isAuditor} onDone={onDone} compact onPreview={(file) => setPreviewIndex(previewFiles.findIndex((item: any) => item.id === file.id))} />)}
                 </div>
-              )}
+       )}
+       {previewIndex !== null && previewFiles[previewIndex] && <FilePreviewDialog f={previewFiles[previewIndex]} index={previewIndex} total={previewFiles.length} onPrev={() => setPreviewIndex((i) => i !== null && i > 0 ? i - 1 : i)} onNext={() => setPreviewIndex((i) => i !== null && i < previewFiles.length - 1 ? i + 1 : i)} onClose={() => setPreviewIndex(null)} />}
 
               <button className="text-xs text-gray-500 flex items-center gap-1 hover:text-gray-800" onClick={() => setExpanded(expanded === r.id ? null : r.id)}>
                 <MessageSquare className="h-3.5 w-3.5" /> التعليقات ({comments.length})
@@ -446,6 +450,9 @@ function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection }: { o: 
           لا توجد متطلبات بعد — {isAuditor ? "أضف أول طلب للفريق" : "سجّل متطلبات المراجع أو جهّز بنودك الداخلية"}
         </CardContent></Card>
       )}
+      {!!sections.length && <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        {sections.map((sec) => <button key={sec.name} onClick={() => { setActiveSection(sec.name); setOpenSections({ [sec.name]: true }); }} className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${activeSection === sec.name ? "border-[#287052] bg-[#e3f0e8] text-[#22634d]" : "border-[#d5e3da] bg-white text-slate-500 hover:bg-[#f2f8f3]"}`}>{sec.name}<span className="mr-1 opacity-60">{sec.items.length}</span></button>)}
+      </div>}
       {!filteredSections.length && o.requirements.length > 0 && <Card><CardContent className="py-10 text-center text-slate-500"><Search className="h-8 w-8 mx-auto mb-2 text-slate-300" />لا توجد نتائج مطابقة للفلاتر الحالية</CardContent></Card>}
       {filteredSections.map((sec) => {
         const done = sec.items.filter((r: any) => doneStates.has(r.status)).length;
@@ -454,7 +461,7 @@ function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection }: { o: 
           <div key={sec.name} className="space-y-2">
              <button
                className="audit-section-toggle w-full flex items-center justify-between rounded-xl border border-[#d7e4dc] bg-[#f8faf8] hover:bg-[#edf5ef] px-4 py-3 transition-colors"
-              onClick={() => setOpenSections((p) => ({ ...p, [sec.name]: !isOpen }))}
+               onClick={() => { const next = !isOpen; setActiveSection(next ? sec.name : null); setOpenSections(next ? { [sec.name]: true } : {}); }}
               data-testid={`audit-section-${sec.name}`}
             >
               <span className="font-bold text-sm flex items-center gap-2">
@@ -468,7 +475,7 @@ function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection }: { o: 
                  <span className="text-xs text-slate-500 flex items-center gap-1">{isOpen ? "إخفاء" : "عرض"}<ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`} /></span>
               </span>
             </button>
-             {isOpen && <div className="space-y-2 audit-section-items">{sec.items.map(renderReq)}</div>}
+             {isOpen && <div className="space-y-1.5 audit-section-items">{sec.items.map(renderReq)}</div>}
           </div>
         );
       })}
@@ -556,29 +563,38 @@ function CommentsBox({ reqId, comments, onDone }: { reqId: number; comments: any
 
 // ===== تبويب الملفات =====
 function FilesTab({ o, isAuditor, periodId, onDone }: { o: any; isAuditor: boolean; periodId: number; onDone: () => void }) {
+  const [query, setQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [limit, setLimit] = useState(30);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const previewFiles = useMemo(() => o.files.filter((f: any) => /^(application\/pdf|image\/(png|jpeg|jpg|webp|gif))$/i.test(f.mimeType || "") && (!query || `${f.title} ${f.fileName}`.toLowerCase().includes(query.toLowerCase())) && (categoryFilter === "all" || f.category === categoryFilter)), [o.files, query, categoryFilter]);
   const grouped = useMemo(() => {
     const g: Record<string, any[]> = {};
-    for (const f of o.files) (g[f.category] ||= []).push(f);
+    for (const f of o.files.filter((item: any) => (!query || `${item.title} ${item.fileName}`.toLowerCase().includes(query.toLowerCase())) && (categoryFilter === "all" || item.category === categoryFilter)).slice(0, limit)) (g[f.category] ||= []).push(f);
     return g;
-  }, [o.files]);
+  }, [o.files, query, categoryFilter, limit]);
   return (
     <div className="space-y-4">
       {!isAuditor && <UploadFileDialog periodId={periodId} onDone={onDone} />}
+      <div className="flex flex-wrap gap-2"><div className="relative flex-1 min-w-52"><Search className="absolute right-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={query} onChange={(e) => { setQuery(e.target.value); setLimit(30); }} placeholder="ابحث في الملفات..." className="pr-9" /></div><Select value={categoryFilter} onValueChange={setCategoryFilter}><SelectTrigger className="w-44"><Filter className="h-4 w-4 ml-1" /><SelectValue placeholder="التصنيف" /></SelectTrigger><SelectContent><SelectItem value="all">كل التصنيفات</SelectItem>{Object.entries(CATEGORY_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select></div>
       {!o.files.length && <Card><CardContent className="py-8 text-center text-gray-500">لا توجد ملفات مرفوعة بعد</CardContent></Card>}
       {Object.entries(grouped).map(([cat, files]) => (
         <Card key={cat}>
           <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><FolderOpen className="h-5 w-5 text-amber-600" /> {CATEGORY_LABELS[cat] || cat} <Badge variant="secondary">{files.length}</Badge></CardTitle></CardHeader>
           <CardContent className="space-y-1">
-            {files.map((f: any) => <FileRow key={f.id} f={f} isAuditor={isAuditor} onDone={onDone} />)}
+             {files.map((f: any) => <FileRow key={f.id} f={f} isAuditor={isAuditor} onDone={onDone} onPreview={(file) => setPreviewIndex(previewFiles.findIndex((item: any) => item.id === file.id))} />)}
           </CardContent>
         </Card>
       ))}
+      {limit < o.files.length && <Button variant="outline" className="w-full" onClick={() => setLimit((n) => n + 30)}>عرض المزيد من الملفات</Button>}
+      {previewIndex !== null && previewFiles[previewIndex] && <FilePreviewDialog f={previewFiles[previewIndex]} index={previewIndex} total={previewFiles.length} onPrev={() => setPreviewIndex((i) => i !== null && i > 0 ? i - 1 : i)} onNext={() => setPreviewIndex((i) => i !== null && i < previewFiles.length - 1 ? i + 1 : i)} onClose={() => setPreviewIndex(null)} />}
     </div>
   );
 }
 
-function FileRow({ f, isAuditor, onDone, compact }: { f: any; isAuditor: boolean; onDone: () => void; compact?: boolean }) {
+function FileRow({ f, isAuditor, onDone, compact, onPreview }: { f: any; isAuditor: boolean; onDone: () => void; compact?: boolean; onPreview?: (f: any) => void }) {
   const { toast } = useToast();
+  const previewable = /^(application\/pdf|image\/(png|jpeg|jpg|webp|gif))$/i.test(f.mimeType || "");
   const del = useMutation({
     mutationFn: () => api(`/api/audit/files/${f.id}`, { method: "DELETE" }),
     onSuccess: onDone,
@@ -594,6 +610,7 @@ function FileRow({ f, isAuditor, onDone, compact }: { f: any; isAuditor: boolean
         </div>
       </div>
       <div className="flex gap-1 shrink-0">
+        {previewable && onPreview && <Button size="sm" variant="ghost" className="text-[#287052]" onClick={() => onPreview(f)}><Eye className="h-4 w-4 ml-1" /><span className="hidden sm:inline">معاينة</span></Button>}
         <a href={`/api/audit/files/${f.id}/download`} target="_blank" rel="noreferrer">
           <Button size="sm" variant="ghost"><Download className="h-4 w-4" /></Button>
         </a>
@@ -605,6 +622,32 @@ function FileRow({ f, isAuditor, onDone, compact }: { f: any; isAuditor: boolean
       </div>
     </div>
   );
+}
+
+function FilePreviewDialog({ f, index, total, onPrev, onNext, onClose }: { f: any; index: number; total: number; onPrev: () => void; onNext: () => void; onClose: () => void }) {
+  const isImage = String(f.mimeType || "").startsWith("image/");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    const handle = (event: KeyboardEvent) => {
+      if (event.key === "ArrowRight") onNext();
+      if (event.key === "ArrowLeft") onPrev();
+    };
+    window.addEventListener("keydown", handle);
+    return () => window.removeEventListener("keydown", handle);
+  }, [onPrev, onNext]);
+  return <Dialog open onOpenChange={(v) => !v && onClose()}>
+    <DialogContent className="max-w-5xl h-[85dvh] bg-[#102f35] border-[#38585a] text-white p-0 overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-3"><div className="min-w-0"><p className="font-bold truncate">{f.title}</p><p className="text-xs text-[#a9c0b6] truncate">{f.fileName} · {fmtSize(f.fileSize)}</p></div><div className="flex gap-2"><a href={`/api/audit/files/${f.id}/download`} target="_blank" rel="noreferrer"><Button size="sm" variant="outline" className="border-white/20 text-white hover:bg-white/10"><Download className="h-4 w-4 ml-1" /> تنزيل</Button></a><Button size="sm" variant="ghost" onClick={onClose} className="text-white">إغلاق</Button></div></div>
+      <div className="relative flex h-[calc(85dvh-65px)] items-center justify-center bg-[#091f24] p-5">
+        <Button aria-label="المعاينة السابقة" disabled={index === 0} onClick={onPrev} variant="outline" className="absolute right-4 top-1/2 z-10 -translate-y-1/2 border-white/20 bg-white/10 text-white hover:bg-white/20"><ArrowRight className="h-5 w-5" /></Button>
+        <Button aria-label="المعاينة التالية" disabled={index === total - 1} onClick={onNext} variant="outline" className="absolute left-4 top-1/2 z-10 -translate-y-1/2 border-white/20 bg-white/10 text-white hover:bg-white/20"><ArrowLeft className="h-5 w-5" /></Button>
+        <span className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-black/40 px-3 py-1 text-xs text-white">{index + 1} / {total}</span>
+        {loading && !error && <div className="absolute text-sm text-[#a9c0b6]">جاري تجهيز المعاينة...</div>}
+        {error ? <div className="text-center"><AlertTriangle className="h-10 w-10 mx-auto text-[#d8b56d] mb-3" /><p className="font-semibold">تعذرت معاينة الملف داخل المتصفح</p><a href={`/api/audit/files/${f.id}/download`} target="_blank" rel="noreferrer"><Button className="mt-4 bg-[#d8b56d] text-[#102f35] hover:bg-[#e1bf78]">تنزيل الملف</Button></a></div> : isImage ? <img src={`/api/audit/files/${f.id}/preview`} alt={f.title} className={`max-h-full max-w-full object-contain transition-opacity ${loading ? "opacity-0" : "opacity-100"}`} onLoad={() => setLoading(false)} onError={() => { setLoading(false); setError(true); }} /> : <iframe title={f.title} src={`/api/audit/files/${f.id}/preview`} className={`h-full w-full rounded-lg bg-white transition-opacity ${loading ? "opacity-0" : "opacity-100"}`} onLoad={() => setLoading(false)} onError={() => { setLoading(false); setError(true); }} />}
+      </div>
+    </DialogContent>
+  </Dialog>;
 }
 
 function UploadFileDialog({ periodId, requirementId, onDone, small }: { periodId: number; requirementId?: number; onDone: () => void; small?: boolean }) {
@@ -675,11 +718,12 @@ const ACTION_LABELS: Record<string, string> = {
 };
 function ActivityTab({ periodId }: { periodId: number }) {
   const q = useQuery<any[]>({ queryKey: ["/api/audit/periods", periodId, "activity"], queryFn: () => api(`/api/audit/periods/${periodId}/activity`) });
+  const [limit, setLimit] = useState(25);
   return (
     <Card>
       <CardContent className="py-4 space-y-2">
         {!q.data?.length && <p className="text-center text-gray-500 py-4">لا يوجد نشاط بعد</p>}
-        {(q.data || []).map((a) => (
+         {(q.data || []).slice(0, limit).map((a) => (
           <div key={a.id} className="flex items-center gap-2 text-sm border-b last:border-0 pb-2">
             <Activity className={`h-4 w-4 shrink-0 ${a.isAuditor ? "text-purple-600" : "text-emerald-600"}`} />
             <span className="font-semibold">{a.userName}{a.isAuditor ? " (المراجع)" : ""}</span>
@@ -688,6 +732,7 @@ function ActivityTab({ periodId }: { periodId: number }) {
             <span className="text-xs text-gray-400 mr-auto shrink-0">{fmtDT(a.createdAt)}</span>
           </div>
         ))}
+         {!!q.data?.length && limit < q.data.length && <Button variant="outline" size="sm" className="w-full" onClick={() => setLimit((n) => n + 25)}>عرض المزيد من السجل</Button>}
       </CardContent>
     </Card>
   );
