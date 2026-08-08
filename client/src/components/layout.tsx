@@ -245,10 +245,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const allStandaloneItems: NavItem[] = useMemo(() => [
     { href: "/", label: t("sidebar.home"), icon: Home, module: "dashboard" },
     { href: "/my-portal", label: t("sidebar.myPortal"), icon: UserCircle },
-    // بوابة المراجعة المالية: نظام مستقل — يظهر للمدير العام والمدير المالي فقط
-    ...(user?.role === "admin" || user?.role === "financial_manager"
-      ? [{ href: "/audit-portal", label: "بوابة المراجعة المالية", icon: Landmark } as NavItem]
-      : []),
   ], [t, user?.role]);
 
   const allNavGroups: { key: string; group: NavGroup }[] = useMemo(() => [
@@ -334,6 +330,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
         ],
       },
     },
+    // الإدارة المالية العامة: تظهر للمدير العام والمدير المالي فقط
+    ...(user?.role === "admin" || user?.role === "financial_manager"
+      ? [{
+          key: "general-finance",
+          group: {
+            label: "الإدارة المالية العامة",
+            icon: Landmark,
+            items: [
+              { href: "/audit-portal", label: "بوابة المراجعة المالية", icon: Landmark, isHeader: true } as NavItem,
+            ],
+          },
+        }]
+      : []),
     {
       key: "assets",
       group: {
@@ -447,7 +456,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         ],
       },
     },
-  ], [t]);
+  ], [t, user?.role]);
 
   const allBottomItems: NavItem[] = useMemo(() => [], []);
 
@@ -493,7 +502,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         items: filterGroupItems(group.items),
       },
     }))
-    .filter(({ group }) => group.items.length > 0), [isAdmin, canView, currentLang]);
+    .filter(({ group }) => group.items.length > 0), [isAdmin, canView, currentLang, allNavGroups]);
 
   const bottomItems = useMemo(() => filterItemsByPermission(allBottomItems), [isAdmin, canView]);
 
