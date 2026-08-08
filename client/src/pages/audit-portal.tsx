@@ -20,7 +20,7 @@ import {
   CheckCircle2, XCircle, Clock, FileText, Landmark, ListChecks, Activity, UserPlus, LogOut,
   ChevronDown, ShieldAlert, CalendarDays,
   Search, Filter, X,
-  Eye, ArrowRight, ArrowLeft, AlertTriangle,
+  Eye, ArrowRight, ArrowLeft, AlertTriangle, Clipboard, Copy,
 } from "lucide-react";
 
 // ===== ثوابت العرض =====
@@ -238,8 +238,10 @@ function PortalBody({ isAuditor, userName, lang, onToggleLang }: { isAuditor: bo
   const qc = useQueryClient();
   const { toast } = useToast();
   const [periodId, setPeriodId] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState("requirements");
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem(`auditPortalTab:${isAuditor ? "auditor" : "team"}`) || "requirements");
   const [focusSection, setFocusSection] = useState<string | null>(null);
+  const [focusRequirement, setFocusRequirement] = useState<number | null>(null);
+  const changeTab = (tab: string) => { setActiveTab(tab); localStorage.setItem(`auditPortalTab:${isAuditor ? "auditor" : "team"}`, tab); };
   const [showCommandCenter, setShowCommandCenter] = useState(true);
 
   const periodsQ = useQuery<any[]>({ queryKey: ["/api/audit/periods"], queryFn: () => api("/api/audit/periods") });
@@ -300,7 +302,7 @@ function PortalBody({ isAuditor, userName, lang, onToggleLang }: { isAuditor: bo
             <div><span className="text-xs font-bold text-[#a7803e]">لوحة القيادة</span><span className="text-sm font-bold text-[#17363a] mr-3">{PORTAL_COPY[lang].readiness} {o.stats.progress}% · {o.stats.total}</span></div>
             <Button variant="ghost" size="sm" onClick={() => setShowCommandCenter(!showCommandCenter)}>{showCommandCenter ? "إخفاء الملخص" : "عرض الملخص"} <ChevronDown className={`h-4 w-4 mr-1 transition-transform ${showCommandCenter ? "rotate-180" : ""}`} /></Button>
           </div>
-          {showCommandCenter && <AuditCommandCenter o={o} onSectionClick={(section) => { setFocusSection(section); setActiveTab("requirements"); }} />}
+          {showCommandCenter && <AuditCommandCenter o={o} onSectionClick={(section) => { setFocusSection(section); changeTab("requirements"); }} onRequirementClick={(id) => { setFocusRequirement(id); changeTab("requirements"); }} />}
           {/* شريط التقدم */}
           <Card className="overflow-hidden border-[#cfdfd5] bg-[#102f35] text-white shadow-xl shadow-[#102f35]/10">
             <CardContent className="py-5 px-5 sm:px-6 flex items-center gap-6 flex-wrap">
@@ -321,7 +323,7 @@ function PortalBody({ isAuditor, userName, lang, onToggleLang }: { isAuditor: bo
             </CardContent>
           </Card>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="audit-tabs">
+          <Tabs value={activeTab} onValueChange={changeTab} className="audit-tabs">
             <TabsList className="sticky top-2 z-20 flex-wrap h-auto bg-white/95 backdrop-blur border border-[#d5e3da] shadow-sm">
               <TabsTrigger value="requirements"><ListChecks className="h-4 w-4 ml-1" /> {PORTAL_COPY[lang].requirements} <span className="audit-tab-count mr-1">{o.requirements.length}</span></TabsTrigger>
               <TabsTrigger value="files"><FolderOpen className="h-4 w-4 ml-1" /> {PORTAL_COPY[lang].files} <span className="audit-tab-count mr-1">{o.files.length}</span></TabsTrigger>
@@ -332,12 +334,12 @@ function PortalBody({ isAuditor, userName, lang, onToggleLang }: { isAuditor: bo
             </TabsList>
 
             <TabsContent value="requirements" className="mt-4">
-              <RequirementsTab o={o} isAuditor={isAuditor} periodId={periodId!} onDone={refresh} focusSection={focusSection} lang={lang} />
+              <RequirementsTab o={o} isAuditor={isAuditor} periodId={periodId!} onDone={refresh} focusSection={focusSection} focusRequirement={focusRequirement} lang={lang} />
             </TabsContent>
             <TabsContent value="files" className="mt-4">
               <FilesTab o={o} isAuditor={isAuditor} periodId={periodId!} onDone={refresh} />
             </TabsContent>
-            {!isAuditor && <TabsContent value="analytics" className="mt-4"><AnalyticsTab o={o} periodId={periodId!} /></TabsContent>}
+            {!isAuditor && <TabsContent value="analytics" className="mt-4"><AnalyticsTab o={o} periodId={periodId!} onRequirementClick={(id) => { setFocusRequirement(id); changeTab("requirements"); }} /></TabsContent>}
             <TabsContent value="statements" className="mt-4"><StatementsTab o={o} isAuditor={isAuditor} periodId={periodId!} onDone={refresh} /></TabsContent>
             {!isAuditor && (
               <TabsContent value="activity" className="mt-4">
@@ -403,7 +405,7 @@ function NewPeriodDialog({ onDone }: { onDone: () => void }) {
   );
 }
 
-function AuditCommandCenter({ o, onSectionClick }: { o: any; onSectionClick: (section: string) => void }) {
+function AuditCommandCenter({ o, onSectionClick, onRequirementClick }: { o: any; onSectionClick: (section: string) => void; onRequirementClick?: (id: number) => void }) {
   const groups = useMemo(() => {
     const map: Record<string, any[]> = {};
     (o.requirements || []).forEach((r: any) => (map[r.section || "بنود عامة"] ||= []).push(r));
@@ -415,12 +417,12 @@ function AuditCommandCenter({ o, onSectionClick }: { o: any; onSectionClick: (se
     <div className="audit-command-grid grid lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x lg:divide-x-reverse divide-[#e3ebe5]">
       <div className="p-5"><p className="text-xs font-bold text-slate-400 mb-3">توزيع الحالات</p><div className="grid grid-cols-2 gap-2">{Object.entries(REQ_STATUS).map(([key, meta]) => { const n = (o.requirements || []).filter((r: any) => r.status === key).length; return <div key={key} className="rounded-xl bg-[#f7faf8] p-3"><p className="audit-count text-xl font-extrabold text-[#17363a]">{n}</p><p className="text-[11px] text-slate-500 truncate">{meta.label}</p></div>; })}</div></div>
       <div className="p-5"><div className="flex justify-between mb-3"><p className="text-xs font-bold text-slate-400">الأقسام المحاسبية</p><span className="text-xs text-slate-400">{groups.length} قسم</span></div><div className="space-y-2 max-h-44 overflow-auto">{groups.map(([name, items]) => { const done = items.filter((r: any) => ["approved", "uploaded", "ready", "not_applicable"].includes(r.status)).length; return <button key={name} onClick={() => onSectionClick(name)} className="w-full text-right group"><div className="flex justify-between text-xs mb-1"><span className="font-semibold text-[#345258] group-hover:text-[#287052]">{name}</span><span className="text-slate-400">{done}/{items.length}</span></div><div className="h-1.5 rounded-full bg-[#e6eee8]"><div className="h-full rounded-full bg-[#4b9a72]" style={{ width: `${Math.round(done / items.length * 100)}%` }} /></div></button>; })}</div></div>
-      <div className="p-5"><p className="text-xs font-bold text-slate-400 mb-3">يحتاج انتباهك أولاً</p><div className="space-y-2 max-h-32 overflow-auto">{attention.slice(0, 4).map((r: any) => <div key={r.id} className="flex items-start gap-2 text-xs"><span className={`mt-1 h-2 w-2 rounded-full shrink-0 ${r.status === "rejected" ? "bg-[#c35d55]" : "bg-[#c79b4d]"}`} /><span className="font-semibold text-[#345258]">{r.title}</span></div>)}{!attention.length && <div className="rounded-xl bg-[#edf6ef] p-3 text-xs text-[#287052]">لا توجد بنود عاجلة حالياً</div>}</div><div className="mt-4 border-t border-[#e3ebe5] pt-3 flex justify-between text-xs"><span className="text-slate-400">إجمالي الملفات</span><b>{o.files.length}</b></div></div>
+      <div className="p-5"><p className="text-xs font-bold text-slate-400 mb-3">يحتاج انتباهك أولاً</p><div className="space-y-2 max-h-32 overflow-auto">{attention.slice(0, 4).map((r: any) => <button key={r.id} onClick={() => onRequirementClick?.(r.id)} className="flex w-full items-start gap-2 text-xs text-right hover:bg-[#f2f8f3] rounded-lg p-1"><span className={`mt-1 h-2 w-2 rounded-full shrink-0 ${r.status === "rejected" ? "bg-[#c35d55]" : "bg-[#c79b4d]"}`} /><span className="font-semibold text-[#345258]">{r.title}</span></button>)}{!attention.length && <div className="rounded-xl bg-[#edf6ef] p-3 text-xs text-[#287052]">لا توجد بنود عاجلة حالياً</div>}</div><div className="mt-4 border-t border-[#e3ebe5] pt-3 flex justify-between text-xs"><span className="text-slate-400">إجمالي الملفات</span><b>{o.files.length}</b></div></div>
     </div>
   </section>;
 }
 
-function AnalyticsTab({ o, periodId }: { o: any; periodId: number }) {
+function AnalyticsTab({ o, periodId, onRequirementClick }: { o: any; periodId: number; onRequirementClick?: (id: number) => void }) {
   const reqs = o?.requirements ?? [];
   const total = Math.max(1, reqs.length);
   const activityQ = useQuery<any[]>({ queryKey: ["/api/audit/periods", periodId, "activity"], queryFn: () => api(`/api/audit/periods/${periodId}/activity`), enabled: !!periodId });
@@ -430,7 +432,7 @@ function AnalyticsTab({ o, periodId }: { o: any; periodId: number }) {
   return <div className="grid lg:grid-cols-3 gap-4">
     <Card><CardHeader><CardTitle className="text-sm">توزيع الحالات</CardTitle></CardHeader><CardContent><div className="h-4 rounded-full overflow-hidden flex bg-[#edf1ee]">{Object.entries(REQ_STATUS).map(([k]) => <div key={k} className={`h-full ${k === "approved" ? "bg-[#287052]" : k === "rejected" ? "bg-[#c35d55]" : k === "uploaded" ? "bg-[#4b9a72]" : "bg-[#d8b56d]"}`} style={{ width: `${reqs.filter((r: any) => r.status === k).length / total * 100}%` }} />)}</div><div className="mt-4 grid grid-cols-2 gap-2">{Object.entries(REQ_STATUS).map(([k, v]) => <div key={k} className="text-xs flex justify-between"><span>{v.label}</span><b>{reqs.filter((r: any) => r.status === k).length}</b></div>)}</div></CardContent></Card>
     <Card><CardHeader><CardTitle className="text-sm">إنجاز الأقسام</CardTitle></CardHeader><CardContent className="space-y-3">{Object.entries(reqs.reduce((m: any, r: any) => { const k = r.section || "عام"; (m[k] ||= []).push(r); return m; }, {})).map(([name, rows]: any) => { const done = rows.filter((r: any) => ["approved", "uploaded", "ready", "not_applicable"].includes(r.status)).length; return <div key={name}><div className="flex justify-between text-xs mb-1"><span>{name}</span><b>{done}/{rows.length}</b></div><Progress value={done / rows.length * 100} className="h-2" /></div>; })}</CardContent></Card>
-    <Card><CardHeader><CardTitle className="text-sm">نشاط مكتب المراجعة</CardTitle></CardHeader><CardContent className="space-y-3"><div className="grid grid-cols-3 gap-2 text-center">{["approve", "reject", "download"].map((a) => <div key={a} className="rounded-lg bg-[#f2f8f3] p-3"><b className="text-xl text-[#17363a]">{approvals.filter((x: any) => x.action === a).length}</b><p className="text-[10px] text-slate-500">{a === "approve" ? "اعتماد" : a === "reject" ? "إرجاع" : "تنزيل"}</p></div>)}</div><p className="text-xs font-bold text-[#a7803e]">الأولوية القصوى المفتوحة</p>{o.requirements.filter((r: any) => r.priority === "high" && !["approved", "not_applicable"].includes(r.status)).slice(0, 5).map((r: any) => <div key={r.id} className="text-xs border-b pb-2">{r.title}</div>)}</CardContent></Card>
+     <Card><CardHeader><CardTitle className="text-sm">نشاط مكتب المراجعة</CardTitle></CardHeader><CardContent className="space-y-3"><div className="grid grid-cols-3 gap-2 text-center">{["approve", "reject", "download"].map((a) => <div key={a} className="rounded-lg bg-[#f2f8f3] p-3"><b className="text-xl text-[#17363a]">{approvals.filter((x: any) => x.action === a).length}</b><p className="text-[10px] text-slate-500">{a === "approve" ? "اعتماد" : a === "reject" ? "إرجاع" : "تنزيل"}</p></div>)}</div><p className="text-xs font-bold text-[#a7803e]">الأولوية القصوى المفتوحة</p>{reqs.filter((r: any) => r.priority === "high" && !["approved", "not_applicable"].includes(r.status)).slice(0, 5).map((r: any) => <button key={r.id} onClick={() => onRequirementClick?.(r.id)} className="block w-full text-right text-xs border-b pb-2 hover:text-[#287052]">{r.title}</button>)}</CardContent></Card>
     <Card className="lg:col-span-3"><CardHeader><CardTitle className="text-sm">الأولوية</CardTitle></CardHeader><CardContent className="grid sm:grid-cols-3 gap-3">{byPriority.map(([key, count]) => <div key={key} className="rounded-xl border border-[#d5e3da] p-4"><p className="text-xs text-slate-500">{key === "high" ? "عاجل" : key === "normal" ? "عادي" : "منخفض"}</p><b className="text-2xl text-[#17363a]">{count}</b></div>)}</CardContent></Card>
   </div>;
 }
@@ -446,7 +448,7 @@ function StatementsTab({ o, isAuditor, periodId, onDone }: { o: any; isAuditor: 
 }
 
 // ===== تبويب المتطلبات =====
-function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection, lang }: { o: any; isAuditor: boolean; periodId: number; onDone: () => void; focusSection?: string | null; lang?: "ar" | "en" }) {
+function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection, focusRequirement, lang }: { o: any; isAuditor: boolean; periodId: number; onDone: () => void; focusSection?: string | null; focusRequirement?: number | null; lang?: "ar" | "en" }) {
   const { toast } = useToast();
   const [expanded, setExpanded] = useState<number | null>(null);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
@@ -457,6 +459,8 @@ function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection, lang }:
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [detailId, setDetailId] = useState<number | null>(null);
+  const [allOpen, setAllOpen] = useState(false);
   const previewFiles = useMemo(() => o.files.filter((f: any) => /^(application\/pdf|image\/(png|jpeg|jpg|webp|gif))$/i.test(f.mimeType || "")), [o.files]);
 
   const setStatus = useMutation({
@@ -481,6 +485,7 @@ function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection, lang }:
   }
   const doneStates = new Set(["approved", "uploaded", "ready", "not_applicable"]);
   useEffect(() => { if (focusSection) { setActiveSection(focusSection); setOpenSections({ [focusSection]: true }); } }, [focusSection]);
+  useEffect(() => { if (focusRequirement) setDetailId(focusRequirement); }, [focusRequirement]);
   const sectionNames = sections.map((s) => s.name);
   const filteredSections = sections.map((sec) => ({ ...sec, items: sec.items.filter((r: any) => {
     const q = search.trim().toLowerCase();
@@ -492,7 +497,7 @@ function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection, lang }:
         const files = o.files.filter((f: any) => f.requirementId === r.id);
         const comments = o.comments.filter((c: any) => c.requirementId === r.id);
         return (
-          <Card key={r.id} className={`audit-requirement border-[#dfe8e2] bg-white shadow-sm ${r.status === "approved" ? "audit-approved" : r.status === "rejected" ? "audit-rejected" : ""}`}>
+          <Card key={r.id} onClick={() => setDetailId(r.id)} className={`audit-requirement cursor-pointer border-[#dfe8e2] bg-white shadow-sm ${r.status === "approved" ? "audit-approved" : r.status === "rejected" ? "audit-rejected" : ""}`}>
             <CardContent className="py-2.5 px-3 space-y-2">
                   <div className="audit-req-head flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
@@ -552,7 +557,7 @@ function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection, lang }:
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-[#d5e3da] bg-white p-3 shadow-sm space-y-3"><div className="flex flex-wrap gap-2 items-center"><div className="relative flex-1 min-w-52"><Search className="absolute right-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث في العنوان أو المسؤول..." className="pr-9 border-[#dbe5df]" /></div><Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-40"><Filter className="h-4 w-4 ml-1 text-[#a7803e]" /><SelectValue placeholder="الحالة" /></SelectTrigger><SelectContent><SelectItem value="all">كل الحالات</SelectItem>{Object.entries(REQ_STATUS).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}</SelectContent></Select><Select value={priorityFilter} onValueChange={setPriorityFilter}><SelectTrigger className="w-32"><SelectValue placeholder="الأولوية" /></SelectTrigger><SelectContent><SelectItem value="all">كل الأولويات</SelectItem><SelectItem value="high">عاجل</SelectItem><SelectItem value="normal">عادي</SelectItem><SelectItem value="low">منخفض</SelectItem></SelectContent></Select><Select value={sectionFilter} onValueChange={setSectionFilter}><SelectTrigger className="w-40"><SelectValue placeholder="القسم" /></SelectTrigger><SelectContent><SelectItem value="all">كل الأقسام</SelectItem>{sectionNames.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><Button size="sm" variant={attentionOnly ? "default" : "outline"} onClick={() => setAttentionOnly(!attentionOnly)} className={attentionOnly ? "bg-[#17363a]" : ""}>يحتاج انتباه</Button></div><div className="flex justify-between text-xs text-slate-400"><span>عرض {filteredSections.reduce((n, s) => n + s.items.length, 0)} من {o.requirements.length} متطلب</span>{(search || statusFilter !== "all" || priorityFilter !== "all" || sectionFilter !== "all" || attentionOnly) && <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setStatusFilter("all"); setPriorityFilter("all"); setSectionFilter("all"); setAttentionOnly(false); }} className="h-7 text-[#287052]">مسح الفلاتر <X className="h-3 w-3 mr-1" /></Button>}</div></div><NewRequirementDialog periodId={periodId} isAuditor={isAuditor} onDone={onDone} />
+      <div className="rounded-2xl border border-[#d5e3da] bg-white p-3 shadow-sm space-y-3"><div className="flex flex-wrap gap-2 items-center"><div className="relative flex-1 min-w-52"><Search className="absolute right-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث في العنوان أو المسؤول..." className="pr-9 border-[#dbe5df]" /></div><Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-40"><Filter className="h-4 w-4 ml-1 text-[#a7803e]" /><SelectValue placeholder="الحالة" /></SelectTrigger><SelectContent><SelectItem value="all">كل الحالات</SelectItem>{Object.entries(REQ_STATUS).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}</SelectContent></Select><Select value={priorityFilter} onValueChange={setPriorityFilter}><SelectTrigger className="w-32"><SelectValue placeholder="الأولوية" /></SelectTrigger><SelectContent><SelectItem value="all">كل الأولويات</SelectItem><SelectItem value="high">عاجل</SelectItem><SelectItem value="normal">عادي</SelectItem><SelectItem value="low">منخفض</SelectItem></SelectContent></Select><Select value={sectionFilter} onValueChange={setSectionFilter}><SelectTrigger className="w-40"><SelectValue placeholder="القسم" /></SelectTrigger><SelectContent><SelectItem value="all">كل الأقسام</SelectItem>{sectionNames.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><Button size="sm" variant={attentionOnly ? "default" : "outline"} onClick={() => setAttentionOnly(!attentionOnly)} className={attentionOnly ? "bg-[#17363a]" : ""}>يحتاج انتباه</Button><Button size="sm" variant="ghost" onClick={() => { const next = !allOpen; setAllOpen(next); setOpenSections(next ? Object.fromEntries(sections.map((s) => [s.name, true])) : {}); }}>{allOpen ? "طي الكل" : "فتح الكل"}</Button></div><div className="flex justify-between text-xs text-slate-400"><span>عرض {filteredSections.reduce((n, s) => n + s.items.length, 0)} من {o.requirements.length} متطلب</span>{(search || statusFilter !== "all" || priorityFilter !== "all" || sectionFilter !== "all" || attentionOnly) && <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setStatusFilter("all"); setPriorityFilter("all"); setSectionFilter("all"); setAttentionOnly(false); }} className="h-7 text-[#287052]">مسح الفلاتر <X className="h-3 w-3 mr-1" /></Button>}</div></div><NewRequirementDialog periodId={periodId} isAuditor={isAuditor} onDone={onDone} />
       {!o.requirements.length && (
         <Card><CardContent className="py-8 text-center text-gray-500">
           لا توجد متطلبات بعد — {isAuditor ? "أضف أول طلب للفريق" : "سجّل متطلبات المراجع أو جهّز بنودك الداخلية"}
@@ -674,6 +679,24 @@ function CommentsBox({ reqId, comments, onDone }: { reqId: number; comments: any
   );
 }
 
+function RequirementDetailDialog({ r, o, isAuditor, periodId, onDone, onClose, lang }: { r: any; o: any; isAuditor: boolean; periodId: number | null; onDone: () => void; onClose: () => void; lang: "ar" | "en" }) {
+  const { toast } = useToast();
+  const files = (o?.files ?? []).filter((f: any) => f.requirementId === r.id);
+  const comments = (o?.comments ?? []).filter((c: any) => c.requirementId === r.id);
+  const [status, setStatus] = useState(r.status);
+  const update = useMutation({ mutationFn: (value: string) => api(`/api/audit/requirements/${r.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: value }) }), onSuccess: onDone, onError: (e: any) => toast({ title: e.message, variant: "destructive" }) });
+  const copy = async () => { await navigator.clipboard?.writeText(`${r.title}${r.titleEn ? ` — ${r.titleEn}` : ""}`); toast({ title: "تم نسخ عنوان المتطلب" }); };
+  return <Dialog open onOpenChange={(v) => !v && onClose()}>
+    <DialogContent dir={lang === "ar" ? "rtl" : "ltr"} className="audit-detail-dialog max-w-3xl max-h-[90dvh] overflow-y-auto">
+      <DialogHeader><div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#e3f0e8] text-[#287052]"><FileText className="h-4 w-4" /></div><div className="min-w-0"><DialogTitle className="truncate">{lang === "en" && r.titleEn ? r.titleEn : r.title}</DialogTitle><p className="audit-caption truncate">{lang === "en" ? r.title : r.titleEn}</p></div><Button variant="ghost" size="sm" onClick={copy} className="mr-auto"><Copy className="h-4 w-4" /></Button></div></DialogHeader>
+      <div className="grid sm:grid-cols-2 gap-3 text-sm"><div><span className="audit-caption">القسم</span><p className="font-semibold">{r.section || "بنود عامة"}</p></div><div><span className="audit-caption">المسؤول</span><p className="font-semibold">{r.assigneeName || "غير محدد"}</p></div><div><span className="audit-caption">الأولوية</span><p className="font-semibold">{r.priority === "high" ? "عاجل" : r.priority === "low" ? "منخفض" : "عادي"}</p></div><div><span className="audit-caption">الحالة</span>{!isAuditor && !["approved", "uploaded"].includes(status) ? <Select value={status} onValueChange={(v) => { setStatus(v); update.mutate(v); }}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{TEAM_STATUSES.map((s) => <SelectItem key={s} value={s}>{REQ_STATUS[s].label}</SelectItem>)}</SelectContent></Select> : <Badge className={`audit-status-badge ${REQ_STATUS[status]?.cls || ""}`}>{REQ_STATUS[status]?.label || status}</Badge>}</div></div>
+      <section><div className="flex items-center justify-between mb-2"><h3 className="font-bold text-sm">المرفقات ({files.length})</h3>{!isAuditor && periodId && <UploadFileDialog periodId={periodId} requirementId={r.id} onDone={onDone} small />}</div><div className="space-y-1">{files.map((f: any) => <FileRow key={f.id} f={f} isAuditor={isAuditor} onDone={onDone} />)}{!files.length && <p className="audit-caption rounded-lg bg-[#f8fbf9] p-4 text-center">لا توجد مرفقات لهذا المتطلب</p>}</div></section>
+      <section><h3 className="font-bold text-sm mb-2">التعليقات</h3><CommentsBox reqId={r.id} comments={comments} onDone={onDone} /></section>
+      {isAuditor && status === "uploaded" && <div className="flex gap-2"><Button className="bg-[#287052]" onClick={() => { setStatus("approved"); update.mutate("approved"); }}><CheckCircle2 className="h-4 w-4 ml-1" /> اعتماد</Button><Button variant="destructive" onClick={() => { setStatus("rejected"); update.mutate("rejected"); }}><XCircle className="h-4 w-4 ml-1" /> إرجاع للتعديل</Button></div>}
+    </DialogContent>
+  </Dialog>;
+}
+
 // ===== تبويب الملفات =====
 function FilesTab({ o, isAuditor, periodId, onDone }: { o: any; isAuditor: boolean; periodId: number; onDone: () => void }) {
   const [query, setQuery] = useState("");
@@ -701,6 +724,7 @@ function FilesTab({ o, isAuditor, periodId, onDone }: { o: any; isAuditor: boole
       ))}
       {limit < o.files.length && <Button variant="outline" className="w-full" onClick={() => setLimit((n) => n + 30)}>عرض المزيد من الملفات</Button>}
       {previewIndex !== null && previewFiles[previewIndex] && <FilePreviewDialog f={previewFiles[previewIndex]} index={previewIndex} total={previewFiles.length} onPrev={() => setPreviewIndex((i) => i !== null && i > 0 ? i - 1 : i)} onNext={() => setPreviewIndex((i) => i !== null && i < previewFiles.length - 1 ? i + 1 : i)} onClose={() => setPreviewIndex(null)} />}
+      {detailId !== null && o.requirements.find((r: any) => r.id === detailId) && <RequirementDetailDialog r={o.requirements.find((item: any) => item.id === detailId)} o={o} isAuditor={isAuditor} periodId={periodId} onDone={onDone} onClose={() => setDetailId(null)} lang={lang || "ar"} />}
     </div>
   );
 }
