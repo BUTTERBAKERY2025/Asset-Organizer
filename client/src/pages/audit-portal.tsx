@@ -78,6 +78,7 @@ function PortalTheme() {
     <style>{`
       .audit-portal { --audit-ink:#17363a; --audit-deep:#102f35; --audit-gold:#b48b46; }
       .audit-portal .border { border-color:#dfe8e2; }
+      .audit-portal button:focus-visible, .audit-portal [role="tab"]:focus-visible, .audit-portal input:focus-visible, .audit-portal [role="combobox"]:focus-visible { outline:2px solid #d8b56d; outline-offset:2px; }
       .audit-portal [data-state="active"] { background:#e3f0e8; color:#22634d; box-shadow:none; }
       .audit-portal .bg-emerald-700 { background-color:#287052 !important; }
       .audit-portal .audit-requirement { animation: auditRise .35s ease both; }
@@ -87,8 +88,23 @@ function PortalTheme() {
       .audit-portal .audit-section-items > :nth-child(5) { animation-delay:160ms; }
       .audit-portal .audit-approved { border-inline-start:3px solid #4b9a72; }
       .audit-portal .audit-rejected { border-inline-start:3px solid #c35d55; background:#fffafa; }
+      .audit-portal .audit-requirement { transition: box-shadow 180ms ease, border-color 180ms ease, transform 180ms ease; }
+      .audit-portal .audit-requirement:hover { border-color:#b9d3c2; box-shadow:0 5px 16px rgba(16,47,53,.07); }
+      .audit-portal .audit-section-toggle { transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease; }
+      .audit-portal .audit-section-toggle:active, .audit-portal .audit-rail-chip:active { transform:scale(.985); }
+      .audit-portal .audit-rail-chip { transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease, transform 160ms ease; }
+      .audit-portal .audit-count { animation:auditCount .5s cubic-bezier(.22,1,.36,1) both; }
+      .audit-portal .audit-preview-image { max-height:calc(85dvh - 120px); }
+      .audit-portal .audit-preview-shimmer { width:180px; height:14px; border-radius:999px; background:linear-gradient(90deg,#17363a 20%,#2c5556 50%,#17363a 80%); background-size:200% 100%; animation:auditShimmer 1.4s ease-in-out infinite; }
+      @keyframes auditCount { from { opacity:.35; transform:translateY(3px); } to { opacity:1; transform:translateY(0); } }
+      @keyframes auditShimmer { from { background-position:200% 0; } to { background-position:-200% 0; } }
       @keyframes auditRise { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
-      @media (prefers-reduced-motion:reduce) { .audit-portal .audit-requirement { animation:none; } }
+      @media (max-width:640px) {
+        .audit-portal .audit-requirement { border-radius:12px; }
+        .audit-portal [role="tablist"] { width:100%; overflow-x:auto; flex-wrap:nowrap; justify-content:flex-start; }
+        .audit-portal [role="tab"] { flex:0 0 auto; white-space:nowrap; }
+      }
+      @media (prefers-reduced-motion:reduce) { .audit-portal .audit-requirement, .audit-portal .audit-count, .audit-portal .audit-preview-shimmer { animation:none; transition:none; } }
     `}</style>
   );
 }
@@ -330,7 +346,7 @@ function AuditCommandCenter({ o, onSectionClick }: { o: any; onSectionClick: (se
   return <section className="rounded-2xl border border-[#d5e3da] bg-white shadow-sm overflow-hidden">
     <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[#e3ebe5] px-5 py-4"><div><p className="text-xs font-bold tracking-widest text-[#a7803e]">لوحة القيادة</p><h2 className="text-xl font-extrabold text-[#17363a] mt-1">نظرة تنفيذية على ملف المراجعة</h2></div><div className="text-left"><span className="text-3xl font-extrabold text-[#287052]">{o.stats.progress}%</span><p className="text-xs text-slate-400">جاهزية الاعتماد</p></div></div>
     <div className="grid lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x lg:divide-x-reverse divide-[#e3ebe5]">
-      <div className="p-5"><p className="text-xs font-bold text-slate-400 mb-3">توزيع الحالات</p><div className="grid grid-cols-2 gap-2">{Object.entries(REQ_STATUS).map(([key, meta]) => { const n = (o.requirements || []).filter((r: any) => r.status === key).length; return <div key={key} className="rounded-xl bg-[#f7faf8] p-3"><p className="text-xl font-extrabold text-[#17363a]">{n}</p><p className="text-[11px] text-slate-500 truncate">{meta.label}</p></div>; })}</div></div>
+      <div className="p-5"><p className="text-xs font-bold text-slate-400 mb-3">توزيع الحالات</p><div className="grid grid-cols-2 gap-2">{Object.entries(REQ_STATUS).map(([key, meta]) => { const n = (o.requirements || []).filter((r: any) => r.status === key).length; return <div key={key} className="rounded-xl bg-[#f7faf8] p-3"><p className="audit-count text-xl font-extrabold text-[#17363a]">{n}</p><p className="text-[11px] text-slate-500 truncate">{meta.label}</p></div>; })}</div></div>
       <div className="p-5"><div className="flex justify-between mb-3"><p className="text-xs font-bold text-slate-400">الأقسام المحاسبية</p><span className="text-xs text-slate-400">{groups.length} قسم</span></div><div className="space-y-2 max-h-44 overflow-auto">{groups.map(([name, items]) => { const done = items.filter((r: any) => ["approved", "uploaded", "ready", "not_applicable"].includes(r.status)).length; return <button key={name} onClick={() => onSectionClick(name)} className="w-full text-right group"><div className="flex justify-between text-xs mb-1"><span className="font-semibold text-[#345258] group-hover:text-[#287052]">{name}</span><span className="text-slate-400">{done}/{items.length}</span></div><div className="h-1.5 rounded-full bg-[#e6eee8]"><div className="h-full rounded-full bg-[#4b9a72]" style={{ width: `${Math.round(done / items.length * 100)}%` }} /></div></button>; })}</div></div>
       <div className="p-5"><p className="text-xs font-bold text-slate-400 mb-3">يحتاج انتباهك أولاً</p><div className="space-y-2 max-h-32 overflow-auto">{attention.slice(0, 4).map((r: any) => <div key={r.id} className="flex items-start gap-2 text-xs"><span className={`mt-1 h-2 w-2 rounded-full shrink-0 ${r.status === "rejected" ? "bg-[#c35d55]" : "bg-[#c79b4d]"}`} /><span className="font-semibold text-[#345258]">{r.title}</span></div>)}{!attention.length && <div className="rounded-xl bg-[#edf6ef] p-3 text-xs text-[#287052]">لا توجد بنود عاجلة حالياً</div>}</div><div className="mt-4 border-t border-[#e3ebe5] pt-3 flex justify-between text-xs"><span className="text-slate-400">إجمالي الملفات</span><b>{o.files.length}</b></div></div>
     </div>
@@ -451,7 +467,7 @@ function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection }: { o: 
         </CardContent></Card>
       )}
       {!!sections.length && <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-        {sections.map((sec) => <button key={sec.name} onClick={() => { setActiveSection(sec.name); setOpenSections({ [sec.name]: true }); }} className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${activeSection === sec.name ? "border-[#287052] bg-[#e3f0e8] text-[#22634d]" : "border-[#d5e3da] bg-white text-slate-500 hover:bg-[#f2f8f3]"}`}>{sec.name}<span className="mr-1 opacity-60">{sec.items.length}</span></button>)}
+        {sections.map((sec) => <button key={sec.name} onClick={() => { setActiveSection(sec.name); setOpenSections({ [sec.name]: true }); }} className={`audit-rail-chip shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold ${activeSection === sec.name ? "border-[#287052] bg-[#e3f0e8] text-[#22634d]" : "border-[#d5e3da] bg-white text-slate-500 hover:bg-[#f2f8f3]"}`}>{sec.name}<span className="mr-1 opacity-60">{sec.items.length}</span></button>)}
       </div>}
       {!filteredSections.length && o.requirements.length > 0 && <Card><CardContent className="py-10 text-center text-slate-500"><Search className="h-8 w-8 mx-auto mb-2 text-slate-300" />لا توجد نتائج مطابقة للفلاتر الحالية</CardContent></Card>}
       {filteredSections.map((sec) => {
@@ -637,14 +653,14 @@ function FilePreviewDialog({ f, index, total, onPrev, onNext, onClose }: { f: an
     return () => window.removeEventListener("keydown", handle);
   }, [onPrev, onNext]);
   return <Dialog open onOpenChange={(v) => !v && onClose()}>
-    <DialogContent className="max-w-5xl h-[85dvh] bg-[#102f35] border-[#38585a] text-white p-0 overflow-hidden">
-      <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-3"><div className="min-w-0"><p className="font-bold truncate">{f.title}</p><p className="text-xs text-[#a9c0b6] truncate">{f.fileName} · {fmtSize(f.fileSize)}</p></div><div className="flex gap-2"><a href={`/api/audit/files/${f.id}/download`} target="_blank" rel="noreferrer"><Button size="sm" variant="outline" className="border-white/20 text-white hover:bg-white/10"><Download className="h-4 w-4 ml-1" /> تنزيل</Button></a><Button size="sm" variant="ghost" onClick={onClose} className="text-white">إغلاق</Button></div></div>
-      <div className="relative flex h-[calc(85dvh-65px)] items-center justify-center bg-[#091f24] p-5">
+      <DialogContent className="max-w-5xl w-[calc(100vw-1rem)] sm:w-full h-[85dvh] bg-[#102f35] border-[#38585a] text-white p-0 overflow-hidden">
+      <div className="flex items-center justify-between gap-2 border-b border-white/10 px-3 sm:px-5 py-3"><div className="min-w-0"><p className="font-bold truncate text-sm sm:text-base">{f.title}</p><p dir="ltr" className="text-[10px] sm:text-xs text-[#a9c0b6] truncate text-right">{f.fileName} · {fmtSize(f.fileSize)}</p></div><div className="flex gap-1.5 shrink-0"><a href={`/api/audit/files/${f.id}/download`} target="_blank" rel="noreferrer"><Button size="sm" variant="outline" className="border-white/20 text-white hover:bg-white/10 px-2 sm:px-3"><Download className="h-4 w-4 sm:ml-1" /><span className="hidden sm:inline">تنزيل</span></Button></a><Button size="sm" variant="ghost" onClick={onClose} className="text-white px-2 sm:px-3">إغلاق</Button></div></div>
+       <div className="relative flex h-[calc(85dvh-65px)] items-center justify-center bg-[#091f24] p-3 sm:p-5">
         <Button aria-label="المعاينة السابقة" disabled={index === 0} onClick={onPrev} variant="outline" className="absolute right-4 top-1/2 z-10 -translate-y-1/2 border-white/20 bg-white/10 text-white hover:bg-white/20"><ArrowRight className="h-5 w-5" /></Button>
         <Button aria-label="المعاينة التالية" disabled={index === total - 1} onClick={onNext} variant="outline" className="absolute left-4 top-1/2 z-10 -translate-y-1/2 border-white/20 bg-white/10 text-white hover:bg-white/20"><ArrowLeft className="h-5 w-5" /></Button>
         <span className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-black/40 px-3 py-1 text-xs text-white">{index + 1} / {total}</span>
-        {loading && !error && <div className="absolute text-sm text-[#a9c0b6]">جاري تجهيز المعاينة...</div>}
-        {error ? <div className="text-center"><AlertTriangle className="h-10 w-10 mx-auto text-[#d8b56d] mb-3" /><p className="font-semibold">تعذرت معاينة الملف داخل المتصفح</p><a href={`/api/audit/files/${f.id}/download`} target="_blank" rel="noreferrer"><Button className="mt-4 bg-[#d8b56d] text-[#102f35] hover:bg-[#e1bf78]">تنزيل الملف</Button></a></div> : isImage ? <img src={`/api/audit/files/${f.id}/preview`} alt={f.title} className={`max-h-full max-w-full object-contain transition-opacity ${loading ? "opacity-0" : "opacity-100"}`} onLoad={() => setLoading(false)} onError={() => { setLoading(false); setError(true); }} /> : <iframe title={f.title} src={`/api/audit/files/${f.id}/preview`} className={`h-full w-full rounded-lg bg-white transition-opacity ${loading ? "opacity-0" : "opacity-100"}`} onLoad={() => setLoading(false)} onError={() => { setLoading(false); setError(true); }} />}
+        {loading && !error && <div className="absolute flex flex-col items-center gap-3 text-sm text-[#a9c0b6]"><div className="audit-preview-shimmer" />جاري تجهيز المعاينة...</div>}
+        {error ? <div className="text-center"><AlertTriangle className="h-10 w-10 mx-auto text-[#d8b56d] mb-3" /><p className="font-semibold">تعذرت معاينة الملف داخل المتصفح</p><a href={`/api/audit/files/${f.id}/download`} target="_blank" rel="noreferrer"><Button className="mt-4 bg-[#d8b56d] text-[#102f35] hover:bg-[#e1bf78]">تنزيل الملف</Button></a></div> : isImage ? <img src={`/api/audit/files/${f.id}/preview`} alt={f.title} className={`audit-preview-image max-w-full w-auto object-contain transition-opacity ${loading ? "opacity-0" : "opacity-100"}`} onLoad={() => setLoading(false)} onError={() => { setLoading(false); setError(true); }} /> : <iframe title={f.title} src={`/api/audit/files/${f.id}/preview`} className={`h-full w-full rounded-lg bg-white transition-opacity ${loading ? "opacity-0" : "opacity-100"}`} onLoad={() => setLoading(false)} onError={() => { setLoading(false); setError(true); }} />}
       </div>
     </DialogContent>
   </Dialog>;
