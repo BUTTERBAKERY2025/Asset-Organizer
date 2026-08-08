@@ -7,6 +7,7 @@ import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PWAInstallPrompt } from "@/components/pwa-install-prompt";
+import { PushNotificationPrompt } from "@/components/push-notification-prompt";
 import { OfflineIndicator } from "@/components/offline-indicator";
 import { SlowConnectionBanner } from "@/components/slow-connection-banner";
 import { DataErrorBanner } from "@/components/data-error-banner";
@@ -550,6 +551,7 @@ function App() {
                 <InactivityLogout />
                 <Router />
                 <PWAInstallPrompt />
+                <PushNotificationPrompt />
                 <OfflineIndicator />
                 <SlowConnectionBanner />
                 <DataErrorBanner />

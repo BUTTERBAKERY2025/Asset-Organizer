@@ -17899,6 +17899,10 @@ export class DatabaseStorage implements IStorage {
 
   async createSystemNotification(notification: InsertSystemNotification): Promise<SystemNotification> {
     const [created] = await db.insert(systemNotifications).values(notification).returning();
+    // إرسال إشعار Push للجوال لنفس المستهدفين (لا يعطّل الإنشاء عند أي فشل)
+    import("./push-service")
+      .then((m) => m.sendPushForSystemNotification(created))
+      .catch(() => {});
     return created;
   }
 

@@ -12770,3 +12770,26 @@ export const internalAuditFindings = pgTable("internal_audit_findings", {
 export const insertInternalAuditFindingSchema = createInsertSchema(internalAuditFindings).omit({ id: true, createdAt: true, updatedAt: true });
 export type InternalAuditFinding = typeof internalAuditFindings.$inferSelect;
 export type InsertInternalAuditFinding = z.infer<typeof insertInternalAuditFindingSchema>;
+
+// ===== إشعارات الجوال (Web Push) =====
+// اشتراكات أجهزة الموظفين — كل جهاز حفظ التطبيق وسمح بالإشعارات يُسجَّل هنا
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [
+  index("idx_push_subs_user").on(t.userId),
+]);
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+
+// مفاتيح VAPID تُولَّد تلقائياً عند أول تشغيل وتُخزَّن هنا (تعمل في التطوير والإنتاج بدون إعداد يدوي)
+export const pushVapidConfig = pgTable("push_vapid_config", {
+  id: serial("id").primaryKey(),
+  publicKey: text("public_key").notNull(),
+  privateKey: text("private_key").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});

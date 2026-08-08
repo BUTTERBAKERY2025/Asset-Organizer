@@ -38002,6 +38002,46 @@ export async function registerRoutes(
     }
   });
 
+  // ===== إشعارات الجوال (Web Push) =====
+  app.get("/api/push/vapid-public-key", isAuthenticated, async (_req, res) => {
+    try {
+      const { getVapidPublicKey } = await import("./push-service");
+      res.json({ publicKey: await getVapidPublicKey() });
+    } catch (error) {
+      console.error("Error getting VAPID key:", error);
+      res.status(500).json({ error: "فشل في تهيئة الإشعارات" });
+    }
+  });
+
+  app.post("/api/push/subscribe", isAuthenticated, async (req, res) => {
+    try {
+      const sub = req.body?.subscription;
+      if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
+        return res.status(400).json({ error: "بيانات اشتراك غير صالحة" });
+      }
+      const { savePushSubscription } = await import("./push-service");
+      await savePushSubscription(req.session.userId, sub, req.headers["user-agent"]);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error saving push subscription:", error);
+      res.status(500).json({ error: "فشل في تفعيل إشعارات الجوال" });
+    }
+  });
+
+  app.post("/api/push/unsubscribe", isAuthenticated, async (req, res) => {
+    try {
+      const endpoint = req.body?.endpoint;
+      if (endpoint) {
+        const { removePushSubscription } = await import("./push-service");
+        await removePushSubscription(endpoint);
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error removing push subscription:", error);
+      res.status(500).json({ error: "فشل في إلغاء الاشتراك" });
+    }
+  });
+
   app.get("/api/active-notifications", isAuthenticated, async (req, res) => {
     try {
       const userId = req.session.userId;
