@@ -328,6 +328,9 @@ export function registerAuditPortalRoutes(app: Express) {
         title,
         description: req.body.description ? String(req.body.description).slice(0, 2000) : null,
         category: FILE_CATEGORIES.has(req.body.category) ? req.body.category : null,
+        section: req.body.section ? String(req.body.section).slice(0, 150) : null,
+        titleEn: req.body.titleEn ? String(req.body.titleEn).slice(0, 300) : null,
+        assigneeName: req.body.assigneeName ? String(req.body.assigneeName).slice(0, 100) : null,
         source: ctx.isAuditor ? "auditor" : "internal",
         priority: ["high", "normal", "low"].includes(req.body.priority) ? req.body.priority : "normal",
         dueDate: /^\d{4}-\d{2}-\d{2}$/.test(req.body.dueDate || "") ? req.body.dueDate : null,
@@ -346,16 +349,27 @@ export function registerAuditPortalRoutes(app: Express) {
       if (!r) return res.status(404).json({ error: "المتطلب غير موجود" });
       const [period] = await db.select().from(auditPeriods).where(eq(auditPeriods.id, r.periodId));
       if (!period || period.status === "closed") return res.status(400).json({ error: "الفترة مغلقة — لا يمكن التعديل" });
-      const status = String(req.body.status || "");
-      // مصفوفة الانتقالات: المراجع يعتمد/يرجع فقط ما هو «مرفوع»، والفريق لا يغيّر بنداً معتمداً
-      const allowedByRole = ctx.isAuditor ? ["approved", "rejected"] : ["requested", "in_progress", "uploaded"];
-      if (!allowedByRole.includes(status)) return res.status(403).json({ error: "لا تملك تغيير الحالة إلى هذه القيمة" });
-      if (ctx.isAuditor && r.status !== "uploaded") return res.status(400).json({ error: "لا يمكن اعتماد/إرجاع بند غير مرفوع" });
-      if (!ctx.isAuditor && r.status === "approved") return res.status(400).json({ error: "البند معتمد من المراجع — لا يمكن تغيير حالته" });
+      const patch: any = {};
+      const status = req.body.status !== undefined ? String(req.body.status || "") : null;
+      if (status !== null) {
+        // مصفوفة الانتقالات: المراجع يعتمد/يرجع فقط ما هو «مرفوع»، والفريق لا يغيّر بنداً معتمداً
+        const allowedByRole = ctx.isAuditor
+          ? ["approved", "rejected"]
+          : ["requested", "in_progress", "ready", "waiting_sample", "not_applicable", "uploaded"];
+        if (!allowedByRole.includes(status)) return res.status(403).json({ error: "لا تملك تغيير الحالة إلى هذه القيمة" });
+        if (ctx.isAuditor && r.status !== "uploaded") return res.status(400).json({ error: "لا يمكن اعتماد/إرجاع بند غير مرفوع" });
+        if (!ctx.isAuditor && r.status === "approved") return res.status(400).json({ error: "البند معتمد من المراجع — لا يمكن تغيير حالته" });
+        patch.status = status;
+      }
+      // الفريق فقط يعدّل المسؤول عن التجهيز
+      if (!ctx.isAuditor && req.body.assigneeName !== undefined) {
+        patch.assigneeName = req.body.assigneeName ? String(req.body.assigneeName).slice(0, 100) : null;
+      }
+      if (!Object.keys(patch).length) return res.status(400).json({ error: "لا يوجد تعديل" });
       const [row] = await db.update(auditRequirements)
-        .set({ status, updatedAt: new Date() })
+        .set({ ...patch, updatedAt: new Date() })
         .where(eq(auditRequirements.id, id)).returning();
-      await logActivity(r.periodId, ctx, status === "approved" ? "approve" : status === "rejected" ? "reject" : "update_requirement", r.title);
+      await logActivity(r.periodId, ctx, patch.status === "approved" ? "approve" : patch.status === "rejected" ? "reject" : "update_requirement", r.title);
       res.json(row);
     } catch (e: any) { res.status(500).json({ error: e.message }); }
   });

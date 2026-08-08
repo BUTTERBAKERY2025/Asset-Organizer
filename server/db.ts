@@ -590,6 +590,9 @@ export async function runStartupMigrations() {
           updated_at timestamp NOT NULL DEFAULT now()
         );
         CREATE INDEX IF NOT EXISTS idx_audit_requirements_period ON audit_requirements(period_id);
+        ALTER TABLE audit_requirements ADD COLUMN IF NOT EXISTS section text;
+        ALTER TABLE audit_requirements ADD COLUMN IF NOT EXISTS title_en text;
+        ALTER TABLE audit_requirements ADD COLUMN IF NOT EXISTS assignee_name text;
         CREATE TABLE IF NOT EXISTS audit_files (
           id serial PRIMARY KEY,
           period_id integer NOT NULL REFERENCES audit_periods(id) ON DELETE CASCADE,

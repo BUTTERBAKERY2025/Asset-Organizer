@@ -34,12 +34,17 @@ const CATEGORY_LABELS: Record<string, string> = {
   other: "أخرى",
 };
 const REQ_STATUS: Record<string, { label: string; cls: string }> = {
-  requested: { label: "مطلوب", cls: "bg-gray-100 text-gray-700" },
-  in_progress: { label: "جاري التجهيز", cls: "bg-amber-100 text-amber-800" },
+  requested: { label: "معلق", cls: "bg-gray-100 text-gray-700" },
+  in_progress: { label: "قيد التجهيز", cls: "bg-amber-100 text-amber-800" },
+  ready: { label: "جاهز — بانتظار الرفع", cls: "bg-cyan-100 text-cyan-800" },
+  waiting_sample: { label: "بانتظار اختيار العينة", cls: "bg-purple-100 text-purple-800" },
+  not_applicable: { label: "غير منطبق", cls: "bg-gray-200 text-gray-500" },
   uploaded: { label: "مرفوع — بانتظار المراجع", cls: "bg-blue-100 text-blue-800" },
   approved: { label: "معتمد ✔", cls: "bg-emerald-100 text-emerald-800" },
   rejected: { label: "مرفوض — يحتاج تعديل", cls: "bg-red-100 text-red-700" },
 };
+// الحالات التي يستطيع الفريق اختيارها يدوياً
+const TEAM_STATUSES = ["requested", "in_progress", "ready", "waiting_sample", "not_applicable"];
 const PERIOD_STATUS: Record<string, string> = {
   active: "قيد التجهيز",
   under_review: "قيد المراجعة",
@@ -284,6 +289,7 @@ function NewPeriodDialog({ onDone }: { onDone: () => void }) {
 function RequirementsTab({ o, isAuditor, periodId, onDone }: { o: any; isAuditor: boolean; periodId: number; onDone: () => void }) {
   const { toast } = useToast();
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
 
   const setStatus = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) =>
@@ -297,15 +303,17 @@ function RequirementsTab({ o, isAuditor, periodId, onDone }: { o: any; isAuditor
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
 
-  return (
-    <div className="space-y-4">
-      <NewRequirementDialog periodId={periodId} isAuditor={isAuditor} onDone={onDone} />
-      {!o.requirements.length && (
-        <Card><CardContent className="py-8 text-center text-gray-500">
-          لا توجد متطلبات بعد — {isAuditor ? "أضف أول طلب للفريق" : "سجّل متطلبات المراجع أو جهّز بنودك الداخلية"}
-        </CardContent></Card>
-      )}
-      {o.requirements.map((r: any) => {
+  // تجميع المتطلبات حسب القسم المحاسبي (مع الحفاظ على ترتيب الورود)
+  const sections: { name: string; items: any[] }[] = [];
+  const secIdx = new Map<string, number>();
+  for (const r of o.requirements) {
+    const key = r.section || "بنود عامة";
+    if (!secIdx.has(key)) { secIdx.set(key, sections.length); sections.push({ name: key, items: [] }); }
+    sections[secIdx.get(key)!].items.push(r);
+  }
+  const doneStates = new Set(["approved", "uploaded", "ready", "not_applicable"]);
+
+  const renderReq = (r: any) => {
         const st = REQ_STATUS[r.status] || REQ_STATUS.requested;
         const files = o.files.filter((f: any) => f.requirementId === r.id);
         const comments = o.comments.filter((c: any) => c.requirementId === r.id);
@@ -320,13 +328,18 @@ function RequirementsTab({ o, isAuditor, periodId, onDone }: { o: any; isAuditor
                     {r.priority === "high" && <Badge className="bg-red-100 text-red-700">عاجل</Badge>}
                     <Badge variant="outline">{r.source === "auditor" ? "طلب المراجع" : "بند داخلي"}</Badge>
                     {r.category && <Badge variant="secondary">{CATEGORY_LABELS[r.category] || r.category}</Badge>}
+                    {r.assigneeName && <Badge variant="outline" className="text-indigo-700 border-indigo-200">المسؤول: {r.assigneeName}</Badge>}
                   </div>
+                  {r.titleEn && <p className="text-xs text-gray-400 mt-0.5" dir="ltr" style={{ textAlign: "right" }}>{r.titleEn}</p>}
                   {r.description && <p className="text-sm text-gray-600 mt-1">{r.description}</p>}
                   <p className="text-xs text-gray-400 mt-1">أضافه {r.createdByName} • {fmtDT(r.createdAt)}{r.dueDate ? ` • الاستحقاق ${r.dueDate}` : ""}</p>
                 </div>
-                <div className="flex gap-2 flex-wrap shrink-0">
-                  {!isAuditor && r.status === "requested" && (
-                    <Button size="sm" variant="outline" onClick={() => setStatus.mutate({ id: r.id, status: "in_progress" })}><Clock className="h-4 w-4 ml-1" /> بدء التجهيز</Button>
+                <div className="flex gap-2 flex-wrap shrink-0 items-center">
+                  {!isAuditor && !["approved", "uploaded"].includes(r.status) && (
+                    <Select value={TEAM_STATUSES.includes(r.status) ? r.status : undefined} onValueChange={(v) => setStatus.mutate({ id: r.id, status: v })}>
+                      <SelectTrigger className="h-8 w-44 text-xs"><SelectValue placeholder="تغيير الحالة" /></SelectTrigger>
+                      <SelectContent>{TEAM_STATUSES.map((s) => <SelectItem key={s} value={s}>{REQ_STATUS[s].label}</SelectItem>)}</SelectContent>
+                    </Select>
                   )}
                   {!isAuditor && <UploadFileDialog periodId={periodId} requirementId={r.id} onDone={onDone} small />}
                   {isAuditor && r.status === "uploaded" && (
@@ -360,6 +373,40 @@ function RequirementsTab({ o, isAuditor, periodId, onDone }: { o: any; isAuditor
             </CardContent>
           </Card>
         );
+  };
+
+  return (
+    <div className="space-y-4">
+      <NewRequirementDialog periodId={periodId} isAuditor={isAuditor} onDone={onDone} />
+      {!o.requirements.length && (
+        <Card><CardContent className="py-8 text-center text-gray-500">
+          لا توجد متطلبات بعد — {isAuditor ? "أضف أول طلب للفريق" : "سجّل متطلبات المراجع أو جهّز بنودك الداخلية"}
+        </CardContent></Card>
+      )}
+      {sections.map((sec) => {
+        const done = sec.items.filter((r: any) => doneStates.has(r.status)).length;
+        const isOpen = openSections[sec.name] ?? false;
+        return (
+          <div key={sec.name} className="space-y-2">
+            <button
+              className="w-full flex items-center justify-between rounded-lg border bg-gray-50 hover:bg-gray-100 px-4 py-2.5"
+              onClick={() => setOpenSections((p) => ({ ...p, [sec.name]: !isOpen }))}
+              data-testid={`audit-section-${sec.name}`}
+            >
+              <span className="font-bold text-sm flex items-center gap-2">
+                <ListChecks className="h-4 w-4 text-emerald-700" /> {sec.name}
+                <Badge variant="secondary" className="font-normal">{done} / {sec.items.length}</Badge>
+              </span>
+              <span className="flex items-center gap-3">
+                <span className="w-28 h-2 rounded bg-gray-200 overflow-hidden hidden sm:block">
+                  <span className="block h-full bg-emerald-600" style={{ width: `${sec.items.length ? Math.round((done / sec.items.length) * 100) : 0}%` }} />
+                </span>
+                <span className="text-xs text-gray-500">{isOpen ? "إخفاء" : "عرض"}</span>
+              </span>
+            </button>
+            {isOpen && <div className="space-y-2">{sec.items.map(renderReq)}</div>}
+          </div>
+        );
       })}
     </div>
   );
@@ -368,10 +415,11 @@ function RequirementsTab({ o, isAuditor, periodId, onDone }: { o: any; isAuditor
 function NewRequirementDialog({ periodId, isAuditor, onDone }: { periodId: number; isAuditor: boolean; onDone: () => void }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ title: "", description: "", category: "other", priority: "normal", dueDate: "" });
+  const emptyForm = { title: "", titleEn: "", section: "", assigneeName: "", description: "", category: "other", priority: "normal", dueDate: "" };
+  const [f, setF] = useState(emptyForm);
   const m = useMutation({
     mutationFn: () => api(`/api/audit/periods/${periodId}/requirements`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(f) }),
-    onSuccess: () => { toast({ title: "تمت إضافة المتطلب ✔" }); setOpen(false); setF({ title: "", description: "", category: "other", priority: "normal", dueDate: "" }); onDone(); },
+    onSuccess: () => { toast({ title: "تمت إضافة المتطلب ✔" }); setOpen(false); setF(emptyForm); onDone(); },
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
   return (
@@ -383,6 +431,11 @@ function NewRequirementDialog({ periodId, isAuditor, onDone }: { periodId: numbe
         <DialogHeader><DialogTitle>{isAuditor ? "طلب جديد من الشركة" : "متطلب جديد"}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div><Label>العنوان</Label><Input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="مثال: كشف حساب البنك الأهلي حتى 30/06" /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>القسم (اختياري)</Label><Input value={f.section} onChange={(e) => setF({ ...f, section: e.target.value })} placeholder="مثال: النقد وما في حكمه" /></div>
+            <div><Label>المسؤول (اختياري)</Label><Input value={f.assigneeName} onChange={(e) => setF({ ...f, assigneeName: e.target.value })} /></div>
+          </div>
+          <div><Label>الاسم الإنجليزي (اختياري)</Label><Input dir="ltr" value={f.titleEn} onChange={(e) => setF({ ...f, titleEn: e.target.value })} /></div>
           <div><Label>تفاصيل (اختياري)</Label><Textarea rows={2} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></div>
           <div className="grid grid-cols-3 gap-3">
             <div>

@@ -9688,9 +9688,12 @@ export const auditRequirements = pgTable("audit_requirements", {
   title: text("title").notNull(),
   description: text("description"),
   category: text("category"), // نفس تصنيفات الملفات
+  section: text("section"), // القسم المحاسبي (النقد، المخزون، الزكاة...) — لتجميع قائمة المتطلبات
+  titleEn: text("title_en"), // الاسم الإنجليزي للمتطلب (كما يرد من مكتب المراجعة)
+  assigneeName: text("assignee_name"), // المسؤول عن التجهيز
   source: text("source").default("internal").notNull(), // internal, auditor
   priority: text("priority").default("normal").notNull(), // high, normal, low
-  status: text("status").default("requested").notNull(), // requested, in_progress, uploaded, approved, rejected
+  status: text("status").default("requested").notNull(), // requested, in_progress, ready, waiting_sample, not_applicable, uploaded, approved, rejected
   dueDate: text("due_date"), // YYYY-MM-DD
   createdByName: text("created_by_name"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
