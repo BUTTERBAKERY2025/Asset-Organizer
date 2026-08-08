@@ -18,7 +18,7 @@ import {
   FileText, Plus, Upload, Trash2, Copy, MessageCircle, RefreshCw,
   Download, Eye, CheckCircle, Clock, XCircle, ArrowRight, Stamp, ChevronDown, ChevronUp,
 } from "lucide-react";
-import { buildApprovedPdf, downloadPdf, positionLabel, quickStampPdf, getPdfPageCount, type QuickStampPosition } from "@/lib/financial-doc-stamp";
+import { buildApprovedPdf, downloadPdf, positionLabel, quickStampPdf, getPdfPageCount, STAMP_LABELS, type QuickStampPosition, type StampKind } from "@/lib/financial-doc-stamp";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface Cycle {
@@ -639,6 +639,7 @@ function QuickStampSection() {
   const [pageNum, setPageNum] = useState("1"); // 1-based
   const [position, setPosition] = useState<QuickStampPosition>("bottom-center");
   const [size, setSize] = useState("110");
+  const [stampKind, setStampKind] = useState<StampKind>("finance");
   const [working, setWorking] = useState(false);
 
   const onFile = async (f: File | null) => {
@@ -667,7 +668,7 @@ function QuickStampSection() {
     if (!bytes || !file) return;
     setWorking(true);
     try {
-      const out = await quickStampPdf(bytes.slice(0), Number(pageNum) - 1, position, Number(size));
+      const out = await quickStampPdf(bytes.slice(0), Number(pageNum) - 1, position, Number(size), stampKind);
       const base = file.name.replace(/\.pdf$/i, "");
       downloadPdf(out, base + " - مختوم.pdf");
       toast({ title: "تم ختم الملف وتحميله ✔" });
@@ -713,6 +714,26 @@ function QuickStampSection() {
 
         {pageCount > 0 && (
           <>
+            <div>
+              <Label>نوع الختم</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-1">
+                {(Object.keys(STAMP_LABELS) as StampKind[]).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setStampKind(k)}
+                    data-testid={`quick-stamp-kind-${k}`}
+                    className={`rounded-lg border-2 px-3 py-2 text-sm font-semibold transition-colors ${
+                      stampKind === k
+                        ? "border-blue-700 bg-blue-50 text-blue-900"
+                        : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                    }`}
+                  >
+                    {STAMP_LABELS[k]}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <Label>الصفحة المطلوب ختمها</Label>

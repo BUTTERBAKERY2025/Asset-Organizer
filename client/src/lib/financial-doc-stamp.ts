@@ -3,6 +3,8 @@
 // تُرسم الصفحة بالكامل على كانفس (لدعم العربية) ثم تُدمج كصورة عبر pdf-lib.
 import { PDFDocument } from "pdf-lib";
 import stampUrl from "@/assets/finance-stamp.png";
+import hrStampUrl from "@/assets/hr-stamp.svg";
+import mainStampUrl from "@/assets/main-stamp.svg";
 
 export interface StampSigner {
   signerName: string;
@@ -130,11 +132,24 @@ function drawStamp(ctx: CanvasRenderingContext2D, cx: number, cy: number, scale 
   ctx.restore();
 }
 
-// تحميل صورة الختم الرسمي (تُحوَّل لعنصر صورة مرة واحدة)
-let stampImgPromise: Promise<HTMLImageElement> | null = null;
-function getStampImage(): Promise<HTMLImageElement> {
-  if (!stampImgPromise) stampImgPromise = loadImage(stampUrl);
-  return stampImgPromise;
+// أنواع الأختام المتاحة (المالية PNG، والبقية SVG بنفس الطراز الدائري)
+export type StampKind = "finance" | "hr" | "main";
+export const STAMP_LABELS: Record<StampKind, string> = {
+  finance: "ختم الإدارة المالية",
+  hr: "ختم شؤون الموظفين",
+  main: "الختم الرئيسي (الإدارة العامة)",
+};
+const STAMP_URLS: Record<StampKind, string> = {
+  finance: stampUrl,
+  hr: hrStampUrl,
+  main: mainStampUrl,
+};
+
+// تحميل صورة الختم (تُحوَّل لعنصر صورة مرة واحدة لكل نوع)
+const stampImgPromises: Partial<Record<StampKind, Promise<HTMLImageElement>>> = {};
+function getStampImage(kind: StampKind = "finance"): Promise<HTMLImageElement> {
+  if (!stampImgPromises[kind]) stampImgPromises[kind] = loadImage(STAMP_URLS[kind]);
+  return stampImgPromises[kind]!;
 }
 
 // إنشاء «شريط الاعتماد» الناعم الذي يُطبع أسفل محتوى آخر صفحة من المستند نفسه
@@ -414,7 +429,8 @@ export async function quickStampPdf(
   originalPdfBytes: ArrayBuffer,
   pageIndex: number, // 0-based
   position: QuickStampPosition,
-  sizePt: number // قطر الختم بالنقاط (72pt = بوصة)
+  sizePt: number, // قطر الختم بالنقاط (72pt = بوصة)
+  stampKind: StampKind = "finance"
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.load(originalPdfBytes, { ignoreEncryption: true });
   const pages = pdfDoc.getPages();
@@ -422,7 +438,7 @@ export async function quickStampPdf(
   const { width: pw, height: ph } = page.getSize();
 
   // تجهيز صورة الختم الشفافة بدقة عالية وميل خفيف
-  const stampImg = await getStampImage();
+  const stampImg = await getStampImage(stampKind);
   const inked = toTransparentInk(stampImg);
   const SS = 2.2; // دقة إضافية
   const px = Math.round(sizePt * SS * 2);
