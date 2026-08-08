@@ -3,8 +3,8 @@
 // تُرسم الصفحة بالكامل على كانفس (لدعم العربية) ثم تُدمج كصورة عبر pdf-lib.
 import { PDFDocument } from "pdf-lib";
 import stampUrl from "@/assets/finance-stamp.png";
-import hrStampUrl from "@/assets/hr-stamp.svg";
-import mainStampUrl from "@/assets/main-stamp.svg";
+import hrStampUrl from "@/assets/hr-stamp.png";
+import mainStampUrl from "@/assets/main-stamp.png";
 import chairmanSigUrl from "@/assets/chairman-signature.png";
 
 export interface StampSigner {
