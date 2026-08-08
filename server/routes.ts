@@ -121,7 +121,7 @@ import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, ge
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
 import { registerFinancialReviewRoutes } from "./financial-review-routes";
-import { registerAuditPortalRoutes } from "./audit-portal-routes";
+import { registerAuditPortalRoutes, auditorApiLockdown } from "./audit-portal-routes";
 import { registerJobOfferRoutes } from "./job-offers-routes";
 import { registerOnboardingRoutes } from "./onboarding-routes";
 import { registerHrRoutes } from "./hr-routes";
@@ -168,6 +168,8 @@ export async function registerRoutes(
 
   // Setup authentication
   await setupAuth(app);
+  // قفل حساب المراجع الخارجي: مقصور على /api/audit/* و /api/auth/* فقط
+  app.use(auditorApiLockdown);
 
   app.get("/api/version", (_req, res) => {
     res.json({ version: "2026-02-23-v3", build: Date.now(), status: "ok" });

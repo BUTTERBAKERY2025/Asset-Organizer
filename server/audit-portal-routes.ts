@@ -71,6 +71,55 @@ const ALLOWED_MIME = new Set([
 ]);
 const ALLOWED_EXT = /\.(pdf|xlsx|xls|csv|docx|doc|png|jpg|jpeg|zip)$/i;
 
+// فحص التوقيع الثنائي (magic bytes) — لا نثق بامتداد الملف أو نوع MIME المرسل من المتصفح
+function sniffBuffer(buf: Buffer): string | null {
+  if (buf.length < 8) return null;
+  const head = buf.subarray(0, 8);
+  if (head.subarray(0, 5).toString("latin1").startsWith("%PDF-")) return "application/pdf";
+  if (head[0] === 0x50 && head[1] === 0x4b) return "application/zip"; // zip/xlsx/docx
+  if (head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47) return "image/png";
+  if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return "image/jpeg";
+  if (head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0) return "application/vnd.ms-excel"; // xls/doc قديم
+  return null; // csv وملفات نصية
+}
+function extAllowsSniff(ext: string, sniffed: string | null, buf: Buffer): boolean {
+  const e = ext.toLowerCase();
+  if (e === ".pdf") return sniffed === "application/pdf";
+  if ([".xlsx", ".docx", ".zip"].includes(e)) return sniffed === "application/zip";
+  if ([".xls", ".doc"].includes(e)) return sniffed === "application/vnd.ms-excel" || sniffed === "application/zip";
+  if (e === ".png") return sniffed === "image/png";
+  if ([".jpg", ".jpeg"].includes(e)) return sniffed === "image/jpeg";
+  if (e === ".csv") {
+    // نص فقط: نرفض أي محتوى ثنائي معروف ونرفض بايتات NUL
+    if (sniffed) return false;
+    return !buf.subarray(0, 4096).includes(0);
+  }
+  return false;
+}
+
+// قفل شامل لحساب المراجع الخارجي: يُمنع من كل واجهات النظام عدا بوابة المراجعة وجلسة الدخول
+// (يُسجَّل قبل بقية المسارات في routes.ts — الحماية على مستوى السيرفر وليس الواجهة فقط)
+const roleCache = new Map<string, { role: string; ts: number }>();
+export const auditorApiLockdown: RequestHandler = async (req: any, res, next) => {
+  try {
+    const userId = req.session?.userId;
+    if (!userId) return next();
+    let cached = roleCache.get(userId);
+    if (!cached || Date.now() - cached.ts > 60_000) {
+      const [u] = await db.select({ role: users.role }).from(users).where(eq(users.id, userId)).limit(1);
+      cached = { role: u?.role || "", ts: Date.now() };
+      roleCache.set(userId, cached);
+    }
+    if (cached.role !== "external_auditor") return next();
+    const p = req.path;
+    const allowed = p.startsWith("/api/audit/") || p.startsWith("/api/auth/") || p === "/api/my-permissions";
+    if (!allowed && p.startsWith("/api")) {
+      return res.status(403).json({ error: "حساب المراجع الخارجي مقصور على بوابة المراجعة المالية فقط" });
+    }
+    next();
+  } catch { next(); }
+};
+
 export function registerAuditPortalRoutes(app: Express) {
   // سياق البوابة: من أنا (فريق أم مراجع خارجي)
   app.get("/api/audit/portal-context", isAuthenticated, async (req: any, res) => {
@@ -201,8 +250,13 @@ export function registerAuditPortalRoutes(app: Express) {
             if (!decoded.includes("\uFFFD")) originalName = decoded;
           } catch {}
           const extMatch = originalName.match(ALLOWED_EXT);
-          const ext = extMatch ? extMatch[0].toLowerCase() : "";
-          const storageName = `audit_${periodId}_${Date.now()}${ext || ".bin"}`;
+          if (!extMatch) return res.status(400).json({ error: "امتداد الملف غير مدعوم" });
+          const ext = extMatch[0].toLowerCase();
+          const sniffed = sniffBuffer(req.file.buffer);
+          if (!extAllowsSniff(ext, sniffed, req.file.buffer)) {
+            return res.status(400).json({ error: "محتوى الملف لا يطابق امتداده — تم رفض الرفع" });
+          }
+          const storageName = `audit_${periodId}_${Date.now()}${ext}`;
           const uploadedFile = await uploadToSupabase(req.file.buffer, storageName, req.file.mimetype || "application/octet-stream");
           if (!uploadedFile) return res.status(500).json({ error: "فشل رفع الملف إلى التخزين" });
 
@@ -237,6 +291,7 @@ export function registerAuditPortalRoutes(app: Express) {
       const data = await downloadFromSupabase(f.storagePath);
       if (!data) return res.status(404).json({ error: "تعذر جلب الملف من التخزين" });
       await logActivity(f.periodId, req.auditCtx, "download", f.title);
+      res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Content-Type", f.mimeType || "application/octet-stream");
       res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(f.fileName)}`);
       res.send(Buffer.from(await data.arrayBuffer()));
@@ -248,6 +303,8 @@ export function registerAuditPortalRoutes(app: Express) {
       const id = parseInt(req.params.id);
       const [f] = await db.select().from(auditFiles).where(eq(auditFiles.id, id));
       if (!f) return res.status(404).json({ error: "الملف غير موجود" });
+      const [fPeriod] = await db.select().from(auditPeriods).where(eq(auditPeriods.id, f.periodId));
+      if (fPeriod?.status === "closed") return res.status(400).json({ error: "الفترة مغلقة — لا يمكن حذف ملفاتها" });
       try { await deleteFromSupabase(f.storagePath); } catch {}
       await db.delete(auditFiles).where(eq(auditFiles.id, id));
       await logActivity(f.periodId, req.auditCtx, "delete_file", f.title);
@@ -286,10 +343,14 @@ export function registerAuditPortalRoutes(app: Express) {
       const ctx: Ctx = req.auditCtx;
       const [r] = await db.select().from(auditRequirements).where(eq(auditRequirements.id, id));
       if (!r) return res.status(404).json({ error: "المتطلب غير موجود" });
+      const [period] = await db.select().from(auditPeriods).where(eq(auditPeriods.id, r.periodId));
+      if (!period || period.status === "closed") return res.status(400).json({ error: "الفترة مغلقة — لا يمكن التعديل" });
       const status = String(req.body.status || "");
-      // المراجع الخارجي: اعتماد أو رفض فقط، والفريق: جاري التجهيز/مرفوع فقط
+      // مصفوفة الانتقالات: المراجع يعتمد/يرجع فقط ما هو «مرفوع»، والفريق لا يغيّر بنداً معتمداً
       const allowedByRole = ctx.isAuditor ? ["approved", "rejected"] : ["requested", "in_progress", "uploaded"];
       if (!allowedByRole.includes(status)) return res.status(403).json({ error: "لا تملك تغيير الحالة إلى هذه القيمة" });
+      if (ctx.isAuditor && r.status !== "uploaded") return res.status(400).json({ error: "لا يمكن اعتماد/إرجاع بند غير مرفوع" });
+      if (!ctx.isAuditor && r.status === "approved") return res.status(400).json({ error: "البند معتمد من المراجع — لا يمكن تغيير حالته" });
       const [row] = await db.update(auditRequirements)
         .set({ status, updatedAt: new Date() })
         .where(eq(auditRequirements.id, id)).returning();
@@ -301,6 +362,10 @@ export function registerAuditPortalRoutes(app: Express) {
   app.delete("/api/audit/requirements/:id", isAuthenticated, requireTeam, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
+      const [rExisting] = await db.select().from(auditRequirements).where(eq(auditRequirements.id, id));
+      if (!rExisting) return res.status(404).json({ error: "المتطلب غير موجود" });
+      const [rPeriod] = await db.select().from(auditPeriods).where(eq(auditPeriods.id, rExisting.periodId));
+      if (rPeriod?.status === "closed") return res.status(400).json({ error: "الفترة مغلقة — لا يمكن حذف متطلباتها" });
       const [r] = await db.delete(auditRequirements).where(eq(auditRequirements.id, id)).returning();
       if (!r) return res.status(404).json({ error: "المتطلب غير موجود" });
       await logActivity(r.periodId, req.auditCtx, "delete_requirement", r.title);
@@ -314,6 +379,8 @@ export function registerAuditPortalRoutes(app: Express) {
       const id = parseInt(req.params.id);
       const [r] = await db.select().from(auditRequirements).where(eq(auditRequirements.id, id));
       if (!r) return res.status(404).json({ error: "المتطلب غير موجود" });
+      const [cPeriod] = await db.select().from(auditPeriods).where(eq(auditPeriods.id, r.periodId));
+      if (cPeriod?.status === "closed") return res.status(400).json({ error: "الفترة مغلقة — لا يمكن إضافة تعليقات" });
       const content = String(req.body.content || "").trim();
       if (!content || content.length > 2000) return res.status(400).json({ error: "نص التعليق مطلوب (بحد أقصى 2000 حرف)" });
       const ctx: Ctx = req.auditCtx;
