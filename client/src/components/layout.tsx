@@ -245,7 +245,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const allStandaloneItems: NavItem[] = useMemo(() => [
     { href: "/", label: t("sidebar.home"), icon: Home, module: "dashboard" },
     { href: "/my-portal", label: t("sidebar.myPortal"), icon: UserCircle },
-  ], [t]);
+    // بوابة المراجعة المالية: نظام مستقل — يظهر للمدير العام والمدير المالي فقط
+    ...(user?.role === "admin" || user?.role === "financial_manager"
+      ? [{ href: "/audit-portal", label: "بوابة المراجعة المالية", icon: Landmark } as NavItem]
+      : []),
+  ], [t, user?.role]);
 
   const allNavGroups: { key: string; group: NavGroup }[] = useMemo(() => [
     {
