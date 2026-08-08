@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="440" height="440" viewBox="0 0 440 440">
+  <defs>
+    <path id="arcTop" d="M 37 220 A 183 183 0 0 1 403 220"/>
+    <path id="arcBottom" d="M 30 220 A 190 190 0 0 0 410 220"/>
+  </defs>
+
+  <g fill="none" stroke="#2b3f9c">
+    <circle cx="220" cy="220" r="212" stroke-width="7"/>
+    <circle cx="220" cy="220" r="202" stroke-width="2.5"/>
+    <circle cx="220" cy="220" r="160" stroke-width="3"/>
+  </g>
+
+  
+  <text font-family="'Noto Naskh Arabic'" font-size="31" font-weight="bold" fill="#2b3f9c">
+    
+  </text>
+
+  
+  <text font-family="'DejaVu Sans', sans-serif" font-size="24" font-weight="bold" letter-spacing="2.5" fill="#2b3f9c">
+    
+  </text>
+
+  
+  <text x="39" y="232" font-family="'DejaVu Sans'" font-size="22" font-weight="bold" fill="#2b3f9c" text-anchor="middle">\</text>
+  <text x="401" y="232" font-family="'DejaVu Sans'" font-size="22" font-weight="bold" fill="#2b3f9c" text-anchor="middle">/</text>
+
+  
+  <text x="220" y="178" font-family="'Noto Naskh Arabic'" font-size="40" font-weight="bold" fill="#2b3f9c" text-anchor="middle">الإدارة العامة</text>
+
+  
+  <text x="76" y="211" font-family="'DejaVu Sans'" font-size="17" fill="#2b3f9c" text-anchor="middle">★</text>
+  <text x="220" y="212" font-family="'DejaVu Sans', sans-serif" font-size="18" font-weight="bold" fill="#2b3f9c" text-anchor="middle" textLength="230" lengthAdjust="spacingAndGlyphs">GENERAL MANAGEMENT</text>
+  <text x="364" y="211" font-family="'DejaVu Sans'" font-size="17" fill="#2b3f9c" text-anchor="middle">★</text>
+
+  
+  <line x1="145" y1="230" x2="295" y2="230" stroke="#2b3f9c" stroke-width="3"/>
+
+  
+  <text x="220" y="266" text-anchor="middle" fill="#2b3f9c"><tspan font-family="'Noto Naskh Arabic'" font-size="30" font-weight="bold">معتمد</tspan><tspan font-family="'DejaVu Sans', sans-serif" font-size="26" font-weight="bold"> | APPROVED</tspan></text>
+
+  
+  <text x="220" y="300" text-anchor="middle" fill="#2b3f9c"><tspan font-family="'Noto Naskh Arabic'" font-size="24" font-weight="bold">س.ت </tspan><tspan font-family="'DejaVu Sans', sans-serif" font-size="22" font-weight="bold">‎7026155296</tspan></text>
+</svg>
