@@ -35,6 +35,13 @@ const CATEGORY_LABELS: Record<string, string> = {
   payroll: "الرواتب",
   inventory: "المخزون",
   other: "أخرى",
+  statements_draft: "مسودة القوائم المالية",
+  statements_approved: "القوائم المالية المعتمدة",
+  statements_stamped: "القوائم المالية المعتمدة والمختومة",
+};
+const PORTAL_COPY = {
+  ar: { requirements: "المتطلبات", files: "مكتبة الملفات", activity: "سجل النشاط", analytics: "التحليلات", statements: "القوائم المالية", language: "English", readiness: "جاهزية الملف", noFiles: "لا توجد ملفات مرفوعة بعد", noItems: "لا توجد متطلبات بعد" },
+  en: { requirements: "Requirements", files: "File library", activity: "Activity log", analytics: "Analytics", statements: "Financial statements", language: "العربية", readiness: "File readiness", noFiles: "No files uploaded yet", noItems: "No requirements yet" },
 };
 const REQ_STATUS: Record<string, { label: string; cls: string }> = {
   requested: { label: "معلق", cls: "bg-gray-100 text-gray-700" },
@@ -156,6 +163,15 @@ function PortalTheme() {
 }
 
 export default function AuditPortalPage() {
+  const [lang, setLang] = useState<"ar" | "en">(() => {
+    const saved = localStorage.getItem("auditPortalLang");
+    return saved === "en" || saved === "ar" ? saved : "ar";
+  });
+  const toggleLang = () => setLang((current) => {
+    const next = current === "ar" ? "en" : "ar";
+    localStorage.setItem("auditPortalLang", next);
+    return next;
+  });
   const ctxQ = useQuery<{ name: string; role: "team" | "auditor" }>({
     queryKey: ["/api/audit/portal-context"],
     queryFn: () => api("/api/audit/portal-context"),
@@ -179,22 +195,23 @@ export default function AuditPortalPage() {
   }
 
   const isAuditor = ctxQ.data.role === "auditor";
-  const content = <PortalBody isAuditor={isAuditor} userName={ctxQ.data.name} />;
+  const content = <PortalBody isAuditor={isAuditor} userName={ctxQ.data.name} lang={lang} onToggleLang={toggleLang} />;
   // المراجع الخارجي: غلاف مستقل أنيق بدون قوائم النظام — الفريق: داخل تخطيط النظام
-  if (isAuditor) return <AuditorShell userName={ctxQ.data.name}>{content}</AuditorShell>;
+  if (isAuditor) return <AuditorShell userName={ctxQ.data.name} lang={lang} onToggleLang={toggleLang}>{content}</AuditorShell>;
   return <Layout>{content}</Layout>;
 }
 
-function AuditorShell({ userName, children }: { userName: string; children: React.ReactNode }) {
+function AuditorShell({ userName, children, lang, onToggleLang }: { userName: string; children: React.ReactNode; lang: "ar" | "en"; onToggleLang: () => void }) {
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
     window.location.href = "/login";
   };
   return (
-    <div dir="rtl" className="audit-portal min-h-[100dvh] bg-[#f4f7f5] text-[#17363a]">
+    <div dir={lang === "ar" ? "rtl" : "ltr"} className="audit-portal min-h-[100dvh] bg-[#f4f7f5] text-[#17363a]">
       <header className="sticky top-0 z-40 border-b border-[#dbe5df] bg-[#102f35] text-white shadow-lg shadow-[#102f35]/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={onToggleLang} className="border-white/20 text-white hover:bg-white/10">{PORTAL_COPY[lang].language}</Button>
             <div className="rounded-xl bg-[#d8b56d] text-[#102f35] p-2.5"><Landmark className="h-5 w-5" /></div>
             <div>
               <p className="font-extrabold leading-tight">بوابة المراجعة المالية</p>
@@ -215,7 +232,7 @@ function AuditorShell({ userName, children }: { userName: string; children: Reac
   );
 }
 
-function PortalBody({ isAuditor, userName }: { isAuditor: boolean; userName: string }) {
+function PortalBody({ isAuditor, userName, lang, onToggleLang }: { isAuditor: boolean; userName: string; lang: "ar" | "en"; onToggleLang: () => void }) {
   const { user } = useAuth();
   const isAdmin = !isAuditor && user?.role === "admin";
   const qc = useQueryClient();
@@ -244,7 +261,7 @@ function PortalBody({ isAuditor, userName }: { isAuditor: boolean; userName: str
   const o = overviewQ.data;
 
   return (
-    <div dir="rtl" className={`${isAuditor ? "space-y-5" : "page-container space-y-5"} audit-portal audit-workspace`}>
+    <div dir={lang === "ar" ? "rtl" : "ltr"} className={`${isAuditor ? "space-y-5" : "page-container space-y-5"} audit-portal audit-workspace`}>
       <PortalTheme />
       {!isAuditor && (
         <div className="flex items-start justify-between flex-wrap gap-3 border-b border-[#dce5df] pb-5">
@@ -253,7 +270,7 @@ function PortalBody({ isAuditor, userName }: { isAuditor: boolean; userName: str
             <h1 className="text-2xl font-extrabold flex items-center gap-2 text-[#17363a]"><Landmark className="h-6 w-6 text-[#b48b46]" /> بوابة المراجعة المالية</h1>
             <p className="text-sm text-slate-500 mt-1">ملف المراجعة الخارجي · مكتب مهام كابيتال</p>
           </div>
-          <NewPeriodDialog onDone={refresh} />
+            <div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={onToggleLang}>{PORTAL_COPY[lang].language}</Button><NewPeriodDialog onDone={refresh} /></div>
         </div>
       )}
 
@@ -280,7 +297,7 @@ function PortalBody({ isAuditor, userName }: { isAuditor: boolean; userName: str
       {o && (
         <>
           <div className="flex items-center justify-between rounded-xl border border-[#d5e3da] bg-white px-4 py-2.5 shadow-sm">
-            <div><span className="text-xs font-bold text-[#a7803e]">لوحة القيادة</span><span className="text-sm font-bold text-[#17363a] mr-3">جاهزية الملف {o.stats.progress}% · {o.stats.total} متطلب</span></div>
+            <div><span className="text-xs font-bold text-[#a7803e]">لوحة القيادة</span><span className="text-sm font-bold text-[#17363a] mr-3">{PORTAL_COPY[lang].readiness} {o.stats.progress}% · {o.stats.total}</span></div>
             <Button variant="ghost" size="sm" onClick={() => setShowCommandCenter(!showCommandCenter)}>{showCommandCenter ? "إخفاء الملخص" : "عرض الملخص"} <ChevronDown className={`h-4 w-4 mr-1 transition-transform ${showCommandCenter ? "rotate-180" : ""}`} /></Button>
           </div>
           {showCommandCenter && <AuditCommandCenter o={o} onSectionClick={(section) => { setFocusSection(section); setActiveTab("requirements"); }} />}
@@ -306,18 +323,22 @@ function PortalBody({ isAuditor, userName }: { isAuditor: boolean; userName: str
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="audit-tabs">
             <TabsList className="sticky top-2 z-20 flex-wrap h-auto bg-white/95 backdrop-blur border border-[#d5e3da] shadow-sm">
-              <TabsTrigger value="requirements"><ListChecks className="h-4 w-4 ml-1" /> المتطلبات <span className="audit-tab-count mr-1">{o.requirements.length}</span></TabsTrigger>
-              <TabsTrigger value="files"><FolderOpen className="h-4 w-4 ml-1" /> مكتبة الملفات <span className="audit-tab-count mr-1">{o.files.length}</span></TabsTrigger>
-              {!isAuditor && <TabsTrigger value="activity"><Activity className="h-4 w-4 ml-1" /> سجل النشاط</TabsTrigger>}
+              <TabsTrigger value="requirements"><ListChecks className="h-4 w-4 ml-1" /> {PORTAL_COPY[lang].requirements} <span className="audit-tab-count mr-1">{o.requirements.length}</span></TabsTrigger>
+              <TabsTrigger value="files"><FolderOpen className="h-4 w-4 ml-1" /> {PORTAL_COPY[lang].files} <span className="audit-tab-count mr-1">{o.files.length}</span></TabsTrigger>
+              {!isAuditor && <TabsTrigger value="activity"><Activity className="h-4 w-4 ml-1" /> {PORTAL_COPY[lang].activity}</TabsTrigger>}
+              {!isAuditor && <TabsTrigger value="analytics"><Activity className="h-4 w-4 ml-1" /> {PORTAL_COPY[lang].analytics}</TabsTrigger>}
+              <TabsTrigger value="statements"><FileText className="h-4 w-4 ml-1" /> {PORTAL_COPY[lang].statements}</TabsTrigger>
               {isAdmin && <TabsTrigger value="accounts"><UserPlus className="h-4 w-4 ml-1" /> حسابات المراجعين</TabsTrigger>}
             </TabsList>
 
             <TabsContent value="requirements" className="mt-4">
-              <RequirementsTab o={o} isAuditor={isAuditor} periodId={periodId!} onDone={refresh} focusSection={focusSection} />
+              <RequirementsTab o={o} isAuditor={isAuditor} periodId={periodId!} onDone={refresh} focusSection={focusSection} lang={lang} />
             </TabsContent>
             <TabsContent value="files" className="mt-4">
               <FilesTab o={o} isAuditor={isAuditor} periodId={periodId!} onDone={refresh} />
             </TabsContent>
+            {!isAuditor && <TabsContent value="analytics" className="mt-4"><AnalyticsTab o={o} periodId={periodId!} /></TabsContent>}
+            <TabsContent value="statements" className="mt-4"><StatementsTab o={o} isAuditor={isAuditor} periodId={periodId!} onDone={refresh} /></TabsContent>
             {!isAuditor && (
               <TabsContent value="activity" className="mt-4">
                 <ActivityTab periodId={periodId!} />
@@ -399,8 +420,33 @@ function AuditCommandCenter({ o, onSectionClick }: { o: any; onSectionClick: (se
   </section>;
 }
 
+function AnalyticsTab({ o, periodId }: { o: any; periodId: number }) {
+  const reqs = o?.requirements ?? [];
+  const total = Math.max(1, reqs.length);
+  const activityQ = useQuery<any[]>({ queryKey: ["/api/audit/periods", periodId, "activity"], queryFn: () => api(`/api/audit/periods/${periodId}/activity`), enabled: !!periodId });
+  const activity = activityQ.data ?? [];
+  const byPriority = ["high", "normal", "low"].map((p) => [p, reqs.filter((r: any) => r.priority === p).length] as const);
+  const approvals = activity.filter((a: any) => ["approve", "reject", "download"].includes(a.action));
+  return <div className="grid lg:grid-cols-3 gap-4">
+    <Card><CardHeader><CardTitle className="text-sm">توزيع الحالات</CardTitle></CardHeader><CardContent><div className="h-4 rounded-full overflow-hidden flex bg-[#edf1ee]">{Object.entries(REQ_STATUS).map(([k]) => <div key={k} className={`h-full ${k === "approved" ? "bg-[#287052]" : k === "rejected" ? "bg-[#c35d55]" : k === "uploaded" ? "bg-[#4b9a72]" : "bg-[#d8b56d]"}`} style={{ width: `${reqs.filter((r: any) => r.status === k).length / total * 100}%` }} />)}</div><div className="mt-4 grid grid-cols-2 gap-2">{Object.entries(REQ_STATUS).map(([k, v]) => <div key={k} className="text-xs flex justify-between"><span>{v.label}</span><b>{reqs.filter((r: any) => r.status === k).length}</b></div>)}</div></CardContent></Card>
+    <Card><CardHeader><CardTitle className="text-sm">إنجاز الأقسام</CardTitle></CardHeader><CardContent className="space-y-3">{Object.entries(reqs.reduce((m: any, r: any) => { const k = r.section || "عام"; (m[k] ||= []).push(r); return m; }, {})).map(([name, rows]: any) => { const done = rows.filter((r: any) => ["approved", "uploaded", "ready", "not_applicable"].includes(r.status)).length; return <div key={name}><div className="flex justify-between text-xs mb-1"><span>{name}</span><b>{done}/{rows.length}</b></div><Progress value={done / rows.length * 100} className="h-2" /></div>; })}</CardContent></Card>
+    <Card><CardHeader><CardTitle className="text-sm">نشاط مكتب المراجعة</CardTitle></CardHeader><CardContent className="space-y-3"><div className="grid grid-cols-3 gap-2 text-center">{["approve", "reject", "download"].map((a) => <div key={a} className="rounded-lg bg-[#f2f8f3] p-3"><b className="text-xl text-[#17363a]">{approvals.filter((x: any) => x.action === a).length}</b><p className="text-[10px] text-slate-500">{a === "approve" ? "اعتماد" : a === "reject" ? "إرجاع" : "تنزيل"}</p></div>)}</div><p className="text-xs font-bold text-[#a7803e]">الأولوية القصوى المفتوحة</p>{o.requirements.filter((r: any) => r.priority === "high" && !["approved", "not_applicable"].includes(r.status)).slice(0, 5).map((r: any) => <div key={r.id} className="text-xs border-b pb-2">{r.title}</div>)}</CardContent></Card>
+    <Card className="lg:col-span-3"><CardHeader><CardTitle className="text-sm">الأولوية</CardTitle></CardHeader><CardContent className="grid sm:grid-cols-3 gap-3">{byPriority.map(([key, count]) => <div key={key} className="rounded-xl border border-[#d5e3da] p-4"><p className="text-xs text-slate-500">{key === "high" ? "عاجل" : key === "normal" ? "عادي" : "منخفض"}</p><b className="text-2xl text-[#17363a]">{count}</b></div>)}</CardContent></Card>
+  </div>;
+}
+
+function StatementsTab({ o, isAuditor, periodId, onDone }: { o: any; isAuditor: boolean; periodId: number; onDone: () => void }) {
+  const groups = [
+    ["financial_statements", "عام"],
+    ["statements_draft", "مسودة"],
+    ["statements_approved", "معتمدة"],
+    ["statements_stamped", "معتمدة ومختومة"],
+  ];
+  return <div className="grid lg:grid-cols-4 gap-4">{groups.map(([category, label]) => { const files = o.files.filter((f: any) => f.category === category); return <Card key={category} className="min-h-48"><CardHeader className="pb-2"><CardTitle className="text-sm flex justify-between">{label}<Badge className="audit-status-badge bg-[#f2f8f3] text-[#287052]">{files.length}</Badge></CardTitle></CardHeader><CardContent className="space-y-2">{files.length ? files.map((f: any) => <FileRow key={f.id} f={f} isAuditor={isAuditor} onDone={onDone} />) : <div className="py-8 text-center text-xs text-slate-400"><FileText className="h-5 w-5 mx-auto mb-2 opacity-50" />لا توجد ملفات</div>}{!isAuditor && <UploadFileDialog periodId={periodId} onDone={onDone} defaultCategory={category} />}</CardContent></Card>; })}</div>;
+}
+
 // ===== تبويب المتطلبات =====
-function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection }: { o: any; isAuditor: boolean; periodId: number; onDone: () => void; focusSection?: string | null }) {
+function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection, lang }: { o: any; isAuditor: boolean; periodId: number; onDone: () => void; focusSection?: string | null; lang?: "ar" | "en" }) {
   const { toast } = useToast();
   const [expanded, setExpanded] = useState<number | null>(null);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
@@ -451,14 +497,14 @@ function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection }: { o: 
                   <div className="audit-req-head flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-bold text-sm text-[#17363a]">{r.title}</p>
+                    <p className="font-bold text-sm text-[#17363a]">{lang === "en" && r.titleEn ? r.titleEn : r.title}</p>
                     <Badge className={`audit-status-badge ${st.cls}`}>{st.label}</Badge>
                     {r.priority === "high" && <Badge className="audit-status-badge bg-red-100 text-red-700">عاجل</Badge>}
                     <Badge className="audit-status-badge bg-[#f8fbf9] text-[#70827e] border-[#d5e3da]">{r.source === "auditor" ? "طلب المراجع" : "بند داخلي"}</Badge>
                     {r.category && <Badge className="audit-status-badge bg-[#f2f8f3] text-[#287052] border-[#c9dfd3]">{CATEGORY_LABELS[r.category] || r.category}</Badge>}
                     {r.assigneeName && <Badge className="audit-status-badge bg-[#f2f8f3] text-[#287052] border-[#c9dfd3]">المسؤول: {r.assigneeName}</Badge>}
                   </div>
-                  {r.titleEn && <p className="text-xs text-gray-400 mt-0.5" dir="ltr" style={{ textAlign: "right" }}>{r.titleEn}</p>}
+                  {(lang !== "en" ? r.titleEn : r.title) && <p className="text-xs text-gray-400 mt-0.5" dir={lang === "en" ? "rtl" : "ltr"}>{lang !== "en" ? r.titleEn : r.title}</p>}
                   {r.description && <p className="text-sm text-gray-600 mt-1">{r.description}</p>}
                   <p className="text-xs text-gray-400 mt-1">أضافه {r.createdByName} • {fmtDT(r.createdAt)}{r.dueDate ? ` • الاستحقاق ${r.dueDate}` : ""}</p>
                 </div>
@@ -717,11 +763,11 @@ function FilePreviewDialog({ f, index, total, onPrev, onNext, onClose }: { f: an
   </Dialog>;
 }
 
-function UploadFileDialog({ periodId, requirementId, onDone, small }: { periodId: number; requirementId?: number; onDone: () => void; small?: boolean }) {
+function UploadFileDialog({ periodId, requirementId, onDone, small, defaultCategory = "other" }: { periodId: number; requirementId?: number; onDone: () => void; small?: boolean; defaultCategory?: string }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("other");
+  const [category, setCategory] = useState(defaultCategory);
   const [files, setFiles] = useState<File[]>([]);
   const [result, setResult] = useState<{ uploaded: any[]; failed: any[] } | null>(null);
   const [busy, setBusy] = useState(false);

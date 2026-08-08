@@ -58,6 +58,8 @@ async function logActivity(periodId: number | null, ctx: Ctx, action: string, de
 
 const FILE_CATEGORIES = new Set([
   "financial_statements", "trial_balance", "banks", "expenses", "revenues", "taxes", "contracts", "payroll", "inventory", "other",
+  // القوائم المالية حسب مرحلتها: مسودة / معتمدة / معتمدة ومختومة
+  "statements_draft", "statements_approved", "statements_stamped",
 ]);
 
 const ALLOWED_MIME = new Set([
