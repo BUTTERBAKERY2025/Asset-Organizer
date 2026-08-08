@@ -76,11 +76,35 @@ function fmtSize(b?: number | null) {
 function PortalTheme() {
   return (
     <style>{`
-      .audit-portal { --audit-ink:#17363a; --audit-deep:#102f35; --audit-gold:#b48b46; }
-      .audit-portal .border { border-color:#dfe8e2; }
-      .audit-portal button:focus-visible, .audit-portal [role="tab"]:focus-visible, .audit-portal input:focus-visible, .audit-portal [role="combobox"]:focus-visible { outline:2px solid #d8b56d; outline-offset:2px; }
-      .audit-portal [data-state="active"] { background:#e3f0e8; color:#22634d; box-shadow:none; }
-      .audit-portal .bg-emerald-700 { background-color:#287052 !important; }
+      .audit-portal {
+        --audit-surface:#ffffff; --audit-surface-raised:#f8fbf9; --audit-surface-tint:#f2f8f3;
+        --audit-border:#d5e3da; --audit-border-soft:#e3ebe5; --audit-ink:#17363a; --audit-deep:#102f35;
+        --audit-muted:#70827e; --audit-gold:#d8b56d; --audit-gold-deep:#a7803e;
+        --audit-success:#287052; --audit-success-soft:#e3f0e8; --audit-danger:#c35d55; --audit-warn:#c79b4d;
+        --audit-radius:.75rem; --audit-shadow:0 4px 16px rgba(16,47,53,.06);
+      }
+      .audit-portal .border { border-color:var(--audit-border); }
+      .audit-portal .bg-white, .audit-portal [data-radix-dialog-content] { background-color:var(--audit-surface); }
+      .audit-portal button:focus-visible, .audit-portal [role="tab"]:focus-visible, .audit-portal input:focus-visible, .audit-portal [role="combobox"]:focus-visible { outline:2px solid var(--audit-gold); outline-offset:2px; }
+      .audit-portal [data-state="active"] { background:var(--audit-success-soft); color:var(--audit-success); box-shadow:none; }
+      .audit-portal .bg-emerald-700 { background-color:var(--audit-success) !important; }
+      .audit-portal .rounded-lg, .audit-portal .rounded-xl, .audit-portal .rounded-2xl { border-radius:var(--audit-radius); }
+      .audit-portal .shadow-sm, .audit-portal .shadow-md { box-shadow:var(--audit-shadow); }
+      .audit-portal [data-radix-dialog-content] { border-color:var(--audit-border); border-radius:var(--audit-radius); }
+      .audit-portal [data-radix-dialog-content] [data-slot="dialog-header"] { padding-bottom:.75rem; border-bottom:1px solid var(--audit-border-soft); }
+      .audit-portal [data-radix-dialog-content] [data-slot="dialog-title"] { color:var(--audit-ink); font-size:1rem; font-weight:800; }
+      .audit-portal [data-radix-dialog-content] label { color:var(--audit-ink); font-size:.75rem; font-weight:700; }
+      .audit-portal [data-radix-dialog-content] button:not(.text-white) { border-radius:.625rem; }
+      .audit-portal [data-radix-dialog-content] .bg-emerald-700 { color:#fff; }
+      .audit-portal .audit-tab-count { color:var(--audit-gold-deep); font-size:10px; font-weight:800; }
+      .audit-portal .audit-caption { color:var(--audit-muted); font-size:.75rem; }
+      .audit-portal .audit-section-toggle[data-open="true"] { background:var(--audit-success-soft); border-color:#b9d3c2; color:var(--audit-success); }
+      .audit-portal .audit-status-badge { border:1px solid transparent; border-radius:999px; padding:.2rem .55rem; font-size:10px; font-weight:800; line-height:1.35; }
+      .audit-portal .audit-status-badge[class*="bg-red"] { background:#fff1ef; color:var(--audit-danger); border-color:#f0c9c4; }
+      .audit-portal .audit-status-badge[class*="bg-emerald"] { background:var(--audit-success-soft); color:var(--audit-success); border-color:#c9dfd3; }
+      .audit-portal .audit-status-badge[class*="bg-amber"] { background:#fff7e8; color:#8b651f; border-color:#ead8ad; }
+      .audit-portal .audit-status-badge[class*="bg-blue"], .audit-portal .audit-status-badge[class*="bg-cyan"] { background:#edf5f5; color:#276b73; border-color:#c9dfe0; }
+      .audit-portal .audit-status-badge[class*="bg-gray"] { background:#f1f4f2; color:var(--audit-muted); border-color:var(--audit-border); }
       .audit-portal .audit-requirement { animation: auditRise .35s ease both; }
       .audit-portal .audit-section-items > :nth-child(2) { animation-delay:40ms; }
       .audit-portal .audit-section-items > :nth-child(3) { animation-delay:80ms; }
@@ -282,8 +306,8 @@ function PortalBody({ isAuditor, userName }: { isAuditor: boolean; userName: str
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="audit-tabs">
             <TabsList className="sticky top-2 z-20 flex-wrap h-auto bg-white/95 backdrop-blur border border-[#d5e3da] shadow-sm">
-              <TabsTrigger value="requirements"><ListChecks className="h-4 w-4 ml-1" /> المتطلبات <span className="mr-1 text-[10px] opacity-60">{o.requirements.length}</span></TabsTrigger>
-              <TabsTrigger value="files"><FolderOpen className="h-4 w-4 ml-1" /> مكتبة الملفات <span className="mr-1 text-[10px] opacity-60">{o.files.length}</span></TabsTrigger>
+              <TabsTrigger value="requirements"><ListChecks className="h-4 w-4 ml-1" /> المتطلبات <span className="audit-tab-count mr-1">{o.requirements.length}</span></TabsTrigger>
+              <TabsTrigger value="files"><FolderOpen className="h-4 w-4 ml-1" /> مكتبة الملفات <span className="audit-tab-count mr-1">{o.files.length}</span></TabsTrigger>
               {!isAuditor && <TabsTrigger value="activity"><Activity className="h-4 w-4 ml-1" /> سجل النشاط</TabsTrigger>}
               {isAdmin && <TabsTrigger value="accounts"><UserPlus className="h-4 w-4 ml-1" /> حسابات المراجعين</TabsTrigger>}
             </TabsList>
@@ -428,11 +452,11 @@ function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection }: { o: 
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-bold text-sm text-[#17363a]">{r.title}</p>
-                    <Badge className={st.cls}>{st.label}</Badge>
-                    {r.priority === "high" && <Badge className="bg-red-100 text-red-700">عاجل</Badge>}
-                    <Badge variant="outline">{r.source === "auditor" ? "طلب المراجع" : "بند داخلي"}</Badge>
-                    {r.category && <Badge variant="secondary">{CATEGORY_LABELS[r.category] || r.category}</Badge>}
-                    {r.assigneeName && <Badge variant="outline" className="text-indigo-700 border-indigo-200">المسؤول: {r.assigneeName}</Badge>}
+                    <Badge className={`audit-status-badge ${st.cls}`}>{st.label}</Badge>
+                    {r.priority === "high" && <Badge className="audit-status-badge bg-red-100 text-red-700">عاجل</Badge>}
+                    <Badge className="audit-status-badge bg-[#f8fbf9] text-[#70827e] border-[#d5e3da]">{r.source === "auditor" ? "طلب المراجع" : "بند داخلي"}</Badge>
+                    {r.category && <Badge className="audit-status-badge bg-[#f2f8f3] text-[#287052] border-[#c9dfd3]">{CATEGORY_LABELS[r.category] || r.category}</Badge>}
+                    {r.assigneeName && <Badge className="audit-status-badge bg-[#f2f8f3] text-[#287052] border-[#c9dfd3]">المسؤول: {r.assigneeName}</Badge>}
                   </div>
                   {r.titleEn && <p className="text-xs text-gray-400 mt-0.5" dir="ltr" style={{ textAlign: "right" }}>{r.titleEn}</p>}
                   {r.description && <p className="text-sm text-gray-600 mt-1">{r.description}</p>}
@@ -501,7 +525,8 @@ function RequirementsTab({ o, isAuditor, periodId, onDone, focusSection }: { o: 
           <div key={sec.name} className="space-y-2">
              <button
                className="audit-section-toggle w-full flex items-center justify-between rounded-xl border border-[#d7e4dc] bg-[#f8faf8] hover:bg-[#edf5ef] px-4 py-3 transition-colors"
-               onClick={() => { const next = !isOpen; setActiveSection(next ? sec.name : null); setOpenSections(next ? { [sec.name]: true } : {}); }}
+                data-open={isOpen ? "true" : "false"}
+                onClick={() => { const next = !isOpen; setActiveSection(next ? sec.name : null); setOpenSections(next ? { [sec.name]: true } : {}); }}
               data-testid={`audit-section-${sec.name}`}
             >
               <span className="font-bold text-sm flex items-center gap-2">
