@@ -1,0 +1,392 @@
+// بوابة المراجعة المالية — Audit Portal
+// فريق الإدارة المالية (admin / financial_manager) يدير الفترات والملفات والمتطلبات،
+// ومكتب المراجعة الخارجي (external_auditor) يدخل بواجهة خاصة: يشاهد ويحمّل الملفات،
+// يضيف طلبات، يعتمد أو يرفض البنود، ويعلّق — ولا يصل لأي جزء آخر من النظام.
+import type { Express, RequestHandler } from "express";
+import { db } from "./db";
+import { eq, and, desc, asc, inArray } from "drizzle-orm";
+import { isAuthenticated } from "./auth";
+import { storage } from "./storage";
+import {
+  auditPeriods,
+  auditRequirements,
+  auditFiles,
+  auditComments,
+  auditActivityLog,
+  users,
+} from "@shared/schema";
+import { uploadToSupabase, downloadFromSupabase, deleteFromSupabase } from "./supabase-storage";
+
+type Ctx = { id: string; name: string; role: string; isAuditor: boolean; isTeam: boolean };
+
+async function getCtx(req: any): Promise<Ctx | null> {
+  const userId = req.session?.userId;
+  if (!userId) return null;
+  const [u] = await db
+    .select({ id: users.id, name: users.name, username: users.username, role: users.role, isActive: users.isActive })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  if (!u || u.isActive !== "active") return null;
+  const isTeam = u.role === "admin" || u.role === "financial_manager";
+  const isAuditor = u.role === "external_auditor";
+  return { id: u.id, name: u.name || u.username || "مستخدم", role: u.role, isAuditor, isTeam };
+}
+
+// فريق الإدارة المالية فقط (إدارة كاملة)
+const requireTeam: RequestHandler = async (req: any, res, next) => {
+  const ctx = await getCtx(req);
+  if (!ctx || !ctx.isTeam) return res.status(403).json({ error: "هذه البوابة متاحة لفريق الإدارة المالية فقط" });
+  req.auditCtx = ctx;
+  next();
+};
+
+// الفريق أو المراجع الخارجي (اطلاع وتفاعل)
+const requireTeamOrAuditor: RequestHandler = async (req: any, res, next) => {
+  const ctx = await getCtx(req);
+  if (!ctx || (!ctx.isTeam && !ctx.isAuditor)) return res.status(403).json({ error: "غير مصرح بالدخول لبوابة المراجعة" });
+  req.auditCtx = ctx;
+  next();
+};
+
+async function logActivity(periodId: number | null, ctx: Ctx, action: string, details?: string) {
+  try {
+    await db.insert(auditActivityLog).values({ periodId, userName: ctx.name, isAuditor: ctx.isAuditor, action, details: details?.slice(0, 500) });
+  } catch {}
+}
+
+const FILE_CATEGORIES = new Set([
+  "financial_statements", "trial_balance", "banks", "expenses", "revenues", "taxes", "contracts", "payroll", "inventory", "other",
+]);
+
+const ALLOWED_MIME = new Set([
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // xlsx
+  "application/vnd.ms-excel", // xls
+  "text/csv",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // docx
+  "application/msword",
+  "image/png", "image/jpeg",
+  "application/zip", "application/x-zip-compressed",
+]);
+const ALLOWED_EXT = /\.(pdf|xlsx|xls|csv|docx|doc|png|jpg|jpeg|zip)$/i;
+
+export function registerAuditPortalRoutes(app: Express) {
+  // سياق البوابة: من أنا (فريق أم مراجع خارجي)
+  app.get("/api/audit/portal-context", isAuthenticated, async (req: any, res) => {
+    const ctx = await getCtx(req);
+    if (!ctx || (!ctx.isTeam && !ctx.isAuditor)) return res.status(403).json({ error: "غير مصرح" });
+    res.json({ name: ctx.name, role: ctx.isAuditor ? "auditor" : "team" });
+  });
+
+  // ===== الفترات المالية =====
+  app.get("/api/audit/periods", isAuthenticated, requireTeamOrAuditor, async (_req, res) => {
+    try {
+      const rows = await db.select().from(auditPeriods).orderBy(desc(auditPeriods.id));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.post("/api/audit/periods", isAuthenticated, requireTeam, async (req: any, res) => {
+    try {
+      const { title, periodType, fiscalYear, periodStart, periodEnd, notes } = req.body || {};
+      if (!title || String(title).trim().length < 3) return res.status(400).json({ error: "عنوان الفترة مطلوب" });
+      const year = parseInt(fiscalYear);
+      if (!year || year < 2000 || year > 2100) return res.status(400).json({ error: "السنة المالية غير صحيحة" });
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(periodStart || "") || !/^\d{4}-\d{2}-\d{2}$/.test(periodEnd || "")) {
+        return res.status(400).json({ error: "تواريخ الفترة مطلوبة" });
+      }
+      if (periodEnd < periodStart) return res.status(400).json({ error: "نهاية الفترة قبل بدايتها" });
+      const pType = ["annual", "semi_annual", "quarterly"].includes(periodType) ? periodType : "semi_annual";
+      const [row] = await db.insert(auditPeriods).values({
+        title: String(title).trim().slice(0, 200),
+        periodType: pType,
+        fiscalYear: year,
+        periodStart, periodEnd,
+        notes: notes ? String(notes).slice(0, 1000) : null,
+        createdBy: req.auditCtx.name,
+      }).returning();
+      await logActivity(row.id, req.auditCtx, "create_period", row.title);
+      res.json(row);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.patch("/api/audit/periods/:id", isAuthenticated, requireTeam, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const allowed: any = {};
+      if (req.body.title) allowed.title = String(req.body.title).trim().slice(0, 200);
+      if (req.body.status && ["active", "under_review", "approved", "closed"].includes(req.body.status)) allowed.status = req.body.status;
+      if (req.body.notes !== undefined) allowed.notes = req.body.notes ? String(req.body.notes).slice(0, 1000) : null;
+      allowed.updatedAt = new Date();
+      const [row] = await db.update(auditPeriods).set(allowed).where(eq(auditPeriods.id, id)).returning();
+      if (!row) return res.status(404).json({ error: "الفترة غير موجودة" });
+      await logActivity(id, req.auditCtx, "update_period", JSON.stringify(Object.keys(allowed)));
+      res.json(row);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.delete("/api/audit/periods/:id", isAuthenticated, requireTeam, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const files = await db.select().from(auditFiles).where(eq(auditFiles.periodId, id));
+      for (const f of files) { try { await deleteFromSupabase(f.storagePath); } catch {} }
+      const [row] = await db.delete(auditPeriods).where(eq(auditPeriods.id, id)).returning();
+      if (!row) return res.status(404).json({ error: "الفترة غير موجودة" });
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ===== نظرة شاملة للفترة: ملفات + متطلبات + تعليقات + نسبة الإنجاز =====
+  app.get("/api/audit/periods/:id/overview", isAuthenticated, requireTeamOrAuditor, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [period] = await db.select().from(auditPeriods).where(eq(auditPeriods.id, id));
+      if (!period) return res.status(404).json({ error: "الفترة غير موجودة" });
+      const [files, reqs] = await Promise.all([
+        db.select().from(auditFiles).where(eq(auditFiles.periodId, id)).orderBy(desc(auditFiles.id)),
+        db.select().from(auditRequirements).where(eq(auditRequirements.periodId, id)).orderBy(desc(auditRequirements.id)),
+      ]);
+      const reqIds = reqs.map(r => r.id);
+      const comments = reqIds.length
+        ? await db.select().from(auditComments).where(inArray(auditComments.requirementId, reqIds)).orderBy(asc(auditComments.id))
+        : [];
+      const total = reqs.length;
+      const approved = reqs.filter(r => r.status === "approved").length;
+      const uploaded = reqs.filter(r => r.status === "uploaded").length;
+      res.json({
+        period, files, requirements: reqs, comments,
+        stats: { total, approved, uploaded, progress: total ? Math.round((approved / total) * 100) : 0 },
+      });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ===== رفع ملف (الفريق فقط) =====
+  app.post("/api/audit/periods/:id/files", isAuthenticated, requireTeam, async (req: any, res) => {
+    try {
+      const periodId = parseInt(req.params.id);
+      const [period] = await db.select().from(auditPeriods).where(eq(auditPeriods.id, periodId));
+      if (!period) return res.status(404).json({ error: "الفترة غير موجودة" });
+      if (period.status === "closed") return res.status(400).json({ error: "الفترة مغلقة" });
+
+      const multer = (await import("multer")).default;
+      const upload = multer({
+        storage: multer.memoryStorage(),
+        limits: { fileSize: 50 * 1024 * 1024 },
+        fileFilter: (_req, file, cb) => {
+          if (ALLOWED_MIME.has(file.mimetype) || ALLOWED_EXT.test(file.originalname || "")) cb(null, true);
+          else cb(new Error("نوع الملف غير مدعوم — المسموح: PDF, Excel, Word, CSV, صور, ZIP"));
+        },
+      }).single("file");
+
+      upload(req, res, async (err: any) => {
+        if (err) return res.status(400).json({ error: err.message || "فشل رفع الملف" });
+        try {
+          if (!req.file) return res.status(400).json({ error: "لم يتم إرفاق ملف" });
+          const title = String(req.body.title || "").trim();
+          if (title.length < 2 || title.length > 300) return res.status(400).json({ error: "عنوان الملف مطلوب" });
+          const category = FILE_CATEGORIES.has(req.body.category) ? req.body.category : "other";
+          let requirementId: number | null = null;
+          if (req.body.requirementId) {
+            const rid = parseInt(req.body.requirementId);
+            const [r] = await db.select().from(auditRequirements)
+              .where(and(eq(auditRequirements.id, rid), eq(auditRequirements.periodId, periodId)));
+            if (!r) return res.status(400).json({ error: "المتطلب غير موجود في هذه الفترة" });
+            requirementId = rid;
+          }
+
+          let originalName = req.file.originalname || "file";
+          try {
+            const decoded = Buffer.from(originalName, "latin1").toString("utf8");
+            if (!decoded.includes("\uFFFD")) originalName = decoded;
+          } catch {}
+          const extMatch = originalName.match(ALLOWED_EXT);
+          const ext = extMatch ? extMatch[0].toLowerCase() : "";
+          const storageName = `audit_${periodId}_${Date.now()}${ext || ".bin"}`;
+          const uploadedFile = await uploadToSupabase(req.file.buffer, storageName, req.file.mimetype || "application/octet-stream");
+          if (!uploadedFile) return res.status(500).json({ error: "فشل رفع الملف إلى التخزين" });
+
+          const [row] = await db.insert(auditFiles).values({
+            periodId, requirementId, category, title,
+            fileName: originalName,
+            storagePath: uploadedFile.path,
+            fileSize: req.file.size,
+            mimeType: req.file.mimetype,
+            uploadedByName: req.auditCtx.name,
+          }).returning();
+
+          // ربط بمتطلب → حالته تصبح «مرفوع»
+          if (requirementId) {
+            await db.update(auditRequirements)
+              .set({ status: "uploaded", updatedAt: new Date() })
+              .where(and(eq(auditRequirements.id, requirementId), inArray(auditRequirements.status, ["requested", "in_progress", "rejected"])));
+          }
+          await logActivity(periodId, req.auditCtx, "upload", `${title} (${originalName})`);
+          res.json(row);
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+      });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ===== تحميل ملف (الفريق + المراجع) مع تسجيل التحميل =====
+  app.get("/api/audit/files/:id/download", isAuthenticated, requireTeamOrAuditor, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [f] = await db.select().from(auditFiles).where(eq(auditFiles.id, id));
+      if (!f) return res.status(404).json({ error: "الملف غير موجود" });
+      const data = await downloadFromSupabase(f.storagePath);
+      if (!data) return res.status(404).json({ error: "تعذر جلب الملف من التخزين" });
+      await logActivity(f.periodId, req.auditCtx, "download", f.title);
+      res.setHeader("Content-Type", f.mimeType || "application/octet-stream");
+      res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(f.fileName)}`);
+      res.send(Buffer.from(await data.arrayBuffer()));
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.delete("/api/audit/files/:id", isAuthenticated, requireTeam, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [f] = await db.select().from(auditFiles).where(eq(auditFiles.id, id));
+      if (!f) return res.status(404).json({ error: "الملف غير موجود" });
+      try { await deleteFromSupabase(f.storagePath); } catch {}
+      await db.delete(auditFiles).where(eq(auditFiles.id, id));
+      await logActivity(f.periodId, req.auditCtx, "delete_file", f.title);
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ===== المتطلبات =====
+  app.post("/api/audit/periods/:id/requirements", isAuthenticated, requireTeamOrAuditor, async (req: any, res) => {
+    try {
+      const periodId = parseInt(req.params.id);
+      const [period] = await db.select().from(auditPeriods).where(eq(auditPeriods.id, periodId));
+      if (!period) return res.status(404).json({ error: "الفترة غير موجودة" });
+      if (period.status === "closed") return res.status(400).json({ error: "الفترة مغلقة" });
+      const title = String(req.body.title || "").trim();
+      if (title.length < 3 || title.length > 300) return res.status(400).json({ error: "عنوان المتطلب مطلوب" });
+      const ctx: Ctx = req.auditCtx;
+      const [row] = await db.insert(auditRequirements).values({
+        periodId,
+        title,
+        description: req.body.description ? String(req.body.description).slice(0, 2000) : null,
+        category: FILE_CATEGORIES.has(req.body.category) ? req.body.category : null,
+        source: ctx.isAuditor ? "auditor" : "internal",
+        priority: ["high", "normal", "low"].includes(req.body.priority) ? req.body.priority : "normal",
+        dueDate: /^\d{4}-\d{2}-\d{2}$/.test(req.body.dueDate || "") ? req.body.dueDate : null,
+        createdByName: ctx.name,
+      }).returning();
+      await logActivity(periodId, ctx, "request", title);
+      res.json(row);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.patch("/api/audit/requirements/:id", isAuthenticated, requireTeamOrAuditor, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const ctx: Ctx = req.auditCtx;
+      const [r] = await db.select().from(auditRequirements).where(eq(auditRequirements.id, id));
+      if (!r) return res.status(404).json({ error: "المتطلب غير موجود" });
+      const status = String(req.body.status || "");
+      // المراجع الخارجي: اعتماد أو رفض فقط، والفريق: جاري التجهيز/مرفوع فقط
+      const allowedByRole = ctx.isAuditor ? ["approved", "rejected"] : ["requested", "in_progress", "uploaded"];
+      if (!allowedByRole.includes(status)) return res.status(403).json({ error: "لا تملك تغيير الحالة إلى هذه القيمة" });
+      const [row] = await db.update(auditRequirements)
+        .set({ status, updatedAt: new Date() })
+        .where(eq(auditRequirements.id, id)).returning();
+      await logActivity(r.periodId, ctx, status === "approved" ? "approve" : status === "rejected" ? "reject" : "update_requirement", r.title);
+      res.json(row);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.delete("/api/audit/requirements/:id", isAuthenticated, requireTeam, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [r] = await db.delete(auditRequirements).where(eq(auditRequirements.id, id)).returning();
+      if (!r) return res.status(404).json({ error: "المتطلب غير موجود" });
+      await logActivity(r.periodId, req.auditCtx, "delete_requirement", r.title);
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ===== التعليقات =====
+  app.post("/api/audit/requirements/:id/comments", isAuthenticated, requireTeamOrAuditor, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [r] = await db.select().from(auditRequirements).where(eq(auditRequirements.id, id));
+      if (!r) return res.status(404).json({ error: "المتطلب غير موجود" });
+      const content = String(req.body.content || "").trim();
+      if (!content || content.length > 2000) return res.status(400).json({ error: "نص التعليق مطلوب (بحد أقصى 2000 حرف)" });
+      const ctx: Ctx = req.auditCtx;
+      const [row] = await db.insert(auditComments).values({
+        requirementId: id, authorName: ctx.name, isAuditor: ctx.isAuditor, content,
+      }).returning();
+      await logActivity(r.periodId, ctx, "comment", r.title);
+      res.json(row);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ===== سجل النشاط (الفريق فقط) =====
+  app.get("/api/audit/periods/:id/activity", isAuthenticated, requireTeam, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const rows = await db.select().from(auditActivityLog)
+        .where(eq(auditActivityLog.periodId, id))
+        .orderBy(desc(auditActivityLog.id)).limit(200);
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ===== حسابات مكتب المراجعة (admin فقط) =====
+  const requireAdminOnly: RequestHandler = async (req: any, res, next) => {
+    const ctx = await getCtx(req);
+    if (!ctx || ctx.role !== "admin") return res.status(403).json({ error: "إدارة حسابات المراجعين متاحة للمدير العام فقط" });
+    req.auditCtx = ctx;
+    next();
+  };
+
+  app.get("/api/audit/auditor-accounts", isAuthenticated, requireAdminOnly, async (_req, res) => {
+    try {
+      const rows = await db.select({ id: users.id, username: users.username, name: users.name, isActive: users.isActive, createdAt: users.createdAt })
+        .from(users).where(eq(users.role, "external_auditor")).orderBy(desc(users.createdAt));
+      res.json(rows);
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.post("/api/audit/auditor-accounts", isAuthenticated, requireAdminOnly, async (req: any, res) => {
+    try {
+      const username = String(req.body.username || "").trim().toLowerCase();
+      const password = String(req.body.password || "");
+      const name = String(req.body.name || "").trim();
+      if (!/^[a-z0-9_.-]{4,50}$/.test(username)) return res.status(400).json({ error: "اسم المستخدم: 4-50 حرفاً إنجليزياً/أرقام فقط" });
+      if (password.length < 8) return res.status(400).json({ error: "كلمة المرور 8 أحرف على الأقل" });
+      if (name.length < 3) return res.status(400).json({ error: "اسم مكتب المراجعة مطلوب" });
+      const [exists] = await db.select({ id: users.id }).from(users).where(eq(users.username, username)).limit(1);
+      if (exists) return res.status(400).json({ error: "اسم المستخدم مستخدم مسبقاً" });
+      const user = await storage.createUser({
+        username, password, name,
+        role: "external_auditor",
+        isActive: "active",
+      } as any);
+      await logActivity(null, req.auditCtx, "create_auditor_account", username);
+      res.json({ id: user.id, username: user.username, name: user.name });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.patch("/api/audit/auditor-accounts/:id", isAuthenticated, requireAdminOnly, async (req: any, res) => {
+    try {
+      const id = req.params.id;
+      const [u] = await db.select({ id: users.id, role: users.role }).from(users).where(eq(users.id, id)).limit(1);
+      if (!u || u.role !== "external_auditor") return res.status(404).json({ error: "حساب المراجع غير موجود" });
+      const patch: any = {};
+      if (req.body.isActive === "active" || req.body.isActive === "inactive") patch.isActive = req.body.isActive;
+      if (req.body.password) {
+        if (String(req.body.password).length < 8) return res.status(400).json({ error: "كلمة المرور 8 أحرف على الأقل" });
+        patch.password = String(req.body.password);
+      }
+      if (!Object.keys(patch).length) return res.status(400).json({ error: "لا يوجد تعديل" });
+      await storage.updateUser(id, patch);
+      await logActivity(null, req.auditCtx, "update_auditor_account", id);
+      res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+}

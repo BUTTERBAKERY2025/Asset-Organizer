@@ -193,6 +193,7 @@ const FloorPlanPage = makeLazy("floor-plan");
 const HRHubPage = makeLazy("hr-hub");
 const MyPortalPage = makeLazy("my-portal");
 const ShareholderPortalPage = makeLazy("shareholder-portal");
+const AuditPortalPage = makeLazy("audit-portal");
 const HREmployeeDocumentsPage = makeLazy("hr/employee-documents");
 const HRLeavesPage = makeLazy("hr/leaves");
 const HRWarningsPage = makeLazy("hr/warnings");
@@ -339,6 +340,7 @@ const Router = React.memo(function Router() {
       {/* HR - الموارد البشرية */}
       <Route path="/my-portal">{() => <ProtectedPage component={MyPortalPage} />}</Route>
       <Route path="/shareholder-portal">{() => <ProtectedPage component={ShareholderPortalPage} />}</Route>
+      <Route path="/audit-portal">{() => <ProtectedPage component={AuditPortalPage} />}</Route>
       <Route path="/hr-hub">{() => <ModulePage component={HRHubPage} module="hr_management" />}</Route>
       <Route path="/hr/employee-documents">{() => <ModulePage component={HREmployeeDocumentsPage} module="hr_documents" />}</Route>
       <Route path="/hr/leaves">{() => <ModulePage component={HRLeavesPage} module="hr_leaves" />}</Route>

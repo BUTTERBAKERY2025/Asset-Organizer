@@ -168,6 +168,8 @@ export default function LoginPage() {
       setLocation("/attendance-check");
     } else if (userData?.role === "shareholder") {
       setLocation(next !== "/" ? next : "/shareholder-portal");
+    } else if (userData?.role === "external_auditor") {
+      setLocation("/audit-portal");
     } else {
       setLocation(next);
     }

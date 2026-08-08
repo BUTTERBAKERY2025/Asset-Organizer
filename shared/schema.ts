@@ -9665,6 +9665,91 @@ export type FinancialReviewCycle = typeof financialReviewCycles.$inferSelect;
 export type FinancialDocument = typeof financialDocuments.$inferSelect;
 export type FinancialDocSigner = typeof financialDocSigners.$inferSelect;
 
+// ============ بوابة المراجعة المالية (Audit Portal) ============
+// فترات مالية (سنوية / نصف سنوية / ربع سنوية) يعمل عليها فريق الإدارة المالية ومكتب المراجعة الخارجي
+export const auditPeriods = pgTable("audit_periods", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(), // مثل: النصف الأول 2026
+  periodType: text("period_type").default("semi_annual").notNull(), // annual, semi_annual, quarterly
+  fiscalYear: integer("fiscal_year").notNull(),
+  periodStart: text("period_start").notNull(), // YYYY-MM-DD
+  periodEnd: text("period_end").notNull(),
+  status: text("status").default("active").notNull(), // active, under_review, approved, closed
+  notes: text("notes"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// متطلبات المراجعة: يطلبها المراجع الخارجي أو تُسجَّل داخلياً، ولها دورة حالة كاملة
+export const auditRequirements = pgTable("audit_requirements", {
+  id: serial("id").primaryKey(),
+  periodId: integer("period_id").notNull().references(() => auditPeriods.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  category: text("category"), // نفس تصنيفات الملفات
+  source: text("source").default("internal").notNull(), // internal, auditor
+  priority: text("priority").default("normal").notNull(), // high, normal, low
+  status: text("status").default("requested").notNull(), // requested, in_progress, uploaded, approved, rejected
+  dueDate: text("due_date"), // YYYY-MM-DD
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_audit_requirements_period").on(table.periodId),
+]);
+
+// ملفات المراجعة (PDF/Excel/صور/مضغوطة) — قد تكون مرتبطة بمتطلب أو ملف عام ضمن تصنيف
+export const auditFiles = pgTable("audit_files", {
+  id: serial("id").primaryKey(),
+  periodId: integer("period_id").notNull().references(() => auditPeriods.id, { onDelete: "cascade" }),
+  requirementId: integer("requirement_id").references(() => auditRequirements.id, { onDelete: "set null" }),
+  category: text("category").default("other").notNull(), // financial_statements, trial_balance, banks, expenses, revenues, taxes, contracts, other
+  title: text("title").notNull(),
+  fileName: text("file_name").notNull(),
+  storagePath: text("storage_path").notNull(),
+  fileSize: integer("file_size"),
+  mimeType: text("mime_type"),
+  uploadedByName: text("uploaded_by_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_audit_files_period").on(table.periodId),
+  index("idx_audit_files_requirement").on(table.requirementId),
+]);
+
+// تعليقات متبادلة على المتطلبات بين الفريق الداخلي والمراجع الخارجي
+export const auditComments = pgTable("audit_comments", {
+  id: serial("id").primaryKey(),
+  requirementId: integer("requirement_id").notNull().references(() => auditRequirements.id, { onDelete: "cascade" }),
+  authorName: text("author_name").notNull(),
+  isAuditor: boolean("is_auditor").default(false).notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_audit_comments_requirement").on(table.requirementId),
+]);
+
+// سجل نشاط البوابة: كل رفع/تحميل/اعتماد مسجَّل بالاسم والوقت
+export const auditActivityLog = pgTable("audit_activity_log", {
+  id: serial("id").primaryKey(),
+  periodId: integer("period_id").references(() => auditPeriods.id, { onDelete: "cascade" }),
+  userName: text("user_name").notNull(),
+  isAuditor: boolean("is_auditor").default(false).notNull(),
+  action: text("action").notNull(), // upload, download, approve, reject, request, comment, create_period, ...
+  details: text("details"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_audit_activity_period").on(table.periodId),
+]);
+
+export const insertAuditPeriodSchema = createInsertSchema(auditPeriods).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertAuditRequirementSchema = createInsertSchema(auditRequirements).omit({ id: true, createdAt: true, updatedAt: true });
+export type AuditPeriod = typeof auditPeriods.$inferSelect;
+export type AuditRequirement = typeof auditRequirements.$inferSelect;
+export type AuditFile = typeof auditFiles.$inferSelect;
+export type AuditComment = typeof auditComments.$inferSelect;
+export type AuditActivity = typeof auditActivityLog.$inferSelect;
+
 export const insertResolutionSignatureSchema = createInsertSchema(resolutionSignatures).omit({
   id: true,
   createdAt: true,

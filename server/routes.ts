@@ -121,6 +121,7 @@ import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, ge
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
 import { registerFinancialReviewRoutes } from "./financial-review-routes";
+import { registerAuditPortalRoutes } from "./audit-portal-routes";
 import { registerJobOfferRoutes } from "./job-offers-routes";
 import { registerOnboardingRoutes } from "./onboarding-routes";
 import { registerHrRoutes } from "./hr-routes";
@@ -431,6 +432,7 @@ export async function registerRoutes(
   // Register governance routes
   registerGovernanceRoutes(app);
   registerFinancialReviewRoutes(app);
+  registerAuditPortalRoutes(app);
   registerJobOfferRoutes(app);
   registerOnboardingRoutes(app);
   registerHrRoutes(app);

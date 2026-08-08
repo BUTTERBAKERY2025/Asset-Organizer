@@ -109,6 +109,15 @@ const governanceModules: GovernanceModule[] = [
     href: "/governance/financial-statements",
   },
   {
+    id: "audit-portal",
+    title: "بوابة المراجعة المالية",
+    description: "الفترات المالية، مكتبة الملفات، متطلبات المراجع الخارجي، وحساب مكتب المراجعة",
+    icon: FileText,
+    color: "text-teal-600",
+    bgColor: "bg-teal-100",
+    href: "/audit-portal",
+  },
+  {
     id: "resolutions",
     title: "قرارات مجلس الإدارة",
     description: "توثيق ومتابعة قرارات المجلس",
@@ -274,7 +283,9 @@ export default function GovernancePage() {
   const { user } = useAuth();
   // بطاقة القوائم المالية والختم الإلكتروني تظهر للأدمن فقط
   const visibleModules = governanceModules.filter(
-    (m) => m.id !== "financial-statements" || user?.role === "admin"
+    (m) =>
+      (m.id !== "financial-statements" || user?.role === "admin") &&
+      (m.id !== "audit-portal" || user?.role === "admin" || user?.role === "financial_manager")
   );
   const { data: independence } = useQuery<IndependenceData>({
     queryKey: ["/api/governance/board-members/_compliance/independence"],

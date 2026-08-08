@@ -559,6 +559,77 @@ export async function runStartupMigrations() {
       console.error("[PUSH] Migration error:", pushErr?.message);
     }
 
+    // بوابة المراجعة المالية: الفترات، المتطلبات، الملفات، التعليقات، سجل النشاط
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS audit_periods (
+          id serial PRIMARY KEY,
+          title text NOT NULL,
+          period_type text NOT NULL DEFAULT 'semi_annual',
+          fiscal_year integer NOT NULL,
+          period_start text NOT NULL,
+          period_end text NOT NULL,
+          status text NOT NULL DEFAULT 'active',
+          notes text,
+          created_by text,
+          created_at timestamp NOT NULL DEFAULT now(),
+          updated_at timestamp NOT NULL DEFAULT now()
+        );
+        CREATE TABLE IF NOT EXISTS audit_requirements (
+          id serial PRIMARY KEY,
+          period_id integer NOT NULL REFERENCES audit_periods(id) ON DELETE CASCADE,
+          title text NOT NULL,
+          description text,
+          category text,
+          source text NOT NULL DEFAULT 'internal',
+          priority text NOT NULL DEFAULT 'normal',
+          status text NOT NULL DEFAULT 'requested',
+          due_date text,
+          created_by_name text,
+          created_at timestamp NOT NULL DEFAULT now(),
+          updated_at timestamp NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_audit_requirements_period ON audit_requirements(period_id);
+        CREATE TABLE IF NOT EXISTS audit_files (
+          id serial PRIMARY KEY,
+          period_id integer NOT NULL REFERENCES audit_periods(id) ON DELETE CASCADE,
+          requirement_id integer REFERENCES audit_requirements(id) ON DELETE SET NULL,
+          category text NOT NULL DEFAULT 'other',
+          title text NOT NULL,
+          file_name text NOT NULL,
+          storage_path text NOT NULL,
+          file_size integer,
+          mime_type text,
+          uploaded_by_name text,
+          created_at timestamp NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_audit_files_period ON audit_files(period_id);
+        CREATE INDEX IF NOT EXISTS idx_audit_files_requirement ON audit_files(requirement_id);
+        CREATE TABLE IF NOT EXISTS audit_comments (
+          id serial PRIMARY KEY,
+          requirement_id integer NOT NULL REFERENCES audit_requirements(id) ON DELETE CASCADE,
+          author_name text NOT NULL,
+          is_auditor boolean NOT NULL DEFAULT false,
+          content text NOT NULL,
+          created_at timestamp NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_audit_comments_requirement ON audit_comments(requirement_id);
+        CREATE TABLE IF NOT EXISTS audit_activity_log (
+          id serial PRIMARY KEY,
+          period_id integer REFERENCES audit_periods(id) ON DELETE CASCADE,
+          user_name text NOT NULL,
+          is_auditor boolean NOT NULL DEFAULT false,
+          action text NOT NULL,
+          details text,
+          created_at timestamp NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_audit_activity_period ON audit_activity_log(period_id);
+      `);
+      console.log("[AUDIT] Audit portal tables verified");
+    } catch (auditErr: any) {
+      console.error("[AUDIT] Migration error:", auditErr?.message);
+    }
+
     console.log("Startup migrations completed successfully");
   } catch (err) {
     console.error("Startup migration error:", err);
