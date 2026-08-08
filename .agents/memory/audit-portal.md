@@ -8,3 +8,4 @@ description: External auditor role lockdown, requirement state machine, file sni
 - Uploads: extension whitelist + magic-byte sniff must agree (pdf/zip-family/xls-doc/png/jpg; csv = no NUL bytes, no binary signature). Storage key is ASCII (`audit_<period>_<ts><ext>`), Arabic filename kept in DB; downloads set nosniff.
 - Tables audit_periods/requirements/files/comments/activity_log created idempotently in server/db.ts startup migration AND applied directly to Supabase prod.
 **Why:** review found auditor session could otherwise call global search/dashboards; deny-by-default middleware chosen over per-route guards.
+- `users` table has NO `name` column (only firstName/lastName/username) — selecting users.name via Drizzle throws at runtime (see drizzle-undefined-select-field.md); audit-portal getCtx builds name from firstName+lastName.
