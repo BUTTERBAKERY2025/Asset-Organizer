@@ -88,3 +88,5 @@ else attach the load listener. (Board uses a setTimeout, so it was unaffected.)
 
 Note: `resolutions.tsx` may still use a different (older) technique; only `voting.tsx`
 was migrated to the bounded-sheet paginator. Verify before assuming parity.
+
+Empty-string blocks break the paginator: measureHtml("") -> firstElementChild null -> appendChild throws -> silent fallback render WITHOUT letterhead/page numbers. Guard every optional block (if (html) add(...)) and make measureHtml return 0 for null.
