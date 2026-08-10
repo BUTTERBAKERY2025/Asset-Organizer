@@ -352,15 +352,16 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
   ];
 
   if (clauses.length) {
-    // لكل بند: نص البند ثم سجل تصويت المساهمين أسفله (نفس مواقف القرار ككل).
+    // البنود تُعرض نصاً فقط، ثم جدول «سجل التصويت» مرة واحدة على القرار ككل
+    // (نفس نسق RES-2026-0018) — لا يتكرر الجدول تحت كل بند.
     if (clausePreamble) flowItems.push({ kind: 'text', cls: 'res-intro', text: clausePreamble });
     clauses.forEach((c) => {
       flowItems.push({ kind: 'text', cls: 'res-box', title: c.title || undefined, text: c.body || '-' });
-      if (!noVotes) {
-        flowItems.push({ kind: 'html', html: '<div class="section-head">سجل التصويت على هذا البند</div>', head: true, beforeTable: true });
-        flowItems.push({ kind: 'table' });
-      }
     });
+    if (!noVotes) {
+      flowItems.push({ kind: 'html', html: '<div class="section-head">سجل التصويت</div>', head: true, beforeTable: true });
+      flowItems.push({ kind: 'table' });
+    }
   } else {
     // لا توجد بنود مُرقّمة: نعرض نص القرار كاملاً مع جدول تصويت واحد كما كان.
     buildResolutionBlocks(resolution.description).forEach((b) => {
