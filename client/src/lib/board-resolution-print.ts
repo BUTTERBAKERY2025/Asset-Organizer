@@ -569,7 +569,7 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
 
         .vt-total { display: flex; justify-content: space-between; gap: 8px; background: #f3ead2; color: #5a4a1e; font-weight: 700; padding: 6px 10px; font-size: 9px; border-radius: 4px; margin-bottom: 8px; }
 
-        .sign-row { display: flex; justify-content: center; align-items: flex-end; margin-top: 12px; }
+        .sign-row { display: flex; justify-content: center; align-items: flex-end; margin-top: 8px; }
         .sign-col { flex: 1; text-align: center; }
         .sign-role { font-size: 10px; font-weight: 700; color: #2b3a4f; margin-bottom: 6px; }
         .sign-img { height: 44px; width: auto; max-width: 150px; display: block; margin: 0 auto 3px; }
@@ -583,9 +583,9 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
         .stamp-col { text-align: center; }
         .stamp-lbl { font-size: 9px; color: #888; margin-bottom: 4px; }
         .stamp-svg { display: inline-block; }
-        .stamp-svg svg { width: 220px; height: auto; }
+        .stamp-svg svg { width: 170px; height: auto; }
         /* الوضع المضغوط: ختم أصغر وهوامش أقل ليتسع الختم في نفس صفحة المحتوى */
-        .sign-compact .stamp-svg svg { width: 150px; height: auto; }
+        .sign-compact .stamp-svg svg { width: 105px; height: auto; }
         .sign-compact .sign-row { margin-top: 4px; }
         .sign-compact .sig-card { padding: 4px 8px 3px; }
         .sign-compact .sig-img2 { max-height: 34px; }
