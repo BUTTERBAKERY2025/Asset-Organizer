@@ -87,7 +87,27 @@ const getRequiredMajority = (resolution: BoardResolution): { percentage: number;
 };
 
 export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: VotingTokenData[], signatures: BoardSignature[] = []): string => {
-  const votedTokens = tokens.filter(t => t.status === 'voted');
+  // القرارات المعتمدة بالتمرير والتوقيع لا تملك رموز تصويت إلكتروني — نبني سجل
+  // التصويت من توقيعات الأعضاء (resolution_signatures) حتى يطلع المحضر بنفس
+  // جدول «سجل التصويت» المعتمد (اسم العضو/الصفة/موافق/تاريخ التوقيع/التوقيع)
+  // بدل شبكة بطاقات منفصلة.
+  const realVotedTokens = tokens.filter(t => t.status === 'voted');
+  const decidedSignatures = (signatures || []).filter(s => s.status === 'signed' || s.status === 'declined');
+  const tokensFromSignatures: VotingTokenData[] = decidedSignatures.map((s, i) => ({
+    id: -(i + 1),
+    voteToken: '',
+    shareholderId: 0,
+    shareholderName: s.memberName || '',
+    numberOfShares: 0,
+    status: 'voted',
+    vote: s.status === 'signed' ? 'for' : 'against',
+    votedAt: s.signedAt || undefined,
+    signatureData: s.signatureData || undefined,
+    voterType: 'board_member',
+    boardMemberPosition: s.memberPosition || 'member',
+  }));
+  const usedSignaturesAsVotes = realVotedTokens.length === 0 && tokensFromSignatures.length > 0;
+  const votedTokens = usedSignaturesAsVotes ? tokensFromSignatures : realVotedTokens;
   const voteLabels: Record<string, string> = { for: 'موافق', against: 'رافض', abstain: 'ممتنع' };
 
   const docDate = (() => {
@@ -393,7 +413,7 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
   // التوقيعات تُجلب من نفس مصدر صفحة القرارات حتى تظهر هنا كما تظهر في قرارات الجمعية.
   // استبعاد رئيس مجلس الإدارة من شبكة البطاقات لأنه يظهر بالفعل في كتلة التوقيع
   // الرسمي بالأسفل (مع ختم الشركة) — منعاً لتكرار اسمه وتوقيعه.
-  const boardMemberSigs = signatures
+  const boardMemberSigs = (usedSignaturesAsVotes ? [] : signatures)
     .filter((sig) => {
       const n = normalizeAr(sig.memberName);
       return !(n.startsWith('عبدالحافظ') && n.includes('مكوش'));
@@ -438,7 +458,13 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
       ? chairmanSigEntry.signatureData!
       : chairmanSig;
   const chairmanDisplayName = chairmanSigEntry?.memberName || chairmanName;
-  const chairmanColHtml =
+  // إذا كان توقيع الرئيس ظاهراً بالفعل داخل جدول «سجل التصويت» (حالة الاعتماد
+  // بالتمرير) لا نكرره بجانب الختم — تماماً كنسق RES-2026-0018.
+  const chairmanInTable = votedTokens.some(t => {
+    const n = normalizeAr(t.shareholderName);
+    return n.startsWith('عبدالحافظ') && n.includes('مكوش');
+  });
+  const chairmanColHtml = chairmanInTable ? '' :
     '<div class="chair-col">' +
       '<div class="sign-role">رئيس مجلس الإدارة</div>' +
       (chairmanSigImg
