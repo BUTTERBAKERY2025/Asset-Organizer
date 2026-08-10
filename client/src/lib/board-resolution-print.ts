@@ -160,9 +160,12 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
     resolution.resolutionType === 'extraordinary_assembly' ||
     resolution.resolutionType === 'general_assembly' ||
     resolution.resolutionType === 'ordinary_assembly';
+  // أي قرار غير جمعوي هو قرار مجلس إدارة يُحتسب بالرأس ويُعرض بنسق «عضو» —
+  // حتى لو لم يُسجَّل عليه تصويت إلكتروني بعد (مثل RES-2026-0019)، لا يتحول
+  // أبداً لنسق المساهمين/الأسهم الخاص بالجمعيات.
   const isBoardVote =
     votedTokens.some(t => t.voterType === 'board_member') ||
-    (!isAssemblyResolution && votedTokens.length > 0 && totalSharesVoted === 0);
+    (!isAssemblyResolution && totalSharesVoted === 0);
 
   // ترتيب المصوتين حسب المنصب لقرارات المجلس فقط؛ المساهمون يبقون بترتيبهم الأصلي.
   const orderedTokens = isBoardVote
@@ -180,8 +183,12 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
 
   // حساب الأغلبية المطلوبة حسب نظام الشركات السعودي 1443هـ
   const requiredMajorityInfo = getRequiredMajority(resolution);
-  const isApproved = Number(approvalPercentage) >= requiredMajorityInfo.percentage;
-  const isUnanimous = isApproved && forVotes === votedTokens.length && votedTokens.length > 0;
+  // قرارات بلا تصويت إلكتروني (اعتُمدت بالتمرير والتوقيع): النتيجة من حالة القرار
+  // نفسه لا من نسبة أصوات صفرية — وإلا ظهر قرار معتمد كأنه «غير معتمد 0%».
+  const noVotes = votedTokens.length === 0;
+  const statusApproved = ['approved', 'implemented', 'completed'].includes(resolution.status || '');
+  const isApproved = noVotes ? statusApproved : Number(approvalPercentage) >= requiredMajorityInfo.percentage;
+  const isUnanimous = isApproved && (noVotes || (forVotes === votedTokens.length && votedTokens.length > 0));
   const resultLabel = isApproved ? (isUnanimous ? 'معتمد بالإجماع' : 'معتمد') : 'غير معتمد';
   const voterNoun = isBoardVote ? 'عضو' : 'مساهم';
 
@@ -302,11 +309,14 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
       '<div class="info-strip">' +
         '<div class="info-cell"><div class="lbl">نوع القرار</div><div class="val">' + typeLabel + '</div></div>' +
         '<div class="info-cell"><div class="lbl">الأغلبية المطلوبة</div><div class="val">' + requiredMajorityInfo.percentage + '%</div></div>' +
-        '<div class="info-cell"><div class="lbl">عدد المصوتين</div><div class="val">' + votedTokens.length + ' ' + voterNoun + '</div></div>' +
-        (isBoardVote
-          ? '<div class="info-cell"><div class="lbl">الأصوات</div><div class="val">' + forVotes + ' موافق من ' + votedTokens.length + '</div></div>'
-          : '<div class="info-cell"><div class="lbl">الأسهم المصوتة</div><div class="val">' + totalSharesVoted.toLocaleString('en-US') + '</div></div>') +
-        '<div class="info-cell"><div class="lbl">نتيجة التصويت</div><div class="val ' + (isApproved ? 'ok' : 'reject') + '">' + approvalPercentage + '% ' + resultLabel + '</div></div>' +
+        (noVotes
+          ? '<div class="info-cell"><div class="lbl">آلية الاعتماد</div><div class="val">بالتمرير والتوقيع</div></div>' +
+            '<div class="info-cell"><div class="lbl">نتيجة القرار</div><div class="val ' + (isApproved ? 'ok' : 'reject') + '">' + resultLabel + '</div></div>'
+          : '<div class="info-cell"><div class="lbl">عدد المصوتين</div><div class="val">' + votedTokens.length + ' ' + voterNoun + '</div></div>' +
+            (isBoardVote
+              ? '<div class="info-cell"><div class="lbl">الأصوات</div><div class="val">' + forVotes + ' موافق من ' + votedTokens.length + '</div></div>'
+              : '<div class="info-cell"><div class="lbl">الأسهم المصوتة</div><div class="val">' + totalSharesVoted.toLocaleString('en-US') + '</div></div>') +
+            '<div class="info-cell"><div class="lbl">نتيجة التصويت</div><div class="val ' + (isApproved ? 'ok' : 'reject') + '">' + approvalPercentage + '% ' + resultLabel + '</div></div>') +
       '</div>' },
     { kind: 'html', html: '<div class="section-head">نص القرار</div>', head: true },
   ];
@@ -316,16 +326,20 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
     if (clausePreamble) flowItems.push({ kind: 'text', cls: 'res-intro', text: clausePreamble });
     clauses.forEach((c) => {
       flowItems.push({ kind: 'text', cls: 'res-box', title: c.title || undefined, text: c.body || '-' });
-      flowItems.push({ kind: 'html', html: '<div class="section-head">سجل التصويت على هذا البند</div>', head: true, beforeTable: true });
-      flowItems.push({ kind: 'table' });
+      if (!noVotes) {
+        flowItems.push({ kind: 'html', html: '<div class="section-head">سجل التصويت على هذا البند</div>', head: true, beforeTable: true });
+        flowItems.push({ kind: 'table' });
+      }
     });
   } else {
     // لا توجد بنود مُرقّمة: نعرض نص القرار كاملاً مع جدول تصويت واحد كما كان.
     buildResolutionBlocks(resolution.description).forEach((b) => {
       flowItems.push({ kind: 'text', cls: b.cls, title: b.title, text: b.text });
     });
-    flowItems.push({ kind: 'html', html: '<div class="section-head">سجل التصويت</div>', head: true, beforeTable: true });
-    flowItems.push({ kind: 'table' });
+    if (!noVotes) {
+      flowItems.push({ kind: 'html', html: '<div class="section-head">سجل التصويت</div>', head: true, beforeTable: true });
+      flowItems.push({ kind: 'table' });
+    }
   }
 
   // ----- voting table parts (head row + body rows + totals) -----
