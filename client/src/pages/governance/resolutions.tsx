@@ -17,6 +17,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Progress } from "@/components/ui/progress";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { openPrintWindow } from "@/lib/print-window";
+import { printBoardResolutionWithSignatures, type VotingTokenData } from "@/lib/board-resolution-print";
 import { useAuth } from "@/hooks/useAuth";
 import {
   Scale,
@@ -53,14 +55,6 @@ import {
   RotateCcw,
 } from "lucide-react";
 import type { BoardResolution, BoardMember } from "@shared/schema";
-import companyStampSvgRaw from "@assets/company-stamp.svg?raw";
-
-// قصّ الـ viewBox على حدود رسم الختم الفعلية (الملف الأصلي 810×810 والرسم صغير داخله)
-const companyStampSvg = companyStampSvgRaw
-  .replace(/viewBox="[^"]+"/, 'viewBox="239.8 298.5 344 169.2"')
-  .replace(/\swidth="[^"]+"/, ' ')
-  .replace(/\sheight="[^"]+"/, ' ');
-import officialLetterhead from "@assets/official-letterhead.png?inline";
 import { exportToExcel, exportToCSV, printAsPDF } from "@/lib/export-utils";
 
 const resolutionTypes = [
@@ -750,269 +744,27 @@ export default function ResolutionsPage() {
                             size="sm"
                             className="gap-1"
                             onClick={async () => {
-                              const resolutionType = resolutionTypes.find(t => t.value === resolution.resolutionType)?.label || resolution.resolutionType;
-                              const status = resolutionStatuses.find(s => s.value === resolution.status)?.label || resolution.status;
-                              const priority = priorities.find(p => p.value === resolution.priority)?.label || resolution.priority;
-                              const category = categories.find(c => c.value === resolution.category)?.label || resolution.category;
-                              const isAssemblyDoc = ['general_assembly', 'ordinary'].includes(resolution.resolutionType);
-                              const isExtraordinaryDoc = ['extraordinary_assembly', 'extraordinary'].includes(resolution.resolutionType);
-                              const docTypeBadge = isAssemblyDoc
-                                ? 'قرار الجمعية العمومية العادية'
-                                : isExtraordinaryDoc
-                                  ? 'قرار الجمعية العمومية غير العادية'
-                                  : 'قرار مجلس الإدارة';
-                              
-                              // جلب التوقيعات الإلكترونية
-                              let signaturesData: ResolutionSignature[] = [];
-                              try {
-                                const res = await fetch(`/api/governance/resolutions/${resolution.id}/signatures`);
-                                if (res.ok) {
-                                  signaturesData = await res.json();
-                                }
-                              } catch (e) {
-                                console.error('Failed to fetch signatures:', e);
+                              // الطباعة عبر القالب الرسمي الموحد (نفس مستند صفحة القرارات الموقعة)
+                              const target = openPrintWindow();
+                              if (!target.win) {
+                                toast({
+                                  title: "النوافذ المنبثقة محظورة",
+                                  description: "الرجاء السماح بالنوافذ المنبثقة لهذا الموقع ثم إعادة المحاولة.",
+                                  variant: "destructive",
+                                });
+                                return;
                               }
-                              
-                              const translatePosition = (pos: string) => {
-                                const positions: Record<string, string> = {
-                                  'chairman': 'رئيس مجلس الإدارة',
-                                  'vice_chairman': 'نائب رئيس مجلس الإدارة',
-                                  'member': 'عضو مجلس الإدارة',
-                                  'secretary': 'أمين السر',
-                                  'رئيس مجلس الإدارة': 'رئيس مجلس الإدارة',
-                                  'نائب رئيس مجلس الإدارة': 'نائب رئيس مجلس الإدارة',
-                                  'عضو مجلس الإدارة': 'عضو مجلس الإدارة',
-                                };
-                                return positions[pos] || pos;
-                              };
-                              
-                              const escapeHtml = (s: any) => String(s ?? '').replace(/[&<>"']/g, (c) => (({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as Record<string, string>)[c]));
-                              const safeImgSrc = (u: any) => {
-                                const v = String(u ?? '').trim();
-                                return /^https:\/\//i.test(v) || /^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i.test(v) ? v : '';
-                              };
-                              const fmtG = (d: any) => { const x = d ? new Date(d) : new Date(); return x.getFullYear() + '/' + String(x.getMonth() + 1).padStart(2, '0') + '/' + String(x.getDate()).padStart(2, '0'); };
-                              const memberCount = signaturesData.length;
-                              const signedCount = signaturesData.filter((sg) => sg.status === 'signed').length;
-                              let forV = Number(resolution.forVotes || 0), againstV = Number(resolution.againstVotes || 0), abstainV = Number(resolution.abstainVotes || 0);
-                              if (forV + againstV + abstainV === 0 && signedCount > 0) forV = signedCount;
-                              const totalVotes = forV + againstV + abstainV;
-                              const unanimous = totalVotes > 0 && againstV === 0 && abstainV === 0;
-                              const isApproved = resolution.status === 'approved' || resolution.status === 'implemented';
-                              const isRejected = resolution.status === 'rejected';
-                              const resultText = isApproved ? ('اعتُمد ' + (unanimous ? 'بالإجماع' : 'بالأغلبية')) : isRejected ? 'مرفوض' : status;
-                              const resultClass = isApproved ? 'ok' : isRejected ? 'reject' : 'pending';
-                              const badgeClass = resultClass;
-                              const badgeText = isApproved ? ('✓ تم اعتماد القرار ' + (unanimous ? 'بالإجماع' : 'بالأغلبية') + ' من أعضاء مجلس الإدارة') : isRejected ? '✗ تم رفض القرار' : ('⏳ ' + status);
-                              const dateStr = fmtG(resolution.createdAt);
-                              const printStamp = fmtG(new Date());
-                              const subjectText = escapeHtml(resolution.title || '');
-                              const bodyText = escapeHtml(resolution.description || ('بناءً على الصلاحيات المخولة لمجلس الإدارة، وبعد الاطلاع على الموضوع المعروض، تقرر ما يلي:\n\n' + (resolution.title || '')));
-
-                              const signaturesHtml = memberCount > 0
-                                ? signaturesData.map((sig) => {
-                                    const signed = sig.status === 'signed';
-                                    const img = signed ? safeImgSrc(sig.signatureData) : '';
-                                    const inner = img
-                                      ? '<img class="sig-img" src="' + img + '" alt="توقيع ' + escapeHtml(sig.memberName) + '" />'
-                                      : sig.status === 'declined'
-                                        ? '<span class="sig-x">✗ رفض التوقيع</span>'
-                                        : '<span class="sig-wait">في انتظار التوقيع</span>';
-                                    // تاريخ التوقيع في المستند الرسمي = تاريخ القرار نفسه (وليس تاريخ التوقيع الفعلي في النظام)
-                                    const dateLine = signed ? '<span class="sig-date">تاريخ التوقيع: ' + dateStr + '</span>' : '';
-                                    const okBadge = signed ? '<span class="sig-ok">✓ موقّع</span>' : sig.status === 'declined' ? '<span class="sig-rej">✗ مرفوض</span>' : '<span class="sig-pend">⏳ معلّق</span>';
-                                    return '<div class="sig-card ' + (signed ? 'signed' : sig.status) + '">'
-                                      + '<div class="sig-role">' + escapeHtml(translatePosition(sig.memberPosition)) + '</div>'
-                                      + '<div class="sig-name">' + escapeHtml(sig.memberName) + '</div>'
-                                      + '<div class="sig-img-wrap">' + inner + '</div>'
-                                      + '<div class="sig-foot">' + okBadge + dateLine + '</div>'
-                                      + '</div>';
-                                  }).join('')
-                                : '<div class="sig-empty">لم يتم إضافة موقّعين بعد</div>';
-
-                                                            // جلب أصوات الحاضرين/المساهمين المصوّتين على هذا القرار
-                              let votesData: any[] = [];
                               try {
-                                const vres = await fetch(`/api/governance/resolutions/${resolution.id}/votes`);
-                                if (vres.ok) {
-                                  votesData = await vres.json();
-                                }
+                                const res = await fetch(`/api/governance/resolutions/${resolution.id}/voting-tokens`, { credentials: "include" });
+                                const tokens = res.ok ? await res.json() : [];
+                                await printBoardResolutionWithSignatures(
+                                  resolution,
+                                  Array.isArray(tokens) ? (tokens as VotingTokenData[]) : [],
+                                  target,
+                                );
                               } catch (e) {
-                                console.error('Failed to fetch votes:', e);
-                              }
-
-                              const voteLabel = (v: string) => v === 'for' ? 'موافق' : v === 'against' ? 'معارض' : v === 'abstain' ? 'ممتنع' : '';
-                              const voteClass = (v: string) => v === 'for' ? 'for' : v === 'against' ? 'against' : 'abstain';
-                              const voterTypeLabel = (t: string) => t === 'board_member' ? 'عضو مجلس الإدارة' : t === 'shareholder' ? 'مساهم' : t === 'proxy' ? 'وكيل' : (t || '');
-
-                              const votersHtml = votesData.length > 0
-                                ? votesData.map((v: any) => {
-                                    const sig = safeImgSrc(v.signatureUrl);
-                                    const name = escapeHtml(v.voterName);
-                                    return `
-                                    <div class="voter-card vote-${voteClass(v.vote)}">
-                                      <div class="voter-head">
-                                        <span class="voter-name">${name}</span>
-                                        <span class="voter-vote vote-${voteClass(v.vote)}">${voteLabel(v.vote)}</span>
-                                      </div>
-                                      <div class="voter-meta">${escapeHtml(voterTypeLabel(v.voterType))}${v.votingPower && Number(v.votingPower) > 1 ? ' · ' + Number(v.votingPower).toLocaleString('ar-SA-u-nu-latn') + ' صوت' : ''}</div>
-                                      <div class="voter-sig">
-                                        ${sig
-                                          ? `<img src="${sig}" alt="توقيع ${name}" class="voter-sig-img" />`
-                                          : '<div class="sig-line">________________</div>'}
-                                      </div>
-                                    </div>
-                                  `;
-                                  }).join('')
-                                : '';
-
-                              const votersSectionHtml = votersHtml
-                                ? `<div class="signatures-section voters-section">
-                                     <div class="section-title">
-                                       <div class="section-icon">👥</div>
-                                       <span>توقيعات الحاضرين والمساهمين المصوّتين على القرار (${votesData.length})</span>
-                                     </div>
-                                     <div class="voters-grid">
-                                       ${votersHtml}
-                                     </div>
-                                   </div>`
-                                : '';
-                              
-                              const html = `
-                                <!DOCTYPE html>
-                                <html lang="ar" dir="rtl">
-                                <head>
-                                  <meta charset="UTF-8">
-                                  <title>${escapeHtml(docTypeBadge)} - ${escapeHtml(resolution.resolutionNumber)}</title>
-                                  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-                                  <style>
-                                    @page { size: A4 portrait; margin: 0; }
-                                    * { margin: 0; padding: 0; box-sizing: border-box; }
-                                    body { font-family: 'Cairo', sans-serif; color: #333; direction: rtl; font-size: 9px; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                                    .letterhead { position: fixed; top: 0; left: 0; width: 210mm; height: 297mm; z-index: 0; }
-                                    .doc-table { position: relative; z-index: 1; width: 210mm; border-collapse: collapse; }
-                                    .doc-table > thead > tr > td, .doc-table > tfoot > tr > td { padding: 0; border: none; }
-                                    .space-head { height: 30mm; }
-                                    .space-foot { height: 20mm; }
-                                    .content-cell { padding: 0 16mm; vertical-align: top; }
-                                    .section-head { break-after: avoid; page-break-after: avoid; }
-                                    .info-strip, .subject-box, .vote-summary, .result-badge, .stamp-wrap { break-inside: avoid; page-break-inside: avoid; }
-
-                                    .doc-title-main { text-align: center; font-size: 17px; font-weight: 700; color: #2b3a4f; margin-bottom: 4px; }
-                                    .doc-meta-wrap { text-align: center; margin-bottom: 9px; }
-                                    .doc-meta-pill { display: inline-block; background: #fbf6e9; border: 1px solid #e6d4a3; color: #7a6326; border-radius: 14px; padding: 4px 18px; font-size: 9px; font-weight: 600; }
-                                    .doc-meta-pill .sep { color: #c9a45b; margin: 0 7px; }
-
-                                    .info-strip { display: flex; background: #faf8f1; border: 1px solid #e9dfc4; border-radius: 7px; overflow: hidden; margin-bottom: 11px; }
-                                    .info-cell { flex: 1; text-align: center; padding: 6px 4px; border-left: 1px solid #ece2c8; }
-                                    .info-cell:last-child { border-left: none; }
-                                    .info-cell .lbl { font-size: 8px; color: #b8962f; font-weight: 600; margin-bottom: 4px; }
-                                    .info-cell .val { font-size: 10.5px; font-weight: 700; color: #2b3a4f; }
-                                    .info-cell .val.ok { color: #2e7d52; }
-                                    .info-cell .val.reject { color: #c0392b; }
-
-                                    .section-head { font-size: 13px; font-weight: 700; color: #2b3a4f; margin: 9px 0 6px; padding-right: 9px; border-right: 3px solid #b8962f; }
-
-                                    .subject-box { background: #f4f7fb; border: 1px solid #d8e2ee; border-right: 3px solid #2b3a4f; border-radius: 5px; padding: 7px 11px; margin-bottom: 7px; }
-                                    .subject-lbl { font-size: 8px; color: #7a8aa0; font-weight: 600; margin-bottom: 2px; }
-                                    .subject-txt { font-size: 11px; font-weight: 700; color: #2b3a4f; }
-                                    .res-box { background: #fdfbf3; border: 1px solid #ecdcb4; border-right: 3px solid #c9a45b; border-radius: 5px; padding: 8px 11px; margin-bottom: 7px; }
-                                    .res-box-text { font-size: 9.5px; color: #444; line-height: 1.85; white-space: pre-wrap; }
-
-                                    .vote-summary { display: flex; gap: 8px; margin-bottom: 8px; }
-                                    .vote-cell { flex: 1; text-align: center; border-radius: 6px; padding: 8px 4px; }
-                                    .vote-cell.for { background: #eaf6ee; border: 1px solid #bfe3cd; }
-                                    .vote-cell.against { background: #fbe9e9; border: 1px solid #f0c0c0; }
-                                    .vote-cell.abstain { background: #eef0f2; border: 1px solid #d8dde2; }
-                                    .vote-num { font-size: 20px; font-weight: 800; line-height: 1; }
-                                    .vote-cell.for .vote-num { color: #2e7d52; }
-                                    .vote-cell.against .vote-num { color: #c0392b; }
-                                    .vote-cell.abstain .vote-num { color: #5a6472; }
-                                    .vote-cap { font-size: 9px; font-weight: 600; color: #555; margin-top: 4px; }
-                                    .result-badge { text-align: center; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 7px; margin-bottom: 4px; }
-                                    .result-badge.ok { background: #e3f3e9; color: #2e7d52; border: 1px solid #bfe3cd; }
-                                    .result-badge.reject { background: #fbe5e5; color: #b3261e; border: 1px solid #f0c0c0; }
-                                    .result-badge.pending { background: #fff7e6; color: #9a7b1e; border: 1px solid #f0dca8; }
-
-                                    .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 4px; }
-                                    .sig-card { border: 1px solid #e3dcc6; border-radius: 7px; padding: 8px 10px 6px; background: #fffdf8; text-align: center; page-break-inside: avoid; break-inside: avoid; }
-                                    .sig-card.signed { border-color: #cfe3d6; background: #fbfdfb; }
-                                    .sig-role { font-size: 8px; color: #b8962f; font-weight: 700; margin-bottom: 2px; }
-                                    .sig-name { font-size: 11px; font-weight: 700; color: #2b3a4f; margin-bottom: 3px; }
-                                    .sig-img-wrap { height: 36px; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; border-bottom: 1px solid #e7e2d4; padding-bottom: 3px; }
-                                    .sig-img { max-height: 34px; max-width: 160px; }
-                                    .sig-wait { font-size: 8px; color: #b0a98f; }
-                                    .sig-x { font-size: 8px; color: #c0392b; }
-                                    .sig-foot { display: flex; justify-content: center; gap: 8px; align-items: center; }
-                                    .sig-ok { font-size: 8px; color: #2e7d52; font-weight: 700; }
-                                    .sig-rej { font-size: 8px; color: #c0392b; font-weight: 700; }
-                                    .sig-pend { font-size: 8px; color: #9a7b1e; font-weight: 700; }
-                                    .sig-date { font-size: 7.5px; color: #888; }
-                                    .sig-empty { text-align: center; color: #aaa; font-size: 9px; padding: 14px; grid-column: 1 / -1; }
-
-                                    .stamp-wrap { text-align: center; margin-top: 10px; }
-                                    .stamp-lbl { font-size: 9px; color: #888; margin-bottom: 2px; }
-                                    .stamp-wrap svg { width: 130px; height: auto; }
-
-                                    .voters-section { margin-top: 10px; }
-                                    .voters-section .section-title { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #2b3a4f; margin: 0 0 5px; }
-                                    .voters-section .section-icon { font-size: 12px; }
-                                    .voters-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
-                                    .voter-card { border: 1px solid #e6e0cd; border-radius: 5px; padding: 5px 7px; background: #fffdf8; }
-                                    .voter-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
-                                    .voter-name { font-size: 8.5px; font-weight: 700; color: #2b3a4f; }
-                                    .voter-vote { font-size: 7.5px; font-weight: 700; border-radius: 8px; padding: 1px 7px; }
-                                    .voter-vote.vote-for { background: #e3f3e9; color: #2e7d52; }
-                                    .voter-vote.vote-against { background: #fbe5e5; color: #b3261e; }
-                                    .voter-vote.vote-abstain { background: #eef0f2; color: #556; }
-                                    .voter-meta { font-size: 7px; color: #888; }
-                                    .voter-sig { margin-top: 2px; }
-                                    .voter-sig-img { max-height: 18px; max-width: 80px; }
-                                    .sig-line { color: #bbb; font-size: 8px; }
-
-                                    .doc-note { text-align: center; font-size: 7.5px; color: #8a8a8a; margin-top: 12px; }
-                                  </style>
-                                </head>
-                                <body>
-                                  <img class="letterhead" src="${officialLetterhead}" alt="" />
-                                  <table class="doc-table">
-                                    <thead><tr><td><div class="space-head"></div></td></tr></thead>
-                                    <tfoot><tr><td><div class="space-foot"></div></td></tr></tfoot>
-                                    <tbody><tr><td class="content-cell">
-                                    <div class="doc-title-main">${docTypeBadge}</div>
-                                    <div class="doc-meta-wrap"><span class="doc-meta-pill">رقم القرار ${escapeHtml(resolution.resolutionNumber)}<span class="sep">•</span>التاريخ ${dateStr}م<span class="sep">•</span>النوع ${escapeHtml(resolutionType)}</span></div>
-                                    <div class="info-strip">
-                                      <div class="info-cell"><div class="lbl">نوع القرار</div><div class="val">${escapeHtml(resolutionType)}</div></div>
-                                      <div class="info-cell"><div class="lbl">التصنيف</div><div class="val">${escapeHtml(category)}</div></div>
-                                      <div class="info-cell"><div class="lbl">الأولوية</div><div class="val">${escapeHtml(priority || '-')}</div></div>
-                                      <div class="info-cell"><div class="lbl">عدد الأعضاء</div><div class="val">${memberCount} أعضاء</div></div>
-                                      <div class="info-cell"><div class="lbl">النتيجة</div><div class="val ${resultClass}">${resultText}</div></div>
-                                    </div>
-                                    <div class="section-head">نص القرار</div>
-                                    ${subjectText ? '<div class="subject-box"><div class="subject-lbl">موضوع القرار</div><div class="subject-txt">' + subjectText + '</div></div>' : ''}
-                                    <div class="res-box"><div class="res-box-text">${bodyText}</div></div>
-                                    <div class="section-head">نتيجة التصويت</div>
-                                    <div class="vote-summary">
-                                      <div class="vote-cell for"><div class="vote-num">${forV}</div><div class="vote-cap">موافق</div></div>
-                                      <div class="vote-cell against"><div class="vote-num">${againstV}</div><div class="vote-cap">معارض</div></div>
-                                      <div class="vote-cell abstain"><div class="vote-num">${abstainV}</div><div class="vote-cap">ممتنع</div></div>
-                                    </div>
-                                    <div class="result-badge ${badgeClass}">${badgeText}</div>
-                                    <div class="section-head">التوقيعات</div>
-                                    <div class="sig-grid">${signaturesHtml}</div>
-                                    <div class="stamp-wrap"><div class="stamp-lbl">ختم الشركة</div>${companyStampSvg}</div>
-                                    ${votersSectionHtml}
-                                    <div class="doc-note">مستند رسمي صادر إلكترونياً عبر نظام إدارة حوكمة الشركات | تاريخ الطباعة: ${printStamp} | رقم القرار ${escapeHtml(resolution.resolutionNumber)}</div>
-                                    </td></tr></tbody>
-                                  </table>
-                                </body>
-                                </html>
-                              `;
-                              const printWindow = window.open('', '_blank');
-                              if (printWindow) {
-                                printWindow.document.write(html);
-                                printWindow.document.close();
-                                printWindow.onload = () => setTimeout(() => printWindow.print(), 300);
+                                try { target.win?.close(); } catch {}
+                                toast({ title: "فشل في طباعة القرار", variant: "destructive" });
                               }
                             }}
                           >
