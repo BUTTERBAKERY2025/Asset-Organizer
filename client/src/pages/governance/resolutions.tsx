@@ -53,7 +53,13 @@ import {
   RotateCcw,
 } from "lucide-react";
 import type { BoardResolution, BoardMember } from "@shared/schema";
-import companyStampSvg from "@assets/company-stamp.svg?raw";
+import companyStampSvgRaw from "@assets/company-stamp.svg?raw";
+
+// قصّ الـ viewBox على حدود رسم الختم الفعلية (الملف الأصلي 810×810 والرسم صغير داخله)
+const companyStampSvg = companyStampSvgRaw
+  .replace(/viewBox="[^"]+"/, 'viewBox="239.8 298.5 344 169.2"')
+  .replace(/\swidth="[^"]+"/, ' ')
+  .replace(/\sheight="[^"]+"/, ' ');
 import officialLetterhead from "@assets/official-letterhead.png?inline";
 import { exportToExcel, exportToCSV, printAsPDF } from "@/lib/export-utils";
 
@@ -946,7 +952,7 @@ export default function ResolutionsPage() {
 
                                     .stamp-wrap { text-align: center; margin-top: 10px; }
                                     .stamp-lbl { font-size: 9px; color: #888; margin-bottom: 2px; }
-                                    .stamp-wrap svg { width: 110px; height: 110px; }
+                                    .stamp-wrap svg { width: 130px; height: auto; }
 
                                     .voters-section { margin-top: 10px; }
                                     .voters-section .section-title { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #2b3a4f; margin: 0 0 5px; }

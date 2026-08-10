@@ -1,4 +1,12 @@
-import companyStampSvg from "@assets/company-stamp.svg?raw";
+import companyStampSvgRaw from "@assets/company-stamp.svg?raw";
+
+// ملف ختم الشركة الأصلي مساحته 810×810 لكن رسم الختم الفعلي يشغل مستطيلاً صغيراً
+// (getBBox: x≈245.8 y≈304.5 w≈332 h≈157.2) — بدون قصّ الـ viewBox يظهر الختم
+// ضئيلاً شبه مختفٍ داخل صندوق فارغ عند الطباعة.
+const companyStampSvg = companyStampSvgRaw
+  .replace(/viewBox="[^"]+"/, 'viewBox="239.8 298.5 344 169.2"')
+  .replace(/\swidth="[^"]+"/, ' ')
+  .replace(/\sheight="[^"]+"/, ' ');
 import officialLetterhead from "@assets/official-letterhead.png?inline";
 import type { BoardResolution } from "@shared/schema";
 import { renderToPrintWindow, openPrintWindow, type PrintTarget } from "./print-window";
@@ -372,7 +380,7 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
 
   // Totals rendered as a standalone block (not a <tfoot>) so the paginator can
   // place it cleanly after the last chunk of rows.
-  const totalsBlockHtml =
+  const totalsBlockHtml = noVotes ? '' :
     '<div class="vt-total">' +
       '<span>الإجمالي: ' + votedTokens.length + ' ' + voterNoun + '</span>' +
       (isBoardVote ? '' : '<span>إجمالي الأسهم: ' + totalSharesVoted.toLocaleString('en-US') + '</span>') +
@@ -415,7 +423,29 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
     : '';
 
   const printNow = new Date();
+  // توقيع رئيس مجلس الإدارة: مصدره الأساسي جدول طلبات التوقيع (resolution_signatures)
+  // — لأن القرارات المعتمدة بالتمرير لا تملك voting_tokens أصلاً — مع التراجع
+  // لتوقيع التصويت الإلكتروني إن وُجد. الرئيس مستبعد من شبكة البطاقات أعلاه،
+  // لذا يجب أن يظهر هنا بجانب ختم الشركة وإلا اختفى توقيعه من المستند كلياً.
+  const chairmanSigEntry = signatures.find((sig) => {
+    const n = normalizeAr(sig.memberName);
+    return n.startsWith('عبدالحافظ') && n.includes('مكوش');
+  });
+  const chairmanSigImg =
+    (chairmanSigEntry && chairmanSigEntry.status === 'signed' && isValidSignature(chairmanSigEntry.signatureData))
+      ? chairmanSigEntry.signatureData!
+      : chairmanSig;
+  const chairmanDisplayName = chairmanSigEntry?.memberName || chairmanName;
+  const chairmanColHtml =
+    '<div class="chair-col">' +
+      '<div class="sign-role">رئيس مجلس الإدارة</div>' +
+      (chairmanSigImg
+        ? '<img class="chair-sig" src="' + chairmanSigImg + '" alt="توقيع رئيس مجلس الإدارة" />'
+        : '<div class="sign-blank"></div>') +
+      '<div class="sign-name">' + sanitize(chairmanDisplayName) + '</div>' +
+    '</div>';
   const signBlockHtml = memberSignaturesHtml + '<div class="sign-row">' +
+      chairmanColHtml +
       '<div class="stamp-col">' +
         '<div class="stamp-lbl">ختم الشركة</div>' +
         '<div class="stamp-svg">' + companyStampSvg + '</div>' +
@@ -516,12 +546,17 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
         .sign-img { height: 44px; width: auto; max-width: 150px; display: block; margin: 0 auto 3px; }
         .sign-blank { height: 42px; }
         .sign-name { font-size: 9px; font-weight: 600; color: #333; border-top: 1px solid #b9b9b9; padding-top: 4px; display: inline-block; min-width: 170px; }
+        .sign-row { gap: 40px; }
+        .chair-col { text-align: center; padding-bottom: 24px; }
+        .chair-sig { height: 60px; width: auto; max-width: 200px; display: block; margin: 0 auto 3px; mix-blend-mode: multiply; }
+        .sign-compact .chair-sig { height: 40px; }
+        .sign-compact .chair-col { padding-bottom: 12px; }
         .stamp-col { text-align: center; }
         .stamp-lbl { font-size: 9px; color: #888; margin-bottom: 4px; }
         .stamp-svg { display: inline-block; }
-        .stamp-svg svg { width: 240px; height: 240px; }
+        .stamp-svg svg { width: 220px; height: auto; }
         /* الوضع المضغوط: ختم أصغر وهوامش أقل ليتسع الختم في نفس صفحة المحتوى */
-        .sign-compact .stamp-svg svg { width: 150px; height: 150px; }
+        .sign-compact .stamp-svg svg { width: 150px; height: auto; }
         .sign-compact .sign-row { margin-top: 4px; }
         .sign-compact .sig-card { padding: 4px 8px 3px; }
         .sign-compact .sig-img2 { max-height: 34px; }
