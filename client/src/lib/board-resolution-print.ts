@@ -618,7 +618,7 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
           return r.height + (parseFloat(s.marginTop) || 0) + (parseFloat(s.marginBottom) || 0);
         }
         // Measure an html string's flow height, then remove it.
-        function measureHtml(html) { var e = mk(html); measure.appendChild(e); var h = oh(e); measure.removeChild(e); return h; }
+        function measureHtml(html) { var e = mk(html); if (!e) return 0; measure.appendChild(e); var h = oh(e); measure.removeChild(e); return h; }
         // Render a (possibly partial) resolution text block. The section title only
         // appears on the first piece; continuation pieces repeat the box framing.
         function renderText(it, text, cont) {
@@ -777,7 +777,7 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
             }
           }
 
-          add(totalsHtml, measureHtml(totalsHtml));
+          if (totalsHtml) add(totalsHtml, measureHtml(totalsHtml));
           // كتلة الختم والتوقيعات: إن لم تتسع كاملةً في بقية الصفحة نجرب النسخة
           // المضغوطة (ختم أصغر) قبل اللجوء لصفحة جديدة — حتى لا يطلع الختم وحده في صفحة.
           (function () {
