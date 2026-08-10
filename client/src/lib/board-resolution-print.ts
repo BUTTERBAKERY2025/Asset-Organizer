@@ -197,7 +197,9 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
   const statusApproved = ['approved', 'implemented', 'completed'].includes(resolution.status || '');
   const isApproved = noVotes ? statusApproved : Number(approvalPercentage) >= requiredMajorityInfo.percentage;
   const isUnanimous = isApproved && (noVotes || (forVotes === votedTokens.length && votedTokens.length > 0));
-  const resultLabel = isApproved ? (isUnanimous ? 'معتمد بالإجماع' : 'معتمد') : 'غير معتمد';
+  const resultLabel = isApproved
+    ? (isUnanimous ? 'معتمد بالإجماع' : 'معتمد')
+    : (noVotes && resolution.status === 'rejected' ? 'مرفوض' : 'غير معتمد');
   const voterNoun = isBoardVote ? 'عضو' : 'مساهم';
 
   // توقيع رئيس مجلس الإدارة (عبدالحافظ احمد إبراهيم ال مكوش) — يُؤخذ من توقيعه الإلكتروني
