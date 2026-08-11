@@ -585,8 +585,9 @@ export const buildBoardResolutionHtml = (resolution: BoardResolution, tokens: Vo
         .stamp-svg { display: inline-block; }
         .stamp-svg svg { width: 170px; height: auto; }
         /* الوضع المضغوط: ختم أصغر وهوامش أقل ليتسع الختم في نفس صفحة المحتوى */
-        .sign-compact .stamp-svg svg { width: 105px; height: auto; }
-        .sign-compact .sign-row { margin-top: 4px; }
+        .sign-compact .stamp-svg svg { width: 82px; height: auto; }
+        .sign-compact .stamp-lbl { font-size: 7px; margin-bottom: 1px; }
+        .sign-compact .sign-row { margin-top: 0; }
         .sign-compact .sig-card { padding: 4px 8px 3px; }
         .sign-compact .sig-img2 { max-height: 34px; }
         .sign-compact .doc-note { margin-top: 4px; }
