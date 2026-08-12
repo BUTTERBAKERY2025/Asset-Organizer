@@ -30574,9 +30574,13 @@ export async function registerRoutes(
       // تاريخ صرف اختياري (مثلاً التاريخ الفعلي من ملف حماية الأجور البنكي)
       let paidAtDate: Date | undefined = undefined;
       if (paidAt) {
-        const d = new Date(paidAt);
-        if (Number.isNaN(d.getTime())) return res.status(400).json({ error: "تاريخ الصرف غير صالح" });
-        paidAtDate = d;
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(paidAt));
+        const d = m ? new Date(String(paidAt)) : null;
+        // رفض التواريخ غير الحقيقية (مثل 31 فبراير) — لا نعتمد على تدوير JS
+        const valid = !!(m && d && !Number.isNaN(d.getTime()) &&
+          d.getFullYear() === Number(m[1]) && d.getMonth() + 1 === Number(m[2]) && d.getDate() === Number(m[3]));
+        if (!valid) return res.status(400).json({ error: "تاريخ الصرف غير صالح (YYYY-MM-DD)" });
+        paidAtDate = d!;
       }
       const saved = await storage.upsertSalaryPayment({
         branchEmployeeId: beId,

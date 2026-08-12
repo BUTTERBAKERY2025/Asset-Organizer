@@ -675,7 +675,7 @@ export interface WpsParsedRow {
   bankStatus: string;      // SUCCESS أو غيره
   paidDate: string;        // ISO yyyy-mm-dd
   // نتيجة المطابقة
-  matchStatus: "matched" | "amount_diff" | "not_found" | "failed";
+  matchStatus: "matched" | "amount_diff" | "not_found" | "failed" | "conflict";
   matchedBy?: "iban" | "id" | "name";
   branchEmployeeId?: number;
   employeeName?: string;
@@ -693,7 +693,11 @@ const normalizeArName = (s: string): string =>
     .trim();
 
 const wpsNum = (s: string): number => {
-  const v = parseFloat((s || "").replace(/\s/g, "").replace(/,/g, "."));
+  let t = (s || "").replace(/\s/g, "");
+  // إن وُجدت فاصلة ونقطة معاً فالفاصلة فاصل آلاف؛ وإلا فهي فاصلة عشرية (تنسيق البنك)
+  t = t.includes(",") && t.includes(".") ? t.replace(/,/g, "") : t.replace(/,/g, ".");
+  if (!/^-?\d+(\.\d+)?$/.test(t)) return 0;
+  const v = parseFloat(t);
   return Number.isFinite(v) ? v : 0;
 };
 
@@ -722,7 +726,8 @@ export function parseWpsBankFile(text: string): { rows: Omit<WpsParsedRow, "matc
     const reference = fields.find((f) => /^\d{13,20}$/.test(f)) || "";
     const bankStatus = (fields.find((f) => /^[A-Z]{4,}$/i.test(f) && !/^SA/i.test(f) && f.length >= 6) || "").toUpperCase();
     const paidDate = wpsDateToISO(dates[dates.length - 1] || "") || fileDate;
-    rows.push({ amount, iban: iban.toUpperCase(), name, idNumber, reference, bankStatus: bankStatus || "SUCCESS", paidDate });
+    // بدون حالة صريحة من البنك لا نفترض النجاح — تُعرض للمراجعة اليدوية
+    rows.push({ amount, iban: iban.toUpperCase(), name, idNumber, reference, bankStatus: bankStatus || "UNKNOWN", paidDate });
   }
   return { rows, fileDate };
 }
@@ -916,6 +921,7 @@ export default function SalaryClosingPage() {
   const [wpsFileName, setWpsFileName] = useState("");
   const [wpsApplying, setWpsApplying] = useState(false);
   const [wpsApplied, setWpsApplied] = useState(false);
+  const [wpsSel, setWpsSel] = useState<Record<number, boolean>>({});
   const [bankDueDate, setBankDueDate] = useState<string>("");
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [groupSel, setGroupSel] = useState<Record<string, string>>({});
@@ -1198,41 +1204,55 @@ export default function SalaryClosingPage() {
   const handleWpsFile = (text: string, fileName: string) => {
     const { rows } = parseWpsBankFile(text);
     const lines: any[] = salaryClosingData;
-    const byIban = new Map<string, any>();
-    const byId = new Map<string, any>();
-    const byName = new Map<string, any>();
-    for (const l of lines) {
-      const acct = String(l.bankAccountNumber || "").replace(/\s+/g, "").toUpperCase();
-      if (acct) byIban.set(acct, l);
-      if (l.iqamaNumber) byId.set(String(l.iqamaNumber).trim(), l);
-      byName.set(normalizeArName(l.employeeName), l);
-    }
+    // بناء الفهارس مع كشف المفاتيح المكررة — المفتاح المكرر لا يُستخدم للمطابقة
+    // التلقائية أبداً (أسماء متشابهة أو آيبان مكرر = خطر تأشير موظف خاطئ)
+    const build = (keyOf: (l: any) => string) => {
+      const m = new Map<string, any>();
+      const dup = new Set<string>();
+      for (const l of lines) {
+        const k = keyOf(l);
+        if (!k) continue;
+        if (m.has(k)) dup.add(k);
+        else m.set(k, l);
+      }
+      return { get: (k: string) => (k && !dup.has(k) ? m.get(k) : undefined) };
+    };
+    const byIban = build((l) => String(l.bankAccountNumber || "").replace(/\s+/g, "").toUpperCase());
+    const byId = build((l) => String(l.iqamaNumber || "").trim());
+    const byName = build((l) => normalizeArName(l.employeeName));
+    const seenEmp = new Set<number>();
     const matched: WpsParsedRow[] = rows.map((r) => {
       let emp: any = byIban.get(r.iban);
       let matchedBy: WpsParsedRow["matchedBy"] = emp ? "iban" : undefined;
       if (!emp && r.idNumber) { emp = byId.get(r.idNumber); if (emp) matchedBy = "id"; }
       if (!emp) { emp = byName.get(normalizeArName(r.name)); if (emp) matchedBy = "name"; }
-      const failed = r.bankStatus !== "SUCCESS";
-      const status: WpsParsedRow["matchStatus"] = failed
-        ? "failed"
-        : !emp
-          ? "not_found"
-          : Math.abs(r.amount - Number(emp.netSalary || 0)) <= 0.05
-            ? "matched"
-            : "amount_diff";
+      const beId = emp ? Number(emp.branchEmployeeId) : undefined;
+      let status: WpsParsedRow["matchStatus"];
+      if (r.bankStatus !== "SUCCESS") status = "failed";
+      else if (!emp) status = "not_found";
+      else if (beId !== undefined && seenEmp.has(beId)) status = "conflict"; // سطران في الملف لنفس الموظف
+      else status = Math.abs(r.amount - Number(emp.netSalary || 0)) <= 0.05 ? "matched" : "amount_diff";
+      if (beId !== undefined && status !== "conflict") seenEmp.add(beId);
       return {
         ...r,
         matchStatus: status,
         matchedBy,
-        branchEmployeeId: emp ? Number(emp.branchEmployeeId) : undefined,
+        branchEmployeeId: status === "conflict" ? undefined : beId,
         employeeName: emp?.employeeName,
         netSalary: emp ? Number(emp.netSalary || 0) : undefined,
-        alreadyPaid: emp ? paymentByEmp.has(Number(emp.branchEmployeeId)) : false,
+        alreadyPaid: beId !== undefined ? paymentByEmp.has(beId) : false,
       };
     });
     setWpsRows(matched);
     setWpsFileName(fileName);
     setWpsApplied(false);
+    // الافتراضي: يُعتمد تلقائياً فقط المطابق تماماً عبر آيبان/هوية — مطابقة الاسم
+    // أو فرق المبلغ تحتاج تأشيراً يدوياً من المستخدم
+    const sel: Record<number, boolean> = {};
+    matched.forEach((r, i) => {
+      sel[i] = r.matchStatus === "matched" && r.matchedBy !== "name";
+    });
+    setWpsSel(sel);
   };
 
   // الموظفون النشطون في الإغلاق ولم يظهروا في ملف البنك (لم يُصرف لهم)
@@ -1244,8 +1264,12 @@ export default function SalaryClosingPage() {
     );
   }, [wpsRows, salaryClosingData]);
 
+  // يُعتمد فقط ما أشّره المستخدم (الافتراضي: المطابق تماماً عبر آيبان/هوية)
   const wpsApplicable = wpsRows.filter(
-    (r) => (r.matchStatus === "matched" || r.matchStatus === "amount_diff") && r.branchEmployeeId,
+    (r, i) =>
+      wpsSel[i] &&
+      (r.matchStatus === "matched" || r.matchStatus === "amount_diff") &&
+      r.branchEmployeeId,
   );
 
   const applyWpsPayments = async () => {
@@ -3624,6 +3648,7 @@ export default function SalaryClosingPage() {
                     <table className="w-full text-xs">
                       <thead className="sticky top-0 bg-gray-100">
                         <tr>
+                          <th className="p-2">اعتماد</th>
                           <th className="p-2 text-right">الموظف (ملف البنك)</th>
                           <th className="p-2 text-right">الموظف (النظام)</th>
                           <th className="p-2">مبلغ البنك</th>
@@ -3635,7 +3660,16 @@ export default function SalaryClosingPage() {
                       <tbody>
                         {wpsRows.map((r, i) => (
                           <tr key={i} className="border-t">
-                            <td className="p-2">{r.name}</td>
+                            <td className="p-2 text-center">
+                              {(r.matchStatus === "matched" || r.matchStatus === "amount_diff") && r.branchEmployeeId ? (
+                                <Checkbox
+                                  checked={!!wpsSel[i]}
+                                  onCheckedChange={(v) => setWpsSel((s) => ({ ...s, [i]: v === true }))}
+                                  data-testid={`checkbox-wps-${i}`}
+                                />
+                              ) : null}
+                            </td>
+                            <td className="p-2">{r.name}{r.matchedBy === "name" ? " ⚠️ (مطابقة بالاسم)" : ""}</td>
                             <td className="p-2">{r.employeeName || "—"}{r.alreadyPaid ? " (مصروف مسبقاً)" : ""}</td>
                             <td className="p-2 text-center font-semibold">{r.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
                             <td className="p-2 text-center">{r.netSalary !== undefined ? r.netSalary.toLocaleString("en-US", { minimumFractionDigits: 2 }) : "—"}</td>
@@ -3645,6 +3679,7 @@ export default function SalaryClosingPage() {
                               {r.matchStatus === "amount_diff" && <Badge className="bg-amber-100 text-amber-800">فرق مبلغ</Badge>}
                               {r.matchStatus === "not_found" && <Badge className="bg-red-100 text-red-800">غير موجود</Badge>}
                               {r.matchStatus === "failed" && <Badge className="bg-gray-200 text-gray-700">{r.bankStatus}</Badge>}
+                              {r.matchStatus === "conflict" && <Badge className="bg-red-100 text-red-800">تكرار بالملف</Badge>}
                             </td>
                           </tr>
                         ))}
