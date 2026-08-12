@@ -663,6 +663,70 @@ function normalizeArabicName(s: any): string {
     .toLowerCase();
 }
 
+// ===== مطابقة ملف حماية الأجور الوارد من البنك (TXT) =====
+// تنسيق بنك الرياض: سطر رأس ثم سطر لكل موظف مفصول بعلامات تبويب، يُقرأ بالأنماط
+// (آيبان/مبالغ/هوية/حالة/تاريخ) وليس بمواقع الأعمدة حتى يتحمّل اختلاف الحشو.
+export interface WpsParsedRow {
+  amount: number;          // المبلغ المصروف فعلياً
+  iban: string;
+  name: string;            // الاسم كما في ملف البنك
+  idNumber: string;        // هوية/إقامة
+  reference: string;       // مرجع العملية البنكي
+  bankStatus: string;      // SUCCESS أو غيره
+  paidDate: string;        // ISO yyyy-mm-dd
+  // نتيجة المطابقة
+  matchStatus: "matched" | "amount_diff" | "not_found" | "failed";
+  matchedBy?: "iban" | "id" | "name";
+  branchEmployeeId?: number;
+  employeeName?: string;
+  netSalary?: number;
+  alreadyPaid?: boolean;
+}
+
+const normalizeArName = (s: string): string =>
+  (s || "")
+    .replace(/[\u064B-\u065F\u0670]/g, "")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const wpsNum = (s: string): number => {
+  const v = parseFloat((s || "").replace(/\s/g, "").replace(/,/g, "."));
+  return Number.isFinite(v) ? v : 0;
+};
+
+const wpsDateToISO = (d: string): string =>
+  /^\d{8}$/.test(d) ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}` : "";
+
+export function parseWpsBankFile(text: string): { rows: Omit<WpsParsedRow, "matchStatus">[]; fileDate: string } {
+  const rows: Omit<WpsParsedRow, "matchStatus">[] = [];
+  let fileDate = "";
+  const lines = (text || "").split(/\r?\n/);
+  for (const raw of lines) {
+    if (!raw.trim() || raw.trim() === "-") continue;
+    const fields = raw.split("\t").map((f) => f.trim());
+    const iban = fields.find((f) => /^SA\d{22}$/i.test(f)) || "";
+    const dates = fields.filter((f) => /^\d{8}$/.test(f));
+    // سطر الرأس: أول حقل رمز بنك (أحرف فقط) — نأخذ منه تاريخ الصرف الافتراضي
+    if (/^[A-Z]{3,6}$/.test(fields[0] || "")) {
+      if (dates.length && !fileDate) fileDate = wpsDateToISO(dates[0]);
+      continue;
+    }
+    // سطر تفصيلي: يبدأ بمبلغ وفيه آيبان واسم عربي
+    const name = fields.find((f) => /[\u0600-\u06FF]/.test(f)) || "";
+    if (!iban || !name) continue;
+    const amount = wpsNum(fields[0]);
+    const idNumber = fields.find((f) => /^\d{9,10}$/.test(f)) || "";
+    const reference = fields.find((f) => /^\d{13,20}$/.test(f)) || "";
+    const bankStatus = (fields.find((f) => /^[A-Z]{4,}$/i.test(f) && !/^SA/i.test(f) && f.length >= 6) || "").toUpperCase();
+    const paidDate = wpsDateToISO(dates[dates.length - 1] || "") || fileDate;
+    rows.push({ amount, iban: iban.toUpperCase(), name, idNumber, reference, bankStatus: bankStatus || "SUCCESS", paidDate });
+  }
+  return { rows, fileDate };
+}
+
 // ===== ملف البنك (نموذج بنك الرياض - نظام مدد) =====
 // قائمة رموز البنوك (SWIFT/BIC) للبنوك السعودية - مطابقة لشيت "data" في النموذج
 const BANK_DATA_CURRENCIES: [string, string][] = [
@@ -846,6 +910,12 @@ export default function SalaryClosingPage() {
   const [showReopenDialog, setShowReopenDialog] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
   const [bankExportOpen, setBankExportOpen] = useState(false);
+  // مطابقة ملف حماية الأجور الوارد من البنك (TXT)
+  const [wpsOpen, setWpsOpen] = useState(false);
+  const [wpsRows, setWpsRows] = useState<WpsParsedRow[]>([]);
+  const [wpsFileName, setWpsFileName] = useState("");
+  const [wpsApplying, setWpsApplying] = useState(false);
+  const [wpsApplied, setWpsApplied] = useState(false);
   const [bankDueDate, setBankDueDate] = useState<string>("");
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [groupSel, setGroupSel] = useState<Record<string, string>>({});
@@ -1121,6 +1191,91 @@ export default function SalaryClosingPage() {
       return m;
     } catch {
       return paymentByEmp;
+    }
+  };
+
+  // ===== مطابقة ملف حماية الأجور مع بيانات الإغلاق =====
+  const handleWpsFile = (text: string, fileName: string) => {
+    const { rows } = parseWpsBankFile(text);
+    const lines: any[] = salaryClosingData;
+    const byIban = new Map<string, any>();
+    const byId = new Map<string, any>();
+    const byName = new Map<string, any>();
+    for (const l of lines) {
+      const acct = String(l.bankAccountNumber || "").replace(/\s+/g, "").toUpperCase();
+      if (acct) byIban.set(acct, l);
+      if (l.iqamaNumber) byId.set(String(l.iqamaNumber).trim(), l);
+      byName.set(normalizeArName(l.employeeName), l);
+    }
+    const matched: WpsParsedRow[] = rows.map((r) => {
+      let emp: any = byIban.get(r.iban);
+      let matchedBy: WpsParsedRow["matchedBy"] = emp ? "iban" : undefined;
+      if (!emp && r.idNumber) { emp = byId.get(r.idNumber); if (emp) matchedBy = "id"; }
+      if (!emp) { emp = byName.get(normalizeArName(r.name)); if (emp) matchedBy = "name"; }
+      const failed = r.bankStatus !== "SUCCESS";
+      const status: WpsParsedRow["matchStatus"] = failed
+        ? "failed"
+        : !emp
+          ? "not_found"
+          : Math.abs(r.amount - Number(emp.netSalary || 0)) <= 0.05
+            ? "matched"
+            : "amount_diff";
+      return {
+        ...r,
+        matchStatus: status,
+        matchedBy,
+        branchEmployeeId: emp ? Number(emp.branchEmployeeId) : undefined,
+        employeeName: emp?.employeeName,
+        netSalary: emp ? Number(emp.netSalary || 0) : undefined,
+        alreadyPaid: emp ? paymentByEmp.has(Number(emp.branchEmployeeId)) : false,
+      };
+    });
+    setWpsRows(matched);
+    setWpsFileName(fileName);
+    setWpsApplied(false);
+  };
+
+  // الموظفون النشطون في الإغلاق ولم يظهروا في ملف البنك (لم يُصرف لهم)
+  const wpsMissingEmployees = useMemo(() => {
+    if (!wpsRows.length) return [] as any[];
+    const inFile = new Set(wpsRows.filter((r) => r.branchEmployeeId).map((r) => r.branchEmployeeId));
+    return (salaryClosingData as any[]).filter(
+      (l) => l.employeeStatus === "active" && Number(l.netSalary || 0) > 0 && !inFile.has(Number(l.branchEmployeeId)),
+    );
+  }, [wpsRows, salaryClosingData]);
+
+  const wpsApplicable = wpsRows.filter(
+    (r) => (r.matchStatus === "matched" || r.matchStatus === "amount_diff") && r.branchEmployeeId,
+  );
+
+  const applyWpsPayments = async () => {
+    if (!wpsApplicable.length) return;
+    setWpsApplying(true);
+    let ok = 0, fail = 0;
+    const CHUNK = 5;
+    for (let i = 0; i < wpsApplicable.length; i += CHUNK) {
+      const chunk = wpsApplicable.slice(i, i + CHUNK);
+      const results = await Promise.allSettled(
+        chunk.map((r) =>
+          apiRequest("POST", "/api/salary-closing/payments", {
+            branchEmployeeId: r.branchEmployeeId,
+            month,
+            paymentMethod: "wage_protection",
+            amount: r.amount,
+            paidAt: r.paidDate ? `${r.paidDate}T12:00:00` : undefined,
+            note: `مطابقة ملف البنك${wpsFileName ? ` (${wpsFileName})` : ""} — مرجع ${r.reference || "-"}`,
+          }),
+        ),
+      );
+      results.forEach((res) => (res.status === "fulfilled" ? ok++ : fail++));
+    }
+    setWpsApplying(false);
+    setWpsApplied(true);
+    refreshPayments();
+    if (fail === 0) {
+      toast({ title: "تمت المطابقة والاعتماد", description: `تم تأشير ${ok} موظفاً كمصروف عبر حماية الأجور بتاريخ الصرف الفعلي من البنك.` });
+    } else {
+      toast({ title: "اكتمل جزئياً", description: `نجح ${ok} وفشل ${fail} — أعد المحاولة للمتبقين.`, variant: "destructive" });
     }
   };
 
@@ -2203,6 +2358,23 @@ export default function SalaryClosingPage() {
                   >
                     <Landmark className="w-4 h-4 ml-2" />
                     تصدير ملف البنك
+                  </Button>
+                )}
+                {!isAllBranches && canCloseSalary && (
+                  <Button
+                    variant="outline"
+                    className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                    onClick={() => {
+                      setWpsRows([]);
+                      setWpsFileName("");
+                      setWpsApplied(false);
+                      setWpsOpen(true);
+                    }}
+                    disabled={previewLoading || salaryClosingData.length === 0}
+                    data-testid="button-wps-reconcile"
+                  >
+                    <Landmark className="w-4 h-4 ml-2" />
+                    مطابقة ملف البنك (حماية الأجور)
                   </Button>
                 )}
                 <Button
@@ -3411,6 +3583,92 @@ export default function SalaryClosingPage() {
               >
                 <Landmark className="w-4 h-4 ml-2" />
                 تصدير الملف
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* مطابقة ملف حماية الأجور الوارد من البنك */}
+        <Dialog open={wpsOpen} onOpenChange={setWpsOpen}>
+          <DialogContent className="max-w-4xl" data-testid="dialog-wps-reconcile">
+            <DialogHeader>
+              <DialogTitle>مطابقة ملف البنك — حماية الأجور</DialogTitle>
+              <DialogDescription>
+                ارفع ملف TXT الوارد من البنك بعد الصرف. سيطابق النظام كل موظف تلقائياً (بالآيبان ثم الهوية ثم الاسم) ويؤشّر «تم الصرف» بتاريخ الصرف الفعلي من البنك.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 text-sm">
+              <Input
+                type="file"
+                accept=".txt,.csv,text/plain"
+                data-testid="input-wps-file"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  const reader = new FileReader();
+                  reader.onload = () => handleWpsFile(String(reader.result || ""), f.name);
+                  reader.readAsText(f, "utf-8");
+                }}
+              />
+              {wpsRows.length > 0 && (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge className="bg-green-100 text-green-800">مطابق: {wpsRows.filter((r) => r.matchStatus === "matched").length}</Badge>
+                    <Badge className="bg-amber-100 text-amber-800">فرق مبلغ: {wpsRows.filter((r) => r.matchStatus === "amount_diff").length}</Badge>
+                    <Badge className="bg-red-100 text-red-800">غير موجود بالإغلاق: {wpsRows.filter((r) => r.matchStatus === "not_found").length}</Badge>
+                    <Badge className="bg-gray-200 text-gray-700">فشل التحويل: {wpsRows.filter((r) => r.matchStatus === "failed").length}</Badge>
+                    <Badge className="bg-blue-100 text-blue-800">لم يظهروا في الملف: {wpsMissingEmployees.length}</Badge>
+                    <Badge variant="outline">إجمالي الملف: {wpsRows.reduce((s, r) => s + r.amount, 0).toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س</Badge>
+                  </div>
+                  <div className="max-h-[45vh] overflow-y-auto border rounded-md">
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-gray-100">
+                        <tr>
+                          <th className="p-2 text-right">الموظف (ملف البنك)</th>
+                          <th className="p-2 text-right">الموظف (النظام)</th>
+                          <th className="p-2">مبلغ البنك</th>
+                          <th className="p-2">صافي الراتب</th>
+                          <th className="p-2">تاريخ الصرف</th>
+                          <th className="p-2">النتيجة</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {wpsRows.map((r, i) => (
+                          <tr key={i} className="border-t">
+                            <td className="p-2">{r.name}</td>
+                            <td className="p-2">{r.employeeName || "—"}{r.alreadyPaid ? " (مصروف مسبقاً)" : ""}</td>
+                            <td className="p-2 text-center font-semibold">{r.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-center">{r.netSalary !== undefined ? r.netSalary.toLocaleString("en-US", { minimumFractionDigits: 2 }) : "—"}</td>
+                            <td className="p-2 text-center" dir="ltr">{r.paidDate || "—"}</td>
+                            <td className="p-2 text-center">
+                              {r.matchStatus === "matched" && <Badge className="bg-green-100 text-green-800">✓ مطابق</Badge>}
+                              {r.matchStatus === "amount_diff" && <Badge className="bg-amber-100 text-amber-800">فرق مبلغ</Badge>}
+                              {r.matchStatus === "not_found" && <Badge className="bg-red-100 text-red-800">غير موجود</Badge>}
+                              {r.matchStatus === "failed" && <Badge className="bg-gray-200 text-gray-700">{r.bankStatus}</Badge>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {wpsMissingEmployees.length > 0 && (
+                    <p className="text-xs text-blue-700">
+                      لم يظهروا في ملف البنك: {wpsMissingEmployees.map((l: any) => l.employeeName).join("، ")}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setWpsOpen(false)} data-testid="button-close-wps">
+                إغلاق
+              </Button>
+              <Button
+                disabled={wpsApplying || wpsApplied || wpsApplicable.length === 0}
+                onClick={applyWpsPayments}
+                data-testid="button-apply-wps"
+              >
+                {wpsApplying ? "جارٍ الاعتماد..." : wpsApplied ? "تم الاعتماد ✓" : `اعتماد الصرف (${wpsApplicable.length} موظف)`}
               </Button>
             </DialogFooter>
           </DialogContent>

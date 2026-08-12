@@ -30553,7 +30553,7 @@ export async function registerRoutes(
   // تأشير صرف راتب موظف وتحديد طريقة الدفع (متاح حتى بعد الإغلاق — الصرف يتم بعد الإغلاق عادةً)
   app.post("/api/salary-closing/payments", isAuthenticated, requirePermission("salary_closing", "edit"), async (req, res) => {
     try {
-      const { branchEmployeeId, month, paymentMethod, amount, note } = req.body || {};
+      const { branchEmployeeId, month, paymentMethod, amount, note, paidAt } = req.body || {};
       const beId = parseInt(branchEmployeeId, 10);
       if (Number.isNaN(beId)) return res.status(400).json({ error: "معرف الموظف غير صحيح" });
       if (!isValidMonth(month)) return res.status(400).json({ error: "صيغة الشهر يجب أن تكون YYYY-MM" });
@@ -30571,12 +30571,20 @@ export async function registerRoutes(
       if (!employee) return res.status(404).json({ error: "الموظف غير موجود" });
       const hasAccess = await canAccessBranch(req, employee.branchId);
       if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      // تاريخ صرف اختياري (مثلاً التاريخ الفعلي من ملف حماية الأجور البنكي)
+      let paidAtDate: Date | undefined = undefined;
+      if (paidAt) {
+        const d = new Date(paidAt);
+        if (Number.isNaN(d.getTime())) return res.status(400).json({ error: "تاريخ الصرف غير صالح" });
+        paidAtDate = d;
+      }
       const saved = await storage.upsertSalaryPayment({
         branchEmployeeId: beId,
         branchId: employee.branchId,
         month,
         paymentMethod,
         amount: amt,
+        paidAt: paidAtDate,
         note: note ? String(note).trim() : null,
         createdBy: req.currentUser?.id ?? null,
         createdByName: currentUserName(req),

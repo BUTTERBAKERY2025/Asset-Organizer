@@ -12507,7 +12507,7 @@ export class DatabaseStorage implements IStorage {
           paymentMethod: data.paymentMethod,
           amount: data.amount,
           note: data.note,
-          paidAt: new Date(),
+          paidAt: (data as any).paidAt ?? new Date(),
           createdBy: data.createdBy,
           createdByName: data.createdByName,
           updatedAt: new Date(),
