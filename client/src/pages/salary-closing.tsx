@@ -704,6 +704,43 @@ const wpsNum = (s: string): number => {
 const wpsDateToISO = (d: string): string =>
   /^\d{8}$/.test(d) ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}` : "";
 
+// قراءة ملف البنك بأي ترميز شائع: UTF-16 (بعلامة BOM)، UTF-8، أو Windows-1256
+// (ترميز ANSI العربي الذي تصدّر به بعض أنظمة البنوك) — نختار الترميز الذي يعطي
+// نصاً عربياً سليماً بدل قراءة ثابتة بـ UTF-8 تُظهر الأسماء كرموز مشوهة.
+export function decodeWpsBankFile(buf: ArrayBuffer): string {
+  const b = new Uint8Array(buf);
+  // BOM صريح
+  if (b.length >= 2 && b[0] === 0xff && b[1] === 0xfe) return new TextDecoder("utf-16le").decode(b.subarray(2));
+  if (b.length >= 2 && b[0] === 0xfe && b[1] === 0xff) return new TextDecoder("utf-16be").decode(b.subarray(2));
+  if (b.length >= 3 && b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf) return new TextDecoder("utf-8").decode(b.subarray(3));
+  // UTF-16LE بدون BOM: تكثر فيه البايتات الصفرية
+  let zeros = 0;
+  const sample = Math.min(b.length, 4000);
+  for (let i = 0; i < sample; i++) if (b[i] === 0) zeros++;
+  if (sample > 0 && zeros / sample > 0.2) return new TextDecoder("utf-16le").decode(b);
+  // جرّب UTF-8 الصارم؛ إن فشل أو لم يُنتج حروفاً عربية فالملف Windows-1256
+  const arabicCount = (s: string) => (s.match(/[\u0600-\u06FF]/g) || []).length;
+  let utf8 = "";
+  let utf8ok = true;
+  try {
+    utf8 = new TextDecoder("utf-8", { fatal: true }).decode(b);
+  } catch {
+    utf8ok = false;
+  }
+  let cp1256 = "";
+  try {
+    cp1256 = new TextDecoder("windows-1256").decode(b);
+  } catch {
+    cp1256 = "";
+  }
+  if (!utf8ok) return cp1256 || new TextDecoder("utf-8").decode(b);
+  // نجح UTF-8 الصارم: نعتمده دائماً (فك بايتات UTF-8 بترميز 1256 يولّد حروفاً
+  // عربية مشوهة أكثر عدداً، فلا يصح التفضيل بالعدد). نلجأ لـ 1256 فقط إذا كان
+  // الملف بلا أي عربية في UTF-8 بينما تظهر عربية في 1256 (ملف ANSI أحرفه ضمن ASCII+عربي)
+  if (arabicCount(utf8) === 0 && cp1256 && arabicCount(cp1256) > 0) return cp1256;
+  return utf8;
+}
+
 export function parseWpsBankFile(text: string): { rows: Omit<WpsParsedRow, "matchStatus">[]; fileDate: string } {
   const rows: Omit<WpsParsedRow, "matchStatus">[] = [];
   let fileDate = "";
@@ -3630,8 +3667,8 @@ export default function SalaryClosingPage() {
                   const f = e.target.files?.[0];
                   if (!f) return;
                   const reader = new FileReader();
-                  reader.onload = () => handleWpsFile(String(reader.result || ""), f.name);
-                  reader.readAsText(f, "utf-8");
+                  reader.onload = () => handleWpsFile(decodeWpsBankFile(reader.result as ArrayBuffer), f.name);
+                  reader.readAsArrayBuffer(f);
                 }}
               />
               {wpsRows.length > 0 && (
