@@ -4,5 +4,6 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
-attached_assets/0_6004308035_*.txt
+attached_assets/*6004308035*.txt
+attached_assets/*6004308093*.txt
 production_migration.tar.gz
