@@ -12,6 +12,8 @@ import {
   validateCentralKitchenDispatch,
   validateCentralKitchenReceipt,
   buildCentralKitchenShadowAllocations,
+  calculateCentralKitchenPilotMetrics,
+  centralKitchenSaudiWindow,
   isMatchingCentralKitchenReplay,
 } from "../server/central-kitchen-orders";
 
@@ -160,5 +162,41 @@ describe("central kitchen workflow rules", () => {
       .toEqual([6, 2]);
     expect(buildCentralKitchenShadowAllocations("projected_branch_in", item).map(row => row.quantity))
       .toEqual([6, 1]);
+  });
+
+  it("calculates pilot fulfillment, discrepancies, overdue orders, and stage time", () => {
+    const metrics = calculateCentralKitchenPilotMetrics([
+      {
+        id: 1, status: "received", neededDate: "2026-09-08", discrepancyStatus: "resolved",
+        createdAt: "2026-09-08T08:00:00Z", approvedAt: "2026-09-08T09:00:00Z",
+        preparedAt: "2026-09-08T11:00:00Z", dispatchedAt: "2026-09-08T12:00:00Z",
+        receivedAt: "2026-09-08T13:00:00Z",
+      },
+      {
+        id: 2, status: "approved", neededDate: "2026-09-01", discrepancyStatus: "none",
+        createdAt: "2026-09-01T08:00:00Z", approvedAt: "2026-09-01T09:00:00Z",
+        preparedAt: null, dispatchedAt: null, receivedAt: null,
+      },
+    ], [
+      { orderId: 1, dispatchedQuantity: 10, receivedQuantity: 8, damagedQuantity: 1, missingQuantity: 1 },
+    ], [
+      { direction: "projected_kitchen_out", quantity: 10, unit: "tray" },
+      { direction: "projected_branch_in", quantity: 8, unit: "tray" },
+    ], "2026-09-09");
+    expect(metrics.fulfillmentRate).toBe(80);
+    expect(metrics.discrepancyRate).toBe(100);
+    expect(metrics.overdueOrders).toBe(1);
+    expect(metrics.averageStageHours.approval).toBe(1);
+    expect(metrics.shadowLedger.entryCount).toBe(2);
+    expect(metrics.shadowLedger.byUnit).toEqual([
+      { direction: "projected_kitchen_out", unit: "tray", quantity: 10 },
+      { direction: "projected_branch_in", unit: "tray", quantity: 8 },
+    ]);
+  });
+
+  it("uses complete Saudi calendar days and excludes future rows", () => {
+    const window = centralKitchenSaudiWindow(7, new Date("2026-09-09T20:00:00Z"));
+    expect(window.start.toISOString()).toBe("2026-09-02T21:00:00.000Z");
+    expect(window.end.toISOString()).toBe("2026-09-09T21:00:00.000Z");
   });
 });

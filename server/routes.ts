@@ -7,7 +7,7 @@ import * as NotificationService from "./notification-service";
 import { computeBranchIssues, formatBranchIssuesMessage } from "./branch-issues";
 import { evaluateWasteGovernance, checkApprovalGate } from "./waste-governance";
 import type { AuthenticatedRequest } from "./types/express";
-import { eq, and, desc, inArray, gte, lte, gt, sql, or, isNull, type SQL } from "drizzle-orm";
+import { eq, and, desc, inArray, gte, lte, lt, gt, sql, or, isNull, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
 import { shifts as shiftsTable, cashierPointsLedger, cashierDailyChallenges, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS, centralKitchenOrders, centralKitchenOrderItems, centralKitchenOrderEvents, centralKitchenShadowInventoryConfig, centralKitchenShadowInventoryEntries } from "@shared/schema";
 import { auditEvent, getApprovalThresholds, APPROVAL_THRESHOLDS } from "./audit-helpers";
@@ -153,6 +153,8 @@ import {
   validateCentralKitchenDispatch,
   validateCentralKitchenReceipt,
   buildCentralKitchenShadowAllocations,
+  calculateCentralKitchenPilotMetrics,
+  centralKitchenSaudiWindow,
   type CentralKitchenStatus,
 } from "./central-kitchen-orders";
 
@@ -7538,6 +7540,75 @@ export async function registerRoutes(
       } catch (error) {
         console.error("Error listing central kitchen orders:", error);
         return res.status(500).json({ error: "فشل في جلب طلبات المطبخ المركزي" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/central-kitchen-orders/pilot-metrics",
+    isAuthenticated,
+    requirePermission("central_kitchen_orders", "view"),
+    async (req, res) => {
+      const parsed = z.object({
+        days: z.coerce.number().int().min(7).max(90).default(30),
+        branchId: z.string().trim().min(1).max(255).optional(),
+      }).safeParse(req.query);
+      if (!parsed.success) return res.status(400).json({ error: "نطاق التحليل غير صالح" });
+      try {
+        const branchFilter = getEffectiveBranchFilter(req, parsed.data.branchId);
+        if (!branchFilter.hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+        const window = centralKitchenSaudiWindow(parsed.data.days);
+        const conditions: SQL[] = [
+          gte(centralKitchenOrders.createdAt, window.start),
+          lt(centralKitchenOrders.createdAt, window.end),
+        ];
+        if (branchFilter.singleBranchId) {
+          conditions.push(or(
+            eq(centralKitchenOrders.requestBranchId, branchFilter.singleBranchId),
+            eq(centralKitchenOrders.centralKitchenId, branchFilter.singleBranchId),
+          )!);
+        } else if (branchFilter.branchIds !== null) {
+          if (!branchFilter.branchIds.length) return res.json(calculateCentralKitchenPilotMetrics([], [], []));
+          conditions.push(or(
+            inArray(centralKitchenOrders.requestBranchId, branchFilter.branchIds),
+            inArray(centralKitchenOrders.centralKitchenId, branchFilter.branchIds),
+          )!);
+        }
+        const orders = await db.select({
+          id: centralKitchenOrders.id,
+          status: centralKitchenOrders.status,
+          neededDate: centralKitchenOrders.neededDate,
+          createdAt: centralKitchenOrders.createdAt,
+          approvedAt: centralKitchenOrders.approvedAt,
+          preparedAt: centralKitchenOrders.preparedAt,
+          dispatchedAt: centralKitchenOrders.dispatchedAt,
+          receivedAt: centralKitchenOrders.receivedAt,
+          discrepancyStatus: centralKitchenOrders.discrepancyStatus,
+        }).from(centralKitchenOrders).where(and(...conditions));
+        const [items, shadowEntries] = orders.length
+          ? await Promise.all([
+              db.select({
+                orderId: centralKitchenOrderItems.orderId,
+                dispatchedQuantity: centralKitchenOrderItems.dispatchedQuantity,
+                receivedQuantity: centralKitchenOrderItems.receivedQuantity,
+                damagedQuantity: centralKitchenOrderItems.damagedQuantity,
+                missingQuantity: centralKitchenOrderItems.missingQuantity,
+              }).from(centralKitchenOrderItems)
+                .innerJoin(centralKitchenOrders, eq(centralKitchenOrderItems.orderId, centralKitchenOrders.id))
+                .where(and(...conditions)),
+              db.select({
+                direction: centralKitchenShadowInventoryEntries.direction,
+                unit: centralKitchenShadowInventoryEntries.unit,
+                quantity: centralKitchenShadowInventoryEntries.quantity,
+              }).from(centralKitchenShadowInventoryEntries)
+                .innerJoin(centralKitchenOrders, eq(centralKitchenShadowInventoryEntries.orderId, centralKitchenOrders.id))
+                .where(and(...conditions)),
+            ])
+          : [[], []];
+        return res.json(calculateCentralKitchenPilotMetrics(orders, items, shadowEntries));
+      } catch (error) {
+        console.error("Central kitchen pilot metrics error:", error);
+        return res.status(500).json({ error: "تعذر تحميل مؤشرات تجربة المطبخ" });
       }
     },
   );

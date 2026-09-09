@@ -12925,6 +12925,8 @@ export const centralKitchenOrders = pgTable("central_kitchen_orders", {
   uniqueIndex("uq_central_kitchen_orders_creator_idempotency").on(table.createdBy, table.idempotencyKey),
   index("idx_central_kitchen_orders_request_branch").on(table.requestBranchId),
   index("idx_central_kitchen_orders_kitchen").on(table.centralKitchenId),
+  index("idx_central_kitchen_orders_request_created").on(table.requestBranchId, table.createdAt),
+  index("idx_central_kitchen_orders_kitchen_created").on(table.centralKitchenId, table.createdAt),
   index("idx_central_kitchen_orders_status").on(table.status),
   check("ck_central_kitchen_orders_status", sql`${table.status} IN ('requested', 'approved', 'prepared', 'dispatched', 'received')`),
   check("ck_central_kitchen_orders_distinct_branches", sql`${table.requestBranchId} <> ${table.centralKitchenId}`),

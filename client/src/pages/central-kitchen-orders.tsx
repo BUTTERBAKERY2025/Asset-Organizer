@@ -48,6 +48,13 @@ type ShadowInventoryEntry = {
   id: number; direction: "projected_kitchen_out" | "projected_branch_in";
   component: "original" | "substitute"; productName: string; unit: string; quantity: number;
 };
+type PilotMetrics = {
+  totalOrders: number; overdueOrders: number; openDiscrepancies: number;
+  fulfillmentRate: number | null; discrepancyRate: number | null;
+  statusCounts: Record<string, number>;
+  averageStageHours: { approval: number | null; preparation: number | null; dispatch: number | null; delivery: number | null };
+  shadowLedger: { entryCount: number; byUnit: Array<{ direction: string; unit: string; quantity: number }> };
+};
 
 const STATUS: Record<string, { label: string; className: string }> = {
   requested: { label: "بانتظار الاعتماد", className: "bg-amber-50 text-amber-800 border-amber-200" },
@@ -75,6 +82,7 @@ export default function CentralKitchenOrdersPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | number | null>(null);
   const [actionNotes, setActionNotes] = useState("");
+  const [pilotDays, setPilotDays] = useState("30");
   const [draft, setDraft] = useState({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: localDate(), neededTime: "", notes: "", items: [emptyLine()] });
   const createAttemptRef = useRef<{ signature: string; key: string } | null>(null);
   const transitionKeysRef = useRef(new Map<string, { signature: string; key: string }>());
@@ -88,6 +96,8 @@ export default function CentralKitchenOrdersPage() {
     return `/api/central-kitchen-orders${string ? `?${string}` : ""}`;
   }, [branchFilter, statusFilter]);
   const ordersQuery = useQuery<KitchenOrder[]>({ queryKey: [listUrl] });
+  const metricsUrl = `/api/central-kitchen-orders/pilot-metrics?days=${pilotDays}${branchFilter !== "all" ? `&branchId=${encodeURIComponent(branchFilter)}` : ""}`;
+  const metricsQuery = useQuery<PilotMetrics>({ queryKey: [metricsUrl] });
   const productsQuery = useQuery<unknown>({ queryKey: ["/api/central-kitchen-orders/products"] });
   const kitchensQuery = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["/api/central-kitchen-orders/kitchens"],
@@ -174,6 +184,13 @@ export default function CentralKitchenOrdersPage() {
           {canCreate("central_kitchen_orders") && <Button size="sm" onClick={() => setCreateOpen(true)} data-testid="create-kitchen-order"><Plus className="ml-2 h-4 w-4" />طلب جديد</Button>}
         </div>} />
 
+      <Card className="border-violet-200 bg-gradient-to-l from-violet-50/70 to-background">
+        <CardContent className="p-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">مؤشرات التجربة والتوسع</h2><p className="text-xs text-muted-foreground">قياس دورة الطلب وجودة التوريد قبل تفعيل المخزون الفعلي.</p></div><Select value={pilotDays} onValueChange={setPilotDays}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="7">آخر 7 أيام</SelectItem><SelectItem value="30">آخر 30 يوماً</SelectItem><SelectItem value="90">آخر 90 يوماً</SelectItem></SelectContent></Select></div>
+          {metricsQuery.isLoading ? <div className="grid gap-3 md:grid-cols-5">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-20" />)}</div> : metricsQuery.data ? <><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5"><MetricTile label="إجمالي الطلبات" value={metricsQuery.data.totalOrders} /><MetricTile label="متأخرة عن الحاجة" value={metricsQuery.data.overdueOrders} tone={metricsQuery.data.overdueOrders ? "danger" : "normal"} /><MetricTile label="فروقات مفتوحة" value={metricsQuery.data.openDiscrepancies} tone={metricsQuery.data.openDiscrepancies ? "warning" : "normal"} /><MetricTile label="متوسط اكتمال البنود" value={metricsQuery.data.fulfillmentRate === null ? "—" : `${metricsQuery.data.fulfillmentRate}%`} /><MetricTile label="طلبات بها فروقات" value={metricsQuery.data.discrepancyRate === null ? "—" : `${metricsQuery.data.discrepancyRate}%`} /></div><div className="mt-4 grid gap-2 border-t pt-3 text-xs sm:grid-cols-2 lg:grid-cols-4"><StageTime label="الاعتماد" value={metricsQuery.data.averageStageHours.approval} /><StageTime label="التجهيز" value={metricsQuery.data.averageStageHours.preparation} /><StageTime label="الإرسال" value={metricsQuery.data.averageStageHours.dispatch} /><StageTime label="التوصيل" value={metricsQuery.data.averageStageHours.delivery} /></div><div className="mt-3 text-xs text-muted-foreground">السجل التجريبي: {metricsQuery.data.shadowLedger.entryCount} حركة{metricsQuery.data.shadowLedger.byUnit.length ? ` · ${metricsQuery.data.shadowLedger.byUnit.map(entry => `${entry.direction === "projected_kitchen_out" ? "خصم" : "إضافة"} ${entry.quantity} ${entry.unit}`).join(" · ")}` : ""}</div></> : <p className="text-sm text-muted-foreground">تعذر تحميل مؤشرات التجربة.</p>}
+        </CardContent>
+      </Card>
+
       <Card className="border-border/80 shadow-sm">
         <CardContent className="p-4">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
@@ -211,6 +228,8 @@ export default function CentralKitchenOrdersPage() {
 }
 
 function StatusBadge({ status }: { status: string }) { const info = STATUS[normalized(status)] || { label: status, className: "bg-muted text-muted-foreground border-border" }; return <Badge variant="outline" className={cn("whitespace-nowrap font-medium", info.className)}>{info.label}</Badge>; }
+function MetricTile({ label, value, tone = "normal" }: { label: string; value: string | number; tone?: "normal" | "warning" | "danger" }) { return <div className={cn("rounded-lg border bg-background p-3", tone === "warning" && "border-amber-200 bg-amber-50", tone === "danger" && "border-red-200 bg-red-50")}><span className="text-xs text-muted-foreground">{label}</span><strong className="mt-1 block text-2xl">{value}</strong></div>; }
+function StageTime({ label, value }: { label: string; value: number | null }) { return <div className="flex items-center justify-between rounded-md bg-background/70 px-3 py-2"><span>متوسط {label}</span><strong>{value === null ? "—" : `${value} ساعة`}</strong></div>; }
 function FormSelect({ label, value, onChange, branches, placeholder }: { label: string; value: string; onChange: (value: string) => void; branches: { id: string; name: string }[]; placeholder: string }) { return <div><Label>{label}</Label><Select value={value} onValueChange={onChange}><SelectTrigger className="mt-2"><SelectValue placeholder={placeholder} /></SelectTrigger><SelectContent>{branches.map(branch => <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>)}</SelectContent></Select></div>; }
 function OrderDetail({ order, accessibleBranchIds, actionNotes, setActionNotes, pending, canApprove, canEdit, onAction }: { order: KitchenOrder; accessibleBranchIds: string[]; actionNotes: string; setActionNotes: (value: string) => void; pending: boolean; canApprove: boolean; canEdit: boolean; onAction: (action: "approve" | "prepare" | "dispatch" | "receive" | "resolve-discrepancy", details?: Record<string, unknown>) => void }) {
   const status = normalized(order.status);

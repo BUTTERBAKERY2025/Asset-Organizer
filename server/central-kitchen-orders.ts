@@ -251,6 +251,91 @@ export function buildCentralKitchenShadowAllocations(
   return allocations;
 }
 
+export function calculateCentralKitchenPilotMetrics(
+  orders: Array<{
+    id: number; status: string; neededDate: string | null; createdAt: Date | string;
+    approvedAt: Date | string | null; preparedAt: Date | string | null;
+    dispatchedAt: Date | string | null; receivedAt: Date | string | null;
+    discrepancyStatus: string;
+  }>,
+  items: Array<{
+    orderId: number; dispatchedQuantity: number | null; receivedQuantity: number | null;
+    damagedQuantity: number | null; missingQuantity: number | null;
+  }>,
+  shadowEntries: Array<{ direction: string; unit: string; quantity: number }>,
+  today = saudiDate(),
+) {
+  const statusCounts = Object.fromEntries(
+    ["requested", "approved", "prepared", "dispatched", "received"].map((status) => [
+      status,
+      orders.filter((order) => order.status === status).length,
+    ]),
+  );
+  const completedOrderIds = new Set(orders.filter((order) => order.status === "received").map((order) => order.id));
+  const completedItems = items.filter((item) => completedOrderIds.has(item.orderId));
+  const lineFulfillmentRates = completedItems.flatMap((item) => {
+    const dispatched = Number(item.dispatchedQuantity || 0);
+    return dispatched > 0 ? [Math.min(1, Number(item.receivedQuantity || 0) / dispatched)] : [];
+  });
+  const discrepantOrderIds = new Set(completedItems
+    .filter((item) => Number(item.damagedQuantity || 0) > 0 || Number(item.missingQuantity || 0) > 0)
+    .map((item) => item.orderId));
+  const stagePairs: Array<[keyof (typeof orders)[number], keyof (typeof orders)[number]]> = [
+    ["createdAt", "approvedAt"],
+    ["approvedAt", "preparedAt"],
+    ["preparedAt", "dispatchedAt"],
+    ["dispatchedAt", "receivedAt"],
+  ];
+  const averageStageHours = stagePairs.map(([from, to]) => {
+    const durations = orders.flatMap((order) => {
+      const start = order[from]; const end = order[to];
+      return start && end ? [(new Date(end).getTime() - new Date(start).getTime()) / 3_600_000] : [];
+    });
+    return durations.length ? Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10 : null;
+  });
+  return {
+    totalOrders: orders.length,
+    statusCounts,
+    overdueOrders: orders.filter((order) => order.status !== "received" && !!order.neededDate && order.neededDate < today).length,
+    openDiscrepancies: orders.filter((order) => order.discrepancyStatus === "open").length,
+    fulfillmentRate: lineFulfillmentRates.length
+      ? Math.round((lineFulfillmentRates.reduce((sum, rate) => sum + rate, 0) / lineFulfillmentRates.length) * 10_000) / 100
+      : null,
+    discrepancyRate: completedOrderIds.size
+      ? Math.round((discrepantOrderIds.size / completedOrderIds.size) * 10_000) / 100
+      : null,
+    averageStageHours: {
+      approval: averageStageHours[0],
+      preparation: averageStageHours[1],
+      dispatch: averageStageHours[2],
+      delivery: averageStageHours[3],
+    },
+    shadowLedger: {
+      entryCount: shadowEntries.length,
+      byUnit: Array.from(shadowEntries.reduce((groups, entry) => {
+        const key = `${entry.direction}:${entry.unit}`;
+        const current = groups.get(key) || { direction: entry.direction, unit: entry.unit, quantity: 0 };
+        current.quantity += Number(entry.quantity);
+        groups.set(key, current);
+        return groups;
+      }, new Map<string, { direction: string; unit: string; quantity: number }>()).values()),
+    },
+  };
+}
+
+export function centralKitchenSaudiWindow(days: number, now = new Date()) {
+  const today = saudiDate(now);
+  const shiftDate = (date: string, offset: number) => {
+    const value = new Date(`${date}T00:00:00Z`);
+    value.setUTCDate(value.getUTCDate() + offset);
+    return value.toISOString().slice(0, 10);
+  };
+  return {
+    start: new Date(`${shiftDate(today, -(days - 1))}T00:00:00+03:00`),
+    end: new Date(`${shiftDate(today, 1)}T00:00:00+03:00`),
+  };
+}
+
 export function validateCentralKitchenPreparation(
   requestedItems: Array<{ id: number; requestedQuantity: number; unit: string }>,
   preparedItems: z.infer<typeof centralKitchenPreparationSchema>["items"],
