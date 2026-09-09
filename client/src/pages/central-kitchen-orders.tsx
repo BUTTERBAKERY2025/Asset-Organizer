@@ -72,7 +72,11 @@ export default function CentralKitchenOrdersPage() {
   }, [branchFilter, statusFilter]);
   const ordersQuery = useQuery<KitchenOrder[]>({ queryKey: [listUrl] });
   const productsQuery = useQuery<unknown>({ queryKey: ["/api/central-kitchen-orders/products"] });
-  const kitchensQuery = useQuery<Array<{ id: string; name: string }>>({ queryKey: ["/api/central-kitchen-orders/kitchens"] });
+  const kitchensQuery = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/central-kitchen-orders/kitchens"],
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
   const detailQuery = useQuery<KitchenOrder>({ queryKey: [`/api/central-kitchen-orders/${detailId}`], enabled: detailId !== null });
   const products = useMemo<ProductOption[]>(() => {
     const raw = productsQuery.data;
@@ -80,7 +84,14 @@ export default function CentralKitchenOrdersPage() {
     if (raw && typeof raw === "object" && Array.isArray((raw as { products?: unknown[] }).products)) return (raw as { products: ProductOption[] }).products;
     return [];
   }, [productsQuery.data]);
-  const centralKitchens = kitchensQuery.data || [];
+  const centralKitchens = useMemo(() => {
+    const merged = new Map<string, { id: string; name: string }>();
+    for (const branch of kitchensQuery.data || []) merged.set(branch.id, branch);
+    for (const branch of branches) {
+      if (branch.isCentralKitchen) merged.set(branch.id, { id: branch.id, name: branch.name });
+    }
+    return Array.from(merged.values());
+  }, [branches, kitchensQuery.data]);
   const filtered = useMemo(() => (ordersQuery.data || []).filter(order => {
     const term = search.trim().toLowerCase();
     return !term || [order.orderNumber, order.requestBranchName, order.centralKitchenName].some(value => value?.toLowerCase().includes(term));
@@ -160,7 +171,7 @@ export default function CentralKitchenOrdersPage() {
     </main>
 
     <Dialog open={createOpen} onOpenChange={setCreateOpen}><DialogContent dir="rtl" className="max-h-[92dvh] max-w-4xl overflow-y-auto"><DialogHeader><DialogTitle>طلب جديد للمطبخ المركزي</DialogTitle><DialogDescription>أضف احتياج الفرع بدقة ليظهر لفريق المطبخ فوراً.</DialogDescription></DialogHeader>
-      <div className="grid gap-4 py-2 md:grid-cols-2"><FormSelect label="الفرع الطالب" value={draft.sourceBranchId} onChange={value => setDraft({ ...draft, sourceBranchId: value })} branches={branches} placeholder="اختر الفرع" /><FormSelect label="المطبخ المركزي" value={draft.centralKitchenId} onChange={value => setDraft({ ...draft, centralKitchenId: value })} branches={centralKitchens.filter(branch => branch.id !== draft.sourceBranchId)} placeholder={centralKitchens.length ? "اختر المطبخ" : "لا يوجد مطبخ مركزي مفعّل"} />
+      <div className="grid gap-4 py-2 md:grid-cols-2"><FormSelect label="الفرع الطالب" value={draft.sourceBranchId} onChange={value => setDraft({ ...draft, sourceBranchId: value })} branches={branches} placeholder="اختر الفرع" /><FormSelect label="المطبخ المركزي" value={draft.centralKitchenId} onChange={value => setDraft({ ...draft, centralKitchenId: value })} branches={centralKitchens.filter(branch => branch.id !== draft.sourceBranchId)} placeholder={kitchensQuery.isLoading ? "جارٍ تحميل المطابخ..." : centralKitchens.length ? "اختر المطبخ" : kitchensQuery.isError ? "تعذر تحميل المطابخ المركزية" : "لا يوجد مطبخ مركزي مفعّل"} />
         <div><Label htmlFor="needed-date">تاريخ الحاجة</Label><Input id="needed-date" type="date" className="mt-2" value={draft.neededDate} onChange={event => setDraft({ ...draft, neededDate: event.target.value })} /></div><div><Label htmlFor="needed-time">وقت الحاجة</Label><Input id="needed-time" type="time" className="mt-2" value={draft.neededTime} onChange={event => setDraft({ ...draft, neededTime: event.target.value })} /></div>
       </div>
       <div className="rounded-lg border bg-muted/20"><div className="flex items-center justify-between border-b px-4 py-3"><div><p className="font-semibold">بنود الطلب</p><p className="text-xs text-muted-foreground">يمكن اختيار منتج أو إدخاله يدوياً.</p></div><Button variant="outline" size="sm" onClick={() => setDraft({ ...draft, items: [...draft.items, emptyLine()] })}><Plus className="ml-1 h-4 w-4" />إضافة بند</Button></div>

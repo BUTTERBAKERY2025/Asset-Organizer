@@ -7555,7 +7555,13 @@ export async function registerRoutes(
     requirePermission("central_kitchen_orders", "view"),
     async (_req, res) => {
       try {
-        const rows = await db.select().from(products).orderBy(products.name);
+        // Keep this endpoint compatible with older production product schemas.
+        // The order form only needs these stable columns.
+        const rows = await db.select({
+          id: products.id,
+          name: products.name,
+          unit: products.unit,
+        }).from(products).orderBy(products.name);
         return res.json(rows);
       } catch (error) {
         console.error("Error listing central kitchen order products:", error);
