@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   canTransitionCentralKitchenOrder,
   centralKitchenIdempotencyKeySchema,
+  centralKitchenPreparationSchema,
   createCentralKitchenOrderSchema,
   createCentralKitchenPayloadFingerprint,
+  createCentralKitchenTransitionFingerprint,
+  validateCentralKitchenPreparation,
   isMatchingCentralKitchenReplay,
 } from "../server/central-kitchen-orders";
 
@@ -57,5 +60,58 @@ describe("central kitchen workflow rules", () => {
       .toBe(createCentralKitchenPayloadFingerprint({ ...base }));
     expect(createCentralKitchenPayloadFingerprint(base))
       .not.toBe(createCentralKitchenPayloadFingerprint({ ...base, requestBranchId: "branch-b" }));
+  });
+
+  it("requires complete, non-excessive preparation details", () => {
+    const prepared = centralKitchenPreparationSchema.parse({
+      idempotencyKey: "prepare-123",
+      items: [
+        {
+          itemId: 1,
+          preparedQuantity: 6,
+          substituteQuantity: 2,
+          substituteProductName: "Alternative bread",
+          substituteUnit: "tray",
+          shortageReason: "out_of_stock",
+        },
+      ],
+    });
+    expect(validateCentralKitchenPreparation(
+      [{ id: 1, requestedQuantity: 10, unit: "tray" }],
+      prepared.items,
+    )).toBeNull();
+    expect(validateCentralKitchenPreparation(
+      [{ id: 1, requestedQuantity: 7, unit: "tray" }],
+      prepared.items,
+    )).toContain("تتجاوز");
+    expect(validateCentralKitchenPreparation(
+      [{ id: 1, requestedQuantity: 10, unit: "tray" }, { id: 2, requestedQuantity: 1, unit: "tray" }],
+      prepared.items,
+    )).toContain("جميع");
+  });
+
+  it("requires substitute identity when a substitute quantity is prepared", () => {
+    expect(centralKitchenPreparationSchema.safeParse({
+      items: [{ itemId: 1, preparedQuantity: 0, substituteQuantity: 2 }],
+    }).success).toBe(false);
+  });
+
+  it("binds transition replay to logical payload, not key location or item order", () => {
+    const first = centralKitchenPreparationSchema.parse({
+      idempotencyKey: "prepare-key-1",
+      items: [
+        { itemId: 2, preparedQuantity: 3, substituteQuantity: 0 },
+        { itemId: 1, preparedQuantity: 4, substituteQuantity: 0 },
+      ],
+    });
+    const retry = centralKitchenPreparationSchema.parse({
+      idempotencyKey: "prepare-key-2",
+      notes: null,
+      items: [...first.items].reverse(),
+    });
+    expect(createCentralKitchenTransitionFingerprint("prepared", first))
+      .toBe(createCentralKitchenTransitionFingerprint("prepared", retry));
+    expect(createCentralKitchenTransitionFingerprint("prepared", first))
+      .not.toBe(createCentralKitchenTransitionFingerprint("dispatched", retry));
   });
 });

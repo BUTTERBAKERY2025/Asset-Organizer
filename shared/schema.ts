@@ -12932,10 +12932,23 @@ export const centralKitchenOrderItems = pgTable("central_kitchen_order_items", {
   requestedQuantity: real("requested_quantity").notNull(),
   unit: text("unit").notNull(),
   notes: text("notes"),
+  preparedQuantity: real("prepared_quantity"),
+  substituteQuantity: real("substitute_quantity"),
+  substituteProductId: integer("substitute_product_id").references(() => products.id, { onDelete: "set null" }),
+  substituteProductName: text("substitute_product_name"),
+  substituteUnit: text("substitute_unit"),
+  shortageReason: text("shortage_reason"),
+  preparationNotes: text("preparation_notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_central_kitchen_order_items_order").on(table.orderId),
   check("ck_central_kitchen_order_items_quantity", sql`${table.requestedQuantity} > 0`),
+  check("ck_central_kitchen_order_items_prepared_quantity", sql`${table.preparedQuantity} IS NULL OR ${table.preparedQuantity} >= 0`),
+  check("ck_central_kitchen_order_items_substitute_quantity", sql`${table.substituteQuantity} IS NULL OR ${table.substituteQuantity} >= 0`),
+  check("ck_central_kitchen_order_items_total_ready", sql`${table.preparedQuantity} IS NULL OR COALESCE(${table.preparedQuantity}, 0) + COALESCE(${table.substituteQuantity}, 0) <= ${table.requestedQuantity}`),
+  check("ck_central_kitchen_order_items_substitute_identity", sql`(COALESCE(${table.substituteQuantity}, 0) = 0 AND ${table.substituteProductId} IS NULL AND ${table.substituteProductName} IS NULL AND ${table.substituteUnit} IS NULL) OR (COALESCE(${table.substituteQuantity}, 0) > 0 AND NULLIF(BTRIM(${table.substituteProductName}), '') IS NOT NULL AND ${table.substituteUnit} = ${table.unit})`),
+  check("ck_central_kitchen_order_items_shortage_reason", sql`${table.preparedQuantity} IS NULL OR (COALESCE(${table.preparedQuantity}, 0) + COALESCE(${table.substituteQuantity}, 0) < ${table.requestedQuantity} AND ${table.shortageReason} IN ('unavailable', 'out_of_stock', 'production_issue', 'quality_issue', 'other')) OR (COALESCE(${table.preparedQuantity}, 0) + COALESCE(${table.substituteQuantity}, 0) >= ${table.requestedQuantity} AND ${table.shortageReason} IS NULL)`),
+  check("ck_central_kitchen_order_items_preparation_consistency", sql`${table.preparedQuantity} IS NOT NULL OR (${table.substituteQuantity} IS NULL AND ${table.substituteProductId} IS NULL AND ${table.substituteProductName} IS NULL AND ${table.substituteUnit} IS NULL AND ${table.shortageReason} IS NULL AND ${table.preparationNotes} IS NULL)`),
 ]);
 
 export const centralKitchenOrderEvents = pgTable("central_kitchen_order_events", {
@@ -12946,6 +12959,7 @@ export const centralKitchenOrderEvents = pgTable("central_kitchen_order_events",
   toStatus: text("to_status").notNull(),
   notes: text("notes"),
   idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+  payloadFingerprint: varchar("payload_fingerprint", { length: 64 }),
   actorId: varchar("actor_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [

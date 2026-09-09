@@ -17,11 +17,15 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import {
-  Check, ChevronLeft, Factory, Filter, Loader2, PackagePlus, Plus, RefreshCw,
-  Search, ShieldCheck, Truck, X,
+  AlertTriangle, Check, ChevronLeft, Factory, Filter, Loader2, PackagePlus, Plus, Printer,
+  RefreshCw, Search, ShieldCheck, Truck, X,
 } from "lucide-react";
 
-type KitchenItem = { id?: string | number; productId?: string | number; productName: string; unit: string; requestedQuantity: number; notes?: string };
+type KitchenItem = {
+  id?: string | number; productId?: string | number; productName: string; unit: string; requestedQuantity: number; notes?: string;
+  preparedQuantity?: number | null; substituteQuantity?: number | null; substituteProductName?: string | null;
+  substituteUnit?: string | null; shortageReason?: string | null; preparationNotes?: string | null;
+};
 type KitchenEvent = { id: string | number; fromStatus?: string; toStatus: string; actorId?: string; notes?: string; createdAt: string };
 type KitchenOrder = {
   id: string | number; orderNumber: string; requestBranchId: string; centralKitchenId: string; status: string;
@@ -31,6 +35,10 @@ type KitchenOrder = {
 };
 type ProductOption = { id?: string | number; name?: string; productName?: string; unit?: string; unitName?: string };
 type DraftItem = { productId?: string | number; productName: string; unit: string; requestedQuantity: string; notes: string };
+type PreparationInput = {
+  itemId: number; preparedQuantity: number; substituteQuantity: number; substituteProductName?: string;
+  substituteUnit?: string; shortageReason?: string; preparationNotes?: string;
+};
 
 const STATUS: Record<string, { label: string; className: string }> = {
   requested: { label: "بانتظار الاعتماد", className: "bg-amber-50 text-amber-800 border-amber-200" },
@@ -60,7 +68,7 @@ export default function CentralKitchenOrdersPage() {
   const [actionNotes, setActionNotes] = useState("");
   const [draft, setDraft] = useState({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: localDate(), neededTime: "", notes: "", items: [emptyLine()] });
   const createAttemptRef = useRef<{ signature: string; key: string } | null>(null);
-  const transitionKeysRef = useRef(new Map<string, string>());
+  const transitionKeysRef = useRef(new Map<string, { signature: string; key: string }>());
 
   useEffect(() => { if (userBranchId) setBranchFilter(userBranchId); }, [userBranchId]);
   const listUrl = useMemo(() => {
@@ -125,18 +133,24 @@ export default function CentralKitchenOrdersPage() {
     onError: (error) => toast({ title: "تعذر إنشاء الطلب", description: error instanceof Error ? error.message : "تحقق من البيانات وحاول مجدداً.", variant: "destructive" }),
   });
   const workflowMutation = useMutation({
-    mutationFn: async ({ id, action }: { id: string | number; action: "approve" | "prepare" | "dispatch" | "receive" }) => {
+    mutationFn: async ({ id, action, preparationItems }: { id: string | number; action: "approve" | "prepare" | "dispatch" | "receive"; preparationItems?: PreparationInput[] }) => {
       const attemptId = `${id}:${action}`;
-      const idempotencyKey = transitionKeysRef.current.get(attemptId) || crypto.randomUUID();
-      transitionKeysRef.current.set(attemptId, idempotencyKey);
-      const response = await apiRequest("POST", `/api/central-kitchen-orders/${id}/${action}`, {
+      const payload = {
         notes: actionNotes || undefined,
+        ...(action === "prepare" ? { items: preparationItems } : {}),
+      };
+      const signature = JSON.stringify(payload);
+      const previous = transitionKeysRef.current.get(attemptId);
+      const idempotencyKey = previous?.signature === signature ? previous.key : crypto.randomUUID();
+      transitionKeysRef.current.set(attemptId, { signature, key: idempotencyKey });
+      const response = await apiRequest("POST", `/api/central-kitchen-orders/${id}/${action}`, {
+        ...payload,
         idempotencyKey,
       });
       return { order: await response.json(), attemptId };
     },
     onSuccess: ({ attemptId }, { action }) => { transitionKeysRef.current.delete(attemptId); toast({ title: `تم ${action === "approve" ? "اعتماد" : action === "prepare" ? "تجهيز" : action === "dispatch" ? "شحن" : "استلام"} الطلب` }); setActionNotes(""); refresh(); },
-    onError: () => toast({ title: "لم تكتمل العملية", description: "يرجى مراجعة حالة الطلب والصلاحيات.", variant: "destructive" }),
+    onError: (error) => toast({ title: "لم تكتمل العملية", description: error instanceof Error ? error.message : "يرجى مراجعة حالة الطلب والصلاحيات.", variant: "destructive" }),
   });
   const setLine = (index: number, changes: Partial<DraftItem>) => setDraft(current => ({ ...current, items: current.items.map((item, i) => i === index ? { ...item, ...changes } : item) }));
   const selectedDetail = detailQuery.data;
@@ -183,26 +197,109 @@ export default function CentralKitchenOrdersPage() {
       <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setCreateOpen(false)}>إلغاء</Button><Button disabled={createMutation.isPending} onClick={() => createMutation.mutate()}>{createMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}إرسال الطلب</Button></div>
     </DialogContent></Dialog>
 
-    <Dialog open={detailId !== null} onOpenChange={open => { if (!open) { setDetailId(null); setActionNotes(""); } }}><DialogContent dir="rtl" className="max-h-[92dvh] max-w-4xl overflow-y-auto">{detailQuery.isLoading ? <div className="space-y-3 py-8">{Array.from({ length: 5 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</div> : detailQuery.isError || !selectedDetail ? <div className="py-12 text-center"><p className="font-medium">تعذر تحميل تفاصيل الطلب</p><Button variant="outline" className="mt-4" onClick={() => detailQuery.refetch()}>إعادة المحاولة</Button></div> : <OrderDetail order={selectedDetail} accessibleBranchIds={branches.map(branch => branch.id)} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={workflowMutation.isPending} canApprove={canApprove("central_kitchen_orders")} canEdit={canEdit("central_kitchen_orders")} onAction={action => workflowMutation.mutate({ id: selectedDetail.id, action })} />}</DialogContent></Dialog>
+    <Dialog open={detailId !== null} onOpenChange={open => { if (!open) { setDetailId(null); setActionNotes(""); } }}><DialogContent dir="rtl" className="max-h-[92dvh] max-w-5xl overflow-y-auto">{detailQuery.isLoading ? <div className="space-y-3 py-8">{Array.from({ length: 5 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</div> : detailQuery.isError || !selectedDetail ? <div className="py-12 text-center"><p className="font-medium">تعذر تحميل تفاصيل الطلب</p><Button variant="outline" className="mt-4" onClick={() => detailQuery.refetch()}>إعادة المحاولة</Button></div> : <OrderDetail order={selectedDetail} accessibleBranchIds={branches.map(branch => branch.id)} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={workflowMutation.isPending} canApprove={canApprove("central_kitchen_orders")} canEdit={canEdit("central_kitchen_orders")} onAction={(action, preparationItems) => workflowMutation.mutate({ id: selectedDetail.id, action, preparationItems })} />}</DialogContent></Dialog>
   </Layout>;
 }
 
 function StatusBadge({ status }: { status: string }) { const info = STATUS[normalized(status)] || { label: status, className: "bg-muted text-muted-foreground border-border" }; return <Badge variant="outline" className={cn("whitespace-nowrap font-medium", info.className)}>{info.label}</Badge>; }
 function FormSelect({ label, value, onChange, branches, placeholder }: { label: string; value: string; onChange: (value: string) => void; branches: { id: string; name: string }[]; placeholder: string }) { return <div><Label>{label}</Label><Select value={value} onValueChange={onChange}><SelectTrigger className="mt-2"><SelectValue placeholder={placeholder} /></SelectTrigger><SelectContent>{branches.map(branch => <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>)}</SelectContent></Select></div>; }
-function OrderDetail({ order, accessibleBranchIds, actionNotes, setActionNotes, pending, canApprove, canEdit, onAction }: { order: KitchenOrder; accessibleBranchIds: string[]; actionNotes: string; setActionNotes: (value: string) => void; pending: boolean; canApprove: boolean; canEdit: boolean; onAction: (action: "approve" | "prepare" | "dispatch" | "receive") => void }) {
-  const status = normalized(order.status); const action = status === "requested" || status === "pending" || status === "draft" ? "approve" : status === "approved" ? "prepare" : status === "prepared" ? "dispatch" : status === "dispatched" ? "receive" : null;
+function OrderDetail({ order, accessibleBranchIds, actionNotes, setActionNotes, pending, canApprove, canEdit, onAction }: { order: KitchenOrder; accessibleBranchIds: string[]; actionNotes: string; setActionNotes: (value: string) => void; pending: boolean; canApprove: boolean; canEdit: boolean; onAction: (action: "approve" | "prepare" | "dispatch" | "receive", preparationItems?: PreparationInput[]) => void }) {
+  const status = normalized(order.status);
+  const action = status === "requested" || status === "pending" || status === "draft" ? "approve" : status === "approved" ? "prepare" : status === "prepared" ? "dispatch" : status === "dispatched" ? "receive" : null;
   const allowAction = action === "approve"
     ? canApprove && accessibleBranchIds.includes(order.centralKitchenId)
     : action === "receive"
       ? canEdit && accessibleBranchIds.includes(order.requestBranchId)
       : !!action && canEdit && accessibleBranchIds.includes(order.centralKitchenId);
   const actionConfig = action ? { approve: { label: "اعتماد الطلب", icon: ShieldCheck }, prepare: { label: "تأكيد التجهيز", icon: PackagePlus }, dispatch: { label: "تأكيد الشحن", icon: Truck }, receive: { label: "تأكيد الاستلام", icon: Check } }[action] : null;
-  return <><DialogHeader><div className="flex items-start justify-between gap-3 pl-8"><div><DialogTitle className="font-mono text-xl">{order.orderNumber}</DialogTitle><DialogDescription className="mt-1">طلب الفرع {order.requestBranchName || order.requestBranchId} من {order.centralKitchenName || order.centralKitchenId}</DialogDescription></div><StatusBadge status={order.status} /></div></DialogHeader>
+  return <><DialogHeader><div className="flex items-start justify-between gap-3 pl-8"><div><DialogTitle className="font-mono text-xl">{order.orderNumber}</DialogTitle><DialogDescription className="mt-1">طلب الفرع {order.requestBranchName || order.requestBranchId} من {order.centralKitchenName || order.centralKitchenId}</DialogDescription></div><div className="flex items-center gap-2"><StatusBadge status={order.status} />{["prepared", "dispatched", "received"].includes(status) && <Button size="sm" variant="outline" onClick={() => printPreparationNote(order)}><Printer className="ml-1 h-4 w-4" />سند التجهيز</Button>}</div></div></DialogHeader>
     <div className="grid gap-3 border-y py-4 text-sm md:grid-cols-3"><div><span className="block text-muted-foreground">تاريخ الحاجة</span><span className="mt-1 block font-medium">{readableDate(order.neededDate)}</span></div><div><span className="block text-muted-foreground">وقت الحاجة</span><span className="mt-1 block font-medium">{readableTime(order.neededTime)}</span></div><div><span className="block text-muted-foreground">تاريخ الإنشاء</span><span className="mt-1 block font-medium">{readableDate(order.createdAt)}</span></div></div>
     {order.notes && <div className="rounded-md border-r-4 border-primary bg-muted/30 px-4 py-3 text-sm"><span className="mb-1 block text-xs text-muted-foreground">ملاحظات الطلب</span>{order.notes}</div>}
-    <section><h3 className="mb-2 font-semibold">بنود الطلب <span className="text-sm font-normal text-muted-foreground">({order.items?.length || 0})</span></h3><div className="overflow-hidden rounded-md border"><Table><TableHeader className="bg-muted/40"><TableRow><TableHead className="text-right">الصنف</TableHead><TableHead className="text-right">الكمية</TableHead><TableHead className="text-right">ملاحظات</TableHead></TableRow></TableHeader><TableBody>{order.items?.map(item => <TableRow key={item.id || item.productName}><TableCell className="font-medium">{item.productName}</TableCell><TableCell>{item.requestedQuantity} {item.unit}</TableCell><TableCell className="text-muted-foreground">{item.notes || "—"}</TableCell></TableRow>)}</TableBody></Table></div></section>
+    <OrderItemsTable items={order.items || []} showPreparation={["prepared", "dispatched", "received"].includes(status)} />
     <section><h3 className="mb-3 font-semibold">مسار الطلب</h3><div className="space-y-3 border-r-2 border-muted pr-4">{order.events?.length ? order.events.map(event => <div className="relative" key={event.id}><span className="absolute -right-[23px] top-1 h-3 w-3 rounded-full border-2 border-background bg-primary" /><div className="flex flex-wrap items-center gap-2"><StatusBadge status={event.toStatus} /><span className="text-xs text-muted-foreground">{readableDate(event.createdAt)} · {new Date(event.createdAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}</span></div>{event.notes && <p className="mt-1 text-sm text-muted-foreground">{event.notes}</p>}</div>) : <p className="text-sm text-muted-foreground">لم تُسجل تحديثات إضافية بعد.</p>}</div></section>
-    {actionConfig && allowAction && <div className="rounded-lg border bg-muted/20 p-3"><Label htmlFor="action-note">{action === "dispatch" || action === "receive" ? "ملاحظة العملية" : "ملاحظة (اختياري)"}</Label><Input id="action-note" className="mt-2" value={actionNotes} onChange={event => setActionNotes(event.target.value)} placeholder="أضف ملاحظة للفريق..." /><Button className="mt-3 w-full sm:w-auto" disabled={pending} onClick={() => { if (action) onAction(action); }}>{pending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <actionConfig.icon className="ml-2 h-4 w-4" />}{actionConfig.label}</Button></div>}
+    {action === "prepare" && allowAction
+      ? <PreparationEditor items={order.items || []} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={pending} onSubmit={items => onAction("prepare", items)} />
+      : actionConfig && allowAction && <div className="rounded-lg border bg-muted/20 p-3"><Label htmlFor="action-note">{action === "dispatch" || action === "receive" ? "ملاحظة العملية" : "ملاحظة (اختياري)"}</Label><Input id="action-note" className="mt-2" value={actionNotes} onChange={event => setActionNotes(event.target.value)} placeholder="أضف ملاحظة للفريق..." /><Button className="mt-3 w-full sm:w-auto" disabled={pending} onClick={() => { if (action) onAction(action); }}>{pending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <actionConfig.icon className="ml-2 h-4 w-4" />}{actionConfig.label}</Button></div>}
     {!action && status === "received" && <div className="flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800"><Check className="h-4 w-4" />اكتمل مسار هذا الطلب وتم تأكيد الاستلام.</div>}
   </>;
+}
+
+const SHORTAGE_LABELS: Record<string, string> = {
+  unavailable: "غير متوفر",
+  out_of_stock: "نفاد المخزون",
+  production_issue: "تعذر الإنتاج",
+  quality_issue: "مشكلة جودة",
+  other: "سبب آخر",
+};
+
+function OrderItemsTable({ items, showPreparation }: { items: KitchenItem[]; showPreparation: boolean }) {
+  return <section><h3 className="mb-2 font-semibold">بنود الطلب <span className="text-sm font-normal text-muted-foreground">({items.length})</span></h3><div className="overflow-x-auto rounded-md border"><Table><TableHeader className="bg-muted/40"><TableRow><TableHead className="text-right">الصنف</TableHead><TableHead className="text-right">المطلوب</TableHead>{showPreparation && <><TableHead className="text-right">الأصلي المجهز</TableHead><TableHead className="text-right">البديل</TableHead><TableHead className="text-right">النقص</TableHead></>}<TableHead className="text-right">ملاحظات</TableHead></TableRow></TableHeader><TableBody>{items.map(item => {
+    const substitute = Number(item.substituteQuantity || 0);
+    const prepared = Number(item.preparedQuantity || 0);
+    const shortage = Math.max(0, Number(item.requestedQuantity) - prepared - substitute);
+    return <TableRow key={item.id || item.productName}><TableCell className="font-medium">{item.productName}</TableCell><TableCell>{item.requestedQuantity} {item.unit}</TableCell>{showPreparation && <><TableCell>{prepared} {item.unit}</TableCell><TableCell>{substitute > 0 ? `${substitute} ${item.substituteUnit || item.unit} — ${item.substituteProductName}` : "—"}</TableCell><TableCell>{shortage > 0 ? <span className="text-amber-700">{shortage} {item.unit}<small className="block">{SHORTAGE_LABELS[item.shortageReason || ""] || item.shortageReason}</small></span> : <span className="text-emerald-700">مكتمل</span>}</TableCell></>}<TableCell className="text-muted-foreground">{item.preparationNotes || item.notes || "—"}</TableCell></TableRow>;
+  })}</TableBody></Table></div></section>;
+}
+
+function PreparationEditor({ items, actionNotes, setActionNotes, pending, onSubmit }: { items: KitchenItem[]; actionNotes: string; setActionNotes: (value: string) => void; pending: boolean; onSubmit: (items: PreparationInput[]) => void }) {
+  const [drafts, setDrafts] = useState(() => items.map(item => ({
+    itemId: Number(item.id),
+    preparedQuantity: String(item.requestedQuantity),
+    substituteQuantity: "0",
+    substituteProductName: "",
+    substituteUnit: item.unit,
+    shortageReason: "",
+    preparationNotes: "",
+  })));
+  const update = (index: number, changes: Partial<(typeof drafts)[number]>) => setDrafts(current => current.map((item, i) => i === index ? { ...item, ...changes } : item));
+  const validationError = useMemo(() => {
+    for (let index = 0; index < drafts.length; index++) {
+      const draft = drafts[index];
+      const requested = Number(items[index]?.requestedQuantity || 0);
+      const prepared = Number(draft.preparedQuantity);
+      const substitute = Number(draft.substituteQuantity);
+      if (!Number.isFinite(prepared) || !Number.isFinite(substitute) || prepared < 0 || substitute < 0) return "أدخل كميات صحيحة غير سالبة.";
+      if (prepared + substitute > requested) return `إجمالي تجهيز ${items[index]?.productName} يتجاوز المطلوب.`;
+      if (substitute > 0 && (!draft.substituteProductName.trim() || !draft.substituteUnit.trim())) return "أدخل اسم ووحدة المنتج البديل.";
+      if (prepared + substitute < requested && !draft.shortageReason) return "حدد سبب النقص لكل بند غير مكتمل.";
+    }
+    return "";
+  }, [drafts, items]);
+  const submit = () => {
+    if (validationError) return;
+    onSubmit(drafts.map(item => {
+      const substituteQuantity = Number(item.substituteQuantity);
+      const requestedQuantity = Number(items.find(source => Number(source.id) === item.itemId)?.requestedQuantity || 0);
+      const hasShortage = Number(item.preparedQuantity) + substituteQuantity < requestedQuantity;
+      return {
+        itemId: item.itemId,
+        preparedQuantity: Number(item.preparedQuantity),
+        substituteQuantity,
+        substituteProductName: substituteQuantity > 0 ? item.substituteProductName.trim() : undefined,
+        substituteUnit: substituteQuantity > 0 ? item.substituteUnit.trim() : undefined,
+        shortageReason: hasShortage ? item.shortageReason || undefined : undefined,
+        preparationNotes: item.preparationNotes.trim() || undefined,
+      };
+    }));
+  };
+  return <section className="rounded-lg border border-indigo-200 bg-indigo-50/30 p-4"><div className="mb-3"><h3 className="font-semibold">تسجيل التجهيز الفعلي</h3><p className="text-xs text-muted-foreground">سجّل الكمية الأصلية والبديلة. لن يسمح النظام بتجاوز المطلوب.</p></div><div className="space-y-3">{drafts.map((draft, index) => {
+    const requested = Number(items[index]?.requestedQuantity || 0);
+    const ready = Number(draft.preparedQuantity || 0) + Number(draft.substituteQuantity || 0);
+    const shortage = Math.max(0, requested - ready);
+    return <div className="rounded-md border bg-background p-3" key={draft.itemId}><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><p className="font-medium">{items[index]?.productName}</p><Badge variant="outline">المطلوب: {requested} {items[index]?.unit}</Badge></div><div className="grid gap-3 md:grid-cols-4"><div><Label className="text-xs">الكمية الأصلية المجهزة</Label><Input className="mt-1" type="number" min="0" max={requested} step="any" value={draft.preparedQuantity} onChange={event => update(index, { preparedQuantity: event.target.value })} /></div><div><Label className="text-xs">كمية البديل</Label><Input className="mt-1" type="number" min="0" max={requested} step="any" value={draft.substituteQuantity} onChange={event => update(index, { substituteQuantity: event.target.value })} /></div><div><Label className="text-xs">اسم البديل</Label><Input className="mt-1" disabled={Number(draft.substituteQuantity) <= 0} value={draft.substituteProductName} onChange={event => update(index, { substituteProductName: event.target.value })} placeholder="مثلاً خبز بديل" /></div><div><Label className="text-xs">وحدة احتساب البديل</Label><Input className="mt-1" disabled value={draft.substituteUnit} /></div></div>{shortage > 0 && <div className="mt-3 grid gap-3 md:grid-cols-2"><div><Label className="text-xs">سبب النقص ({shortage} {items[index]?.unit})</Label><Select value={draft.shortageReason} onValueChange={value => update(index, { shortageReason: value })}><SelectTrigger className="mt-1"><SelectValue placeholder="اختر سبب النقص" /></SelectTrigger><SelectContent>{Object.entries(SHORTAGE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div><div><Label className="text-xs">ملاحظة التجهيز</Label><Input className="mt-1" value={draft.preparationNotes} onChange={event => update(index, { preparationNotes: event.target.value })} placeholder="تفاصيل النقص أو البديل" /></div></div>}</div>;
+  })}</div>{validationError && <div className="mt-3 flex items-center gap-2 rounded-md bg-amber-50 p-2 text-sm text-amber-800"><AlertTriangle className="h-4 w-4" />{validationError}</div>}<div className="mt-4"><Label htmlFor="preparation-note">ملاحظة عامة (اختياري)</Label><Input id="preparation-note" className="mt-1" value={actionNotes} onChange={event => setActionNotes(event.target.value)} /><Button className="mt-3" disabled={pending || !!validationError} onClick={submit}>{pending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <PackagePlus className="ml-2 h-4 w-4" />}تأكيد الكميات والتجهيز</Button></div></section>;
+}
+
+function printPreparationNote(order: KitchenOrder) {
+  const escape = (value: unknown) => String(value ?? "—").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[character] || character));
+  const rows = (order.items || []).map(item => {
+    const prepared = Number(item.preparedQuantity || 0);
+    const substitute = Number(item.substituteQuantity || 0);
+    const shortage = Math.max(0, Number(item.requestedQuantity) - prepared - substitute);
+    return `<tr><td>${escape(item.productName)}</td><td>${escape(item.requestedQuantity)} ${escape(item.unit)}</td><td>${prepared} ${escape(item.unit)}</td><td>${substitute > 0 ? `${substitute} ${escape(item.substituteUnit || item.unit)} — ${escape(item.substituteProductName)}` : "—"}</td><td>${shortage} ${escape(item.unit)}</td><td>${escape(item.preparationNotes || SHORTAGE_LABELS[item.shortageReason || ""] || "")}</td></tr>`;
+  }).join("");
+  const printWindow = window.open("", "_blank", "width=900,height=700");
+  if (!printWindow) return;
+  printWindow.document.write(`<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>سند تجهيز ${escape(order.orderNumber)}</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#172033}h1{font-size:22px;margin:0 0 8px}.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:22px 0}.box{border:1px solid #d8dee9;border-radius:8px;padding:10px}small{display:block;color:#687386;margin-bottom:4px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #d8dee9;padding:9px;text-align:right;font-size:12px}th{background:#f3f5f8}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:80px;margin-top:60px}.line{border-top:1px solid #172033;padding-top:8px;text-align:center}@media print{body{padding:0}}</style></head><body><h1>سند تجهيز طلب المطبخ المركزي</h1><div>${escape(order.orderNumber)}</div><div class="meta"><div class="box"><small>الفرع الطالب</small>${escape(order.requestBranchName || order.requestBranchId)}</div><div class="box"><small>المطبخ المركزي</small>${escape(order.centralKitchenName || order.centralKitchenId)}</div><div class="box"><small>تاريخ الحاجة</small>${escape(order.neededDate)}</div></div><table><thead><tr><th>الصنف</th><th>المطلوب</th><th>الأصلي المجهز</th><th>البديل</th><th>النقص</th><th>ملاحظات</th></tr></thead><tbody>${rows}</tbody></table><div class="signatures"><div class="line">مسؤول التجهيز</div><div class="line">مسؤول الإرسال</div></div><script>window.onload=()=>window.print()<\/script></body></html>`);
+  printWindow.document.close();
 }

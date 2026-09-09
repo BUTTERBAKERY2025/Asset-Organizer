@@ -139,11 +139,14 @@ import { registerBatchRoute } from "./batch-api";
 import {
   canTransitionCentralKitchenOrder,
   centralKitchenIdempotencyKeySchema,
+  centralKitchenPreparationSchema,
   centralKitchenTransitionSchema,
   createCentralKitchenPayloadFingerprint,
   createCentralKitchenOrderSchema,
+  createCentralKitchenTransitionFingerprint,
   isMatchingCentralKitchenReplay,
   saudiDate,
+  validateCentralKitchenPreparation,
   type CentralKitchenStatus,
 } from "./central-kitchen-orders";
 
@@ -7723,13 +7726,20 @@ export async function registerRoutes(
     eventType: "approved" | "prepared" | "dispatched" | "received",
   ) => async (req: Request, res: Response) => {
     const id = centralKitchenOrderIdSchema.safeParse(req.params.id);
-    const body = centralKitchenTransitionSchema.safeParse(req.body);
+    const bodySchema = targetStatus === "prepared"
+      ? centralKitchenPreparationSchema
+      : centralKitchenTransitionSchema;
+    const body = bodySchema.safeParse(req.body);
     if (!id.success) return res.status(400).json({ error: "معرف الطلب غير صالح" });
     if (!body.success) {
       return res.status(400).json({ error: "بيانات الانتقال غير صالحة", details: body.error.flatten() });
     }
     const keyResult = centralKitchenRequestKey(req, body.data.idempotencyKey);
     if (!keyResult.key) return res.status(400).json({ error: keyResult.error });
+    const payloadFingerprint = createCentralKitchenTransitionFingerprint(eventType, body.data);
+    const preparationPayload = targetStatus === "prepared"
+      ? centralKitchenPreparationSchema.parse(body.data)
+      : null;
     const user = getCurrentUser(req);
     try {
       const [order] = await db.select().from(centralKitchenOrders)
@@ -7749,6 +7759,7 @@ export async function registerRoutes(
         id: centralKitchenOrderEvents.id,
         eventType: centralKitchenOrderEvents.eventType,
         toStatus: centralKitchenOrderEvents.toStatus,
+        payloadFingerprint: centralKitchenOrderEvents.payloadFingerprint,
       })
         .from(centralKitchenOrderEvents)
         .where(and(
@@ -7756,7 +7767,7 @@ export async function registerRoutes(
           eq(centralKitchenOrderEvents.idempotencyKey, keyResult.key),
         )).limit(1);
       if (replay.length) {
-        if (!isMatchingCentralKitchenReplay(replay[0], eventType, targetStatus)) {
+        if (!isMatchingCentralKitchenReplay(replay[0], eventType, targetStatus, payloadFingerprint)) {
           return res.status(409).json({ error: "مفتاح عدم التكرار مستخدم لعملية مختلفة" });
         }
         res.set("Idempotent-Replayed", "true");
@@ -7769,6 +7780,26 @@ export async function registerRoutes(
           error: `انتقال غير مسموح من ${order.status} إلى ${targetStatus}`,
           currentStatus: order.status,
         });
+      }
+      const preparationRequestedById = new Map<number, { requestedQuantity: number; unit: string }>();
+      if (preparationPayload) {
+        const requestedItems = await db.select({
+          id: centralKitchenOrderItems.id,
+          requestedQuantity: centralKitchenOrderItems.requestedQuantity,
+          unit: centralKitchenOrderItems.unit,
+        }).from(centralKitchenOrderItems)
+          .where(eq(centralKitchenOrderItems.orderId, id.data));
+        for (const item of requestedItems) {
+          preparationRequestedById.set(item.id, {
+            requestedQuantity: Number(item.requestedQuantity),
+            unit: item.unit,
+          });
+        }
+        const preparationError = validateCentralKitchenPreparation(
+          requestedItems.map((item) => ({ id: item.id, requestedQuantity: Number(item.requestedQuantity), unit: item.unit })),
+          preparationPayload.items,
+        );
+        if (preparationError) return res.status(400).json({ error: preparationError });
       }
       const actorField = {
         approved: { approvedBy: user.id, approvedAt: sql`now()` },
@@ -7787,6 +7818,26 @@ export async function registerRoutes(
           eq(centralKitchenOrders.status, fromStatus),
         )).returning({ id: centralKitchenOrders.id });
         if (!updated) return false;
+        if (preparationPayload) {
+          for (const item of preparationPayload.items) {
+            const requested = preparationRequestedById.get(item.itemId)!;
+            const hasShortage = item.preparedQuantity + item.substituteQuantity
+              < requested.requestedQuantity - 0.000001;
+            const [preparedItem] = await tx.update(centralKitchenOrderItems).set({
+              preparedQuantity: item.preparedQuantity,
+              substituteQuantity: item.substituteQuantity,
+              substituteProductId: item.substituteQuantity > 0 ? item.substituteProductId || null : null,
+              substituteProductName: item.substituteQuantity > 0 ? item.substituteProductName : null,
+              substituteUnit: item.substituteQuantity > 0 ? item.substituteUnit : null,
+              shortageReason: hasShortage ? item.shortageReason : null,
+              preparationNotes: item.preparationNotes || null,
+            }).where(and(
+              eq(centralKitchenOrderItems.id, item.itemId),
+              eq(centralKitchenOrderItems.orderId, id.data),
+            )).returning({ id: centralKitchenOrderItems.id });
+            if (!preparedItem) throw new Error("Central kitchen preparation item disappeared during transition");
+          }
+        }
         await tx.insert(centralKitchenOrderEvents).values({
           orderId: id.data,
           eventType,
@@ -7794,6 +7845,7 @@ export async function registerRoutes(
           toStatus: targetStatus,
           notes: body.data.notes || null,
           idempotencyKey: keyResult.key!,
+          payloadFingerprint,
           actorId: user.id,
         });
         return true;
@@ -7803,6 +7855,7 @@ export async function registerRoutes(
           id: centralKitchenOrderEvents.id,
           eventType: centralKitchenOrderEvents.eventType,
           toStatus: centralKitchenOrderEvents.toStatus,
+          payloadFingerprint: centralKitchenOrderEvents.payloadFingerprint,
         })
           .from(centralKitchenOrderEvents)
           .where(and(
@@ -7810,7 +7863,7 @@ export async function registerRoutes(
             eq(centralKitchenOrderEvents.idempotencyKey, keyResult.key),
           )).limit(1);
         if (replayAfterRace.length) {
-          if (!isMatchingCentralKitchenReplay(replayAfterRace[0], eventType, targetStatus)) {
+          if (!isMatchingCentralKitchenReplay(replayAfterRace[0], eventType, targetStatus, payloadFingerprint)) {
             return res.status(409).json({ error: "مفتاح عدم التكرار مستخدم لعملية مختلفة" });
           }
           res.set("Idempotent-Replayed", "true");
@@ -7825,11 +7878,12 @@ export async function registerRoutes(
         const [conflictingEvent] = await db.select({
           eventType: centralKitchenOrderEvents.eventType,
           toStatus: centralKitchenOrderEvents.toStatus,
+          payloadFingerprint: centralKitchenOrderEvents.payloadFingerprint,
         }).from(centralKitchenOrderEvents).where(and(
           eq(centralKitchenOrderEvents.orderId, id.data),
           eq(centralKitchenOrderEvents.idempotencyKey, keyResult.key),
         )).limit(1);
-        if (isMatchingCentralKitchenReplay(conflictingEvent, eventType, targetStatus)) {
+        if (isMatchingCentralKitchenReplay(conflictingEvent, eventType, targetStatus, payloadFingerprint)) {
           res.set("Idempotent-Replayed", "true");
           return res.json(await getCentralKitchenOrderDetail(id.data));
         }
