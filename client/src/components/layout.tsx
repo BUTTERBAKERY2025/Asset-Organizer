@@ -79,7 +79,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     "/finished-goods-inventory": "production", "/sales-data-uploads": "production", "/production-reports": "production",
     "/production-comparisons": "production", "/production-comparison-reports": "production", "/production": "production",
     "/product-category-management": "production",
-    "/operations": "operations", "/branch-shifts": "operations", "/shift-reports": "operations",
+    "/operations": "operations", "/central-kitchen-orders": "operations", "/branch-shifts": "operations", "/shift-reports": "operations",
     "/products": "operations", "/quality-control": "operations", "/display-bar-waste": "operations",
     "/operations-reports": "operations",
     "/cashier-journals": "sales", "/branch-daily-closures": "sales", "/branch-daily-closing": "sales",
@@ -304,6 +304,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         icon: Factory,
         items: [
           { href: "/operations", label: t("sidebar.operationsDashboard"), icon: LayoutDashboard, module: "operations", isHeader: true, hideIfNoPermission: true },
+          { href: "/central-kitchen-orders", label: "طلبات المطبخ المركزي", icon: ClipboardList, module: "central_kitchen_orders", indent: true },
           { href: "/branch-shifts", label: t("sidebar.branchShifts"), icon: DoorOpen, module: "branch_closure", indent: true },
           { href: "/products", label: t("sidebar.products"), icon: Package, module: "products", indent: true },
           { href: "/quality-control", label: t("sidebar.qualityControl"), icon: CheckCircle, module: "quality_control", indent: true },

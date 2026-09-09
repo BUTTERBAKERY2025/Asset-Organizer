@@ -76,6 +76,7 @@ const IncentivesManagementPage = makeLazy("incentives-management");
 const SalesAnalyticsPage = makeLazy("sales-analytics");
 const DisplayBarWastePage = makeLazy("display-bar-waste");
 const AdvancedProductionOrdersPage = makeLazy("advanced-production-orders");
+const CentralKitchenOrdersPage = makeLazy("central-kitchen-orders");
 const AdvancedProductionOrderFormPage = makeLazy("advanced-production-order-form");
 const AdvancedProductionOrderDetailsPage = makeLazy("advanced-production-order-details");
 const SalesDataUploadsPage = makeLazy("sales-data-uploads");
@@ -378,6 +379,7 @@ const Router = React.memo(function Router() {
       
       {/* Operations - التشغيل */}
       <Route path="/operations">{() => <ModulePage component={OperationsDashboardPage} module="operations" />}</Route>
+      <Route path="/central-kitchen-orders">{() => <ModulePage component={CentralKitchenOrdersPage} module="central_kitchen_orders" />}</Route>
       <Route path="/branch-shifts">{() => <ModulePage component={BranchShiftsPage} module="branch_closure" />}</Route>
       <Route path="/shift-reports">{() => <ModulePage component={ShiftReportsPage} module="branch_closure" />}</Route>
       <Route path="/products">{() => <ModulePage component={ProductsPage} module="products" />}</Route>

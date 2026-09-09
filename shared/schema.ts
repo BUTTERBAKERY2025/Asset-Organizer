@@ -69,6 +69,7 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export const branches = pgTable("branches", {
   id: varchar("id").primaryKey(),
   name: text("name").notNull(),
+  isCentralKitchen: boolean("is_central_kitchen").default(false).notNull(),
   latitude: doublePrecision("latitude"),
   longitude: doublePrecision("longitude"),
   locationRadius: integer("location_radius").default(200),
@@ -1055,6 +1056,7 @@ export const SYSTEM_MODULES = [
   "quality", // اسم مختصر للتوافق
   "products",
   "operations",
+  "central_kitchen_orders",
   "ai_production_planner",
   
   // الورديات والحضور
@@ -1258,6 +1260,7 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   quality: "الجودة",
   products: "المنتجات",
   operations: "التشغيل",
+  central_kitchen_orders: "طلبات المطبخ المركزي",
   ai_production_planner: "مخطط الإنتاج الذكي",
   
   // الورديات والحضور
@@ -1469,6 +1472,7 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
       "quality_control",
       "products",
       "operations",
+      "central_kitchen_orders",
       "ai_production_planner",
     ],
   },
@@ -1733,6 +1737,7 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
     { module: "dashboard", actions: ["view", "export"] },
     // التشغيل والإنتاج والجودة
     { module: "operations", actions: ["view", "create", "edit", "delete", "export", "print"] },
+    { module: "central_kitchen_orders", actions: ["view", "create", "edit", "approve", "export", "print"] },
     { module: "production", actions: ["view", "create", "edit", "export", "print"] },
     { module: "daily_production", actions: ["view", "create", "edit", "export", "print"] },
     { module: "advanced_production", actions: ["view", "create", "edit", "export"] },
@@ -1789,6 +1794,7 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
     { module: "shifts", actions: ["view", "create", "edit", "export"] },
     { module: "timesheet", actions: ["view", "export"] },
     { module: "operations", actions: ["view", "create", "edit", "export"] },
+    { module: "central_kitchen_orders", actions: ["view", "create", "edit", "export"] },
     { module: "waste_tracking", actions: ["view", "create", "edit", "export"] },
     { module: "waste", actions: ["view", "create", "edit", "export"] },
   ],
@@ -1886,6 +1892,7 @@ export const JOB_ROLE_PERMISSION_TEMPLATES: Record<
   production_manager: [
     { module: "dashboard", actions: ["view", "export"] },
     { module: "production", actions: ["view", "create", "edit", "delete"] },
+    { module: "central_kitchen_orders", actions: ["view", "edit", "approve", "export", "print"] },
     { module: "shifts", actions: ["view", "create", "edit", "delete"] },
     {
       module: "quality_control",
@@ -12883,3 +12890,70 @@ export const pushVapidConfig = pgTable("push_vapid_config", {
   privateKey: text("private_key").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// ===== Central kitchen branch orders (workflow only; no inventory posting) =====
+export const centralKitchenOrders = pgTable("central_kitchen_orders", {
+  id: serial("id").primaryKey(),
+  orderNumber: text("order_number").notNull().unique(),
+  requestBranchId: varchar("request_branch_id").notNull().references(() => branches.id),
+  centralKitchenId: varchar("central_kitchen_id").notNull().references(() => branches.id),
+  orderDate: date("order_date").notNull(),
+  neededDate: date("needed_date"),
+  neededTime: text("needed_time"),
+  status: text("status").notNull().default("requested"),
+  notes: text("notes"),
+  idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+  payloadFingerprint: varchar("payload_fingerprint", { length: 64 }).notNull(),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  preparedBy: varchar("prepared_by").references(() => users.id),
+  dispatchedBy: varchar("dispatched_by").references(() => users.id),
+  receivedBy: varchar("received_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  preparedAt: timestamp("prepared_at"),
+  dispatchedAt: timestamp("dispatched_at"),
+  receivedAt: timestamp("received_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_central_kitchen_orders_creator_idempotency").on(table.createdBy, table.idempotencyKey),
+  index("idx_central_kitchen_orders_request_branch").on(table.requestBranchId),
+  index("idx_central_kitchen_orders_kitchen").on(table.centralKitchenId),
+  index("idx_central_kitchen_orders_status").on(table.status),
+  check("ck_central_kitchen_orders_status", sql`${table.status} IN ('requested', 'approved', 'prepared', 'dispatched', 'received')`),
+  check("ck_central_kitchen_orders_distinct_branches", sql`${table.requestBranchId} <> ${table.centralKitchenId}`),
+]);
+
+export const centralKitchenOrderItems = pgTable("central_kitchen_order_items", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => centralKitchenOrders.id, { onDelete: "cascade" }),
+  productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
+  productName: text("product_name").notNull(),
+  requestedQuantity: real("requested_quantity").notNull(),
+  unit: text("unit").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_central_kitchen_order_items_order").on(table.orderId),
+  check("ck_central_kitchen_order_items_quantity", sql`${table.requestedQuantity} > 0`),
+]);
+
+export const centralKitchenOrderEvents = pgTable("central_kitchen_order_events", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => centralKitchenOrders.id, { onDelete: "restrict" }),
+  eventType: text("event_type").notNull(),
+  fromStatus: text("from_status"),
+  toStatus: text("to_status").notNull(),
+  notes: text("notes"),
+  idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+  actorId: varchar("actor_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_central_kitchen_order_events_idempotency").on(table.orderId, table.idempotencyKey),
+  index("idx_central_kitchen_order_events_order").on(table.orderId),
+  index("idx_central_kitchen_order_events_created").on(table.createdAt),
+]);
+
+export type CentralKitchenOrder = typeof centralKitchenOrders.$inferSelect;
+export type CentralKitchenOrderItem = typeof centralKitchenOrderItems.$inferSelect;
+export type CentralKitchenOrderEvent = typeof centralKitchenOrderEvents.$inferSelect;

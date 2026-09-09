@@ -9,9 +9,9 @@ import { evaluateWasteGovernance, checkApprovalGate } from "./waste-governance";
 import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, gt, sql, or, isNull, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
-import { shifts as shiftsTable, cashierPointsLedger, cashierDailyChallenges, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS } from "@shared/schema";
+import { shifts as shiftsTable, cashierPointsLedger, cashierDailyChallenges, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS, centralKitchenOrders, centralKitchenOrderItems, centralKitchenOrderEvents } from "@shared/schema";
 import { auditEvent, getApprovalThresholds, APPROVAL_THRESHOLDS } from "./audit-helpers";
-import { randomInt } from "crypto";
+import { randomInt, randomUUID } from "crypto";
 
 // Helper to safely get current user from authenticated request
 function getCurrentUser(req: Request): User {
@@ -117,7 +117,7 @@ import { sendWhatsAppMessage, isTwilioConfigured } from "./twilio-service";
 import { recipientsSchema as reportRecipientsSchema } from "./scheduler";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertContractMilestoneSchema, insertContractVariationSchema, insertContractGuaranteeSchema, insertContractTemplateSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
-import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS, hasCrossBranchHrReadAccess } from "./auth";
+import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS, BRANCH_MANAGER_CENTRAL_KITCHEN_PERMISSIONS, hasCrossBranchHrReadAccess } from "./auth";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
 import { registerFinancialReviewRoutes } from "./financial-review-routes";
@@ -136,6 +136,16 @@ import { registerWalletRoutes } from "./wallet-routes";
 import { registerSecurityRoutes } from "./security-routes";
 import { apiCacheMiddleware, invalidateCacheForPath, invalidateCache, jsonSlimMiddleware } from "./api-cache";
 import { registerBatchRoute } from "./batch-api";
+import {
+  canTransitionCentralKitchenOrder,
+  centralKitchenIdempotencyKeySchema,
+  centralKitchenTransitionSchema,
+  createCentralKitchenPayloadFingerprint,
+  createCentralKitchenOrderSchema,
+  isMatchingCentralKitchenReplay,
+  saudiDate,
+  type CentralKitchenStatus,
+} from "./central-kitchen-orders";
 
 // Normalize date to YYYY-MM-DD format
 function normalizeDate(dateStr: string | null | undefined): string | null {
@@ -1246,6 +1256,20 @@ export async function registerRoutes(
         }));
       }
 
+      if (currentUser.role === "branch_manager") {
+        const merged = new Map<string, Set<string>>();
+        for (const p of permissions) {
+          merged.set(p.module, new Set(p.actions || []));
+        }
+        const set = merged.get("central_kitchen_orders") || new Set<string>();
+        for (const action of BRANCH_MANAGER_CENTRAL_KITCHEN_PERMISSIONS) set.add(action);
+        merged.set("central_kitchen_orders", set);
+        permissions = Array.from(merged.entries()).map(([module, actions]) => ({
+          module,
+          actions: Array.from(actions),
+        }));
+      }
+
       res.json(permissions);
     } catch (error) {
       console.error("Error fetching my permissions:", error);
@@ -1473,18 +1497,27 @@ export async function registerRoutes(
     }
   });
 
-  // Update branch name - Admin only
+  // Update branch settings - Admin only
   app.patch("/api/branches/:id", isAuthenticated, requirePermission("branches", "edit"), async (req, res) => {
     try {
       if (!isUserAdmin(req)) {
         return res.status(403).json({ error: "غير مصرح - هذه الميزة متاحة للمدير فقط" });
       }
       const { id } = req.params;
-      const { name } = req.body;
-      if (!name || typeof name !== "string" || !name.trim()) {
-        return res.status(400).json({ error: "اسم الفرع مطلوب" });
+      const { name, isCentralKitchen } = req.body;
+      if (name !== undefined && (typeof name !== "string" || !name.trim())) {
+        return res.status(400).json({ error: "اسم الفرع غير صالح" });
       }
-      await db.update(branches).set({ name: name.trim() }).where(eq(branches.id, id));
+      if (isCentralKitchen !== undefined && typeof isCentralKitchen !== "boolean") {
+        return res.status(400).json({ error: "قيمة تصنيف المطبخ المركزي غير صالحة" });
+      }
+      if (name === undefined && isCentralKitchen === undefined) {
+        return res.status(400).json({ error: "لم يتم إرسال أي تعديل" });
+      }
+      await db.update(branches).set({
+        ...(name !== undefined ? { name: name.trim() } : {}),
+        ...(isCentralKitchen !== undefined ? { isCentralKitchen } : {}),
+      }).where(eq(branches.id, id));
       const [updated] = await db.select().from(branches).where(eq(branches.id, id));
       if (!updated) return res.status(404).json({ error: "الفرع غير موجود" });
       res.json(updated);
@@ -7381,6 +7414,438 @@ export async function registerRoutes(
       res.status(500).json({ error: "Failed to get employee count" });
     }
   });
+
+  // Central-kitchen branch orders. This workflow deliberately does not post inventory.
+  const centralKitchenOrderIdSchema = z.coerce.number().int().positive();
+  const centralKitchenListQuerySchema = z.object({
+    branchId: z.string().trim().min(1).max(255).optional(),
+    status: z.enum(["requested", "approved", "prepared", "dispatched", "received"]).optional(),
+  });
+
+  const centralKitchenRequestKey = (
+    req: Request,
+    bodyKey?: string,
+  ): { key?: string; error?: string } => {
+    const headerValue = req.get("Idempotency-Key")?.trim();
+    if (headerValue && bodyKey && headerValue !== bodyKey) {
+      return { error: "مفتاح عدم التكرار في الترويسة لا يطابق الطلب" };
+    }
+    const parsed = centralKitchenIdempotencyKeySchema.safeParse(headerValue || bodyKey);
+    if (!parsed.success) {
+      return { error: "يلزم Idempotency-Key صالح بطول 8 إلى 128 حرفاً" };
+    }
+    return { key: parsed.data };
+  };
+
+  const getCentralKitchenOrderDetail = async (orderId: number) => {
+    const [order] = await db.select().from(centralKitchenOrders)
+      .where(eq(centralKitchenOrders.id, orderId)).limit(1);
+    if (!order) return null;
+    const [items, events] = await Promise.all([
+      db.select().from(centralKitchenOrderItems)
+        .where(eq(centralKitchenOrderItems.orderId, orderId))
+        .orderBy(centralKitchenOrderItems.id),
+      db.select().from(centralKitchenOrderEvents)
+        .where(eq(centralKitchenOrderEvents.orderId, orderId))
+        .orderBy(centralKitchenOrderEvents.id),
+    ]);
+    const branchRows = await db.select({ id: branches.id, name: branches.name }).from(branches)
+      .where(inArray(branches.id, [order.requestBranchId, order.centralKitchenId]));
+    const branchNames = new Map(branchRows.map((branch) => [branch.id, branch.name]));
+    return {
+      ...order,
+      requestBranchName: branchNames.get(order.requestBranchId) || null,
+      centralKitchenName: branchNames.get(order.centralKitchenId) || null,
+      items,
+      events,
+    };
+  };
+
+  const canAccessCentralKitchenOrder = async (req: Request, order: {
+    requestBranchId: string;
+    centralKitchenId: string;
+  }): Promise<boolean> => {
+    if (isUserAdmin(req)) return true;
+    return (await canAccessBranch(req, order.requestBranchId))
+      || (await canAccessBranch(req, order.centralKitchenId));
+  };
+
+  app.get(
+    "/api/central-kitchen-orders",
+    isAuthenticated,
+    requirePermission("central_kitchen_orders", "view"),
+    async (req, res) => {
+      const parsed = centralKitchenListQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "معايير البحث غير صالحة", details: parsed.error.flatten() });
+      }
+      try {
+        const branchFilter = getEffectiveBranchFilter(req, parsed.data.branchId);
+        if (!branchFilter.hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+        }
+        const conditions: SQL[] = [];
+        if (parsed.data.status) conditions.push(eq(centralKitchenOrders.status, parsed.data.status));
+        if (branchFilter.singleBranchId) {
+          conditions.push(or(
+            eq(centralKitchenOrders.requestBranchId, branchFilter.singleBranchId),
+            eq(centralKitchenOrders.centralKitchenId, branchFilter.singleBranchId),
+          )!);
+        } else if (branchFilter.branchIds !== null) {
+          if (branchFilter.branchIds.length === 0) return res.json([]);
+          conditions.push(or(
+            inArray(centralKitchenOrders.requestBranchId, branchFilter.branchIds),
+            inArray(centralKitchenOrders.centralKitchenId, branchFilter.branchIds),
+          )!);
+        }
+        const rows = await db.select().from(centralKitchenOrders)
+          .where(conditions.length ? and(...conditions) : undefined)
+          .orderBy(desc(centralKitchenOrders.createdAt));
+        const branchIds = Array.from(new Set(rows.flatMap((row) => [row.requestBranchId, row.centralKitchenId])));
+        const branchRows = branchIds.length
+          ? await db.select({ id: branches.id, name: branches.name }).from(branches)
+            .where(inArray(branches.id, branchIds))
+          : [];
+        const names = new Map(branchRows.map((branch) => [branch.id, branch.name]));
+        const itemCounts = rows.length
+          ? await db.select({
+              orderId: centralKitchenOrderItems.orderId,
+              count: sql<number>`count(*)::int`,
+            }).from(centralKitchenOrderItems)
+            .where(inArray(centralKitchenOrderItems.orderId, rows.map((row) => row.id)))
+            .groupBy(centralKitchenOrderItems.orderId)
+          : [];
+        const counts = new Map(itemCounts.map((row) => [row.orderId, Number(row.count)]));
+        return res.json(rows.map((row) => ({
+          ...row,
+          requestBranchName: names.get(row.requestBranchId) || null,
+          centralKitchenName: names.get(row.centralKitchenId) || null,
+          itemCount: counts.get(row.id) || 0,
+        })));
+      } catch (error) {
+        console.error("Error listing central kitchen orders:", error);
+        return res.status(500).json({ error: "فشل في جلب طلبات المطبخ المركزي" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/central-kitchen-orders/kitchens",
+    isAuthenticated,
+    requirePermission("central_kitchen_orders", "view"),
+    async (_req, res) => {
+      try {
+        const kitchens = await db.select({
+          id: branches.id,
+          name: branches.name,
+        }).from(branches)
+          .where(eq(branches.isCentralKitchen, true))
+          .orderBy(branches.name);
+        return res.json(kitchens);
+      } catch (error) {
+        console.error("Error listing central kitchens:", error);
+        return res.status(500).json({ error: "فشل في جلب المطابخ المركزية" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/central-kitchen-orders/products",
+    isAuthenticated,
+    requirePermission("central_kitchen_orders", "view"),
+    async (_req, res) => {
+      try {
+        const rows = await db.select().from(products).orderBy(products.name);
+        return res.json(rows);
+      } catch (error) {
+        console.error("Error listing central kitchen order products:", error);
+        return res.status(500).json({ error: "فشل في جلب المنتجات" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/central-kitchen-orders/:id",
+    isAuthenticated,
+    requirePermission("central_kitchen_orders", "view"),
+    async (req, res) => {
+      const id = centralKitchenOrderIdSchema.safeParse(req.params.id);
+      if (!id.success) return res.status(400).json({ error: "معرف الطلب غير صالح" });
+      try {
+        const detail = await getCentralKitchenOrderDetail(id.data);
+        if (!detail) return res.status(404).json({ error: "الطلب غير موجود" });
+        if (!(await canAccessCentralKitchenOrder(req, detail))) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الطلب" });
+        }
+        return res.json(detail);
+      } catch (error) {
+        console.error("Error fetching central kitchen order:", error);
+        return res.status(500).json({ error: "فشل في جلب طلب المطبخ المركزي" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/central-kitchen-orders",
+    isAuthenticated,
+    requirePermission("central_kitchen_orders", "create"),
+    async (req, res) => {
+      const parsed = createCentralKitchenOrderSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "بيانات الطلب غير صالحة", details: parsed.error.flatten() });
+      }
+      const keyResult = centralKitchenRequestKey(req, parsed.data.idempotencyKey);
+      if (!keyResult.key) return res.status(400).json({ error: keyResult.error });
+      const user = getCurrentUser(req);
+      const payload = parsed.data;
+      const payloadFingerprint = createCentralKitchenPayloadFingerprint(payload);
+      try {
+        // The requesting branch is always the branch of the submitting user.
+        if (!(await canAccessBranch(req, payload.requestBranchId))) {
+          return res.status(403).json({ error: "ليس لديك صلاحية لإنشاء طلب لهذا الفرع" });
+        }
+        const orderDay = saudiDate();
+        if (payload.neededDate && payload.neededDate < orderDay) {
+          return res.status(400).json({ error: "تاريخ الاحتياج لا يمكن أن يكون في الماضي" });
+        }
+        const branchRows = await db.select({
+          id: branches.id,
+          isCentralKitchen: branches.isCentralKitchen,
+        }).from(branches)
+          .where(inArray(branches.id, [payload.requestBranchId, payload.centralKitchenId]));
+        if (new Set(branchRows.map((row) => row.id)).size !== 2) {
+          return res.status(400).json({ error: "الفرع الطالب أو المطبخ المركزي غير موجود" });
+        }
+        const kitchen = branchRows.find((row) => row.id === payload.centralKitchenId);
+        if (!kitchen?.isCentralKitchen) {
+          return res.status(400).json({ error: "الجهة المختارة ليست مطبخاً مركزياً معتمداً" });
+        }
+
+        const [existing] = await db.select({
+          id: centralKitchenOrders.id,
+          requestBranchId: centralKitchenOrders.requestBranchId,
+          centralKitchenId: centralKitchenOrders.centralKitchenId,
+          payloadFingerprint: centralKitchenOrders.payloadFingerprint,
+        })
+          .from(centralKitchenOrders)
+          .where(and(
+            eq(centralKitchenOrders.createdBy, user.id),
+            eq(centralKitchenOrders.idempotencyKey, keyResult.key),
+          )).limit(1);
+        if (existing) {
+          if (existing.payloadFingerprint !== payloadFingerprint) {
+            return res.status(409).json({ error: "مفتاح عدم التكرار مستخدم لطلب مختلف" });
+          }
+          if (!(await canAccessCentralKitchenOrder(req, existing))) {
+            return res.status(403).json({ error: "غير مصرح بالوصول إلى الطلب الأصلي" });
+          }
+          const detail = await getCentralKitchenOrderDetail(existing.id);
+          res.set("Idempotent-Replayed", "true");
+          return res.status(200).json(detail);
+        }
+
+        const orderNumber = `CK-${orderDay.replace(/-/g, "")}-${randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
+        const orderId = await db.transaction(async (tx) => {
+          const [created] = await tx.insert(centralKitchenOrders).values({
+            orderNumber,
+            requestBranchId: payload.requestBranchId,
+            centralKitchenId: payload.centralKitchenId,
+            orderDate: orderDay,
+            neededDate: payload.neededDate || null,
+            neededTime: payload.neededTime || null,
+            notes: payload.notes || null,
+            idempotencyKey: keyResult.key!,
+            payloadFingerprint,
+            createdBy: user.id,
+          }).returning({ id: centralKitchenOrders.id });
+          await tx.insert(centralKitchenOrderItems).values(payload.items.map((item) => ({
+            orderId: created.id,
+            productId: item.productId || null,
+            productName: item.productName,
+            requestedQuantity: item.requestedQuantity,
+            unit: item.unit,
+            notes: item.notes || null,
+          })));
+          await tx.insert(centralKitchenOrderEvents).values({
+            orderId: created.id,
+            eventType: "created",
+            fromStatus: null,
+            toStatus: "requested",
+            notes: payload.notes || null,
+            // Keep the create event namespace separate so a caller may safely
+            // reuse its order key for a later transition.
+            idempotencyKey: `created:${keyResult.key!}`.slice(0, 128),
+            actorId: user.id,
+          });
+          return created.id;
+        });
+        return res.status(201).json(await getCentralKitchenOrderDetail(orderId));
+      } catch (error: any) {
+        const errorCode = error?.code || error?.cause?.code;
+        if (errorCode === "23505") {
+          const [existing] = await db.select({
+            id: centralKitchenOrders.id,
+            requestBranchId: centralKitchenOrders.requestBranchId,
+            centralKitchenId: centralKitchenOrders.centralKitchenId,
+            payloadFingerprint: centralKitchenOrders.payloadFingerprint,
+          })
+            .from(centralKitchenOrders)
+            .where(and(
+              eq(centralKitchenOrders.createdBy, user.id),
+              eq(centralKitchenOrders.idempotencyKey, keyResult.key),
+            )).limit(1);
+          if (existing) {
+            if (existing.payloadFingerprint !== payloadFingerprint) {
+              return res.status(409).json({ error: "مفتاح عدم التكرار مستخدم لطلب مختلف" });
+            }
+            if (!(await canAccessCentralKitchenOrder(req, existing))) {
+              return res.status(403).json({ error: "غير مصرح بالوصول إلى الطلب الأصلي" });
+            }
+            res.set("Idempotent-Replayed", "true");
+            return res.status(200).json(await getCentralKitchenOrderDetail(existing.id));
+          }
+          return res.status(409).json({ error: "تعارض في رقم الطلب، يرجى إعادة المحاولة" });
+        }
+        console.error("Error creating central kitchen order:", error);
+        return res.status(500).json({ error: "فشل في إنشاء طلب المطبخ المركزي" });
+      }
+    },
+  );
+
+  const transitionCentralKitchenOrder = (
+    targetStatus: CentralKitchenStatus,
+    eventType: "approved" | "prepared" | "dispatched" | "received",
+  ) => async (req: Request, res: Response) => {
+    const id = centralKitchenOrderIdSchema.safeParse(req.params.id);
+    const body = centralKitchenTransitionSchema.safeParse(req.body);
+    if (!id.success) return res.status(400).json({ error: "معرف الطلب غير صالح" });
+    if (!body.success) {
+      return res.status(400).json({ error: "بيانات الانتقال غير صالحة", details: body.error.flatten() });
+    }
+    const keyResult = centralKitchenRequestKey(req, body.data.idempotencyKey);
+    if (!keyResult.key) return res.status(400).json({ error: keyResult.error });
+    const user = getCurrentUser(req);
+    try {
+      const [order] = await db.select().from(centralKitchenOrders)
+        .where(eq(centralKitchenOrders.id, id.data)).limit(1);
+      if (!order) return res.status(404).json({ error: "الطلب غير موجود" });
+
+      // Receiving belongs to the request branch. Kitchen-side transitions
+      // belong to the central kitchen branch.
+      const scopedBranchId = targetStatus === "received"
+        ? order.requestBranchId
+        : order.centralKitchenId;
+      if (!(await canAccessBranch(req, scopedBranchId))) {
+        return res.status(403).json({ error: "ليس لديك صلاحية لتنفيذ هذه الخطوة لهذا الفرع" });
+      }
+
+      const replay = await db.select({
+        id: centralKitchenOrderEvents.id,
+        eventType: centralKitchenOrderEvents.eventType,
+        toStatus: centralKitchenOrderEvents.toStatus,
+      })
+        .from(centralKitchenOrderEvents)
+        .where(and(
+          eq(centralKitchenOrderEvents.orderId, id.data),
+          eq(centralKitchenOrderEvents.idempotencyKey, keyResult.key),
+        )).limit(1);
+      if (replay.length) {
+        if (!isMatchingCentralKitchenReplay(replay[0], eventType, targetStatus)) {
+          return res.status(409).json({ error: "مفتاح عدم التكرار مستخدم لعملية مختلفة" });
+        }
+        res.set("Idempotent-Replayed", "true");
+        return res.json(await getCentralKitchenOrderDetail(id.data));
+      }
+
+      const fromStatus = order.status as CentralKitchenStatus;
+      if (!canTransitionCentralKitchenOrder(fromStatus, targetStatus)) {
+        return res.status(409).json({
+          error: `انتقال غير مسموح من ${order.status} إلى ${targetStatus}`,
+          currentStatus: order.status,
+        });
+      }
+      const actorField = {
+        approved: { approvedBy: user.id, approvedAt: sql`now()` },
+        prepared: { preparedBy: user.id, preparedAt: sql`now()` },
+        dispatched: { dispatchedBy: user.id, dispatchedAt: sql`now()` },
+        received: { receivedBy: user.id, receivedAt: sql`now()` },
+      }[eventType];
+
+      const transitioned = await db.transaction(async (tx) => {
+        const [updated] = await tx.update(centralKitchenOrders).set({
+          status: targetStatus,
+          updatedAt: sql`now()`,
+          ...actorField,
+        }).where(and(
+          eq(centralKitchenOrders.id, id.data),
+          eq(centralKitchenOrders.status, fromStatus),
+        )).returning({ id: centralKitchenOrders.id });
+        if (!updated) return false;
+        await tx.insert(centralKitchenOrderEvents).values({
+          orderId: id.data,
+          eventType,
+          fromStatus,
+          toStatus: targetStatus,
+          notes: body.data.notes || null,
+          idempotencyKey: keyResult.key!,
+          actorId: user.id,
+        });
+        return true;
+      });
+      if (!transitioned) {
+        const replayAfterRace = await db.select({
+          id: centralKitchenOrderEvents.id,
+          eventType: centralKitchenOrderEvents.eventType,
+          toStatus: centralKitchenOrderEvents.toStatus,
+        })
+          .from(centralKitchenOrderEvents)
+          .where(and(
+            eq(centralKitchenOrderEvents.orderId, id.data),
+            eq(centralKitchenOrderEvents.idempotencyKey, keyResult.key),
+          )).limit(1);
+        if (replayAfterRace.length) {
+          if (!isMatchingCentralKitchenReplay(replayAfterRace[0], eventType, targetStatus)) {
+            return res.status(409).json({ error: "مفتاح عدم التكرار مستخدم لعملية مختلفة" });
+          }
+          res.set("Idempotent-Replayed", "true");
+          return res.json(await getCentralKitchenOrderDetail(id.data));
+        }
+        return res.status(409).json({ error: "تغيرت حالة الطلب، حدّث البيانات وحاول مجدداً" });
+      }
+      return res.json(await getCentralKitchenOrderDetail(id.data));
+    } catch (error: any) {
+      const errorCode = error?.code || error?.cause?.code;
+      if (errorCode === "23505") {
+        const [conflictingEvent] = await db.select({
+          eventType: centralKitchenOrderEvents.eventType,
+          toStatus: centralKitchenOrderEvents.toStatus,
+        }).from(centralKitchenOrderEvents).where(and(
+          eq(centralKitchenOrderEvents.orderId, id.data),
+          eq(centralKitchenOrderEvents.idempotencyKey, keyResult.key),
+        )).limit(1);
+        if (isMatchingCentralKitchenReplay(conflictingEvent, eventType, targetStatus)) {
+          res.set("Idempotent-Replayed", "true");
+          return res.json(await getCentralKitchenOrderDetail(id.data));
+        }
+        return res.status(409).json({ error: "مفتاح عدم التكرار مستخدم لعملية مختلفة" });
+      }
+      console.error(`Error transitioning central kitchen order to ${targetStatus}:`, error);
+      return res.status(500).json({ error: "فشل في تحديث حالة طلب المطبخ المركزي" });
+    }
+  };
+
+  app.post("/api/central-kitchen-orders/:id/approve", isAuthenticated,
+    requirePermission("central_kitchen_orders", "approve"),
+    transitionCentralKitchenOrder("approved", "approved"));
+  app.post("/api/central-kitchen-orders/:id/prepare", isAuthenticated,
+    requirePermission("central_kitchen_orders", "edit"),
+    transitionCentralKitchenOrder("prepared", "prepared"));
+  app.post("/api/central-kitchen-orders/:id/dispatch", isAuthenticated,
+    requirePermission("central_kitchen_orders", "edit"),
+    transitionCentralKitchenOrder("dispatched", "dispatched"));
+  app.post("/api/central-kitchen-orders/:id/receive", isAuthenticated,
+    requirePermission("central_kitchen_orders", "edit"),
+    transitionCentralKitchenOrder("received", "received"));
 
   // Production Orders Routes
   app.get("/api/production-orders", isAuthenticated, requirePermission("production", "view"), async (req, res) => {

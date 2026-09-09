@@ -120,6 +120,23 @@ export default function BranchesPage() {
     },
   });
 
+  const updateKitchenTypeMutation = useMutation({
+    mutationFn: async (branch: Branch) => {
+      const res = await apiRequest("PATCH", `/api/branches/${branch.id}`, {
+        isCentralKitchen: !branch.isCentralKitchen,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/branches"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/central-kitchen-orders/kitchens"] });
+      toast({ title: "تم تحديث تصنيف المطبخ المركزي" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "خطأ", description: error.message, variant: "destructive" });
+    },
+  });
+
   const openEditDialog = (branch: Branch) => {
     setSelectedBranch(branch);
     setEditingBranchName(branch.name);
@@ -293,6 +310,7 @@ export default function BranchesPage() {
                   <TableRow>
                     <TableHead className="text-right w-[100px] hidden sm:table-cell">المعرف</TableHead>
                     <TableHead className="text-right">اسم الفرع</TableHead>
+                    <TableHead className="text-right w-[130px]">نوع الموقع</TableHead>
                     <TableHead className="text-right w-[120px]">الموقع</TableHead>
                     <TableHead className="text-right w-[120px]">عدد الأصناف</TableHead>
                     <TableHead className="text-right w-[150px]">إجمالي القيمة</TableHead>
@@ -302,7 +320,7 @@ export default function BranchesPage() {
                 <TableBody>
                   {branches.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={isAdmin ? 6 : 5} className="text-center py-8 text-muted-foreground text-xs sm:text-sm">
+                      <TableCell colSpan={isAdmin ? 7 : 6} className="text-center py-8 text-muted-foreground text-xs sm:text-sm">
                         لا توجد فروع مسجلة
                       </TableCell>
                     </TableRow>
@@ -318,6 +336,9 @@ export default function BranchesPage() {
                               <Building2 className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground" />
                               {branch.name}
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            {branch.isCentralKitchen ? <Badge>مطبخ مركزي</Badge> : <span className="text-xs text-muted-foreground">فرع عادي</span>}
                           </TableCell>
                           <TableCell>
                             {hasLocation ? (
@@ -340,6 +361,16 @@ export default function BranchesPage() {
                           {isAdmin && (
                           <TableCell>
                             <div className="flex items-center gap-1">
+                              <Button
+                                variant={branch.isCentralKitchen ? "default" : "ghost"}
+                                size="sm"
+                                onClick={() => updateKitchenTypeMutation.mutate(branch)}
+                                disabled={updateKitchenTypeMutation.isPending}
+                                className="h-8 px-2 text-xs"
+                                title="تفعيل أو إلغاء تصنيف المطبخ المركزي"
+                              >
+                                {branch.isCentralKitchen ? "مركزي" : "تفعيل"}
+                              </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
