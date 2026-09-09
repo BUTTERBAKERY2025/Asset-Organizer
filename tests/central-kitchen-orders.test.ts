@@ -11,6 +11,7 @@ import {
   validateCentralKitchenPreparation,
   validateCentralKitchenDispatch,
   validateCentralKitchenReceipt,
+  buildCentralKitchenShadowAllocations,
   isMatchingCentralKitchenReplay,
 } from "../server/central-kitchen-orders";
 
@@ -146,5 +147,18 @@ describe("central kitchen workflow rules", () => {
       [{ id: 1, dispatchedQuantity: 8 }],
       damagedWithoutNote.items,
     ).error).toContain("ملاحظة");
+  });
+
+  it("projects original and substitute quantities without touching balances", () => {
+    const item = {
+      productId: 10, productName: "Original", unit: "tray",
+      preparedQuantity: 6, substituteQuantity: 2,
+      substituteProductId: 11, substituteProductName: "Substitute", substituteUnit: "tray",
+      dispatchedQuantity: 8, receivedQuantity: 7,
+    };
+    expect(buildCentralKitchenShadowAllocations("projected_kitchen_out", item).map(row => row.quantity))
+      .toEqual([6, 2]);
+    expect(buildCentralKitchenShadowAllocations("projected_branch_in", item).map(row => row.quantity))
+      .toEqual([6, 1]);
   });
 });

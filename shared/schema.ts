@@ -12982,6 +12982,38 @@ export const centralKitchenOrderEvents = pgTable("central_kitchen_order_events",
   index("idx_central_kitchen_order_events_created").on(table.createdAt),
 ]);
 
+export const centralKitchenShadowInventoryConfig = pgTable("central_kitchen_shadow_inventory_config", {
+  id: integer("id").primaryKey(),
+  activatedAt: timestamp("activated_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  check("ck_central_kitchen_shadow_config_singleton", sql`${table.id} = 1`),
+]);
+
+export const centralKitchenShadowInventoryEntries = pgTable("central_kitchen_shadow_inventory_entries", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => centralKitchenOrders.id, { onDelete: "restrict" }),
+  orderItemId: integer("order_item_id").notNull().references(() => centralKitchenOrderItems.id, { onDelete: "restrict" }),
+  sourceEventId: integer("source_event_id").notNull().references(() => centralKitchenOrderEvents.id, { onDelete: "restrict" }),
+  direction: text("direction").notNull(),
+  component: text("component").notNull(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "restrict" }),
+  counterpartyBranchId: varchar("counterparty_branch_id").notNull().references(() => branches.id, { onDelete: "restrict" }),
+  productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
+  productName: text("product_name").notNull(),
+  unit: text("unit").notNull(),
+  quantity: real("quantity").notNull(),
+  actorId: varchar("actor_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  unique("uq_central_kitchen_shadow_inventory_source").on(table.orderItemId, table.direction, table.component),
+  index("idx_central_kitchen_shadow_inventory_order").on(table.orderId),
+  index("idx_central_kitchen_shadow_inventory_branch").on(table.branchId, table.createdAt),
+  check("ck_central_kitchen_shadow_inventory_direction", sql`${table.direction} IN ('projected_kitchen_out', 'projected_branch_in')`),
+  check("ck_central_kitchen_shadow_inventory_component", sql`${table.component} IN ('original', 'substitute')`),
+  check("ck_central_kitchen_shadow_inventory_quantity", sql`${table.quantity} > 0`),
+]);
+
 export type CentralKitchenOrder = typeof centralKitchenOrders.$inferSelect;
 export type CentralKitchenOrderItem = typeof centralKitchenOrderItems.$inferSelect;
 export type CentralKitchenOrderEvent = typeof centralKitchenOrderEvents.$inferSelect;

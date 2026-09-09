@@ -206,6 +206,51 @@ export function validateCentralKitchenReceipt(
   return { error: null, hasDiscrepancy };
 }
 
+export type CentralKitchenShadowAllocation = {
+  component: "original" | "substitute";
+  productId: number | null;
+  productName: string;
+  unit: string;
+  quantity: number;
+};
+
+export function buildCentralKitchenShadowAllocations(
+  direction: "projected_kitchen_out" | "projected_branch_in",
+  item: {
+    productId: number | null;
+    productName: string;
+    unit: string;
+    preparedQuantity: number;
+    substituteQuantity: number;
+    substituteProductId: number | null;
+    substituteProductName: string | null;
+    substituteUnit: string | null;
+    dispatchedQuantity: number;
+    receivedQuantity: number;
+  },
+): CentralKitchenShadowAllocation[] {
+  const total = direction === "projected_kitchen_out" ? item.dispatchedQuantity : item.receivedQuantity;
+  const dispatchedOriginal = Math.min(item.dispatchedQuantity, item.preparedQuantity);
+  const originalQuantity = Math.min(total, dispatchedOriginal);
+  const substituteQuantity = Math.max(0, total - originalQuantity);
+  const allocations: CentralKitchenShadowAllocation[] = [];
+  if (originalQuantity > 0.000001) allocations.push({
+    component: "original",
+    productId: item.productId,
+    productName: item.productName,
+    unit: item.unit,
+    quantity: originalQuantity,
+  });
+  if (substituteQuantity > 0.000001) allocations.push({
+    component: "substitute",
+    productId: item.substituteProductId,
+    productName: item.substituteProductName || "منتج بديل",
+    unit: item.substituteUnit || item.unit,
+    quantity: substituteQuantity,
+  });
+  return allocations;
+}
+
 export function validateCentralKitchenPreparation(
   requestedItems: Array<{ id: number; requestedQuantity: number; unit: string }>,
   preparedItems: z.infer<typeof centralKitchenPreparationSchema>["items"],

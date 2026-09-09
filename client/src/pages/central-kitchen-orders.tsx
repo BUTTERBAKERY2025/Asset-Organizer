@@ -36,12 +36,17 @@ type KitchenOrder = {
   receivedAt?: string; requestBranchName?: string; centralKitchenName?: string; itemCount?: number; items?: KitchenItem[]; events?: KitchenEvent[];
   driverName?: string | null; vehicleNumber?: string | null; discrepancyStatus?: "none" | "open" | "resolved";
   discrepancyResolutionNotes?: string | null;
+  shadowInventoryEntries?: ShadowInventoryEntry[];
 };
 type ProductOption = { id?: string | number; name?: string; productName?: string; unit?: string; unitName?: string };
 type DraftItem = { productId?: string | number; productName: string; unit: string; requestedQuantity: string; notes: string };
 type PreparationInput = {
   itemId: number; preparedQuantity: number; substituteQuantity: number; substituteProductName?: string;
   substituteUnit?: string; shortageReason?: string; preparationNotes?: string;
+};
+type ShadowInventoryEntry = {
+  id: number; direction: "projected_kitchen_out" | "projected_branch_in";
+  component: "original" | "substitute"; productName: string; unit: string; quantity: number;
 };
 
 const STATUS: Record<string, { label: string; className: string }> = {
@@ -221,6 +226,7 @@ function OrderDetail({ order, accessibleBranchIds, actionNotes, setActionNotes, 
     {order.notes && <div className="rounded-md border-r-4 border-primary bg-muted/30 px-4 py-3 text-sm"><span className="mb-1 block text-xs text-muted-foreground">ملاحظات الطلب</span>{order.notes}</div>}
     {order.driverName && <div className="grid gap-3 rounded-md border bg-orange-50/40 p-3 text-sm md:grid-cols-2"><div><span className="text-muted-foreground">السائق: </span>{order.driverName}</div><div><span className="text-muted-foreground">المركبة: </span>{order.vehicleNumber}</div></div>}
     <OrderItemsTable items={order.items || []} showPreparation={["prepared", "dispatched", "received"].includes(status)} showShipment={["dispatched", "received"].includes(status)} />
+    {!!order.shadowInventoryEntries?.length && <section className="rounded-lg border border-dashed border-violet-300 bg-violet-50/40 p-4"><div className="mb-3 flex items-center justify-between gap-3"><div><h3 className="font-semibold text-violet-950">سجل المخزون التجريبي</h3><p className="text-xs text-violet-700">للمراجعة فقط — لم تتغير أرصدة المخزون الفعلية.</p></div><Badge variant="outline" className="border-violet-300 text-violet-800">SHADOW</Badge></div><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead className="text-right">الحركة المتوقعة</TableHead><TableHead className="text-right">المنتج</TableHead><TableHead className="text-right">الكمية</TableHead><TableHead className="text-right">النوع</TableHead></TableRow></TableHeader><TableBody>{order.shadowInventoryEntries.map(entry => <TableRow key={entry.id}><TableCell>{entry.direction === "projected_kitchen_out" ? "خصم متوقع من المطبخ" : "إضافة متوقعة للفرع"}</TableCell><TableCell>{entry.productName}</TableCell><TableCell>{entry.quantity} {entry.unit}</TableCell><TableCell>{entry.component === "substitute" ? "بديل" : "أصلي"}</TableCell></TableRow>)}</TableBody></Table></div></section>}
     <section><h3 className="mb-3 font-semibold">مسار الطلب</h3><div className="space-y-3 border-r-2 border-muted pr-4">{order.events?.length ? order.events.map(event => <div className="relative" key={event.id}><span className="absolute -right-[23px] top-1 h-3 w-3 rounded-full border-2 border-background bg-primary" /><div className="flex flex-wrap items-center gap-2"><StatusBadge status={event.toStatus} /><span className="text-xs text-muted-foreground">{readableDate(event.createdAt)} · {new Date(event.createdAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}</span></div>{event.notes && <p className="mt-1 text-sm text-muted-foreground">{event.notes}</p>}</div>) : <p className="text-sm text-muted-foreground">لم تُسجل تحديثات إضافية بعد.</p>}</div></section>
     {action === "prepare" && allowAction
       ? <PreparationEditor items={order.items || []} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={pending} onSubmit={items => onAction("prepare", { items })} />

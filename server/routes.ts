@@ -9,7 +9,7 @@ import { evaluateWasteGovernance, checkApprovalGate } from "./waste-governance";
 import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, gt, sql, or, isNull, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
-import { shifts as shiftsTable, cashierPointsLedger, cashierDailyChallenges, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS, centralKitchenOrders, centralKitchenOrderItems, centralKitchenOrderEvents } from "@shared/schema";
+import { shifts as shiftsTable, cashierPointsLedger, cashierDailyChallenges, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS, centralKitchenOrders, centralKitchenOrderItems, centralKitchenOrderEvents, centralKitchenShadowInventoryConfig, centralKitchenShadowInventoryEntries } from "@shared/schema";
 import { auditEvent, getApprovalThresholds, APPROVAL_THRESHOLDS } from "./audit-helpers";
 import { randomInt, randomUUID } from "crypto";
 
@@ -152,6 +152,7 @@ import {
   validateCentralKitchenPreparation,
   validateCentralKitchenDispatch,
   validateCentralKitchenReceipt,
+  buildCentralKitchenShadowAllocations,
   type CentralKitchenStatus,
 } from "./central-kitchen-orders";
 
@@ -7423,7 +7424,7 @@ export async function registerRoutes(
     }
   });
 
-  // Central-kitchen branch orders. This workflow deliberately does not post inventory.
+  // Central-kitchen branch orders. Real balances remain untouched; phase 5 posts shadow projections only.
   const centralKitchenOrderIdSchema = z.coerce.number().int().positive();
   const centralKitchenListQuerySchema = z.object({
     branchId: z.string().trim().min(1).max(255).optional(),
@@ -7449,13 +7450,16 @@ export async function registerRoutes(
     const [order] = await db.select().from(centralKitchenOrders)
       .where(eq(centralKitchenOrders.id, orderId)).limit(1);
     if (!order) return null;
-    const [items, events] = await Promise.all([
+    const [items, events, shadowInventoryEntries] = await Promise.all([
       db.select().from(centralKitchenOrderItems)
         .where(eq(centralKitchenOrderItems.orderId, orderId))
         .orderBy(centralKitchenOrderItems.id),
       db.select().from(centralKitchenOrderEvents)
         .where(eq(centralKitchenOrderEvents.orderId, orderId))
         .orderBy(centralKitchenOrderEvents.id),
+      db.select().from(centralKitchenShadowInventoryEntries)
+        .where(eq(centralKitchenShadowInventoryEntries.orderId, orderId))
+        .orderBy(centralKitchenShadowInventoryEntries.id),
     ]);
     const branchRows = await db.select({ id: branches.id, name: branches.name }).from(branches)
       .where(inArray(branches.id, [order.requestBranchId, order.centralKitchenId]));
@@ -7466,6 +7470,7 @@ export async function registerRoutes(
       centralKitchenName: branchNames.get(order.centralKitchenId) || null,
       items,
       events,
+      shadowInventoryEntries,
     };
   };
 
@@ -7929,7 +7934,7 @@ export async function registerRoutes(
             if (!receivedItem) throw new Error("Central kitchen receipt item disappeared during transition");
           }
         }
-        await tx.insert(centralKitchenOrderEvents).values({
+        const [transitionEvent] = await tx.insert(centralKitchenOrderEvents).values({
           orderId: id.data,
           eventType,
           fromStatus,
@@ -7938,7 +7943,44 @@ export async function registerRoutes(
           idempotencyKey: keyResult.key!,
           payloadFingerprint,
           actorId: user.id,
-        });
+        }).returning({ id: centralKitchenOrderEvents.id });
+        if ((dispatchPayload || receivePayload) && transitionEvent) {
+          const [shadowConfig] = await tx.select().from(centralKitchenShadowInventoryConfig)
+            .where(eq(centralKitchenShadowInventoryConfig.id, 1)).limit(1);
+          if (shadowConfig && new Date(order.createdAt).getTime() >= new Date(shadowConfig.activatedAt).getTime()) {
+            const direction = dispatchPayload ? "projected_kitchen_out" : "projected_branch_in";
+            const shadowItems = await tx.select().from(centralKitchenOrderItems)
+              .where(eq(centralKitchenOrderItems.orderId, id.data));
+            const entries = shadowItems.flatMap((item) =>
+              buildCentralKitchenShadowAllocations(direction, {
+                productId: item.productId,
+                productName: item.productName,
+                unit: item.unit,
+                preparedQuantity: Number(item.preparedQuantity || 0),
+                substituteQuantity: Number(item.substituteQuantity || 0),
+                substituteProductId: item.substituteProductId,
+                substituteProductName: item.substituteProductName,
+                substituteUnit: item.substituteUnit,
+                dispatchedQuantity: Number(item.dispatchedQuantity || 0),
+                receivedQuantity: Number(item.receivedQuantity || 0),
+              }).map((allocation) => ({
+                orderId: id.data,
+                orderItemId: item.id,
+                sourceEventId: transitionEvent.id,
+                direction,
+                component: allocation.component,
+                branchId: dispatchPayload ? order.centralKitchenId : order.requestBranchId,
+                counterpartyBranchId: dispatchPayload ? order.requestBranchId : order.centralKitchenId,
+                productId: allocation.productId,
+                productName: allocation.productName,
+                unit: allocation.unit,
+                quantity: allocation.quantity,
+                actorId: user.id,
+              })),
+            );
+            if (entries.length) await tx.insert(centralKitchenShadowInventoryEntries).values(entries);
+          }
+        }
         return true;
       });
       if (!transitioned) {
