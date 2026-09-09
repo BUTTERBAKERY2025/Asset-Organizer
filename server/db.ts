@@ -20,6 +20,10 @@ if (!connectionString) {
 // Auto-detect Supabase from connection string (contains 'supabase' in URL)
 const isSupabaseUrl = connectionString.includes('supabase');
 const isSupabase = useSupabase || isSupabaseUrl;
+const configuredPoolMax = Number.parseInt(process.env.DB_POOL_MAX || "", 10);
+const poolMax = Number.isFinite(configuredPoolMax) && configuredPoolMax >= 1 && configuredPoolMax <= 20
+  ? configuredPoolMax
+  : isSupabase ? 6 : 25;
 
 // Log connection info for debugging (without password)
 const sanitizedUrl = connectionString.replace(/:([^:@]+)@/, ':***@');
@@ -30,11 +34,11 @@ export const pool = new Pool({
   connectionString,
   ssl: isSupabase ? { rejectUnauthorized: false } : undefined,
   connectionTimeoutMillis: isSupabase ? 15000 : 5000,
-  idleTimeoutMillis: isSupabase ? 120000 : 30000,
-  // PERF: raised from 15→30 to prevent pool exhaustion when many users hit hub-bundle
-  // (20+ parallel queries per request). Supabase free tier supports 60 concurrent.
-  max: isSupabase ? 30 : 25,
-  min: isSupabase ? 5 : 8,
+  idleTimeoutMillis: isSupabase ? 20000 : 30000,
+  // Keep enough headroom for a blue/green Render deploy, database maintenance,
+  // and other clients. Session storage shares this same pool.
+  max: poolMax,
+  min: 0,
   statement_timeout: isSupabase ? 45000 : 30000,
   keepAlive: true,
   keepAliveInitialDelayMillis: 5000,
@@ -59,7 +63,7 @@ export async function warmupPool() {
     const client = await pool.connect();
     await client.query('SELECT 1');
     client.release();
-    const warmupCount = isSupabase ? 4 : 3;
+    const warmupCount = isSupabase ? 1 : 3;
     const warmups = Array.from({ length: warmupCount }, async () => {
       const c = await pool.connect();
       await c.query('SELECT 1');

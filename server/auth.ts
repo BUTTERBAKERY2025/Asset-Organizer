@@ -3,7 +3,7 @@ import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { systemAuditLogs, ROLE_PERMISSION_TEMPLATES } from "@shared/schema";
 import { isLoginBlocked, trackLoginAttempt } from "./security";
 import {
@@ -460,7 +460,7 @@ export function getSession() {
   const sessionTtl = 8 * 60 * 60 * 1000;
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
-    conString: process.env.DATABASE_URL,
+    pool,
     createTableIfMissing: false,
     ttl: sessionTtl / 1000,
     tableName: "sessions",
