@@ -134,6 +134,78 @@ export const centralKitchenPreparationSchema = z.object({
   });
 });
 
+export const centralKitchenDispatchSchema = z.object({
+  notes: z.string().trim().max(2000).optional().nullable(),
+  idempotencyKey: centralKitchenIdempotencyKeySchema.optional(),
+  driverName: trimmedText(200),
+  vehicleNumber: trimmedText(100),
+  items: z.array(z.object({
+    itemId: z.number().int().positive(),
+    dispatchedQuantity: z.number().finite().min(0).max(1_000_000),
+  }).strict()).min(1).max(500),
+}).strict();
+
+export const centralKitchenReceiveSchema = z.object({
+  notes: z.string().trim().max(2000).optional().nullable(),
+  idempotencyKey: centralKitchenIdempotencyKeySchema.optional(),
+  items: z.array(z.object({
+    itemId: z.number().int().positive(),
+    receivedQuantity: z.number().finite().min(0).max(1_000_000),
+    damagedQuantity: z.number().finite().min(0).max(1_000_000).default(0),
+    receivingNotes: z.string().trim().max(1000).optional().nullable(),
+  }).strict()).min(1).max(500),
+}).strict();
+
+export const centralKitchenResolveDiscrepancySchema = z.object({
+  notes: trimmedText(2000),
+  idempotencyKey: centralKitchenIdempotencyKeySchema.optional(),
+}).strict();
+
+function validateExactItemSet(expectedIds: number[], submittedIds: number[]): string | null {
+  if (expectedIds.length !== submittedIds.length || new Set(submittedIds).size !== submittedIds.length) {
+    return "يجب تسجيل جميع بنود الطلب مرة واحدة";
+  }
+  const expected = new Set(expectedIds);
+  return submittedIds.every((id) => expected.has(id)) ? null : "بيانات البنود لا تطابق الطلب";
+}
+
+export function validateCentralKitchenDispatch(
+  preparedItems: Array<{ id: number; preparedQuantity: number; substituteQuantity: number }>,
+  dispatchedItems: z.infer<typeof centralKitchenDispatchSchema>["items"],
+): string | null {
+  const setError = validateExactItemSet(preparedItems.map((item) => item.id), dispatchedItems.map((item) => item.itemId));
+  if (setError) return setError;
+  const prepared = new Map(preparedItems.map((item) => [item.id, item.preparedQuantity + item.substituteQuantity]));
+  for (const item of dispatchedItems) {
+    if (item.dispatchedQuantity > (prepared.get(item.itemId) || 0) + 0.000001) {
+      return "الكمية المرسلة لا يمكن أن تتجاوز الكمية المجهزة";
+    }
+  }
+  return null;
+}
+
+export function validateCentralKitchenReceipt(
+  dispatchedItems: Array<{ id: number; dispatchedQuantity: number }>,
+  receivedItems: z.infer<typeof centralKitchenReceiveSchema>["items"],
+): { error: string | null; hasDiscrepancy: boolean } {
+  const setError = validateExactItemSet(dispatchedItems.map((item) => item.id), receivedItems.map((item) => item.itemId));
+  if (setError) return { error: setError, hasDiscrepancy: false };
+  const dispatched = new Map(dispatchedItems.map((item) => [item.id, item.dispatchedQuantity]));
+  let hasDiscrepancy = false;
+  for (const item of receivedItems) {
+    const sent = dispatched.get(item.itemId) || 0;
+    if (item.receivedQuantity + item.damagedQuantity > sent + 0.000001) {
+      return { error: "المستلم والتالف لا يمكن أن يتجاوز الكمية المرسلة", hasDiscrepancy: false };
+    }
+    const missing = Math.max(0, sent - item.receivedQuantity - item.damagedQuantity);
+    if ((missing > 0.000001 || item.damagedQuantity > 0.000001) && !item.receivingNotes) {
+      return { error: "يجب كتابة ملاحظة عند وجود ناقص أو تالف", hasDiscrepancy: false };
+    }
+    hasDiscrepancy ||= missing > 0.000001 || item.damagedQuantity > 0.000001;
+  }
+  return { error: null, hasDiscrepancy };
+}
+
 export function validateCentralKitchenPreparation(
   requestedItems: Array<{ id: number; requestedQuantity: number; unit: string }>,
   preparedItems: z.infer<typeof centralKitchenPreparationSchema>["items"],
@@ -169,25 +241,28 @@ export function validateCentralKitchenPreparation(
 
 export function createCentralKitchenTransitionFingerprint(
   eventType: string,
-  payload: z.infer<typeof centralKitchenTransitionSchema> | z.infer<typeof centralKitchenPreparationSchema>,
+  payload: z.infer<typeof centralKitchenTransitionSchema>
+    | z.infer<typeof centralKitchenPreparationSchema>
+    | z.infer<typeof centralKitchenDispatchSchema>
+    | z.infer<typeof centralKitchenReceiveSchema>
+    | z.infer<typeof centralKitchenResolveDiscrepancySchema>,
 ): string {
+  const topLevel = {
+    notes: payload.notes ?? null,
+    ...Object.fromEntries(Object.entries(payload)
+    .filter(([key]) => key !== "idempotencyKey" && key !== "items" && key !== "notes")
+    .map(([key, value]) => [key, value ?? null])),
+  };
   const canonical = "items" in payload
     ? {
-        notes: payload.notes ?? null,
+        ...topLevel,
         items: [...payload.items]
           .sort((left, right) => left.itemId - right.itemId)
-          .map((item) => ({
-            itemId: item.itemId,
-            preparedQuantity: item.preparedQuantity,
-            substituteQuantity: item.substituteQuantity,
-            substituteProductId: item.substituteProductId ?? null,
-            substituteProductName: item.substituteProductName ?? null,
-            substituteUnit: item.substituteUnit ?? null,
-            shortageReason: item.shortageReason ?? null,
-            preparationNotes: item.preparationNotes ?? null,
-          })),
+          .map((item) => Object.fromEntries(Object.entries(item)
+            .filter(([key]) => key !== "idempotencyKey")
+            .map(([key, value]) => [key, value ?? null]))),
       }
-    : { notes: payload.notes ?? null };
+    : topLevel;
   return createHash("sha256").update(JSON.stringify({ eventType, payload: canonical })).digest("hex");
 }
 

@@ -12909,6 +12909,12 @@ export const centralKitchenOrders = pgTable("central_kitchen_orders", {
   preparedBy: varchar("prepared_by").references(() => users.id),
   dispatchedBy: varchar("dispatched_by").references(() => users.id),
   receivedBy: varchar("received_by").references(() => users.id),
+  driverName: text("driver_name"),
+  vehicleNumber: text("vehicle_number"),
+  discrepancyStatus: text("discrepancy_status").notNull().default("none"),
+  discrepancyResolvedBy: varchar("discrepancy_resolved_by").references(() => users.id),
+  discrepancyResolvedAt: timestamp("discrepancy_resolved_at"),
+  discrepancyResolutionNotes: text("discrepancy_resolution_notes"),
   approvedAt: timestamp("approved_at"),
   preparedAt: timestamp("prepared_at"),
   dispatchedAt: timestamp("dispatched_at"),
@@ -12922,6 +12928,7 @@ export const centralKitchenOrders = pgTable("central_kitchen_orders", {
   index("idx_central_kitchen_orders_status").on(table.status),
   check("ck_central_kitchen_orders_status", sql`${table.status} IN ('requested', 'approved', 'prepared', 'dispatched', 'received')`),
   check("ck_central_kitchen_orders_distinct_branches", sql`${table.requestBranchId} <> ${table.centralKitchenId}`),
+  check("ck_central_kitchen_orders_discrepancy_status", sql`${table.discrepancyStatus} IN ('none', 'open', 'resolved')`),
 ]);
 
 export const centralKitchenOrderItems = pgTable("central_kitchen_order_items", {
@@ -12939,6 +12946,11 @@ export const centralKitchenOrderItems = pgTable("central_kitchen_order_items", {
   substituteUnit: text("substitute_unit"),
   shortageReason: text("shortage_reason"),
   preparationNotes: text("preparation_notes"),
+  dispatchedQuantity: real("dispatched_quantity"),
+  receivedQuantity: real("received_quantity"),
+  damagedQuantity: real("damaged_quantity"),
+  missingQuantity: real("missing_quantity"),
+  receivingNotes: text("receiving_notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_central_kitchen_order_items_order").on(table.orderId),
@@ -12949,6 +12961,8 @@ export const centralKitchenOrderItems = pgTable("central_kitchen_order_items", {
   check("ck_central_kitchen_order_items_substitute_identity", sql`(COALESCE(${table.substituteQuantity}, 0) = 0 AND ${table.substituteProductId} IS NULL AND ${table.substituteProductName} IS NULL AND ${table.substituteUnit} IS NULL) OR (COALESCE(${table.substituteQuantity}, 0) > 0 AND NULLIF(BTRIM(${table.substituteProductName}), '') IS NOT NULL AND ${table.substituteUnit} = ${table.unit})`),
   check("ck_central_kitchen_order_items_shortage_reason", sql`${table.preparedQuantity} IS NULL OR (COALESCE(${table.preparedQuantity}, 0) + COALESCE(${table.substituteQuantity}, 0) < ${table.requestedQuantity} AND ${table.shortageReason} IN ('unavailable', 'out_of_stock', 'production_issue', 'quality_issue', 'other')) OR (COALESCE(${table.preparedQuantity}, 0) + COALESCE(${table.substituteQuantity}, 0) >= ${table.requestedQuantity} AND ${table.shortageReason} IS NULL)`),
   check("ck_central_kitchen_order_items_preparation_consistency", sql`${table.preparedQuantity} IS NOT NULL OR (${table.substituteQuantity} IS NULL AND ${table.substituteProductId} IS NULL AND ${table.substituteProductName} IS NULL AND ${table.substituteUnit} IS NULL AND ${table.shortageReason} IS NULL AND ${table.preparationNotes} IS NULL)`),
+  check("ck_central_kitchen_order_items_dispatched_quantity", sql`${table.dispatchedQuantity} IS NULL OR (${table.dispatchedQuantity} >= 0 AND ${table.dispatchedQuantity} <= COALESCE(${table.preparedQuantity}, 0) + COALESCE(${table.substituteQuantity}, 0))`),
+  check("ck_central_kitchen_order_items_receipt_quantities", sql`${table.receivedQuantity} IS NULL OR (${table.receivedQuantity} >= 0 AND COALESCE(${table.damagedQuantity}, 0) >= 0 AND COALESCE(${table.missingQuantity}, 0) >= 0 AND ${table.receivedQuantity} + COALESCE(${table.damagedQuantity}, 0) + COALESCE(${table.missingQuantity}, 0) = ${table.dispatchedQuantity})`),
 ]);
 
 export const centralKitchenOrderEvents = pgTable("central_kitchen_order_events", {

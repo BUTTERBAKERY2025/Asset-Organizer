@@ -3,10 +3,14 @@ import {
   canTransitionCentralKitchenOrder,
   centralKitchenIdempotencyKeySchema,
   centralKitchenPreparationSchema,
+  centralKitchenDispatchSchema,
+  centralKitchenReceiveSchema,
   createCentralKitchenOrderSchema,
   createCentralKitchenPayloadFingerprint,
   createCentralKitchenTransitionFingerprint,
   validateCentralKitchenPreparation,
+  validateCentralKitchenDispatch,
+  validateCentralKitchenReceipt,
   isMatchingCentralKitchenReplay,
 } from "../server/central-kitchen-orders";
 
@@ -113,5 +117,34 @@ describe("central kitchen workflow rules", () => {
       .toBe(createCentralKitchenTransitionFingerprint("prepared", retry));
     expect(createCentralKitchenTransitionFingerprint("prepared", first))
       .not.toBe(createCentralKitchenTransitionFingerprint("dispatched", retry));
+  });
+
+  it("prevents dispatching more than was prepared", () => {
+    const payload = centralKitchenDispatchSchema.parse({
+      driverName: "Driver",
+      vehicleNumber: "ABC-123",
+      items: [{ itemId: 1, dispatchedQuantity: 9 }],
+    });
+    expect(validateCentralKitchenDispatch(
+      [{ id: 1, preparedQuantity: 6, substituteQuantity: 2 }],
+      payload.items,
+    )).toContain("تتجاوز");
+  });
+
+  it("derives receipt discrepancies and requires notes", () => {
+    const complete = centralKitchenReceiveSchema.parse({
+      items: [{ itemId: 1, receivedQuantity: 8, damagedQuantity: 0 }],
+    });
+    expect(validateCentralKitchenReceipt(
+      [{ id: 1, dispatchedQuantity: 8 }],
+      complete.items,
+    )).toEqual({ error: null, hasDiscrepancy: false });
+    const damagedWithoutNote = centralKitchenReceiveSchema.parse({
+      items: [{ itemId: 1, receivedQuantity: 7, damagedQuantity: 1 }],
+    });
+    expect(validateCentralKitchenReceipt(
+      [{ id: 1, dispatchedQuantity: 8 }],
+      damagedWithoutNote.items,
+    ).error).toContain("ملاحظة");
   });
 });

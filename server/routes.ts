@@ -138,8 +138,11 @@ import { apiCacheMiddleware, invalidateCacheForPath, invalidateCache, jsonSlimMi
 import { registerBatchRoute } from "./batch-api";
 import {
   canTransitionCentralKitchenOrder,
+  centralKitchenDispatchSchema,
   centralKitchenIdempotencyKeySchema,
   centralKitchenPreparationSchema,
+  centralKitchenReceiveSchema,
+  centralKitchenResolveDiscrepancySchema,
   centralKitchenTransitionSchema,
   createCentralKitchenPayloadFingerprint,
   createCentralKitchenOrderSchema,
@@ -147,6 +150,8 @@ import {
   isMatchingCentralKitchenReplay,
   saudiDate,
   validateCentralKitchenPreparation,
+  validateCentralKitchenDispatch,
+  validateCentralKitchenReceipt,
   type CentralKitchenStatus,
 } from "./central-kitchen-orders";
 
@@ -7728,7 +7733,11 @@ export async function registerRoutes(
     const id = centralKitchenOrderIdSchema.safeParse(req.params.id);
     const bodySchema = targetStatus === "prepared"
       ? centralKitchenPreparationSchema
-      : centralKitchenTransitionSchema;
+      : targetStatus === "dispatched"
+        ? centralKitchenDispatchSchema
+        : targetStatus === "received"
+          ? centralKitchenReceiveSchema
+          : centralKitchenTransitionSchema;
     const body = bodySchema.safeParse(req.body);
     if (!id.success) return res.status(400).json({ error: "معرف الطلب غير صالح" });
     if (!body.success) {
@@ -7739,6 +7748,12 @@ export async function registerRoutes(
     const payloadFingerprint = createCentralKitchenTransitionFingerprint(eventType, body.data);
     const preparationPayload = targetStatus === "prepared"
       ? centralKitchenPreparationSchema.parse(body.data)
+      : null;
+    const dispatchPayload = targetStatus === "dispatched"
+      ? centralKitchenDispatchSchema.parse(body.data)
+      : null;
+    const receivePayload = targetStatus === "received"
+      ? centralKitchenReceiveSchema.parse(body.data)
       : null;
     const user = getCurrentUser(req);
     try {
@@ -7782,6 +7797,7 @@ export async function registerRoutes(
         });
       }
       const preparationRequestedById = new Map<number, { requestedQuantity: number; unit: string }>();
+      let receiptHasDiscrepancy = false;
       if (preparationPayload) {
         const requestedItems = await db.select({
           id: centralKitchenOrderItems.id,
@@ -7801,6 +7817,39 @@ export async function registerRoutes(
         );
         if (preparationError) return res.status(400).json({ error: preparationError });
       }
+      if (dispatchPayload) {
+        const preparedItems = await db.select({
+          id: centralKitchenOrderItems.id,
+          preparedQuantity: centralKitchenOrderItems.preparedQuantity,
+          substituteQuantity: centralKitchenOrderItems.substituteQuantity,
+        }).from(centralKitchenOrderItems)
+          .where(eq(centralKitchenOrderItems.orderId, id.data));
+        const dispatchError = validateCentralKitchenDispatch(
+          preparedItems.map((item) => ({
+            id: item.id,
+            preparedQuantity: Number(item.preparedQuantity || 0),
+            substituteQuantity: Number(item.substituteQuantity || 0),
+          })),
+          dispatchPayload.items,
+        );
+        if (dispatchError) return res.status(400).json({ error: dispatchError });
+      }
+      if (receivePayload) {
+        const dispatchedItems = await db.select({
+          id: centralKitchenOrderItems.id,
+          dispatchedQuantity: centralKitchenOrderItems.dispatchedQuantity,
+        }).from(centralKitchenOrderItems)
+          .where(eq(centralKitchenOrderItems.orderId, id.data));
+        const receiptValidation = validateCentralKitchenReceipt(
+          dispatchedItems.map((item) => ({
+            id: item.id,
+            dispatchedQuantity: Number(item.dispatchedQuantity || 0),
+          })),
+          receivePayload.items,
+        );
+        if (receiptValidation.error) return res.status(400).json({ error: receiptValidation.error });
+        receiptHasDiscrepancy = receiptValidation.hasDiscrepancy;
+      }
       const actorField = {
         approved: { approvedBy: user.id, approvedAt: sql`now()` },
         prepared: { preparedBy: user.id, preparedAt: sql`now()` },
@@ -7813,6 +7862,13 @@ export async function registerRoutes(
           status: targetStatus,
           updatedAt: sql`now()`,
           ...actorField,
+          ...(dispatchPayload ? {
+            driverName: dispatchPayload.driverName,
+            vehicleNumber: dispatchPayload.vehicleNumber,
+          } : {}),
+          ...(receivePayload ? {
+            discrepancyStatus: receiptHasDiscrepancy ? "open" : "none",
+          } : {}),
         }).where(and(
           eq(centralKitchenOrders.id, id.data),
           eq(centralKitchenOrders.status, fromStatus),
@@ -7836,6 +7892,41 @@ export async function registerRoutes(
               eq(centralKitchenOrderItems.orderId, id.data),
             )).returning({ id: centralKitchenOrderItems.id });
             if (!preparedItem) throw new Error("Central kitchen preparation item disappeared during transition");
+          }
+        }
+        if (dispatchPayload) {
+          for (const item of dispatchPayload.items) {
+            const [dispatchedItem] = await tx.update(centralKitchenOrderItems).set({
+              dispatchedQuantity: item.dispatchedQuantity,
+            }).where(and(
+              eq(centralKitchenOrderItems.id, item.itemId),
+              eq(centralKitchenOrderItems.orderId, id.data),
+            )).returning({ id: centralKitchenOrderItems.id });
+            if (!dispatchedItem) throw new Error("Central kitchen dispatch item disappeared during transition");
+          }
+        }
+        if (receivePayload) {
+          const dispatchedRows = await tx.select({
+            id: centralKitchenOrderItems.id,
+            dispatchedQuantity: centralKitchenOrderItems.dispatchedQuantity,
+          }).from(centralKitchenOrderItems)
+            .where(eq(centralKitchenOrderItems.orderId, id.data));
+          const dispatchedById = new Map(dispatchedRows.map((item) => [item.id, Number(item.dispatchedQuantity || 0)]));
+          for (const item of receivePayload.items) {
+            const missingQuantity = Math.max(
+              0,
+              (dispatchedById.get(item.itemId) || 0) - item.receivedQuantity - item.damagedQuantity,
+            );
+            const [receivedItem] = await tx.update(centralKitchenOrderItems).set({
+              receivedQuantity: item.receivedQuantity,
+              damagedQuantity: item.damagedQuantity,
+              missingQuantity,
+              receivingNotes: item.receivingNotes || null,
+            }).where(and(
+              eq(centralKitchenOrderItems.id, item.itemId),
+              eq(centralKitchenOrderItems.orderId, id.data),
+            )).returning({ id: centralKitchenOrderItems.id });
+            if (!receivedItem) throw new Error("Central kitchen receipt item disappeared during transition");
           }
         }
         await tx.insert(centralKitchenOrderEvents).values({
@@ -7906,6 +7997,88 @@ export async function registerRoutes(
   app.post("/api/central-kitchen-orders/:id/receive", isAuthenticated,
     requirePermission("central_kitchen_orders", "edit"),
     transitionCentralKitchenOrder("received", "received"));
+  app.post("/api/central-kitchen-orders/:id/resolve-discrepancy", isAuthenticated,
+    requirePermission("central_kitchen_orders", "edit"),
+    async (req: Request, res: Response) => {
+      const id = centralKitchenOrderIdSchema.safeParse(req.params.id);
+      const body = centralKitchenResolveDiscrepancySchema.safeParse(req.body);
+      if (!id.success || !body.success) return res.status(400).json({ error: "بيانات معالجة الفروقات غير صالحة" });
+      const keyResult = centralKitchenRequestKey(req, body.data.idempotencyKey);
+      if (!keyResult.key) return res.status(400).json({ error: keyResult.error });
+      const user = getCurrentUser(req);
+      const fingerprint = createCentralKitchenTransitionFingerprint("discrepancy_resolved", body.data);
+      try {
+        const [order] = await db.select().from(centralKitchenOrders)
+          .where(eq(centralKitchenOrders.id, id.data)).limit(1);
+        if (!order) return res.status(404).json({ error: "الطلب غير موجود" });
+        if (!isUserAdmin(req) && !(await canAccessBranch(req, order.requestBranchId))) {
+          return res.status(403).json({ error: "معالجة الفروقات متاحة للفرع المستلم فقط" });
+        }
+        const [replay] = await db.select({
+          eventType: centralKitchenOrderEvents.eventType,
+          toStatus: centralKitchenOrderEvents.toStatus,
+          payloadFingerprint: centralKitchenOrderEvents.payloadFingerprint,
+        }).from(centralKitchenOrderEvents).where(and(
+          eq(centralKitchenOrderEvents.orderId, id.data),
+          eq(centralKitchenOrderEvents.idempotencyKey, keyResult.key),
+        )).limit(1);
+        if (replay) {
+          if (!isMatchingCentralKitchenReplay(replay, "discrepancy_resolved", "received", fingerprint)) {
+            return res.status(409).json({ error: "مفتاح عدم التكرار مستخدم لعملية مختلفة" });
+          }
+          res.set("Idempotent-Replayed", "true");
+          return res.json(await getCentralKitchenOrderDetail(id.data));
+        }
+        if (order.status !== "received" || order.discrepancyStatus !== "open") {
+          return res.status(409).json({ error: "لا توجد فروقات مفتوحة لمعالجتها" });
+        }
+        const transitioned = await db.transaction(async (tx) => {
+          const [updated] = await tx.update(centralKitchenOrders).set({
+            discrepancyStatus: "resolved",
+            discrepancyResolvedBy: user.id,
+            discrepancyResolvedAt: sql`now()`,
+            discrepancyResolutionNotes: body.data.notes,
+            updatedAt: sql`now()`,
+          }).where(and(
+            eq(centralKitchenOrders.id, id.data),
+            eq(centralKitchenOrders.status, "received"),
+            eq(centralKitchenOrders.discrepancyStatus, "open"),
+          )).returning({ id: centralKitchenOrders.id });
+          if (!updated) return false;
+          await tx.insert(centralKitchenOrderEvents).values({
+            orderId: id.data,
+            eventType: "discrepancy_resolved",
+            fromStatus: "received",
+            toStatus: "received",
+            notes: body.data.notes,
+            idempotencyKey: keyResult.key!,
+            payloadFingerprint: fingerprint,
+            actorId: user.id,
+          });
+          return true;
+        });
+        if (!transitioned) return res.status(409).json({ error: "تمت معالجة الفروقات بواسطة مستخدم آخر" });
+        return res.json(await getCentralKitchenOrderDetail(id.data));
+      } catch (error: any) {
+        const errorCode = error?.cause?.code || error?.code;
+        if (errorCode === "23505") {
+          const [replay] = await db.select({
+            eventType: centralKitchenOrderEvents.eventType,
+            toStatus: centralKitchenOrderEvents.toStatus,
+            payloadFingerprint: centralKitchenOrderEvents.payloadFingerprint,
+          }).from(centralKitchenOrderEvents).where(and(
+            eq(centralKitchenOrderEvents.orderId, id.data),
+            eq(centralKitchenOrderEvents.idempotencyKey, keyResult.key),
+          )).limit(1);
+          if (isMatchingCentralKitchenReplay(replay, "discrepancy_resolved", "received", fingerprint)) {
+            res.set("Idempotent-Replayed", "true");
+            return res.json(await getCentralKitchenOrderDetail(id.data));
+          }
+        }
+        console.error("Resolve central kitchen discrepancy error:", error);
+        return res.status(500).json({ error: "تعذرت معالجة الفروقات" });
+      }
+    });
 
   // Production Orders Routes
   app.get("/api/production-orders", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
