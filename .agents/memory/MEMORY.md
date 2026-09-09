@@ -52,3 +52,4 @@
 - [Event POS shift reconciliation](event-pos-shift-reconciliation.md) — full refund = exclude sale from stats, partial = pos_refunds row; close stats via tx; sale insert re-locks shift.
 - [Web Push notifications](web-push-notifications.md) — VAPID auto-stored in DB (read oldest row, never regenerate); targeting mirrors bell logic; push_sent_at conditional-UPDATE prevents double sends.
 - [Idempotency replay authorization](idempotency-replay-authorization.md) — replays must authorize the stored resource and bind keys to payload/action, or branch changes can expose old data.
+- [Central-kitchen shadow ledger](central-kitchen-shadow-ledger.md) — shadow postings start at DB activation, never backfill, and split original before substitute without touching real balances.
