@@ -7462,6 +7462,39 @@ export async function registerRoutes(
       NOT IN ('false', 'inactive', '0')
   `;
 
+  const getActiveCentralKitchenCatalog = async () => {
+    const [productRows, warehouseRows] = await Promise.all([
+      db.select({
+        id: productsTable.id,
+        name: productsTable.name,
+        unit: productsTable.unit,
+      }).from(productsTable)
+        .where(activeCentralKitchenProduct)
+        .orderBy(productsTable.name),
+      db.select({
+        id: warehouseItems.id,
+        name: warehouseItems.name,
+        unit: warehouseItems.unit,
+        sku: warehouseItems.sku,
+      }).from(warehouseItems)
+        .where(eq(warehouseItems.isActive, true))
+        .orderBy(warehouseItems.name),
+    ]);
+    return {
+      products: productRows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        unit: row.unit || "قطعة",
+      })),
+      warehouse: warehouseRows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        unit: row.unit,
+        ...(row.sku ? { sku: row.sku } : {}),
+      })),
+    };
+  };
+
   const validateCentralKitchenCatalogIdentities = async (
     items: CentralKitchenCatalogIdentity[],
   ): Promise<string | null> => {
@@ -7473,29 +7506,25 @@ export async function registerRoutes(
             id: productsTable.id,
             name: productsTable.name,
             unit: productsTable.unit,
-          }).from(productsTable).where(and(
-            inArray(productsTable.id, productIds),
-            activeCentralKitchenProduct,
-          ))
+            active: activeCentralKitchenProduct,
+          }).from(productsTable).where(inArray(productsTable.id, productIds))
         : Promise.resolve([]),
       warehouseItemIds.length
         ? db.select({
             id: warehouseItems.id,
             name: warehouseItems.name,
             unit: warehouseItems.unit,
-          }).from(warehouseItems).where(and(
-            inArray(warehouseItems.id, warehouseItemIds),
-            eq(warehouseItems.isActive, true),
-          ))
+            active: warehouseItems.isActive,
+          }).from(warehouseItems).where(inArray(warehouseItems.id, warehouseItemIds))
         : Promise.resolve([]),
     ]);
     const productCatalog = new Map(productRows.map((row) => [
       row.id,
-      { name: row.name, unit: row.unit || "قطعة" },
+      { name: row.name, unit: row.unit || "قطعة", active: row.active },
     ]));
     const warehouseCatalog = new Map(warehouseRows.map((row) => [
       row.id,
-      { name: row.name, unit: row.unit },
+      { name: row.name, unit: row.unit, active: row.active },
     ]));
     for (const item of items) {
       if (item.productId != null && item.warehouseItemId != null) {
@@ -7506,10 +7535,11 @@ export async function registerRoutes(
       const catalogItem = item.productId != null
         ? productCatalog.get(item.productId)
         : warehouseCatalog.get(item.warehouseItemId!);
-      if (!catalogItem) return "الصنف المختار غير موجود أو غير مفعّل";
+      if (!catalogItem) return "الصنف المختار لم يعد موجوداً. أعد تحميل الصفحة واختر صنفاً آخر.";
+      if (!catalogItem.active) return "الصنف المختار غير مفعّل حالياً. أعد تحميل الصفحة واختر صنفاً مفعّلاً.";
       if (item.productName !== catalogItem.name
         || (item.validateCatalogUnit !== false && item.unit !== catalogItem.unit)) {
-        return "اسم الصنف أو وحدته لا يطابق بيانات الكتالوج";
+        return "تغيّر اسم الصنف أو وحدته في الكتالوج. أعد تحميل الصفحة ثم اختر الصنف من جديد.";
       }
     }
     return null;
@@ -7706,41 +7736,34 @@ export async function registerRoutes(
     requirePermission("central_kitchen_orders", "view"),
     async (_req, res) => {
       try {
-        const [productRows, warehouseRows] = await Promise.all([
-          db.select({
-            id: productsTable.id,
-            name: productsTable.name,
-            unit: productsTable.unit,
-          }).from(productsTable)
-            .where(activeCentralKitchenProduct)
-            .orderBy(productsTable.name),
-          db.select({
-            id: warehouseItems.id,
-            name: warehouseItems.name,
-            unit: warehouseItems.unit,
-            sku: warehouseItems.sku,
-          }).from(warehouseItems)
-            .where(eq(warehouseItems.isActive, true))
-            .orderBy(warehouseItems.name),
-        ]);
-        return res.json([
-          ...productRows.map((row) => ({
-            id: row.id,
-            name: row.name,
-            unit: row.unit || "قطعة",
-            source: "product" as const,
-          })),
-          ...warehouseRows.map((row) => ({
-            id: row.id,
-            name: row.name,
-            unit: row.unit,
-            source: "warehouse" as const,
-            ...(row.sku ? { sku: row.sku } : {}),
-          })),
-        ]);
+        const catalog = await getActiveCentralKitchenCatalog();
+        res.set("Cache-Control", "private, no-store");
+        return res.json(catalog.products);
       } catch (error) {
         console.error("Error listing central kitchen order products:", error);
         return res.status(500).json({ error: "فشل في جلب المنتجات" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/central-kitchen-orders/catalog-v2",
+    isAuthenticated,
+    requirePermission("central_kitchen_orders", "view"),
+    async (_req, res) => {
+      try {
+        const catalog = await getActiveCentralKitchenCatalog();
+        res.set("Cache-Control", "private, no-store");
+        return res.json({
+          schemaVersion: 2,
+          items: [
+            ...catalog.products.map((item) => ({ ...item, source: "product" as const })),
+            ...catalog.warehouse.map((item) => ({ ...item, source: "warehouse" as const })),
+          ],
+        });
+      } catch (error) {
+        console.error("Error listing central kitchen order catalog v2:", error);
+        return res.status(500).json({ error: "فشل في جلب كتالوج الأصناف" });
       }
     },
   );

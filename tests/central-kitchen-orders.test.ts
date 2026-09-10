@@ -16,8 +16,28 @@ import {
   centralKitchenSaudiWindow,
   isMatchingCentralKitchenReplay,
 } from "../server/central-kitchen-orders";
+import { parseCentralKitchenCatalogV2 } from "../shared/central-kitchen-catalog";
 
 describe("central kitchen workflow rules", () => {
+  it("accepts only the explicit v2 catalog identity contract", () => {
+    expect(parseCentralKitchenCatalogV2({
+      schemaVersion: 2,
+      items: [
+        { id: 7, source: "product", name: "Bread", unit: "tray" },
+        { id: 7, source: "warehouse", name: "Flour", unit: "kg", sku: "WH-7" },
+      ],
+    }).items).toHaveLength(2);
+    for (const invalid of [
+      { schemaVersion: 1, items: [] },
+      { schemaVersion: 2, items: [{ id: 7, name: "Bread", unit: "tray" }] },
+      { schemaVersion: 2, items: [{ id: 0, source: "product", name: "Bread", unit: "tray" }] },
+      { schemaVersion: 2, items: [{ id: "7", source: "product", name: "Bread", unit: "tray" }] },
+      { schemaVersion: 2, items: [{ id: 7, source: "legacy", name: "Bread", unit: "tray" }] },
+    ]) {
+      expect(() => parseCentralKitchenCatalogV2(invalid)).toThrow("أعد تحميل الصفحة");
+    }
+  });
+
   it("permits only the strict forward transition table", () => {
     expect(canTransitionCentralKitchenOrder("requested", "approved")).toBe(true);
     expect(canTransitionCentralKitchenOrder("approved", "prepared")).toBe(true);

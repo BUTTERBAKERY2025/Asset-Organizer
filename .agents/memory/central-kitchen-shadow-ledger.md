@@ -13,6 +13,8 @@ When one order line contains original and substitute quantities, projected dispa
 
 Catalog linkage must preserve both prepared-product and warehouse-material identities without interpreting equal numeric IDs as the same item. Do not infer historical mappings from names.
 
+**Compatibility:** Never return warehouse IDs through the legacy product-only catalog contract. Old open browser tabs interpret every numeric ID as a product; mixed catalogs require an explicitly versioned, source-validated contract.
+
 **Why:** The pilot covers prepared products as well as warehouse materials; switching wholesale to either catalog would exclude valid requests. Linking a catalog is separate from enabling real stock posting.
 
 **How to apply:** Keep source-specific identities through original/substitute allocations. Substitute quantities remain expressed in the requested unit by the established workflow, not automatically converted from catalog units. Immutable shadow rows cannot support FK `ON DELETE SET NULL`; use a deletion restriction for new catalog references.

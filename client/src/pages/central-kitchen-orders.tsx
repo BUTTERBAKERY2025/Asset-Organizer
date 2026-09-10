@@ -18,6 +18,10 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import {
+  CentralKitchenCatalogItem,
+  parseCentralKitchenCatalogV2,
+} from "@shared/central-kitchen-catalog";
+import {
   AlertTriangle, Check, ChevronLeft, Factory, Filter, Loader2, PackagePlus, Plus, Printer,
   RefreshCw, Search, ShieldCheck, Truck, X,
 } from "lucide-react";
@@ -40,7 +44,7 @@ type KitchenOrder = {
   discrepancyResolutionNotes?: string | null;
   shadowInventoryEntries?: ShadowInventoryEntry[];
 };
-type ProductOption = { id: number; name: string; unit: string; source?: "product" | "warehouse"; sku?: string };
+type ProductOption = CentralKitchenCatalogItem;
 type DraftItem = { productId?: number; warehouseItemId?: number; manualMode?: boolean; productName: string; unit: string; requestedQuantity: string; notes: string };
 type PreparationInput = {
   itemId: number; preparedQuantity: number; substituteQuantity: number; substituteProductName?: string;
@@ -70,7 +74,7 @@ const STATUS: Record<string, { label: string; className: string }> = {
   draft: { label: "مسودة", className: "bg-stone-100 text-stone-700 border-stone-200" },
 };
 const emptyLine = (): DraftItem => ({ productName: "", unit: "قطعة", requestedQuantity: "1", notes: "" });
-const catalogKey = (item: Pick<ProductOption, "id" | "source">) => `${item.source || "product"}:${item.id}`;
+const catalogKey = (item: Pick<ProductOption, "id" | "source">) => `${item.source}:${item.id}`;
 const sourceLabel = (source: "product" | "warehouse") => source === "warehouse" ? "المستودع" : "المنتجات";
 const identitySource = (value: { productId?: string | number | null; warehouseItemId?: string | number | null }) =>
   value.warehouseItemId != null ? "warehouse" : "product";
@@ -106,19 +110,44 @@ export default function CentralKitchenOrdersPage() {
   const ordersQuery = useQuery<KitchenOrder[]>({ queryKey: [listUrl] });
   const metricsUrl = `/api/central-kitchen-orders/pilot-metrics?days=${pilotDays}${branchFilter !== "all" ? `&branchId=${encodeURIComponent(branchFilter)}` : ""}`;
   const metricsQuery = useQuery<PilotMetrics>({ queryKey: [metricsUrl] });
-  const productsQuery = useQuery<unknown>({ queryKey: ["/api/central-kitchen-orders/products"] });
+  const productsQuery = useQuery<ProductOption[]>({
+    queryKey: ["/api/central-kitchen-orders/catalog-v2"],
+    queryFn: async () => {
+      let response: Response;
+      try {
+        response = await fetch("/api/central-kitchen-orders/catalog-v2", { credentials: "include" });
+      } catch {
+        throw new Error("تعذر الاتصال بالخادم لتحميل الكتالوج. تحقق من الشبكة ثم أعد المحاولة.");
+      }
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("انتهت الجلسة أو لا تملك صلاحية عرض الكتالوج. سجّل الدخول مجدداً أو راجع الصلاحيات.");
+      }
+      if (!response.ok) {
+        throw new Error("تعذر تحميل الكتالوج من الخادم. تحقق من الاتصال ثم أعد المحاولة.");
+      }
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch {
+        throw new Error("إصدار كتالوج الأصناف غير متوافق. أعد تحميل الصفحة للحصول على الإصدار الأحدث.");
+      }
+      return parseCentralKitchenCatalogV2(payload).items;
+    },
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnReconnect: "always",
+    placeholderData: () => undefined,
+  });
   const kitchensQuery = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["/api/central-kitchen-orders/kitchens"],
     staleTime: 0,
     refetchOnMount: "always",
   });
   const detailQuery = useQuery<KitchenOrder>({ queryKey: [`/api/central-kitchen-orders/${detailId}`], enabled: detailId !== null });
-  const products = useMemo<ProductOption[]>(() => {
-    const raw = productsQuery.data;
-    if (Array.isArray(raw)) return raw.map(item => ({ ...(item as ProductOption), source: (item as ProductOption).source || "product" }));
-    if (raw && typeof raw === "object" && Array.isArray((raw as { products?: unknown[] }).products)) return (raw as { products: ProductOption[] }).products.map(item => ({ ...item, source: item.source || "product" }));
-    return [];
-  }, [productsQuery.data]);
+  const products = productsQuery.data || [];
+  useEffect(() => {
+    if (createOpen) void productsQuery.refetch();
+  }, [createOpen]);
   const centralKitchens = useMemo(() => {
     const merged = new Map<string, { id: string; name: string }>();
     for (const branch of kitchensQuery.data || []) merged.set(branch.id, branch);
@@ -228,7 +257,7 @@ export default function CentralKitchenOrdersPage() {
       <div className="rounded-lg border bg-muted/20"><div className="flex items-center justify-between border-b px-4 py-3"><div><p className="font-semibold">بنود الطلب</p><p className="text-xs text-muted-foreground">اختر من كتالوج المنتجات أو المستودع، أو اختر الإدخال اليدوي صراحةً.</p></div><Button variant="outline" size="sm" onClick={() => setDraft({ ...draft, items: [...draft.items, emptyLine()] })}><Plus className="ml-1 h-4 w-4" />إضافة بند</Button></div>
         <CatalogQueryState query={productsQuery} count={products.length} />
         <div className="space-y-3 p-3">{draft.items.map((item, index) => <div className="grid gap-2 rounded-md border bg-background p-3 md:grid-cols-12" key={index}>
-          <div className="md:col-span-4"><Label className="text-xs">الصنف</Label><SearchableSelect className="mt-1" triggerClassName="h-9" value={item.warehouseItemId !== undefined ? `warehouse:${item.warehouseItemId}` : item.productId !== undefined ? `product:${item.productId}` : item.manualMode ? "__manual" : undefined} onValueChange={value => { if (value === "__manual") setLine(index, { manualMode: true, productId: undefined, warehouseItemId: undefined, productName: "", unit: "قطعة" }); else { const selected = products.find(entry => catalogKey(entry) === value); if (selected) { const source = selected.source || "product"; setLine(index, { manualMode: false, productId: source === "product" ? selected.id : undefined, warehouseItemId: source === "warehouse" ? selected.id : undefined, productName: selected.name, unit: selected.unit }); } } }} options={[{ value: "__manual", label: "إدخال يدوي", badge: "يدوي" }, ...products.map(product => ({ value: catalogKey(product), label: product.name, sublabel: [product.sku, product.unit].filter(Boolean).join(" · "), badge: sourceLabel(product.source || "product") }))]} placeholder="اختر صنفاً أو الوضع اليدوي" searchPlaceholder="ابحث بالاسم أو الرمز..." emptyText="لا توجد أصناف مطابقة" dataTestid={`catalog-item-${index}`} /><Input className="mt-2 h-9" disabled={!item.manualMode} value={item.productName} onChange={event => setLine(index, { productName: event.target.value })} placeholder={item.manualMode ? "اسم الصنف اليدوي" : "يُثبت الاسم بعد اختيار الكتالوج"} /></div>
+          <div className="md:col-span-4"><Label className="text-xs">الصنف</Label><SearchableSelect className="mt-1" triggerClassName="h-9" value={item.warehouseItemId !== undefined ? `warehouse:${item.warehouseItemId}` : item.productId !== undefined ? `product:${item.productId}` : item.manualMode ? "__manual" : undefined} onValueChange={value => { if (value === "__manual") setLine(index, { manualMode: true, productId: undefined, warehouseItemId: undefined, productName: "", unit: "قطعة" }); else { const selected = products.find(entry => catalogKey(entry) === value); if (selected) { const source = selected.source; setLine(index, { manualMode: false, productId: source === "product" ? selected.id : undefined, warehouseItemId: source === "warehouse" ? selected.id : undefined, productName: selected.name, unit: selected.unit }); } } }} options={[{ value: "__manual", label: "إدخال يدوي", badge: "يدوي" }, ...products.map(product => ({ value: catalogKey(product), label: product.name, sublabel: [product.sku, product.unit].filter(Boolean).join(" · "), badge: sourceLabel(product.source) }))]} placeholder="اختر صنفاً أو الوضع اليدوي" searchPlaceholder="ابحث بالاسم أو الرمز..." emptyText="لا توجد أصناف مطابقة" dataTestid={`catalog-item-${index}`} /><Input className="mt-2 h-9" disabled={!item.manualMode} value={item.productName} onChange={event => setLine(index, { productName: event.target.value })} placeholder={item.manualMode ? "اسم الصنف اليدوي" : "يُثبت الاسم بعد اختيار الكتالوج"} /></div>
           <div className="md:col-span-2"><Label className="text-xs">الوحدة</Label><Input className="mt-1 h-9" disabled={!item.manualMode} value={item.unit} onChange={event => setLine(index, { unit: event.target.value })} placeholder="قطعة" /></div><div className="md:col-span-2"><Label className="text-xs">الكمية</Label><Input className="mt-1 h-9" type="number" min="0.01" step="any" value={item.requestedQuantity} onChange={event => setLine(index, { requestedQuantity: event.target.value })} /></div><div className="md:col-span-3"><Label className="text-xs">ملاحظة البند</Label><Input className="mt-1 h-9" value={item.notes} onChange={event => setLine(index, { notes: event.target.value })} placeholder="اختياري" /></div><div className="flex items-end md:col-span-1"><Button variant="ghost" size="icon" className="text-destructive" disabled={draft.items.length === 1} onClick={() => setDraft({ ...draft, items: draft.items.filter((_, i) => i !== index) })} aria-label="حذف البند"><X className="h-4 w-4" /></Button></div>
         </div>)}</div></div>
       <div><Label htmlFor="order-notes">ملاحظات عامة</Label><textarea id="order-notes" className="mt-2 min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={draft.notes} onChange={event => setDraft({ ...draft, notes: event.target.value })} placeholder="تعليمات خاصة للاستلام أو التجهيز..." /></div>
@@ -243,10 +272,10 @@ function StatusBadge({ status }: { status: string }) { const info = STATUS[norma
 function MetricTile({ label, value, tone = "normal" }: { label: string; value: string | number; tone?: "normal" | "warning" | "danger" }) { return <div className={cn("rounded-lg border bg-background p-3", tone === "warning" && "border-amber-200 bg-amber-50", tone === "danger" && "border-red-200 bg-red-50")}><span className="text-xs text-muted-foreground">{label}</span><strong className="mt-1 block text-2xl">{value}</strong></div>; }
 function StageTime({ label, value }: { label: string; value: number | null }) { return <div className="flex items-center justify-between rounded-md bg-background/70 px-3 py-2"><span>متوسط {label}</span><strong>{value === null ? "—" : `${value} ساعة`}</strong></div>; }
 function FormSelect({ label, value, onChange, branches, placeholder }: { label: string; value: string; onChange: (value: string) => void; branches: { id: string; name: string }[]; placeholder: string }) { return <div><Label>{label}</Label><Select value={value} onValueChange={onChange}><SelectTrigger className="mt-2"><SelectValue placeholder={placeholder} /></SelectTrigger><SelectContent>{branches.map(branch => <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>)}</SelectContent></Select></div>; }
-type CatalogQueryLike = { isLoading: boolean; isError: boolean; refetch: () => unknown };
+type CatalogQueryLike = { isLoading: boolean; isError: boolean; error?: Error | null; refetch: () => unknown };
 function CatalogQueryState({ query, count }: { query: CatalogQueryLike; count: number }) {
   if (query.isLoading) return <div className="m-3 flex items-center gap-2 rounded-md border bg-background p-3 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />جارٍ تحميل كتالوج الأصناف...</div>;
-  if (query.isError) return <div className="m-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"><span>تعذر تحميل كتالوج الأصناف. لم يتم التحويل إلى الإدخال اليدوي تلقائياً.</span><Button type="button" size="sm" variant="outline" onClick={() => query.refetch()}><RefreshCw className="ml-1 h-4 w-4" />إعادة المحاولة</Button></div>;
+  if (query.isError) return <div className="m-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"><span>{query.error?.message || "تعذر تحميل كتالوج الأصناف. تحقق من الاتصال ثم أعد المحاولة."} لم يتم استنتاج أي معرّفات أو التحويل تلقائياً.</span><Button type="button" size="sm" variant="outline" onClick={() => query.refetch()}><RefreshCw className="ml-1 h-4 w-4" />إعادة المحاولة</Button></div>;
   if (!count) return <div className="m-3 rounded-md border bg-background p-3 text-sm text-muted-foreground">الكتالوج فارغ حالياً. يمكنك اختيار «إدخال يدوي» بشكل صريح.</div>;
   return null;
 }
@@ -347,7 +376,7 @@ function PreparationEditor({ items, products, productsQuery, actionNotes, setAct
     const requested = Number(items[index]?.requestedQuantity || 0);
     const ready = Number(draft.preparedQuantity || 0) + Number(draft.substituteQuantity || 0);
     const shortage = Math.max(0, requested - ready);
-    return <div className="rounded-md border bg-background p-3" key={draft.itemId}><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><p className="font-medium">{items[index]?.productName} <CatalogSourceBadge source={identitySource(items[index])} /></p><Badge variant="outline">المطلوب: {requested} {items[index]?.unit}</Badge></div><div className="grid gap-3 md:grid-cols-4"><div><Label className="text-xs">الكمية الأصلية المجهزة</Label><Input className="mt-1" type="number" min="0" max={requested} step="any" value={draft.preparedQuantity} onChange={event => update(index, { preparedQuantity: event.target.value })} /></div><div><Label className="text-xs">كمية البديل</Label><Input className="mt-1" type="number" min="0" max={requested} step="any" value={draft.substituteQuantity} onChange={event => update(index, { substituteQuantity: event.target.value })} /></div><div><Label className="text-xs">اختيار البديل</Label><SearchableSelect className="mt-1" triggerClassName="h-10" disabled={Number(draft.substituteQuantity) <= 0} value={draft.substituteWarehouseItemId !== undefined ? `warehouse:${draft.substituteWarehouseItemId}` : draft.substituteProductId !== undefined ? `product:${draft.substituteProductId}` : draft.substituteManualMode ? "__manual" : undefined} onValueChange={value => { if (value === "__manual") update(index, { substituteManualMode: true, substituteProductId: undefined, substituteWarehouseItemId: undefined, substituteProductName: "" }); else { const selected = products.find(entry => catalogKey(entry) === value); if (selected) { const source = selected.source || "product"; update(index, { substituteManualMode: false, substituteProductId: source === "product" ? selected.id : undefined, substituteWarehouseItemId: source === "warehouse" ? selected.id : undefined, substituteProductName: selected.name, substituteUnit: items[index].unit }); } } }} options={[{ value: "__manual", label: "بديل يدوي", badge: "يدوي" }, ...products.map(product => ({ value: catalogKey(product), label: product.name, sublabel: product.sku, badge: sourceLabel(product.source || "product") }))]} placeholder="اختر البديل" searchPlaceholder="ابحث عن بديل..." /><Input className="mt-2" disabled={Number(draft.substituteQuantity) <= 0 || !draft.substituteManualMode} value={draft.substituteProductName} onChange={event => update(index, { substituteProductName: event.target.value })} placeholder="اسم البديل اليدوي" /></div><div><Label className="text-xs">وحدة احتساب البديل</Label><Input className="mt-1" disabled value={draft.substituteUnit} /><p className="mt-1 text-[11px] text-muted-foreground">مطابقة لوحدة الطلب</p></div></div>{shortage > 0 && <div className="mt-3 grid gap-3 md:grid-cols-2"><div><Label className="text-xs">سبب النقص ({shortage} {items[index]?.unit})</Label><Select value={draft.shortageReason} onValueChange={value => update(index, { shortageReason: value })}><SelectTrigger className="mt-1"><SelectValue placeholder="اختر سبب النقص" /></SelectTrigger><SelectContent>{Object.entries(SHORTAGE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div><div><Label className="text-xs">ملاحظة التجهيز</Label><Input className="mt-1" value={draft.preparationNotes} onChange={event => update(index, { preparationNotes: event.target.value })} placeholder="تفاصيل النقص أو البديل" /></div></div>}</div>;
+    return <div className="rounded-md border bg-background p-3" key={draft.itemId}><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><p className="font-medium">{items[index]?.productName} <CatalogSourceBadge source={identitySource(items[index])} /></p><Badge variant="outline">المطلوب: {requested} {items[index]?.unit}</Badge></div><div className="grid gap-3 md:grid-cols-4"><div><Label className="text-xs">الكمية الأصلية المجهزة</Label><Input className="mt-1" type="number" min="0" max={requested} step="any" value={draft.preparedQuantity} onChange={event => update(index, { preparedQuantity: event.target.value })} /></div><div><Label className="text-xs">كمية البديل</Label><Input className="mt-1" type="number" min="0" max={requested} step="any" value={draft.substituteQuantity} onChange={event => update(index, { substituteQuantity: event.target.value })} /></div><div><Label className="text-xs">اختيار البديل</Label><SearchableSelect className="mt-1" triggerClassName="h-10" disabled={Number(draft.substituteQuantity) <= 0} value={draft.substituteWarehouseItemId !== undefined ? `warehouse:${draft.substituteWarehouseItemId}` : draft.substituteProductId !== undefined ? `product:${draft.substituteProductId}` : draft.substituteManualMode ? "__manual" : undefined} onValueChange={value => { if (value === "__manual") update(index, { substituteManualMode: true, substituteProductId: undefined, substituteWarehouseItemId: undefined, substituteProductName: "" }); else { const selected = products.find(entry => catalogKey(entry) === value); if (selected) { const source = selected.source; update(index, { substituteManualMode: false, substituteProductId: source === "product" ? selected.id : undefined, substituteWarehouseItemId: source === "warehouse" ? selected.id : undefined, substituteProductName: selected.name, substituteUnit: items[index].unit }); } } }} options={[{ value: "__manual", label: "بديل يدوي", badge: "يدوي" }, ...products.map(product => ({ value: catalogKey(product), label: product.name, sublabel: product.sku, badge: sourceLabel(product.source) }))]} placeholder="اختر البديل" searchPlaceholder="ابحث عن بديل..." /><Input className="mt-2" disabled={Number(draft.substituteQuantity) <= 0 || !draft.substituteManualMode} value={draft.substituteProductName} onChange={event => update(index, { substituteProductName: event.target.value })} placeholder="اسم البديل اليدوي" /></div><div><Label className="text-xs">وحدة احتساب البديل</Label><Input className="mt-1" disabled value={draft.substituteUnit} /><p className="mt-1 text-[11px] text-muted-foreground">مطابقة لوحدة الطلب</p></div></div>{shortage > 0 && <div className="mt-3 grid gap-3 md:grid-cols-2"><div><Label className="text-xs">سبب النقص ({shortage} {items[index]?.unit})</Label><Select value={draft.shortageReason} onValueChange={value => update(index, { shortageReason: value })}><SelectTrigger className="mt-1"><SelectValue placeholder="اختر سبب النقص" /></SelectTrigger><SelectContent>{Object.entries(SHORTAGE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div><div><Label className="text-xs">ملاحظة التجهيز</Label><Input className="mt-1" value={draft.preparationNotes} onChange={event => update(index, { preparationNotes: event.target.value })} placeholder="تفاصيل النقص أو البديل" /></div></div>}</div>;
   })}</div>{validationError && <div className="mt-3 flex items-center gap-2 rounded-md bg-amber-50 p-2 text-sm text-amber-800"><AlertTriangle className="h-4 w-4" />{validationError}</div>}<div className="mt-4"><Label htmlFor="preparation-note">ملاحظة عامة (اختياري)</Label><Input id="preparation-note" className="mt-1" value={actionNotes} onChange={event => setActionNotes(event.target.value)} /><Button className="mt-3" disabled={pending || !!validationError} onClick={submit}>{pending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <PackagePlus className="ml-2 h-4 w-4" />}تأكيد الكميات والتجهيز</Button></div></section>;
 }
 

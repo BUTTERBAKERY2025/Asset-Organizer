@@ -339,7 +339,7 @@ describe.sequential("central kitchen database-backed handler pilot", () => {
       },
     });
     expect(inactive.statusCode).toBe(400);
-    expect(inactive.body.error).toContain("غير موجود أو غير مفعّل");
+    expect(inactive.body.error).toContain("غير مفعّل حالياً");
 
     const inactiveProduct = await invoke("post", "/api/central-kitchen-orders", {
       user: fixture.requestUser,
@@ -356,7 +356,7 @@ describe.sequential("central kitchen database-backed handler pilot", () => {
       },
     });
     expect(inactiveProduct.statusCode).toBe(400);
-    expect(inactiveProduct.body.error).toContain("غير موجود أو غير مفعّل");
+    expect(inactiveProduct.body.error).toContain("غير مفعّل حالياً");
 
     const missing = await invoke("post", "/api/central-kitchen-orders", {
       user: fixture.requestUser,
@@ -373,7 +373,24 @@ describe.sequential("central kitchen database-backed handler pilot", () => {
       },
     });
     expect(missing.statusCode).toBe(400);
-    expect(missing.body.error).toContain("غير موجود أو غير مفعّل");
+    expect(missing.body.error).toContain("لم يعد موجوداً");
+
+    const changed = await invoke("post", "/api/central-kitchen-orders", {
+      user: fixture.requestUser,
+      body: {
+        requestBranchId: fixture.requestBranchId,
+        centralKitchenId: fixture.kitchenBranchId,
+        idempotencyKey: key("changed"),
+        items: [{
+          productId: fixture.sharedCatalogId,
+          productName: "Stale product name",
+          requestedQuantity: 1,
+          unit: "tray",
+        }],
+      },
+    });
+    expect(changed.statusCode).toBe(400);
+    expect(changed.body.error).toContain("تغيّر اسم الصنف أو وحدته");
 
     const after = await databaseState.db.select({ count: sql<number>`count(*)::int` })
       .from(centralKitchenOrders)
@@ -385,12 +402,31 @@ describe.sequential("central kitchen database-backed handler pilot", () => {
     });
     expect(catalog.statusCode).toBe(200);
     expect(catalog.body).toEqual(expect.arrayContaining([
-      expect.objectContaining({
+      {
         id: fixture.sharedCatalogId,
-        source: "product",
-      }),
+        name: "CK integration product",
+        unit: "tray",
+      },
     ]));
+    expect(catalog.headers["cache-control"]).toBe("private, no-store");
+    expect(catalog.body.every((item: any) =>
+      Object.keys(item).sort().join(",") === "id,name,unit" && item.name !== "CK integration warehouse original"
+    )).toBe(true);
     expect(catalog.body).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: fixture.inactiveProductId }),
+    ]));
+
+    const catalogV2 = await invoke("get", "/api/central-kitchen-orders/catalog-v2", {
+      user: fixture.requestUser,
+    });
+    expect(catalogV2.statusCode).toBe(200);
+    expect(catalogV2.headers["cache-control"]).toBe("private, no-store");
+    expect(catalogV2.body.schemaVersion).toBe(2);
+    expect(catalogV2.body.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: fixture.sharedCatalogId, source: "product" }),
+      expect.objectContaining({ id: fixture.sharedCatalogId, source: "warehouse" }),
+    ]));
+    expect(catalogV2.body.items).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ id: fixture.inactiveProductId, source: "product" }),
       expect.objectContaining({ id: fixture.inactiveWarehouseId, source: "warehouse" }),
     ]));
