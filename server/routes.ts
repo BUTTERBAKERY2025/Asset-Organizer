@@ -7455,6 +7455,12 @@ export async function registerRoutes(
     unit: string;
     validateCatalogUnit?: boolean;
   };
+  // Some older product schemas do not have is_active. Reading through to_jsonb
+  // treats that missing key as active without directly referencing an absent column.
+  const activeCentralKitchenProduct = sql<boolean>`
+    COALESCE(to_jsonb(${productsTable}) ->> 'is_active', 'true')
+      NOT IN ('false', 'inactive', '0')
+  `;
 
   const validateCentralKitchenCatalogIdentities = async (
     items: CentralKitchenCatalogIdentity[],
@@ -7467,7 +7473,10 @@ export async function registerRoutes(
             id: productsTable.id,
             name: productsTable.name,
             unit: productsTable.unit,
-          }).from(productsTable).where(inArray(productsTable.id, productIds))
+          }).from(productsTable).where(and(
+            inArray(productsTable.id, productIds),
+            activeCentralKitchenProduct,
+          ))
         : Promise.resolve([]),
       warehouseItemIds.length
         ? db.select({
@@ -7702,7 +7711,9 @@ export async function registerRoutes(
             id: productsTable.id,
             name: productsTable.name,
             unit: productsTable.unit,
-          }).from(productsTable).orderBy(productsTable.name),
+          }).from(productsTable)
+            .where(activeCentralKitchenProduct)
+            .orderBy(productsTable.name),
           db.select({
             id: warehouseItems.id,
             name: warehouseItems.name,
