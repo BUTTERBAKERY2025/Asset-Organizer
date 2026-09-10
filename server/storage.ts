@@ -646,6 +646,7 @@ import {
   type FloorPlanLink,
   type InsertFloorPlanLink,
 } from "@shared/schema";
+import { postProductionBatchToStock } from "./production-stock-posting";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
 import { db, pool } from "./db";
@@ -8533,54 +8534,17 @@ export class DatabaseStorage implements IStorage {
   // Mark batch as finished
   async finishBatch(id: number): Promise<DailyProductionBatch | undefined> {
     return await db.transaction(async (tx) => {
-      const [existing] = await tx.select().from(dailyProductionBatches).where(eq(dailyProductionBatches.id, id));
-      if (!existing || existing.status === 'finished') {
-        if (existing) return existing;
-        return undefined;
-      }
+      const [existing] = await tx.select().from(dailyProductionBatches)
+        .where(eq(dailyProductionBatches.id, id))
+        .for("update");
+      if (!existing) return undefined;
+      if (existing.status === "finished") return existing;
 
       const [updated] = await tx.update(dailyProductionBatches)
-        .set({ status: 'finished', finishedAt: new Date() })
+        .set({ status: "finished", finishedAt: new Date() })
         .where(eq(dailyProductionBatches.id, id))
         .returning();
-      if (!updated) return undefined;
-
-      const productionDate = updated.productionDate || new Date().toISOString().split('T')[0];
-      const productNameNormalized = (updated.productName || '').trim().toLowerCase();
-      
-      try {
-        const upsertResult = await tx.execute(sql`
-          INSERT INTO finished_goods_inventory (branch_id, product_id, product_name, product_name_normalized, product_category, quantity, unit, production_date, last_batch_id, created_at, updated_at)
-          VALUES (${updated.branchId}, ${updated.productId}, ${updated.productName}, ${productNameNormalized}, ${updated.productCategory}, ${updated.quantity}, ${updated.unit || 'قطعة'}, ${productionDate}, ${updated.id}, NOW(), NOW())
-          ON CONFLICT (branch_id, product_name_normalized, production_date)
-          DO UPDATE SET 
-            quantity = finished_goods_inventory.quantity + EXCLUDED.quantity,
-            last_batch_id = EXCLUDED.last_batch_id,
-            product_id = COALESCE(EXCLUDED.product_id, finished_goods_inventory.product_id),
-            updated_at = NOW()
-          RETURNING id, quantity
-        `) as { rows: any[] };
-        
-        const row = upsertResult.rows[0];
-        if (row) {
-          const balanceAfter = row.quantity;
-          const balanceBefore = balanceAfter - updated.quantity;
-          await tx.insert(productionInventoryLogs).values({
-            branchId: updated.branchId,
-            productId: updated.productId,
-            productName: updated.productName,
-            movementType: 'production_in',
-            quantity: updated.quantity,
-            balanceBefore,
-            balanceAfter,
-            referenceType: 'batch',
-            referenceId: updated.id,
-            notes: `ترحيل من إكمال دفعة الإنتاج #${updated.id}`,
-          });
-        }
-      } catch (invErr) {
-        console.error("Error transferring finished batch to inventory:", invErr);
-      }
+      await postProductionBatchToStock(tx, id, undefined, undefined, { allowInitialPosting: true });
 
       if (updated.destination === 'display_bar' && updated.productId) {
         const batchRef = `PROD-${updated.id}`;
@@ -8645,8 +8609,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createDailyProductionBatch(batch: InsertDailyProductionBatch): Promise<DailyProductionBatch> {
-    const [newBatch] = await db.insert(dailyProductionBatches).values(batch).returning();
-    return newBatch;
+    return await db.transaction(async (tx) => {
+      const [newBatch] = await tx.insert(dailyProductionBatches).values(batch).returning();
+      if (newBatch.status === "finished") {
+        await postProductionBatchToStock(tx, newBatch.id, undefined, undefined, { allowInitialPosting: true });
+      }
+      return newBatch;
+    });
   }
 
   async createDailyProductionBatchWithTransfer(batch: InsertDailyProductionBatch, userId?: string, userName?: string): Promise<{ batch: DailyProductionBatch; transferred: boolean }> {
@@ -8654,42 +8623,11 @@ export class DatabaseStorage implements IStorage {
       const [newBatch] = await tx.insert(dailyProductionBatches).values(batch).returning();
       
       let transferred = false;
-      if (newBatch && batch.status === "finished") {
-        const productionDate = newBatch.productionDate || new Date().toISOString().split('T')[0];
-        const productNameNormalized = (newBatch.productName || '').trim().toLowerCase();
-        
-        const upsertResult = await tx.execute(sql`
-          INSERT INTO finished_goods_inventory (branch_id, product_id, product_name, product_name_normalized, product_category, quantity, unit, production_date, last_batch_id, created_at, updated_at)
-          VALUES (${newBatch.branchId}, ${newBatch.productId}, ${newBatch.productName}, ${productNameNormalized}, ${newBatch.productCategory}, ${newBatch.quantity}, ${newBatch.unit || 'قطعة'}, ${productionDate}, ${newBatch.id}, NOW(), NOW())
-          ON CONFLICT (branch_id, product_name_normalized, production_date)
-          DO UPDATE SET 
-            quantity = finished_goods_inventory.quantity + EXCLUDED.quantity,
-            last_batch_id = EXCLUDED.last_batch_id,
-            product_id = COALESCE(EXCLUDED.product_id, finished_goods_inventory.product_id),
-            updated_at = NOW()
-          RETURNING id, quantity
-        `) as { rows: any[] };
-        
-        const row = upsertResult.rows[0];
-        const balanceAfter = row.quantity;
-        const balanceBefore = balanceAfter - newBatch.quantity;
-        
-        await tx.insert(productionInventoryLogs).values({
-          branchId: newBatch.branchId,
-          productId: newBatch.productId,
-          productName: newBatch.productName,
-          movementType: 'production_in',
-          quantity: newBatch.quantity,
-          balanceBefore,
-          balanceAfter,
-          referenceType: 'batch',
-          referenceId: newBatch.id,
-          notes: `ترحيل من دفعة الإنتاج #${newBatch.id}`,
-          createdBy: userId,
-          createdByName: userName,
-        });
-        
-        transferred = true;
+      if (newBatch && newBatch.status === "finished") {
+        const posting = await postProductionBatchToStock(
+          tx, newBatch.id, userId, userName, { allowInitialPosting: true },
+        );
+        transferred = posting.posted;
 
         if (newBatch.destination === 'display_bar' && newBatch.productId) {
           const batchRef = `PROD-${newBatch.id}`;
@@ -8727,18 +8665,83 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateDailyProductionBatch(id: number, batch: Partial<InsertDailyProductionBatch>): Promise<DailyProductionBatch | undefined> {
-    const [updated] = await db.update(dailyProductionBatches)
-      .set(batch)
-      .where(eq(dailyProductionBatches.id, id))
-      .returning();
-    return updated || undefined;
+    return await db.transaction(async (tx) => {
+      const linkedUpdate = batch as Partial<InsertDailyProductionBatch> & {
+        centralKitchenOrderItemId?: number | null;
+      };
+      const [existing] = await tx.select().from(dailyProductionBatches)
+        .where(eq(dailyProductionBatches.id, id))
+        .for("update");
+      if (!existing) return undefined;
+      const [posting] = await tx.select({ id: productionInventoryLogs.id })
+        .from(productionInventoryLogs)
+        .where(eq(productionInventoryLogs.batchId, id)).limit(1);
+      const [legacyPosting] = await tx.select({ id: productionInventoryLogs.id })
+        .from(productionInventoryLogs)
+        .where(and(
+          eq(productionInventoryLogs.referenceType, "batch"),
+          eq(productionInventoryLogs.referenceId, id),
+        )).limit(1);
+      if (posting || legacyPosting || existing.status === "finished") {
+        throw new Error("لا يمكن تعديل دفعة إنتاج مكتملة أو تم ترحيلها إلى المخزون");
+      }
+      if (existing.centralKitchenOrderItemId && (
+        (batch.branchId !== undefined && batch.branchId !== existing.branchId)
+        || (batch.productId !== undefined && batch.productId !== existing.productId)
+        || (batch.productName !== undefined && batch.productName !== existing.productName)
+        || (batch.quantity !== undefined && batch.quantity !== existing.quantity)
+        || (batch.unit !== undefined && batch.unit !== existing.unit)
+        || (batch.productionDate !== undefined && batch.productionDate !== existing.productionDate)
+        || (linkedUpdate.centralKitchenOrderItemId !== undefined
+          && linkedUpdate.centralKitchenOrderItemId !== existing.centralKitchenOrderItemId)
+      )) {
+        throw new Error("لا يمكن تغيير هوية أو كمية دفعة مرتبطة بطلب المطبخ المركزي");
+      }
+      const [updated] = await tx.update(dailyProductionBatches)
+        .set(batch)
+        .where(eq(dailyProductionBatches.id, id))
+        .returning();
+      if (updated?.status === "finished") {
+        await postProductionBatchToStock(tx, id, undefined, undefined, { allowInitialPosting: true });
+      }
+      return updated || undefined;
+    });
   }
 
   async updateDailyProductionBatchWithTransfer(id: number, batch: Partial<InsertDailyProductionBatch>, userId?: string, userName?: string): Promise<{ batch: DailyProductionBatch | undefined; transferred: boolean }> {
     return await db.transaction(async (tx) => {
-      const [existing] = await tx.select().from(dailyProductionBatches).where(eq(dailyProductionBatches.id, id));
+      const linkedUpdate = batch as Partial<InsertDailyProductionBatch> & {
+        centralKitchenOrderItemId?: number | null;
+      };
+      const [existing] = await tx.select().from(dailyProductionBatches)
+        .where(eq(dailyProductionBatches.id, id))
+        .for("update");
       if (!existing) {
         return { batch: undefined, transferred: false };
+      }
+      const [posting] = await tx.select({ id: productionInventoryLogs.id })
+        .from(productionInventoryLogs)
+        .where(eq(productionInventoryLogs.batchId, id)).limit(1);
+      const [legacyPosting] = await tx.select({ id: productionInventoryLogs.id })
+        .from(productionInventoryLogs)
+        .where(and(
+          eq(productionInventoryLogs.referenceType, "batch"),
+          eq(productionInventoryLogs.referenceId, id),
+        )).limit(1);
+      if (posting || legacyPosting || existing.status === "finished") {
+        throw new Error("لا يمكن تعديل دفعة إنتاج مكتملة أو تم ترحيلها إلى المخزون");
+      }
+      if (existing.centralKitchenOrderItemId && (
+        (batch.branchId !== undefined && batch.branchId !== existing.branchId)
+        || (batch.productId !== undefined && batch.productId !== existing.productId)
+        || (batch.productName !== undefined && batch.productName !== existing.productName)
+        || (batch.quantity !== undefined && batch.quantity !== existing.quantity)
+        || (batch.unit !== undefined && batch.unit !== existing.unit)
+        || (batch.productionDate !== undefined && batch.productionDate !== existing.productionDate)
+        || (linkedUpdate.centralKitchenOrderItemId !== undefined
+          && linkedUpdate.centralKitchenOrderItemId !== existing.centralKitchenOrderItemId)
+      )) {
+        throw new Error("لا يمكن تغيير هوية أو كمية دفعة مرتبطة بطلب المطبخ المركزي");
       }
       
       const [updated] = await tx.update(dailyProductionBatches)
@@ -8751,42 +8754,11 @@ export class DatabaseStorage implements IStorage {
       }
       
       let transferred = false;
-      if (batch.status === "finished" && existing.status !== "finished") {
-        const productionDate = updated.productionDate || new Date().toISOString().split('T')[0];
-        const productNameNormalized = (updated.productName || '').trim().toLowerCase();
-        
-        const upsertResult = await tx.execute(sql`
-          INSERT INTO finished_goods_inventory (branch_id, product_id, product_name, product_name_normalized, product_category, quantity, unit, production_date, last_batch_id, created_at, updated_at)
-          VALUES (${updated.branchId}, ${updated.productId}, ${updated.productName}, ${productNameNormalized}, ${updated.productCategory}, ${updated.quantity}, ${updated.unit || 'قطعة'}, ${productionDate}, ${updated.id}, NOW(), NOW())
-          ON CONFLICT (branch_id, product_name_normalized, production_date)
-          DO UPDATE SET 
-            quantity = finished_goods_inventory.quantity + EXCLUDED.quantity,
-            last_batch_id = EXCLUDED.last_batch_id,
-            product_id = COALESCE(EXCLUDED.product_id, finished_goods_inventory.product_id),
-            updated_at = NOW()
-          RETURNING id, quantity
-        `) as { rows: any[] };
-        
-        const row = upsertResult.rows[0];
-        const balanceAfter = row.quantity;
-        const balanceBefore = balanceAfter - updated.quantity;
-        
-        await tx.insert(productionInventoryLogs).values({
-          branchId: updated.branchId,
-          productId: updated.productId,
-          productName: updated.productName,
-          movementType: 'production_in',
-          quantity: updated.quantity,
-          balanceBefore,
-          balanceAfter,
-          referenceType: 'batch',
-          referenceId: updated.id,
-          notes: `ترحيل من دفعة الإنتاج #${updated.id}`,
-          createdBy: userId,
-          createdByName: userName,
-        });
-        
-        transferred = true;
+      if (updated.status === "finished") {
+        const postingResult = await postProductionBatchToStock(
+          tx, id, userId, userName, { allowInitialPosting: true },
+        );
+        transferred = postingResult.posted;
 
         if (updated.destination === 'display_bar' && updated.productId) {
           const batchRef = `PROD-${updated.id}`;
@@ -8820,8 +8792,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteDailyProductionBatch(id: number): Promise<boolean> {
-    const result = await db.delete(dailyProductionBatches).where(eq(dailyProductionBatches.id, id));
-    return true;
+    return await db.transaction(async (tx) => {
+      const [batch] = await tx.select().from(dailyProductionBatches)
+        .where(eq(dailyProductionBatches.id, id))
+        .for("update");
+      if (!batch) return false;
+      const [posting] = await tx.select({ id: productionInventoryLogs.id })
+        .from(productionInventoryLogs)
+        .where(eq(productionInventoryLogs.batchId, id)).limit(1);
+      const [legacyPosting] = await tx.select({ id: productionInventoryLogs.id })
+        .from(productionInventoryLogs)
+        .where(and(
+          eq(productionInventoryLogs.referenceType, "batch"),
+          eq(productionInventoryLogs.referenceId, id),
+        )).limit(1);
+      if (posting || legacyPosting || batch.status === "finished") {
+        throw new Error("لا يمكن حذف دفعة إنتاج مكتملة أو تم ترحيلها إلى المخزون");
+      }
+      if (batch.centralKitchenOrderItemId) {
+        throw new Error("لا يمكن حذف دفعة مرتبطة بطلب المطبخ المركزي");
+      }
+      const deleted = await tx.delete(dailyProductionBatches)
+        .where(eq(dailyProductionBatches.id, id))
+        .returning({ id: dailyProductionBatches.id });
+      return deleted.length > 0;
+    });
   }
 
   async getDailyProductionStats(branchId: string, date: string): Promise<{
@@ -13619,128 +13614,106 @@ export class DatabaseStorage implements IStorage {
   }
 
   async addToFinishedGoodsInventory(item: InsertFinishedGoodsInventory): Promise<FinishedGoodsInventory> {
-    // Ensure productNameNormalized is set for consistent matching
+    const quantity = item.quantity ?? 0;
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      throw new Error("كمية المخزون يجب أن تكون عدداً صحيحاً غير سالب");
+    }
     const itemWithNormalized = {
       ...item,
+      quantity,
       productNameNormalized: item.productNameNormalized || item.productName.trim().toLowerCase()
     };
-    
-    // Use normalized product name for matching
-    const conditions = [
-      eq(finishedGoodsInventory.branchId, itemWithNormalized.branchId),
-      eq(finishedGoodsInventory.productNameNormalized, itemWithNormalized.productNameNormalized),
-      eq(finishedGoodsInventory.productionDate, itemWithNormalized.productionDate)
-    ];
-    
-    const existing = await db.select().from(finishedGoodsInventory).where(and(...conditions));
-    
-    if (existing.length > 0) {
-      // Update existing entry
-      const [updated] = await db.update(finishedGoodsInventory)
-        .set({ 
-          quantity: sql`${finishedGoodsInventory.quantity} + ${itemWithNormalized.quantity}`,
-          lastBatchId: itemWithNormalized.lastBatchId,
-          productId: itemWithNormalized.productId || existing[0].productId,
-          updatedAt: new Date()
-        })
-        .where(eq(finishedGoodsInventory.id, existing[0].id))
-        .returning();
-      return updated;
-    }
-    
-    // Create new entry
-    const [created] = await db.insert(finishedGoodsInventory).values(itemWithNormalized).returning();
-    return created;
+    return await db.transaction(async (tx) => {
+      const conditions = itemWithNormalized.productId
+        ? [
+            eq(finishedGoodsInventory.branchId, itemWithNormalized.branchId),
+            eq(finishedGoodsInventory.productId, itemWithNormalized.productId),
+            eq(finishedGoodsInventory.productionDate, itemWithNormalized.productionDate),
+            eq(finishedGoodsInventory.unit, itemWithNormalized.unit || "قطعة"),
+          ]
+        : [
+            eq(finishedGoodsInventory.branchId, itemWithNormalized.branchId),
+            isNull(finishedGoodsInventory.productId),
+            eq(finishedGoodsInventory.productNameNormalized, itemWithNormalized.productNameNormalized),
+            eq(finishedGoodsInventory.productionDate, itemWithNormalized.productionDate),
+            eq(finishedGoodsInventory.unit, itemWithNormalized.unit || "قطعة"),
+          ];
+      const existing = await tx.select().from(finishedGoodsInventory)
+        .where(and(...conditions))
+        .for("update");
+      if (existing.length > 1) {
+        throw new Error("تعذر تحديد رصيد وحيد للمنتج والوحدة وتاريخ الإنتاج");
+      }
+      if (existing.length === 1) {
+        const [updated] = await tx.update(finishedGoodsInventory)
+          .set({
+            quantity: sql`${finishedGoodsInventory.quantity} + ${itemWithNormalized.quantity}`,
+            lastBatchId: itemWithNormalized.lastBatchId,
+            updatedAt: new Date(),
+          })
+          .where(eq(finishedGoodsInventory.id, existing[0].id))
+          .returning();
+        return updated;
+      }
+      const sameLegacyIdentity = await tx.select().from(finishedGoodsInventory).where(and(
+        eq(finishedGoodsInventory.branchId, itemWithNormalized.branchId),
+        eq(finishedGoodsInventory.productNameNormalized, itemWithNormalized.productNameNormalized),
+        eq(finishedGoodsInventory.productionDate, itemWithNormalized.productionDate),
+      )).for("update");
+      const collision = sameLegacyIdentity.find((row) =>
+        row.productId !== (itemWithNormalized.productId || null)
+        || (row.unit || "قطعة") !== (itemWithNormalized.unit || "قطعة")
+      );
+      if (collision) {
+        throw new Error("يوجد رصيد بالاسم والتاريخ نفسيهما لهوية منتج أو وحدة مختلفة");
+      }
+      const [created] = await tx.insert(finishedGoodsInventory).values(itemWithNormalized).returning();
+      return created;
+    });
   }
 
   async updateFinishedGoodsInventory(id: number, item: Partial<InsertFinishedGoodsInventory>): Promise<FinishedGoodsInventory | undefined> {
+    if (item.quantity !== undefined && (!Number.isInteger(item.quantity) || item.quantity < 0)) {
+      throw new Error("كمية المخزون يجب أن تكون عدداً صحيحاً غير سالب");
+    }
     const [updated] = await db.update(finishedGoodsInventory)
       .set({ ...item, updatedAt: new Date() })
-      .where(eq(finishedGoodsInventory.id, id))
+      .where(and(
+        eq(finishedGoodsInventory.id, id),
+        item.quantity === undefined
+          ? sql`TRUE`
+          : sql`${item.quantity} >= ${finishedGoodsInventory.reservedQuantity}`,
+      ))
       .returning();
+    if (!updated && item.quantity !== undefined) {
+      const [existing] = await db.select().from(finishedGoodsInventory)
+        .where(eq(finishedGoodsInventory.id, id));
+      if (existing) throw new Error("لا يمكن خفض الكمية عن الكمية المحجوزة");
+    }
     return updated || undefined;
   }
 
   async decrementFinishedGoodsInventory(id: number, quantity: number): Promise<FinishedGoodsInventory | undefined> {
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      throw new Error("كمية الخصم يجب أن تكون عدداً صحيحاً أكبر من صفر");
+    }
     const [updated] = await db.update(finishedGoodsInventory)
       .set({ 
-        quantity: sql`GREATEST(${finishedGoodsInventory.quantity} - ${quantity}, 0)`,
+        quantity: sql`${finishedGoodsInventory.quantity} - ${quantity}`,
         updatedAt: new Date()
       })
-      .where(eq(finishedGoodsInventory.id, id))
+      .where(and(
+        eq(finishedGoodsInventory.id, id),
+        sql`${finishedGoodsInventory.quantity} - ${finishedGoodsInventory.reservedQuantity} >= ${quantity}`,
+      ))
       .returning();
     return updated || undefined;
   }
 
   async addProductionToFinishedGoods(batchId: number, userId?: string, userName?: string): Promise<FinishedGoodsInventory> {
     return await db.transaction(async (tx) => {
-      // Get the production batch
-      const [batch] = await tx.select().from(dailyProductionBatches).where(eq(dailyProductionBatches.id, batchId));
-      if (!batch) {
-        throw new Error(`دفعة الإنتاج ${batchId} غير موجودة`);
-      }
-      
-      const productionDate = batch.productionDate || new Date().toISOString().split('T')[0];
-      
-      // Normalize product name for consistent matching - trim and lowercase
-      const productNameNormalized = (batch.productName || '').trim().toLowerCase();
-      
-      // Use UPSERT with standard unique index for atomic inventory addition
-      // Index: finished_goods_unique_idx on (branch_id, product_name_normalized, production_date)
-      // RETURNING provides the final quantity after the operation
-      const upsertResult = await tx.execute(sql`
-        INSERT INTO finished_goods_inventory (branch_id, product_id, product_name, product_name_normalized, product_category, quantity, unit, production_date, last_batch_id, created_at, updated_at)
-        VALUES (${batch.branchId}, ${batch.productId}, ${batch.productName}, ${productNameNormalized}, ${batch.productCategory}, ${batch.quantity}, ${batch.unit || 'قطعة'}, ${productionDate}, ${batchId}, NOW(), NOW())
-        ON CONFLICT (branch_id, product_name_normalized, production_date)
-        DO UPDATE SET 
-          quantity = finished_goods_inventory.quantity + EXCLUDED.quantity,
-          last_batch_id = EXCLUDED.last_batch_id,
-          product_id = COALESCE(EXCLUDED.product_id, finished_goods_inventory.product_id),
-          updated_at = NOW()
-        RETURNING id, branch_id, product_id, product_name, product_name_normalized, product_category, quantity, unit, production_date, last_batch_id, created_at, updated_at
-      `) as { rows: any[] };
-      
-      // Use RETURNING row directly - this is the final state after atomic upsert
-      const row = upsertResult.rows[0];
-      const finalQuantity = row.quantity;
-      
-      // Balance calculation from RETURNING data (quantity after operation - added quantity = balance before)
-      const balanceAfter = finalQuantity;
-      const balanceBefore = finalQuantity - batch.quantity;
-      
-      // Map result to expected type
-      const inventoryItem: FinishedGoodsInventory = {
-        id: row.id,
-        branchId: row.branch_id,
-        productId: row.product_id,
-        productName: row.product_name,
-        productNameNormalized: row.product_name_normalized,
-        productCategory: row.product_category,
-        quantity: row.quantity,
-        unit: row.unit,
-        productionDate: row.production_date,
-        lastBatchId: row.last_batch_id,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      };
-      
-      // Log the movement within same transaction
-      await tx.insert(productionInventoryLogs).values({
-        branchId: batch.branchId,
-        productId: batch.productId,
-        productName: batch.productName,
-        movementType: 'production_in',
-        quantity: batch.quantity,
-        balanceBefore,
-        balanceAfter,
-        referenceType: 'batch',
-        referenceId: batchId,
-        notes: `ترحيل من دفعة الإنتاج #${batchId}`,
-        createdBy: userId,
-        createdByName: userName,
-      });
-      
-      return inventoryItem;
+      const result = await postProductionBatchToStock(tx, batchId, userId, userName);
+      return result.inventory;
     });
   }
 
@@ -13772,6 +13745,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async transferFinishedGoods(inventoryId: number, quantity: number, destinationType: string, destinationBranchId?: string, notes?: string, userId?: string, userName?: string): Promise<FinishedGoodsTransfer> {
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      throw new Error("كمية التحويل يجب أن تكون عدداً صحيحاً أكبر من صفر");
+    }
     // Valid destination types
     const validDestinationTypes = ['branch', 'display_bar', 'بار_العرض', 'kitchen_trolley', 'freezer', 'refrigerator'];
     if (!validDestinationTypes.includes(destinationType)) {
@@ -13793,7 +13769,7 @@ export class DatabaseStorage implements IStorage {
         })
         .where(and(
           eq(finishedGoodsInventory.id, inventoryId),
-          sql`${finishedGoodsInventory.quantity} >= ${quantity}`
+          sql`${finishedGoodsInventory.quantity} - ${finishedGoodsInventory.reservedQuantity} >= ${quantity}`
         ))
         .returning();
       
@@ -13805,7 +13781,8 @@ export class DatabaseStorage implements IStorage {
         if (!existingItem) {
           throw new Error(`عنصر المخزون ${inventoryId} غير موجود`);
         }
-        throw new Error(`الكمية غير كافية. المتاح: ${existingItem.quantity}, المطلوب: ${quantity}`);
+        const available = existingItem.quantity - existingItem.reservedQuantity;
+        throw new Error(`الكمية غير المحجوزة غير كافية. المتاح: ${available}, المطلوب: ${quantity}`);
       }
       
       const updatedInventory = updateResult[0];
@@ -13931,6 +13908,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateBranchStock(branchId: string, itemId: number, quantity: number, dailyConsumption?: number, userId?: string): Promise<BranchStock> {
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      throw new Error("كمية مخزون المواد يجب أن تكون عدداً صحيحاً غير سالب");
+    }
     const existing = await db.select().from(branchStock)
       .where(and(eq(branchStock.branchId, branchId), eq(branchStock.itemId, itemId)));
     
@@ -13942,8 +13922,13 @@ export class DatabaseStorage implements IStorage {
           lastUpdated: new Date(),
           updatedBy: userId 
         })
-        .where(and(eq(branchStock.branchId, branchId), eq(branchStock.itemId, itemId)))
+        .where(and(
+          eq(branchStock.branchId, branchId),
+          eq(branchStock.itemId, itemId),
+          sql`${quantity} >= ${branchStock.reservedQuantity}`,
+        ))
         .returning();
+      if (!updated) throw new Error("لا يمكن خفض مخزون المواد عن الكمية المحجوزة");
       return updated;
     } else {
       const [created] = await db.insert(branchStock)
@@ -14098,6 +14083,9 @@ export class DatabaseStorage implements IStorage {
       for (const item of items) {
         const receivedItem = receivedItems.find(ri => ri.itemId === item.itemId);
         const receivedQty = receivedItem?.receivedQuantity ?? item.quantity;
+        if (!Number.isInteger(receivedQty) || receivedQty < 0) {
+          throw new Error("الكمية المستلمة يجب أن تكون عدداً صحيحاً غير سالب");
+        }
         const discrepancy = receivedQty - item.quantity;
         
         if (discrepancy !== 0) hasDiscrepancy = true;
@@ -14133,17 +14121,20 @@ export class DatabaseStorage implements IStorage {
         
         // Deduct from source branch stock (if branch-to-branch transfer)
         if (transfer.sourceBranchId) {
-          const sourceStock = await tx.select().from(branchStock)
-            .where(and(eq(branchStock.branchId, transfer.sourceBranchId), eq(branchStock.itemId, item.itemId)));
-          
-          if (sourceStock.length > 0) {
-            await tx.update(branchStock)
-              .set({ 
-                currentQuantity: Math.max(0, (sourceStock[0].currentQuantity || 0) - item.quantity),
-                lastUpdated: new Date(),
-                updatedBy: userId
-              })
-              .where(and(eq(branchStock.branchId, transfer.sourceBranchId), eq(branchStock.itemId, item.itemId)));
+          const debited = await tx.update(branchStock)
+            .set({
+              currentQuantity: sql`${branchStock.currentQuantity} - ${item.quantity}`,
+              lastUpdated: new Date(),
+              updatedBy: userId,
+            })
+            .where(and(
+              eq(branchStock.branchId, transfer.sourceBranchId),
+              eq(branchStock.itemId, item.itemId),
+              sql`${branchStock.currentQuantity} - ${branchStock.reservedQuantity} >= ${item.quantity}`,
+            ))
+            .returning({ id: branchStock.id });
+          if (!debited.length) {
+            throw new Error(`مخزون المادة ${item.itemId} غير المحجوز غير كافٍ لإتمام التحويل`);
           }
         }
         

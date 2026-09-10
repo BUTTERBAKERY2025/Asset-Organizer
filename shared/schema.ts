@@ -4100,6 +4100,10 @@ export const dailyProductionBatches = pgTable("daily_production_batches", {
   destination: text("destination").notNull(), // display_bar, kitchen_trolley, freezer, refrigerator
   shiftId: integer("shift_id").references(() => shifts.id),
   productionOrderId: integer("production_order_id"),
+  centralKitchenOrderItemId: integer("central_kitchen_order_item_id")
+    .references(() => centralKitchenOrderItems.id, { onDelete: "restrict" }),
+  centralKitchenIdempotencyKey: varchar("central_kitchen_idempotency_key", { length: 128 }),
+  centralKitchenPayloadFingerprint: varchar("central_kitchen_payload_fingerprint", { length: 64 }),
   producedAt: timestamp("produced_at").defaultNow().notNull(),
   productionDate: text("production_date"), // تاريخ الإنتاج بتوقيت المستخدم YYYY-MM-DD
   recordedBy: varchar("recorded_by").references(() => users.id),
@@ -4118,6 +4122,12 @@ export const dailyProductionBatches = pgTable("daily_production_batches", {
   index("idx_daily_production_batches_branch_id").on(table.branchId),
   index("idx_daily_production_batches_production_date").on(table.productionDate),
   index("idx_daily_production_batches_branch_date").on(table.branchId, table.productionDate),
+  uniqueIndex("uq_daily_production_linked_item_date")
+    .on(table.centralKitchenOrderItemId, table.productionDate)
+    .where(sql`${table.centralKitchenOrderItemId} IS NOT NULL`),
+  uniqueIndex("uq_daily_production_linked_creator_key")
+    .on(table.recordedBy, table.centralKitchenIdempotencyKey)
+    .where(sql`${table.centralKitchenOrderItemId} IS NOT NULL AND ${table.centralKitchenIdempotencyKey} IS NOT NULL`),
 ]);
 
 export const insertDailyProductionBatchSchema = createInsertSchema(
@@ -4126,6 +4136,9 @@ export const insertDailyProductionBatchSchema = createInsertSchema(
   id: true,
   createdAt: true,
   finishedAt: true,
+  centralKitchenOrderItemId: true,
+  centralKitchenIdempotencyKey: true,
+  centralKitchenPayloadFingerprint: true,
 });
 
 export type DailyProductionBatch = typeof dailyProductionBatches.$inferSelect;
@@ -7544,6 +7557,7 @@ export const finishedGoodsInventory = pgTable("finished_goods_inventory", {
   productNameNormalized: text("product_name_normalized").notNull(), // normalized: lower(trim(product_name))
   productCategory: text("product_category"),
   quantity: integer("quantity").notNull().default(0), // الكمية المتاحة
+  reservedQuantity: integer("reserved_quantity").notNull().default(0),
   unit: text("unit").default("قطعة"),
   productionDate: text("production_date").notNull(), // تاريخ الإنتاج YYYY-MM-DD
   lastBatchId: integer("last_batch_id").references(() => dailyProductionBatches.id), // آخر دفعة إنتاج
@@ -7556,7 +7570,13 @@ export const finishedGoodsInventory = pgTable("finished_goods_inventory", {
   index("idx_finished_goods_category").on(table.productCategory),
   index("idx_finished_goods_product_name").on(table.productName),
   // Standard unique index for atomic UPSERT - uses normalized product name
-  uniqueIndex("finished_goods_unique_idx").on(table.branchId, table.productNameNormalized, table.productionDate),
+  uniqueIndex("finished_goods_unique_idx")
+    .on(table.branchId, table.productNameNormalized, table.productionDate)
+    .where(sql`${table.productId} IS NULL`),
+  uniqueIndex("uq_finished_goods_canonical_product")
+    .on(table.branchId, table.productId, table.productionDate, table.unit)
+    .where(sql`${table.productId} IS NOT NULL`),
+  check("ck_finished_goods_reserved_quantity", sql`${table.reservedQuantity} >= 0 AND ${table.reservedQuantity} <= ${table.quantity}`),
 ]);
 
 export const insertFinishedGoodsInventorySchema = createInsertSchema(finishedGoodsInventory).omit({
@@ -7630,6 +7650,7 @@ export const productionInventoryLogs = pgTable("production_inventory_logs", {
   balanceAfter: integer("balance_after").default(0),
   referenceType: text("reference_type"), // batch, transfer, adjustment
   referenceId: integer("reference_id"), // معرف المرجع
+  batchId: integer("batch_id").references(() => dailyProductionBatches.id),
   notes: text("notes"),
   createdBy: varchar("created_by").references(() => users.id),
   createdByName: text("created_by_name"),
@@ -7638,6 +7659,9 @@ export const productionInventoryLogs = pgTable("production_inventory_logs", {
   index("idx_prod_inv_logs_branch").on(table.branchId),
   index("idx_prod_inv_logs_product").on(table.productId),
   index("idx_prod_inv_logs_type").on(table.movementType),
+  uniqueIndex("uq_production_inventory_logs_batch")
+    .on(table.batchId)
+    .where(sql`${table.batchId} IS NOT NULL`),
 ]);
 
 export const insertProductionInventoryLogSchema = createInsertSchema(productionInventoryLogs).omit({
@@ -7730,6 +7754,7 @@ export const branchStock = pgTable("branch_stock", {
     .notNull()
     .references(() => warehouseItems.id),
   currentQuantity: integer("current_quantity").default(0),
+  reservedQuantity: integer("reserved_quantity").notNull().default(0),
   dailyConsumption: integer("daily_consumption").default(0), // معدل الاستهلاك اليومي
   lastUpdated: timestamp("last_updated").defaultNow().notNull(),
   updatedBy: varchar("updated_by").references(() => users.id),
@@ -7737,6 +7762,7 @@ export const branchStock = pgTable("branch_stock", {
   index("idx_branch_stock_branch").on(table.branchId),
   index("idx_branch_stock_item").on(table.itemId),
   uniqueIndex("branch_stock_unique").on(table.branchId, table.itemId),
+  check("ck_branch_stock_reserved_quantity", sql`${table.reservedQuantity} >= 0 AND ${table.reservedQuantity} <= COALESCE(${table.currentQuantity}, 0)`),
 ]);
 
 export const insertBranchStockSchema = createInsertSchema(branchStock).omit({
@@ -12901,6 +12927,9 @@ export const centralKitchenOrders = pgTable("central_kitchen_orders", {
   neededDate: date("needed_date"),
   neededTime: text("needed_time"),
   status: text("status").notNull().default("requested"),
+  // Null identifies pre-live historical orders. Application code always
+  // snapshots shadow or real for newly-created orders.
+  inventoryMode: text("inventory_mode"),
   notes: text("notes"),
   idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
   payloadFingerprint: varchar("payload_fingerprint", { length: 64 }).notNull(),
@@ -12931,6 +12960,7 @@ export const centralKitchenOrders = pgTable("central_kitchen_orders", {
   check("ck_central_kitchen_orders_status", sql`${table.status} IN ('requested', 'approved', 'prepared', 'dispatched', 'received')`),
   check("ck_central_kitchen_orders_distinct_branches", sql`${table.requestBranchId} <> ${table.centralKitchenId}`),
   check("ck_central_kitchen_orders_discrepancy_status", sql`${table.discrepancyStatus} IN ('none', 'open', 'resolved')`),
+  check("ck_central_kitchen_orders_inventory_mode", sql`${table.inventoryMode} IS NULL OR ${table.inventoryMode} IN ('shadow', 'real')`),
 ]);
 
 export const centralKitchenOrderItems = pgTable("central_kitchen_order_items", {
@@ -13018,6 +13048,70 @@ export const centralKitchenShadowInventoryEntries = pgTable("central_kitchen_sha
   check("ck_central_kitchen_shadow_inventory_direction", sql`${table.direction} IN ('projected_kitchen_out', 'projected_branch_in')`),
   check("ck_central_kitchen_shadow_inventory_component", sql`${table.component} IN ('original', 'substitute')`),
   check("ck_central_kitchen_shadow_inventory_quantity", sql`${table.quantity} > 0`),
+]);
+
+export const centralKitchenRuntime = pgTable("central_kitchen_runtime", {
+  kitchenId: varchar("kitchen_id").primaryKey().references(() => branches.id, { onDelete: "cascade" }),
+  mode: text("mode").notNull().default("shadow"),
+  activatedAt: timestamp("activated_at"),
+  activatedBy: varchar("activated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  check("ck_central_kitchen_runtime_mode", sql`${table.mode} IN ('shadow', 'real', 'paused')`),
+]);
+
+export const centralKitchenInventoryAllocations = pgTable("central_kitchen_inventory_allocations", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => centralKitchenOrders.id, { onDelete: "restrict" }),
+  orderItemId: integer("order_item_id").notNull().references(() => centralKitchenOrderItems.id, { onDelete: "restrict" }),
+  component: text("component").notNull(),
+  kind: text("kind").notNull(),
+  catalogId: integer("catalog_id").notNull(),
+  sourceFinishedGoodsId: integer("source_finished_goods_id").references(() => finishedGoodsInventory.id, { onDelete: "restrict" }),
+  sourceBranchStockId: integer("source_branch_stock_id").references(() => branchStock.id, { onDelete: "restrict" }),
+  unit: text("unit").notNull(),
+  reservedQuantity: integer("reserved_quantity").notNull(),
+  dispatchedQuantity: integer("dispatched_quantity").notNull().default(0),
+  releasedQuantity: integer("released_quantity").notNull().default(0),
+  receivedQuantity: integer("received_quantity").notNull().default(0),
+  status: text("status").notNull().default("reserved"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_central_kitchen_allocation_finished_source")
+    .on(table.orderItemId, table.component, table.sourceFinishedGoodsId)
+    .where(sql`${table.sourceFinishedGoodsId} IS NOT NULL`),
+  uniqueIndex("uq_central_kitchen_allocation_branch_source")
+    .on(table.orderItemId, table.component, table.sourceBranchStockId)
+    .where(sql`${table.sourceBranchStockId} IS NOT NULL`),
+  index("idx_central_kitchen_allocations_order").on(table.orderId),
+  index("idx_central_kitchen_allocations_item").on(table.orderItemId),
+  check("ck_central_kitchen_allocation_component", sql`${table.component} IN ('original', 'substitute')`),
+  check("ck_central_kitchen_allocation_kind", sql`${table.kind} IN ('product', 'warehouse')`),
+  check("ck_central_kitchen_allocation_source", sql`(${table.kind} = 'product' AND ${table.sourceFinishedGoodsId} IS NOT NULL AND ${table.sourceBranchStockId} IS NULL) OR (${table.kind} = 'warehouse' AND ${table.sourceFinishedGoodsId} IS NULL AND ${table.sourceBranchStockId} IS NOT NULL)`),
+  check("ck_central_kitchen_allocation_quantities", sql`${table.reservedQuantity} > 0 AND ${table.dispatchedQuantity} >= 0 AND ${table.releasedQuantity} >= 0 AND ${table.receivedQuantity} >= 0 AND ${table.dispatchedQuantity} + ${table.releasedQuantity} <= ${table.reservedQuantity} AND ${table.receivedQuantity} <= ${table.dispatchedQuantity}`),
+  check("ck_central_kitchen_allocation_status", sql`${table.status} IN ('reserved', 'dispatched', 'released')`),
+]);
+
+export const centralKitchenInventoryMovements = pgTable("central_kitchen_inventory_movements", {
+  id: serial("id").primaryKey(),
+  allocationId: integer("allocation_id").notNull().references(() => centralKitchenInventoryAllocations.id, { onDelete: "restrict" }),
+  orderId: integer("order_id").notNull().references(() => centralKitchenOrders.id, { onDelete: "restrict" }),
+  orderItemId: integer("order_item_id").notNull().references(() => centralKitchenOrderItems.id, { onDelete: "restrict" }),
+  movementType: text("movement_type").notNull(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "restrict" }),
+  kind: text("kind").notNull(),
+  catalogId: integer("catalog_id").notNull(),
+  quantity: integer("quantity").notNull(),
+  unit: text("unit").notNull(),
+  eventId: integer("event_id").notNull().references(() => centralKitchenOrderEvents.id, { onDelete: "restrict" }),
+  actorId: varchar("actor_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  unique("uq_central_kitchen_inventory_movement_reference").on(table.allocationId, table.movementType),
+  index("idx_central_kitchen_inventory_movements_order").on(table.orderId, table.createdAt),
+  check("ck_central_kitchen_inventory_movement_type", sql`${table.movementType} IN ('dispatch_debit', 'reservation_release', 'receipt_credit')`),
+  check("ck_central_kitchen_inventory_movement_quantity", sql`${table.quantity} > 0`),
 ]);
 
 export type CentralKitchenOrder = typeof centralKitchenOrders.$inferSelect;

@@ -171,6 +171,15 @@ export const centralKitchenResolveDiscrepancySchema = z.object({
   idempotencyKey: centralKitchenIdempotencyKeySchema.optional(),
 }).strict();
 
+export const centralKitchenRuntimeSchema = z.object({
+  mode: z.enum(["shadow", "real", "paused"]),
+}).strict();
+
+export const centralKitchenLinkedBatchSchema = z.object({
+  quantity: z.number().int().positive().max(1_000_000),
+  productionDate: realCalendarDate,
+}).strict();
+
 function validateExactItemSet(expectedIds: number[], submittedIds: number[]): string | null {
   if (expectedIds.length !== submittedIds.length || new Set(submittedIds).size !== submittedIds.length) {
     return "يجب تسجيل جميع بنود الطلب مرة واحدة";

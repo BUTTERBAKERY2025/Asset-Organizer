@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import memoize from "memoizee";
 import { storage } from "./storage";
+import { ProductionStockPostingError } from "./production-stock-posting";
 import { db, pool } from "./db";
 import * as NotificationService from "./notification-service";
 import { computeBranchIssues, formatBranchIssuesMessage } from "./branch-issues";
@@ -9,9 +10,9 @@ import { evaluateWasteGovernance, checkApprovalGate } from "./waste-governance";
 import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, lt, gt, sql, or, isNull, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
-import { shifts as shiftsTable, cashierPointsLedger, cashierDailyChallenges, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS, centralKitchenOrders, centralKitchenOrderItems, centralKitchenOrderEvents, centralKitchenShadowInventoryConfig, centralKitchenShadowInventoryEntries, warehouseItems } from "@shared/schema";
+import { shifts as shiftsTable, cashierPointsLedger, cashierDailyChallenges, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS, centralKitchenOrders, centralKitchenOrderItems, centralKitchenOrderEvents, centralKitchenShadowInventoryConfig, centralKitchenShadowInventoryEntries, centralKitchenInventoryAllocations, warehouseItems, dailyProductionBatches } from "@shared/schema";
 import { auditEvent, getApprovalThresholds, APPROVAL_THRESHOLDS } from "./audit-helpers";
-import { randomInt, randomUUID } from "crypto";
+import { createHash, randomInt, randomUUID } from "crypto";
 
 // Helper to safely get current user from authenticated request
 function getCurrentUser(req: Request): User {
@@ -155,8 +156,21 @@ import {
   buildCentralKitchenShadowAllocations,
   calculateCentralKitchenPilotMetrics,
   centralKitchenSaudiWindow,
+  centralKitchenRuntimeSchema,
+  centralKitchenLinkedBatchSchema,
   type CentralKitchenStatus,
 } from "./central-kitchen-orders";
+import {
+  CentralKitchenLiveError,
+  assertRealOrderWritable,
+  dispatchRealInventory,
+  getAllocatedKitchenDemands,
+  getKitchenAvailability,
+  getKitchenRuntime,
+  receiveRealInventory,
+  reserveRealPreparation,
+  setKitchenRuntime,
+} from "./central-kitchen-live";
 
 // Normalize date to YYYY-MM-DD format
 function normalizeDate(dateStr: string | null | undefined): string | null {
@@ -7549,7 +7563,7 @@ export async function registerRoutes(
     const [order] = await db.select().from(centralKitchenOrders)
       .where(eq(centralKitchenOrders.id, orderId)).limit(1);
     if (!order) return null;
-    const [items, events, shadowInventoryEntries] = await Promise.all([
+    const [items, events, shadowInventoryEntries, allocations, linkedBatches] = await Promise.all([
       db.select().from(centralKitchenOrderItems)
         .where(eq(centralKitchenOrderItems.orderId, orderId))
         .orderBy(centralKitchenOrderItems.id),
@@ -7559,6 +7573,20 @@ export async function registerRoutes(
       db.select().from(centralKitchenShadowInventoryEntries)
         .where(eq(centralKitchenShadowInventoryEntries.orderId, orderId))
         .orderBy(centralKitchenShadowInventoryEntries.id),
+      db.select().from(centralKitchenInventoryAllocations)
+        .where(eq(centralKitchenInventoryAllocations.orderId, orderId))
+        .orderBy(centralKitchenInventoryAllocations.id),
+      db.select({
+        id: dailyProductionBatches.id,
+        orderItemId: dailyProductionBatches.centralKitchenOrderItemId,
+        productId: dailyProductionBatches.productId,
+        quantity: dailyProductionBatches.quantity,
+        productionDate: dailyProductionBatches.productionDate,
+        status: dailyProductionBatches.status,
+      }).from(dailyProductionBatches)
+        .innerJoin(centralKitchenOrderItems, eq(dailyProductionBatches.centralKitchenOrderItemId, centralKitchenOrderItems.id))
+        .where(eq(centralKitchenOrderItems.orderId, orderId))
+        .orderBy(dailyProductionBatches.id),
     ]);
     const branchRows = await db.select({ id: branches.id, name: branches.name }).from(branches)
       .where(inArray(branches.id, [order.requestBranchId, order.centralKitchenId]));
@@ -7570,6 +7598,8 @@ export async function registerRoutes(
       items,
       events,
       shadowInventoryEntries,
+      allocations,
+      linkedBatches,
     };
   };
 
@@ -7769,6 +7799,264 @@ export async function registerRoutes(
   );
 
   app.get(
+    "/api/central-kitchen-orders/availability",
+    isAuthenticated,
+    requirePermission("central_kitchen_orders", "view"),
+    async (req, res) => {
+      const parsed = z.object({
+        kitchenId: z.string().trim().min(1).max(255),
+        productId: z.coerce.number().int().positive().optional(),
+        warehouseItemId: z.coerce.number().int().positive().optional(),
+      }).strict().superRefine((value, ctx) => {
+        if ((value.productId == null) === (value.warehouseItemId == null)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "حدد صنفاً واحداً" });
+        }
+      }).safeParse(req.query);
+      if (!parsed.success) return res.status(400).json({ error: "معايير التوفر غير صالحة" });
+      if (!(await canAccessBranch(req, parsed.data.kitchenId))) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا المطبخ" });
+      }
+      const identity = parsed.data.productId
+        ? { productId: parsed.data.productId }
+        : { warehouseItemId: parsed.data.warehouseItemId! };
+      try {
+        return res.json(await getKitchenAvailability(parsed.data.kitchenId, identity));
+      } catch (error) {
+        if (error instanceof CentralKitchenLiveError) {
+          return res.status(error.status).json({ error: error.message });
+        }
+        throw error;
+      }
+    },
+  );
+
+  app.get(
+    "/api/central-kitchen-orders/operations",
+    isAuthenticated,
+    requirePermission("central_kitchen_orders", "view"),
+    async (req, res) => {
+      const parsed = z.object({ kitchenId: z.string().trim().min(1).max(255) }).strict().safeParse(req.query);
+      if (!parsed.success) return res.status(400).json({ error: "معرف المطبخ غير صالح" });
+      const kitchenId = parsed.data.kitchenId;
+      if (!(await canAccessBranch(req, kitchenId))) return res.status(403).json({ error: "غير مصرح بالوصول لهذا المطبخ" });
+      const runtime = await getKitchenRuntime(kitchenId);
+      const rows = await db.select({
+        orderId: centralKitchenOrders.id,
+        orderItemId: centralKitchenOrderItems.id,
+        orderNumber: centralKitchenOrders.orderNumber,
+        neededDate: centralKitchenOrders.neededDate,
+        productId: centralKitchenOrderItems.productId,
+        warehouseItemId: centralKitchenOrderItems.warehouseItemId,
+        name: centralKitchenOrderItems.productName,
+        unit: centralKitchenOrderItems.unit,
+        targetQuantity: centralKitchenOrderItems.requestedQuantity,
+      }).from(centralKitchenOrderItems)
+        .innerJoin(centralKitchenOrders, eq(centralKitchenOrderItems.orderId, centralKitchenOrders.id))
+        .where(and(
+          eq(centralKitchenOrders.centralKitchenId, kitchenId),
+          eq(centralKitchenOrders.inventoryMode, "real"),
+          eq(centralKitchenOrders.status, "approved"),
+        ));
+      const demands = [];
+      const processedCatalogs = new Set<string>();
+      for (const row of rows) {
+        if (!row.productId && !row.warehouseItemId) continue;
+        const stockKey = row.productId ? `product:${row.productId}` : `warehouse:${row.warehouseItemId}`;
+        if (processedCatalogs.has(stockKey)) continue;
+        processedCatalogs.add(stockKey);
+        const identity = row.productId
+          ? { productId: row.productId }
+          : { warehouseItemId: row.warehouseItemId! };
+        const allocated = await getAllocatedKitchenDemands(kitchenId, identity);
+        demands.push(...allocated.map((demand) => ({
+          orderId: demand.orderId,
+          orderItemId: demand.orderItemId,
+          orderNumber: demand.orderNumber,
+          neededDate: demand.neededDate,
+          kind: demand.productId ? "product" as const : "warehouse" as const,
+          catalogId: demand.productId || demand.warehouseItemId!,
+          name: demand.name,
+          unit: demand.unit,
+          targetQuantity: demand.targetQuantity,
+          availableQuantity: demand.availableQuantity,
+          reservedQuantity: demand.ownReservedQuantity,
+          linkedUnfinishedQuantity: demand.linkedUnfinishedQuantity,
+          uncoveredQuantity: demand.uncoveredQuantity,
+        })));
+      }
+      const byUnit = Array.from(demands.reduce((groups, demand) => {
+        const total = groups.get(demand.unit) || {
+          unit: demand.unit, targetQuantity: 0, availableQuantity: 0,
+          reservedQuantity: 0, linkedUnfinishedQuantity: 0, uncoveredQuantity: 0,
+        };
+        total.targetQuantity += demand.targetQuantity;
+        total.availableQuantity += demand.availableQuantity;
+        total.reservedQuantity += demand.reservedQuantity;
+        total.linkedUnfinishedQuantity += demand.linkedUnfinishedQuantity;
+        total.uncoveredQuantity += demand.uncoveredQuantity;
+        groups.set(demand.unit, total);
+        return groups;
+      }, new Map<string, {
+        unit: string; targetQuantity: number; availableQuantity: number;
+        reservedQuantity: number; linkedUnfinishedQuantity: number; uncoveredQuantity: number;
+      }>()).values());
+      return res.json({ runtime, demands, totals: { byUnit } });
+    },
+  );
+
+  app.put(
+    "/api/central-kitchen-orders/runtime/:kitchenId",
+    isAuthenticated,
+    async (req, res) => {
+      if (!isUserAdmin(req)) return res.status(403).json({ error: "تفعيل المخزون الحقيقي متاح للمشرف فقط" });
+      const body = centralKitchenRuntimeSchema.safeParse(req.body);
+      const kitchenId = z.string().trim().min(1).max(255).safeParse(req.params.kitchenId);
+      if (!body.success || !kitchenId.success) return res.status(400).json({ error: "إعداد التشغيل غير صالح" });
+      const [kitchen] = await db.select({ id: branches.id }).from(branches)
+        .where(and(eq(branches.id, kitchenId.data), eq(branches.isCentralKitchen, true))).limit(1);
+      if (!kitchen) return res.status(404).json({ error: "المطبخ المركزي غير موجود" });
+      return res.json(await setKitchenRuntime(kitchenId.data, body.data.mode, getCurrentUser(req).id));
+    },
+  );
+
+  app.post(
+    "/api/central-kitchen-orders/:id/items/:itemId/production-batches",
+    isAuthenticated,
+    requirePermission("production", "create"),
+    async (req, res) => {
+      const orderId = centralKitchenOrderIdSchema.safeParse(req.params.id);
+      const itemId = centralKitchenOrderIdSchema.safeParse(req.params.itemId);
+      const body = centralKitchenLinkedBatchSchema.safeParse(req.body);
+      const key = centralKitchenRequestKey(req);
+      if (!orderId.success || !itemId.success || !body.success) return res.status(400).json({ error: "بيانات دفعة الإنتاج غير صالحة" });
+      if (!key.key) return res.status(400).json({ error: key.error });
+      const actor = getCurrentUser(req);
+      const batchFingerprint = createHash("sha256").update(JSON.stringify({
+        orderId: orderId.data,
+        itemId: itemId.data,
+        quantity: body.data.quantity,
+        productionDate: body.data.productionDate,
+      })).digest("hex");
+      const [keyReplay] = await db.select({
+        batch: dailyProductionBatches,
+        order: centralKitchenOrders,
+      }).from(dailyProductionBatches)
+        .innerJoin(centralKitchenOrderItems, eq(dailyProductionBatches.centralKitchenOrderItemId, centralKitchenOrderItems.id))
+        .innerJoin(centralKitchenOrders, eq(centralKitchenOrderItems.orderId, centralKitchenOrders.id))
+        .where(and(
+          eq(dailyProductionBatches.recordedBy, actor.id),
+          eq(dailyProductionBatches.centralKitchenIdempotencyKey, key.key),
+        )).limit(1);
+      if (keyReplay) {
+        if (!(await canAccessBranch(req, keyReplay.order.centralKitchenId))) {
+          return res.status(403).json({ error: "غير مصرح بالوصول إلى الدفعة الأصلية" });
+        }
+        if (keyReplay.batch.centralKitchenPayloadFingerprint !== batchFingerprint) {
+          return res.status(409).json({ error: "مفتاح عدم التكرار مستخدم لدفعة مختلفة" });
+        }
+        res.set("Idempotent-Replayed", "true");
+        return res.json(keyReplay.batch);
+      }
+      const [item] = await db.select({
+        id: centralKitchenOrderItems.id,
+        productId: centralKitchenOrderItems.productId,
+        productName: centralKitchenOrderItems.productName,
+        unit: centralKitchenOrderItems.unit,
+        requestedQuantity: centralKitchenOrderItems.requestedQuantity,
+        order: centralKitchenOrders,
+      }).from(centralKitchenOrderItems)
+        .innerJoin(centralKitchenOrders, eq(centralKitchenOrderItems.orderId, centralKitchenOrders.id))
+        .where(and(eq(centralKitchenOrderItems.id, itemId.data), eq(centralKitchenOrders.id, orderId.data))).limit(1);
+      if (!item) return res.status(404).json({ error: "بند الطلب غير موجود" });
+      if (!(await canAccessBranch(req, item.order.centralKitchenId))) {
+        return res.status(403).json({ error: "إنشاء دفعة الإنتاج متاح للمطبخ المركزي فقط" });
+      }
+      if (item.order.inventoryMode !== "real" || item.order.status !== "approved") {
+        return res.status(409).json({ error: "دفعة الطلب تتطلب طلباً حقيقياً معتمداً" });
+      }
+      if (!item.productId) return res.status(400).json({ error: "دفعات الإنتاج متاحة للمنتجات المرتبطة بالكتالوج فقط" });
+      await assertRealOrderWritable(item.order);
+      try {
+        const result = await db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(
+            hashtext(${item.order.centralKitchenId}),
+            ${item.productId}
+          )`);
+          const [lockedOrder] = await tx.select().from(centralKitchenOrders)
+            .where(eq(centralKitchenOrders.id, orderId.data)).for("update");
+          if (!lockedOrder || lockedOrder.inventoryMode !== "real" || lockedOrder.status !== "approved") {
+            throw new CentralKitchenLiveError("تغيرت حالة الطلب ولم يعد يقبل دفعات إنتاج", 409);
+          }
+          const [lockedItem] = await tx.select().from(centralKitchenOrderItems)
+            .where(and(eq(centralKitchenOrderItems.id, item.id), eq(centralKitchenOrderItems.orderId, orderId.data)))
+            .for("update");
+          if (!lockedItem) throw new CentralKitchenLiveError("بند الطلب غير موجود", 404);
+          await assertRealOrderWritable(lockedOrder, tx);
+          const [existing] = await tx.select().from(dailyProductionBatches).where(and(
+            eq(dailyProductionBatches.centralKitchenOrderItemId, lockedItem.id),
+            eq(dailyProductionBatches.productionDate, body.data.productionDate),
+          )).limit(1);
+          if (existing) {
+            if (existing.quantity !== body.data.quantity || existing.productId !== lockedItem.productId) {
+              throw new CentralKitchenLiveError("توجد دفعة مختلفة لهذا البند في التاريخ نفسه", 409);
+            }
+            return { batch: existing, replayed: true };
+          }
+          const [allocatedDemands, [product]] = await Promise.all([
+            getAllocatedKitchenDemands(
+              lockedOrder.centralKitchenId,
+              { productId: lockedItem.productId! },
+              tx,
+            ),
+            tx.select({ category: productsTable.category }).from(productsTable)
+              .where(eq(productsTable.id, lockedItem.productId!)).limit(1),
+          ]);
+          const allocatedDemand = allocatedDemands.find((demand) => demand.orderItemId === lockedItem.id);
+          if (!allocatedDemand) throw new CentralKitchenLiveError("لم يعد البند ضمن احتياج الإنتاج المعتمد", 409);
+          const uncovered = allocatedDemand.uncoveredQuantity;
+          if (body.data.quantity > uncovered) {
+            throw new CentralKitchenLiveError(`كمية الدفعة تتجاوز الاحتياج غير المغطى (${uncovered})`, 409);
+          }
+          const [created] = await tx.insert(dailyProductionBatches).values({
+            branchId: lockedOrder.centralKitchenId,
+            productId: lockedItem.productId,
+            productName: lockedItem.productName,
+            productCategory: product?.category || null,
+            quantity: body.data.quantity,
+            unit: lockedItem.unit,
+            destination: "central_kitchen_order",
+            productionDate: body.data.productionDate,
+            status: "in_progress",
+            centralKitchenOrderItemId: lockedItem.id,
+            centralKitchenIdempotencyKey: key.key,
+            centralKitchenPayloadFingerprint: batchFingerprint,
+            recordedBy: actor.id,
+          }).returning();
+          return { batch: created, replayed: false };
+        });
+        if (result.replayed) res.set("Idempotent-Replayed", "true");
+        return res.status(result.replayed ? 200 : 201).json(result.batch);
+      } catch (error: any) {
+        if (error instanceof CentralKitchenLiveError) {
+          return res.status(error.status).json({ error: error.message });
+        }
+        if ((error?.code || error?.cause?.code) === "23505") {
+          const [replay] = await db.select().from(dailyProductionBatches).where(and(
+            eq(dailyProductionBatches.centralKitchenOrderItemId, item.id),
+            eq(dailyProductionBatches.productionDate, body.data.productionDate),
+          )).limit(1);
+          if (replay?.quantity === body.data.quantity
+            && replay.centralKitchenPayloadFingerprint === batchFingerprint) {
+            res.set("Idempotent-Replayed", "true");
+            return res.json(replay);
+          }
+        }
+        throw error;
+      }
+    },
+  );
+
+  app.get(
     "/api/central-kitchen-orders/:id",
     isAuthenticated,
     requirePermission("central_kitchen_orders", "view"),
@@ -7824,7 +8112,6 @@ export async function registerRoutes(
         if (!kitchen?.isCentralKitchen) {
           return res.status(400).json({ error: "الجهة المختارة ليست مطبخاً مركزياً معتمداً" });
         }
-
         const [existing] = await db.select({
           id: centralKitchenOrders.id,
           requestBranchId: centralKitchenOrders.requestBranchId,
@@ -7847,6 +8134,19 @@ export async function registerRoutes(
           res.set("Idempotent-Replayed", "true");
           return res.status(200).json(detail);
         }
+        const runtime = await getKitchenRuntime(payload.centralKitchenId);
+        if (runtime.mode === "paused") {
+          return res.status(423).json({ error: "إنشاء طلبات هذا المطبخ متوقف مؤقتاً" });
+        }
+        const inventoryMode = runtime.mode === "real" ? "real" : "shadow";
+        if (inventoryMode === "real") {
+          const invalidRealItem = payload.items.find((item) =>
+            (item.productId == null) === (item.warehouseItemId == null)
+            || !Number.isInteger(item.requestedQuantity));
+          if (invalidRealItem) {
+            return res.status(400).json({ error: "الطلبات الحقيقية تتطلب صنف كتالوج واحداً وكمية صحيحة لكل بند" });
+          }
+        }
 
         const catalogError = await validateCentralKitchenCatalogIdentities(payload.items);
         if (catalogError) return res.status(400).json({ error: catalogError });
@@ -7864,6 +8164,7 @@ export async function registerRoutes(
             idempotencyKey: keyResult.key!,
             payloadFingerprint,
             createdBy: user.id,
+            inventoryMode,
           }).returning({ id: centralKitchenOrders.id });
           await tx.insert(centralKitchenOrderItems).values(payload.items.map((item) => ({
             orderId: created.id,
@@ -8069,6 +8370,10 @@ export async function registerRoutes(
       }[eventType];
 
       const transitioned = await db.transaction(async (tx) => {
+        await assertRealOrderWritable(order, tx);
+        if (preparationPayload) {
+          await reserveRealPreparation(tx, order, preparationPayload.items);
+        }
         const [updated] = await tx.update(centralKitchenOrders).set({
           status: targetStatus,
           updatedAt: sql`now()`,
@@ -8151,10 +8456,27 @@ export async function registerRoutes(
           payloadFingerprint,
           actorId: user.id,
         }).returning({ id: centralKitchenOrderEvents.id });
+        if (dispatchPayload) {
+          await dispatchRealInventory(tx, order, dispatchPayload.items, transitionEvent.id, user.id);
+        }
+        if (receivePayload) {
+          await receiveRealInventory(
+            tx,
+            order,
+            receivePayload.items.map((item) => ({ itemId: item.itemId, receivedQuantity: item.receivedQuantity })),
+            saudiDate(),
+            user.id,
+            transitionEvent.id,
+          );
+        }
         if ((dispatchPayload || receivePayload) && transitionEvent) {
           const [shadowConfig] = await tx.select().from(centralKitchenShadowInventoryConfig)
             .where(eq(centralKitchenShadowInventoryConfig.id, 1)).limit(1);
-          if (shadowConfig && new Date(order.createdAt).getTime() >= new Date(shadowConfig.activatedAt).getTime()) {
+          if (order.inventoryMode === "shadow" || (
+            order.inventoryMode == null
+            && shadowConfig
+            && new Date(order.createdAt).getTime() >= new Date(shadowConfig.activatedAt).getTime()
+          )) {
             const direction = dispatchPayload ? "projected_kitchen_out" : "projected_branch_in";
             const shadowItems = await tx.select().from(centralKitchenOrderItems)
               .where(eq(centralKitchenOrderItems.orderId, id.data));
@@ -8216,6 +8538,9 @@ export async function registerRoutes(
       }
       return res.json(await getCentralKitchenOrderDetail(id.data));
     } catch (error: any) {
+      if (error instanceof CentralKitchenLiveError) {
+        return res.status(error.status).json({ error: error.message });
+      }
       const errorCode = error?.code || error?.cause?.code;
       if (errorCode === "23505") {
         const [conflictingEvent] = await db.select({
@@ -21532,6 +21857,9 @@ export async function registerRoutes(
       res.json(batch);
     } catch (error) {
       console.error("Error finishing batch:", error);
+      if (error instanceof ProductionStockPostingError) {
+        return res.status(error.status).json({ error: error.message });
+      }
       res.status(500).json({ error: "فشل في إكمال الدفعة" });
     }
   });
@@ -34756,6 +35084,22 @@ export async function registerRoutes(
       if (isNaN(batchId) || batchId <= 0) {
         return res.status(400).json({ error: "معرف الدفعة غير صالح" });
       }
+      const batch = await storage.getDailyProductionBatch(batchId);
+      if (!batch) return res.status(404).json({ error: "دفعة الإنتاج غير موجودة" });
+      if (!(await canAccessBranch(req, batch.branchId))) {
+        return res.status(403).json({ error: "غير مصرح بترحيل مخزون هذا الفرع" });
+      }
+      if (batch.centralKitchenOrderItemId) {
+        const [linkedOrder] = await db.select({
+          inventoryMode: centralKitchenOrders.inventoryMode,
+          centralKitchenId: centralKitchenOrders.centralKitchenId,
+        }).from(centralKitchenOrderItems)
+          .innerJoin(centralKitchenOrders, eq(centralKitchenOrderItems.orderId, centralKitchenOrders.id))
+          .where(eq(centralKitchenOrderItems.id, batch.centralKitchenOrderItemId))
+          .limit(1);
+        if (!linkedOrder) return res.status(409).json({ error: "ارتباط دفعة الإنتاج بطلب المطبخ غير صالح" });
+        await assertRealOrderWritable(linkedOrder);
+      }
       
       const inventoryItem = await storage.addProductionToFinishedGoods(
         batchId,
@@ -34765,6 +35109,9 @@ export async function registerRoutes(
       
       res.status(201).json(inventoryItem);
     } catch (error: any) {
+      if (error instanceof CentralKitchenLiveError) {
+        return res.status(error.status).json({ error: error.message });
+      }
       console.error("Error adding production to inventory:", error);
       // Return 400 for not found or validation errors
       const isClientError = error.message?.includes('غير موجودة');
