@@ -9,7 +9,7 @@ import { evaluateWasteGovernance, checkApprovalGate } from "./waste-governance";
 import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, lt, gt, sql, or, isNull, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
-import { shifts as shiftsTable, cashierPointsLedger, cashierDailyChallenges, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS, centralKitchenOrders, centralKitchenOrderItems, centralKitchenOrderEvents, centralKitchenShadowInventoryConfig, centralKitchenShadowInventoryEntries } from "@shared/schema";
+import { shifts as shiftsTable, cashierPointsLedger, cashierDailyChallenges, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS, centralKitchenOrders, centralKitchenOrderItems, centralKitchenOrderEvents, centralKitchenShadowInventoryConfig, centralKitchenShadowInventoryEntries, warehouseItems } from "@shared/schema";
 import { auditEvent, getApprovalThresholds, APPROVAL_THRESHOLDS } from "./audit-helpers";
 import { randomInt, randomUUID } from "crypto";
 
@@ -7448,6 +7448,64 @@ export async function registerRoutes(
     return { key: parsed.data };
   };
 
+  type CentralKitchenCatalogIdentity = {
+    productId?: number | null;
+    warehouseItemId?: number | null;
+    productName: string;
+    unit: string;
+    validateCatalogUnit?: boolean;
+  };
+
+  const validateCentralKitchenCatalogIdentities = async (
+    items: CentralKitchenCatalogIdentity[],
+  ): Promise<string | null> => {
+    const productIds = Array.from(new Set(items.flatMap((item) => item.productId != null ? [item.productId] : [])));
+    const warehouseItemIds = Array.from(new Set(items.flatMap((item) => item.warehouseItemId != null ? [item.warehouseItemId] : [])));
+    const [productRows, warehouseRows] = await Promise.all([
+      productIds.length
+        ? db.select({
+            id: productsTable.id,
+            name: productsTable.name,
+            unit: productsTable.unit,
+          }).from(productsTable).where(inArray(productsTable.id, productIds))
+        : Promise.resolve([]),
+      warehouseItemIds.length
+        ? db.select({
+            id: warehouseItems.id,
+            name: warehouseItems.name,
+            unit: warehouseItems.unit,
+          }).from(warehouseItems).where(and(
+            inArray(warehouseItems.id, warehouseItemIds),
+            eq(warehouseItems.isActive, true),
+          ))
+        : Promise.resolve([]),
+    ]);
+    const productCatalog = new Map(productRows.map((row) => [
+      row.id,
+      { name: row.name, unit: row.unit || "قطعة" },
+    ]));
+    const warehouseCatalog = new Map(warehouseRows.map((row) => [
+      row.id,
+      { name: row.name, unit: row.unit },
+    ]));
+    for (const item of items) {
+      if (item.productId != null && item.warehouseItemId != null) {
+        return "لا يمكن ربط البند بمنتج وصنف مستودع معاً";
+      }
+      // Neither identity is intentionally retained as the legacy/manual option.
+      if (item.productId == null && item.warehouseItemId == null) continue;
+      const catalogItem = item.productId != null
+        ? productCatalog.get(item.productId)
+        : warehouseCatalog.get(item.warehouseItemId!);
+      if (!catalogItem) return "الصنف المختار غير موجود أو غير مفعّل";
+      if (item.productName !== catalogItem.name
+        || (item.validateCatalogUnit !== false && item.unit !== catalogItem.unit)) {
+        return "اسم الصنف أو وحدته لا يطابق بيانات الكتالوج";
+      }
+    }
+    return null;
+  };
+
   const getCentralKitchenOrderDetail = async (orderId: number) => {
     const [order] = await db.select().from(centralKitchenOrders)
       .where(eq(centralKitchenOrders.id, orderId)).limit(1);
@@ -7639,14 +7697,36 @@ export async function registerRoutes(
     requirePermission("central_kitchen_orders", "view"),
     async (_req, res) => {
       try {
-        // Keep this endpoint compatible with older production product schemas.
-        // The order form only needs these stable columns.
-        const rows = await db.select({
-          id: products.id,
-          name: products.name,
-          unit: products.unit,
-        }).from(products).orderBy(products.name);
-        return res.json(rows);
+        const [productRows, warehouseRows] = await Promise.all([
+          db.select({
+            id: productsTable.id,
+            name: productsTable.name,
+            unit: productsTable.unit,
+          }).from(productsTable).orderBy(productsTable.name),
+          db.select({
+            id: warehouseItems.id,
+            name: warehouseItems.name,
+            unit: warehouseItems.unit,
+            sku: warehouseItems.sku,
+          }).from(warehouseItems)
+            .where(eq(warehouseItems.isActive, true))
+            .orderBy(warehouseItems.name),
+        ]);
+        return res.json([
+          ...productRows.map((row) => ({
+            id: row.id,
+            name: row.name,
+            unit: row.unit || "قطعة",
+            source: "product" as const,
+          })),
+          ...warehouseRows.map((row) => ({
+            id: row.id,
+            name: row.name,
+            unit: row.unit,
+            source: "warehouse" as const,
+            ...(row.sku ? { sku: row.sku } : {}),
+          })),
+        ]);
       } catch (error) {
         console.error("Error listing central kitchen order products:", error);
         return res.status(500).json({ error: "فشل في جلب المنتجات" });
@@ -7734,6 +7814,9 @@ export async function registerRoutes(
           return res.status(200).json(detail);
         }
 
+        const catalogError = await validateCentralKitchenCatalogIdentities(payload.items);
+        if (catalogError) return res.status(400).json({ error: catalogError });
+
         const orderNumber = `CK-${orderDay.replace(/-/g, "")}-${randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
         const orderId = await db.transaction(async (tx) => {
           const [created] = await tx.insert(centralKitchenOrders).values({
@@ -7751,6 +7834,7 @@ export async function registerRoutes(
           await tx.insert(centralKitchenOrderItems).values(payload.items.map((item) => ({
             orderId: created.id,
             productId: item.productId || null,
+             warehouseItemId: item.warehouseItemId || null,
             productName: item.productName,
             requestedQuantity: item.requestedQuantity,
             unit: item.unit,
@@ -7795,6 +7879,9 @@ export async function registerRoutes(
             return res.status(200).json(await getCentralKitchenOrderDetail(existing.id));
           }
           return res.status(409).json({ error: "تعارض في رقم الطلب، يرجى إعادة المحاولة" });
+        }
+        if (errorCode === "23503") {
+          return res.status(400).json({ error: "الصنف المختار غير موجود" });
         }
         console.error("Error creating central kitchen order:", error);
         return res.status(500).json({ error: "فشل في إنشاء طلب المطبخ المركزي" });
@@ -7892,6 +7979,20 @@ export async function registerRoutes(
           preparationPayload.items,
         );
         if (preparationError) return res.status(400).json({ error: preparationError });
+        const substituteCatalogError = await validateCentralKitchenCatalogIdentities(
+          preparationPayload.items
+            .filter((item) => item.substituteQuantity > 0)
+            .map((item) => ({
+              productId: item.substituteProductId,
+              warehouseItemId: item.substituteWarehouseItemId,
+              productName: item.substituteProductName!,
+              unit: item.substituteUnit!,
+              // Substitutes are accounted in the original order's unit. Their
+              // catalog unit is therefore not the unit being recorded here.
+              validateCatalogUnit: false,
+            })),
+        );
+        if (substituteCatalogError) return res.status(400).json({ error: substituteCatalogError });
       }
       if (dispatchPayload) {
         const preparedItems = await db.select({
@@ -7959,6 +8060,7 @@ export async function registerRoutes(
               preparedQuantity: item.preparedQuantity,
               substituteQuantity: item.substituteQuantity,
               substituteProductId: item.substituteQuantity > 0 ? item.substituteProductId || null : null,
+               substituteWarehouseItemId: item.substituteQuantity > 0 ? item.substituteWarehouseItemId || null : null,
               substituteProductName: item.substituteQuantity > 0 ? item.substituteProductName : null,
               substituteUnit: item.substituteQuantity > 0 ? item.substituteUnit : null,
               shortageReason: hasShortage ? item.shortageReason : null,
@@ -8025,11 +8127,13 @@ export async function registerRoutes(
             const entries = shadowItems.flatMap((item) =>
               buildCentralKitchenShadowAllocations(direction, {
                 productId: item.productId,
+                 warehouseItemId: item.warehouseItemId,
                 productName: item.productName,
                 unit: item.unit,
                 preparedQuantity: Number(item.preparedQuantity || 0),
                 substituteQuantity: Number(item.substituteQuantity || 0),
                 substituteProductId: item.substituteProductId,
+                 substituteWarehouseItemId: item.substituteWarehouseItemId,
                 substituteProductName: item.substituteProductName,
                 substituteUnit: item.substituteUnit,
                 dispatchedQuantity: Number(item.dispatchedQuantity || 0),
@@ -8043,6 +8147,7 @@ export async function registerRoutes(
                 branchId: dispatchPayload ? order.centralKitchenId : order.requestBranchId,
                 counterpartyBranchId: dispatchPayload ? order.requestBranchId : order.centralKitchenId,
                 productId: allocation.productId,
+                 warehouseItemId: allocation.warehouseItemId,
                 productName: allocation.productName,
                 unit: allocation.unit,
                 quantity: allocation.quantity,
@@ -8092,6 +8197,9 @@ export async function registerRoutes(
           return res.json(await getCentralKitchenOrderDetail(id.data));
         }
         return res.status(409).json({ error: "مفتاح عدم التكرار مستخدم لعملية مختلفة" });
+      }
+      if (errorCode === "23503") {
+        return res.status(400).json({ error: "الصنف البديل غير موجود" });
       }
       console.error(`Error transitioning central kitchen order to ${targetStatus}:`, error);
       return res.status(500).json({ error: "فشل في تحديث حالة طلب المطبخ المركزي" });

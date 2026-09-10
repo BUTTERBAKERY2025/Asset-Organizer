@@ -49,6 +49,29 @@ describe("central kitchen workflow rules", () => {
     }).success).toBe(true);
   });
 
+  it("accepts product, warehouse, and explicit legacy/manual identities but never mixed identities", () => {
+    const base = {
+      requestBranchId: "branch-a",
+      centralKitchenId: "kitchen",
+    };
+    expect(createCentralKitchenOrderSchema.safeParse({
+      ...base,
+      items: [{ productId: 7, productName: "Bread", requestedQuantity: 2, unit: "tray" }],
+    }).success).toBe(true);
+    expect(createCentralKitchenOrderSchema.safeParse({
+      ...base,
+      items: [{ warehouseItemId: 7, productName: "Flour", requestedQuantity: 2, unit: "kg" }],
+    }).success).toBe(true);
+    expect(createCentralKitchenOrderSchema.safeParse({
+      ...base,
+      items: [{ productName: "Manual line", requestedQuantity: 2, unit: "tray" }],
+    }).success).toBe(true);
+    expect(createCentralKitchenOrderSchema.safeParse({
+      ...base,
+      items: [{ productId: 7, warehouseItemId: 7, productName: "Collision", requestedQuantity: 2, unit: "tray" }],
+    }).success).toBe(false);
+  });
+
   it("binds idempotent replays to the same transition operation", () => {
     const event = { eventType: "approved", toStatus: "approved" };
     expect(isMatchingCentralKitchenReplay(event, "approved", "approved")).toBe(true);
@@ -67,6 +90,28 @@ describe("central kitchen workflow rules", () => {
       .toBe(createCentralKitchenPayloadFingerprint({ ...base }));
     expect(createCentralKitchenPayloadFingerprint(base))
       .not.toBe(createCentralKitchenPayloadFingerprint({ ...base, requestBranchId: "branch-b" }));
+    // This is the pre-catalog-linkage canonical hash: absent new keys must not
+    // invalidate idempotent retries of orders created before migration 028.
+    expect(createCentralKitchenPayloadFingerprint(base))
+      .toBe("ef0e8612894e9f82df08391f6f92070884ebc47196f5fb09b067ca3b18bcd63b");
+  });
+
+  it("keeps colliding numeric IDs distinct in new catalog fingerprints", () => {
+    const common = {
+      requestBranchId: "branch-a",
+      centralKitchenId: "kitchen",
+      items: [{ productName: "Catalog item", requestedQuantity: 2, unit: "tray" }],
+    };
+    const product = createCentralKitchenOrderSchema.parse({
+      ...common,
+      items: [{ ...common.items[0], productId: 42 }],
+    });
+    const warehouse = createCentralKitchenOrderSchema.parse({
+      ...common,
+      items: [{ ...common.items[0], warehouseItemId: 42 }],
+    });
+    expect(createCentralKitchenPayloadFingerprint(product))
+      .not.toBe(createCentralKitchenPayloadFingerprint(warehouse));
   });
 
   it("requires complete, non-excessive preparation details", () => {
@@ -101,6 +146,38 @@ describe("central kitchen workflow rules", () => {
     expect(centralKitchenPreparationSchema.safeParse({
       items: [{ itemId: 1, preparedQuantity: 0, substituteQuantity: 2 }],
     }).success).toBe(false);
+    expect(centralKitchenPreparationSchema.safeParse({
+      items: [{
+        itemId: 1,
+        preparedQuantity: 0,
+        substituteQuantity: 2,
+        substituteProductId: 5,
+        substituteWarehouseItemId: 5,
+        substituteProductName: "Mixed identity",
+        substituteUnit: "tray",
+      }],
+    }).success).toBe(false);
+  });
+
+  it("accounts a warehouse substitute in the original order unit", () => {
+    const prepared = centralKitchenPreparationSchema.parse({
+      items: [{
+        itemId: 1,
+        preparedQuantity: 0,
+        substituteQuantity: 2,
+        substituteWarehouseItemId: 8,
+        substituteProductName: "Warehouse substitute",
+        substituteUnit: "tray",
+      }],
+    });
+    expect(validateCentralKitchenPreparation(
+      [{ id: 1, requestedQuantity: 2, unit: "tray" }],
+      prepared.items,
+    )).toBeNull();
+    expect(validateCentralKitchenPreparation(
+      [{ id: 1, requestedQuantity: 2, unit: "piece" }],
+      prepared.items,
+    )).toContain("نفس وحدة");
   });
 
   it("binds transition replay to logical payload, not key location or item order", () => {
@@ -120,6 +197,23 @@ describe("central kitchen workflow rules", () => {
       .toBe(createCentralKitchenTransitionFingerprint("prepared", retry));
     expect(createCentralKitchenTransitionFingerprint("prepared", first))
       .not.toBe(createCentralKitchenTransitionFingerprint("dispatched", retry));
+  });
+
+  it("includes warehouse substitute identity in new preparation fingerprints", () => {
+    const productSubstitute = centralKitchenPreparationSchema.parse({
+      items: [{
+        itemId: 1, preparedQuantity: 0, substituteQuantity: 2,
+        substituteProductId: 9, substituteProductName: "Alternative", substituteUnit: "tray",
+      }],
+    });
+    const warehouseSubstitute = centralKitchenPreparationSchema.parse({
+      items: [{
+        itemId: 1, preparedQuantity: 0, substituteQuantity: 2,
+        substituteWarehouseItemId: 9, substituteProductName: "Alternative", substituteUnit: "tray",
+      }],
+    });
+    expect(createCentralKitchenTransitionFingerprint("prepared", productSubstitute))
+      .not.toBe(createCentralKitchenTransitionFingerprint("prepared", warehouseSubstitute));
   });
 
   it("prevents dispatching more than was prepared", () => {
@@ -153,13 +247,23 @@ describe("central kitchen workflow rules", () => {
 
   it("projects original and substitute quantities without touching balances", () => {
     const item = {
-      productId: 10, productName: "Original", unit: "tray",
+      productId: null, warehouseItemId: 10, productName: "Original", unit: "tray",
       preparedQuantity: 6, substituteQuantity: 2,
-      substituteProductId: 11, substituteProductName: "Substitute", substituteUnit: "tray",
+      substituteProductId: 11, substituteWarehouseItemId: null,
+      substituteProductName: "Substitute", substituteUnit: "tray",
       dispatchedQuantity: 8, receivedQuantity: 7,
     };
-    expect(buildCentralKitchenShadowAllocations("projected_kitchen_out", item).map(row => row.quantity))
-      .toEqual([6, 2]);
+    expect(buildCentralKitchenShadowAllocations("projected_kitchen_out", item))
+      .toEqual([
+        {
+          component: "original", productId: null, warehouseItemId: 10,
+          productName: "Original", unit: "tray", quantity: 6,
+        },
+        {
+          component: "substitute", productId: 11, warehouseItemId: null,
+          productName: "Substitute", unit: "tray", quantity: 2,
+        },
+      ]);
     expect(buildCentralKitchenShadowAllocations("projected_branch_in", item).map(row => row.quantity))
       .toEqual([6, 1]);
   });

@@ -60,11 +60,16 @@ export const createCentralKitchenOrderSchema = z.object({
   idempotencyKey: centralKitchenIdempotencyKeySchema.optional(),
   items: z.array(z.object({
     productId: z.number().int().positive().optional().nullable(),
+    warehouseItemId: z.number().int().positive().optional().nullable(),
     productName: trimmedText(300),
     requestedQuantity: z.number().finite().positive().max(1_000_000),
     unit: trimmedText(50),
     notes: z.string().trim().max(1000).optional().nullable(),
-  }).strict()).min(1).max(500),
+  }).strict().superRefine((item, ctx) => {
+    if (item.productId != null && item.warehouseItemId != null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Choose only one catalog identity" });
+    }
+  })).min(1).max(500),
 }).strict().superRefine((value, ctx) => {
   if (value.requestBranchId === value.centralKitchenId) {
     ctx.addIssue({
@@ -86,6 +91,7 @@ export function createCentralKitchenPayloadFingerprint(
     notes: payload.notes || null,
     items: payload.items.map((item) => ({
       productId: item.productId || null,
+      ...("warehouseItemId" in item ? { warehouseItemId: item.warehouseItemId || null } : {}),
       productName: item.productName,
       requestedQuantity: item.requestedQuantity,
       unit: item.unit,
@@ -116,6 +122,7 @@ export const centralKitchenPreparationSchema = z.object({
     preparedQuantity: z.number().finite().min(0).max(1_000_000),
     substituteQuantity: z.number().finite().min(0).max(1_000_000).default(0),
     substituteProductId: z.number().int().positive().optional().nullable(),
+    substituteWarehouseItemId: z.number().int().positive().optional().nullable(),
     substituteProductName: z.string().trim().max(300).optional().nullable(),
     substituteUnit: z.string().trim().max(50).optional().nullable(),
     shortageReason: z.enum(CENTRAL_KITCHEN_SHORTAGE_REASONS).optional().nullable(),
@@ -128,6 +135,9 @@ export const centralKitchenPreparationSchema = z.object({
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["items", index, "itemId"], message: "Duplicate item" });
     }
     seen.add(item.itemId);
+    if (item.substituteProductId != null && item.substituteWarehouseItemId != null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["items", index], message: "Choose only one substitute catalog identity" });
+    }
     if (item.substituteQuantity > 0 && (!item.substituteProductName || !item.substituteUnit)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["items", index], message: "Substitute name and unit are required" });
     }
@@ -209,6 +219,7 @@ export function validateCentralKitchenReceipt(
 export type CentralKitchenShadowAllocation = {
   component: "original" | "substitute";
   productId: number | null;
+  warehouseItemId: number | null;
   productName: string;
   unit: string;
   quantity: number;
@@ -218,11 +229,13 @@ export function buildCentralKitchenShadowAllocations(
   direction: "projected_kitchen_out" | "projected_branch_in",
   item: {
     productId: number | null;
+    warehouseItemId: number | null;
     productName: string;
     unit: string;
     preparedQuantity: number;
     substituteQuantity: number;
     substituteProductId: number | null;
+    substituteWarehouseItemId: number | null;
     substituteProductName: string | null;
     substituteUnit: string | null;
     dispatchedQuantity: number;
@@ -237,6 +250,7 @@ export function buildCentralKitchenShadowAllocations(
   if (originalQuantity > 0.000001) allocations.push({
     component: "original",
     productId: item.productId,
+    warehouseItemId: item.warehouseItemId,
     productName: item.productName,
     unit: item.unit,
     quantity: originalQuantity,
@@ -244,6 +258,7 @@ export function buildCentralKitchenShadowAllocations(
   if (substituteQuantity > 0.000001) allocations.push({
     component: "substitute",
     productId: item.substituteProductId,
+    warehouseItemId: item.substituteWarehouseItemId,
     productName: item.substituteProductName || "منتج بديل",
     unit: item.substituteUnit || item.unit,
     quantity: substituteQuantity,
@@ -354,6 +369,7 @@ export function validateCentralKitchenPreparation(
     }
     if (prepared.substituteQuantity === 0 && (
       prepared.substituteProductId
+      || prepared.substituteWarehouseItemId
       || prepared.substituteProductName
       || prepared.substituteUnit
     )) {
