@@ -17,6 +17,7 @@ import type {
   CentralKitchenRuntimeContract,
   CentralKitchenRuntimeMode,
 } from "@shared/central-kitchen-live";
+import { formatExact6 } from "@shared/central-kitchen-batch-materials";
 import { postProductionBatchToStock } from "./production-stock-posting";
 
 export class CentralKitchenLiveError extends Error {
@@ -35,6 +36,33 @@ type PreparedLine = {
   substituteWarehouseItemId?: number | null;
   substituteUnit?: string | null;
 };
+
+function warehouseQuantityMicros(value: number | string, allowZero = false): bigint {
+  let normalized: bigint;
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (!/^\d+(?:\.\d{1,6})?$/.test(text)) {
+      throw new CentralKitchenLiveError("كمية المادة تقبل ست منازل عشرية كحد أقصى", 400);
+    }
+    const [whole, fraction = ""] = text.split(".");
+    normalized = BigInt(whole) * 1_000_000n + BigInt((fraction + "000000").slice(0, 6));
+  } else {
+    if (!Number.isFinite(value)) throw new CentralKitchenLiveError("كمية المادة يجب أن تكون رقماً صالحاً", 400);
+    const micros = value * 1_000_000;
+    if (Math.abs(micros - Math.round(micros)) > Number.EPSILON * Math.max(1, Math.abs(micros)) * 8) {
+      throw new CentralKitchenLiveError("كمية المادة تقبل ست منازل عشرية كحد أقصى", 400);
+    }
+    normalized = BigInt(Math.round(micros));
+  }
+  if (normalized < 0n || (!allowZero && normalized === 0n)) {
+    throw new CentralKitchenLiveError("كمية المادة يجب أن تكون أكبر من صفر", 400);
+  }
+  return normalized;
+}
+
+function warehouseQuantity(value: number | string, allowZero = false): string {
+  return formatExact6(warehouseQuantityMicros(value, allowZero));
+}
 
 export type CentralKitchenDemandAllocation = {
   orderId: number;
@@ -110,7 +138,7 @@ export async function getAllocatedKitchenDemands(
   for (const row of rows) {
     const [[reservation], [linked]] = await Promise.all([
       tx.select({
-        quantity: sql<number>`COALESCE(SUM(${centralKitchenInventoryAllocations.reservedQuantity}), 0)::int`,
+        quantity: sql<number>`COALESCE(SUM(${centralKitchenInventoryAllocations.reservedQuantity}), 0)`,
       }).from(centralKitchenInventoryAllocations).where(and(
         eq(centralKitchenInventoryAllocations.orderItemId, row.orderItemId),
         eq(centralKitchenInventoryAllocations.status, "reserved"),
@@ -230,10 +258,11 @@ async function reserveComponent(
   identity: { kind: "product" | "warehouse"; catalogId: number; unit: string },
   quantity: number,
 ) {
-  if (!Number.isInteger(quantity) || quantity < 0) {
-    throw new CentralKitchenLiveError("المخزون الحقيقي يقبل كميات صحيحة فقط", 400);
+  if (identity.kind === "product" && (!Number.isInteger(quantity) || quantity < 0)) {
+    throw new CentralKitchenLiveError("مخزون المنتجات الجاهزة يقبل كميات صحيحة فقط", 400);
   }
-  if (!quantity) return;
+  const materialQuantity = identity.kind === "warehouse" ? warehouseQuantity(quantity, true) : quantity;
+  if (identity.kind === "warehouse" ? materialQuantity === "0.000000" : !quantity) return;
   if (identity.kind === "warehouse") {
     const rows = await tx.execute(sql`
       SELECT bs.id, wi.unit
@@ -246,15 +275,15 @@ async function reserveComponent(
       throw new CentralKitchenLiveError("وحدة مخزون المادة لا تطابق وحدة الطلب", 400);
     }
     const reserved = await tx.execute(sql`
-      UPDATE branch_stock SET reserved_quantity = reserved_quantity + ${quantity}, last_updated = now()
-      WHERE id = ${stock.id} AND current_quantity - reserved_quantity >= ${quantity}
+      UPDATE branch_stock SET reserved_quantity = reserved_quantity + ${materialQuantity}, last_updated = now()
+      WHERE id = ${stock.id} AND current_quantity - reserved_quantity >= ${materialQuantity}
       RETURNING id
     `);
     if (!reserved.rows?.length) throw new CentralKitchenLiveError("مخزون مواد المطبخ غير كافٍ");
     await tx.insert(centralKitchenInventoryAllocations).values({
       orderId: order.id, orderItemId: itemId, component, kind: "warehouse",
       catalogId: identity.catalogId, sourceBranchStockId: stock.id, unit: identity.unit,
-      reservedQuantity: quantity,
+      reservedQuantity: materialQuantity as any,
     });
     return;
   }
@@ -331,47 +360,66 @@ export async function dispatchRealInventory(
   if (order.inventoryMode !== "real") return;
   await assertRealOrderWritable(order, tx);
   for (const line of lines) {
-    if (!Number.isInteger(line.dispatchedQuantity)) throw new CentralKitchenLiveError("الكمية المرسلة يجب أن تكون عدداً صحيحاً", 400);
     const allocations = await tx.select().from(centralKitchenInventoryAllocations)
       .where(eq(centralKitchenInventoryAllocations.orderItemId, line.itemId))
       .orderBy(sql`CASE WHEN ${centralKitchenInventoryAllocations.component} = 'original' THEN 0 ELSE 1 END`, centralKitchenInventoryAllocations.id)
       .for("update");
+    const warehouseSource = allocations[0]?.kind === "warehouse";
+    if (allocations.some((allocation) => (allocation.kind === "warehouse") !== warehouseSource)) {
+      throw new CentralKitchenLiveError("تخصيصات الشحنة تحتوي مصادر مخزون غير متجانسة", 409);
+    }
+    if (!warehouseSource && !Number.isInteger(line.dispatchedQuantity)) {
+      throw new CentralKitchenLiveError("كمية المنتجات الجاهزة المرسلة يجب أن تكون عدداً صحيحاً", 400);
+    }
+    let remainingMaterial = warehouseSource ? warehouseQuantityMicros(line.dispatchedQuantity, true) : null;
     let remaining = line.dispatchedQuantity;
     for (const allocation of allocations) {
-      const used = Math.min(remaining, allocation.reservedQuantity);
-      const released = allocation.reservedQuantity - used;
+      const used = warehouseSource
+        ? (remainingMaterial! < warehouseQuantityMicros(String(allocation.reservedQuantity), true)
+          ? remainingMaterial!
+          : warehouseQuantityMicros(String(allocation.reservedQuantity), true))
+        : BigInt(Math.min(remaining, Number(allocation.reservedQuantity)));
+      const reserved = warehouseSource
+        ? warehouseQuantityMicros(String(allocation.reservedQuantity), true)
+        : BigInt(Number(allocation.reservedQuantity));
+      const released = reserved - used;
+      const usedQuantity = warehouseSource ? formatExact6(used) : Number(used);
+      const releasedQuantity = warehouseSource ? formatExact6(released) : Number(released);
       if (allocation.kind === "product") {
         await tx.update(finishedGoodsInventory).set({
-          quantity: sql`${finishedGoodsInventory.quantity} - ${used}`,
+          quantity: sql`${finishedGoodsInventory.quantity} - ${usedQuantity}`,
           reservedQuantity: sql`${finishedGoodsInventory.reservedQuantity} - ${allocation.reservedQuantity}`,
           updatedAt: sql`now()`,
         }).where(eq(finishedGoodsInventory.id, allocation.sourceFinishedGoodsId!));
       } else {
         await tx.update(branchStock).set({
-          currentQuantity: sql`${branchStock.currentQuantity} - ${used}`,
+          currentQuantity: sql`${branchStock.currentQuantity} - ${usedQuantity}`,
           reservedQuantity: sql`${branchStock.reservedQuantity} - ${allocation.reservedQuantity}`,
           lastUpdated: sql`now()`,
         }).where(eq(branchStock.id, allocation.sourceBranchStockId!));
       }
       await tx.update(centralKitchenInventoryAllocations).set({
-        dispatchedQuantity: used, releasedQuantity: released,
-        status: used ? "dispatched" : "released", updatedAt: sql`now()`,
+        dispatchedQuantity: usedQuantity as any, releasedQuantity: releasedQuantity as any,
+        status: used > 0n ? "dispatched" : "released", updatedAt: sql`now()`,
       }).where(eq(centralKitchenInventoryAllocations.id, allocation.id));
       if (used) await tx.insert(centralKitchenInventoryMovements).values({
         allocationId: allocation.id, orderId: order.id, orderItemId: line.itemId,
         movementType: "dispatch_debit", branchId: order.centralKitchenId,
-        kind: allocation.kind, catalogId: allocation.catalogId, quantity: used,
+        kind: allocation.kind, catalogId: allocation.catalogId, quantity: usedQuantity as any,
         unit: allocation.unit, eventId, actorId: userId,
       });
       if (released) await tx.insert(centralKitchenInventoryMovements).values({
         allocationId: allocation.id, orderId: order.id, orderItemId: line.itemId,
         movementType: "reservation_release", branchId: order.centralKitchenId,
-        kind: allocation.kind, catalogId: allocation.catalogId, quantity: released,
+        kind: allocation.kind, catalogId: allocation.catalogId, quantity: releasedQuantity as any,
         unit: allocation.unit, eventId, actorId: userId,
       });
-      remaining -= used;
+      if (warehouseSource) remainingMaterial! -= used;
+      else remaining -= Number(used);
     }
-    if (remaining) throw new CentralKitchenLiveError("الكمية المرسلة تتجاوز الكمية المحجوزة");
+    if (warehouseSource ? remainingMaterial! !== 0n : remaining) {
+      throw new CentralKitchenLiveError("الكمية المرسلة تتجاوز الكمية المحجوزة");
+    }
   }
 }
 
@@ -386,21 +434,34 @@ export async function receiveRealInventory(
   if (order.inventoryMode !== "real") return;
   await assertRealOrderWritable(order, tx);
   for (const line of lines) {
-    if (!Number.isInteger(line.receivedQuantity)) throw new CentralKitchenLiveError("الكمية المستلمة يجب أن تكون عدداً صحيحاً", 400);
     const allocations = await tx.select().from(centralKitchenInventoryAllocations)
       .where(eq(centralKitchenInventoryAllocations.orderItemId, line.itemId))
       .orderBy(sql`CASE WHEN ${centralKitchenInventoryAllocations.component} = 'original' THEN 0 ELSE 1 END`, centralKitchenInventoryAllocations.id);
+    const warehouseSource = allocations[0]?.kind === "warehouse";
+    if (allocations.some((allocation) => (allocation.kind === "warehouse") !== warehouseSource)) {
+      throw new CentralKitchenLiveError("تخصيصات الاستلام تحتوي مصادر مخزون غير متجانسة", 409);
+    }
+    if (!warehouseSource && !Number.isInteger(line.receivedQuantity)) {
+      throw new CentralKitchenLiveError("كمية المنتجات الجاهزة المستلمة يجب أن تكون عدداً صحيحاً", 400);
+    }
+    let remainingMaterial = warehouseSource ? warehouseQuantityMicros(line.receivedQuantity, true) : null;
     let remaining = line.receivedQuantity;
     for (const allocation of allocations) {
-      const quantity = Math.min(remaining, allocation.dispatchedQuantity);
-      if (!quantity) continue;
+      const dispatched = warehouseSource
+        ? warehouseQuantityMicros(String(allocation.dispatchedQuantity), true)
+        : BigInt(Number(allocation.dispatchedQuantity));
+      const quantity = warehouseSource
+        ? (remainingMaterial! < dispatched ? remainingMaterial! : dispatched)
+        : BigInt(Math.min(remaining, Number(dispatched)));
+      if (quantity === 0n) continue;
+      const receiptQuantity = warehouseSource ? formatExact6(quantity) : Number(quantity);
       if (allocation.kind === "warehouse") {
         await tx.insert(branchStock).values({
           branchId: order.requestBranchId, itemId: allocation.catalogId,
-          currentQuantity: quantity, reservedQuantity: 0, updatedBy: userId,
+          currentQuantity: receiptQuantity as any, reservedQuantity: 0, updatedBy: userId,
         }).onConflictDoUpdate({
           target: [branchStock.branchId, branchStock.itemId],
-          set: { currentQuantity: sql`${branchStock.currentQuantity} + ${quantity}`, lastUpdated: sql`now()`, updatedBy: userId },
+          set: { currentQuantity: sql`${branchStock.currentQuantity} + ${receiptQuantity}`, lastUpdated: sql`now()`, updatedBy: userId },
         });
       } else {
         const [item] = await tx.select().from(centralKitchenOrderItems)
@@ -409,25 +470,28 @@ export async function receiveRealInventory(
         await tx.execute(sql`
           INSERT INTO finished_goods_inventory
             (branch_id, product_id, product_name, product_name_normalized, quantity, reserved_quantity, unit, production_date, created_at, updated_at)
-          VALUES (${order.requestBranchId}, ${allocation.catalogId}, ${name}, lower(btrim(${name})), ${quantity}, 0, ${allocation.unit}, ${receiptDate}, now(), now())
+          VALUES (${order.requestBranchId}, ${allocation.catalogId}, ${name}, lower(btrim(${name})), ${receiptQuantity}, 0, ${allocation.unit}, ${receiptDate}, now(), now())
           ON CONFLICT (branch_id, product_id, production_date, unit) WHERE product_id IS NOT NULL
           DO UPDATE SET quantity = finished_goods_inventory.quantity + EXCLUDED.quantity, updated_at = now()
         `);
       }
       await tx.update(centralKitchenInventoryAllocations).set({
-        receivedQuantity: sql`${centralKitchenInventoryAllocations.receivedQuantity} + ${quantity}`,
+        receivedQuantity: sql`${centralKitchenInventoryAllocations.receivedQuantity} + ${receiptQuantity}`,
         updatedAt: sql`now()`,
       }).where(eq(centralKitchenInventoryAllocations.id, allocation.id));
       await tx.insert(centralKitchenInventoryMovements).values({
         allocationId: allocation.id, orderId: order.id, orderItemId: line.itemId,
         movementType: "receipt_credit", branchId: order.requestBranchId,
-        kind: allocation.kind, catalogId: allocation.catalogId, quantity,
+        kind: allocation.kind, catalogId: allocation.catalogId, quantity: receiptQuantity as any,
         unit: allocation.unit, eventId, actorId: userId,
       });
-      remaining -= quantity;
-      if (!remaining) break;
+      if (warehouseSource) remainingMaterial! -= quantity;
+      else remaining -= Number(quantity);
+      if (warehouseSource ? remainingMaterial === 0n : !remaining) break;
     }
-    if (remaining) throw new CentralKitchenLiveError("الكمية المستلمة لا تطابق تخصيصات الشحنة", 400);
+    if (warehouseSource ? remainingMaterial! !== 0n : remaining) {
+      throw new CentralKitchenLiveError("الكمية المستلمة لا تطابق تخصيصات الشحنة", 400);
+    }
   }
 }
 

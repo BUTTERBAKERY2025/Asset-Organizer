@@ -44,6 +44,16 @@ const realCalendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) 
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }, "Invalid calendar date");
 const neededTime = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, "Invalid time");
+const hasAtMostSixDecimalPlaces = (value: number): boolean => {
+  const scaled = value * 1_000_000;
+  return Math.abs(scaled - Math.round(scaled))
+    <= Number.EPSILON * Math.max(1, Math.abs(scaled)) * 8;
+};
+const exactSixDecimalPositive = z.number().finite().positive().max(1_000_000)
+  .refine(hasAtMostSixDecimalPlaces, "الكمية تقبل ست منازل عشرية كحد أقصى");
+const exactSixDecimalNonnegative = z.number().finite().min(0).max(1_000_000)
+  .refine(hasAtMostSixDecimalPlaces, "الكمية تقبل ست منازل عشرية كحد أقصى");
+const quantityMicros = (value: number): bigint => BigInt(Math.round(value * 1_000_000));
 
 export const centralKitchenIdempotencyKeySchema = z.string()
   .trim()
@@ -62,7 +72,7 @@ export const createCentralKitchenOrderSchema = z.object({
     productId: z.number().int().positive().optional().nullable(),
     warehouseItemId: z.number().int().positive().optional().nullable(),
     productName: trimmedText(300),
-    requestedQuantity: z.number().finite().positive().max(1_000_000),
+    requestedQuantity: exactSixDecimalPositive,
     unit: trimmedText(50),
     notes: z.string().trim().max(1000).optional().nullable(),
   }).strict().superRefine((item, ctx) => {
@@ -119,8 +129,8 @@ export const centralKitchenPreparationSchema = z.object({
   idempotencyKey: centralKitchenIdempotencyKeySchema.optional(),
   items: z.array(z.object({
     itemId: z.number().int().positive(),
-    preparedQuantity: z.number().finite().min(0).max(1_000_000),
-    substituteQuantity: z.number().finite().min(0).max(1_000_000).default(0),
+    preparedQuantity: exactSixDecimalNonnegative,
+    substituteQuantity: exactSixDecimalNonnegative.default(0),
     substituteProductId: z.number().int().positive().optional().nullable(),
     substituteWarehouseItemId: z.number().int().positive().optional().nullable(),
     substituteProductName: z.string().trim().max(300).optional().nullable(),
@@ -151,7 +161,7 @@ export const centralKitchenDispatchSchema = z.object({
   vehicleNumber: trimmedText(100),
   items: z.array(z.object({
     itemId: z.number().int().positive(),
-    dispatchedQuantity: z.number().finite().min(0).max(1_000_000),
+    dispatchedQuantity: exactSixDecimalNonnegative,
   }).strict()).min(1).max(500),
 }).strict();
 
@@ -160,8 +170,8 @@ export const centralKitchenReceiveSchema = z.object({
   idempotencyKey: centralKitchenIdempotencyKeySchema.optional(),
   items: z.array(z.object({
     itemId: z.number().int().positive(),
-    receivedQuantity: z.number().finite().min(0).max(1_000_000),
-    damagedQuantity: z.number().finite().min(0).max(1_000_000).default(0),
+    receivedQuantity: exactSixDecimalNonnegative,
+    damagedQuantity: exactSixDecimalNonnegative.default(0),
     receivingNotes: z.string().trim().max(1000).optional().nullable(),
   }).strict()).min(1).max(500),
 }).strict();
@@ -178,6 +188,9 @@ export const centralKitchenRuntimeSchema = z.object({
 export const centralKitchenLinkedBatchSchema = z.object({
   quantity: z.number().int().positive().max(1_000_000),
   productionDate: realCalendarDate,
+  // Only an explicit true enables prospective recipe snapshotting. Existing
+  // linked batches and callers retain their non-recipe behavior.
+  recipeBacked: z.boolean().default(false),
   idempotencyKey: centralKitchenIdempotencyKeySchema.optional(),
 }).strict();
 
@@ -195,9 +208,12 @@ export function validateCentralKitchenDispatch(
 ): string | null {
   const setError = validateExactItemSet(preparedItems.map((item) => item.id), dispatchedItems.map((item) => item.itemId));
   if (setError) return setError;
-  const prepared = new Map(preparedItems.map((item) => [item.id, item.preparedQuantity + item.substituteQuantity]));
+  const prepared = new Map(preparedItems.map((item) => [
+    item.id,
+    quantityMicros(item.preparedQuantity) + quantityMicros(item.substituteQuantity),
+  ]));
   for (const item of dispatchedItems) {
-    if (item.dispatchedQuantity > (prepared.get(item.itemId) || 0) + 0.000001) {
+    if (quantityMicros(item.dispatchedQuantity) > (prepared.get(item.itemId) || 0n)) {
       return "الكمية المرسلة لا يمكن أن تتجاوز الكمية المجهزة";
     }
   }
@@ -210,18 +226,20 @@ export function validateCentralKitchenReceipt(
 ): { error: string | null; hasDiscrepancy: boolean } {
   const setError = validateExactItemSet(dispatchedItems.map((item) => item.id), receivedItems.map((item) => item.itemId));
   if (setError) return { error: setError, hasDiscrepancy: false };
-  const dispatched = new Map(dispatchedItems.map((item) => [item.id, item.dispatchedQuantity]));
+  const dispatched = new Map(dispatchedItems.map((item) => [item.id, quantityMicros(item.dispatchedQuantity)]));
   let hasDiscrepancy = false;
   for (const item of receivedItems) {
-    const sent = dispatched.get(item.itemId) || 0;
-    if (item.receivedQuantity + item.damagedQuantity > sent + 0.000001) {
+    const sent = dispatched.get(item.itemId) || 0n;
+    const received = quantityMicros(item.receivedQuantity);
+    const damaged = quantityMicros(item.damagedQuantity);
+    if (received + damaged > sent) {
       return { error: "المستلم والتالف لا يمكن أن يتجاوز الكمية المرسلة", hasDiscrepancy: false };
     }
-    const missing = Math.max(0, sent - item.receivedQuantity - item.damagedQuantity);
-    if ((missing > 0.000001 || item.damagedQuantity > 0.000001) && !item.receivingNotes) {
+    const missing = sent - received - damaged;
+    if ((missing > 0n || damaged > 0n) && !item.receivingNotes) {
       return { error: "يجب كتابة ملاحظة عند وجود ناقص أو تالف", hasDiscrepancy: false };
     }
-    hasDiscrepancy ||= missing > 0.000001 || item.damagedQuantity > 0.000001;
+    hasDiscrepancy ||= missing > 0n || damaged > 0n;
   }
   return { error: null, hasDiscrepancy };
 }

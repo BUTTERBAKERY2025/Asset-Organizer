@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import type { CentralKitchenOperationsResponse, CentralKitchenRuntimeMode } from "@shared/central-kitchen-live";
@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { RecipeMaterialsPreview, useRecipeMaterialRequirements } from "@/components/central-kitchen/recipe-materials";
 
 type Kitchen = { id: string; name: string };
 const modeStyle: Record<CentralKitchenRuntimeMode, string> = {
@@ -30,10 +31,12 @@ export function OperationsBoard({ kitchens, kitchenId, onKitchenChange }: { kitc
   const queryClient = useQueryClient();
   const { isAdmin, canCreate } = usePermissions();
   const [modeDraft, setModeDraft] = useState<CentralKitchenRuntimeMode | null>(null);
-  const [production, setProduction] = useState<{ orderId: number; itemId: number; name: string; uncovered: number } | null>(null);
+  const [production, setProduction] = useState<{ orderId: number; itemId: number; productId: number; name: string; uncovered: number } | null>(null);
   const [batchQty, setBatchQty] = useState("");
   const [date, setDate] = useState(saudiDate);
+  const [recipeBacked, setRecipeBacked] = useState<boolean | null>(null);
   const batchAttemptRef = useRef<{ signature: string; key: string } | null>(null);
+  const recipeChoiceRef = useRef<string | null>(null);
   const operations = useQuery<CentralKitchenOperationsResponse>({
     queryKey: ["/api/central-kitchen-orders/operations", kitchenId],
     queryFn: async () => {
@@ -45,6 +48,20 @@ export function OperationsBoard({ kitchens, kitchenId, onKitchenChange }: { kitc
     refetchInterval: 45_000,
   });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["/api/central-kitchen-orders/operations", kitchenId] });
+  const recipeRequirements = useRecipeMaterialRequirements({
+    kitchenId,
+    productId: production?.productId || 0,
+    quantity: batchQty,
+    enabled: production !== null,
+  });
+  useEffect(() => {
+    if (!production || !recipeRequirements.data) return;
+    const key = `${kitchenId}:${production.productId}:${batchQty}`;
+    if (recipeChoiceRef.current !== key) {
+      recipeChoiceRef.current = key;
+      setRecipeBacked(recipeRequirements.data.recipe !== null ? true : null);
+    }
+  }, [batchQty, kitchenId, production, recipeRequirements.data]);
   const runtimeMutation = useMutation({
     mutationFn: async (mode: CentralKitchenRuntimeMode) => {
       const response = await apiRequest("PUT", `/api/central-kitchen-orders/runtime/${kitchenId}`, { mode });
@@ -60,13 +77,15 @@ export function OperationsBoard({ kitchens, kitchenId, onKitchenChange }: { kitc
   const batchMutation = useMutation({
     mutationFn: async () => {
       if (!production || !Number.isInteger(Number(batchQty)) || Number(batchQty) < 1) throw new Error("أدخل كمية صحيحة أكبر من صفر.");
-      const payload = { quantity: Number(batchQty), productionDate: date };
+      if (recipeBacked === null) throw new Error("انتظر التحقق من الوصفة ثم اختر طريقة ربط الدفعة.");
+      if (recipeBacked && (!recipeRequirements.data || !recipeRequirements.data.recipe)) throw new Error("لا توجد وصفة معتمدة صالحة لربط هذه الدفعة.");
+      const payload = { quantity: Number(batchQty), productionDate: date, recipeBacked };
       const signature = JSON.stringify({ orderId: production.orderId, itemId: production.itemId, ...payload });
       if (!batchAttemptRef.current || batchAttemptRef.current.signature !== signature) batchAttemptRef.current = { signature, key: crypto.randomUUID() };
       const response = await apiRequest("POST", `/api/central-kitchen-orders/${production.orderId}/items/${production.itemId}/production-batches`, { ...payload, idempotencyKey: batchAttemptRef.current.key });
       return response.json();
     },
-    onSuccess: () => { batchAttemptRef.current = null; setProduction(null); setBatchQty(""); refresh(); toast({ title: "بدأت دفعة الإنتاج وربطت بطلب الفرع" }); },
+    onSuccess: () => { batchAttemptRef.current = null; setProduction(null); setBatchQty(""); setRecipeBacked(null); recipeChoiceRef.current = null; refresh(); toast({ title: recipeBacked ? "بدأت دفعة الإنتاج وربطت بالوصفة المعتمدة" : "بدأت دفعة إنتاج غير مرتبطة بوصفة" }); },
     onError: (error) => toast({ title: "تعذر إنشاء الدفعة", description: error instanceof Error ? error.message : "تحقق من الاحتياج المتبقي.", variant: "destructive" }),
   });
   const grouped = useMemo(() => {
@@ -93,10 +112,10 @@ export function OperationsBoard({ kitchens, kitchenId, onKitchenChange }: { kitc
         <Metric label="بنود قيد الإنتاج" value={qty(operations.data!.demands.filter(d => d.linkedUnfinishedQuantity > 0).length)} note="دفعات مرتبطة لم تُنه بعد" tone="good" />
       </div>
       {isAdmin && <Card className="border-dashed"><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">ضبط وضع المخزون</p><p className="text-xs text-muted-foreground">الظلّي لا يرحّل المخزون. التغيير إلى الفعلي أو الإيقاف يحتاج تأكيداً صريحاً.</p></div><Select value={operations.data!.runtime.mode} onValueChange={value => { if (value !== operations.data!.runtime.mode) setModeDraft(value as CentralKitchenRuntimeMode); }}><SelectTrigger className="w-44"><Settings2 className="ml-2 h-4 w-4" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="shadow">تشغيل ظلّي</SelectItem><SelectItem value="real">مخزون فعلي</SelectItem><SelectItem value="paused">إيقاف</SelectItem></SelectContent></Select></CardContent></Card>}
-      {grouped.length === 0 ? <State icon={<PackageCheck className="h-7 w-7" />} title="لا توجد احتياجات معتمدة" text="ستظهر البنود هنا بعد اعتماد طلبات الفروع." /> : grouped.map(([unit, demands]) => <Card key={unit} className="overflow-hidden"><CardContent className="p-0"><div className="border-b bg-muted/35 px-4 py-3"><p className="font-semibold">وحدة: {unit}</p><p className="text-xs text-muted-foreground">الأرقام لا تُدمج عبر وحدات مختلفة.</p></div><div className="divide-y">{demands.map(d => { const covered = Math.max(0, d.targetQuantity - d.uncoveredQuantity); return <div key={d.orderItemId} className="grid gap-3 p-4 md:grid-cols-[1.4fr_2fr_auto] md:items-center"><div><Link href={`/central-kitchen-orders?orderId=${d.orderId}`} className="font-mono text-sm font-bold text-primary">{d.orderNumber}</Link><p className="mt-1 font-semibold">{d.name}</p><p className="text-xs text-muted-foreground">{d.kind === "warehouse" ? "صنف مستودع — لا يمكن فتح دفعة إنتاج" : "منتج كتالوج"} {d.neededDate ? `· الحاجة ${d.neededDate}` : ""}</p></div><div><div className="mb-1 flex justify-between text-xs"><span>المغطّى {qty(covered)} / {qty(d.targetQuantity)}</span><span className={d.uncoveredQuantity > 0 ? "text-rose-700" : "text-emerald-700"}>المتبقي {qty(d.uncoveredQuantity)}</span></div><Progress value={Math.min(100, (covered / Math.max(1, d.targetQuantity)) * 100)} className="h-2" /><p className="mt-2 text-[11px] text-muted-foreground">متاح {qty(d.availableQuantity)} · محجوز {qty(d.reservedQuantity)} · قيد الإنتاج {qty(d.linkedUnfinishedQuantity)}</p></div><div className="flex gap-2 md:justify-end"><Link href={`/central-kitchen-orders?orderId=${d.orderId}`} className="inline-flex h-9 items-center rounded-md border px-3 text-xs font-medium">التفاصيل <ArrowLeft className="mr-1 h-3.5 w-3.5" /></Link>{d.kind === "product" && d.uncoveredQuantity > 0 && canProduce && operations.data!.runtime.mode !== "paused" && <Button size="sm" onClick={() => { setProduction({ orderId: d.orderId, itemId: d.orderItemId, name: d.name, uncovered: d.uncoveredQuantity }); setBatchQty(String(d.uncoveredQuantity)); }}><Play className="ml-1 h-3.5 w-3.5" />بدء إنتاج</Button>}</div></div>; })}</div></CardContent></Card>)}
+     {grouped.length === 0 ? <State icon={<PackageCheck className="h-7 w-7" />} title="لا توجد احتياجات معتمدة" text="ستظهر البنود هنا بعد اعتماد طلبات الفروع." /> : grouped.map(([unit, demands]) => <Card key={unit} className="overflow-hidden"><CardContent className="p-0"><div className="border-b bg-muted/35 px-4 py-3"><p className="font-semibold">وحدة: {unit}</p><p className="text-xs text-muted-foreground">الأرقام لا تُدمج عبر وحدات مختلفة.</p></div><div className="divide-y">{demands.map(d => { const covered = Math.max(0, d.targetQuantity - d.uncoveredQuantity); return <div key={d.orderItemId} className="grid gap-3 p-4 md:grid-cols-[1.4fr_2fr_auto] md:items-center"><div><Link href={`/central-kitchen-orders?orderId=${d.orderId}`} className="font-mono text-sm font-bold text-primary">{d.orderNumber}</Link><p className="mt-1 font-semibold">{d.name}</p><p className="text-xs text-muted-foreground">{d.kind === "warehouse" ? "صنف مستودع — لا يمكن فتح دفعة إنتاج" : "منتج كتالوج"} {d.neededDate ? `· الحاجة ${d.neededDate}` : ""}</p></div><div><div className="mb-1 flex justify-between text-xs"><span>المغطّى {qty(covered)} / {qty(d.targetQuantity)}</span><span className={d.uncoveredQuantity > 0 ? "text-rose-700" : "text-emerald-700"}>المتبقي {qty(d.uncoveredQuantity)}</span></div><Progress value={Math.min(100, (covered / Math.max(1, d.targetQuantity)) * 100)} className="h-2" /><p className="mt-2 text-[11px] text-muted-foreground">متاح {qty(d.availableQuantity)} · محجوز {qty(d.reservedQuantity)} · قيد الإنتاج {qty(d.linkedUnfinishedQuantity)}</p></div><div className="flex gap-2 md:justify-end"><Link href={`/central-kitchen-orders?orderId=${d.orderId}`} className="inline-flex h-9 items-center rounded-md border px-3 text-xs font-medium">التفاصيل <ArrowLeft className="mr-1 h-3.5 w-3.5" /></Link>{d.kind === "product" && d.uncoveredQuantity > 0 && canProduce && operations.data!.runtime.mode !== "paused" && <Button size="sm" onClick={() => { setProduction({ orderId: d.orderId, itemId: d.orderItemId, productId: d.catalogId, name: d.name, uncovered: d.uncoveredQuantity }); setBatchQty(String(d.uncoveredQuantity)); setRecipeBacked(null); recipeChoiceRef.current = null; }}><Play className="ml-1 h-3.5 w-3.5" />بدء إنتاج</Button>}</div></div>; })}</div></CardContent></Card>)}
     </>}
     <Dialog open={modeDraft !== null} onOpenChange={open => !open && setModeDraft(null)}><DialogContent dir="rtl"><DialogHeader><DialogTitle>تأكيد تغيير وضع تشغيل المطبخ</DialogTitle><DialogDescription>{modeDraft === "real" ? "سيؤثر التفعيل على الطلبات الجديدة فقط: ستُنشأ حجوزات من مخزون فرع المطبخ. لا يُرحّل أو يُصحح أي رصيد أو طلب قديم." : modeDraft === "paused" ? "سيوقف الإيقاف ترحيل المخزون للطلبات الحقيقية المعلّقة ويمنع بدء أو إنهاء دفعات الإنتاج المرتبطة إلى أن يُستأنف التشغيل. تبقى الأرصدة والحجوزات الحالية محفوظة." : "سيعود أثر الطلبات الجديدة إلى السجل الظلّي فقط، دون تعديل أي طلب أو رصيد قديم."}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setModeDraft(null)}>إلغاء</Button><Button disabled={runtimeMutation.isPending} onClick={() => modeDraft && runtimeMutation.mutate(modeDraft)}>{runtimeMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}تأكيد التغيير</Button></DialogFooter></DialogContent></Dialog>
-    <Dialog open={production !== null} onOpenChange={open => !open && setProduction(null)}><DialogContent dir="rtl"><DialogHeader><DialogTitle>بدء دفعة إنتاج مرتبطة</DialogTitle><DialogDescription>{production?.name} · أقصى احتياج غير مغطى: {production && qty(production.uncovered)}. لا يتم استهلاك مواد خام تلقائياً.</DialogDescription></DialogHeader><div className="grid gap-3"><div><Label>كمية صحيحة</Label><Input className="mt-1" type="number" min="1" step="1" value={batchQty} onChange={e => setBatchQty(e.target.value)} /></div><div><Label>تاريخ الإنتاج</Label><Input className="mt-1" type="date" value={date} onChange={e => setDate(e.target.value)} /></div></div><DialogFooter><Button variant="outline" onClick={() => setProduction(null)}>إلغاء</Button><Button disabled={batchMutation.isPending} onClick={() => batchMutation.mutate()}>{batchMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}إنشاء الدفعة</Button></DialogFooter></DialogContent></Dialog>
+    <Dialog open={production !== null} onOpenChange={open => { if (!open) { setProduction(null); setRecipeBacked(null); recipeChoiceRef.current = null; } }}><DialogContent dir="rtl" className="max-h-[92dvh] max-w-4xl overflow-y-auto"><DialogHeader><DialogTitle>بدء دفعة إنتاج مرتبطة</DialogTitle><DialogDescription>{production?.name} · أقصى احتياج غير مغطى: {production && qty(production.uncovered)}. لا يتم استهلاك مواد خام عند الإنشاء؛ التحقق النهائي يحدث عند الإنهاء.</DialogDescription></DialogHeader><div className="grid gap-3 sm:grid-cols-2"><div><Label>كمية صحيحة</Label><Input className="mt-1" type="number" min="1" step="1" value={batchQty} onChange={e => { setBatchQty(e.target.value); recipeChoiceRef.current = null; setRecipeBacked(null); }} /></div><div><Label>تاريخ الإنتاج</Label><Input className="mt-1" type="date" value={date} onChange={e => setDate(e.target.value)} /></div></div>{production && <RecipeMaterialsPreview query={recipeRequirements} recipeBacked={recipeBacked === true} onRecipeBackedChange={setRecipeBacked} kitchenId={kitchenId} showToggle />}{recipeBacked === false && recipeRequirements.data?.recipe && <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">تم اختيار إنشاء دفعة غير مرتبطة رغم توفر وصفة معتمدة. هذا الاختيار لا يضيف لقطة مواد ولن يغيّر الدفعات السابقة.</p>}<DialogFooter><Button variant="outline" onClick={() => setProduction(null)}>إلغاء</Button><Button disabled={batchMutation.isPending || recipeBacked === null || recipeRequirements.isLoading || recipeRequirements.isError || (recipeBacked === true && !recipeRequirements.data?.recipe)} onClick={() => batchMutation.mutate()}>{batchMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}إنشاء الدفعة</Button></DialogFooter></DialogContent></Dialog>
   </section>;
 }
 function Metric({ label, value, note, tone }: { label: string; value: string; note: string; tone?: "danger" | "violet" | "good" }) { return <Card className={tone === "danger" ? "border-rose-200 bg-rose-50/50" : tone === "violet" ? "border-violet-200 bg-violet-50/50" : tone === "good" ? "border-emerald-200 bg-emerald-50/50" : ""}><CardContent className="p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-bold tabular-nums">{value}</p><p className="mt-1 text-[11px] text-muted-foreground">{note}</p></CardContent></Card>; }

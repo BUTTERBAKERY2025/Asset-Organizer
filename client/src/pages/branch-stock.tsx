@@ -51,6 +51,9 @@ type WarehouseItem = {
   currentStock: number;
 };
 
+const decimalInput = (value: string) => value === "" || /^\d*(?:\.\d{0,6})?$/.test(value);
+const displayQuantity = (value: number) => Number.isFinite(value) ? value.toFixed(6).replace(/\.?0+$/, "") : "0";
+
 const CATEGORY_LABELS = {
   raw: { ar: "مواد خام", en: "Raw Materials" },
   consumable: { ar: "مستهلكات", en: "Consumables" },
@@ -69,8 +72,8 @@ export default function BranchStockPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [showLowStock, setShowLowStock] = useState(false);
   const [editingItem, setEditingItem] = useState<BranchStockItem | null>(null);
-  const [editQuantity, setEditQuantity] = useState(0);
-  const [editConsumption, setEditConsumption] = useState(0);
+  const [editQuantity, setEditQuantity] = useState("");
+  const [editConsumption, setEditConsumption] = useState("");
 
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -166,8 +169,8 @@ export default function BranchStockPage() {
 
   const handleEdit = (item: BranchStockItem) => {
     setEditingItem(item);
-    setEditQuantity(item.currentQuantity);
-    setEditConsumption(item.dailyConsumption);
+    setEditQuantity(displayQuantity(item.currentQuantity));
+    setEditConsumption(displayQuantity(item.dailyConsumption));
   };
 
   const selectedBranchData = branches.find(b => b.id === selectedBranch);
@@ -227,7 +230,7 @@ export default function BranchStockPage() {
                         variant="outline" 
                         className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/40"
                       >
-                        {isRTL ? item.itemName : (item.itemNameEn || item.itemName)}: {item.currentQuantity} {item.unit}
+                        {isRTL ? item.itemName : (item.itemNameEn || item.itemName)}: {displayQuantity(item.currentQuantity)} {item.unit}
                       </Badge>
                     ))}
                     {lowStockItems.length > 5 && (
@@ -337,13 +340,13 @@ export default function BranchStockPage() {
                                 </Badge>
                               </TableCell>
                               <TableCell className="font-mono text-xs sm:text-sm">
-                                {item.currentQuantity} {item.unit}
+                                 {displayQuantity(item.currentQuantity)} {item.unit}
                               </TableCell>
                               <TableCell className="hidden md:table-cell font-mono text-xs sm:text-sm text-muted-foreground">
-                                {item.minStockLevel} {item.unit}
+                                 {displayQuantity(item.minStockLevel || 0)} {item.unit}
                               </TableCell>
                               <TableCell className="hidden lg:table-cell font-mono text-xs sm:text-sm">
-                                {item.dailyConsumption} {item.unit}/{isRTL ? "يوم" : "day"}
+                                 {displayQuantity(item.dailyConsumption)} {item.unit}/{isRTL ? "يوم" : "day"}
                               </TableCell>
                               <TableCell>
                                 <Badge className={`${status.color} text-white text-[10px] sm:text-xs`}>
@@ -388,10 +391,11 @@ export default function BranchStockPage() {
               <div className="space-y-2">
                 <Label>{isRTL ? "الكمية الحالية" : "Current Quantity"}</Label>
                 <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    value={editQuantity}
-                    onChange={(e) => setEditQuantity(parseInt(e.target.value) || 0)}
+                    <Input
+                      type="number"
+                      step="0.000001"
+                      value={editQuantity}
+                      onChange={(e) => { if (decimalInput(e.target.value)) setEditQuantity(e.target.value); }}
                     min={0}
                     data-testid="input-edit-quantity"
                   />
@@ -403,19 +407,20 @@ export default function BranchStockPage() {
                 <div className="flex items-center gap-2">
                   <Input
                     type="number"
+                    step="0.000001"
                     value={editConsumption}
-                    onChange={(e) => setEditConsumption(parseInt(e.target.value) || 0)}
+                    onChange={(e) => { if (decimalInput(e.target.value)) setEditConsumption(e.target.value); }}
                     min={0}
                     data-testid="input-edit-consumption"
                   />
                   <span className="text-muted-foreground">{editingItem?.unit}/{isRTL ? "يوم" : "day"}</span>
                 </div>
               </div>
-              {editingItem && editQuantity > 0 && editConsumption > 0 && (
+              {editingItem && Number(editQuantity) > 0 && Number(editConsumption) > 0 && (
                 <div className="p-3 bg-muted rounded-lg">
                   <p className="text-sm text-muted-foreground">
                     {isRTL ? "يكفي لـ" : "Sufficient for"}: 
-                    <span className="font-bold mx-1">{Math.floor(editQuantity / editConsumption)}</span>
+                    <span className="font-bold mx-1">{Math.floor(Number(editQuantity) / Number(editConsumption))}</span>
                     {isRTL ? "يوم" : "days"}
                   </p>
                 </div>
@@ -431,8 +436,8 @@ export default function BranchStockPage() {
                     updateStockMutation.mutate({
                       branchId: selectedBranch,
                       itemId: editingItem.itemId,
-                      quantity: editQuantity,
-                      dailyConsumption: editConsumption,
+                      quantity: Number(editQuantity),
+                      dailyConsumption: Number(editConsumption),
                     });
                   }
                 }}

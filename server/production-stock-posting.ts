@@ -9,6 +9,10 @@ import {
   products,
   type FinishedGoodsInventory,
 } from "@shared/schema";
+import {
+  CentralKitchenBatchMaterialsError,
+  consumeRecipeBackedBatchMaterials,
+} from "./central-kitchen-batch-materials";
 
 type Transaction = any;
 
@@ -113,6 +117,20 @@ export async function postProductionBatchToStock(
     eq(finishedGoodsInventory.productionDate, batch.productionDate),
     eq(finishedGoodsInventory.unit, unit),
   );
+  // Validate/safely replay the material ledger before considering an existing
+  // finished-goods log. A malformed recipe_backed=true batch must never hide
+  // behind an output replay and silently bypass its required snapshot.
+  try {
+    await consumeRecipeBackedBatchMaterials(tx, batch, { id: userId, name: userName });
+  } catch (error) {
+    // All production finishing callers already propagate this typed error.
+    // Keep material stock failures explicit rather than letting alternate
+    // finish routes turn a safe 409 rejection into a generic 500.
+    if (error instanceof CentralKitchenBatchMaterialsError) {
+      throw new ProductionStockPostingError(error.message, error.status);
+    }
+    throw error;
+  }
   const [priorLog] = await tx.select({ id: productionInventoryLogs.id })
     .from(productionInventoryLogs)
     .where(eq(productionInventoryLogs.batchId, batch.id))

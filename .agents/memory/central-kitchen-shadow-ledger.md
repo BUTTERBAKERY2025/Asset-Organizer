@@ -25,9 +25,9 @@ Catalog linkage must preserve both prepared-product and warehouse-material ident
 
 **How to apply:** Keep source-specific identities through original/substitute allocations. Substitute quantities remain expressed in the requested unit by the established workflow, not automatically converted from catalog units. Immutable shadow rows cannot support FK `ON DELETE SET NULL`; use a deletion restriction for new catalog references.
 
-For real stock, substitute catalog units must actually match the original stock unit; the pilot's label-only rule is not a conversion mechanism. Reject unsupported fractional stock movements instead of rounding.
+For real stock, substitute catalog units must actually match the original stock unit; the pilot's label-only rule is not a conversion mechanism. Materials support up to six decimal places; finished-product counts remain whole. Reject unsupported precision instead of rounding.
 
-**Why:** Existing authoritative balances use integer quantities and have no conversion recipes. A permissive shadow allocation cannot safely become a real debit.
+**Why:** The user explicitly authorized fractional material inventory and recipe-driven production on 2026-09-12. This did not authorize inferred unit conversions or fractional finished-product counts. A permissive shadow allocation cannot safely become a real debit.
 
 Production demand display and batch creation must use the same deterministic allocation of shared stock across approved real requests.
 

@@ -136,6 +136,16 @@ import { registerLoyaltyRoutes, redeemLoyaltyInTx } from "./loyalty-routes";
 import { registerWalletRoutes } from "./wallet-routes";
 import { registerSecurityRoutes } from "./security-routes";
 import { registerCentralKitchenRecipeRoutes } from "./central-kitchen-recipes";
+import {
+  CentralKitchenBatchMaterialsError,
+  getBatchMaterialRequirements,
+  previewCentralKitchenMaterialRequirements,
+  snapshotRecipeBackedBatchMaterials,
+} from "./central-kitchen-batch-materials";
+import {
+  centralKitchenBatchRequirementsParamsSchema,
+  centralKitchenMaterialRequirementsQuerySchema,
+} from "@shared/central-kitchen-batch-materials";
 import { apiCacheMiddleware, invalidateCacheForPath, invalidateCache, jsonSlimMiddleware } from "./api-cache";
 import { registerBatchRoute } from "./batch-api";
 import {
@@ -7832,6 +7842,57 @@ export async function registerRoutes(
     },
   );
 
+  // Recipe requirements are a production contract, intentionally separate
+  // from order inventory availability. They never reserve or debit stock.
+  app.get(
+    "/api/central-kitchen/production/requirements",
+    isAuthenticated,
+    requirePermission("production", "view"),
+    async (req, res) => {
+      const parsed = centralKitchenMaterialRequirementsQuerySchema.safeParse(req.query);
+      if (!parsed.success) return res.status(400).json({ error: "معايير احتياج المواد غير صالحة" });
+      if (!(await canAccessBranch(req, parsed.data.kitchenId))) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا المطبخ" });
+      }
+      const [kitchen] = await db.select({ id: branches.id }).from(branches).where(and(
+        eq(branches.id, parsed.data.kitchenId),
+        eq(branches.isCentralKitchen, true),
+      )).limit(1);
+      if (!kitchen) return res.status(404).json({ error: "المطبخ المركزي غير موجود" });
+      try {
+        return res.json(await previewCentralKitchenMaterialRequirements(db, parsed.data));
+      } catch (error) {
+      if (error instanceof CentralKitchenBatchMaterialsError) {
+        return res.status(error.status).json({ error: error.message });
+      }
+        throw error;
+      }
+    },
+  );
+
+  app.get(
+    "/api/central-kitchen/production/batches/:batchId/material-requirements",
+    isAuthenticated,
+    requirePermission("production", "view"),
+    async (req, res) => {
+      const parsed = centralKitchenBatchRequirementsParamsSchema.safeParse(req.params);
+      if (!parsed.success) return res.status(400).json({ error: "معرف الدفعة غير صالح" });
+      try {
+        const requirements = await getBatchMaterialRequirements(db, parsed.data.batchId);
+        if (!requirements) return res.status(404).json({ error: "دفعة الإنتاج غير موجودة" });
+        if (!(await canAccessBranch(req, requirements.kitchenId))) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذه الدفعة" });
+        }
+        return res.json(requirements);
+      } catch (error) {
+        if (error instanceof CentralKitchenBatchMaterialsError) {
+          return res.status(error.status).json({ error: error.message });
+        }
+        throw error;
+      }
+    },
+  );
+
   app.get(
     "/api/central-kitchen-orders/operations",
     isAuthenticated,
@@ -7930,6 +7991,9 @@ export async function registerRoutes(
       const itemId = centralKitchenOrderIdSchema.safeParse(req.params.itemId);
       const body = centralKitchenLinkedBatchSchema.safeParse(req.body);
       if (!orderId.success || !itemId.success || !body.success) return res.status(400).json({ error: "بيانات دفعة الإنتاج غير صالحة" });
+      if (body.data.recipeBacked && !body.data.idempotencyKey) {
+        return res.status(400).json({ error: "الدفعة المرتبطة بالوصفة تتطلب idempotencyKey ضمن بيانات المتصفح" });
+      }
       const key = centralKitchenRequestKey(req, body.data.idempotencyKey);
       if (!key.key) return res.status(400).json({ error: key.error });
       const actor = getCurrentUser(req);
@@ -7938,6 +8002,7 @@ export async function registerRoutes(
         itemId: itemId.data,
         quantity: body.data.quantity,
         productionDate: body.data.productionDate,
+        recipeBacked: body.data.recipeBacked,
       })).digest("hex");
       const [keyReplay] = await db.select({
         batch: dailyProductionBatches,
@@ -7956,8 +8021,9 @@ export async function registerRoutes(
         if (keyReplay.batch.centralKitchenPayloadFingerprint !== batchFingerprint) {
           return res.status(409).json({ error: "مفتاح عدم التكرار مستخدم لدفعة مختلفة" });
         }
+        const replaySnapshot = await getBatchMaterialRequirements(db, keyReplay.batch.id);
         res.set("Idempotent-Replayed", "true");
-        return res.json(keyReplay.batch);
+        return res.json({ ...keyReplay.batch, recipeBacked: replaySnapshot?.recipeBacked === true });
       }
       const [item] = await db.select({
         id: centralKitchenOrderItems.id,
@@ -7999,10 +8065,13 @@ export async function registerRoutes(
             eq(dailyProductionBatches.productionDate, body.data.productionDate),
           )).limit(1);
           if (existing) {
-            if (existing.quantity !== body.data.quantity || existing.productId !== lockedItem.productId) {
+            const existingSnapshot = await getBatchMaterialRequirements(tx, existing.id);
+            if (existing.quantity !== body.data.quantity
+              || existing.productId !== lockedItem.productId
+              || existingSnapshot.recipeBacked !== body.data.recipeBacked) {
               throw new CentralKitchenLiveError("توجد دفعة مختلفة لهذا البند في التاريخ نفسه", 409);
             }
-            return { batch: existing, replayed: true };
+            return { batch: existing, replayed: true, recipeBacked: existingSnapshot.recipeBacked };
           }
           const [allocatedDemands, [product]] = await Promise.all([
             getAllocatedKitchenDemands(
@@ -8034,12 +8103,27 @@ export async function registerRoutes(
             centralKitchenPayloadFingerprint: batchFingerprint,
             recordedBy: actor.id,
           }).returning();
-          return { batch: created, replayed: false };
+          if (body.data.recipeBacked) {
+            await snapshotRecipeBackedBatchMaterials(tx, {
+              batchId: created.id,
+              kitchenId: lockedOrder.centralKitchenId,
+              productId: lockedItem.productId!,
+              batchQuantity: body.data.quantity,
+              batchUnit: lockedItem.unit,
+            });
+          }
+          return { batch: created, replayed: false, recipeBacked: body.data.recipeBacked };
         });
         if (result.replayed) res.set("Idempotent-Replayed", "true");
-        return res.status(result.replayed ? 200 : 201).json(result.batch);
+        return res.status(result.replayed ? 200 : 201).json({
+          ...result.batch,
+          recipeBacked: result.recipeBacked,
+        });
       } catch (error: any) {
         if (error instanceof CentralKitchenLiveError) {
+          return res.status(error.status).json({ error: error.message });
+        }
+        if (error instanceof CentralKitchenBatchMaterialsError) {
           return res.status(error.status).json({ error: error.message });
         }
         if ((error?.code || error?.cause?.code) === "23505") {
@@ -8047,10 +8131,12 @@ export async function registerRoutes(
             eq(dailyProductionBatches.centralKitchenOrderItemId, item.id),
             eq(dailyProductionBatches.productionDate, body.data.productionDate),
           )).limit(1);
+          const replaySnapshot = replay ? await getBatchMaterialRequirements(db, replay.id) : null;
           if (replay?.quantity === body.data.quantity
-            && replay.centralKitchenPayloadFingerprint === batchFingerprint) {
+            && replay.centralKitchenPayloadFingerprint === batchFingerprint
+            && replaySnapshot?.recipeBacked === body.data.recipeBacked) {
             res.set("Idempotent-Replayed", "true");
-            return res.json(replay);
+            return res.json({ ...replay, recipeBacked: replaySnapshot.recipeBacked });
           }
         }
         throw error;
@@ -21862,6 +21948,9 @@ export async function registerRoutes(
       if (error instanceof ProductionStockPostingError) {
         return res.status(error.status).json({ error: error.message });
       }
+        if (error instanceof CentralKitchenBatchMaterialsError) {
+          return res.status(error.status).json({ error: error.message });
+        }
       res.status(500).json({ error: "فشل في إكمال الدفعة" });
     }
   });
@@ -21931,6 +22020,11 @@ export async function registerRoutes(
   app.post("/api/daily-production/batches", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
     try {
       const user = (req as any).user;
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, "recipeBacked")) {
+        return res.status(400).json({
+          error: "ربط الوصفة متاح فقط عند إنشاء دفعة مرتبطة بطلب المطبخ المركزي",
+        });
+      }
       const { branchId, productId, productName, productCategory, quantity, unit, destination, notes, producedAt, productionDate, status, chefId, chefName, sourceBatchId } = req.body;
       
       // Validate required fields
@@ -22003,6 +22097,9 @@ export async function registerRoutes(
       if (isNaN(id)) {
         return res.status(400).json({ error: "معرف غير صالح" });
       }
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, "recipeBacked")) {
+        return res.status(400).json({ error: "لا يمكن تغيير ربط الوصفة لدفعة الإنتاج" });
+      }
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req)) {
@@ -22056,6 +22153,9 @@ export async function registerRoutes(
       res.json({ ...result.batch, transferred: result.transferred });
     } catch (error) {
       console.error("Error updating batch:", error);
+      if (error instanceof ProductionStockPostingError || error instanceof CentralKitchenBatchMaterialsError) {
+        return res.status(error.status).json({ error: error.message });
+      }
       res.status(500).json({ error: "فشل في تحديث دفعة الإنتاج" });
     }
   });
@@ -35114,6 +35214,9 @@ export async function registerRoutes(
       if (error instanceof CentralKitchenLiveError) {
         return res.status(error.status).json({ error: error.message });
       }
+      if (error instanceof ProductionStockPostingError || error instanceof CentralKitchenBatchMaterialsError) {
+        return res.status(error.status).json({ error: error.message });
+      }
       console.error("Error adding production to inventory:", error);
       // Return 400 for not found or validation errors
       const isClientError = error.message?.includes('غير موجودة');
@@ -35281,6 +35384,185 @@ export async function registerRoutes(
 
   // ==================== Warehouse Management Routes ====================
 
+  // Warehouse quantities are decimal values (up to six places).  Keep this
+  // validation at the HTTP boundary so invalid values cannot reach a storage
+  // method which may already have performed part of a multi-row operation.
+  type WarehouseQuantityMode = "any" | "nonnegative" | "positive";
+  const parseWarehouseQuantity = (
+    value: unknown,
+    mode: WarehouseQuantityMode = "nonnegative"
+  ): number | undefined => {
+    if (typeof value !== "number" && typeof value !== "string") return undefined;
+
+    const rawValue = String(value).trim();
+    if (!rawValue || !/^[+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eE][+-]?\d+)?$/.test(rawValue)) {
+      return undefined;
+    }
+
+    const quantity = Number(rawValue);
+    if (
+      !Number.isFinite(quantity)
+      || Math.abs(quantity) > 1_000_000_000
+      || (mode !== "any" && quantity < 0)
+      || (mode === "positive" && quantity <= 0)
+    ) {
+      return undefined;
+    }
+
+    // Match the shared material-quantity scale and normalize harmless binary
+    // floating-point tails (for example, 0.1 + 0.2) without rounding actual
+    // seventh-decimal input.
+    const scaled = quantity * 1_000_000;
+    const rounded = Math.round(scaled);
+    if (
+      !Number.isSafeInteger(rounded)
+      || Math.abs(scaled - rounded) > 0.0000001
+    ) {
+      return undefined;
+    }
+
+    return rounded / 1_000_000;
+  };
+
+  const normalizeWarehouseQuantityFields = (
+    value: Record<string, unknown>,
+    fields: readonly string[],
+    mode: WarehouseQuantityMode = "nonnegative",
+    required = false,
+    allowNull = true
+  ): Record<string, unknown> | undefined => {
+    const normalized = { ...value };
+    for (const field of fields) {
+      const hasField = Object.prototype.hasOwnProperty.call(value, field);
+      if (!hasField) {
+        if (required) return undefined;
+        continue;
+      }
+      if (value[field] === null) {
+        if (required || !allowNull) return undefined;
+        continue;
+      }
+      if (value[field] === undefined) {
+        if (required) return undefined;
+        continue;
+      }
+      const quantity = parseWarehouseQuantity(value[field], mode);
+      if (quantity === undefined) return undefined;
+      normalized[field] = quantity;
+    }
+    return normalized;
+  };
+
+  const warehouseQuantityFields = [
+    "currentStock",
+    "minStockLevel",
+    "maxStockLevel",
+    "reorderPoint",
+  ] as const;
+  const invalidWarehouseQuantityMessage = "الكميات يجب أن تكون أرقاماً منتهية غير سالبة وبحد أقصى 6 منازل عشرية";
+
+  // Storage owns delivery idempotency and the debit/credit transaction.  Keep
+  // its business markers as HTTP conflicts instead of turning a safe retry or
+  // a stock race into a misleading 500.
+  const getWarehouseTransferErrorStatus = (error: unknown): number | undefined => {
+    const candidate = (error && typeof error === "object") ? error as Record<string, unknown> : {};
+    for (const value of [candidate.statusCode, candidate.status, candidate.httpStatus, candidate.httpCode]) {
+      const status = typeof value === "number" ? value : Number(value);
+      if ([400, 404, 409].includes(status)) return status;
+    }
+
+    const marker = [
+      candidate.code,
+      candidate.reason,
+      candidate.errorCode,
+      candidate.type,
+      candidate.name,
+      candidate.message,
+      error,
+    ].filter((value) => value !== undefined && value !== null).join(" ").toLowerCase();
+
+    if (/not found|does not exist|غير موجود/.test(marker)) return 404;
+    if (
+      (/already|duplicate|idempot|conflict|concurrent|retry/.test(marker)
+        && /deliver|receive|confirm|transfer|processed|handled/.test(marker))
+      || /تم (?:استلام|تأكيد الاستلام).*(?:مسبق|سابق)|(?:مستلم|مؤكد).*(?:مسبق|سابق)|(?:إعادة|retry).*(?:تسليم|استلام|تأكيد|deliver|receive|confirm)/.test(marker)
+    ) {
+      return 409;
+    }
+    if (/cannot modify|لا يمكن تعديل الكميات|بعد إرسال الشحنة/.test(marker)) return 409;
+    if (/no items|empty transfer|لا توجد عناصر|بدون عناصر/.test(marker)) return 409;
+    if (/insufficient|not enough|stock.*(?:short|insufficient)|reserved|غير كاف|نقص المخزون|المخزون.*غير كاف|محجوز|لا يمكن خفض مخزون/.test(marker)) {
+      return 409;
+    }
+    if (/invalid|quantity|qty|كمية|decimal|finite|negative|positive|غير صالح|غير صحيحة/.test(marker)) {
+      return 400;
+    }
+    return undefined;
+  };
+
+  const mainWarehouseBranchId = "main_warehouse";
+  const warehouseTransferStatuses = new Set([
+    "pending",
+    "approved",
+    "rejected",
+    "in_transit",
+    "delivered",
+    "cancelled",
+  ]);
+  const warehouseTransferNextStatuses: Record<string, readonly string[]> = {
+    pending: ["approved", "rejected", "cancelled"],
+    approved: ["in_transit", "cancelled"],
+    in_transit: ["delivered"],
+  };
+
+  // A warehouse source is identified by the immutable branch sentinel, not by
+  // a client-supplied sourceType.  Warehouse managers must be assigned to the
+  // warehouse branch (and retain the normal warehouse permission middleware);
+  // branch access alone must not grant approval/dispatch rights.
+  const canManageWarehouseSource = async (req: any): Promise<boolean> => {
+    if (isUserAdmin(req)) return true;
+    const user = req.currentUser;
+    if (!user || user.branchId !== mainWarehouseBranchId) return false;
+    return await canAccessBranch(req, mainWarehouseBranchId);
+  };
+
+  const canAccessWarehouseTransferSource = async (
+    req: any,
+    sourceBranchId: string | null | undefined,
+  ): Promise<boolean> => {
+    if (isUserAdmin(req)) return true;
+    if (!sourceBranchId) return false;
+    if (sourceBranchId === mainWarehouseBranchId) {
+      return await canManageWarehouseSource(req);
+    }
+    return await canAccessBranch(req, sourceBranchId);
+  };
+
+  const canAccessWarehouseTransferDestination = async (
+    req: any,
+    destinationBranchId: string | null | undefined,
+  ): Promise<boolean> => {
+    if (isUserAdmin(req)) return true;
+    if (!destinationBranchId) return false;
+    return await canAccessBranch(req, destinationBranchId);
+  };
+
+  const isValidWarehouseTransferStateChange = (
+    currentStatus: string,
+    nextStatus: string,
+  ): boolean => {
+    // Same-state retries are safe no-ops in the locked storage worker.  Keep
+    // cancellation creation-only/pre-dispatch and pending creation-only.
+    if (
+      currentStatus === nextStatus
+      && nextStatus !== "pending"
+      && nextStatus !== "cancelled"
+    ) {
+      return true;
+    }
+    return warehouseTransferNextStatuses[currentStatus]?.includes(nextStatus) ?? false;
+  };
+
   // Warehouse Dashboard Stats
   app.get("/api/warehouse/dashboard-stats", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
     try {
@@ -35396,8 +35678,18 @@ export async function registerRoutes(
   app.post("/api/warehouse/items", isAuthenticated, requirePermission("warehouse", "create"), async (req, res) => {
     try {
       const user = req.currentUser;
+      if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+        return res.status(400).json({ error: "بيانات المادة غير صالحة" });
+      }
+      const normalizedBody = normalizeWarehouseQuantityFields(
+        req.body as Record<string, unknown>,
+        warehouseQuantityFields
+      );
+      if (!normalizedBody) {
+        return res.status(400).json({ error: invalidWarehouseQuantityMessage });
+      }
       const item = await storage.createWarehouseItem({
-        ...req.body,
+        ...normalizedBody,
         createdBy: user?.id
       });
       res.status(201).json(item);
@@ -35409,7 +35701,17 @@ export async function registerRoutes(
 
   app.put("/api/warehouse/items/:id", isAuthenticated, requirePermission("warehouse", "edit"), async (req, res) => {
     try {
-      const item = await storage.updateWarehouseItem(parseInt(req.params.id), req.body);
+      if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+        return res.status(400).json({ error: "بيانات المادة غير صالحة" });
+      }
+      const normalizedBody = normalizeWarehouseQuantityFields(
+        req.body as Record<string, unknown>,
+        warehouseQuantityFields
+      );
+      if (!normalizedBody) {
+        return res.status(400).json({ error: invalidWarehouseQuantityMessage });
+      }
+      const item = await storage.updateWarehouseItem(parseInt(req.params.id), normalizedBody as any);
       if (!item) {
         return res.status(404).json({ error: "المادة غير موجودة" });
       }
@@ -35465,17 +35767,34 @@ export async function registerRoutes(
       
       const user = req.currentUser;
       const { quantity, dailyConsumption } = req.body;
+      const normalizedQuantity = parseWarehouseQuantity(quantity);
+      const normalizedDailyConsumption = dailyConsumption === undefined
+        ? undefined
+        : parseWarehouseQuantity(dailyConsumption);
+      if (normalizedQuantity === undefined || (
+        dailyConsumption !== undefined &&
+        normalizedDailyConsumption === undefined
+      )) {
+        return res.status(400).json({ error: invalidWarehouseQuantityMessage });
+      }
       const stock = await storage.updateBranchStock(
         branchId,
         parseInt(req.params.itemId),
-        quantity,
-        dailyConsumption,
+        normalizedQuantity,
+        normalizedDailyConsumption,
         user?.id
       );
       res.json(stock);
     } catch (error) {
       console.error("Error updating branch stock:", error);
-      res.status(500).json({ error: "فشل في تحديث مخزون الفرع" });
+      const statusCode = getWarehouseTransferErrorStatus(error) ?? 500;
+      res.status(statusCode).json({
+        error: statusCode === 409
+          ? "تعذر تحديث مخزون الفرع بسبب تعارض أو كمية محجوزة"
+          : statusCode === 400
+            ? invalidWarehouseQuantityMessage
+            : "فشل في تحديث مخزون الفرع",
+      });
     }
   });
 
@@ -35505,12 +35824,21 @@ export async function registerRoutes(
       }
       
       const transfers = await storage.getMaterialTransfers(filters);
+      // Storage's legacy filter accepts one branch; enforce multi-branch
+      // visibility here as well so an explicit branch-access list never falls
+      // back to an unfiltered transfer result.
+      const visibleTransfers = branchFilter.branchIds
+        ? transfers.filter((transfer) =>
+            (!!transfer.sourceBranchId && branchFilter.branchIds!.includes(transfer.sourceBranchId))
+            || (!!transfer.destinationBranchId && branchFilter.branchIds!.includes(transfer.destinationBranchId))
+          )
+        : transfers;
       
       // Enrich transfers with branch names
       const branches = await storage.getAllBranches();
       const branchMap = new Map(branches.map(b => [b.id, b.name]));
       
-      const enrichedTransfers = transfers.map(t => ({
+      const enrichedTransfers = visibleTransfers.map(t => ({
         ...t,
         sourceBranchName: t.sourceBranchId === "main_warehouse" 
           ? "المستودع الرئيسي" 
@@ -35595,23 +35923,104 @@ export async function registerRoutes(
   app.post("/api/warehouse/material-transfers", isAuthenticated, requirePermission("warehouse", "create"), async (req, res) => {
     try {
       const user = req.currentUser;
-      const { items, ...transferData } = req.body;
-      
-      // SECURITY: Apply branch filter
-      const branchFilter = getEffectiveBranchFilter(req, transferData.sourceBranchId);
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const {
+        items,
+        sourceBranchId: requestedSourceBranchId,
+        destinationBranchId: requestedDestinationBranchId,
+        requestId,
+        transferDate,
+        notes,
+      } = body;
+      if (
+        typeof requestedSourceBranchId !== "string"
+        || !requestedSourceBranchId
+        || typeof requestedDestinationBranchId !== "string"
+        || !requestedDestinationBranchId
+        || requestedSourceBranchId === requestedDestinationBranchId
+      ) {
+        return res.status(400).json({ error: "يجب تحديد مصدر ووجهة تحويل صالحين" });
+      }
 
-      if (!branchFilter.hasAccess) {
-        return res.status(403).json({ error: "لا يمكنك إنشاء تحويل من فرع غير فرعك" });
+      // sourceType is derived from the canonical source sentinel.  Never trust
+      // a client sourceType (or source name) to turn a branch debit into a
+      // warehouse debit.
+      const sourceIsWarehouse = requestedSourceBranchId === mainWarehouseBranchId;
+      const sourceType = sourceIsWarehouse ? "warehouse" : "branch";
+      const sourceAccess = await canAccessWarehouseTransferSource(req, requestedSourceBranchId);
+      const destinationAccess = await canAccessWarehouseTransferDestination(req, requestedDestinationBranchId);
+      if (!isUserAdmin(req)) {
+        // Branches may submit requests from the main warehouse, but they may
+        // only request delivery to a branch they are authorized to represent.
+        // A warehouse manager may still create a warehouse transfer through
+        // the normal source-side policy.
+        if (sourceIsWarehouse ? (!sourceAccess && !destinationAccess) : !sourceAccess) {
+          return res.status(403).json({ error: "غير مصرح بإنشاء هذا التحويل" });
+        }
+      }
+
+      const normalizedItems: any[] = [];
+      if (items !== undefined) {
+        if (!Array.isArray(items)) {
+          return res.status(400).json({ error: "يجب توفير بنود التحويل في قائمة" });
+        }
+        for (const rawItem of items) {
+          if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) {
+            return res.status(400).json({ error: invalidWarehouseQuantityMessage });
+          }
+          const withQuantity = normalizeWarehouseQuantityFields(
+            rawItem as Record<string, unknown>,
+            ["quantity"],
+            "positive",
+            true
+          );
+          const normalizedItem = withQuantity && normalizeWarehouseQuantityFields(
+            withQuantity,
+            ["originalQuantity"],
+            "positive"
+          );
+          const normalizedOptionalQuantities = normalizedItem && normalizeWarehouseQuantityFields(
+            normalizedItem,
+            ["availableQuantity"]
+          );
+          if (!normalizedOptionalQuantities) {
+            return res.status(400).json({ error: invalidWarehouseQuantityMessage });
+          }
+          // Requesters may not seed receipt, discrepancy, modification, or
+          // other audit columns on a pending transfer.
+          normalizedItems.push({
+            itemId: normalizedOptionalQuantities.itemId,
+            itemName: normalizedOptionalQuantities.itemName,
+            category: normalizedOptionalQuantities.category,
+            unit: normalizedOptionalQuantities.unit,
+            quantity: normalizedOptionalQuantities.quantity,
+            originalQuantity: normalizedOptionalQuantities.originalQuantity,
+            availableQuantity: normalizedOptionalQuantities.availableQuantity,
+            notes: normalizedOptionalQuantities.notes,
+          });
+        }
       }
       
       const transferNumber = await storage.generateMaterialTransferNumber();
+      const normalizedTransferDate = typeof transferDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(transferDate)
+        ? transferDate
+        : new Date().toISOString().split("T")[0];
+      const sanitizedTransferData: any = {
+        requestId: Number.isInteger(requestId) && requestId > 0 ? requestId : undefined,
+        sourceType,
+        sourceBranchId: requestedSourceBranchId,
+        destinationBranchId: requestedDestinationBranchId,
+        transferDate: normalizedTransferDate,
+        status: "pending",
+        notes: typeof notes === "string" ? notes : undefined,
+        createdBy: user?.id,
+        createdByName: [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.username,
+      };
       
       const transfer = await storage.createMaterialTransfer({
-        ...transferData,
+        ...sanitizedTransferData,
         transferNumber,
-        createdBy: user?.id,
-        createdByName: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username
-      }, items || []);
+      }, normalizedItems);
       
       res.status(201).json(transfer);
     } catch (error) {
@@ -35623,34 +36032,108 @@ export async function registerRoutes(
   app.put("/api/warehouse/material-transfers/:id/status", isAuthenticated, requirePermission("warehouse", "edit"), async (req, res) => {
     try {
       const user = req.currentUser;
-      const { status, receiverSignature, ...additionalData } = req.body;
-      
-      if (!['pending', 'approved', 'rejected', 'in_transit', 'delivered', 'cancelled'].includes(status)) {
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const {
+        status,
+        receiverSignature,
+        notes,
+        deliveryNotes,
+        rejectionReason,
+        driverName,
+        vehicleNumber,
+        transferDate,
+      } = body;
+
+      if (typeof status !== "string" || !warehouseTransferStatuses.has(status)) {
         return res.status(400).json({ error: "حالة غير صالحة" });
       }
-      
-      // SECURITY: Verify branch access for non-admin users
-      if (!isUserAdmin(req)) {
-        const existingTransfer = await storage.getMaterialTransferWithItems(parseInt(req.params.id));
-        if (existingTransfer) {
-          const sourceAccess = await canAccessBranch(req, existingTransfer.transfer.sourceBranchId || '');
-          const destAccess = await canAccessBranch(req, existingTransfer.transfer.destinationBranchId || '');
-          if (!sourceAccess && !destAccess) {
-            return res.status(403).json({ error: "غير مصرح بتعديل حالة هذا التحويل" });
-          }
-        }
+
+      const transferId = parseInt(req.params.id);
+      const existingTransfer = await storage.getMaterialTransferWithItems(transferId);
+      if (!existingTransfer) {
+        return res.status(404).json({ error: "التحويل غير موجود" });
       }
-      
-      const updateData: any = { ...additionalData };
-      
-      if (status === 'in_transit') {
+
+      const currentStatus = existingTransfer.transfer.status;
+      const sourceAccess = await canAccessWarehouseTransferSource(
+        req,
+        existingTransfer.transfer.sourceBranchId,
+      );
+      const destinationAccess = await canAccessWarehouseTransferDestination(
+        req,
+        existingTransfer.transfer.destinationBranchId,
+      );
+      const isAdmin = isUserAdmin(req);
+
+      // Approval, rejection, and dispatch are source-side actions.  Delivery
+      // is a destination acknowledgement.  Cancellation is allowed only
+      // before dispatch, by the source or requesting destination.
+      if (status === "approved" || status === "rejected" || status === "in_transit") {
+        if (!isAdmin && !sourceAccess) {
+          return res.status(403).json({ error: "فقط مصدر التحويل يمكنه اعتماد أو إرسال التحويل" });
+        }
+      } else if (status === "delivered") {
+        if (!isAdmin && !destinationAccess) {
+          return res.status(403).json({ error: "فقط الفرع المستلم يمكنه تأكيد الاستلام" });
+        }
+      } else if (status === "cancelled") {
+        if (!isAdmin && !sourceAccess && !destinationAccess) {
+          return res.status(403).json({ error: "غير مصرح بإلغاء هذا التحويل" });
+        }
+      } else {
+        // pending is creation-only; it must never be used to reset a transfer.
+        return res.status(409).json({ error: "لا يمكن إعادة التحويل إلى حالة الانتظار" });
+      }
+
+      if (!isValidWarehouseTransferStateChange(currentStatus, status)) {
+        return res.status(409).json({ error: "لا يمكن تنفيذ انتقال حالة التحويل المطلوب" });
+      }
+      if (status === "cancelled" && currentStatus !== "pending" && currentStatus !== "approved") {
+        return res.status(409).json({ error: "لا يمكن إلغاء التحويل بعد إرسال الشحنة" });
+      }
+      if (status === "cancelled" && currentStatus === "approved" && !isAdmin && !sourceAccess) {
+        return res.status(403).json({ error: "فقط مصدر التحويل يمكنه إلغاء التحويل بعد اعتماده" });
+      }
+
+      // Whitelist mutable workflow fields.  In particular, never pass client
+      // source/destination/items/status or approval/receipt audit columns to
+      // storage through an object spread.
+      const updateData: any = {};
+      if (typeof notes === "string") {
+        updateData.notes = notes;
+      }
+
+      if (status === "approved") {
+        updateData.approvedBy = user?.id;
+        updateData.approvedByName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.username;
+        updateData.approvedAt = new Date();
+      } else if (status === "rejected") {
+        updateData.rejectedBy = user?.id;
+        updateData.rejectedByName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.username;
+        updateData.rejectedAt = new Date();
+        if (typeof rejectionReason === "string") {
+          updateData.rejectionReason = rejectionReason;
+        } else if (typeof notes === "string") {
+          updateData.rejectionReason = notes;
+        }
+      } else if (status === "in_transit") {
         updateData.departureTime = new Date();
-      } else if (status === 'delivered') {
+        if (typeof driverName === "string") updateData.driverName = driverName;
+        if (typeof vehicleNumber === "string") updateData.vehicleNumber = vehicleNumber;
+        if (typeof transferDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(transferDate)) {
+          updateData.transferDate = transferDate;
+        }
+      } else if (status === "delivered") {
         updateData.arrivalTime = new Date();
         updateData.receivedBy = user?.id;
         updateData.receivedByName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username;
-        if (receiverSignature) {
+        if (typeof receiverSignature === "string") {
           updateData.receiverSignature = receiverSignature;
+        }
+        if (typeof deliveryNotes === "string") {
+          updateData.deliveryNotes = deliveryNotes;
+        } else if (typeof notes === "string") {
+          updateData.deliveryNotes = notes;
         }
       }
       
@@ -35659,13 +36142,13 @@ export async function registerRoutes(
       // When delivered, use atomic transaction for status + stock + logs
       if (status === 'delivered') {
         transfer = await storage.deliverMaterialTransferWithStockUpdate(
-          parseInt(req.params.id),
+          transferId,
           updateData,
           user?.id
         );
       } else {
         transfer = await storage.updateMaterialTransferStatus(
-          parseInt(req.params.id),
+          transferId,
           status,
           updateData
         );
@@ -35709,7 +36192,16 @@ export async function registerRoutes(
       res.json(transfer);
     } catch (error) {
       console.error("Error updating transfer status:", error);
-      res.status(500).json({ error: "فشل في تحديث حالة التحويل" });
+      const statusCode = getWarehouseTransferErrorStatus(error) ?? 500;
+      res.status(statusCode).json({
+        error: statusCode === 409
+          ? "تعذر إتمام التسليم بسبب تعارض أو نقص في المخزون"
+          : statusCode === 404
+            ? "التحويل غير موجود"
+            : statusCode === 400
+              ? invalidWarehouseQuantityMessage
+              : "فشل في تحديث حالة التحويل",
+      });
     }
   });
 
@@ -35728,23 +36220,36 @@ export async function registerRoutes(
       if (!isUserAdmin(req)) {
         const existingTransfer = await storage.getMaterialTransferWithItems(parseInt(req.params.id));
         if (existingTransfer) {
-          const hasAccess = await canAccessBranch(req, existingTransfer.transfer.sourceBranchId || '');
+          const hasAccess = await canAccessWarehouseTransferSource(
+            req,
+            existingTransfer.transfer.sourceBranchId,
+          );
           if (!hasAccess) {
             return res.status(403).json({ error: "غير مصرح بتعديل كميات هذا التحويل" });
           }
         }
       }
       
-      // Validate all quantities are positive
-      for (const mod of modifications) {
-        if (mod.newQuantity < 0) {
-          return res.status(400).json({ error: "الكمية يجب أن تكون رقم موجب" });
+      const normalizedModifications: any[] = [];
+      for (const rawModification of modifications) {
+        if (!rawModification || typeof rawModification !== "object" || Array.isArray(rawModification)) {
+          return res.status(400).json({ error: invalidWarehouseQuantityMessage });
         }
+        const normalizedModification = normalizeWarehouseQuantityFields(
+          rawModification as Record<string, unknown>,
+          ["newQuantity"],
+          "positive",
+          true
+        );
+        if (!normalizedModification) {
+          return res.status(400).json({ error: invalidWarehouseQuantityMessage });
+        }
+        normalizedModifications.push(normalizedModification);
       }
       
       const transfer = await storage.modifyTransferQuantities(
         parseInt(req.params.id),
-        modifications,
+        normalizedModifications,
         user?.id || '',
         [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || ''
       );
@@ -35768,7 +36273,17 @@ export async function registerRoutes(
       res.json(transfer);
     } catch (error: any) {
       console.error("Error modifying transfer quantities:", error);
-      console.error("Quantity adjustment error:", error); res.status(400).json({ error: "فشل في تعديل الكميات" });
+      const statusCode = getWarehouseTransferErrorStatus(error) ?? 500;
+      console.error("Quantity adjustment error:", error);
+      res.status(statusCode).json({
+        error: statusCode === 409
+          ? "تعذر تعديل الكميات بسبب تعارض في حالة التحويل أو المخزون"
+          : statusCode === 400
+            ? invalidWarehouseQuantityMessage
+            : statusCode === 404
+              ? "التحويل غير موجود"
+              : "فشل في تعديل الكميات",
+      });
     }
   });
 
@@ -35782,21 +36297,49 @@ export async function registerRoutes(
       if (!receivedItems || !Array.isArray(receivedItems)) {
         return res.status(400).json({ error: "يجب توفير بيانات الاستلام" });
       }
-      
-      // SECURITY: Verify branch access for non-admin users (only destination branch can confirm)
-      if (!isUserAdmin(req)) {
-        const existingTransfer = await storage.getMaterialTransferWithItems(parseInt(req.params.id));
-        if (existingTransfer) {
-          const hasAccess = await canAccessBranch(req, existingTransfer.transfer.destinationBranchId || '');
-          if (!hasAccess) {
-            return res.status(403).json({ error: "فقط الفرع المستلم يمكنه تأكيد الاستلام" });
-          }
+      const normalizedReceivedItems: any[] = [];
+      for (const rawReceivedItem of receivedItems) {
+        if (!rawReceivedItem || typeof rawReceivedItem !== "object" || Array.isArray(rawReceivedItem)) {
+          return res.status(400).json({ error: invalidWarehouseQuantityMessage });
         }
+        const normalizedReceivedItem = normalizeWarehouseQuantityFields(
+          rawReceivedItem as Record<string, unknown>,
+          ["receivedQuantity"],
+          "nonnegative",
+          false,
+          false
+        );
+        if (!normalizedReceivedItem) {
+          return res.status(400).json({ error: invalidWarehouseQuantityMessage });
+        }
+        normalizedReceivedItems.push(normalizedReceivedItem);
+      }
+
+      const transferId = parseInt(req.params.id);
+      const existingTransfer = await storage.getMaterialTransferWithItems(transferId);
+      if (!existingTransfer) {
+        return res.status(404).json({ error: "التحويل غير موجود" });
+      }
+      if (
+        existingTransfer.transfer.status !== "in_transit"
+        && existingTransfer.transfer.status !== "delivered"
+      ) {
+        return res.status(409).json({ error: "لا يمكن تأكيد استلام تحويل غير مرسل" });
+      }
+
+      // SECURITY: delivery is an acknowledgement by the destination branch,
+      // including idempotent retries; source access must never grant it.
+      const destinationAccess = await canAccessWarehouseTransferDestination(
+        req,
+        existingTransfer.transfer.destinationBranchId,
+      );
+      if (!isUserAdmin(req) && !destinationAccess) {
+        return res.status(403).json({ error: "فقط الفرع المستلم يمكنه تأكيد الاستلام" });
       }
       
       const transfer = await storage.confirmMaterialTransferDelivery(
-        parseInt(req.params.id),
-        receivedItems,
+        transferId,
+        normalizedReceivedItems,
         {
           receivedBy: user?.id ?? undefined,
           receivedByName: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || undefined,
@@ -35829,7 +36372,16 @@ export async function registerRoutes(
       res.json(transfer);
     } catch (error) {
       console.error("Error confirming delivery:", error);
-      res.status(500).json({ error: "فشل في تأكيد الاستلام" });
+      const statusCode = getWarehouseTransferErrorStatus(error) ?? 500;
+      res.status(statusCode).json({
+        error: statusCode === 409
+          ? "تعذر تأكيد الاستلام بسبب تعارض أو نقص في المخزون"
+          : statusCode === 404
+            ? "التحويل غير موجود"
+            : statusCode === 400
+              ? invalidWarehouseQuantityMessage
+              : "فشل في تأكيد الاستلام",
+      });
     }
   });
 

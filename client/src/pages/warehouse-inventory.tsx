@@ -54,6 +54,9 @@ const UNITS = [
   { value: "كيس", labelAr: "كيس", labelEn: "Bag" },
 ];
 
+const decimalInput = (value: string) => value === "" || /^\d*(?:\.\d{0,6})?$/.test(value);
+const displayQuantity = (value: number) => Number.isFinite(value) ? value.toFixed(6).replace(/\.?0+$/, "") : "0";
+
 function getCategoryBadge(category: string, isRTL: boolean) {
   const cat = MATERIAL_CATEGORIES.find(c => c.value === category);
   if (!cat) return <Badge variant="outline">{category}</Badge>;
@@ -93,9 +96,9 @@ export default function WarehouseInventoryPage() {
     sku: "",
     category: "raw_materials",
     unit: "كجم",
-    currentStock: 0,
-    minStock: 0,
-    reorderPoint: 0,
+    currentStock: "0",
+    minStock: "0",
+    reorderPoint: "0",
     unitCost: 0,
     notes: "",
   });
@@ -118,6 +121,9 @@ export default function WarehouseInventoryPage() {
     mutationFn: async (data: typeof formData) => {
       const response = await apiRequest("POST", "/api/warehouse/items", {
         ...data,
+        currentStock: Number(data.currentStock),
+        minStock: Number(data.minStock),
+        reorderPoint: Number(data.reorderPoint),
         isActive: true,
       });
       return response.json();
@@ -139,7 +145,12 @@ export default function WarehouseInventoryPage() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: typeof formData }) => {
-      const response = await apiRequest("PUT", `/api/warehouse/items/${id}`, data);
+      const response = await apiRequest("PUT", `/api/warehouse/items/${id}`, {
+        ...data,
+        currentStock: Number(data.currentStock),
+        minStock: Number(data.minStock),
+        reorderPoint: Number(data.reorderPoint),
+      });
       return response.json();
     },
     onSuccess: () => {
@@ -182,9 +193,9 @@ export default function WarehouseInventoryPage() {
       sku: "",
       category: "raw_materials",
       unit: "كجم",
-      currentStock: 0,
-      minStock: 0,
-      reorderPoint: 0,
+       currentStock: "0",
+       minStock: "0",
+       reorderPoint: "0",
       unitCost: 0,
       notes: "",
     });
@@ -198,9 +209,9 @@ export default function WarehouseInventoryPage() {
       sku: item.sku || "",
       category: item.category,
       unit: item.unit,
-      currentStock: item.currentStock,
-      minStock: item.minStock,
-      reorderPoint: item.reorderPoint,
+       currentStock: displayQuantity(item.currentStock),
+       minStock: displayQuantity(item.minStock),
+       reorderPoint: displayQuantity(item.reorderPoint),
       unitCost: item.unitCost || 0,
       notes: item.notes || "",
     });
@@ -306,7 +317,8 @@ export default function WarehouseInventoryPage() {
             type="number"
             min={0}
             value={formData.currentStock}
-            onChange={(e) => setFormData(prev => ({ ...prev, currentStock: parseFloat(e.target.value) || 0 }))}
+            step="0.000001"
+            onChange={(e) => { if (decimalInput(e.target.value)) setFormData(prev => ({ ...prev, currentStock: e.target.value })); }}
             data-testid="input-current-stock"
           />
         </div>
@@ -316,7 +328,8 @@ export default function WarehouseInventoryPage() {
             type="number"
             min={0}
             value={formData.minStock}
-            onChange={(e) => setFormData(prev => ({ ...prev, minStock: parseFloat(e.target.value) || 0 }))}
+            step="0.000001"
+            onChange={(e) => { if (decimalInput(e.target.value)) setFormData(prev => ({ ...prev, minStock: e.target.value })); }}
             data-testid="input-min-stock"
           />
         </div>
@@ -326,7 +339,8 @@ export default function WarehouseInventoryPage() {
             type="number"
             min={0}
             value={formData.reorderPoint}
-            onChange={(e) => setFormData(prev => ({ ...prev, reorderPoint: parseFloat(e.target.value) || 0 }))}
+            step="0.000001"
+            onChange={(e) => { if (decimalInput(e.target.value)) setFormData(prev => ({ ...prev, reorderPoint: e.target.value })); }}
             data-testid="input-reorder"
           />
         </div>
@@ -505,10 +519,10 @@ export default function WarehouseInventoryPage() {
                       <TableCell className="hidden sm:table-cell">{getCategoryBadge(item.category, isRTL)}</TableCell>
                       <TableCell>
                         <span className={`text-xs sm:text-sm ${item.currentStock <= item.reorderPoint ? "text-red-500 font-bold" : ""}`}>
-                          {item.currentStock} {item.unit}
+                           {displayQuantity(item.currentStock)} {item.unit}
                         </span>
                       </TableCell>
-                      <TableCell className="hidden lg:table-cell text-xs sm:text-sm">{item.minStock} {item.unit}</TableCell>
+                       <TableCell className="hidden lg:table-cell text-xs sm:text-sm">{displayQuantity(item.minStock)} {item.unit}</TableCell>
                       <TableCell>{getStockStatus(item, isRTL)}</TableCell>
                       <TableCell className="hidden md:table-cell text-xs sm:text-sm">{item.unitCost ? `${item.unitCost.toFixed(2)} ر.س` : "-"}</TableCell>
                       <TableCell>

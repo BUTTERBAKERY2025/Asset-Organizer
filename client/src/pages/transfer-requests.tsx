@@ -84,6 +84,12 @@ type TransferItem = {
   modificationNotes?: string | null;
 };
 
+const decimalInput = (value: string) => value === "" || /^\d*(?:\.\d{0,6})?$/.test(value);
+const quantityText = (value: number | string | null | undefined) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(6).replace(/\.?0+$/, "") : "0";
+};
+
 const STATUS_OPTIONS = [
   { value: "pending", labelAr: "قيد الانتظار", labelEn: "Pending", color: "bg-yellow-500", icon: Clock },
   { value: "approved", labelAr: "تمت الموافقة", labelEn: "Approved", color: "bg-emerald-500", icon: CheckCircle },
@@ -122,12 +128,13 @@ export default function TransferRequestsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [transferType, setTransferType] = useState<"to_warehouse" | "between_branches">("to_warehouse");
   const [openItemIndex, setOpenItemIndex] = useState<number | null>(null);
+  const shortagePrefillRef = useRef<string | null>(null);
   const [modifyingItems, setModifyingItems] = useState<Array<{ 
     itemId: number; 
     itemName: string;
     originalQuantity: number;
     currentQuantity: number;
-    newQuantity: number; 
+    newQuantity: string;
     unit: string;
     modificationNotes: string 
   }>>([]);
@@ -170,7 +177,7 @@ export default function TransferRequestsPage() {
     destinationBranchId: "",
     destinationBranchName: "",
     notes: "",
-    items: [] as { itemId: number; itemName: string; category: string; quantity: number; availableQuantity: number | null; unit: string; notes: string }[],
+    items: [] as { itemId: number; itemName: string; category: string; quantity: string; availableQuantity: string | null; unit: string; notes: string }[],
   });
 
   // Fetch warehouse items for selection
@@ -185,11 +192,43 @@ export default function TransferRequestsPage() {
     placeholderData: (prev) => prev,
   });
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const destinationBranchId = params.get("destinationBranchId");
+    const warehouseItemId = Number(params.get("warehouseItemId"));
+    const requestedQuantity = params.get("quantity");
+    const availableQuantity = params.get("availableQuantity");
+    if (!destinationBranchId || !Number.isInteger(warehouseItemId) || warehouseItemId <= 0 || !requestedQuantity || !decimalInput(requestedQuantity) || !warehouseItems.length) return;
+    const item = warehouseItems.find(entry => entry.id === warehouseItemId);
+    if (!item) return;
+    const prefillKey = `${destinationBranchId}:${warehouseItemId}:${requestedQuantity}:${availableQuantity || ""}`;
+    if (shortagePrefillRef.current === prefillKey) return;
+    shortagePrefillRef.current = prefillKey;
+    const destination = branches.find(branch => branch.id === destinationBranchId);
+    setNewTransfer(prev => ({
+      ...prev,
+      sourceBranchId: "main_warehouse",
+      sourceBranchName: isRTL ? "المستودع الرئيسي" : "Main Warehouse",
+      destinationBranchId,
+      destinationBranchName: destination?.name || destinationBranchId,
+      items: [{
+        itemId: item.id,
+        itemName: item.name,
+        category: item.category,
+        quantity: requestedQuantity,
+        availableQuantity: availableQuantity && decimalInput(availableQuantity) ? availableQuantity : "0",
+        unit: item.unit,
+        notes: "احتياج مواد وصفة إنتاج",
+      }],
+    }));
+    setIsCreateOpen(true);
+  }, [branches, isRTL, warehouseItems]);
+
   // Add item to transfer
   const addTransferItem = () => {
     setNewTransfer(prev => ({
       ...prev,
-      items: [...prev.items, { itemId: 0, itemName: "", category: "", quantity: 1, availableQuantity: null, unit: "كجم", notes: "" }],
+      items: [...prev.items, { itemId: 0, itemName: "", category: "", quantity: "1", availableQuantity: null, unit: "كجم", notes: "" }],
     }));
   };
 
@@ -244,7 +283,7 @@ export default function TransferRequestsPage() {
   // State for delivery confirmation with received quantities
   const [isDeliveryConfirmOpen, setIsDeliveryConfirmOpen] = useState(false);
   const [deliveryConfirmData, setDeliveryConfirmData] = useState<{
-    receivedItems: Array<{ itemId: number; itemName: string; sentQuantity: number; receivedQuantity: number; unit: string; discrepancyNotes: string }>;
+    receivedItems: Array<{ itemId: number; itemName: string; sentQuantity: number; receivedQuantity: string; unit: string; discrepancyNotes: string }>;
     receiverSignature: string | null;
     deliveryNotes: string;
   }>({
@@ -276,6 +315,11 @@ export default function TransferRequestsPage() {
       const destBranch = branches.find(b => b.id === data.destinationBranchId);
       const response = await apiRequest("POST", "/api/warehouse/material-transfers", {
         ...data,
+        items: data.items.map(item => ({
+          ...item,
+          quantity: Number(item.quantity),
+          availableQuantity: item.availableQuantity === null ? null : Number(item.availableQuantity),
+        })),
         destinationBranchName: destBranch?.name || "",
         status: "pending",
         transferDate: new Date().toISOString().split('T')[0], // Set request date
@@ -402,7 +446,7 @@ export default function TransferRequestsPage() {
           itemName: item.itemName,
           originalQuantity: item.originalQuantity || item.quantity,
           currentQuantity: item.quantity,
-          newQuantity: item.quantity,
+          newQuantity: quantityText(item.quantity),
           unit: item.unit,
           modificationNotes: ""
         })));
@@ -462,7 +506,7 @@ export default function TransferRequestsPage() {
             itemId: item.itemId,
             itemName: item.itemName,
             sentQuantity: item.quantity,
-            receivedQuantity: item.quantity, // Default to sent quantity
+            receivedQuantity: quantityText(item.quantity), // Default to sent quantity
             unit: item.unit,
             discrepancyNotes: ""
           })),
@@ -1083,10 +1127,11 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                           <Input 
                             type="number" 
                             min="0"
+                             step="0.000001"
                             value={item.availableQuantity ?? ""}
                             onChange={(e) => {
-                              const val = e.target.value === "" ? null : parseInt(e.target.value);
-                              updateTransferItem(index, "availableQuantity", val);
+                               const val = e.target.value === "" ? null : e.target.value;
+                               if (val === null || decimalInput(val)) updateTransferItem(index, "availableQuantity", val);
                             }}
                             placeholder={isRTL ? "أدخل الكمية المتوفرة" : "Enter available qty"}
                             className={`text-center font-bold ${item.availableQuantity === null ? 'border-red-500 bg-red-50' : 'border-blue-300 focus:border-blue-500'}`}
@@ -1105,9 +1150,10 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                           </Label>
                           <Input 
                             type="number" 
-                            min="1"
+                             min="0.000001"
+                             step="0.000001"
                             value={item.quantity}
-                            onChange={(e) => updateTransferItem(index, "quantity", parseInt(e.target.value) || 1)}
+                             onChange={(e) => { if (decimalInput(e.target.value)) updateTransferItem(index, "quantity", e.target.value); }}
                             className="border-orange-300 focus:border-orange-500 text-center font-bold"
                             data-testid={`input-qty-${index}`}
                           />
@@ -1123,7 +1169,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                         </div>
                       </div>
                       
-                      {item.availableQuantity !== null && item.quantity > item.availableQuantity && (
+                      {item.availableQuantity !== null && Number(item.quantity) > Number(item.availableQuantity) && (
                         <p className="text-xs text-red-500 flex items-center gap-1 bg-red-50 p-2 rounded">
                           ⚠️ {isRTL ? "الكمية المطلوبة أكبر من المتوفرة!" : "Requested qty exceeds available!"}
                         </p>
@@ -1163,9 +1209,13 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                       toast({ title: isRTL ? "خطأ" : "Error", description: isRTL ? "يجب إدخال الكمية المتوفرة بالفرع لجميع الأصناف" : "Please enter available quantity for all items", variant: "destructive" });
                       return;
                     }
+                    if (newTransfer.items.some(item => !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0 || Number(item.availableQuantity) < 0)) {
+                      toast({ title: isRTL ? "خطأ" : "Error", description: isRTL ? "أدخل كميات موجبة حتى ست منازل عشرية" : "Enter positive quantities with up to 6 decimal places", variant: "destructive" });
+                      return;
+                    }
                     createMutation.mutate(newTransfer);
                   }} 
-                  disabled={!newTransfer.destinationBranchId || !newTransfer.sourceBranchId || newTransfer.items.length === 0 || newTransfer.items.some(item => item.availableQuantity === null) || createMutation.isPending}
+                  disabled={!newTransfer.destinationBranchId || !newTransfer.sourceBranchId || newTransfer.items.length === 0 || newTransfer.items.some(item => item.availableQuantity === null || !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) || createMutation.isPending}
                   data-testid="btn-submit-transfer"
                 >
                   {createMutation.isPending ? (isRTL ? "جاري الإرسال..." : "Submitting...") : (isRTL ? "إرسال الطلب" : "Submit Request")}
@@ -1798,7 +1848,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                     </TableHeader>
                     <TableBody>
                       {deliveryConfirmData.receivedItems.map((item, idx) => {
-                        const diff = item.receivedQuantity - item.sentQuantity;
+                        const diff = Number(item.receivedQuantity) - item.sentQuantity;
                         return (
                           <TableRow key={item.itemId}>
                             <TableCell className="font-medium">
@@ -1810,11 +1860,11 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                               <Input
                                 type="number"
                                 min={0}
+                                step="0.000001"
                                 value={item.receivedQuantity}
                                 onChange={(e) => {
-                                  const newItems = [...deliveryConfirmData.receivedItems];
-                                  newItems[idx].receivedQuantity = parseInt(e.target.value) || 0;
-                                  setDeliveryConfirmData(prev => ({ ...prev, receivedItems: newItems }));
+                                  if (!decimalInput(e.target.value)) return;
+                                  setDeliveryConfirmData(prev => ({ ...prev, receivedItems: prev.receivedItems.map((row, rowIndex) => rowIndex === idx ? { ...row, receivedQuantity: e.target.value } : row) }));
                                 }}
                                 className="w-20 text-center mx-auto"
                                 data-testid={`input-received-qty-${item.itemId}`}
@@ -1846,7 +1896,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                 </div>
                 
                 {/* Summary */}
-                {deliveryConfirmData.receivedItems.some(item => item.receivedQuantity !== item.sentQuantity) && (
+                {deliveryConfirmData.receivedItems.some(item => Number(item.receivedQuantity) !== item.sentQuantity) && (
                   <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 rounded-lg">
                     <p className="text-sm font-medium text-amber-800 dark:text-amber-200 flex items-center gap-2">
                       <AlertTriangle className="w-4 h-4" />
@@ -1891,7 +1941,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                       id: selectedTransfer.id,
                       receivedItems: deliveryConfirmData.receivedItems.map(item => ({
                         itemId: item.itemId,
-                        receivedQuantity: item.receivedQuantity,
+                        receivedQuantity: Number(item.receivedQuantity),
                         discrepancyNotes: item.discrepancyNotes || undefined
                       })),
                       receiverSignature: deliveryConfirmData.receiverSignature,
@@ -1961,11 +2011,11 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                         <Input
                           type="number"
                           min="0"
+                          step="0.000001"
                           value={item.newQuantity}
                           onChange={(e) => {
-                            const newItems = [...modifyingItems];
-                            newItems[idx] = { ...item, newQuantity: parseInt(e.target.value) || 0 };
-                            setModifyingItems(newItems);
+                            if (!decimalInput(e.target.value)) return;
+                            setModifyingItems(current => current.map((row, rowIndex) => rowIndex === idx ? { ...row, newQuantity: e.target.value } : row));
                           }}
                           className="w-20 text-center mx-auto"
                           data-testid={`input-qty-${item.itemId}`}
@@ -1990,19 +2040,19 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
               </Table>
               
               {/* Summary of changes */}
-              {modifyingItems.some((item) => item.newQuantity !== item.originalQuantity) && (
+              {modifyingItems.some((item) => Number(item.newQuantity) !== item.originalQuantity) && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                   <div className="text-sm font-medium text-blue-800 mb-2">
                     {isRTL ? "ملخص التعديلات:" : "Modifications Summary:"}
                   </div>
                   <div className="space-y-1">
-                    {modifyingItems.filter((item) => item.newQuantity !== item.originalQuantity).map((item) => (
+                    {modifyingItems.filter((item) => Number(item.newQuantity) !== item.originalQuantity).map((item) => (
                       <div key={item.itemId} className="text-sm text-blue-700 flex justify-between">
                         <span>{item.itemName}</span>
                         <span className="font-mono">
                           {item.originalQuantity} → {item.newQuantity}
-                          <span className={item.newQuantity < item.originalQuantity ? "text-red-600 mr-1" : "text-green-600 mr-1"}>
-                            ({item.newQuantity - item.originalQuantity > 0 ? '+' : ''}{item.newQuantity - item.originalQuantity})
+                          <span className={Number(item.newQuantity) < item.originalQuantity ? "text-red-600 mr-1" : "text-green-600 mr-1"}>
+                            ({Number(item.newQuantity) - item.originalQuantity > 0 ? '+' : ''}{Number(item.newQuantity) - item.originalQuantity})
                           </span>
                         </span>
                       </div>
@@ -2020,10 +2070,10 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                 onClick={() => {
                   if (selectedTransfer) {
                     const changedItems = modifyingItems
-                      .filter((item: any) => item.newQuantity !== item.currentQuantity)
+                      .filter((item: any) => Number(item.newQuantity) !== Number(item.currentQuantity))
                       .map((item: any) => ({
                         itemId: item.itemId,
-                        newQuantity: item.newQuantity,
+                        newQuantity: Number(item.newQuantity),
                         modificationNotes: item.modificationNotes || undefined
                       }));
                     

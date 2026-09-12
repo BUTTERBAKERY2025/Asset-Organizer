@@ -20,6 +20,12 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import {
+  materialQuantitySchema,
+  nonzeroMaterialQuantitySchema,
+  nonnegativeMaterialQuantitySchema,
+  positiveMaterialQuantitySchema,
+} from "./material-quantity";
 
 // Session storage table (required for Replit Auth)
 export const sessions = pgTable(
@@ -4104,6 +4110,9 @@ export const dailyProductionBatches = pgTable("daily_production_batches", {
     .references(() => centralKitchenOrderItems.id, { onDelete: "restrict" }),
   centralKitchenIdempotencyKey: varchar("central_kitchen_idempotency_key", { length: 128 }),
   centralKitchenPayloadFingerprint: varchar("central_kitchen_payload_fingerprint", { length: 64 }),
+  // NULL marks historical/non-recipe batches; recipe-backed batches are set
+  // only by the dedicated snapshot workflow.
+  recipeBacked: boolean("recipe_backed"),
   producedAt: timestamp("produced_at").defaultNow().notNull(),
   productionDate: text("production_date"), // تاريخ الإنتاج بتوقيت المستخدم YYYY-MM-DD
   recordedBy: varchar("recorded_by").references(() => users.id),
@@ -4139,6 +4148,7 @@ export const insertDailyProductionBatchSchema = createInsertSchema(
   centralKitchenOrderItemId: true,
   centralKitchenIdempotencyKey: true,
   centralKitchenPayloadFingerprint: true,
+  recipeBacked: true,
 });
 
 export type DailyProductionBatch = typeof dailyProductionBatches.$inferSelect;
@@ -7719,10 +7729,10 @@ export const warehouseItems = pgTable("warehouse_items", {
   unit: text("unit").notNull().default("كجم"), // كجم، لتر، قطعة، علبة، كرتون
   sku: text("sku"), // رمز الصنف
   barcode: text("barcode"),
-  minStockLevel: integer("min_stock_level").default(0), // الحد الأدنى للتنبيه
-  maxStockLevel: integer("max_stock_level"), // الحد الأقصى
-  reorderPoint: integer("reorder_point"), // نقطة إعادة الطلب
-  currentStock: integer("current_stock").default(0), // المخزون الحالي في المستودع الرئيسي
+  minStockLevel: numeric("min_stock_level", { precision: 18, scale: 6, mode: "number" }).default(0), // الحد الأدنى للتنبيه
+  maxStockLevel: numeric("max_stock_level", { precision: 18, scale: 6, mode: "number" }), // الحد الأقصى
+  reorderPoint: numeric("reorder_point", { precision: 18, scale: 6, mode: "number" }), // نقطة إعادة الطلب
+  currentStock: numeric("current_stock", { precision: 18, scale: 6, mode: "number" }).default(0), // المخزون الحالي في المستودع الرئيسي
   unitPrice: text("unit_price"), // سعر الوحدة
   supplierId: integer("supplier_id"), // المورد الرئيسي
   isActive: boolean("is_active").default(true),
@@ -7735,7 +7745,12 @@ export const warehouseItems = pgTable("warehouse_items", {
   index("idx_warehouse_items_active").on(table.isActive),
 ]);
 
-export const insertWarehouseItemSchema = createInsertSchema(warehouseItems).omit({
+export const insertWarehouseItemSchema = createInsertSchema(warehouseItems, {
+  minStockLevel: nonnegativeMaterialQuantitySchema.nullable().optional(),
+  maxStockLevel: nonnegativeMaterialQuantitySchema.nullable().optional(),
+  reorderPoint: nonnegativeMaterialQuantitySchema.nullable().optional(),
+  currentStock: nonnegativeMaterialQuantitySchema.nullable().optional(),
+}).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -7753,9 +7768,9 @@ export const branchStock = pgTable("branch_stock", {
   itemId: integer("item_id")
     .notNull()
     .references(() => warehouseItems.id),
-  currentQuantity: integer("current_quantity").default(0),
-  reservedQuantity: integer("reserved_quantity").notNull().default(0),
-  dailyConsumption: integer("daily_consumption").default(0), // معدل الاستهلاك اليومي
+  currentQuantity: numeric("current_quantity", { precision: 18, scale: 6, mode: "number" }).default(0),
+  reservedQuantity: numeric("reserved_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  dailyConsumption: numeric("daily_consumption", { precision: 18, scale: 6, mode: "number" }).default(0), // معدل الاستهلاك اليومي
   lastUpdated: timestamp("last_updated").defaultNow().notNull(),
   updatedBy: varchar("updated_by").references(() => users.id),
 }, (table) => [
@@ -7765,7 +7780,11 @@ export const branchStock = pgTable("branch_stock", {
   check("ck_branch_stock_reserved_quantity", sql`${table.reservedQuantity} >= 0 AND ${table.reservedQuantity} <= COALESCE(${table.currentQuantity}, 0)`),
 ]);
 
-export const insertBranchStockSchema = createInsertSchema(branchStock).omit({
+export const insertBranchStockSchema = createInsertSchema(branchStock, {
+  currentQuantity: nonnegativeMaterialQuantitySchema.nullable().optional(),
+  reservedQuantity: nonnegativeMaterialQuantitySchema.optional(),
+  dailyConsumption: nonnegativeMaterialQuantitySchema.nullable().optional(),
+}).omit({
   id: true,
   lastUpdated: true,
 });
@@ -7841,11 +7860,11 @@ export const materialTransferItems = pgTable("material_transfer_items", {
   itemName: text("item_name").notNull(),
   category: text("category").notNull(),
   unit: text("unit").notNull(),
-  quantity: integer("quantity").notNull(), // الكمية المعتمدة للإرسال
-  originalQuantity: integer("original_quantity"), // الكمية المطلوبة الأصلية
-  availableQuantity: integer("available_quantity"), // الكمية المتوفرة وقت الإنشاء
-  receivedQuantity: integer("received_quantity"), // الكمية المستلمة فعلياً
-  discrepancy: integer("discrepancy"), // الفرق (مستلم - مرسل)
+  quantity: numeric("quantity", { precision: 18, scale: 6, mode: "number" }).notNull(), // الكمية المعتمدة للإرسال
+  originalQuantity: numeric("original_quantity", { precision: 18, scale: 6, mode: "number" }), // الكمية المطلوبة الأصلية
+  availableQuantity: numeric("available_quantity", { precision: 18, scale: 6, mode: "number" }), // الكمية المتوفرة وقت الإنشاء
+  receivedQuantity: numeric("received_quantity", { precision: 18, scale: 6, mode: "number" }), // الكمية المستلمة فعلياً
+  discrepancy: numeric("discrepancy", { precision: 18, scale: 6, mode: "number" }), // الفرق (مستلم - مرسل)
   discrepancyNotes: text("discrepancy_notes"), // ملاحظات الفرق (تالف، ناقص، إلخ)
   isModified: boolean("is_modified").default(false), // هل تم تعديل الكمية من مسؤول المستودع؟
   modifiedBy: text("modified_by"), // معرف المعدِّل
@@ -7858,7 +7877,13 @@ export const materialTransferItems = pgTable("material_transfer_items", {
   index("idx_material_transfer_items_item").on(table.itemId),
 ]);
 
-export const insertMaterialTransferItemSchema = createInsertSchema(materialTransferItems).omit({
+export const insertMaterialTransferItemSchema = createInsertSchema(materialTransferItems, {
+  quantity: positiveMaterialQuantitySchema,
+  originalQuantity: positiveMaterialQuantitySchema.nullable().optional(),
+  availableQuantity: nonnegativeMaterialQuantitySchema.nullable().optional(),
+  receivedQuantity: nonnegativeMaterialQuantitySchema.nullable().optional(),
+  discrepancy: materialQuantitySchema.nullable().optional(),
+}).omit({
   id: true,
 });
 
@@ -7874,9 +7899,9 @@ export const warehouseMovementLogs = pgTable("warehouse_movement_logs", {
   branchId: varchar("branch_id")
     .references(() => branches.id),
   movementType: text("movement_type").notNull(), // in, out, adjustment, transfer_in, transfer_out
-  quantity: integer("quantity").notNull(),
-  balanceBefore: integer("balance_before").default(0),
-  balanceAfter: integer("balance_after").default(0),
+  quantity: numeric("quantity", { precision: 18, scale: 6, mode: "number" }).notNull(),
+  balanceBefore: numeric("balance_before", { precision: 18, scale: 6, mode: "number" }).default(0),
+  balanceAfter: numeric("balance_after", { precision: 18, scale: 6, mode: "number" }).default(0),
   referenceType: text("reference_type"), // request, transfer, purchase, adjustment
   referenceId: integer("reference_id"),
   notes: text("notes"),
@@ -7890,7 +7915,11 @@ export const warehouseMovementLogs = pgTable("warehouse_movement_logs", {
   index("idx_warehouse_logs_date").on(table.createdAt),
 ]);
 
-export const insertWarehouseMovementLogSchema = createInsertSchema(warehouseMovementLogs).omit({
+export const insertWarehouseMovementLogSchema = createInsertSchema(warehouseMovementLogs, {
+  quantity: nonzeroMaterialQuantitySchema,
+  balanceBefore: nonnegativeMaterialQuantitySchema.nullable().optional(),
+  balanceAfter: nonnegativeMaterialQuantitySchema.nullable().optional(),
+}).omit({
   id: true,
   createdAt: true,
 });
@@ -12969,21 +12998,21 @@ export const centralKitchenOrderItems = pgTable("central_kitchen_order_items", {
   productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
   warehouseItemId: integer("warehouse_item_id").references(() => warehouseItems.id, { onDelete: "set null" }),
   productName: text("product_name").notNull(),
-  requestedQuantity: real("requested_quantity").notNull(),
+  requestedQuantity: numeric("requested_quantity", { precision: 18, scale: 6, mode: "number" }).notNull(),
   unit: text("unit").notNull(),
   notes: text("notes"),
-  preparedQuantity: real("prepared_quantity"),
-  substituteQuantity: real("substitute_quantity"),
+  preparedQuantity: numeric("prepared_quantity", { precision: 18, scale: 6, mode: "number" }),
+  substituteQuantity: numeric("substitute_quantity", { precision: 18, scale: 6, mode: "number" }),
   substituteProductId: integer("substitute_product_id").references(() => products.id, { onDelete: "set null" }),
   substituteWarehouseItemId: integer("substitute_warehouse_item_id").references(() => warehouseItems.id, { onDelete: "set null" }),
   substituteProductName: text("substitute_product_name"),
   substituteUnit: text("substitute_unit"),
   shortageReason: text("shortage_reason"),
   preparationNotes: text("preparation_notes"),
-  dispatchedQuantity: real("dispatched_quantity"),
-  receivedQuantity: real("received_quantity"),
-  damagedQuantity: real("damaged_quantity"),
-  missingQuantity: real("missing_quantity"),
+  dispatchedQuantity: numeric("dispatched_quantity", { precision: 18, scale: 6, mode: "number" }),
+  receivedQuantity: numeric("received_quantity", { precision: 18, scale: 6, mode: "number" }),
+  damagedQuantity: numeric("damaged_quantity", { precision: 18, scale: 6, mode: "number" }),
+  missingQuantity: numeric("missing_quantity", { precision: 18, scale: 6, mode: "number" }),
   receivingNotes: text("receiving_notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
@@ -13038,7 +13067,7 @@ export const centralKitchenShadowInventoryEntries = pgTable("central_kitchen_sha
   warehouseItemId: integer("warehouse_item_id").references(() => warehouseItems.id, { onDelete: "restrict" }),
   productName: text("product_name").notNull(),
   unit: text("unit").notNull(),
-  quantity: real("quantity").notNull(),
+  quantity: numeric("quantity", { precision: 18, scale: 6, mode: "number" }).notNull(),
   actorId: varchar("actor_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
@@ -13070,10 +13099,10 @@ export const centralKitchenInventoryAllocations = pgTable("central_kitchen_inven
   sourceFinishedGoodsId: integer("source_finished_goods_id").references(() => finishedGoodsInventory.id, { onDelete: "restrict" }),
   sourceBranchStockId: integer("source_branch_stock_id").references(() => branchStock.id, { onDelete: "restrict" }),
   unit: text("unit").notNull(),
-  reservedQuantity: integer("reserved_quantity").notNull(),
-  dispatchedQuantity: integer("dispatched_quantity").notNull().default(0),
-  releasedQuantity: integer("released_quantity").notNull().default(0),
-  receivedQuantity: integer("received_quantity").notNull().default(0),
+  reservedQuantity: numeric("reserved_quantity", { precision: 18, scale: 6, mode: "number" }).notNull(),
+  dispatchedQuantity: numeric("dispatched_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  releasedQuantity: numeric("released_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  receivedQuantity: numeric("received_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
   status: text("status").notNull().default("reserved"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -13102,7 +13131,7 @@ export const centralKitchenInventoryMovements = pgTable("central_kitchen_invento
   branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "restrict" }),
   kind: text("kind").notNull(),
   catalogId: integer("catalog_id").notNull(),
-  quantity: integer("quantity").notNull(),
+  quantity: numeric("quantity", { precision: 18, scale: 6, mode: "number" }).notNull(),
   unit: text("unit").notNull(),
   eventId: integer("event_id").notNull().references(() => centralKitchenOrderEvents.id, { onDelete: "restrict" }),
   actorId: varchar("actor_id").notNull().references(() => users.id, { onDelete: "restrict" }),

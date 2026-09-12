@@ -646,11 +646,63 @@ import {
   type FloorPlanLink,
   type InsertFloorPlanLink,
 } from "@shared/schema";
+import {
+  addMaterialQuantities,
+  materialQuantitySchema,
+  nonzeroMaterialQuantitySchema,
+  nonnegativeMaterialQuantitySchema,
+  positiveMaterialQuantitySchema,
+  subtractMaterialQuantities,
+} from "@shared/material-quantity";
 import { postProductionBatchToStock } from "./production-stock-posting";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
 import { db, pool } from "./db";
 import { eq, and, gte, lte, desc, or, inArray, sql, isNull, isNotNull, ilike } from "drizzle-orm";
+
+function requireMaterialQuantity(
+  value: number,
+  schema: typeof positiveMaterialQuantitySchema | typeof nonnegativeMaterialQuantitySchema | typeof nonzeroMaterialQuantitySchema | typeof materialQuantitySchema,
+  label: string,
+): number {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) {
+    throw new Error(`${label}: ${parsed.error.issues[0]?.message ?? "قيمة غير صالحة"}`);
+  }
+  return parsed.data;
+}
+
+function requirePositiveMaterialQuantity(value: number, label: string): number {
+  return requireMaterialQuantity(value, positiveMaterialQuantitySchema, label);
+}
+
+function requireNonnegativeMaterialQuantity(value: number, label: string): number {
+  return requireMaterialQuantity(value, nonnegativeMaterialQuantitySchema, label);
+}
+
+function requireNonzeroMaterialQuantity(value: number, label: string): number {
+  return requireMaterialQuantity(value, nonzeroMaterialQuantitySchema, label);
+}
+
+function normalizeOptionalNonnegativeMaterialQuantity(
+  value: number | null | undefined,
+  label: string,
+): number | null | undefined {
+  if (value == null) return value;
+  return requireNonnegativeMaterialQuantity(value, label);
+}
+
+function normalizeOptionalPositiveMaterialQuantity(
+  value: number | null | undefined,
+  label: string,
+): number | null | undefined {
+  if (value == null) return value;
+  return requirePositiveMaterialQuantity(value, label);
+}
+
+function materialDeliveryConflict(message: string): Error & { statusCode: number } {
+  return Object.assign(new Error(message), { statusCode: 409 });
+}
 
 // ============================================================
 // Audit log query / analytics types + sensitivity classification
@@ -13877,13 +13929,33 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createWarehouseItem(item: InsertWarehouseItem): Promise<WarehouseItem> {
-    const [created] = await db.insert(warehouseItems).values(item).returning();
+    const normalizedItem: InsertWarehouseItem = {
+      ...item,
+      minStockLevel: normalizeOptionalNonnegativeMaterialQuantity(item.minStockLevel, "الحد الأدنى للمخزون"),
+      maxStockLevel: normalizeOptionalNonnegativeMaterialQuantity(item.maxStockLevel, "الحد الأقصى للمخزون"),
+      reorderPoint: normalizeOptionalNonnegativeMaterialQuantity(item.reorderPoint, "نقطة إعادة الطلب"),
+      currentStock: normalizeOptionalNonnegativeMaterialQuantity(item.currentStock, "المخزون الحالي"),
+    };
+    const [created] = await db.insert(warehouseItems).values(normalizedItem).returning();
     return created;
   }
 
   async updateWarehouseItem(id: number, updates: Partial<InsertWarehouseItem>): Promise<WarehouseItem | undefined> {
+    const normalizedUpdates: Partial<InsertWarehouseItem> = { ...updates };
+    if (updates.minStockLevel !== undefined) {
+      normalizedUpdates.minStockLevel = normalizeOptionalNonnegativeMaterialQuantity(updates.minStockLevel, "الحد الأدنى للمخزون");
+    }
+    if (updates.maxStockLevel !== undefined) {
+      normalizedUpdates.maxStockLevel = normalizeOptionalNonnegativeMaterialQuantity(updates.maxStockLevel, "الحد الأقصى للمخزون");
+    }
+    if (updates.reorderPoint !== undefined) {
+      normalizedUpdates.reorderPoint = normalizeOptionalNonnegativeMaterialQuantity(updates.reorderPoint, "نقطة إعادة الطلب");
+    }
+    if (updates.currentStock !== undefined) {
+      normalizedUpdates.currentStock = normalizeOptionalNonnegativeMaterialQuantity(updates.currentStock, "المخزون الحالي");
+    }
     const [updated] = await db.update(warehouseItems)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...normalizedUpdates, updatedAt: new Date() })
       .where(eq(warehouseItems.id, id))
       .returning();
     return updated || undefined;
@@ -13908,31 +13980,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateBranchStock(branchId: string, itemId: number, quantity: number, dailyConsumption?: number, userId?: string): Promise<BranchStock> {
-    if (!Number.isInteger(quantity) || quantity < 0) {
-      throw new Error("كمية مخزون المواد يجب أن تكون عدداً صحيحاً غير سالب");
-    }
+    const normalizedQuantity = requireNonnegativeMaterialQuantity(quantity, "كمية مخزون المواد يجب أن تكون كمية غير سالبة حتى 6 منازل عشرية");
+    const normalizedDailyConsumption = dailyConsumption === undefined
+      ? undefined
+      : requireNonnegativeMaterialQuantity(dailyConsumption, "معدل الاستهلاك اليومي يجب أن يكون كمية غير سالبة حتى 6 منازل عشرية");
     const existing = await db.select().from(branchStock)
       .where(and(eq(branchStock.branchId, branchId), eq(branchStock.itemId, itemId)));
     
     if (existing.length > 0) {
       const [updated] = await db.update(branchStock)
         .set({ 
-          currentQuantity: quantity, 
-          dailyConsumption: dailyConsumption ?? existing[0].dailyConsumption,
+          currentQuantity: normalizedQuantity,
+          dailyConsumption: normalizedDailyConsumption ?? existing[0].dailyConsumption,
           lastUpdated: new Date(),
           updatedBy: userId 
         })
         .where(and(
           eq(branchStock.branchId, branchId),
           eq(branchStock.itemId, itemId),
-          sql`${quantity} >= ${branchStock.reservedQuantity}`,
+          sql`${normalizedQuantity} >= ${branchStock.reservedQuantity}`,
         ))
         .returning();
       if (!updated) throw new Error("لا يمكن خفض مخزون المواد عن الكمية المحجوزة");
       return updated;
     } else {
       const [created] = await db.insert(branchStock)
-        .values({ branchId, itemId, currentQuantity: quantity, dailyConsumption, updatedBy: userId })
+        .values({ branchId, itemId, currentQuantity: normalizedQuantity, dailyConsumption: normalizedDailyConsumption, updatedBy: userId })
         .returning();
       return created;
     }
@@ -13981,12 +14054,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createMaterialTransfer(transfer: InsertMaterialTransfer, items: InsertMaterialTransferItem[]): Promise<MaterialTransfer> {
+    const normalizedItems = items.map((item) => ({
+      ...item,
+      quantity: requirePositiveMaterialQuantity(item.quantity, "كمية التحويل يجب أن تكون موجبة حتى 6 منازل عشرية"),
+      originalQuantity: normalizeOptionalPositiveMaterialQuantity(item.originalQuantity, "الكمية الأصلية يجب أن تكون موجبة حتى 6 منازل عشرية"),
+      availableQuantity: normalizeOptionalNonnegativeMaterialQuantity(item.availableQuantity, "الكمية المتوفرة يجب أن تكون غير سالبة حتى 6 منازل عشرية"),
+      receivedQuantity: normalizeOptionalNonnegativeMaterialQuantity(item.receivedQuantity, "الكمية المستلمة يجب أن تكون غير سالبة حتى 6 منازل عشرية"),
+      discrepancy: item.discrepancy == null
+        ? item.discrepancy
+        : requireMaterialQuantity(item.discrepancy, materialQuantitySchema, "فرق الكمية يجب أن يكون حتى 6 منازل عشرية"),
+    }));
     return await db.transaction(async (tx) => {
       const [created] = await tx.insert(materialTransfers).values(transfer).returning();
       
-      if (items.length > 0) {
+      if (normalizedItems.length > 0) {
         await tx.insert(materialTransferItems).values(
-          items.map(item => ({ ...item, transferId: created.id }))
+          normalizedItems.map(item => ({ ...item, transferId: created.id }))
         );
       }
       
@@ -13995,194 +14078,290 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateMaterialTransferStatus(id: number, status: string, additionalData?: Partial<InsertMaterialTransfer>): Promise<MaterialTransfer | undefined> {
-    const [updated] = await db.update(materialTransfers)
-      .set({ 
-        status,
-        ...additionalData,
-        updatedAt: new Date() 
-      })
-      .where(eq(materialTransfers.id, id))
-      .returning();
-    return updated || undefined;
-  }
+    const allowedTransitions: Record<string, string[]> = {
+      pending: ["approved", "rejected", "cancelled"],
+      approved: ["in_transit", "cancelled"],
+      in_transit: ["delivered"],
+    };
+    const validStatuses = new Set([
+      "pending",
+      "approved",
+      "rejected",
+      "in_transit",
+      "delivered",
+      "cancelled",
+    ]);
+    if (!validStatuses.has(status)) {
+      throw new Error("حالة التحويل غير صالحة");
+    }
 
-  async deliverMaterialTransferWithStockUpdate(
-    id: number, 
-    additionalData: { arrivalTime: Date; receivedBy?: string; receivedByName?: string; receiverSignature?: string },
-    userId?: string
-  ): Promise<MaterialTransfer | undefined> {
-    return await db.transaction(async (tx) => {
-      const [transfer] = await tx.select().from(materialTransfers).where(eq(materialTransfers.id, id));
-      if (!transfer) throw new Error("التحويل غير موجود");
-      
-      const items = await tx.select().from(materialTransferItems).where(eq(materialTransferItems.transferId, id));
-      if (!items || items.length === 0) throw new Error("لا توجد عناصر في التحويل");
-      
+    return db.transaction(async (tx) => {
+      const [transfer] = await tx.select().from(materialTransfers)
+        .where(eq(materialTransfers.id, id))
+        .for("update");
+      if (!transfer) return undefined;
+
+      // Same-state retries are safe no-ops, including terminal states.
+      if (transfer.status === status) return transfer;
+      if (!allowedTransitions[transfer.status]?.includes(status)) {
+        throw materialDeliveryConflict(
+          `لا يمكن تغيير حالة التحويل من ${transfer.status} إلى ${status}`,
+        );
+      }
+      // A delivered transition must always post source/destination balances
+      // through applyMaterialTransferDelivery, never through a header update.
+      if (status === "delivered") {
+        throw materialDeliveryConflict("يجب تأكيد استلام التحويل لإتمام التسليم");
+      }
+
+      // Source/destination identity is fixed once a transfer is created.
+      const {
+        sourceType: _sourceType,
+        sourceBranchId: _sourceBranchId,
+        destinationBranchId: _destinationBranchId,
+        ...mutableData
+      } = additionalData ?? {};
       const [updated] = await tx.update(materialTransfers)
-        .set({ 
-          status: 'delivered',
-          ...additionalData,
-          updatedAt: new Date() 
+        .set({
+          ...mutableData,
+          status,
+          updatedAt: new Date(),
         })
         .where(eq(materialTransfers.id, id))
         .returning();
-      
-      for (const item of items) {
-        const existingStock = await tx.select().from(branchStock)
-          .where(and(eq(branchStock.branchId, transfer.destinationBranchId), eq(branchStock.itemId, item.itemId)));
-        
-        if (existingStock.length > 0) {
-          await tx.update(branchStock)
-            .set({ 
-              currentQuantity: (existingStock[0].currentQuantity || 0) + item.quantity,
-              lastUpdated: new Date(),
-              updatedBy: userId
-            })
-            .where(and(eq(branchStock.branchId, transfer.destinationBranchId), eq(branchStock.itemId, item.itemId)));
-        } else {
-          await tx.insert(branchStock).values({
-            branchId: transfer.destinationBranchId,
-            itemId: item.itemId,
-            currentQuantity: item.quantity,
-            updatedBy: userId
-          });
+      return updated;
+    });
+  }
+
+  private async applyMaterialTransferDelivery(
+    tx: any,
+    id: number,
+    receivedItems: Array<{ itemId: number; receivedQuantity: number; discrepancyNotes?: string }> | undefined,
+    deliveryData: {
+      arrivalTime: Date;
+      deliveryDate?: string;
+      receivedBy?: string;
+      receivedByName?: string;
+      receiverSignature?: string;
+      deliveryNotes?: string;
+    },
+    userId?: string,
+  ): Promise<MaterialTransfer> {
+    // A header lock serializes the delivery boundary.  It prevents a retry
+    // from observing the old status while the first receipt is posting stock.
+    const [transfer] = await tx.select().from(materialTransfers)
+      .where(eq(materialTransfers.id, id))
+      .for("update");
+    if (!transfer) throw new Error("التحويل غير موجود");
+
+    const items = await tx.select().from(materialTransferItems)
+      .where(eq(materialTransferItems.transferId, id))
+      .for("update");
+    if (items.length === 0) throw new Error("لا توجد عناصر في التحويل");
+
+    const receivedByItemId = new Map<number, { receivedQuantity: number; discrepancyNotes?: string }>();
+    for (const receivedItem of receivedItems ?? []) {
+      if (!Number.isInteger(receivedItem.itemId) || receivedItem.itemId <= 0 || receivedByItemId.has(receivedItem.itemId)) {
+        throw new Error("بيانات استلام التحويل تحتوي على صنف مكرر أو غير صالح");
+      }
+      receivedByItemId.set(receivedItem.itemId, receivedItem);
+    }
+    for (const itemId of receivedByItemId.keys()) {
+      if (!items.some((item) => item.itemId === itemId)) {
+        throw new Error(`الصنف ${itemId} ليس ضمن التحويل`);
+      }
+    }
+
+    const lines = items.map((item) => {
+      const sentQuantity = requirePositiveMaterialQuantity(
+        item.quantity,
+        "كمية التحويل يجب أن تكون موجبة حتى 6 منازل عشرية",
+      );
+      const receipt = receivedByItemId.get(item.itemId);
+      const receivedQuantity = requireNonnegativeMaterialQuantity(
+        receipt?.receivedQuantity ?? sentQuantity,
+        "الكمية المستلمة يجب أن تكون كمية غير سالبة حتى 6 منازل عشرية",
+      );
+      const discrepancy = subtractMaterialQuantities(receivedQuantity, sentQuantity);
+      if (discrepancy > 0) {
+        throw materialDeliveryConflict(
+          `الكمية المستلمة للصنف ${item.itemId} لا يمكن أن تتجاوز الكمية المرسلة`,
+        );
+      }
+      return {
+        item,
+        sentQuantity,
+        receivedQuantity,
+        discrepancy,
+        discrepancyNotes: receipt?.discrepancyNotes,
+      };
+    });
+
+    if (transfer.status === "delivered") {
+      // Delivery is idempotent only for the same receipt payload.  A changed
+      // receipt must be rejected rather than silently rewriting posted stock.
+      const matchesPostedReceipt = lines.every(({ item, receivedQuantity, discrepancy, discrepancyNotes }) =>
+        (item.receivedQuantity ?? item.quantity) === receivedQuantity
+        && (item.discrepancy ?? subtractMaterialQuantities(item.receivedQuantity ?? item.quantity, item.quantity)) === discrepancy
+        && (item.discrepancyNotes ?? null) === (discrepancyNotes ?? null),
+      );
+      if (!matchesPostedReceipt) {
+        throw materialDeliveryConflict("تم تسليم التحويل سابقاً ببيانات استلام مختلفة");
+      }
+      return transfer;
+    }
+    if (transfer.status === "cancelled" || transfer.status === "rejected") {
+      throw materialDeliveryConflict("لا يمكن تسليم تحويل ملغي أو مرفوض");
+    }
+    if (transfer.status !== "in_transit") {
+      throw materialDeliveryConflict("لا يمكن تسليم التحويل قبل إرساله");
+    }
+
+    const sourceIsWarehouse = transfer.sourceType === "warehouse"
+      || transfer.sourceBranchId === "main_warehouse";
+    if (!sourceIsWarehouse && !transfer.sourceBranchId) {
+      throw new Error("مصدر التحويل غير صالح");
+    }
+
+    let hasDiscrepancy = false;
+    for (const line of lines) {
+      const { item, sentQuantity, receivedQuantity, discrepancy, discrepancyNotes } = line;
+      if (discrepancy !== 0) hasDiscrepancy = true;
+
+      // Debit the actual source atomically before any destination credit.
+      // Branch reservations are intentionally retained; only unreserved
+      // branch stock may be transferred.
+      if (sourceIsWarehouse) {
+        const debited = await tx.update(warehouseItems)
+          .set({
+            currentStock: sql`${warehouseItems.currentStock} - ${sentQuantity}`,
+            updatedAt: new Date(),
+          })
+          .where(and(
+            eq(warehouseItems.id, item.itemId),
+            sql`${warehouseItems.currentStock} >= ${sentQuantity}`,
+          ))
+          .returning({ id: warehouseItems.id });
+        if (!debited.length) {
+          throw materialDeliveryConflict(`مخزون المستودع للمادة ${item.itemId} غير كافٍ لإتمام التحويل`);
         }
-        
+      } else {
+        const debited = await tx.update(branchStock)
+          .set({
+            currentQuantity: sql`${branchStock.currentQuantity} - ${sentQuantity}`,
+            lastUpdated: new Date(),
+            updatedBy: userId,
+          })
+          .where(and(
+            eq(branchStock.branchId, transfer.sourceBranchId!),
+            eq(branchStock.itemId, item.itemId),
+            sql`${branchStock.currentQuantity} - ${branchStock.reservedQuantity} >= ${sentQuantity}`,
+          ))
+          .returning({ id: branchStock.id });
+        if (!debited.length) {
+          throw materialDeliveryConflict(`مخزون المادة ${item.itemId} غير المحجوز غير كافٍ لإتمام التحويل`);
+        }
+      }
+
+      await tx.update(materialTransferItems)
+        .set({
+          receivedQuantity,
+          discrepancy,
+          discrepancyNotes: discrepancyNotes ?? null,
+        })
+        .where(eq(materialTransferItems.id, item.id));
+
+      // A zero receipt is a valid loss/missing receipt.  It has no incoming
+      // stock movement and must not attempt to insert an invalid zero audit row.
+      if (receivedQuantity > 0) {
+        await tx.insert(branchStock).values({
+          branchId: transfer.destinationBranchId,
+          itemId: item.itemId,
+          currentQuantity: receivedQuantity,
+          updatedBy: userId,
+        }).onConflictDoUpdate({
+          target: [branchStock.branchId, branchStock.itemId],
+          set: {
+            currentQuantity: sql`${branchStock.currentQuantity} + ${receivedQuantity}`,
+            lastUpdated: new Date(),
+            updatedBy: userId,
+          },
+        });
+
         await tx.insert(warehouseMovementLogs).values({
           itemId: item.itemId,
           branchId: transfer.destinationBranchId,
-          movementType: 'transfer_in',
-          quantity: item.quantity,
-          referenceType: 'transfer',
+          movementType: "transfer_in",
+          quantity: receivedQuantity,
+          referenceType: "transfer",
           referenceId: transfer.id,
-          notes: `استلام من تحويل ${transfer.transferNumber}`,
-          createdBy: userId
+          notes: `استلام ${receivedQuantity} من تحويل ${transfer.transferNumber}${discrepancy !== 0 ? ` (فرق: ${discrepancy})` : ""}`,
+          createdBy: userId,
         });
       }
-      
-      return updated;
-    });
+
+      await tx.insert(warehouseMovementLogs).values({
+        itemId: item.itemId,
+        branchId: sourceIsWarehouse ? undefined : transfer.sourceBranchId!,
+        movementType: "transfer_out",
+        quantity: sentQuantity,
+        referenceType: "transfer",
+        referenceId: transfer.id,
+        notes: `إرسال ${sentQuantity} في تحويل ${transfer.transferNumber}`,
+        createdBy: userId,
+      });
+    }
+
+    const [updated] = await tx.update(materialTransfers)
+      .set({
+        status: "delivered",
+        arrivalTime: deliveryData.arrivalTime,
+        deliveryDate: deliveryData.deliveryDate,
+        hasDiscrepancy,
+        receivedBy: deliveryData.receivedBy,
+        receivedByName: deliveryData.receivedByName,
+        receiverSignature: deliveryData.receiverSignature,
+        deliveryNotes: deliveryData.deliveryNotes,
+        updatedAt: new Date(),
+      })
+      .where(eq(materialTransfers.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deliverMaterialTransferWithStockUpdate(
+    id: number,
+    additionalData: { arrivalTime: Date; receivedBy?: string; receivedByName?: string; receiverSignature?: string },
+    userId?: string,
+  ): Promise<MaterialTransfer | undefined> {
+    const deliveryDate = additionalData.arrivalTime.toISOString().split("T")[0];
+    return db.transaction((tx) => this.applyMaterialTransferDelivery(
+      tx,
+      id,
+      undefined,
+      { ...additionalData, deliveryDate },
+      userId,
+    ));
   }
 
   async confirmMaterialTransferDelivery(
     id: number,
     receivedItems: Array<{ itemId: number; receivedQuantity: number; discrepancyNotes?: string }>,
     deliveryData: { receivedBy?: string; receivedByName?: string; receiverSignature?: string; deliveryNotes?: string },
-    userId?: string
+    userId?: string,
   ): Promise<MaterialTransfer | undefined> {
-    return await db.transaction(async (tx) => {
-      const [transfer] = await tx.select().from(materialTransfers).where(eq(materialTransfers.id, id));
-      if (!transfer) throw new Error("التحويل غير موجود");
-      
-      const items = await tx.select().from(materialTransferItems).where(eq(materialTransferItems.transferId, id));
-      if (!items || items.length === 0) throw new Error("لا توجد عناصر في التحويل");
-      
-      let hasDiscrepancy = false;
-      
-      // Update each item with received quantity and calculate discrepancy
-      for (const item of items) {
-        const receivedItem = receivedItems.find(ri => ri.itemId === item.itemId);
-        const receivedQty = receivedItem?.receivedQuantity ?? item.quantity;
-        if (!Number.isInteger(receivedQty) || receivedQty < 0) {
-          throw new Error("الكمية المستلمة يجب أن تكون عدداً صحيحاً غير سالب");
-        }
-        const discrepancy = receivedQty - item.quantity;
-        
-        if (discrepancy !== 0) hasDiscrepancy = true;
-        
-        await tx.update(materialTransferItems)
-          .set({
-            receivedQuantity: receivedQty,
-            discrepancy: discrepancy,
-            discrepancyNotes: receivedItem?.discrepancyNotes || null
-          })
-          .where(eq(materialTransferItems.id, item.id));
-        
-        // Update destination branch stock with RECEIVED quantity (not sent quantity)
-        const existingStock = await tx.select().from(branchStock)
-          .where(and(eq(branchStock.branchId, transfer.destinationBranchId), eq(branchStock.itemId, item.itemId)));
-        
-        if (existingStock.length > 0) {
-          await tx.update(branchStock)
-            .set({ 
-              currentQuantity: (existingStock[0].currentQuantity || 0) + receivedQty,
-              lastUpdated: new Date(),
-              updatedBy: userId
-            })
-            .where(and(eq(branchStock.branchId, transfer.destinationBranchId), eq(branchStock.itemId, item.itemId)));
-        } else {
-          await tx.insert(branchStock).values({
-            branchId: transfer.destinationBranchId,
-            itemId: item.itemId,
-            currentQuantity: receivedQty,
-            updatedBy: userId
-          });
-        }
-        
-        // Deduct from source branch stock (if branch-to-branch transfer)
-        if (transfer.sourceBranchId) {
-          const debited = await tx.update(branchStock)
-            .set({
-              currentQuantity: sql`${branchStock.currentQuantity} - ${item.quantity}`,
-              lastUpdated: new Date(),
-              updatedBy: userId,
-            })
-            .where(and(
-              eq(branchStock.branchId, transfer.sourceBranchId),
-              eq(branchStock.itemId, item.itemId),
-              sql`${branchStock.currentQuantity} - ${branchStock.reservedQuantity} >= ${item.quantity}`,
-            ))
-            .returning({ id: branchStock.id });
-          if (!debited.length) {
-            throw new Error(`مخزون المادة ${item.itemId} غير المحجوز غير كافٍ لإتمام التحويل`);
-          }
-        }
-        
-        // Log the movement
-        await tx.insert(warehouseMovementLogs).values({
-          itemId: item.itemId,
-          branchId: transfer.destinationBranchId,
-          movementType: 'transfer_in',
-          quantity: receivedQty,
-          referenceType: 'transfer',
-          referenceId: transfer.id,
-          notes: `استلام ${receivedQty} من تحويل ${transfer.transferNumber}${discrepancy !== 0 ? ` (فرق: ${discrepancy})` : ''}`,
-          createdBy: userId
-        });
-        
-        // Log outgoing from source if branch-to-branch
-        if (transfer.sourceBranchId) {
-          await tx.insert(warehouseMovementLogs).values({
-            itemId: item.itemId,
-            branchId: transfer.sourceBranchId,
-            movementType: 'transfer_out',
-            quantity: item.quantity,
-            referenceType: 'transfer',
-            referenceId: transfer.id,
-            notes: `إرسال ${item.quantity} في تحويل ${transfer.transferNumber}`,
-            createdBy: userId
-          });
-        }
-      }
-      
-      // Update transfer header
-      const [updated] = await tx.update(materialTransfers)
-        .set({ 
-          status: 'delivered',
-          arrivalTime: new Date(),
-          deliveryDate: new Date().toISOString().split('T')[0],
-          hasDiscrepancy,
-          receivedBy: deliveryData.receivedBy,
-          receivedByName: deliveryData.receivedByName,
-          receiverSignature: deliveryData.receiverSignature,
-          deliveryNotes: deliveryData.deliveryNotes,
-          updatedAt: new Date() 
-        })
-        .where(eq(materialTransfers.id, id))
-        .returning();
-      
-      return updated;
-    });
+    const now = new Date();
+    return db.transaction((tx) => this.applyMaterialTransferDelivery(
+      tx,
+      id,
+      receivedItems,
+      {
+        ...deliveryData,
+        arrivalTime: now,
+        deliveryDate: now.toISOString().split("T")[0],
+      },
+      userId,
+    ));
   }
 
   async generateMaterialTransferNumber(): Promise<string> {
@@ -14218,7 +14397,9 @@ export class DatabaseStorage implements IStorage {
   ): Promise<MaterialTransfer> {
     return await db.transaction(async (tx) => {
       // Get the transfer and verify it's in a modifiable state
-      const [transfer] = await tx.select().from(materialTransfers).where(eq(materialTransfers.id, transferId));
+      const [transfer] = await tx.select().from(materialTransfers)
+        .where(eq(materialTransfers.id, transferId))
+        .for("update");
       
       if (!transfer) {
         throw new Error("طلب التحويل غير موجود");
@@ -14238,18 +14419,22 @@ export class DatabaseStorage implements IStorage {
       for (const mod of modifications) {
         const item = items.find(i => i.itemId === mod.itemId);
         if (!item) continue;
+        const newQuantity = requirePositiveMaterialQuantity(
+          mod.newQuantity,
+          "كمية التحويل يجب أن تكون موجبة حتى 6 منازل عشرية",
+        );
         
         // Store original quantity if not already stored
-        const originalQty = item.originalQuantity || item.quantity;
+        const originalQty = item.originalQuantity ?? item.quantity;
         
         // Only update if quantity changed
-        if (mod.newQuantity !== item.quantity) {
+        if (newQuantity !== item.quantity) {
           hasModifications = true;
           
           await tx.update(materialTransferItems)
             .set({
               originalQuantity: originalQty,
-              quantity: mod.newQuantity,
+              quantity: newQuantity,
               isModified: true,
               modifiedBy,
               modifiedByName,
@@ -14290,7 +14475,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createWarehouseMovementLog(log: InsertWarehouseMovementLog): Promise<WarehouseMovementLog> {
-    const [created] = await db.insert(warehouseMovementLogs).values(log).returning();
+    const normalizedLog: InsertWarehouseMovementLog = {
+      ...log,
+      quantity: requireNonzeroMaterialQuantity(log.quantity, "كمية حركة المستودع يجب أن تكون غير صفرية حتى 6 منازل عشرية"),
+      balanceBefore: normalizeOptionalNonnegativeMaterialQuantity(log.balanceBefore, "الرصيد السابق يجب أن يكون غير سالب حتى 6 منازل عشرية"),
+      balanceAfter: normalizeOptionalNonnegativeMaterialQuantity(log.balanceAfter, "الرصيد اللاحق يجب أن يكون غير سالب حتى 6 منازل عشرية"),
+    };
+    const [created] = await db.insert(warehouseMovementLogs).values(normalizedLog).returning();
     return created;
   }
 
@@ -14381,14 +14572,17 @@ export class DatabaseStorage implements IStorage {
       const srcBranch = transfer.sourceBranchId;
       
       const items = allTransferItems.filter(item => item.transferId === transfer.id);
-      const totalQty = items.reduce((sum, item) => sum + (item.receivedQuantity || item.quantity), 0);
+      const totalQty = items.reduce(
+        (sum, item) => addMaterialQuantities(sum, item.receivedQuantity ?? item.quantity),
+        0,
+      );
       
       // Incoming to destination
       if (!branchStats.has(destBranch)) {
         branchStats.set(destBranch, { incoming: 0, outgoing: 0, count: 0 });
       }
       const destStats = branchStats.get(destBranch)!;
-      destStats.incoming += totalQty;
+      destStats.incoming = addMaterialQuantities(destStats.incoming, totalQty);
       destStats.count++;
       
       // Outgoing from source (if branch-to-branch)
@@ -14397,7 +14591,10 @@ export class DatabaseStorage implements IStorage {
           branchStats.set(srcBranch, { incoming: 0, outgoing: 0, count: 0 });
         }
         const srcStats = branchStats.get(srcBranch)!;
-        srcStats.outgoing += items.reduce((sum, item) => sum + item.quantity, 0);
+        srcStats.outgoing = items.reduce(
+          (sum, item) => addMaterialQuantities(sum, item.quantity),
+          srcStats.outgoing,
+        );
       }
     }
 
@@ -14406,7 +14603,7 @@ export class DatabaseStorage implements IStorage {
       branchName: branchMap.get(bId) || bId,
       totalIncoming: stats.incoming,
       totalOutgoing: stats.outgoing,
-      netMovement: stats.incoming - stats.outgoing,
+      netMovement: subtractMaterialQuantities(stats.incoming, stats.outgoing),
       transferCount: stats.count
     }));
 
@@ -14424,11 +14621,14 @@ export class DatabaseStorage implements IStorage {
         const stats = itemStats.get(item.itemId)!;
         
         // Incoming: received quantities at destination
-        stats.incoming += item.receivedQuantity || item.quantity;
+        stats.incoming = addMaterialQuantities(
+          stats.incoming,
+          item.receivedQuantity ?? item.quantity,
+        );
         
         // Outgoing: sent quantities from source (only for branch-to-branch transfers)
         if (srcBranch && srcBranch !== 'main_warehouse') {
-          stats.outgoing += item.quantity;
+          stats.outgoing = addMaterialQuantities(stats.outgoing, item.quantity);
         }
       }
     }
@@ -14442,7 +14642,7 @@ export class DatabaseStorage implements IStorage {
         unit: itemInfo?.unit || '',
         totalIncoming: stats.incoming,
         totalOutgoing: stats.outgoing,
-        netMovement: stats.incoming - stats.outgoing
+        netMovement: subtractMaterialQuantities(stats.incoming, stats.outgoing)
       };
     });
 
@@ -14458,7 +14658,10 @@ export class DatabaseStorage implements IStorage {
         deliveryDate: t.deliveryDate,
         hasDiscrepancy: t.hasDiscrepancy,
         itemCount: items.length,
-        totalQuantity: items.reduce((sum, item) => sum + (item.receivedQuantity || item.quantity), 0)
+        totalQuantity: items.reduce(
+          (sum, item) => addMaterialQuantities(sum, item.receivedQuantity ?? item.quantity),
+          0,
+        )
       };
     });
 
@@ -14466,7 +14669,10 @@ export class DatabaseStorage implements IStorage {
     const summary = {
       totalTransfers: deliveredTransfers.length,
       deliveredTransfers: deliveredTransfers.length,
-      totalItemsReceived: allTransferItems.reduce((sum, item) => sum + (item.receivedQuantity || item.quantity), 0),
+      totalItemsReceived: allTransferItems.reduce(
+        (sum, item) => addMaterialQuantities(sum, item.receivedQuantity ?? item.quantity),
+        0,
+      ),
       transfersWithDiscrepancy: deliveredTransfers.filter(t => t.hasDiscrepancy).length
     };
 
@@ -14546,13 +14752,13 @@ export class DatabaseStorage implements IStorage {
       if (items.length === 0) continue;
 
       for (const ti of items) {
-        const qty = ti.receivedQuantity || ti.quantity;
+        const qty = ti.receivedQuantity ?? ti.quantity;
         const isIncoming = !branchId || transfer.destinationBranchId === branchId;
         const isOutgoing = branchId && transfer.sourceBranchId === branchId;
 
         if (isIncoming) {
-          totalIn += qty;
-          runningBalance += qty;
+          totalIn = addMaterialQuantities(totalIn, qty);
+          runningBalance = addMaterialQuantities(runningBalance, qty);
           movements.push({
             date: transfer.deliveryDate || '',
             type: 'وارد',
@@ -14566,8 +14772,8 @@ export class DatabaseStorage implements IStorage {
         }
 
         if (isOutgoing) {
-          totalOut += ti.quantity;
-          runningBalance -= ti.quantity;
+          totalOut = addMaterialQuantities(totalOut, ti.quantity);
+          runningBalance = subtractMaterialQuantities(runningBalance, ti.quantity);
           movements.push({
             date: transfer.deliveryDate || '',
             type: 'صادر',
@@ -14588,7 +14794,7 @@ export class DatabaseStorage implements IStorage {
       summary: {
         totalIn,
         totalOut,
-        netChange: totalIn - totalOut,
+        netChange: subtractMaterialQuantities(totalIn, totalOut),
         openingBalance: 0,
         closingBalance: runningBalance
       }
@@ -14645,7 +14851,7 @@ export class DatabaseStorage implements IStorage {
         }
         const stat = stats.get(key)!;
         stat.count++;
-        stat.totalQty += item.quantity;
+        stat.totalQty = addMaterialQuantities(stat.totalQty, item.quantity);
       }
     }
 
@@ -14733,8 +14939,11 @@ export class DatabaseStorage implements IStorage {
     for (const transfer of deliveredTransfers) {
       const items = allTransferItems.filter(ti => ti.transferId === transfer.id);
       for (const item of items) {
-        const current = receivedStats.get(item.itemId) || 0;
-        receivedStats.set(item.itemId, current + (item.receivedQuantity || item.quantity));
+        const current = receivedStats.get(item.itemId) ?? 0;
+        receivedStats.set(
+          item.itemId,
+          addMaterialQuantities(current, item.receivedQuantity ?? item.quantity),
+        );
       }
     }
 
@@ -14743,8 +14952,8 @@ export class DatabaseStorage implements IStorage {
     for (const transfer of allRequests) {
       const items = allTransferItems.filter(ti => ti.transferId === transfer.id);
       for (const item of items) {
-        const current = requestedStats.get(item.itemId) || 0;
-        requestedStats.set(item.itemId, current + item.quantity);
+        const current = requestedStats.get(item.itemId) ?? 0;
+        requestedStats.set(item.itemId, addMaterialQuantities(current, item.quantity));
       }
     }
 
@@ -14755,16 +14964,24 @@ export class DatabaseStorage implements IStorage {
         branchStats.set(transfer.destinationBranchId, { received: 0, requested: 0 });
       }
       const items = allTransferItems.filter(ti => ti.transferId === transfer.id);
-      const totalQty = items.reduce((sum, item) => sum + item.quantity, 0);
-      branchStats.get(transfer.destinationBranchId)!.requested += totalQty;
+      const totalQty = items.reduce(
+        (sum, item) => addMaterialQuantities(sum, item.quantity),
+        0,
+      );
+      const stats = branchStats.get(transfer.destinationBranchId)!;
+      stats.requested = addMaterialQuantities(stats.requested, totalQty);
     }
     for (const transfer of deliveredTransfers) {
       if (!branchStats.has(transfer.destinationBranchId)) {
         branchStats.set(transfer.destinationBranchId, { received: 0, requested: 0 });
       }
       const items = allTransferItems.filter(ti => ti.transferId === transfer.id);
-      const totalQty = items.reduce((sum, item) => sum + (item.receivedQuantity || item.quantity), 0);
-      branchStats.get(transfer.destinationBranchId)!.received += totalQty;
+      const totalQty = items.reduce(
+        (sum, item) => addMaterialQuantities(sum, item.receivedQuantity ?? item.quantity),
+        0,
+      );
+      const stats = branchStats.get(transfer.destinationBranchId)!;
+      stats.received = addMaterialQuantities(stats.received, totalQty);
     }
 
     return {
@@ -14871,10 +15088,10 @@ export class DatabaseStorage implements IStorage {
       if (transfer.hasDiscrepancy) destStats.discrepancies++;
       
       for (const item of items) {
-        const qty = item.receivedQuantity || item.quantity;
-        destStats.received += qty;
-        const current = destStats.itemsReceived.get(item.itemId) || 0;
-        destStats.itemsReceived.set(item.itemId, current + qty);
+        const qty = item.receivedQuantity ?? item.quantity;
+        destStats.received = addMaterialQuantities(destStats.received, qty);
+        const current = destStats.itemsReceived.get(item.itemId) ?? 0;
+        destStats.itemsReceived.set(item.itemId, addMaterialQuantities(current, qty));
       }
 
       // Source stats (for branch-to-branch)
@@ -14889,9 +15106,9 @@ export class DatabaseStorage implements IStorage {
         srcStats.transfersSent++;
         
         for (const item of items) {
-          srcStats.sent += item.quantity;
-          const current = srcStats.itemsSent.get(item.itemId) || 0;
-          srcStats.itemsSent.set(item.itemId, current + item.quantity);
+          srcStats.sent = addMaterialQuantities(srcStats.sent, item.quantity);
+          const current = srcStats.itemsSent.get(item.itemId) ?? 0;
+          srcStats.itemsSent.set(item.itemId, addMaterialQuantities(current, item.quantity));
         }
       }
     }
@@ -14926,7 +15143,7 @@ export class DatabaseStorage implements IStorage {
         branchName: branchMap.get(bId) || bId,
         totalReceived: stats.received,
         totalSent: stats.sent,
-        netMovement: stats.received - stats.sent,
+        netMovement: subtractMaterialQuantities(stats.received, stats.sent),
         transfersReceived: stats.transfersReceived,
         transfersSent: stats.transfersSent,
         discrepancyCount: stats.discrepancies,
