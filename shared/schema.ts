@@ -13117,3 +13117,83 @@ export const centralKitchenInventoryMovements = pgTable("central_kitchen_invento
 export type CentralKitchenOrder = typeof centralKitchenOrders.$inferSelect;
 export type CentralKitchenOrderItem = typeof centralKitchenOrderItems.$inferSelect;
 export type CentralKitchenOrderEvent = typeof centralKitchenOrderEvents.$inferSelect;
+export const centralKitchenRecipes = pgTable("central_kitchen_recipes", {
+  id: serial("id").primaryKey(),
+  kitchenId: varchar("kitchen_id").notNull().references(() => branches.id, { onDelete: "restrict" }),
+  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "restrict" }),
+  outputQuantity: numeric("output_quantity", { precision: 18, scale: 6 }).notNull(),
+  outputUnit: text("output_unit").notNull(),
+  notes: text("notes"),
+  status: text("status").notNull().default("draft"),
+  version: integer("version").notNull().default(1),
+  updateToken: varchar("update_token", { length: 128 }).notNull().default(sql`gen_random_uuid()::text`),
+  supersedesRecipeId: integer("supersedes_recipe_id"),
+  supersededByRecipeId: integer("superseded_by_recipe_id"),
+  idempotencyKey: varchar("idempotency_key", { length: 128 }),
+  payloadFingerprint: varchar("payload_fingerprint", { length: 64 }),
+  createdBy: varchar("created_by").notNull().references(() => users.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedBy: varchar("updated_by").notNull().references(() => users.id, { onDelete: "restrict" }),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  approvedBy: varchar("approved_by").references(() => users.id, { onDelete: "restrict" }),
+  approvedAt: timestamp("approved_at"),
+  supersededAt: timestamp("superseded_at"),
+}, (table) => [
+  uniqueIndex("uq_central_kitchen_recipes_current_draft")
+    .on(table.kitchenId, table.productId)
+    .where(sql`${table.status} = 'draft'`),
+  uniqueIndex("uq_central_kitchen_recipes_current_approved")
+    .on(table.kitchenId, table.productId)
+    .where(sql`${table.status} = 'approved'`),
+  uniqueIndex("uq_central_kitchen_recipes_creator_idempotency")
+    .on(table.createdBy, table.idempotencyKey)
+    .where(sql`${table.idempotencyKey} IS NOT NULL`),
+  index("idx_central_kitchen_recipes_kitchen_product")
+    .on(table.kitchenId, table.productId),
+  index("idx_central_kitchen_recipes_status")
+    .on(table.status),
+  check("ck_central_kitchen_recipes_status", sql`${table.status} IN ('draft', 'approved', 'superseded')`),
+  check("ck_central_kitchen_recipes_output_quantity", sql`${table.outputQuantity} > 0`),
+  check("ck_central_kitchen_recipes_version", sql`${table.version} > 0`),
+]);
+
+export const centralKitchenRecipeIngredients = pgTable("central_kitchen_recipe_ingredients", {
+  id: serial("id").primaryKey(),
+  recipeId: integer("recipe_id").notNull().references(() => centralKitchenRecipes.id, { onDelete: "cascade" }),
+  warehouseItemId: integer("warehouse_item_id").notNull().references(() => warehouseItems.id, { onDelete: "restrict" }),
+  quantity: numeric("quantity", { precision: 18, scale: 6 }).notNull(),
+  unit: text("unit").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  unique("uq_central_kitchen_recipe_ingredients_item").on(table.recipeId, table.warehouseItemId),
+  index("idx_central_kitchen_recipe_ingredients_recipe").on(table.recipeId),
+  index("idx_central_kitchen_recipe_ingredients_item").on(table.warehouseItemId),
+  check("ck_central_kitchen_recipe_ingredients_quantity", sql`${table.quantity} > 0`),
+]);
+
+export const centralKitchenRecipeOperations = pgTable("central_kitchen_recipe_operations", {
+  id: serial("id").primaryKey(),
+  actorId: varchar("actor_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  action: text("action").notNull(),
+  idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+  fingerprint: varchar("fingerprint", { length: 64 }).notNull(),
+  recipeId: integer("recipe_id").notNull(),
+  kitchenId: varchar("kitchen_id").notNull().references(() => branches.id, { onDelete: "restrict" }),
+  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "restrict" }),
+  snapshotJson: jsonb("snapshot_json").$type<Record<string, unknown>>().notNull(),
+  responseJson: jsonb("response_json").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_central_kitchen_recipe_operations_actor_key")
+    .on(table.actorId, table.idempotencyKey),
+  index("idx_central_kitchen_recipe_operations_recipe")
+    .on(table.recipeId),
+  check(
+    "ck_central_kitchen_recipe_operations_action",
+    sql`${table.action} IN ('create', 'update', 'approve', 'revise', 'delete')`,
+  ),
+]);
+
+export type CentralKitchenRecipe = typeof centralKitchenRecipes.$inferSelect;
+export type CentralKitchenRecipeIngredient = typeof centralKitchenRecipeIngredients.$inferSelect;
+export type CentralKitchenRecipeOperation = typeof centralKitchenRecipeOperations.$inferSelect;

@@ -53,3 +53,4 @@
 - [Web Push notifications](web-push-notifications.md) — VAPID auto-stored in DB (read oldest row, never regenerate); targeting mirrors bell logic; push_sent_at conditional-UPDATE prevents double sends.
 - [Idempotency replay authorization](idempotency-replay-authorization.md) — replays must authorize the stored resource and bind keys to payload/action, or branch changes can expose old data.
 - [Central-kitchen shadow ledger](central-kitchen-shadow-ledger.md) — shadow postings start at DB activation, never backfill, and split original before substitute without touching real balances.
+- [Recipe activation boundary](central-kitchen-recipe-boundary.md) — recipe approval does not enable raw-stock posting; revision retries bind the source recipe, not the new draft.

@@ -135,6 +135,7 @@ import { registerSocialResponsibilityRoutes } from "./social-responsibility-rout
 import { registerLoyaltyRoutes, redeemLoyaltyInTx } from "./loyalty-routes";
 import { registerWalletRoutes } from "./wallet-routes";
 import { registerSecurityRoutes } from "./security-routes";
+import { registerCentralKitchenRecipeRoutes } from "./central-kitchen-recipes";
 import { apiCacheMiddleware, invalidateCacheForPath, invalidateCache, jsonSlimMiddleware } from "./api-cache";
 import { registerBatchRoute } from "./batch-api";
 import {
@@ -482,6 +483,7 @@ export async function registerRoutes(
   registerLoyaltyRoutes(app);
   registerWalletRoutes(app);
   registerSecurityRoutes(app);
+  registerCentralKitchenRecipeRoutes(app);
 
   // Cached data fetchers
   const getCachedBranches = memoize(async () => {
