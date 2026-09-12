@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Factory, ListChecks } from "lucide-react";
+import { Factory, ListChecks, Workflow } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { PageHeader } from "@/components/dashboard/page-header";
@@ -34,8 +34,8 @@ export default function ProductionDashboardPage() {
   useEffect(() => { if (new URLSearchParams(location.split("?")[1] || "").get("tab") === "recipes") setTab("recipes"); }, [location]);
   const changeTab = (value: string) => { setTab(value); setLocation(value === "recipes" ? "/production-dashboard?tab=recipes" : "/production-dashboard"); };
   return <Layout><main dir="rtl" className="page-container space-y-5 pb-10">
-    <PageHeader icon={Factory} tone="production" title="إنتاج المطبخ المركزي" description="دورة الطلب المعتمد → الإنتاج → المخزون → الإرسال" actions={<Link href="/central-kitchen-orders" className="inline-flex"><Button><ListChecks className="ml-2 h-4 w-4" />طلبات الفروع</Button></Link>} />
-    <Tabs value={tab} onValueChange={changeTab} className="space-y-5"><TabsList className="h-auto flex-wrap rounded-xl bg-muted p-1"><TabsTrigger value="operations" className="rounded-lg">التشغيل الحي</TabsTrigger><TabsTrigger value="recipes" className="rounded-lg">دفتر الوصفات</TabsTrigger><TabsTrigger value="legacy" className="rounded-lg">التقارير والأدوات السابقة</TabsTrigger></TabsList>
+    <PageHeader icon={Factory} tone="production" title="إنتاج المطبخ المركزي" description="دورة الطلب المعتمد → الإنتاج → المخزون → الإرسال" actions={<div className="flex flex-wrap gap-2"><a href="/production-reports?tab=operations" target="_blank" rel="noopener noreferrer" className="inline-flex"><Button variant="outline"><Workflow className="ml-2 h-4 w-4" />تقرير التشغيل المترابط</Button></a><Link href="/central-kitchen-orders" className="inline-flex"><Button><ListChecks className="ml-2 h-4 w-4" />طلبات الفروع</Button></Link></div>} />
+    <Tabs value={tab} onValueChange={changeTab} className="space-y-5"><TabsList className="h-auto flex-wrap rounded-xl bg-muted p-1"><TabsTrigger value="operations" className="rounded-lg">التشغيل الحي</TabsTrigger><TabsTrigger value="recipes" className="rounded-lg">دفتر الوصفات</TabsTrigger><TabsTrigger value="legacy" className="rounded-lg">التقارير والأدوات السابقة <span className="mr-1 text-[10px] text-muted-foreground">(مصادر تاريخية)</span></TabsTrigger></TabsList>
       <TabsContent value="operations"><OperationsBoard kitchens={kitchens} kitchenId={kitchenId} onKitchenChange={setKitchenId} /></TabsContent>
       <TabsContent value="recipes"><RecipeBook kitchens={kitchens} kitchenId={kitchenId} onKitchenChange={setKitchenId} /></TabsContent>
       <TabsContent value="legacy"><LegacyProductionDashboard /></TabsContent>

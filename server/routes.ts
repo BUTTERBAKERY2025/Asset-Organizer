@@ -136,6 +136,7 @@ import { registerLoyaltyRoutes, redeemLoyaltyInTx } from "./loyalty-routes";
 import { registerWalletRoutes } from "./wallet-routes";
 import { registerSecurityRoutes } from "./security-routes";
 import { registerCentralKitchenRecipeRoutes } from "./central-kitchen-recipes";
+import { registerProductionOperationsReportRoute } from "./production-operations-report";
 import {
   CentralKitchenBatchMaterialsError,
   getBatchMaterialRequirements,
@@ -494,6 +495,7 @@ export async function registerRoutes(
   registerWalletRoutes(app);
   registerSecurityRoutes(app);
   registerCentralKitchenRecipeRoutes(app);
+  registerProductionOperationsReportRoute(app);
 
   // Cached data fetchers
   const getCachedBranches = memoize(async () => {
@@ -22201,7 +22203,64 @@ export async function registerRoutes(
       if (!branchId || !date) {
         return res.status(400).json({ error: "الفرع والتاريخ مطلوبان" });
       }
-      const stats = await storage.getDailyProductionStats(branchId as string, date as string);
+      const requestedBranch = String(branchId);
+      const requestedDate = String(date);
+      const dateParts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(requestedDate);
+      if (!dateParts || (() => {
+        const candidate = new Date(Date.UTC(Number(dateParts[1]), Number(dateParts[2]) - 1, Number(dateParts[3])));
+        return candidate.getUTCFullYear() !== Number(dateParts[1])
+          || candidate.getUTCMonth() !== Number(dateParts[2]) - 1
+          || candidate.getUTCDate() !== Number(dateParts[3]);
+      })()) {
+        return res.status(400).json({ error: "تاريخ غير صالح" });
+      }
+
+      const branchFilter = getEffectiveBranchFilter(
+        req,
+        requestedBranch === "all" ? undefined : requestedBranch,
+      );
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+
+      // A multi-branch user asking for "all" must only receive their assigned
+      // branches; storage's "all" is intentionally reserved for administrators.
+      const stats = branchFilter.branchIds === null
+        ? await storage.getDailyProductionStats("all", requestedDate)
+        : branchFilter.singleBranchId
+          ? await storage.getDailyProductionStats(branchFilter.singleBranchId, requestedDate)
+          : (await Promise.all(
+              branchFilter.branchIds.map(id => storage.getDailyProductionStats(id, requestedDate)),
+            )).reduce((total, current) => ({
+              totalBatches: total.totalBatches + current.totalBatches,
+              totalQuantity: total.totalQuantity + current.totalQuantity,
+              byDestination: Object.entries(current.byDestination).reduce((values, [key, value]) => {
+                values[key] = (values[key] || 0) + value;
+                return values;
+              }, total.byDestination),
+              byCategory: Object.entries(current.byCategory).reduce((values, [key, value]) => {
+                values[key] = (values[key] || 0) + value;
+                return values;
+              }, total.byCategory),
+              byHour: Object.entries(current.byHour).reduce((values, [key, value]) => {
+                values[key] = (values[key] || 0) + value;
+                return values;
+              }, total.byHour),
+              pendingBatches: total.pendingBatches + current.pendingBatches,
+              pendingQuantity: total.pendingQuantity + current.pendingQuantity,
+              cancelledBatches: total.cancelledBatches + current.cancelledBatches,
+              cancelledQuantity: total.cancelledQuantity + current.cancelledQuantity,
+            }), {
+              totalBatches: 0,
+              totalQuantity: 0,
+              byDestination: {} as Record<string, number>,
+              byCategory: {} as Record<string, number>,
+              byHour: {} as Record<string, number>,
+              pendingBatches: 0,
+              pendingQuantity: 0,
+              cancelledBatches: 0,
+              cancelledQuantity: 0,
+            });
       res.json(stats);
     } catch (error) {
       console.error("Error fetching daily production stats:", error);
@@ -22326,40 +22385,158 @@ export async function registerRoutes(
       }
       
       const branchId = branchFilter.singleBranchId || requestedBranch;
-      const startDate = (req.query.startDate as string) || new Date().toISOString().split('T')[0];
-      const endDate = (req.query.endDate as string) || new Date().toISOString().split('T')[0];
-      
-      // Get production stats for the date range
-      const prodStats = await storage.getDailyProductionStats(branchId, startDate);
-      const targetData = await storage.getProductionTargetsByDate(branchId, startDate);
+      // Dates are stored as Saudi local YYYY-MM-DD values.  Defaulting to the
+      // current month prevents an accidental all-history production report.
+      const today = saudiDate();
+      const startDate = (req.query.startDate as string) || `${today.slice(0, 7)}-01`;
+      const endDate = (req.query.endDate as string) || today;
+      const parseCalendarDate = (value: string): Date | null => {
+        const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+        if (!parts) return null;
+        const parsed = new Date(Date.UTC(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3])));
+        return parsed.getUTCFullYear() === Number(parts[1])
+          && parsed.getUTCMonth() === Number(parts[2]) - 1
+          && parsed.getUTCDate() === Number(parts[3])
+          ? parsed
+          : null;
+      };
+      const start = parseCalendarDate(startDate);
+      const end = parseCalendarDate(endDate);
+      if (!start || !end || start > end) {
+        return res.status(400).json({ error: "نطاق التاريخ غير صالح" });
+      }
+      const rangeDays = Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1;
+      if (rangeDays > 366) {
+        return res.status(400).json({ error: "لا يمكن أن يتجاوز نطاق التقرير 366 يوماً" });
+      }
+      const dateStrings = Array.from({ length: rangeDays }, (_, index) => {
+        const d = new Date(start);
+        d.setUTCDate(d.getUTCDate() + index);
+        return d.toISOString().slice(0, 10);
+      });
+      const branchMatches = (candidateBranchId: string | null | undefined) =>
+        branchFilter.branchIds === null
+          || (!!candidateBranchId && branchFilter.branchIds.includes(candidateBranchId));
+      const getScopedDailyStats = async (reportDate: string) => {
+        if (branchFilter.branchIds === null) {
+          return storage.getDailyProductionStats("all", reportDate);
+        }
+        if (branchFilter.singleBranchId) {
+          return storage.getDailyProductionStats(branchFilter.singleBranchId, reportDate);
+        }
+        const stats = await Promise.all(
+          branchFilter.branchIds.map(id => storage.getDailyProductionStats(id, reportDate)),
+        );
+        return stats.reduce((total, current) => ({
+          totalBatches: total.totalBatches + current.totalBatches,
+          totalQuantity: total.totalQuantity + current.totalQuantity,
+          byDestination: total.byDestination,
+          byCategory: total.byCategory,
+          byHour: total.byHour,
+          pendingBatches: total.pendingBatches + current.pendingBatches,
+          pendingQuantity: total.pendingQuantity + current.pendingQuantity,
+          cancelledBatches: total.cancelledBatches + current.cancelledBatches,
+          cancelledQuantity: total.cancelledQuantity + current.cancelledQuantity,
+        }), {
+          totalBatches: 0,
+          totalQuantity: 0,
+          byDestination: {} as Record<string, number>,
+          byCategory: {} as Record<string, number>,
+          byHour: {} as Record<string, number>,
+          pendingBatches: 0,
+          pendingQuantity: 0,
+          cancelledBatches: 0,
+          cancelledQuantity: 0,
+        });
+      };
+      // Read planned order lines once for the complete range. Calling the
+      // daily target helper for every day repeats a weekly/long-term item's
+      // target on every overlapping day (and once per accessible branch).
+      const targetConditions: SQL[] = [
+        or(
+          eq(advancedProductionOrders.status, "pending"),
+          eq(advancedProductionOrders.status, "approved"),
+          eq(advancedProductionOrders.status, "in_progress"),
+        ),
+        or(
+          and(
+            isNull(productionOrderItems.scheduledDate),
+            lte(advancedProductionOrders.startDate, endDate),
+            gte(advancedProductionOrders.endDate, startDate),
+          ),
+          and(
+            gte(productionOrderItems.scheduledDate, startDate),
+            lte(productionOrderItems.scheduledDate, endDate),
+          ),
+        ),
+      ];
+      if (branchFilter.branchIds !== null) {
+        targetConditions.push(or(
+          inArray(advancedProductionOrders.sourceBranchId, branchFilter.branchIds),
+          inArray(advancedProductionOrders.targetBranchId, branchFilter.branchIds),
+        ));
+      }
+      const queriedTargetRows = await db.select({
+        orderId: advancedProductionOrders.id,
+        itemId: productionOrderItems.id,
+        sourceBranchId: advancedProductionOrders.sourceBranchId,
+        targetBranchId: advancedProductionOrders.targetBranchId,
+        orderStartDate: advancedProductionOrders.startDate,
+        scheduledDate: productionOrderItems.scheduledDate,
+        targetQuantity: productionOrderItems.targetQuantity,
+      }).from(productionOrderItems)
+        .innerJoin(advancedProductionOrders, eq(productionOrderItems.orderId, advancedProductionOrders.id))
+        .where(and(...targetConditions));
+      // The key is explicit even though this join is currently one-to-one. It
+      // protects totals if target sources are extended with joins later.
+      const targetRows = [...new Map(
+        queriedTargetRows.map(row => [`${row.orderId}:${row.itemId}`, row]),
+      ).values()];
+      const targetData = {
+        totalTarget: targetRows.reduce((total, row) => total + (row.targetQuantity || 0), 0),
+      };
+      const targetByDate = new Map<string, number>();
+      for (const row of targetRows) {
+        // A line without an explicit scheduled day is a range-level plan, not
+        // a daily recurring target. Place it once on the first in-range date.
+        const planDate = row.scheduledDate
+          || (row.orderStartDate > startDate ? row.orderStartDate : startDate);
+        targetByDate.set(
+          planDate,
+          (targetByDate.get(planDate) || 0) + (row.targetQuantity || 0),
+        );
+      }
+      // One bounded range pass is the source for actual production and trend.
+      const dailyRangeData: Array<{
+        date: string;
+        stats: Awaited<ReturnType<typeof getScopedDailyStats>>;
+      }> = [];
+      for (const date of dateStrings) {
+        dailyRangeData.push({ date, stats: await getScopedDailyStats(date) });
+      }
       
       // Get waste reports with date filtering
       const allWasteReports = await storage.getWasteReports();
       const wasteReports = allWasteReports.filter(w => {
         const reportDate = w.reportDate || '';
-        const matchesBranch = branchId === 'all' || w.branchId === branchId;
+        const matchesBranch = branchMatches(w.branchId);
         const matchesDate = reportDate >= startDate && reportDate <= endDate;
-        return matchesBranch && matchesDate;
+        return w.status === 'approved' && matchesBranch && matchesDate;
       });
       
       // Get quality checks
       const allQualityChecks = await storage.getAllQualityChecks();
       const qualityChecks = allQualityChecks.filter(q => {
         const checkDate = q.checkDate || (q.createdAt ? new Date(q.createdAt).toISOString().split('T')[0] : '');
-        return checkDate >= startDate && checkDate <= endDate;
+        return branchMatches(q.branchId) && checkDate >= startDate && checkDate <= endDate;
       });
       
-      // Get products for performance analysis
-      const products = await storage.getAllProducts();
-      
       // Get branches for comparison
-      const branches = await storage.getAllBranches();
+      const branches = (await storage.getAllBranches()).filter(b => branchMatches(b.id));
       
       // Get cashier journals for sales comparison
       const allJournals = await storage.getCashierJournalsByDateRange(startDate, endDate);
-      const journalsInRange = branchId === 'all' 
-        ? allJournals 
-        : allJournals.filter(j => j.branchId === branchId);
+      const journalsInRange = allJournals.filter(j => branchMatches(j.branchId));
       const totalSales = journalsInRange.reduce((sum: number, j) => sum + (parseFloat(j.totalSales?.toString() || '0') || 0), 0);
       
       // Calculate waste analysis with product breakdown
@@ -22406,12 +22583,17 @@ export async function registerRoutes(
       // Build real product performance from production batches
       // Use productionDate for timezone-independent filtering
       const allProductionBatches = await storage.getAllDailyProductionBatches(
-        branchId === 'all' ? {} : { branchId }
+        branchFilter.singleBranchId ? { branchId: branchFilter.singleBranchId } : {}
       );
       const entriesInRange = allProductionBatches.filter(e => {
         // Use productionDate if available, otherwise fall back to producedAt
         const entryDate = e.productionDate || (e.producedAt ? new Date(e.producedAt).toISOString().split('T')[0] : '');
-        return entryDate >= startDate && entryDate <= endDate;
+        // Actual production is the same finished set used by daily statistics;
+        // in-progress and cancelled batches are work state, not output.
+        return e.status === 'finished'
+          && branchMatches(e.branchId)
+          && entryDate >= startDate
+          && entryDate <= endDate;
       });
       
       const productQuantities: Record<string, number> = {};
@@ -22474,16 +22656,21 @@ export async function registerRoutes(
         }));
       
       // Build branch comparison
-      const branchComparison = await Promise.all(branches.map(async (b) => {
-        const bStats = await storage.getDailyProductionStats(b.id, startDate);
-        const bTarget = await storage.getProductionTargetsByDate(b.id, startDate);
-        return {
+      const branchComparison = [];
+      for (const b of branches) {
+        const bStats = entriesInRange
+          .filter(entry => entry.branchId === b.id)
+          .reduce((total, entry) => total + (entry.quantity || 0), 0);
+        const bTarget = targetRows
+          .filter(row => row.sourceBranchId === b.id || row.targetBranchId === b.id)
+          .reduce((total, row) => total + (row.targetQuantity || 0), 0);
+        branchComparison.push({
           branchName: b.name,
-          production: bStats.totalQuantity,
-          target: bTarget.totalTarget,
-          efficiency: bTarget.totalTarget > 0 ? (bStats.totalQuantity / bTarget.totalTarget) * 100 : 0,
-        };
-      }));
+          production: bStats,
+          target: bTarget,
+          efficiency: bTarget > 0 ? (bStats / bTarget) * 100 : 0,
+        });
+      }
       
       // Get shift-based production data
       const shiftData: Record<string, { production: number; entries: number }> = {
@@ -22517,14 +22704,8 @@ export async function registerRoutes(
       
       // Build daily trends for the date range
       const dailyTrends: Array<{ date: string; production: number; target: number; sales: number; waste: number }> = [];
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const dateStr = d.toISOString().split('T')[0];
-        const dayStats = await storage.getDailyProductionStats(branchId, dateStr);
-        const dayTarget = await storage.getProductionTargetsByDate(branchId, dateStr);
-        
+      for (const day of dailyRangeData) {
+        const dateStr = day.date;
         const daySales = journalsInRange
           .filter(j => j.journalDate === dateStr)
           .reduce((sum, j) => sum + (parseFloat(j.totalSales?.toString() || '0') || 0), 0);
@@ -22535,8 +22716,8 @@ export async function registerRoutes(
         
         dailyTrends.push({
           date: dateStr,
-          production: dayStats.totalQuantity,
-          target: dayTarget.totalTarget,
+          production: day.stats.totalQuantity,
+          target: targetByDate.get(dateStr) || 0,
           sales: daySales,
           waste: dayWaste,
         });
@@ -22608,10 +22789,16 @@ export async function registerRoutes(
         },
         targetComparison: {
           target: targetData.totalTarget,
-          actual: targetData.totalProduced,
-          completionRate: targetData.totalTarget > 0 ? (targetData.totalProduced / targetData.totalTarget) * 100 : 0,
-          gap: targetData.totalProduced - targetData.totalTarget,
-          status: targetData.totalProduced >= targetData.totalTarget ? 'تحقق الهدف' : 'لم يتحقق',
+          // Production batches do not have a mandatory production-order-item
+          // link, so an aggregate finished quantity cannot truthfully be
+          // called an order-plan "actual".
+          actual: null,
+          completionRate: null,
+          gap: null,
+          status: 'غير متاح',
+          plannedTarget: targetData.totalTarget,
+          finishedProduction: totalQuantityInRange,
+          comparisonStatus: 'unavailable_without_explicit_batch_link',
         },
         salesData: {
           totalSales,
@@ -22645,6 +22832,8 @@ export async function registerRoutes(
           weekly: [],
         },
         filters: { branchId, startDate, endDate },
+        comparisonStatus: 'unavailable_without_explicit_batch_link',
+        comparisonWarning: 'لا يمكن مقارنة خطة أوامر الإنتاج بالإنتاج الفعلي حتى تُربط دفعات الإنتاج صراحةً ببنود الأمر.',
         generatedAt: new Date().toISOString(),
       });
     } catch (error) {

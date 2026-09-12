@@ -35,6 +35,7 @@ import {
   Search,
   X,
   FileBarChart,
+  Workflow,
 } from "lucide-react";
 import { Layout } from "@/components/layout";
 import { PageHeader } from "@/components/dashboard/page-header";
@@ -48,6 +49,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useProductionContext } from "@/contexts/ProductionContext";
 import { useBranches } from "@/hooks/useBranches";
+import { OperationsReport } from "@/components/production/operations-report";
 import {
   LineChart,
   Line,
@@ -83,11 +85,15 @@ interface ReportData {
     byChef: Record<string, { batches: number; quantity: number }>;
   };
   targetComparison: {
-    target: number;
-    actual: number;
-    completionRate: number;
-    gap: number;
+    target: number | null;
+    actual: number | null;
+    completionRate: number | null;
+    gap: number | null;
     status: string;
+    comparisonStatus?: string;
+  };
+  metadata?: {
+    comparisonStatus?: string;
   };
   salesData?: {
     totalSales: number;
@@ -153,6 +159,19 @@ interface ReportData {
     // Carry-over tracking
     sourceBatchId: number | null;
   }>;
+}
+
+function targetComparisonUnavailable(reportData: ReportData | undefined): boolean {
+  const comparison = reportData?.targetComparison;
+  return comparison?.comparisonStatus === "unavailable_without_explicit_batch_link" ||
+    reportData?.metadata?.comparisonStatus === "unavailable_without_explicit_batch_link" ||
+    comparison?.actual === null ||
+    comparison?.completionRate === null ||
+    comparison?.gap === null;
+}
+
+function targetComparisonValue(value: number | null | undefined): string {
+  return value === null || value === undefined ? "غير متاح" : String(value);
 }
 
 const CHART_COLORS = ['#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#06b6d4', '#ec4899', '#84cc16'];
@@ -624,7 +643,10 @@ export default function ProductionReportsPage() {
   const { selectedBranch, setSelectedBranch, selectedDate, setSelectedDate } = useProductionContext();
   const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [activeTab, setActiveTab] = useState("data");
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "operations") return "operations";
+    return "data";
+  });
   const [isExporting, setIsExporting] = useState<string | null>(null);
   
   // Filters state
@@ -806,13 +828,15 @@ export default function ProductionReportsPage() {
       }
       
       if (reportType === "all" || reportType === "targets") {
+        const comparisonUnavailable = targetComparisonUnavailable(reportData);
         const targetData = [
           ["تقرير الأهداف والإنجاز"],
-          ["الهدف", reportData.targetComparison.target],
-          ["الفعلي", reportData.targetComparison.actual],
-          ["نسبة الإنجاز", `${reportData.targetComparison.completionRate.toFixed(1)}%`],
-          ["الفجوة", reportData.targetComparison.gap],
+          ["الهدف", comparisonUnavailable ? "غير متاح" : targetComparisonValue(reportData.targetComparison.target)],
+          ["الفعلي", comparisonUnavailable ? "غير متاح" : targetComparisonValue(reportData.targetComparison.actual)],
+          ["نسبة الإنجاز", comparisonUnavailable ? "غير متاح" : `${reportData.targetComparison.completionRate?.toFixed(1)}%`],
+          ["الفجوة", comparisonUnavailable ? "غير متاح" : targetComparisonValue(reportData.targetComparison.gap)],
           ["الحالة", reportData.targetComparison.status],
+          ["حالة المقارنة", reportData.targetComparison.comparisonStatus || "غير محددة"],
         ];
         const ws = XLSX.utils.aoa_to_sheet(targetData);
         XLSX.utils.book_append_sheet(wb, ws, "الأهداف");
@@ -929,6 +953,7 @@ export default function ProductionReportsPage() {
   const exportToPDF = useCallback(async () => {
     setIsExporting("pdf");
     try {
+      const comparisonUnavailable = targetComparisonUnavailable(reportData);
       const response = await fetch("/api/pdf/production-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -938,7 +963,7 @@ export default function ProductionReportsPage() {
           endDate,
           totalBatches: reportData?.dailySummary.totalBatches || 0,
           totalQuantity: reportData?.dailySummary.totalQuantity || 0,
-          completionRate: reportData?.targetComparison.completionRate || 0,
+          completionRate: comparisonUnavailable ? null : reportData?.targetComparison.completionRate,
         }),
       });
       if (!response.ok) throw new Error("Failed to generate PDF");
@@ -1131,9 +1156,13 @@ export default function ProductionReportsPage() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="flex w-full gap-1 h-auto p-1">
+            <TabsTrigger value="operations" className="text-xs py-1.5 bg-violet-100 text-violet-900" data-testid="tab-operations">
+              <Workflow className="h-3 w-3 ml-1" />
+              التشغيل المترابط
+            </TabsTrigger>
             <TabsTrigger value="data" className="text-xs py-1.5 bg-amber-100" data-testid="tab-data">
               <FileSpreadsheet className="h-3 w-3 ml-1" />
-              البيانات
+              <span>البيانات <span className="text-[10px] text-muted-foreground">(سجل تاريخي)</span></span>
             </TabsTrigger>
             <TabsTrigger value="summary" className="text-xs py-1.5" data-testid="tab-summary">
               <BarChart3 className="h-3 w-3 ml-1" />
@@ -1177,7 +1206,11 @@ export default function ProductionReportsPage() {
             </TabsTrigger>
           </TabsList>
 
-          {isLoading ? (
+          {activeTab === "operations" ? (
+            <TabsContent value="operations">
+              <OperationsReport />
+            </TabsContent>
+          ) : isLoading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
               {[1, 2, 3, 4].map((i) => (
                 <Card key={i}>
@@ -1571,7 +1604,7 @@ export default function ProductionReportsPage() {
                         </div>
                         <span className="text-xs text-gray-600">نسبة الإنجاز</span>
                       </div>
-                      <p className="text-2xl font-bold text-amber-700">{reportData?.targetComparison.completionRate?.toFixed(0) || 0}%</p>
+                      <p className="text-2xl font-bold text-amber-700">{targetComparisonUnavailable(reportData) ? "غير متاح" : `${reportData?.targetComparison.completionRate?.toFixed(0)}%`}</p>
                     </CardContent>
                   </Card>
                   <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-200">
@@ -1796,28 +1829,28 @@ export default function ProductionReportsPage() {
                   <Card>
                     <CardContent className="p-3 text-center">
                       <p className="text-xs text-gray-500 mb-1">الهدف</p>
-                      <p className="text-xl font-bold text-gray-700">{reportData?.targetComparison.target || 0}</p>
+                      <p className="text-xl font-bold text-gray-700">{targetComparisonUnavailable(reportData) ? "غير متاح" : targetComparisonValue(reportData?.targetComparison.target)}</p>
                     </CardContent>
                   </Card>
                   <Card>
                     <CardContent className="p-3 text-center">
                       <p className="text-xs text-gray-500 mb-1">الفعلي</p>
-                      <p className="text-xl font-bold text-green-600">{reportData?.targetComparison.actual || 0}</p>
+                      <p className="text-xl font-bold text-green-600">{targetComparisonUnavailable(reportData) ? "غير متاح" : targetComparisonValue(reportData?.targetComparison.actual)}</p>
                     </CardContent>
                   </Card>
                   <Card>
                     <CardContent className="p-3 text-center">
                       <p className="text-xs text-gray-500 mb-1">الفجوة</p>
-                      <p className={`text-xl font-bold ${(reportData?.targetComparison.gap || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {(reportData?.targetComparison.gap || 0) >= 0 ? '+' : ''}{reportData?.targetComparison.gap || 0}
+                      <p className={`text-xl font-bold ${targetComparisonUnavailable(reportData) ? 'text-gray-600' : (reportData?.targetComparison.gap || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {targetComparisonUnavailable(reportData) ? "—" : `${(reportData?.targetComparison.gap || 0) >= 0 ? '+' : ''}${targetComparisonValue(reportData?.targetComparison.gap)}`}
                       </p>
                     </CardContent>
                   </Card>
-                  <Card className={`${(reportData?.targetComparison.completionRate || 0) >= 100 ? 'bg-green-50 border-green-200' : (reportData?.targetComparison.completionRate || 0) >= 80 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
+                  <Card className={`${targetComparisonUnavailable(reportData) ? 'bg-gray-50 border-gray-200' : (reportData?.targetComparison.completionRate || 0) >= 100 ? 'bg-green-50 border-green-200' : (reportData?.targetComparison.completionRate || 0) >= 80 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
                     <CardContent className="p-3 text-center">
                       <p className="text-xs text-gray-500 mb-1">نسبة الإنجاز</p>
-                      <p className={`text-xl font-bold ${(reportData?.targetComparison.completionRate || 0) >= 100 ? 'text-green-600' : (reportData?.targetComparison.completionRate || 0) >= 80 ? 'text-amber-600' : 'text-red-600'}`}>
-                        {reportData?.targetComparison.completionRate?.toFixed(1) || 0}%
+                      <p className={`text-xl font-bold ${targetComparisonUnavailable(reportData) ? 'text-gray-600' : (reportData?.targetComparison.completionRate || 0) >= 100 ? 'text-green-600' : (reportData?.targetComparison.completionRate || 0) >= 80 ? 'text-amber-600' : 'text-red-600'}`}>
+                        {targetComparisonUnavailable(reportData) ? "غير متاح" : `${reportData?.targetComparison.completionRate?.toFixed(1)}%`}
                       </p>
                     </CardContent>
                   </Card>

@@ -8877,18 +8877,31 @@ export class DatabaseStorage implements IStorage {
     byDestination: Record<string, number>;
     byCategory: Record<string, number>;
     byHour: Record<string, number>;
+    pendingBatches: number;
+    pendingQuantity: number;
+    cancelledBatches: number;
+    cancelledQuantity: number;
   }> {
+    // Actual production is inventory-posted only when a batch is finished.
+    // Keep unfinished/cancelled work visible separately instead of inflating
+    // the production quantities used by reports and target comparisons.
     const conditions = [eq(dailyProductionBatches.productionDate, date)];
     if (branchId !== "all") {
       conditions.push(eq(dailyProductionBatches.branchId, branchId));
     }
-    const batches = await db.select().from(dailyProductionBatches)
+    const allBatches = await db.select().from(dailyProductionBatches)
       .where(and(...conditions));
+    const batches = allBatches.filter(batch => batch.status === "finished");
+    const nonFinishedBatches = allBatches.filter(batch => batch.status !== "finished");
 
     const byDestination: Record<string, number> = {};
     const byCategory: Record<string, number> = {};
     const byHour: Record<string, number> = {};
     let totalQuantity = 0;
+    let pendingBatches = 0;
+    let pendingQuantity = 0;
+    let cancelledBatches = 0;
+    let cancelledQuantity = 0;
 
     for (const batch of batches) {
       totalQuantity += batch.quantity;
@@ -8906,12 +8919,26 @@ export class DatabaseStorage implements IStorage {
       byHour[hour] = (byHour[hour] || 0) + batch.quantity;
     }
 
+    for (const batch of nonFinishedBatches) {
+      if (batch.status === "cancelled") {
+        cancelledBatches += 1;
+        cancelledQuantity += batch.quantity;
+      } else {
+        pendingBatches += 1;
+        pendingQuantity += batch.quantity;
+      }
+    }
+
     return {
       totalBatches: batches.length,
       totalQuantity,
       byDestination,
       byCategory,
       byHour,
+      pendingBatches,
+      pendingQuantity,
+      cancelledBatches,
+      cancelledQuantity,
     };
   }
 
