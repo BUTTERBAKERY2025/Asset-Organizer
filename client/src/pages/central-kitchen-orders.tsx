@@ -24,6 +24,12 @@ import {
   parseCentralKitchenCatalogV2,
 } from "@shared/central-kitchen-catalog";
 import {
+  filterCentralKitchenOrdersByInventoryMode,
+  getCentralKitchenNextStep,
+  parseCentralKitchenInventoryMode,
+  parseCentralKitchenInventoryModeFilter,
+} from "@shared/central-kitchen-next-step";
+import {
   AlertTriangle, Check, ChevronLeft, Factory, Filter, Loader2, PackagePlus, Plus, Printer,
   RefreshCw, Search, ShieldCheck, Truck, X,
 } from "lucide-react";
@@ -45,7 +51,7 @@ type KitchenOrder = {
   driverName?: string | null; vehicleNumber?: string | null; discrepancyStatus?: "none" | "open" | "resolved";
   discrepancyResolutionNotes?: string | null;
   shadowInventoryEntries?: ShadowInventoryEntry[];
-  inventoryMode?: "shadow" | "real";
+  inventoryMode?: string | null;
   allocations?: Array<{ id: number; orderItemId: number; component: "original" | "substitute"; unit: string; reservedQuantity: number; dispatchedQuantity: number; releasedQuantity: number; status: string }>;
   linkedBatches?: Array<{ id: number; orderItemId: number; productId: number; quantity: number; productionDate: string | null; status: string | null }>;
 };
@@ -78,6 +84,10 @@ const STATUS: Record<string, { label: string; className: string }> = {
   received: { label: "تم الاستلام", className: "bg-emerald-50 text-emerald-800 border-emerald-200" },
   draft: { label: "مسودة", className: "bg-stone-100 text-stone-700 border-stone-200" },
 };
+const CENTRAL_KITCHEN_STATUSES = ["requested", "approved", "prepared", "dispatched", "received"] as const;
+type CentralKitchenStatusFilter = (typeof CENTRAL_KITCHEN_STATUSES)[number];
+const INVENTORY_MODES = ["real", "shadow", "unknown"] as const;
+type InventoryModeFilter = (typeof INVENTORY_MODES)[number];
 const emptyLine = (): DraftItem => ({ productName: "", unit: "قطعة", requestedQuantity: "1", notes: "" });
 const catalogKey = (item: Pick<ProductOption, "id" | "source">) => `${item.source}:${item.id}`;
 const sourceLabel = (source: "product" | "warehouse") => source === "warehouse" ? "المستودع" : "المنتجات";
@@ -87,6 +97,30 @@ const localDate = () => new Date().toLocaleDateString("en-CA");
 const readableDate = (value?: string) => value ? new Intl.DateTimeFormat("ar-SA", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value)) : "غير محدد";
 const readableTime = (value?: string) => value || "—";
 const normalized = (status: string) => status?.toLowerCase().replaceAll(" ", "_") || "pending";
+const isCentralKitchenStatus = (value: string | null): value is CentralKitchenStatusFilter =>
+  !!value && (CENTRAL_KITCHEN_STATUSES as readonly string[]).includes(value);
+const isInventoryMode = (value: string | null): value is InventoryModeFilter =>
+  parseCentralKitchenInventoryModeFilter(value) !== "all";
+const readFilterFromUrl = <T extends string>(
+  key: string,
+  values: readonly T[],
+): T | "all" => {
+  if (typeof window === "undefined") return "all";
+  const value = new URLSearchParams(window.location.search).get(key)?.trim().toLowerCase() || null;
+  return values.includes(value as T) ? value as T : "all";
+};
+const writeFilterToUrl = (key: string, value: string) => {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (value === "all") url.searchParams.delete(key);
+  else url.searchParams.set(key, value);
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+};
+const errorStatus = (error: unknown): number | null => {
+  const message = error instanceof Error ? error.message : String(error || "");
+  const match = /^(\d{3}):/.exec(message);
+  return match ? Number(match[1]) : null;
+};
 
 export default function CentralKitchenOrdersPage() {
   const { branches, userBranchId, canSelectBranch } = useBranches();
@@ -94,7 +128,8 @@ export default function CentralKitchenOrdersPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [branchFilter, setBranchFilter] = useState(userBranchId || "all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<CentralKitchenStatusFilter | "all">(() => readFilterFromUrl("status", CENTRAL_KITCHEN_STATUSES));
+  const [inventoryModeFilter, setInventoryModeFilter] = useState<InventoryModeFilter | "all">(() => readFilterFromUrl("inventoryMode", INVENTORY_MODES));
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | number | null>(null);
@@ -106,8 +141,19 @@ export default function CentralKitchenOrdersPage() {
 
   useEffect(() => { if (userBranchId) setBranchFilter(userBranchId); }, [userBranchId]);
   useEffect(() => {
-    const orderId = new URLSearchParams(window.location.search).get("orderId");
-    if (orderId) setDetailId(orderId);
+    const syncUrlState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const orderId = params.get("orderId");
+      const status = params.get("status")?.trim().toLowerCase() || null;
+      const inventoryMode = params.get("inventoryMode")?.trim().toLowerCase() || null;
+      setDetailId(orderId);
+      setStatusFilter(isCentralKitchenStatus(status) ? status : "all");
+      setInventoryModeFilter(isInventoryMode(inventoryMode) ? inventoryMode : "all");
+      if (!orderId) setActionNotes("");
+    };
+    syncUrlState();
+    window.addEventListener("popstate", syncUrlState);
+    return () => window.removeEventListener("popstate", syncUrlState);
   }, []);
   const listUrl = useMemo(() => {
     const params = new URLSearchParams();
@@ -165,10 +211,11 @@ export default function CentralKitchenOrdersPage() {
     }
     return Array.from(merged.values());
   }, [branches, kitchensQuery.data]);
-  const filtered = useMemo(() => (ordersQuery.data || []).filter(order => {
+  const filtered = useMemo(() => filterCentralKitchenOrdersByInventoryMode(ordersQuery.data || [], inventoryModeFilter).filter(order => {
     const term = search.trim().toLowerCase();
-    return !term || [order.orderNumber, order.requestBranchName, order.centralKitchenName].some(value => value?.toLowerCase().includes(term));
-  }), [ordersQuery.data, search]);
+    const matchesSearch = !term || [order.orderNumber, order.requestBranchName, order.centralKitchenName].some(value => value?.toLowerCase().includes(term));
+    return matchesSearch;
+  }), [ordersQuery.data, search, inventoryModeFilter]);
   const refresh = () => queryClient.invalidateQueries({ predicate: query => typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/central-kitchen-orders") });
 
   const createMutation = useMutation({
@@ -196,7 +243,7 @@ export default function CentralKitchenOrdersPage() {
     onSuccess: (order) => {
       toast({ title: "تم إنشاء طلب المطبخ", description: `تم تسجيل الطلب ${order.orderNumber || ""}` });
       createAttemptRef.current = null;
-      setCreateOpen(false); setDetailId(order.id); setDraft({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: localDate(), neededTime: "", notes: "", items: [emptyLine()] }); refresh();
+       setCreateOpen(false); openDetail(order.id); setDraft({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: localDate(), neededTime: "", notes: "", items: [emptyLine()] }); refresh();
     },
     onError: (error) => toast({ title: "تعذر إنشاء الطلب", description: error instanceof Error ? error.message : "تحقق من البيانات وحاول مجدداً.", variant: "destructive" }),
   });
@@ -224,6 +271,36 @@ export default function CentralKitchenOrdersPage() {
   const selectedDetail = detailQuery.data;
   const statusInfo = (status: string) => STATUS[normalized(status)] || { label: status || "قيد المراجعة", className: "bg-muted text-muted-foreground border-border" };
   const branchName = (id: string) => branches.find(branch => branch.id === id)?.name || id;
+  const openDetail = (id: string | number) => {
+    const value = String(id);
+    setDetailId(id);
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("orderId") !== value) {
+      url.searchParams.set("orderId", value);
+      window.history.pushState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+  };
+  const closeDetail = () => {
+    setDetailId(null);
+    setActionNotes("");
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("orderId")) {
+      url.searchParams.delete("orderId");
+      window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+  };
+  const changeStatusFilter = (value: string) => {
+    if (value !== "all" && !isCentralKitchenStatus(value)) return;
+    setStatusFilter(value as CentralKitchenStatusFilter | "all");
+    writeFilterToUrl("status", value);
+  };
+  const changeInventoryModeFilter = (value: string) => {
+    if (value !== "all" && !isInventoryMode(value)) return;
+    setInventoryModeFilter(value as InventoryModeFilter | "all");
+    writeFilterToUrl("inventoryMode", value);
+  };
 
   return <Layout>
     <main dir="rtl" className="page-container space-y-5 pb-10">
@@ -240,13 +317,15 @@ export default function CentralKitchenOrdersPage() {
         </CardContent>
       </Card>
 
-      <Card className="border-border/80 shadow-sm">
+       <Card className="border-border/80 shadow-sm">
         <CardContent className="p-4">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
             <div className="relative md:col-span-5"><Search className="absolute right-3 top-3 h-4 w-4 text-muted-foreground" /><Input value={search} onChange={event => setSearch(event.target.value)} className="h-10 pr-9" placeholder="ابحث برقم الطلب أو الفرع..." /></div>
             <Select value={branchFilter} onValueChange={setBranchFilter}><SelectTrigger className="h-10 md:col-span-4" disabled={!canSelectBranch}><SelectValue placeholder="فرع المصدر" /></SelectTrigger><SelectContent>{canSelectBranch && <SelectItem value="all">كل الفروع</SelectItem>}{branches.map(branch => <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>)}</SelectContent></Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="h-10 md:col-span-3"><Filter className="ml-2 h-4 w-4 text-muted-foreground" /><SelectValue placeholder="كل الحالات" /></SelectTrigger><SelectContent><SelectItem value="all">كل الحالات</SelectItem>{["requested", "approved", "prepared", "dispatched", "received"].map(key => <SelectItem key={key} value={key}>{STATUS[key].label}</SelectItem>)}</SelectContent></Select>
+             <Select value={statusFilter} onValueChange={changeStatusFilter}><SelectTrigger className="h-10 md:col-span-3"><Filter className="ml-2 h-4 w-4 text-muted-foreground" /><SelectValue placeholder="كل الحالات" /></SelectTrigger><SelectContent><SelectItem value="all">كل الحالات</SelectItem>{CENTRAL_KITCHEN_STATUSES.map(key => <SelectItem key={key} value={key}>{STATUS[key].label}</SelectItem>)}</SelectContent></Select>
+             <Select value={inventoryModeFilter} onValueChange={changeInventoryModeFilter}><SelectTrigger className="h-10 md:col-span-3"><SelectValue placeholder="كل أوضاع المخزون" /></SelectTrigger><SelectContent><SelectItem value="all">كل أوضاع المخزون</SelectItem><SelectItem value="real">فعلي</SelectItem><SelectItem value="shadow">ظلّي — تشغيلي</SelectItem><SelectItem value="unknown">غير محدد / طلب قديم</SelectItem></SelectContent></Select>
           </div>
+           <p className="mt-2 text-xs text-muted-foreground">يُطبّق نطاق الفرع والحالة على الخادم، بينما يُصفّى وضع المخزون محلياً على كامل قائمة الطلبات غير المرقّمة.</p>
         </CardContent>
       </Card>
 
@@ -254,8 +333,8 @@ export default function CentralKitchenOrdersPage() {
       ordersQuery.isError ? <Card><CardContent className="py-16 text-center"><p className="font-medium">تعذر تحميل الطلبات</p><p className="mt-1 text-sm text-muted-foreground">تحقق من الاتصال ثم أعد المحاولة.</p><Button className="mt-4" variant="outline" onClick={refresh}>إعادة المحاولة</Button></CardContent></Card> :
       filtered.length === 0 ? <Card><CardContent className="py-16 text-center"><PackagePlus className="mx-auto mb-3 h-10 w-10 text-muted-foreground" /><h2 className="font-semibold">لا توجد طلبات مطابقة</h2><p className="mt-1 text-sm text-muted-foreground">{canCreate("central_kitchen_orders") ? "أنشئ طلباً جديداً أو عدّل عوامل التصفية." : "عدّل عوامل التصفية أو انتظر وصول طلب جديد."}</p>{canCreate("central_kitchen_orders") && <Button className="mt-5" onClick={() => setCreateOpen(true)}>إنشاء طلب</Button>}</CardContent></Card> :
       <Card className="overflow-hidden border-border/80"><div className="overflow-x-auto"><Table><TableHeader className="bg-muted/40"><TableRow><TableHead className="text-right">رقم الطلب</TableHead><TableHead className="text-right">من</TableHead><TableHead className="text-right">إلى المطبخ</TableHead><TableHead className="text-right">المطلوب</TableHead><TableHead className="text-right">البنود</TableHead><TableHead className="text-right">الحالة</TableHead><TableHead className="text-left"> </TableHead></TableRow></TableHeader><TableBody>
-        {filtered.map(order => <TableRow key={order.id} className="cursor-pointer hover:bg-muted/35" onClick={() => setDetailId(order.id)}>
-          <TableCell className="font-mono font-semibold text-primary">{order.orderNumber}</TableCell><TableCell>{order.requestBranchName || branchName(order.requestBranchId)}</TableCell><TableCell>{order.centralKitchenName || branchName(order.centralKitchenId)}</TableCell><TableCell><span className="text-sm">{readableDate(order.neededDate)} <span className="text-muted-foreground">{readableTime(order.neededTime)}</span></span></TableCell><TableCell>{order.itemCount ?? order.items?.length ?? 0} بنود</TableCell><TableCell><StatusBadge status={order.status} /></TableCell><TableCell className="text-left"><Button variant="ghost" size="icon" aria-label="عرض الطلب" onClick={event => { event.stopPropagation(); setDetailId(order.id); }}><ChevronLeft className="h-4 w-4" /></Button></TableCell>
+         {filtered.map(order => <TableRow key={order.id} className="cursor-pointer hover:bg-muted/35" onClick={() => openDetail(order.id)}>
+           <TableCell className="font-mono font-semibold text-primary">{order.orderNumber}</TableCell><TableCell>{order.requestBranchName || branchName(order.requestBranchId)}</TableCell><TableCell>{order.centralKitchenName || branchName(order.centralKitchenId)}</TableCell><TableCell><span className="text-sm">{readableDate(order.neededDate)} <span className="text-muted-foreground">{readableTime(order.neededTime)}</span></span></TableCell><TableCell>{order.itemCount ?? order.items?.length ?? 0} بنود</TableCell><TableCell><StatusBadge status={order.status} /><NextStepSummary order={order} /></TableCell><TableCell className="text-left"><Button variant="ghost" size="icon" aria-label="عرض الطلب" onClick={event => { event.stopPropagation(); openDetail(order.id); }}><ChevronLeft className="h-4 w-4" /></Button></TableCell>
         </TableRow>)}</TableBody></Table></div></Card>}
     </main>
 
@@ -273,11 +352,46 @@ export default function CentralKitchenOrdersPage() {
       <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setCreateOpen(false)}>إلغاء</Button><Button disabled={createMutation.isPending} onClick={() => createMutation.mutate()}>{createMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}إرسال الطلب</Button></div>
     </DialogContent></Dialog>
 
-    <Dialog open={detailId !== null} onOpenChange={open => { if (!open) { setDetailId(null); setActionNotes(""); } }}><DialogContent dir="rtl" className="max-h-[92dvh] max-w-5xl overflow-y-auto">{detailQuery.isLoading ? <div className="space-y-3 py-8">{Array.from({ length: 5 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</div> : detailQuery.isError || !selectedDetail ? <div className="py-12 text-center"><p className="font-medium">تعذر تحميل تفاصيل الطلب</p><Button variant="outline" className="mt-4" onClick={() => detailQuery.refetch()}>إعادة المحاولة</Button></div> : <OrderDetail order={selectedDetail} products={products} productsQuery={productsQuery} accessibleBranchIds={branches.map(branch => branch.id)} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={workflowMutation.isPending} canApprove={canApprove("central_kitchen_orders")} canEdit={canEdit("central_kitchen_orders")} onAction={(action, details) => workflowMutation.mutate({ id: selectedDetail.id, action, details })} />}</DialogContent></Dialog>
+     <Dialog open={detailId !== null} onOpenChange={open => { if (!open) closeDetail(); }}><DialogContent dir="rtl" className="max-h-[92dvh] max-w-5xl overflow-y-auto">{(detailQuery.isLoading || (detailQuery.isFetching && detailQuery.isPlaceholderData)) ? <div className="space-y-3 py-8" aria-label="جارٍ تحميل تفاصيل الطلب">{Array.from({ length: 5 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</div> : detailQuery.isError || !selectedDetail ? <DetailQueryError error={detailQuery.error} onRetry={() => detailQuery.refetch()} /> : <OrderDetail order={selectedDetail} products={products} productsQuery={productsQuery} accessibleBranchIds={branches.map(branch => branch.id)} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={workflowMutation.isPending} canApprove={canApprove("central_kitchen_orders")} canEdit={canEdit("central_kitchen_orders")} onAction={(action, details) => workflowMutation.mutate({ id: selectedDetail.id, action, details })} />}</DialogContent></Dialog>
   </Layout>;
 }
 
 function StatusBadge({ status }: { status: string }) { const info = STATUS[normalized(status)] || { label: status, className: "bg-muted text-muted-foreground border-border" }; return <Badge variant="outline" className={cn("whitespace-nowrap font-medium", info.className)}>{info.label}</Badge>; }
+function NextStepSummary({ order }: { order: KitchenOrder }) {
+  const step = getCentralKitchenNextStep({
+    status: order.status,
+    inventoryMode: parseCentralKitchenInventoryMode(order.inventoryMode),
+    discrepancyStatus: order.discrepancyStatus,
+  });
+  const inventoryMode = parseCentralKitchenInventoryMode(order.inventoryMode);
+  return <><span className={cn("mt-1 block text-[11px]", step.isComplete ? "text-emerald-700" : "text-muted-foreground")}>{step.isComplete ? step.label : `التالي: ${step.label} · ${step.owner}`}</span>{inventoryMode === "shadow" && <span className="block text-[10px] text-amber-700">ظلّي — تشغيلي فقط، لا حركة مخزون فعلية</span>}{inventoryMode === "unknown" && <span className="block text-[10px] text-muted-foreground">وضع المخزون غير محدد — طلب قديم</span>}</>;
+}
+const LIFECYCLE_STAGES = [
+  { status: "requested", label: "طلب" },
+  { status: "approved", label: "اعتماد" },
+  { status: "prepared", label: "تجهيز" },
+  { status: "dispatched", label: "إرسال" },
+  { status: "received", label: "استلام" },
+] as const;
+function LifecycleProgress({ status }: { status: string }) {
+  const currentIndex = LIFECYCLE_STAGES.findIndex(stage => stage.status === status);
+  if (currentIndex < 0) {
+    return <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-900">حالة الطلب غير معروفة — لا يمكن تحديد تقدّم الدورة.</div>;
+  }
+  return <section aria-label="تقدم دورة الطلب" className="rounded-lg border bg-background p-3"><div className="mb-2 flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">تقدم دورة الطلب</h3><span className="text-xs text-muted-foreground">{currentIndex + 1} من {LIFECYCLE_STAGES.length}</span></div><div className="grid grid-cols-5 gap-1">{LIFECYCLE_STAGES.map((stage, index) => <div key={stage.status} className="text-center"><div className={cn("mx-auto h-2 rounded-full", index <= currentIndex ? "bg-primary" : "bg-muted")} /><span className={cn("mt-1 block text-[11px]", index === currentIndex ? "font-semibold text-primary" : "text-muted-foreground")}>{stage.label}</span></div>)}</div></section>;
+}
+function NextStepGuidance({ step, inventoryMode }: { step: ReturnType<typeof getCentralKitchenNextStep>; inventoryMode?: KitchenOrder["inventoryMode"] }) {
+  const mode = parseCentralKitchenInventoryMode(inventoryMode);
+  const shadow = mode === "shadow";
+  const unknownMode = mode === "unknown";
+  return <section className={cn("rounded-lg border px-4 py-3", step.isComplete ? "border-emerald-200 bg-emerald-50/70" : step.stage === "discrepancy_review" ? "border-amber-300 bg-amber-50/70" : "border-sky-200 bg-sky-50/60")}><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold">{step.isComplete ? "مسار الطلب مكتمل" : "الخطوة التالية"}</h3><p className="mt-1 text-sm">{step.label}</p></div><Badge variant="outline" className="bg-background">{step.isComplete ? "مكتمل" : `المسؤول: ${step.owner}`}</Badge></div>{shadow && <p className="mt-2 text-xs text-amber-800">الوضع الظلّي تشغيلي فقط ولا يمثل حركة مخزون فعلية.</p>}{unknownMode && <p className="mt-2 text-xs text-muted-foreground">وضع المخزون غير محدد؛ هذا السجل لا يثبت حركة مخزون فعلية.</p>}{step.stage === "discrepancy_review" && <p className="mt-2 text-xs text-amber-900">لا تُعد الفروقات مكتملة تلقائياً؛ راجعها مع الفريق المسؤول.</p>}</section>;
+}
+function DetailQueryError({ error, onRetry }: { error: unknown; onRetry: () => unknown }) {
+  const status = errorStatus(error);
+  const forbidden = status === 401 || status === 403;
+  const missing = status === 404;
+  return <div className="py-12 text-center" role="alert"><p className="font-medium">{forbidden ? "لا تملك صلاحية عرض هذا الطلب" : missing ? "الطلب غير موجود" : "تعذر تحميل تفاصيل الطلب"}</p><p className="mt-1 text-sm text-muted-foreground">{forbidden ? "تم رفض الوصول إلى هذا الطلب. اطلب من مسؤول النظام منحك صلاحية مناسبة." : missing ? "قد يكون الطلب حُذف أو لم يعد متاحاً." : "تحقق من الاتصال ثم أعد المحاولة."}</p>{!forbidden && <Button variant="outline" className="mt-4" onClick={() => onRetry()}>إعادة المحاولة</Button>}</div>;
+}
 function MetricTile({ label, value, tone = "normal" }: { label: string; value: string | number; tone?: "normal" | "warning" | "danger" }) { return <div className={cn("rounded-lg border bg-background p-3", tone === "warning" && "border-amber-200 bg-amber-50", tone === "danger" && "border-red-200 bg-red-50")}><span className="text-xs text-muted-foreground">{label}</span><strong className="mt-1 block text-2xl">{value}</strong></div>; }
 function StageTime({ label, value }: { label: string; value: number | null }) { return <div className="flex items-center justify-between rounded-md bg-background/70 px-3 py-2"><span>متوسط {label}</span><strong>{value === null ? "—" : `${value} ساعة`}</strong></div>; }
 function FormSelect({ label, value, onChange, branches, placeholder }: { label: string; value: string; onChange: (value: string) => void; branches: { id: string; name: string }[]; placeholder: string }) { return <div><Label>{label}</Label><Select value={value} onValueChange={onChange}><SelectTrigger className="mt-2"><SelectValue placeholder={placeholder} /></SelectTrigger><SelectContent>{branches.map(branch => <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>)}</SelectContent></Select></div>; }
@@ -290,6 +404,17 @@ function CatalogQueryState({ query, count }: { query: CatalogQueryLike; count: n
 }
 function OrderDetail({ order, products, productsQuery, accessibleBranchIds, actionNotes, setActionNotes, pending, canApprove, canEdit, onAction }: { order: KitchenOrder; products: ProductOption[]; productsQuery: CatalogQueryLike; accessibleBranchIds: string[]; actionNotes: string; setActionNotes: (value: string) => void; pending: boolean; canApprove: boolean; canEdit: boolean; onAction: (action: "approve" | "prepare" | "dispatch" | "receive" | "resolve-discrepancy", details?: Record<string, unknown>) => void }) {
   const status = normalized(order.status);
+  const discrepancyQuantities = (order.items || []).reduce((totals, item) => ({
+    damaged: totals.damaged + Math.max(0, Number(item.damagedQuantity || 0)),
+    missing: totals.missing + Math.max(0, Number(item.missingQuantity || 0)),
+  }), { damaged: 0, missing: 0 });
+  const nextStep = getCentralKitchenNextStep({
+    status: order.status,
+    inventoryMode: parseCentralKitchenInventoryMode(order.inventoryMode),
+    discrepancyStatus: order.discrepancyStatus,
+    damagedQuantity: discrepancyQuantities.damaged,
+    missingQuantity: discrepancyQuantities.missing,
+  });
   const action = status === "requested" || status === "pending" || status === "draft" ? "approve" : status === "approved" ? "prepare" : status === "prepared" ? "dispatch" : status === "dispatched" ? "receive" : null;
   const allowAction = action === "approve"
     ? canApprove && accessibleBranchIds.includes(order.centralKitchenId)
@@ -297,10 +422,13 @@ function OrderDetail({ order, products, productsQuery, accessibleBranchIds, acti
       ? canEdit && accessibleBranchIds.includes(order.requestBranchId)
       : !!action && canEdit && accessibleBranchIds.includes(order.centralKitchenId);
   const actionConfig = action ? { approve: { label: "اعتماد الطلب", icon: ShieldCheck }, prepare: { label: "تأكيد التجهيز", icon: PackagePlus }, dispatch: { label: "تأكيد الشحن", icon: Truck }, receive: { label: "تأكيد الاستلام", icon: Check } }[action] : null;
-  return <><DialogHeader><div className="flex items-start justify-between gap-3 pl-8"><div><DialogTitle className="font-mono text-xl">{order.orderNumber}</DialogTitle><DialogDescription className="mt-1">طلب الفرع {order.requestBranchName || order.requestBranchId} من {order.centralKitchenName || order.centralKitchenId}</DialogDescription></div><div className="flex items-center gap-2"><StatusBadge status={order.status} />{["prepared", "dispatched", "received"].includes(status) && <Button size="sm" variant="outline" onClick={() => printPreparationNote(order)}><Printer className="ml-1 h-4 w-4" />سند التجهيز</Button>}</div></div></DialogHeader>
+   return <><DialogHeader><div className="flex items-start justify-between gap-3 pl-8"><div><DialogTitle className="font-mono text-xl">{order.orderNumber}</DialogTitle><DialogDescription className="mt-1">طلب الفرع {order.requestBranchName || order.requestBranchId} من {order.centralKitchenName || order.centralKitchenId}</DialogDescription></div><div className="flex items-center gap-2"><StatusBadge status={order.status} />{["prepared", "dispatched", "received"].includes(status) && <Button size="sm" variant="outline" onClick={() => printPreparationNote(order)}><Printer className="ml-1 h-4 w-4" />سند التجهيز</Button>}</div></div></DialogHeader>
     <div className="grid gap-3 border-y py-4 text-sm md:grid-cols-3"><div><span className="block text-muted-foreground">تاريخ الحاجة</span><span className="mt-1 block font-medium">{readableDate(order.neededDate)}</span></div><div><span className="block text-muted-foreground">وقت الحاجة</span><span className="mt-1 block font-medium">{readableTime(order.neededTime)}</span></div><div><span className="block text-muted-foreground">تاريخ الإنشاء</span><span className="mt-1 block font-medium">{readableDate(order.createdAt)}</span></div></div>
     {order.notes && <div className="rounded-md border-r-4 border-primary bg-muted/30 px-4 py-3 text-sm"><span className="mb-1 block text-xs text-muted-foreground">ملاحظات الطلب</span>{order.notes}</div>}
-    <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 px-3 py-2 text-xs"><span className="text-muted-foreground">وضع مخزون الطلب:</span><Badge variant="outline" className={order.inventoryMode === "real" ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-amber-300 bg-amber-50 text-amber-800"}>{order.inventoryMode === "real" ? "فعلي — حجوزات من مخزون المطبخ" : "ظلّي — لا توجد حركة مخزون فعلية"}</Badge></div>
+     <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 px-3 py-2 text-xs"><span className="text-muted-foreground">وضع مخزون الطلب:</span><Badge variant="outline" className={parseCentralKitchenInventoryMode(order.inventoryMode) === "real" ? "border-emerald-300 bg-emerald-50 text-emerald-800" : parseCentralKitchenInventoryMode(order.inventoryMode) === "shadow" ? "border-amber-300 bg-amber-50 text-amber-800" : "border-border bg-muted text-muted-foreground"}>{parseCentralKitchenInventoryMode(order.inventoryMode) === "real" ? "فعلي — حجوزات من مخزون المطبخ" : parseCentralKitchenInventoryMode(order.inventoryMode) === "shadow" ? "ظلّي — تشغيلي فقط، لا حركة مخزون فعلية" : "غير محدد — طلب قديم، لا يثبت حركة مخزون"}</Badge></div>
+     <LifecycleProgress status={status} />
+     <NextStepGuidance step={nextStep} inventoryMode={order.inventoryMode} />
+     <div className="flex justify-end"><a href="/production-reports?tab=operations" className="text-xs font-medium text-primary underline-offset-4 hover:underline">عرض تقرير العمليات المترابط</a></div>
     {order.driverName && <div className="grid gap-3 rounded-md border bg-orange-50/40 p-3 text-sm md:grid-cols-2"><div><span className="text-muted-foreground">السائق: </span>{order.driverName}</div><div><span className="text-muted-foreground">المركبة: </span>{order.vehicleNumber}</div></div>}
     <OrderItemsTable items={order.items || []} showPreparation={["prepared", "dispatched", "received"].includes(status)} showShipment={["dispatched", "received"].includes(status)} />
     {!!order.allocations?.length && <section className="rounded-lg border bg-emerald-50/30 p-4"><h3 className="font-semibold">الحجوزات والكميات المرحلة</h3><div className="mt-2 space-y-2 text-sm">{order.allocations.map(allocation => <div key={allocation.id} className="flex flex-wrap justify-between gap-2 rounded bg-background px-3 py-2"><span>بند #{allocation.orderItemId} · {allocation.component === "original" ? "الصنف الأصلي" : "بديل"} · {allocation.status}</span><span>محجوز {allocation.reservedQuantity} · مشحون {allocation.dispatchedQuantity} · محرر {allocation.releasedQuantity} {allocation.unit}</span></div>)}</div></section>}
@@ -312,7 +440,7 @@ function OrderDetail({ order, products, productsQuery, accessibleBranchIds, acti
       : action === "dispatch" && allowAction ? <DispatchEditor items={order.items || []} pending={pending} onSubmit={details => onAction("dispatch", details)} />
       : action === "receive" && allowAction ? <ReceiptEditor items={order.items || []} pending={pending} onSubmit={details => onAction("receive", details)} />
       : actionConfig && allowAction && <div className="rounded-lg border bg-muted/20 p-3"><Label htmlFor="action-note">ملاحظة (اختياري)</Label><Input id="action-note" className="mt-2" value={actionNotes} onChange={event => setActionNotes(event.target.value)} placeholder="أضف ملاحظة للفريق..." /><Button className="mt-3 w-full sm:w-auto" disabled={pending} onClick={() => { if (action) onAction(action); }}>{pending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <actionConfig.icon className="ml-2 h-4 w-4" />}{actionConfig.label}</Button></div>}
-    {!action && status === "received" && order.discrepancyStatus !== "open" && <div className="flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800"><Check className="h-4 w-4" />اكتمل مسار هذا الطلب وتم تأكيد الاستلام.</div>}
+     {!action && status === "received" && nextStep.isComplete && <div className="flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800"><Check className="h-4 w-4" />اكتمل مسار هذا الطلب وتم تأكيد الاستلام.</div>}
     {status === "received" && order.discrepancyStatus === "open" && canEdit && accessibleBranchIds.includes(order.requestBranchId) && <div className="rounded-lg border border-amber-300 bg-amber-50 p-3"><div className="flex items-center gap-2 font-medium text-amber-900"><AlertTriangle className="h-4 w-4" />فروقات استلام مفتوحة</div><Input className="mt-3" value={actionNotes} onChange={event => setActionNotes(event.target.value)} placeholder="اكتب كيف تمت معالجة الناقص أو التالف" /><Button className="mt-3" disabled={pending || !actionNotes.trim()} onClick={() => onAction("resolve-discrepancy", { notes: actionNotes.trim() })}>إغلاق الفروقات بعد المعالجة</Button></div>}
   </>;
 }

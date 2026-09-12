@@ -20,3 +20,9 @@ Keep real, shadow, and unknown kitchen modes separate in headline quantities as 
 **Why:** Shadow movements did not change physical stock; current catalog prices cannot establish historical production cost.
 
 **How to apply:** Use mode-specific quantities, approved waste separately, and documented date/source definitions. Do not silently replace missing values with zero.
+
+Receipt discrepancies require authoritative settlement status; historical damaged/missing quantities do not establish whether a discrepancy remains open.
+
+**Why:** A resolved discrepancy retains its original quantities. Conversely, a received list row can omit quantities while its discrepancy remains open.
+
+**How to apply:** Use explicit open/resolved/none status for next-step guidance. If a report does not carry that status, direct the user to the source order and label settlement state unavailable rather than completed or unresolved.
