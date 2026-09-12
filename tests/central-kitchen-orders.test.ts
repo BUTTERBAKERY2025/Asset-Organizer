@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canTransitionCentralKitchenOrder,
   centralKitchenIdempotencyKeySchema,
+  centralKitchenLinkedBatchSchema,
   centralKitchenPreparationSchema,
   centralKitchenDispatchSchema,
   centralKitchenReceiveSchema,
@@ -19,6 +20,24 @@ import {
 import { parseCentralKitchenCatalogV2 } from "../shared/central-kitchen-catalog";
 
 describe("central kitchen workflow rules", () => {
+  it("accepts the linked-batch browser payload while retaining strict validation", () => {
+    const payload = {
+      quantity: 1,
+      productionDate: "2026-09-12",
+      idempotencyKey: "fce0dba6-4900-4b0a-b0fd-de0c27a46015",
+    };
+    expect(centralKitchenLinkedBatchSchema.safeParse(payload).success).toBe(true);
+    expect(centralKitchenLinkedBatchSchema.safeParse({
+      quantity: 1, productionDate: "2026-09-12",
+    }).success).toBe(true);
+    expect(centralKitchenLinkedBatchSchema.safeParse({
+      ...payload, idempotencyKey: "short",
+    }).success).toBe(false);
+    expect(centralKitchenLinkedBatchSchema.safeParse({
+      ...payload, status: "finished",
+    }).success).toBe(false);
+  });
+
   it("accepts only the explicit v2 catalog identity contract", () => {
     expect(parseCentralKitchenCatalogV2({
       schemaVersion: 2,

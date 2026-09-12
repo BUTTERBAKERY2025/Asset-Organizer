@@ -779,14 +779,25 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     expect((await approve(order.body.id)).statusCode).toBe(200);
     const line = order.body.items[0];
     const productionDate = "2098-02-01";
+    const conflictingKey = await invoke(
+      "post",
+      "/api/central-kitchen-orders/:id/items/:itemId/production-batches",
+      {
+        user: fixture.kitchenUser,
+        params: { id: String(order.body.id), itemId: String(line.id) },
+        headers: { "Idempotency-Key": key("different-header") },
+        body: { quantity: 4, productionDate, idempotencyKey: key("linked-batch") },
+      },
+    );
+    expect(conflictingKey.statusCode).toBe(400);
+    expect(conflictingKey.body.error).toContain("لا يطابق");
     const createdBatch = await invoke(
       "post",
       "/api/central-kitchen-orders/:id/items/:itemId/production-batches",
       {
         user: fixture.kitchenUser,
         params: { id: String(order.body.id), itemId: String(line.id) },
-        headers: { "Idempotency-Key": key("linked-batch") },
-        body: { quantity: 4, productionDate },
+        body: { quantity: 4, productionDate, idempotencyKey: key("linked-batch") },
       },
     );
     expect(createdBatch.statusCode).toBe(201);
@@ -796,6 +807,19 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
       centralKitchenOrderItemId: line.id,
       status: "in_progress",
     });
+
+    const browserReplay = await invoke(
+      "post",
+      "/api/central-kitchen-orders/:id/items/:itemId/production-batches",
+      {
+        user: fixture.kitchenUser,
+        params: { id: String(order.body.id), itemId: String(line.id) },
+        body: { quantity: 4, productionDate, idempotencyKey: key("linked-batch") },
+      },
+    );
+    expect(browserReplay.statusCode).toBe(200);
+    expect(browserReplay.headers["idempotent-replayed"]).toBe("true");
+    expect(browserReplay.body.id).toBe(createdBatch.body.id);
 
     const replay = await invoke(
       "post",

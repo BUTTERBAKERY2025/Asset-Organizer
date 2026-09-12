@@ -7927,8 +7927,8 @@ export async function registerRoutes(
       const orderId = centralKitchenOrderIdSchema.safeParse(req.params.id);
       const itemId = centralKitchenOrderIdSchema.safeParse(req.params.itemId);
       const body = centralKitchenLinkedBatchSchema.safeParse(req.body);
-      const key = centralKitchenRequestKey(req);
       if (!orderId.success || !itemId.success || !body.success) return res.status(400).json({ error: "بيانات دفعة الإنتاج غير صالحة" });
+      const key = centralKitchenRequestKey(req, body.data.idempotencyKey);
       if (!key.key) return res.status(400).json({ error: key.error });
       const actor = getCurrentUser(req);
       const batchFingerprint = createHash("sha256").update(JSON.stringify({

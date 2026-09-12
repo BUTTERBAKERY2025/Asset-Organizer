@@ -178,6 +178,7 @@ export const centralKitchenRuntimeSchema = z.object({
 export const centralKitchenLinkedBatchSchema = z.object({
   quantity: z.number().int().positive().max(1_000_000),
   productionDate: realCalendarDate,
+  idempotencyKey: centralKitchenIdempotencyKeySchema.optional(),
 }).strict();
 
 function validateExactItemSet(expectedIds: number[], submittedIds: number[]): string | null {
