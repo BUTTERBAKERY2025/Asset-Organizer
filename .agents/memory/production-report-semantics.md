@@ -26,3 +26,9 @@ Receipt discrepancies require authoritative settlement status; historical damage
 **Why:** A resolved discrepancy retains its original quantities. Conversely, a received list row can omit quantities while its discrepancy remains open.
 
 **How to apply:** Use explicit open/resolved/none status for next-step guidance. If a report does not carry that status, direct the user to the source order and label settlement state unavailable rather than completed or unresolved.
+
+Daily workplan evidence is not a stock-readiness or reconciliation verdict.
+
+**Why:** A missing current recipe does not block fulfillment from existing stock or invalidate a historical frozen recipe. A material movement proves a recorded movement, not complete snapshot reconciliation. Selecting a future plan date does not make earlier future requests overdue.
+
+**How to apply:** Keep recipe availability informational unless production need is established; label movement presence as evidence, preserve unknown allocation readiness, and compare lateness to actual Riyadh today. Selected dates organize current persisted state, not historical as-of snapshots.

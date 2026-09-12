@@ -137,6 +137,7 @@ import { registerWalletRoutes } from "./wallet-routes";
 import { registerSecurityRoutes } from "./security-routes";
 import { registerCentralKitchenRecipeRoutes } from "./central-kitchen-recipes";
 import { registerProductionOperationsReportRoute } from "./production-operations-report";
+import { registerCentralKitchenWorkplanRoute } from "./central-kitchen-workplan";
 import {
   CentralKitchenBatchMaterialsError,
   getBatchMaterialRequirements,
@@ -496,6 +497,7 @@ export async function registerRoutes(
   registerSecurityRoutes(app);
   registerCentralKitchenRecipeRoutes(app);
   registerProductionOperationsReportRoute(app);
+  registerCentralKitchenWorkplanRoute(app);
 
   // Cached data fetchers
   const getCachedBranches = memoize(async () => {
