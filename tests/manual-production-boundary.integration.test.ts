@@ -90,6 +90,7 @@ type TestResponse = { statusCode: number; body: any; headers: Record<string, str
 const registrations: Registration[] = [];
 let finishTransaction!: () => void;
 let transactionPromise!: Promise<void>;
+let generatedIdempotencyKey = 0;
 let fixture: {
   branchId: string;
   otherBranchId: string;
@@ -125,6 +126,13 @@ async function invoke(
   const headers = Object.fromEntries(
     Object.entries(options.headers || {}).map(([name, value]) => [name.toLowerCase(), value]),
   );
+  // The generic manual route now has a required durable operation key. This
+  // legacy boundary suite is about acknowledgement/link fields, so give each
+  // valid attempt an otherwise-unrelated unique header.
+  if (method === "post" && path === "/api/daily-production/batches" && !headers["idempotency-key"]) {
+    generatedIdempotencyKey += 1;
+    headers["idempotency-key"] = `manual-boundary-${generatedIdempotencyKey}-key`;
+  }
   const response: TestResponse = { statusCode: 200, body: undefined, headers: {} };
   const req: any = {
     method: method.toUpperCase(),
@@ -407,29 +415,22 @@ describe.sequential("manual daily-production boundary (development DB)", () => {
     expect(afterSnapshots.rows).toEqual(beforeSnapshots.rows);
   });
 
-  it("allows an acknowledged independent carryover only from a same-branch independent source", async () => {
+  it("rejects sourceBatchId cloning at the generic manual creation boundary", async () => {
     const before = await batchCount();
     const response = await invoke("post", "/api/daily-production/batches", {
       user: fixture!.user,
       body: manualBody(fixture!.branchId, { sourceBatchId: fixture!.sourceBatchId }),
     });
-    expect(response.statusCode).toBe(201);
-    expect(response.body.sourceBatchId).toBe(fixture!.sourceBatchId);
-    expect(response.body.recipeBacked).toBe(false);
-    expect(await batchCount()).toBe(before + 1);
-    expect(await batchFields(response.body.id)).toMatchObject({
-      source_batch_id: fixture!.sourceBatchId,
-      recipe_backed: false,
-      central_kitchen_order_item_id: null,
-      production_order_id: null,
-    });
+    expect(response.statusCode).toBe(400);
+    expect(response.body.error).toContain("إعادة جدولة");
+    expect(await batchCount()).toBe(before);
   });
 
-  it("rejects missing, cross-branch, and operationally linked carryover sources before insert", async () => {
+  it("rejects all sourceBatchId values rather than resolving or cloning a source", async () => {
     const cases = [
-      { id: 999_999_999, status: 404, error: "المصدر" },
-      { id: fixture!.otherSourceBatchId, status: 403, error: "فرع آخر" },
-      { id: fixture!.linkedBatchId, status: 409, error: "مرتبطة" },
+      { id: 999_999_999 },
+      { id: fixture!.otherSourceBatchId },
+      { id: fixture!.linkedBatchId },
     ];
     for (const testCase of cases) {
       const before = await batchCount();
@@ -437,8 +438,8 @@ describe.sequential("manual daily-production boundary (development DB)", () => {
         user: fixture!.user,
         body: manualBody(fixture!.branchId, { sourceBatchId: testCase.id }),
       });
-      expect(response.statusCode).toBe(testCase.status);
-      expect(response.body.error).toContain(testCase.error);
+      expect(response.statusCode).toBe(400);
+      expect(response.body.error).toContain("إعادة جدولة");
       expect(await batchCount()).toBe(before);
     }
   });

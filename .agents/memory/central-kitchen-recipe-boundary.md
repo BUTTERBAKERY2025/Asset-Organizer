@@ -31,4 +31,10 @@ Independent manual output is a separate, explicitly acknowledged workflow, not a
 
 **Why:** Generic output entry credits finished goods without a request-item link or frozen ingredient snapshot. Copying or editing a linked batch through that path can detach its operational meaning.
 
-**How to apply:** Keep operational batches in their dedicated workflow, reject operational control fields on manual endpoints, and validate carry-over sources before creating any copy. Manual acknowledgment is request-time intent, not a historical consent record; do not infer past acknowledgment or recipe consumption from source badges.
+**How to apply:** Keep operational batches in their dedicated workflow, reject operational control fields on manual endpoints, and reject source-copy attempts before they create independent records. Manual acknowledgment is request-time intent, not a historical consent record; do not infer past acknowledgment or recipe consumption from source badges.
+
+Manual unfinished-production carry-over means rescheduling the same batch, not cloning it and finishing its source.
+
+**Why:** The former two-request copy-then-finish flow could credit the source and later credit its copy, while a network failure could leave only half of the operation completed.
+
+**How to apply:** Only reschedule an independent, unposted, in-progress batch, with expected date/quantity checked under lock. Preserve its identity, quantity and stock state; leave completed history untouched. Generic creation must not recreate the retired source-copy path.

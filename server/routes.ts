@@ -3,6 +3,10 @@ import { createServer, type Server } from "http";
 import memoize from "memoizee";
 import { storage } from "./storage";
 import { ProductionStockPostingError } from "./production-stock-posting";
+import {
+  manualProductionOperations,
+  ManualProductionOperationError,
+} from "./manual-production-operations";
 import { db, pool } from "./db";
 import * as NotificationService from "./notification-service";
 import { computeBranchIssues, formatBranchIssuesMessage } from "./branch-issues";
@@ -10,7 +14,7 @@ import { evaluateWasteGovernance, checkApprovalGate } from "./waste-governance";
 import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, lt, gt, sql, or, isNull, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
-import { shifts as shiftsTable, cashierPointsLedger, cashierDailyChallenges, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS, centralKitchenOrders, centralKitchenOrderItems, centralKitchenOrderEvents, centralKitchenShadowInventoryConfig, centralKitchenShadowInventoryEntries, centralKitchenInventoryAllocations, warehouseItems, dailyProductionBatches } from "@shared/schema";
+import { shifts as shiftsTable, cashierPointsLedger, cashierDailyChallenges, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS, centralKitchenOrders, centralKitchenOrderItems, centralKitchenOrderEvents, centralKitchenShadowInventoryConfig, centralKitchenShadowInventoryEntries, centralKitchenInventoryAllocations, warehouseItems, dailyProductionBatches, productionInventoryLogs } from "@shared/schema";
 import { auditEvent, getApprovalThresholds, APPROVAL_THRESHOLDS } from "./audit-helpers";
 import { createHash, randomInt, randomUUID } from "crypto";
 
@@ -149,6 +153,7 @@ import {
   hasIndependentEntryAcknowledgement,
   isOperationallyLinkedProductionBatch,
 } from "@shared/manual-production-entry";
+import { isManualProductionIdempotencyKey } from "@shared/manual-production-operation";
 import {
   centralKitchenBatchRequirementsParamsSchema,
   centralKitchenMaterialRequirementsQuerySchema,
@@ -22000,6 +22005,137 @@ export async function registerRoutes(
     }
   });
 
+  // Carry an unfinished independent batch forward by rescheduling the same
+  // row. Unlike the retired carry-over route this never clones quantity,
+  // ownership metadata, or a finished/posted batch.
+  app.post("/api/daily-production/batches/:id/reschedule", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
+    try {
+      if (getManualProductionReservedField(req.body)) {
+        return res.status(400).json({
+          error: "لا يمكن استخدام حقول الربط التشغيلي عند إعادة جدولة دفعة يدوية",
+        });
+      }
+      if (!hasIndependentEntryAcknowledgement(req.body)) {
+        return res.status(400).json({
+          error: "يلزم تأكيد أن الدفعة إدخال مستقل غير مرتبط بطلب أو وصفة",
+        });
+      }
+      const idempotencyKey = req.get("Idempotency-Key");
+      if (!isManualProductionIdempotencyKey(idempotencyKey)) {
+        return res.status(400).json({
+          error: "يلزم ترويسة Idempotency-Key آمنة بطول من 8 إلى 128 حرفاً",
+        });
+      }
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      const { branchId, productionDate, expectedProductionDate, expectedQuantity } = req.body || {};
+      if (typeof branchId !== "string" || !branchId) {
+        return res.status(400).json({ error: "الفرع مطلوب" });
+      }
+      const validDate = (value: unknown): value is string => {
+        if (typeof value !== "string" || !/^(\d{4})-(\d{2})-(\d{2})$/.test(value)) return false;
+        const [year, month, day] = value.split("-").map(Number);
+        const candidate = new Date(Date.UTC(year, month - 1, day));
+        return candidate.getUTCFullYear() === year
+          && candidate.getUTCMonth() === month - 1
+          && candidate.getUTCDate() === day;
+      };
+      if (!validDate(productionDate)) {
+        return res.status(400).json({ error: "تاريخ الإنتاج الجديد غير صالح" });
+      }
+      if (expectedProductionDate !== null && !validDate(expectedProductionDate)) {
+        return res.status(400).json({ error: "تاريخ الإنتاج المتوقع غير صالح" });
+      }
+      if (typeof expectedQuantity !== "number"
+        || !Number.isFinite(expectedQuantity) || expectedQuantity <= 0) {
+        return res.status(400).json({ error: "الكمية المتوقعة غير صالحة" });
+      }
+
+      const user = (req as any).user;
+      // All mutable source checks live inside execute below, after the durable
+      // key lookup. Thus an exact replay still succeeds after this batch has
+      // been rescheduled, finished, or otherwise changed.
+      const operation = await manualProductionOperations.execute({
+        actorId: String(user?.id),
+        operation: "reschedule",
+        idempotencyKey,
+        canonicalPayload: {
+          sourceBatchId: id,
+          branchId,
+          productionDate,
+          expectedProductionDate,
+          expectedQuantity,
+        },
+        branchId,
+        authorizeBranch: async (authorizedBranchId) =>
+          isUserAdmin(req) || await canAccessBranch(req, authorizedBranchId),
+        execute: async (tx) => {
+          const [source] = await tx.select().from(dailyProductionBatches)
+            .where(eq(dailyProductionBatches.id, id))
+            .for("update");
+          if (!source) {
+            throw new ManualProductionOperationError("دفعة الإنتاج المصدر غير موجودة", 404);
+          }
+          if (source.branchId !== branchId) {
+            throw new ManualProductionOperationError("فرع الدفعة لا يطابق الفرع المحدد", 409);
+          }
+          if (isOperationallyLinkedProductionBatch(source)) {
+            throw new ManualProductionOperationError(
+              "لا يمكن إعادة جدولة دفعة مرتبطة بطلب أو وصفة تشغيلية",
+              409,
+            );
+          }
+          if (source.status !== "in_progress") {
+            throw new ManualProductionOperationError("يمكن إعادة جدولة دفعة غير مكتملة فقط", 409);
+          }
+          const [posting] = await tx.select({ id: productionInventoryLogs.id })
+            .from(productionInventoryLogs)
+            .where(or(
+              eq(productionInventoryLogs.batchId, id),
+              and(
+                eq(productionInventoryLogs.referenceType, "batch"),
+                eq(productionInventoryLogs.referenceId, id),
+              ),
+            ))
+            .limit(1);
+          if (posting) {
+            throw new ManualProductionOperationError("لا يمكن إعادة جدولة دفعة تم ترحيلها إلى المخزون", 409);
+          }
+          if ((source.productionDate ?? null) !== expectedProductionDate
+            || Number(source.quantity) !== expectedQuantity) {
+            throw new ManualProductionOperationError(
+              "تغيرت الدفعة منذ فتحها؛ حدّث البيانات ثم أعد المحاولة",
+              409,
+            );
+          }
+          if (source.productionDate && productionDate <= source.productionDate) {
+            throw new ManualProductionOperationError(
+              "يجب أن يكون تاريخ إعادة الجدولة بعد تاريخ الإنتاج الأصلي",
+              409,
+            );
+          }
+          const [batch] = await tx.update(dailyProductionBatches)
+            .set({ productionDate })
+            .where(eq(dailyProductionBatches.id, id))
+            .returning();
+          if (!batch) {
+            throw new ManualProductionOperationError("تعذر إعادة جدولة دفعة الإنتاج", 409);
+          }
+          return { status: 200, body: { batch, rescheduled: true } };
+        },
+      });
+      return res.status(operation.status).json(operation.body);
+    } catch (error) {
+      console.error("Error rescheduling batch:", error);
+      if (error instanceof ManualProductionOperationError) {
+        return res.status(error.status).json({ error: error.message });
+      }
+      return res.status(500).json({ error: "فشل في إعادة جدولة دفعة الإنتاج" });
+    }
+  });
+
   // Get single batch
   app.get("/api/daily-production/batches/:id", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
@@ -22044,22 +22180,30 @@ export async function registerRoutes(
           error: "يلزم تأكيد أن الدفعة إدخال مستقل غير مرتبط بطلب أو وصفة",
         });
       }
+      // Carryover is an in-place reschedule, never a clone through this
+      // generic creation boundary. Reject even null/false-like attempts.
+      if (req.body && typeof req.body === "object"
+        && Object.prototype.hasOwnProperty.call(req.body, "sourceBatchId")) {
+        return res.status(400).json({
+          error: "لا يمكن إنشاء نسخة مرحّلة؛ استخدم مسار إعادة جدولة الدفعة نفسها",
+        });
+      }
+
+      const idempotencyKey = req.get("Idempotency-Key");
+      if (!isManualProductionIdempotencyKey(idempotencyKey)) {
+        return res.status(400).json({
+          error: "يلزم ترويسة Idempotency-Key آمنة بطول من 8 إلى 128 حرفاً",
+        });
+      }
 
       const user = (req as any).user;
-      const { branchId, productId, productName, productCategory, quantity, unit, destination, notes, producedAt, productionDate, status, chefId, chefName, sourceBatchId } = req.body;
+      const { branchId, productId, productName, productCategory, quantity, unit, destination, notes, producedAt, productionDate, status, chefId, chefName } = req.body;
       
       // Validate required fields
       if (!branchId || typeof branchId !== 'string') {
         return res.status(400).json({ error: "الفرع مطلوب" });
       }
       
-      // SECURITY: Verify branch access for non-admin users
-      if (!isUserAdmin(req)) {
-        const hasAccess = await canAccessBranch(req, branchId);
-        if (!hasAccess) {
-          return res.status(403).json({ error: "غير مصرح بإنشاء دفعات لهذا الفرع" });
-        }
-      }
       if (!productName || typeof productName !== 'string') {
         return res.status(400).json({ error: "اسم المنتج مطلوب" });
       }
@@ -22075,30 +22219,12 @@ export async function registerRoutes(
       if (!validDestinations.includes(destination)) {
         return res.status(400).json({ error: "الوجهة غير صالحة" });
       }
-
-      let validatedSourceBatchId: number | null = null;
-      if (sourceBatchId !== undefined && sourceBatchId !== null && sourceBatchId !== "") {
-        const sourceId = typeof sourceBatchId === "number"
-          ? sourceBatchId
-          : typeof sourceBatchId === "string" && /^\d+$/.test(sourceBatchId.trim())
-            ? Number(sourceBatchId.trim())
-            : NaN;
-        if (!Number.isInteger(sourceId) || sourceId <= 0) {
-          return res.status(400).json({ error: "معرف دفعة الترحيل غير صالح" });
+      let normalizedProductId: number | null = null;
+      if (productId !== undefined && productId !== null && productId !== "") {
+        normalizedProductId = Number(productId);
+        if (!Number.isInteger(normalizedProductId) || normalizedProductId <= 0) {
+          return res.status(400).json({ error: "معرف المنتج غير صالح" });
         }
-        const sourceBatch = await storage.getDailyProductionBatch(sourceId);
-        if (!sourceBatch) {
-          return res.status(404).json({ error: "دفعة الترحيل المصدر غير موجودة" });
-        }
-        if (sourceBatch.branchId !== branchId) {
-          return res.status(403).json({ error: "لا يمكن ترحيل دفعة من فرع آخر" });
-        }
-        if (isOperationallyLinkedProductionBatch(sourceBatch)) {
-          return res.status(409).json({
-            error: "لا يمكن إنشاء ترحيل يدوي من دفعة مرتبطة بطلب أو وصفة؛ افتح الطلب الأصلي لترحيل الدفعة",
-          });
-        }
-        validatedSourceBatchId = sourceId;
       }
 
       // Validate status value if provided
@@ -22106,10 +22232,18 @@ export async function registerRoutes(
       if (status && !validStatuses.includes(status)) {
         return res.status(400).json({ error: "الحالة غير صالحة" });
       }
+      const hasExplicitProducedAt = Object.prototype.hasOwnProperty.call(req.body, "producedAt");
+      if (hasExplicitProducedAt && typeof producedAt !== "string") {
+        return res.status(400).json({ error: "وقت الإنتاج غير صالح" });
+      }
+      const explicitProducedAt = hasExplicitProducedAt ? new Date(producedAt) : undefined;
+      if (explicitProducedAt && Number.isNaN(explicitProducedAt.getTime())) {
+        return res.status(400).json({ error: "وقت الإنتاج غير صالح" });
+      }
       
       const batchData = {
         branchId,
-        productId: productId ? Number(productId) : null,
+        productId: normalizedProductId,
         productName: productName.trim(),
         productCategory: productCategory || null,
         quantity: Number(quantity),
@@ -22118,23 +22252,54 @@ export async function registerRoutes(
         notes: notes || null,
         recordedBy: user?.id || null,
         recorderName: user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username || null,
-        producedAt: producedAt ? new Date(producedAt) : new Date(),
+        producedAt: explicitProducedAt || new Date(),
         productionDate: productionDate || null, // User's local date YYYY-MM-DD
         status: status || 'finished',
         chefId: chefId || null,
         chefName: chefName || null,
-        sourceBatchId: validatedSourceBatchId,
         // The acknowledgement above is request-only intent.  Persist the
         // server-owned boundary marker, never the acknowledgement itself.
         recipeBacked: false,
       };
       
       const userName = user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username || '';
-      const result = await storage.createDailyProductionBatchWithTransfer(batchData, user?.id, userName);
-      
-      res.status(201).json({ ...result.batch, transferred: result.transferred });
+      const canonicalPayload = {
+        branchId,
+        productId: batchData.productId,
+        productName: batchData.productName,
+        productCategory: batchData.productCategory,
+        quantity: batchData.quantity,
+        unit: batchData.unit,
+        destination,
+        notes: batchData.notes,
+        ...(explicitProducedAt ? { producedAt: explicitProducedAt.toJSON() } : {}),
+        productionDate: batchData.productionDate,
+        status: batchData.status,
+        chefId: batchData.chefId,
+        chefName: batchData.chefName,
+      };
+      const operation = await manualProductionOperations.execute({
+        actorId: String(user?.id),
+        operation: "create",
+        idempotencyKey,
+        canonicalPayload,
+        branchId,
+        authorizeBranch: async (authorizedBranchId) =>
+          isUserAdmin(req) || await canAccessBranch(req, authorizedBranchId),
+        execute: async (tx) => {
+          const result = await storage.createDailyProductionBatchWithTransfer(batchData, user?.id, userName, tx);
+          return { status: 201, body: { ...result.batch, transferred: result.transferred } };
+        },
+      });
+      res.status(operation.status).json(operation.body);
     } catch (error) {
       console.error("Error creating batch:", error);
+      if (error instanceof ManualProductionOperationError) {
+        return res.status(error.status).json({ error: error.message });
+      }
+      if (error instanceof ProductionStockPostingError || error instanceof CentralKitchenBatchMaterialsError) {
+        return res.status(error.status).json({ error: error.message });
+      }
       res.status(500).json({ error: "فشل في إنشاء دفعة الإنتاج" });
     }
   });

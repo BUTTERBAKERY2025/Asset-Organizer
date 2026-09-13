@@ -60,6 +60,22 @@ import {
   type IndependentEntryAcknowledgementAction,
   type IndependentEntryAcknowledgementState,
 } from "@/components/central-kitchen/manual-production-ui";
+import {
+  assertManualProductionStorageAvailable,
+  canApplyManualProductionContextGate,
+  clearManualProductionIntent,
+  getManualProductionIntentContext,
+  isManualProductionContextCurrent,
+  isProductionDateAfter,
+  type ManualProductionIntent,
+  type ManualProductionContextIdentity,
+  type ManualProductionOperationContext,
+  ManualProductionIntentMismatchError,
+  ManualProductionStorageError,
+  postManualProductionOperation,
+  prepareManualProductionIntent,
+  readManualProductionIntent,
+} from "@/components/central-kitchen/manual-production-operation";
 
 interface DailyProductionBatch {
   id: number;
@@ -73,6 +89,7 @@ interface DailyProductionBatch {
   shiftId: number | null;
   productionOrderId: number | null;
   producedAt: string;
+  productionDate?: string | null;
   recordedBy: string | null;
   recorderName: string | null;
   notes: string | null;
@@ -206,6 +223,10 @@ export default function DailyProductionPage() {
   const [matchingInProgressBatch, setMatchingInProgressBatch] = useState<DailyProductionBatch | null>(null);
   const [pendingSubmitAction, setPendingSubmitAction] = useState<(() => boolean) | null>(null);
   const [carryOverBatch, setCarryOverBatch] = useState<DailyProductionBatch | null>(null);
+  const [uncertainCreateIntent, setUncertainCreateIntent] = useState<ManualProductionIntent<Record<string, any>> | null>(null);
+  const [uncertainRescheduleIntent, setUncertainRescheduleIntent] = useState<ManualProductionIntent<Record<string, any>> | null>(null);
+  const [manualOperationStorageError, setManualOperationStorageError] = useState<string | null>(null);
+  const [discardIntent, setDiscardIntent] = useState<ManualProductionIntent<Record<string, any>> | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   const { toast } = useToast();
@@ -218,6 +239,25 @@ export default function DailyProductionPage() {
   const canDeleteRecords = isAdmin || canDelete("production");
   const independentEntryAcknowledged = entryAcknowledgement.normal;
   const carryOverAcknowledged = entryAcknowledgement.carryOver;
+  const authenticatedUserId = user?.id ? String(user.id) : "";
+  const latestManualContextRef = useRef<ManualProductionContextIdentity>({
+    userId: authenticatedUserId,
+    branchId,
+  });
+  const latestCreateIntentRef = useRef<ManualProductionIntent<Record<string, any>> | null>(uncertainCreateIntent);
+  const latestRescheduleIntentRef = useRef<ManualProductionIntent<Record<string, any>> | null>(uncertainRescheduleIntent);
+  const pendingSubmitContextRef = useRef<ManualProductionContextIdentity | null>(null);
+  latestManualContextRef.current = { userId: authenticatedUserId, branchId };
+
+  const updateCreateIntent = (intent: ManualProductionIntent<Record<string, any>> | null) => {
+    latestCreateIntentRef.current = intent;
+    setUncertainCreateIntent(intent);
+  };
+
+  const updateRescheduleIntent = (intent: ManualProductionIntent<Record<string, any>> | null) => {
+    latestRescheduleIntentRef.current = intent;
+    setUncertainRescheduleIntent(intent);
+  };
 
   const dispatchEntryAcknowledgement = (action: IndependentEntryAcknowledgementAction) => {
     setEntryAcknowledgement(previous => reduceIndependentEntryAcknowledgement(previous, action));
@@ -237,6 +277,77 @@ export default function DailyProductionPage() {
     setCarryOverBatch(null);
     dispatchEntryAcknowledgement({ type: "close_carry_over" });
   };
+
+  const operationContext = (operation: "create" | "reschedule"): ManualProductionOperationContext => ({
+    userId: authenticatedUserId,
+    branchId,
+    operation,
+  });
+
+  const canApplyOperationCallback = (intent: ManualProductionIntent): boolean => {
+    const activeIntentKey = intent.operation === "create"
+      ? latestCreateIntentRef.current?.key
+      : latestRescheduleIntentRef.current?.key;
+    return canApplyManualProductionContextGate(
+      latestManualContextRef.current,
+      getManualProductionIntentContext(intent),
+      intent.key,
+      activeIntentKey,
+    );
+  };
+
+  const isPendingSubmitContextCurrent = (): boolean => {
+    const pendingContext = pendingSubmitContextRef.current;
+    return !!pendingContext
+      && pendingContext.userId === latestManualContextRef.current.userId
+      && pendingContext.branchId === latestManualContextRef.current.branchId;
+  };
+
+  const showManualOperationStorageError = (error: unknown) => {
+    const message = error instanceof Error ? error.message : "تعذر حفظ نية العملية بأمان.";
+    setManualOperationStorageError(message);
+    toast({
+      title: "لم يتم إرسال الطلب",
+      description: message,
+      variant: "destructive",
+    });
+  };
+
+  // Restoring an intent only renders the resume/discard controls.  It must
+  // never cause a POST on mount, after a refresh, or after a branch switch.
+  useEffect(() => {
+    const restoringIdentity = { userId: authenticatedUserId, branchId };
+    if (latestManualContextRef.current.userId !== restoringIdentity.userId
+      || latestManualContextRef.current.branchId !== restoringIdentity.branchId) {
+      return;
+    }
+    updateCreateIntent(null);
+    updateRescheduleIntent(null);
+    pendingSubmitContextRef.current = null;
+    setPendingSubmitAction(null);
+    setMatchingInProgressBatch(null);
+    setShowInProgressDialog(false);
+    setEditingBatch(null);
+    setManualOperationStorageError(null);
+    if (!authenticatedUserId || !branchId) return;
+    try {
+      assertManualProductionStorageAvailable();
+      const restoredCreateIntent = readManualProductionIntent<Record<string, any>>(operationContext("create"));
+      const restoredRescheduleIntent = readManualProductionIntent<Record<string, any>>(operationContext("reschedule"));
+      if (latestManualContextRef.current.userId !== restoringIdentity.userId
+        || latestManualContextRef.current.branchId !== restoringIdentity.branchId) {
+        return;
+      }
+      updateCreateIntent(restoredCreateIntent);
+      updateRescheduleIntent(restoredRescheduleIntent);
+    } catch (error) {
+      if (latestManualContextRef.current.userId !== restoringIdentity.userId
+        || latestManualContextRef.current.branchId !== restoringIdentity.branchId) {
+        return;
+      }
+      showManualOperationStorageError(error);
+    }
+  }, [authenticatedUserId, branchId]);
 
   const { data: branches } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -363,20 +474,34 @@ export default function DailyProductionPage() {
   };
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
-      if (data.independentEntryAcknowledged !== true) {
+    mutationFn: async ({
+      intent,
+    }: {
+      intent: ManualProductionIntent<Record<string, any>>;
+    }) => {
+      if (intent.payload.independentEntryAcknowledged !== true) {
         throw new Error("يلزم تأكيد الإدخال المستقل قبل التسجيل.");
       }
-      const res = await apiRequest("POST", "/api/daily-production/batches", data);
-      return res.json();
+      return postManualProductionOperation<any>(intent.requestPath, intent);
     },
-    onSuccess: (result: any) => {
+    onSuccess: (result: any, variables: { intent: ManualProductionIntent<Record<string, any>> }) => {
+      if (!canApplyOperationCallback(variables.intent)) return;
+      try {
+        clearManualProductionIntent(variables.intent);
+      } catch (error) {
+        updateCreateIntent(variables.intent);
+        showManualOperationStorageError(error);
+        return;
+      }
+      updateCreateIntent(null);
       refetchBatches();
       refetchUnfinished();
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats", branchId, selectedDate] });
       queryClient.invalidateQueries({ queryKey: ["/api/finished-goods-inventory"] });
       queryClient.invalidateQueries({ queryKey: ["/api/display-bar/receipts"] });
-      const wasDisplayBar = destination === 'display_bar' && status === 'finished';
+      const submittedPayload = variables.intent.payload;
+      const wasDisplayBar = submittedPayload.destination === "display_bar"
+        && submittedPayload.status === "finished";
       if (!quickMode) {
         setProductName("");
         setProductCategory("");
@@ -398,14 +523,35 @@ export default function DailyProductionPage() {
           : `سجلها: ${user?.firstName || user?.username}` 
       });
     },
-    onError: (error: any) => {
+    onError: (
+      error: any,
+      variables: { intent: ManualProductionIntent<Record<string, any>> },
+    ) => {
+      if (!canApplyOperationCallback(variables.intent)) return;
       dispatchEntryAcknowledgement({ type: "normal_submit_error" });
-      toast({ title: "خطأ", description: error.message, variant: "destructive" });
+      // Any non-success is retained conservatively.  A 400/401/403 can be
+      // returned after the server has already received and committed work,
+      // so only a durable success callback may clear this intent.
+      updateCreateIntent(variables.intent);
+      toast({
+        title: error?.status === 409 ? "تعارض في مفتاح العملية" : "تعذر تأكيد وصول الطلب",
+        description: error?.status === 409
+          ? "تم الاحتفاظ بنفس الطلب والمفتاح؛ لا تم إنشاء مفتاح جديد. راجع الحالة ثم أعد المحاولة بنفس التأكيد."
+          : "تم الاحتفاظ بالطلب والمفتاح حتى بعد الخطأ؛ قد يكون الخادم سجّل الدفعة. أعد المحاولة بنفس المفتاح أو تجاهلها صراحةً.",
+        variant: "destructive",
+      });
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+    mutationFn: async ({
+      id,
+      data,
+    }: {
+      id: number;
+      data: any;
+      context: ManualProductionContextIdentity;
+    }) => {
       const knownBatch = [...(batches || []), ...(unfinishedBatches || [])]
         .find(batch => batch.id === id);
       if (knownBatch && isOperationallyLinkedProductionBatch(knownBatch)) {
@@ -414,20 +560,22 @@ export default function DailyProductionPage() {
       const res = await apiRequest("PATCH", `/api/daily-production/batches/${id}`, data);
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_result: any, variables: { context: ManualProductionContextIdentity }) => {
+      if (!isManualProductionContextCurrent(latestManualContextRef.current, variables.context)) return;
       refetchBatches();
       refetchUnfinished();
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats", branchId, selectedDate] });
       setEditingBatch(null);
       toast({ title: "تم تحديث الدفعة بنجاح" });
     },
-    onError: (error: any) => {
+    onError: (error: any, variables: { context: ManualProductionContextIdentity }) => {
+      if (!isManualProductionContextCurrent(latestManualContextRef.current, variables.context)) return;
       toast({ title: "خطأ", description: error.message, variant: "destructive" });
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
+    mutationFn: async ({ id }: { id: number; context: ManualProductionContextIdentity }) => {
       const knownBatch = [...(batches || []), ...(unfinishedBatches || [])]
         .find(batch => batch.id === id);
       if (knownBatch && isOperationallyLinkedProductionBatch(knownBatch)) {
@@ -435,13 +583,15 @@ export default function DailyProductionPage() {
       }
       await apiRequest("DELETE", `/api/daily-production/batches/${id}`);
     },
-    onSuccess: () => {
+    onSuccess: (_result: any, variables: { context: ManualProductionContextIdentity }) => {
+      if (!isManualProductionContextCurrent(latestManualContextRef.current, variables.context)) return;
       refetchBatches();
       refetchUnfinished();
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats", branchId, selectedDate] });
       toast({ title: "تم حذف الدفعة" });
     },
-    onError: (error: any) => {
+    onError: (error: any, variables: { context: ManualProductionContextIdentity }) => {
+      if (!isManualProductionContextCurrent(latestManualContextRef.current, variables.context)) return;
       toast({ title: "خطأ", description: error.message, variant: "destructive" });
     },
   });
@@ -449,7 +599,12 @@ export default function DailyProductionPage() {
   // Finish a batch (mark as completed) - includes who finished it
   // Backend automatically transfers to finished goods inventory
   const finishBatchMutation = useMutation({
-    mutationFn: async (batchId: number) => {
+    mutationFn: async ({
+      batchId,
+    }: {
+      batchId: number;
+      context: ManualProductionContextIdentity;
+    }) => {
       const knownBatch = [...(batches || []), ...(unfinishedBatches || [])]
         .find(batch => batch.id === batchId);
       if (knownBatch && isOperationallyLinkedProductionBatch(knownBatch)) {
@@ -464,7 +619,11 @@ export default function DailyProductionPage() {
       });
       return res.json();
     },
-    onSuccess: (result: any) => {
+    onSuccess: (
+      result: any,
+      variables: { context: ManualProductionContextIdentity },
+    ) => {
+      if (!isManualProductionContextCurrent(latestManualContextRef.current, variables.context)) return;
       refetchBatches();
       refetchUnfinished();
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats", branchId, selectedDate] });
@@ -472,67 +631,133 @@ export default function DailyProductionPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/display-bar/receipts"] });
       toast({ title: "تم اكتمال الدفعة", description: result?.destination === 'display_bar' ? "تم ترحيلها للمخزون وبار العرض تلقائياً" : "تم تحديث حالة الدفعة وترحيلها للمخزون النهائي" });
     },
-    onError: (error: any) => {
+    onError: (error: any, variables: { context: ManualProductionContextIdentity }) => {
+      if (!isManualProductionContextCurrent(latestManualContextRef.current, variables.context)) return;
       toast({ title: "خطأ", description: error.message, variant: "destructive" });
     },
   });
 
-  // Carry-over: create a new batch today based on unfinished batch from previous day
-  // Also marks the source batch as finished to prevent duplicates
+  // Carry-over reschedules the existing row.  It never creates a copy, marks
+  // the source finished, or posts output stock; only its production date
+  // changes on the dedicated edit-protected endpoint.
   const carryOverMutation = useMutation({
     mutationFn: async ({
+      intent,
       sourceBatch,
-      independentEntryAcknowledged: acknowledged,
     }: {
-      sourceBatch: DailyProductionBatch;
-      independentEntryAcknowledged: boolean;
+      intent: ManualProductionIntent<Record<string, any>>;
+      sourceBatch?: DailyProductionBatch;
     }) => {
-      if (isOperationallyLinkedProductionBatch(sourceBatch)) {
+      if (sourceBatch && isOperationallyLinkedProductionBatch(sourceBatch)) {
         throw new Error("لا يمكن ترحيل دفعة مرتبطة من الإدخال العام؛ افتح تشغيل المطبخ المركزي.");
       }
-      if (!canEnterIndependentEntry(acknowledged)) {
+      if (intent.payload.independentEntryAcknowledged !== true) {
         throw new Error("يلزم تأكيد ترحيل الدفعة المستقلة قبل المتابعة.");
       }
-      // First, create the new batch
-      const res = await apiRequest("POST", "/api/daily-production/batches", {
-        branchId: sourceBatch.branchId,
-        productId: sourceBatch.productId,
-        productName: sourceBatch.productName,
-        productCategory: sourceBatch.productCategory,
-        quantity: sourceBatch.quantity,
-        unit: sourceBatch.unit,
-        destination: sourceBatch.destination,
-        notes: `ترحيل من ${format(new Date(sourceBatch.producedAt), "yyyy-MM-dd")}`,
-        productionDate: selectedDate, // Carry over to current selected date
-        status: "in_progress",
-        chefId: sourceBatch.chefId,
-        chefName: sourceBatch.chefName,
-        sourceBatchId: sourceBatch.id,
-        independentEntryAcknowledged: acknowledged,
-      });
-      
-      // Then mark the source batch as finished (carried over)
-      await apiRequest("PATCH", `/api/daily-production/batches/${sourceBatch.id}`, {
-        status: "finished",
-        finishedAt: new Date().toISOString(),
-        notes: (sourceBatch.notes ? sourceBatch.notes + " | " : "") + "تم ترحيله",
-      });
-      
-      return res.json();
+      return postManualProductionOperation<any>(intent.requestPath, intent);
     },
-    onSuccess: () => {
+    onSuccess: (result: any, variables: { intent: ManualProductionIntent<Record<string, any>> }) => {
+      if (!canApplyOperationCallback(variables.intent)) return;
+      if (!result || result.rescheduled !== true) {
+        updateRescheduleIntent(variables.intent);
+        dispatchEntryAcknowledgement({ type: "carry_over_submit_error" });
+        toast({
+          title: "نتيجة إعادة الجدولة غير مؤكدة",
+          description: "احتُفظ بنفس الحمولة والمفتاح؛ راجع النية قبل إعادة المحاولة.",
+          variant: "destructive",
+        });
+        return;
+      }
+      try {
+        clearManualProductionIntent(variables.intent);
+      } catch (error) {
+        updateRescheduleIntent(variables.intent);
+        showManualOperationStorageError(error);
+        return;
+      }
+      updateRescheduleIntent(null);
       refetchBatches();
       refetchUnfinished();
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats", branchId, selectedDate] });
       dispatchEntryAcknowledgement({ type: "carry_over_submit_success" });
       closeCarryOverDialog();
-      toast({ title: "تم الترحيل", description: "تم ترحيل الدفعة لليوم الحالي" });
+      toast({
+        title: "تمت إعادة الجدولة",
+        description: "تم نقل نفس الدفعة إلى التاريخ المحدد (المعرف نفسه) دون إنشاء نسخة أو تحريك مخزون الناتج.",
+      });
     },
-    onError: (error: any) => {
+    onError: (
+      error: any,
+      variables: { intent: ManualProductionIntent<Record<string, any>> },
+    ) => {
+      if (!canApplyOperationCallback(variables.intent)) return;
       dispatchEntryAcknowledgement({ type: "carry_over_submit_error" });
-      toast({ title: "خطأ", description: error.message, variant: "destructive" });
+      // Retain every failed attempt, including permission/session/validation
+      // responses.  Explicit discard is the only non-success clear path.
+      updateRescheduleIntent(variables.intent);
+      toast({
+        title: error?.status === 409 ? "تعارض في مفتاح إعادة الجدولة" : "تعذر تأكيد إعادة الجدولة",
+        description: error?.status === 409
+          ? "تم الاحتفاظ بنفس إعادة الجدولة والمفتاح؛ لا تم إنشاء مفتاح جديد."
+          : "تم الاحتفاظ بالترحيل والمفتاح حتى بعد الخطأ؛ قد يكون الخادم نقل الدفعة. أعد المحاولة بنفس المفتاح أو تجاهلها صراحةً.",
+        variant: "destructive",
+      });
     },
   });
+
+  const submitManualCreate = (payload: Record<string, any>): boolean => {
+    if (uncertainCreateIntent) {
+      toast({
+        title: "يوجد تسجيل غير محسوم",
+        description: "استأنف أو تجاهل الطلب المحفوظ أولاً؛ لا يمكن استبدال حمولة قد تكون وصلت إلى الخادم.",
+        variant: "destructive",
+      });
+      return false;
+    }
+    if (!authenticatedUserId || !branchId) {
+      toast({ title: "بيانات ناقصة", description: "يلزم المستخدم والفرع قبل التسجيل.", variant: "destructive" });
+      return false;
+    }
+    const requestPath = "/api/daily-production/batches";
+    let preparation: {
+      intent: ManualProductionIntent<Record<string, any>>;
+      reused: boolean;
+    };
+    try {
+      preparation = prepareManualProductionIntent(
+        operationContext("create"),
+        payload,
+        requestPath,
+      );
+    } catch (error) {
+      if (error instanceof ManualProductionIntentMismatchError) {
+        updateCreateIntent(error.existingIntent as ManualProductionIntent<Record<string, any>>);
+        dispatchEntryAcknowledgement({ type: "set_normal", value: false });
+        toast({
+          title: "يوجد تسجيل محفوظ ببيانات مختلفة",
+          description: "استأنف أو تجاهل التسجيل المحفوظ صراحةً؛ لم يتم تغيير مفتاحه.",
+          variant: "destructive",
+        });
+      } else {
+        showManualOperationStorageError(error);
+      }
+      return false;
+    }
+    if (preparation.reused) {
+      updateCreateIntent(preparation.intent);
+      dispatchEntryAcknowledgement({ type: "set_normal", value: false });
+      toast({
+        title: "يوجد تسجيل غير محسوم",
+        description: "استخدم زر إعادة المحاولة في التنبيه؛ ستُستخدم الحمولة الأصلية والمفتاح نفسه.",
+        variant: "destructive",
+      });
+      return false;
+    }
+    setManualOperationStorageError(null);
+    updateCreateIntent(preparation.intent);
+    createMutation.mutate({ intent: preparation.intent });
+    return true;
+  };
 
   // Helper to execute the actual batch creation
   const executeCreateBatch = () => {
@@ -540,7 +765,7 @@ export default function DailyProductionPage() {
     const numericQuantity = parseInt(quantity, 10);
     const product = products?.find(p => p.name === productName);
     const resolvedCategory = productCategory || product?.category || null;
-    createMutation.mutate({
+    const payload = {
       branchId,
       productId: product?.id || null,
       productName,
@@ -554,8 +779,8 @@ export default function DailyProductionPage() {
       chefId: selectedChefId || null,
       chefName: selectedChefName || null,
       independentEntryAcknowledged: true,
-    });
-    return true;
+    };
+    return submitManualCreate(payload);
   };
 
   const handleSubmit = (e: React.FormEvent): boolean => {
@@ -569,6 +794,14 @@ export default function DailyProductionPage() {
       return false;
     }
     if (!requireIndependentEntryAcknowledgement()) return false;
+    if (uncertainCreateIntent) {
+      toast({
+        title: "يوجد تسجيل غير محسوم",
+        description: "استأنف أو تجاهل التسجيل المحفوظ قبل تعديل أو إرسال إدخال جديد.",
+        variant: "destructive",
+      });
+      return false;
+    }
     
     const numericQuantity = parseInt(quantity, 10);
     if (isNaN(numericQuantity) || numericQuantity <= 0) {
@@ -585,6 +818,7 @@ export default function DailyProductionPage() {
       if (matchingBatch) {
         // Show dialog to ask user what to do
         setMatchingInProgressBatch(matchingBatch);
+        pendingSubmitContextRef.current = latestManualContextRef.current;
         setPendingSubmitAction(() => executeCreateBatch);
         dispatchEntryAcknowledgement({ type: "begin_in_progress" });
         setShowInProgressDialog(true);
@@ -601,6 +835,13 @@ export default function DailyProductionPage() {
   // Handle dialog: mark existing as finished, then create new batch
   const handleFinishExistingAndCreate = async () => {
     if (!matchingInProgressBatch) return;
+    if (!isPendingSubmitContextCurrent()) {
+      setShowInProgressDialog(false);
+      setMatchingInProgressBatch(null);
+      setPendingSubmitAction(null);
+      pendingSubmitContextRef.current = null;
+      return;
+    }
     if (isOperationallyLinkedProductionBatch(matchingInProgressBatch)) {
       toast({
         title: "هذه الدفعة تُدار من تشغيل المطبخ المركزي",
@@ -611,24 +852,40 @@ export default function DailyProductionPage() {
     }
     
     try {
-      await finishBatchMutation.mutateAsync(matchingInProgressBatch.id);
+      await finishBatchMutation.mutateAsync({
+        batchId: matchingInProgressBatch.id,
+        context: pendingSubmitContextRef.current || latestManualContextRef.current,
+      });
+      if (!isPendingSubmitContextCurrent()) return;
       // After finishing, execute the pending create action
       if (pendingSubmitAction) {
         const submitted = pendingSubmitAction();
         if (!submitted) dispatchEntryAcknowledgement({ type: "cancel_in_progress" });
       }
     } catch (error) {
-      dispatchEntryAcknowledgement({ type: "cancel_in_progress" });
+      if (isPendingSubmitContextCurrent()) {
+        dispatchEntryAcknowledgement({ type: "cancel_in_progress" });
+      }
       console.error("Error finishing batch:", error);
     } finally {
-      setShowInProgressDialog(false);
-      setMatchingInProgressBatch(null);
-      setPendingSubmitAction(null);
+      if (isPendingSubmitContextCurrent()) {
+        setShowInProgressDialog(false);
+        setMatchingInProgressBatch(null);
+        setPendingSubmitAction(null);
+      }
+      pendingSubmitContextRef.current = null;
     }
   };
 
   // Handle dialog: continue with new batch without finishing existing
   const handleContinueNewBatch = () => {
+    if (!isPendingSubmitContextCurrent()) {
+      setShowInProgressDialog(false);
+      setMatchingInProgressBatch(null);
+      setPendingSubmitAction(null);
+      pendingSubmitContextRef.current = null;
+      return;
+    }
     let submitted = false;
     if (pendingSubmitAction) {
       submitted = pendingSubmitAction();
@@ -637,6 +894,7 @@ export default function DailyProductionPage() {
     setShowInProgressDialog(false);
     setMatchingInProgressBatch(null);
     setPendingSubmitAction(null);
+    pendingSubmitContextRef.current = null;
   };
 
   // Handle dialog: cancel
@@ -645,12 +903,21 @@ export default function DailyProductionPage() {
     setShowInProgressDialog(false);
     setMatchingInProgressBatch(null);
     setPendingSubmitAction(null);
+    pendingSubmitContextRef.current = null;
   };
 
   // Helper to execute quick entry batch creation
   const executeQuickEntry = (product: Product, qty: number) => {
     if (!requireIndependentEntryAcknowledgement()) return false;
-    createMutation.mutate({
+    if (uncertainCreateIntent) {
+      toast({
+        title: "يوجد تسجيل غير محسوم",
+        description: "استأنف أو تجاهل التسجيل المحفوظ قبل إرسال إدخال جديد.",
+        variant: "destructive",
+      });
+      return false;
+    }
+    const payload = {
       branchId,
       productId: product.id,
       productName: product.name,
@@ -664,8 +931,8 @@ export default function DailyProductionPage() {
       chefId: selectedChefId || null,
       chefName: selectedChefName || null,
       independentEntryAcknowledged: true,
-    });
-    return true;
+    };
+    return submitManualCreate(payload);
   };
 
   const handleQuickEntry = (product: Product, qty: number): boolean => {
@@ -676,6 +943,7 @@ export default function DailyProductionPage() {
       if (matchingBatch) {
         // Show dialog to ask user what to do
         setMatchingInProgressBatch(matchingBatch);
+        pendingSubmitContextRef.current = latestManualContextRef.current;
         setPendingSubmitAction(() => () => executeQuickEntry(product, qty));
         dispatchEntryAcknowledgement({ type: "begin_in_progress" });
         setShowInProgressDialog(true);
@@ -686,6 +954,233 @@ export default function DailyProductionPage() {
     // No matching in-progress batch, proceed normally
     executeQuickEntry(product, qty);
     return true;
+  };
+
+  const restoreCreateIntent = () => {
+    const intent = uncertainCreateIntent;
+    if (!intent) return;
+    if (!canApplyOperationCallback(intent)) return;
+    const payload = intent.payload;
+    setBranchId(String(payload.branchId || branchId));
+    setSelectedDate(String(payload.productionDate || selectedDate));
+    setProductName(String(payload.productName || ""));
+    setProductCategory(String(payload.productCategory || ""));
+    setQuantity(String(payload.quantity || ""));
+    setDestination(String(payload.destination || "display_bar"));
+    setStatus(String(payload.status || "finished"));
+    setSelectedChefId(String(payload.chefId || ""));
+    setSelectedChefName(String(payload.chefName || ""));
+    setNotes(String(payload.notes || ""));
+    // A retry always requires the acknowledgement again, including after a
+    // refresh restored this intent.
+    dispatchEntryAcknowledgement({ type: "set_normal", value: false });
+    toast({
+      title: "تمت استعادة بيانات التسجيل",
+      description: "راجع البيانات ثم فعّل التأكيد. ستستخدم إعادة المحاولة الحمولة الأصلية والمفتاح نفسه.",
+    });
+  };
+
+  const retryCreateIntent = () => {
+    const intent = uncertainCreateIntent;
+    if (!intent) return;
+    if (!canApplyOperationCallback(intent)) return;
+    if (!requireIndependentEntryAcknowledgement()) return;
+    try {
+      const current = readManualProductionIntent<Record<string, any>>(
+        getManualProductionIntentContext(intent),
+      );
+      if (!current || current.key !== intent.key) {
+        throw new ManualProductionStorageError("تعذر العثور على نفس التسجيل المحفوظ؛ لم يتم إنشاء مفتاح بديل.");
+      }
+      createMutation.mutate({ intent: current });
+    } catch (error) {
+      showManualOperationStorageError(error);
+    }
+  };
+
+  const restoreRescheduleIntent = () => {
+    const intent = uncertainRescheduleIntent;
+    if (!intent) return;
+    if (!canApplyOperationCallback(intent)) return;
+    setSelectedDate(String(intent.payload.productionDate || selectedDate));
+    dispatchEntryAcknowledgement({ type: "set_carry_over", value: false });
+    toast({
+      title: "تمت استعادة إعادة الجدولة",
+      description: "فعّل تأكيد الترحيل ثم أعد المحاولة. ستستخدم نفس المعرف والمفتاح والحمولة.",
+    });
+  };
+
+  const retryRescheduleIntent = () => {
+    const intent = uncertainRescheduleIntent;
+    if (!intent) return;
+    if (!canApplyOperationCallback(intent)) return;
+    if (!canEnterIndependentEntry(carryOverAcknowledged)) {
+      toast({
+        title: "تأكيد الترحيل مطلوب",
+        description: "فعّل التأكيد مرة أخرى قبل إعادة إرسال نفس العملية.",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      const current = readManualProductionIntent<Record<string, any>>(
+        getManualProductionIntentContext(intent),
+      );
+      if (!current || current.key !== intent.key) {
+        throw new ManualProductionStorageError("تعذر العثور على نفس إعادة الجدولة؛ لم يتم إنشاء مفتاح بديل.");
+      }
+      carryOverMutation.mutate({ intent: current });
+    } catch (error) {
+      showManualOperationStorageError(error);
+    }
+  };
+
+  const askDiscardIntent = (intent: ManualProductionIntent<Record<string, any>>) => {
+    setDiscardIntent(intent);
+  };
+
+  const confirmDiscardIntent = () => {
+    const intent = discardIntent;
+    if (!intent) return;
+    if (!canApplyOperationCallback(intent)) {
+      setDiscardIntent(null);
+      return;
+    }
+    try {
+      clearManualProductionIntent(intent);
+      if (intent.operation === "create") {
+        updateCreateIntent(null);
+      } else {
+        updateRescheduleIntent(null);
+      }
+      setDiscardIntent(null);
+      if (intent.operation === "reschedule") closeCarryOverDialog();
+      toast({
+        title: "تم تجاهل النية المحفوظة",
+        description: "قد يكون الخادم سجّل العملية بالفعل؛ لن تتم إعادة المحاولة تلقائياً.",
+      });
+    } catch (error) {
+      showManualOperationStorageError(error);
+    }
+  };
+
+  const openCarryOver = (sourceBatch: DailyProductionBatch) => {
+    if (!canModifyRecords) {
+      toast({ title: "لا تملك صلاحية التعديل", description: "إعادة الجدولة تتطلب صلاحية تعديل الإنتاج.", variant: "destructive" });
+      return;
+    }
+    if (uncertainRescheduleIntent) {
+      toast({
+        title: "يوجد ترحيل غير محسوم",
+        description: "استأنف أو تجاهل إعادة الجدولة المحفوظة أولاً.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (isOperationallyLinkedProductionBatch(sourceBatch)) {
+      toast({
+        title: "هذه الدفعة تُدار من تشغيل المطبخ المركزي",
+        description: "لا يمكن إعادة جدولة دفعة مرتبطة؛ افتح التشغيل الفعلي.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const sourceDateForValidation = sourceBatch.productionDate
+      || format(new Date(sourceBatch.producedAt), "yyyy-MM-dd");
+    if (!isProductionDateAfter(selectedDate, sourceDateForValidation)) {
+      toast({
+        title: "تاريخ الترحيل غير صالح",
+        description: "يجب أن يكون التاريخ المحدد بعد تاريخ إنتاج الدفعة المصدر.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setCarryOverBatch(sourceBatch);
+    dispatchEntryAcknowledgement({ type: "open_carry_over" });
+  };
+
+  const submitCarryOver = () => {
+    const sourceBatch = carryOverBatch;
+    if (!sourceBatch) return;
+    if (!canModifyRecords) {
+      toast({ title: "لا تملك صلاحية التعديل", description: "إعادة الجدولة تتطلب صلاحية تعديل الإنتاج.", variant: "destructive" });
+      return;
+    }
+    if (isOperationallyLinkedProductionBatch(sourceBatch)) {
+      toast({
+        title: "هذه الدفعة تُدار من تشغيل المطبخ المركزي",
+        description: "لا يمكن إعادة جدولة دفعة مرتبطة؛ افتح التشغيل الفعلي.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!canEnterIndependentEntry(carryOverAcknowledged)) {
+      toast({
+        title: "تأكيد الترحيل مطلوب",
+        description: "فعّل مربع التأكيد قبل إعادة جدولة الدفعة.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const sourceDateForValidation = sourceBatch.productionDate
+      || format(new Date(sourceBatch.producedAt), "yyyy-MM-dd");
+    if (!isProductionDateAfter(selectedDate, sourceDateForValidation)) {
+      toast({
+        title: "تاريخ الترحيل غير صالح",
+        description: "يجب أن يكون التاريخ المحدد بعد تاريخ إنتاج الدفعة المصدر.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!authenticatedUserId || !branchId) {
+      showManualOperationStorageError(new ManualProductionStorageError("يلزم المستخدم والفرع قبل إعادة الجدولة."));
+      return;
+    }
+    const requestPath = `/api/daily-production/batches/${sourceBatch.id}/reschedule`;
+    const payload = {
+      branchId,
+      productionDate: selectedDate,
+      expectedProductionDate: sourceBatch.productionDate ?? null,
+      expectedQuantity: sourceBatch.quantity,
+      independentEntryAcknowledged: true,
+    };
+    let preparation: {
+      intent: ManualProductionIntent<Record<string, any>>;
+      reused: boolean;
+    };
+    try {
+      preparation = prepareManualProductionIntent(
+        operationContext("reschedule"),
+        payload,
+        requestPath,
+      );
+    } catch (error) {
+      if (error instanceof ManualProductionIntentMismatchError) {
+        updateRescheduleIntent(error.existingIntent as ManualProductionIntent<Record<string, any>>);
+        dispatchEntryAcknowledgement({ type: "set_carry_over", value: false });
+        toast({
+          title: "يوجد ترحيل محفوظ ببيانات مختلفة",
+          description: "استأنف أو تجاهل إعادة الجدولة المحفوظة صراحةً؛ لم يتم تغيير مفتاحها.",
+          variant: "destructive",
+        });
+      } else {
+        showManualOperationStorageError(error);
+      }
+      return;
+    }
+    if (preparation.reused) {
+      updateRescheduleIntent(preparation.intent);
+      dispatchEntryAcknowledgement({ type: "set_carry_over", value: false });
+      toast({
+        title: "يوجد ترحيل غير محسوم",
+        description: "استخدم زر إعادة المحاولة؛ ستُستخدم الحمولة الأصلية والمفتاح نفسه.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setManualOperationStorageError(null);
+    updateRescheduleIntent(preparation.intent);
+    carryOverMutation.mutate({ intent: preparation.intent, sourceBatch });
   };
 
   const handleEditSave = () => {
@@ -702,6 +1197,7 @@ export default function DailyProductionPage() {
         destination: editDestination,
         notes: editNotes || null,
       },
+      context: latestManualContextRef.current,
     });
   };
 
@@ -1269,6 +1765,92 @@ export default function DailyProductionPage() {
                 </p>
               </div>
             </div>
+            {manualOperationStorageError && (
+              <div className="mt-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900" role="alert">
+                <p className="font-semibold">تم إيقاف الإرسال لحماية العملية</p>
+                <p className="mt-1 text-xs">{manualOperationStorageError}</p>
+              </div>
+            )}
+            {uncertainCreateIntent && (
+              <div
+                className="mt-3 rounded-lg border-2 border-orange-400 bg-orange-50 p-3 text-sm text-orange-950"
+                role="alert"
+                data-testid="manual-production-create-resume"
+              >
+                <p className="font-semibold">يوجد تسجيل إنتاج غير محسوم</p>
+                <p className="mt-1 text-xs leading-5">
+                  قد يكون الخادم سجّل «{uncertainCreateIntent.payload.productName || "الدفعة"}».
+                  لم تتم استعادته تلقائياً. استأنف الحمولة الأصلية أو تجاهلها صراحةً قبل إدخال بيانات مختلفة.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={restoreCreateIntent}>
+                    استعادة البيانات
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={retryCreateIntent}
+                    disabled={!independentEntryAcknowledged || createMutation.isPending}
+                  >
+                    {createMutation.isPending ? "جاري إعادة المحاولة..." : "إعادة المحاولة بنفس المفتاح"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => askDiscardIntent(uncertainCreateIntent)}
+                  >
+                    تجاهل مع التحذير
+                  </Button>
+                </div>
+              </div>
+            )}
+            {uncertainRescheduleIntent && (
+              <div
+                className="mt-3 rounded-lg border-2 border-orange-400 bg-orange-50 p-3 text-sm text-orange-950"
+                role="alert"
+                data-testid="manual-production-reschedule-resume"
+              >
+                <p className="font-semibold">يوجد ترحيل غير محسوم</p>
+                <p className="mt-1 text-xs leading-5">
+                  قد يكون الخادم أعاد جدولة الدفعة ذاتها. لم تتم المتابعة تلقائياً؛ استأنف أو تجاهل
+                  العملية الصريحة قبل بدء ترحيل آخر.
+                </p>
+                <label className="mt-3 flex items-start gap-2 text-xs leading-5">
+                  <input
+                    type="checkbox"
+                    checked={carryOverAcknowledged}
+                    onChange={(event) => dispatchEntryAcknowledgement({
+                      type: "set_carry_over",
+                      value: event.target.checked,
+                    })}
+                    className="mt-1 h-4 w-4 shrink-0 accent-orange-600"
+                  />
+                  <span>أؤكد إعادة محاولة نفس الدفعة المستقلة دون إنشاء نسخة أو تحريك مخزون الناتج.</span>
+                </label>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={restoreRescheduleIntent}>
+                    استعادة الترحيل
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={retryRescheduleIntent}
+                    disabled={!carryOverAcknowledged || carryOverMutation.isPending}
+                  >
+                    {carryOverMutation.isPending ? "جاري إعادة المحاولة..." : "إعادة المحاولة بنفس المفتاح"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => askDiscardIntent(uncertainRescheduleIntent)}
+                  >
+                    تجاهل مع التحذير
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -1530,7 +2112,10 @@ export default function DailyProductionPage() {
                                      variant="outline"
                                      size="sm"
                                      className="h-8 text-xs gap-1 text-green-700 border-green-300 hover:bg-green-50"
-                                     onClick={() => finishBatchMutation.mutate(batch.id)}
+                                     onClick={() => finishBatchMutation.mutate({
+                                       batchId: batch.id,
+                                       context: latestManualContextRef.current,
+                                     })}
                                      disabled={finishBatchMutation.isPending}
                                    >
                                      <CheckCircle className="h-3 w-3" />
@@ -1540,11 +2125,8 @@ export default function DailyProductionPage() {
                                      variant="outline"
                                      size="sm"
                                      className="h-8 text-xs gap-1 text-amber-700 border-amber-300 hover:bg-amber-50"
-                                     onClick={() => {
-                                       setCarryOverBatch(batch);
-                                       dispatchEntryAcknowledgement({ type: "open_carry_over" });
-                                     }}
-                                     disabled={carryOverMutation.isPending}
+                                     onClick={() => openCarryOver(batch)}
+                                     disabled={carryOverMutation.isPending || !!uncertainRescheduleIntent}
                                    >
                                      <Repeat className="h-3 w-3" />
                                      ترحيل
@@ -1632,7 +2214,10 @@ export default function DailyProductionPage() {
                                      التشغيل
                                    </Link>
                                  ) : (
-                                   <Button variant="ghost" size="icon" className="h-7 w-7 text-green-500" onClick={() => finishBatchMutation.mutate(batch.id)} disabled={finishBatchMutation.isPending}>
+                                   <Button variant="ghost" size="icon" className="h-7 w-7 text-green-500" onClick={() => finishBatchMutation.mutate({
+                                     batchId: batch.id,
+                                     context: latestManualContextRef.current,
+                                   })} disabled={finishBatchMutation.isPending}>
                                      <CheckCircle className="h-3.5 w-3.5" />
                                    </Button>
                                  )
@@ -1658,7 +2243,10 @@ export default function DailyProductionPage() {
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                       <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                                      <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={() => deleteMutation.mutate(batch.id)}>
+                                      <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={() => deleteMutation.mutate({
+                                        id: batch.id,
+                                        context: latestManualContextRef.current,
+                                      })}>
                                         حذف
                                       </AlertDialogAction>
                                     </AlertDialogFooter>
@@ -2501,8 +3089,8 @@ export default function DailyProductionPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Carry-over is a new generic batch, so it needs the same explicit
-          independent-entry acknowledgement as every other generic POST. */}
+      {/* Carry-over is an in-place reschedule: the batch id stays the same,
+          only its date changes, and no output-stock posting happens here. */}
       <Dialog
         open={carryOverBatch !== null}
         onOpenChange={(open) => {
@@ -2516,7 +3104,8 @@ export default function DailyProductionPage() {
               تأكيد ترحيل دفعة مستقلة
             </DialogTitle>
             <DialogDescription className="text-right">
-              سيُنشئ الترحيل دفعة جديدة لليوم المحدد. لا تستخدمه لدفعة مرتبطة بطلب مركزي؛ افتح التشغيل الفعلي لذلك المسار.
+              سيعيد الترحيل جدولة نفس الدفعة إلى تاريخ لاحق. لا ينشئ نسخة ولا يحرّك مخزون الناتج؛
+              لا تستخدمه لدفعة مرتبطة بطلب مركزي، وافتح التشغيل الفعلي لذلك المسار.
             </DialogDescription>
           </DialogHeader>
           {carryOverBatch && (
@@ -2524,7 +3113,8 @@ export default function DailyProductionPage() {
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                 <p className="font-semibold">{carryOverBatch.productName}</p>
                 <p className="mt-1 text-xs">
-                  {carryOverBatch.quantity} {carryOverBatch.unit || "قطعة"} · من {format(new Date(carryOverBatch.producedAt), "yyyy-MM-dd")}
+                  المعرف #{carryOverBatch.id} · {carryOverBatch.quantity} {carryOverBatch.unit || "قطعة"} ·
+                  من {carryOverBatch.productionDate || format(new Date(carryOverBatch.producedAt), "yyyy-MM-dd")} إلى {selectedDate}
                 </p>
               </div>
               <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
@@ -2538,8 +3128,8 @@ export default function DailyProductionPage() {
                   className="mt-1 h-4 w-4 shrink-0 accent-amber-600"
                 />
                 <Label htmlFor="carry-over-entry-acknowledgement" className="cursor-pointer text-xs leading-5 text-amber-900">
-                  أقرّ أن هذه دفعة مستقلة غير مرتبطة بطلب مركزي؛ لا تستهلك وصفة أو مواد خام ولا تلبّي طلباً،
-                  ويُرحّل ناتج الإنتاج النهائي فقط عند الإكمال.
+                  أقرّ أن هذه الدفعة مستقلة وغير مرتبطة بطلب مركزي، وأن العملية ستغيّر تاريخ الدفعة
+                  نفسها فقط دون إنشاء نسخة أو تحريك مخزون الناتج.
                 </Label>
               </div>
             </div>
@@ -2549,28 +3139,30 @@ export default function DailyProductionPage() {
               إلغاء
             </Button>
             <Button
-              onClick={() => {
-                if (!carryOverBatch) return;
-                if (!carryOverAcknowledged) {
-                  toast({
-                    title: "تأكيد الترحيل مطلوب",
-                    description: "فعّل مربع التأكيد قبل إنشاء الدفعة المرحّلة.",
-                    variant: "destructive",
-                  });
-                  return;
-                }
-                carryOverMutation.mutate({
-                  sourceBatch: carryOverBatch,
-                  independentEntryAcknowledged: carryOverAcknowledged,
-                });
-              }}
+              onClick={submitCarryOver}
               disabled={!carryOverAcknowledged || carryOverMutation.isPending}
             >
-              {carryOverMutation.isPending ? "جاري الترحيل..." : "تأكيد الترحيل"}
+              {carryOverMutation.isPending ? "جاري إعادة الجدولة..." : "تأكيد إعادة الجدولة"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={discardIntent !== null} onOpenChange={(open) => !open && setDiscardIntent(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تجاهل عملية غير محسومة؟</AlertDialogTitle>
+            <AlertDialogDescription>
+              قد يكون الخادم سجّل العملية بالفعل رغم عدم وصول النتيجة إلى المتصفح.
+              سيؤدي التجاهل إلى حذف النية المحفوظة ولن تتم إعادة المحاولة تلقائياً.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDiscardIntent}>تجاهل مع علمي بالتحذير</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 }

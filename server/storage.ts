@@ -1292,7 +1292,7 @@ export interface IStorage {
   getAllDailyProductionBatches(filters?: { branchId?: string; date?: string; destination?: string; status?: string; chefId?: string; category?: string; productionOrderId?: number }): Promise<DailyProductionBatch[]>;
   getDailyProductionBatch(id: number): Promise<DailyProductionBatch | undefined>;
   createDailyProductionBatch(batch: InsertDailyProductionBatch): Promise<DailyProductionBatch>;
-  createDailyProductionBatchWithTransfer(batch: InsertDailyProductionBatch, userId?: string, userName?: string): Promise<{ batch: DailyProductionBatch; transferred: boolean }>;
+  createDailyProductionBatchWithTransfer(batch: InsertDailyProductionBatch, userId?: string, userName?: string, tx?: any): Promise<{ batch: DailyProductionBatch; transferred: boolean }>;
   updateDailyProductionBatch(id: number, batch: Partial<InsertDailyProductionBatch>): Promise<DailyProductionBatch | undefined>;
   updateDailyProductionBatchWithTransfer(id: number, batch: Partial<InsertDailyProductionBatch>, userId?: string, userName?: string): Promise<{ batch: DailyProductionBatch | undefined; transferred: boolean }>;
   deleteDailyProductionBatch(id: number): Promise<boolean>;
@@ -8670,8 +8670,8 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async createDailyProductionBatchWithTransfer(batch: InsertDailyProductionBatch, userId?: string, userName?: string): Promise<{ batch: DailyProductionBatch; transferred: boolean }> {
-    return await db.transaction(async (tx) => {
+  async createDailyProductionBatchWithTransfer(batch: InsertDailyProductionBatch, userId?: string, userName?: string, existingTx?: any): Promise<{ batch: DailyProductionBatch; transferred: boolean }> {
+    const createInTransaction = async (tx: any) => {
       const [newBatch] = await tx.insert(dailyProductionBatches).values(batch).returning();
       
       let transferred = false;
@@ -8713,7 +8713,13 @@ export class DatabaseStorage implements IStorage {
       }
       
       return { batch: newBatch, transferred };
-    });
+    };
+    // The manual-operation idempotency executor supplies its transaction so
+    // inserting the batch, posting stock, and persisting the replay response
+    // are atomic rather than nested commits.
+    return existingTx
+      ? await createInTransaction(existingTx)
+      : await db.transaction(createInTransaction);
   }
 
   async updateDailyProductionBatch(id: number, batch: Partial<InsertDailyProductionBatch>): Promise<DailyProductionBatch | undefined> {
