@@ -49,6 +49,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Link } from "wouter";
+import { isOperationallyLinkedProductionBatch } from "@shared/manual-production-entry";
+import {
+  canEnterIndependentEntry,
+  getProductionSource,
+  getProductionSourceLabel,
+  initialIndependentEntryAcknowledgementState,
+  type ProductionSourceFields,
+  reduceIndependentEntryAcknowledgement,
+  type IndependentEntryAcknowledgementAction,
+  type IndependentEntryAcknowledgementState,
+} from "@/components/central-kitchen/manual-production-ui";
 
 interface DailyProductionBatch {
   id: number;
@@ -73,6 +84,10 @@ interface DailyProductionBatch {
   finishedAt: string | null;
   finishedById: string | null;
   finishedByName: string | null;
+  centralKitchenOrderItemId: number | null;
+  recipeBacked: boolean | null;
+  centralKitchenIdempotencyKey?: string | null;
+  centralKitchenPayloadFingerprint?: string | null;
 }
 
 interface ChefUser {
@@ -122,6 +137,42 @@ const HOUR_LABELS: Record<string, string> = {
 
 const QUICK_QUANTITIES = [1, 2, 3, 5, 10, 12, 15, 20, 24, 30];
 
+function ProductionSourceBadge({ batch, compact = false }: { batch: ProductionSourceFields & { id?: number }; compact?: boolean }) {
+  const source = getProductionSource(batch);
+  const label = getProductionSourceLabel(source);
+  const isLinked = source !== "unlinked_legacy";
+  const badge = (
+    <Badge
+      variant="outline"
+      className={`${compact ? "text-[9px] h-5" : "text-xs h-6"} px-1.5 py-0 whitespace-nowrap ${
+        source === "linked_recipe"
+          ? "border-violet-300 bg-violet-50 text-violet-800"
+          : source === "linked_without_recipe"
+            ? "border-amber-300 bg-amber-50 text-amber-800"
+            : source === "linked_recipe_unknown"
+              ? "border-sky-300 bg-sky-50 text-sky-800"
+              : "border-stone-300 bg-stone-50 text-stone-700"
+      }`}
+      data-testid={batch.id ? `source-badge-${batch.id}` : undefined}
+    >
+      {label}
+    </Badge>
+  );
+
+  // The API only exposes the order-item id here. Never turn that id into an
+  // order id: operations is the truthful destination until the full request
+  // context is available.
+  return isLinked ? (
+    <Link
+      href="/production-dashboard?tab=operations"
+      className="inline-flex max-w-full"
+      title="فتح التشغيل الفعلي للمطبخ المركزي"
+    >
+      {badge}
+    </Link>
+  ) : badge;
+}
+
 export default function DailyProductionPage() {
   const [branchId, setBranchId] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
@@ -132,6 +183,9 @@ export default function DailyProductionPage() {
   const [selectedShift, setSelectedShift] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [status, setStatus] = useState<string>("finished");
+  const [entryAcknowledgement, setEntryAcknowledgement] = useState<IndependentEntryAcknowledgementState>(
+    initialIndependentEntryAcknowledgementState,
+  );
   const [selectedChefId, setSelectedChefId] = useState<string>("");
   const [selectedChefName, setSelectedChefName] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -150,7 +204,8 @@ export default function DailyProductionPage() {
   const [editNotes, setEditNotes] = useState<string>("");
   const [showInProgressDialog, setShowInProgressDialog] = useState<boolean>(false);
   const [matchingInProgressBatch, setMatchingInProgressBatch] = useState<DailyProductionBatch | null>(null);
-  const [pendingSubmitAction, setPendingSubmitAction] = useState<(() => void) | null>(null);
+  const [pendingSubmitAction, setPendingSubmitAction] = useState<(() => boolean) | null>(null);
+  const [carryOverBatch, setCarryOverBatch] = useState<DailyProductionBatch | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   const { toast } = useToast();
@@ -161,6 +216,27 @@ export default function DailyProductionPage() {
 
   const canModifyRecords = isAdmin || canEdit("production");
   const canDeleteRecords = isAdmin || canDelete("production");
+  const independentEntryAcknowledged = entryAcknowledgement.normal;
+  const carryOverAcknowledged = entryAcknowledgement.carryOver;
+
+  const dispatchEntryAcknowledgement = (action: IndependentEntryAcknowledgementAction) => {
+    setEntryAcknowledgement(previous => reduceIndependentEntryAcknowledgement(previous, action));
+  };
+
+  const requireIndependentEntryAcknowledgement = () => {
+    if (canEnterIndependentEntry(independentEntryAcknowledged)) return true;
+    toast({
+      title: "تأكيد الإدخال المستقل مطلوب",
+      description: "فعّل مربع التأكيد الذي يوضح أن هذا التسجيل لا يرتبط بطلب مطبخ مركزي ولا يستهلك وصفة.",
+      variant: "destructive",
+    });
+    return false;
+  };
+
+  const closeCarryOverDialog = () => {
+    setCarryOverBatch(null);
+    dispatchEntryAcknowledgement({ type: "close_carry_over" });
+  };
 
   const { data: branches } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -288,6 +364,9 @@ export default function DailyProductionPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
+      if (data.independentEntryAcknowledged !== true) {
+        throw new Error("يلزم تأكيد الإدخال المستقل قبل التسجيل.");
+      }
       const res = await apiRequest("POST", "/api/daily-production/batches", data);
       return res.json();
     },
@@ -309,6 +388,9 @@ export default function DailyProductionPage() {
       } else {
         setQuantity("");
       }
+      // An acknowledgement applies to the entry just submitted, not to
+      // future records created by a later click or an Enter key.
+      dispatchEntryAcknowledgement({ type: "normal_submit_success" });
       toast({ 
         title: "تم تسجيل الدفعة بنجاح", 
         description: wasDisplayBar 
@@ -317,12 +399,18 @@ export default function DailyProductionPage() {
       });
     },
     onError: (error: any) => {
+      dispatchEntryAcknowledgement({ type: "normal_submit_error" });
       toast({ title: "خطأ", description: error.message, variant: "destructive" });
     },
   });
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const knownBatch = [...(batches || []), ...(unfinishedBatches || [])]
+        .find(batch => batch.id === id);
+      if (knownBatch && isOperationallyLinkedProductionBatch(knownBatch)) {
+        throw new Error("لا يمكن تعديل دفعة مرتبطة من سجل الإنتاج العام؛ افتح التشغيل المركزي.");
+      }
       const res = await apiRequest("PATCH", `/api/daily-production/batches/${id}`, data);
       return res.json();
     },
@@ -340,6 +428,11 @@ export default function DailyProductionPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
+      const knownBatch = [...(batches || []), ...(unfinishedBatches || [])]
+        .find(batch => batch.id === id);
+      if (knownBatch && isOperationallyLinkedProductionBatch(knownBatch)) {
+        throw new Error("لا يمكن حذف دفعة مرتبطة من سجل الإنتاج العام؛ افتح التشغيل المركزي.");
+      }
       await apiRequest("DELETE", `/api/daily-production/batches/${id}`);
     },
     onSuccess: () => {
@@ -357,6 +450,11 @@ export default function DailyProductionPage() {
   // Backend automatically transfers to finished goods inventory
   const finishBatchMutation = useMutation({
     mutationFn: async (batchId: number) => {
+      const knownBatch = [...(batches || []), ...(unfinishedBatches || [])]
+        .find(batch => batch.id === batchId);
+      if (knownBatch && isOperationallyLinkedProductionBatch(knownBatch)) {
+        throw new Error("هذه الدفعة مرتبطة بتشغيل المطبخ المركزي؛ افتح التشغيل لمعاينة الوصفة قبل الإنهاء.");
+      }
       const finisherName = user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : user?.username || "";
       const res = await apiRequest("PATCH", `/api/daily-production/batches/${batchId}`, {
         status: "finished",
@@ -382,7 +480,19 @@ export default function DailyProductionPage() {
   // Carry-over: create a new batch today based on unfinished batch from previous day
   // Also marks the source batch as finished to prevent duplicates
   const carryOverMutation = useMutation({
-    mutationFn: async (sourceBatch: DailyProductionBatch) => {
+    mutationFn: async ({
+      sourceBatch,
+      independentEntryAcknowledged: acknowledged,
+    }: {
+      sourceBatch: DailyProductionBatch;
+      independentEntryAcknowledged: boolean;
+    }) => {
+      if (isOperationallyLinkedProductionBatch(sourceBatch)) {
+        throw new Error("لا يمكن ترحيل دفعة مرتبطة من الإدخال العام؛ افتح تشغيل المطبخ المركزي.");
+      }
+      if (!canEnterIndependentEntry(acknowledged)) {
+        throw new Error("يلزم تأكيد ترحيل الدفعة المستقلة قبل المتابعة.");
+      }
       // First, create the new batch
       const res = await apiRequest("POST", "/api/daily-production/batches", {
         branchId: sourceBatch.branchId,
@@ -398,6 +508,7 @@ export default function DailyProductionPage() {
         chefId: sourceBatch.chefId,
         chefName: sourceBatch.chefName,
         sourceBatchId: sourceBatch.id,
+        independentEntryAcknowledged: acknowledged,
       });
       
       // Then mark the source batch as finished (carried over)
@@ -413,15 +524,19 @@ export default function DailyProductionPage() {
       refetchBatches();
       refetchUnfinished();
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats", branchId, selectedDate] });
+      dispatchEntryAcknowledgement({ type: "carry_over_submit_success" });
+      closeCarryOverDialog();
       toast({ title: "تم الترحيل", description: "تم ترحيل الدفعة لليوم الحالي" });
     },
     onError: (error: any) => {
+      dispatchEntryAcknowledgement({ type: "carry_over_submit_error" });
       toast({ title: "خطأ", description: error.message, variant: "destructive" });
     },
   });
 
   // Helper to execute the actual batch creation
   const executeCreateBatch = () => {
+    if (!requireIndependentEntryAcknowledgement()) return false;
     const numericQuantity = parseInt(quantity, 10);
     const product = products?.find(p => p.name === productName);
     const resolvedCategory = productCategory || product?.category || null;
@@ -438,24 +553,27 @@ export default function DailyProductionPage() {
       status: isSweetsCategory(resolvedCategory) ? status : "finished",
       chefId: selectedChefId || null,
       chefName: selectedChefName || null,
+      independentEntryAcknowledged: true,
     });
+    return true;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent): boolean => {
     e.preventDefault();
     if (!branchId || !productName || !quantity || !destination) {
       toast({ title: "بيانات ناقصة", description: "يرجى ملء جميع الحقول المطلوبة", variant: "destructive" });
-      return;
+      return false;
     }
     if (!selectedChefId) {
       toast({ title: "بيانات ناقصة", description: "يرجى اختيار الشيف المنتج", variant: "destructive" });
-      return;
+      return false;
     }
+    if (!requireIndependentEntryAcknowledgement()) return false;
     
     const numericQuantity = parseInt(quantity, 10);
     if (isNaN(numericQuantity) || numericQuantity <= 0) {
       toast({ title: "خطأ", description: "الكمية يجب أن تكون رقماً صحيحاً أكبر من صفر", variant: "destructive" });
-      return;
+      return false;
     }
     
     const product = products?.find(p => p.name === productName);
@@ -468,26 +586,39 @@ export default function DailyProductionPage() {
         // Show dialog to ask user what to do
         setMatchingInProgressBatch(matchingBatch);
         setPendingSubmitAction(() => executeCreateBatch);
+        dispatchEntryAcknowledgement({ type: "begin_in_progress" });
         setShowInProgressDialog(true);
-        return;
+        setShowManualEntry(false);
+        return false;
       }
     }
     
     // No matching in-progress batch, proceed normally
     executeCreateBatch();
+    return true;
   };
 
   // Handle dialog: mark existing as finished, then create new batch
   const handleFinishExistingAndCreate = async () => {
     if (!matchingInProgressBatch) return;
+    if (isOperationallyLinkedProductionBatch(matchingInProgressBatch)) {
+      toast({
+        title: "هذه الدفعة تُدار من تشغيل المطبخ المركزي",
+        description: "افتح التشغيل الفعلي لمراجعة الوصفة ومعاينة الإنهاء قبل أي أثر مخزني.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
       await finishBatchMutation.mutateAsync(matchingInProgressBatch.id);
       // After finishing, execute the pending create action
       if (pendingSubmitAction) {
-        pendingSubmitAction();
+        const submitted = pendingSubmitAction();
+        if (!submitted) dispatchEntryAcknowledgement({ type: "cancel_in_progress" });
       }
     } catch (error) {
+      dispatchEntryAcknowledgement({ type: "cancel_in_progress" });
       console.error("Error finishing batch:", error);
     } finally {
       setShowInProgressDialog(false);
@@ -498,9 +629,11 @@ export default function DailyProductionPage() {
 
   // Handle dialog: continue with new batch without finishing existing
   const handleContinueNewBatch = () => {
+    let submitted = false;
     if (pendingSubmitAction) {
-      pendingSubmitAction();
+      submitted = pendingSubmitAction();
     }
+    if (!submitted) dispatchEntryAcknowledgement({ type: "cancel_in_progress" });
     setShowInProgressDialog(false);
     setMatchingInProgressBatch(null);
     setPendingSubmitAction(null);
@@ -508,6 +641,7 @@ export default function DailyProductionPage() {
 
   // Handle dialog: cancel
   const handleCancelInProgressDialog = () => {
+    dispatchEntryAcknowledgement({ type: "cancel_in_progress" });
     setShowInProgressDialog(false);
     setMatchingInProgressBatch(null);
     setPendingSubmitAction(null);
@@ -515,6 +649,7 @@ export default function DailyProductionPage() {
 
   // Helper to execute quick entry batch creation
   const executeQuickEntry = (product: Product, qty: number) => {
+    if (!requireIndependentEntryAcknowledgement()) return false;
     createMutation.mutate({
       branchId,
       productId: product.id,
@@ -528,10 +663,13 @@ export default function DailyProductionPage() {
       status: isSweetsCategory(product.category) ? status : "finished",
       chefId: selectedChefId || null,
       chefName: selectedChefName || null,
+      independentEntryAcknowledged: true,
     });
+    return true;
   };
 
-  const handleQuickEntry = (product: Product, qty: number) => {
+  const handleQuickEntry = (product: Product, qty: number): boolean => {
+    if (!requireIndependentEntryAcknowledgement()) return false;
     // Check for matching in-progress batch (only for sweets category)
     if (isSweetsCategory(product.category)) {
       const matchingBatch = findMatchingInProgressBatch(product.name, product.id);
@@ -539,13 +677,15 @@ export default function DailyProductionPage() {
         // Show dialog to ask user what to do
         setMatchingInProgressBatch(matchingBatch);
         setPendingSubmitAction(() => () => executeQuickEntry(product, qty));
+        dispatchEntryAcknowledgement({ type: "begin_in_progress" });
         setShowInProgressDialog(true);
-        return;
+        return true;
       }
     }
     
     // No matching in-progress batch, proceed normally
     executeQuickEntry(product, qty);
+    return true;
   };
 
   const handleEditSave = () => {
@@ -566,6 +706,14 @@ export default function DailyProductionPage() {
   };
 
   const openEditDialog = (batch: DailyProductionBatch) => {
+    if (isOperationallyLinkedProductionBatch(batch)) {
+      toast({
+        title: "التعديل من التشغيل المركزي فقط",
+        description: "لا يمكن تعديل دفعة مرتبطة أو مرتبطة بوصفة من سجل الإنتاج العام.",
+        variant: "destructive",
+      });
+      return;
+    }
     setEditingBatch(batch);
     setEditQuantity(batch.quantity.toString());
     setEditDestination(batch.destination);
@@ -692,10 +840,27 @@ export default function DailyProductionPage() {
     return null;
   };
 
+  const openManualEntry = () => {
+    dispatchEntryAcknowledgement({ type: "open_normal_entry" });
+    setShowManualEntry(true);
+  };
+
+  const handleManualEntryDialogChange = (open: boolean) => {
+    setShowManualEntry(open);
+    if (!open) dispatchEntryAcknowledgement({ type: "close_normal_entry" });
+  };
+
   const handleProductCardClick = (product: Product) => {
+    dispatchEntryAcknowledgement({ type: "open_normal_entry" });
     setQuantityDialogProduct(product);
     setQuickQuantity("");
     setTimeout(() => quantityInputRef.current?.focus(), 100);
+  };
+
+  const closeQuickQuantityDialog = () => {
+    setQuantityDialogProduct(null);
+    setQuickQuantity("");
+    dispatchEntryAcknowledgement({ type: "close_normal_entry" });
   };
 
   const handleQuickQuantitySubmit = () => {
@@ -708,9 +873,11 @@ export default function DailyProductionPage() {
       return;
     }
 
-    handleQuickEntry(quantityDialogProduct, qty);
-    setQuantityDialogProduct(null);
-    setQuickQuantity("");
+    const submitted = handleQuickEntry(quantityDialogProduct, qty);
+    if (submitted) {
+      setQuantityDialogProduct(null);
+      setQuickQuantity("");
+    }
   };
 
   const getDiff = (current: number, previous: number) => {
@@ -1061,6 +1228,50 @@ export default function DailyProductionPage() {
           </div>
         )}
 
+        {/* Make the two production workflows explicit before any entry action. */}
+        <Card className="border-violet-200 bg-violet-50/40">
+          <CardContent className="p-4 sm:p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className="bg-violet-100 text-violet-800">اختر مسار الإنتاج</Badge>
+                  <span className="text-sm font-semibold">لا تستخدم الإدخال اليدوي لطلبات المطبخ المركزي</span>
+                </div>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  للطلبات المعتمدة، ابدأ من التشغيل الفعلي حتى يبقى الطلب والوصفة والإنهاء المسبق ظاهرة.
+                  الإدخال اليدوي أدناه مستقل عن الطلبات ولا يملأ احتياج طلب مركزي.
+                </p>
+              </div>
+              <Link href="/production-dashboard?tab=operations" className="shrink-0">
+                <Button className="w-full gap-2 bg-violet-700 hover:bg-violet-800 lg:w-auto">
+                  <Factory className="h-4 w-4" />
+                  إنتاج طلبات المطبخ المعتمدة
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+            <div className="mt-4 flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
+              <input
+                id="independent-entry-acknowledgement"
+                type="checkbox"
+                checked={independentEntryAcknowledged}
+                onChange={(event) => dispatchEntryAcknowledgement({ type: "set_normal", value: event.target.checked })}
+                className="mt-1 h-4 w-4 shrink-0 accent-amber-600"
+                data-testid="checkbox-independent-entry"
+              />
+              <div className="space-y-1">
+                <Label htmlFor="independent-entry-acknowledgement" className="cursor-pointer text-sm font-semibold text-amber-900">
+                  إدخال مستقل (ليس لطلب مطبخ مركزي)
+                </Label>
+                <p className="text-xs leading-5 text-amber-800">
+                  أقرّ بأن هذا المسار يسجّل مخرج إنتاج نهائي مستقل فقط عند الإكمال؛ لا يستهلك وصفة أو مواد خام،
+                  ولا يلبّي أو يخصم من أي طلب مركزي.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="flex w-full sm:grid sm:grid-cols-4 lg:w-auto lg:inline-grid">
@@ -1244,7 +1455,7 @@ export default function DailyProductionPage() {
                 })}
                 {/* Manual Entry Card */}
                 <button
-                  onClick={() => setShowManualEntry(true)}
+                   onClick={openManualEntry}
                   disabled={!branchId || !selectedChefId}
                   className={`flex flex-col items-center justify-center text-center p-3 sm:p-4 rounded-xl border-2 border-dashed transition-all touch-manipulation ${
                     !branchId || !selectedChefId
@@ -1256,8 +1467,8 @@ export default function DailyProductionPage() {
                   <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center mb-2 bg-gray-100">
                     <Plus className="h-5 w-5 sm:h-6 sm:w-6 text-gray-500" />
                   </div>
-                  <span className="text-xs sm:text-sm font-medium text-muted-foreground">إدخال يدوي</span>
-                  <span className="text-[10px] text-muted-foreground mt-1">منتج غير مدرج</span>
+                   <span className="text-xs sm:text-sm font-medium text-muted-foreground">إدخال مستقل يدوي</span>
+                   <span className="text-[10px] text-muted-foreground mt-1">منتج غير مدرج · يتطلب التأكيد</span>
                 </button>
                 {categoryFilteredProducts.length === 0 && (
                   <div className="col-span-full text-center py-12 text-muted-foreground">
@@ -1296,32 +1507,50 @@ export default function DailyProductionPage() {
                             {getEnName(batch) && (
                               <p className="text-xs text-muted-foreground truncate ltr">{getEnName(batch)}</p>
                             )}
+                             <div className="mt-1">
+                               <ProductionSourceBadge batch={batch} compact />
+                             </div>
                             <p className="text-xs text-muted-foreground">
                               {batch.quantity} {batch.unit || "قطعة"} - {format(new Date(batch.producedAt), "yyyy-MM-dd")}
                             </p>
                           </div>
-                          {canModifyRecords ? (
+                           {canModifyRecords ? (
                             <div className="flex items-center gap-1 shrink-0 mr-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 text-xs gap-1 text-green-700 border-green-300 hover:bg-green-50"
-                                onClick={() => finishBatchMutation.mutate(batch.id)}
-                                disabled={finishBatchMutation.isPending}
-                              >
-                                <CheckCircle className="h-3 w-3" />
-                                اكتمل
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 text-xs gap-1 text-amber-700 border-amber-300 hover:bg-amber-50"
-                                onClick={() => carryOverMutation.mutate(batch)}
-                                disabled={carryOverMutation.isPending}
-                              >
-                                <Repeat className="h-3 w-3" />
-                                ترحيل
-                              </Button>
+                               {isOperationallyLinkedProductionBatch(batch) ? (
+                                 <Link
+                                   href="/production-dashboard?tab=operations"
+                                   className="inline-flex h-8 items-center gap-1 rounded-md border border-violet-300 px-2 text-xs font-medium text-violet-800 hover:bg-violet-50"
+                                 >
+                                   <ArrowLeft className="h-3 w-3" />
+                                   فتح التشغيل
+                                 </Link>
+                               ) : (
+                                 <>
+                                   <Button
+                                     variant="outline"
+                                     size="sm"
+                                     className="h-8 text-xs gap-1 text-green-700 border-green-300 hover:bg-green-50"
+                                     onClick={() => finishBatchMutation.mutate(batch.id)}
+                                     disabled={finishBatchMutation.isPending}
+                                   >
+                                     <CheckCircle className="h-3 w-3" />
+                                     اكتمل
+                                   </Button>
+                                   <Button
+                                     variant="outline"
+                                     size="sm"
+                                     className="h-8 text-xs gap-1 text-amber-700 border-amber-300 hover:bg-amber-50"
+                                     onClick={() => {
+                                       setCarryOverBatch(batch);
+                                       dispatchEntryAcknowledgement({ type: "open_carry_over" });
+                                     }}
+                                     disabled={carryOverMutation.isPending}
+                                   >
+                                     <Repeat className="h-3 w-3" />
+                                     ترحيل
+                                   </Button>
+                                 </>
+                               )}
                             </div>
                           ) : (
                             <Badge variant="outline" className="text-xs text-muted-foreground gap-1 shrink-0">
@@ -1371,6 +1600,9 @@ export default function DailyProductionPage() {
                               {getEnName(batch) && (
                                 <p className="text-xs text-muted-foreground truncate ltr">{getEnName(batch)}</p>
                               )}
+                               <div className="mt-1">
+                                 <ProductionSourceBadge batch={batch} compact />
+                               </div>
                               <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                                 <span className="flex items-center gap-0.5">
                                   <Clock className="h-2.5 w-2.5" />
@@ -1389,17 +1621,28 @@ export default function DailyProductionPage() {
                               </div>
                             </div>
                             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                              {canModifyRecords && isSweetsCategory(batch.productCategory) && batch.status === "in_progress" && (
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-green-500" onClick={() => finishBatchMutation.mutate(batch.id)} disabled={finishBatchMutation.isPending}>
-                                  <CheckCircle className="h-3.5 w-3.5" />
-                                </Button>
-                              )}
-                              {canModifyRecords && (
+                               {canModifyRecords && isSweetsCategory(batch.productCategory) && batch.status === "in_progress" && (
+                                 isOperationallyLinkedProductionBatch(batch) ? (
+                                   <Link
+                                     href="/production-dashboard?tab=operations"
+                                     className="inline-flex h-7 items-center gap-1 rounded-md border border-violet-300 px-1.5 text-[10px] text-violet-800"
+                                     title="مراجعة الإنهاء من تشغيل المطبخ المركزي"
+                                   >
+                                     <ArrowLeft className="h-3 w-3" />
+                                     التشغيل
+                                   </Link>
+                                 ) : (
+                                   <Button variant="ghost" size="icon" className="h-7 w-7 text-green-500" onClick={() => finishBatchMutation.mutate(batch.id)} disabled={finishBatchMutation.isPending}>
+                                     <CheckCircle className="h-3.5 w-3.5" />
+                                   </Button>
+                                 )
+                               )}
+                               {canModifyRecords && !isOperationallyLinkedProductionBatch(batch) && (
                                 <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500" onClick={() => openEditDialog(batch)}>
                                   <Edit2 className="h-3.5 w-3.5" />
                                 </Button>
                               )}
-                              {canDeleteRecords && (
+                               {canDeleteRecords && !isOperationallyLinkedProductionBatch(batch) && (
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
                                     <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500">
@@ -1504,6 +1747,9 @@ export default function DailyProductionPage() {
                                       {getEnName(batch) && (
                                         <p className="text-xs text-muted-foreground truncate ltr">{getEnName(batch)}</p>
                                       )}
+                                       <div className="mt-1">
+                                         <ProductionSourceBadge batch={batch} compact />
+                                       </div>
                                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                         <span>{formatTime(batch.producedAt)}</span>
                                         <span>•</span>
@@ -1764,6 +2010,7 @@ export default function DailyProductionPage() {
                             <TableHead className="text-right font-bold">#</TableHead>
                             <TableHead className="text-right font-bold">الوقت</TableHead>
                             <TableHead className="text-right font-bold">المنتج</TableHead>
+                             <TableHead className="text-right font-bold">مصدر الدفعة</TableHead>
                             <TableHead className="text-right font-bold">الفئة</TableHead>
                             <TableHead className="text-center font-bold">الكمية</TableHead>
                             <TableHead className="text-right font-bold">الوجهة</TableHead>
@@ -1792,6 +2039,9 @@ export default function DailyProductionPage() {
                                     )}
                                   </div>
                                 </TableCell>
+                                 <TableCell>
+                                   <ProductionSourceBadge batch={batch} />
+                                 </TableCell>
                                 <TableCell>
                                   <Badge variant="outline" className="text-xs">
                                     {batch.productCategory || "-"}
@@ -1889,7 +2139,7 @@ export default function DailyProductionPage() {
       </div>
 
       {/* Manual Entry Dialog */}
-      <Dialog open={showManualEntry} onOpenChange={setShowManualEntry}>
+      <Dialog open={showManualEntry} onOpenChange={handleManualEntryDialogChange}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1898,10 +2148,22 @@ export default function DailyProductionPage() {
             </DialogTitle>
             <DialogDescription>أدخل بيانات منتج غير موجود في القائمة</DialogDescription>
           </DialogHeader>
+          <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
+            <input
+              id="manual-dialog-entry-acknowledgement"
+              type="checkbox"
+              checked={independentEntryAcknowledged}
+              onChange={(event) => dispatchEntryAcknowledgement({ type: "set_normal", value: event.target.checked })}
+              className="mt-1 h-4 w-4 shrink-0 accent-amber-600"
+            />
+            <Label htmlFor="manual-dialog-entry-acknowledgement" className="cursor-pointer text-xs leading-5 text-amber-900">
+              أقرّ أن الإدخال مستقل عن الطلبات المركزية: لا استهلاك وصفة أو مواد خام ولا تلبية لطلب،
+              ويُرحّل ناتج الإنتاج النهائي فقط عند الإكمال.
+            </Label>
+          </div>
           <form onSubmit={(e) => {
             e.preventDefault();
-            handleSubmit(e);
-            if (productName && quantity) {
+            if (handleSubmit(e)) {
               setShowManualEntry(false);
             }
           }} className="space-y-4 py-2">
@@ -1953,12 +2215,12 @@ export default function DailyProductionPage() {
               <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="ملاحظات إضافية (اختياري)" rows={2} />
             </div>
             <div className="grid grid-cols-2 gap-2 pt-1">
-              <Button type="button" variant="outline" onClick={() => setShowManualEntry(false)} className="h-11">
+               <Button type="button" variant="outline" onClick={() => handleManualEntryDialogChange(false)} className="h-11">
                 إلغاء
               </Button>
               <Button
                 type="submit"
-                disabled={createMutation.isPending || !productName || !quantity}
+                 disabled={createMutation.isPending || !productName || !quantity || !independentEntryAcknowledged}
                 className="h-11 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700"
                 data-testid="btn-manual-submit"
               >
@@ -1970,7 +2232,7 @@ export default function DailyProductionPage() {
       </Dialog>
 
       {/* Quick Quantity Popup */}
-      <Dialog open={!!quantityDialogProduct} onOpenChange={() => setQuantityDialogProduct(null)}>
+      <Dialog open={!!quantityDialogProduct} onOpenChange={(open) => !open && closeQuickQuantityDialog()}>
         <DialogContent className="max-w-[340px] sm:max-w-sm p-0 gap-0 rounded-2xl overflow-hidden">
           <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-4 text-white text-center">
             <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-2">
@@ -1990,6 +2252,19 @@ export default function DailyProductionPage() {
           </div>
 
           <div className="p-4 space-y-4">
+            <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-right">
+              <input
+                id="quick-entry-acknowledgement"
+                type="checkbox"
+                checked={independentEntryAcknowledged}
+                onChange={(event) => dispatchEntryAcknowledgement({ type: "set_normal", value: event.target.checked })}
+                className="mt-1 h-4 w-4 shrink-0 accent-amber-600"
+              />
+              <Label htmlFor="quick-entry-acknowledgement" className="cursor-pointer text-xs leading-5 text-amber-900">
+                هذا تسجيل مستقل، لا يستهلك وصفة أو مواد خام ولا يلبّي طلب مطبخ مركزي؛
+                يُرحّل ناتج الإنتاج النهائي فقط عند الإكمال.
+              </Label>
+            </div>
             <div className="space-y-2">
               <Label className="text-sm font-medium">الكمية</Label>
               <Input
@@ -2063,14 +2338,14 @@ export default function DailyProductionPage() {
             <div className="grid grid-cols-2 gap-2 pt-1">
               <Button
                 variant="outline"
-                onClick={() => setQuantityDialogProduct(null)}
+                onClick={closeQuickQuantityDialog}
                 className="h-12 text-sm"
               >
                 إلغاء
               </Button>
               <Button
                 onClick={handleQuickQuantitySubmit}
-                disabled={!quickQuantity || parseInt(quickQuantity) <= 0 || createMutation.isPending}
+               disabled={!quickQuantity || parseInt(quickQuantity) <= 0 || createMutation.isPending || !independentEntryAcknowledged}
                 className="h-12 text-sm bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 font-bold"
                 data-testid="btn-confirm-quantity"
               >
@@ -2143,7 +2418,12 @@ export default function DailyProductionPage() {
       </Dialog>
 
       {/* In-Progress Product Dialog */}
-      <Dialog open={showInProgressDialog} onOpenChange={setShowInProgressDialog}>
+      <Dialog
+        open={showInProgressDialog}
+        onOpenChange={(open) => {
+          if (!open) handleCancelInProgressDialog();
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-700">
@@ -2172,7 +2452,20 @@ export default function DailyProductionPage() {
           )}
 
           <DialogFooter className="flex flex-col gap-2 sm:flex-col">
-            {canModifyRecords ? (
+            {matchingInProgressBatch && isOperationallyLinkedProductionBatch(matchingInProgressBatch) ? (
+              <div className="w-full space-y-2">
+                <div className="rounded-md border border-violet-200 bg-violet-50 p-3 text-xs text-violet-900">
+                  هذه الدفعة مرتبطة بطلب مركزي. لا يمكن إنهاؤها من الإدخال اليومي العام؛ راجع معاينة الوصفة من التشغيل الفعلي.
+                </div>
+                <Link
+                  href="/production-dashboard?tab=operations"
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-violet-700 px-4 text-sm font-medium text-white hover:bg-violet-800"
+                >
+                  <Factory className="h-4 w-4" />
+                  فتح التشغيل الفعلي
+                </Link>
+              </div>
+            ) : canModifyRecords ? (
               <Button
                 onClick={handleFinishExistingAndCreate}
                 className="w-full bg-green-600 hover:bg-green-700"
@@ -2203,6 +2496,77 @@ export default function DailyProductionPage() {
             >
               <X className="h-4 w-4 ml-2" />
               إلغاء
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Carry-over is a new generic batch, so it needs the same explicit
+          independent-entry acknowledgement as every other generic POST. */}
+      <Dialog
+        open={carryOverBatch !== null}
+        onOpenChange={(open) => {
+          if (!open) closeCarryOverDialog();
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              <Repeat className="h-5 w-5" />
+              تأكيد ترحيل دفعة مستقلة
+            </DialogTitle>
+            <DialogDescription className="text-right">
+              سيُنشئ الترحيل دفعة جديدة لليوم المحدد. لا تستخدمه لدفعة مرتبطة بطلب مركزي؛ افتح التشغيل الفعلي لذلك المسار.
+            </DialogDescription>
+          </DialogHeader>
+          {carryOverBatch && (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                <p className="font-semibold">{carryOverBatch.productName}</p>
+                <p className="mt-1 text-xs">
+                  {carryOverBatch.quantity} {carryOverBatch.unit || "قطعة"} · من {format(new Date(carryOverBatch.producedAt), "yyyy-MM-dd")}
+                </p>
+              </div>
+              <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
+                <input
+                  id="carry-over-entry-acknowledgement"
+                  type="checkbox"
+                  checked={carryOverAcknowledged}
+                  onChange={(event) => {
+                    dispatchEntryAcknowledgement({ type: "set_carry_over", value: event.target.checked });
+                  }}
+                  className="mt-1 h-4 w-4 shrink-0 accent-amber-600"
+                />
+                <Label htmlFor="carry-over-entry-acknowledgement" className="cursor-pointer text-xs leading-5 text-amber-900">
+                  أقرّ أن هذه دفعة مستقلة غير مرتبطة بطلب مركزي؛ لا تستهلك وصفة أو مواد خام ولا تلبّي طلباً،
+                  ويُرحّل ناتج الإنتاج النهائي فقط عند الإكمال.
+                </Label>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={closeCarryOverDialog} disabled={carryOverMutation.isPending}>
+              إلغاء
+            </Button>
+            <Button
+              onClick={() => {
+                if (!carryOverBatch) return;
+                if (!carryOverAcknowledged) {
+                  toast({
+                    title: "تأكيد الترحيل مطلوب",
+                    description: "فعّل مربع التأكيد قبل إنشاء الدفعة المرحّلة.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                carryOverMutation.mutate({
+                  sourceBatch: carryOverBatch,
+                  independentEntryAcknowledged: carryOverAcknowledged,
+                });
+              }}
+              disabled={!carryOverAcknowledged || carryOverMutation.isPending}
+            >
+              {carryOverMutation.isPending ? "جاري الترحيل..." : "تأكيد الترحيل"}
             </Button>
           </DialogFooter>
         </DialogContent>

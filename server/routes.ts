@@ -145,6 +145,11 @@ import {
   snapshotRecipeBackedBatchMaterials,
 } from "./central-kitchen-batch-materials";
 import {
+  getManualProductionReservedField,
+  hasIndependentEntryAcknowledgement,
+  isOperationallyLinkedProductionBatch,
+} from "@shared/manual-production-entry";
+import {
   centralKitchenBatchRequirementsParamsSchema,
   centralKitchenMaterialRequirementsQuerySchema,
 } from "@shared/central-kitchen-batch-materials";
@@ -21959,37 +21964,39 @@ export async function registerRoutes(
     }
   });
 
-  // Carry over batch to next day
+  // Legacy carry-over endpoint retired.  The old storage helper copied a
+  // batch without the manual-entry acknowledgement and could carry central-
+  // kitchen ownership metadata into a new row.  Keep authentication,
+  // permission, and branch scope checks here so an out-of-branch batch is
+  // never disclosed, but do not retain another mutable creation path.
   app.post("/api/daily-production/batches/:id/carry-over", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "معرف غير صالح" });
       }
-      
+
+      const existingBatch = await storage.getDailyProductionBatch(id);
+      if (!existingBatch) {
+        return res.status(404).json({ error: "دفعة الإنتاج المصدر غير موجودة" });
+      }
+
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req)) {
-        const existingBatch = await storage.getDailyProductionBatch(id);
-        if (existingBatch?.branchId) {
+        if (existingBatch.branchId) {
           const hasAccess = await canAccessBranch(req, existingBatch.branchId);
           if (!hasAccess) {
             return res.status(403).json({ error: "غير مصرح بترحيل هذه الدفعة" });
           }
         }
       }
-      
-      const { newDate, additionalQuantity } = req.body;
-      if (!newDate) {
-        return res.status(400).json({ error: "التاريخ الجديد مطلوب" });
-      }
-      const batch = await storage.carryOverBatch(id, new Date(newDate), additionalQuantity);
-      if (!batch) {
-        return res.status(404).json({ error: "دفعة الإنتاج المصدر غير موجودة" });
-      }
-      res.status(201).json(batch);
+
+      return res.status(410).json({
+        error: "تم إيقاف ترحيل الدفعات عبر هذا المسار؛ استخدم مسار الإدخال اليدوي المستقل مع التأكيد المطلوب",
+      });
     } catch (error) {
-      console.error("Error carrying over batch:", error);
-      res.status(500).json({ error: "فشل في ترحيل الدفعة" });
+      console.error("Error checking retired carry-over route:", error);
+      res.status(500).json({ error: "تعذر التحقق من مسار الترحيل المتوقف" });
     }
   });
 
@@ -22023,12 +22030,22 @@ export async function registerRoutes(
   // Create new batch
   app.post("/api/daily-production/batches", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
     try {
-      const user = (req as any).user;
-      if (Object.prototype.hasOwnProperty.call(req.body || {}, "recipeBacked")) {
+      // This endpoint is intentionally the manual-entry boundary.  Inspect
+      // the raw JSON object before destructuring/coercing anything so that
+      // even null/false operational fields cannot reach the generic insert.
+      const reservedField = getManualProductionReservedField(req.body);
+      if (reservedField) {
         return res.status(400).json({
-          error: "ربط الوصفة متاح فقط عند إنشاء دفعة مرتبطة بطلب المطبخ المركزي",
+          error: "لا يمكن استخدام حقول الربط التشغيلي عند إنشاء دفعة يدوية؛ افتح طلب المطبخ المركزي الأصلي لإنشاء الدفعة المرتبطة",
         });
       }
+      if (!hasIndependentEntryAcknowledgement(req.body)) {
+        return res.status(400).json({
+          error: "يلزم تأكيد أن الدفعة إدخال مستقل غير مرتبط بطلب أو وصفة",
+        });
+      }
+
+      const user = (req as any).user;
       const { branchId, productId, productName, productCategory, quantity, unit, destination, notes, producedAt, productionDate, status, chefId, chefName, sourceBatchId } = req.body;
       
       // Validate required fields
@@ -22059,6 +22076,31 @@ export async function registerRoutes(
         return res.status(400).json({ error: "الوجهة غير صالحة" });
       }
 
+      let validatedSourceBatchId: number | null = null;
+      if (sourceBatchId !== undefined && sourceBatchId !== null && sourceBatchId !== "") {
+        const sourceId = typeof sourceBatchId === "number"
+          ? sourceBatchId
+          : typeof sourceBatchId === "string" && /^\d+$/.test(sourceBatchId.trim())
+            ? Number(sourceBatchId.trim())
+            : NaN;
+        if (!Number.isInteger(sourceId) || sourceId <= 0) {
+          return res.status(400).json({ error: "معرف دفعة الترحيل غير صالح" });
+        }
+        const sourceBatch = await storage.getDailyProductionBatch(sourceId);
+        if (!sourceBatch) {
+          return res.status(404).json({ error: "دفعة الترحيل المصدر غير موجودة" });
+        }
+        if (sourceBatch.branchId !== branchId) {
+          return res.status(403).json({ error: "لا يمكن ترحيل دفعة من فرع آخر" });
+        }
+        if (isOperationallyLinkedProductionBatch(sourceBatch)) {
+          return res.status(409).json({
+            error: "لا يمكن إنشاء ترحيل يدوي من دفعة مرتبطة بطلب أو وصفة؛ افتح الطلب الأصلي لترحيل الدفعة",
+          });
+        }
+        validatedSourceBatchId = sourceId;
+      }
+
       // Validate status value if provided
       const validStatuses = ['finished', 'in_progress'];
       if (status && !validStatuses.includes(status)) {
@@ -22081,7 +22123,10 @@ export async function registerRoutes(
         status: status || 'finished',
         chefId: chefId || null,
         chefName: chefName || null,
-        sourceBatchId: sourceBatchId ? Number(sourceBatchId) : null,
+        sourceBatchId: validatedSourceBatchId,
+        // The acknowledgement above is request-only intent.  Persist the
+        // server-owned boundary marker, never the acknowledgement itself.
+        recipeBacked: false,
       };
       
       const userName = user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user?.username || '';
@@ -22097,23 +22142,39 @@ export async function registerRoutes(
   // Update batch
   app.patch("/api/daily-production/batches/:id", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
     try {
+      // Keep the same raw-field boundary as manual creation.  In particular,
+      // a false/null link field is still a caller attempt to control an
+      // operational column and must not be silently ignored.
+      if (getManualProductionReservedField(req.body)) {
+        return res.status(400).json({
+          error: "لا يمكن استخدام حقول الربط التشغيلي عند تعديل دفعة يدوية؛ افتح طلب المطبخ المركزي الأصلي لتعديل الدفعة المرتبطة",
+        });
+      }
+
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) {
         return res.status(400).json({ error: "معرف غير صالح" });
       }
-      if (Object.prototype.hasOwnProperty.call(req.body || {}, "recipeBacked")) {
-        return res.status(400).json({ error: "لا يمكن تغيير ربط الوصفة لدفعة الإنتاج" });
+
+      const existingBatch = await storage.getDailyProductionBatch(id);
+      if (!existingBatch) {
+        return res.status(404).json({ error: "دفعة الإنتاج غير موجودة" });
       }
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req)) {
-        const existingBatch = await storage.getDailyProductionBatch(id);
-        if (existingBatch?.branchId) {
+        if (existingBatch.branchId) {
           const hasAccess = await canAccessBranch(req, existingBatch.branchId);
           if (!hasAccess) {
             return res.status(403).json({ error: "غير مصرح بتعديل هذه الدفعة" });
           }
         }
+      }
+
+      if (isOperationallyLinkedProductionBatch(existingBatch)) {
+        return res.status(409).json({
+          error: "هذه الدفعة مرتبطة بطلب أو وصفة تشغيلية ولا يمكن تعديلها هنا؛ افتح الطلب الأصلي لتعديل الدفعة المرتبطة",
+        });
       }
       
       // Validate allowed update fields
@@ -22184,6 +22245,12 @@ export async function registerRoutes(
         if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بحذف دفعة إنتاج هذا الفرع" });
         }
+      }
+
+      if (isOperationallyLinkedProductionBatch(existing)) {
+        return res.status(409).json({
+          error: "هذه الدفعة مرتبطة بطلب أو وصفة تشغيلية ولا يمكن حذفها هنا؛ افتح الطلب الأصلي لحذف الدفعة المرتبطة",
+        });
       }
       
       await storage.deleteDailyProductionBatch(id);

@@ -26,3 +26,9 @@ Operation idempotency binds the requested source resource, while its stored resp
 **Why:** Revising an approved recipe produces a new draft ID; binding replay to the result ID rather than the source ID incorrectly rejects identical retries.
 
 **How to apply:** Preserve the original operation response independently of editable recipe records. Test replay after edits, approval, and draft deletion, including access loss for the original actor.
+
+Independent manual output is a separate, explicitly acknowledged workflow, not a shortcut for fulfilling a kitchen request or consuming its recipe.
+
+**Why:** Generic output entry credits finished goods without a request-item link or frozen ingredient snapshot. Copying or editing a linked batch through that path can detach its operational meaning.
+
+**How to apply:** Keep operational batches in their dedicated workflow, reject operational control fields on manual endpoints, and validate carry-over sources before creating any copy. Manual acknowledgment is request-time intent, not a historical consent record; do not infer past acknowledgment or recipe consumption from source badges.
