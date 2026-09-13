@@ -19,6 +19,7 @@ import type {
 } from "@shared/central-kitchen-live";
 import { formatExact6 } from "@shared/central-kitchen-batch-materials";
 import { postProductionBatchToStock } from "./production-stock-posting";
+import { getBatchMaterialRequirements } from "./central-kitchen-batch-materials";
 
 export class CentralKitchenLiveError extends Error {
   constructor(message: string, public status = 409) {
@@ -31,10 +32,25 @@ type Transaction = any;
 type PreparedLine = {
   itemId: number;
   preparedQuantity: number;
+  preparedFromStock?: number | null;
+  preparedFromProduction?: number | null;
   substituteQuantity: number;
   substituteProductId?: number | null;
   substituteWarehouseItemId?: number | null;
   substituteUnit?: string | null;
+};
+
+type ProductionProofBatch = {
+  batchId: number;
+  quantity: string;
+  checksum: string;
+};
+
+export type ProductionFulfillmentAvailability = {
+  eligibleQuantity: number;
+  batches: Array<{ batchId: number; quantity: number }>;
+  unavailableBatches: Array<{ batchId: number; reason: string }>;
+  message?: string;
 };
 
 function warehouseQuantityMicros(value: number | string, allowZero = false): bigint {
@@ -62,6 +78,135 @@ function warehouseQuantityMicros(value: number | string, allowZero = false): big
 
 function warehouseQuantity(value: number | string, allowZero = false): string {
   return formatExact6(warehouseQuantityMicros(value, allowZero));
+}
+
+function exactQuantityMicros(value: number | string): bigint {
+  return warehouseQuantityMicros(value, true);
+}
+
+/**
+ * Read only verification of output which has already been posted.  This never
+ * calls the production posting path: production output is normal finished
+ * stock, and preparation must only prove that historic fact.
+ */
+async function inspectProductionFulfillment(
+  tx: Transaction,
+  input: { itemId: number; kitchenId: string; productId: number; unit: string },
+  lockBatches = false,
+): Promise<{
+  availability: ProductionFulfillmentAvailability;
+  proofBatches: ProductionProofBatch[];
+}> {
+  const result = await tx.execute(sql`
+    SELECT b.id, b.branch_id, b.product_id, b.quantity::text AS quantity, b.unit,
+           b.status, b.recipe_backed, s.ingredient_checksum
+    FROM daily_production_batches b
+    LEFT JOIN central_kitchen_batch_recipe_snapshots s ON s.batch_id = b.id
+    WHERE b.central_kitchen_order_item_id = ${input.itemId}
+    ORDER BY b.id
+    ${lockBatches ? sql`FOR UPDATE OF b` : sql``}
+  `);
+  const batches: Array<{ batchId: number; quantity: number }> = [];
+  const proofBatches: ProductionProofBatch[] = [];
+  const unavailableBatches: Array<{ batchId: number; reason: string }> = [];
+  for (const batch of result.rows as any[]) {
+    const batchId = Number(batch.id);
+    if (batch.branch_id !== input.kitchenId
+      || Number(batch.product_id) !== input.productId
+      || String(batch.unit || "").trim() !== input.unit.trim()) {
+      unavailableBatches.push({ batchId, reason: "هوية الدفعة لا تطابق بند الطلب أو المطبخ" });
+      continue;
+    }
+    if (batch.status !== "finished") {
+      unavailableBatches.push({ batchId, reason: "دفعة الإنتاج لم تكتمل بعد" });
+      continue;
+    }
+    if (batch.recipe_backed !== true || !batch.ingredient_checksum) {
+      unavailableBatches.push({ batchId, reason: "الدفعة لا تحمل لقطة وصفة مجمدة صالحة" });
+      continue;
+    }
+    try {
+      // This checks the frozen batch/snapshot identity, immutable material
+      // set/checksum, and that every required material debit actually exists.
+      const materials = await getBatchMaterialRequirements(tx, batchId);
+      if (!materials?.recipeBacked || materials.materialConsumptionStatus !== "consumed") {
+        unavailableBatches.push({ batchId, reason: "لا يوجد إثبات صرف مواد مكتمل للدفعة" });
+        continue;
+      }
+      const outputLog = await tx.execute(sql`
+        SELECT branch_id, product_id, quantity::text, movement_type, reference_type,
+               reference_id, batch_id
+        FROM production_inventory_logs
+        WHERE batch_id = ${batchId}
+        LIMIT 2
+      `);
+      const log = outputLog.rows?.[0] as any;
+      if (outputLog.rows.length !== 1
+        || !log
+        || log.movement_type !== "production_in"
+        || log.reference_type !== "batch"
+        || Number(log.reference_id) !== batchId
+        || Number(log.batch_id) !== batchId
+        || log.branch_id !== input.kitchenId
+        || Number(log.product_id) !== input.productId
+        || exactQuantityMicros(log.quantity) !== exactQuantityMicros(batch.quantity)) {
+        unavailableBatches.push({ batchId, reason: "لا يوجد إثبات قيد إنتاج نهائي صالح للدفعة" });
+        continue;
+      }
+      const quantity = Number(batch.quantity);
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        unavailableBatches.push({ batchId, reason: "كمية دفعة الإنتاج غير صالحة" });
+        continue;
+      }
+      batches.push({ batchId, quantity });
+      proofBatches.push({
+        batchId,
+        quantity: warehouseQuantity(batch.quantity, true),
+        checksum: String(batch.ingredient_checksum),
+      });
+    } catch (error: any) {
+      unavailableBatches.push({
+        batchId,
+        reason: error instanceof Error ? error.message : "تعذر التحقق من إثبات الدفعة",
+      });
+    }
+  }
+  const eligibleQuantity = batches.reduce((sum, batch) => sum + batch.quantity, 0);
+  return {
+    availability: {
+      eligibleQuantity,
+      batches,
+      unavailableBatches,
+      ...(batches.length ? {} : { message: "لا توجد دفعات إنتاج مكتملة ذات إثبات مواد وقيد مخزون صالح" }),
+    },
+    proofBatches,
+  };
+}
+
+export async function getProductionFulfillmentAvailability(
+  tx: Transaction,
+  input: { itemId: number; kitchenId: string; productId: number; unit: string },
+): Promise<ProductionFulfillmentAvailability> {
+  return (await inspectProductionFulfillment(tx, input)).availability;
+}
+
+function selectStableProductionProof(
+  proofBatches: ProductionProofBatch[],
+  requestedQuantity: number,
+): ProductionProofBatch[] {
+  let remaining = exactQuantityMicros(requestedQuantity);
+  const selected: ProductionProofBatch[] = [];
+  for (const batch of proofBatches) {
+    if (remaining === 0n) break;
+    const quantity = exactQuantityMicros(batch.quantity);
+    const used = quantity < remaining ? quantity : remaining;
+    if (used > 0n) selected.push({ ...batch, quantity: formatExact6(used) });
+    remaining -= used;
+  }
+  if (remaining !== 0n) {
+    throw new CentralKitchenLiveError("كمية الإنتاج المختارة تتجاوز الدفعات المثبتة", 409);
+  }
+  return selected;
 }
 
 export type CentralKitchenDemandAllocation = {
@@ -316,8 +461,15 @@ export async function reserveRealPreparation(
   tx: Transaction,
   order: { id: number; centralKitchenId: string; inventoryMode: string | null },
   lines: PreparedLine[],
-) {
-  if (order.inventoryMode !== "real") return;
+): Promise<Map<number, Record<string, unknown> | null>> {
+  const classified = lines.some((line) =>
+    line.preparedFromStock != null || line.preparedFromProduction != null);
+  if (order.inventoryMode !== "real") {
+    if (classified) {
+      throw new CentralKitchenLiveError("لا يمكن تصنيف مصدر التجهيز لطلب ظلي أو تاريخي", 400);
+    }
+    return new Map();
+  }
   await assertRealOrderWritable(order, tx);
   const existing = await tx.select({ id: centralKitchenInventoryAllocations.id })
     .from(centralKitchenInventoryAllocations)
@@ -326,9 +478,53 @@ export async function reserveRealPreparation(
   const items = await tx.select().from(centralKitchenOrderItems)
     .where(eq(centralKitchenOrderItems.orderId, order.id));
   const byId = new Map(items.map((item: any) => [item.id, item]));
+  const evidenceByItem = new Map<number, Record<string, unknown> | null>();
   for (const line of lines) {
     const item: any = byId.get(line.itemId);
     if (!item) throw new CentralKitchenLiveError("بند الطلب غير موجود", 400);
+    const hasStockSource = line.preparedFromStock != null;
+    const hasProductionSource = line.preparedFromProduction != null;
+    if (hasStockSource !== hasProductionSource) {
+      throw new CentralKitchenLiveError("يجب إرسال مصدري التجهيز معاً أو تركهما معاً", 400);
+    }
+    if (hasStockSource) {
+      if (!item.productId || item.warehouseItemId) {
+        throw new CentralKitchenLiveError("تصنيف المصدر متاح لبنود المنتجات الحقيقية فقط", 400);
+      }
+      const stock = exactQuantityMicros(line.preparedFromStock!);
+      const production = exactQuantityMicros(line.preparedFromProduction!);
+      if (stock + production !== exactQuantityMicros(line.preparedQuantity)) {
+        throw new CentralKitchenLiveError("مجموع مصدرَي التجهيز لا يطابق الكمية المجهزة", 400);
+      }
+      // Finished goods, including production output, use whole product counts.
+      // Keep the source split subject to the same invariant as the existing
+      // reserveComponent total rather than allowing .5 + .5 to evade it.
+      if (stock % 1_000_000n !== 0n || production % 1_000_000n !== 0n) {
+        throw new CentralKitchenLiveError("مصدرَا تجهيز المنتج الجاهز يقبلان كميات صحيحة فقط", 400);
+      }
+      if (production > 0n) {
+        const inspected = await inspectProductionFulfillment(tx, {
+          itemId: item.id,
+          kitchenId: order.centralKitchenId,
+          productId: item.productId,
+          unit: item.unit,
+        }, true);
+        const eligible = inspected.proofBatches.reduce(
+          (sum, batch) => sum + exactQuantityMicros(batch.quantity), 0n);
+        if (production > eligible) {
+          throw new CentralKitchenLiveError("كمية الإنتاج تتجاوز الدفعات المكتملة ذات الإثبات الصالح", 409);
+        }
+        evidenceByItem.set(item.id, {
+          version: 1,
+          batches: selectStableProductionProof(inspected.proofBatches, line.preparedFromProduction!),
+        });
+      } else {
+        evidenceByItem.set(item.id, null);
+      }
+    } else {
+      // Deliberately preserve unknown for legacy callers and old rows.
+      evidenceByItem.set(item.id, null);
+    }
     const original = item.productId
       ? { kind: "product" as const, catalogId: item.productId, unit: item.unit }
       : item.warehouseItemId
@@ -348,6 +544,7 @@ export async function reserveRealPreparation(
       await reserveComponent(tx, order, item.id, "substitute", substitute, line.substituteQuantity);
     }
   }
+  return evidenceByItem;
 }
 
 export async function dispatchRealInventory(

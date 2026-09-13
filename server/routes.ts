@@ -190,6 +190,7 @@ import {
   getAllocatedKitchenDemands,
   getKitchenAvailability,
   getKitchenRuntime,
+  getProductionFulfillmentAvailability,
   receiveRealInventory,
   reserveRealPreparation,
   setKitchenRuntime,
@@ -8159,6 +8160,51 @@ export async function registerRoutes(
   );
 
   app.get(
+    "/api/central-kitchen-orders/:id/items/:itemId/production-fulfillment",
+    isAuthenticated,
+    requirePermission("central_kitchen_orders", "view"),
+    async (req, res) => {
+      const orderId = centralKitchenOrderIdSchema.safeParse(req.params.id);
+      const itemId = centralKitchenOrderIdSchema.safeParse(req.params.itemId);
+      if (!orderId.success || !itemId.success) {
+        return res.status(400).json({ error: "معرف الطلب أو البند غير صالح" });
+      }
+      const [row] = await db.select({
+        order: centralKitchenOrders,
+        item: centralKitchenOrderItems,
+      }).from(centralKitchenOrderItems)
+        .innerJoin(centralKitchenOrders, eq(centralKitchenOrderItems.orderId, centralKitchenOrders.id))
+        .where(and(
+          eq(centralKitchenOrders.id, orderId.data),
+          eq(centralKitchenOrderItems.id, itemId.data),
+        )).limit(1);
+      if (!row) return res.status(404).json({ error: "بند الطلب غير موجود" });
+      if (!(await canAccessCentralKitchenOrder(req, row.order))) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الطلب" });
+      }
+      if (row.order.inventoryMode !== "real" || !row.item.productId || row.item.warehouseItemId) {
+        return res.json({
+          eligibleQuantity: 0,
+          batches: [],
+          unavailableBatches: [],
+          message: "إثبات إنتاج التجهيز متاح فقط لبنود المنتجات في الطلبات الحقيقية",
+        });
+      }
+      try {
+        return res.json(await getProductionFulfillmentAvailability(db, {
+          itemId: row.item.id,
+          kitchenId: row.order.centralKitchenId,
+          productId: row.item.productId,
+          unit: row.item.unit,
+        }));
+      } catch (error) {
+        console.error("Error verifying central kitchen production fulfillment:", error);
+        return res.status(500).json({ error: "تعذر التحقق من إثبات إنتاج البند" });
+      }
+    },
+  );
+
+  app.get(
     "/api/central-kitchen-orders/:id",
     isAuthenticated,
     requirePermission("central_kitchen_orders", "view"),
@@ -8473,8 +8519,9 @@ export async function registerRoutes(
 
       const transitioned = await db.transaction(async (tx) => {
         await assertRealOrderWritable(order, tx);
+        let productionEvidenceByItem = new Map<number, Record<string, unknown> | null>();
         if (preparationPayload) {
-          await reserveRealPreparation(tx, order, preparationPayload.items);
+          productionEvidenceByItem = await reserveRealPreparation(tx, order, preparationPayload.items);
         }
         const [updated] = await tx.update(centralKitchenOrders).set({
           status: targetStatus,
@@ -8499,6 +8546,9 @@ export async function registerRoutes(
               < requested.requestedQuantity - 0.000001;
             const [preparedItem] = await tx.update(centralKitchenOrderItems).set({
               preparedQuantity: item.preparedQuantity,
+              preparedFromStock: item.preparedFromStock ?? null,
+              preparedFromProduction: item.preparedFromProduction ?? null,
+              productionFulfillmentEvidence: productionEvidenceByItem.get(item.itemId) ?? null,
               substituteQuantity: item.substituteQuantity,
               substituteProductId: item.substituteQuantity > 0 ? item.substituteProductId || null : null,
                substituteWarehouseItemId: item.substituteQuantity > 0 ? item.substituteWarehouseItemId || null : null,

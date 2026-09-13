@@ -130,6 +130,8 @@ export const centralKitchenPreparationSchema = z.object({
   items: z.array(z.object({
     itemId: z.number().int().positive(),
     preparedQuantity: exactSixDecimalNonnegative,
+    preparedFromStock: exactSixDecimalNonnegative.optional().nullable(),
+    preparedFromProduction: exactSixDecimalNonnegative.optional().nullable(),
     substituteQuantity: exactSixDecimalNonnegative.default(0),
     substituteProductId: z.number().int().positive().optional().nullable(),
     substituteWarehouseItemId: z.number().int().positive().optional().nullable(),
@@ -147,6 +149,24 @@ export const centralKitchenPreparationSchema = z.object({
     seen.add(item.itemId);
     if (item.substituteProductId != null && item.substituteWarehouseItemId != null) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["items", index], message: "Choose only one substitute catalog identity" });
+    }
+    const hasStockSource = item.preparedFromStock != null;
+    const hasProductionSource = item.preparedFromProduction != null;
+    if (hasStockSource !== hasProductionSource) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["items", index],
+        message: "يجب إرسال مصدري التجهيز معاً أو تركهما معاً للتوافق مع السجلات السابقة",
+      });
+    }
+    if (hasStockSource && hasProductionSource
+      && quantityMicros(item.preparedFromStock!) + quantityMicros(item.preparedFromProduction!)
+        !== quantityMicros(item.preparedQuantity)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["items", index, "preparedFromProduction"],
+        message: "مجموع مصدرَي التجهيز يجب أن يساوي الكمية المجهزة بدقة",
+      });
     }
     if (item.substituteQuantity > 0 && (!item.substituteProductName || !item.substituteUnit)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["items", index], message: "Substitute name and unit are required" });
@@ -432,9 +452,22 @@ export function createCentralKitchenTransitionFingerprint(
         ...topLevel,
         items: [...payload.items]
           .sort((left, right) => left.itemId - right.itemId)
-          .map((item) => Object.fromEntries(Object.entries(item)
-            .filter(([key]) => key !== "idempotencyKey")
-            .map(([key, value]) => [key, value ?? null]))),
+          .map((item) => ({
+            ...Object.fromEntries(Object.entries(item)
+            .filter(([key]) => key !== "idempotencyKey"
+              && key !== "preparedFromStock"
+              && key !== "preparedFromProduction")
+            .map(([key, value]) => [key, value ?? null])),
+            // Null and omission are the same legacy/unknown classification,
+            // so retain the old payload hash for prior callers. A real split
+            // is always canonicalized and participates in replay identity.
+            ...(eventType === "prepared"
+              && ((item as any).preparedFromStock != null
+                || (item as any).preparedFromProduction != null) ? {
+              preparedFromStock: (item as any).preparedFromStock ?? null,
+              preparedFromProduction: (item as any).preparedFromProduction ?? null,
+            } : {}),
+          })),
       }
     : topLevel;
   return createHash("sha256").update(JSON.stringify({ eventType, payload: canonical })).digest("hex");

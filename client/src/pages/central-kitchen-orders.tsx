@@ -19,6 +19,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { AvailabilitySnapshot } from "@/components/central-kitchen/availability-snapshot";
 import { LinkedBatches } from "@/components/central-kitchen/linked-batches";
+import { PreparationEditor, SavedPreparationSummary } from "@/components/central-kitchen/prepare-fulfillment";
 import {
   CentralKitchenCatalogItem,
   parseCentralKitchenCatalogV2,
@@ -37,6 +38,7 @@ import {
 type KitchenItem = {
   id?: string | number; productId?: string | number; warehouseItemId?: string | number; productName: string; unit: string; requestedQuantity: number; notes?: string;
   preparedQuantity?: number | null; substituteQuantity?: number | null; substituteProductName?: string | null;
+  preparedFromStock?: number | null; preparedFromProduction?: number | null; productionFulfillmentEvidence?: unknown;
   substituteUnit?: string | null; substituteProductId?: string | number | null; substituteWarehouseItemId?: string | number | null;
   shortageReason?: string | null; preparationNotes?: string | null;
   dispatchedQuantity?: number | null; receivedQuantity?: number | null; damagedQuantity?: number | null;
@@ -57,11 +59,6 @@ type KitchenOrder = {
 };
 type ProductOption = CentralKitchenCatalogItem;
 type DraftItem = { productId?: number; warehouseItemId?: number; manualMode?: boolean; productName: string; unit: string; requestedQuantity: string; notes: string };
-type PreparationInput = {
-  itemId: number; preparedQuantity: number; substituteQuantity: number; substituteProductName?: string;
-  substituteUnit?: string; substituteProductId?: number; substituteWarehouseItemId?: number;
-  shortageReason?: string; preparationNotes?: string;
-};
 type ShadowInventoryEntry = {
   id: number; direction: "projected_kitchen_out" | "projected_branch_in";
   component: "original" | "substitute"; productName: string; unit: string; quantity: number;
@@ -436,7 +433,7 @@ function OrderDetail({ order, products, productsQuery, accessibleBranchIds, acti
     {!!order.shadowInventoryEntries?.length && <section className="rounded-lg border border-dashed border-violet-300 bg-violet-50/40 p-4"><div className="mb-3 flex items-center justify-between gap-3"><div><h3 className="font-semibold text-violet-950">سجل المخزون التجريبي</h3><p className="text-xs text-violet-700">للمراجعة فقط — لم تتغير أرصدة المخزون الفعلية.</p></div><Badge variant="outline" className="border-violet-300 text-violet-800">SHADOW</Badge></div><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead className="text-right">الحركة المتوقعة</TableHead><TableHead className="text-right">الصنف</TableHead><TableHead className="text-right">المصدر</TableHead><TableHead className="text-right">الكمية</TableHead><TableHead className="text-right">النوع</TableHead></TableRow></TableHeader><TableBody>{order.shadowInventoryEntries.map(entry => <TableRow key={entry.id}><TableCell>{entry.direction === "projected_kitchen_out" ? "خصم متوقع من المطبخ" : "إضافة متوقعة للفرع"}</TableCell><TableCell>{entry.productName}</TableCell><TableCell><CatalogSourceBadge source={identitySource(entry)} /></TableCell><TableCell>{entry.quantity} {entry.unit}</TableCell><TableCell>{entry.component === "substitute" ? "بديل" : "أصلي"}</TableCell></TableRow>)}</TableBody></Table></div></section>}
     <section><h3 className="mb-3 font-semibold">مسار الطلب</h3><div className="space-y-3 border-r-2 border-muted pr-4">{order.events?.length ? order.events.map(event => <div className="relative" key={event.id}><span className="absolute -right-[23px] top-1 h-3 w-3 rounded-full border-2 border-background bg-primary" /><div className="flex flex-wrap items-center gap-2"><StatusBadge status={event.toStatus} /><span className="text-xs text-muted-foreground">{readableDate(event.createdAt)} · {new Date(event.createdAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}</span></div>{event.notes && <p className="mt-1 text-sm text-muted-foreground">{event.notes}</p>}</div>) : <p className="text-sm text-muted-foreground">لم تُسجل تحديثات إضافية بعد.</p>}</div></section>
     {action === "prepare" && allowAction
-      ? <PreparationEditor items={order.items || []} products={products} productsQuery={productsQuery} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={pending} onSubmit={items => onAction("prepare", { items })} />
+       ? <PreparationEditor orderId={order.id} inventoryMode={order.inventoryMode} items={order.items || []} products={products} productsQuery={productsQuery} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={pending} onSubmit={items => onAction("prepare", { items })} />
       : action === "dispatch" && allowAction ? <DispatchEditor items={order.items || []} pending={pending} onSubmit={details => onAction("dispatch", details)} />
       : action === "receive" && allowAction ? <ReceiptEditor items={order.items || []} pending={pending} onSubmit={details => onAction("receive", details)} />
       : actionConfig && allowAction && <div className="rounded-lg border bg-muted/20 p-3"><Label htmlFor="action-note">ملاحظة (اختياري)</Label><Input id="action-note" className="mt-2" value={actionNotes} onChange={event => setActionNotes(event.target.value)} placeholder="أضف ملاحظة للفريق..." /><Button className="mt-3 w-full sm:w-auto" disabled={pending} onClick={() => { if (action) onAction(action); }}>{pending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <actionConfig.icon className="ml-2 h-4 w-4" />}{actionConfig.label}</Button></div>}
@@ -458,66 +455,12 @@ function OrderItemsTable({ items, showPreparation, showShipment }: { items: Kitc
     const substitute = Number(item.substituteQuantity || 0);
     const prepared = Number(item.preparedQuantity || 0);
     const shortage = Math.max(0, Number(item.requestedQuantity) - prepared - substitute);
-    return <TableRow key={item.id || item.productName}><TableCell className="font-medium"><div>{item.productName}</div><CatalogSourceBadge source={identitySource(item)} /></TableCell><TableCell>{item.requestedQuantity} {item.unit}</TableCell>{showPreparation && <><TableCell>{prepared} {item.unit}</TableCell><TableCell>{substitute > 0 ? <div><span>{substitute} {item.unit} — {item.substituteProductName}</span><CatalogSourceBadge source={identitySource({ productId: item.substituteProductId, warehouseItemId: item.substituteWarehouseItemId })} /></div> : "—"}</TableCell></>}{showShipment && <><TableCell>{item.dispatchedQuantity ?? "—"} {item.unit}</TableCell><TableCell>{item.receivedQuantity ?? "—"} {item.unit}</TableCell><TableCell>{Number(item.damagedQuantity || 0)} / {Number(item.missingQuantity || 0)} {item.unit}</TableCell></>}<TableCell className="text-muted-foreground">{item.receivingNotes || item.preparationNotes || (shortage > 0 ? SHORTAGE_LABELS[item.shortageReason || ""] : item.notes) || "—"}</TableCell></TableRow>;
+     return <TableRow key={item.id || item.productName}><TableCell className="font-medium"><div>{item.productName}</div><CatalogSourceBadge source={identitySource(item)} /></TableCell><TableCell>{item.requestedQuantity} {item.unit}</TableCell>{showPreparation && <><TableCell><div>{prepared} {item.unit}</div><div className="mt-1 text-xs font-normal text-muted-foreground"><SavedPreparationSummary item={item} /></div></TableCell><TableCell>{substitute > 0 ? <div><span>{substitute} {item.unit} — {item.substituteProductName}</span><CatalogSourceBadge source={identitySource({ productId: item.substituteProductId, warehouseItemId: item.substituteWarehouseItemId })} /></div> : "—"}</TableCell></>}{showShipment && <><TableCell>{item.dispatchedQuantity ?? "—"} {item.unit}</TableCell><TableCell>{item.receivedQuantity ?? "—"} {item.unit}</TableCell><TableCell>{Number(item.damagedQuantity || 0)} / {Number(item.missingQuantity || 0)} {item.unit}</TableCell></>}<TableCell className="text-muted-foreground">{item.receivingNotes || item.preparationNotes || (shortage > 0 ? SHORTAGE_LABELS[item.shortageReason || ""] : item.notes) || "—"}</TableCell></TableRow>;
   })}</TableBody></Table></div></section>;
 }
 
 function CatalogSourceBadge({ source }: { source: "product" | "warehouse" }) {
   return <Badge variant="outline" className="mt-1 text-[10px] font-normal">{sourceLabel(source)}</Badge>;
-}
-
-function PreparationEditor({ items, products, productsQuery, actionNotes, setActionNotes, pending, onSubmit }: { items: KitchenItem[]; products: ProductOption[]; productsQuery: CatalogQueryLike; actionNotes: string; setActionNotes: (value: string) => void; pending: boolean; onSubmit: (items: PreparationInput[]) => void }) {
-  const [drafts, setDrafts] = useState(() => items.map(item => ({
-    itemId: Number(item.id),
-    preparedQuantity: String(item.requestedQuantity),
-    substituteQuantity: "0",
-    substituteProductName: "",
-    substituteUnit: item.unit,
-    substituteProductId: undefined as number | undefined,
-    substituteWarehouseItemId: undefined as number | undefined,
-    substituteManualMode: false,
-    shortageReason: "",
-    preparationNotes: "",
-  })));
-  const update = (index: number, changes: Partial<(typeof drafts)[number]>) => setDrafts(current => current.map((item, i) => i === index ? { ...item, ...changes } : item));
-  const validationError = useMemo(() => {
-    for (let index = 0; index < drafts.length; index++) {
-      const draft = drafts[index];
-      const requested = Number(items[index]?.requestedQuantity || 0);
-      const prepared = Number(draft.preparedQuantity);
-      const substitute = Number(draft.substituteQuantity);
-      if (!Number.isFinite(prepared) || !Number.isFinite(substitute) || prepared < 0 || substitute < 0) return "أدخل كميات صحيحة غير سالبة.";
-      if (prepared + substitute > requested) return `إجمالي تجهيز ${items[index]?.productName} يتجاوز المطلوب.`;
-      if (substitute > 0 && (!draft.substituteProductName.trim() || !draft.substituteUnit.trim())) return "أدخل اسم ووحدة المنتج البديل.";
-      if (prepared + substitute < requested && !draft.shortageReason) return "حدد سبب النقص لكل بند غير مكتمل.";
-    }
-    return "";
-  }, [drafts, items]);
-  const submit = () => {
-    if (validationError) return;
-    onSubmit(drafts.map(item => {
-      const substituteQuantity = Number(item.substituteQuantity);
-      const requestedQuantity = Number(items.find(source => Number(source.id) === item.itemId)?.requestedQuantity || 0);
-      const hasShortage = Number(item.preparedQuantity) + substituteQuantity < requestedQuantity;
-      return {
-        itemId: item.itemId,
-        preparedQuantity: Number(item.preparedQuantity),
-        substituteQuantity,
-        substituteProductName: substituteQuantity > 0 ? item.substituteProductName.trim() : undefined,
-        substituteUnit: substituteQuantity > 0 ? item.substituteUnit.trim() : undefined,
-        substituteProductId: substituteQuantity > 0 ? item.substituteProductId : undefined,
-        substituteWarehouseItemId: substituteQuantity > 0 ? item.substituteWarehouseItemId : undefined,
-        shortageReason: hasShortage ? item.shortageReason || undefined : undefined,
-        preparationNotes: item.preparationNotes.trim() || undefined,
-      };
-    }));
-  };
-  return <section className="rounded-lg border border-indigo-200 bg-indigo-50/30 p-4"><div className="mb-3"><h3 className="font-semibold">تسجيل التجهيز الفعلي</h3><p className="text-xs text-muted-foreground">سجّل الكمية الأصلية والبديلة. البديل يُحتسب دائماً بوحدة الصنف المطلوب.</p></div><CatalogQueryState query={productsQuery} count={products.length} /><div className="space-y-3">{drafts.map((draft, index) => {
-    const requested = Number(items[index]?.requestedQuantity || 0);
-    const ready = Number(draft.preparedQuantity || 0) + Number(draft.substituteQuantity || 0);
-    const shortage = Math.max(0, requested - ready);
-    return <div className="rounded-md border bg-background p-3" key={draft.itemId}><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><p className="font-medium">{items[index]?.productName} <CatalogSourceBadge source={identitySource(items[index])} /></p><Badge variant="outline">المطلوب: {requested} {items[index]?.unit}</Badge></div><div className="grid gap-3 md:grid-cols-4"><div><Label className="text-xs">الكمية الأصلية المجهزة</Label><Input className="mt-1" type="number" min="0" max={requested} step="any" value={draft.preparedQuantity} onChange={event => update(index, { preparedQuantity: event.target.value })} /></div><div><Label className="text-xs">كمية البديل</Label><Input className="mt-1" type="number" min="0" max={requested} step="any" value={draft.substituteQuantity} onChange={event => update(index, { substituteQuantity: event.target.value })} /></div><div><Label className="text-xs">اختيار البديل</Label><SearchableSelect className="mt-1" triggerClassName="h-10" disabled={Number(draft.substituteQuantity) <= 0} value={draft.substituteWarehouseItemId !== undefined ? `warehouse:${draft.substituteWarehouseItemId}` : draft.substituteProductId !== undefined ? `product:${draft.substituteProductId}` : draft.substituteManualMode ? "__manual" : undefined} onValueChange={value => { if (value === "__manual") update(index, { substituteManualMode: true, substituteProductId: undefined, substituteWarehouseItemId: undefined, substituteProductName: "" }); else { const selected = products.find(entry => catalogKey(entry) === value); if (selected) { const source = selected.source; update(index, { substituteManualMode: false, substituteProductId: source === "product" ? selected.id : undefined, substituteWarehouseItemId: source === "warehouse" ? selected.id : undefined, substituteProductName: selected.name, substituteUnit: items[index].unit }); } } }} options={[{ value: "__manual", label: "بديل يدوي", badge: "يدوي" }, ...products.map(product => ({ value: catalogKey(product), label: product.name, sublabel: product.sku, badge: sourceLabel(product.source) }))]} placeholder="اختر البديل" searchPlaceholder="ابحث عن بديل..." /><Input className="mt-2" disabled={Number(draft.substituteQuantity) <= 0 || !draft.substituteManualMode} value={draft.substituteProductName} onChange={event => update(index, { substituteProductName: event.target.value })} placeholder="اسم البديل اليدوي" /></div><div><Label className="text-xs">وحدة احتساب البديل</Label><Input className="mt-1" disabled value={draft.substituteUnit} /><p className="mt-1 text-[11px] text-muted-foreground">مطابقة لوحدة الطلب</p></div></div>{shortage > 0 && <div className="mt-3 grid gap-3 md:grid-cols-2"><div><Label className="text-xs">سبب النقص ({shortage} {items[index]?.unit})</Label><Select value={draft.shortageReason} onValueChange={value => update(index, { shortageReason: value })}><SelectTrigger className="mt-1"><SelectValue placeholder="اختر سبب النقص" /></SelectTrigger><SelectContent>{Object.entries(SHORTAGE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div><div><Label className="text-xs">ملاحظة التجهيز</Label><Input className="mt-1" value={draft.preparationNotes} onChange={event => update(index, { preparationNotes: event.target.value })} placeholder="تفاصيل النقص أو البديل" /></div></div>}</div>;
-  })}</div>{validationError && <div className="mt-3 flex items-center gap-2 rounded-md bg-amber-50 p-2 text-sm text-amber-800"><AlertTriangle className="h-4 w-4" />{validationError}</div>}<div className="mt-4"><Label htmlFor="preparation-note">ملاحظة عامة (اختياري)</Label><Input id="preparation-note" className="mt-1" value={actionNotes} onChange={event => setActionNotes(event.target.value)} /><Button className="mt-3" disabled={pending || !!validationError} onClick={submit}>{pending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <PackagePlus className="ml-2 h-4 w-4" />}تأكيد الكميات والتجهيز</Button></div></section>;
 }
 
 function DispatchEditor({ items, pending, onSubmit }: { items: KitchenItem[]; pending: boolean; onSubmit: (details: Record<string, unknown>) => void }) {

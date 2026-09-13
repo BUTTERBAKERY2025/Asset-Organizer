@@ -198,6 +198,37 @@ describe("central kitchen workflow rules", () => {
     }).success).toBe(false);
   });
 
+  it("accepts omitted preparation sources for legacy compatibility but validates a decimal-safe split", () => {
+    expect(centralKitchenPreparationSchema.safeParse({
+      items: [{ itemId: 1, preparedQuantity: 3, substituteQuantity: 0 }],
+    }).success).toBe(true);
+    expect(centralKitchenPreparationSchema.safeParse({
+      items: [{
+        itemId: 1, preparedQuantity: 1, substituteQuantity: 0,
+        preparedFromStock: 0.4, preparedFromProduction: 0.6,
+      }],
+    }).success).toBe(true);
+    expect(centralKitchenPreparationSchema.safeParse({
+      items: [{
+        itemId: 1, preparedQuantity: 1, substituteQuantity: 0,
+        preparedFromStock: 0.4, preparedFromProduction: 0.599999,
+      }],
+    }).success).toBe(false);
+    expect(centralKitchenPreparationSchema.safeParse({
+      items: [{ itemId: 1, preparedQuantity: 1, substituteQuantity: 0, preparedFromStock: 1 }],
+    }).success).toBe(false);
+  });
+
+  it("does not accept client-supplied production fulfillment evidence", () => {
+    expect(centralKitchenPreparationSchema.safeParse({
+      items: [{
+        itemId: 1, preparedQuantity: 1, substituteQuantity: 0,
+        preparedFromStock: 0, preparedFromProduction: 1,
+        productionFulfillmentEvidence: { batches: [{ batchId: 1 }] },
+      }],
+    }).success).toBe(false);
+  });
+
   it("accounts a warehouse substitute in the original order unit", () => {
     const prepared = centralKitchenPreparationSchema.parse({
       items: [{
@@ -236,6 +267,34 @@ describe("central kitchen workflow rules", () => {
       .toBe(createCentralKitchenTransitionFingerprint("prepared", retry));
     expect(createCentralKitchenTransitionFingerprint("prepared", first))
       .not.toBe(createCentralKitchenTransitionFingerprint("dispatched", retry));
+  });
+
+  it("binds preparation replay to the submitted source split", () => {
+    const stockOnly = centralKitchenPreparationSchema.parse({
+      items: [{
+        itemId: 1, preparedQuantity: 2, substituteQuantity: 0,
+        preparedFromStock: 2, preparedFromProduction: 0,
+      }],
+    });
+    const mixed = centralKitchenPreparationSchema.parse({
+      items: [{
+        itemId: 1, preparedQuantity: 2, substituteQuantity: 0,
+        preparedFromStock: 1, preparedFromProduction: 1,
+      }],
+    });
+    expect(createCentralKitchenTransitionFingerprint("prepared", stockOnly))
+      .not.toBe(createCentralKitchenTransitionFingerprint("prepared", mixed));
+    const omitted = centralKitchenPreparationSchema.parse({
+      items: [{ itemId: 2, preparedQuantity: 2, substituteQuantity: 0 }],
+    });
+    const explicitUnknown = centralKitchenPreparationSchema.parse({
+      items: [{
+        itemId: 2, preparedQuantity: 2, substituteQuantity: 0,
+        preparedFromStock: null, preparedFromProduction: null,
+      }],
+    });
+    expect(createCentralKitchenTransitionFingerprint("prepared", omitted))
+      .toBe(createCentralKitchenTransitionFingerprint("prepared", explicitUnknown));
   });
 
   it("includes warehouse substitute identity in new preparation fingerprints", () => {

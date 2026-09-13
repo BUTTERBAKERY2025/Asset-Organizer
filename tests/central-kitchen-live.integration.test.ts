@@ -8,6 +8,8 @@ import {
   branches,
   centralKitchenInventoryAllocations,
   centralKitchenInventoryMovements,
+  centralKitchenRecipeIngredients,
+  centralKitchenRecipes,
   centralKitchenOrders,
   centralKitchenRuntime,
   dailyProductionBatches,
@@ -859,6 +861,128 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
       .where(eq(productionInventoryLogs.batchId, createdBatch.body.id));
     expect(movements).toHaveLength(1);
     await setRuntime("real");
+  });
+
+  it("uses only verified recipe-backed output as a preparation source, while reserving and debiting the full prepared total", async () => {
+    const product = (await databaseState.db.select().from(products)
+      .where(eq(products.id, fixture.mismatchProductId)))[0];
+    const [recipe] = await databaseState.db.insert(centralKitchenRecipes).values({
+      kitchenId: fixture.kitchenBranchId,
+      productId: product.id,
+      outputQuantity: "1.000000",
+      outputUnit: "tray",
+      status: "draft",
+      version: 1,
+      createdBy: fixture.kitchenUser.id,
+      updatedBy: fixture.kitchenUser.id,
+    }).returning();
+    await databaseState.db.insert(centralKitchenRecipeIngredients).values({
+      recipeId: recipe.id,
+      warehouseItemId: fixture.materialId,
+      quantity: "1.000000",
+      unit: "tray",
+    });
+    await databaseState.db.update(centralKitchenRecipes).set({
+      status: "approved",
+      approvedBy: fixture.kitchenUser.id,
+      approvedAt: new Date(),
+      updatedBy: fixture.kitchenUser.id,
+    }).where(eq(centralKitchenRecipes.id, recipe.id));
+
+    const order = await createOrder([{
+      productId: product.id,
+      productName: product.name,
+      requestedQuantity: 2,
+      unit: "tray",
+    }]);
+    expect(order.statusCode).toBe(201);
+    expect((await approve(order.body.id)).statusCode).toBe(200);
+    const line = order.body.items[0];
+
+    const noEvidence = await invoke("post", "/api/central-kitchen-orders/:id/prepare", {
+      user: fixture.kitchenUser,
+      params: { id: String(order.body.id) },
+      body: {
+        idempotencyKey: key("unverified-production"),
+        items: [{
+          itemId: line.id, preparedQuantity: 2, substituteQuantity: 0,
+          preparedFromStock: 0, preparedFromProduction: 2,
+        }],
+      },
+    });
+    expect(noEvidence.statusCode).toBe(409);
+    expect((await databaseState.db.select().from(centralKitchenInventoryAllocations)
+      .where(eq(centralKitchenInventoryAllocations.orderId, order.body.id)))).toHaveLength(0);
+
+    const linked = await invoke("post", "/api/central-kitchen-orders/:id/items/:itemId/production-batches", {
+      user: fixture.kitchenUser,
+      params: { id: String(order.body.id), itemId: String(line.id) },
+      body: {
+        quantity: 2,
+        productionDate: "2098-02-02",
+        recipeBacked: true,
+        idempotencyKey: key("verified-production"),
+      },
+    });
+    expect(linked.statusCode).toBe(201);
+    expect((await invoke("post", "/api/daily-production/batches/:id/finish", {
+      user: fixture.kitchenUser,
+      params: { id: String(linked.body.id) },
+    })).statusCode).toBe(200);
+
+    const availability = await invoke(
+      "get",
+      "/api/central-kitchen-orders/:id/items/:itemId/production-fulfillment",
+      { user: fixture.kitchenUser, params: { id: String(order.body.id), itemId: String(line.id) } },
+    );
+    expect(availability.statusCode).toBe(200);
+    expect(availability.body).toMatchObject({
+      eligibleQuantity: 2,
+      batches: [{ batchId: linked.body.id, quantity: 2 }],
+    });
+
+    const prepared = await invoke("post", "/api/central-kitchen-orders/:id/prepare", {
+      user: fixture.kitchenUser,
+      params: { id: String(order.body.id) },
+      body: {
+        idempotencyKey: key("verified-prepare"),
+        items: [{
+          itemId: line.id, preparedQuantity: 2, substituteQuantity: 0,
+          preparedFromStock: 1, preparedFromProduction: 1,
+        }],
+      },
+    });
+    expect(prepared.statusCode).toBe(200);
+    expect(prepared.body.items[0]).toMatchObject({
+      preparedFromStock: 1,
+      preparedFromProduction: 1,
+      productionFulfillmentEvidence: {
+        version: 1,
+        batches: [{ batchId: linked.body.id, quantity: "1.000000", checksum: expect.any(String) }],
+      },
+    });
+    const allocations = await databaseState.db.select().from(centralKitchenInventoryAllocations)
+      .where(eq(centralKitchenInventoryAllocations.orderId, order.body.id));
+    expect(allocations.reduce((sum: number, allocation: any) => sum + Number(allocation.reservedQuantity), 0)).toBe(2);
+
+    const dispatched = await invoke("post", "/api/central-kitchen-orders/:id/dispatch", {
+      user: fixture.kitchenUser,
+      params: { id: String(order.body.id) },
+      body: {
+        idempotencyKey: key("verified-dispatch"),
+        driverName: "Production proof driver",
+        vehicleNumber: "PROOF-1",
+        items: [{ itemId: line.id, dispatchedQuantity: 2 }],
+      },
+    });
+    expect(dispatched.statusCode).toBe(200);
+    const debits = await databaseState.db.select().from(centralKitchenInventoryMovements)
+      .where(and(
+        eq(centralKitchenInventoryMovements.orderId, order.body.id),
+        eq(centralKitchenInventoryMovements.movementType, "dispatch_debit"),
+      ));
+    expect(debits).toHaveLength(1);
+    expect(Number(debits[0].quantity)).toBe(2);
   });
 
   it("allows linked production only for real approved orders and kitchen-side actors", async () => {

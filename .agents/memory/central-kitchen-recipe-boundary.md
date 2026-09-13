@@ -38,3 +38,9 @@ Manual unfinished-production carry-over means rescheduling the same batch, not c
 **Why:** The former two-request copy-then-finish flow could credit the source and later credit its copy, while a network failure could leave only half of the operation completed.
 
 **How to apply:** Only reschedule an independent, unposted, in-progress batch, with expected date/quantity checked under lock. Preserve its identity, quantity and stock state; leave completed history untouched. Generic creation must not recreate the retired source-copy path.
+
+Manufactured orders may be fulfilled from ready kitchen stock, with new production when needed; a mixed preparation split describes provenance, not separate inventory.
+
+**Why:** The user explicitly chose stock-first fulfillment. Finished recipe-backed output already credits finished-goods stock, so excluding its portion from normal dispatch debits would leave phantom stock.
+
+**How to apply:** Reserve and debit the entire prepared quantity once. Only claim a production portion when finished linked batches have valid frozen recipe, ingredient movement and output-credit evidence. Freeze proof at preparation, preserve immutable batch/item links, and leave historical unclassified rows unknown. Never add a second inventory source solely for this classification.

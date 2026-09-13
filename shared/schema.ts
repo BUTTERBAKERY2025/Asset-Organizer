@@ -13002,6 +13002,12 @@ export const centralKitchenOrderItems = pgTable("central_kitchen_order_items", {
   unit: text("unit").notNull(),
   notes: text("notes"),
   preparedQuantity: numeric("prepared_quantity", { precision: 18, scale: 6, mode: "number" }),
+  // Null deliberately means the preparation predates source classification.
+  // New real-product preparations may split the original quantity between
+  // finished stock and verified linked production.
+  preparedFromStock: numeric("prepared_from_stock", { precision: 18, scale: 6, mode: "number" }),
+  preparedFromProduction: numeric("prepared_from_production", { precision: 18, scale: 6, mode: "number" }),
+  productionFulfillmentEvidence: jsonb("production_fulfillment_evidence"),
   substituteQuantity: numeric("substitute_quantity", { precision: 18, scale: 6, mode: "number" }),
   substituteProductId: integer("substitute_product_id").references(() => products.id, { onDelete: "set null" }),
   substituteWarehouseItemId: integer("substitute_warehouse_item_id").references(() => warehouseItems.id, { onDelete: "set null" }),
@@ -13020,6 +13026,9 @@ export const centralKitchenOrderItems = pgTable("central_kitchen_order_items", {
   check("ck_central_kitchen_order_items_catalog_identity", sql`NOT (${table.productId} IS NOT NULL AND ${table.warehouseItemId} IS NOT NULL)`),
   check("ck_central_kitchen_order_items_quantity", sql`${table.requestedQuantity} > 0`),
   check("ck_central_kitchen_order_items_prepared_quantity", sql`${table.preparedQuantity} IS NULL OR ${table.preparedQuantity} >= 0`),
+  check("ck_central_kitchen_order_items_preparation_source_pair", sql`(${table.preparedFromStock} IS NULL) = (${table.preparedFromProduction} IS NULL)`),
+  check("ck_central_kitchen_order_items_preparation_sources", sql`${table.preparedFromStock} IS NULL OR (${table.preparedQuantity} IS NOT NULL AND ${table.preparedFromStock} >= 0 AND ${table.preparedFromProduction} >= 0 AND ${table.preparedFromStock} + ${table.preparedFromProduction} = ${table.preparedQuantity})`),
+  check("ck_central_kitchen_order_items_production_evidence", sql`(${table.preparedFromProduction} IS NULL OR ${table.preparedFromProduction} = 0) = (${table.productionFulfillmentEvidence} IS NULL)`),
   check("ck_central_kitchen_order_items_substitute_quantity", sql`${table.substituteQuantity} IS NULL OR ${table.substituteQuantity} >= 0`),
   check("ck_central_kitchen_order_items_total_ready", sql`${table.preparedQuantity} IS NULL OR COALESCE(${table.preparedQuantity}, 0) + COALESCE(${table.substituteQuantity}, 0) <= ${table.requestedQuantity}`),
   check("ck_central_kitchen_order_items_substitute_identity", sql`(COALESCE(${table.substituteQuantity}, 0) = 0 AND ${table.substituteProductId} IS NULL AND ${table.substituteWarehouseItemId} IS NULL AND ${table.substituteProductName} IS NULL AND ${table.substituteUnit} IS NULL) OR (COALESCE(${table.substituteQuantity}, 0) > 0 AND NOT (${table.substituteProductId} IS NOT NULL AND ${table.substituteWarehouseItemId} IS NOT NULL) AND NULLIF(BTRIM(${table.substituteProductName}), '') IS NOT NULL AND ${table.substituteUnit} = ${table.unit})`),
