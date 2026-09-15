@@ -191,6 +191,15 @@ function orderFromRows(rows: unknown[]): {
       unit: textValue(row.item_unit, "غير محددة"),
       requestedQuantity: numberValue(row.requested_quantity),
       preparedQuantity: nullableNumber(row.prepared_quantity),
+      preparedFromStock: nullableNumber(row.prepared_from_stock),
+      preparedFromProduction: nullableNumber(row.prepared_from_production),
+      preparationSourceStatus: row.prepared_from_stock !== null
+        && row.prepared_from_stock !== undefined
+        && row.prepared_from_production !== null
+        && row.prepared_from_production !== undefined
+        ? "recorded"
+        : "unknown",
+      productionFulfillmentEvidence: row.production_fulfillment_evidence ?? null,
       dispatchedQuantity: nullableNumber(row.dispatched_quantity),
       receivedQuantity: nullableNumber(row.received_quantity),
       damagedQuantity: nullableNumber(row.damaged_quantity),
@@ -451,6 +460,9 @@ async function buildWorkplan(
       item.unit AS item_unit,
       item.requested_quantity,
       item.prepared_quantity,
+       item.prepared_from_stock,
+       item.prepared_from_production,
+       item.production_fulfillment_evidence,
       item.dispatched_quantity,
       item.received_quantity,
       item.damaged_quantity,

@@ -53,6 +53,20 @@ export type ProductionOperationsRequestRow = {
   unit: string;
   requestedQuantity: number;
   preparedQuantity: number;
+  /**
+   * Source quantities are only summed when every persisted item in this row
+   * recorded the complete source pair. They are deliberately nullable so a
+   * partial historical group cannot be presented as a complete total.
+   */
+  preparedFromStock: number | null;
+  preparedFromProduction: number | null;
+  preparationSourceStatus: "recorded" | "partial" | "unknown";
+  /**
+   * Persisted production proof, retained with the originating order-item ID.
+   * No proof or source quantity is inferred from a linked batch or lifecycle
+   * quantity.
+   */
+  productionFulfillmentEvidence: unknown | null;
   dispatchedQuantity: number;
   goodReceivedQuantity: number;
   damagedQuantity: number;

@@ -73,6 +73,13 @@ export type CentralKitchenWorkplanOrderItem = {
   unit: string;
   requestedQuantity: number;
   preparedQuantity: number | null;
+  /** Persisted preparation-source split; never reconstructed from lifecycle state. */
+  preparedFromStock: number | null;
+  /** Persisted preparation-source split; never reconstructed from linked batches. */
+  preparedFromProduction: number | null;
+  preparationSourceStatus: "recorded" | "unknown";
+  /** Persisted proof for this item only, if production supplied any quantity. */
+  productionFulfillmentEvidence: unknown | null;
   dispatchedQuantity: number | null;
   receivedQuantity: number | null;
   damagedQuantity: number | null;

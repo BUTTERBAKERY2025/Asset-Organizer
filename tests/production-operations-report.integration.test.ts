@@ -100,6 +100,9 @@ let fixture: {
   outsiderBatchId: number;
   visibleOrderId: number;
   visibleOrderItemId: number;
+  provenanceKnownItemId: number;
+  provenanceUnknownItemId: number;
+  zeroSourceItemId: number;
   advancedOrderId: number;
 };
 
@@ -428,6 +431,50 @@ describe.sequential("production operations report (development DB)", () => {
       INSERT INTO central_kitchen_order_items (order_id, product_id, product_name, requested_quantity, unit)
       VALUES (${unknownOrderId}, ${outputProductId}, 'Report output tray', 3, 'tray')
     `);
+    const provenanceOrder = await databaseState.db.execute(sql`
+      INSERT INTO central_kitchen_orders (
+        order_number, request_branch_id, central_kitchen_id, order_date, needed_date,
+        status, inventory_mode, idempotency_key, payload_fingerprint, created_by
+      ) VALUES (
+        ${`POR-${suffix}-provenance`}, ${requestBranchId}, ${kitchenBranchId}, '2035-06-01', '2035-06-10',
+        'approved', 'real', ${`por-provenance-${suffix}`}, ${"f".repeat(64)}, ${kitchenUser.id}
+      ) RETURNING id
+    `);
+    const provenanceOrderId = Number((provenanceOrder.rows[0] as any).id);
+    const provenanceKnown = await databaseState.db.execute(sql`
+      INSERT INTO central_kitchen_order_items (
+        order_id, product_id, product_name, requested_quantity, unit, prepared_quantity,
+        prepared_from_stock, prepared_from_production, production_fulfillment_evidence
+      ) VALUES (
+        ${provenanceOrderId}, ${outputProductId}, 'Report output tray', 5, 'tray', 5,
+        2, 3, ${JSON.stringify({
+          version: 1,
+          batches: [{
+            batchId: 987_654_321,
+            quantity: "3.000000",
+            checksum: "d".repeat(64),
+          }],
+        })}::jsonb
+      ) RETURNING id
+    `);
+    const provenanceKnownItemId = Number((provenanceKnown.rows[0] as any).id);
+    const provenanceUnknown = await databaseState.db.execute(sql`
+      INSERT INTO central_kitchen_order_items (
+        order_id, product_id, product_name, requested_quantity, unit
+      ) VALUES (
+        ${provenanceOrderId}, ${outputProductId}, 'Report output tray', 5, 'tray'
+      ) RETURNING id
+    `);
+    const provenanceUnknownItemId = Number((provenanceUnknown.rows[0] as any).id);
+    const zeroSource = await databaseState.db.execute(sql`
+      INSERT INTO central_kitchen_order_items (
+        order_id, product_id, product_name, requested_quantity, unit, prepared_quantity,
+        prepared_from_stock, prepared_from_production
+      ) VALUES (
+        ${provenanceOrderId}, ${outputProductId}, 'Report output tray', 1, 'box', 0, 0, 0
+      ) RETURNING id
+    `);
+    const zeroSourceItemId = Number((zeroSource.rows[0] as any).id);
 
     const postedBatch = await databaseState.db.execute(sql`
       INSERT INTO daily_production_batches (
@@ -602,6 +649,9 @@ describe.sequential("production operations report (development DB)", () => {
       outsiderBatchId,
       visibleOrderId,
       visibleOrderItemId,
+      provenanceKnownItemId,
+      provenanceUnknownItemId,
+      zeroSourceItemId,
       advancedOrderId,
     };
 
@@ -762,6 +812,56 @@ describe.sequential("production operations report (development DB)", () => {
     expect(request.linkedBatchIds).not.toContain(fixture.legacyBatchId);
     expect(request.linkedBatchIds).not.toContain(fixture.inProgressBatchId);
 
+    // Source provenance is limited to persisted item columns. The two matching
+    // tray items are one report group, but one lacks the immutable source pair,
+    // so neither partial sum can be represented as the group's total.
+    const partialProvenance = report.requestRows.find((row) =>
+      row.orderItemIds.includes(fixture.provenanceKnownItemId),
+    )!;
+    expect(partialProvenance.orderItemIds).toEqual([
+      fixture.provenanceKnownItemId,
+      fixture.provenanceUnknownItemId,
+    ]);
+    expect(partialProvenance).toMatchObject({
+      unit: "tray",
+      preparedFromStock: null,
+      preparedFromProduction: null,
+      preparationSourceStatus: "partial",
+      productionFulfillmentEvidence: {
+        items: [{
+          itemId: fixture.provenanceKnownItemId,
+          evidence: {
+            version: 1,
+            batches: [{
+              batchId: 987_654_321,
+              quantity: "3.000000",
+              checksum: "d".repeat(64),
+            }],
+          },
+        }],
+      },
+    });
+    expect(partialProvenance.productionFulfillmentEvidence).not.toEqual(
+      expect.objectContaining({ items: expect.arrayContaining([
+        expect.objectContaining({ itemId: fixture.provenanceUnknownItemId }),
+      ]) }),
+    );
+    expect((partialProvenance.productionFulfillmentEvidence as any)
+      .items[0].evidence.batches[0].quantity).toBe("3.000000");
+
+    // A persisted zero/zero pair is known, not unknown. Its matching product
+    // has another unit above, and the source total must never cross that unit.
+    const zeroProvenance = report.requestRows.find((row) =>
+      row.orderItemIds.includes(fixture.zeroSourceItemId),
+    )!;
+    expect(zeroProvenance).toMatchObject({
+      unit: "box",
+      preparedFromStock: 0,
+      preparedFromProduction: 0,
+      preparationSourceStatus: "recorded",
+      productionFulfillmentEvidence: null,
+    });
+
     // Mode-specific central-kitchen figures are authoritative. Do not consume
     // the legacy combined fields: combining shadow projections with real
     // inventory workflow facts would falsely make 17.5 look physically real.
@@ -772,15 +872,33 @@ describe.sequential("production operations report (development DB)", () => {
     ]));
     expect(Object.keys(modes).sort()).toEqual(["real", "shadow", "unknown"]);
     expect(modes.real).toMatchObject({
-      orderCount: 1,
-      activeOrderCount: 1,
+      orderCount: 2,
+      activeOrderCount: 2,
       inactiveOrderCount: 0,
-      requestedQuantityByUnit: [{ unit: "tray", quantity: 10.5 }],
-      preparedQuantityByUnit: [{ unit: "tray", quantity: 9.5 }],
-      dispatchedQuantityByUnit: [{ unit: "tray", quantity: 8.5 }],
-      goodReceivedQuantityByUnit: [{ unit: "tray", quantity: 6.25 }],
-      damagedQuantityByUnit: [{ unit: "tray", quantity: 1 }],
-      missingQuantityByUnit: [{ unit: "tray", quantity: 1.25 }],
+      requestedQuantityByUnit: [
+        { unit: "box", quantity: 1 },
+        { unit: "tray", quantity: 20.5 },
+      ],
+      preparedQuantityByUnit: [
+        { unit: "box", quantity: 0 },
+        { unit: "tray", quantity: 14.5 },
+      ],
+      dispatchedQuantityByUnit: [
+        { unit: "box", quantity: 0 },
+        { unit: "tray", quantity: 8.5 },
+      ],
+      goodReceivedQuantityByUnit: [
+        { unit: "box", quantity: 0 },
+        { unit: "tray", quantity: 6.25 },
+      ],
+      damagedQuantityByUnit: [
+        { unit: "box", quantity: 0 },
+        { unit: "tray", quantity: 1 },
+      ],
+      missingQuantityByUnit: [
+        { unit: "box", quantity: 0 },
+        { unit: "tray", quantity: 1.25 },
+      ],
     });
     expect(modes.shadow).toMatchObject({
       orderCount: 1,
@@ -798,11 +916,12 @@ describe.sequential("production operations report (development DB)", () => {
       requestedQuantityByUnit: [{ unit: "tray", quantity: 3 }],
     });
     expect(report.summary.centralKitchen).toMatchObject({
-      orderCount: 3,
-      activeOrderCount: 3,
+      orderCount: 4,
+      activeOrderCount: 4,
       inactiveOrderCount: 0,
     });
     expect(report.summary.centralKitchen.orderCountsByInventoryModeAndStatus).toEqual(expect.arrayContaining([
+      { inventoryMode: "real", status: "approved", orderCount: 1 },
       { inventoryMode: "real", status: "received", orderCount: 1 },
       { inventoryMode: "shadow", status: "dispatched", orderCount: 1 },
       { inventoryMode: "unknown", status: "requested", orderCount: 1 },

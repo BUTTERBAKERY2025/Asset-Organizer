@@ -41,6 +41,18 @@ function numberIds(value: unknown): number[] {
   return value.map(integerValue).filter((id) => id > 0);
 }
 
+function persistedProductionEvidence(value: unknown): { items: Array<{ itemId: number; evidence: unknown }> } | null {
+  if (!Array.isArray(value)) return null;
+  const items = value.flatMap((entry) => {
+    const row = asRow(entry);
+    const itemId = integerValue(row.itemId);
+    return itemId > 0 && Object.prototype.hasOwnProperty.call(row, "evidence")
+      ? [{ itemId, evidence: row.evidence }]
+      : [];
+  });
+  return items.length ? { items } : null;
+}
+
 function stringIds(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.map((item) => String(item)).filter(Boolean);
@@ -249,16 +261,41 @@ export function registerProductionOperationsReportRoute(app: Express): void {
               ckoi.unit,
               COALESCE(SUM(ckoi.requested_quantity), 0) AS requested_quantity,
               COALESCE(SUM(ckoi.prepared_quantity), 0) AS prepared_quantity,
+               CASE WHEN BOOL_AND(
+                 ckoi.prepared_from_stock IS NOT NULL
+                 AND ckoi.prepared_from_production IS NOT NULL
+               ) THEN COALESCE(SUM(ckoi.prepared_from_stock), 0) ELSE NULL END AS prepared_from_stock,
+               CASE WHEN BOOL_AND(
+                 ckoi.prepared_from_stock IS NOT NULL
+                 AND ckoi.prepared_from_production IS NOT NULL
+               ) THEN COALESCE(SUM(ckoi.prepared_from_production), 0) ELSE NULL END AS prepared_from_production,
+               CASE
+                 WHEN BOOL_AND(
+                   ckoi.prepared_from_stock IS NOT NULL
+                   AND ckoi.prepared_from_production IS NOT NULL
+                 ) THEN 'recorded'
+                 WHEN BOOL_OR(
+                   ckoi.prepared_from_stock IS NOT NULL
+                   AND ckoi.prepared_from_production IS NOT NULL
+                 ) THEN 'partial'
+                 ELSE 'unknown'
+               END AS preparation_source_status,
+               JSONB_AGG(JSONB_BUILD_OBJECT(
+                 'itemId', ckoi.id,
+                 'evidence', ckoi.production_fulfillment_evidence
+               ) ORDER BY ckoi.id) FILTER (
+                 WHERE ckoi.production_fulfillment_evidence IS NOT NULL
+               ) AS production_fulfillment_evidence,
               COALESCE(SUM(ckoi.dispatched_quantity), 0) AS dispatched_quantity,
               COALESCE(SUM(ckoi.received_quantity), 0) AS good_received_quantity,
               COALESCE(SUM(ckoi.damaged_quantity), 0) AS damaged_quantity,
               COALESCE(SUM(ckoi.missing_quantity), 0) AS missing_quantity,
-              CASE WHEN ckoi.product_id IS NOT NULL
-                THEN COALESCE(linked_batches.linked_finished_quantity, 0) ELSE 0 END AS linked_finished_quantity,
-              CASE WHEN ckoi.product_id IS NOT NULL
-                THEN COALESCE(linked_batches.linked_in_progress_quantity, 0) ELSE 0 END AS linked_in_progress_quantity,
-              CASE WHEN ckoi.product_id IS NOT NULL
-                THEN COALESCE(linked_batches.linked_batch_ids, ARRAY[]::integer[]) ELSE ARRAY[]::integer[] END AS linked_batch_ids,
+               CASE WHEN ckoi.product_id IS NOT NULL
+                 THEN COALESCE(linked_batches.linked_finished_quantity, 0) ELSE 0 END AS linked_finished_quantity,
+               CASE WHEN ckoi.product_id IS NOT NULL
+                 THEN COALESCE(linked_batches.linked_in_progress_quantity, 0) ELSE 0 END AS linked_in_progress_quantity,
+               CASE WHEN ckoi.product_id IS NOT NULL
+                 THEN COALESCE(linked_batches.linked_batch_ids, ARRAY[]::integer[]) ELSE ARRAY[]::integer[] END AS linked_batch_ids,
               ARRAY_AGG(DISTINCT cko.id) AS order_ids,
               ARRAY_AGG(ckoi.id ORDER BY ckoi.id) AS order_item_ids
             FROM central_kitchen_orders cko
@@ -291,6 +328,18 @@ export function registerProductionOperationsReportRoute(app: Express): void {
               unit: textValue(row.unit, UNKNOWN_UNIT),
               requestedQuantity: numberValue(row.requested_quantity),
               preparedQuantity: numberValue(row.prepared_quantity),
+              preparedFromStock: row.prepared_from_stock == null
+                ? null
+                : numberValue(row.prepared_from_stock),
+              preparedFromProduction: row.prepared_from_production == null
+                ? null
+                : numberValue(row.prepared_from_production),
+              preparationSourceStatus: row.preparation_source_status === "recorded"
+                ? "recorded"
+                : row.preparation_source_status === "partial"
+                  ? "partial"
+                  : "unknown",
+              productionFulfillmentEvidence: persistedProductionEvidence(row.production_fulfillment_evidence),
               dispatchedQuantity: numberValue(row.dispatched_quantity),
               goodReceivedQuantity: numberValue(row.good_received_quantity),
               damagedQuantity: numberValue(row.damaged_quantity),

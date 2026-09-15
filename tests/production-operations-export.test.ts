@@ -5,6 +5,9 @@ import {
   buildProductionReportPrintHtml,
   buildProductionReportTables,
   buildProductionReportWorkbook,
+  compactPreparationEvidenceReferences,
+  getPreparationSourceReadout,
+  parsePreparationEvidenceReferences,
   productionReportCsvCell,
   productionReportQuantity6,
   type ProductionOperationsExportRows,
@@ -232,6 +235,9 @@ describe("production operations exports", () => {
     expect(tables.sections.requests.headers).toContain("orderItemIds");
     expect(tables.sections.requests.headers).toContain("nextStep");
     expect(tables.sections.requests.headers).toContain("nextStepOwner");
+    expect(tables.sections.requests.headers).toContain("preparedFromStock");
+    expect(tables.sections.requests.headers).toContain("preparedFromProduction");
+    expect(tables.sections.requests.headers).toContain("productionFulfillmentEvidence");
     expect(tables.sections.requests.rows[0].sourceRelativeUrl).toBe("/central-kitchen-orders?orderId=901");
     expect(tables.sections.requests.rows[0].linkedBatchIds).toEqual([101]);
     expect(tables.sections.requests.rows[0].nextStep).toBe("الإنتاج ثم التجهيز");
@@ -301,5 +307,118 @@ describe("production operations exports", () => {
     expect(workbook.Sheets["الخطة المسجلة"]?.["!ref"]).toBe("A1:I1");
     expect(workbook.Sheets["بيانات التقرير"]?.["A1"]?.v).toBe("البيان");
     expect(workbook.Sheets["بيانات التقرير"]?.["A5"]?.v).toBe("الفلاتر المختارة — البحث");
+  });
+
+  it("keeps recorded zero typed, marks partial and unknown sources without partial sums, and mirrors source columns in every format", async () => {
+    const sourceRows = {
+      ...filteredRows,
+      requests: [
+        {
+          ...report.requestRows[0],
+          preparedFromStock: 0,
+          preparedFromProduction: 0.923456,
+          preparationSourceStatus: "recorded",
+          productionFulfillmentEvidence: {
+            items: [{
+              itemId: 902,
+              evidence: { version: 1, batches: [{ batchId: 101, quantity: "0.923456", checksum: "<img src=x>" }] },
+            }],
+          },
+        },
+        {
+          ...report.requestRows[0],
+          itemId: 5,
+          preparedFromStock: 2,
+          preparedFromProduction: null,
+          preparationSourceStatus: "partial",
+          productionFulfillmentEvidence: null,
+        },
+        {
+          ...report.requestRows[0],
+          itemId: 6,
+        },
+      ] as unknown as ProductionOperationsExportRows["requests"],
+    };
+    const tables = buildProductionReportTables(report, sourceRows, filters);
+    const requestSection = tables.sections.requests;
+    expect(requestSection.rows).toHaveLength(3);
+    const csv = buildProductionReportCsv(tables);
+    const print = buildProductionReportPrintHtml(report, sourceRows, filters);
+    expect(csv).toContain("\"مصدر التجهيز: من المخزون\"");
+    expect(csv).toContain("\"0.000000\"");
+    expect(csv).toContain("\"مسجل جزئياً — لا يمثل كامل الكمية\"");
+    expect(csv).toContain("\"غير مسجل\"");
+    expect(csv).toContain("بند 902 · دفعة 101 (0.923456)");
+    expect(csv).not.toContain("<img src=x>");
+    expect(print).toContain("مصدر التجهيز: من المخزون");
+    expect(print).toContain("مسجل جزئياً — لا يمثل كامل الكمية");
+    expect(print).toContain("غير مسجل");
+    expect(print).not.toContain("<img src=x>");
+
+    const workbook = await buildProductionReportWorkbook(report, sourceRows, filters);
+    const sheet = workbook.Sheets["طلبات المطبخ"];
+    expect(sheet?.["K2"]).toMatchObject({ t: "n", v: 0, z: "0.000000" });
+    expect(sheet?.["L2"]).toMatchObject({ t: "n", v: 0.923456, z: "0.000000" });
+    expect(sheet?.["K3"]?.v).toBe("مسجل جزئياً — لا يمثل كامل الكمية");
+    expect(sheet?.["K4"]?.v).toBe("غير مسجل");
+    expect(sheet?.["M2"]?.v).toBe("بند 902 · دفعة 101 (0.923456)");
+  });
+
+  it("accepts only positive numeric item, batch, and proof-quantity references", () => {
+    const malicious = {
+      items: [
+        { itemId: "902", evidence: { batches: [{ batchId: 1, quantity: 1 }] } },
+        { itemId: 902, evidence: { batches: [{ batchId: 0, quantity: 1 }, { batchId: 101, quantity: 0 }, { batchId: 102, quantity: 2, label: "=cmd()" }] } },
+      ],
+    };
+    expect(parsePreparationEvidenceReferences(malicious)).toEqual([{ itemId: 902, batchId: 102, quantity: 2 }]);
+    expect(compactPreparationEvidenceReferences(malicious)).toBe("بند 902 · دفعة 102 (2.000000)");
+    expect(getPreparationSourceReadout({ preparedFromStock: 1, preparationSourceStatus: "partial" })).toMatchObject({
+      status: "partial", preparedFromStock: null, preparedFromProduction: null,
+    });
+    expect(getPreparationSourceReadout({ preparedQuantity: 10, linkedBatchIds: [9] })).toMatchObject({
+      status: "unknown", preparedFromStock: null, preparedFromProduction: null,
+    });
+  });
+
+  it("renders canonical persisted string quantities for direct item and grouped report evidence in UI/export formatters", async () => {
+    const persistedItemProof = {
+      version: 1,
+      batches: [{ batchId: 101, quantity: "3.000000", checksum: "untrusted-checksum" }],
+    };
+    const persistedGroupProof = {
+      items: [{ itemId: 902, evidence: persistedItemProof }],
+    };
+    expect(compactPreparationEvidenceReferences(persistedItemProof)).toBe("دفعة 101 (3.000000)");
+    expect(compactPreparationEvidenceReferences(persistedGroupProof)).toBe("بند 902 · دفعة 101 (3.000000)");
+    expect(parsePreparationEvidenceReferences({
+      batches: [
+        { batchId: 101, quantity: "3.000000" },
+        { batchId: 102, quantity: "03.000000" },
+        { batchId: 103, quantity: "3.0000001" },
+        { batchId: 104, quantity: " 3.000000" },
+        { batchId: 105, quantity: "+3" },
+        { batchId: 106, quantity: "3e0" },
+        { batchId: Number.MAX_SAFE_INTEGER + 1, quantity: "3" },
+      ],
+    })).toEqual([{ itemId: null, batchId: 101, quantity: 3 }]);
+
+    const sourceRows = {
+      ...filteredRows,
+      requests: [{
+        ...report.requestRows[0],
+        preparedFromStock: 0,
+        preparedFromProduction: 3,
+        preparationSourceStatus: "recorded",
+        productionFulfillmentEvidence: persistedGroupProof,
+      }] as unknown as ProductionOperationsExportRows["requests"],
+    };
+    const tables = buildProductionReportTables(report, sourceRows, filters);
+    const csv = buildProductionReportCsv(tables);
+    const print = buildProductionReportPrintHtml(report, sourceRows, filters);
+    const workbook = await buildProductionReportWorkbook(report, sourceRows, filters);
+    expect(csv).toContain("بند 902 · دفعة 101 (3.000000)");
+    expect(print).toContain("بند 902 · دفعة 101 (3.000000)");
+    expect(workbook.Sheets["طلبات المطبخ"]?.["M2"]?.v).toBe("بند 902 · دفعة 101 (3.000000)");
   });
 });

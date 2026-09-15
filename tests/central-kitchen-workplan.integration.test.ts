@@ -468,6 +468,20 @@ describe.sequential("central kitchen workplan database-backed read-only workflow
         batch_id, warehouse_item_id, branch_stock_id, quantity, unit, actor_id
       ) VALUES (${consumedBatchId}, ${materialId}, ${kitchenStockId}, 1.500000, 'kg', ${kitchenUser.id})
     `);
+    await databaseState.db.execute(sql`
+      UPDATE central_kitchen_order_items
+      SET prepared_from_stock = 4.000000,
+          prepared_from_production = 6.000000,
+          production_fulfillment_evidence = ${JSON.stringify({
+            version: 1,
+            batches: [{
+              batchId: consumedBatchId,
+              quantity: "6.000000",
+              checksum: "c".repeat(64),
+            }],
+          })}::jsonb
+      WHERE id = ${dateOrderItemId}
+    `);
     // The production schema permits one explicit linked batch per order item
     // and production date. Distinct dates here prove the workplan follows the
     // direct FK rather than guessing by product/date.
@@ -658,6 +672,17 @@ describe.sequential("central kitchen workplan database-backed read-only workflow
         productId: fixture.productId,
         catalogMapping: "product",
         requestedQuantity: 10,
+        preparedFromStock: 4,
+        preparedFromProduction: 6,
+        preparationSourceStatus: "recorded",
+        productionFulfillmentEvidence: {
+          version: 1,
+          batches: [{
+            batchId: fixture.consumedBatchId,
+            quantity: "6.000000",
+            checksum: "c".repeat(64),
+          }],
+        },
         approvedRecipe: true,
       }),
       expect.objectContaining({
@@ -668,6 +693,8 @@ describe.sequential("central kitchen workplan database-backed read-only workflow
       }),
     ]));
     expect(dateOrder.finished).toBe(true);
+    expect((dateOrder.items.find((item) => item.id === fixture.dateOrderItemId)!
+      .productionFulfillmentEvidence as any).batches[0].quantity).toBe("6.000000");
     expect(dateOrder.exceptions.some((item) => item.code === "no_approved_recipe")).toBe(false);
     expect(dateOrder.linkedBatches.count).toBe(4);
     expect(dateOrder.linkedBatches.refs).toEqual(expect.arrayContaining([
@@ -737,7 +764,13 @@ describe.sequential("central kitchen workplan database-backed read-only workflow
     expect(unknownOrder).toMatchObject({
       rawStatus: "requested",
       nextStep: { stage: "approval" },
-      items: [expect.objectContaining({ unit: "tray" })],
+      items: [expect.objectContaining({
+        unit: "tray",
+        preparedFromStock: null,
+        preparedFromProduction: null,
+        preparationSourceStatus: "unknown",
+        productionFulfillmentEvidence: null,
+      })],
     });
     expect(new Set(workplan.orders.map((order) => order.inventoryMode))).toEqual(new Set(["real", "shadow", "unknown"]));
     expect(workplan.summary).toMatchObject({

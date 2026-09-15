@@ -49,6 +49,113 @@ export type ProductionReportExportSection = {
 
 export type ProductionReportTable = ProductionReportExportSection;
 
+export type PreparationSourceStatus = "recorded" | "partial" | "unknown";
+export type PreparationEvidenceReference = {
+  itemId: number | null;
+  batchId: number;
+  quantity: number;
+};
+export type PreparationSourceReadout = {
+  status: PreparationSourceStatus;
+  preparedFromStock: number | null;
+  preparedFromProduction: number | null;
+  evidenceReferences: PreparationEvidenceReference[];
+};
+
+export const PREPARATION_SOURCE_UNKNOWN_TEXT = "غير مسجل";
+export const PREPARATION_SOURCE_PARTIAL_TEXT = "مسجل جزئياً — لا يمثل كامل الكمية";
+
+function finiteNonnegativeQuantity(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function positiveId(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+/**
+ * JSONB proof quantities can retain PostgreSQL NUMERIC as a canonical decimal
+ * string. Parse only that persisted representation, never arbitrary strings
+ * that Number() would accept (whitespace, signs, exponent/formula text).
+ */
+function positiveProofQuantity(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) && value > 0 ? value : null;
+  if (typeof value !== "string" || !/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/.test(value)) return null;
+  const quantity = Number(value);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : null;
+}
+
+/**
+ * Reads the persisted proof shape only. Labels, checksums, and arbitrary JSON
+ * fields are intentionally not rendered or exported: they are not references.
+ */
+function proofBatchReferences(value: unknown, itemId: number | null): PreparationEvidenceReference[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const batches = (value as Record<string, unknown>).batches;
+  if (!Array.isArray(batches)) return [];
+  return batches.flatMap((batch) => {
+    if (!batch || typeof batch !== "object" || Array.isArray(batch)) return [];
+    const row = batch as Record<string, unknown>;
+    const batchId = positiveId(row.batchId);
+    const quantity = positiveProofQuantity(row.quantity);
+    return batchId !== null && quantity !== null ? [{ itemId, batchId, quantity }] : [];
+  });
+}
+
+/** Safely parses either an item's proof or the report's grouped item proofs. */
+export function parsePreparationEvidenceReferences(value: unknown): PreparationEvidenceReference[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const record = value as Record<string, unknown>;
+  if (Array.isArray(record.items)) {
+    return record.items.flatMap((entry) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+      const item = entry as Record<string, unknown>;
+      const itemId = positiveId(item.itemId);
+      return itemId === null ? [] : proofBatchReferences(item.evidence, itemId);
+    });
+  }
+  return proofBatchReferences(record, null);
+}
+
+export function compactPreparationEvidenceReferences(value: unknown): string {
+  const references = parsePreparationEvidenceReferences(value);
+  if (!references.length) return "—";
+  return references.map((reference) => `${reference.itemId === null ? "" : `بند ${reference.itemId} · `}دفعة ${reference.batchId} (${productionReportQuantity6(reference.quantity)})`).join("؛ ");
+}
+
+/**
+ * Does not derive a source from a linked batch, completion, dispatch, or
+ * prepared total. Old payloads without the persisted source fields remain
+ * explicitly unknown.
+ */
+export function getPreparationSourceReadout(value: unknown): PreparationSourceReadout {
+  const row = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  const explicitStatus = row.preparationSourceStatus;
+  const stock = finiteNonnegativeQuantity(row.preparedFromStock);
+  const production = finiteNonnegativeQuantity(row.preparedFromProduction);
+  const status: PreparationSourceStatus = explicitStatus === "partial"
+    ? "partial"
+    : explicitStatus === "recorded" && stock !== null && production !== null
+      ? "recorded"
+      : "unknown";
+  return {
+    status,
+    preparedFromStock: status === "recorded" ? stock : null,
+    preparedFromProduction: status === "recorded" ? production : null,
+    evidenceReferences: parsePreparationEvidenceReferences(row.productionFulfillmentEvidence),
+  };
+}
+
+export function preparationSourceQuantityText(value: unknown, source: PreparationSourceReadout): string {
+  if (source.status === "partial") return PREPARATION_SOURCE_PARTIAL_TEXT;
+  if (source.status !== "recorded" || typeof value !== "number" || !Number.isFinite(value)) {
+    return PREPARATION_SOURCE_UNKNOWN_TEXT;
+  }
+  return productionReportQuantity6(value);
+}
+
 export type ProductionReportExportMetadata = {
   selectedFilters: ProductionOperationsExportFilters;
   /**
@@ -129,6 +236,9 @@ const FIELD_LABELS: Record<string, string> = {
   itemName: "الصنف",
   requestedQuantity: "الكمية المطلوبة",
   preparedQuantity: "الكمية المجهزة",
+  preparedFromStock: "مصدر التجهيز: من المخزون",
+  preparedFromProduction: "مصدر التجهيز: من إنتاج مرتبط",
+  productionFulfillmentEvidence: "مراجع دليل الإنتاج المرتبط",
   dispatchedQuantity: "الكمية المرسلة",
   goodReceivedQuantity: "الكمية المستلمة سليماً",
   damagedQuantity: "الكمية التالفة",
@@ -196,6 +306,9 @@ const SECTION_DEFINITIONS = {
       "unit",
       "requestedQuantity",
       "preparedQuantity",
+      "preparedFromStock",
+      "preparedFromProduction",
+      "productionFulfillmentEvidence",
       "dispatchedQuantity",
       "goodReceivedQuantity",
       "damagedQuantity",
@@ -213,6 +326,8 @@ const SECTION_DEFINITIONS = {
     quantityFields: [
       "requestedQuantity",
       "preparedQuantity",
+      "preparedFromStock",
+      "preparedFromProduction",
       "dispatchedQuantity",
       "goodReceivedQuantity",
       "damagedQuantity",
@@ -369,7 +484,12 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: "مرفوض",
 };
 
-function displayFieldValue(header: string, value: ProductionReportExportCell): string {
+function displayFieldValue(header: string, value: ProductionReportExportCell, row?: ProductionReportExportRow): string {
+  const source = row ? getPreparationSourceReadout(row) : null;
+  if (source && (header === "preparedFromStock" || header === "preparedFromProduction")) {
+    return preparationSourceQuantityText(value, source);
+  }
+  if (header === "productionFulfillmentEvidence") return compactPreparationEvidenceReferences(value);
   if (value === null || value === undefined) return "";
   if (Array.isArray(value)) return value.length ? value.join("، ") : "—";
   if (header === "inventoryMode") return MODE_LABELS[String(value)] || String(value);
@@ -390,10 +510,15 @@ function displayFieldValue(header: string, value: ProductionReportExportCell): s
   return String(value);
 }
 
-function csvValue(header: string, value: ProductionReportExportCell, quantity: boolean): string {
+function csvValue(header: string, value: ProductionReportExportCell, quantity: boolean, row: ProductionReportExportRow): string {
+  const source = getPreparationSourceReadout(row);
+  if (header === "preparedFromStock" || header === "preparedFromProduction") {
+    return preparationSourceQuantityText(value, source);
+  }
+  if (header === "productionFulfillmentEvidence") return compactPreparationEvidenceReferences(value);
   if (value === null || value === undefined) return "";
   if (typeof value === "number") return quantity ? productionReportQuantity6(value) : String(value);
-  return displayFieldValue(header, value);
+  return displayFieldValue(header, value, row);
 }
 
 function quantitiesLine(values: Array<{ unit: string; quantity: number }>): string {
@@ -482,7 +607,7 @@ export function buildProductionReportCsv(tables: ProductionReportTables): string
     for (const row of current.rows) {
       lines.push(
         current.headers
-          .map((header) => productionReportCsvCell(csvValue(header, row[header], current.quantityFields.includes(header))))
+          .map((header) => productionReportCsvCell(csvValue(header, row[header], current.quantityFields.includes(header), row)))
           .join(","),
       );
     }
@@ -531,10 +656,16 @@ export function downloadProductionReportCsv(
   );
 }
 
-function excelCell(header: string, value: ProductionReportExportCell): string | number | null {
+function excelCell(header: string, value: ProductionReportExportCell, row: ProductionReportExportRow): string | number | null {
+  const source = getPreparationSourceReadout(row);
+  if (header === "preparedFromStock" || header === "preparedFromProduction") {
+    if (source.status !== "recorded") return source.status === "partial" ? PREPARATION_SOURCE_PARTIAL_TEXT : PREPARATION_SOURCE_UNKNOWN_TEXT;
+    return typeof value === "number" && Number.isFinite(value) ? value : PREPARATION_SOURCE_UNKNOWN_TEXT;
+  }
+  if (header === "productionFulfillmentEvidence") return safeProductionReportText(compactPreparationEvidenceReferences(value));
   if (value === null || value === undefined) return null;
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  return safeProductionReportText(displayFieldValue(header, value));
+  return safeProductionReportText(displayFieldValue(header, value, row));
 }
 
 type XlsxModule = typeof import("xlsx");
@@ -542,7 +673,7 @@ type XlsxModule = typeof import("xlsx");
 function worksheetForTable(XLSX: XlsxModule, table: ProductionReportExportSection) {
   const aoa: Array<Array<string | number | null>> = [
     table.headers.map((header) => FIELD_LABELS[header] || header),
-    ...table.rows.map((row) => table.headers.map((header) => excelCell(header, row[header]))),
+    ...table.rows.map((row) => table.headers.map((header) => excelCell(header, row[header], row))),
   ];
   const worksheet = XLSX.utils.aoa_to_sheet(aoa);
   worksheet["!cols"] = table.headers.map((header) => ({
@@ -626,7 +757,7 @@ function tableHtml(table: ProductionReportExportSection): string {
         .map((header) => `<td>${escapeProductionReportHtml(
           typeof row[header] === "number" && table.quantityFields.includes(header)
             ? productionReportQuantity6(row[header] as number)
-            : displayFieldValue(header, row[header]),
+            : displayFieldValue(header, row[header], row),
         )}</td>`)
         .join("");
       return `<tr>${cells}</tr>`;
@@ -737,7 +868,11 @@ th, td { border: 1px solid #cbd5e1; padding: 4px 5px; text-align: right; vertica
         const cell = popupDocument.createElement("td");
         cell.textContent = typeof row[header] === "number" && current.quantityFields.includes(header)
           ? productionReportQuantity6(row[header] as number)
-          : (row[header] === null || row[header] === undefined ? "—" : displayFieldValue(header, row[header]));
+          : (row[header] === null || row[header] === undefined
+            ? (header === "preparedFromStock" || header === "preparedFromProduction"
+              ? preparationSourceQuantityText(row[header], getPreparationSourceReadout(row))
+              : "—")
+            : displayFieldValue(header, row[header], row));
         bodyRow.appendChild(cell);
       }
       tbody.appendChild(bodyRow);

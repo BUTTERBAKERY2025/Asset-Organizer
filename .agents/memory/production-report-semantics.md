@@ -32,3 +32,9 @@ Daily workplan evidence is not a stock-readiness or reconciliation verdict.
 **Why:** A missing current recipe does not block fulfillment from existing stock or invalidate a historical frozen recipe. A material movement proves a recorded movement, not complete snapshot reconciliation. Selecting a future plan date does not make earlier future requests overdue.
 
 **How to apply:** Keep recipe availability informational unless production need is established; label movement presence as evidence, preserve unknown allocation readiness, and compare lateness to actual Riyadh today. Selected dates organize current persisted state, not historical as-of snapshots.
+
+Preparation provenance is not extra production and is not the source composition of dispatched or received quantities.
+
+**Why:** Mixed historical groups can contain both classified and unclassified preparations. Summing just known source values falsely presents a partial amount as the complete source total.
+
+**How to apply:** Only show numeric grouped source totals when every item is classified; otherwise show partial/unknown with null amounts. Preserve genuine recorded zero. Render only persisted proof references, and test against the writer's decimal-string quantities rather than invented numeric fixtures. Keep source quantities out of production summary totals.
