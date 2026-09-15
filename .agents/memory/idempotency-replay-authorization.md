@@ -26,3 +26,9 @@ Durable manual-production keys have no automatic expiry, and successful response
 **Why:** Expiring an unresolved key or reconstructing its response from an edited/deleted batch breaks retry guarantees. Server-generated timestamps must not change the canonical request fingerprint between retries.
 
 **How to apply:** Use the manual workflow's header transport, normalize accepted business fields, preserve explicit client timestamps when present, and replay stored JSON only after current authorization. Missing operation storage must fail explicitly rather than execute without protection.
+
+Concurrency integration tests need independent database transactions, not one shared rollback transaction.
+
+**Why:** A single connection serializes queries and nested transactions become savepoints; simultaneous HTTP calls alone then cannot exercise competing commits or unique-conflict recovery.
+
+**How to apply:** Use a temporary isolated schema with schema-local sequences and a multi-connection pool, commit fixture setup, prohibit fallback to public tables, and drop only the test schema during teardown. Authentication doubles do not verify the real login or permission implementation.
