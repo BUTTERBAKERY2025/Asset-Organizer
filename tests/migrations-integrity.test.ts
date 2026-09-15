@@ -5,6 +5,21 @@ import { describe, expect, it } from "vitest";
 
 const migrations = [
   {
+    file: "migrations/026_central_kitchen_shadow_inventory.sql",
+    bytes: 2356,
+    sha256: "6a38cfd07be877cb3b58b6de288896524c21e2698e9c46e356020a861fff770c",
+  },
+  {
+    file: "migrations/027_central_kitchen_pilot_metrics.sql",
+    bytes: 344,
+    sha256: "9a566e55be323c469465dd83c7f3c6b0a04a61b32ac3ae90c665e83a62e672be",
+  },
+  {
+    file: "migrations/028_central_kitchen_catalog_linkage.sql",
+    bytes: 1945,
+    sha256: "9f36bd0f36e47b73afe05e035a548780bb312de24f4e7e0e5017ac6fbac8053d",
+  },
+  {
     file: "migrations/031_central_kitchen_recipes.sql",
     bytes: 8083,
     sha256: "5315e467596f245ddbde7a54f810bfc9fd60e0236c87b076f8f4627a4ccc255e",
@@ -34,7 +49,10 @@ const migrations = [
 describe("central-kitchen migration transaction integrity", () => {
   it("keeps one top-level transaction and one canonical payload per migration", () => {
     for (const migration of migrations) {
-      const source = readFileSync(resolve(__dirname, "..", migration.file));
+      // Ignore only a conventional final newline; pin every SQL payload byte.
+      const source = Buffer.from(
+        readFileSync(resolve(__dirname, "..", migration.file), "utf8").replace(/\r?\n$/, ""),
+      );
       const sourceText = source.toString("utf8");
 
       expect(sourceText.match(/^BEGIN;[ \t]*$/gm) ?? []).toHaveLength(1);
