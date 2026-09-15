@@ -11235,6 +11235,7 @@ export const posSales = pgTable("pos_sales", {
   idempotencyKey: text("idempotency_key"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
+  uniqueIndex("uniq_pos_sales_idempotency").on(table.branchId, table.idempotencyKey).where(sql`idempotency_key IS NOT NULL`),
   index("idx_pos_sales_branch_date").on(table.branchId, table.saleDate),
   index("idx_pos_sales_event").on(table.eventId),
   index("idx_pos_sales_shift").on(table.shiftId),

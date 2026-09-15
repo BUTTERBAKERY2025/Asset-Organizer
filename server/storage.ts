@@ -18352,11 +18352,20 @@ export class DatabaseStorage implements IStorage {
     if (result) {
       return result.nextInvoiceNumber - 1;
     }
-    const [newSettings] = await db
+    // سباق إنشاء إعدادات الفرع لأول مرة: onConflictDoNothing ثم إعادة محاولة UPDATE الذرّي
+    const inserted = await db
       .insert(posInvoiceSettings)
       .values({ branchId, businessName: '', vatNumber: '', nextInvoiceNumber: 2 })
+      .onConflictDoNothing()
       .returning({ nextInvoiceNumber: posInvoiceSettings.nextInvoiceNumber });
-    return 1;
+    if (inserted.length > 0) return 1;
+    const [retry] = await db
+      .update(posInvoiceSettings)
+      .set({ nextInvoiceNumber: sql`${posInvoiceSettings.nextInvoiceNumber} + 1` })
+      .where(eq(posInvoiceSettings.branchId, branchId))
+      .returning({ nextInvoiceNumber: posInvoiceSettings.nextInvoiceNumber });
+    if (!retry) throw new Error("تعذر توليد رقم الفاتورة");
+    return retry.nextInvoiceNumber - 1;
   }
 
   // Event POS - Sales
