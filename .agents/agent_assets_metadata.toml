@@ -11,9 +11,25 @@ id = "lP9wMbQcQ6DdPKOerwspJ"
 uri = "file://bulk-approve-cashier-journals.txt"
 type = "text"
 title = "كود الاعتماد من 2026-01-01 إلى 2026-07-20 — ينفّذ في Supabase SQL Editor"
+logical_id = "d38936bb-d78b-411f-8121-3c216adae40c"
 
 [[outputs]]
 id = "TWnSada3b4oYUoPQMqOry"
 uri = "file://add-sponsorship-column.txt"
 type = "text"
 title = "كود SQL - عمود نوع الكفالة (نفّذه في Supabase قبل النشر)"
+logical_id = "9c7d1554-a6bf-4150-bcfb-9070dc20a4f3"
+
+[[outputs]]
+id = "ZnBMgFc26tj4oGVEagdhp"
+uri = "file://reports/catalog-review.xlsx"
+type = "table"
+title = "تقرير مطابقة أكواد الأصناف والفئات"
+description = "7 أوراق: المنتجات والمواد المرجعية، مطابقتها بالسجلات الحالية، الأقسام غير المطابقة، والارتباطات التي تمنع الحذف. تقرير مراجعة فقط؛ لم تتغير قاعدة البيانات."
+logical_id = "cf3d5ea3-76e8-4a88-aee1-2970ad9370c7"
+content_hash = "sha256:3e00a45919d146607597d67ecef6fa6b7c9b5e4c1043e246782ef37a87cfa34f"
+size = 72639
+mtime_ms = 1789495092315
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/cf3d5ea3-76e8-4a88-aee1-2970ad9370c7/8a0e150c-a2aa-4c30-a092-f5a066e1f853"
+storage_version_token = "1789495141304290"
+content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

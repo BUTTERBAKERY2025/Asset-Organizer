@@ -57,3 +57,4 @@
 - [Production reporting semantics](production-report-semantics.md) — finished batches are actual output; separate shadow totals, deduplicate range plans, and never infer unlinked plan completion.
 - [Daily challenge previews](daily-challenge-preview.md) — per-journal estimates must not be summed as guaranteed daily awards; approval has day-wide replacement semantics.
 - [Recipe access boundary](recipe-access-boundary.md) — independent book permissions must not silently disable recipe-backed production or its scoped material requirements.
+- [Catalogue authority](catalogue-authority.md) — supplied codes replace business codes, not internal identities; resolve Arabic/bilingual matches before cleanup and preserve stock/history.
