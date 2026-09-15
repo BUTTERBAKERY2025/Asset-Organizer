@@ -159,6 +159,7 @@ import {
   centralKitchenMaterialRequirementsQuerySchema,
 } from "@shared/central-kitchen-batch-materials";
 import { apiCacheMiddleware, invalidateCacheForPath, invalidateCache, jsonSlimMiddleware } from "./api-cache";
+import { requireProductCatalogRead, noStoreProductCatalogRead } from "./product-catalog-access";
 import { registerBatchRoute } from "./batch-api";
 import {
   canTransitionCentralKitchenOrder,
@@ -7085,7 +7086,7 @@ export async function registerRoutes(
   // ============================================
 
   // Products Routes
-  app.get("/api/products", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/products", noStoreProductCatalogRead, isAuthenticated, requireProductCatalogRead, async (req, res) => {
     try {
       const products = await storage.getAllProducts();
       res.json(products);
@@ -7095,7 +7096,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/products/:id", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/products/:id", noStoreProductCatalogRead, isAuthenticated, requireProductCatalogRead, async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       const product = await storage.getProduct(id);

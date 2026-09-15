@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { PRODUCT_CATALOG_READ_MODULES } from "@shared/schema";
 import type { SystemModule } from "@shared/schema";
 
 const NotificationsDropdown = lazy(() => import("@/components/notifications-dropdown").then(m => ({ default: m.NotificationsDropdown })));
@@ -48,6 +49,7 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
   requiresAuth?: boolean;
   module?: SystemModule;
+  modules?: readonly SystemModule[];
   isHeader?: boolean;
   indent?: boolean;
   hideIfNoPermission?: boolean;
@@ -176,7 +178,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       "/construction-projects": ["/api/construction-projects"],
       "/contractors": ["/api/contractors"],
       "/operations": ["/api/operations/products"],
-      "/products": ["/api/operations/products", "/api/product-categories"],
+      "/products": ["/api/products", "/api/product-categories"],
       "/cashier-journals": ["/api/branch-cashiers"],
       "/branch-daily-closures": ["/api/branches"],
       "/sales-analytics": ["/api/branches", "/api/branch-cashiers"],
@@ -307,7 +309,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/operations", label: t("sidebar.operationsDashboard"), icon: LayoutDashboard, module: "operations", isHeader: true, hideIfNoPermission: true },
           { href: "/central-kitchen-orders", label: "طلبات المطبخ المركزي", icon: ClipboardList, module: "central_kitchen_orders", indent: true },
           { href: "/branch-shifts", label: t("sidebar.branchShifts"), icon: DoorOpen, module: "branch_closure", indent: true },
-          { href: "/products", label: t("sidebar.products"), icon: Package, module: "products", indent: true },
+          { href: "/products", label: t("sidebar.products"), icon: Package, modules: PRODUCT_CATALOG_READ_MODULES, indent: true },
           { href: "/quality-control", label: t("sidebar.qualityControl"), icon: CheckCircle, module: "quality_control", indent: true },
           { href: "/display-bar-waste", label: t("sidebar.displayBarWaste"), icon: Boxes, module: "waste_tracking", indent: true },
           { href: "/operations-reports", label: t("sidebar.operationsReports"), icon: FileBarChart, module: "operations", indent: true },
@@ -478,16 +480,24 @@ export function Layout({ children }: { children: React.ReactNode }) {
     return canView(module);
   };
 
+  const checkNavPermissions = (modules: readonly SystemModule[]): boolean =>
+    modules.some(module => checkNavPermission(module));
+
   const filterItemsByPermission = (items: NavItem[]): NavItem[] => {
     return items.filter(item => {
-      if (!item.module) return true;
-      return checkNavPermission(item.module);
+      if (item.modules) return checkNavPermissions(item.modules);
+      if (item.module) return checkNavPermission(item.module);
+      return true;
     });
   };
 
   const filterGroupItems = (items: NavItem[]): NavItem[] => {
     return items.filter(item => {
       if (item.adminOnly && !isAdmin) return false;
+      if (item.modules) {
+        if (item.hideIfNoPermission && !checkNavPermissions(item.modules)) return false;
+        return checkNavPermissions(item.modules);
+      }
       if (!item.module) return true;
       if (item.hideIfNoPermission && !checkNavPermission(item.module)) return false;
       return checkNavPermission(item.module);

@@ -21,7 +21,15 @@ import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
 import type { User, UserPermission, Branch } from "@shared/schema";
-import { SYSTEM_MODULES, MODULE_ACTIONS, MODULE_LABELS, ACTION_LABELS, ROLE_PERMISSION_TEMPLATES, getGroupedModules } from "@shared/schema";
+import {
+  SYSTEM_MODULES,
+  MODULE_ACTIONS,
+  MODULE_LABELS,
+  ACTION_LABELS,
+  ROLE_PERMISSION_TEMPLATES,
+  JOB_ROLE_PERMISSION_TEMPLATES,
+  getGroupedModules,
+} from "@shared/schema";
 import React, { useEffect, useState } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Info, Lock, Unlock } from "lucide-react";
@@ -660,18 +668,6 @@ export default function UsersPage() {
         { module: "reports", actions: ["view", "export", "print"] },
         { module: "event_pos", actions: ["view", "create", "edit", "delete"] },
       ],
-      production_manager: [
-        { module: "dashboard", actions: ["view", "export"] },
-        { module: "platform_home", actions: ["view"] },
-        { module: "production", actions: ["view", "create", "edit", "delete", "approve"] },
-        { module: "daily_production", actions: ["view", "create", "edit", "delete"] },
-        { module: "advanced_production", actions: ["view", "create", "edit", "delete"] },
-        { module: "quality_control", actions: ["view", "create", "edit", "delete"] },
-        { module: "products", actions: ["view", "create", "edit"] },
-        { module: "operations", actions: ["view"] },
-        { module: "inventory", actions: ["view"] },
-        { module: "shifts", actions: ["view", "create", "edit", "delete"] },
-      ],
       // Recipe-book access is deliberately independent from the broad
       // view-only template; grant it explicitly when needed.
       viewer: getGroupedModules().flatMap(g => g.modules)
@@ -689,7 +685,11 @@ export default function UsersPage() {
       ],
     };
     
-    const template = templates[templateId];
+    // Keep the production-manager job template in shared/schema.ts so the
+    // users page and the job-title permission flow cannot drift apart.
+    const template = templateId === "production_manager"
+      ? JOB_ROLE_PERMISSION_TEMPLATES.production_manager
+      : templates[templateId];
     if (!template) return;
     
     const newState: PermissionState = {};

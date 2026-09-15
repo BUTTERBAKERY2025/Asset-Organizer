@@ -1194,6 +1194,17 @@ export const SYSTEM_MODULES = [
 
 export type SystemModule = (typeof SYSTEM_MODULES)[number];
 
+// Product catalog reads are intentionally available through several existing
+// modules.  This is a focused read capability for the catalog route, not a
+// global alias between modules.
+export const PRODUCT_CATALOG_READ_MODULES = [
+  "operations",
+  "products",
+  "production",
+  "daily_production",
+  "advanced_production",
+] as const satisfies readonly SystemModule[];
+
 // Actions for each module
 export const MODULE_ACTIONS = [
   "view",
@@ -1904,12 +1915,15 @@ export const JOB_ROLE_PERMISSION_TEMPLATES: Record<
   production_manager: [
     { module: "dashboard", actions: ["view", "export"] },
     { module: "production", actions: ["view", "create", "edit", "delete"] },
+    { module: "daily_production", actions: ["view", "create", "edit", "export", "print"] },
+    { module: "advanced_production", actions: ["view", "create", "edit", "export"] },
     { module: "central_kitchen_orders", actions: ["view", "edit", "approve", "export", "print"] },
     { module: "shifts", actions: ["view", "create", "edit", "delete"] },
     {
       module: "quality_control",
       actions: ["view", "create", "edit", "delete"],
     },
+    { module: "products", actions: ["view"] },
     { module: "operations", actions: ["view"] },
     { module: "inventory", actions: ["view"] },
   ],

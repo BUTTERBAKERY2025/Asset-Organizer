@@ -104,6 +104,13 @@ function buildCacheKey(req: Request): string {
   return `${userId}:${activeBranchId}:${req.method}:${req.path}:${queryStr}`;
 }
 
+// Catalog reads are permission-sensitive. They must reach authentication and
+// the route guard on every request instead of being served before either one
+// can observe a revoked permission.
+function isProductCatalogReadPath(req: Request): boolean {
+  return req.method === "GET" && /^\/api\/products(?:\/[^/]+)?$/.test(req.path);
+}
+
 export function invalidateCacheForUser(userId: string) {
   const keysToDelete: string[] = [];
   for (const [key] of Array.from(cache.entries())) {
@@ -132,6 +139,10 @@ export function apiCacheMiddleware(req: Request, res: Response, next: NextFuncti
   }
 
   if (!req.path.startsWith("/api/")) {
+    return next();
+  }
+
+  if (isProductCatalogReadPath(req)) {
     return next();
   }
 

@@ -23,6 +23,7 @@ import {
   MODULE_LABELS as SHARED_MODULE_LABELS,
   ACTION_LABELS as SHARED_ACTION_LABELS,
   ROLE_PERMISSION_TEMPLATES,
+  JOB_ROLE_PERMISSION_TEMPLATES,
   getGroupedModules,
 } from "@shared/schema";
 
@@ -161,18 +162,6 @@ const CUSTOM_TEMPLATES: Record<string, { module: string; actions: string[] }[]> 
     { module: "employee_reports", actions: ["view", "export", "print"] },
     { module: "reports", actions: ["view", "export", "print"] },
     { module: "event_pos", actions: ["view", "create", "edit", "delete"] },
-  ],
-  production_manager: [
-    { module: "dashboard", actions: ["view", "export"] },
-    { module: "platform_home", actions: ["view"] },
-    { module: "production", actions: ["view", "create", "edit", "delete", "approve"] },
-    { module: "daily_production", actions: ["view", "create", "edit", "delete"] },
-    { module: "advanced_production", actions: ["view", "create", "edit", "delete"] },
-    { module: "quality_control", actions: ["view", "create", "edit", "delete"] },
-    { module: "products", actions: ["view", "create", "edit"] },
-    { module: "operations", actions: ["view"] },
-    { module: "inventory", actions: ["view"] },
-    { module: "shifts", actions: ["view", "create", "edit", "delete"] },
   ],
   // Recipe-book access is an explicit grant, not part of the broad viewer
   // template. The matrix still exposes the module for deliberate selection.
@@ -424,7 +413,11 @@ export default function UserPermissionsPage() {
 
   const applyCustomTemplate = (templateId: string) => {
     if (!canWrite) return;
-    const template = CUSTOM_TEMPLATES[templateId];
+    // Keep the production-manager job template in shared/schema.ts so the
+    // permissions editor cannot drift from the job-title template.
+    const template = templateId === "production_manager"
+      ? JOB_ROLE_PERMISSION_TEMPLATES.production_manager
+      : CUSTOM_TEMPLATES[templateId];
     if (!template) return;
     const newState: PermissionState = {};
     for (const perm of template) newState[perm.module] = [...perm.actions];

@@ -10,11 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Plus, Search, Edit, Trash2, Package, Filter, X, Download, FileSpreadsheet, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TablePagination } from "@/components/ui/pagination";
 import { ExportButtons } from "@/components/export-buttons";
+import { getProductCatalogWriteAccess } from "@/lib/product-catalog-permissions";
 import type { Product } from "@shared/schema";
 
 const PRODUCT_CATEGORIES = [
@@ -65,8 +67,24 @@ export default function ProductsPage() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { hasPermission, canView } = usePermissions();
+  // Product writes are intentionally checked against the existing operations
+  // actions. Read access is broader and is handled by the route wrapper.
+  const {
+    create: canCreateProduct,
+    edit: canEditProduct,
+    delete: canDeleteProduct,
+  } = getProductCatalogWriteAccess(hasPermission);
+  const canManageProducts = canCreateProduct || canEditProduct || canDeleteProduct;
+  const catalogBackHref = canView("production")
+    ? "/production-dashboard"
+    : canView("daily_production")
+      ? "/daily-production"
+      : canView("operations")
+        ? "/operations"
+        : "/";
 
-  const { data: products = [], isLoading } = useQuery<Product[]>({
+  const { data: products = [], isLoading, isError, error } = useQuery<Product[]>({
     queryKey: ["/api/products"],
     queryFn: async () => {
       const res = await fetch("/api/products");
@@ -117,6 +135,8 @@ export default function ProductsPage() {
   };
 
   const handleSubmit = () => {
+    if (editingProduct ? !canEditProduct : !canCreateProduct) return;
+
     const data = {
       name: formData.name,
       nameEn: formData.nameEn,
@@ -139,6 +159,8 @@ export default function ProductsPage() {
   };
 
   const handleEdit = (product: Product) => {
+    if (!canEditProduct) return;
+
     setEditingProduct(product);
     const vatRate = (product as any).vatRate ?? 0.15;
     const vatRateStr = String(vatRate);
@@ -278,7 +300,7 @@ export default function ProductsPage() {
       <div className="page-container space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/operations">
+            <Link href={catalogBackHref}>
               <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-8 sm:w-8" data-testid="btn-back">
                 <ArrowRight className="h-4 w-4" />
               </Button>
@@ -288,7 +310,9 @@ export default function ProductsPage() {
                 <Package className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                 إدارة المنتجات
               </h1>
-              <p className="text-xs sm:text-sm text-muted-foreground">قائمة المنتجات والأسعار - {products.length} منتج</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                {isError ? "تعذر تحميل قائمة المنتجات" : `قائمة المنتجات والأسعار - ${products.length} منتج`}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -299,145 +323,151 @@ export default function ProductsPage() {
               title="قائمة منتجات BUTTER BAKERY"
               subtitle={`إجمالي ${products.length} منتج`}
             />
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button data-testid="button-add-product" className="gap-1 h-11 sm:h-9">
-                  <Plus className="w-4 h-4" />
-                  إضافة منتج
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-lg">
-                <DialogHeader>
-                  <DialogTitle>{editingProduct ? "تعديل المنتج" : "إضافة منتج جديد"}</DialogTitle>
-                  <DialogDescription>أدخل بيانات المنتج كاملة</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label>اسم المنتج (عربي) *</Label>
-                      <Input
-                        value={formData.name}
-                        onChange={e => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="مثال: كرواسون شوكولاته"
-                        data-testid="input-product-name"
-                        className="h-11 sm:h-10"
-                      />
+            {canManageProducts && (
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                {canCreateProduct && (
+                  <DialogTrigger asChild>
+                    <Button data-testid="button-add-product" className="gap-1 h-11 sm:h-9">
+                      <Plus className="w-4 h-4" />
+                      إضافة منتج
+                    </Button>
+                  </DialogTrigger>
+                )}
+                <DialogContent className="max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>{editingProduct ? "تعديل المنتج" : "إضافة منتج جديد"}</DialogTitle>
+                    <DialogDescription>أدخل بيانات المنتج كاملة</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label>اسم المنتج (عربي) *</Label>
+                        <Input
+                          value={formData.name}
+                          onChange={e => setFormData({ ...formData, name: e.target.value })}
+                          placeholder="مثال: كرواسون شوكولاته"
+                          data-testid="input-product-name"
+                          className="h-11 sm:h-10"
+                        />
+                      </div>
+                      <div>
+                        <Label>Product Name (English)</Label>
+                        <Input
+                          value={formData.nameEn}
+                          onChange={e => setFormData({ ...formData, nameEn: e.target.value })}
+                          placeholder="e.g. Chocolate Croissant"
+                          data-testid="input-product-name-en"
+                          className="h-11 sm:h-10"
+                          dir="ltr"
+                        />
+                      </div>
+                      <div>
+                        <Label>رمز SKU</Label>
+                        <Input
+                          value={formData.sku}
+                          onChange={e => setFormData({ ...formData, sku: e.target.value })}
+                          placeholder="sk-1234"
+                          className="h-11 sm:h-10"
+                        />
+                      </div>
+                      <div>
+                        <Label>الفئة *</Label>
+                        <Select value={formData.category} onValueChange={v => setFormData({ ...formData, category: v })}>
+                          <SelectTrigger data-testid="select-category" className="h-11 sm:h-10">
+                            <SelectValue placeholder="اختر الفئة" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-60 overflow-y-auto">
+                            {PRODUCT_CATEGORIES.map(cat => (
+                              <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>نوع الصنف *</Label>
+                        <Select value={formData.productType} onValueChange={v => setFormData({ ...formData, productType: v })}>
+                          <SelectTrigger data-testid="select-product-type" className="h-11 sm:h-10">
+                            <SelectValue placeholder="اختر النوع" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-60 overflow-y-auto">
+                            {PRODUCT_TYPES.map(type => (
+                              <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>الوحدة</Label>
+                        <Select value={formData.unit} onValueChange={v => setFormData({ ...formData, unit: v })}>
+                          <SelectTrigger className="h-11 sm:h-10">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-60 overflow-y-auto">
+                            {UNITS.map(u => (
+                              <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>نسبة الضريبة</Label>
+                        <Select value={formData.vatRate} onValueChange={handleVatRateChange}>
+                          <SelectTrigger className="h-11 sm:h-10">
+                            <SelectValue placeholder="اختر نسبة الضريبة" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-60 overflow-y-auto">
+                            <SelectItem value="0.15">15%</SelectItem>
+                            <SelectItem value="0">0%</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div>
-                      <Label>Product Name (English)</Label>
-                      <Input
-                        value={formData.nameEn}
-                        onChange={e => setFormData({ ...formData, nameEn: e.target.value })}
-                        placeholder="e.g. Chocolate Croissant"
-                        data-testid="input-product-name-en"
-                        className="h-11 sm:h-10"
-                        dir="ltr"
-                      />
-                    </div>
-                    <div>
-                      <Label>رمز SKU</Label>
-                      <Input
-                        value={formData.sku}
-                        onChange={e => setFormData({ ...formData, sku: e.target.value })}
-                        placeholder="sk-1234"
-                        className="h-11 sm:h-10"
-                      />
-                    </div>
-                    <div>
-                      <Label>الفئة *</Label>
-                      <Select value={formData.category} onValueChange={v => setFormData({ ...formData, category: v })}>
-                        <SelectTrigger data-testid="select-category" className="h-11 sm:h-10">
-                          <SelectValue placeholder="اختر الفئة" />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60 overflow-y-auto">
-                          {PRODUCT_CATEGORIES.map(cat => (
-                            <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>نوع الصنف *</Label>
-                      <Select value={formData.productType} onValueChange={v => setFormData({ ...formData, productType: v })}>
-                        <SelectTrigger data-testid="select-product-type" className="h-11 sm:h-10">
-                          <SelectValue placeholder="اختر النوع" />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60 overflow-y-auto">
-                          {PRODUCT_TYPES.map(type => (
-                            <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>الوحدة</Label>
-                      <Select value={formData.unit} onValueChange={v => setFormData({ ...formData, unit: v })}>
-                        <SelectTrigger className="h-11 sm:h-10">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60 overflow-y-auto">
-                          {UNITS.map(u => (
-                            <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>نسبة الضريبة</Label>
-                      <Select value={formData.vatRate} onValueChange={handleVatRateChange}>
-                        <SelectTrigger className="h-11 sm:h-10">
-                          <SelectValue placeholder="اختر نسبة الضريبة" />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60 overflow-y-auto">
-                          <SelectItem value="0.15">15%</SelectItem>
-                          <SelectItem value="0">0%</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <Label>السعر بدون ضريبة</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formData.priceExclVat}
+                          onChange={e => handlePriceExclVatChange(e.target.value)}
+                          placeholder="0.00"
+                          className="h-11 sm:h-10"
+                        />
+                      </div>
+                      <div>
+                        <Label>قيمة الضريبة</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formData.vatAmount}
+                          readOnly
+                          className="bg-muted h-11 sm:h-10"
+                        />
+                      </div>
+                      <div>
+                        <Label>السعر شامل الضريبة</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formData.basePrice}
+                          onChange={e => handleBasePriceChange(e.target.value)}
+                          placeholder="0.00"
+                          className="font-semibold h-11 sm:h-10"
+                        />
+                      </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <Label>السعر بدون ضريبة</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={formData.priceExclVat}
-                        onChange={e => handlePriceExclVatChange(e.target.value)}
-                        placeholder="0.00"
-                        className="h-11 sm:h-10"
-                      />
-                    </div>
-                    <div>
-                      <Label>قيمة الضريبة</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={formData.vatAmount}
-                        readOnly
-                        className="bg-muted h-11 sm:h-10"
-                      />
-                    </div>
-                    <div>
-                      <Label>السعر شامل الضريبة</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={formData.basePrice}
-                        onChange={e => handleBasePriceChange(e.target.value)}
-                        placeholder="0.00"
-                        className="font-semibold h-11 sm:h-10"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={resetForm} className="h-11 sm:h-9">إلغاء</Button>
-                  <Button onClick={handleSubmit} disabled={!formData.name || !formData.category} className="h-11 sm:h-9">
-                    {editingProduct ? "حفظ التعديلات" : "إضافة المنتج"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={resetForm} className="h-11 sm:h-9">إلغاء</Button>
+                    {(editingProduct ? canEditProduct : canCreateProduct) && (
+                      <Button onClick={handleSubmit} disabled={!formData.name || !formData.category} className="h-11 sm:h-9">
+                        {editingProduct ? "حفظ التعديلات" : "إضافة المنتج"}
+                      </Button>
+                    )}
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
         </div>
 
@@ -508,7 +538,17 @@ export default function ProductsPage() {
               )}
             </div>
 
-            {isLoading ? (
+            {isError ? (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center" data-testid="products-load-error">
+                <p className="font-medium text-destructive">تعذر تحميل المنتجات</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  لا يمكن عرض قائمة المنتجات حالياً. تحقق من صلاحية العرض ثم حاول مرة أخرى.
+                </p>
+                {error instanceof Error && error.message.startsWith("403") && (
+                  <p className="mt-2 text-xs text-muted-foreground">رمز الخطأ: 403 (غير مصرح)</p>
+                )}
+              </div>
+            ) : isLoading ? (
               <div className="space-y-2">
                 {[...Array(10)].map((_, i) => (
                   <Skeleton key={i} className="h-12 w-full" />
@@ -529,13 +569,13 @@ export default function ProductsPage() {
                         <th className="p-2 sm:p-3 text-right font-semibold hidden lg:table-cell">السعر بدون ضريبة</th>
                         <th className="p-2 sm:p-3 text-right font-semibold hidden lg:table-cell">الضريبة</th>
                         <th className="p-2 sm:p-3 text-right font-semibold">السعر شامل</th>
-                        <th className="p-2 sm:p-3 text-right font-semibold">إجراءات</th>
+                        {canManageProducts && <th className="p-2 sm:p-3 text-right font-semibold">إجراءات</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y">
                       {paginatedProducts.length === 0 ? (
                         <tr>
-                          <td colSpan={10} className="p-8 text-center text-muted-foreground">
+                          <td colSpan={canManageProducts ? 10 : 9} className="p-8 text-center text-muted-foreground">
                             لا توجد منتجات مطابقة للبحث
                           </td>
                         </tr>
@@ -571,28 +611,36 @@ export default function ProductsPage() {
                             <td className="p-2 sm:p-3 tabular-nums font-semibold text-primary text-xs sm:text-sm">
                               {(product.basePrice || 0).toFixed(2)} ر.س
                             </td>
-                            <td className="p-2 sm:p-3">
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 sm:h-8 sm:w-8"
-                                  onClick={() => handleEdit(product)}
-                                  data-testid={`button-edit-${product.id}`}
-                                >
-                                  <Edit className="w-3 h-3 sm:w-4 sm:h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 sm:h-8 sm:w-8 text-destructive hover:text-destructive"
-                                  onClick={() => deleteMutation.mutate(product.id)}
-                                  data-testid={`button-delete-${product.id}`}
-                                >
-                                  <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                                </Button>
-                              </div>
-                            </td>
+                            {canManageProducts && (
+                              <td className="p-2 sm:p-3">
+                                <div className="flex items-center gap-1">
+                                  {canEditProduct && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 sm:h-8 sm:w-8"
+                                      onClick={() => handleEdit(product)}
+                                      data-testid={`button-edit-${product.id}`}
+                                    >
+                                      <Edit className="w-3 h-3 sm:w-4 sm:h-4" />
+                                    </Button>
+                                  )}
+                                  {canDeleteProduct && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 sm:h-8 sm:w-8 text-destructive hover:text-destructive"
+                                      onClick={() => {
+                                        if (canDeleteProduct) deleteMutation.mutate(product.id);
+                                      }}
+                                      data-testid={`button-delete-${product.id}`}
+                                    >
+                                      <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </td>
+                            )}
                           </tr>
                         ))
                       )}

@@ -13,10 +13,11 @@ import { SlowConnectionBanner } from "@/components/slow-connection-banner";
 import { DataErrorBanner } from "@/components/data-error-banner";
 import { InactivityLogout } from "@/components/inactivity-logout";
 import { ProductionProvider } from "@/contexts/ProductionContext";
-import { ProtectedRoute, PublicOnlyRoute, ModuleProtectedRoute } from "@/components/protected-route";
+import { ProtectedRoute, PublicOnlyRoute, ModuleProtectedRoute, AnyModuleProtectedRoute } from "@/components/protected-route";
 import { AuthGate } from "@/contexts/AuthContext";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Loader2 } from "lucide-react";
+import { PRODUCT_CATALOG_READ_MODULES } from "@shared/schema";
 import type { SystemModule } from "@shared/schema";
 
 import NotFound from "@/pages/not-found";
@@ -278,6 +279,22 @@ const ModulePage = React.memo(function ModulePage({ component: Component, module
   );
 });
 
+const AnyModulePage = React.memo(function AnyModulePage({
+  component: Component,
+  modules,
+}: {
+  component: React.ComponentType;
+  modules: readonly SystemModule[];
+}) {
+  return (
+    <AnyModuleProtectedRoute modules={modules}>
+      <Suspense fallback={<PageLoadingFallback />}>
+        <PageWrapper><Component /></PageWrapper>
+      </Suspense>
+    </AnyModuleProtectedRoute>
+  );
+});
+
 const AdminPage = React.memo(function AdminPage({ component: Component, module }: { component: React.ComponentType; module?: SystemModule }) {
   if (module) {
     return (
@@ -384,7 +401,7 @@ const Router = React.memo(function Router() {
       <Route path="/central-kitchen-orders">{() => <ModulePage component={CentralKitchenOrdersPage} module="central_kitchen_orders" />}</Route>
       <Route path="/branch-shifts">{() => <ModulePage component={BranchShiftsPage} module="branch_closure" />}</Route>
       <Route path="/shift-reports">{() => <ModulePage component={ShiftReportsPage} module="branch_closure" />}</Route>
-      <Route path="/products">{() => <ModulePage component={ProductsPage} module="products" />}</Route>
+      <Route path="/products">{() => <AnyModulePage component={ProductsPage} modules={PRODUCT_CATALOG_READ_MODULES} />}</Route>
       <Route path="/quality-control">{() => <ModulePage component={QualityControlPage} module="quality_control" />}</Route>
       <Route path="/display-bar-waste">{() => <ModulePage component={DisplayBarWastePage} module="waste_tracking" />}</Route>
       <Route path="/operations-employees">{() => <AdminPage component={OperationsEmployeesPage} module="operations" />}</Route>

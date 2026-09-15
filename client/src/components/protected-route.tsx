@@ -20,6 +20,12 @@ interface ModuleProtectedRouteProps {
   requiredRole?: "admin" | "employee" | "viewer";
 }
 
+interface AnyModuleProtectedRouteProps {
+  children: React.ReactNode;
+  modules: readonly SystemModule[];
+  requiredRole?: "admin" | "employee" | "viewer";
+}
+
 function AccessDeniedPage({ message }: { message?: string }) {
   const handleLogout = async () => {
     try {
@@ -170,6 +176,48 @@ export function ModuleProtectedRoute({ children, module, requiredRole }: ModuleP
 
   if (!isAdmin && !canView(module)) {
     return <AccessDeniedPage message={`ليس لديك صلاحية الوصول لهذا القسم`} />;
+  }
+
+  return <>{children}</>;
+}
+
+/**
+ * Protect a focused page that can be read through one of several existing
+ * modules. This deliberately does not alias modules globally: callers must
+ * opt in with an explicit list for the single page they are protecting.
+ */
+export function AnyModuleProtectedRoute({ children, modules, requiredRole }: AnyModuleProtectedRouteProps) {
+  const { isReady } = useAuthReady();
+  const { user, isAuthenticated, isAdmin } = useAuth();
+  const { canView } = usePermissions();
+  const [location] = useLocation();
+
+  if (!isReady) {
+    return <InlineSkeleton />;
+  }
+
+  if (!isAuthenticated) {
+    const returnUrl = encodeURIComponent(location);
+    return <Redirect to={`/login?returnUrl=${returnUrl}`} />;
+  }
+
+  if (requiredRole) {
+    const roleHierarchy: Record<string, number> = {
+      admin: 3,
+      employee: 2,
+      viewer: 1,
+    };
+
+    const userRoleLevel = roleHierarchy[user?.role || "viewer"] || 0;
+    const requiredRoleLevel = roleHierarchy[requiredRole] || 0;
+
+    if (userRoleLevel < requiredRoleLevel) {
+      return <AccessDeniedPage message="هذه الصفحة متاحة فقط للمديرين" />;
+    }
+  }
+
+  if (!isAdmin && !modules.some((module) => canView(module))) {
+    return <AccessDeniedPage message="ليس لديك صلاحية الوصول لهذا القسم" />;
   }
 
   return <>{children}</>;
