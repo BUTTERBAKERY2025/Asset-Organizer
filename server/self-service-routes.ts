@@ -16,6 +16,7 @@ import {
   employeeEvaluations,
   employeeDocuments,
   incentiveAwards,
+  cashierSalesJournals,
   notifications,
   users,
   employmentApplications,
@@ -23,6 +24,7 @@ import {
   salaryClosureLines,
   PORTAL_SETTING_KEYS,
 } from "@shared/schema";
+import { buildCashierDailyChallengeToday } from "@shared/cashier-daily-challenges";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { notifyEmployeeOfDecision, notifyHrOfRequest } from "./notify-helpers";
@@ -124,6 +126,57 @@ export function registerSelfServiceRoutes(app: Express) {
   // بوابة الموظف الذاتية — Employee Self-Service
   // كل المسارات هنا محصورة على ملف الموظف المرتبط بحساب المستخدم الحالي فقط.
   // ========================================================================
+
+  // تقدم تحديات الكاشير اليومية — قراءة فقط، ومحصورة على يومية المستخدم وفرعه.
+  app.get("/api/my/challenges/today", isAuthenticated, async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      const userId = getUserId(req);
+      if (!userId) return res.status(401).json({ error: "غير مصرح" });
+
+      const date = saudiDate();
+      const emp = await getMyEmployee(req);
+      if (!emp) {
+        return res.json({ date, settingsActive: false, journals: [] });
+      }
+
+      const [journals, challenges, settings] = await Promise.all([
+        db.select({
+          id: cashierSalesJournals.id,
+          branchId: cashierSalesJournals.branchId,
+          cashierId: cashierSalesJournals.cashierId,
+          journalDate: cashierSalesJournals.journalDate,
+          shiftType: cashierSalesJournals.shiftType,
+          averageTicket: cashierSalesJournals.averageTicket,
+          totalSales: cashierSalesJournals.totalSales,
+          transactionCount: cashierSalesJournals.transactionCount,
+          customerCount: cashierSalesJournals.customerCount,
+        })
+          .from(cashierSalesJournals)
+          .where(and(
+            eq(cashierSalesJournals.cashierId, userId),
+            eq(cashierSalesJournals.branchId, emp.branchId),
+            eq(cashierSalesJournals.journalDate, date),
+          ))
+          .orderBy(desc(cashierSalesJournals.id)),
+        storage.getActiveDailyChallenges(emp.branchId, date),
+        storage.getPointSettings(),
+      ]);
+
+      const result = buildCashierDailyChallengeToday({
+        date,
+        branchId: emp.branchId,
+        cashierId: userId,
+        journals,
+        challenges,
+        settings,
+      });
+      res.json(result);
+    } catch (e: any) {
+      console.error("[my/challenges/today] error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
 
   // ملف الموظف الخاص بالمستخدم الحالي
   app.get("/api/my/profile", isAuthenticated, async (req, res) => {

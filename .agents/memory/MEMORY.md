@@ -55,3 +55,4 @@
 - [Central-kitchen shadow ledger](central-kitchen-shadow-ledger.md) — shadow postings start at DB activation, never backfill, and split original before substitute without touching real balances.
 - [Recipe activation boundary](central-kitchen-recipe-boundary.md) — recipe approval does not enable raw-stock posting; revision retries bind the source recipe, not the new draft.
 - [Production reporting semantics](production-report-semantics.md) — finished batches are actual output; separate shadow totals, deduplicate range plans, and never infer unlinked plan completion.
+- [Daily challenge previews](daily-challenge-preview.md) — per-journal estimates must not be summed as guaranteed daily awards; approval has day-wide replacement semantics.

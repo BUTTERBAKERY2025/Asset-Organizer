@@ -29,6 +29,7 @@ import { PortalTimesheet } from "@/components/portal-timesheet";
 import { PortalWarningSigner } from "@/components/portal-warning-signer";
 import { PortalAdvanceSigner } from "@/components/portal-advance-signer";
 import { PortalSettlementSigner } from "@/components/portal-settlement-signer";
+import { PortalDailyChallenges } from "@/components/portal-daily-challenges";
 
 function fmtMoney(n: any): string {
   return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1370,6 +1371,7 @@ export default function MyPortalPage() {
               {/* حوافزي / incentives */}
               {showIncentives && (
                 <TabsContent value="incentives" className="space-y-3">
+                  {activeTab === "incentives" && <PortalDailyChallenges />}
                   {myIncentives.length === 0 ? (
                     <Card><CardContent className="p-8 text-center text-muted-foreground text-sm" data-testid="text-no-incentives">لا توجد حوافز ممنوحة بعد</CardContent></Card>
                   ) : (
