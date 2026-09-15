@@ -110,6 +110,8 @@ let fixture: {
   mismatchProductId: number;
   materialId: number;
   wrongUnitMaterialId: number;
+  recodeProductId: number;
+  recodeMaterialId: number;
 };
 
 function captureApp() {
@@ -327,6 +329,8 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     const mismatchProductId = firstId + 5;
     const materialId = firstId + 6;
     const wrongUnitMaterialId = firstId + 7;
+    const recodeProductId = firstId + 8;
+    const recodeMaterialId = firstId + 9;
 
     await databaseState.db.insert(products).values([
       {
@@ -371,6 +375,14 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
         unit: "tray",
         isActive: "true",
       },
+      {
+        id: recodeProductId,
+        name: `CK live recode product ${suffix}`,
+        sku: `CK-LIVE-OLD-PRODUCT-${suffix}`,
+        category: "test",
+        unit: "tray",
+        isActive: "true",
+      },
     ]);
     await databaseState.db.insert(warehouseItems).values([
       {
@@ -389,11 +401,22 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
         currentStock: 500,
         isActive: true,
       },
+      {
+        id: recodeMaterialId,
+        name: `CK live recode material ${suffix}`,
+        sku: `CK-LIVE-OLD-MATERIAL-${suffix}`,
+        category: "raw",
+        unit: "kg",
+        currentStock: 500,
+        isActive: true,
+      },
     ]);
     await databaseState.db.insert(branchStock).values([
       { branchId: kitchenBranchId, itemId: materialId, currentQuantity: 9 },
       { branchId: requestBranchId, itemId: materialId, currentQuantity: 40 },
       { branchId: kitchenBranchId, itemId: wrongUnitMaterialId, currentQuantity: 20 },
+      { branchId: kitchenBranchId, itemId: recodeMaterialId, currentQuantity: 3 },
+      { branchId: requestBranchId, itemId: recodeMaterialId, currentQuantity: 4 },
     ]);
     await databaseState.db.insert(finishedGoodsInventory).values([
       {
@@ -418,6 +441,17 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
         unit: "tray",
         productionDate: "2098-01-01",
       },
+      {
+        branchId: kitchenBranchId,
+        productId: recodeProductId,
+        productName: `CK live recode product ${suffix}`,
+        productNameNormalized: `ck live recode product ${suffix}`.toLowerCase(),
+        productCategory: "test",
+        quantity: 1,
+        reservedQuantity: 0,
+        unit: "tray",
+        productionDate: "2098-09-01",
+      },
     ]);
 
     fixture = {
@@ -436,6 +470,8 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
       mismatchProductId,
       materialId,
       wrongUnitMaterialId,
+      recodeProductId,
+      recodeMaterialId,
     };
 
     const { registerRoutes } = await import("../server/routes");
@@ -1395,5 +1431,417 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
       quantity: 2,
       status: "in_progress",
     });
+  });
+
+  it("keeps recipe-backed IDs and frozen names through catalogue recode and the full real-order lifecycle", async () => {
+    await setRuntime("real");
+    const [product] = await databaseState.db.select().from(products)
+      .where(eq(products.id, fixture.recodeProductId));
+    const [material] = await databaseState.db.select().from(warehouseItems)
+      .where(eq(warehouseItems.id, fixture.recodeMaterialId));
+    const oldProductName = product.name;
+    const oldMaterialName = material.name;
+    const oldProductSku = product.sku;
+    const oldMaterialSku = material.sku;
+
+    const createdRecipe = await invoke("post", "/api/central-kitchen-recipes", {
+      user: fixture.kitchenUser,
+      body: {
+        kitchenId: fixture.kitchenBranchId,
+        productId: fixture.recodeProductId,
+        outputQuantity: 1,
+        outputUnit: product.unit,
+        ingredients: [{
+          warehouseItemId: fixture.recodeMaterialId,
+          quantity: 0.5,
+          unit: material.unit,
+        }],
+        notes: "Catalogue recode lifecycle recipe",
+        idempotencyKey: key("recode-recipe"),
+      },
+    });
+    expect(createdRecipe.statusCode).toBe(201);
+    const draft = createdRecipe.body.recipe || createdRecipe.body.data || createdRecipe.body;
+    const approvedRecipe = await invoke("post", "/api/central-kitchen-recipes/:id/approve", {
+      user: fixture.kitchenUser,
+      params: { id: String(draft.id) },
+      body: {
+        version: draft.version,
+        updateToken: draft.updateToken,
+        idempotencyKey: key("recode-recipe-approve"),
+      },
+    });
+    expect(approvedRecipe.statusCode).toBe(200);
+    const approved = approvedRecipe.body.recipe || approvedRecipe.body.data || approvedRecipe.body;
+    expect(approved).toMatchObject({
+      id: draft.id,
+      productId: fixture.recodeProductId,
+      status: "approved",
+    });
+
+    const order = await createOrder([
+      {
+        productId: fixture.recodeProductId,
+        productName: oldProductName,
+        requestedQuantity: 2,
+        unit: product.unit,
+      },
+      {
+        warehouseItemId: fixture.recodeMaterialId,
+        productName: oldMaterialName,
+        requestedQuantity: 2,
+        unit: material.unit,
+      },
+    ]);
+    expect(order.statusCode).toBe(201);
+    expect((await approve(order.body.id)).statusCode).toBe(200);
+    const productLine = order.body.items.find((item: any) => item.productId === fixture.recodeProductId);
+    const materialLine = order.body.items.find((item: any) => item.warehouseItemId === fixture.recodeMaterialId);
+    expect(productLine).toMatchObject({
+      productId: fixture.recodeProductId,
+      productName: oldProductName,
+      unit: product.unit,
+    });
+    expect(materialLine).toMatchObject({
+      warehouseItemId: fixture.recodeMaterialId,
+      productName: oldMaterialName,
+      unit: material.unit,
+    });
+
+    const batchKey = key("recode-batch");
+    const linked = await invoke(
+      "post",
+      "/api/central-kitchen-orders/:id/items/:itemId/production-batches",
+      {
+        user: fixture.kitchenUser,
+        params: { id: String(order.body.id), itemId: String(productLine.id) },
+        body: {
+          quantity: 1,
+          productionDate: "2098-09-02",
+          recipeBacked: true,
+          idempotencyKey: batchKey,
+        },
+      },
+    );
+    expect(linked.statusCode).toBe(201);
+    expect(linked.body).toMatchObject({
+      productId: fixture.recodeProductId,
+      productName: oldProductName,
+      centralKitchenOrderItemId: productLine.id,
+      recipeBacked: true,
+      status: "in_progress",
+    });
+
+    const frozenBeforeRecode = await databaseState.db.execute(sql`
+      SELECT kitchen_id, product_id, source_recipe_id, source_recipe_version,
+             recipe_output_quantity::text, recipe_output_unit, batch_output_quantity::text,
+             ingredient_count, ingredient_checksum
+      FROM central_kitchen_batch_recipe_snapshots
+      WHERE batch_id = ${linked.body.id}
+    `);
+    const frozenMaterialsBeforeRecode = await databaseState.db.execute(sql`
+      SELECT warehouse_item_id, material_name, unit, recipe_quantity::text, required_quantity::text
+      FROM central_kitchen_batch_materials
+      WHERE batch_id = ${linked.body.id}
+    `);
+    expect(frozenBeforeRecode.rows).toEqual([expect.objectContaining({
+      kitchen_id: fixture.kitchenBranchId,
+      product_id: fixture.recodeProductId,
+      source_recipe_id: approved.id,
+      source_recipe_version: approved.version,
+      recipe_output_quantity: "1.000000",
+      recipe_output_unit: product.unit,
+      batch_output_quantity: "1.000000",
+      ingredient_count: 1,
+      ingredient_checksum: expect.stringMatching(/^[a-f0-9]{64}$/),
+    })]);
+    expect(frozenMaterialsBeforeRecode.rows).toEqual([{
+      warehouse_item_id: fixture.recodeMaterialId,
+      material_name: oldMaterialName,
+      unit: material.unit,
+      recipe_quantity: "0.500000",
+      required_quantity: "0.500000",
+    }]);
+
+    const recodedProductName = `${oldProductName} recoded`;
+    const recodedMaterialName = `${oldMaterialName} recoded`;
+    const recodedProductSku = `${oldProductSku}-NEW`;
+    const recodedMaterialSku = `${oldMaterialSku}-NEW`;
+    await databaseState.db.update(products).set({
+      name: recodedProductName,
+      sku: recodedProductSku,
+      unit: product.unit,
+    }).where(eq(products.id, fixture.recodeProductId));
+    await databaseState.db.update(warehouseItems).set({
+      name: recodedMaterialName,
+      sku: recodedMaterialSku,
+      unit: material.unit,
+    }).where(eq(warehouseItems.id, fixture.recodeMaterialId));
+
+    const recodedCatalog = await databaseState.db.execute(sql`
+      SELECT id, name, sku, unit FROM products WHERE id = ${fixture.recodeProductId}
+      UNION ALL
+      SELECT id, name, sku, unit FROM warehouse_items WHERE id = ${fixture.recodeMaterialId}
+      ORDER BY id
+    `);
+    expect(recodedCatalog.rows).toEqual([
+      { id: fixture.recodeProductId, name: recodedProductName, sku: recodedProductSku, unit: product.unit },
+      { id: fixture.recodeMaterialId, name: recodedMaterialName, sku: recodedMaterialSku, unit: material.unit },
+    ]);
+
+    const materialBeforeFinish = await warehouseBalance(fixture.kitchenBranchId, fixture.recodeMaterialId);
+    const productBeforeFinish = await productBalance(fixture.kitchenBranchId, fixture.recodeProductId);
+    expect(materialBeforeFinish).toEqual({ quantity: 3, reserved: 0 });
+    expect(productBeforeFinish).toEqual({ quantity: 1, reserved: 0 });
+
+    const finished = await invoke("post", "/api/daily-production/batches/:id/finish", {
+      user: fixture.kitchenUser,
+      params: { id: String(linked.body.id) },
+    });
+    expect(finished.statusCode).toBe(200);
+    expect(finished.body).toMatchObject({
+      id: linked.body.id,
+      productId: fixture.recodeProductId,
+      status: "finished",
+    });
+    expect(await warehouseBalance(fixture.kitchenBranchId, fixture.recodeMaterialId))
+      .toEqual({ quantity: 2.5, reserved: 0 });
+    expect(await productBalance(fixture.kitchenBranchId, fixture.recodeProductId))
+      .toEqual({ quantity: 2, reserved: 0 });
+
+    const materialMovementsAfterFinish = await databaseState.db.execute(sql`
+      SELECT warehouse_item_id, quantity::text, unit
+      FROM central_kitchen_batch_material_movements
+      WHERE batch_id = ${linked.body.id}
+    `);
+    const outputLogsAfterFinish = await databaseState.db.execute(sql`
+      SELECT product_id, quantity::text, movement_type, batch_id
+      FROM production_inventory_logs
+      WHERE batch_id = ${linked.body.id}
+    `);
+    expect(materialMovementsAfterFinish.rows).toEqual([{
+      warehouse_item_id: fixture.recodeMaterialId,
+      quantity: "0.500000",
+      unit: material.unit,
+    }]);
+    expect(outputLogsAfterFinish.rows).toEqual([{
+      product_id: fixture.recodeProductId,
+      quantity: "1",
+      movement_type: "production_in",
+      batch_id: linked.body.id,
+    }]);
+
+    const finishReplay = await invoke("post", "/api/daily-production/batches/:id/finish", {
+      user: fixture.kitchenUser,
+      params: { id: String(linked.body.id) },
+    });
+    expect(finishReplay.statusCode).toBe(200);
+    expect(await warehouseBalance(fixture.kitchenBranchId, fixture.recodeMaterialId))
+      .toEqual({ quantity: 2.5, reserved: 0 });
+    expect(await productBalance(fixture.kitchenBranchId, fixture.recodeProductId))
+      .toEqual({ quantity: 2, reserved: 0 });
+    expect((await databaseState.db.execute(sql`
+      SELECT warehouse_item_id FROM central_kitchen_batch_material_movements WHERE batch_id = ${linked.body.id}
+    `)).rows).toEqual(materialMovementsAfterFinish.rows.map((row: any) => ({
+      warehouse_item_id: row.warehouse_item_id,
+    })));
+    expect((await databaseState.db.execute(sql`
+      SELECT product_id, quantity::text, movement_type, batch_id
+      FROM production_inventory_logs WHERE batch_id = ${linked.body.id}
+    `)).rows).toEqual(outputLogsAfterFinish.rows);
+
+    const prepared = await invoke("post", "/api/central-kitchen-orders/:id/prepare", {
+      user: fixture.kitchenUser,
+      params: { id: String(order.body.id) },
+      body: {
+        idempotencyKey: key("recode-prepare"),
+        items: [
+          {
+            itemId: productLine.id,
+            preparedQuantity: 2,
+            preparedFromStock: 1,
+            preparedFromProduction: 1,
+            substituteQuantity: 0,
+          },
+          {
+            itemId: materialLine.id,
+            preparedQuantity: 2,
+            substituteQuantity: 0,
+          },
+        ],
+      },
+    });
+    expect(prepared.statusCode).toBe(200);
+    expect(prepared.body.items.find((item: any) => item.id === productLine.id)).toMatchObject({
+      productId: fixture.recodeProductId,
+      preparedFromStock: 1,
+      preparedFromProduction: 1,
+      productionFulfillmentEvidence: {
+        version: 1,
+        batches: [{ batchId: linked.body.id, quantity: "1.000000", checksum: expect.any(String) }],
+      },
+    });
+    expect(await productBalance(fixture.kitchenBranchId, fixture.recodeProductId))
+      .toEqual({ quantity: 2, reserved: 2 });
+    expect(await warehouseBalance(fixture.kitchenBranchId, fixture.recodeMaterialId))
+      .toEqual({ quantity: 2.5, reserved: 2 });
+
+    const requestProductBefore = await productBalance(fixture.requestBranchId, fixture.recodeProductId);
+    const requestMaterialBefore = await warehouseBalance(fixture.requestBranchId, fixture.recodeMaterialId);
+    expect(requestProductBefore).toEqual({ quantity: 0, reserved: 0 });
+    expect(requestMaterialBefore).toEqual({ quantity: 4, reserved: 0 });
+
+    const dispatchBody = {
+      idempotencyKey: key("recode-dispatch"),
+      driverName: "Catalogue Recode Driver",
+      vehicleNumber: "RECODE-1",
+      items: [
+        { itemId: productLine.id, dispatchedQuantity: 2 },
+        { itemId: materialLine.id, dispatchedQuantity: 2 },
+      ],
+    };
+    const dispatched = await invoke("post", "/api/central-kitchen-orders/:id/dispatch", {
+      user: fixture.kitchenUser,
+      params: { id: String(order.body.id) },
+      body: dispatchBody,
+    });
+    expect(dispatched.statusCode).toBe(200);
+    expect(await productBalance(fixture.kitchenBranchId, fixture.recodeProductId))
+      .toEqual({ quantity: 0, reserved: 0 });
+    expect(await warehouseBalance(fixture.kitchenBranchId, fixture.recodeMaterialId))
+      .toEqual({ quantity: 0.5, reserved: 0 });
+
+    const receiveBody = {
+      idempotencyKey: key("recode-receive"),
+      items: [
+        {
+          itemId: productLine.id,
+          receivedQuantity: 1,
+          damagedQuantity: 1,
+          receivingNotes: "One good and one damaged after recode",
+        },
+        {
+          itemId: materialLine.id,
+          receivedQuantity: 1,
+          damagedQuantity: 0,
+          receivingNotes: "One kilogram missing after recode",
+        },
+      ],
+    };
+    const received = await invoke("post", "/api/central-kitchen-orders/:id/receive", {
+      user: fixture.requestUser,
+      params: { id: String(order.body.id) },
+      body: receiveBody,
+    });
+    expect(received.statusCode).toBe(200);
+    expect(await productBalance(fixture.requestBranchId, fixture.recodeProductId))
+      .toEqual({ quantity: requestProductBefore.quantity + 1, reserved: 0 });
+    expect(await warehouseBalance(fixture.requestBranchId, fixture.recodeMaterialId))
+      .toEqual({ quantity: requestMaterialBefore.quantity + 1, reserved: 0 });
+    expect(received.body).toMatchObject({
+      discrepancyStatus: "open",
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          id: productLine.id,
+          productId: fixture.recodeProductId,
+          receivedQuantity: 1,
+          damagedQuantity: 1,
+          missingQuantity: 0,
+        }),
+        expect.objectContaining({
+          id: materialLine.id,
+          warehouseItemId: fixture.recodeMaterialId,
+          receivedQuantity: 1,
+          damagedQuantity: 0,
+          missingQuantity: 1,
+        }),
+      ]),
+    });
+
+    const allocationsBeforeReplay = await databaseState.db.select()
+      .from(centralKitchenInventoryAllocations)
+      .where(eq(centralKitchenInventoryAllocations.orderId, order.body.id));
+    const movementsBeforeReplay = await databaseState.db.select()
+      .from(centralKitchenInventoryMovements)
+      .where(eq(centralKitchenInventoryMovements.orderId, order.body.id));
+    expect(allocationsBeforeReplay).toHaveLength(3);
+    expect(allocationsBeforeReplay.map((allocation: any) => [
+      allocation.kind,
+      allocation.catalogId,
+      Number(allocation.reservedQuantity),
+      Number(allocation.dispatchedQuantity),
+      Number(allocation.receivedQuantity),
+      allocation.unit,
+    ])).toEqual(expect.arrayContaining([
+      ["product", fixture.recodeProductId, 1, 1, 1, product.unit],
+      ["product", fixture.recodeProductId, 1, 1, 0, product.unit],
+      ["warehouse", fixture.recodeMaterialId, 2, 2, 1, material.unit],
+    ]));
+    expect(movementsBeforeReplay).toHaveLength(5);
+    expect(movementsBeforeReplay.map((movement: any) => [
+      movement.movementType,
+      movement.catalogId,
+      Number(movement.quantity),
+      movement.branchId,
+    ])).toEqual(expect.arrayContaining([
+      ["dispatch_debit", fixture.recodeProductId, 1, fixture.kitchenBranchId],
+      ["dispatch_debit", fixture.recodeProductId, 1, fixture.kitchenBranchId],
+      ["dispatch_debit", fixture.recodeMaterialId, 2, fixture.kitchenBranchId],
+      ["receipt_credit", fixture.recodeProductId, 1, fixture.requestBranchId],
+      ["receipt_credit", fixture.recodeMaterialId, 1, fixture.requestBranchId],
+    ]));
+
+    const dispatchReplay = await invoke("post", "/api/central-kitchen-orders/:id/dispatch", {
+      user: fixture.kitchenUser,
+      params: { id: String(order.body.id) },
+      body: dispatchBody,
+    });
+    expect(dispatchReplay.statusCode).toBe(200);
+    expect(dispatchReplay.headers["idempotent-replayed"]).toBe("true");
+    const receiveReplay = await invoke("post", "/api/central-kitchen-orders/:id/receive", {
+      user: fixture.requestUser,
+      params: { id: String(order.body.id) },
+      body: receiveBody,
+    });
+    expect(receiveReplay.statusCode).toBe(200);
+    expect(receiveReplay.headers["idempotent-replayed"]).toBe("true");
+    expect(await productBalance(fixture.kitchenBranchId, fixture.recodeProductId))
+      .toEqual({ quantity: 0, reserved: 0 });
+    expect(await warehouseBalance(fixture.kitchenBranchId, fixture.recodeMaterialId))
+      .toEqual({ quantity: 0.5, reserved: 0 });
+    expect(await productBalance(fixture.requestBranchId, fixture.recodeProductId))
+      .toEqual({ quantity: requestProductBefore.quantity + 1, reserved: 0 });
+    expect(await warehouseBalance(fixture.requestBranchId, fixture.recodeMaterialId))
+      .toEqual({ quantity: requestMaterialBefore.quantity + 1, reserved: 0 });
+    expect(await databaseState.db.select().from(centralKitchenInventoryAllocations)
+      .where(eq(centralKitchenInventoryAllocations.orderId, order.body.id))).toEqual(allocationsBeforeReplay);
+    expect(await databaseState.db.select().from(centralKitchenInventoryMovements)
+      .where(eq(centralKitchenInventoryMovements.orderId, order.body.id))).toEqual(movementsBeforeReplay);
+
+    expect((await databaseState.db.execute(sql`
+      SELECT kitchen_id, product_id, source_recipe_id, source_recipe_version,
+             recipe_output_quantity::text, recipe_output_unit, batch_output_quantity::text,
+             ingredient_count, ingredient_checksum
+      FROM central_kitchen_batch_recipe_snapshots
+      WHERE batch_id = ${linked.body.id}
+    `)).rows).toEqual(frozenBeforeRecode.rows);
+    expect((await databaseState.db.execute(sql`
+      SELECT warehouse_item_id, material_name, unit, recipe_quantity::text, required_quantity::text
+      FROM central_kitchen_batch_materials
+      WHERE batch_id = ${linked.body.id}
+    `)).rows).toEqual(frozenMaterialsBeforeRecode.rows);
+    const lineage = await databaseState.db.execute(sql`
+      SELECT i.product_id, i.warehouse_item_id, b.product_id AS batch_product_id,
+             b.product_name AS batch_product_name
+      FROM central_kitchen_order_items i
+      INNER JOIN daily_production_batches b ON b.central_kitchen_order_item_id = i.id
+      WHERE i.id = ${productLine.id}
+    `);
+    expect(lineage.rows).toEqual([{
+      product_id: fixture.recodeProductId,
+      warehouse_item_id: null,
+      batch_product_id: fixture.recodeProductId,
+      batch_product_name: oldProductName,
+    }]);
   });
 });
