@@ -41501,6 +41501,9 @@ export async function registerRoutes(
 
   app.post("/api/pos/sales/:id/refund", isAuthenticated, requirePermission("event_pos", "delete"), async (req, res) => {
     try {
+      if (req.body.refundMethod != null && !["cash", "network"].includes(req.body.refundMethod)) {
+        return res.status(400).json({ error: "طريقة الاسترجاع يجب أن تكون نقد أو شبكة" });
+      }
       const saleId = Number(req.params.id);
       if (isNaN(saleId)) return res.status(400).json({ error: "معرف غير صالح" });
       const { reason } = req.body;
@@ -41849,6 +41852,9 @@ export async function registerRoutes(
 
   app.post("/api/pos/sales/:id/partial-refund", isAuthenticated, requirePermission("event_pos", "delete"), async (req, res) => {
     try {
+      if (req.body.refundMethod != null && !["cash", "network"].includes(req.body.refundMethod)) {
+        return res.status(400).json({ error: "طريقة الاسترجاع يجب أن تكون نقد أو شبكة" });
+      }
       const id = parseInt(req.params.id, 10);
       const sale = await storage.getPosSaleById(id);
       if (!sale) return res.status(404).json({ error: "الفاتورة غير موجودة" });
@@ -41874,7 +41880,7 @@ export async function registerRoutes(
       }
       const result = await storage.createPosPartialRefund({
         saleId: id,
-        items: items.map((it: any) => ({ saleItemId: parseInt(String(it.saleItemId), 10), quantity: parseInt(String(it.quantity), 10) })),
+        items: items.map((it: any) => ({ saleItemId: Number(it.saleItemId), quantity: Number(it.quantity) })),
         refundMethod: req.body.refundMethod === "network" ? "network" : "cash",
         reason: req.body.reason,
         refundedBy: currentUserId,

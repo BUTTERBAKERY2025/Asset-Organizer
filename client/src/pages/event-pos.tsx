@@ -193,6 +193,7 @@ export default function EventPosPage() {
   const [refundLoading, setRefundLoading] = useState(false);
   const [refundQtys, setRefundQtys] = useState<Record<number, number>>({});
   const [refundMethod, setRefundMethod] = useState<string>("cash");
+  const [fullRefundMethod, setFullRefundMethod] = useState<"cash" | "network">("cash");
   const [refundReason, setRefundReason] = useState("");
   // مفاتيح تمييز عمليات الاسترجاع/الإلغاء: ثابتة طوال جلسة النافذة الواحدة
   const refundKeyRef = useRef<string | null>(null);
@@ -664,7 +665,7 @@ export default function EventPosPage() {
 
   const voidMutation = useMutation({
     mutationFn: async ({ saleId, reason, action }: { saleId: number; reason: string; action: string }) => {
-      const res = await apiRequest("POST", `/api/pos/sales/${saleId}/${action}`, { reason, idempotencyKey: voidKeyRef.current });
+      const res = await apiRequest("POST", `/api/pos/sales/${saleId}/${action}`, { reason, idempotencyKey: voidKeyRef.current, ...(action === "refund" ? { refundMethod: fullRefundMethod } : {}) });
       return res.json();
     },
     onSuccess: () => {
@@ -1989,6 +1990,16 @@ export default function EventPosPage() {
             </DialogTitle>
           </div>
           <div className="p-5 space-y-4">
+            {voidAction === "refund" && (
+              <div>
+                <label htmlFor="full-refund-method" className="text-sm font-bold text-gray-600 mb-2 block">طريقة إرجاع المبلغ</label>
+                <select id="full-refund-method" data-testid="select-full-refund-method" value={fullRefundMethod} onChange={e => setFullRefundMethod(e.target.value as "cash" | "network")} className="w-full border rounded-xl h-11 px-3">
+                  <option value="cash">نقد</option>
+                  <option value="network">شبكة</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">تُسجّل طريقة الإرجاع المختارة في تسوية الوردية، حتى لو كان الدفع الأصلي مقسّماً.</p>
+              </div>
+            )}
             <div className="bg-amber-50 dark:bg-amber-950/40 rounded-xl p-3 flex items-start gap-2 border border-amber-200 dark:border-amber-900">
               <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-300 shrink-0 mt-0.5" />
               <p className="text-xs text-amber-700 dark:text-amber-300">{voidAction === "void" ? "سيتم إلغاء هذه الفاتورة نهائياً ولن تحسب في المبيعات" : "سيتم تسجيل استرجاع لهذه الفاتورة"}</p>
@@ -2112,7 +2123,7 @@ export default function EventPosPage() {
                         <Ban className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={() => { setVoidSaleId(sale.id); setVoidAction("refund"); setVoidReason(""); voidKeyRef.current = (crypto as any)?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`; setShowVoid(true); }}
+                        onClick={() => { setVoidSaleId(sale.id); setVoidAction("refund"); setFullRefundMethod(sale.paymentMethod === "network" ? "network" : "cash"); setVoidReason(""); voidKeyRef.current = (crypto as any)?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`; setShowVoid(true); }}
                         className="w-8 h-8 rounded-lg flex items-center justify-center text-amber-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
                         title="استرجاع كامل"
                         data-testid={`button-refund-${sale.id}`}

@@ -8,7 +8,7 @@ Rules:
 - Refund accounting is LEDGER-BASED (since 2026-07-27): full AND partial refunds both write pos_refunds rows (full refund = refundPosSaleFull → createPosPartialRefund on all remaining quantities). refund_method (cash|network) drives expected-cash/network subtraction.
 - Countable-sale predicate everywhere in stats (shift stats, daily summary, range summary, event report): `status IN ('completed','partially_refunded') OR (status='refunded' AND EXISTS pos_refunds row)`. Legacy fully-refunded sales (pre-ledger, no pos_refunds rows) stay excluded and must NOT be added back — they have nothing offsetting them.
 - Refund-subtraction queries join pos_refunds and filter sale status IN ('partially_refunded','refunded') (not just partially_refunded), otherwise ledger-based full refunds double-subtract or leak.
-- Partial refunds on discounted sales scale total AND vat by (1 - discount/saleGross), then subtotal = total - vat — same basis as sale-side discount math.
+- Refund allocation must conserve the stored invoice total AND VAT across repeated partial refunds, including discounted item details. **Why:** independently rounding each request can over/under-refund pennies. **How to apply:** treat the original invoice and actual prior refunds as the accounting limits, not newly calculated prices.
 - `closePosShift` locks the shift FOR UPDATE and must pass its `tx` into `getPosShiftStats(shiftId, tx)`; `createPosSale` re-locks the shift inside its own transaction and throws an Arabic "الوردية مغلقة" error if not open — this pair prevents sales landing on a just-closed shift.
 - The sale route's catch surfaces Arabic validation messages via a regex (بطاقة|الولاء|...|الوردية) → 400; new transactional Arabic errors must be added to that regex or they become 500s.
 - `/api/pos/shifts/*` routes must load the event and enforce `canAccessBranch(req, event.branchId)` — shift lookups by eventId alone are IDOR-prone.
@@ -20,5 +20,6 @@ Rules:
 - Sale creation recomputes ALL money server-side from branch_products (priceOverride ?? basePrice, vatRate) — client totals/prices are never trusted.
 - saleDate/saleTime are server-stamped in Asia/Riyadh (client clock never trusted); client "today" filters use Intl with Asia/Riyadh; ZATCA QR parses saleDate/saleTime with explicit +03:00.
 - Partial refund locks its target shift FOR UPDATE; if shift is closed the refund is detached (shift_id NULL) so closed-shift reconciliation never drifts.
+- Refund cash-out belongs to the refunding cashier, not automatically to the original seller. **Why:** an original sale shift can still be open under another cashier; debiting it assigns that person someone else's cash-out. **How to apply:** preserve the distinction between sale attribution and refund attribution in all settlement changes.
 - `uniq_pos_shifts_open` partial unique index on (event_id, cashier_id) WHERE status='open'; openPosShift catches 23505 and returns the existing shift.
 - Void/full-refund/held-order-delete routes must fetch the resource and enforce canAccessBranch; shift stats are owner-or-edit-permission only.

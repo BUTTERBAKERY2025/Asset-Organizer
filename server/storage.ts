@@ -655,6 +655,7 @@ import {
   subtractMaterialQuantities,
 } from "@shared/material-quantity";
 import { postProductionBatchToStock } from "./production-stock-posting";
+import { allocatePosRefundAmounts } from "./pos-refund-allocation";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
 import { db, pool } from "./db";
@@ -18479,15 +18480,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async refundPosSale(saleId: number, reason: string, refundedBy: string): Promise<PosSale | undefined> {
-    const [sale] = await db.select().from(posSales).where(eq(posSales.id, saleId));
-    if (!sale || sale.status !== 'completed') return undefined;
-    const [updated] = await db.update(posSales).set({
-      status: 'refunded',
-      refundReason: reason,
+    // Keep the old method as a compatibility wrapper, but never create a
+    // status-only refund.  All callers now go through the unified refund
+    // ledger so quantities, VAT, shift totals, and reports stay consistent.
+    const result = await this.refundPosSaleFull({
+      saleId,
+      refundMethod: "cash",
+      reason,
       refundedBy,
-      refundedAt: new Date(),
-    }).where(eq(posSales.id, saleId)).returning();
-    return updated || undefined;
+    });
+    return result.sale;
   }
 
   /**
@@ -18824,6 +18826,14 @@ export class DatabaseStorage implements IStorage {
     shiftId?: number | null;
     idempotencyKey?: string | null;
   }): Promise<{ refund?: PosRefund; error?: string }> {
+    // A duplicated item id used to be processed twice against the same
+    // snapshot of refundedQuantity, which could over-refund a line.  Reject
+    // it before entering the transaction instead of silently merging it.
+    const requestedItemIds = params.items.map((item) => item.saleItemId);
+    if (new Set(requestedItemIds).size !== requestedItemIds.length) {
+      return { error: "لا يمكن تكرار الصنف في طلب الاسترجاع" };
+    }
+
     // مفتاح تمييز العملية: إعادة المحاولة بنفس المفتاح تعيد نفس سطر الاسترجاع بدل التكرار
     if (params.idempotencyKey) {
       const [existing] = await db.select().from(posRefunds)
@@ -18847,9 +18857,22 @@ export class DatabaseStorage implements IStorage {
       }
       // قفل الوردية المستهدفة داخل المعاملة: إن كانت مغلقة لا نربط الاسترجاع بها
       // حتى لا يختل حساب التسوية بعد الإغلاق (سباق الإغلاق/الاسترجاع)
-      let effectiveShiftId: number | null = params.shiftId ?? sale.shiftId ?? null;
+      // An explicit null means the refunding cashier has no open shift.
+      // Never debit the original sale's cashier merely because their shift is open.
+      let effectiveShiftId: number | null = params.shiftId ?? null;
+      if (params.shiftId === undefined && sale.eventId) {
+        const [ownShift] = await tx.select().from(posShifts).where(and(
+          eq(posShifts.eventId, sale.eventId),
+          eq(posShifts.cashierId, params.refundedBy),
+          eq(posShifts.status, "open"),
+        )).limit(1);
+        effectiveShiftId = ownShift?.id ?? null;
+      }
       if (effectiveShiftId != null) {
         const [shiftRow] = await tx.select().from(posShifts).where(eq(posShifts.id, effectiveShiftId)).for("update");
+        if (shiftRow && (shiftRow.eventId !== sale.eventId || shiftRow.cashierId !== params.refundedBy)) {
+          return { error: "وردية الاسترجاع لا تخص الكاشير أو الإيفنت" };
+        }
         if (!shiftRow || shiftRow.status !== "open") {
           effectiveShiftId = null;
         }
@@ -18857,44 +18880,73 @@ export class DatabaseStorage implements IStorage {
       const saleItems = await tx.select().from(posSaleItems).where(eq(posSaleItems.saleId, params.saleId)).for("update");
       const itemMap = new Map(saleItems.map((it) => [it.id, it]));
 
-      let subtotal = 0, vatTotal = 0, total = 0;
-      const refundItemRows: any[] = [];
-      for (const reqItem of params.items) {
-        const it = itemMap.get(reqItem.saleItemId);
-        if (!it) return { error: "صنف غير موجود في الفاتورة" };
-        const qty = Math.floor(Number(reqItem.quantity) || 0);
-        if (qty <= 0) continue;
-        const remaining = it.quantity - (it.refundedQuantity || 0);
-        if (qty > remaining) {
-          return { error: `الكمية المطلوب استرجاعها من "${it.productName}" أكبر من المتبقي (${remaining})` };
+      // Existing refund headers are the ledger of what has already been paid
+      // back.  The allocator uses them when this request consumes the final
+      // quantity, closing any cent left by legacy independently-rounded rows.
+      const existingRefundRows = await tx.select({
+        totalAmount: posRefunds.totalAmount,
+        vatAmount: posRefunds.vatAmount,
+      }).from(posRefunds).where(eq(posRefunds.saleId, params.saleId));
+      const existingRefundTotal = existingRefundRows.reduce((sum, refund) => sum + (Number(refund.totalAmount) || 0), 0);
+      const existingRefundVat = existingRefundRows.reduce((sum, refund) => sum + (Number(refund.vatAmount) || 0), 0);
+
+      // Pass quantities through unchanged so the allocator can reject NaN,
+      // fractions, and non-positive values instead of silently flooring them.
+      const requestedItems = params.items
+        .map((item) => ({
+          saleItemId: item.saleItemId,
+          quantity: Number(item.quantity),
+        }));
+
+      let allocation;
+      try {
+        allocation = allocatePosRefundAmounts({
+          saleTotal: sale.totalAmount,
+          saleVat: sale.vatAmount,
+          saleItems: saleItems.map((item) => ({
+            saleItemId: item.id,
+            quantity: item.quantity,
+            grossTotal: item.totalPrice,
+            grossVat: item.vatAmount,
+            refundedQuantity: item.refundedQuantity || 0,
+          })),
+          requestedItems,
+          existingRefundTotal,
+          existingRefundVat,
+        });
+      } catch (error: any) {
+        // Preserve the existing API's structured error response while keeping
+        // all money validation inside the pure allocator.
+        const message = String(error?.message || "تعذر حساب مبلغ الاسترجاع");
+        const itemMatch = message.match(/الكمية المطلوب استرجاعها من الصنف أكبر من المتبقي \((\d+)\)/);
+        if (itemMatch) {
+          const requested = requestedItems.find((item) => {
+            const saleItem = itemMap.get(item.saleItemId);
+            return saleItem && item.quantity > saleItem.quantity - (saleItem.refundedQuantity || 0);
+          });
+          const saleItem = requested ? itemMap.get(requested.saleItemId) : undefined;
+          return {
+            error: saleItem
+              ? `الكمية المطلوب استرجاعها من "${saleItem.productName}" أكبر من المتبقي (${saleItem.quantity - (saleItem.refundedQuantity || 0)})`
+              : message,
+          };
         }
-        const lineTotal = Math.round((it.totalPrice / it.quantity) * qty * 100) / 100;
-        const lineVat = Math.round((it.vatAmount / it.quantity) * qty * 100) / 100;
-        subtotal += lineTotal - lineVat;
-        vatTotal += lineVat;
-        total += lineTotal;
-        refundItemRows.push({
+        return { error: message };
+      }
+
+      const refundItemRows: any[] = allocation.items.map((line) => {
+        const it = itemMap.get(line.saleItemId)!;
+        return {
           saleItemId: it.id,
           productId: it.productId,
           productName: it.productName,
-          quantity: qty,
+          quantity: line.quantity,
           unitPrice: it.unitPrice,
-          vatAmount: lineVat,
-          totalPrice: lineTotal,
-        });
-      }
+          vatAmount: line.vatAmount,
+          totalPrice: line.totalAmount,
+        };
+      });
       if (refundItemRows.length === 0) return { error: "لم يتم تحديد أصناف للاسترجاع" };
-
-      // خصم تناسبي إذا كانت الفاتورة عليها خصم — يشمل الضريبة أيضاً
-      // (نفس أساس احتساب البيع: كل من الصافي والضريبة يُخفَّضان بنسبة الخصم من الإجمالي)
-      const saleGross = saleItems.reduce((s, it) => s + it.totalPrice, 0);
-      const discount = sale.discountAmount || 0;
-      if (discount > 0 && saleGross > 0) {
-        const discountRatio = discount / saleGross;
-        total = Math.round(total * (1 - discountRatio) * 100) / 100;
-        vatTotal = Math.round(vatTotal * (1 - discountRatio) * 100) / 100;
-        subtotal = Math.round((total - vatTotal) * 100) / 100;
-      }
 
       const countRes = await tx.execute(sql`SELECT COUNT(*)::int as c FROM pos_refunds WHERE sale_id = ${params.saleId}`);
       const seq = (Number(((countRes as any).rows?.[0] || (countRes as any)[0])?.c) || 0) + 1;
@@ -18905,9 +18957,9 @@ export class DatabaseStorage implements IStorage {
         eventId: sale.eventId,
         shiftId: effectiveShiftId,
         refundNumber,
-        subtotal: Math.round(subtotal * 100) / 100,
-        vatAmount: Math.round(vatTotal * 100) / 100,
-        totalAmount: Math.round(total * 100) / 100,
+        subtotal: allocation.subtotal,
+        vatAmount: allocation.vatAmount,
+        totalAmount: allocation.totalAmount,
         refundMethod: params.refundMethod === "network" ? "network" : "cash",
         reason: params.reason || null,
         refundedBy: params.refundedBy,
