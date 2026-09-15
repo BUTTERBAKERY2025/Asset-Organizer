@@ -187,13 +187,23 @@ const permissions = {
   warehouse: ["view", "create", "edit", "delete", "approve"],
 };
 
-function actor(id: string, branchId: string, role = "manager") {
+const recipePermissions = {
+  ...permissions,
+  central_kitchen_recipes: ["view", "create", "edit", "delete", "approve", "print"],
+};
+
+function actor(
+  id: string,
+  branchId: string,
+  role = "manager",
+  testPermissions: Record<string, string[]> = permissions,
+) {
   return {
     id,
     username: id,
     branchId,
     role,
-    testPermissions: permissions,
+    testPermissions,
     testAllowedBranchIds: [branchId],
   };
 }
@@ -449,7 +459,15 @@ describe.sequential("recipe-backed central-kitchen batch materials (development 
     const kitchenBranchId = `ck-material-kitchen-${suffix}`;
     const requestBranchId = `ck-material-request-${suffix}`;
     const outsiderBranchId = `ck-material-outsider-${suffix}`;
-    const kitchenUser = actor(`ck-material-kitchen-user-${suffix}`, kitchenBranchId);
+    // Recipe creation/approval is intentionally authorized through the
+    // dedicated recipe module; production permissions alone must not imply
+    // recipe-book access.
+    const kitchenUser = actor(
+      `ck-material-kitchen-user-${suffix}`,
+      kitchenBranchId,
+      "manager",
+      recipePermissions,
+    );
     const requestUser = actor(`ck-material-request-user-${suffix}`, requestBranchId);
     const outsiderUser = actor(`ck-material-outsider-user-${suffix}`, outsiderBranchId);
     const warehouseUser = actor(`ck-material-warehouse-user-${suffix}`, "main_warehouse", "admin");

@@ -131,6 +131,7 @@ let fixture: {
   requestBranchId: string;
   kitchenUser: any;
   viewerUser: any;
+  productionOnlyUser: any;
   outsiderUser: any;
   requestUser: any;
   productId: number;
@@ -254,7 +255,7 @@ function user(
 }
 
 const kitchenPermissions = {
-  production: ["view", "create", "edit", "delete", "approve"],
+  central_kitchen_recipes: ["view", "create", "edit", "delete", "approve", "print"],
 };
 
 function createPayload(idempotencyKey = key("create")) {
@@ -398,7 +399,13 @@ describe.sequential("central kitchen recipes database-backed workflow", () => {
       `ck-recipe-viewer-user-${suffix}`,
       kitchenBranchId,
       "viewer",
-      { production: ["view"] },
+      { central_kitchen_recipes: ["view"] },
+    );
+    const productionOnlyUser = user(
+      `ck-recipe-production-user-${suffix}`,
+      kitchenBranchId,
+      "production_operator",
+      { production: ["view", "create", "edit", "delete", "approve"] },
     );
     const outsiderUser = user(
       `ck-recipe-outsider-user-${suffix}`,
@@ -512,6 +519,7 @@ describe.sequential("central kitchen recipes database-backed workflow", () => {
       requestBranchId,
       kitchenUser,
       viewerUser,
+      productionOnlyUser,
       outsiderUser,
       requestUser,
       productId,
@@ -532,12 +540,13 @@ describe.sequential("central kitchen recipes database-backed workflow", () => {
     await databaseState.pool?.end();
   });
 
-  it("wires approval to exactly production:approve and protects all recipe reads", async () => {
+  it("wires recipe actions to the independent module and protects all recipe reads", async () => {
     const expectedGuards = [
       ["get", "/api/central-kitchen-recipes/catalog", "view"],
       ["get", "/api/central-kitchen-recipes", "view"],
       ["post", "/api/central-kitchen-recipes", "create"],
       ["get", "/api/central-kitchen-recipes/:id", "view"],
+      ["get", "/api/central-kitchen-recipes/:id/print", "view"],
       ["patch", "/api/central-kitchen-recipes/:id", "edit"],
       ["post", "/api/central-kitchen-recipes/:id/approve", "approve"],
       ["post", "/api/central-kitchen-recipes/:id/revise", "create"],
@@ -549,18 +558,17 @@ describe.sequential("central kitchen recipes database-backed workflow", () => {
         (handler: any) => handler.recipePermission,
       ) as any;
       expect(guard?.recipePermission, `${method.toUpperCase()} ${path}`)
-        .toEqual({ module: "production", action });
+        .toEqual({ module: "central_kitchen_recipes", action });
     }
-    const approveRegistration = route("post", "/api/central-kitchen-recipes/:id/approve");
-    const approvalGuard = approveRegistration.handlers.find(
+    const printRegistration = route("get", "/api/central-kitchen-recipes/:id/print");
+    expect(printRegistration.handlers.filter((handler: any) => handler.recipePermission).map(
       (handler: any) => handler.recipePermission,
-    ) as any;
-    expect(approvalGuard?.recipePermission).toEqual({
-      module: "production",
-      action: "approve",
-    });
+    )).toEqual([
+      { module: "central_kitchen_recipes", action: "view" },
+      { module: "central_kitchen_recipes", action: "print" },
+    ]);
     expect(authState.permissionCalls).toContainEqual({
-      module: "production",
+      module: "central_kitchen_recipes",
       action: "approve",
     });
 
@@ -598,6 +606,28 @@ describe.sequential("central kitchen recipes database-backed workflow", () => {
       const outsider = await invoke(method, path, { ...options, user: fixture.outsiderUser });
       expect(outsider.statusCode).toBe(403);
     }
+  });
+
+  it("does not let production access imply recipe-book access, writes, or printing", async () => {
+    const productionOnly = fixture.productionOnlyUser;
+    const list = await invoke("get", "/api/central-kitchen-recipes", {
+      user: productionOnly,
+      query: { kitchenId: fixture.kitchenBranchId },
+    });
+    expect(list.statusCode).toBe(403);
+
+    const write = await invoke("patch", "/api/central-kitchen-recipes/:id", {
+      user: fixture.viewerUser,
+      params: { id: "1" },
+      body: {},
+    });
+    expect(write.statusCode).toBe(403);
+
+    const print = await invoke("get", "/api/central-kitchen-recipes/:id/print", {
+      user: fixture.viewerUser,
+      params: { id: "1" },
+    });
+    expect(print.statusCode).toBe(403);
   });
 
   it("rejects malformed quantities, duplicate materials, catalog mismatches, and inactive identities", async () => {
@@ -706,6 +736,23 @@ describe.sequential("central kitchen recipes database-backed workflow", () => {
     expect(outsiderDetail.statusCode).toBe(403);
     const kitchenDetail = await getRecipe(firstId);
     expect(kitchenDetail.status).toBe("draft");
+    const printed = await invoke("get", "/api/central-kitchen-recipes/:id/print", {
+      user: fixture.kitchenUser,
+      params: { id: String(firstId) },
+    });
+    expect(printed.statusCode).toBe(200);
+    expect(recipeBody(printed.body)).toEqual(kitchenDetail);
+
+    const viewerPrint = await invoke("get", "/api/central-kitchen-recipes/:id/print", {
+      user: fixture.viewerUser,
+      params: { id: String(firstId) },
+    });
+    expect(viewerPrint.statusCode).toBe(403);
+    const outsiderPrint = await invoke("get", "/api/central-kitchen-recipes/:id/print", {
+      user: fixture.outsiderUser,
+      params: { id: String(firstId) },
+    });
+    expect(outsiderPrint.statusCode).toBe(403);
 
     const draftKitchenIdentityChange = await invoke("patch", "/api/central-kitchen-recipes/:id", {
       user: fixture.kitchenUser,

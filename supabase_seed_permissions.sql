@@ -92,6 +92,12 @@ INSERT INTO permissions (module, action, name, description, is_default) VALUES
 ('operations', 'create', 'إضافة عمليات', 'إضافة سجلات تشغيل', false),
 ('operations', 'edit', 'تعديل التشغيل', 'تعديل سجلات التشغيل', false),
 ('operations', 'export', 'تصدير التشغيل', 'تصدير تقارير التشغيل', false),
+('central_kitchen_recipes', 'view', 'عرض وصفات المطبخ المركزي', 'عرض قائمة وتفاصيل وصفات المطبخ المركزي', false),
+('central_kitchen_recipes', 'create', 'إنشاء وصفة للمطبخ المركزي', 'إنشاء وصفات ومسودات مراجعة للمطبخ المركزي', false),
+('central_kitchen_recipes', 'edit', 'تعديل وصفة المطبخ المركزي', 'تعديل مسودات وصفات المطبخ المركزي', false),
+('central_kitchen_recipes', 'delete', 'حذف وصفة المطبخ المركزي', 'حذف مسودات وصفات المطبخ المركزي', false),
+('central_kitchen_recipes', 'approve', 'اعتماد وصفة المطبخ المركزي', 'اعتماد وصفات المطبخ المركزي', false),
+('central_kitchen_recipes', 'print', 'طباعة وصفة المطبخ المركزي', 'طباعة تفاصيل وصفة المطبخ المركزي', false),
 -- مخطط الإنتاج الذكي
 ('ai_production_planner', 'view', 'عرض مخطط الإنتاج', 'عرض مخطط الإنتاج الذكي', false),
 ('ai_production_planner', 'create', 'إنشاء خطة إنتاج', 'إنشاء خطة إنتاج ذكية', false),

@@ -6,6 +6,12 @@ import {
   createCentralKitchenRecipeSchema,
   updateCentralKitchenRecipeSchema,
 } from "../shared/central-kitchen-recipes";
+import {
+  MODULE_GROUPS,
+  MODULE_LABELS,
+  ROLE_PERMISSION_TEMPLATES,
+  SYSTEM_MODULES,
+} from "../shared/schema";
 import { createCentralKitchenRecipePayloadFingerprint } from "../server/central-kitchen-recipes";
 
 const payload = {
@@ -21,6 +27,26 @@ const payload = {
 } as const;
 
 describe("central kitchen recipe contract", () => {
+  it("publishes an independent permission module without inheriting production or viewer grants", () => {
+    expect(SYSTEM_MODULES).toContain("central_kitchen_recipes");
+    expect(MODULE_LABELS.central_kitchen_recipes).toBe("وصفات المطبخ المركزي");
+    expect(MODULE_GROUPS.find((group) => group.modules.includes("central_kitchen_recipes"))?.label)
+      .toBe("الإنتاج والتشغيل");
+    expect(ROLE_PERMISSION_TEMPLATES.viewer.some(
+      (permission) => permission.module === "central_kitchen_recipes",
+    )).toBe(false);
+    expect(ROLE_PERMISSION_TEMPLATES.operations_manager.some(
+      (permission) => permission.module === "central_kitchen_recipes",
+    )).toBe(false);
+    for (const [role, permissions] of Object.entries(ROLE_PERMISSION_TEMPLATES)) {
+      if (role === "admin") continue;
+      expect(
+        permissions.some((permission) => permission.module === "central_kitchen_recipes"),
+        `${role} must not auto-grant recipe access`,
+      ).toBe(false);
+    }
+  });
+
   it("accepts the complete browser create payload and normalizes decimal strings", () => {
     const parsed = createCentralKitchenRecipeSchema.parse({
       ...payload,

@@ -30,7 +30,7 @@ import {
 } from "./auth";
 
 const BASE_PATH = "/api/central-kitchen-recipes";
-const PERMISSION_MODULE = "production";
+const PERMISSION_MODULE = "central_kitchen_recipes";
 
 type Executor = typeof db | any;
 
@@ -602,6 +602,26 @@ export function registerCentralKitchenRecipeRoutes(app: Express): void {
     },
   );
 
+  app.get(
+    `${BASE_PATH}/:id/print`,
+    isAuthenticated,
+    requirePermission(PERMISSION_MODULE, "view"),
+    requirePermission(PERMISSION_MODULE, "print"),
+    async (req, res) => {
+      try {
+        const id = parseId(req.params.id);
+        const recipe = await findRecipeById(db, id);
+        if (!recipe) throw new RecipeRouteError(404, "الوصفة غير موجودة");
+        await assertKitchenAccess(req, recipe.kitchenId);
+        const detail = await getRecipeContract(db, id);
+        if (!detail) throw new RecipeRouteError(404, "الوصفة غير موجودة");
+        res.json(detail);
+      } catch (error) {
+        handleRecipeError(error, res);
+      }
+    },
+  );
+
   app.patch(
     `${BASE_PATH}/:id`,
     isAuthenticated,
@@ -709,7 +729,7 @@ export function registerCentralKitchenRecipeRoutes(app: Express): void {
   app.post(
     `${BASE_PATH}/:id/approve`,
     isAuthenticated,
-    requirePermission("production", "approve"),
+    requirePermission(PERMISSION_MODULE, "approve"),
     async (req, res) => {
       try {
         const id = parseId(req.params.id);

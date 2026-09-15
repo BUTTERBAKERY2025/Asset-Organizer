@@ -174,7 +174,11 @@ const CUSTOM_TEMPLATES: Record<string, { module: string; actions: string[] }[]> 
     { module: "inventory", actions: ["view"] },
     { module: "shifts", actions: ["view", "create", "edit", "delete"] },
   ],
-  viewer: getGroupedModules().flatMap((g) => g.modules).filter((m) => m !== "users").map((module) => ({ module, actions: ["view"] })),
+  // Recipe-book access is an explicit grant, not part of the broad viewer
+  // template. The matrix still exposes the module for deliberate selection.
+  viewer: getGroupedModules().flatMap((g) => g.modules)
+    .filter((m) => m !== "users" && m !== "central_kitchen_recipes")
+    .map((module) => ({ module, actions: ["view"] })),
   employee: [
     { module: "dashboard", actions: ["view", "export"] },
     { module: "platform_home", actions: ["view"] },

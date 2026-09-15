@@ -151,6 +151,7 @@ export default function PlatformHomePage() {
     { title: t("modules.sales.title"),       icon: Receipt,        href: "/cashier-journals",        color: "money",      module: "cashier_journal" },
     { title: t("modules.operations.title"),  icon: Factory,        href: "/operations",              color: "production", module: "operations" },
     { title: t("modules.production.title"),  icon: ClipboardList,  href: "/production-dashboard",    color: "production", module: "production" },
+    { title: "دفتر وصفات المطبخ المركزي",     icon: ClipboardList,  href: "/central-kitchen-recipes",  color: "production", module: "central_kitchen_recipes" },
     { title: t("modules.assets.title"),      icon: Package,        href: "/inventory",               color: "inventory",  module: "inventory" },
     { title: t("modules.warehouse.title"),   icon: Warehouse,      href: "/warehouse-dashboard",     color: "inventory",  module: "warehouse" },
     { title: t("modules.projects.title"),    icon: Hammer,         href: "/construction-projects",   color: "projects",   module: "construction_projects" },

@@ -245,6 +245,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const allStandaloneItems: NavItem[] = useMemo(() => [
     { href: "/", label: t("sidebar.home"), icon: Home, module: "dashboard" },
     { href: "/my-portal", label: t("sidebar.myPortal"), icon: UserCircle },
+    { href: "/central-kitchen-recipes", label: "دفتر وصفات المطبخ المركزي", icon: ClipboardList, module: "central_kitchen_recipes" },
   ], [t, user?.role]);
 
   const allNavGroups: { key: string; group: NavGroup }[] = useMemo(() => [

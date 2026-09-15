@@ -1063,6 +1063,7 @@ export const SYSTEM_MODULES = [
   "products",
   "operations",
   "central_kitchen_orders",
+  "central_kitchen_recipes",
   "ai_production_planner",
   
   // الورديات والحضور
@@ -1267,6 +1268,7 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   products: "المنتجات",
   operations: "التشغيل",
   central_kitchen_orders: "طلبات المطبخ المركزي",
+  central_kitchen_recipes: "وصفات المطبخ المركزي",
   ai_production_planner: "مخطط الإنتاج الذكي",
   
   // الورديات والحضور
@@ -1479,6 +1481,7 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
       "products",
       "operations",
       "central_kitchen_orders",
+      "central_kitchen_recipes",
       "ai_production_planner",
     ],
   },
@@ -1806,7 +1809,10 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
   ],
 
   // Viewer: View-only access to all modules
-  viewer: SYSTEM_MODULES.filter((m) => m !== "users").map((module) => ({
+  // Recipe-book permissions are intentionally explicit.  In particular, do
+  // not let the broad view-only template silently grant the new module to
+  // every viewer when the catalog is extended.
+  viewer: SYSTEM_MODULES.filter((m) => m !== "users" && m !== "central_kitchen_recipes").map((module) => ({
     module,
     actions: ["view"] as ModuleAction[],
   })),
