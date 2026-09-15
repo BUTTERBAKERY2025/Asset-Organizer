@@ -16,6 +16,7 @@ import {
   users,
 } from "@shared/schema";
 import { uploadToSupabase, downloadFromSupabase, deleteFromSupabase } from "./supabase-storage";
+import { canonicalAuditMime } from "./audit-file-types";
 
 type Ctx = { id: string; name: string; role: string; isAuditor: boolean; isTeam: boolean };
 
@@ -93,36 +94,11 @@ const ALLOWED_MIME = new Set([
   "text/csv",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // docx
   "application/msword",
-  "image/png", "image/jpeg",
+  "image/png", "image/jpeg", "image/webp", "image/gif",
   "application/zip", "application/x-zip-compressed",
 ]);
-const ALLOWED_EXT = /\.(pdf|xlsx|xls|csv|docx|doc|png|jpg|jpeg|zip)$/i;
+const ALLOWED_EXT = /\.(pdf|xlsx|xls|csv|docx|doc|png|jpg|jpeg|webp|gif|zip)$/i;
 
-// فحص التوقيع الثنائي (magic bytes) — لا نثق بامتداد الملف أو نوع MIME المرسل من المتصفح
-function sniffBuffer(buf: Buffer): string | null {
-  if (buf.length < 8) return null;
-  const head = buf.subarray(0, 8);
-  if (head.subarray(0, 5).toString("latin1").startsWith("%PDF-")) return "application/pdf";
-  if (head[0] === 0x50 && head[1] === 0x4b) return "application/zip"; // zip/xlsx/docx
-  if (head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47) return "image/png";
-  if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return "image/jpeg";
-  if (head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0) return "application/vnd.ms-excel"; // xls/doc قديم
-  return null; // csv وملفات نصية
-}
-function extAllowsSniff(ext: string, sniffed: string | null, buf: Buffer): boolean {
-  const e = ext.toLowerCase();
-  if (e === ".pdf") return sniffed === "application/pdf";
-  if ([".xlsx", ".docx", ".zip"].includes(e)) return sniffed === "application/zip";
-  if ([".xls", ".doc"].includes(e)) return sniffed === "application/vnd.ms-excel" || sniffed === "application/zip";
-  if (e === ".png") return sniffed === "image/png";
-  if ([".jpg", ".jpeg"].includes(e)) return sniffed === "image/jpeg";
-  if (e === ".csv") {
-    // نص فقط: نرفض أي محتوى ثنائي معروف ونرفض بايتات NUL
-    if (sniffed) return false;
-    return !buf.subarray(0, 4096).includes(0);
-  }
-  return false;
-}
 
 // قفل شامل لحساب المراجع الخارجي: يُمنع من كل واجهات النظام عدا بوابة المراجعة وجلسة الدخول
 // (يُسجَّل قبل بقية المسارات في routes.ts — الحماية على مستوى السيرفر وليس الواجهة فقط)
@@ -293,12 +269,12 @@ export function registerAuditPortalRoutes(app: Express) {
             const extMatch = originalName.match(ALLOWED_EXT);
             if (!extMatch) { failed.push({ fileName: originalName, error: "امتداد الملف غير مدعوم" }); continue; }
             const ext = extMatch[0].toLowerCase();
-            const sniffed = sniffBuffer(f.buffer);
-            if (!extAllowsSniff(ext, sniffed, f.buffer)) {
+            const mimeType = canonicalAuditMime(ext, f.buffer);
+            if (!mimeType) {
               failed.push({ fileName: originalName, error: "محتوى الملف لا يطابق امتداده" }); continue;
             }
             const storageName = `audit_${periodId}_${Date.now()}_${seq}${ext}`;
-            const uploadedFile = await uploadToSupabase(f.buffer, storageName, f.mimetype || "application/octet-stream");
+            const uploadedFile = await uploadToSupabase(f.buffer, storageName, mimeType);
             if (!uploadedFile) { failed.push({ fileName: originalName, error: "فشل الرفع إلى التخزين" }); continue; }
             // عنوان الملف: المُرسل (لملف واحد) أو اسم الملف بدون الامتداد
             const title = (incoming.length === 1 && baseTitle) ? baseTitle : originalName.replace(ALLOWED_EXT, "").slice(0, 300) || originalName;
@@ -307,7 +283,7 @@ export function registerAuditPortalRoutes(app: Express) {
               fileName: originalName,
               storagePath: uploadedFile.path,
               fileSize: f.size,
-              mimeType: f.mimetype,
+              mimeType,
               uploadedByName: req.auditCtx.name,
             }).returning();
             uploadedRows.push(row);
