@@ -166,3 +166,98 @@ export type CentralKitchenRecipeCatalogContract = {
   materials: Array<{ id: number; name: string; unit: string }>;
 };
 
+/**
+ * Import values are deliberately kept separate from the normal recipe
+ * payload.  A source row may be incomplete (or may contain a quantity which
+ * needs a human acknowledgement), whereas the create/update schemas above
+ * only accept a complete catalog recipe.
+ */
+export const CENTRAL_KITCHEN_RECIPE_IMPORT_UNRESOLVED_MARKER = "UNRESOLVED";
+
+export type CentralKitchenRecipeImportSourceIngredient = {
+  rawName: string;
+  rawQuantity: string | null;
+  rawUnit: string | null;
+  issue?: string | null;
+};
+
+export type CentralKitchenRecipeImportSource = {
+  sourceId: string;
+  name: string;
+  suggestedProductName: string;
+  outputQuantity: number | null;
+  outputUnit: string | null;
+  rawSourceText: string;
+  ingredients: CentralKitchenRecipeImportSourceIngredient[];
+  issues?: string[];
+};
+
+export type CentralKitchenRecipeImportCatalogItem = {
+  id: number;
+  name: string;
+  unit: string;
+};
+
+export type CentralKitchenRecipeImportIngredientContract = {
+  sourceName: string;
+  sourceQuantity: string;
+  sourceUnit: string;
+  warehouseItemId: number | null;
+  quantity: number | null;
+  unit: string | null;
+  issue: string | null;
+};
+
+export type CentralKitchenRecipeImportContract = {
+  sourceId: string;
+  name: string;
+  suggestedProductName: string;
+  outputQuantity: number | null;
+  outputUnit: string | null;
+  rawSourceText: string;
+  productId: number | null;
+  ingredients: CentralKitchenRecipeImportIngredientContract[];
+  issues: string[];
+};
+
+export type CentralKitchenRecipeImportCatalog = {
+  products: CentralKitchenRecipeImportCatalogItem[];
+  materials: CentralKitchenRecipeImportCatalogItem[];
+};
+
+/**
+ * This is intentionally conservative.  It handles punctuation, casing and
+ * accents only; it does not perform fuzzy matching or translate a product
+ * into another product.
+ */
+export function normalizeCentralKitchenRecipeImportName(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("en-US")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9\u0600-\u06ff]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+export function containsCentralKitchenRecipeImportUnresolvedMarker(value: unknown): boolean {
+  return typeof value === "string"
+    && value.toLocaleUpperCase("en-US").includes(CENTRAL_KITCHEN_RECIPE_IMPORT_UNRESOLVED_MARKER);
+}
+
+export function findStrictCentralKitchenRecipeImportMatches(
+  sourceName: string,
+  catalog: CentralKitchenRecipeImportCatalogItem[],
+  aliases: Record<string, string[]> = {},
+): CentralKitchenRecipeImportCatalogItem[] {
+  const sourceKey = normalizeCentralKitchenRecipeImportName(sourceName);
+  const acceptedNames = new Set([
+    sourceKey,
+    ...(aliases[sourceKey] || []).map(normalizeCentralKitchenRecipeImportName),
+  ]);
+  return catalog.filter((item) => acceptedNames.has(
+    normalizeCentralKitchenRecipeImportName(item.name),
+  ));
+}
+

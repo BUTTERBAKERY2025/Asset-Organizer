@@ -13,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@/hooks/use-toast";
+import { ImportedRecipes } from "./imported-recipes";
+import type { PreparedImportedRecipe } from "./imported-recipes-model";
 
 type Kitchen = { id: string; name: string };
 type IngredientDraft = { warehouseItemId: string; quantity: string };
@@ -284,13 +286,29 @@ export function RecipeBook({ kitchens, kitchenId, onKitchenChange }: { kitchens:
     print.mutate({ recipe, popup });
   };
   const openEditor = (recipe: CentralKitchenRecipeContract | null) => setEditor({ recipe, draft: recipe ? { productId: String(recipe.productId), outputQuantity: String(recipe.outputQuantity), notes: recipe.notes || "", ingredients: recipe.ingredients.map(i => ({ warehouseItemId: String(i.warehouseItemId), quantity: String(i.quantity) })) } : emptyDraft() });
+  const prepareImportedRecipe = (draft: PreparedImportedRecipe) => {
+    setSelected(null);
+    setEditor({
+      recipe: null,
+      draft: {
+        productId: String(draft.productId),
+        outputQuantity: draft.outputQuantity,
+        notes: draft.notes,
+        ingredients: draft.ingredients.map(ingredient => ({
+          warehouseItemId: String(ingredient.warehouseItemId),
+          quantity: ingredient.quantity,
+        })),
+      },
+    });
+  };
   const filtered = useMemo(() => (recipes.data || []).filter(recipe => (filter === "all" || recipe.status === filter) && recipe.productName.toLowerCase().includes(search.trim().toLowerCase())), [recipes.data, filter, search]);
   const canWrite = canCreateRecipe;
 
   if (!canViewRecipe) return <State icon={<AlertTriangle />} title="لا تملك صلاحية عرض الوصفات" text="تحتاج إلى صلاحية عرض دفتر وصفات المطبخ المركزي للوصول إلى هذه الصفحة." />;
   return <section className="space-y-5">
     <Card className="overflow-hidden border-0 bg-[linear-gradient(120deg,hsl(22_55%_25%),hsl(350_38%_31%))] text-white shadow-lg"><CardContent className="p-5 sm:p-7"><div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"><div><div className="mb-3 flex items-center gap-2 text-orange-100"><ClipboardList className="h-5 w-5" /><span className="text-xs font-semibold tracking-[.14em]">دفتر وصفات قابل للمراجعة</span></div><h2 className="text-2xl font-bold">وصفة معتمدة، وسجل لا ينسى.</h2><p className="mt-2 max-w-2xl text-sm text-orange-50">تبدأ الوصفة كمسودة ثم تُعتمد. عند اختيار ربط الوصفة لدفعة جديدة تُجمّد لها نسخة الوصفة المعتمدة، ويُخصم احتياج المواد عند إتمام الدفعة؛ الاعتماد وحده لا يخصم المخزون. يمكن اختيار دفعة غير مرتبطة بوصفة من التشغيل، ولا تُعاد الدفعات السابقة للربط بأثر رجعي. مراجعة الوصفة المعتمدة تكون إصداراً جديداً.</p></div><div className="flex flex-wrap gap-2"><Select value={kitchenId} onValueChange={onKitchenChange}><SelectTrigger className="w-52 border-white/20 bg-white/10 text-white"><SelectValue placeholder="اختر المطبخ" /></SelectTrigger><SelectContent>{kitchens.map(k => <SelectItem key={k.id} value={k.id}>{k.name}</SelectItem>)}</SelectContent></Select><Button variant="secondary" size="icon" onClick={refresh} aria-label="تحديث"><RefreshCw className={`h-4 w-4 ${recipes.isFetching ? "animate-spin" : ""}`} /></Button>{canWrite && <Button onClick={() => openEditor(null)}><FilePlus2 className="ml-2 h-4 w-4" />مسودة جديدة</Button>}</div></div></CardContent></Card>
-    {!kitchenId ? <State icon={<ClipboardList />} title="اختر مطبخاً مركزياً" text="اختر المطبخ لعرض وصفاته وسجل اعتمادها." /> : recipes.isLoading ? <div className="space-y-3">{[1, 2, 3].map(i => <div key={i} className="h-20 animate-pulse rounded-2xl bg-muted" />)}</div> : recipes.isError ? <State icon={<AlertTriangle />} title="تعذر تحميل دفتر الوصفات" text={recipes.error instanceof Error ? recipes.error.message : "تحقق من الاتصال."} action={<Button onClick={() => recipes.refetch()} variant="outline">إعادة المحاولة</Button>} /> : <>
+     {kitchenId && <ImportedRecipes kitchenId={kitchenId} catalog={catalog.data} recipes={recipes.data} existingRecipesLoaded={!recipes.isLoading && !recipes.isError} canView={canViewRecipe} canCreate={canCreateRecipe} onPrepare={prepareImportedRecipe} />}
+     {!kitchenId ? <State icon={<ClipboardList />} title="اختر مطبخاً مركزياً" text="اختر المطبخ لعرض وصفاته وسجل اعتمادها." /> : recipes.isLoading ? <div className="space-y-3">{[1, 2, 3].map(i => <div key={i} className="h-20 animate-pulse rounded-2xl bg-muted" />)}</div> : recipes.isError ? <State icon={<AlertTriangle />} title="تعذر تحميل دفتر الوصفات" text={recipes.error instanceof Error ? recipes.error.message : "تحقق من الاتصال."} action={<Button onClick={() => recipes.refetch()} variant="outline">إعادة المحاولة</Button>} /> : <>
       <div className="flex flex-col gap-3 sm:flex-row"><Input value={search} onChange={e => setSearch(e.target.value)} placeholder="ابحث باسم المنتج…" className="sm:max-w-sm" /><Select value={filter} onValueChange={value => setFilter(value as typeof filter)}><SelectTrigger className="sm:w-44"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">كل الحالات</SelectItem><SelectItem value="approved">المعتمدة</SelectItem><SelectItem value="draft">المسودات</SelectItem><SelectItem value="superseded">السجل المستبدل</SelectItem></SelectContent></Select></div>
       {filtered.length === 0 ? <State icon={<History />} title={recipes.data?.length ? "لا نتائج مطابقة" : "لا توجد وصفات بعد"} text={recipes.data?.length ? "غيّر البحث أو تصفية الحالة." : "ابدأ بمسودة تربط منتج الكتالوج بمواد المطبخ."} /> : <Card><CardContent className="p-0"><div className="divide-y">{filtered.map(recipe => <button type="button" key={recipe.id} onClick={() => setSelected(recipe)} className="flex w-full items-center gap-3 p-4 text-right transition-colors hover:bg-muted/45"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{recipe.productName}</p><Badge variant="outline" className={statusClass[recipe.status]}>{statusNames[recipe.status]}</Badge></div><p className="mt-1 text-xs text-muted-foreground">إخراج {format(recipe.outputQuantity)} {recipe.outputUnit} · {recipe.ingredients.length} مواد · آخر تحديث {dateTime(recipe.updatedAt)}</p></div><Eye className="h-4 w-4 shrink-0 text-muted-foreground" /></button>)}</div></CardContent></Card>}
     </>}

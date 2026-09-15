@@ -22,12 +22,16 @@ import {
   updateCentralKitchenRecipeSchema,
   type CentralKitchenRecipePayload,
   type CentralKitchenRecipeContract,
+  containsCentralKitchenRecipeImportUnresolvedMarker,
 } from "@shared/central-kitchen-recipes";
 import {
   canAccessBranch,
   isAuthenticated,
   requirePermission,
 } from "./auth";
+import {
+  mapPastryRecipeImportSources,
+} from "./central-kitchen-recipe-import";
 
 const BASE_PATH = "/api/central-kitchen-recipes";
 const PERMISSION_MODULE = "central_kitchen_recipes";
@@ -233,6 +237,17 @@ async function validateCatalogPayload(
   executor: Executor,
   payload: CentralKitchenRecipePayload,
 ): Promise<{ productName: string; ingredientNames: Map<number, string> }> {
+  if (payload.ingredients.length === 0) {
+    throw new RecipeRouteError(400, "لا يمكن اعتماد وصفة بلا مكونات");
+  }
+  if (
+    containsCentralKitchenRecipeImportUnresolvedMarker(payload.outputUnit)
+    || containsCentralKitchenRecipeImportUnresolvedMarker(payload.notes)
+    || payload.ingredients.some((ingredient) =>
+      containsCentralKitchenRecipeImportUnresolvedMarker(ingredient.unit))
+  ) {
+    throw new RecipeRouteError(400, "يجب حل جميع علامات الاستيراد غير المحسومة قبل حفظ الوصفة");
+  }
   // Products historically used text values for is_active (and some legacy
   // databases omitted the field).  to_jsonb keeps this check safe across those
   // catalog variants without making a stock write.
@@ -450,6 +465,55 @@ export function registerCentralKitchenRecipeRoutes(app: Express): void {
             name: row.name,
             unit: row.unit,
           })),
+        });
+      } catch (error) {
+        handleRecipeError(error, res);
+      }
+    },
+  );
+
+  app.get(
+    `${BASE_PATH}/import-sources`,
+    isAuthenticated,
+    requirePermission(PERMISSION_MODULE, "view"),
+    async (req, res) => {
+      try {
+        const query = parseBody(
+          centralKitchenRecipeCatalogQuerySchema,
+          { kitchenId: req.query.kitchenId },
+        );
+        await assertKitchenAccess(req, query.kitchenId);
+        const [productResult, materials] = await Promise.all([
+          db.execute(sql`
+            SELECT p.id, p.name, p.unit
+            FROM products p
+            WHERE lower(COALESCE(to_jsonb(p)->>'is_active', 'true'))
+              IN ('true', 'active', '1', 'yes')
+            ORDER BY p.name, p.id
+          `),
+          db
+            .select({
+              id: warehouseItems.id,
+              name: warehouseItems.name,
+              unit: warehouseItems.unit,
+            })
+            .from(warehouseItems)
+            .where(eq(warehouseItems.isActive, true))
+            .orderBy(asc(warehouseItems.name), asc(warehouseItems.id)),
+        ]);
+        res.json({
+          sources: mapPastryRecipeImportSources({
+            products: productResult.rows.map((row: any) => ({
+              id: Number(row.id),
+              name: row.name,
+              unit: row.unit,
+            })),
+            materials: materials.map((row: any) => ({
+              id: row.id,
+              name: row.name,
+              unit: row.unit,
+            })),
+          }),
         });
       } catch (error) {
         handleRecipeError(error, res);

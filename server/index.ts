@@ -77,6 +77,22 @@ if (process.env.NODE_ENV === "production") {
 
 // Serve attached_assets statically for inventory images
 // Note: These are non-sensitive equipment photos, not confidential business data
+app.use((req, res, next) => {
+  // Recipe source workbooks are server-side import inputs, not public assets.
+  // Keep the general attached-assets image route while denying this source
+  // catalogue even though it lives in the workspace's asset directory.
+  let requestedName: string;
+  try {
+    requestedName = path.basename(decodeURIComponent(req.path));
+  } catch {
+    return res.status(400).end();
+  }
+  if (requestedName === 'STANDER_RECIPE_PASTRY_8-9-2026_(1)_1789474534195.xlsx'
+      || requestedName === 'central-kitchen-recipe-import.ts') {
+    return res.status(404).end();
+  }
+  return next();
+});
 app.use('/attached_assets', express.static(path.join(process.cwd(), 'attached_assets')));
 
 // Serve uploads directory - require session authentication and prevent path traversal

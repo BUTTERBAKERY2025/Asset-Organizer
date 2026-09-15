@@ -5,6 +5,15 @@ import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { metaImagesPlugin } from "./vite-plugin-meta-images";
 
+const recipeSourceWorkbookPath = path.resolve(
+  import.meta.dirname,
+  "attached_assets/STANDER_RECIPE_PASTRY_8-9-2026_(1)_1789474534195.xlsx",
+);
+const recipeImportSourcePath = path.resolve(
+  import.meta.dirname,
+  "server/central-kitchen-recipe-import.ts",
+);
+
 export default defineConfig({
   plugins: [
     react(),
@@ -75,7 +84,17 @@ export default defineConfig({
     allowedHosts: true,
     fs: {
       strict: true,
-      deny: ["**/.*"],
+      // Keep Vite's security defaults and deny the recipe source/formulas
+      // even through /@fs.  The import route is the only intended reader.
+      deny: [
+        ".env",
+        ".env.*",
+        "*.{crt,pem}",
+        "**/.git/**",
+        "**/.*",
+        recipeSourceWorkbookPath,
+        recipeImportSourcePath,
+      ],
     },
   },
 });

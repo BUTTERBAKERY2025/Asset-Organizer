@@ -672,10 +672,14 @@ export default function UsersPage() {
         { module: "inventory", actions: ["view"] },
         { module: "shifts", actions: ["view", "create", "edit", "delete"] },
       ],
-      viewer: getGroupedModules().flatMap(g => g.modules).filter(m => m !== "users").map(module => ({
-        module,
-        actions: ["view"],
-      })),
+      // Recipe-book access is deliberately independent from the broad
+      // view-only template; grant it explicitly when needed.
+      viewer: getGroupedModules().flatMap(g => g.modules)
+        .filter(m => m !== "users" && m !== "central_kitchen_recipes")
+        .map(module => ({
+          module,
+          actions: ["view"],
+        })),
       employee: [
         { module: "dashboard", actions: ["view", "export"] },
         { module: "platform_home", actions: ["view"] },
