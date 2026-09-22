@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { useVisualViewportDialog } from "./use-visual-viewport-dialog";
 import {
   buildOrderSafeSummary, buildSheetSafeSummary, preparationSheetPrintHtml,
   SHORTAGE_LABELS, type PreparationSheet,
@@ -73,6 +74,7 @@ export function SheetPreviewDialog({ sheet, open, onOpenChange }: {
   const { toast } = useToast();
   const [actionError, setActionError] = useState<string | null>(null);
   const [shareReviewOpen, setShareReviewOpen] = useState(false);
+  const dialogStyle = useVisualViewportDialog({ open, maxHeight: 900, viewportFraction: 0.94 });
   if (!sheet) return null;
   const safeText = buildSheetSafeSummary(sheet);
   const print = () => {
@@ -102,8 +104,9 @@ export function SheetPreviewDialog({ sheet, open, onOpenChange }: {
       toast({ title: "حظر المتصفح نافذة واتساب", description: "اسمح بالنوافذ المنبثقة أو انسخ الملخص يدوياً.", variant: "destructive" });
     } else setActionError(null);
   };
-  return <Dialog open={open} onOpenChange={nextOpen => { if (!nextOpen) setShareReviewOpen(false); onOpenChange(nextOpen); }}><DialogContent dir="rtl" style={{ width: "calc(100vw - 1rem)", maxWidth: "72rem" }} className="box-border min-w-0 max-h-[92dvh] overflow-x-hidden overflow-y-auto p-3 sm:p-6">
-    <DialogHeader className="min-w-0 break-words pl-7 text-right"><DialogTitle className="leading-normal">معاينة ورقة التجهيز المجمعة</DialogTitle><DialogDescription className="break-words">{sheet.orders.length} طلبات · لقطة {new Date(sheet.generatedAt).toLocaleString("ar-SA")} · راجع الكميات أولاً، ثم اختر الطباعة أو المشاركة.</DialogDescription></DialogHeader>
+  return <Dialog open={open} onOpenChange={nextOpen => { if (!nextOpen) setShareReviewOpen(false); onOpenChange(nextOpen); }}><DialogContent dir="rtl" style={{ ...dialogStyle, width: "calc(100vw - 1rem)", maxWidth: "72rem", display: "flex", flexDirection: "column" }} className="box-border h-[94dvh] min-w-0 gap-0 overflow-hidden p-0 sm:rounded-xl">
+    <DialogHeader className="shrink-0 min-w-0 break-words border-b px-4 py-4 pl-10 text-right sm:px-6"><DialogTitle className="leading-normal">معاينة ورقة التجهيز المجمعة</DialogTitle><DialogDescription className="break-words">{sheet.orders.length} طلبات · لقطة {new Date(sheet.generatedAt).toLocaleString("ar-SA")} · راجع الكميات أولاً، ثم اختر الطباعة أو المشاركة.</DialogDescription></DialogHeader>
+    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-3 sm:px-6">
     <div role="status" className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs leading-5 text-sky-900">حالة اللقطة: محدثة وقت الإنشاء. «لم يُحسم» يعني أن التجهيز لم يكتمل بعد، ولا يُعد نقصاً فعلياً.</div>
     <div className="space-y-3 md:hidden" aria-label="بطاقات ورقة التجهيز">{sheet.groups.map(group => <PreparationGroupCard key={`${group.provenance}:${group.identity}:${group.unit}`} group={group} />)}</div>
     <div className="hidden min-w-0 max-w-full overflow-x-auto overscroll-x-contain rounded-lg border md:block" tabIndex={0} aria-label="جدول ورقة التجهيز؛ مرّر أفقياً لعرض بقية الأعمدة"><table className="w-full min-w-[850px] text-sm"><thead className="bg-muted/50"><tr>{["الصنف", "الوحدة", "المطلوب", "المعتمد", "الأصلي", "البديل", "لم يُحسم", "نقص فعلي", "تفاصيل الطلبات"].map(value => <th key={value} className="p-2 text-right">{value}</th>)}</tr></thead><tbody>{sheet.groups.map(group => <tr key={`${group.provenance}:${group.identity}:${group.unit}`} className="border-t align-top">
@@ -112,7 +115,7 @@ export function SheetPreviewDialog({ sheet, open, onOpenChange }: {
     </tr>)}</tbody></table></div>
     {shareReviewOpen && <section id="sheet-share-review" className="min-w-0 rounded-lg border bg-muted/10 p-3 sm:p-4" aria-label="نص المشاركة الآمن"><div className="mb-2"><h3 className="text-sm font-semibold">راجع نص المشاركة الآمن</h3><p className="mt-1 break-words text-xs text-muted-foreground">لا يتضمن ملاحظات التجهيز أو المخزون أو تفاصيل النقص؛ الروابط محمية بتسجيل الدخول والصلاحيات.</p></div><textarea readOnly aria-label="نص المشاركة الآمن للمراجعة" className="block min-h-32 w-full max-w-full rounded-md border bg-background p-3 text-xs leading-5" value={safeText} /></section>}
     {actionError && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">{actionError}</p>}
-    <div data-testid="sheet-preview-controls" className="flex min-w-0 flex-col gap-2 border-t pt-3 sm:flex-row sm:justify-end"><Button className="w-full sm:w-auto sm:order-3" onClick={print}><Printer className="ml-1 h-4 w-4" />طباعة / حفظ PDF</Button><Button variant="outline" className="w-full sm:w-auto sm:order-1" onClick={() => setShareReviewOpen(value => !value)} aria-expanded={shareReviewOpen} aria-controls="sheet-share-review"><MessageCircle className="ml-1 h-4 w-4" />{shareReviewOpen ? "إخفاء المشاركة" : "مراجعة ومشاركة"}</Button>{shareReviewOpen && <><Button variant="outline" className="w-full sm:w-auto sm:order-2" onClick={copy}><Copy className="ml-1 h-4 w-4" />نسخ الملخص</Button><Button variant="outline" className="w-full sm:w-auto sm:order-2" onClick={whatsapp}><MessageCircle className="ml-1 h-4 w-4" />فتح واتساب</Button></>}</div>
+    </div><div data-testid="sheet-preview-controls" className="flex shrink-0 min-w-0 flex-col gap-2 border-t bg-background px-3 py-3 sm:flex-row sm:justify-end sm:px-6"><Button className="w-full sm:w-auto sm:order-3" onClick={print}><Printer className="ml-1 h-4 w-4" />طباعة / حفظ PDF</Button><Button variant="outline" className="w-full sm:w-auto sm:order-1" onClick={() => setShareReviewOpen(value => !value)} aria-expanded={shareReviewOpen} aria-controls="sheet-share-review"><MessageCircle className="ml-1 h-4 w-4" />{shareReviewOpen ? "إخفاء المشاركة" : "مراجعة ومشاركة"}</Button>{shareReviewOpen && <><Button variant="outline" className="w-full sm:w-auto sm:order-2" onClick={copy}><Copy className="ml-1 h-4 w-4" />نسخ الملخص</Button><Button variant="outline" className="w-full sm:w-auto sm:order-2" onClick={whatsapp}><MessageCircle className="ml-1 h-4 w-4" />فتح واتساب</Button></>}</div>
   </DialogContent></Dialog>;
 }
 

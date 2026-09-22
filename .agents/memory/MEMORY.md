@@ -63,3 +63,4 @@
 - [Mobile keyboard dialogs](mobile-dialog-keyboard.md) — dvh and sticky footers alone do not prevent iPhone keyboards hiding actions; test visual-viewport changes.
 - [Kitchen routing policy](kitchen-routing-policy.md) — explicit kitchen choice every request; operations get exception alerts without losing intervention authority.
 - [Production development role](production-development-role.md) — all branches by explicit choice; material/production stock, not fixed assets or accounting.
+- [Unmet kitchen demand](kitchen-unmet-demand.md) — replacements earn credit at receipt, waiver is not fulfillment, and uncertain original/substitute attribution needs branch confirmation.

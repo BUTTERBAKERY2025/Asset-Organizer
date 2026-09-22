@@ -45,6 +45,7 @@ const pageImports: Record<string, () => Promise<any>> = {
   "integrations": () => import("@/pages/integrations"),
   "operations-dashboard": () => import("@/pages/operations-dashboard"),
   "central-kitchen-orders": () => import("@/pages/central-kitchen-orders"),
+  "central-kitchen-demand-report": () => import("@/pages/central-kitchen-demand-report"),
   "central-kitchen-recipes": () => import("@/pages/central-kitchen-recipes"),
   "branch-shifts": () => import("@/pages/operations/branch-shifts"),
   "shift-reports": () => import("@/pages/operations/shift-reports"),

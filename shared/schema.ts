@@ -17,6 +17,7 @@ import {
   date,
   numeric,
   bigint,
+  foreignKey,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -13098,6 +13099,7 @@ export const centralKitchenOrderItems = pgTable("central_kitchen_order_items", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_central_kitchen_order_items_order").on(table.orderId),
+  unique("uq_central_kitchen_order_items_order_identity").on(table.orderId, table.id),
   check("ck_central_kitchen_order_items_catalog_identity", sql`NOT (${table.productId} IS NOT NULL AND ${table.warehouseItemId} IS NOT NULL)`),
   check("ck_central_kitchen_order_items_quantity", sql`${table.requestedQuantity} > 0`),
   check("ck_central_kitchen_order_items_reported_available_quantity", sql`${table.reportedAvailableQuantity} IS NULL OR ${table.reportedAvailableQuantity} >= 0`),
@@ -13130,6 +13132,73 @@ export const centralKitchenOrderEvents = pgTable("central_kitchen_order_events",
   uniqueIndex("uq_central_kitchen_order_events_idempotency").on(table.orderId, table.idempotencyKey),
   index("idx_central_kitchen_order_events_order").on(table.orderId),
   index("idx_central_kitchen_order_events_created").on(table.createdAt),
+]);
+
+// An unmet-demand commitment is bookkeeping for the ORIGINAL request item. It
+// deliberately has no inventory foreign keys or posting hooks: stock continues
+// to move only through the normal dispatch/receipt pipeline.
+export const centralKitchenDemandCommitments = pgTable("central_kitchen_demand_commitments", {
+  id: serial("id").primaryKey(),
+  originalOrderId: integer("original_order_id").notNull().references(() => centralKitchenOrders.id, { onDelete: "restrict" }),
+  originalOrderItemId: integer("original_order_item_id").notNull().references(() => centralKitchenOrderItems.id, { onDelete: "restrict" }),
+  requestBranchId: varchar("request_branch_id").notNull().references(() => branches.id, { onDelete: "restrict" }),
+  centralKitchenId: varchar("central_kitchen_id").notNull().references(() => branches.id, { onDelete: "restrict" }),
+  inventoryMode: text("inventory_mode"),
+  productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
+  warehouseItemId: integer("warehouse_item_id").references(() => warehouseItems.id, { onDelete: "set null" }),
+  productName: text("product_name").notNull(),
+  unit: text("unit").notNull(),
+  requestedQuantity: numeric("requested_quantity", { precision: 18, scale: 6 }).notNull(),
+  originalGoodReceivedQuantity: numeric("original_good_received_quantity", { precision: 18, scale: 6 }).notNull(),
+  totalGoodReceivedQuantity: numeric("total_good_received_quantity", { precision: 18, scale: 6 }).notNull(),
+  preparationShortfallQuantity: numeric("preparation_shortfall_quantity", { precision: 18, scale: 6 }).notNull(),
+  transitLossQuantity: numeric("transit_loss_quantity", { precision: 18, scale: 6 }).notNull(),
+  substitutePreparedQuantity: numeric("substitute_prepared_quantity", { precision: 18, scale: 6 }).notNull(),
+  substituteOfferedQuantity: numeric("substitute_offered_quantity", { precision: 18, scale: 6 }).notNull(),
+  receiptAttributionBasis: text("receipt_attribution_basis").notNull().default("estimated_original_first"),
+  reasonCode: text("reason_code").notNull(),
+  status: text("status").notNull().default("open"),
+  activationKind: text("activation_kind").notNull(),
+  version: integer("version").notNull().default(1),
+  activatedBy: varchar("activated_by").notNull().references(() => users.id, { onDelete: "restrict" }),
+  activatedAt: timestamp("activated_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  unique("uq_central_kitchen_demand_commitment_item").on(table.originalOrderItemId),
+  index("idx_central_kitchen_demand_commitments_scope").on(table.centralKitchenId, table.requestBranchId, table.status),
+  check("ck_central_kitchen_demand_commitment_mode", sql`${table.inventoryMode} IS NULL OR ${table.inventoryMode} IN ('real', 'shadow')`),
+  check("ck_central_kitchen_demand_commitment_status", sql`${table.status} IN ('open', 'replacement_planned', 'substitute_pending', 'partially_settled', 'fulfilled', 'waived')`),
+  check("ck_central_kitchen_demand_commitment_activation", sql`${table.activationKind} IN ('receipt', 'legacy_reconciliation')`),
+  check("ck_central_kitchen_demand_commitment_receipt_basis", sql`${table.receiptAttributionBasis} IN ('estimated_original_first', 'branch_confirmed')`),
+  check("ck_central_kitchen_demand_commitment_quantities", sql`${table.requestedQuantity} > 0 AND ${table.originalGoodReceivedQuantity} >= 0 AND ${table.originalGoodReceivedQuantity} <= ${table.requestedQuantity} AND ${table.totalGoodReceivedQuantity} >= ${table.originalGoodReceivedQuantity} AND ${table.totalGoodReceivedQuantity} <= ${table.requestedQuantity} AND ${table.preparationShortfallQuantity} >= 0 AND ${table.transitLossQuantity} >= 0 AND ${table.substitutePreparedQuantity} >= 0 AND ${table.substitutePreparedQuantity} <= ${table.requestedQuantity} AND ${table.substituteOfferedQuantity} >= 0 AND ${table.substituteOfferedQuantity} <= ${table.substitutePreparedQuantity}`),
+]);
+
+export const centralKitchenDemandActions = pgTable("central_kitchen_demand_actions", {
+  id: serial("id").primaryKey(),
+  commitmentId: integer("commitment_id").notNull().references(() => centralKitchenDemandCommitments.id, { onDelete: "restrict" }),
+  actionType: text("action_type").notNull(),
+  quantity: numeric("quantity", { precision: 18, scale: 6 }).notNull(),
+  secondaryQuantity: numeric("secondary_quantity", { precision: 18, scale: 6 }),
+  dueDate: date("due_date"),
+  responsibleUserId: varchar("responsible_user_id").references(() => users.id, { onDelete: "restrict" }),
+  replacementOrderId: integer("replacement_order_id").references(() => centralKitchenOrders.id, { onDelete: "restrict" }),
+  replacementOrderItemId: integer("replacement_order_item_id").references(() => centralKitchenOrderItems.id, { onDelete: "restrict" }),
+  reason: text("reason"),
+  actorId: varchar("actor_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+  payloadFingerprint: varchar("payload_fingerprint", { length: 64 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  unique("uq_central_kitchen_demand_action_key").on(table.commitmentId, table.idempotencyKey),
+  index("idx_central_kitchen_demand_actions_commitment").on(table.commitmentId, table.createdAt),
+  foreignKey({
+    columns: [table.replacementOrderId, table.replacementOrderItemId],
+    foreignColumns: [centralKitchenOrderItems.orderId, centralKitchenOrderItems.id],
+    name: "fk_central_kitchen_demand_replacement_item",
+  }),
+  check("ck_central_kitchen_demand_action_type", sql`${table.actionType} IN ('replacement_created', 'substitute_accepted', 'remainder_waived', 'receipt_attribution_confirmed')`),
+  check("ck_central_kitchen_demand_action_quantity", sql`(${table.actionType} = 'receipt_attribution_confirmed' AND ${table.quantity} >= 0 AND ${table.secondaryQuantity} >= 0) OR (${table.actionType} <> 'receipt_attribution_confirmed' AND ${table.quantity} > 0 AND ${table.secondaryQuantity} IS NULL)`),
+  check("ck_central_kitchen_demand_action_shape", sql`(${table.actionType} = 'replacement_created' AND ${table.dueDate} IS NOT NULL AND ${table.responsibleUserId} IS NOT NULL AND ${table.replacementOrderId} IS NOT NULL AND ${table.replacementOrderItemId} IS NOT NULL) OR (${table.actionType} = 'substitute_accepted' AND ${table.replacementOrderId} IS NULL AND ${table.replacementOrderItemId} IS NULL) OR (${table.actionType} = 'remainder_waived' AND NULLIF(BTRIM(${table.reason}), '') IS NOT NULL AND ${table.replacementOrderId} IS NULL AND ${table.replacementOrderItemId} IS NULL) OR (${table.actionType} = 'receipt_attribution_confirmed' AND ${table.replacementOrderId} IS NULL AND ${table.replacementOrderItemId} IS NULL)`),
 ]);
 
 export const centralKitchenShadowInventoryConfig = pgTable("central_kitchen_shadow_inventory_config", {

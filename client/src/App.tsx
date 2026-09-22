@@ -78,6 +78,7 @@ const SalesAnalyticsPage = makeLazy("sales-analytics");
 const DisplayBarWastePage = makeLazy("display-bar-waste");
 const AdvancedProductionOrdersPage = makeLazy("advanced-production-orders");
 const CentralKitchenOrdersPage = makeLazy("central-kitchen-orders");
+const CentralKitchenDemandReportPage = makeLazy("central-kitchen-demand-report");
 const CentralKitchenRecipesPage = makeLazy("central-kitchen-recipes");
 const AdvancedProductionOrderFormPage = makeLazy("advanced-production-order-form");
 const AdvancedProductionOrderDetailsPage = makeLazy("advanced-production-order-details");
@@ -399,6 +400,7 @@ const Router = React.memo(function Router() {
       {/* Operations - التشغيل */}
       <Route path="/operations">{() => <ModulePage component={OperationsDashboardPage} module="operations" />}</Route>
       <Route path="/central-kitchen-orders">{() => <ModulePage component={CentralKitchenOrdersPage} module="central_kitchen_orders" />}</Route>
+      <Route path="/central-kitchen-demand-report">{() => <ModulePage component={CentralKitchenDemandReportPage} module="central_kitchen_orders" />}</Route>
       <Route path="/branch-shifts">{() => <ModulePage component={BranchShiftsPage} module="branch_closure" />}</Route>
       <Route path="/shift-reports">{() => <ModulePage component={ShiftReportsPage} module="branch_closure" />}</Route>
       <Route path="/products">{() => <AnyModulePage component={ProductsPage} modules={PRODUCT_CATALOG_READ_MODULES} />}</Route>

@@ -17,7 +17,8 @@ import { eq, and, desc, inArray, gte, lte, lt, gt, sql, or, isNull, type SQL } f
 import type { User } from "@shared/schema";
 import { groupPreparationSheet, invalidPreparationSheetOrderIds } from "@shared/central-kitchen-preparation-sheet";
 import { buildCentralKitchenCounts, centralKitchenPageMeta } from "@shared/central-kitchen-list";
-import { shifts as shiftsTable, cashierPointsLedger, cashierDailyChallenges, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS, centralKitchenOrders, centralKitchenOrderItems, centralKitchenOrderEvents, centralKitchenShadowInventoryConfig, centralKitchenShadowInventoryEntries, centralKitchenInventoryAllocations, warehouseItems, dailyProductionBatches, productionInventoryLogs } from "@shared/schema";
+import { shifts as shiftsTable, cashierPointsLedger, cashierDailyChallenges, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS, centralKitchenOrders, centralKitchenOrderItems, centralKitchenOrderEvents, centralKitchenShadowInventoryConfig, centralKitchenShadowInventoryEntries, centralKitchenInventoryAllocations, centralKitchenDemandCommitments, centralKitchenDemandActions, warehouseItems, dailyProductionBatches, productionInventoryLogs } from "@shared/schema";
+import { demandDecimal, demandMicros } from "@shared/central-kitchen-demand";
 import { auditEvent, getApprovalThresholds, APPROVAL_THRESHOLDS } from "./audit-helpers";
 import {
   isProductConflictError,
@@ -159,6 +160,7 @@ import { registerCentralKitchenRecipeRoutes } from "./central-kitchen-recipes";
 import { registerProductionOperationsReportRoute } from "./production-operations-report";
 import { registerAdvancedProductionExecutionRoutes, advancedExecutionRows } from "./advanced-production-execution";
 import { registerCentralKitchenWorkplanRoute } from "./central-kitchen-workplan";
+import { registerCentralKitchenDemandRoutes } from "./central-kitchen-demand-routes";
 import {
   CENTRAL_KITCHEN_DEFAULT_NEEDED_TIME,
   getOrderSchedule,
@@ -536,6 +538,7 @@ export async function registerRoutes(
   registerWalletRoutes(app);
   registerSecurityRoutes(app);
   registerCentralKitchenRecipeRoutes(app);
+  registerCentralKitchenDemandRoutes(app);
   registerProductionOperationsReportRoute(app);
   registerAdvancedProductionExecutionRoutes(app);
   registerCentralKitchenWorkplanRoute(app);
@@ -7723,6 +7726,15 @@ export async function registerRoutes(
           if (Math.max(0, ...events.map(event => event.id)) !== payload.expectedEventId) {
             throw new CentralKitchenLiveError("تغير الطلب منذ فتحه. أعد تحميل التفاصيل قبل المتابعة");
           }
+          if (payload.edit) {
+            const [replacementLink] = await tx.select({ id: centralKitchenDemandActions.id })
+              .from(centralKitchenDemandActions)
+              .where(eq(centralKitchenDemandActions.replacementOrderId, order.id))
+              .limit(1);
+            if (replacementLink) {
+              throw new CentralKitchenLiveError("لا يمكن تغيير كمية أو هوية طلب التعويض المرتبط؛ يمكن إلغاؤه ثم إعادة التخطيط", 409);
+            }
+          }
           const items = await tx.select().from(centralKitchenOrderItems).where(eq(centralKitchenOrderItems.orderId, order.id));
           const [batches, allocations, ledger, movements] = await Promise.all([
             items.length ? tx.select({ id: dailyProductionBatches.id }).from(dailyProductionBatches)
@@ -8844,6 +8856,15 @@ export async function registerRoutes(
       const [order] = await db.select().from(centralKitchenOrders)
         .where(eq(centralKitchenOrders.id, id.data)).limit(1);
       if (!order) return res.status(404).json({ error: "الطلب غير موجود" });
+      if (preparationPayload && preparationPayload.items.some((item) => item.substituteQuantity > 0)) {
+        const [replacementLink] = await db.select({ id: centralKitchenDemandActions.id })
+          .from(centralKitchenDemandActions)
+          .where(eq(centralKitchenDemandActions.replacementOrderId, order.id))
+          .limit(1);
+        if (replacementLink) {
+          return res.status(409).json({ error: "طلب التعويض المرتبط يقبل الصنف الأصلي فقط؛ البديل يحتاج موافقة مستقلة من الفرع ولا يُحتسب تلقائياً" });
+        }
+      }
 
       // Receiving belongs to the request branch. Kitchen-side transitions
       // belong to the central kitchen branch.
@@ -9048,6 +9069,55 @@ export async function registerRoutes(
               eq(centralKitchenOrderItems.orderId, id.data),
             )).returning({ id: centralKitchenOrderItems.id });
             if (!receivedItem) throw new Error("Central kitchen receipt item disappeared during transition");
+          }
+          // Receiving a replacement credits its original commitment through the
+          // report; it must never create a second-level demand chain.
+          const [replacementLink] = await tx.select({ id: centralKitchenDemandActions.id })
+            .from(centralKitchenDemandActions)
+            .where(eq(centralKitchenDemandActions.replacementOrderId, id.data))
+            .limit(1);
+          if (!replacementLink) {
+            const receivedRows = await tx.select().from(centralKitchenOrderItems)
+              .where(eq(centralKitchenOrderItems.orderId, id.data));
+            const commitments = receivedRows.flatMap((item) => {
+              const requested = demandMicros(String(item.requestedQuantity));
+              const preparedOriginal = demandMicros(String(item.preparedQuantity || 0));
+              const received = demandMicros(String(item.receivedQuantity || 0));
+              const originalGood = received < preparedOriginal ? received : preparedOriginal;
+              if (originalGood >= requested) return [];
+              const preparationShortfall = requested > preparedOriginal ? requested - preparedOriginal : BigInt(0);
+              const transitLoss = preparedOriginal > originalGood ? preparedOriginal - originalGood : BigInt(0);
+              const preparedSubstitute = demandMicros(String(item.substituteQuantity || 0));
+              const inferredReceivedSubstitute = received - originalGood;
+              const substituteReceived = preparedSubstitute < inferredReceivedSubstitute ? preparedSubstitute : inferredReceivedSubstitute;
+              return [{
+                originalOrderId: id.data,
+                originalOrderItemId: item.id,
+                requestBranchId: order.requestBranchId,
+                centralKitchenId: order.centralKitchenId,
+                inventoryMode: order.inventoryMode,
+                productId: item.productId,
+                warehouseItemId: item.warehouseItemId,
+                productName: item.productName,
+                unit: item.unit,
+                requestedQuantity: demandDecimal(requested),
+                originalGoodReceivedQuantity: demandDecimal(originalGood),
+                totalGoodReceivedQuantity: demandDecimal(received),
+                preparationShortfallQuantity: demandDecimal(preparationShortfall),
+                transitLossQuantity: demandDecimal(transitLoss),
+                substitutePreparedQuantity: demandDecimal(preparedSubstitute),
+                substituteOfferedQuantity: demandDecimal(substituteReceived),
+                receiptAttributionBasis: "estimated_original_first",
+                reasonCode: transitLoss > BigInt(0) ? "transit_loss" : "preparation_shortfall",
+                status: substituteReceived > BigInt(0) ? "substitute_pending" : "open",
+                activationKind: "receipt",
+                activatedBy: user.id,
+              }];
+            });
+            if (commitments.length) {
+              await tx.insert(centralKitchenDemandCommitments).values(commitments)
+                .onConflictDoNothing({ target: centralKitchenDemandCommitments.originalOrderItemId });
+            }
           }
         }
         const [transitionEvent] = await tx.insert(centralKitchenOrderEvents).values({
