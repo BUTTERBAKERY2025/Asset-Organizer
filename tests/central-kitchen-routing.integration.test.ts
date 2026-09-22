@@ -3,7 +3,7 @@ import pg from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq } from "drizzle-orm";
 import * as schema from "../shared/schema";
-import { getKitchenRouting, kitchenActionAllowed, registerKitchenRoutingRoutes, routingCandidates, routingPermission, routingSchema } from "../server/central-kitchen-routing";
+import { getKitchenRouting, getKitchenRoutingBatch, kitchenActionAllowed, registerKitchenRoutingRoutes, routingCandidates, routingPermission, routingSchema } from "../server/central-kitchen-routing";
 import { filterAuthorizedCentralKitchenNotificationUsers, insertCentralKitchenNotification, routedRecipients } from "../server/central-kitchen-notifications";
 
 describe("routing authorization", () => {
@@ -51,6 +51,9 @@ describe("routing authorization", () => {
         expect(await kitchenActionAllowed(tx, lead, order, "approve")).toBe(true);
         expect(await kitchenActionAllowed(tx, creator, order, "receive")).toBe(false);
         expect(await kitchenActionAllowed(tx, receiver, order, "receive")).toBe(true);
+        const batchRouting = await getKitchenRoutingBatch(tx, [kitchen, branch]);
+        expect(batchRouting.get(kitchen)?.responsibleUserId).toBe(lead);
+        expect(batchRouting.get(branch)?.receiverUserId).toBe(receiver);
         expect(await kitchenActionAllowed(tx, manager, order, "receive")).toBe(true);
         expect(await routedRecipients(tx, order, "created")).toEqual([lead]);
         expect((await routedRecipients(tx, order, "dispatched")).sort()).toEqual([creator, manager, receiver].sort());
@@ -87,6 +90,7 @@ describe("routing authorization", () => {
         await tx.update(schema.userPermissions).set({ actions: ["view"] }).where(eq(schema.userPermissions.userId, lead));
         expect(await kitchenActionAllowed(tx, lead, order, "approve")).toBe(false);
         expect((await getKitchenRouting(tx, kitchen)).hasKitchenResponsible).toBe(false);
+        expect((await getKitchenRoutingBatch(tx, [kitchen])).get(kitchen)?.hasKitchenResponsible).toBe(false);
         expect((await routingCandidates(tx, kitchen)).kitchenCandidates).toEqual([]);
         const missing = await insertCentralKitchenNotification(tx, { ...eventInput, event: "created", eventId: order.id + 1000000 });
         expect(missing).toBeTypeOf("number");
@@ -96,6 +100,7 @@ describe("routing authorization", () => {
         expect(await filterAuthorizedCentralKitchenNotificationUsers(tx, notice, [ops])).toEqual([]);
         await tx.delete(schema.userBranchAccess).where(eq(schema.userBranchAccess.userId, receiver));
         expect(await kitchenActionAllowed(tx, receiver, order, "receive")).toBe(false);
+        expect((await getKitchenRoutingBatch(tx, [branch])).get(branch)?.receiverUserId).toBeNull();
         throw rollback;
       });
     } catch (error) {

@@ -20,8 +20,6 @@ import { cn } from "@/lib/utils";
 import { isKitchenOrderDraftValid, isValidKitchenQuantity, normalizeReportedAvailableQuantity, OrderLineEditor, type KitchenOrderDraftLine } from "@/components/central-kitchen/order-line-editor";
 import { LinkedBatches } from "@/components/central-kitchen/linked-batches";
 import {
-  matchesOrderQueueStage,
-  matchesSaudiNeededDate,
   queueOrderNeedsAttention,
   type OrderQueueStage,
 } from "@/components/central-kitchen/order-queue";
@@ -35,7 +33,6 @@ import {
   parseCentralKitchenCatalogV2,
 } from "@shared/central-kitchen-catalog";
 import {
-  filterCentralKitchenOrdersByInventoryMode,
   getCentralKitchenNextStep,
   parseCentralKitchenInventoryMode,
   parseCentralKitchenInventoryModeFilter,
@@ -90,6 +87,17 @@ type KitchenOrder = {
   allocations?: Array<{ id: number; orderItemId: number; component: "original" | "substitute"; unit: string; reservedQuantity: number; dispatchedQuantity: number; releasedQuantity: number; status: string }>;
   linkedBatches?: Array<{ id: number; orderItemId: number; productId: number; quantity: number; productionDate: string | null; status: string | null }>;
   allowedActions?: AllowedActions;
+  nextResponsible?: { name: string | null; role: string; unassigned: boolean } | null;
+};
+type KitchenOrderPage = {
+  data: KitchenOrder[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  serverNow: string;
+  arrival: { count: number; maxId: number | null };
+  counts: Record<OrderStage, number> & { new: number; overdue: number; dueToday: number; openDiscrepancies: number };
 };
 type ProductOption = CentralKitchenCatalogItem;
 type DraftItem = KitchenOrderDraftLine;
@@ -177,6 +185,11 @@ export default function CentralKitchenOrdersPage() {
   const [dateFilter, setDateFilter] = useState("all");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [newOrdersNotice, setNewOrdersNotice] = useState(0);
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<"priority" | "newest" | "oldest_waiting">("priority");
+  const [focus, setFocus] = useState<"new" | "overdue" | "dueToday" | "discrepancy" | null>(null);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+  const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
   const [createOpen, setCreateOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const createDialogStyle = useVisualViewportDialog({ open: createOpen, maxHeight: 820, viewportFraction: 0.94 });
@@ -205,6 +218,13 @@ export default function CentralKitchenOrdersPage() {
 
   useEffect(() => { if (userBranchId) setBranchFilter(userBranchId); }, [userBranchId]);
   useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update); };
+  }, []);
+  useEffect(() => { setPage(1); }, [branchFilter, stage, inventoryModeFilter, search, kitchenFilter, dateFilter, sort, focus]);
+  useEffect(() => {
     if (userBranchId) setDraft(current => current.sourceBranchId ? current : { ...current, sourceBranchId: userBranchId });
   }, [userBranchId]);
   useEffect(() => {
@@ -229,10 +249,23 @@ export default function CentralKitchenOrdersPage() {
   const listUrl = useMemo(() => {
     const params = new URLSearchParams();
     if (branchFilter !== "all") params.set("branchId", branchFilter);
+    params.set("page", String(page));
+    params.set("pageSize", "25");
+    params.set("stage", stage);
+    params.set("sort", sort);
+    if (search.trim()) params.set("search", search.trim());
+    if (kitchenFilter !== "all") params.set("kitchenId", kitchenFilter);
+    if (dateFilter !== "all") params.set("needed", dateFilter);
+    if (inventoryModeFilter !== "all") params.set("inventoryMode", inventoryModeFilter);
+    if (focus) params.set("focus", focus);
     const string = params.toString();
     return `/api/central-kitchen-orders${string ? `?${string}` : ""}`;
-  }, [branchFilter]);
-  const ordersQuery = useQuery<KitchenOrder[]>({ queryKey: [listUrl], refetchInterval: 30_000 });
+  }, [branchFilter, page, stage, sort, search, kitchenFilter, dateFilter, inventoryModeFilter, focus]);
+  const ordersQuery = useQuery<KitchenOrderPage>({
+    queryKey: [listUrl],
+    refetchInterval: 30_000,
+    placeholderData: previous => previous,
+  });
   const metricsUrl = `/api/central-kitchen-orders/pilot-metrics?days=${pilotDays}${branchFilter !== "all" ? `&branchId=${encodeURIComponent(branchFilter)}` : ""}`;
   const metricsQuery = useQuery<PilotMetrics>({ queryKey: [metricsUrl] });
   const productsQuery = useQuery<ProductOption[]>({
@@ -297,34 +330,25 @@ export default function CentralKitchenOrdersPage() {
     for (const kitchen of centralKitchens) merged.set(kitchen.id, kitchen);
     return Array.from(merged.values());
   }, [branches, centralKitchens]);
-  const knownOrderIds = useRef<Set<string> | null>(null);
-  const knownListUrl = useRef(listUrl);
+  const arrivalBaseline = useRef<{ scope: string; count: number; maxId: number | null } | null>(null);
   useEffect(() => {
     if (!ordersQuery.data) return;
-    const nextIds = new Set(ordersQuery.data.map(order => String(order.id)));
-    if (knownListUrl.current !== listUrl) {
-      knownListUrl.current = listUrl;
-      knownOrderIds.current = nextIds;
+    const scope = branchFilter;
+    const next = ordersQuery.data.arrival;
+    if (!next) return;
+    if (arrivalBaseline.current?.scope !== scope) {
+      arrivalBaseline.current = { scope, ...next };
+      setNewOrdersNotice(0);
       return;
     }
-    if (knownOrderIds.current) {
-      const added = Array.from(nextIds).filter(id => !knownOrderIds.current?.has(id)).length;
-      if (added) setNewOrdersNotice(current => current + added);
+    const previous = arrivalBaseline.current;
+    if (next.count > previous.count && next.maxId !== previous.maxId) {
+      setNewOrdersNotice(current => current + next.count - previous.count);
     }
-    knownOrderIds.current = nextIds;
-  }, [listUrl, ordersQuery.data]);
-  const stageCounts = useMemo(() => {
-    const orders = filterCentralKitchenOrdersByInventoryMode(ordersQuery.data || [], inventoryModeFilter);
-    const count = (value: OrderStage) => orders.filter(order => matchesOrderQueueStage(order, value)).length;
-    return { attention: count("attention"), requested: count("requested"), approved: count("approved"), prepared: count("prepared"), dispatched: count("dispatched"), archive: count("archive"), all: count("all") };
-  }, [ordersQuery.data, inventoryModeFilter]);
-  const filtered = useMemo(() => filterCentralKitchenOrdersByInventoryMode(ordersQuery.data || [], inventoryModeFilter).filter(order => {
-    const term = search.trim().toLowerCase();
-    const matchesSearch = !term || [order.orderNumber, order.requestBranchName, order.centralKitchenName].some(value => value?.toLowerCase().includes(term));
-    const matchesKitchen = kitchenFilter === "all" || String(order.centralKitchenId) === kitchenFilter;
-    const matchesDate = matchesSaudiNeededDate(order, dateFilter as "all" | "today" | "past" | "future");
-    return matchesOrderQueueStage(order, stage) && matchesSearch && matchesKitchen && matchesDate;
-  }).sort((a, b) => Number(queueOrderNeedsAttention(b)) - Number(queueOrderNeedsAttention(a)) || String(a.neededDate || "").localeCompare(String(b.neededDate || ""))), [ordersQuery.data, search, inventoryModeFilter, kitchenFilter, dateFilter, stage]);
+    arrivalBaseline.current = { scope, ...next };
+  }, [branchFilter, ordersQuery.data]);
+  const stageCounts = ordersQuery.data?.counts || { attention: 0, requested: 0, approved: 0, prepared: 0, dispatched: 0, archive: 0, all: 0 };
+  const filtered = ordersQuery.data?.data || [];
   const refresh = () => queryClient.invalidateQueries({ predicate: query => typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/central-kitchen-orders") });
   const refreshNotifications = () => queryClient.invalidateQueries({ predicate: query => query.queryKey[0] === "/api/active-notifications" || query.queryKey[0] === "/api/system-notifications/my-reads" });
 
@@ -379,6 +403,29 @@ export default function CentralKitchenOrdersPage() {
     onSuccess: ({ attemptId }, { action }) => { transitionKeysRef.current.delete(attemptId); toast({ title: action === "resolve-discrepancy" ? "تمت معالجة الفروقات" : `تم ${action === "approve" ? "اعتماد" : action === "prepare" ? "تجهيز" : action === "dispatch" ? "شحن" : "استلام"} الطلب` }); setActionNotes(""); refresh(); refreshNotifications(); },
     onError: (error) => toast({ title: "لم تكتمل العملية", description: error instanceof Error ? error.message : "يرجى مراجعة حالة الطلب والصلاحيات.", variant: "destructive" }),
   });
+  const preparationSheetMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/central-kitchen-orders/preparation-sheet", {
+        orderIds: Array.from(selectedOrderIds).map(Number),
+      });
+      return response.json() as Promise<{
+        orders: Array<{ id: number; orderNumber: string; requestBranchName?: string | null }>;
+        groups: Array<{
+          identity: string; provenance: "original" | "substitute"; productName: string; unit: string;
+          requestedQuantity: number; approvedQuantity: number; preparedQuantity: number;
+          orders: Array<{ id: number; orderNumber: string; branchName: string; requestedQuantity: number; preparedQuantity: number }>;
+        }>;
+      }>;
+    },
+    onSuccess: printConsolidatedPreparationSheet,
+    onError: error => toast({
+      title: "تعذر إعداد ورقة التجهيز",
+      description: errorStatus(error) === 409
+        ? "تغيّرت حالة أحد الطلبات وأصبح نهائياً. امسح التحديد ثم اختر الطلبات النشطة مجدداً."
+        : error instanceof Error ? error.message : "راجع الطلبات المحددة والصلاحيات.",
+      variant: "destructive",
+    }),
+  });
   const selectedDetail = detailQuery.data;
   const statusInfo = (status: string) => STATUS[normalized(status)] || { label: status || "قيد المراجعة", className: "bg-muted text-muted-foreground border-border" };
   const branchName = (id: string) => branches.find(branch => branch.id === id)?.name || id;
@@ -413,6 +460,7 @@ export default function CentralKitchenOrdersPage() {
   };
   const changeStage = (value: OrderStage) => {
     setStage(value);
+    setFocus(null);
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
     url.searchParams.delete("status");
@@ -434,8 +482,25 @@ export default function CentralKitchenOrdersPage() {
           {canCreate("central_kitchen_orders") && <Button size="sm" onClick={() => void openCreate()} data-testid="create-kitchen-order"><Plus className="ml-2 h-4 w-4" />طلب جديد</Button>}
         </div>} />
       <DailyOrderingNotice />
+      <div className={cn("flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs", !online || ordersQuery.isRefetchError ? "border-amber-300 bg-amber-50 text-amber-900" : "border-[#e6ddd6] bg-[#fffdf9] text-muted-foreground")} role="status">
+        <span>{!online ? "أنت غير متصل — المعروض آخر بيانات ناجحة." : ordersQuery.isRefetchError ? "فشل التحديث في الخلفية — ما زالت آخر بيانات ناجحة معروضة." : ordersQuery.dataUpdatedAt ? `آخر تحديث ناجح: ${new Date(ordersQuery.dataUpdatedAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}${Date.now() - ordersQuery.dataUpdatedAt > 60_000 ? " · قد تكون البيانات قديمة" : ""}` : "جارٍ تحميل أحدث البيانات…"}</span>
+        {(!online || ordersQuery.isRefetchError) && <Button size="sm" variant="outline" disabled={!online || ordersQuery.isFetching} onClick={() => void ordersQuery.refetch()}><RefreshCw className={cn("ml-1 h-3.5 w-3.5", ordersQuery.isFetching && "animate-spin")} />إعادة المحاولة</Button>}
+      </div>
 
       {newOrdersNotice > 0 && <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e9c8a6] bg-[#f7e5d3] px-4 py-3 text-sm text-[#633b33]" aria-live="polite"><span><strong>{newOrdersNotice} طلب جديد.</strong> ظهر بعد آخر تحديث تلقائي أو يدوي دون تغيير الفلاتر أو الطلب المفتوح.</span><button type="button" className="rounded p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setNewOrdersNotice(0)} aria-label="إغلاق تنبيه الطلبات الجديدة"><X className="h-4 w-4" /></button></div>}
+
+      <section className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="مؤشرات قائمة الطلبات">
+        {([
+          ["requested", "جديد", ordersQuery.data?.counts.new || 0],
+          ["attention", "متأخر", ordersQuery.data?.counts.overdue || 0],
+          ["today", "مطلوب اليوم", ordersQuery.data?.counts.dueToday || 0],
+          ["discrepancy", "فروقات مفتوحة", ordersQuery.data?.counts.openDiscrepancies || 0],
+        ] as const).map(([target, label, count]) => <button key={target} type="button" className="rounded-xl border border-[#e6ddd6] bg-[#fffdf9] px-3 py-2 text-right shadow-sm hover:border-[#c9aebf]" onClick={() => {
+          changeStage("all");
+          setFocus(target === "requested" ? "new" : target === "attention" ? "overdue" : target === "today" ? "dueToday" : "discrepancy");
+        }}><strong className="text-lg text-[#4f2a63]">{count}</strong><span className="mr-2 text-xs text-muted-foreground">{label}</span></button>)}
+        <p className="col-span-2 text-[10px] text-muted-foreground sm:col-span-4">المؤشرات تشمل كامل نتائج الفرع والبحث والفلاتر الثانوية، ولا تتقيد بتبويب المرحلة الحالي.</p>
+      </section>
 
       <nav className="-mx-1 flex overflow-x-auto border-b border-[#e6ddd6] px-1" aria-label="مراحل الطلبات">
         {([
@@ -452,7 +517,10 @@ export default function CentralKitchenOrdersPage() {
           <div className="flex flex-wrap items-center gap-2 border-b border-[#eee5df] p-3">
             <div className="relative min-w-0 flex-[1_1_260px]"><Search className="absolute right-3 top-3 h-4 w-4 text-muted-foreground" /><Input aria-label="بحث في الطلبات" value={search} onChange={event => setSearch(event.target.value)} className="h-10 bg-[#fbf7f3] pr-9" placeholder="رقم الطلب أو الفرع أو المطبخ" /></div>
             <Button variant="outline" className="h-10 border-[#e6d9d1] bg-[#fffaf6]" type="button" onClick={() => setFiltersOpen(open => !open)} aria-expanded={filtersOpen} aria-controls="kitchen-order-filters"><SlidersHorizontal className="ml-2 h-4 w-4" />تصفية</Button>
-            <span className="text-xs text-muted-foreground">{filtered.length} طلب</span>
+            <Select value={sort} onValueChange={value => setSort(value as typeof sort)}><SelectTrigger className="h-10 w-36"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="priority">الأولوية</SelectItem><SelectItem value="newest">الأحدث</SelectItem><SelectItem value="oldest_waiting">الأقدم انتظاراً</SelectItem></SelectContent></Select>
+            <Button variant="outline" className="h-10" disabled={!selectedOrderIds.size || preparationSheetMutation.isPending} onClick={() => preparationSheetMutation.mutate()}><Printer className="ml-2 h-4 w-4" />ورقة تجهيز ({selectedOrderIds.size})</Button>
+            {!!selectedOrderIds.size && <Button variant="ghost" className="h-10" onClick={() => setSelectedOrderIds(new Set())}>مسح التحديد</Button>}
+            <span className="text-xs text-muted-foreground">{ordersQuery.data?.total || 0} طلب</span>
           </div>
           <div id="kitchen-order-filters" hidden={!filtersOpen} className="grid gap-2 border-b border-[#eee5df] p-3 sm:grid-cols-2 lg:grid-cols-4">
             <Select value={branchFilter} onValueChange={setBranchFilter}><SelectTrigger disabled={!canSelectBranch}><SelectValue placeholder="فرع المصدر" /></SelectTrigger><SelectContent>{canSelectBranch && <SelectItem value="all">كل الفروع</SelectItem>}{branches.map(branch => <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>)}</SelectContent></Select>
@@ -463,15 +531,17 @@ export default function CentralKitchenOrdersPage() {
 
       {ordersQuery.isLoading ? <Card><CardContent className="space-y-3 p-4">{Array.from({ length: 6 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</CardContent></Card> :
       ordersQuery.isError ? <Card><CardContent className="py-16 text-center"><p className="font-medium">تعذر تحميل الطلبات</p><p className="mt-1 text-sm text-muted-foreground">تحقق من الاتصال ثم أعد المحاولة.</p><Button className="mt-4" variant="outline" onClick={refresh}>إعادة المحاولة</Button></CardContent></Card> :
-      filtered.length === 0 ? <div className="py-16 text-center"><PackagePlus className="mx-auto mb-3 h-9 w-9 text-muted-foreground" /><h2 className="font-semibold">لا توجد طلبات ضمن هذا العرض</h2><p className="mt-1 text-sm text-muted-foreground">غيّر المرحلة أو امسح البحث والفلاتر الثانوية.</p><Button variant="link" className="mt-2" onClick={() => { setSearch(""); setKitchenFilter("all"); setDateFilter("all"); changeInventoryModeFilter("all"); }}>مسح الفلاتر</Button></div> :
+       filtered.length === 0 ? <div className="py-16 text-center"><PackagePlus className="mx-auto mb-3 h-9 w-9 text-muted-foreground" /><h2 className="font-semibold">لا توجد طلبات ضمن هذا العرض</h2><p className="mt-1 text-sm text-muted-foreground">غيّر المرحلة أو امسح البحث والفلاتر الثانوية.</p><Button variant="link" className="mt-2" onClick={() => { setSearch(""); setKitchenFilter("all"); setDateFilter("all"); setFocus(null); changeInventoryModeFilter("all"); }}>مسح الفلاتر</Button></div> :
       <section className="divide-y divide-[#eee6df] p-1.5" aria-label="قائمة الطلبات">
-        {filtered.map(order => <button key={order.id} type="button" onClick={() => selectDetail(order.id)} className={cn("grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-transparent p-3 text-right transition-colors hover:bg-[#fcf6f1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-[minmax(190px,1.3fr)_minmax(130px,.7fr)_minmax(145px,.8fr)_18px]", String(detailId) === String(order.id) && "border-[#e9d8e7] bg-[#f5edf4]", queueOrderNeedsAttention(order) && "border-r-[3px] border-r-[#c56a45]")}>
-          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><strong className="font-mono text-sm text-[#4f2a63]">{order.orderNumber}</strong>{queueOrderNeedsAttention(order) && <span className="inline-flex items-center gap-1 rounded bg-[#f9e4d6] px-1.5 py-0.5 text-[10px] text-[#934829]"><AlertTriangle className="h-3 w-3" />{isOpenDiscrepancy(order) ? "فروقات مفتوحة" : "متأخر عن موعد الحاجة"}</span>}</div><span className="mt-1 block truncate text-xs text-muted-foreground">{order.requestBranchName || branchName(order.requestBranchId)} <span className="px-1">←</span> {order.centralKitchenName || branchName(order.centralKitchenId)}</span></div>
+        {filtered.map(order => <div key={order.id} role="button" tabIndex={0} onClick={() => selectDetail(order.id)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectDetail(order.id); } }} className={cn("grid w-full cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-transparent p-3 text-right transition-colors hover:bg-[#fcf6f1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-[auto_minmax(190px,1.3fr)_minmax(130px,.7fr)_minmax(145px,.8fr)_18px]", String(detailId) === String(order.id) && "border-[#e9d8e7] bg-[#f5edf4]", queueOrderNeedsAttention(order) && "border-r-[3px] border-r-[#c56a45]")}>
+          <input type="checkbox" aria-label={`اختيار ${order.orderNumber} لورقة التجهيز`} disabled={["cancelled", "received"].includes(normalized(order.status))} checked={selectedOrderIds.has(String(order.id))} onClick={event => event.stopPropagation()} onChange={event => setSelectedOrderIds(current => { const next = new Set(current); if (event.target.checked) next.add(String(order.id)); else next.delete(String(order.id)); return next; })} className="h-4 w-4 accent-[#4f2a63]" />
+          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><strong className="font-mono text-sm text-[#4f2a63]">{order.orderNumber}</strong>{queueOrderNeedsAttention(order) && <span className="inline-flex items-center gap-1 rounded bg-[#f9e4d6] px-1.5 py-0.5 text-[10px] text-[#934829]"><AlertTriangle className="h-3 w-3" />{isOpenDiscrepancy(order) ? "فروقات مفتوحة" : ["requested", "pending", "draft"].includes(normalized(order.status)) ? "طلب جديد" : "متأخر عن موعد الحاجة"}</span>}</div><span className="mt-1 block truncate text-xs text-muted-foreground">{order.requestBranchName || branchName(order.requestBranchId)} <span className="px-1">←</span> {order.centralKitchenName || branchName(order.centralKitchenId)}</span>{order.nextResponsible && <span className={cn("mt-1 block text-[10px]", order.nextResponsible.unassigned ? "font-medium text-amber-700" : "text-muted-foreground")}>{order.nextResponsible.unassigned ? "⚠ غير معيّن: " : "المسؤول التالي: "}{order.nextResponsible.name || order.nextResponsible.role}</span>}</div>
           <div className="text-xs sm:block"><span className="block text-[10px] text-muted-foreground">موعد الحاجة</span><strong className="font-medium">{readableDate(order.neededDate)} · {readableTime(order.neededTime)}</strong></div>
           <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1 sm:block"><StatusBadge status={order.status} /><LateSubmissionBadge schedule={order.orderingSchedule} /><NextStepSummary order={order} /></div>
           <ChevronLeft className="hidden h-4 w-4 text-muted-foreground sm:block" />
-        </button>)}
+        </div>)}
       </section>}
+      {!!ordersQuery.data && ordersQuery.data.totalPages > 1 && <div className="flex items-center justify-between border-t px-3 py-3 text-xs"><Button size="sm" variant="outline" disabled={page <= 1 || ordersQuery.isFetching} onClick={() => setPage(value => value - 1)}>السابق</Button><span>صفحة {ordersQuery.data.page} من {ordersQuery.data.totalPages}</span><Button size="sm" variant="outline" disabled={page >= ordersQuery.data.totalPages || ordersQuery.isFetching} onClick={() => setPage(value => value + 1)}>التالي</Button></div>}
         </CardContent>
       </Card>
       <aside className="sticky top-4 hidden min-h-[520px] rounded-2xl border border-[#e6ddd6] bg-[#fffdf9] p-4 shadow-sm lg:block" aria-label="ملخص الطلب المحدد">
@@ -524,7 +594,7 @@ function NextStepSummary({ order }: { order: KitchenOrder }) {
     discrepancyStatus: order.discrepancyStatus,
   });
   const inventoryMode = parseCentralKitchenInventoryMode(order.inventoryMode);
-  return <><span className={cn("mt-1 block text-[11px]", step.isComplete ? "text-emerald-700" : "text-muted-foreground")}>{step.isComplete ? step.label : `التالي: ${step.label} · ${step.owner}`}</span>{inventoryMode === "shadow" && <span className="block text-[10px] text-amber-700">ظلّي — تشغيلي فقط، لا حركة مخزون فعلية</span>}{inventoryMode === "unknown" && <span className="block text-[10px] text-muted-foreground">وضع المخزون غير محدد — طلب قديم</span>}</>;
+  return <><span className={cn("mt-1 block text-[11px]", step.isComplete ? "text-emerald-700" : order.nextResponsible?.unassigned ? "font-medium text-amber-700" : "text-muted-foreground")}>{step.isComplete ? step.label : `التالي: ${step.label} · ${order.nextResponsible?.name || order.nextResponsible?.role || step.owner}${order.nextResponsible?.unassigned ? " (غير معيّن)" : ""}`}</span>{inventoryMode === "shadow" && <span className="block text-[10px] text-amber-700">ظلّي — تشغيلي فقط، لا حركة مخزون فعلية</span>}{inventoryMode === "unknown" && <span className="block text-[10px] text-muted-foreground">وضع المخزون غير محدد — طلب قديم</span>}</>;
 }
 const LIFECYCLE_STAGES = [
   { status: "requested", label: "طلب" },
@@ -569,7 +639,7 @@ function OrderSummaryPane({ order, loading, error, onRetry, onOpen, onClear }: {
     {queueOrderNeedsAttention(order) && <div className="flex gap-2 rounded-lg bg-[#f9e7dc] p-3 text-xs leading-5 text-[#833e29]"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>{isOpenDiscrepancy(order) ? "تم الاستلام مع فروقات مفتوحة؛ لا يعد الطلب مكتملاً." : "تجاوز الطلب موعد الحاجة المحدد ولم يكتمل بعد."}</span></div>}
     <section><div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-semibold">البنود المطلوبة</h3><span className="text-[10px] text-muted-foreground">{order.items?.length ?? order.itemCount ?? 0} بنود</span></div><div className="divide-y border-y">{(order.items || []).slice(0, 5).map(item => <div key={item.id || item.productName} className="flex justify-between gap-3 py-2 text-xs"><span className="truncate">{item.productName}</span><strong className="shrink-0 font-medium">{item.requestedQuantity} {item.unit}</strong></div>)}{!order.items?.length && <p className="py-4 text-center text-xs text-muted-foreground">افتح التفاصيل لتحميل البنود الكاملة.</p>}{(order.items?.length || 0) > 5 && <p className="py-2 text-[10px] text-muted-foreground">+ {(order.items?.length || 0) - 5} بنود أخرى</p>}</div></section>
     {order.notes && <div className="border-r-2 border-[#c7955a] bg-[#f6f0e5] p-3 text-xs"><span className="block text-[10px] text-muted-foreground">ملاحظة الفرع</span><p className="mt-1 leading-5">{order.notes}</p></div>}
-    <div className="border-t pt-3"><p className="mb-2 text-xs text-muted-foreground">{nextStep.isComplete ? nextStep.label : `التالي: ${nextStep.label} · ${nextStep.owner}`}</p><Button className="w-full bg-[#4f2a63] hover:bg-[#3f2250]" onClick={onOpen}>فتح التفاصيل والإجراء</Button></div>
+    <div className="border-t pt-3"><p className="mb-2 text-xs text-muted-foreground">{nextStep.isComplete ? nextStep.label : `التالي: ${nextStep.label} · ${order.nextResponsible?.name || order.nextResponsible?.role || nextStep.owner}`}</p><Button className="w-full bg-[#4f2a63] hover:bg-[#3f2250]" onClick={onOpen}>{nextStep.isComplete ? "فتح التفاصيل" : `فتح نموذج ${nextStep.label}`}</Button></div>
   </div>;
 }
 function MetricTile({ label, value, tone = "normal" }: { label: string; value: string | number; tone?: "normal" | "warning" | "danger" }) { return <div className={cn("rounded-lg border bg-background p-3", tone === "warning" && "border-amber-200 bg-amber-50", tone === "danger" && "border-red-200 bg-red-50")}><span className="text-xs text-muted-foreground">{label}</span><strong className="mt-1 block text-2xl">{value}</strong></div>; }
@@ -818,5 +888,29 @@ function printPreparationNote(order: KitchenOrder) {
   const printWindow = window.open("", "_blank", "width=900,height=700");
   if (!printWindow) return;
   printWindow.document.write(`<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>سند تجهيز ${escape(order.orderNumber)}</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#172033}h1{font-size:22px;margin:0 0 8px}.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:22px 0}.box{border:1px solid #d8dee9;border-radius:8px;padding:10px}small{display:block;color:#687386;margin-bottom:4px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #d8dee9;padding:9px;text-align:right;font-size:12px}th{background:#f3f5f8}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:80px;margin-top:60px}.line{border-top:1px solid #172033;padding-top:8px;text-align:center}@media print{body{padding:0}}</style></head><body><h1>سند تجهيز طلب المطبخ المركزي</h1><div>${escape(order.orderNumber)}</div><div class="meta"><div class="box"><small>الفرع الطالب</small>${escape(order.requestBranchName || order.requestBranchId)}</div><div class="box"><small>المطبخ المركزي</small>${escape(order.centralKitchenName || order.centralKitchenId)}</div><div class="box"><small>تاريخ الحاجة</small>${escape(order.neededDate)}</div></div><table><thead><tr><th>الصنف</th><th>المطلوب</th><th>المتوفر في الفرع</th><th>الأصلي المجهز</th><th>البديل</th><th>النقص</th><th>ملاحظات</th></tr></thead><tbody>${rows}</tbody></table><div class="signatures"><div class="line">مسؤول التجهيز</div><div class="line">مسؤول الإرسال</div></div><script>window.onload=()=>window.print()<\/script></body></html>`);
+  printWindow.document.close();
+}
+
+function printConsolidatedPreparationSheet(sheet: {
+  orders: Array<{ id: number; orderNumber: string; requestBranchName?: string | null }>;
+  groups: Array<{
+    identity: string; provenance: "original" | "substitute"; productName: string; unit: string;
+    requestedQuantity: number; approvedQuantity: number; preparedQuantity: number;
+    orders: Array<{ id: number; orderNumber: string; branchName: string; requestedQuantity: number; preparedQuantity: number }>;
+  }>;
+}) {
+  const escape = (value: unknown) => String(value ?? "—").replace(/[&<>"']/g, character =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[character] || character));
+  const rows = sheet.groups.map(group => `<tr>
+    <td>${escape(group.productName)}<small>${escape(group.identity)} · ${group.provenance === "substitute" ? "بديل مجهز" : "صنف أصلي"}</small></td>
+    <td>${escape(group.unit)}</td>
+    <td>${escape(group.requestedQuantity)}</td>
+    <td>${escape(group.approvedQuantity)}</td>
+    <td>${escape(group.preparedQuantity)}</td>
+    <td>${group.orders.map(order => `<a href="/central-kitchen-orders?orderId=${encodeURIComponent(String(order.id))}">${escape(order.orderNumber)}</a> · ${escape(order.branchName)} (مطلوب ${escape(order.requestedQuantity)} · مجهز ${escape(order.preparedQuantity)} ${escape(group.unit)})`).join("<br>")}</td>
+  </tr>`).join("");
+  const printWindow = window.open("", "_blank", "width=1100,height=800");
+  if (!printWindow) return;
+  printWindow.document.write(`<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>ورقة التجهيز المجمعة</title><style>body{font-family:Arial,sans-serif;padding:28px;color:#2f1c3a}h1{font-size:22px}p{color:#666}table{width:100%;border-collapse:collapse}th,td{border:1px solid #d8ced5;padding:9px;text-align:right;vertical-align:top;font-size:12px}th{background:#f5edf4}small{display:block;color:#777;margin-top:3px}a{color:#4f2a63}@media print{body{padding:0}a{text-decoration:none;color:inherit}}</style></head><body><h1>ورقة التجهيز المجمعة</h1><p>${sheet.orders.length} طلبات · التجميع فقط عند تطابق هوية الصنف ووحدة القياس والمصدر (أصلي/بديل). «المعتمد» هو مقدار الطلب كاملاً بعد اعتماد الطلب؛ لا توجد موافقة مستقلة لكل بند.</p><table><thead><tr><th>الصنف</th><th>الوحدة</th><th>المطلوب</th><th>المعتمد (اعتماد الطلب كاملاً)</th><th>المجهز فعلياً</th><th>الطلبات الأصلية</th></tr></thead><tbody>${rows}</tbody></table><script>window.onload=()=>window.print()<\/script></body></html>`);
   printWindow.document.close();
 }

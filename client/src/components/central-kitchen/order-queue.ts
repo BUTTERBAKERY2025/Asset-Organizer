@@ -41,7 +41,7 @@ export const queueOrderNeedsAttention = (order: QueueOrder, now: Date = new Date
   const status = normalizeQueueStatus(order.status);
   if (status === "cancelled") return false;
   if (status === "received") return order.discrepancyStatus === "open";
-  return isOrderOverdue(order, now);
+  return ["requested", "pending", "draft"].includes(status) || isOrderOverdue(order, now);
 };
 
 export const matchesOrderQueueStage = (order: QueueOrder, stage: OrderQueueStage, now: Date = new Date()) => {

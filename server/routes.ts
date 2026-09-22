@@ -15,6 +15,8 @@ import { evaluateWasteGovernance, checkApprovalGate } from "./waste-governance";
 import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, lt, gt, sql, or, isNull, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
+import { groupPreparationSheet, invalidPreparationSheetOrderIds } from "@shared/central-kitchen-preparation-sheet";
+import { buildCentralKitchenCounts, centralKitchenPageMeta } from "@shared/central-kitchen-list";
 import { shifts as shiftsTable, cashierPointsLedger, cashierDailyChallenges, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS, centralKitchenOrders, centralKitchenOrderItems, centralKitchenOrderEvents, centralKitchenShadowInventoryConfig, centralKitchenShadowInventoryEntries, centralKitchenInventoryAllocations, warehouseItems, dailyProductionBatches, productionInventoryLogs } from "@shared/schema";
 import { auditEvent, getApprovalThresholds, APPROVAL_THRESHOLDS } from "./audit-helpers";
 import {
@@ -135,7 +137,7 @@ import { sendWhatsAppMessage, isTwilioConfigured } from "./twilio-service";
 import { recipientsSchema as reportRecipientsSchema } from "./scheduler";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertContractMilestoneSchema, insertContractVariationSchema, insertContractGuaranteeSchema, insertContractTemplateSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
-import { registerKitchenRoutingRoutes, kitchenActionAllowed, getKitchenRouting } from "./central-kitchen-routing";
+import { registerKitchenRoutingRoutes, kitchenActionAllowed, getKitchenRouting, getKitchenRoutingBatch } from "./central-kitchen-routing";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS, BRANCH_MANAGER_CENTRAL_KITCHEN_PERMISSIONS, hasCrossBranchHrReadAccess } from "./auth";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
@@ -7570,6 +7572,15 @@ export async function registerRoutes(
   const centralKitchenListQuerySchema = z.object({
     branchId: z.string().trim().min(1).max(255).optional(),
     status: z.enum(["requested", "approved", "prepared", "dispatched", "received", "cancelled"]).optional(),
+    page: z.coerce.number().int().min(1).optional(),
+    pageSize: z.coerce.number().int().min(1).max(100).optional(),
+    stage: z.enum(["attention", "requested", "approved", "prepared", "dispatched", "archive", "all"]).optional(),
+    search: z.string().trim().max(100).optional(),
+    kitchenId: z.string().trim().min(1).max(255).optional(),
+    needed: z.enum(["all", "today", "past", "future"]).optional(),
+    inventoryMode: z.enum(["all", "real", "shadow", "unknown"]).optional(),
+    sort: z.enum(["priority", "newest", "oldest_waiting"]).optional(),
+    focus: z.enum(["new", "overdue", "dueToday", "discrepancy"]).optional(),
   });
 
   const centralKitchenRequestKey = (
@@ -7876,15 +7887,92 @@ export async function registerRoutes(
             eq(centralKitchenOrders.centralKitchenId, branchFilter.singleBranchId),
           )!);
         } else if (branchFilter.branchIds !== null) {
-          if (branchFilter.branchIds.length === 0) return res.json([]);
+          if (branchFilter.branchIds.length === 0) {
+            if (parsed.data.page !== undefined || parsed.data.pageSize !== undefined) {
+              return res.json({
+                data: [], page: parsed.data.page || 1, pageSize: parsed.data.pageSize || 25,
+                total: 0, totalPages: 1,
+                counts: { attention: 0, requested: 0, approved: 0, prepared: 0, dispatched: 0, archive: 0, all: 0, new: 0, overdue: 0, dueToday: 0, openDiscrepancies: 0 },
+                arrival: { count: 0, maxId: null },
+                serverNow: new Date().toISOString(),
+              });
+            }
+            return res.json([]);
+          }
           conditions.push(or(
             inArray(centralKitchenOrders.requestBranchId, branchFilter.branchIds),
             inArray(centralKitchenOrders.centralKitchenId, branchFilter.branchIds),
           )!);
         }
-        const rows = await db.select().from(centralKitchenOrders)
-          .where(conditions.length ? and(...conditions) : undefined)
-          .orderBy(desc(centralKitchenOrders.createdAt));
+        const arrivalConditions = [...conditions];
+        // Supplying page/pageSize opts into the v2 envelope. With neither parameter the
+        // original array response is retained for older consumers.
+        const paged = parsed.data.page !== undefined || parsed.data.pageSize !== undefined;
+        if (parsed.data.kitchenId) conditions.push(eq(centralKitchenOrders.centralKitchenId, parsed.data.kitchenId));
+        if (parsed.data.inventoryMode && parsed.data.inventoryMode !== "all") {
+          conditions.push(parsed.data.inventoryMode === "unknown"
+            ? or(isNull(centralKitchenOrders.inventoryMode), sql`${centralKitchenOrders.inventoryMode} not in ('real', 'shadow')`)!
+            : eq(centralKitchenOrders.inventoryMode, parsed.data.inventoryMode));
+        }
+        const saudiToday = sql`(now() at time zone 'Asia/Riyadh')::date`;
+        if (parsed.data.needed === "today") conditions.push(sql`${centralKitchenOrders.neededDate}::date = ${saudiToday}`);
+        if (parsed.data.needed === "past") conditions.push(sql`${centralKitchenOrders.neededDate}::date < ${saudiToday}`);
+        if (parsed.data.needed === "future") conditions.push(sql`${centralKitchenOrders.neededDate}::date > ${saudiToday}`);
+        if (parsed.data.search) {
+          const term = `%${parsed.data.search.replace(/[%_\\]/g, "\\$&")}%`;
+          conditions.push(or(
+            sql`${centralKitchenOrders.orderNumber} ilike ${term} escape '\\'`,
+            sql`exists (select 1 from ${branches} b where b.id in (${centralKitchenOrders.requestBranchId}, ${centralKitchenOrders.centralKitchenId}) and b.name ilike ${term} escape '\\')`,
+          )!);
+        }
+        const countConditions = [...conditions];
+        const neededAt = sql`(${centralKitchenOrders.neededDate}::date + (case when ${centralKitchenOrders.neededTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' then ${centralKitchenOrders.neededTime} else '23:59' end)::time) at time zone 'Asia/Riyadh'`;
+        const activeOverdue = and(
+          inArray(centralKitchenOrders.status, ["approved", "prepared", "dispatched"]),
+          sql`${neededAt} < now()`,
+        )!;
+        const attention = or(
+          inArray(centralKitchenOrders.status, ["requested", "pending", "draft"]),
+          activeOverdue,
+          and(eq(centralKitchenOrders.status, "received"), eq(centralKitchenOrders.discrepancyStatus, "open")),
+        )!;
+        if (parsed.data.focus === "new") conditions.push(inArray(centralKitchenOrders.status, ["requested", "pending", "draft"]));
+        if (parsed.data.focus === "overdue") conditions.push(activeOverdue);
+        if (parsed.data.focus === "dueToday") conditions.push(and(
+          sql`${centralKitchenOrders.neededDate}::date = ${saudiToday}`,
+          sql`${centralKitchenOrders.status} <> 'cancelled'`,
+          or(sql`${centralKitchenOrders.status} <> 'received'`, eq(centralKitchenOrders.discrepancyStatus, "open")),
+        )!);
+        if (parsed.data.focus === "discrepancy") conditions.push(and(
+          eq(centralKitchenOrders.status, "received"),
+          eq(centralKitchenOrders.discrepancyStatus, "open"),
+        )!);
+        if (parsed.data.stage === "attention") conditions.push(attention);
+        else if (parsed.data.stage === "requested") conditions.push(inArray(centralKitchenOrders.status, ["requested", "pending", "draft"]));
+        else if (parsed.data.stage === "archive") conditions.push(or(
+          eq(centralKitchenOrders.status, "cancelled"),
+          and(eq(centralKitchenOrders.status, "received"), sql`coalesce(${centralKitchenOrders.discrepancyStatus}, 'none') <> 'open'`),
+        )!);
+        else if (parsed.data.stage && !["all"].includes(parsed.data.stage)) conditions.push(eq(centralKitchenOrders.status, parsed.data.stage));
+
+        const where = conditions.length ? and(...conditions) : undefined;
+        const priority = sql`case
+          when ${activeOverdue} then 0
+          when ${centralKitchenOrders.status} in ('requested','pending','draft') then 1
+          when ${centralKitchenOrders.status} = 'received' and ${centralKitchenOrders.discrepancyStatus} = 'open' then 2
+          else 3 end`;
+        const orderBy = !paged || parsed.data.sort === "newest"
+          ? [desc(centralKitchenOrders.createdAt), desc(centralKitchenOrders.id)]
+          : parsed.data.sort === "oldest_waiting"
+            ? [centralKitchenOrders.createdAt, centralKitchenOrders.id]
+            : [priority, neededAt, centralKitchenOrders.id];
+        const page = parsed.data.page || 1;
+        const pageSize = parsed.data.pageSize || 25;
+        const baseQuery = db.select().from(centralKitchenOrders).where(where).orderBy(...orderBy);
+        const rows = paged ? await baseQuery.limit(pageSize).offset((page - 1) * pageSize) : await baseQuery;
+        const [{ total }] = paged
+          ? await db.select({ total: sql<number>`count(*)::int` }).from(centralKitchenOrders).where(where)
+          : [{ total: rows.length }];
         const branchIds = Array.from(new Set(rows.flatMap((row) => [row.requestBranchId, row.centralKitchenId])));
         const branchRows = branchIds.length
           ? await db.select({ id: branches.id, name: branches.name }).from(branches)
@@ -7902,14 +7990,66 @@ export async function registerRoutes(
           grouped.push(item);
           itemsByOrder.set(item.orderId, grouped);
         }
-        return res.json(rows.map((row) => ({
+        const routingByBranch = await getKitchenRoutingBatch(db, branchIds);
+        const result = rows.map((row) => ({
           ...row,
           orderingSchedule: getOrderSchedule(row),
           requestBranchName: names.get(row.requestBranchId) || null,
           centralKitchenName: names.get(row.centralKitchenId) || null,
           itemCount: itemsByOrder.get(row.id)?.length || 0,
           items: itemsByOrder.get(row.id) || [],
-        })));
+          nextResponsible: (() => {
+            const status = String(row.status);
+            if (["requested", "pending", "draft"].includes(status)) {
+              const route = routingByBranch.get(row.centralKitchenId);
+              return { name: route?.responsibleName || route?.deputyName || null, role: "مسؤول اعتماد المطبخ", unassigned: !route?.hasKitchenResponsible };
+            }
+            if (status === "dispatched") {
+              const route = routingByBranch.get(row.requestBranchId);
+              return { name: route?.receiverName || null, role: "مسؤول استلام الفرع", unassigned: !route?.receiverName };
+            }
+            if (status === "approved") return { name: null, role: "فريق تجهيز المطبخ", unassigned: false };
+            if (status === "prepared") return { name: null, role: "فريق إرسال المطبخ", unassigned: false };
+            if (status === "received" && row.discrepancyStatus === "open") return { name: null, role: "مسؤول معالجة فروقات الفرع", unassigned: false };
+            return null;
+          })(),
+        }));
+        if (!paged) return res.json(result);
+        const countWhere = countConditions.length ? and(...countConditions) : undefined;
+        const now = new Date();
+        const [facets] = await db.select({
+          all: sql<number>`count(*)::int`,
+          requested: sql<number>`count(*) filter (where ${centralKitchenOrders.status} in ('requested','pending','draft'))::int`,
+          approved: sql<number>`count(*) filter (where ${centralKitchenOrders.status} = 'approved')::int`,
+          prepared: sql<number>`count(*) filter (where ${centralKitchenOrders.status} = 'prepared')::int`,
+          dispatched: sql<number>`count(*) filter (where ${centralKitchenOrders.status} = 'dispatched')::int`,
+          overdue: sql<number>`count(*) filter (where ${activeOverdue})::int`,
+          discrepancies: sql<number>`count(*) filter (where ${centralKitchenOrders.status} = 'received' and ${centralKitchenOrders.discrepancyStatus} = 'open')::int`,
+          dueToday: sql<number>`count(*) filter (where ${centralKitchenOrders.neededDate}::date = ${saudiToday}
+            and ${centralKitchenOrders.status} <> 'cancelled'
+            and (${centralKitchenOrders.status} <> 'received' or ${centralKitchenOrders.discrepancyStatus} = 'open'))::int`,
+          archive: sql<number>`count(*) filter (where ${centralKitchenOrders.status} = 'cancelled'
+            or (${centralKitchenOrders.status} = 'received' and coalesce(${centralKitchenOrders.discrepancyStatus}, 'none') <> 'open'))::int`,
+        }).from(centralKitchenOrders).where(countWhere);
+        const [arrival] = await db.select({
+          count: sql<number>`count(*)::int`,
+          maxId: sql<number | null>`max(${centralKitchenOrders.id})::int`,
+        }).from(centralKitchenOrders).where(arrivalConditions.length ? and(...arrivalConditions) : undefined);
+        const counts = buildCentralKitchenCounts({
+          all: Number(facets.all), requested: Number(facets.requested),
+          approved: Number(facets.approved), prepared: Number(facets.prepared),
+          dispatched: Number(facets.dispatched), overdue: Number(facets.overdue),
+          discrepancies: Number(facets.discrepancies), dueToday: Number(facets.dueToday),
+          archive: Number(facets.archive),
+        });
+        const pageMeta = centralKitchenPageMeta(Number(total), page, pageSize);
+        return res.json({
+          data: result,
+          ...pageMeta,
+          counts,
+          arrival: { count: Number(arrival.count), maxId: arrival.maxId === null ? null : Number(arrival.maxId) },
+          serverNow: now.toISOString(),
+        });
       } catch (error) {
         console.error("Error listing central kitchen orders:", error);
         return res.status(500).json({ error: "فشل في جلب طلبات المطبخ المركزي" });
@@ -8430,6 +8570,53 @@ export async function registerRoutes(
     (_req, res) => {
       res.set("Cache-Control", "private, no-store");
       return res.json(getOrderingPolicy());
+    },
+  );
+
+  app.post(
+    "/api/central-kitchen-orders/preparation-sheet",
+    isAuthenticated,
+    requirePermission("central_kitchen_orders", "view"),
+    async (req, res) => {
+      const parsed = z.object({ orderIds: z.array(z.coerce.number().int().positive()).min(1).max(100) }).safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "اختر طلباً واحداً على الأقل (وبحد أقصى 100)" });
+      try {
+        const rows = await db.select().from(centralKitchenOrders)
+          .where(inArray(centralKitchenOrders.id, parsed.data.orderIds));
+        const permitted: typeof rows = [];
+        for (const row of rows) {
+          if (await canAccessCentralKitchenOrder(req, row)) permitted.push(row);
+        }
+        if (permitted.length !== new Set(parsed.data.orderIds).size) {
+          return res.status(403).json({ error: "أحد الطلبات غير موجود أو خارج نطاق فروعك" });
+        }
+        const invalidOrderIds = invalidPreparationSheetOrderIds(permitted);
+        if (invalidOrderIds.length) {
+          return res.status(409).json({
+            error: "بعض الطلبات المحددة أصبحت نهائية ولا تصلح لورقة التجهيز",
+            invalidOrderIds,
+          });
+        }
+        const items = await db.select().from(centralKitchenOrderItems)
+          .where(inArray(centralKitchenOrderItems.orderId, permitted.map(row => row.id)))
+          .orderBy(centralKitchenOrderItems.id);
+        const branchRows = await db.select({ id: branches.id, name: branches.name }).from(branches)
+          .where(inArray(branches.id, Array.from(new Set(permitted.map(row => row.requestBranchId)))));
+        const branchNames = new Map(branchRows.map(row => [row.id, row.name]));
+        const orders = permitted.map(row => ({
+          ...row,
+          requestBranchName: branchNames.get(row.requestBranchId) || null,
+          items: items.filter(item => item.orderId === row.id),
+        }));
+        res.set("Cache-Control", "private, no-store");
+        return res.json({ orders: orders.map(order => ({
+          id: order.id, orderNumber: order.orderNumber, status: order.status,
+          requestBranchName: order.requestBranchName,
+        })), groups: groupPreparationSheet(orders) });
+      } catch (error) {
+        console.error("Central kitchen preparation sheet error:", error);
+        return res.status(500).json({ error: "تعذر إعداد ورقة التجهيز المجمعة" });
+      }
     },
   );
 

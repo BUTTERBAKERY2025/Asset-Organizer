@@ -83,6 +83,76 @@ export async function getKitchenRouting(tx: RoutingExecutor, branchId: string) {
   };
 }
 
+export async function getKitchenRoutingBatch(tx: RoutingExecutor, branchIds: string[]) {
+  const unique = Array.from(new Set(branchIds.filter(Boolean)));
+  if (!unique.length) return new Map<string, Awaited<ReturnType<typeof getKitchenRouting>>>();
+  const rows = await tx.select().from(centralKitchenRouting)
+    .where(inArray(centralKitchenRouting.branchId, unique));
+  const userIds = Array.from(new Set<string>(rows.flatMap((row: any) =>
+    [row.responsibleUserId, row.deputyUserId, row.receiverUserId].filter(Boolean))));
+  const people = userIds.length ? await tx.select({
+    id: users.id, name: users.firstName, lastName: users.lastName, username: users.username,
+    role: users.role, branchId: users.branchId, actions: userPermissions.actions,
+  }).from(users).leftJoin(userPermissions, and(eq(userPermissions.userId, users.id),
+    eq(userPermissions.module, "central_kitchen_orders")))
+    .where(and(inArray(users.id, userIds), eq(users.isActive, "active"))) : [];
+  const [accessRows, direct, inherited, overrides] = userIds.length ? await Promise.all([
+    tx.select({ userId: userBranchAccess.userId, branchId: userBranchAccess.branchId }).from(userBranchAccess)
+      .where(and(inArray(userBranchAccess.userId, userIds), inArray(userBranchAccess.branchId, unique))),
+    tx.select().from(userPermissions).where(and(inArray(userPermissions.userId, userIds), eq(userPermissions.module, "central_kitchen_orders"))),
+    tx.select({ userId: userAssignments.userId, action: permissions.action })
+      .from(userAssignments).innerJoin(rolePermissions, eq(userAssignments.roleId, rolePermissions.roleId))
+      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+      .where(and(inArray(userAssignments.userId, userIds), eq(userAssignments.isActive, true), eq(permissions.module, "central_kitchen_orders"))),
+    tx.select({ userId: userPermissionOverrides.userId, action: permissions.action,
+      allow: userPermissionOverrides.allow, expiresAt: userPermissionOverrides.expiresAt })
+      .from(userPermissionOverrides).innerJoin(permissions, eq(userPermissionOverrides.permissionId, permissions.id))
+      .where(and(inArray(userPermissionOverrides.userId, userIds), eq(permissions.module, "central_kitchen_orders"))),
+  ]) : [[], [], [], []];
+  for (const person of people) {
+    const custom = direct.some((permission: any) => permission.userId === person.id && permission.actions.length > 0);
+    const actions = new Set<string>(custom ? person.actions || []
+      : inherited.filter((permission: any) => permission.userId === person.id).map((permission: any) => permission.action));
+    for (const override of overrides.filter((permission: any) => permission.userId === person.id)) {
+      if (override.expiresAt && new Date(override.expiresAt).getTime() < Date.now()) continue;
+      if (override.allow) actions.add(override.action);
+      else actions.delete(override.action);
+    }
+    person.actions = Array.from(actions);
+  }
+  const names = new Map(people.map((person: any) => [
+    person.id,
+    [person.name, person.lastName].filter(Boolean).join(" ") || person.username || person.id,
+  ]));
+  const byBranch = new Map(rows.map((row: any) => [row.branchId, row]));
+  const eligible = (userId: string | null | undefined, branchId: string, action: "approve" | "edit") => {
+    const person: any = people.find((candidate: any) => candidate.id === userId);
+    if (!person || !routingPermission(person.role, person.actions || [], action)) return null;
+    const branchEligible = person.role === "production_development_manager" || person.branchId === branchId
+      || accessRows.some((access: any) => access.userId === person.id && access.branchId === branchId);
+    return branchEligible ? person : null;
+  };
+  return new Map(unique.map(branchId => {
+    const row: any = byBranch.get(branchId);
+    const responsible = eligible(row?.responsibleUserId, branchId, "approve");
+    const deputy = eligible(row?.deputyUserId, branchId, "approve");
+    const receiver = eligible(row?.receiverUserId, branchId, "edit");
+    const responsibleName = responsible ? names.get(responsible.id) || null : null;
+    const deputyName = deputy ? names.get(deputy.id) || null : null;
+    const receiverName = receiver ? names.get(receiver.id) || null : null;
+    return [branchId, {
+      branchId,
+      responsibleUserId: responsibleName ? row.responsibleUserId : null,
+      deputyUserId: deputyName ? row.deputyUserId : null,
+      receiverUserId: receiverName ? row.receiverUserId : null,
+      responsibleName,
+      deputyName,
+      receiverName,
+      hasKitchenResponsible: !!(responsibleName || deputyName),
+    }];
+  }));
+}
+
 export async function kitchenActionAllowed(tx: RoutingExecutor, userId: string, order: any, action: string) {
   const branchId = action === "receive" ? order.requestBranchId : order.centralKitchenId;
   const actor = await routingActor(tx, userId);
