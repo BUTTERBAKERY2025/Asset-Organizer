@@ -89,3 +89,17 @@ mtime_ms = 1790102932091
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/7425fc9a-3481-43f9-9084-51d3a9430deb/03822b0e-5195-4564-8b31-6d6f5d1cb34a"
 storage_version_token = "1790103341302675"
 content_type = "image/png"
+
+[[outputs]]
+id = "7FdkkpUgd6RaCP4RF1AoU"
+uri = "file://.local/test-results/kitchen-queue-mobile-viewport.png"
+type = "image"
+title = "تنظيم طلبات المطبخ على الجوال"
+description = "لقطة من الواجهة المعدلة بعرض 390 بكسل، ببيانات اختبار، وليست نموذجاً منفصلاً."
+logical_id = "6e71ca48-9804-414f-96b9-4c84204543e0"
+content_hash = "sha256:29ecac453dccd9750a8fa3165f6014ebfaa2d205a98808606c62c2e83af9a4aa"
+size = 53735
+mtime_ms = 1790120505709
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/6e71ca48-9804-414f-96b9-4c84204543e0/3d48e0c9-a1dd-4885-a7bc-3635b740153b"
+storage_version_token = "1790120531681262"
+content_type = "image/png"

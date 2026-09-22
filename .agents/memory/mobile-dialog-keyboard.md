@@ -12,3 +12,9 @@ Size and position keyboard-sensitive dialogs using the visual viewport, with ord
 Verify actual geometry, not merely that an action exists or can be clicked programmatically: the full button must fit within the scroll viewport with lower breathing room. Keep the order context outside the scrolling body and reserve the physical side occupied by the close button in RTL.
 
 **Why:** Mobile fixture passes previously concealed a partly clipped Save button and a close control overlapping the status badge. A viewport screenshot exposed what presence/click assertions missed.
+
+Mobile usability also requires an ordered task flow, not only overflow fixes: keep actionable records ahead of advanced filters/history, and separate task sections instead of one long detail form.
+
+**Why:** The user rejected technically fitting layouts that still required excessive scrolling through controls and administrative information.
+
+**How to apply:** Review viewport-sized captures of the real default list and selected task; full-page screenshots and error-dialog captures cannot establish everyday usability.
