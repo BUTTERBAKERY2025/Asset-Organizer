@@ -18,8 +18,31 @@ preserve existing orders and inventory and do not infer historical batch links.
 The advanced-execution migration requires the existing recipe snapshot,
 production-material, and stock-posting schema to be installed first.
 
-The three migrations have been applied to the local development database only.
-Production rollout remains a separate authorized operation.
+The three migrations were also applied to the authorized external production
+database on 2026-09-22, after the approved trial-data cleanup. Their columns,
+indexes and advanced-execution trigger definitions were checked. This does not
+publish the application code: Render rollout remains a separate user action.
+
+## Authorized trial reset
+
+On 2026-09-22 the user confirmed that all finished-goods balances were trial data.
+Production/kitchen requests, production batches and trial transfers were removed
+in a snapshot-bound transaction; finished-goods rows were retained with zero
+quantities/reservations and no last-batch references. Production-linked display
+receipts were removed; ten receipts without an explicit batch link were retained.
+Products, recipes, raw-material balances, users, branches, sales and accounting
+were outside the deletion scope.
+
+Selective backups and maintenance verification records are under the ignored
+`.local/backups/` directory. A full cleanup/restore rehearsal using the then-live
+foreign keys and triggers succeeded and was rolled back before the committed
+cleanup. The committed state was checked from a new read-only connection.
+The later additive migrations mean any future restore must be reviewed against
+the current schema; do not rerun a historical cleanup or overwrite subsequent
+real operations. Internal sequences were deliberately not reset.
+
+Opening quantities must come from the physical stocktake, not inferred from the
+removed trial history. Do not start real operation on the old Render code.
 
 ## Operating rules
 

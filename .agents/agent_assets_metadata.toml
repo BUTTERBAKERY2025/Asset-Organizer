@@ -47,3 +47,17 @@ mtime_ms = 1790088361741
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/ed275f5b-262d-4c40-a34a-b163c22757b6/f0ce1f18-0d50-41a6-bf0e-3869dd1daba9"
 storage_version_token = "1790088376523739"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "Ge8y6L_YeNn0PpOQM9vfq"
+uri = "file://.local/backups/production-trial-cleanup-and-backup-2026-09-22.tar.gz"
+type = "unspecified"
+title = "النسخة الاحتياطية وتقرير تنظيف بيانات التجربة"
+description = "تتضمن بيانات ما قبل التنظيف، ونتيجة تجربة الاسترجاع الكاملة، والتحقق بعد الحذف والتصفير، وسجل تحديث قاعدة التشغيل. احتفظ بنسخة خارج المشروع."
+logical_id = "9b3a12ce-a375-466b-bac9-8403600f9a1d"
+content_hash = "sha256:c1457122833565e818a5909875e8a9c1a6e47db7a05a1224fb27828ae07c6779"
+size = 186700
+mtime_ms = 1790089217292
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/9b3a12ce-a375-466b-bac9-8403600f9a1d/3eaf62f1-c6e9-41e6-89af-ec6969bf1d0d"
+storage_version_token = "1790089250470529"
+content_type = "application/octet-stream"
