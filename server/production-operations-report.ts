@@ -207,6 +207,9 @@ export function registerProductionOperationsReportRoute(app: Express): void {
               poi.product_id,
               COALESCE(NULLIF(BTRIM(poi.product_name), ''), 'منتج غير مسمى') AS product_name,
               NULLIF(BTRIM(p.unit), '') AS catalog_unit,
+              poi.execution_unit,
+              CASE WHEN poi.execution_unit IS NOT NULL THEN COALESCE(SUM(executed.finished), 0) END AS linked_finished_quantity,
+              CASE WHEN poi.execution_unit IS NOT NULL THEN COALESCE(SUM(executed.in_progress), 0) END AS linked_in_progress_quantity,
               ARRAY_AGG(DISTINCT apo.source_branch_id) AS source_branch_ids,
               ARRAY_AGG(DISTINCT apo.target_branch_id) AS target_branch_ids,
               COALESCE(SUM(poi.target_quantity), 0) AS planned_quantity,
@@ -215,11 +218,17 @@ export function registerProductionOperationsReportRoute(app: Express): void {
             FROM advanced_production_orders apo
             INNER JOIN production_order_items poi ON poi.order_id = apo.id
             LEFT JOIN products p ON p.id = poi.product_id
+            LEFT JOIN LATERAL (
+              SELECT COALESCE(SUM(b.quantity) FILTER (WHERE b.status = 'finished'), 0) AS finished,
+                COALESCE(SUM(b.quantity) FILTER (WHERE b.status = 'in_progress'), 0) AS in_progress
+              FROM daily_production_batches b WHERE b.advanced_production_order_item_id = poi.id
+            ) executed ON true
             WHERE apo.start_date <= ${window.endDate}
               AND apo.end_date >= ${window.startDate}
+              AND apo.status <> 'cancelled' AND poi.status <> 'cancelled'
               AND (${advancedSourceBranch} OR ${advancedTargetBranch})
             GROUP BY poi.product_id, COALESCE(NULLIF(BTRIM(poi.product_name), ''), 'منتج غير مسمى'),
-                     NULLIF(BTRIM(p.unit), '')
+                     NULLIF(BTRIM(p.unit), ''), poi.execution_unit
             ORDER BY product_name, catalog_unit NULLS LAST
           `);
           const plannedRows: ProductionOperationsPlannedRow[] = plannedResult.rows.map((raw) => {
@@ -233,7 +242,11 @@ export function registerProductionOperationsReportRoute(app: Express): void {
               plannedQuantity: numberValue(row.planned_quantity),
               advancedOrderIds: numberIds(row.advanced_order_ids),
               advancedOrderItemIds: numberIds(row.advanced_order_item_ids),
-              comparisonStatus: "unavailable_without_explicit_batch_link",
+              comparisonStatus: row.execution_unit ? "available_explicit_batch_order_item_fk" : "unavailable_without_explicit_batch_link",
+              executionUnit: textValue(row.execution_unit) || null,
+              linkedFinishedQuantity: row.execution_unit ? numberValue(row.linked_finished_quantity) : null,
+              linkedInProgressQuantity: row.execution_unit ? numberValue(row.linked_in_progress_quantity) : null,
+              remainingQuantity: row.execution_unit ? numberValue(row.planned_quantity) - numberValue(row.linked_finished_quantity) - numberValue(row.linked_in_progress_quantity) : null,
             };
           });
 
@@ -424,7 +437,7 @@ export function registerProductionOperationsReportRoute(app: Express): void {
 
           const coverageResult = await tx.execute(sql`
             WITH scoped_finished AS (
-              SELECT b.id, b.recipe_backed, b.central_kitchen_order_item_id,
+              SELECT b.id, b.recipe_backed, b.central_kitchen_order_item_id, b.advanced_production_order_item_id,
                 EXISTS (
                   SELECT 1 FROM production_inventory_logs pil
                   WHERE pil.batch_id = b.id
@@ -441,16 +454,17 @@ export function registerProductionOperationsReportRoute(app: Express): void {
               COUNT(*) FILTER (WHERE recipe_backed IS TRUE) AS recipe_backed,
               COUNT(*) FILTER (WHERE recipe_backed IS FALSE) AS non_recipe,
               COUNT(*) FILTER (WHERE recipe_backed IS NULL) AS recipe_status_unknown,
-              COUNT(*) FILTER (WHERE central_kitchen_order_item_id IS NOT NULL) AS linked,
-              COUNT(*) FILTER (WHERE central_kitchen_order_item_id IS NULL) AS unlinked,
+              COUNT(*) FILTER (WHERE central_kitchen_order_item_id IS NOT NULL OR advanced_production_order_item_id IS NOT NULL) AS linked,
+              COUNT(*) FILTER (WHERE central_kitchen_order_item_id IS NULL AND advanced_production_order_item_id IS NULL) AS unlinked,
               COUNT(*) FILTER (WHERE output_posting_proven) AS output_posting_proven,
               COUNT(*) FILTER (
-                WHERE (recipe_backed IS TRUE OR central_kitchen_order_item_id IS NOT NULL)
+                WHERE (recipe_backed IS TRUE OR central_kitchen_order_item_id IS NOT NULL OR advanced_production_order_item_id IS NOT NULL)
                   AND NOT output_posting_proven
               ) AS output_posting_missing,
               COUNT(*) FILTER (
                 WHERE recipe_backed IS NULL
                   AND central_kitchen_order_item_id IS NULL
+                  AND advanced_production_order_item_id IS NULL
                   AND NOT output_posting_proven
               ) AS output_posting_unknown
             FROM scoped_finished
@@ -617,7 +631,7 @@ export function registerProductionOperationsReportRoute(app: Express): void {
                 orderCount: advancedOrderIds.size,
                 itemCount: plannedRows.reduce((total, row) => total + row.advancedOrderItemIds.length, 0),
                 plannedQuantityByCatalogUnit,
-                comparisonStatus: "unavailable_without_explicit_batch_link",
+                comparisonStatus: plannedRows.some(row => row.executionUnit) ? "partial_explicit_batch_link" : "unavailable_without_explicit_batch_link",
               },
               centralKitchen: {
                 orderCount: new Set(requestRows.flatMap((row) => row.orderIds)).size,
@@ -693,7 +707,7 @@ export function registerProductionOperationsReportRoute(app: Express): void {
                   dateBasis: "request needed_date cohort; linked batches are not filtered by production_date",
                 },
                 advancedPlanToBatch: {
-                  status: "unavailable_without_explicit_batch_link",
+                  status: plannedRows.some(row => row.executionUnit) ? "available_explicit_batch_order_item_fk" : "unavailable_without_explicit_batch_link",
                 },
               },
               costing: {
@@ -710,7 +724,7 @@ export function registerProductionOperationsReportRoute(app: Express): void {
                 "غياب إثبات ترحيل المخرج يعد نقصاً فقط للدفعات ذات رابط دورة صريح؛ السجل التاريخي بلا علامة يبقى غير معروف.",
                 "استخدم centralKitchen.byInventoryMode فقط لعرض كميات طلبات المطبخ. الحقول المجمعة القديمة موسومة deprecated وتمزج حقائق تشغيلية ولا تمثل مخزوناً فعلياً.",
                 "أي حالة طلب ملغاة أو مرفوضة معروضة في صف مستقل ولا تدخل activeOrderCount.",
-                "وحدة خطط الإنتاج المتقدمة والهالك هي وحدة الكتالوج الحالية عند توفرها وليست لقطة تاريخية.",
+                "مقارنة الخطة تستخدم رابط بند صريح ووحدة تنفيذ مجمدة وإجمالي دفعات البند عبر كامل الفترة؛ التاريخي غير المرتبط مجهول. وحدة الكتالوج للخطط غير المرتبطة والهالك ليست لقطة تاريخية.",
               ],
             },
           };

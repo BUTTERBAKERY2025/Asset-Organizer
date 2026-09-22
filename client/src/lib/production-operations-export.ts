@@ -227,6 +227,8 @@ const FIELD_LABELS: Record<string, string> = {
   advancedOrderIds: "معرفات الأوامر المتقدمة",
   advancedOrderItemIds: "معرفات بنود الأوامر",
   comparisonStatus: "حالة المقارنة",
+  executionUnit: "وحدة التنفيذ المجمدة",
+  remainingQuantity: "متبقٍ لإنشاء دفعات",
   kitchenId: "معرف المطبخ",
   requestBranchIds: "معرفات فروع الطلب",
   inventoryMode: "وضع المخزون",
@@ -290,8 +292,12 @@ const SECTION_DEFINITIONS = {
       "advancedOrderIds",
       "advancedOrderItemIds",
       "comparisonStatus",
+      "executionUnit",
+      "linkedFinishedQuantity",
+      "linkedInProgressQuantity",
+      "remainingQuantity",
     ],
-    quantityFields: ["plannedQuantity"],
+    quantityFields: ["plannedQuantity", "linkedFinishedQuantity", "linkedInProgressQuantity", "remainingQuantity"],
   },
   requests: {
     name: "requests",
@@ -498,6 +504,7 @@ function displayFieldValue(header: string, value: ProductionReportExportCell, ro
   if (header === "comparisonStatus") {
     return value === "unavailable_without_explicit_batch_link"
       ? "غير متاحة دون رابط دفعة صريح"
+      : value === "available_explicit_batch_order_item_fk" ? "رابط بند صريح"
       : String(value);
   }
   if (header === "linkedProductionComparisonStatus") {
@@ -541,7 +548,7 @@ function globalSummaryRows(metadata: ProductionReportExportMetadata): string[][]
     ],
     [
       "ملخص الخطط العام غير المفلتر",
-      `أوامر: ${summary.advancedPlans.orderCount}؛ بنود: ${summary.advancedPlans.itemCount}؛ الكمية المخططة حسب وحدة الكتالوج: ${quantitiesLine(summary.advancedPlans.plannedQuantityByCatalogUnit)}؛ حالة المقارنة: غير متاحة دون رابط دفعة صريح`,
+      `أوامر: ${summary.advancedPlans.orderCount}؛ بنود: ${summary.advancedPlans.itemCount}؛ الكمية المخططة حسب وحدة الكتالوج: ${quantitiesLine(summary.advancedPlans.plannedQuantityByCatalogUnit)}؛ المقارنة للروابط الصريحة فقط؛ التاريخي غير المرتبط غير معلوم`,
     ],
     [
       "ملخص طلبات المطبخ العام غير المفلتر",

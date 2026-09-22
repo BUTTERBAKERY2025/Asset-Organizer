@@ -3948,6 +3948,7 @@ export const productionOrderItems = pgTable("production_order_items", {
   productCategory: text("product_category"),
   targetQuantity: integer("target_quantity").notNull(),
   originalQuantity: integer("original_quantity"), // الكمية الأصلية من الملف المصدر
+  executionUnit: text("execution_unit"), // Frozen only on explicit linked execution; historical plans remain NULL.
   producedQuantity: integer("produced_quantity").default(0),
   wastedQuantity: integer("wasted_quantity").default(0),
   unitPrice: real("unit_price").default(0), // سعر الوحدة
@@ -4126,6 +4127,10 @@ export const dailyProductionBatches = pgTable("daily_production_batches", {
   destination: text("destination").notNull(), // display_bar, kitchen_trolley, freezer, refrigerator
   shiftId: integer("shift_id").references(() => shifts.id),
   productionOrderId: integer("production_order_id"),
+  advancedProductionOrderItemId: integer("advanced_production_order_item_id")
+    .references(() => productionOrderItems.id, { onDelete: "restrict" }),
+  advancedIdempotencyKey: varchar("advanced_idempotency_key", { length: 128 }),
+  advancedPayloadFingerprint: varchar("advanced_payload_fingerprint", { length: 64 }),
   centralKitchenOrderItemId: integer("central_kitchen_order_item_id")
     .references(() => centralKitchenOrderItems.id, { onDelete: "restrict" }),
   centralKitchenIdempotencyKey: varchar("central_kitchen_idempotency_key", { length: 128 }),
@@ -4151,6 +4156,10 @@ export const dailyProductionBatches = pgTable("daily_production_batches", {
   index("idx_daily_production_batches_branch_id").on(table.branchId),
   index("idx_daily_production_batches_production_date").on(table.productionDate),
   index("idx_daily_production_batches_branch_date").on(table.branchId, table.productionDate),
+  index("idx_daily_production_advanced_item").on(table.advancedProductionOrderItemId),
+  uniqueIndex("uq_daily_production_advanced_creator_key")
+    .on(table.recordedBy, table.advancedIdempotencyKey)
+    .where(sql`${table.advancedIdempotencyKey} IS NOT NULL`),
   uniqueIndex("uq_daily_production_linked_item_date")
     .on(table.centralKitchenOrderItemId, table.productionDate)
     .where(sql`${table.centralKitchenOrderItemId} IS NOT NULL`),
@@ -7848,6 +7857,12 @@ export const materialTransfers = pgTable("material_transfers", {
   notes: text("notes"),
   createdBy: varchar("created_by").references(() => users.id),
   createdByName: text("created_by_name"),
+  // Durable request deduplication. requestId remains the business request FK
+  // and must not be used as an idempotency key.
+  idempotencyKey: varchar("idempotency_key", { length: 128 }),
+  idempotencyActorId: varchar("idempotency_actor_id").references(() => users.id),
+  idempotencyAction: varchar("idempotency_action", { length: 64 }),
+  idempotencyPayloadHash: varchar("idempotency_payload_hash", { length: 64 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
@@ -7857,6 +7872,9 @@ export const materialTransfers = pgTable("material_transfers", {
   index("idx_material_transfers_date").on(table.transferDate),
   index("idx_material_transfers_request").on(table.requestId),
   uniqueIndex("material_transfers_number_unique").on(table.transferNumber),
+  uniqueIndex("uq_material_transfers_idempotency")
+    .on(table.idempotencyActorId, table.idempotencyAction, table.idempotencyKey)
+    .where(sql`${table.idempotencyKey} IS NOT NULL`),
 ]);
 
 export const insertMaterialTransferSchema = createInsertSchema(materialTransfers).omit({
@@ -13007,7 +13025,7 @@ export const centralKitchenOrders = pgTable("central_kitchen_orders", {
   index("idx_central_kitchen_orders_request_created").on(table.requestBranchId, table.createdAt),
   index("idx_central_kitchen_orders_kitchen_created").on(table.centralKitchenId, table.createdAt),
   index("idx_central_kitchen_orders_status").on(table.status),
-  check("ck_central_kitchen_orders_status", sql`${table.status} IN ('requested', 'approved', 'prepared', 'dispatched', 'received')`),
+  check("ck_central_kitchen_orders_status", sql`${table.status} IN ('requested', 'approved', 'prepared', 'dispatched', 'received', 'cancelled')`),
   check("ck_central_kitchen_orders_distinct_branches", sql`${table.requestBranchId} <> ${table.centralKitchenId}`),
   check("ck_central_kitchen_orders_discrepancy_status", sql`${table.discrepancyStatus} IN ('none', 'open', 'resolved')`),
   check("ck_central_kitchen_orders_inventory_mode", sql`${table.inventoryMode} IS NULL OR ${table.inventoryMode} IN ('shadow', 'real')`),
@@ -13066,6 +13084,7 @@ export const centralKitchenOrderEvents = pgTable("central_kitchen_order_events",
   fromStatus: text("from_status"),
   toStatus: text("to_status").notNull(),
   notes: text("notes"),
+  changeSnapshot: jsonb("change_snapshot"),
   idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
   payloadFingerprint: varchar("payload_fingerprint", { length: 64 }),
   actorId: varchar("actor_id").notNull().references(() => users.id),

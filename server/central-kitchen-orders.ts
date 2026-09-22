@@ -7,6 +7,7 @@ export const CENTRAL_KITCHEN_STATUSES = [
   "prepared",
   "dispatched",
   "received",
+  "cancelled",
 ] as const;
 
 export type CentralKitchenStatus = (typeof CENTRAL_KITCHEN_STATUSES)[number];
@@ -17,6 +18,7 @@ export const CENTRAL_KITCHEN_TRANSITIONS: Readonly<Record<CentralKitchenStatus, 
   prepared: "dispatched",
   dispatched: "received",
   received: null,
+  cancelled: null,
 };
 
 export function canTransitionCentralKitchenOrder(
@@ -60,6 +62,31 @@ export const centralKitchenIdempotencyKeySchema = z.string()
   .min(8)
   .max(128)
   .regex(/^[A-Za-z0-9._:-]+$/, "Invalid idempotency key");
+
+export const centralKitchenRequestChangeSchema = z.object({
+  expectedEventId: z.number().int().nonnegative(),
+  reason: z.string().trim().min(1).max(2000),
+  idempotencyKey: centralKitchenIdempotencyKeySchema.optional(),
+  // Existing identities remain stable for historical references.
+  edit: z.object({
+    neededDate: realCalendarDate,
+    neededTime: neededTime.nullable(),
+    notes: z.string().trim().max(2000).nullable(),
+    items: z.array(z.object({
+      itemId: z.number().int().positive(),
+      requestedQuantity: exactSixDecimalPositive,
+    }).strict()).min(1).max(500),
+  }).strict().optional(),
+}).strict();
+
+export function centralKitchenRequestChangeBlock(status: string, edit: boolean, committed: boolean): string | null {
+  if (status === "prepared") return "لا يمكن إلغاء طلب مجهز: لا يتوفر إثبات آمن لتحرير جميع الحجوزات ذرياً. راجع مسؤول المطبخ دون عكس المخزون.";
+  if (edit ? status !== "requested" : !["requested", "approved"].includes(status)) {
+    return "التعديل للطلبات الجديدة فقط والإلغاء قبل التجهيز والإرسال والاستلام فقط";
+  }
+  if (committed) return "لا يمكن تعديل أو إلغاء طلب مرتبط بإنتاج أو حجز أو حركة مخزون، حتى لو كانت دفعة الإنتاج متعطلة";
+  return null;
+}
 
 export const createCentralKitchenOrderSchema = z.object({
   requestBranchId: trimmedText(255),
@@ -329,7 +356,7 @@ export function calculateCentralKitchenPilotMetrics(
   today = saudiDate(),
 ) {
   const statusCounts = Object.fromEntries(
-    ["requested", "approved", "prepared", "dispatched", "received"].map((status) => [
+    ["requested", "approved", "prepared", "dispatched", "received", "cancelled"].map((status) => [
       status,
       orders.filter((order) => order.status === status).length,
     ]),
@@ -359,7 +386,7 @@ export function calculateCentralKitchenPilotMetrics(
   return {
     totalOrders: orders.length,
     statusCounts,
-    overdueOrders: orders.filter((order) => order.status !== "received" && !!order.neededDate && order.neededDate < today).length,
+    overdueOrders: orders.filter((order) => !["received", "cancelled"].includes(order.status) && !!order.neededDate && order.neededDate < today).length,
     openDiscrepancies: orders.filter((order) => order.discrepancyStatus === "open").length,
     fulfillmentRate: lineFulfillmentRates.length
       ? Math.round((lineFulfillmentRates.reduce((sum, rate) => sum + rate, 0) / lineFulfillmentRates.length) * 10_000) / 100

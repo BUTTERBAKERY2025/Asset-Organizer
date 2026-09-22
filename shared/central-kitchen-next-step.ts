@@ -98,6 +98,8 @@ export function getCentralKitchenNextStep({
     : "";
 
   switch (normalizedStatus) {
+    case "cancelled":
+      return nextStep("ملغي — لا يوجد طلب نشط", "—", "complete", true);
     case "requested":
       return nextStep("اعتماد", "مصدر المطبخ", "approval");
     case "approved":

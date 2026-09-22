@@ -6,12 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
-import { Plus, Search, Edit, Trash2, Package, Filter, X, Download, FileSpreadsheet, ArrowRight } from "lucide-react";
+import { Plus, Search, Edit, Archive, Package, Filter, X, Download, FileSpreadsheet, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TablePagination } from "@/components/ui/pagination";
@@ -43,12 +44,27 @@ const UNITS = [
   { value: "تذكرة/حجز", label: "تذكرة/حجز" },
 ];
 
+function getMutationError(error: unknown, fallback: string) {
+  if (!(error instanceof Error)) return fallback;
+  const jsonStart = error.message.indexOf("{");
+  if (jsonStart >= 0) {
+    try {
+      const payload = JSON.parse(error.message.slice(jsonStart));
+      if (typeof payload.error === "string") return payload.error;
+    } catch {
+      // Keep the safe fallback for non-JSON server responses.
+    }
+  }
+  return error.message || fallback;
+}
+
 export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [productTypeFilter, setProductTypeFilter] = useState<string>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [productToArchive, setProductToArchive] = useState<Product | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
@@ -100,8 +116,8 @@ export default function ProductsPage() {
       toast({ title: "تم إضافة المنتج بنجاح" });
       resetForm();
     },
-    onError: () => {
-      toast({ title: "خطأ", description: "فشل في إضافة المنتج", variant: "destructive" });
+    onError: (error) => {
+      toast({ title: "خطأ", description: getMutationError(error, "فشل في إضافة المنتج"), variant: "destructive" });
     },
   });
 
@@ -112,8 +128,8 @@ export default function ProductsPage() {
       toast({ title: "تم تحديث المنتج بنجاح" });
       resetForm();
     },
-    onError: () => {
-      toast({ title: "خطأ", description: "فشل في تحديث المنتج", variant: "destructive" });
+    onError: (error) => {
+      toast({ title: "خطأ", description: getMutationError(error, "فشل في تحديث المنتج"), variant: "destructive" });
     },
   });
 
@@ -121,10 +137,11 @@ export default function ProductsPage() {
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/products/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      toast({ title: "تم حذف المنتج بنجاح" });
+      toast({ title: "تمت أرشفة المنتج", description: "تم إيقاف المنتج مع الاحتفاظ بهويته وسجله السابق." });
+      setProductToArchive(null);
     },
-    onError: () => {
-      toast({ title: "خطأ", description: "فشل في حذف المنتج", variant: "destructive" });
+    onError: (error) => {
+      toast({ title: "تعذرت أرشفة المنتج", description: getMutationError(error, "فشل في أرشفة المنتج"), variant: "destructive" });
     },
   });
 
@@ -140,7 +157,7 @@ export default function ProductsPage() {
     const data = {
       name: formData.name,
       nameEn: formData.nameEn,
-      sku: formData.sku,
+      sku: formData.sku.trim() || null,
       category: formData.category,
       productType: formData.productType,
       unit: formData.unit,
@@ -148,7 +165,6 @@ export default function ProductsPage() {
       priceExclVat: formData.priceExclVat ? parseFloat(formData.priceExclVat) : null,
       vatAmount: formData.vatAmount ? parseFloat(formData.vatAmount) : null,
       vatRate: formData.vatRate ? parseFloat(formData.vatRate) : 0.15,
-      isActive: "true",
     };
 
     if (editingProduct) {
@@ -569,19 +585,20 @@ export default function ProductsPage() {
                         <th className="p-2 sm:p-3 text-right font-semibold hidden lg:table-cell">السعر بدون ضريبة</th>
                         <th className="p-2 sm:p-3 text-right font-semibold hidden lg:table-cell">الضريبة</th>
                         <th className="p-2 sm:p-3 text-right font-semibold">السعر شامل</th>
+                        <th className="p-2 sm:p-3 text-right font-semibold">الحالة</th>
                         {canManageProducts && <th className="p-2 sm:p-3 text-right font-semibold">إجراءات</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y">
                       {paginatedProducts.length === 0 ? (
                         <tr>
-                          <td colSpan={canManageProducts ? 10 : 9} className="p-8 text-center text-muted-foreground">
+                          <td colSpan={canManageProducts ? 11 : 10} className="p-8 text-center text-muted-foreground">
                             لا توجد منتجات مطابقة للبحث
                           </td>
                         </tr>
                       ) : (
                         paginatedProducts.map((product, index) => (
-                          <tr key={product.id} className="hover:bg-muted/30" data-testid={`row-product-${product.id}`}>
+                          <tr key={product.id} className={`hover:bg-muted/30 ${product.isActive === "false" ? "opacity-60" : ""}`} data-testid={`row-product-${product.id}`}>
                             <td className="p-2 sm:p-3 text-muted-foreground text-xs">
                               {(currentPage - 1) * itemsPerPage + index + 1}
                             </td>
@@ -611,6 +628,11 @@ export default function ProductsPage() {
                             <td className="p-2 sm:p-3 tabular-nums font-semibold text-primary text-xs sm:text-sm">
                               {(product.basePrice || 0).toFixed(2)} ر.س
                             </td>
+                            <td className="p-2 sm:p-3">
+                              <Badge variant={product.isActive === "false" ? "secondary" : "default"}>
+                                {product.isActive === "false" ? "مؤرشف" : "نشط"}
+                              </Badge>
+                            </td>
                             {canManageProducts && (
                               <td className="p-2 sm:p-3">
                                 <div className="flex items-center gap-1">
@@ -625,17 +647,16 @@ export default function ProductsPage() {
                                       <Edit className="w-3 h-3 sm:w-4 sm:h-4" />
                                     </Button>
                                   )}
-                                  {canDeleteProduct && (
+                                  {canDeleteProduct && product.isActive !== "false" && (
                                     <Button
                                       variant="ghost"
                                       size="icon"
                                       className="h-8 w-8 sm:h-8 sm:w-8 text-destructive hover:text-destructive"
-                                      onClick={() => {
-                                        if (canDeleteProduct) deleteMutation.mutate(product.id);
-                                      }}
+                                      onClick={() => setProductToArchive(product)}
+                                      aria-label={`أرشفة ${product.name}`}
                                       data-testid={`button-delete-${product.id}`}
                                     >
-                                      <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                                      <Archive className="w-3 h-3 sm:w-4 sm:h-4" />
                                     </Button>
                                   )}
                                 </div>
@@ -662,6 +683,26 @@ export default function ProductsPage() {
             )}
           </CardContent>
         </Card>
+        <AlertDialog open={Boolean(productToArchive)} onOpenChange={(open) => !open && setProductToArchive(null)}>
+          <AlertDialogContent dir="rtl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>أرشفة المنتج؟</AlertDialogTitle>
+              <AlertDialogDescription>
+                سيتم إيقاف «{productToArchive?.name}» عن الاستخدام الجديد مع الاحتفاظ بهويته وسجل المبيعات والمخزون السابق. لن يتم حذفه نهائياً.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>إلغاء</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => productToArchive && deleteMutation.mutate(productToArchive.id)}
+                disabled={deleteMutation.isPending}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleteMutation.isPending ? "جارٍ الأرشفة..." : "أرشفة وإيقاف"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </Layout>
   );

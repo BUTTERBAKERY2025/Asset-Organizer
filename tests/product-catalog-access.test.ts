@@ -6,10 +6,12 @@ type Permission = { module: string; actions: string[] };
 const permissionStorage = vi.hoisted(() => new Map<string, Permission[]>());
 const productStorage = vi.hoisted(() => ({
   getAllProducts: vi.fn(async () => [{ id: 1, name: "Catalog item" }]),
-  getProduct: vi.fn(async (id: number) => ({ id, name: "Catalog item" })),
+  getProduct: vi.fn(async (id: number) => ({ id, name: "Catalog item", isActive: "true" })),
+  getProductBySku: vi.fn(async () => undefined),
   createProduct: vi.fn(async (data: unknown) => ({ id: 2, ...(data as object) })),
   updateProduct: vi.fn(async (id: number, data: unknown) => ({ id, ...(data as object) })),
   deleteProduct: vi.fn(async () => true),
+  createSystemAuditLog: vi.fn(async () => ({})),
 }));
 
 vi.mock("../server/auth", () => {
@@ -268,6 +270,62 @@ describe("product catalog access", () => {
     expect(created.statusCode).toBe(201);
     expect(updated.statusCode).toBe(200);
     expect(deleted.statusCode).toBe(200);
+    expect(deleted.body).toEqual({ success: true, archived: true });
+  });
+
+  it("rejects immutable and unknown PATCH fields without touching storage", async () => {
+    const currentUser = user("operations-invalid-update");
+    grant(currentUser.id, "operations", ["edit"]);
+
+    const immutable = await invoke("patch", "/api/products/:id", {
+      user: currentUser,
+      params: { id: "1" },
+      body: { id: 99, createdAt: "2020-01-01" },
+    });
+
+    expect(immutable.statusCode).toBe(400);
+    expect(productStorage.updateProduct).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 for a missing product and 409 for a duplicate SKU", async () => {
+    const currentUser = user("operations-update-errors");
+    grant(currentUser.id, "operations", ["edit"]);
+
+    productStorage.getProduct.mockResolvedValueOnce(undefined as any);
+    const missing = await invoke("patch", "/api/products/:id", {
+      user: currentUser,
+      params: { id: "404" },
+      body: { name: "Missing" },
+    });
+
+    productStorage.getProductBySku.mockResolvedValueOnce({ id: 2, sku: "DUP" } as any);
+    const duplicate = await invoke("patch", "/api/products/:id", {
+      user: currentUser,
+      params: { id: "1" },
+      body: { sku: "DUP" },
+    });
+
+    expect(missing.statusCode).toBe(404);
+    expect(duplicate.statusCode).toBe(409);
+  });
+
+  it("archives instead of physically deleting and prevents repeated retirement", async () => {
+    const currentUser = user("operations-archive");
+    grant(currentUser.id, "operations", ["delete"]);
+
+    const archived = await invoke("delete", "/api/products/:id", {
+      user: currentUser,
+      params: { id: "1" },
+    });
+    productStorage.getProduct.mockResolvedValueOnce({ id: 1, name: "Old", isActive: "false" } as any);
+    const repeated = await invoke("delete", "/api/products/:id", {
+      user: currentUser,
+      params: { id: "1" },
+    });
+
+    expect(archived.statusCode).toBe(200);
+    expect(productStorage.deleteProduct).toHaveBeenCalledWith(1);
+    expect(repeated.statusCode).toBe(409);
   });
 });
 

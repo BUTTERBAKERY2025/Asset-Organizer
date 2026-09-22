@@ -8,6 +8,12 @@
  */
 
 export const MANUAL_PRODUCTION_RESERVED_FIELDS = [
+  "advancedProductionOrderItemId",
+  "advancedIdempotencyKey",
+  "advancedPayloadFingerprint",
+  "advanced_production_order_item_id",
+  "advanced_idempotency_key",
+  "advanced_payload_fingerprint",
   "recipeBacked",
   "centralKitchenOrderItemId",
   "centralKitchenIdempotencyKey",
@@ -59,6 +65,9 @@ export function hasIndependentEntryAcknowledgement(body: unknown): boolean {
 export function isOperationallyLinkedProductionBatch(batch: unknown): boolean {
   if (!isRecord(batch)) return false;
   return batch.recipeBacked === true
+    || batch.advancedProductionOrderItemId != null
+    || batch.advancedIdempotencyKey != null
+    || batch.advancedPayloadFingerprint != null
     || batch.centralKitchenOrderItemId != null
     || batch.centralKitchenIdempotencyKey != null
     || batch.centralKitchenPayloadFingerprint != null

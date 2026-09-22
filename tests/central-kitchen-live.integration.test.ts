@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import express from "express";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import pg from "pg";
@@ -177,6 +178,31 @@ function key(label: string) {
   return `ck-live-${label}-${keySequence}-12345678`;
 }
 
+// Real HTTP transport around the same captured production handlers and
+// rollback-only DB fixture. Authentication remains the harness's test double;
+// handler-level branch authorization and production services are not mocked.
+async function httpInvoke(method: string, path: string, options: Parameters<typeof invoke>[2]): Promise<TestResponse> {
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => { (req as any).currentUser = options.user; next(); });
+  (app as any)[method](path, route(method, path));
+  const server = createServer(app);
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address() as { port: number };
+    const resolvedPath = path.replace(/:([A-Za-z]+)/g, (_, name) => encodeURIComponent(options.params?.[name]));
+    const response = await fetch(`http://127.0.0.1:${address.port}${resolvedPath}`, {
+      method: method.toUpperCase(),
+      headers: { "Content-Type": "application/json", ...options.headers },
+      ...(options.body ? { body: JSON.stringify(options.body) } : {}),
+    });
+    return { statusCode: response.status, body: await response.json(), headers: Object.fromEntries(response.headers) };
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
+}
+
 function createBody(
   items: any[],
   idempotencyKey = key("create"),
@@ -252,6 +278,11 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
       throw new Error("Central-kitchen live integration tests are forbidden outside DEVELOPMENT");
     }
     if (!process.env.DATABASE_URL) throw new Error("Development DATABASE_URL is required");
+    const databaseHost = new URL(process.env.DATABASE_URL).hostname;
+    // Replit's managed development PostgreSQL is reached as "helium".
+    if (!["localhost", "127.0.0.1", "[::1]", "::1", "helium"].includes(databaseHost)) {
+      throw new Error("Rollback integration tests require an explicitly configured local DEVELOPMENT DATABASE_URL");
+    }
 
     const pool = new pg.Pool({
       connectionString: process.env.DATABASE_URL,
@@ -477,6 +508,135 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     const { registerRoutes } = await import("../server/routes");
     await registerRoutes(createServer(), captureApp());
   }, 30_000);
+
+  it("HTTP edits and cancels a branch request once without stock changes and denies the kitchen branch", async () => {
+    expect((await setRuntime("real")).statusCode).toBe(200);
+    const [product] = await databaseState.db.select().from(products).where(eq(products.id, fixture.stockedProductId));
+    const stockBefore = await productBalance(fixture.kitchenBranchId, product.id);
+    const materialBefore = await warehouseBalance(fixture.kitchenBranchId, fixture.materialId);
+    const created = await httpInvoke("post", "/api/central-kitchen-orders", {
+      user: fixture.requestUser,
+      body: createBody([{ productId: product.id, productName: product.name, unit: product.unit, requestedQuantity: 2 }]),
+    });
+    expect(created.statusCode).toBe(201);
+    const params = { id: String(created.body.id) };
+    const revision = (order: any) => Math.max(0, ...order.events.map((event: any) => event.id));
+    const edit = {
+      expectedEventId: revision(created.body), reason: "HTTP demand correction", idempotencyKey: key("http-edit"),
+      edit: { neededDate: "2098-09-01", neededTime: null, notes: "corrected",
+        items: [{ itemId: created.body.items[0].id, requestedQuantity: 3 }] },
+    };
+    const path = "/api/central-kitchen-orders/:id/request-change";
+    expect((await httpInvoke("post", path, { user: fixture.kitchenUser, params, body: edit })).statusCode).toBe(403);
+    const edited = await httpInvoke("post", path, { user: fixture.requestUser, params, body: edit });
+    expect(edited.statusCode).toBe(200);
+    expect(Number(edited.body.items[0].requestedQuantity)).toBe(3);
+    const editedReplay = await httpInvoke("post", path, { user: fixture.requestUser, params, body: edit });
+    expect(editedReplay.statusCode).toBe(200);
+    expect(editedReplay.headers["idempotent-replayed"]).toBe("true");
+    expect(editedReplay.body.events).toHaveLength(edited.body.events.length);
+    const cancel = { expectedEventId: revision(edited.body), reason: "HTTP request withdrawn", idempotencyKey: key("http-cancel") };
+    const cancelled = await httpInvoke("post", path, { user: fixture.requestUser, params, body: cancel });
+    expect(cancelled.statusCode).toBe(200);
+    expect(cancelled.body.status).toBe("cancelled");
+    const replay = await httpInvoke("post", path, { user: fixture.requestUser, params, body: cancel });
+    expect(replay.statusCode).toBe(200);
+    expect(replay.headers["idempotent-replayed"]).toBe("true");
+    expect(replay.body.events).toHaveLength(cancelled.body.events.length);
+    expect(replay.body.events.filter((event: any) => event.eventType === "cancelled")).toHaveLength(1);
+    expect(await productBalance(fixture.kitchenBranchId, product.id)).toEqual(stockBefore);
+    expect(await warehouseBalance(fixture.kitchenBranchId, fixture.materialId)).toEqual(materialBefore);
+    expect(replay.body.allocations).toHaveLength(0);
+    expect(replay.body.shadowInventoryEntries).toHaveLength(0);
+    expect((await setRuntime("shadow")).statusCode).toBe(200);
+  });
+
+  it("HTTP executes an approved plan through recipe-backed batches, posts finish once and releases cancelled capacity", async () => {
+    const [material] = await databaseState.db.select().from(warehouseItems).where(eq(warehouseItems.id, fixture.wrongUnitMaterialId));
+    const [product] = await databaseState.db.insert(products).values({
+      name: key("http-plan-product"), category: "test", unit: "tray", productType: "finish", isActive: "true",
+    }).returning();
+    const [plan] = await databaseState.db.insert(schema.advancedProductionOrders).values({
+      orderNumber: key("http-plan"), title: "HTTP execution rollback fixture", status: "approved",
+      sourceBranchId: fixture.kitchenBranchId, targetBranchId: fixture.requestBranchId,
+      startDate: "2098-09-01", endDate: "2098-09-01", createdBy: fixture.kitchenUser.id,
+    }).returning();
+    const [item] = await databaseState.db.insert(schema.productionOrderItems).values({
+      orderId: plan.id, productId: product.id, productName: product.name, targetQuantity: 2,
+    }).returning();
+    const base = "/api/advanced-production-orders/:orderId";
+    const batchPath = `${base}/items/:itemId/batches`;
+    const params = { orderId: String(plan.id), itemId: String(item.id) };
+    const batchBody = { quantity: 1, unit: product.unit, productionDate: "2098-09-01", destination: "display_bar" };
+    const create = (user = fixture.kitchenUser) => httpInvoke("post", batchPath, {
+      user, params, body: batchBody, headers: { "Idempotency-Key": key("http-plan-batch") },
+    });
+    expect((await create(fixture.requestUser)).statusCode).toBe(403);
+    // No nonrecipe fallback is permitted.
+    expect((await create()).statusCode).toBe(409);
+    const recipeResult = await httpInvoke("post", "/api/central-kitchen-recipes", {
+      user: fixture.kitchenUser, body: {
+        kitchenId: fixture.kitchenBranchId, productId: product.id, outputQuantity: 1, outputUnit: product.unit,
+        ingredients: [{ warehouseItemId: material.id, quantity: 0.5, unit: material.unit }],
+        idempotencyKey: key("http-plan-recipe"),
+      },
+    });
+    expect(recipeResult.statusCode).toBe(201);
+    const recipe = recipeResult.body.recipe || recipeResult.body.data || recipeResult.body;
+    expect((await httpInvoke("post", "/api/central-kitchen-recipes/:id/approve", {
+      user: fixture.kitchenUser, params: { id: String(recipe.id) },
+      body: { version: recipe.version, updateToken: recipe.updateToken, idempotencyKey: key("http-plan-recipe-approve") },
+    })).statusCode).toBe(200);
+    const materialBefore = await warehouseBalance(fixture.kitchenBranchId, material.id);
+    const stockBefore = await productBalance(fixture.kitchenBranchId, product.id);
+    // A rollback-only suite must explicitly flush deferred constraints: an
+    // unfinished snapshot establishment must never be able to commit.
+    const missingProof = await databaseState.db.transaction(async (tx: any) => {
+      await tx.execute(sql`SELECT set_config('app.advanced_execution_write', 'on', true)`);
+      await tx.update(schema.productionOrderItems).set({ executionUnit: product.unit })
+        .where(eq(schema.productionOrderItems.id, item.id));
+      await tx.insert(dailyProductionBatches).values({
+        branchId: fixture.kitchenBranchId, productId: product.id, productName: product.name,
+        quantity: 1, unit: product.unit, productionDate: "2098-09-01",
+        destination: "display_bar", productionOrderId: plan.id,
+        advancedProductionOrderItemId: item.id,
+        advancedIdempotencyKey: key("http-missing-proof"),
+        advancedPayloadFingerprint: "a".repeat(64),
+        recipeBacked: false, status: "in_progress", recordedBy: fixture.kitchenUser.id,
+      });
+      await tx.execute(sql`SET CONSTRAINTS require_advanced_execution_recipe_proof IMMEDIATE`);
+    }).then(() => null, (error: any) => error);
+    expect(missingProof?.cause?.code || missingProof?.code).toBe("23514");
+    const first = await create();
+    expect(first.statusCode).toBe(201);
+    const firstBatch = first.body.batch || first.body;
+    expect(firstBatch.recipeBacked).toBe(true);
+    expect(firstBatch.advancedProductionOrderItemId).toBe(item.id);
+    await databaseState.db.execute(sql`SET CONSTRAINTS require_advanced_execution_recipe_proof IMMEDIATE`);
+    await databaseState.db.execute(sql`SET CONSTRAINTS require_advanced_execution_recipe_proof DEFERRED`);
+    const second = await create();
+    expect(second.statusCode).toBe(201);
+    const secondBatch = second.body.batch || second.body;
+    expect((await create()).statusCode).toBe(409);
+    const actionPath = `${batchPath}/:batchId/:action`;
+    const action = (batchId: number, action: string) => httpInvoke("post", actionPath, {
+      user: fixture.kitchenUser, params: { ...params, batchId: String(batchId), action },
+    });
+    expect((await action(secondBatch.id, "cancel")).statusCode).toBe(200);
+    expect((await action(secondBatch.id, "cancel")).statusCode).toBe(200);
+    expect(await warehouseBalance(fixture.kitchenBranchId, material.id)).toEqual(materialBefore);
+    expect(await productBalance(fixture.kitchenBranchId, product.id)).toEqual(stockBefore);
+    expect((await action(firstBatch.id, "finish")).statusCode).toBe(200);
+    expect((await action(firstBatch.id, "finish")).statusCode).toBe(200);
+    expect(await warehouseBalance(fixture.kitchenBranchId, material.id)).toEqual({ ...materialBefore, quantity: materialBefore.quantity - 0.5 });
+    expect(await productBalance(fixture.kitchenBranchId, product.id)).toEqual({ ...stockBefore, quantity: stockBefore.quantity + 1 });
+    expect((await databaseState.db.execute(sql`SELECT id FROM central_kitchen_batch_material_movements WHERE batch_id = ${firstBatch.id}`)).rows).toHaveLength(1);
+    expect((await databaseState.db.select().from(productionInventoryLogs).where(eq(productionInventoryLogs.batchId, firstBatch.id))).length).toBe(1);
+    expect((await action(firstBatch.id, "cancel")).statusCode).toBe(409);
+    const replacement = await create();
+    expect(replacement.statusCode).toBe(201);
+    expect((await action((replacement.body.batch || replacement.body).id, "cancel")).statusCode).toBe(200);
+  });
 
   afterAll(async () => {
     finishTransaction?.();

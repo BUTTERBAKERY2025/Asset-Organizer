@@ -227,6 +227,7 @@ describe("production operations exports", () => {
     expect(tables.sections.planned.headers).toEqual([
       "productId", "productName", "catalogUnit", "sourceBranchIds", "targetBranchIds",
       "plannedQuantity", "advancedOrderIds", "advancedOrderItemIds", "comparisonStatus",
+      "executionUnit", "linkedFinishedQuantity", "linkedInProgressQuantity", "remainingQuantity",
     ]);
     expect(tables.sections.requests.headers).toContain("inventoryMode");
     expect(tables.sections.requests.headers).toContain("status");
@@ -304,7 +305,7 @@ describe("production operations exports", () => {
     expect(workbook.SheetNames).toEqual(["الإنتاج المنفذ", "الخطة المسجلة", "طلبات المطبخ", "استهلاك المواد", "الهالك المعتمد", "بيانات التقرير"]);
     expect(workbook.Sheets["الإنتاج المنفذ"]?.["F2"]).toMatchObject({ t: "n", v: 0.123456, z: "0.000000" });
     expect(workbook.Sheets["الخطة المسجلة"]?.["A1"]?.v).toBe("معرف المنتج");
-    expect(workbook.Sheets["الخطة المسجلة"]?.["!ref"]).toBe("A1:I1");
+    expect(workbook.Sheets["الخطة المسجلة"]?.["!ref"]).toBe("A1:M1");
     expect(workbook.Sheets["بيانات التقرير"]?.["A1"]?.v).toBe("البيان");
     expect(workbook.Sheets["بيانات التقرير"]?.["A5"]?.v).toBe("الفلاتر المختارة — البحث");
   });

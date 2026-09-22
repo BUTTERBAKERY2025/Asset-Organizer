@@ -44,3 +44,9 @@ Manufactured orders may be fulfilled from ready kitchen stock, with new producti
 **Why:** The user explicitly chose stock-first fulfillment. Finished recipe-backed output already credits finished-goods stock, so excluding its portion from normal dispatch debits would leave phantom stock.
 
 **How to apply:** Reserve and debit the entire prepared quantity once. Only claim a production portion when finished linked batches have valid frozen recipe, ingredient movement and output-credit evidence. Freeze proof at preparation, preserve immutable batch/item links, and leave historical unclassified rows unknown. Never add a second inventory source solely for this classification.
+
+Recipe-backed creation must respect database trigger timing, not just application transaction ordering.
+
+**Why:** A mocked execution test passed while real PostgreSQL rejected inserting a batch already marked recipe-backed before its snapshot existed. Being in one transaction does not postpone immediate constraints.
+
+**How to apply:** Verify any new batch-creation path against the migrated development database, including existing recipe triggers. Preserve a safe snapshot-establishment sequence and a commit-time proof requirement; do not weaken recipe integrity merely to make insertion succeed.

@@ -1,4 +1,5 @@
 import memoize from "memoizee";
+import { runIdempotentMaterialTransferCreation } from "./material-transfer-creation";
 
 // Helper function to get Saudi Arabia time (UTC+3)
 function getSaudiArabiaTime(): { date: string; time: string; timeShort: string } {
@@ -659,7 +660,7 @@ import { allocatePosRefundAmounts } from "./pos-refund-allocation";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
 import { db, pool } from "./db";
-import { eq, and, gte, lte, desc, or, inArray, sql, isNull, isNotNull, ilike } from "drizzle-orm";
+import { eq, and, gte, lte, desc, or, inArray, sql, isNull, isNotNull, ilike, ne } from "drizzle-orm";
 
 function requireMaterialQuantity(
   value: number,
@@ -1056,6 +1057,7 @@ export interface IStorage {
   // Operations Module - Products
   getAllProducts(): Promise<Product[]>;
   getProduct(id: number): Promise<Product | undefined>;
+  getProductBySku(sku: string, excludeId?: number): Promise<Product | undefined>;
   createProduct(product: InsertProduct): Promise<Product>;
   updateProduct(id: number, product: Partial<InsertProduct>): Promise<Product | undefined>;
   deleteProduct(id: number): Promise<boolean>;
@@ -5291,6 +5293,13 @@ export class DatabaseStorage implements IStorage {
     return product || undefined;
   }
 
+  async getProductBySku(sku: string, excludeId?: number): Promise<Product | undefined> {
+    const conditions = [eq(products.sku, sku)];
+    if (excludeId !== undefined) conditions.push(ne(products.id, excludeId));
+    const [product] = await db.select().from(products).where(and(...conditions)).limit(1);
+    return product || undefined;
+  }
+
   async createProduct(product: InsertProduct): Promise<Product> {
     const [created] = await db.insert(products).values(product).returning();
     return created;
@@ -5306,7 +5315,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteProduct(id: number): Promise<boolean> {
-    const result = await db.delete(products).where(eq(products.id, id)).returning();
+    // Products are catalogue identities referenced by historical sales, recipes,
+    // and inventory records. "Delete" therefore safely retires the identity.
+    const result = await db
+      .update(products)
+      .set({ isActive: "false", updatedAt: new Date() })
+      .where(and(eq(products.id, id), eq(products.isActive, "true")))
+      .returning({ id: products.id });
     return result.length > 0;
   }
 
@@ -14087,7 +14102,13 @@ export class DatabaseStorage implements IStorage {
     return { transfer, items };
   }
 
-  async createMaterialTransfer(transfer: InsertMaterialTransfer, items: InsertMaterialTransferItem[]): Promise<MaterialTransfer> {
+  async createMaterialTransfer(
+    transfer: InsertMaterialTransfer,
+    items: InsertMaterialTransferItem[],
+  ): Promise<{ transfer: MaterialTransfer; replayed: boolean }> {
+    if (items.length === 0) {
+      throw new Error("يجب أن يحتوي التحويل على صنف واحد صالح على الأقل");
+    }
     const normalizedItems = items.map((item) => ({
       ...item,
       quantity: requirePositiveMaterialQuantity(item.quantity, "كمية التحويل يجب أن تكون موجبة حتى 6 منازل عشرية"),
@@ -14098,16 +14119,32 @@ export class DatabaseStorage implements IStorage {
         ? item.discrepancy
         : requireMaterialQuantity(item.discrepancy, materialQuantitySchema, "فرق الكمية يجب أن يكون حتى 6 منازل عشرية"),
     }));
-    return await db.transaction(async (tx) => {
-      const [created] = await tx.insert(materialTransfers).values(transfer).returning();
-      
-      if (normalizedItems.length > 0) {
+    const idempotencyKey = transfer.idempotencyKey;
+    const idempotencyActorId = transfer.idempotencyActorId;
+    const idempotencyAction = transfer.idempotencyAction;
+    const payloadHash = transfer.idempotencyPayloadHash;
+    if (!idempotencyKey || !idempotencyActorId || !idempotencyAction || !payloadHash) {
+      throw new Error("بيانات منع تكرار تحويل المواد غير مكتملة");
+    }
+    return runIdempotentMaterialTransferCreation({
+      payloadHash,
+      create: () => db.transaction(async (tx) => {
+        const [row] = await tx.insert(materialTransfers).values(transfer).returning();
         await tx.insert(materialTransferItems).values(
-          normalizedItems.map(item => ({ ...item, transferId: created.id }))
+          normalizedItems.map(item => ({ ...item, transferId: row.id }))
         );
-      }
-      
-      return created;
+        return row;
+      }),
+      // Query only after the failed transaction has rolled back. PostgreSQL's
+      // unique index has already serialized a concurrent request at this point.
+      findExisting: async () => {
+        const [existing] = await db.select().from(materialTransfers).where(and(
+          eq(materialTransfers.idempotencyActorId, idempotencyActorId),
+          eq(materialTransfers.idempotencyAction, idempotencyAction),
+          eq(materialTransfers.idempotencyKey, idempotencyKey),
+        )).limit(1);
+        return existing;
+      },
     });
   }
 

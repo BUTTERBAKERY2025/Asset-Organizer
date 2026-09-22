@@ -129,6 +129,7 @@ export default function TransferRequestsPage() {
   const [transferType, setTransferType] = useState<"to_warehouse" | "between_branches">("to_warehouse");
   const [openItemIndex, setOpenItemIndex] = useState<number | null>(null);
   const shortagePrefillRef = useRef<string | null>(null);
+  const createIdempotencyKeyRef = useRef<string | null>(null);
   const [modifyingItems, setModifyingItems] = useState<Array<{ 
     itemId: number; 
     itemName: string;
@@ -312,6 +313,8 @@ export default function TransferRequestsPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof newTransfer) => {
+      const idempotencyKey = createIdempotencyKeyRef.current || crypto.randomUUID();
+      createIdempotencyKeyRef.current = idempotencyKey;
       const destBranch = branches.find(b => b.id === data.destinationBranchId);
       const response = await apiRequest("POST", "/api/warehouse/material-transfers", {
         ...data,
@@ -322,11 +325,11 @@ export default function TransferRequestsPage() {
         })),
         destinationBranchName: destBranch?.name || "",
         status: "pending",
-        transferDate: new Date().toISOString().split('T')[0], // Set request date
-      });
+      }, { "Idempotency-Key": idempotencyKey });
       return response.json();
     },
     onSuccess: () => {
+      createIdempotencyKeyRef.current = null;
       queryClient.invalidateQueries({ queryKey: ["/api/warehouse/material-transfers"] });
       setIsCreateOpen(false);
       resetForm();
@@ -463,6 +466,7 @@ export default function TransferRequestsPage() {
   };
 
   const resetForm = () => {
+    createIdempotencyKeyRef.current = null;
     // Reset to correct flow: source = warehouse, destination = branch
     setNewTransfer({
       sourceBranchId: "main_warehouse",
@@ -915,7 +919,11 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                 sheetName={isRTL ? "التحويلات" : "Transfers"}
               />
             </div>
-            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <Dialog open={isCreateOpen} onOpenChange={(open) => {
+              if (open && !isCreateOpen) createIdempotencyKeyRef.current = crypto.randomUUID();
+              if (!open && !createMutation.isPending) createIdempotencyKeyRef.current = null;
+              setIsCreateOpen(open);
+            }}>
               <DialogTrigger asChild>
                 <Button data-testid="btn-create-transfer" className="w-full sm:w-auto">
                   <Plus className={`w-4 h-4 ${isRTL ? "ml-1 sm:ml-2" : "mr-1 sm:mr-2"}`} />

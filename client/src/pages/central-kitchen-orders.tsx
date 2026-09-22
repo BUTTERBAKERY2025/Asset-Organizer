@@ -44,7 +44,7 @@ type KitchenItem = {
   dispatchedQuantity?: number | null; receivedQuantity?: number | null; damagedQuantity?: number | null;
   missingQuantity?: number | null; receivingNotes?: string | null;
 };
-type KitchenEvent = { id: string | number; fromStatus?: string; toStatus: string; actorId?: string; notes?: string; createdAt: string };
+type KitchenEvent = { id: string | number; eventType?: string; fromStatus?: string; toStatus: string; actorId?: string; notes?: string; createdAt: string; changeSnapshot?: { before?: { order?: { neededDate?: string }; items?: KitchenItem[] }; requested?: { edit?: { neededDate: string; items: Array<{ itemId: number; requestedQuantity: number }> } } } };
 type KitchenOrder = {
   id: string | number; orderNumber: string; requestBranchId: string; centralKitchenId: string; status: string;
   neededDate?: string; neededTime?: string; notes?: string; createdBy?: string; approvedBy?: string; preparedBy?: string;
@@ -73,6 +73,7 @@ type PilotMetrics = {
 };
 
 const STATUS: Record<string, { label: string; className: string }> = {
+  cancelled: { label: "ملغي", className: "bg-stone-100 text-stone-700 border-stone-200" },
   requested: { label: "بانتظار الاعتماد", className: "bg-amber-50 text-amber-800 border-amber-200" },
   pending: { label: "بانتظار الاعتماد", className: "bg-amber-50 text-amber-800 border-amber-200" },
   approved: { label: "معتمد", className: "bg-sky-50 text-sky-800 border-sky-200" },
@@ -81,7 +82,7 @@ const STATUS: Record<string, { label: string; className: string }> = {
   received: { label: "تم الاستلام", className: "bg-emerald-50 text-emerald-800 border-emerald-200" },
   draft: { label: "مسودة", className: "bg-stone-100 text-stone-700 border-stone-200" },
 };
-const CENTRAL_KITCHEN_STATUSES = ["requested", "approved", "prepared", "dispatched", "received"] as const;
+const CENTRAL_KITCHEN_STATUSES = ["requested", "approved", "prepared", "dispatched", "received", "cancelled"] as const;
 type CentralKitchenStatusFilter = (typeof CENTRAL_KITCHEN_STATUSES)[number];
 const INVENTORY_MODES = ["real", "shadow", "unknown"] as const;
 type InventoryModeFilter = (typeof INVENTORY_MODES)[number];
@@ -371,6 +372,7 @@ const LIFECYCLE_STAGES = [
   { status: "received", label: "استلام" },
 ] as const;
 function LifecycleProgress({ status }: { status: string }) {
+  if (status === "cancelled") return <p className="rounded border p-3 text-muted-foreground">طلب ملغي — محفوظ في السجل ولا يدخل في الطلب النشط.</p>;
   const currentIndex = LIFECYCLE_STAGES.findIndex(stage => stage.status === status);
   if (currentIndex < 0) {
     return <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-900">حالة الطلب غير معروفة — لا يمكن تحديد تقدّم الدورة.</div>;
@@ -424,6 +426,8 @@ function OrderDetail({ order, products, productsQuery, accessibleBranchIds, acti
     {order.notes && <div className="rounded-md border-r-4 border-primary bg-muted/30 px-4 py-3 text-sm"><span className="mb-1 block text-xs text-muted-foreground">ملاحظات الطلب</span>{order.notes}</div>}
      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 px-3 py-2 text-xs"><span className="text-muted-foreground">وضع مخزون الطلب:</span><Badge variant="outline" className={parseCentralKitchenInventoryMode(order.inventoryMode) === "real" ? "border-emerald-300 bg-emerald-50 text-emerald-800" : parseCentralKitchenInventoryMode(order.inventoryMode) === "shadow" ? "border-amber-300 bg-amber-50 text-amber-800" : "border-border bg-muted text-muted-foreground"}>{parseCentralKitchenInventoryMode(order.inventoryMode) === "real" ? "فعلي — حجوزات من مخزون المطبخ" : parseCentralKitchenInventoryMode(order.inventoryMode) === "shadow" ? "ظلّي — تشغيلي فقط، لا حركة مخزون فعلية" : "غير محدد — طلب قديم، لا يثبت حركة مخزون"}</Badge></div>
      <LifecycleProgress status={status} />
+     {canEdit && accessibleBranchIds.includes(order.requestBranchId) && <RequestChangeControls key={`${order.id}:${Math.max(0, ...(order.events || []).map(event => Number(event.id)))}`} order={order} />}
+     {(order.events || []).filter(event => event.eventType === "edited").map(event => <details key={event.id} className="rounded border p-3 text-sm"><summary>تعديل الطلب · {readableDate(event.createdAt)} · {event.notes}</summary><p>تاريخ الاحتياج: {event.changeSnapshot?.before?.order?.neededDate || "—"} ← {event.changeSnapshot?.requested?.edit?.neededDate}</p>{event.changeSnapshot?.before?.items?.map(item => <p key={item.id}>{item.productName}: {item.requestedQuantity} ← {event.changeSnapshot?.requested?.edit?.items.find(updated => updated.itemId === Number(item.id))?.requestedQuantity} {item.unit}</p>)}</details>)}
      <NextStepGuidance step={nextStep} inventoryMode={order.inventoryMode} />
      <div className="flex justify-end"><a href="/production-reports?tab=operations" className="text-xs font-medium text-primary underline-offset-4 hover:underline">عرض تقرير العمليات المترابط</a></div>
     {order.driverName && <div className="grid gap-3 rounded-md border bg-orange-50/40 p-3 text-sm md:grid-cols-2"><div><span className="text-muted-foreground">السائق: </span>{order.driverName}</div><div><span className="text-muted-foreground">المركبة: </span>{order.vehicleNumber}</div></div>}
@@ -440,6 +444,51 @@ function OrderDetail({ order, products, productsQuery, accessibleBranchIds, acti
      {!action && status === "received" && nextStep.isComplete && <div className="flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800"><Check className="h-4 w-4" />اكتمل مسار هذا الطلب وتم تأكيد الاستلام.</div>}
     {status === "received" && order.discrepancyStatus === "open" && canEdit && accessibleBranchIds.includes(order.requestBranchId) && <div className="rounded-lg border border-amber-300 bg-amber-50 p-3"><div className="flex items-center gap-2 font-medium text-amber-900"><AlertTriangle className="h-4 w-4" />فروقات استلام مفتوحة</div><Input className="mt-3" value={actionNotes} onChange={event => setActionNotes(event.target.value)} placeholder="اكتب كيف تمت معالجة الناقص أو التالف" /><Button className="mt-3" disabled={pending || !actionNotes.trim()} onClick={() => onAction("resolve-discrepancy", { notes: actionNotes.trim() })}>إغلاق الفروقات بعد المعالجة</Button></div>}
   </>;
+}
+
+function RequestChangeControls({ order }: { order: KitchenOrder }) {
+  const client = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [reason, setReason] = useState("");
+  const [date, setDate] = useState(order.neededDate || localDate());
+  const [time, setTime] = useState(order.neededTime || "");
+  const [notes, setNotes] = useState(order.notes || "");
+  const [quantities, setQuantities] = useState((order.items || []).map(item => String(item.requestedQuantity)));
+  const attempt = useRef<{ signature: string; key: string } | null>(null);
+  const mutation = useMutation({
+    mutationFn: async (edit: boolean) => {
+      const payload = {
+        expectedEventId: Math.max(0, ...(order.events || []).map(event => Number(event.id))),
+        reason: reason.trim(),
+        ...(edit ? { edit: { neededDate: date, neededTime: time || null, notes: notes || null,
+          items: (order.items || []).map((item, index) => ({ itemId: Number(item.id), requestedQuantity: Number(quantities[index]) })) } } : {}),
+      };
+      const signature = JSON.stringify(payload);
+      if (attempt.current?.signature !== signature) attempt.current = { signature, key: crypto.randomUUID() };
+      const response = await apiRequest("POST", `/api/central-kitchen-orders/${order.id}/request-change`, { ...payload, idempotencyKey: attempt.current.key });
+      return response.json();
+    },
+    onSuccess: () => { void client.invalidateQueries({ predicate: query => String(query.queryKey[0]).includes("central-kitchen") }); },
+  });
+  if (order.status === "cancelled") return null;
+  const committed = !!order.linkedBatches?.length || !!order.allocations?.length || !!order.shadowInventoryEntries?.length;
+  if (committed || !["requested", "approved"].includes(order.status)) return <p className="rounded border p-3 text-sm text-muted-foreground">التعديل والإلغاء غير متاحين بعد الإنتاج أو الحجز أو التجهيز أو الإرسال. الدفعات المتعطلة لا تبرر عكس المخزون؛ راجع مسؤول المطبخ.</p>;
+  return <section className="space-y-3 rounded-lg border p-4">
+    <h3 className="font-semibold">تعديل / إلغاء من الفرع الطالب</h3>
+    <p className="text-sm text-muted-foreground">يُحفظ السبب والتاريخ. يتحقق الخادم من عدم وجود إنتاج أو حجز قبل التنفيذ. تغيير الأصناف يتطلب إلغاء الطلب وإنشاء طلب جديد.</p>
+    <Label>سبب التعديل أو الإلغاء (إلزامي)<Input value={reason} onChange={event => setReason(event.target.value)} disabled={mutation.isPending} /></Label>
+    {editing && <div className="space-y-3">
+      <Label>تاريخ الاحتياج<Input type="date" value={date} onChange={event => setDate(event.target.value)} /></Label>
+      <Label>وقت الاحتياج<Input type="time" value={time} onChange={event => setTime(event.target.value)} /></Label>
+      <Label>ملاحظات الطلب<Input value={notes} onChange={event => setNotes(event.target.value)} /></Label>
+      {(order.items || []).map((item, index) => <Label key={item.id} className="block">{item.productName} · {item.unit}<Input type="number" min={item.productId ? 1 : 0.000001} step={item.productId ? 1 : 0.000001} value={quantities[index]} onChange={event => setQuantities(values => values.map((value, i) => i === index ? event.target.value : value))} /></Label>)}
+    </div>}
+    {mutation.error && <p role="alert" className="text-sm text-destructive">{mutation.error instanceof Error ? mutation.error.message : "تعذر حفظ الطلب"} — أعد تحميل التفاصيل عند تعارض النسخة.</p>}
+    <div className="flex gap-2">
+      {order.status === "requested" && <Button variant="outline" disabled={mutation.isPending || (editing && !reason.trim())} onClick={() => editing ? mutation.mutate(true) : setEditing(true)}>{editing ? "حفظ التعديل" : "تعديل الطلب"}</Button>}
+      <Button variant="destructive" disabled={mutation.isPending || !reason.trim()} onClick={() => { if (window.confirm("إلغاء الطلب نهائياً مع حفظ السجل؟")) mutation.mutate(false); }}>إلغاء الطلب</Button>
+    </div>
+  </section>;
 }
 
 const SHORTAGE_LABELS: Record<string, string> = {

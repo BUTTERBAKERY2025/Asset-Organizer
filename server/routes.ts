@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import { centralKitchenInventoryMovements } from "@shared/schema";
 import { createServer, type Server } from "http";
 import memoize from "memoizee";
 import { storage } from "./storage";
@@ -16,7 +17,19 @@ import { eq, and, desc, inArray, gte, lte, lt, gt, sql, or, isNull, type SQL } f
 import type { User } from "@shared/schema";
 import { shifts as shiftsTable, cashierPointsLedger, cashierDailyChallenges, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS, centralKitchenOrders, centralKitchenOrderItems, centralKitchenOrderEvents, centralKitchenShadowInventoryConfig, centralKitchenShadowInventoryEntries, centralKitchenInventoryAllocations, warehouseItems, dailyProductionBatches, productionInventoryLogs } from "@shared/schema";
 import { auditEvent, getApprovalThresholds, APPROVAL_THRESHOLDS } from "./audit-helpers";
+import {
+  isProductConflictError,
+  normalizeProductMutationInput,
+  productUpdateSchema,
+} from "@shared/product-mutations";
 import { createHash, randomInt, randomUUID } from "crypto";
+import {
+  MaterialTransferCreationError,
+  databaseErrorCode,
+  materialTransferPayloadHash,
+  requireNonEmptyMaterialTransferItems,
+  requireMaterialTransferIdempotencyKey,
+} from "./material-transfer-creation";
 
 // Helper to safely get current user from authenticated request
 function getCurrentUser(req: Request): User {
@@ -141,6 +154,7 @@ import { registerWalletRoutes } from "./wallet-routes";
 import { registerSecurityRoutes } from "./security-routes";
 import { registerCentralKitchenRecipeRoutes } from "./central-kitchen-recipes";
 import { registerProductionOperationsReportRoute } from "./production-operations-report";
+import { registerAdvancedProductionExecutionRoutes, advancedExecutionRows } from "./advanced-production-execution";
 import { registerCentralKitchenWorkplanRoute } from "./central-kitchen-workplan";
 import {
   CentralKitchenBatchMaterialsError,
@@ -163,6 +177,8 @@ import { requireProductCatalogRead, noStoreProductCatalogRead } from "./product-
 import { registerBatchRoute } from "./batch-api";
 import {
   canTransitionCentralKitchenOrder,
+  centralKitchenRequestChangeSchema,
+  centralKitchenRequestChangeBlock,
   centralKitchenDispatchSchema,
   centralKitchenIdempotencyKeySchema,
   centralKitchenPreparationSchema,
@@ -509,6 +525,7 @@ export async function registerRoutes(
   registerSecurityRoutes(app);
   registerCentralKitchenRecipeRoutes(app);
   registerProductionOperationsReportRoute(app);
+  registerAdvancedProductionExecutionRoutes(app);
   registerCentralKitchenWorkplanRoute(app);
 
   // Cached data fetchers
@@ -7112,47 +7129,100 @@ export async function registerRoutes(
 
   app.post("/api/products", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
     try {
-      const body = { ...req.body };
-      if (typeof body.isActive === 'boolean') {
-        body.isActive = body.isActive ? "true" : "false";
+      const parsed = insertProductSchema.safeParse(normalizeProductMutationInput(req.body));
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid product data", details: parsed.error.flatten() });
       }
-      const validatedData = insertProductSchema.parse(body);
-      const product = await storage.createProduct(validatedData);
+      if (parsed.data.sku && await storage.getProductBySku(parsed.data.sku)) {
+        return res.status(409).json({ error: "A product with this SKU already exists" });
+      }
+      const product = await storage.createProduct(parsed.data);
+      await auditEvent({
+        req,
+        module: "products",
+        entityId: product.id,
+        entityName: product.name,
+        action: "create",
+        details: { sku: product.sku },
+      });
       res.status(201).json(product);
     } catch (error) {
       console.error("Error creating product:", error);
+      if (isProductConflictError(error)) {
+        return res.status(409).json({ error: "A product with this SKU already exists" });
+      }
       res.status(500).json({ error: "Failed to create product" });
     }
   });
 
   app.patch("/api/products/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
     try {
-      const id = parseInt(req.params.id, 10);
-      const body = { ...req.body };
-      if (typeof body.isActive === 'boolean') {
-        body.isActive = body.isActive ? "true" : "false";
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: "Invalid product id" });
       }
-      const product = await storage.updateProduct(id, body);
-      if (!product) {
+      const parsed = productUpdateSchema.safeParse(normalizeProductMutationInput(req.body));
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid product update", details: parsed.error.flatten() });
+      }
+      const existing = await storage.getProduct(id);
+      if (!existing) {
         return res.status(404).json({ error: "Product not found" });
       }
+      if (parsed.data.sku && await storage.getProductBySku(parsed.data.sku, id)) {
+        return res.status(409).json({ error: "A product with this SKU already exists" });
+      }
+      const product = await storage.updateProduct(id, parsed.data);
+      if (!product) return res.status(409).json({ error: "Product changed while it was being updated" });
+      await auditEvent({
+        req,
+        module: "products",
+        entityId: product.id,
+        entityName: product.name,
+        action: parsed.data.isActive === "false" ? "deactivate" : "update",
+        details: { before: existing, changes: parsed.data },
+      });
       res.json(product);
     } catch (error) {
       console.error("Error updating product:", error);
+      if (isProductConflictError(error)) {
+        return res.status(409).json({ error: "A product with this SKU already exists" });
+      }
       res.status(500).json({ error: "Failed to update product" });
     }
   });
 
   app.delete("/api/products/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
     try {
-      const id = parseInt(req.params.id, 10);
-      const deleted = await storage.deleteProduct(id);
-      if (!deleted) {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: "Invalid product id" });
+      }
+      const existing = await storage.getProduct(id);
+      if (!existing) {
         return res.status(404).json({ error: "Product not found" });
       }
-      res.json({ success: true });
+      if (existing.isActive === "false") {
+        return res.status(409).json({ error: "Product is already archived" });
+      }
+      const deleted = await storage.deleteProduct(id);
+      if (!deleted) {
+        return res.status(409).json({ error: "Product changed while it was being archived" });
+      }
+      await auditEvent({
+        req,
+        module: "products",
+        entityId: existing.id,
+        entityName: existing.name,
+        action: "archive",
+        details: { sku: existing.sku, preservedIdentity: true },
+      });
+      res.json({ success: true, archived: true });
     } catch (error) {
       console.error("Error deleting product:", error);
+      if (isProductConflictError(error)) {
+        return res.status(409).json({ error: "Product could not be archived due to a concurrent change" });
+      }
       res.status(500).json({ error: "Failed to delete product" });
     }
   });
@@ -7472,7 +7542,7 @@ export async function registerRoutes(
   const centralKitchenOrderIdSchema = z.coerce.number().int().positive();
   const centralKitchenListQuerySchema = z.object({
     branchId: z.string().trim().min(1).max(255).optional(),
-    status: z.enum(["requested", "approved", "prepared", "dispatched", "received"]).optional(),
+    status: z.enum(["requested", "approved", "prepared", "dispatched", "received", "cancelled"]).optional(),
   });
 
   const centralKitchenRequestKey = (
@@ -7587,7 +7657,89 @@ export async function registerRoutes(
     return null;
   };
 
-  const getCentralKitchenOrderDetail = async (orderId: number) => {
+  app.post("/api/central-kitchen-orders/:id/request-change", isAuthenticated,
+    requirePermission("central_kitchen_orders", "edit"), async (req, res) => {
+      const id = centralKitchenOrderIdSchema.safeParse(req.params.id);
+      const parsed = centralKitchenRequestChangeSchema.safeParse(req.body);
+      if (!id.success || !parsed.success) return res.status(400).json({ error: "بيانات تعديل الطلب غير صالحة" });
+      const key = centralKitchenRequestKey(req, parsed.data.idempotencyKey);
+      if (!key.key) return res.status(400).json({ error: key.error });
+      const { idempotencyKey: _, ...payload } = parsed.data;
+      const fingerprint = createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+      const actor = getCurrentUser(req);
+      try {
+        const result = await db.transaction(async tx => {
+          const [order] = await tx.select().from(centralKitchenOrders)
+            .where(eq(centralKitchenOrders.id, id.data)).for("update");
+          if (!order) throw new CentralKitchenLiveError("الطلب غير موجود", 404);
+          if (!(await canAccessBranch(req, order.requestBranchId))) throw new CentralKitchenLiveError("التعديل والإلغاء للفرع الطالب فقط", 403);
+          const events = await tx.select().from(centralKitchenOrderEvents)
+            .where(eq(centralKitchenOrderEvents.orderId, order.id));
+          const replay = events.find(event => event.idempotencyKey === key.key);
+          if (replay) {
+            if (replay.actorId !== actor.id || replay.payloadFingerprint !== fingerprint || !["edited", "cancelled"].includes(replay.eventType)) {
+              throw new CentralKitchenLiveError("مفتاح المحاولة مستخدم لعملية مختلفة");
+            }
+            return true;
+          }
+          if (Math.max(0, ...events.map(event => event.id)) !== payload.expectedEventId) {
+            throw new CentralKitchenLiveError("تغير الطلب منذ فتحه. أعد تحميل التفاصيل قبل المتابعة");
+          }
+          const items = await tx.select().from(centralKitchenOrderItems).where(eq(centralKitchenOrderItems.orderId, order.id));
+          const [batches, allocations, ledger, movements] = await Promise.all([
+            items.length ? tx.select({ id: dailyProductionBatches.id }).from(dailyProductionBatches)
+              .where(inArray(dailyProductionBatches.centralKitchenOrderItemId, items.map(item => item.id))).limit(1) : Promise.resolve([]),
+            tx.select({ id: centralKitchenInventoryAllocations.id }).from(centralKitchenInventoryAllocations).where(eq(centralKitchenInventoryAllocations.orderId, order.id)).limit(1),
+            tx.select({ id: centralKitchenShadowInventoryEntries.id }).from(centralKitchenShadowInventoryEntries).where(eq(centralKitchenShadowInventoryEntries.orderId, order.id)).limit(1),
+            tx.select({ id: centralKitchenInventoryMovements.id }).from(centralKitchenInventoryMovements).where(eq(centralKitchenInventoryMovements.orderId, order.id)).limit(1),
+          ]);
+          const blocked = centralKitchenRequestChangeBlock(order.status, !!payload.edit,
+            !!(batches.length || allocations.length || ledger.length || movements.length || items.some(item =>
+              item.preparedQuantity != null || item.dispatchedQuantity != null || item.receivedQuantity != null)));
+          if (blocked) throw new CentralKitchenLiveError(blocked);
+          if (payload.edit) {
+            const edit = payload.edit;
+            if (edit.neededDate < saudiDate()) throw new CentralKitchenLiveError("تاريخ الاحتياج لا يمكن أن يكون في الماضي", 400);
+            if (edit.items.length !== items.length || new Set(edit.items.map(item => item.itemId)).size !== items.length
+              || edit.items.some(item => !items.some(original => original.id === item.itemId))) {
+              throw new CentralKitchenLiveError("يجب إبقاء هويات جميع البنود دون حذف أو إضافة", 400);
+            }
+            if (items.some(item => item.productId == null && item.warehouseItemId == null)) {
+              throw new CentralKitchenLiveError("طلب قديم غير مرتبط بالكتالوج: ألغ الطلب وأنشئ طلباً موثقاً", 400);
+            }
+            const catalogError = await validateCentralKitchenCatalogIdentities(items);
+            if (catalogError) throw new CentralKitchenLiveError(catalogError, 400);
+            for (const item of edit.items) {
+              const original = items.find(row => row.id === item.itemId)!;
+              if (original.productId != null && !Number.isInteger(item.requestedQuantity)) {
+                throw new CentralKitchenLiveError("المنتجات بالقطعة تتطلب كمية صحيحة", 400);
+              }
+              await tx.update(centralKitchenOrderItems).set({ requestedQuantity: item.requestedQuantity }).where(eq(centralKitchenOrderItems.id, item.itemId));
+            }
+            await tx.update(centralKitchenOrders).set({ neededDate: edit.neededDate, neededTime: edit.neededTime, notes: edit.notes, updatedAt: sql`now()` }).where(eq(centralKitchenOrders.id, order.id));
+          } else {
+            await tx.update(centralKitchenOrders).set({ status: "cancelled", updatedAt: sql`now()` }).where(eq(centralKitchenOrders.id, order.id));
+          }
+          await tx.insert(centralKitchenOrderEvents).values({
+            orderId: order.id, eventType: payload.edit ? "edited" : "cancelled", fromStatus: order.status,
+            toStatus: payload.edit ? order.status : "cancelled", actorId: actor.id,
+            notes: payload.reason, changeSnapshot: { before: { order, items }, requested: payload },
+            idempotencyKey: key.key!, payloadFingerprint: fingerprint,
+          });
+          return false;
+        });
+        if (result) res.set("Idempotent-Replayed", "true");
+        return res.json(await getCentralKitchenOrderDetail(id.data));
+      } catch (error) {
+        if (error instanceof CentralKitchenLiveError) return res.status(error.status).json({ error: error.message });
+        console.error("Central kitchen request change failed:", error);
+        return res.status(500).json({ error: "تعذر تعديل الطلب. أعد المحاولة بنفس البيانات" });
+      }
+    });
+
+  // A coherent snapshot is essential: the event revision must describe the
+  // same quantities rendered by an editor, not a later concurrent mutation.
+  const getCentralKitchenOrderDetail = async (orderId: number) => db.transaction(async (db) => {
     const [order] = await db.select().from(centralKitchenOrders)
       .where(eq(centralKitchenOrders.id, orderId)).limit(1);
     if (!order) return null;
@@ -7629,7 +7781,7 @@ export async function registerRoutes(
       allocations,
       linkedBatches,
     };
-  };
+  }, { isolationLevel: "repeatable read", readOnly: true });
 
   const canAccessCentralKitchenOrder = async (req: Request, order: {
     requestBranchId: string;
@@ -8519,6 +8671,13 @@ export async function registerRoutes(
       }[eventType];
 
       const transitioned = await db.transaction(async (tx) => {
+        // Match linked-batch creation's order lock before any stock commitment.
+        const [lockedOrder] = await tx.select().from(centralKitchenOrders)
+          .where(eq(centralKitchenOrders.id, id.data)).for("update");
+        if (!lockedOrder || lockedOrder.status !== fromStatus) return false;
+        if (lockedOrder.updatedAt.getTime() !== order.updatedAt.getTime()) {
+          throw new CentralKitchenLiveError("تغير الطلب أثناء تنفيذ الخطوة. أعد تحميل التفاصيل قبل المتابعة");
+        }
         await assertRealOrderWritable(order, tx);
         let productionEvidenceByItem = new Map<number, Record<string, unknown> | null>();
         if (preparationPayload) {
@@ -8920,6 +9079,9 @@ export async function registerRoutes(
       res.json(order);
     } catch (error) {
       console.error("Error updating production order:", error);
+      if (((error as any)?.code || (error as any)?.cause?.code) === "23514") {
+        return res.status(409).json({ error: "الخطة مرتبطة بتنفيذ فعلي؛ لا يمكن تغيير هويتها أو إلغاؤها أو إعادة فتحها، والإتمام يتطلب دفعات مكتملة لكل البنود" });
+      }
       res.status(500).json({ error: "Failed to update production order" });
     }
   });
@@ -17883,169 +18045,20 @@ export async function registerRoutes(
       const schedules = await storage.getProductionOrderSchedules(id);
       
       const order = result.order;
-      const orderStartDate = order.startDate;
-      const orderEndDate = order.endDate || order.startDate;
-      let dailyProductionComparison: any[] = [];
-      let comparisonScope = '';
-      
-      if (order.sourceBranchId) {
-        const normalizeArabic = (name: string): string => {
-          return name
-            .trim()
-            .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
-            .replace(/[أإآٱ]/g, 'ا')
-            .replace(/ة/g, 'ه')
-            .replace(/ى/g, 'ي')
-            .replace(/ؤ/g, 'و')
-            .replace(/ئ/g, 'ي')
-            .replace(/[-_\s]+/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim()
-            .toLowerCase();
-        };
-        
-        let allBatches: any[] = [];
-        
-        const batchesByOrderId = await storage.getAllDailyProductionBatches({
-          branchId: order.sourceBranchId,
-          productionOrderId: id,
-        } as any);
-        
-        if (batchesByOrderId && batchesByOrderId.length > 0) {
-          allBatches = batchesByOrderId;
-          comparisonScope = 'مرتبط بأمر الإنتاج';
-        } else if (orderStartDate) {
-          if (orderStartDate === orderEndDate || !orderEndDate) {
-            const dateBatches = await storage.getAllDailyProductionBatches({
-              branchId: order.sourceBranchId,
-              date: orderStartDate,
-            });
-            allBatches = dateBatches;
-            comparisonScope = `تاريخ ${orderStartDate}`;
-          } else {
-            const start = new Date(orderStartDate);
-            const end = new Date(orderEndDate);
-            const dateList: string[] = [];
-            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-              dateList.push(d.toISOString().split('T')[0]);
-            }
-            for (const dateStr of dateList) {
-              const dayBatches = await storage.getAllDailyProductionBatches({
-                branchId: order.sourceBranchId,
-                date: dateStr,
-              });
-              allBatches.push(...dayBatches);
-            }
-            comparisonScope = `من ${orderStartDate} إلى ${orderEndDate}`;
-          }
-        }
-        
-        const orderItems = result.items || [];
-        
-        const batchesByProductId = new Map<number, { totalProduced: number; batches: any[] }>();
-        const batchesByName = new Map<string, { totalProduced: number; batches: any[] }>();
-        
-        for (const batch of allBatches) {
-          if (batch.productId) {
-            if (!batchesByProductId.has(batch.productId)) {
-              batchesByProductId.set(batch.productId, { totalProduced: 0, batches: [] });
-            }
-            const entry = batchesByProductId.get(batch.productId)!;
-            entry.totalProduced += batch.quantity || 0;
-            entry.batches.push(batch);
-          }
-          
-          const nameKey = normalizeArabic(batch.productName);
-          if (!batchesByName.has(nameKey)) {
-            batchesByName.set(nameKey, { totalProduced: 0, batches: [] });
-          }
-          const nameEntry = batchesByName.get(nameKey)!;
-          nameEntry.totalProduced += batch.quantity || 0;
-          nameEntry.batches.push(batch);
-        }
-        
-        const matchedBatchKeys = new Set<string>();
-        
-        dailyProductionComparison = orderItems.map((item: any) => {
-          const itemProductId = item.productId || item.product_id;
-          const itemName = normalizeArabic(item.productName || item.product_name || '');
-          
-          let matched: { totalProduced: number; batches: any[] } | undefined;
-          
-          if (itemProductId && batchesByProductId.has(itemProductId)) {
-            matched = batchesByProductId.get(itemProductId);
-            if (matched) {
-              for (const b of matched.batches) {
-                matchedBatchKeys.add(normalizeArabic(b.productName));
-              }
-            }
-          }
-          
-          if (!matched) {
-            matched = batchesByName.get(itemName);
-            if (matched) matchedBatchKeys.add(itemName);
-          }
-          
-          if (!matched) {
-            for (const [bKey, bVal] of batchesByName.entries()) {
-              if (bKey.includes(itemName) || itemName.includes(bKey)) {
-                matched = bVal;
-                matchedBatchKeys.add(bKey);
-                break;
-              }
-            }
-          }
-          
-          if (!matched) {
-            const itemParts = itemName.split(' ').filter((p: string) => p.length > 2);
-            if (itemParts.length >= 2) {
-              for (const [bKey, bVal] of batchesByName.entries()) {
-                const matchCount = itemParts.filter((p: string) => bKey.includes(p)).length;
-                if (matchCount >= Math.ceil(itemParts.length * 0.6)) {
-                  matched = bVal;
-                  matchedBatchKeys.add(bKey);
-                  break;
-                }
-              }
-            }
-          }
-          
-          const actualProduced = matched?.totalProduced || 0;
-          const targetQty = Number(item.targetQuantity || item.target_quantity || item.quantity) || 0;
-          const variance = actualProduced - targetQty;
-          const achievementPct = targetQty > 0 ? Math.round((actualProduced / targetQty) * 100) : 0;
-          
-          return {
-            orderItemId: item.id,
-            productName: item.productName || item.product_name,
-            category: item.category || item.productCategory || item.product_category || '',
-            targetQuantity: targetQty,
-            actualProduced,
-            variance,
-            achievementPct,
-            unit: item.unit || 'قطعة',
-            batchCount: matched?.batches?.length || 0,
-          };
-        });
-        
-        const unmatchedBatches = [...batchesByName.entries()].filter(([bKey]) => !matchedBatchKeys.has(bKey));
-        
-        for (const [, val] of unmatchedBatches) {
-          const batch = val.batches[0];
-          dailyProductionComparison.push({
-            orderItemId: null,
-            productName: batch.productName,
-            category: batch.productCategory || '',
-            targetQuantity: 0,
-            actualProduced: val.totalProduced,
-            variance: val.totalProduced,
-            achievementPct: 0,
-            unit: batch.unit || 'قطعة',
-            batchCount: val.batches.length,
-            isExtraProduction: true,
-          });
-        }
-      }
+      // Only explicit order-item foreign keys establish execution. Legacy name,
+      // product/date and order-level matches are never evidence of plan output.
+      const execution = await advancedExecutionRows(db, id);
+      const dailyProductionComparison = execution.filter((row: any) => row.linkageStatus === "linked").map((row: any) => ({
+        orderItemId: row.itemId,
+        productName: row.productName,
+        targetQuantity: Number(row.plannedQuantity),
+        actualProduced: Number(row.completedQuantity),
+        variance: Number(row.completedQuantity) - Number(row.plannedQuantity),
+        achievementPct: Number(row.plannedQuantity) > 0 ? Math.round(Number(row.completedQuantity) / Number(row.plannedQuantity) * 100) : 0,
+        unit: row.unit,
+        batchCount: row.batches.filter((batch: any) => batch.status === "finished").length,
+      }));
+      const comparisonScope = "دفعات مرتبطة صراحة ببند الخطة فقط؛ البنود التاريخية غير المرتبطة غير قابلة للمقارنة";
       
       res.json({ ...result, schedules, dailyProductionComparison, comparisonScope });
     } catch (error) {
@@ -18294,6 +18307,9 @@ export async function registerRoutes(
       res.json(result);
     } catch (error) {
       console.error("Error changing order status:", error);
+      if (((error as any)?.code || (error as any)?.cause?.code) === "23514") {
+        return res.status(409).json({ error: "حالة الخطة محمية بالتنفيذ المرتبط: أكمل دفعات كل البنود قبل إتمام الخطة؛ لا يمكن إلغاء أو إعادة فتح خطة منفذة" });
+      }
       res.status(500).json({ error: "فشل في تغيير حالة الأمر" });
     }
   });
@@ -18320,6 +18336,9 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting production order:", error);
+      if (["23514", "23503"].includes((error as any)?.code || (error as any)?.cause?.code)) {
+        return res.status(409).json({ error: "لا يمكن حذف خطة لها دفعات تنفيذ مرتبطة؛ محفوظة لحماية أثر المخزون" });
+      }
       res.status(500).json({ error: "Failed to delete production order" });
     }
   });
@@ -18408,6 +18427,9 @@ export async function registerRoutes(
       res.json(item);
     } catch (error) {
       console.error("Error updating order item:", error);
+      if (((error as any)?.code || (error as any)?.cause?.code) === "23514") {
+        return res.status(409).json({ error: "بند الخطة مرتبط بدفعات فعلية ولا يمكن تعديل هويته أو كميته أو إلغاؤه" });
+      }
       res.status(500).json({ error: "Failed to update item" });
     }
   });
@@ -18441,6 +18463,9 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting order item:", error);
+      if (["23514", "23503"].includes((error as any)?.code || (error as any)?.cause?.code)) {
+        return res.status(409).json({ error: "لا يمكن حذف بند خطة مرتبط بدفعات فعلية" });
+      }
       res.status(500).json({ error: "Failed to delete item" });
     }
   });
@@ -22003,6 +22028,10 @@ export async function registerRoutes(
         }
       }
       
+      const advancedOwnedBatch = await storage.getDailyProductionBatch(id);
+      if (advancedOwnedBatch?.advancedProductionOrderItemId != null) {
+        return res.status(409).json({ error: "أكمل الدفعة من بند خطة الإنتاج الأصلي لضمان حدود الكمية والهوية والصلاحيات" });
+      }
       const batch = await storage.finishBatch(id);
       if (!batch) {
         return res.status(404).json({ error: "دفعة الإنتاج غير موجودة" });
@@ -36397,6 +36426,8 @@ export async function registerRoutes(
   app.post("/api/warehouse/material-transfers", isAuthenticated, requirePermission("warehouse", "create"), async (req, res) => {
     try {
       const user = req.currentUser;
+      if (!user?.id) return res.status(401).json({ error: "المستخدم غير مصادق عليه" });
+      const idempotencyKey = requireMaterialTransferIdempotencyKey(req.get("Idempotency-Key"));
       const body = req.body && typeof req.body === "object" ? req.body : {};
       const {
         items,
@@ -36434,10 +36465,8 @@ export async function registerRoutes(
       }
 
       const normalizedItems: any[] = [];
-      if (items !== undefined) {
-        if (!Array.isArray(items)) {
-          return res.status(400).json({ error: "يجب توفير بنود التحويل في قائمة" });
-        }
+      requireNonEmptyMaterialTransferItems(items);
+      {
         for (const rawItem of items) {
           if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) {
             return res.status(400).json({ error: invalidWarehouseQuantityMessage });
@@ -36460,10 +36489,24 @@ export async function registerRoutes(
           if (!normalizedOptionalQuantities) {
             return res.status(400).json({ error: invalidWarehouseQuantityMessage });
           }
+          const normalizedItemId = normalizedOptionalQuantities.itemId;
+          if (
+            typeof normalizedItemId !== "number"
+            || !Number.isInteger(normalizedItemId)
+            || normalizedItemId <= 0
+            || typeof normalizedOptionalQuantities.itemName !== "string"
+            || !normalizedOptionalQuantities.itemName.trim()
+            || typeof normalizedOptionalQuantities.category !== "string"
+            || !normalizedOptionalQuantities.category.trim()
+            || typeof normalizedOptionalQuantities.unit !== "string"
+            || !normalizedOptionalQuantities.unit.trim()
+          ) {
+            return res.status(400).json({ error: "يحتوي التحويل على صنف غير صالح" });
+          }
           // Requesters may not seed receipt, discrepancy, modification, or
           // other audit columns on a pending transfer.
           normalizedItems.push({
-            itemId: normalizedOptionalQuantities.itemId,
+            itemId: normalizedItemId,
             itemName: normalizedOptionalQuantities.itemName,
             category: normalizedOptionalQuantities.category,
             unit: normalizedOptionalQuantities.unit,
@@ -36490,14 +36533,61 @@ export async function registerRoutes(
         createdBy: user?.id,
         createdByName: [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.username,
       };
+      const idempotencyAction = "create_material_transfer";
+      const idempotencyPayloadHash = materialTransferPayloadHash({
+        transfer: {
+          requestId: sanitizedTransferData.requestId,
+          sourceType,
+          sourceBranchId: requestedSourceBranchId,
+          destinationBranchId: requestedDestinationBranchId,
+          // An omitted date remains omitted for payload binding even if the
+          // server chooses today's date for the persisted transfer.
+          transferDate: typeof transferDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(transferDate)
+            ? transferDate
+            : null,
+          notes: sanitizedTransferData.notes,
+        },
+        items: normalizedItems,
+      });
       
-      const transfer = await storage.createMaterialTransfer({
+      const creation = await storage.createMaterialTransfer({
         ...sanitizedTransferData,
         transferNumber,
+        idempotencyKey,
+        idempotencyActorId: user.id,
+        idempotencyAction,
+        idempotencyPayloadHash,
       }, normalizedItems);
+
+      // Authorization is evaluated again against the durable row on replay.
+      // This prevents an old key from returning a transfer whose branch scope
+      // was changed after it was originally created.
+      if (creation.replayed && !isUserAdmin(req)) {
+        const actualSourceId = creation.transfer.sourceBranchId;
+        const actualDestinationId = creation.transfer.destinationBranchId;
+        const actualSourceAccess = typeof actualSourceId === "string"
+          ? await canAccessWarehouseTransferSource(req, actualSourceId)
+          : false;
+        const actualDestinationAccess = await canAccessWarehouseTransferDestination(req, actualDestinationId);
+        const actualSourceIsWarehouse = actualSourceId === mainWarehouseBranchId;
+        if (actualSourceIsWarehouse
+          ? (!actualSourceAccess && !actualDestinationAccess)
+          : !actualSourceAccess) {
+          return res.status(403).json({ error: "غير مصرح بإنشاء هذا التحويل" });
+        }
+      }
       
-      res.status(201).json(transfer);
-    } catch (error) {
+      res.status(creation.replayed ? 200 : 201).json(creation.transfer);
+    } catch (error: any) {
+      if (error instanceof MaterialTransferCreationError || error?.status === 409) {
+        return res.status(error.status).json({ error: error.message });
+      }
+      const dbErrorCode = databaseErrorCode(error);
+      if (dbErrorCode === "42703" || dbErrorCode === "42P01") {
+        return res.status(503).json({
+          error: "مخطط منع تكرار تحويلات المواد غير مثبت؛ يجب تطبيق migration material_transfer_creation_idempotency.sql",
+        });
+      }
       console.error("Error creating material transfer:", error);
       res.status(500).json({ error: "فشل في إنشاء التحويل" });
     }

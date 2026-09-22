@@ -41,6 +41,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { AdvancedExecution } from "@/components/production/advanced-execution";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: any }> = {
   draft: { label: "مسودة", color: "text-gray-700", bgColor: "bg-gray-100", icon: FileText },
@@ -357,6 +358,8 @@ export default function AdvancedProductionOrderDetailsPage() {
             </div>
           }
         />
+
+        <AdvancedExecution key={`${order.id}`} orderId={order.id} status={order.status} startDate={order.startDate} />
 
         {order.status !== 'cancelled' && (
           <Card className="border-0 shadow-sm overflow-hidden">

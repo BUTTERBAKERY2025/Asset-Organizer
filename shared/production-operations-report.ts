@@ -38,7 +38,11 @@ export type ProductionOperationsPlannedRow = {
   plannedQuantity: number;
   advancedOrderIds: number[];
   advancedOrderItemIds: number[];
-  comparisonStatus: "unavailable_without_explicit_batch_link";
+  comparisonStatus: "unavailable_without_explicit_batch_link" | "available_explicit_batch_order_item_fk";
+  executionUnit?: string | null;
+  linkedFinishedQuantity?: number | null;
+  linkedInProgressQuantity?: number | null;
+  remainingQuantity?: number | null;
 };
 
 export type ProductionOperationsRequestRow = {
@@ -131,7 +135,7 @@ export type ProductionOperationsReport = {
       orderCount: number;
       itemCount: number;
       plannedQuantityByCatalogUnit: ProductionOperationsQuantityByUnit[];
-      comparisonStatus: "unavailable_without_explicit_batch_link";
+      comparisonStatus: "unavailable_without_explicit_batch_link" | "partial_explicit_batch_link";
     };
     centralKitchen: {
       orderCount: number;
@@ -216,7 +220,7 @@ export type ProductionOperationsReport = {
         dateBasis: "request needed_date cohort; linked batches are not filtered by production_date";
       };
       advancedPlanToBatch: {
-        status: "unavailable_without_explicit_batch_link";
+        status: "unavailable_without_explicit_batch_link" | "available_explicit_batch_order_item_fk";
       };
     };
     costing: {
