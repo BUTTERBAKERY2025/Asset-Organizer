@@ -61,3 +61,17 @@ mtime_ms = 1790089217292
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/9b3a12ce-a375-466b-bac9-8403600f9a1d/3eaf62f1-c6e9-41e6-89af-ec6969bf1d0d"
 storage_version_token = "1790089250470529"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "OyfPLmbxmDiYQ9ZCLEQkK"
+uri = "file://screenshots/kitchen-orders-design.jpg"
+type = "image"
+title = "التصميم التجريبي لطلبات المطبخ المركزي"
+description = "معاينة التصميم المبسّط: مراحل الطلبات، البحث والتصفية، والتفاصيل عند اختيار الطلب. بيانات تجريبية، ولم يُطبّق على الموقع الفعلي بعد."
+logical_id = "554c6518-4a9c-40bf-a217-d59b260dec6e"
+content_hash = "sha256:14f7a2fa6e6687344d46208cc02ef5f95edd0dc40249fa74dfdedc2a974025c3"
+size = 55017
+mtime_ms = 1790101698043
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/554c6518-4a9c-40bf-a217-d59b260dec6e/0a3a9ab1-852f-4d3f-bb23-e65b0da12959"
+storage_version_token = "1790101706904202"
+content_type = "image/jpeg"
