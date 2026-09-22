@@ -157,6 +157,11 @@ import { registerProductionOperationsReportRoute } from "./production-operations
 import { registerAdvancedProductionExecutionRoutes, advancedExecutionRows } from "./advanced-production-execution";
 import { registerCentralKitchenWorkplanRoute } from "./central-kitchen-workplan";
 import {
+  CENTRAL_KITCHEN_DEFAULT_NEEDED_TIME,
+  getOrderSchedule,
+  getOrderingPolicy,
+} from "@shared/central-kitchen-ordering-policy";
+import {
   CentralKitchenBatchMaterialsError,
   getBatchMaterialRequirements,
   previewCentralKitchenMaterialRequirements,
@@ -7773,6 +7778,7 @@ export async function registerRoutes(
     const branchNames = new Map(branchRows.map((branch) => [branch.id, branch.name]));
     return {
       ...order,
+      orderingSchedule: getOrderSchedule(order),
       requestBranchName: branchNames.get(order.requestBranchId) || null,
       centralKitchenName: branchNames.get(order.centralKitchenId) || null,
       items,
@@ -7840,6 +7846,7 @@ export async function registerRoutes(
         const counts = new Map(itemCounts.map((row) => [row.orderId, Number(row.count)]));
         return res.json(rows.map((row) => ({
           ...row,
+          orderingSchedule: getOrderSchedule(row),
           requestBranchName: names.get(row.requestBranchId) || null,
           centralKitchenName: names.get(row.centralKitchenId) || null,
           itemCount: counts.get(row.id) || 0,
@@ -8358,6 +8365,16 @@ export async function registerRoutes(
   );
 
   app.get(
+    "/api/central-kitchen-orders/policy",
+    isAuthenticated,
+    requirePermission("central_kitchen_orders", "view"),
+    (_req, res) => {
+      res.set("Cache-Control", "private, no-store");
+      return res.json(getOrderingPolicy());
+    },
+  );
+
+  app.get(
     "/api/central-kitchen-orders/:id",
     isAuthenticated,
     requirePermission("central_kitchen_orders", "view"),
@@ -8390,7 +8407,10 @@ export async function registerRoutes(
       const keyResult = centralKitchenRequestKey(req, parsed.data.idempotencyKey);
       if (!keyResult.key) return res.status(400).json({ error: keyResult.error });
       const user = getCurrentUser(req);
-      const payload = parsed.data;
+      const payload = {
+        ...parsed.data,
+        neededTime: parsed.data.neededTime ?? CENTRAL_KITCHEN_DEFAULT_NEEDED_TIME,
+      };
       const payloadFingerprint = createCentralKitchenPayloadFingerprint(payload);
       try {
         // The requesting branch is always the branch of the submitting user.

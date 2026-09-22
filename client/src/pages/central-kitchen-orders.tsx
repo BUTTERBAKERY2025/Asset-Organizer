@@ -19,6 +19,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { AvailabilitySnapshot } from "@/components/central-kitchen/availability-snapshot";
 import { LinkedBatches } from "@/components/central-kitchen/linked-batches";
+import { DailyOrderingNotice, LateSubmissionBadge, OrderScheduleNotice, useKitchenOrderingPolicy } from "@/components/central-kitchen/ordering-schedule";
+import { getOrderSchedule } from "@shared/central-kitchen-ordering-policy";
 import { PreparationEditor, SavedPreparationSummary } from "@/components/central-kitchen/prepare-fulfillment";
 import {
   CentralKitchenCatalogItem,
@@ -46,6 +48,7 @@ type KitchenItem = {
 };
 type KitchenEvent = { id: string | number; eventType?: string; fromStatus?: string; toStatus: string; actorId?: string; notes?: string; createdAt: string; changeSnapshot?: { before?: { order?: { neededDate?: string }; items?: KitchenItem[] }; requested?: { edit?: { neededDate: string; items: Array<{ itemId: number; requestedQuantity: number }> } } } };
 type KitchenOrder = {
+  orderingSchedule?: ReturnType<typeof getOrderSchedule>;
   id: string | number; orderNumber: string; requestBranchId: string; centralKitchenId: string; status: string;
   neededDate?: string; neededTime?: string; notes?: string; createdBy?: string; approvedBy?: string; preparedBy?: string;
   dispatchedBy?: string; receivedBy?: string; createdAt: string; approvedAt?: string; preparedAt?: string; dispatchedAt?: string;
@@ -133,7 +136,21 @@ export default function CentralKitchenOrdersPage() {
   const [detailId, setDetailId] = useState<string | number | null>(null);
   const [actionNotes, setActionNotes] = useState("");
   const [pilotDays, setPilotDays] = useState("30");
-  const [draft, setDraft] = useState({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: localDate(), neededTime: "", notes: "", items: [emptyLine()] });
+  const [draft, setDraft] = useState({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: "", neededTime: "07:00", notes: "", items: [emptyLine()] });
+  const orderingPolicy = useKitchenOrderingPolicy(createOpen);
+  const draftSchedule = orderingPolicy.serverNow ? getOrderSchedule({
+    neededDate: draft.neededDate, neededTime: draft.neededTime,
+    createdAt: orderingPolicy.serverNow,
+  }) : null;
+  const openCreate = async () => {
+    setCreateOpen(true);
+    const result = await orderingPolicy.query.refetch();
+    const policy = result.data;
+    if (policy) setDraft(current => ({
+      ...current, neededDate: current.neededDate || policy.defaultNeededDate,
+      neededTime: current.neededTime || policy.defaultNeededTime,
+    }));
+  };
   const createAttemptRef = useRef<{ signature: string; key: string } | null>(null);
   const transitionKeysRef = useRef(new Map<string, { signature: string; key: string }>());
 
@@ -239,9 +256,9 @@ export default function CentralKitchenOrdersPage() {
       return response.json() as Promise<KitchenOrder>;
     },
     onSuccess: (order) => {
-      toast({ title: "تم إنشاء طلب المطبخ", description: `تم تسجيل الطلب ${order.orderNumber || ""}` });
+      toast({ title: "تم إنشاء طلب المطبخ", description: `تم تسجيل الطلب ${order.orderNumber || ""}${order.orderingSchedule?.isLate ? " — أُرسل بعد الموعد؛ يرجى التنسيق مع المطبخ." : ""}` });
       createAttemptRef.current = null;
-       setCreateOpen(false); openDetail(order.id); setDraft({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: localDate(), neededTime: "", notes: "", items: [emptyLine()] }); refresh();
+       setCreateOpen(false); openDetail(order.id); setDraft({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: "", neededTime: "07:00", notes: "", items: [emptyLine()] }); refresh();
     },
     onError: (error) => toast({ title: "تعذر إنشاء الطلب", description: error instanceof Error ? error.message : "تحقق من البيانات وحاول مجدداً.", variant: "destructive" }),
   });
@@ -305,8 +322,9 @@ export default function CentralKitchenOrdersPage() {
       <PageHeader icon={Factory} tone="production" title="طلبات المطبخ المركزي" description="تتبّع احتياج الفروع من الطلب حتى الاستلام"
         actions={<div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={refresh} data-testid="refresh-kitchen-orders"><RefreshCw className="ml-2 h-4 w-4" />تحديث</Button>
-          {canCreate("central_kitchen_orders") && <Button size="sm" onClick={() => setCreateOpen(true)} data-testid="create-kitchen-order"><Plus className="ml-2 h-4 w-4" />طلب جديد</Button>}
+          {canCreate("central_kitchen_orders") && <Button size="sm" onClick={() => void openCreate()} data-testid="create-kitchen-order"><Plus className="ml-2 h-4 w-4" />طلب جديد</Button>}
         </div>} />
+      <DailyOrderingNotice />
 
       <Card className="border-violet-200 bg-gradient-to-l from-violet-50/70 to-background">
         <CardContent className="p-4">
@@ -329,10 +347,10 @@ export default function CentralKitchenOrdersPage() {
 
       {ordersQuery.isLoading ? <Card><CardContent className="space-y-3 p-4">{Array.from({ length: 6 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</CardContent></Card> :
       ordersQuery.isError ? <Card><CardContent className="py-16 text-center"><p className="font-medium">تعذر تحميل الطلبات</p><p className="mt-1 text-sm text-muted-foreground">تحقق من الاتصال ثم أعد المحاولة.</p><Button className="mt-4" variant="outline" onClick={refresh}>إعادة المحاولة</Button></CardContent></Card> :
-      filtered.length === 0 ? <Card><CardContent className="py-16 text-center"><PackagePlus className="mx-auto mb-3 h-10 w-10 text-muted-foreground" /><h2 className="font-semibold">لا توجد طلبات مطابقة</h2><p className="mt-1 text-sm text-muted-foreground">{canCreate("central_kitchen_orders") ? "أنشئ طلباً جديداً أو عدّل عوامل التصفية." : "عدّل عوامل التصفية أو انتظر وصول طلب جديد."}</p>{canCreate("central_kitchen_orders") && <Button className="mt-5" onClick={() => setCreateOpen(true)}>إنشاء طلب</Button>}</CardContent></Card> :
+      filtered.length === 0 ? <Card><CardContent className="py-16 text-center"><PackagePlus className="mx-auto mb-3 h-10 w-10 text-muted-foreground" /><h2 className="font-semibold">لا توجد طلبات مطابقة</h2><p className="mt-1 text-sm text-muted-foreground">{canCreate("central_kitchen_orders") ? "أنشئ طلباً جديداً أو عدّل عوامل التصفية." : "عدّل عوامل التصفية أو انتظر وصول طلب جديد."}</p>{canCreate("central_kitchen_orders") && <Button className="mt-5" onClick={() => void openCreate()}>إنشاء طلب</Button>}</CardContent></Card> :
       <Card className="overflow-hidden border-border/80"><div className="overflow-x-auto"><Table><TableHeader className="bg-muted/40"><TableRow><TableHead className="text-right">رقم الطلب</TableHead><TableHead className="text-right">من</TableHead><TableHead className="text-right">إلى المطبخ</TableHead><TableHead className="text-right">المطلوب</TableHead><TableHead className="text-right">البنود</TableHead><TableHead className="text-right">الحالة</TableHead><TableHead className="text-left"> </TableHead></TableRow></TableHeader><TableBody>
          {filtered.map(order => <TableRow key={order.id} className="cursor-pointer hover:bg-muted/35" onClick={() => openDetail(order.id)}>
-           <TableCell className="font-mono font-semibold text-primary">{order.orderNumber}</TableCell><TableCell>{order.requestBranchName || branchName(order.requestBranchId)}</TableCell><TableCell>{order.centralKitchenName || branchName(order.centralKitchenId)}</TableCell><TableCell><span className="text-sm">{readableDate(order.neededDate)} <span className="text-muted-foreground">{readableTime(order.neededTime)}</span></span></TableCell><TableCell>{order.itemCount ?? order.items?.length ?? 0} بنود</TableCell><TableCell><StatusBadge status={order.status} /><NextStepSummary order={order} /></TableCell><TableCell className="text-left"><Button variant="ghost" size="icon" aria-label="عرض الطلب" onClick={event => { event.stopPropagation(); openDetail(order.id); }}><ChevronLeft className="h-4 w-4" /></Button></TableCell>
+           <TableCell className="font-mono font-semibold text-primary">{order.orderNumber}</TableCell><TableCell>{order.requestBranchName || branchName(order.requestBranchId)}</TableCell><TableCell>{order.centralKitchenName || branchName(order.centralKitchenId)}</TableCell><TableCell><span className="text-sm">{readableDate(order.neededDate)} <span className="text-muted-foreground">{readableTime(order.neededTime)}</span></span></TableCell><TableCell>{order.itemCount ?? order.items?.length ?? 0} بنود</TableCell><TableCell><StatusBadge status={order.status} /><LateSubmissionBadge schedule={order.orderingSchedule} /><NextStepSummary order={order} /></TableCell><TableCell className="text-left"><Button variant="ghost" size="icon" aria-label="عرض الطلب" onClick={event => { event.stopPropagation(); openDetail(order.id); }}><ChevronLeft className="h-4 w-4" /></Button></TableCell>
         </TableRow>)}</TableBody></Table></div></Card>}
     </main>
 
@@ -340,6 +358,7 @@ export default function CentralKitchenOrdersPage() {
       <div className="grid gap-4 py-2 md:grid-cols-2"><FormSelect label="الفرع الطالب" value={draft.sourceBranchId} onChange={value => setDraft({ ...draft, sourceBranchId: value })} branches={branches} placeholder="اختر الفرع" /><FormSelect label="المطبخ المركزي" value={draft.centralKitchenId} onChange={value => setDraft({ ...draft, centralKitchenId: value })} branches={centralKitchens.filter(branch => branch.id !== draft.sourceBranchId)} placeholder={kitchensQuery.isLoading ? "جارٍ تحميل المطابخ..." : centralKitchens.length ? "اختر المطبخ" : kitchensQuery.isError ? "تعذر تحميل المطابخ المركزية" : "لا يوجد مطبخ مركزي مفعّل"} />
         <div><Label htmlFor="needed-date">تاريخ الحاجة</Label><Input id="needed-date" type="date" className="mt-2" value={draft.neededDate} onChange={event => setDraft({ ...draft, neededDate: event.target.value })} /></div><div><Label htmlFor="needed-time">وقت الحاجة</Label><Input id="needed-time" type="time" className="mt-2" value={draft.neededTime} onChange={event => setDraft({ ...draft, neededTime: event.target.value })} /></div>
       </div>
+      {orderingPolicy.query.isError ? <p role="alert" className="rounded border border-amber-300 p-3 text-sm">تعذر تحميل مواعيد الطلب من الخادم. <Button variant="link" onClick={() => void openCreate()}>إعادة المحاولة</Button></p> : !orderingPolicy.query.data ? <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل مواعيد الطلب بتوقيت السعودية…</p> : <OrderScheduleNotice schedule={draftSchedule} preview />}
       <div className="rounded-lg border bg-muted/20"><div className="flex items-center justify-between border-b px-4 py-3"><div><p className="font-semibold">بنود الطلب</p><p className="text-xs text-muted-foreground">اختر من كتالوج المنتجات أو المستودع، أو اختر الإدخال اليدوي صراحةً.</p></div><Button variant="outline" size="sm" onClick={() => setDraft({ ...draft, items: [...draft.items, emptyLine()] })}><Plus className="ml-1 h-4 w-4" />إضافة بند</Button></div>
         <CatalogQueryState query={productsQuery} count={products.length} />
         <div className="space-y-3 p-3">{draft.items.map((item, index) => <div className="grid gap-2 rounded-md border bg-background p-3 md:grid-cols-12" key={index}>
@@ -347,7 +366,7 @@ export default function CentralKitchenOrdersPage() {
           <div className="md:col-span-2"><Label className="text-xs">الوحدة</Label><Input className="mt-1 h-9" disabled={!item.manualMode} value={item.unit} onChange={event => setLine(index, { unit: event.target.value })} placeholder="قطعة" /></div><div className="md:col-span-2"><Label className="text-xs">الكمية</Label><Input className="mt-1 h-9" type="number" min="0.01" step="any" value={item.requestedQuantity} onChange={event => setLine(index, { requestedQuantity: event.target.value })} /></div><div className="md:col-span-3"><Label className="text-xs">ملاحظة البند</Label><Input className="mt-1 h-9" value={item.notes} onChange={event => setLine(index, { notes: event.target.value })} placeholder="اختياري" /></div><div className="flex items-end md:col-span-1"><Button variant="ghost" size="icon" className="text-destructive" disabled={draft.items.length === 1} onClick={() => setDraft({ ...draft, items: draft.items.filter((_, i) => i !== index) })} aria-label="حذف البند"><X className="h-4 w-4" /></Button></div>
         </div>)}</div></div>
       <div><Label htmlFor="order-notes">ملاحظات عامة</Label><textarea id="order-notes" className="mt-2 min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={draft.notes} onChange={event => setDraft({ ...draft, notes: event.target.value })} placeholder="تعليمات خاصة للاستلام أو التجهيز..." /></div>
-      <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setCreateOpen(false)}>إلغاء</Button><Button disabled={createMutation.isPending} onClick={() => createMutation.mutate()}>{createMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}إرسال الطلب</Button></div>
+      <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setCreateOpen(false)}>إلغاء</Button><Button disabled={createMutation.isPending || !draft.neededDate || !orderingPolicy.query.data} onClick={() => createMutation.mutate()}>{createMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}إرسال الطلب</Button></div>
     </DialogContent></Dialog>
 
      <Dialog open={detailId !== null} onOpenChange={open => { if (!open) closeDetail(); }}><DialogContent dir="rtl" className="max-h-[92dvh] max-w-5xl overflow-y-auto">{(detailQuery.isLoading || (detailQuery.isFetching && detailQuery.isPlaceholderData)) ? <div className="space-y-3 py-8" aria-label="جارٍ تحميل تفاصيل الطلب">{Array.from({ length: 5 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</div> : detailQuery.isError || !selectedDetail ? <DetailQueryError error={detailQuery.error} onRetry={() => detailQuery.refetch()} /> : <OrderDetail order={selectedDetail} products={products} productsQuery={productsQuery} accessibleBranchIds={branches.map(branch => branch.id)} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={workflowMutation.isPending} canApprove={canApprove("central_kitchen_orders")} canEdit={canEdit("central_kitchen_orders")} onAction={(action, details) => workflowMutation.mutate({ id: selectedDetail.id, action, details })} />}</DialogContent></Dialog>
@@ -425,6 +444,7 @@ function OrderDetail({ order, products, productsQuery, accessibleBranchIds, acti
     <div className="grid gap-3 border-y py-4 text-sm md:grid-cols-3"><div><span className="block text-muted-foreground">تاريخ الحاجة</span><span className="mt-1 block font-medium">{readableDate(order.neededDate)}</span></div><div><span className="block text-muted-foreground">وقت الحاجة</span><span className="mt-1 block font-medium">{readableTime(order.neededTime)}</span></div><div><span className="block text-muted-foreground">تاريخ الإنشاء</span><span className="mt-1 block font-medium">{readableDate(order.createdAt)}</span></div></div>
     {order.notes && <div className="rounded-md border-r-4 border-primary bg-muted/30 px-4 py-3 text-sm"><span className="mb-1 block text-xs text-muted-foreground">ملاحظات الطلب</span>{order.notes}</div>}
      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 px-3 py-2 text-xs"><span className="text-muted-foreground">وضع مخزون الطلب:</span><Badge variant="outline" className={parseCentralKitchenInventoryMode(order.inventoryMode) === "real" ? "border-emerald-300 bg-emerald-50 text-emerald-800" : parseCentralKitchenInventoryMode(order.inventoryMode) === "shadow" ? "border-amber-300 bg-amber-50 text-amber-800" : "border-border bg-muted text-muted-foreground"}>{parseCentralKitchenInventoryMode(order.inventoryMode) === "real" ? "فعلي — حجوزات من مخزون المطبخ" : parseCentralKitchenInventoryMode(order.inventoryMode) === "shadow" ? "ظلّي — تشغيلي فقط، لا حركة مخزون فعلية" : "غير محدد — طلب قديم، لا يثبت حركة مخزون"}</Badge></div>
+     <OrderScheduleNotice schedule={order.orderingSchedule} />
      <LifecycleProgress status={status} />
      {canEdit && accessibleBranchIds.includes(order.requestBranchId) && <RequestChangeControls key={`${order.id}:${Math.max(0, ...(order.events || []).map(event => Number(event.id)))}`} order={order} />}
      {(order.events || []).filter(event => event.eventType === "edited").map(event => <details key={event.id} className="rounded border p-3 text-sm"><summary>تعديل الطلب · {readableDate(event.createdAt)} · {event.notes}</summary><p>تاريخ الاحتياج: {event.changeSnapshot?.before?.order?.neededDate || "—"} ← {event.changeSnapshot?.requested?.edit?.neededDate}</p>{event.changeSnapshot?.before?.items?.map(item => <p key={item.id}>{item.productName}: {item.requestedQuantity} ← {event.changeSnapshot?.requested?.edit?.items.find(updated => updated.itemId === Number(item.id))?.requestedQuantity} {item.unit}</p>)}</details>)}

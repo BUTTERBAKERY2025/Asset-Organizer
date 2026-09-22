@@ -44,6 +44,22 @@ real operations. Internal sequences were deliberately not reset.
 Opening quantities must come from the physical stocktake, not inferred from the
 removed trial history. Do not start real operation on the old Render code.
 
+## Daily ordering timetable
+
+The agreed daily schedule is Saudi time (Asia/Riyadh): submit by 17:00 on the
+day before need, kitchen review at 19:00 that evening, default delivery at 07:00
+on the needed day. The new-order form defaults to tomorrow using server time.
+Orders after the cutoff remain allowed and are visibly flagged on creation,
+in the list, and in details. Review is a staff responsibility, not automatic
+approval or a scheduled notification.
+
+Submission lateness compares original createdAt against the deadline for the
+current neededDate, not updatedAt or the current clock. Thus later approvals
+do not turn an on-time submission into a late one; editing the needed date can
+change its classification. Missing legacy dates have no inferred schedule.
+This is separate from the existing overdue-delivery metric. No schema migration
+is required for this timetable; the updated application code must be published.
+
 ## Operating rules
 
 - Product deletion now archives the product; it preserves its identity and

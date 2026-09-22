@@ -2004,4 +2004,45 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
       batch_product_name: oldProductName,
     }]);
   });
+
+  it("HTTP allows late daily orders, preserves replay metadata, and recalculates the current needed date", async () => {
+    const policy = await httpInvoke("get", "/api/central-kitchen-orders/policy", { user: fixture.requestUser });
+    expect(policy.statusCode).toBe(200);
+    expect(policy.headers["cache-control"]).toContain("no-store");
+    expect(policy.body).toMatchObject({ requestDeadline: "17:00", reviewTime: "19:00", defaultNeededTime: "07:00", timeZone: "Asia/Riyadh" });
+    const today = new Date(Date.parse(policy.body.serverNow) + 3 * 3600_000).toISOString().slice(0, 10);
+    const [product] = await databaseState.db.select().from(products).where(eq(products.id, fixture.stockedProductId));
+    const before = await productBalance(fixture.kitchenBranchId, product.id);
+    const body = { ...createBody([{ productId: product.id, productName: product.name, unit: product.unit, requestedQuantity: 1 }]), neededDate: today };
+    const created = await httpInvoke("post", "/api/central-kitchen-orders", { user: fixture.requestUser, body });
+    expect(created.statusCode).toBe(201);
+    expect(created.body.neededTime).toBe("07:00");
+    expect(created.body.orderingSchedule.isLate).toBe(true); // Same-day need missed yesterday's cutoff.
+    const replay = await httpInvoke("post", "/api/central-kitchen-orders", {
+      user: fixture.requestUser, body: { ...body, neededTime: "07:00" },
+    });
+    expect(replay.statusCode).toBe(200);
+    expect(replay.body.id).toBe(created.body.id);
+    expect(replay.body.orderingSchedule).toEqual(created.body.orderingSchedule);
+    const params = { id: String(created.body.id) };
+    const detail = await httpInvoke("get", "/api/central-kitchen-orders/:id", { user: fixture.requestUser, params });
+    expect(detail.body.orderingSchedule).toEqual(created.body.orderingSchedule);
+    const list = await httpInvoke("get", "/api/central-kitchen-orders", { user: fixture.requestUser });
+    expect(list.body.find((order: any) => order.id === created.body.id).orderingSchedule).toEqual(created.body.orderingSchedule);
+    const later = new Date(`${today}T00:00:00Z`);
+    later.setUTCDate(later.getUTCDate() + 3);
+    const edit = await httpInvoke("post", "/api/central-kitchen-orders/:id/request-change", {
+      user: fixture.requestUser, params,
+      body: {
+        idempotencyKey: key("daily-schedule-edit"), reason: "Need moved to a later day",
+        expectedEventId: Math.max(...created.body.events.map((event: any) => event.id)),
+        edit: { neededDate: later.toISOString().slice(0, 10), neededTime: "07:00", notes: "",
+          items: created.body.items.map((item: any) => ({ itemId: item.id, requestedQuantity: Number(item.requestedQuantity) })) },
+      },
+    });
+    expect(edit.statusCode).toBe(200);
+    expect(edit.body.createdAt).toBe(created.body.createdAt);
+    expect(edit.body.orderingSchedule.isLate).toBe(false);
+    expect(await productBalance(fixture.kitchenBranchId, product.id)).toEqual(before);
+  });
 });

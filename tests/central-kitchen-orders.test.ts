@@ -135,6 +135,20 @@ describe("central kitchen workflow rules", () => {
       .toBe("ef0e8612894e9f82df08391f6f92070884ebc47196f5fb09b067ca3b18bcd63b");
   });
 
+  it("canonicalizes omitted and explicit default delivery times identically", () => {
+    const omitted = createCentralKitchenOrderSchema.parse({
+      requestBranchId: "branch-a",
+      centralKitchenId: "kitchen",
+      neededDate: "2028-02-29",
+      items: [{ productName: "Bread", requestedQuantity: 2, unit: "tray" }],
+    });
+    expect(createCentralKitchenPayloadFingerprint(omitted))
+      .toBe(createCentralKitchenPayloadFingerprint({
+        ...omitted,
+        neededTime: "07:00",
+      }));
+  });
+
   it("keeps colliding numeric IDs distinct in new catalog fingerprints", () => {
     const common = {
       requestBranchId: "branch-a",

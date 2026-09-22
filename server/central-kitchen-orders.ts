@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createHash } from "crypto";
+import { CENTRAL_KITCHEN_DEFAULT_NEEDED_TIME } from "@shared/central-kitchen-ordering-policy";
 
 export const CENTRAL_KITCHEN_STATUSES = [
   "requested",
@@ -124,7 +125,7 @@ export function createCentralKitchenPayloadFingerprint(
     requestBranchId: payload.requestBranchId,
     centralKitchenId: payload.centralKitchenId,
     neededDate: payload.neededDate || null,
-    neededTime: payload.neededTime || null,
+    neededTime: payload.neededTime ?? CENTRAL_KITCHEN_DEFAULT_NEEDED_TIME,
     notes: payload.notes || null,
     items: payload.items.map((item) => ({
       productId: item.productId || null,
