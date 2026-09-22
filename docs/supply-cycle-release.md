@@ -69,10 +69,10 @@ calculated net request. Product/branch changes clear the draft declaration.
 
 `migrations/036_central_kitchen_reported_available_quantity.sql` adds the nullable
 column and nonnegative constraint without rewriting historical records.
-This migration was applied to DEVELOPMENT only on 2026-09-22. Unlike the three
-older migrations above, it has NOT been applied to the external production
-database. Apply it to the confirmed, authorized production target before
-publishing this version on Render. Publishing alone does not migrate Supabase.
+This migration was applied to development and, with explicit user approval,
+to the external Supabase production database on 2026-09-22. The column and
+nonnegative constraint were verified after application. Publishing alone does
+not migrate Supabase.
 
 ## Mobile ordering and lifecycle notifications
 
@@ -91,9 +91,17 @@ transactions create no notification. Push delivery is best-effort after commit
 and cannot roll back an order; in-app notifications remain available.
 
 `migrations/037_central_kitchen_notification_scope.sql` adds nullable scope and
-deduplication fields to system_notifications. It was applied to DEVELOPMENT only.
-Both this migration and migration 036 above must be applied to the authorized
-external production database before this version is published on Render.
+deduplication fields to system_notifications. It was applied to development and,
+with explicit user approval, to external Supabase production on 2026-09-22.
+The three columns and unique deduplication index were verified.
+
+`migrations/038_central_kitchen_routing.sql` was also applied to that production
+database with the same approval. Its assignment columns, foreign keys and
+distinct-person constraints were verified. No responsible users or default
+kitchens were assigned, and no order or inventory quantities were changed.
+This schema update does not publish application code or establish that a live
+authenticated order submission succeeds. Availability lookup failures require
+separate diagnosis if they persist.
 
 ## Operating rules
 
