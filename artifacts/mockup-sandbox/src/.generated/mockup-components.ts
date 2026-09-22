@@ -6,5 +6,7 @@ export const modules: ModuleMap = {
   "./components/mockups/floor-plan-redesign/TouchWorkspace.tsx": () => import("../components/mockups/floor-plan-redesign/TouchWorkspace.tsx"),
   "./components/mockups/hr-hub-redesign/CommandCenter.tsx": () => import("../components/mockups/hr-hub-redesign/CommandCenter.tsx"),
   "./components/mockups/hr-hub-redesign/SmartSections.tsx": () => import("../components/mockups/hr-hub-redesign/SmartSections.tsx"),
-  "./components/mockups/hr-hub-redesign/WorkflowTabs.tsx": () => import("../components/mockups/hr-hub-redesign/WorkflowTabs.tsx")
+  "./components/mockups/hr-hub-redesign/WorkflowTabs.tsx": () => import("../components/mockups/hr-hub-redesign/WorkflowTabs.tsx"),
+  "./components/mockups/kitchen-orders/Current.tsx": () => import("../components/mockups/kitchen-orders/Current.tsx"),
+  "./components/mockups/kitchen-orders/Streamlined.tsx": () => import("../components/mockups/kitchen-orders/Streamlined.tsx")
 };
