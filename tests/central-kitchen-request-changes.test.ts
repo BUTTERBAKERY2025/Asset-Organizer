@@ -17,14 +17,20 @@ describe("request changes fail closed", () => {
   it("requires a revision, reason and valid exact quantities and dates", () => {
     const payload = { expectedEventId: 1, reason: "changed demand", edit: {
       neededDate: "2026-09-30", neededTime: null, notes: null,
-      items: [{ itemId: 2, requestedQuantity: 0.5 }],
+      items: [{ itemId: 2, requestedQuantity: 0.5, reportedAvailableQuantity: 0 }],
     } };
     expect(centralKitchenRequestChangeSchema.safeParse(payload).success).toBe(true);
     expect(centralKitchenRequestChangeSchema.safeParse({ ...payload, reason: " " }).success).toBe(false);
     expect(centralKitchenRequestChangeSchema.safeParse({ ...payload, expectedEventId: undefined }).success).toBe(false);
     expect(centralKitchenRequestChangeSchema.safeParse({ ...payload, edit: { ...payload.edit, neededDate: "2026-02-30" } }).success).toBe(false);
     for (const quantity of [0, -1, 0.0000001, Infinity]) {
-      expect(centralKitchenRequestChangeSchema.safeParse({ ...payload, edit: { ...payload.edit, items: [{ itemId: 2, requestedQuantity: quantity }] } }).success).toBe(false);
+      expect(centralKitchenRequestChangeSchema.safeParse({
+        ...payload,
+        edit: {
+          ...payload.edit,
+          items: [{ itemId: 2, requestedQuantity: quantity, reportedAvailableQuantity: 0 }],
+        },
+      }).success).toBe(false);
     }
   });
   it("makes cancellation terminal, not active demand", () => {

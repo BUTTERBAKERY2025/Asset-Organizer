@@ -9,7 +9,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useBranches } from "@/hooks/useBranches";
@@ -17,8 +16,10 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import { AvailabilitySnapshot } from "@/components/central-kitchen/availability-snapshot";
+import { isKitchenOrderDraftValid, isValidKitchenQuantity, normalizeReportedAvailableQuantity, OrderLineEditor, type KitchenOrderDraftLine } from "@/components/central-kitchen/order-line-editor";
 import { LinkedBatches } from "@/components/central-kitchen/linked-batches";
+import { OrderNotificationsOptIn } from "@/components/central-kitchen/order-notifications-opt-in";
+import { useVisualViewportDialog } from "@/components/central-kitchen/use-visual-viewport-dialog";
 import { DailyOrderingNotice, LateSubmissionBadge, OrderScheduleNotice, useKitchenOrderingPolicy } from "@/components/central-kitchen/ordering-schedule";
 import { getOrderSchedule } from "@shared/central-kitchen-ordering-policy";
 import { PreparationEditor, SavedPreparationSummary } from "@/components/central-kitchen/prepare-fulfillment";
@@ -34,11 +35,11 @@ import {
 } from "@shared/central-kitchen-next-step";
 import {
   AlertTriangle, Check, ChevronLeft, Factory, Filter, Loader2, PackagePlus, Plus, Printer,
-  RefreshCw, Search, ShieldCheck, Truck, X,
+  RefreshCw, Search, ShieldCheck, Truck,
 } from "lucide-react";
 
 type KitchenItem = {
-  id?: string | number; productId?: string | number; warehouseItemId?: string | number; productName: string; unit: string; requestedQuantity: number; notes?: string;
+  id?: string | number; productId?: string | number; warehouseItemId?: string | number; productName: string; unit: string; requestedQuantity: number; reportedAvailableQuantity?: number | string | null; notes?: string;
   preparedQuantity?: number | null; substituteQuantity?: number | null; substituteProductName?: string | null;
   preparedFromStock?: number | null; preparedFromProduction?: number | null; productionFulfillmentEvidence?: unknown;
   substituteUnit?: string | null; substituteProductId?: string | number | null; substituteWarehouseItemId?: string | number | null;
@@ -46,7 +47,7 @@ type KitchenItem = {
   dispatchedQuantity?: number | null; receivedQuantity?: number | null; damagedQuantity?: number | null;
   missingQuantity?: number | null; receivingNotes?: string | null;
 };
-type KitchenEvent = { id: string | number; eventType?: string; fromStatus?: string; toStatus: string; actorId?: string; notes?: string; createdAt: string; changeSnapshot?: { before?: { order?: { neededDate?: string }; items?: KitchenItem[] }; requested?: { edit?: { neededDate: string; items: Array<{ itemId: number; requestedQuantity: number }> } } } };
+type KitchenEvent = { id: string | number; eventType?: string; fromStatus?: string; toStatus: string; actorId?: string; notes?: string; createdAt: string; changeSnapshot?: { before?: { order?: { neededDate?: string }; items?: KitchenItem[] }; requested?: { edit?: { neededDate: string; items: Array<{ itemId: number; requestedQuantity: number; reportedAvailableQuantity?: number }> } } } };
 type KitchenOrder = {
   orderingSchedule?: ReturnType<typeof getOrderSchedule>;
   id: string | number; orderNumber: string; requestBranchId: string; centralKitchenId: string; status: string;
@@ -61,7 +62,7 @@ type KitchenOrder = {
   linkedBatches?: Array<{ id: number; orderItemId: number; productId: number; quantity: number; productionDate: string | null; status: string | null }>;
 };
 type ProductOption = CentralKitchenCatalogItem;
-type DraftItem = { productId?: number; warehouseItemId?: number; manualMode?: boolean; productName: string; unit: string; requestedQuantity: string; notes: string };
+type DraftItem = KitchenOrderDraftLine;
 type ShadowInventoryEntry = {
   id: number; direction: "projected_kitchen_out" | "projected_branch_in";
   component: "original" | "substitute"; productName: string; unit: string; quantity: number;
@@ -89,12 +90,10 @@ const CENTRAL_KITCHEN_STATUSES = ["requested", "approved", "prepared", "dispatch
 type CentralKitchenStatusFilter = (typeof CENTRAL_KITCHEN_STATUSES)[number];
 const INVENTORY_MODES = ["real", "shadow", "unknown"] as const;
 type InventoryModeFilter = (typeof INVENTORY_MODES)[number];
-const emptyLine = (): DraftItem => ({ productName: "", unit: "قطعة", requestedQuantity: "1", notes: "" });
-const catalogKey = (item: Pick<ProductOption, "id" | "source">) => `${item.source}:${item.id}`;
+const emptyLine = (): DraftItem => ({ productName: "", unit: "قطعة", requestedQuantity: "1", reportedAvailableQuantity: "", notes: "" });
 const sourceLabel = (source: "product" | "warehouse") => source === "warehouse" ? "المستودع" : "المنتجات";
 const identitySource = (value: { productId?: string | number | null; warehouseItemId?: string | number | null }) =>
   value.warehouseItemId != null ? "warehouse" : "product";
-const localDate = () => new Date().toLocaleDateString("en-CA");
 const readableDate = (value?: string) => value ? new Intl.DateTimeFormat("ar-SA", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value)) : "غير محدد";
 const readableTime = (value?: string) => value || "—";
 const normalized = (status: string) => status?.toLowerCase().replaceAll(" ", "_") || "pending";
@@ -133,6 +132,7 @@ export default function CentralKitchenOrdersPage() {
   const [inventoryModeFilter, setInventoryModeFilter] = useState<InventoryModeFilter | "all">(() => readFilterFromUrl("inventoryMode", INVENTORY_MODES));
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const createDialogStyle = useVisualViewportDialog({ open: createOpen, maxHeight: 820, viewportFraction: 0.94 });
   const [detailId, setDetailId] = useState<string | number | null>(null);
   const [actionNotes, setActionNotes] = useState("");
   const [pilotDays, setPilotDays] = useState("30");
@@ -155,6 +155,9 @@ export default function CentralKitchenOrdersPage() {
   const transitionKeysRef = useRef(new Map<string, { signature: string; key: string }>());
 
   useEffect(() => { if (userBranchId) setBranchFilter(userBranchId); }, [userBranchId]);
+  useEffect(() => {
+    if (userBranchId) setDraft(current => current.sourceBranchId ? current : { ...current, sourceBranchId: userBranchId });
+  }, [userBranchId]);
   useEffect(() => {
     const syncUrlState = () => {
       const params = new URLSearchParams(window.location.search);
@@ -226,23 +229,31 @@ export default function CentralKitchenOrdersPage() {
     }
     return Array.from(merged.values());
   }, [branches, kitchensQuery.data]);
+  useEffect(() => {
+    if (createOpen && !draft.centralKitchenId && centralKitchens.length === 1) {
+      setDraft(current => current.centralKitchenId ? current : { ...current, centralKitchenId: centralKitchens[0].id });
+    }
+  }, [createOpen, centralKitchens, draft.centralKitchenId]);
   const filtered = useMemo(() => filterCentralKitchenOrdersByInventoryMode(ordersQuery.data || [], inventoryModeFilter).filter(order => {
     const term = search.trim().toLowerCase();
     const matchesSearch = !term || [order.orderNumber, order.requestBranchName, order.centralKitchenName].some(value => value?.toLowerCase().includes(term));
     return matchesSearch;
   }), [ordersQuery.data, search, inventoryModeFilter]);
   const refresh = () => queryClient.invalidateQueries({ predicate: query => typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/central-kitchen-orders") });
+  const refreshNotifications = () => queryClient.invalidateQueries({ predicate: query => query.queryKey[0] === "/api/active-notifications" || query.queryKey[0] === "/api/system-notifications/my-reads" });
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const invalid = draft.items.some(item => !item.productName.trim() || !item.unit.trim() || Number(item.requestedQuantity) <= 0);
+      const invalid = !isKitchenOrderDraftValid(draft.items);
       if (!draft.sourceBranchId || !draft.centralKitchenId || invalid) throw new Error("أكمل الفروع وبنود الطلب بالكميات الصحيحة.");
       const payload = {
         requestBranchId: draft.sourceBranchId, centralKitchenId: draft.centralKitchenId, neededDate: draft.neededDate || undefined,
         neededTime: draft.neededTime || undefined, notes: draft.notes || undefined,
         items: draft.items.map(item => ({
           ...(item.warehouseItemId !== undefined ? { warehouseItemId: item.warehouseItemId } : item.productId !== undefined ? { productId: item.productId } : {}),
-          productName: item.productName.trim(), unit: item.unit.trim(), requestedQuantity: Number(item.requestedQuantity), notes: item.notes || undefined,
+          productName: item.productName.trim(), unit: item.unit.trim(), requestedQuantity: Number(item.requestedQuantity),
+          reportedAvailableQuantity: normalizeReportedAvailableQuantity(item.reportedAvailableQuantity),
+          notes: item.notes || undefined,
         })),
       };
       const signature = JSON.stringify(payload);
@@ -258,7 +269,7 @@ export default function CentralKitchenOrdersPage() {
     onSuccess: (order) => {
       toast({ title: "تم إنشاء طلب المطبخ", description: `تم تسجيل الطلب ${order.orderNumber || ""}${order.orderingSchedule?.isLate ? " — أُرسل بعد الموعد؛ يرجى التنسيق مع المطبخ." : ""}` });
       createAttemptRef.current = null;
-       setCreateOpen(false); openDetail(order.id); setDraft({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: "", neededTime: "07:00", notes: "", items: [emptyLine()] }); refresh();
+        setCreateOpen(false); openDetail(order.id); setDraft({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: "", neededTime: "07:00", notes: "", items: [emptyLine()] }); refresh(); refreshNotifications();
     },
     onError: (error) => toast({ title: "تعذر إنشاء الطلب", description: error instanceof Error ? error.message : "تحقق من البيانات وحاول مجدداً.", variant: "destructive" }),
   });
@@ -279,10 +290,9 @@ export default function CentralKitchenOrdersPage() {
       });
       return { order: await response.json(), attemptId };
     },
-    onSuccess: ({ attemptId }, { action }) => { transitionKeysRef.current.delete(attemptId); toast({ title: action === "resolve-discrepancy" ? "تمت معالجة الفروقات" : `تم ${action === "approve" ? "اعتماد" : action === "prepare" ? "تجهيز" : action === "dispatch" ? "شحن" : "استلام"} الطلب` }); setActionNotes(""); refresh(); },
+    onSuccess: ({ attemptId }, { action }) => { transitionKeysRef.current.delete(attemptId); toast({ title: action === "resolve-discrepancy" ? "تمت معالجة الفروقات" : `تم ${action === "approve" ? "اعتماد" : action === "prepare" ? "تجهيز" : action === "dispatch" ? "شحن" : "استلام"} الطلب` }); setActionNotes(""); refresh(); refreshNotifications(); },
     onError: (error) => toast({ title: "لم تكتمل العملية", description: error instanceof Error ? error.message : "يرجى مراجعة حالة الطلب والصلاحيات.", variant: "destructive" }),
   });
-  const setLine = (index: number, changes: Partial<DraftItem>) => setDraft(current => ({ ...current, items: current.items.map((item, i) => i === index ? { ...item, ...changes } : item) }));
   const selectedDetail = detailQuery.data;
   const statusInfo = (status: string) => STATUS[normalized(status)] || { label: status || "قيد المراجعة", className: "bg-muted text-muted-foreground border-border" };
   const branchName = (id: string) => branches.find(branch => branch.id === id)?.name || id;
@@ -344,29 +354,35 @@ export default function CentralKitchenOrdersPage() {
            <p className="mt-2 text-xs text-muted-foreground">يُطبّق نطاق الفرع والحالة على الخادم، بينما يُصفّى وضع المخزون محلياً على كامل قائمة الطلبات غير المرقّمة.</p>
         </CardContent>
       </Card>
+       <OrderNotificationsOptIn />
 
       {ordersQuery.isLoading ? <Card><CardContent className="space-y-3 p-4">{Array.from({ length: 6 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</CardContent></Card> :
       ordersQuery.isError ? <Card><CardContent className="py-16 text-center"><p className="font-medium">تعذر تحميل الطلبات</p><p className="mt-1 text-sm text-muted-foreground">تحقق من الاتصال ثم أعد المحاولة.</p><Button className="mt-4" variant="outline" onClick={refresh}>إعادة المحاولة</Button></CardContent></Card> :
       filtered.length === 0 ? <Card><CardContent className="py-16 text-center"><PackagePlus className="mx-auto mb-3 h-10 w-10 text-muted-foreground" /><h2 className="font-semibold">لا توجد طلبات مطابقة</h2><p className="mt-1 text-sm text-muted-foreground">{canCreate("central_kitchen_orders") ? "أنشئ طلباً جديداً أو عدّل عوامل التصفية." : "عدّل عوامل التصفية أو انتظر وصول طلب جديد."}</p>{canCreate("central_kitchen_orders") && <Button className="mt-5" onClick={() => void openCreate()}>إنشاء طلب</Button>}</CardContent></Card> :
-      <Card className="overflow-hidden border-border/80"><div className="overflow-x-auto"><Table><TableHeader className="bg-muted/40"><TableRow><TableHead className="text-right">رقم الطلب</TableHead><TableHead className="text-right">من</TableHead><TableHead className="text-right">إلى المطبخ</TableHead><TableHead className="text-right">المطلوب</TableHead><TableHead className="text-right">البنود</TableHead><TableHead className="text-right">الحالة</TableHead><TableHead className="text-left"> </TableHead></TableRow></TableHeader><TableBody>
+       <>
+       <section className="space-y-3 md:hidden" aria-label="قائمة الطلبات">
+         {filtered.map(order => <button key={order.id} type="button" onClick={() => openDetail(order.id)} className="block min-h-32 w-full rounded-xl border border-border/80 bg-card p-4 text-right shadow-sm transition-colors active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+           <div className="flex items-start justify-between gap-3"><div className="min-w-0"><span className="block font-mono text-sm font-bold text-primary">{order.orderNumber}</span><span className="mt-1 block truncate text-sm font-medium">{order.requestBranchName || branchName(order.requestBranchId)} <span className="font-normal text-muted-foreground">←</span> {order.centralKitchenName || branchName(order.centralKitchenId)}</span></div><StatusBadge status={order.status} /></div>
+           <div className="mt-3 grid grid-cols-2 gap-2 border-t pt-3 text-xs"><div><span className="block text-muted-foreground">موعد الحاجة</span><span className="mt-0.5 block font-medium">{readableDate(order.neededDate)} · {readableTime(order.neededTime)}</span></div><div><span className="block text-muted-foreground">البنود</span><span className="mt-0.5 block font-medium">{order.itemCount ?? order.items?.length ?? 0} بنود</span></div></div>
+           <div className="mt-2"><LateSubmissionBadge schedule={order.orderingSchedule} /><NextStepSummary order={order} /></div>
+         </button>)}
+       </section>
+       <Card className="hidden overflow-hidden border-border/80 md:block"><div className="overflow-x-auto"><Table><TableHeader className="bg-muted/40"><TableRow><TableHead className="text-right">رقم الطلب</TableHead><TableHead className="text-right">من</TableHead><TableHead className="text-right">إلى المطبخ</TableHead><TableHead className="text-right">المطلوب</TableHead><TableHead className="text-right">البنود</TableHead><TableHead className="text-right">الحالة</TableHead><TableHead className="text-left"> </TableHead></TableRow></TableHeader><TableBody>
          {filtered.map(order => <TableRow key={order.id} className="cursor-pointer hover:bg-muted/35" onClick={() => openDetail(order.id)}>
            <TableCell className="font-mono font-semibold text-primary">{order.orderNumber}</TableCell><TableCell>{order.requestBranchName || branchName(order.requestBranchId)}</TableCell><TableCell>{order.centralKitchenName || branchName(order.centralKitchenId)}</TableCell><TableCell><span className="text-sm">{readableDate(order.neededDate)} <span className="text-muted-foreground">{readableTime(order.neededTime)}</span></span></TableCell><TableCell>{order.itemCount ?? order.items?.length ?? 0} بنود</TableCell><TableCell><StatusBadge status={order.status} /><LateSubmissionBadge schedule={order.orderingSchedule} /><NextStepSummary order={order} /></TableCell><TableCell className="text-left"><Button variant="ghost" size="icon" aria-label="عرض الطلب" onClick={event => { event.stopPropagation(); openDetail(order.id); }}><ChevronLeft className="h-4 w-4" /></Button></TableCell>
-        </TableRow>)}</TableBody></Table></div></Card>}
+        </TableRow>)}</TableBody></Table></div></Card></>}
     </main>
 
-    <Dialog open={createOpen} onOpenChange={setCreateOpen}><DialogContent dir="rtl" className="max-h-[92dvh] max-w-4xl overflow-y-auto"><DialogHeader><DialogTitle>طلب جديد للمطبخ المركزي</DialogTitle><DialogDescription>أضف احتياج الفرع بدقة ليظهر لفريق المطبخ فوراً.</DialogDescription></DialogHeader>
-      <div className="grid gap-4 py-2 md:grid-cols-2"><FormSelect label="الفرع الطالب" value={draft.sourceBranchId} onChange={value => setDraft({ ...draft, sourceBranchId: value })} branches={branches} placeholder="اختر الفرع" /><FormSelect label="المطبخ المركزي" value={draft.centralKitchenId} onChange={value => setDraft({ ...draft, centralKitchenId: value })} branches={centralKitchens.filter(branch => branch.id !== draft.sourceBranchId)} placeholder={kitchensQuery.isLoading ? "جارٍ تحميل المطابخ..." : centralKitchens.length ? "اختر المطبخ" : kitchensQuery.isError ? "تعذر تحميل المطابخ المركزية" : "لا يوجد مطبخ مركزي مفعّل"} />
+    <Dialog open={createOpen} onOpenChange={setCreateOpen}><DialogContent dir="rtl" style={{ ...createDialogStyle, display: "flex", flexDirection: "column" }} className="h-[94dvh] max-h-[820px] max-w-4xl gap-0 overflow-hidden p-0 sm:rounded-xl"><DialogHeader className="border-b px-5 py-4 text-right"><DialogTitle>طلب جديد للمطبخ المركزي</DialogTitle><DialogDescription>أضف احتياج الفرع بدقة ليظهر لفريق المطبخ فوراً.</DialogDescription></DialogHeader>
+      <div className="mb-[76px] min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-6"><div className="grid gap-4 py-2 md:grid-cols-2"><FormSelect label="الفرع الطالب" value={draft.sourceBranchId} onChange={value => setDraft(current => ({ ...current, sourceBranchId: value, items: current.items.map(item => ({ ...item, reportedAvailableQuantity: "" })) }))} branches={branches} placeholder="اختر الفرع" /><FormSelect label="المطبخ المركزي" value={draft.centralKitchenId} onChange={value => setDraft({ ...draft, centralKitchenId: value })} branches={centralKitchens.filter(branch => branch.id !== draft.sourceBranchId)} placeholder={kitchensQuery.isLoading ? "جارٍ تحميل المطابخ..." : centralKitchens.length ? "اختر المطبخ" : kitchensQuery.isError ? "تعذر تحميل المطابخ المركزية" : "لا يوجد مطبخ مركزي مفعّل"} />
         <div><Label htmlFor="needed-date">تاريخ الحاجة</Label><Input id="needed-date" type="date" className="mt-2" value={draft.neededDate} onChange={event => setDraft({ ...draft, neededDate: event.target.value })} /></div><div><Label htmlFor="needed-time">وقت الحاجة</Label><Input id="needed-time" type="time" className="mt-2" value={draft.neededTime} onChange={event => setDraft({ ...draft, neededTime: event.target.value })} /></div>
       </div>
       {orderingPolicy.query.isError ? <p role="alert" className="rounded border border-amber-300 p-3 text-sm">تعذر تحميل مواعيد الطلب من الخادم. <Button variant="link" onClick={() => void openCreate()}>إعادة المحاولة</Button></p> : !orderingPolicy.query.data ? <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل مواعيد الطلب بتوقيت السعودية…</p> : <OrderScheduleNotice schedule={draftSchedule} preview />}
-      <div className="rounded-lg border bg-muted/20"><div className="flex items-center justify-between border-b px-4 py-3"><div><p className="font-semibold">بنود الطلب</p><p className="text-xs text-muted-foreground">اختر من كتالوج المنتجات أو المستودع، أو اختر الإدخال اليدوي صراحةً.</p></div><Button variant="outline" size="sm" onClick={() => setDraft({ ...draft, items: [...draft.items, emptyLine()] })}><Plus className="ml-1 h-4 w-4" />إضافة بند</Button></div>
-        <CatalogQueryState query={productsQuery} count={products.length} />
-        <div className="space-y-3 p-3">{draft.items.map((item, index) => <div className="grid gap-2 rounded-md border bg-background p-3 md:grid-cols-12" key={index}>
-          <div className="md:col-span-4"><Label className="text-xs">الصنف</Label><SearchableSelect className="mt-1" triggerClassName="h-9" value={item.warehouseItemId !== undefined ? `warehouse:${item.warehouseItemId}` : item.productId !== undefined ? `product:${item.productId}` : item.manualMode ? "__manual" : undefined} onValueChange={value => { if (value === "__manual") setLine(index, { manualMode: true, productId: undefined, warehouseItemId: undefined, productName: "", unit: "قطعة" }); else { const selected = products.find(entry => catalogKey(entry) === value); if (selected) { const source = selected.source; setLine(index, { manualMode: false, productId: source === "product" ? selected.id : undefined, warehouseItemId: source === "warehouse" ? selected.id : undefined, productName: selected.name, unit: selected.unit }); } } }} options={[{ value: "__manual", label: "إدخال يدوي", badge: "يدوي" }, ...products.map(product => ({ value: catalogKey(product), label: product.name, sublabel: [product.sku, product.unit].filter(Boolean).join(" · "), badge: sourceLabel(product.source) }))]} placeholder="اختر صنفاً أو الوضع اليدوي" searchPlaceholder="ابحث بالاسم أو الرمز..." emptyText="لا توجد أصناف مطابقة" dataTestid={`catalog-item-${index}`} /><Input className="mt-2 h-9" disabled={!item.manualMode} value={item.productName} onChange={event => setLine(index, { productName: event.target.value })} placeholder={item.manualMode ? "اسم الصنف اليدوي" : "يُثبت الاسم بعد اختيار الكتالوج"} /><AvailabilitySnapshot kitchenId={draft.centralKitchenId} productId={item.productId} warehouseItemId={item.warehouseItemId} requested={item.requestedQuantity} /></div>
-          <div className="md:col-span-2"><Label className="text-xs">الوحدة</Label><Input className="mt-1 h-9" disabled={!item.manualMode} value={item.unit} onChange={event => setLine(index, { unit: event.target.value })} placeholder="قطعة" /></div><div className="md:col-span-2"><Label className="text-xs">الكمية</Label><Input className="mt-1 h-9" type="number" min="0.01" step="any" value={item.requestedQuantity} onChange={event => setLine(index, { requestedQuantity: event.target.value })} /></div><div className="md:col-span-3"><Label className="text-xs">ملاحظة البند</Label><Input className="mt-1 h-9" value={item.notes} onChange={event => setLine(index, { notes: event.target.value })} placeholder="اختياري" /></div><div className="flex items-end md:col-span-1"><Button variant="ghost" size="icon" className="text-destructive" disabled={draft.items.length === 1} onClick={() => setDraft({ ...draft, items: draft.items.filter((_, i) => i !== index) })} aria-label="حذف البند"><X className="h-4 w-4" /></Button></div>
-        </div>)}</div></div>
-      <div><Label htmlFor="order-notes">ملاحظات عامة</Label><textarea id="order-notes" className="mt-2 min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={draft.notes} onChange={event => setDraft({ ...draft, notes: event.target.value })} placeholder="تعليمات خاصة للاستلام أو التجهيز..." /></div>
-      <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setCreateOpen(false)}>إلغاء</Button><Button disabled={createMutation.isPending || !draft.neededDate || !orderingPolicy.query.data} onClick={() => createMutation.mutate()}>{createMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}إرسال الطلب</Button></div>
+      <OrderLineEditor items={draft.items} products={products} kitchenId={draft.centralKitchenId} catalogLoading={productsQuery.isLoading} catalogError={productsQuery.isError} onRetryCatalog={() => void productsQuery.refetch()} onChange={items => setDraft(current => ({ ...current, items }))} />
+       <div><Label htmlFor="order-notes">ملاحظات عامة</Label><textarea id="order-notes" className="mt-2 min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={draft.notes} onChange={event => setDraft({ ...draft, notes: event.target.value })} placeholder="تعليمات خاصة للاستلام أو التجهيز..." /></div>
+       {!isKitchenOrderDraftValid(draft.items) && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950" role="status">قبل الإرسال: اختر الصنف، وأدخل كمية الطلب والمتوفر الحالي لكل بند. اكتب 0 صراحةً عند عدم توفر الصنف.</p>}
+      </div>
+        <div className="absolute inset-x-0 bottom-0 z-10 flex items-center justify-between gap-2 border-t bg-background px-4 py-3 sm:px-6"><span className="text-xs text-muted-foreground">{draft.items.length} {draft.items.length === 1 ? "بند" : "بنود"}</span><div className="flex gap-2"><Button variant="outline" className="min-h-11" onClick={() => setCreateOpen(false)}>إلغاء</Button><Button className="min-h-11" disabled={createMutation.isPending || !draft.neededDate || !draft.sourceBranchId || !draft.centralKitchenId || !orderingPolicy.query.data || !isKitchenOrderDraftValid(draft.items)} onClick={() => { const invalid = document.querySelector<HTMLElement>("[aria-invalid='true']"); if (invalid) { invalid.focus(); return; } createMutation.mutate(); }}>{createMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}إرسال الطلب</Button></div></div>
     </DialogContent></Dialog>
 
      <Dialog open={detailId !== null} onOpenChange={open => { if (!open) closeDetail(); }}><DialogContent dir="rtl" className="max-h-[92dvh] max-w-5xl overflow-y-auto">{(detailQuery.isLoading || (detailQuery.isFetching && detailQuery.isPlaceholderData)) ? <div className="space-y-3 py-8" aria-label="جارٍ تحميل تفاصيل الطلب">{Array.from({ length: 5 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</div> : detailQuery.isError || !selectedDetail ? <DetailQueryError error={detailQuery.error} onRetry={() => detailQuery.refetch()} /> : <OrderDetail order={selectedDetail} products={products} productsQuery={productsQuery} accessibleBranchIds={branches.map(branch => branch.id)} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={workflowMutation.isPending} canApprove={canApprove("central_kitchen_orders")} canEdit={canEdit("central_kitchen_orders")} onAction={(action, details) => workflowMutation.mutate({ id: selectedDetail.id, action, details })} />}</DialogContent></Dialog>
@@ -447,7 +463,7 @@ function OrderDetail({ order, products, productsQuery, accessibleBranchIds, acti
      <OrderScheduleNotice schedule={order.orderingSchedule} />
      <LifecycleProgress status={status} />
      {canEdit && accessibleBranchIds.includes(order.requestBranchId) && <RequestChangeControls key={`${order.id}:${Math.max(0, ...(order.events || []).map(event => Number(event.id)))}`} order={order} />}
-     {(order.events || []).filter(event => event.eventType === "edited").map(event => <details key={event.id} className="rounded border p-3 text-sm"><summary>تعديل الطلب · {readableDate(event.createdAt)} · {event.notes}</summary><p>تاريخ الاحتياج: {event.changeSnapshot?.before?.order?.neededDate || "—"} ← {event.changeSnapshot?.requested?.edit?.neededDate}</p>{event.changeSnapshot?.before?.items?.map(item => <p key={item.id}>{item.productName}: {item.requestedQuantity} ← {event.changeSnapshot?.requested?.edit?.items.find(updated => updated.itemId === Number(item.id))?.requestedQuantity} {item.unit}</p>)}</details>)}
+      {(order.events || []).filter(event => event.eventType === "edited").map(event => <details key={event.id} className="rounded border p-3 text-sm"><summary>تعديل الطلب · {readableDate(event.createdAt)} · {event.notes}</summary><p>تاريخ الاحتياج: {event.changeSnapshot?.before?.order?.neededDate || "—"} ← {event.changeSnapshot?.requested?.edit?.neededDate}</p>{event.changeSnapshot?.before?.items?.map(item => { const updated = event.changeSnapshot?.requested?.edit?.items.find(value => value.itemId === Number(item.id)); return <p key={item.id}>{item.productName}: توريد {item.requestedQuantity} ← {updated?.requestedQuantity} {item.unit} · المتوفر في الفرع {item.reportedAvailableQuantity == null ? "غير مسجل" : item.reportedAvailableQuantity} ← {updated?.reportedAvailableQuantity ?? "غير مسجل"} {item.unit}</p>; })}</details>)}
      <NextStepGuidance step={nextStep} inventoryMode={order.inventoryMode} />
      <div className="flex justify-end"><a href="/production-reports?tab=operations" className="text-xs font-medium text-primary underline-offset-4 hover:underline">عرض تقرير العمليات المترابط</a></div>
     {order.driverName && <div className="grid gap-3 rounded-md border bg-orange-50/40 p-3 text-sm md:grid-cols-2"><div><span className="text-muted-foreground">السائق: </span>{order.driverName}</div><div><span className="text-muted-foreground">المركبة: </span>{order.vehicleNumber}</div></div>}
@@ -470,18 +486,23 @@ function RequestChangeControls({ order }: { order: KitchenOrder }) {
   const client = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [reason, setReason] = useState("");
-  const [date, setDate] = useState(order.neededDate || localDate());
+  const [date, setDate] = useState(order.neededDate || "");
   const [time, setTime] = useState(order.neededTime || "");
   const [notes, setNotes] = useState(order.notes || "");
   const [quantities, setQuantities] = useState((order.items || []).map(item => String(item.requestedQuantity)));
+  const [reportedAvailable, setReportedAvailable] = useState((order.items || []).map(() => ""));
+  const validEdit = !!date && !!order.items?.length && order.items.every((item, index) =>
+    isValidKitchenQuantity(quantities[index] || "", item.productId != null)
+    && isValidKitchenQuantity(reportedAvailable[index] || "", item.productId != null, true));
   const attempt = useRef<{ signature: string; key: string } | null>(null);
   const mutation = useMutation({
     mutationFn: async (edit: boolean) => {
+      if (edit && !validEdit) throw new Error("أكمل تاريخ الحاجة والكميات المطلوبة والمتوفرة لكل صنف.");
       const payload = {
         expectedEventId: Math.max(0, ...(order.events || []).map(event => Number(event.id))),
         reason: reason.trim(),
         ...(edit ? { edit: { neededDate: date, neededTime: time || null, notes: notes || null,
-          items: (order.items || []).map((item, index) => ({ itemId: Number(item.id), requestedQuantity: Number(quantities[index]) })) } } : {}),
+          items: (order.items || []).map((item, index) => ({ itemId: Number(item.id), requestedQuantity: Number(quantities[index]), reportedAvailableQuantity: Number(reportedAvailable[index]) })) } } : {}),
       };
       const signature = JSON.stringify(payload);
       if (attempt.current?.signature !== signature) attempt.current = { signature, key: crypto.randomUUID() };
@@ -501,11 +522,11 @@ function RequestChangeControls({ order }: { order: KitchenOrder }) {
       <Label>تاريخ الاحتياج<Input type="date" value={date} onChange={event => setDate(event.target.value)} /></Label>
       <Label>وقت الاحتياج<Input type="time" value={time} onChange={event => setTime(event.target.value)} /></Label>
       <Label>ملاحظات الطلب<Input value={notes} onChange={event => setNotes(event.target.value)} /></Label>
-      {(order.items || []).map((item, index) => <Label key={item.id} className="block">{item.productName} · {item.unit}<Input type="number" min={item.productId ? 1 : 0.000001} step={item.productId ? 1 : 0.000001} value={quantities[index]} onChange={event => setQuantities(values => values.map((value, i) => i === index ? event.target.value : value))} /></Label>)}
+       {(order.items || []).map((item, index) => <div key={item.id} className="grid gap-3 rounded-md border bg-muted/10 p-3 md:grid-cols-2"><Label className="block">{item.productName} · {item.unit}<span className="mt-1 block text-xs font-normal text-muted-foreground">الكمية المطلوب توريدها</span><Input type="number" min={item.productId ? 1 : 0.000001} step={item.productId ? 1 : 0.000001} value={quantities[index]} onChange={event => setQuantities(values => values.map((value, i) => i === index ? event.target.value : value))} /></Label><Label className="block">المتوفر حالياً في الفرع <span className="text-destructive">*</span><span className="mt-1 block text-xs font-normal text-muted-foreground">أدخل المتوفر الآن؛ المسجل سابقاً: {item.reportedAvailableQuantity == null ? "غير مسجل" : `${item.reportedAvailableQuantity} ${item.unit}`}</span><Input type="number" min="0" step={item.productId ? 1 : 0.000001} value={reportedAvailable[index]} onChange={event => setReportedAvailable(values => values.map((value, i) => i === index ? event.target.value : value))} aria-invalid={!isValidKitchenQuantity(reportedAvailable[index] || "", item.productId != null, true)} /></Label></div>)}
     </div>}
     {mutation.error && <p role="alert" className="text-sm text-destructive">{mutation.error instanceof Error ? mutation.error.message : "تعذر حفظ الطلب"} — أعد تحميل التفاصيل عند تعارض النسخة.</p>}
     <div className="flex gap-2">
-      {order.status === "requested" && <Button variant="outline" disabled={mutation.isPending || (editing && !reason.trim())} onClick={() => editing ? mutation.mutate(true) : setEditing(true)}>{editing ? "حفظ التعديل" : "تعديل الطلب"}</Button>}
+      {order.status === "requested" && <Button variant="outline" disabled={mutation.isPending || (editing && (!reason.trim() || !validEdit))} onClick={() => editing ? mutation.mutate(true) : setEditing(true)}>{editing ? "حفظ التعديل" : "تعديل الطلب"}</Button>}
       <Button variant="destructive" disabled={mutation.isPending || !reason.trim()} onClick={() => { if (window.confirm("إلغاء الطلب نهائياً مع حفظ السجل؟")) mutation.mutate(false); }}>إلغاء الطلب</Button>
     </div>
   </section>;
@@ -520,11 +541,11 @@ const SHORTAGE_LABELS: Record<string, string> = {
 };
 
 function OrderItemsTable({ items, showPreparation, showShipment }: { items: KitchenItem[]; showPreparation: boolean; showShipment: boolean }) {
-  return <section><h3 className="mb-2 font-semibold">بنود الطلب <span className="text-sm font-normal text-muted-foreground">({items.length})</span></h3><div className="overflow-x-auto rounded-md border"><Table><TableHeader className="bg-muted/40"><TableRow><TableHead className="text-right">الصنف</TableHead><TableHead className="text-right">المطلوب</TableHead>{showPreparation && <><TableHead className="text-right">المجهز</TableHead><TableHead className="text-right">البديل</TableHead></>}{showShipment && <><TableHead className="text-right">المرسل</TableHead><TableHead className="text-right">المستلم</TableHead><TableHead className="text-right">تالف/ناقص</TableHead></>}<TableHead className="text-right">ملاحظات</TableHead></TableRow></TableHeader><TableBody>{items.map(item => {
+  return <section><h3 className="mb-2 font-semibold">بنود الطلب <span className="text-sm font-normal text-muted-foreground">({items.length})</span></h3><div className="overflow-x-auto rounded-md border"><Table><TableHeader className="bg-muted/40"><TableRow><TableHead className="text-right">الصنف</TableHead><TableHead className="text-right">المطلوب</TableHead><TableHead className="text-right">المتوفر في الفرع</TableHead>{showPreparation && <><TableHead className="text-right">المجهز</TableHead><TableHead className="text-right">البديل</TableHead></>}{showShipment && <><TableHead className="text-right">المرسل</TableHead><TableHead className="text-right">المستلم</TableHead><TableHead className="text-right">تالف/ناقص</TableHead></>}<TableHead className="text-right">ملاحظات</TableHead></TableRow></TableHeader><TableBody>{items.map(item => {
     const substitute = Number(item.substituteQuantity || 0);
     const prepared = Number(item.preparedQuantity || 0);
     const shortage = Math.max(0, Number(item.requestedQuantity) - prepared - substitute);
-     return <TableRow key={item.id || item.productName}><TableCell className="font-medium"><div>{item.productName}</div><CatalogSourceBadge source={identitySource(item)} /></TableCell><TableCell>{item.requestedQuantity} {item.unit}</TableCell>{showPreparation && <><TableCell><div>{prepared} {item.unit}</div><div className="mt-1 text-xs font-normal text-muted-foreground"><SavedPreparationSummary item={item} /></div></TableCell><TableCell>{substitute > 0 ? <div><span>{substitute} {item.unit} — {item.substituteProductName}</span><CatalogSourceBadge source={identitySource({ productId: item.substituteProductId, warehouseItemId: item.substituteWarehouseItemId })} /></div> : "—"}</TableCell></>}{showShipment && <><TableCell>{item.dispatchedQuantity ?? "—"} {item.unit}</TableCell><TableCell>{item.receivedQuantity ?? "—"} {item.unit}</TableCell><TableCell>{Number(item.damagedQuantity || 0)} / {Number(item.missingQuantity || 0)} {item.unit}</TableCell></>}<TableCell className="text-muted-foreground">{item.receivingNotes || item.preparationNotes || (shortage > 0 ? SHORTAGE_LABELS[item.shortageReason || ""] : item.notes) || "—"}</TableCell></TableRow>;
+     return <TableRow key={item.id || item.productName}><TableCell className="font-medium"><div>{item.productName}</div><CatalogSourceBadge source={identitySource(item)} /></TableCell><TableCell>{item.requestedQuantity} {item.unit}</TableCell><TableCell>{item.reportedAvailableQuantity == null ? <span className="text-muted-foreground">غير مسجل</span> : `${item.reportedAvailableQuantity} ${item.unit}`}</TableCell>{showPreparation && <><TableCell><div>{prepared} {item.unit}</div><div className="mt-1 text-xs font-normal text-muted-foreground"><SavedPreparationSummary item={item} /></div></TableCell><TableCell>{substitute > 0 ? <div><span>{substitute} {item.unit} — {item.substituteProductName}</span><CatalogSourceBadge source={identitySource({ productId: item.substituteProductId, warehouseItemId: item.substituteWarehouseItemId })} /></div> : "—"}</TableCell></>}{showShipment && <><TableCell>{item.dispatchedQuantity ?? "—"} {item.unit}</TableCell><TableCell>{item.receivedQuantity ?? "—"} {item.unit}</TableCell><TableCell>{Number(item.damagedQuantity || 0)} / {Number(item.missingQuantity || 0)} {item.unit}</TableCell></>}<TableCell className="text-muted-foreground">{item.receivingNotes || item.preparationNotes || (shortage > 0 ? SHORTAGE_LABELS[item.shortageReason || ""] : item.notes) || "—"}</TableCell></TableRow>;
   })}</TableBody></Table></div></section>;
 }
 
@@ -556,10 +577,11 @@ function printPreparationNote(order: KitchenOrder) {
     const prepared = Number(item.preparedQuantity || 0);
     const substitute = Number(item.substituteQuantity || 0);
     const shortage = Math.max(0, Number(item.requestedQuantity) - prepared - substitute);
-    return `<tr><td>${escape(item.productName)}</td><td>${escape(item.requestedQuantity)} ${escape(item.unit)}</td><td>${prepared} ${escape(item.unit)}</td><td>${substitute > 0 ? `${substitute} ${escape(item.substituteUnit || item.unit)} — ${escape(item.substituteProductName)}` : "—"}</td><td>${shortage} ${escape(item.unit)}</td><td>${escape(item.preparationNotes || SHORTAGE_LABELS[item.shortageReason || ""] || "")}</td></tr>`;
+    const declaredAvailable = item.reportedAvailableQuantity == null ? "غير مسجل" : `${escape(item.reportedAvailableQuantity)} ${escape(item.unit)}`;
+    return `<tr><td>${escape(item.productName)}</td><td>${escape(item.requestedQuantity)} ${escape(item.unit)}</td><td>${declaredAvailable}</td><td>${prepared} ${escape(item.unit)}</td><td>${substitute > 0 ? `${substitute} ${escape(item.substituteUnit || item.unit)} — ${escape(item.substituteProductName)}` : "—"}</td><td>${shortage} ${escape(item.unit)}</td><td>${escape(item.preparationNotes || SHORTAGE_LABELS[item.shortageReason || ""] || "")}</td></tr>`;
   }).join("");
   const printWindow = window.open("", "_blank", "width=900,height=700");
   if (!printWindow) return;
-  printWindow.document.write(`<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>سند تجهيز ${escape(order.orderNumber)}</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#172033}h1{font-size:22px;margin:0 0 8px}.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:22px 0}.box{border:1px solid #d8dee9;border-radius:8px;padding:10px}small{display:block;color:#687386;margin-bottom:4px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #d8dee9;padding:9px;text-align:right;font-size:12px}th{background:#f3f5f8}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:80px;margin-top:60px}.line{border-top:1px solid #172033;padding-top:8px;text-align:center}@media print{body{padding:0}}</style></head><body><h1>سند تجهيز طلب المطبخ المركزي</h1><div>${escape(order.orderNumber)}</div><div class="meta"><div class="box"><small>الفرع الطالب</small>${escape(order.requestBranchName || order.requestBranchId)}</div><div class="box"><small>المطبخ المركزي</small>${escape(order.centralKitchenName || order.centralKitchenId)}</div><div class="box"><small>تاريخ الحاجة</small>${escape(order.neededDate)}</div></div><table><thead><tr><th>الصنف</th><th>المطلوب</th><th>الأصلي المجهز</th><th>البديل</th><th>النقص</th><th>ملاحظات</th></tr></thead><tbody>${rows}</tbody></table><div class="signatures"><div class="line">مسؤول التجهيز</div><div class="line">مسؤول الإرسال</div></div><script>window.onload=()=>window.print()<\/script></body></html>`);
+  printWindow.document.write(`<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>سند تجهيز ${escape(order.orderNumber)}</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#172033}h1{font-size:22px;margin:0 0 8px}.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:22px 0}.box{border:1px solid #d8dee9;border-radius:8px;padding:10px}small{display:block;color:#687386;margin-bottom:4px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #d8dee9;padding:9px;text-align:right;font-size:12px}th{background:#f3f5f8}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:80px;margin-top:60px}.line{border-top:1px solid #172033;padding-top:8px;text-align:center}@media print{body{padding:0}}</style></head><body><h1>سند تجهيز طلب المطبخ المركزي</h1><div>${escape(order.orderNumber)}</div><div class="meta"><div class="box"><small>الفرع الطالب</small>${escape(order.requestBranchName || order.requestBranchId)}</div><div class="box"><small>المطبخ المركزي</small>${escape(order.centralKitchenName || order.centralKitchenId)}</div><div class="box"><small>تاريخ الحاجة</small>${escape(order.neededDate)}</div></div><table><thead><tr><th>الصنف</th><th>المطلوب</th><th>المتوفر في الفرع</th><th>الأصلي المجهز</th><th>البديل</th><th>النقص</th><th>ملاحظات</th></tr></thead><tbody>${rows}</tbody></table><div class="signatures"><div class="line">مسؤول التجهيز</div><div class="line">مسؤول الإرسال</div></div><script>window.onload=()=>window.print()<\/script></body></html>`);
   printWindow.document.close();
 }

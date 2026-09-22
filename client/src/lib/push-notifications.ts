@@ -23,13 +23,27 @@ export function iosNeedsInstall(): boolean {
 
 export type EnablePushResult = "enabled" | "denied" | "unsupported" | "error";
 
+async function readyPushWorker(): Promise<ServiceWorkerRegistration> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error("تعذر تجهيز إشعارات الجهاز؛ أعد المحاولة بعد تحديث الصفحة.")), 10_000);
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
+}
+
 export async function enablePushNotifications(): Promise<EnablePushResult> {
   if (!pushSupported()) return "unsupported";
   try {
     const permission = await Notification.requestPermission();
     if (permission !== "granted") return "denied";
 
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await readyPushWorker();
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
       const res = await fetch("/api/push/vapid-public-key", { credentials: "include" });
@@ -57,7 +71,7 @@ export async function enablePushNotifications(): Promise<EnablePushResult> {
 export async function syncPushSubscription(): Promise<void> {
   if (!pushSupported() || Notification.permission !== "granted") return;
   try {
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await readyPushWorker();
     const sub = await reg.pushManager.getSubscription();
     if (sub) {
       await fetch("/api/push/subscribe", {

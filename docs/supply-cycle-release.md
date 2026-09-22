@@ -60,6 +60,41 @@ change its classification. Missing legacy dates have no inferred schedule.
 This is separate from the existing overdue-delivery metric. No schema migration
 is required for this timetable; the updated application code must be published.
 
+## Required branch-available declaration
+
+Each newly submitted or edited line requires an explicit nonnegative
+reportedAvailableQuantity. Zero is valid; historical NULL means “not reported”.
+This is the requester's declaration, not a stock adjustment or an automatically
+calculated net request. Product/branch changes clear the draft declaration.
+
+`migrations/036_central_kitchen_reported_available_quantity.sql` adds the nullable
+column and nonnegative constraint without rewriting historical records.
+This migration was applied to DEVELOPMENT only on 2026-09-22. Unlike the three
+older migrations above, it has NOT been applied to the external production
+database. Apply it to the confirmed, authorized production target before
+publishing this version on Render. Publishing alone does not migrate Supabase.
+
+## Mobile ordering and lifecycle notifications
+
+The order list uses mobile cards. The request form keeps actions reachable and
+uses a separate searchable item dialog. Phone alerts have an explicit opt-in
+control, including iPhone home-screen installation guidance. Browser/OS consent
+is still required; application code cannot grant that permission for the user.
+
+Order events create bell notifications transactionally: new/edited/cancelled
+requests notify the kitchen; approval/preparation/dispatch notify the requesting
+branch; receipt and receipt discrepancies notify the kitchen; discrepancy
+resolution notifies the requesting branch. Existing authorization is rechecked
+for notification visibility, read/dismiss and push delivery. Event-based keys
+prevent duplicate notification records after retries. Failed business
+transactions create no notification. Push delivery is best-effort after commit
+and cannot roll back an order; in-app notifications remain available.
+
+`migrations/037_central_kitchen_notification_scope.sql` adds nullable scope and
+deduplication fields to system_notifications. It was applied to DEVELOPMENT only.
+Both this migration and migration 036 above must be applied to the authorized
+external production database before this version is published on Render.
+
 ## Operating rules
 
 - Product deletion now archives the product; it preserves its identity and

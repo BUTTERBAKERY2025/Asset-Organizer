@@ -6,6 +6,7 @@ import {
   centralKitchenPreparationSchema,
   centralKitchenDispatchSchema,
   centralKitchenReceiveSchema,
+  centralKitchenRequestChangeSchema,
   createCentralKitchenOrderSchema,
   createCentralKitchenPayloadFingerprint,
   createCentralKitchenTransitionFingerprint,
@@ -73,7 +74,7 @@ describe("central kitchen workflow rules", () => {
       centralKitchenId: "A",
       neededDate: "2025-02-29",
       neededTime: "25:00",
-      items: [{ productName: "Bread", requestedQuantity: 0, unit: "piece" }],
+      items: [{ productName: "Bread", requestedQuantity: 0, reportedAvailableQuantity: 0, unit: "piece" }],
     }).success).toBe(false);
   });
 
@@ -84,8 +85,65 @@ describe("central kitchen workflow rules", () => {
       neededDate: "2028-02-29",
       neededTime: "09:30",
       idempotencyKey: "request-123",
-      items: [{ productName: "Bread", requestedQuantity: 2, unit: "tray" }],
+      items: [{ productName: "Bread", requestedQuantity: 2, reportedAvailableQuantity: 0, unit: "tray" }],
     }).success).toBe(true);
+  });
+
+  it("requires an explicit valid on-hand declaration on create and edit", () => {
+    const createBase = {
+      requestBranchId: "branch-a",
+      centralKitchenId: "kitchen",
+      items: [{ warehouseItemId: 7, productName: "Flour", requestedQuantity: 2, unit: "kg" }],
+    };
+    for (const reportedAvailableQuantity of [undefined, null, "", -1, 0.1234567]) {
+      expect(createCentralKitchenOrderSchema.safeParse({
+        ...createBase,
+        items: [{ ...createBase.items[0], reportedAvailableQuantity }],
+      }).success).toBe(false);
+    }
+    expect(createCentralKitchenOrderSchema.safeParse({
+      ...createBase,
+      items: [{ ...createBase.items[0], reportedAvailableQuantity: 0 }],
+    }).success).toBe(true);
+    expect(createCentralKitchenOrderSchema.safeParse({
+      ...createBase,
+      items: [{ ...createBase.items[0], reportedAvailableQuantity: 1.234567 }],
+    }).success).toBe(true);
+    expect(createCentralKitchenOrderSchema.safeParse({
+      ...createBase,
+      items: [{
+        productId: 7, productName: "Bread", requestedQuantity: 2,
+        reportedAvailableQuantity: 0.5, unit: "piece",
+      }],
+    }).success).toBe(false);
+    expect(createCentralKitchenOrderSchema.safeParse({
+      ...createBase,
+      items: [{
+        productId: 7, productName: "Bread", requestedQuantity: 1.5,
+        reportedAvailableQuantity: 0, unit: "piece",
+      }],
+    }).success).toBe(false);
+
+    const editBase = {
+      expectedEventId: 1,
+      reason: "correction",
+      edit: {
+        neededDate: "2028-02-29",
+        neededTime: null,
+        notes: null,
+        items: [{ itemId: 10, requestedQuantity: 2, reportedAvailableQuantity: 0 }],
+      },
+    };
+    expect(centralKitchenRequestChangeSchema.safeParse(editBase).success).toBe(true);
+    for (const reportedAvailableQuantity of [undefined, null, "", -1]) {
+      expect(centralKitchenRequestChangeSchema.safeParse({
+        ...editBase,
+        edit: {
+          ...editBase.edit,
+          items: [{ ...editBase.edit.items[0], reportedAvailableQuantity }],
+        },
+      }).success).toBe(false);
+    }
   });
 
   it("accepts product, warehouse, and explicit legacy/manual identities but never mixed identities", () => {
@@ -95,19 +153,19 @@ describe("central kitchen workflow rules", () => {
     };
     expect(createCentralKitchenOrderSchema.safeParse({
       ...base,
-      items: [{ productId: 7, productName: "Bread", requestedQuantity: 2, unit: "tray" }],
+      items: [{ productId: 7, productName: "Bread", requestedQuantity: 2, reportedAvailableQuantity: 0, unit: "tray" }],
     }).success).toBe(true);
     expect(createCentralKitchenOrderSchema.safeParse({
       ...base,
-      items: [{ warehouseItemId: 7, productName: "Flour", requestedQuantity: 2, unit: "kg" }],
+      items: [{ warehouseItemId: 7, productName: "Flour", requestedQuantity: 2, reportedAvailableQuantity: 0.25, unit: "kg" }],
     }).success).toBe(true);
     expect(createCentralKitchenOrderSchema.safeParse({
       ...base,
-      items: [{ productName: "Manual line", requestedQuantity: 2, unit: "tray" }],
+      items: [{ productName: "Manual line", requestedQuantity: 2, reportedAvailableQuantity: 0, unit: "tray" }],
     }).success).toBe(true);
     expect(createCentralKitchenOrderSchema.safeParse({
       ...base,
-      items: [{ productId: 7, warehouseItemId: 7, productName: "Collision", requestedQuantity: 2, unit: "tray" }],
+      items: [{ productId: 7, warehouseItemId: 7, productName: "Collision", requestedQuantity: 2, reportedAvailableQuantity: 0, unit: "tray" }],
     }).success).toBe(false);
   });
 
@@ -123,16 +181,17 @@ describe("central kitchen workflow rules", () => {
       centralKitchenId: "kitchen",
       neededDate: "2028-02-29",
       neededTime: "09:30",
-      items: [{ productName: "Bread", requestedQuantity: 2, unit: "tray" }],
+      items: [{ productName: "Bread", requestedQuantity: 2, reportedAvailableQuantity: 0, unit: "tray" }],
     });
     expect(createCentralKitchenPayloadFingerprint(base))
       .toBe(createCentralKitchenPayloadFingerprint({ ...base }));
     expect(createCentralKitchenPayloadFingerprint(base))
       .not.toBe(createCentralKitchenPayloadFingerprint({ ...base, requestBranchId: "branch-b" }));
-    // This is the pre-catalog-linkage canonical hash: absent new keys must not
-    // invalidate idempotent retries of orders created before migration 028.
     expect(createCentralKitchenPayloadFingerprint(base))
-      .toBe("ef0e8612894e9f82df08391f6f92070884ebc47196f5fb09b067ca3b18bcd63b");
+      .not.toBe(createCentralKitchenPayloadFingerprint({
+        ...base,
+        items: [{ ...base.items[0], reportedAvailableQuantity: 1 }],
+      }));
   });
 
   it("canonicalizes omitted and explicit default delivery times identically", () => {
@@ -140,7 +199,7 @@ describe("central kitchen workflow rules", () => {
       requestBranchId: "branch-a",
       centralKitchenId: "kitchen",
       neededDate: "2028-02-29",
-      items: [{ productName: "Bread", requestedQuantity: 2, unit: "tray" }],
+      items: [{ productName: "Bread", requestedQuantity: 2, reportedAvailableQuantity: 0, unit: "tray" }],
     });
     expect(createCentralKitchenPayloadFingerprint(omitted))
       .toBe(createCentralKitchenPayloadFingerprint({
@@ -153,7 +212,7 @@ describe("central kitchen workflow rules", () => {
     const common = {
       requestBranchId: "branch-a",
       centralKitchenId: "kitchen",
-      items: [{ productName: "Catalog item", requestedQuantity: 2, unit: "tray" }],
+      items: [{ productName: "Catalog item", requestedQuantity: 2, reportedAvailableQuantity: 0, unit: "tray" }],
     };
     const product = createCentralKitchenOrderSchema.parse({
       ...common,

@@ -24,7 +24,10 @@ There are TWO separate notification surfaces:
   - Targeting: `targetAllBranches` / `targetBranchIds` / `targetRoleIds` (vs `users.role`),
     PLUS `targetUserIds` (text[]) for per-person targeting. **When `targetUserIds` is set &
     non-empty it OVERRIDES branch+role** in `getActiveNotificationsForUser` — only those
-    user ids see it, regardless of active branch/role. Empty/null → legacy branch+role.
+    user ids see it, regardless of active branch/role for legacy general announcements. Empty/null → legacy branch+role.
+    Central-kitchen lifecycle notifications add a current permission and DB branch-membership
+    check for bell/portal visibility, read/dismiss and push; exact recipient membership alone
+    is not authorization for these scoped notifications.
   - `send-targeted` has `targetMode` ("position" | "individuals") + `displayStyle`
     (modal/fullscreen/banner/slide_in, rendered by `NotificationDisplay`). In-app delivery
     ALWAYS writes `targetUserIds` (exact selected linked users, per branch) — no more

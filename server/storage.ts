@@ -18216,7 +18216,7 @@ export class DatabaseStorage implements IStorage {
     const dismissedIds = new Set(reads.filter(r => r.dismissed).map(r => r.notificationId));
     const readOnceIds = new Set(reads.map(r => r.notificationId));
 
-    return allActive.filter(n => {
+    const visible = allActive.filter(n => {
       if (dismissedIds.has(n.id)) return false;
       if (n.showOnce && readOnceIds.has(n.id)) return false;
       // Per-user targeting — if targetUserIds is set & non-empty, ONLY those users see it,
@@ -18239,6 +18239,20 @@ export class DatabaseStorage implements IStorage {
       }
       return true;
     });
+    const scoped = visible.filter(n => n.accessModule === "central_kitchen_orders");
+    if (!scoped.length) return visible;
+    const { filterAuthorizedCentralKitchenNotificationUsers } = await import("./central-kitchen-notifications");
+    const allowedIds = new Set<number>();
+    await Promise.all(scoped.map(async (notification) => {
+      const authorized = await filterAuthorizedCentralKitchenNotificationUsers(
+        db,
+        notification,
+        [userId],
+      );
+      if (authorized.includes(userId)) allowedIds.add(notification.id);
+    }));
+    return visible.filter(n =>
+      n.accessModule !== "central_kitchen_orders" || allowedIds.has(n.id));
   }
 
   async markNotificationRead(notificationId: number, userId: string): Promise<NotificationRead> {

@@ -239,6 +239,7 @@ function createOrderBody(extra: Record<string, unknown> = {}) {
       productId: fixture.productId,
       productName: "HTTP concurrency product",
       requestedQuantity: 2,
+      reportedAvailableQuantity: 0,
       unit: "tray",
     }],
     ...extra,
@@ -445,6 +446,7 @@ describe.sequential(
       expect(databaseState.pool!.totalCount).toBeGreaterThanOrEqual(2);
 
       const orderId = responses[0].body.id;
+      expect(responses[0].body.items[0].reportedAvailableQuantity).toBe(0);
       expect(await countRows(sql`
         SELECT COUNT(*)::int AS count
         FROM central_kitchen_orders
@@ -477,7 +479,8 @@ describe.sequential(
           items: [{
             productId: fixture.productId,
             productName: "HTTP concurrency product",
-            requestedQuantity: 3,
+            requestedQuantity: 2,
+            reportedAvailableQuantity: 1,
             unit: "tray",
           }],
         }),
@@ -499,7 +502,15 @@ describe.sequential(
       );
       expect(requesterList.status).toBe(200);
       expect(requesterList.body).toEqual(expect.arrayContaining([
-        expect.objectContaining({ id: orderId }),
+        expect.objectContaining({
+          id: orderId,
+          items: [
+            expect.objectContaining({
+              id: itemId,
+              reportedAvailableQuantity: 0,
+            }),
+          ],
+        }),
       ]));
 
       const outsiderList = await httpRequest(

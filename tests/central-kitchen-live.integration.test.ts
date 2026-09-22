@@ -11,12 +11,16 @@ import {
   centralKitchenInventoryMovements,
   centralKitchenRecipeIngredients,
   centralKitchenRecipes,
+  centralKitchenOrderItems,
   centralKitchenOrders,
   centralKitchenRuntime,
   dailyProductionBatches,
   finishedGoodsInventory,
   productionInventoryLogs,
   products,
+  systemNotifications,
+  userBranchAccess,
+  userPermissions,
   users,
   warehouseItems,
 } from "../shared/schema";
@@ -102,6 +106,7 @@ let fixture: {
   requestUser: any;
   kitchenUser: any;
   outsiderUser: any;
+  scopedKitchenUser: any;
   adminUser: any;
   stockedProductId: number;
   productionProductId: number;
@@ -144,6 +149,7 @@ async function invoke(
   const response: TestResponse = { statusCode: 200, body: undefined, headers: {} };
   const req = {
     currentUser: options.user,
+    session: { userId: options.user.id },
     params: options.params || {},
     query: options.query || {},
     body: options.body || {},
@@ -211,7 +217,10 @@ function createBody(
     requestBranchId: fixture.requestBranchId,
     centralKitchenId: fixture.kitchenBranchId,
     idempotencyKey,
-    items,
+    items: items.map(item => ({
+      reportedAvailableQuantity: 0,
+      ...item,
+    })),
   };
 }
 
@@ -316,19 +325,19 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     const requestUser = {
       id: `ck-live-request-user-${suffix}`,
       username: `ck-live-request-${suffix}`,
-      role: "manager",
+      role: "branch_manager",
       branchId: requestBranchId,
     };
     const kitchenUser = {
       id: `ck-live-kitchen-user-${suffix}`,
       username: `ck-live-kitchen-${suffix}`,
-      role: "manager",
+      role: "branch_manager",
       branchId: kitchenBranchId,
     };
     const outsiderUser = {
       id: `ck-live-outsider-user-${suffix}`,
       username: `ck-live-outsider-${suffix}`,
-      role: "manager",
+      role: "branch_manager",
       branchId: outsiderBranchId,
     };
     const adminUser = {
@@ -337,13 +346,31 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
       role: "admin",
       branchId: kitchenBranchId,
     };
+    const scopedKitchenUser = {
+      id: `ck-live-scoped-kitchen-user-${suffix}`,
+      username: `ck-live-scoped-kitchen-${suffix}`,
+      role: "employee",
+      branchId: outsiderBranchId,
+    };
 
     await databaseState.db.insert(branches).values([
       { id: requestBranchId, name: "CK live request branch" },
       { id: kitchenBranchId, name: "CK live central kitchen", isCentralKitchen: true },
       { id: outsiderBranchId, name: "CK live outsider branch" },
     ]);
-    await databaseState.db.insert(users).values([requestUser, kitchenUser, outsiderUser, adminUser]);
+    await databaseState.db.insert(users).values([
+      requestUser, kitchenUser, outsiderUser, adminUser, scopedKitchenUser,
+    ]);
+    await databaseState.db.insert(userBranchAccess).values({
+      userId: scopedKitchenUser.id,
+      branchId: kitchenBranchId,
+      accessLevel: "full",
+    });
+    await databaseState.db.insert(userPermissions).values({
+      userId: scopedKitchenUser.id,
+      module: "central_kitchen_orders",
+      actions: ["view"],
+    });
 
     const idResult = await databaseState.db.execute(sql`
       SELECT GREATEST(
@@ -492,6 +519,7 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
       requestUser,
       kitchenUser,
       outsiderUser,
+      scopedKitchenUser,
       adminUser,
       stockedProductId,
       productionProductId,
@@ -514,27 +542,153 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     const [product] = await databaseState.db.select().from(products).where(eq(products.id, fixture.stockedProductId));
     const stockBefore = await productBalance(fixture.kitchenBranchId, product.id);
     const materialBefore = await warehouseBalance(fixture.kitchenBranchId, fixture.materialId);
+    const createPayload = createBody(
+      [{ productId: product.id, productName: product.name, unit: product.unit, requestedQuantity: 2 }],
+      key("http-edit-create"),
+    );
     const created = await httpInvoke("post", "/api/central-kitchen-orders", {
       user: fixture.requestUser,
-      body: createBody([{ productId: product.id, productName: product.name, unit: product.unit, requestedQuantity: 2 }]),
+      body: createPayload,
     });
     expect(created.statusCode).toBe(201);
+    const createdNotifications = await databaseState.db.select().from(systemNotifications)
+      .where(eq(systemNotifications.buttonAction, `/central-kitchen-orders?orderId=${created.body.id}`));
+    expect(createdNotifications).toHaveLength(1);
+    expect(createdNotifications[0]).toMatchObject({
+      title: "طلب جديد للمطبخ المركزي",
+      targetAllBranches: false,
+      targetBranchIds: [fixture.kitchenBranchId],
+      accessBranchIds: [fixture.kitchenBranchId],
+      accessModule: "central_kitchen_orders",
+    });
+    expect(createdNotifications[0].targetUserIds).toContain(fixture.kitchenUser.id);
+    expect(createdNotifications[0].targetUserIds).toContain(fixture.scopedKitchenUser.id);
+    expect(createdNotifications[0].targetUserIds).not.toContain(fixture.requestUser.id);
+    expect(createdNotifications[0].targetUserIds).not.toContain(fixture.outsiderUser.id);
+    const notificationParams = { id: String(createdNotifications[0].id) };
+    const [readGateNotification] = await databaseState.db.insert(systemNotifications).values({
+      title: "Scoped read authorization fixture",
+      content: "Scoped read authorization fixture",
+      targetAllBranches: false,
+      targetBranchIds: [fixture.kitchenBranchId],
+      targetUserIds: [fixture.scopedKitchenUser.id],
+      accessModule: "central_kitchen_orders",
+      accessBranchIds: [fixture.kitchenBranchId],
+      showOnce: true,
+    }).returning();
+    expect((await invoke("post", "/api/system-notifications/:id/read", {
+      user: fixture.scopedKitchenUser,
+      params: { id: String(readGateNotification.id) },
+    })).statusCode).toBe(200);
+    expect((await invoke("post", "/api/system-notifications/:id/read", {
+      user: fixture.outsiderUser,
+      params: notificationParams,
+    })).statusCode).toBe(403);
+    expect((await invoke("post", "/api/system-notifications/:id/read", {
+      user: fixture.outsiderUser,
+      params: { id: "999999999" },
+    })).statusCode).toBe(404);
+    const { storage } = await import("../server/storage");
+    expect((await storage.getActiveNotificationsForUser(
+      fixture.scopedKitchenUser.id,
+      fixture.kitchenBranchId,
+    )).map((notification: any) => notification.id)).toContain(createdNotifications[0].id);
+    await databaseState.db.delete(userBranchAccess)
+      .where(and(
+        eq(userBranchAccess.userId, fixture.scopedKitchenUser.id),
+        eq(userBranchAccess.branchId, fixture.kitchenBranchId),
+      ));
+    expect((await storage.getActiveNotificationsForUser(
+      fixture.scopedKitchenUser.id,
+      fixture.kitchenBranchId,
+    )).map((notification: any) => notification.id)).not.toContain(createdNotifications[0].id);
+    expect((await invoke("post", "/api/system-notifications/:id/dismiss", {
+      user: fixture.scopedKitchenUser,
+      params: notificationParams,
+    })).statusCode).toBe(403);
+    await databaseState.db.insert(userBranchAccess).values({
+      userId: fixture.scopedKitchenUser.id,
+      branchId: fixture.kitchenBranchId,
+      accessLevel: "full",
+    });
+    await databaseState.db.delete(userPermissions)
+      .where(and(
+        eq(userPermissions.userId, fixture.scopedKitchenUser.id),
+        eq(userPermissions.module, "central_kitchen_orders"),
+      ));
+    expect((await storage.getActiveNotificationsForUser(
+      fixture.scopedKitchenUser.id,
+      fixture.kitchenBranchId,
+    )).map((notification: any) => notification.id)).not.toContain(createdNotifications[0].id);
+    expect((await invoke("post", "/api/system-notifications/:id/read", {
+      user: fixture.scopedKitchenUser,
+      params: notificationParams,
+    })).statusCode).toBe(403);
+    const [legacyNotification] = await databaseState.db.insert(systemNotifications).values({
+      title: "Legacy test notification",
+      content: "Legacy behavior remains unchanged",
+      targetAllBranches: true,
+    }).returning();
+    expect((await invoke("post", "/api/system-notifications/:id/read", {
+      user: fixture.outsiderUser,
+      params: { id: String(legacyNotification.id) },
+    })).statusCode).toBe(200);
+    expect(created.body.items[0].reportedAvailableQuantity).toBe(0);
+    const changedDeclarationRetry = await httpInvoke("post", "/api/central-kitchen-orders", {
+      user: fixture.requestUser,
+      body: {
+        ...createPayload,
+        items: createPayload.items.map(item => ({ ...item, reportedAvailableQuantity: 1 })),
+      },
+    });
+    expect(changedDeclarationRetry.statusCode).toBe(409);
+    expect(await databaseState.db.select().from(systemNotifications)
+      .where(eq(systemNotifications.buttonAction, `/central-kitchen-orders?orderId=${created.body.id}`)))
+      .toHaveLength(1);
+    const detail = await httpInvoke("get", "/api/central-kitchen-orders/:id", {
+      user: fixture.requestUser,
+      params: { id: String(created.body.id) },
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.body.items[0].reportedAvailableQuantity).toBe(0);
+    const listed = await httpInvoke("get", "/api/central-kitchen-orders", {
+      user: fixture.requestUser,
+    });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.body.find((order: any) => order.id === created.body.id).items[0].reportedAvailableQuantity).toBe(0);
+    // Simulate a row created before migration 036: NULL remains an explicit
+    // "not reported" legacy state until the employee supplies a declaration.
+    await databaseState.db.update(centralKitchenOrderItems)
+      .set({ reportedAvailableQuantity: null })
+      .where(eq(centralKitchenOrderItems.id, created.body.items[0].id));
     const params = { id: String(created.body.id) };
     const revision = (order: any) => Math.max(0, ...order.events.map((event: any) => event.id));
     const edit = {
       expectedEventId: revision(created.body), reason: "HTTP demand correction", idempotencyKey: key("http-edit"),
       edit: { neededDate: "2098-09-01", neededTime: null, notes: "corrected",
-        items: [{ itemId: created.body.items[0].id, requestedQuantity: 3 }] },
+        items: [{
+          itemId: created.body.items[0].id,
+          requestedQuantity: 3,
+          reportedAvailableQuantity: 1,
+        }] },
     };
     const path = "/api/central-kitchen-orders/:id/request-change";
     expect((await httpInvoke("post", path, { user: fixture.kitchenUser, params, body: edit })).statusCode).toBe(403);
     const edited = await httpInvoke("post", path, { user: fixture.requestUser, params, body: edit });
     expect(edited.statusCode).toBe(200);
     expect(Number(edited.body.items[0].requestedQuantity)).toBe(3);
+    expect(Number(edited.body.items[0].reportedAvailableQuantity)).toBe(1);
+    const editEvent = edited.body.events.find((event: any) => event.eventType === "edited");
+    expect(editEvent.changeSnapshot.before.items[0].reportedAvailableQuantity).toBeNull();
+    expect(editEvent.changeSnapshot.after.items[0].reportedAvailableQuantity).toBe(1);
     const editedReplay = await httpInvoke("post", path, { user: fixture.requestUser, params, body: edit });
     expect(editedReplay.statusCode).toBe(200);
     expect(editedReplay.headers["idempotent-replayed"]).toBe("true");
     expect(editedReplay.body.events).toHaveLength(edited.body.events.length);
+    expect((await databaseState.db.select().from(systemNotifications)
+      .where(eq(systemNotifications.buttonAction, `/central-kitchen-orders?orderId=${created.body.id}`)))
+      .filter((notification: any) => notification.title === "تم تعديل طلب المطبخ المركزي"))
+      .toHaveLength(1);
     const cancel = { expectedEventId: revision(edited.body), reason: "HTTP request withdrawn", idempotencyKey: key("http-cancel") };
     const cancelled = await httpInvoke("post", path, { user: fixture.requestUser, params, body: cancel });
     expect(cancelled.statusCode).toBe(200);
@@ -544,6 +698,22 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     expect(replay.headers["idempotent-replayed"]).toBe("true");
     expect(replay.body.events).toHaveLength(cancelled.body.events.length);
     expect(replay.body.events.filter((event: any) => event.eventType === "cancelled")).toHaveLength(1);
+    expect((await databaseState.db.select().from(systemNotifications)
+      .where(eq(systemNotifications.buttonAction, `/central-kitchen-orders?orderId=${created.body.id}`)))
+      .filter((notification: any) => notification.title === "تم إلغاء طلب المطبخ المركزي"))
+      .toHaveLength(1);
+    const notificationCountBeforeFailedTransition = (await databaseState.db.select()
+      .from(systemNotifications)
+      .where(eq(systemNotifications.buttonAction, `/central-kitchen-orders?orderId=${created.body.id}`))).length;
+    const failedTransition = await httpInvoke("post", "/api/central-kitchen-orders/:id/approve", {
+      user: fixture.kitchenUser,
+      params,
+      body: { idempotencyKey: key("failed-approve-after-cancel") },
+    });
+    expect(failedTransition.statusCode).toBe(409);
+    expect((await databaseState.db.select().from(systemNotifications)
+      .where(eq(systemNotifications.buttonAction, `/central-kitchen-orders?orderId=${created.body.id}`))))
+      .toHaveLength(notificationCountBeforeFailedTransition);
     expect(await productBalance(fixture.kitchenBranchId, product.id)).toEqual(stockBefore);
     expect(await warehouseBalance(fixture.kitchenBranchId, fixture.materialId)).toEqual(materialBefore);
     expect(replay.body.allocations).toHaveLength(0);
@@ -655,7 +825,7 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
         productId: fixture.stockedProductId,
         productName: (await databaseState.db.select().from(products)
           .where(eq(products.id, fixture.stockedProductId)))[0].name,
-        requestedQuantity: 1.5,
+        requestedQuantity: 1,
         unit: "tray",
       },
       {
@@ -691,7 +861,7 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
       body: {
         idempotencyKey: key("shadow-prepare"),
         items: [
-          { itemId: shadow.body.items[0].id, preparedQuantity: 1.5, substituteQuantity: 0 },
+          { itemId: shadow.body.items[0].id, preparedQuantity: 1, substituteQuantity: 0 },
           { itemId: shadow.body.items[1].id, preparedQuantity: 1, substituteQuantity: 0 },
         ],
       },
@@ -705,7 +875,7 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
         driverName: "Shadow Driver",
         vehicleNumber: "SHADOW-1",
         items: [
-          { itemId: shadow.body.items[0].id, dispatchedQuantity: 1.5 },
+          { itemId: shadow.body.items[0].id, dispatchedQuantity: 1 },
           { itemId: shadow.body.items[1].id, dispatchedQuantity: 1 },
         ],
       },
@@ -717,7 +887,7 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
       body: {
         idempotencyKey: key("shadow-receive"),
         items: [
-          { itemId: shadow.body.items[0].id, receivedQuantity: 1.5, damagedQuantity: 0 },
+          { itemId: shadow.body.items[0].id, receivedQuantity: 1, damagedQuantity: 0 },
           { itemId: shadow.body.items[1].id, receivedQuantity: 1, damagedQuantity: 0 },
         ],
       },
@@ -747,6 +917,19 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
       unit: "tray",
     }]);
     expect(fractional.statusCode).toBe(400);
+
+    const fractionalWarehouse = await createOrder([{
+      warehouseItemId: fixture.materialId,
+      productName: material.name,
+      requestedQuantity: 1.5,
+      reportedAvailableQuantity: 0.25,
+      unit: material.unit,
+    }]);
+    expect(fractionalWarehouse.statusCode).toBe(201);
+    expect(fractionalWarehouse.body.items[0]).toMatchObject({
+      requestedQuantity: 1.5,
+      reportedAvailableQuantity: 0.25,
+    });
 
     const created = await createOrder([
       {
@@ -2037,7 +2220,11 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
         idempotencyKey: key("daily-schedule-edit"), reason: "Need moved to a later day",
         expectedEventId: Math.max(...created.body.events.map((event: any) => event.id)),
         edit: { neededDate: later.toISOString().slice(0, 10), neededTime: "07:00", notes: "",
-          items: created.body.items.map((item: any) => ({ itemId: item.id, requestedQuantity: Number(item.requestedQuantity) })) },
+          items: created.body.items.map((item: any) => ({
+            itemId: item.id,
+            requestedQuantity: Number(item.requestedQuantity),
+            reportedAvailableQuantity: Number(item.reportedAvailableQuantity),
+          })) },
       },
     });
     expect(edit.statusCode).toBe(200);

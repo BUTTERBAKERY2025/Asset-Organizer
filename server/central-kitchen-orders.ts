@@ -76,6 +76,7 @@ export const centralKitchenRequestChangeSchema = z.object({
     items: z.array(z.object({
       itemId: z.number().int().positive(),
       requestedQuantity: exactSixDecimalPositive,
+      reportedAvailableQuantity: exactSixDecimalNonnegative,
     }).strict()).min(1).max(500),
   }).strict().optional(),
 }).strict();
@@ -101,11 +102,26 @@ export const createCentralKitchenOrderSchema = z.object({
     warehouseItemId: z.number().int().positive().optional().nullable(),
     productName: trimmedText(300),
     requestedQuantity: exactSixDecimalPositive,
+    reportedAvailableQuantity: exactSixDecimalNonnegative,
     unit: trimmedText(50),
     notes: z.string().trim().max(1000).optional().nullable(),
   }).strict().superRefine((item, ctx) => {
     if (item.productId != null && item.warehouseItemId != null) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Choose only one catalog identity" });
+    }
+    if (item.productId != null && !Number.isInteger(item.requestedQuantity)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["requestedQuantity"],
+        message: "المنتجات بالقطعة تتطلب كمية مطلوبة صحيحة",
+      });
+    }
+    if (item.productId != null && !Number.isInteger(item.reportedAvailableQuantity)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["reportedAvailableQuantity"],
+        message: "المنتجات بالقطعة تتطلب كمية متوفرة صحيحة",
+      });
     }
   })).min(1).max(500),
 }).strict().superRefine((value, ctx) => {
@@ -132,6 +148,7 @@ export function createCentralKitchenPayloadFingerprint(
       ...("warehouseItemId" in item ? { warehouseItemId: item.warehouseItemId || null } : {}),
       productName: item.productName,
       requestedQuantity: item.requestedQuantity,
+      reportedAvailableQuantity: item.reportedAvailableQuantity,
       unit: item.unit,
       notes: item.notes || null,
     })),

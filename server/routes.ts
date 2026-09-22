@@ -217,6 +217,10 @@ import {
   reserveRealPreparation,
   setKitchenRuntime,
 } from "./central-kitchen-live";
+import {
+  dispatchCentralKitchenNotificationAfterCommit,
+  insertCentralKitchenNotification,
+} from "./central-kitchen-notifications";
 
 // Normalize date to YYYY-MM-DD format
 function normalizeDate(dateStr: string | null | undefined): string | null {
@@ -7716,24 +7720,56 @@ export async function registerRoutes(
             if (catalogError) throw new CentralKitchenLiveError(catalogError, 400);
             for (const item of edit.items) {
               const original = items.find(row => row.id === item.itemId)!;
-              if (original.productId != null && !Number.isInteger(item.requestedQuantity)) {
+              if (original.productId != null && (
+                !Number.isInteger(item.requestedQuantity)
+                || !Number.isInteger(item.reportedAvailableQuantity)
+              )) {
                 throw new CentralKitchenLiveError("المنتجات بالقطعة تتطلب كمية صحيحة", 400);
               }
-              await tx.update(centralKitchenOrderItems).set({ requestedQuantity: item.requestedQuantity }).where(eq(centralKitchenOrderItems.id, item.itemId));
+              await tx.update(centralKitchenOrderItems).set({
+                requestedQuantity: item.requestedQuantity,
+                reportedAvailableQuantity: item.reportedAvailableQuantity,
+              }).where(eq(centralKitchenOrderItems.id, item.itemId));
             }
             await tx.update(centralKitchenOrders).set({ neededDate: edit.neededDate, neededTime: edit.neededTime, notes: edit.notes, updatedAt: sql`now()` }).where(eq(centralKitchenOrders.id, order.id));
           } else {
             await tx.update(centralKitchenOrders).set({ status: "cancelled", updatedAt: sql`now()` }).where(eq(centralKitchenOrders.id, order.id));
           }
-          await tx.insert(centralKitchenOrderEvents).values({
+          const afterOrder = payload.edit
+            ? { ...order, neededDate: payload.edit.neededDate, neededTime: payload.edit.neededTime, notes: payload.edit.notes }
+            : { ...order, status: "cancelled" };
+          const afterItems = payload.edit
+            ? items.map(item => {
+                const changed = payload.edit!.items.find(candidate => candidate.itemId === item.id)!;
+                return {
+                  ...item,
+                  requestedQuantity: changed.requestedQuantity,
+                  reportedAvailableQuantity: changed.reportedAvailableQuantity,
+                };
+              })
+            : items;
+          const [changeEvent] = await tx.insert(centralKitchenOrderEvents).values({
             orderId: order.id, eventType: payload.edit ? "edited" : "cancelled", fromStatus: order.status,
             toStatus: payload.edit ? order.status : "cancelled", actorId: actor.id,
-            notes: payload.reason, changeSnapshot: { before: { order, items }, requested: payload },
+            notes: payload.reason,
+            changeSnapshot: {
+              before: { order, items },
+              after: { order: afterOrder, items: afterItems },
+              requested: payload,
+            },
             idempotencyKey: key.key!, payloadFingerprint: fingerprint,
+          }).returning({ id: centralKitchenOrderEvents.id });
+          const notificationId = await insertCentralKitchenNotification(tx, {
+            eventId: changeEvent.id,
+            orderId: order.id,
+            event: payload.edit ? "edited" : "cancelled",
+            branchId: order.centralKitchenId,
+            actorId: actor.id,
           });
-          return false;
+          return { replayed: false, notificationId };
         });
-        if (result) res.set("Idempotent-Replayed", "true");
+        if (result === true) res.set("Idempotent-Replayed", "true");
+        else dispatchCentralKitchenNotificationAfterCommit(result.notificationId);
         return res.json(await getCentralKitchenOrderDetail(id.data));
       } catch (error) {
         if (error instanceof CentralKitchenLiveError) return res.status(error.status).json({ error: error.message });
@@ -7835,21 +7871,24 @@ export async function registerRoutes(
             .where(inArray(branches.id, branchIds))
           : [];
         const names = new Map(branchRows.map((branch) => [branch.id, branch.name]));
-        const itemCounts = rows.length
-          ? await db.select({
-              orderId: centralKitchenOrderItems.orderId,
-              count: sql<number>`count(*)::int`,
-            }).from(centralKitchenOrderItems)
+        const listItems = rows.length
+          ? await db.select().from(centralKitchenOrderItems)
             .where(inArray(centralKitchenOrderItems.orderId, rows.map((row) => row.id)))
-            .groupBy(centralKitchenOrderItems.orderId)
+            .orderBy(centralKitchenOrderItems.id)
           : [];
-        const counts = new Map(itemCounts.map((row) => [row.orderId, Number(row.count)]));
+        const itemsByOrder = new Map<number, typeof listItems>();
+        for (const item of listItems) {
+          const grouped = itemsByOrder.get(item.orderId) || [];
+          grouped.push(item);
+          itemsByOrder.set(item.orderId, grouped);
+        }
         return res.json(rows.map((row) => ({
           ...row,
           orderingSchedule: getOrderSchedule(row),
           requestBranchName: names.get(row.requestBranchId) || null,
           centralKitchenName: names.get(row.centralKitchenId) || null,
-          itemCount: counts.get(row.id) || 0,
+          itemCount: itemsByOrder.get(row.id)?.length || 0,
+          items: itemsByOrder.get(row.id) || [],
         })));
       } catch (error) {
         console.error("Error listing central kitchen orders:", error);
@@ -8463,7 +8502,10 @@ export async function registerRoutes(
         if (inventoryMode === "real") {
           const invalidRealItem = payload.items.find((item) =>
             (item.productId == null) === (item.warehouseItemId == null)
-            || !Number.isInteger(item.requestedQuantity));
+             || (item.productId != null && (
+               !Number.isInteger(item.requestedQuantity)
+               || !Number.isInteger(item.reportedAvailableQuantity)
+             )));
           if (invalidRealItem) {
             return res.status(400).json({ error: "الطلبات الحقيقية تتطلب صنف كتالوج واحداً وكمية صحيحة لكل بند" });
           }
@@ -8473,7 +8515,7 @@ export async function registerRoutes(
         if (catalogError) return res.status(400).json({ error: catalogError });
 
         const orderNumber = `CK-${orderDay.replace(/-/g, "")}-${randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
-        const orderId = await db.transaction(async (tx) => {
+        const createdResult = await db.transaction(async (tx) => {
           const [created] = await tx.insert(centralKitchenOrders).values({
             orderNumber,
             requestBranchId: payload.requestBranchId,
@@ -8493,10 +8535,11 @@ export async function registerRoutes(
              warehouseItemId: item.warehouseItemId || null,
             productName: item.productName,
             requestedQuantity: item.requestedQuantity,
+             reportedAvailableQuantity: item.reportedAvailableQuantity,
             unit: item.unit,
             notes: item.notes || null,
           })));
-          await tx.insert(centralKitchenOrderEvents).values({
+          const [createdEvent] = await tx.insert(centralKitchenOrderEvents).values({
             orderId: created.id,
             eventType: "created",
             fromStatus: null,
@@ -8506,10 +8549,18 @@ export async function registerRoutes(
             // reuse its order key for a later transition.
             idempotencyKey: `created:${keyResult.key!}`.slice(0, 128),
             actorId: user.id,
+          }).returning({ id: centralKitchenOrderEvents.id });
+          const notificationId = await insertCentralKitchenNotification(tx, {
+            eventId: createdEvent.id,
+            orderId: created.id,
+            event: "created",
+            branchId: payload.centralKitchenId,
+            actorId: user.id,
           });
-          return created.id;
+          return { orderId: created.id, notificationId };
         });
-        return res.status(201).json(await getCentralKitchenOrderDetail(orderId));
+        dispatchCentralKitchenNotificationAfterCommit(createdResult.notificationId);
+        return res.status(201).json(await getCentralKitchenOrderDetail(createdResult.orderId));
       } catch (error: any) {
         const errorCode = error?.code || error?.cause?.code;
         if (errorCode === "23505") {
@@ -8845,7 +8896,20 @@ export async function registerRoutes(
             if (entries.length) await tx.insert(centralKitchenShadowInventoryEntries).values(entries);
           }
         }
-        return true;
+        const notificationBranchId = targetStatus === "received"
+          ? order.centralKitchenId
+          : order.requestBranchId;
+        const notificationEvent = targetStatus === "received" && receiptHasDiscrepancy
+          ? "received_discrepancy"
+          : eventType;
+        const notificationId = await insertCentralKitchenNotification(tx, {
+          eventId: transitionEvent.id,
+          orderId: id.data,
+          event: notificationEvent,
+          branchId: notificationBranchId,
+          actorId: user.id,
+        });
+        return { notificationId };
       });
       if (!transitioned) {
         const replayAfterRace = await db.select({
@@ -8868,6 +8932,7 @@ export async function registerRoutes(
         }
         return res.status(409).json({ error: "تغيرت حالة الطلب، حدّث البيانات وحاول مجدداً" });
       }
+      dispatchCentralKitchenNotificationAfterCommit(transitioned.notificationId);
       return res.json(await getCentralKitchenOrderDetail(id.data));
     } catch (error: any) {
       if (error instanceof CentralKitchenLiveError) {
@@ -8957,7 +9022,7 @@ export async function registerRoutes(
             eq(centralKitchenOrders.discrepancyStatus, "open"),
           )).returning({ id: centralKitchenOrders.id });
           if (!updated) return false;
-          await tx.insert(centralKitchenOrderEvents).values({
+          const [resolvedEvent] = await tx.insert(centralKitchenOrderEvents).values({
             orderId: id.data,
             eventType: "discrepancy_resolved",
             fromStatus: "received",
@@ -8966,10 +9031,18 @@ export async function registerRoutes(
             idempotencyKey: keyResult.key!,
             payloadFingerprint: fingerprint,
             actorId: user.id,
+          }).returning({ id: centralKitchenOrderEvents.id });
+          const notificationId = await insertCentralKitchenNotification(tx, {
+            eventId: resolvedEvent.id,
+            orderId: id.data,
+            event: "discrepancy_resolved",
+            branchId: order.requestBranchId,
+            actorId: user.id,
           });
-          return true;
+          return { notificationId };
         });
         if (!transitioned) return res.status(409).json({ error: "تمت معالجة الفروقات بواسطة مستخدم آخر" });
+        dispatchCentralKitchenNotificationAfterCommit(transitioned.notificationId);
         return res.json(await getCentralKitchenOrderDetail(id.data));
       } catch (error: any) {
         const errorCode = error?.cause?.code || error?.code;
@@ -40512,7 +40585,19 @@ export async function registerRoutes(
   app.post("/api/system-notifications/:id/read", isAuthenticated, async (req, res) => {
     try {
       const userId = req.session.userId;
-      const read = await storage.markNotificationRead(parseInt(req.params.id), userId);
+      const notificationId = Number.parseInt(req.params.id, 10);
+      if (!Number.isInteger(notificationId) || notificationId <= 0) {
+        return res.status(404).json({ error: "الإشعار غير موجود" });
+      }
+      const notification = await storage.getSystemNotification(notificationId);
+      if (!notification) return res.status(404).json({ error: "الإشعار غير موجود" });
+      if (notification.accessModule === "central_kitchen_orders") {
+        const { canUserAccessCentralKitchenNotification } = await import("./central-kitchen-notifications");
+        if (!(await canUserAccessCentralKitchenNotification(db, notification, userId))) {
+          return res.status(403).json({ error: "لم تعد مصرحاً بالوصول إلى هذا الإشعار" });
+        }
+      }
+      const read = await storage.markNotificationRead(notificationId, userId);
       res.json(read);
     } catch (error) {
       console.error("Error marking notification read:", error);
@@ -40523,7 +40608,19 @@ export async function registerRoutes(
   app.post("/api/system-notifications/:id/dismiss", isAuthenticated, async (req, res) => {
     try {
       const userId = req.session.userId;
-      const dismissed = await storage.dismissNotification(parseInt(req.params.id), userId);
+      const notificationId = Number.parseInt(req.params.id, 10);
+      if (!Number.isInteger(notificationId) || notificationId <= 0) {
+        return res.status(404).json({ error: "الإشعار غير موجود" });
+      }
+      const notification = await storage.getSystemNotification(notificationId);
+      if (!notification) return res.status(404).json({ error: "الإشعار غير موجود" });
+      if (notification.accessModule === "central_kitchen_orders") {
+        const { canUserAccessCentralKitchenNotification } = await import("./central-kitchen-notifications");
+        if (!(await canUserAccessCentralKitchenNotification(db, notification, userId))) {
+          return res.status(403).json({ error: "لم تعد مصرحاً بالوصول إلى هذا الإشعار" });
+        }
+      }
+      const dismissed = await storage.dismissNotification(notificationId, userId);
       res.json(dismissed);
     } catch (error) {
       console.error("Error dismissing notification:", error);

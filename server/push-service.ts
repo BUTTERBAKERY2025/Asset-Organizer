@@ -83,7 +83,13 @@ export async function removePushSubscription(userId: string, endpoint: string): 
 // الفرع: يُطابق فرع المستخدم الأساسي أو أي فرع لديه وصول له (user_branch_access)
 async function resolveTargetUserIds(n: SystemNotification): Promise<string[]> {
   const targetUserIds = (n as any).targetUserIds as string[] | null | undefined;
-  if (targetUserIds && targetUserIds.length > 0) return targetUserIds;
+  if (targetUserIds && targetUserIds.length > 0) {
+    if (n.accessModule === "central_kitchen_orders") {
+      const { filterAuthorizedCentralKitchenNotificationUsers } = await import("./central-kitchen-notifications");
+      return filterAuthorizedCentralKitchenNotificationUsers(db, n, targetUserIds);
+    }
+    return targetUserIds;
+  }
 
   const conds = [];
   if (!n.targetAllBranches && n.targetBranchIds && n.targetBranchIds.length > 0) {
@@ -101,7 +107,12 @@ async function resolveTargetUserIds(n: SystemNotification): Promise<string[]> {
     .select({ id: users.id })
     .from(users)
     .where(conds.length ? and(...conds) : undefined);
-  return rows.map((r) => r.id);
+  const userIds = rows.map((r) => r.id);
+  if (n.accessModule === "central_kitchen_orders") {
+    const { filterAuthorizedCentralKitchenNotificationUsers } = await import("./central-kitchen-notifications");
+    return filterAuthorizedCentralKitchenNotificationUsers(db, n, userIds);
+  }
+  return userIds;
 }
 
 async function deliverPush(n: SystemNotification): Promise<void> {
@@ -118,11 +129,11 @@ async function deliverPush(n: SystemNotification): Promise<void> {
   const payload = JSON.stringify({
     title: n.title || "إشعار جديد",
     body: (n.content || "").slice(0, 300),
-    url: "/",
+    url: n.buttonAction || "/",
     tag: `sysnotif-${n.id}`,
   });
 
-  await Promise.allSettled(
+  const results = await Promise.allSettled(
     subs.map(async (s) => {
       try {
         await webpush.sendNotification(
@@ -133,10 +144,25 @@ async function deliverPush(n: SystemNotification): Promise<void> {
         // اشتراك منتهي/محذوف من الجهاز → نظّفه
         if (err?.statusCode === 404 || err?.statusCode === 410) {
           await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, s.endpoint)).catch(() => {});
+          return;
         }
+        // A transient provider/network failure must remain retryable. The
+        // caller releases push_sent_at so the scheduled sweep can try again.
+        throw err;
       }
     })
   );
+  const transientFailure = results.find((result) => result.status === "rejected");
+  // Release the notification-level claim only when no endpoint was delivered
+  // (or permanently retired). Retrying after a partial success would duplicate
+  // push on devices that already received it; per-user authorization is still
+  // re-evaluated on the next wholly-unsent retry.
+  if (
+    transientFailure?.status === "rejected"
+    && results.every((result) => result.status === "rejected")
+  ) {
+    throw transientFailure.reason;
+  }
 }
 
 // «حجز» الإشعار للإرسال — UPDATE شرطي يمنع الإرسال المزدوج بين السيرفرات/المسارات
@@ -149,6 +175,12 @@ async function claimForPush(id: number): Promise<boolean> {
   return claimed.length > 0;
 }
 
+async function releasePushClaim(id: number): Promise<void> {
+  await db.update(systemNotifications)
+    .set({ pushSentAt: null })
+    .where(eq(systemNotifications.id, id));
+}
+
 // يُستدعى بعد إنشاء إشعار نظام (fire-and-forget)
 export async function sendPushForSystemNotification(n: SystemNotification): Promise<void> {
   try {
@@ -158,6 +190,7 @@ export async function sendPushForSystemNotification(n: SystemNotification): Prom
     if (!(await claimForPush(n.id))) return;
     await deliverPush(n);
   } catch (e) {
+    await releasePushClaim(n.id).catch(() => {});
     console.error("[push] send failed:", (e as any)?.message || e);
   }
 }
@@ -180,7 +213,10 @@ export async function sweepScheduledPush(): Promise<void> {
       .limit(20);
     for (const n of due) {
       if (await claimForPush(n.id)) {
-        await deliverPush(n).catch((e) => console.error("[push] sweep deliver failed:", e?.message || e));
+        await deliverPush(n).catch(async (e) => {
+          await releasePushClaim(n.id).catch(() => {});
+          console.error("[push] sweep deliver failed:", e?.message || e);
+        });
       }
     }
   } catch (e) {

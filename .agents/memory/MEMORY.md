@@ -59,3 +59,5 @@
 - [Recipe access boundary](recipe-access-boundary.md) — independent book permissions must not silently disable recipe-backed production or its scoped material requirements.
 - [Catalogue authority](catalogue-authority.md) — supplied codes replace business codes, not internal identities; resolve Arabic/bilingual matches before cleanup and preserve stock/history.
 - [Financial aggregate precision](financial-aggregate-precision.md) — promote real inputs before SUM; casting the aggregate afterward cannot recover lost cents.
+- [Branch availability declarations](kitchen-branch-declaration.md) — explicit manual on-hand entry is information for the kitchen, not a stock adjustment or automatic net demand.
+- [Mobile keyboard dialogs](mobile-dialog-keyboard.md) — dvh and sticky footers alone do not prevent iPhone keyboards hiding actions; test visual-viewport changes.
