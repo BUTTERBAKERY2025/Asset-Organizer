@@ -73,6 +73,9 @@ describe("consolidated preparation sheet", () => {
       requestedQuantity: 3.75,
       approvedQuantity: 3.75,
       preparedQuantity: 2.5,
+      substitutedQuantity: 0.25,
+      unpreparedQuantity: 0.75,
+      actualShortageQuantity: 0.25,
     });
     expect(groups.find(group => group.identity === "product:9")).toMatchObject({
       provenance: "substitute",
@@ -84,6 +87,8 @@ describe("consolidated preparation sheet", () => {
       requestedQuantity: 3,
       approvedQuantity: 0,
       preparedQuantity: 0,
+      unpreparedQuantity: 3,
+      actualShortageQuantity: 0,
     });
     expect(groups.find(group => group.identity === "warehouse:7")?.requestedQuantity).toBe(8);
   });

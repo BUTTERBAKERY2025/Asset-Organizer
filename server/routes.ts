@@ -8609,7 +8609,7 @@ export async function registerRoutes(
           items: items.filter(item => item.orderId === row.id),
         }));
         res.set("Cache-Control", "private, no-store");
-        return res.json({ orders: orders.map(order => ({
+        return res.json({ generatedAt: new Date().toISOString(), snapshotStatus: "current_at_generation", orders: orders.map(order => ({
           id: order.id, orderNumber: order.orderNumber, status: order.status,
           requestBranchName: order.requestBranchName,
         })), groups: groupPreparationSheet(orders) });

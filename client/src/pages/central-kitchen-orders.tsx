@@ -28,6 +28,9 @@ import { useVisualViewportDialog } from "@/components/central-kitchen/use-visual
 import { DailyOrderingNotice, LateSubmissionBadge, OrderScheduleNotice, useKitchenOrderingPolicy } from "@/components/central-kitchen/ordering-schedule";
 import { getOrderSchedule } from "@shared/central-kitchen-ordering-policy";
 import { PreparationEditor, SavedPreparationSummary } from "@/components/central-kitchen/prepare-fulfillment";
+import { OrderActionsMenu, SheetPreviewDialog } from "@/components/central-kitchen/kitchen-order-sharing";
+import type { PreparationSheet } from "@/components/central-kitchen/kitchen-order-share-model";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   CentralKitchenCatalogItem,
   parseCentralKitchenCatalogV2,
@@ -38,7 +41,7 @@ import {
   parseCentralKitchenInventoryModeFilter,
 } from "@shared/central-kitchen-next-step";
 import {
-  AlertTriangle, BarChart3, Check, ChevronLeft, Factory, Loader2, PackagePlus, Plus, Printer,
+  AlertTriangle, BarChart3, Check, ChevronLeft, EllipsisVertical, Factory, Loader2, PackagePlus, Plus,
   RefreshCw, Search, Settings, ShieldCheck, SlidersHorizontal, Truck, X,
 } from "lucide-react";
 
@@ -189,6 +192,8 @@ export default function CentralKitchenOrdersPage() {
   const [sort, setSort] = useState<"priority" | "newest" | "oldest_waiting">("priority");
   const [focus, setFocus] = useState<"new" | "overdue" | "dueToday" | "discrepancy" | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+  const [sheetPreview, setSheetPreview] = useState<PreparationSheet | null>(null);
+  const [sheetPreviewOpen, setSheetPreviewOpen] = useState(false);
   const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
   const [createOpen, setCreateOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -408,16 +413,12 @@ export default function CentralKitchenOrdersPage() {
       const response = await apiRequest("POST", "/api/central-kitchen-orders/preparation-sheet", {
         orderIds: Array.from(selectedOrderIds).map(Number),
       });
-      return response.json() as Promise<{
-        orders: Array<{ id: number; orderNumber: string; requestBranchName?: string | null }>;
-        groups: Array<{
-          identity: string; provenance: "original" | "substitute"; productName: string; unit: string;
-          requestedQuantity: number; approvedQuantity: number; preparedQuantity: number;
-          orders: Array<{ id: number; orderNumber: string; branchName: string; requestedQuantity: number; preparedQuantity: number }>;
-        }>;
-      }>;
+      return response.json() as Promise<PreparationSheet>;
     },
-    onSuccess: printConsolidatedPreparationSheet,
+    onSuccess: sheet => {
+      setSheetPreview(sheet);
+      setSheetPreviewOpen(true);
+    },
     onError: error => toast({
       title: "تعذر إعداد ورقة التجهيز",
       description: errorStatus(error) === 409
@@ -518,8 +519,7 @@ export default function CentralKitchenOrdersPage() {
             <div className="relative min-w-0 flex-[1_1_260px]"><Search className="absolute right-3 top-3 h-4 w-4 text-muted-foreground" /><Input aria-label="بحث في الطلبات" value={search} onChange={event => setSearch(event.target.value)} className="h-10 bg-[#fbf7f3] pr-9" placeholder="رقم الطلب أو الفرع أو المطبخ" /></div>
             <Button variant="outline" className="h-10 border-[#e6d9d1] bg-[#fffaf6]" type="button" onClick={() => setFiltersOpen(open => !open)} aria-expanded={filtersOpen} aria-controls="kitchen-order-filters"><SlidersHorizontal className="ml-2 h-4 w-4" />تصفية</Button>
             <Select value={sort} onValueChange={value => setSort(value as typeof sort)}><SelectTrigger className="h-10 w-36"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="priority">الأولوية</SelectItem><SelectItem value="newest">الأحدث</SelectItem><SelectItem value="oldest_waiting">الأقدم انتظاراً</SelectItem></SelectContent></Select>
-            <Button variant="outline" className="h-10" disabled={!selectedOrderIds.size || preparationSheetMutation.isPending} onClick={() => preparationSheetMutation.mutate()}><Printer className="ml-2 h-4 w-4" />ورقة تجهيز ({selectedOrderIds.size})</Button>
-            {!!selectedOrderIds.size && <Button variant="ghost" className="h-10" onClick={() => setSelectedOrderIds(new Set())}>مسح التحديد</Button>}
+            <DropdownMenu><DropdownMenuTrigger asChild><Button data-testid="sheet-actions-trigger" variant="outline" className="h-10" disabled={!selectedOrderIds.size || preparationSheetMutation.isPending}><EllipsisVertical className="ml-1 h-4 w-4" />تجهيز ومشاركة ({selectedOrderIds.size})</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="text-right"><DropdownMenuItem onSelect={() => preparationSheetMutation.mutate()}>معاينة الورقة قبل الطباعة والمشاركة</DropdownMenuItem><DropdownMenuItem onSelect={() => setSelectedOrderIds(new Set())}>مسح التحديد</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
             <span className="text-xs text-muted-foreground">{ordersQuery.data?.total || 0} طلب</span>
           </div>
           <div id="kitchen-order-filters" hidden={!filtersOpen} className="grid gap-2 border-b border-[#eee5df] p-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -549,6 +549,7 @@ export default function CentralKitchenOrdersPage() {
           order={selectedDetail}
           loading={detailId !== null && (detailQuery.isLoading || detailQuery.isFetching)}
           error={detailId !== null && detailQuery.isError}
+          queryError={detailQuery.error}
           onRetry={() => detailQuery.refetch()}
           onOpen={() => detailId !== null && openFullDetail(detailId)}
           onClear={closeDetail}
@@ -581,6 +582,7 @@ export default function CentralKitchenOrdersPage() {
     </DialogContent></Dialog>
 
     {canConfigureRouting && <RoutingSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} branches={routingBranches} />}
+    <SheetPreviewDialog sheet={sheetPreview} open={sheetPreviewOpen} onOpenChange={setSheetPreviewOpen} />
 
       <Dialog open={detailId !== null && detailDialogOpen} onOpenChange={open => { setDetailDialogOpen(open); if (!open && typeof window !== "undefined" && !window.matchMedia("(min-width: 1024px)").matches) closeDetail(); }}><DialogContent dir="rtl" className="max-h-[92dvh] max-w-5xl overflow-y-auto">{(detailQuery.isLoading || (detailQuery.isFetching && detailQuery.isPlaceholderData)) ? <div className="space-y-3 py-8" aria-label="جارٍ تحميل تفاصيل الطلب">{Array.from({ length: 5 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</div> : detailQuery.isError || !selectedDetail ? <DetailQueryError error={detailQuery.error} onRetry={() => detailQuery.refetch()} /> : <OrderDetail order={selectedDetail} products={products} productsQuery={productsQuery} accessibleBranchIds={branches.map(branch => branch.id)} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={workflowMutation.isPending} canApprove={canApprove("central_kitchen_orders")} canEdit={canEdit("central_kitchen_orders")} canConfigureRouting={canConfigureRouting} onConfigureRouting={() => setSettingsOpen(true)} onAction={(action, details) => workflowMutation.mutate({ id: selectedDetail.id, action, details })} />}</DialogContent></Dialog>
   </Layout>;
@@ -619,13 +621,14 @@ function NextStepGuidance({ step, inventoryMode }: { step: ReturnType<typeof get
 }
 function DetailQueryError({ error, onRetry }: { error: unknown; onRetry: () => unknown }) {
   const status = errorStatus(error);
-  const forbidden = status === 401 || status === 403;
+  const unauthenticated = status === 401;
+  const forbidden = status === 403;
   const missing = status === 404;
-  return <div className="py-12 text-center" role="alert"><p className="font-medium">{forbidden ? "لا تملك صلاحية عرض هذا الطلب" : missing ? "الطلب غير موجود" : "تعذر تحميل تفاصيل الطلب"}</p><p className="mt-1 text-sm text-muted-foreground">{forbidden ? "تم رفض الوصول إلى هذا الطلب. اطلب من مسؤول النظام منحك صلاحية مناسبة." : missing ? "قد يكون الطلب حُذف أو لم يعد متاحاً." : "تحقق من الاتصال ثم أعد المحاولة."}</p>{!forbidden && <Button variant="outline" className="mt-4" onClick={() => onRetry()}>إعادة المحاولة</Button>}</div>;
+  return <div className="py-12 text-center" role="alert"><p className="font-medium">{unauthenticated ? "انتهت الجلسة أو لم تسجّل الدخول" : forbidden ? "لا تملك صلاحية عرض هذا الطلب" : missing ? "الطلب غير موجود" : "تعذر تحميل تفاصيل الطلب"}</p><p className="mt-1 text-sm text-muted-foreground">{unauthenticated ? "سجّل الدخول مجدداً ثم افتح رابط الطلب." : forbidden ? "الطلب موجود لكن الوصول إليه خارج صلاحياتك أو نطاق فروعك." : missing ? "لم يُعثر على رقم الطلب في الرابط؛ تحقق من الرابط أو تواصل مع المرسل." : "تحقق من الاتصال ثم أعد المحاولة."}</p>{!forbidden && !unauthenticated && <Button variant="outline" className="mt-4" onClick={() => onRetry()}>إعادة المحاولة</Button>}</div>;
 }
-function OrderSummaryPane({ order, loading, error, onRetry, onOpen, onClear }: { order?: KitchenOrder; loading: boolean; error: boolean; onRetry: () => unknown; onOpen: () => void; onClear: () => void }) {
+function OrderSummaryPane({ order, loading, error, queryError, onRetry, onOpen, onClear }: { order?: KitchenOrder; loading: boolean; error: boolean; queryError: unknown; onRetry: () => unknown; onOpen: () => void; onClear: () => void }) {
   if (loading) return <div className="space-y-3 py-8" aria-label="جارٍ تحميل ملخص الطلب">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-12" />)}</div>;
-  if (error) return <div className="py-12 text-center" role="alert"><p className="text-sm font-medium">تعذر تحميل ملخص الطلب</p><Button size="sm" variant="outline" className="mt-3" onClick={() => onRetry()}>إعادة المحاولة</Button></div>;
+  if (error) return <DetailQueryError error={queryError} onRetry={onRetry} />;
   if (!order) return <div className="flex min-h-[480px] flex-col items-center justify-center gap-2 px-6 text-center text-muted-foreground"><PackagePlus className="h-7 w-7" /><strong className="text-sm text-[#694d60]">اختر طلباً من القائمة</strong><span className="text-xs leading-6">تظهر البنود ومسار الإجراء هنا دون ازدحام قائمة الانتظار.</span></div>;
   const nextStep = getCentralKitchenNextStep({
     status: order.status,
@@ -759,7 +762,7 @@ function OrderDetail({ order, products, productsQuery, accessibleBranchIds, acti
         ? order.allowedActions[action as keyof AllowedActions] === true
         : canEdit && accessibleBranchIds.includes(order.centralKitchenId));
   const actionConfig = action ? { approve: { label: "اعتماد الطلب", icon: ShieldCheck }, prepare: { label: "تأكيد التجهيز", icon: PackagePlus }, dispatch: { label: "تأكيد الشحن", icon: Truck }, receive: { label: "تأكيد الاستلام", icon: Check } }[action] : null;
-   return <><DialogHeader><div className="flex items-start justify-between gap-3 pl-8"><div><DialogTitle className="font-mono text-xl">{order.orderNumber}</DialogTitle><DialogDescription className="mt-1">طلب الفرع {order.requestBranchName || order.requestBranchId} من {order.centralKitchenName || order.centralKitchenId}</DialogDescription></div><div className="flex items-center gap-2"><StatusBadge status={order.status} />{["prepared", "dispatched", "received"].includes(status) && <Button size="sm" variant="outline" onClick={() => printPreparationNote(order)}><Printer className="ml-1 h-4 w-4" />سند التجهيز</Button>}</div></div></DialogHeader>
+   return <><DialogHeader><div className="flex items-start justify-between gap-3 pl-8"><div><DialogTitle className="font-mono text-xl">{order.orderNumber}</DialogTitle><DialogDescription className="mt-1">طلب الفرع {order.requestBranchName || order.requestBranchId} من {order.centralKitchenName || order.centralKitchenId}</DialogDescription></div><div className="flex flex-wrap items-center gap-2"><StatusBadge status={order.status} /><OrderActionsMenu order={order} canPrint={["prepared", "dispatched", "received"].includes(status)} onPrint={() => printPreparationNote(order)} /></div></div></DialogHeader>
     <div className="grid gap-3 border-y py-4 text-sm md:grid-cols-3"><div><span className="block text-muted-foreground">تاريخ الحاجة</span><span className="mt-1 block font-medium">{readableDate(order.neededDate)}</span></div><div><span className="block text-muted-foreground">وقت الحاجة</span><span className="mt-1 block font-medium">{readableTime(order.neededTime)}</span></div><div><span className="block text-muted-foreground">تاريخ الإنشاء</span><span className="mt-1 block font-medium">{readableDate(order.createdAt)}</span></div></div>
     {order.notes && <div className="rounded-md border-r-4 border-primary bg-muted/30 px-4 py-3 text-sm"><span className="mb-1 block text-xs text-muted-foreground">ملاحظات الطلب</span>{order.notes}</div>}
      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 px-3 py-2 text-xs"><span className="text-muted-foreground">وضع مخزون الطلب:</span><Badge variant="outline" className={parseCentralKitchenInventoryMode(order.inventoryMode) === "real" ? "border-emerald-300 bg-emerald-50 text-emerald-800" : parseCentralKitchenInventoryMode(order.inventoryMode) === "shadow" ? "border-amber-300 bg-amber-50 text-amber-800" : "border-border bg-muted text-muted-foreground"}>{parseCentralKitchenInventoryMode(order.inventoryMode) === "real" ? "فعلي — حجوزات من مخزون المطبخ" : parseCentralKitchenInventoryMode(order.inventoryMode) === "shadow" ? "ظلّي — تشغيلي فقط، لا حركة مخزون فعلية" : "غير محدد — طلب قديم، لا يثبت حركة مخزون"}</Badge></div>
@@ -876,7 +879,7 @@ function ReceiptEditor({ items, pending, onSubmit }: { items: KitchenItem[]; pen
   return <section className="rounded-lg border border-emerald-200 bg-emerald-50/30 p-4"><h3 className="font-semibold">تسجيل الاستلام الفعلي</h3><div className="mt-3 space-y-3">{items.map((item, index) => { const sent = Number(item.dispatchedQuantity || 0); const missing = Math.max(0, sent - Number(rows[index].received || 0) - Number(rows[index].damaged || 0)); return <div className="rounded-md border bg-background p-3" key={item.id}><div className="mb-2 font-medium">{item.productName} — أرسل {sent} {item.unit}</div><div className="grid gap-2 md:grid-cols-3"><div><Label>المستلم السليم</Label><Input type="number" min="0" step="any" value={rows[index].received} onChange={e => update(index, { received: e.target.value })} /></div><div><Label>التالف</Label><Input type="number" min="0" step="any" value={rows[index].damaged} onChange={e => update(index, { damaged: e.target.value })} /></div><div><Label>الناقص: {missing}</Label><Input value={rows[index].notes} onChange={e => update(index, { notes: e.target.value })} placeholder={missing > 0 || Number(rows[index].damaged) > 0 ? "الملاحظة مطلوبة" : "ملاحظة اختيارية"} /></div></div></div>; })}</div><Button className="mt-4" disabled={pending || invalid} onClick={() => onSubmit({ items: items.map((item, index) => ({ itemId: Number(item.id), receivedQuantity: Number(rows[index].received), damagedQuantity: Number(rows[index].damaged), receivingNotes: rows[index].notes.trim() || undefined })) })}><Check className="ml-2 h-4 w-4" />تأكيد الاستلام</Button></section>;
 }
 
-function printPreparationNote(order: KitchenOrder) {
+function printPreparationNote(order: KitchenOrder): boolean {
   const escape = (value: unknown) => String(value ?? "—").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[character] || character));
   const rows = (order.items || []).map(item => {
     const prepared = Number(item.preparedQuantity || 0);
@@ -886,31 +889,8 @@ function printPreparationNote(order: KitchenOrder) {
     return `<tr><td>${escape(item.productName)}</td><td>${escape(item.requestedQuantity)} ${escape(item.unit)}</td><td>${declaredAvailable}</td><td>${prepared} ${escape(item.unit)}</td><td>${substitute > 0 ? `${substitute} ${escape(item.substituteUnit || item.unit)} — ${escape(item.substituteProductName)}` : "—"}</td><td>${shortage} ${escape(item.unit)}</td><td>${escape(item.preparationNotes || SHORTAGE_LABELS[item.shortageReason || ""] || "")}</td></tr>`;
   }).join("");
   const printWindow = window.open("", "_blank", "width=900,height=700");
-  if (!printWindow) return;
+  if (!printWindow) return false;
   printWindow.document.write(`<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>سند تجهيز ${escape(order.orderNumber)}</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#172033}h1{font-size:22px;margin:0 0 8px}.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:22px 0}.box{border:1px solid #d8dee9;border-radius:8px;padding:10px}small{display:block;color:#687386;margin-bottom:4px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #d8dee9;padding:9px;text-align:right;font-size:12px}th{background:#f3f5f8}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:80px;margin-top:60px}.line{border-top:1px solid #172033;padding-top:8px;text-align:center}@media print{body{padding:0}}</style></head><body><h1>سند تجهيز طلب المطبخ المركزي</h1><div>${escape(order.orderNumber)}</div><div class="meta"><div class="box"><small>الفرع الطالب</small>${escape(order.requestBranchName || order.requestBranchId)}</div><div class="box"><small>المطبخ المركزي</small>${escape(order.centralKitchenName || order.centralKitchenId)}</div><div class="box"><small>تاريخ الحاجة</small>${escape(order.neededDate)}</div></div><table><thead><tr><th>الصنف</th><th>المطلوب</th><th>المتوفر في الفرع</th><th>الأصلي المجهز</th><th>البديل</th><th>النقص</th><th>ملاحظات</th></tr></thead><tbody>${rows}</tbody></table><div class="signatures"><div class="line">مسؤول التجهيز</div><div class="line">مسؤول الإرسال</div></div><script>window.onload=()=>window.print()<\/script></body></html>`);
   printWindow.document.close();
-}
-
-function printConsolidatedPreparationSheet(sheet: {
-  orders: Array<{ id: number; orderNumber: string; requestBranchName?: string | null }>;
-  groups: Array<{
-    identity: string; provenance: "original" | "substitute"; productName: string; unit: string;
-    requestedQuantity: number; approvedQuantity: number; preparedQuantity: number;
-    orders: Array<{ id: number; orderNumber: string; branchName: string; requestedQuantity: number; preparedQuantity: number }>;
-  }>;
-}) {
-  const escape = (value: unknown) => String(value ?? "—").replace(/[&<>"']/g, character =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[character] || character));
-  const rows = sheet.groups.map(group => `<tr>
-    <td>${escape(group.productName)}<small>${escape(group.identity)} · ${group.provenance === "substitute" ? "بديل مجهز" : "صنف أصلي"}</small></td>
-    <td>${escape(group.unit)}</td>
-    <td>${escape(group.requestedQuantity)}</td>
-    <td>${escape(group.approvedQuantity)}</td>
-    <td>${escape(group.preparedQuantity)}</td>
-    <td>${group.orders.map(order => `<a href="/central-kitchen-orders?orderId=${encodeURIComponent(String(order.id))}">${escape(order.orderNumber)}</a> · ${escape(order.branchName)} (مطلوب ${escape(order.requestedQuantity)} · مجهز ${escape(order.preparedQuantity)} ${escape(group.unit)})`).join("<br>")}</td>
-  </tr>`).join("");
-  const printWindow = window.open("", "_blank", "width=1100,height=800");
-  if (!printWindow) return;
-  printWindow.document.write(`<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>ورقة التجهيز المجمعة</title><style>body{font-family:Arial,sans-serif;padding:28px;color:#2f1c3a}h1{font-size:22px}p{color:#666}table{width:100%;border-collapse:collapse}th,td{border:1px solid #d8ced5;padding:9px;text-align:right;vertical-align:top;font-size:12px}th{background:#f5edf4}small{display:block;color:#777;margin-top:3px}a{color:#4f2a63}@media print{body{padding:0}a{text-decoration:none;color:inherit}}</style></head><body><h1>ورقة التجهيز المجمعة</h1><p>${sheet.orders.length} طلبات · التجميع فقط عند تطابق هوية الصنف ووحدة القياس والمصدر (أصلي/بديل). «المعتمد» هو مقدار الطلب كاملاً بعد اعتماد الطلب؛ لا توجد موافقة مستقلة لكل بند.</p><table><thead><tr><th>الصنف</th><th>الوحدة</th><th>المطلوب</th><th>المعتمد (اعتماد الطلب كاملاً)</th><th>المجهز فعلياً</th><th>الطلبات الأصلية</th></tr></thead><tbody>${rows}</tbody></table><script>window.onload=()=>window.print()<\/script></body></html>`);
-  printWindow.document.close();
+  return true;
 }
