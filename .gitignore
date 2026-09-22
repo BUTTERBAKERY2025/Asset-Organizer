@@ -7,3 +7,4 @@ vite.config.ts.*
 attached_assets/*6004308035*.txt
 attached_assets/*6004308093*.txt
 production_migration.tar.gz
+.local/backups/

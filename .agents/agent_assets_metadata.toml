@@ -33,3 +33,17 @@ mtime_ms = 1789495092315
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/cf3d5ea3-76e8-4a88-aee1-2970ad9370c7/8a0e150c-a2aa-4c30-a092-f5a066e1f853"
 storage_version_token = "1789495141304290"
 content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+[[outputs]]
+id = "YczRYdoqj-sSxlmy-j0i1"
+uri = "file://.local/backups/production-trial-backup-2026-09-22.tar.gz"
+type = "unspecified"
+title = "نسخة سجلات الإنتاج والتحويلات قبل التنظيف"
+description = "نسخة انتقائية من 31 جدولاً، مع فحص سلامة الملفات وتجربة استرجاع الصفوف في جداول مؤقتة ببيئة التطوير. ليست نسخة كاملة لقاعدة البيانات، ولم يتم حذف أي سجل."
+logical_id = "ed275f5b-262d-4c40-a34a-b163c22757b6"
+content_hash = "sha256:f355ecf144cb8bfeecd248ab8010f3ec0979418843d8ebd0d21d560cd7b39d21"
+size = 60718
+mtime_ms = 1790088361741
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/ed275f5b-262d-4c40-a34a-b163c22757b6/f0ce1f18-0d50-41a6-bf0e-3869dd1daba9"
+storage_version_token = "1790088376523739"
+content_type = "application/octet-stream"
