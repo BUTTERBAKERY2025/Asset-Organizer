@@ -13,6 +13,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useBranches } from "@/hooks/useBranches";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Plus, Search, Edit, Trash2, Factory, Clock, Calendar, CheckCircle, AlertTriangle, Play, Pause } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TablePagination } from "@/components/ui/pagination";
@@ -60,6 +61,7 @@ export default function ProductionPage() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { canCreate, canEdit, canDelete, canExport } = usePermissions();
 
   const { data: orders, isLoading } = useQuery<ProductionOrder[]>({
     queryKey: ["/api/production-orders"],
@@ -129,6 +131,7 @@ export default function ProductionPage() {
   };
 
   const handleSubmit = () => {
+    if (editingOrder ? !canEdit("production") : !canCreate("production")) return;
     const data = {
       ...formData,
       productId: parseInt(formData.productId),
@@ -143,6 +146,7 @@ export default function ProductionPage() {
   };
 
   const handleStatusChange = (order: ProductionOrder, newStatus: string) => {
+    if (!canEdit("production")) return;
     const updateData: any = { status: newStatus };
     if (newStatus === 'in_progress') {
       updateData.startedAt = new Date().toISOString();
@@ -172,7 +176,7 @@ export default function ProductionPage() {
             <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">إدارة الإنتاج</h1>
             <p className="text-sm text-muted-foreground">أوامر الإنتاج اليومية</p>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          {(canCreate("production") || canEdit("production")) && <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button data-testid="button-add-order" className="h-11 sm:h-9">
                 <Plus className="w-4 h-4 ml-2" />
@@ -294,7 +298,7 @@ export default function ProductionPage() {
                 </Button>
               </DialogFooter>
             </DialogContent>
-          </Dialog>
+          </Dialog>}
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -309,13 +313,13 @@ export default function ProductionPage() {
             />
           </div>
           <Badge variant="secondary">{orders?.length || 0} أمر</Badge>
-          <ExportButtons
+          {canExport("production") && <ExportButtons
             data={filteredOrders || []}
             columns={exportColumns}
             fileName={`أوامر-الإنتاج-${new Date().toISOString().split('T')[0]}`}
             title="تقرير أوامر الإنتاج"
             sheetName="أوامر الإنتاج"
-          />
+          />}
         </div>
 
         {filteredOrders && filteredOrders.length > 0 && (
@@ -335,9 +339,9 @@ export default function ProductionPage() {
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Factory className="w-12 h-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground">لا توجد أوامر إنتاج</p>
-              <Button variant="outline" className="mt-4 h-11 sm:h-9" onClick={() => setIsDialogOpen(true)}>
+              {canCreate("production") && <Button variant="outline" className="mt-4 h-11 sm:h-9" onClick={() => setIsDialogOpen(true)}>
                 إنشاء أول أمر إنتاج
-              </Button>
+              </Button>}
             </CardContent>
           </Card>
         ) : (
@@ -399,7 +403,7 @@ export default function ProductionPage() {
                       )}
                     </div>
                     <div className="flex flex-wrap items-center gap-1 sm:gap-2 pt-2 border-t">
-                      {order.status === 'pending' && (
+                      {canEdit("production") && order.status === 'pending' && (
                         <Button 
                           variant="outline" 
                           size="sm" 
@@ -410,7 +414,7 @@ export default function ProductionPage() {
                           بدء
                         </Button>
                       )}
-                      {order.status === 'in_progress' && (
+                      {canEdit("production") && order.status === 'in_progress' && (
                         <Button 
                           variant="outline" 
                           size="sm" 
@@ -421,10 +425,10 @@ export default function ProductionPage() {
                           إكمال
                         </Button>
                       )}
-                      <Button variant="outline" size="sm" className="text-destructive h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-none" onClick={() => deleteMutation.mutate(order.id)}>
+                      {canDelete("production") && <Button variant="outline" size="sm" className="text-destructive h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-none" onClick={() => deleteMutation.mutate(order.id)}>
                         <Trash2 className="w-3 h-3 ml-1" />
                         حذف
-                      </Button>
+                      </Button>}
                     </div>
                   </CardContent>
                 </Card>

@@ -237,7 +237,8 @@
     "hrManager": "HR Manager",
     "employee": "Employee",
     "viewer": "Viewer",
-    "attendanceClerk": "Attendance Clerk"
+    "attendanceClerk": "Attendance Clerk",
+    "productionDevelopmentManager": "Production & Development Manager"
   },
   "subItems": {
     "branchEmployees": "Branch Employees",

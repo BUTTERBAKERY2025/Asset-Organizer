@@ -721,12 +721,12 @@ export async function registerRoutes(
       // SECURITY: Only admins may assign privileged roles. Non-admins can only
       // create "viewer" or "employee" accounts. This prevents privilege escalation
       // via the users:create permission (e.g., creating an admin or hr_manager).
-      const PRIVILEGED_ROLES = new Set(["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "branch_manager", "attendance_clerk"]);
+      const PRIVILEGED_ROLES = new Set(["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "production_development_manager", "operations_manager", "branch_manager", "attendance_clerk"]);
       const requestedRole = (role as string | undefined) || "viewer";
       if (PRIVILEGED_ROLES.has(requestedRole) && (req as any).currentUser?.role !== "admin") {
         return res.status(403).json({ error: "فقط المسؤولين يمكنهم منح هذا الدور" });
       }
-      if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "branch_manager", "employee", "viewer", "attendance_clerk"].includes(requestedRole)) {
+      if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "production_development_manager", "operations_manager", "branch_manager", "employee", "viewer", "attendance_clerk"].includes(requestedRole)) {
         return res.status(400).json({ error: "دور غير صالح" });
       }
       
@@ -814,7 +814,7 @@ export async function registerRoutes(
       }
       
       if (role !== undefined) {
-        if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "branch_manager", "employee", "viewer", "attendance_clerk"].includes(role)) {
+        if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "production_development_manager", "operations_manager", "branch_manager", "employee", "viewer", "attendance_clerk"].includes(role)) {
           return res.status(400).json({ error: "Invalid role" });
         }
         // SECURITY: Only admins can change user roles to prevent privilege escalation
@@ -1318,6 +1318,17 @@ export async function registerRoutes(
         }));
       }
 
+      if (currentUser.role === "production_development_manager") {
+        const { PRODUCTION_DEVELOPMENT_MANAGER_PERMISSIONS } = await import("./auth");
+        const merged = new Map<string, Set<string>>(permissions.map((p: any) => [p.module, new Set<string>(p.actions || [])]));
+        for (const [module, actions] of Object.entries(PRODUCTION_DEVELOPMENT_MANAGER_PERMISSIONS)) {
+          const existing = merged.get(module) || new Set<string>();
+          actions.forEach(action => existing.add(action));
+          merged.set(module, existing);
+        }
+        permissions = Array.from(merged, ([module, actions]) => ({ module, actions: [...actions] }));
+      }
+
       // Operations Manager: merge the action-aware auto-granted operations modules
       // so the frontend sidebar/landing/canView matches what the backend authorizes.
       if (currentUser.role === "operations_manager") {
@@ -1440,6 +1451,12 @@ export async function registerRoutes(
             for (const action of acts) addPermMirrored(m, action, "role_auto", FIN_MIRRORS);
           }
         }
+        if (targetUser.role === "production_development_manager") {
+          const { PRODUCTION_DEVELOPMENT_MANAGER_PERMISSIONS } = await import("./auth");
+          for (const [module, actions] of Object.entries(PRODUCTION_DEVELOPMENT_MANAGER_PERMISSIONS)) {
+            for (const action of actions) addPerm(module, action, "role_auto");
+          }
+        }
         if (targetUser.role === "operations_manager") {
           for (const [m, acts] of Object.entries(OPERATIONS_MANAGER_PERMISSIONS)) {
             for (const action of acts) addPermMirrored(m, action, "role_auto", OPS_MIRRORS);
@@ -1500,7 +1517,7 @@ export async function registerRoutes(
       const user = req.currentUser;
       
       // SECURITY: Filter branches based on user role and branch access
-      if (isUserAdmin(req) || user?.role === "financial_manager") {
+      if (isUserAdmin(req) || user?.role === "financial_manager" || user?.role === "production_development_manager") {
         // Admins and the cross-branch Financial Manager can see all branches
         res.json(branches);
       } else if (user?.role === "operations_manager") {
@@ -7137,7 +7154,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/products", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+  app.post("/api/products", isAuthenticated, (req, res, next) => import("./auth").then(({ requireProductWritePermission }) => requireProductWritePermission("create")(req, res, next)).catch(next), async (req, res) => {
     try {
       const parsed = insertProductSchema.safeParse(normalizeProductMutationInput(req.body));
       if (!parsed.success) {
@@ -7165,7 +7182,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/products/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+  app.patch("/api/products/:id", isAuthenticated, (req, res, next) => import("./auth").then(({ requireProductWritePermission }) => requireProductWritePermission("edit")(req, res, next)).catch(next), async (req, res) => {
     try {
       const id = Number(req.params.id);
       if (!Number.isInteger(id) || id <= 0) {
@@ -9412,12 +9429,12 @@ export async function registerRoutes(
       
       // SECURITY: Only admins may assign privileged roles via this endpoint.
       // Non-admins with operations:create can only create regular "employee" accounts.
-      const OP_PRIVILEGED_ROLES = new Set(["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "branch_manager", "attendance_clerk"]);
+      const OP_PRIVILEGED_ROLES = new Set(["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "production_development_manager", "operations_manager", "branch_manager", "attendance_clerk"]);
       const opRequestedRole = (role as string | undefined) || "employee";
       if (OP_PRIVILEGED_ROLES.has(opRequestedRole) && !isUserAdmin(req)) {
         return res.status(403).json({ error: "فقط المسؤولين يمكنهم منح هذا الدور" });
       }
-      if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "operations_manager", "branch_manager", "employee", "viewer", "attendance_clerk"].includes(opRequestedRole)) {
+      if (!["admin", "hr_manager", "hr_specialist", "financial_accountant", "financial_manager", "production_development_manager", "operations_manager", "branch_manager", "employee", "viewer", "attendance_clerk"].includes(opRequestedRole)) {
         return res.status(400).json({ error: "دور غير صالح" });
       }
       
@@ -36135,6 +36152,9 @@ export async function registerRoutes(
   const canManageWarehouseSource = async (req: any): Promise<boolean> => {
     if (isUserAdmin(req)) return true;
     const user = req.currentUser;
+    // This is source scope only; every calling route still requires warehouse
+    // create/edit. Production management covers the main warehouse as requested.
+    if (user?.role === "production_development_manager") return true;
     if (!user || user.branchId !== mainWarehouseBranchId) return false;
     return await canAccessBranch(req, mainWarehouseBranchId);
   };

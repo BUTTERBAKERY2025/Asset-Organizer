@@ -237,7 +237,8 @@
     "hrManager": "مدير الموارد البشرية",
     "employee": "موظف",
     "viewer": "مشاهد",
-    "attendanceClerk": "مسجل الحضور"
+    "attendanceClerk": "مسجل الحضور",
+    "productionDevelopmentManager": "مدير الإنتاج والتطوير"
   },
   "subItems": {
     "branchEmployees": "موظفو الفروع",

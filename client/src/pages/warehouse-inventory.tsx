@@ -18,6 +18,7 @@ import {
 import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type WarehouseItem = {
   id: number;
@@ -82,6 +83,7 @@ export default function WarehouseInventoryPage() {
   const isRTL = i18n.language === "ar";
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { canCreate, canEdit, canDelete } = usePermissions();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -379,7 +381,7 @@ export default function WarehouseInventoryPage() {
               </p>
             </div>
           </div>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          {canCreate("warehouse_inventory") && <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
               <Button data-testid="btn-add-item" className="w-full sm:w-auto">
                 <Plus className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
@@ -408,7 +410,7 @@ export default function WarehouseInventoryPage() {
                 </Button>
               </DialogFooter>
             </DialogContent>
-          </Dialog>
+          </Dialog>}
         </div>
 
         {lowStockItems.length > 0 && (
@@ -527,7 +529,7 @@ export default function WarehouseInventoryPage() {
                       <TableCell className="hidden md:table-cell text-xs sm:text-sm">{item.unitCost ? `${item.unitCost.toFixed(2)} ر.س` : "-"}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
-                          <Button 
+                           {canEdit("warehouse_inventory") && <Button
                             variant="ghost" 
                             size="icon" 
                             className="h-7 w-7 sm:h-8 sm:w-8"
@@ -535,8 +537,8 @@ export default function WarehouseInventoryPage() {
                             data-testid={`btn-edit-${item.id}`}
                           >
                             <Edit className="w-3 h-3 sm:w-4 sm:h-4" />
-                          </Button>
-                          <Button 
+                           </Button>}
+                           {canDelete("warehouse_inventory") && <Button
                             variant="ghost" 
                             size="icon" 
                             className="h-7 w-7 sm:h-8 sm:w-8"
@@ -548,7 +550,7 @@ export default function WarehouseInventoryPage() {
                             data-testid={`btn-delete-${item.id}`}
                           >
                             <Trash2 className="w-3 h-3 sm:w-4 sm:h-4 text-red-500" />
-                          </Button>
+                           </Button>}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -560,7 +562,7 @@ export default function WarehouseInventoryPage() {
           </CardContent>
         </Card>
 
-        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        {canEdit("warehouse_inventory") && <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>{isRTL ? "تعديل المادة" : "Edit Item"}</DialogTitle>
@@ -586,7 +588,7 @@ export default function WarehouseInventoryPage() {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
+        </Dialog>}
       </div>
     </Layout>
   );

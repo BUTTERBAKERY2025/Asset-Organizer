@@ -1,7 +1,7 @@
 import { and, eq, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 import { branches, centralKitchenRouting, systemAuditLogs, userBranchAccess, userPermissions, users,
-  permissions, rolePermissions, userAssignments, userPermissionOverrides } from "@shared/schema";
+  permissions, rolePermissions, userAssignments, userPermissionOverrides, ROLE_PERMISSION_TEMPLATES } from "@shared/schema";
 
 export type RoutingExecutor = { select: (...args: any[]) => any; insert: (...args: any[]) => any };
 export const routingSchema = z.object({
@@ -15,6 +15,8 @@ export const routingSchema = z.object({
 
 export function routingPermission(role: string, actions: string[], action: string) {
   return role === "admin" || actions.includes(action)
+    || (role === "production_development_manager" && ROLE_PERMISSION_TEMPLATES.production_development_manager
+      .some(entry => entry.module === "central_kitchen_orders" && entry.actions.some(allowed => allowed === action)))
     || (role === "branch_manager" && ["view", "edit", "create"].includes(action));
 }
 
@@ -26,7 +28,7 @@ export async function routingPeople(tx: RoutingExecutor, branchId?: string) {
     role: users.role, actions: userPermissions.actions,
   }).from(users).leftJoin(userPermissions, and(eq(userPermissions.userId, users.id),
     eq(userPermissions.module, "central_kitchen_orders")))
-    .where(and(eq(users.isActive, "active"), ...(branchId ? [or(eq(users.branchId, branchId), inArray(users.id, access))] : [])));
+    .where(and(eq(users.isActive, "active"), ...(branchId ? [or(eq(users.role, "production_development_manager"), eq(users.branchId, branchId), inArray(users.id, access))] : [])));
   if (!people.length) return people;
   const ids = people.map((p: any) => p.id);
   const direct = await tx.select().from(userPermissions).where(inArray(userPermissions.userId, ids));
@@ -85,7 +87,7 @@ export async function kitchenActionAllowed(tx: RoutingExecutor, userId: string, 
   const branchId = action === "receive" ? order.requestBranchId : order.centralKitchenId;
   const actor = await routingActor(tx, userId);
   if (!actor || !routingPermission(actor.role, actor.actions || [], action === "approve" ? "approve" : "edit")) return false;
-  if (["admin", "operations_manager"].includes(actor.role)) return true;
+  if (["admin", "operations_manager", "production_development_manager"].includes(actor.role)) return true;
   const people = await routingPeople(tx, branchId);
   if (!people.some((p: any) => p.id === userId)) return false;
   if (!["approve", "receive"].includes(action)) return true;
@@ -109,14 +111,15 @@ export function registerKitchenRoutingRoutes(app: any, db: any, auth: any, getUs
         if (!branch.isCentralKitchen && !(await canAccessBranch(req, branchId))) return res.status(403).json({ error: "غير مصرح للفرع" });
         return res.json(await getKitchenRouting(db, branchId));
       }
-      if (!["admin", "operations_manager"].includes(actor.role)) return res.status(403).json({ error: "إعدادات التوجيه للإدارة فقط" });
+      if (!["admin", "operations_manager", "production_development_manager"].includes(actor.role)) return res.status(403).json({ error: "إعدادات التوجيه للإدارة فقط" });
+      if (kind === "write" && !routingPermission(actor.role, actor.actions || [], "edit")) return res.status(403).json({ error: "غير مصرح بتعديل التوجيه" });
       if (kind === "candidates") return res.json(await routingCandidates(db, branchId));
       const parsed = routingSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: "أشخاص التوجيه غير صالحين أو مكررون" });
       const result = await db.transaction(async (tx: any) => {
         const currentActor = await routingActor(tx, actor.id);
-        if (!currentActor || !["admin", "operations_manager"].includes(currentActor.role)
-          || !routingPermission(currentActor.role, currentActor.actions || [], "view")) throw new Error("ROUTING_FORBIDDEN");
+        if (!currentActor || !["admin", "operations_manager", "production_development_manager"].includes(currentActor.role)
+          || !routingPermission(currentActor.role, currentActor.actions || [], "edit")) throw new Error("ROUTING_FORBIDDEN");
         const candidates = await routingCandidates(tx, branchId);
         for (const [key, id] of Object.entries(parsed.data)) {
           const eligible = key === "receiverUserId" ? candidates.receiverCandidates : candidates.kitchenCandidates;

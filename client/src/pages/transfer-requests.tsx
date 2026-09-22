@@ -26,6 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 import { SignaturePad, SignatureDisplay } from "@/components/signature-pad";
 import { ExportButtons } from "@/components/export-buttons";
 import { useBranches } from "@/hooks/useBranches";
+import { usePermissions } from "@/hooks/usePermissions";
 import { generateTransferPdf, generateQuickTransferPdf } from "@/lib/pdf-utils";
 
 type MaterialTransfer = {
@@ -117,6 +118,7 @@ export default function TransferRequestsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { branches, userBranchId, canSelectBranch } = useBranches();
+  const { canCreate, canEdit, canApprove } = usePermissions();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
@@ -857,12 +859,17 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
 
   // Status workflow: Warehouse (source) approves → dispatches → Branch (destination) confirms delivery
   const getNextStatus = (transfer: MaterialTransfer): string[] => {
+    const permitted = (statuses: string[]) => statuses.filter((status) =>
+      status === "approved" || status === "rejected"
+        ? canApprove("transfer_requests")
+        : canEdit("transfer_requests")
+    );
     // Admins can manage all transfers
     if (canSelectBranch) {
       switch (transfer.status) {
-        case "pending": return ["approved", "rejected", "cancelled"];
-        case "approved": return ["in_transit", "cancelled"];
-        case "in_transit": return ["delivered"];
+        case "pending": return permitted(["approved", "rejected", "cancelled"]);
+        case "approved": return permitted(["in_transit", "cancelled"]);
+        case "in_transit": return permitted(["delivered"]);
         default: return [];
       }
     }
@@ -875,23 +882,23 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
       case "pending":
         // Warehouse approves/rejects requests from branches
         if (isWarehouse) {
-          return ["approved", "rejected"];
+          return permitted(["approved", "rejected"]);
         }
         // Requesting branch can cancel their own request
         if (isDestination) {
-          return ["cancelled"];
+          return permitted(["cancelled"]);
         }
         return [];
       case "approved":
         // Warehouse dispatches after approval
         if (isWarehouse) {
-          return ["in_transit", "cancelled"];
+          return permitted(["in_transit", "cancelled"]);
         }
         return [];
       case "in_transit":
         // Destination branch confirms delivery
         if (isDestination) {
-          return ["delivered"];
+          return permitted(["delivered"]);
         }
         return [];
       default:
@@ -919,7 +926,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                 sheetName={isRTL ? "التحويلات" : "Transfers"}
               />
             </div>
-            <Dialog open={isCreateOpen} onOpenChange={(open) => {
+            {canCreate("transfer_requests") && <Dialog open={isCreateOpen} onOpenChange={(open) => {
               if (open && !isCreateOpen) createIdempotencyKeyRef.current = crypto.randomUUID();
               if (!open && !createMutation.isPending) createIdempotencyKeyRef.current = null;
               setIsCreateOpen(open);
@@ -1230,7 +1237,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                 </Button>
               </DialogFooter>
             </DialogContent>
-          </Dialog>
+            </Dialog>}
             </div>
           }
         />

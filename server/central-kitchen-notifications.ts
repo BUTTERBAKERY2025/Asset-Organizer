@@ -42,6 +42,7 @@ export function canReceiveCentralKitchenNotification(
   permissionActions: string[] | null,
 ): boolean {
   return role === "admin"
+    || role === "production_development_manager"
     || role === "branch_manager"
     || !!permissionActions?.includes("view");
 }
@@ -106,7 +107,7 @@ export async function resolveCentralKitchenNotificationRecipients(
     .where(and(
       eq(users.isActive, "active"),
       or(
-        ...(candidateUserIds ? [eq(users.role, "admin"), eq(users.role, "operations_manager")] : []),
+        ...(candidateUserIds ? [eq(users.role, "admin"), eq(users.role, "operations_manager"), eq(users.role, "production_development_manager")] : []),
         inArray(users.branchId, branchIds),
         inArray(users.id, branchUsers),
       ),
@@ -192,7 +193,7 @@ export async function routedRecipients(tx: DatabaseExecutor, order: any, event: 
   const kitchen = await getKitchenRouting(tx, order.centralKitchenId);
   const kitchenIds = [kitchen.responsibleUserId, kitchen.deputyUserId].filter(Boolean) as string[];
   const ops = async () => (await routingPeople(tx)).filter((p: any) =>
-    p.role === "operations_manager" && routingPermission(p.role, p.actions || [], "view")).map((p: any) => p.id);
+    ["operations_manager", "production_development_manager"].includes(p.role) && routingPermission(p.role, p.actions || [], "view")).map((p: any) => p.id);
   if (event === "overdue" && ["received", "cancelled"].includes(order.status)) return [];
   if (["missing_responsible", "overdue"].includes(event)) return ops();
   if (["created", "edited", "cancelled", "received"].includes(event)) return kitchenIds;

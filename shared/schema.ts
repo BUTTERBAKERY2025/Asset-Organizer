@@ -1722,6 +1722,20 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
   // (صلاحية approve تغطي الاعتماد والرفض وتأكيد الصرف mark-paid)، ويغلق الرواتب
   // الشهرية (الإغلاق/إعادة الفتح بصلاحية edit)، ويتابع الموظفين والرواتب تفصيليًا،
   // مع رؤية مالية ورقابية. لا يشمل إدارة المستخدمين أو إعدادات النظام أو الصلاحيات.
+  production_development_manager: [
+    { module: "production", actions: ["view", "create", "edit", "export"] },
+    { module: "daily_production", actions: ["view", "create", "edit", "export"] },
+    { module: "advanced_production", actions: ["view", "create", "edit", "export"] },
+    { module: "ai_production_planner", actions: ["view", "create", "edit"] },
+    { module: "products", actions: ["view", "create", "edit", "export"] },
+    { module: "central_kitchen_recipes", actions: ["view", "create", "edit", "approve", "print"] },
+    { module: "central_kitchen_orders", actions: ["view", "create", "edit", "approve", "export"] },
+    { module: "warehouse", actions: ["view", "create", "edit", "export"] },
+    { module: "material_requests", actions: ["view", "create", "edit", "approve", "export"] },
+    { module: "transfer_requests", actions: ["view", "create", "edit", "approve", "export"] },
+    { module: "warehouse_inventory", actions: ["view", "create", "edit", "export"] },
+    { module: "branches", actions: ["view"] },
+  ],
   financial_manager: [
     { module: "dashboard", actions: ["view", "export"] },
     // الاعتماد المالي وتحويل المبالغ

@@ -153,6 +153,7 @@ const ROLE_LABELS: Record<string, string> = {
   hr_manager: "مدير موارد بشرية",
   hr_specialist: "أخصائي موارد بشرية",
   financial_manager: "مدير مالي",
+  production_development_manager: "مدير الإنتاج والتطوير",
   operations_manager: "مدير عمليات",
   branch_manager: "مدير فرع",
   shareholder: "مساهم",

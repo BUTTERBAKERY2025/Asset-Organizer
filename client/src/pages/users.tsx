@@ -16,7 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { TablePagination } from "@/components/ui/pagination";
-import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2, Wand2, Pencil, Search, X, Filter, KeyRound, Power, Copy } from "lucide-react";
+import { Loader2, Users, Shield, UserCog, Eye, Plus, Trash2, Settings2, Wand2, Pencil, Search, X, Filter, KeyRound, Power, Copy, Factory } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
@@ -109,12 +109,15 @@ const ROLES = [
   { value: "hr_specialist", label: "اختصاصي موارد بشرية", icon: UserCog, description: "صلاحيات موارد بشرية في جميع الفروع أقل من المدير: الإجازات والمستندات والإنذارات والسلف والحضور والورديات والتوظيف (بدون إغلاق الرواتب أو نهاية الخدمة، وبيانات الموظفين عرض فقط)" },
   { value: "financial_accountant", label: "محاسب مالي", icon: UserCog, description: "اطلاع على التقارير المالية والتشغيلية" },
   { value: "financial_manager", label: "مدير مالي", icon: UserCog, description: "إشراف مالي على كل الفروع: اعتماد الصرف وتحويل المبالغ، إغلاق الرواتب ومتابعتها تفصيليًا، السلف ونهاية الخدمة، ولوحات الأرباح والتقارير المالية (لا يشمل إدارة المستخدمين أو إعدادات النظام)" },
+  { value: "production_development_manager", label: "مدير الإنتاج والتطوير", icon: Factory, description: "إدارة الإنتاج والتطوير والمطابخ والمخازن في جميع الفروع والمطابخ (لا يشمل المالية أو الموارد البشرية أو إدارة المستخدمين)" },
   { value: "operations_manager", label: "مدير تشغيل", icon: UserCog, description: "إدارة العمليات اليومية في جميع الفروع: التشغيل والإنتاج والجودة والهدر، الورديات والحضور والتايم شيت، المخزون والمخازن والصيانة، واعتماد الإجازات، مع رؤية تشغيلية للتقارير والمبيعات (لا يشمل إدارة المستخدمين أو الاعتماد المالي وإغلاق الرواتب)" },
   { value: "branch_manager", label: "مدير فرع", icon: UserCog, description: "إدارة فرعه فقط: اعتماد طلبات إجازات موظفي الفرع، الحضور والورديات، متابعة موظفي الفرع، التشغيل والهدر (بدون رواتب أو أرصدة إجازات أو إعدادات — ويلتزم بالفروع المسموحة له)" },
   { value: "employee", label: "موظف", icon: UserCog, description: "حسب الصلاحيات المحددة" },
   { value: "viewer", label: "مشاهد", icon: Eye, description: "حسب الصلاحيات المحددة" },
   { value: "attendance_clerk", label: "مسجل الحضور", icon: UserCog, description: "تسجيل الحضور والانصراف فقط" },
 ];
+
+const INTRINSIC_ALL_BRANCH_ROLES = new Set(["production_development_manager"]);
 
 const exportColumns = [
   { header: "الاسم", key: "name", width: 20 },
@@ -201,10 +204,13 @@ export default function UsersPage() {
 
   const createUserMutation = useMutation({
     mutationFn: async (userData: typeof newUser) => {
+      const payload = INTRINSIC_ALL_BRANCH_ROLES.has(userData.role)
+        ? { ...userData, branchIds: undefined }
+        : userData;
       const res = await fetch("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(userData),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -269,7 +275,7 @@ export default function UsersPage() {
       if (data.username !== undefined) updateData.username = data.username;
       if (data.role !== undefined) updateData.role = data.role;
       if (data.password && data.password.trim() !== "") updateData.password = data.password;
-      if (data.branchIds !== undefined) updateData.branchIds = data.branchIds;
+      if (data.branchIds !== undefined && !INTRINSIC_ALL_BRANCH_ROLES.has(data.role || "")) updateData.branchIds = data.branchIds;
       
       const res = await fetch(`/api/users/${userId}`, {
         method: "PATCH",
@@ -915,7 +921,11 @@ export default function UsersPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
+                {INTRINSIC_ALL_BRANCH_ROLES.has(newUser.role) ? (
+                  <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800" data-testid="new-role-all-branches-note">
+                    هذا الدور يشمل جميع الفروع والمطابخ تلقائيًا، ولا يمكن تقييده بفروع محددة.
+                  </div>
+                ) : <div className="space-y-2">
                   <Label>الفروع المسموحة</Label>
                   <div className="border rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
                     <div className="flex items-center gap-2 pb-2 border-b">
@@ -952,7 +962,7 @@ export default function UsersPage() {
                   {newUser.branchIds.length > 0 && (
                     <p className="text-xs text-muted-foreground">تم اختيار {newUser.branchIds.length} فرع</p>
                   )}
-                </div>
+                </div>}
                 <Button type="submit" className="w-full h-11 sm:h-9" disabled={createUserMutation.isPending} data-testid="button-submit-user">
                   {createUserMutation.isPending ? (
                     <>
@@ -1204,7 +1214,9 @@ export default function UsersPage() {
                         </TableCell>
                         <TableCell className="text-muted-foreground font-mono text-xs hidden md:table-cell" dir="ltr">{user.username || "-"}</TableCell>
                         <TableCell className="text-muted-foreground text-xs sm:text-sm hidden lg:table-cell">
-                          {user.branchId === "all_branches" ? "🌐 جميع الفروع" : user.branchId ? branches.find(b => b.id === user.branchId)?.name || user.branchId : "-"}
+                          {INTRINSIC_ALL_BRANCH_ROLES.has(user.role) || user.branchId === "all_branches"
+                            ? "🌐 جميع الفروع والمطابخ"
+                            : user.branchId ? branches.find(b => b.id === user.branchId)?.name || user.branchId : "-"}
                         </TableCell>
                         <TableCell className="text-muted-foreground text-xs hidden xl:table-cell">{formatDate(user.createdAt)}</TableCell>
                         <TableCell>
@@ -1681,7 +1693,11 @@ export default function UsersPage() {
               />
               <p className="text-xs text-muted-foreground">اتركها فارغة إذا لم ترد تغيير كلمة المرور</p>
             </div>
-            <div className="space-y-2">
+            {INTRINSIC_ALL_BRANCH_ROLES.has(editUser.role) ? (
+              <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800" data-testid="edit-role-all-branches-note">
+                هذا الدور يشمل جميع الفروع والمطابخ تلقائيًا، ولا يمكن تقييده بفروع محددة.
+              </div>
+            ) : <div className="space-y-2">
               <Label>الفروع المسموحة</Label>
               <div className="border rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
                 <div className="flex items-center gap-2 pb-2 border-b">
@@ -1717,7 +1733,7 @@ export default function UsersPage() {
               {editUser.branchIds.length > 0 && (
                 <p className="text-xs text-muted-foreground">تم اختيار {editUser.branchIds.length} فرع</p>
               )}
-            </div>
+            </div>}
             <DialogFooter>
               <Button
                 type="button"

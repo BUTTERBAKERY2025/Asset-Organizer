@@ -5,6 +5,7 @@ import {
 } from "../shared/schema";
 import {
   getProductCatalogWriteAccess,
+  PRODUCT_CATALOG_ADDITIVE_WRITE_MODULE,
   PRODUCT_CATALOG_WRITE_MODULE,
 } from "../client/src/lib/product-catalog-permissions";
 
@@ -35,8 +36,9 @@ describe("product catalog permission contracts", () => {
     expect(actionsFor("central_kitchen_recipes")).toBeUndefined();
   });
 
-  it("keeps catalog writes owned by operations actions", () => {
+  it("allows additive product create/edit without broad operations access", () => {
     expect(PRODUCT_CATALOG_WRITE_MODULE).toBe("operations");
+    expect(PRODUCT_CATALOG_ADDITIVE_WRITE_MODULE).toBe("products");
 
     const readOnly = getProductCatalogWriteAccess(() => false);
     expect(readOnly).toEqual({ create: false, edit: false, delete: false });
@@ -45,5 +47,10 @@ describe("product catalog permission contracts", () => {
       module === "operations" && action === "create",
     );
     expect(operationsCreateOnly).toEqual({ create: true, edit: false, delete: false });
+
+    const productsEditOnly = getProductCatalogWriteAccess((module, action) =>
+      module === "products" && action === "edit",
+    );
+    expect(productsEditOnly).toEqual({ create: false, edit: true, delete: false });
   });
 });

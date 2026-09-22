@@ -150,7 +150,10 @@ export default function CentralKitchenOrdersPage() {
   const { branches, userBranchId, canSelectBranch } = useBranches();
   const { canView, canCreate, canEdit, canApprove } = usePermissions();
   const { user, isAdmin } = useAuth();
-  const canConfigureRouting = isAdmin || (user?.role === "operations_manager" && canView("central_kitchen_orders"));
+  const canConfigureRouting = isAdmin || (
+    ["operations_manager", "production_development_manager"].includes(user?.role || "") &&
+    canView("central_kitchen_orders")
+  );
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [branchFilter, setBranchFilter] = useState(userBranchId || "all");

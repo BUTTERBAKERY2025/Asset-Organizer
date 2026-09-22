@@ -41,6 +41,7 @@ const ROLE_KEYS: Record<string, string> = {
   employee: "roles.employee",
   viewer: "roles.viewer",
   attendance_clerk: "roles.attendanceClerk",
+  production_development_manager: "roles.productionDevelopmentManager",
 };
 
 interface NavItem {
@@ -232,7 +233,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     staleTime: 1000 * 60 * 60, // 1 hour - branches rarely change
   });
 
-  const availableBranches = isAdmin ? fetchedBranches : fetchedBranches.filter(b => 
+  const hasIntrinsicAllBranchAccess = user?.role === "production_development_manager";
+  const availableBranches = isAdmin || hasIntrinsicAllBranchAccess ? fetchedBranches : fetchedBranches.filter(b =>
     allowedBranches.some(ub => ub.branchId === b.id)
   );
 

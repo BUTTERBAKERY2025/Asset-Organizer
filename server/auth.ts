@@ -160,6 +160,11 @@ export const HR_SPECIALIST_PERMISSIONS: Record<string, string[]> = {
 // SCOPE is handled separately in getAllowedBranchIds / canAccessBranch; this map only
 // governs WHICH modules/actions are authorized. Must be merged into /api/my-permissions
 // too (see routes.ts) or the frontend sidebar/landing page won't match the backend.
+export const PRODUCTION_DEVELOPMENT_MANAGER_PERMISSIONS: Record<string, string[]> =
+  Object.fromEntries(ROLE_PERMISSION_TEMPLATES.production_development_manager.map(
+    (entry) => [entry.module, [...entry.actions]],
+  ));
+
 export const FINANCIAL_MANAGER_PERMISSIONS: Record<string, string[]> =
   Object.fromEntries(
     ((ROLE_PERMISSION_TEMPLATES as any).financial_manager || []).map(
@@ -787,7 +792,7 @@ export async function setupAuth(app: Express) {
       
       const allBranches = await allBranchesPromise;
       let filteredBranches: any[] = [];
-      if (user.role === "admin" || user.role === "financial_manager") {
+      if (user.role === "admin" || user.role === "financial_manager" || user.role === "production_development_manager") {
         // Financial Manager is a cross-branch role — sees every branch org-wide.
         filteredBranches = allBranches;
       } else if (user.role === "operations_manager") {
@@ -829,6 +834,13 @@ export async function setupAuth(app: Express) {
         }
       }
       
+      if (user.role === "production_development_manager") {
+        const merged = new Map<string, Set<string>>(permissions.map((p: any) => [p.module, new Set<string>(p.actions || [])]));
+        for (const [module, actions] of Object.entries(PRODUCTION_DEVELOPMENT_MANAGER_PERMISSIONS)) {
+          merged.set(module, new Set([...(merged.get(module) || []), ...actions]));
+        }
+        permissions = Array.from(merged, ([module, actions]) => ({ module, actions: [...actions] }));
+      }
       res.json({
         user: {
           ...user,
@@ -1115,6 +1127,23 @@ setInterval(() => {
   }
 }, 120_000);
 
+// Catalog writes have a narrow products grant as well as the legacy operations
+// grant. Do not grant the entire operations module to production management.
+export const requireProductWritePermission = (action: "create" | "edit"): RequestHandler =>
+  async (req, res, next) => {
+    const user = (req as any).currentUser;
+    if (!user) return res.status(401).json({ message: "غير مصرح" });
+    if (user.role === "viewer" || user.role === "attendance_clerk") {
+      return requirePermission("products", action)(req, res, next);
+    }
+    if (user.role === "admin" || (user.role === "production_development_manager"
+      && PRODUCTION_DEVELOPMENT_MANAGER_PERMISSIONS.products.includes(action))) return next();
+    const permissions = getCachedPermissions(user.id) || await storage.getUserPermissions(user.id);
+    if (permissions.some((permission: any) => permission.module === "products"
+      && Array.isArray(permission.actions) && permission.actions.includes(action))) return next();
+    return requirePermission("operations", action)(req, res, next);
+  };
+
 export const requireRole = (roles: string[]): RequestHandler => {
   return async (req, res, next) => {
     const user = (req as any).currentUser;
@@ -1186,6 +1215,13 @@ export const requirePermission = (module: string, action?: string): RequestHandl
       if (allowed && (action == null || allowed.includes(action))) {
         return next();
       }
+    }
+
+    if (user.role === "production_development_manager") {
+      const allowed = PRODUCTION_DEVELOPMENT_MANAGER_PERMISSIONS[module];
+      const methodActions: Record<string, string> = { GET: "view", HEAD: "view", OPTIONS: "view", POST: "create", PATCH: "edit", PUT: "edit", DELETE: "delete" };
+      const requiredAction = action ?? methodActions[req.method] ?? "delete";
+      if (allowed?.includes(requiredAction)) return next();
     }
 
     // Financial Manager role: action-aware auto-grant for finance/HR-read modules
@@ -1322,6 +1358,11 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
       }
     }
 
+    if (user.role === "production_development_manager") {
+      const allowed = PRODUCTION_DEVELOPMENT_MANAGER_PERMISSIONS[module];
+      if (allowed && actions.some((action) => allowed.includes(action))) return next();
+    }
+
     // Financial Manager: grant when ANY requested action is allowed for this module
     // (mirrors requirePermission above).
     if (user.role === "financial_manager") {
@@ -1390,7 +1431,7 @@ export async function canAccessBranch(req: any, branchId: string): Promise<boole
 
   // Financial Manager is a cross-branch role — can access every branch. Module-level
   // requirePermission still governs WHAT they can do; this only governs WHICH branch.
-  if (user.role === "financial_manager") return true;
+  if (user.role === "financial_manager" || user.role === "production_development_manager") return true;
 
   // Operations Manager: cross-branch BY DEFAULT, but if the admin explicitly
   // restricted the user to specific branches (user_branch_access rows exist),
@@ -1515,7 +1556,7 @@ export function getAllowedBranchIds(req: any): string[] | null {
   // Financial Manager: نطاق مالي على مستوى المنشأة — يرى ويعتمد عبر كل الفروع.
   // تبقى الوحدات مقيّدة بقالب صلاحياته (مالية + موارد بشرية للقراءة)، فالتوسّع هنا
   // على مستوى الفرع فقط لا على مستوى الوحدات.
-  if (user.role === "financial_manager") {
+  if (user.role === "financial_manager" || user.role === "production_development_manager") {
     return null; // كل الفروع
   }
 

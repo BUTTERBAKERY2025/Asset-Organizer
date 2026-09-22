@@ -1,6 +1,7 @@
 import type { ModuleAction, SystemModule } from "@shared/schema";
 
 export const PRODUCT_CATALOG_WRITE_MODULE: SystemModule = "operations";
+export const PRODUCT_CATALOG_ADDITIVE_WRITE_MODULE: SystemModule = "products";
 
 export interface ProductCatalogWriteAccess {
   create: boolean;
@@ -16,8 +17,12 @@ export function getProductCatalogWriteAccess(
   hasPermission: (module: SystemModule, action: ModuleAction) => boolean,
 ): ProductCatalogWriteAccess {
   return {
-    create: hasPermission(PRODUCT_CATALOG_WRITE_MODULE, "create"),
-    edit: hasPermission(PRODUCT_CATALOG_WRITE_MODULE, "edit"),
+    create:
+      hasPermission(PRODUCT_CATALOG_ADDITIVE_WRITE_MODULE, "create") ||
+      hasPermission(PRODUCT_CATALOG_WRITE_MODULE, "create"),
+    edit:
+      hasPermission(PRODUCT_CATALOG_ADDITIVE_WRITE_MODULE, "edit") ||
+      hasPermission(PRODUCT_CATALOG_WRITE_MODULE, "edit"),
     delete: hasPermission(PRODUCT_CATALOG_WRITE_MODULE, "delete"),
   };
 }

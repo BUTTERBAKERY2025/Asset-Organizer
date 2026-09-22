@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -66,6 +67,7 @@ export default function FinishedGoodsInventoryPage() {
   const queryClient = useQueryClient();
   const { itemsPerPage, getPageItems } = usePagination(15);
   const { user } = useAuth();
+  const { canEdit } = usePermissions();
 
   const { data: branches } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -159,6 +161,7 @@ export default function FinishedGoodsInventoryPage() {
   const categories = Array.from(new Set(inventory?.map(i => i.productCategory).filter(Boolean))) as string[];
 
   const handleTransfer = () => {
+    if (!canEdit("production")) return;
     if (!selectedItem) return;
     const qty = parseInt(transferQuantity, 10);
     if (!qty || qty <= 0 || qty > selectedItem.quantity) {
@@ -402,7 +405,7 @@ export default function FinishedGoodsInventoryPage() {
                         <TableCell className="hidden sm:table-cell text-xs sm:text-sm">{item.unit}</TableCell>
                         <TableCell className="hidden md:table-cell text-xs sm:text-sm">{item.productionDate}</TableCell>
                         <TableCell>
-                          <Button
+                           {canEdit("production") && <Button
                             size="sm"
                             onClick={() => openTransferDialog(item)}
                             disabled={item.quantity <= 0}
@@ -412,7 +415,7 @@ export default function FinishedGoodsInventoryPage() {
                             <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
                             <span className="hidden sm:inline">تحويل</span>
                             <span className="sm:hidden">نقل</span>
-                          </Button>
+                           </Button>}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -479,7 +482,7 @@ export default function FinishedGoodsInventoryPage() {
           </CardContent>
         </Card>
 
-        <Dialog open={showTransferDialog} onOpenChange={setShowTransferDialog}>
+        {canEdit("production") && <Dialog open={showTransferDialog} onOpenChange={setShowTransferDialog}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>تحويل منتج</DialogTitle>
@@ -554,7 +557,7 @@ export default function FinishedGoodsInventoryPage() {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
+        </Dialog>}
 
         <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
           <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">

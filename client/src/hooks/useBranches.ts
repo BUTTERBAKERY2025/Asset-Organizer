@@ -4,6 +4,7 @@ import type { Branch } from "@shared/schema";
 
 export function useBranches() {
   const { user, isAdmin } = useAuth();
+  const hasIntrinsicAllBranchAccess = user?.role === "production_development_manager";
 
   // Server now filters branches based on user role, so we get pre-filtered data
   const { data: branches = [], isLoading } = useQuery<Branch[]>({
@@ -21,12 +22,12 @@ export function useBranches() {
 
   // For non-admins with single branch access, use that branch
   // For non-admins with multiple branches, userBranchId should be null to allow selection
-  const userBranchId = isAdmin ? null : (branches.length === 1 ? branches[0]?.id : null);
+  const userBranchId = isAdmin || hasIntrinsicAllBranchAccess ? null : (branches.length === 1 ? branches[0]?.id : null);
 
   // User can select branch if:
   // 1. They are admin, OR
   // 2. They have access to more than one branch
-  const canSelectBranch = isAdmin || branches.length > 1;
+  const canSelectBranch = isAdmin || hasIntrinsicAllBranchAccess || branches.length > 1;
 
   // defaultBranchId: For single-branch users, use their branch; otherwise null (allow "all")
   const defaultBranchId = branches.length === 1 ? branches[0]?.id : null;
