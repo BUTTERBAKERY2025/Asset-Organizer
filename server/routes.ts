@@ -135,6 +135,7 @@ import { sendWhatsAppMessage, isTwilioConfigured } from "./twilio-service";
 import { recipientsSchema as reportRecipientsSchema } from "./scheduler";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertContractMilestoneSchema, insertContractVariationSchema, insertContractGuaranteeSchema, insertContractTemplateSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
+import { registerKitchenRoutingRoutes, kitchenActionAllowed, getKitchenRouting } from "./central-kitchen-routing";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS, BRANCH_MANAGER_CENTRAL_KITCHEN_PERMISSIONS, hasCrossBranchHrReadAccess } from "./auth";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
@@ -7812,8 +7813,10 @@ export async function registerRoutes(
     const branchRows = await db.select({ id: branches.id, name: branches.name }).from(branches)
       .where(inArray(branches.id, [order.requestBranchId, order.centralKitchenId]));
     const branchNames = new Map(branchRows.map((branch) => [branch.id, branch.name]));
+    const routing = await getKitchenRouting(db, order.centralKitchenId);
     return {
       ...order,
+      routingWarning: routing.hasKitchenResponsible ? null : "لم يتم تعيين مسؤول أو نائب مؤهل للمطبخ؛ تم تنبيه العمليات",
       orderingSchedule: getOrderSchedule(order),
       requestBranchName: branchNames.get(order.requestBranchId) || null,
       centralKitchenName: branchNames.get(order.centralKitchenId) || null,
@@ -8413,6 +8416,8 @@ export async function registerRoutes(
     },
   );
 
+  registerKitchenRoutingRoutes(app, db, isAuthenticated, getCurrentUser, canAccessBranch);
+
   app.get(
     "/api/central-kitchen-orders/:id",
     isAuthenticated,
@@ -8423,10 +8428,15 @@ export async function registerRoutes(
       try {
         const detail = await getCentralKitchenOrderDetail(id.data);
         if (!detail) return res.status(404).json({ error: "الطلب غير موجود" });
-        if (!(await canAccessCentralKitchenOrder(req, detail))) {
+        if (!(await canAccessCentralKitchenOrder(req, detail as { requestBranchId: string; centralKitchenId: string }))) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا الطلب" });
         }
-        return res.json(detail);
+        const allowedActions = Object.fromEntries(await Promise.all(
+          [["approve", "requested"], ["prepare", "approved"], ["dispatch", "prepared"], ["receive", "dispatched"]]
+            .map(async ([action, status]) => [action, (detail as any).status === status
+              && await kitchenActionAllowed(db, getCurrentUser(req).id, detail, action)]),
+        ));
+        return res.json({ ...detail, allowedActions });
       } catch (error) {
         console.error("Error fetching central kitchen order:", error);
         return res.status(500).json({ error: "فشل في جلب طلب المطبخ المركزي" });
@@ -8636,6 +8646,10 @@ export async function registerRoutes(
       const scopedBranchId = targetStatus === "received"
         ? order.requestBranchId
         : order.centralKitchenId;
+      const routingAction = ({ approved: "approve", prepared: "prepare", dispatched: "dispatch", received: "receive" } as Record<string, string>)[targetStatus];
+      if (!(await kitchenActionAllowed(db, user.id, order, routingAction))) {
+        return res.status(403).json({ error: "لا تملك صلاحية الإجراء أو تكليف التوجيه الحالي" });
+      }
       if (!(await canAccessBranch(req, scopedBranchId))) {
         return res.status(403).json({ error: "ليس لديك صلاحية لتنفيذ هذه الخطوة لهذا الفرع" });
       }
@@ -8742,6 +8756,9 @@ export async function registerRoutes(
       }[eventType];
 
       const transitioned = await db.transaction(async (tx) => {
+        if (!(await kitchenActionAllowed(tx, user.id, order, routingAction))) {
+          throw new CentralKitchenLiveError("تم سحب صلاحية الإجراء أو التكليف", 403);
+        }
         // Match linked-batch creation's order lock before any stock commitment.
         const [lockedOrder] = await tx.select().from(centralKitchenOrders)
           .where(eq(centralKitchenOrders.id, id.data)).for("update");

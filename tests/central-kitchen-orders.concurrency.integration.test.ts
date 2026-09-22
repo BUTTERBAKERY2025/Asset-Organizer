@@ -128,6 +128,14 @@ let fixture!: Fixture;
 const ISOLATED_TABLES = [
   "branches",
   "users",
+  "user_permissions",
+  "permissions",
+  "role_permissions",
+  "user_assignments",
+  "user_permission_overrides",
+  "user_branch_access",
+  "system_notifications",
+  "central_kitchen_routing",
   "products",
   "warehouse_items",
   "central_kitchen_orders",
@@ -359,6 +367,13 @@ describe.sequential(
         { ...requestUser },
         { ...kitchenUser },
         { ...outsiderUser },
+      ]);
+      await databaseState.db.insert(schema.userPermissions).values([requestUser, kitchenUser, outsiderUser].map(user => ({
+        userId: user.id, module: "central_kitchen_orders", actions: ["view", "create", "edit", "approve"],
+      })));
+      await databaseState.db.insert(schema.centralKitchenRouting).values([
+        { branchId: kitchenBranchId, responsibleUserId: kitchenUser.id },
+        { branchId: requestBranchId, receiverUserId: requestUser.id },
       ]);
       await databaseState.db.insert(products).values({
         id: productId,

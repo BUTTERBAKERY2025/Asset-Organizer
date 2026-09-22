@@ -745,6 +745,11 @@ export function startScheduler() {
   console.log(`[scheduler] starting (tick=${TICK_MS}ms, twilio=${isTwilioConfigured() ? "configured" : "disabled"})`);
   setTimeout(tick, 5000);
   setInterval(tick, TICK_MS);
+  const kitchenSweep = () => import("./central-kitchen-notifications")
+    .then(m => m.escalateOverdueKitchenOrders(db))
+    .catch(error => console.error("[scheduler] kitchen overdue escalation failed:", error));
+  setTimeout(kitchenSweep, 15_000);
+  setInterval(kitchenSweep, TICK_MS);
   // إشعارات الجوال المجدولة: مسح دوري كل 5 دقائق لإرسال ما حان وقته
   const pushSweep = () =>
     import("./push-service")

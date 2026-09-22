@@ -227,6 +227,13 @@ describe.sequential("central kitchen database-backed handler pilot", () => {
       { id: outsiderBranchId, name: "CK integration outsider" },
     ]);
     await databaseState.db.insert(users).values([requestUser, kitchenUser, outsiderUser]);
+    await databaseState.db.insert(schema.userPermissions).values([requestUser, kitchenUser, outsiderUser].map(user => ({
+      userId: user.id, module: "central_kitchen_orders", actions: ["view", "create", "edit", "approve"],
+    })));
+    await databaseState.db.insert(schema.centralKitchenRouting).values([
+      { branchId: kitchenBranchId, responsibleUserId: kitchenUser.id },
+      { branchId: requestBranchId, receiverUserId: requestUser.id },
+    ]);
 
     const idResult = await databaseState.db.execute(sql`
       select greatest(
@@ -334,6 +341,7 @@ describe.sequential("central kitchen database-backed handler pilot", () => {
           warehouseItemId: fixture.inactiveWarehouseId,
           productName: "CK integration inactive warehouse",
           requestedQuantity: 1,
+          reportedAvailableQuantity: 0,
           unit: "tray",
         }],
       },
@@ -351,6 +359,7 @@ describe.sequential("central kitchen database-backed handler pilot", () => {
           productId: fixture.inactiveProductId,
           productName: "CK integration inactive product",
           requestedQuantity: 1,
+          reportedAvailableQuantity: 0,
           unit: "tray",
         }],
       },
@@ -368,6 +377,7 @@ describe.sequential("central kitchen database-backed handler pilot", () => {
           productId: fixture.sharedCatalogId + 999,
           productName: "Missing product",
           requestedQuantity: 1,
+          reportedAvailableQuantity: 0,
           unit: "tray",
         }],
       },
@@ -385,6 +395,7 @@ describe.sequential("central kitchen database-backed handler pilot", () => {
           productId: fixture.sharedCatalogId,
           productName: "Stale product name",
           requestedQuantity: 1,
+          reportedAvailableQuantity: 0,
           unit: "tray",
         }],
       },
@@ -459,12 +470,14 @@ describe.sequential("central kitchen database-backed handler pilot", () => {
           productId: fixture.sharedCatalogId,
           productName: "CK integration product",
           requestedQuantity: 10,
+          reportedAvailableQuantity: 0,
           unit: "tray",
         },
         {
           warehouseItemId: fixture.sharedCatalogId,
           productName: "CK integration warehouse original",
           requestedQuantity: 5,
+          reportedAvailableQuantity: 0,
           unit: "tray",
         },
       ],

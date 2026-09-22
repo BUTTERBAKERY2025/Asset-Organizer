@@ -16,6 +16,11 @@
 
 ## Ordered release
 
+- [ ] Routing release additionally requires additive migrations **036 → 037 → 038** before this application version starts. Migration 038 adds only per-branch routing; it does not assign a default kitchen, populate people, or change stock. An unconfigured kitchen permits requests and alerts eligible operations managers.
+- [ ] 038 was applied only to the Replit development database with the database skill. The external Render/Supabase production schema remains an operator deployment prerequisite; it was not modified. Do not assume Replit Publish migrates an external database.
+- [ ] Verify `central_kitchen_routing` foreign keys and distinct-person constraints; configure responsible/deputy/receiver explicitly after deploy. Existing open orders use current routing, not historical inferred assignments.
+- [ ] Overdue notifications use the Saudi needed date/time (07:00 when time is absent), only for open orders, with one stable notification key per order. Closed historical orders are excluded.
+
 - [ ] Review and apply **031 → 032 → 033 → 034 → 035** in order; do not skip or concatenate migrations.
 - [ ] Verify each migration commits once and the next migration starts only after the previous one succeeds.
 - [ ] For Replit-managed databases, use the approved Publish flow for production schema changes. **Do not run `db:push` as a release step**, and do not perform direct production DDL.

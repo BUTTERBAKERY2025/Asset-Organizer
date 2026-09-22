@@ -61,3 +61,4 @@
 - [Financial aggregate precision](financial-aggregate-precision.md) — promote real inputs before SUM; casting the aggregate afterward cannot recover lost cents.
 - [Branch availability declarations](kitchen-branch-declaration.md) — explicit manual on-hand entry is information for the kitchen, not a stock adjustment or automatic net demand.
 - [Mobile keyboard dialogs](mobile-dialog-keyboard.md) — dvh and sticky footers alone do not prevent iPhone keyboards hiding actions; test visual-viewport changes.
+- [Kitchen routing policy](kitchen-routing-policy.md) — explicit kitchen choice every request; operations get exception alerts without losing intervention authority.

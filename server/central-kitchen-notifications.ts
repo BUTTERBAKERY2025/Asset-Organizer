@@ -1,6 +1,9 @@
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { getKitchenRouting, routingPeople, routingPermission } from "./central-kitchen-routing";
 import {
   systemNotifications,
+  centralKitchenOrders,
+  centralKitchenOrderEvents,
   userBranchAccess,
   userPermissions,
   users,
@@ -16,9 +19,13 @@ export type CentralKitchenNotificationEvent =
   | "dispatched"
   | "received"
   | "received_discrepancy"
+  | "missing_responsible"
+  | "overdue"
   | "discrepancy_resolved";
 
 const EVENT_COPY: Record<CentralKitchenNotificationEvent, { title: string; content: string; priority: number }> = {
+  missing_responsible: { title: "طلب دون مسؤول مطبخ", content: "يرجى تعيين مسؤول أو نائب مؤهل للمطبخ.", priority: 4 },
+  overdue: { title: "طلب مطبخ متأخر", content: "تجاوز الطلب موعد الاحتياج ولم يتم استلامه.", priority: 4 },
   created: { title: "طلب جديد للمطبخ المركزي", content: "وصل طلب فرع جديد ويحتاج إلى المراجعة.", priority: 3 },
   edited: { title: "تم تعديل طلب المطبخ المركزي", content: "عدّل الفرع الطالب بيانات طلب قائم.", priority: 2 },
   cancelled: { title: "تم إلغاء طلب المطبخ المركزي", content: "ألغى الفرع الطالب طلباً قائماً.", priority: 3 },
@@ -35,7 +42,6 @@ export function canReceiveCentralKitchenNotification(
   permissionActions: string[] | null,
 ): boolean {
   return role === "admin"
-    || role === "operations_manager"
     || role === "branch_manager"
     || !!permissionActions?.includes("view");
 }
@@ -69,7 +75,7 @@ export function buildCentralKitchenNotificationPayload(input: {
     autoSource: "central_kitchen_order",
     accessModule: "central_kitchen_orders",
     accessBranchIds: [input.branchId],
-    dedupeKey: `central-kitchen-event:${input.eventId}`,
+    dedupeKey: `central-kitchen-event:${input.eventId}:${input.event}`,
     createdBy: input.actorId,
   } as const;
 }
@@ -100,8 +106,7 @@ export async function resolveCentralKitchenNotificationRecipients(
     .where(and(
       eq(users.isActive, "active"),
       or(
-        eq(users.role, "admin"),
-        eq(users.role, "operations_manager"),
+        ...(candidateUserIds ? [eq(users.role, "admin"), eq(users.role, "operations_manager")] : []),
         inArray(users.branchId, branchIds),
         inArray(users.id, branchUsers),
       ),
@@ -118,20 +123,33 @@ export async function resolveCentralKitchenNotificationRecipients(
 
 export async function filterAuthorizedCentralKitchenNotificationUsers(
   executor: DatabaseExecutor,
-  notification: Pick<SystemNotification, "accessModule" | "accessBranchIds">,
+  notification: Pick<SystemNotification, "accessModule" | "accessBranchIds"> & Partial<SystemNotification>,
   candidateUserIds: string[],
 ): Promise<string[]> {
   if (notification.accessModule !== "central_kitchen_orders") return candidateUserIds;
-  return resolveCentralKitchenNotificationRecipients(
-    executor,
-    notification.accessBranchIds || [],
-    candidateUserIds,
-  );
+  let event = notification.dedupeKey?.split(":").at(-1) as CentralKitchenNotificationEvent;
+  const orderId = Number(notification.buttonAction?.match(/orderId=(\d+)/)?.[1]);
+  if (orderId && !EVENT_COPY[event]) {
+    const eventId = Number(notification.dedupeKey?.match(/^central-kitchen-event:(\d+)$/)?.[1]);
+    if (eventId) {
+      const [row] = await executor.select().from(centralKitchenOrderEvents)
+        .where(and(eq(centralKitchenOrderEvents.id, eventId), eq(centralKitchenOrderEvents.orderId, orderId)));
+      event = row?.eventType as CentralKitchenNotificationEvent;
+    }
+  }
+  if (orderId && EVENT_COPY[event]) {
+    const [order] = await executor.select().from(centralKitchenOrders).where(eq(centralKitchenOrders.id, orderId));
+    if (!order) return [];
+    const recipients = await routedRecipients(executor, order, event);
+    return candidateUserIds.filter(id => recipients.includes(id));
+  }
+  // Unrecognized legacy rows cannot safely prove a current assignment.
+  return [];
 }
 
 export async function canUserAccessCentralKitchenNotification(
   executor: DatabaseExecutor,
-  notification: Pick<SystemNotification, "accessModule" | "accessBranchIds" | "targetUserIds">,
+  notification: Pick<SystemNotification, "accessModule" | "accessBranchIds" | "targetUserIds"> & Partial<SystemNotification>,
   userId: string,
 ): Promise<boolean> {
   if (notification.accessModule !== "central_kitchen_orders") return true;
@@ -155,13 +173,64 @@ export async function insertCentralKitchenNotification(
     actorId: string;
   },
 ): Promise<number | null> {
-  const recipients = await resolveCentralKitchenNotificationRecipients(tx, [input.branchId]);
-  if (!recipients.length) return null;
+  const [order] = await tx.select().from(centralKitchenOrders).where(eq(centralKitchenOrders.id, input.orderId));
+  if (!order) throw new Error("Notification order not found");
+  let escalationId: number | null = null;
+  if (input.event === "created" && !(await getKitchenRouting(tx, order.centralKitchenId)).hasKitchenResponsible) {
+    escalationId = await insertCentralKitchenNotification(tx, { ...input, event: "missing_responsible", branchId: order.centralKitchenId });
+  }
+  const recipients = await routedRecipients(tx, order, input.event);
+  if (!recipients.length) return escalationId;
   const [created] = await tx.insert(systemNotifications).values(
     buildCentralKitchenNotificationPayload({ ...input, recipientIds: recipients }),
   ).onConflictDoNothing({ target: systemNotifications.dedupeKey })
     .returning({ id: systemNotifications.id });
-  return created?.id || null;
+  return created?.id || escalationId;
+}
+
+export async function routedRecipients(tx: DatabaseExecutor, order: any, event: CentralKitchenNotificationEvent): Promise<string[]> {
+  const kitchen = await getKitchenRouting(tx, order.centralKitchenId);
+  const kitchenIds = [kitchen.responsibleUserId, kitchen.deputyUserId].filter(Boolean) as string[];
+  const ops = async () => (await routingPeople(tx)).filter((p: any) =>
+    p.role === "operations_manager" && routingPermission(p.role, p.actions || [], "view")).map((p: any) => p.id);
+  if (event === "overdue" && ["received", "cancelled"].includes(order.status)) return [];
+  if (["missing_responsible", "overdue"].includes(event)) return ops();
+  if (["created", "edited", "cancelled", "received"].includes(event)) return kitchenIds;
+  if (event === "received_discrepancy") return Array.from(new Set([...kitchenIds, ...await ops()]));
+  const branchRouting = await getKitchenRouting(tx, order.requestBranchId);
+  const people = await routingPeople(tx, order.requestBranchId);
+  return people.filter((p: any) => routingPermission(p.role, p.actions || [], "view")
+    && (p.id === order.createdBy || p.role === "branch_manager"
+      || (["prepared", "dispatched"].includes(event) && p.id === branchRouting.receiverUserId)))
+    .map((p: any) => p.id);
+}
+
+// Only open orders qualify. A stable per-order key survives scheduler restarts,
+// retries and multiple server instances; creation/date edits do not spam ops.
+export async function escalateOverdueKitchenOrders(db: any) {
+  const ids = await db.transaction(async (tx: any) => {
+    const orders = await tx.select().from(centralKitchenOrders).where(and(
+      inArray(centralKitchenOrders.status, ["requested", "approved", "prepared", "dispatched"]),
+      sql`(${centralKitchenOrders.neededDate}::date +
+        (CASE WHEN ${centralKitchenOrders.neededTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+          THEN ${centralKitchenOrders.neededTime} ELSE '07:00' END)::time)
+        < (now() AT TIME ZONE 'Asia/Riyadh')`,
+    )).for("update", { skipLocked: true });
+    const inserted: number[] = [];
+    for (const order of orders) {
+      const recipients = await routedRecipients(tx, order, "overdue");
+      if (!recipients.length) continue;
+      const [notification] = await tx.insert(systemNotifications).values({
+        ...buildCentralKitchenNotificationPayload({ eventId: order.id, orderId: order.id, event: "overdue",
+          branchId: order.centralKitchenId, actorId: order.createdBy, recipientIds: recipients }),
+        dedupeKey: `central-kitchen-overdue:${order.id}:overdue`,
+      }).onConflictDoNothing({ target: systemNotifications.dedupeKey }).returning({ id: systemNotifications.id });
+      if (notification) inserted.push(notification.id);
+    }
+    return inserted;
+  });
+  for (const id of ids) dispatchCentralKitchenNotificationAfterCommit(id);
+  return ids.length;
 }
 
 export function dispatchCentralKitchenNotificationAfterCommit(notificationId: number | null): void {

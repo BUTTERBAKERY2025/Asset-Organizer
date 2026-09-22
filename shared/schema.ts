@@ -12993,6 +12993,18 @@ export const pushVapidConfig = pgTable("push_vapid_config", {
 });
 
 // ===== Central kitchen branch orders (workflow only; no inventory posting) =====
+export const centralKitchenRouting = pgTable("central_kitchen_routing", {
+  branchId: varchar("branch_id").primaryKey().references(() => branches.id),
+  responsibleUserId: varchar("responsible_user_id").references(() => users.id),
+  deputyUserId: varchar("deputy_user_id").references(() => users.id),
+  receiverUserId: varchar("receiver_user_id").references(() => users.id),
+  updatedBy: varchar("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  check("central_kitchen_routing_distinct", sql`${table.responsibleUserId} IS DISTINCT FROM ${table.deputyUserId} OR ${table.responsibleUserId} IS NULL`),
+  check("central_kitchen_routing_receiver_distinct", sql`(${table.receiverUserId} IS NULL OR ${table.responsibleUserId} IS NULL OR ${table.receiverUserId} <> ${table.responsibleUserId}) AND (${table.receiverUserId} IS NULL OR ${table.deputyUserId} IS NULL OR ${table.receiverUserId} <> ${table.deputyUserId})`),
+]);
+
 export const centralKitchenOrders = pgTable("central_kitchen_orders", {
   id: serial("id").primaryKey(),
   orderNumber: text("order_number").notNull().unique(),

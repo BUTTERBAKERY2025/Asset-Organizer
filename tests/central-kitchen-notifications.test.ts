@@ -11,7 +11,7 @@ describe("central kitchen lifecycle notifications", () => {
     expect(canReceiveCentralKitchenNotification("employee", ["edit"])).toBe(false);
     expect(canReceiveCentralKitchenNotification("employee", null)).toBe(false);
     expect(canReceiveCentralKitchenNotification("branch_manager", null)).toBe(true);
-    expect(canReceiveCentralKitchenNotification("operations_manager", null)).toBe(true);
+    expect(canReceiveCentralKitchenNotification("operations_manager", null)).toBe(false);
     expect(canReceiveCentralKitchenNotification("admin", null)).toBe(true);
   });
 
@@ -30,7 +30,7 @@ describe("central kitchen lifecycle notifications", () => {
       targetUserIds: ["kitchen-user"],
       accessModule: "central_kitchen_orders",
       accessBranchIds: ["kitchen-a"],
-      dedupeKey: "central-kitchen-event:91",
+      dedupeKey: "central-kitchen-event:91:created",
       buttonAction: "/central-kitchen-orders?orderId=42",
       title: "طلب جديد للمطبخ المركزي",
       showOnce: true,
