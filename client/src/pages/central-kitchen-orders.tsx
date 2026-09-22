@@ -19,6 +19,12 @@ import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { isKitchenOrderDraftValid, isValidKitchenQuantity, normalizeReportedAvailableQuantity, OrderLineEditor, type KitchenOrderDraftLine } from "@/components/central-kitchen/order-line-editor";
 import { LinkedBatches } from "@/components/central-kitchen/linked-batches";
+import {
+  matchesOrderQueueStage,
+  matchesSaudiNeededDate,
+  queueOrderNeedsAttention,
+  type OrderQueueStage,
+} from "@/components/central-kitchen/order-queue";
 import { OrderNotificationsOptIn } from "@/components/central-kitchen/order-notifications-opt-in";
 import { useVisualViewportDialog } from "@/components/central-kitchen/use-visual-viewport-dialog";
 import { DailyOrderingNotice, LateSubmissionBadge, OrderScheduleNotice, useKitchenOrderingPolicy } from "@/components/central-kitchen/ordering-schedule";
@@ -35,8 +41,8 @@ import {
   parseCentralKitchenInventoryModeFilter,
 } from "@shared/central-kitchen-next-step";
 import {
-  AlertTriangle, Check, ChevronLeft, Factory, Filter, Loader2, PackagePlus, Plus, Printer,
-  RefreshCw, Search, Settings, ShieldCheck, Truck,
+  AlertTriangle, BarChart3, Check, ChevronLeft, Factory, Loader2, PackagePlus, Plus, Printer,
+  RefreshCw, Search, Settings, ShieldCheck, SlidersHorizontal, Truck, X,
 } from "lucide-react";
 
 type Routing = {
@@ -114,6 +120,7 @@ const CENTRAL_KITCHEN_STATUSES = ["requested", "approved", "prepared", "dispatch
 type CentralKitchenStatusFilter = (typeof CENTRAL_KITCHEN_STATUSES)[number];
 const INVENTORY_MODES = ["real", "shadow", "unknown"] as const;
 type InventoryModeFilter = (typeof INVENTORY_MODES)[number];
+type OrderStage = OrderQueueStage;
 const emptyLine = (): DraftItem => ({ productName: "", unit: "قطعة", requestedQuantity: "1", reportedAvailableQuantity: "", notes: "" });
 const sourceLabel = (source: "product" | "warehouse") => source === "warehouse" ? "المستودع" : "المنتجات";
 const identitySource = (value: { productId?: string | number | null; warehouseItemId?: string | number | null }) =>
@@ -145,6 +152,7 @@ const errorStatus = (error: unknown): number | null => {
   const match = /^(\d{3}):/.exec(message);
   return match ? Number(match[1]) : null;
 };
+const isOpenDiscrepancy = (order: KitchenOrder) => order.discrepancyStatus === "open";
 
 export default function CentralKitchenOrdersPage() {
   const { branches, userBranchId, canSelectBranch } = useBranches();
@@ -157,13 +165,23 @@ export default function CentralKitchenOrdersPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [branchFilter, setBranchFilter] = useState(userBranchId || "all");
-  const [statusFilter, setStatusFilter] = useState<CentralKitchenStatusFilter | "all">(() => readFilterFromUrl("status", CENTRAL_KITCHEN_STATUSES));
+  const initialStatus = readFilterFromUrl("status", CENTRAL_KITCHEN_STATUSES);
+  const [stage, setStage] = useState<OrderStage>(() => {
+    const urlStage = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("stage");
+    if (urlStage && ["attention", "requested", "approved", "prepared", "dispatched", "archive", "all"].includes(urlStage)) return urlStage as OrderStage;
+    return initialStatus === "all" ? "attention" : initialStatus === "received" || initialStatus === "cancelled" ? "archive" : initialStatus;
+  });
   const [inventoryModeFilter, setInventoryModeFilter] = useState<InventoryModeFilter | "all">(() => readFilterFromUrl("inventoryMode", INVENTORY_MODES));
   const [search, setSearch] = useState("");
+  const [kitchenFilter, setKitchenFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [newOrdersNotice, setNewOrdersNotice] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const createDialogStyle = useVisualViewportDialog({ open: createOpen, maxHeight: 820, viewportFraction: 0.94 });
   const [detailId, setDetailId] = useState<string | number | null>(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [actionNotes, setActionNotes] = useState("");
   const [pilotDays, setPilotDays] = useState("30");
   const [draft, setDraft] = useState({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: "", neededTime: "07:00", notes: "", items: [emptyLine()] });
@@ -194,9 +212,13 @@ export default function CentralKitchenOrdersPage() {
       const params = new URLSearchParams(window.location.search);
       const orderId = params.get("orderId");
       const status = params.get("status")?.trim().toLowerCase() || null;
+      const urlStage = params.get("stage")?.trim().toLowerCase() || null;
       const inventoryMode = params.get("inventoryMode")?.trim().toLowerCase() || null;
       setDetailId(orderId);
-      setStatusFilter(isCentralKitchenStatus(status) ? status : "all");
+      setDetailDialogOpen(Boolean(orderId));
+      setStage(urlStage && ["attention", "requested", "approved", "prepared", "dispatched", "archive", "all"].includes(urlStage)
+        ? urlStage as OrderStage
+        : isCentralKitchenStatus(status) ? (status === "received" || status === "cancelled" ? "archive" : status) : "attention");
       setInventoryModeFilter(isInventoryMode(inventoryMode) ? inventoryMode : "all");
       if (!orderId) setActionNotes("");
     };
@@ -207,11 +229,10 @@ export default function CentralKitchenOrdersPage() {
   const listUrl = useMemo(() => {
     const params = new URLSearchParams();
     if (branchFilter !== "all") params.set("branchId", branchFilter);
-    if (statusFilter !== "all") params.set("status", statusFilter);
     const string = params.toString();
     return `/api/central-kitchen-orders${string ? `?${string}` : ""}`;
-  }, [branchFilter, statusFilter]);
-  const ordersQuery = useQuery<KitchenOrder[]>({ queryKey: [listUrl] });
+  }, [branchFilter]);
+  const ordersQuery = useQuery<KitchenOrder[]>({ queryKey: [listUrl], refetchInterval: 30_000 });
   const metricsUrl = `/api/central-kitchen-orders/pilot-metrics?days=${pilotDays}${branchFilter !== "all" ? `&branchId=${encodeURIComponent(branchFilter)}` : ""}`;
   const metricsQuery = useQuery<PilotMetrics>({ queryKey: [metricsUrl] });
   const productsQuery = useQuery<ProductOption[]>({
@@ -276,11 +297,34 @@ export default function CentralKitchenOrdersPage() {
     for (const kitchen of centralKitchens) merged.set(kitchen.id, kitchen);
     return Array.from(merged.values());
   }, [branches, centralKitchens]);
+  const knownOrderIds = useRef<Set<string> | null>(null);
+  const knownListUrl = useRef(listUrl);
+  useEffect(() => {
+    if (!ordersQuery.data) return;
+    const nextIds = new Set(ordersQuery.data.map(order => String(order.id)));
+    if (knownListUrl.current !== listUrl) {
+      knownListUrl.current = listUrl;
+      knownOrderIds.current = nextIds;
+      return;
+    }
+    if (knownOrderIds.current) {
+      const added = Array.from(nextIds).filter(id => !knownOrderIds.current?.has(id)).length;
+      if (added) setNewOrdersNotice(current => current + added);
+    }
+    knownOrderIds.current = nextIds;
+  }, [listUrl, ordersQuery.data]);
+  const stageCounts = useMemo(() => {
+    const orders = filterCentralKitchenOrdersByInventoryMode(ordersQuery.data || [], inventoryModeFilter);
+    const count = (value: OrderStage) => orders.filter(order => matchesOrderQueueStage(order, value)).length;
+    return { attention: count("attention"), requested: count("requested"), approved: count("approved"), prepared: count("prepared"), dispatched: count("dispatched"), archive: count("archive"), all: count("all") };
+  }, [ordersQuery.data, inventoryModeFilter]);
   const filtered = useMemo(() => filterCentralKitchenOrdersByInventoryMode(ordersQuery.data || [], inventoryModeFilter).filter(order => {
     const term = search.trim().toLowerCase();
     const matchesSearch = !term || [order.orderNumber, order.requestBranchName, order.centralKitchenName].some(value => value?.toLowerCase().includes(term));
-    return matchesSearch;
-  }), [ordersQuery.data, search, inventoryModeFilter]);
+    const matchesKitchen = kitchenFilter === "all" || String(order.centralKitchenId) === kitchenFilter;
+    const matchesDate = matchesSaudiNeededDate(order, dateFilter as "all" | "today" | "past" | "future");
+    return matchesOrderQueueStage(order, stage) && matchesSearch && matchesKitchen && matchesDate;
+  }).sort((a, b) => Number(queueOrderNeedsAttention(b)) - Number(queueOrderNeedsAttention(a)) || String(a.neededDate || "").localeCompare(String(b.neededDate || ""))), [ordersQuery.data, search, inventoryModeFilter, kitchenFilter, dateFilter, stage]);
   const refresh = () => queryClient.invalidateQueries({ predicate: query => typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/central-kitchen-orders") });
   const refreshNotifications = () => queryClient.invalidateQueries({ predicate: query => query.queryKey[0] === "/api/active-notifications" || query.queryKey[0] === "/api/system-notifications/my-reads" });
 
@@ -311,7 +355,7 @@ export default function CentralKitchenOrdersPage() {
     onSuccess: (order) => {
       toast({ title: "تم إنشاء طلب المطبخ", description: `تم تسجيل الطلب ${order.orderNumber || ""}${order.orderingSchedule?.isLate ? " — أُرسل بعد الموعد؛ يرجى التنسيق مع المطبخ." : ""}` });
       createAttemptRef.current = null;
-        setCreateOpen(false); openDetail(order.id); setDraft({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: "", neededTime: "07:00", notes: "", items: [emptyLine()] }); refresh(); refreshNotifications();
+        setCreateOpen(false); openFullDetail(order.id); setDraft({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: "", neededTime: "07:00", notes: "", items: [emptyLine()] }); refresh(); refreshNotifications();
     },
     onError: (error) => toast({ title: "تعذر إنشاء الطلب", description: error instanceof Error ? error.message : "تحقق من البيانات وحاول مجدداً.", variant: "destructive" }),
   });
@@ -348,8 +392,17 @@ export default function CentralKitchenOrdersPage() {
       window.history.pushState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
     }
   };
+  const selectDetail = (id: string | number) => {
+    openDetail(id);
+    if (typeof window !== "undefined" && !window.matchMedia("(min-width: 1024px)").matches) setDetailDialogOpen(true);
+  };
+  const openFullDetail = (id: string | number) => {
+    openDetail(id);
+    setDetailDialogOpen(true);
+  };
   const closeDetail = () => {
     setDetailId(null);
+    setDetailDialogOpen(false);
     setActionNotes("");
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
@@ -358,10 +411,14 @@ export default function CentralKitchenOrdersPage() {
       window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
     }
   };
-  const changeStatusFilter = (value: string) => {
-    if (value !== "all" && !isCentralKitchenStatus(value)) return;
-    setStatusFilter(value as CentralKitchenStatusFilter | "all");
-    writeFilterToUrl("status", value);
+  const changeStage = (value: OrderStage) => {
+    setStage(value);
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("status");
+    if (value === "attention") url.searchParams.delete("stage");
+    else url.searchParams.set("stage", value);
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
   };
   const changeInventoryModeFilter = (value: string) => {
     if (value !== "all" && !isInventoryMode(value)) return;
@@ -370,50 +427,73 @@ export default function CentralKitchenOrdersPage() {
   };
 
   return <Layout>
-    <main dir="rtl" className="page-container space-y-5 pb-10">
-      <PageHeader icon={Factory} tone="production" title="طلبات المطبخ المركزي" description="تتبّع احتياج الفروع من الطلب حتى الاستلام"
+    <main dir="rtl" className="page-container space-y-4 bg-[#f8f4ee] pb-10 text-[#2f1c3a]">
+      <PageHeader icon={Factory} tone="production" title="تدفّق طلبات المطبخ" description="رتّب ما يحتاج قراراً الآن، ثم افتح التفاصيل عند الحاجة"
         actions={<div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={refresh} data-testid="refresh-kitchen-orders"><RefreshCw className="ml-2 h-4 w-4" />تحديث</Button>
-          {canConfigureRouting && <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)} data-testid="routing-settings-trigger"><Settings className="ml-2 h-4 w-4" />مسؤولو الفروع</Button>}
           {canCreate("central_kitchen_orders") && <Button size="sm" onClick={() => void openCreate()} data-testid="create-kitchen-order"><Plus className="ml-2 h-4 w-4" />طلب جديد</Button>}
         </div>} />
       <DailyOrderingNotice />
 
-      <Card className="border-violet-200 bg-gradient-to-l from-violet-50/70 to-background">
-        <CardContent className="p-4">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">مؤشرات التجربة والتوسع</h2><p className="text-xs text-muted-foreground">قياس دورة الطلب وجودة التوريد قبل تفعيل المخزون الفعلي.</p></div><Select value={pilotDays} onValueChange={setPilotDays}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="7">آخر 7 أيام</SelectItem><SelectItem value="30">آخر 30 يوماً</SelectItem><SelectItem value="90">آخر 90 يوماً</SelectItem></SelectContent></Select></div>
-          {metricsQuery.isLoading ? <div className="grid gap-3 md:grid-cols-5">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-20" />)}</div> : metricsQuery.data ? <><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5"><MetricTile label="إجمالي الطلبات" value={metricsQuery.data.totalOrders} /><MetricTile label="متأخرة عن الحاجة" value={metricsQuery.data.overdueOrders} tone={metricsQuery.data.overdueOrders ? "danger" : "normal"} /><MetricTile label="فروقات مفتوحة" value={metricsQuery.data.openDiscrepancies} tone={metricsQuery.data.openDiscrepancies ? "warning" : "normal"} /><MetricTile label="متوسط اكتمال البنود" value={metricsQuery.data.fulfillmentRate === null ? "—" : `${metricsQuery.data.fulfillmentRate}%`} /><MetricTile label="طلبات بها فروقات" value={metricsQuery.data.discrepancyRate === null ? "—" : `${metricsQuery.data.discrepancyRate}%`} /></div><div className="mt-4 grid gap-2 border-t pt-3 text-xs sm:grid-cols-2 lg:grid-cols-4"><StageTime label="الاعتماد" value={metricsQuery.data.averageStageHours.approval} /><StageTime label="التجهيز" value={metricsQuery.data.averageStageHours.preparation} /><StageTime label="الإرسال" value={metricsQuery.data.averageStageHours.dispatch} /><StageTime label="التوصيل" value={metricsQuery.data.averageStageHours.delivery} /></div><div className="mt-3 text-xs text-muted-foreground">السجل التجريبي: {metricsQuery.data.shadowLedger.entryCount} حركة{metricsQuery.data.shadowLedger.byUnit.length ? ` · ${metricsQuery.data.shadowLedger.byUnit.map(entry => `${entry.direction === "projected_kitchen_out" ? "خصم" : "إضافة"} ${entry.quantity} ${entry.unit}`).join(" · ")}` : ""}</div></> : <p className="text-sm text-muted-foreground">تعذر تحميل مؤشرات التجربة.</p>}
-        </CardContent>
-      </Card>
+      {newOrdersNotice > 0 && <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e9c8a6] bg-[#f7e5d3] px-4 py-3 text-sm text-[#633b33]" aria-live="polite"><span><strong>{newOrdersNotice} طلب جديد.</strong> ظهر بعد آخر تحديث تلقائي أو يدوي دون تغيير الفلاتر أو الطلب المفتوح.</span><button type="button" className="rounded p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setNewOrdersNotice(0)} aria-label="إغلاق تنبيه الطلبات الجديدة"><X className="h-4 w-4" /></button></div>}
 
-       <Card className="border-border/80 shadow-sm">
-        <CardContent className="p-4">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
-            <div className="relative md:col-span-5"><Search className="absolute right-3 top-3 h-4 w-4 text-muted-foreground" /><Input value={search} onChange={event => setSearch(event.target.value)} className="h-10 pr-9" placeholder="ابحث برقم الطلب أو الفرع..." /></div>
-            <Select value={branchFilter} onValueChange={setBranchFilter}><SelectTrigger className="h-10 md:col-span-4" disabled={!canSelectBranch}><SelectValue placeholder="فرع المصدر" /></SelectTrigger><SelectContent>{canSelectBranch && <SelectItem value="all">كل الفروع</SelectItem>}{branches.map(branch => <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>)}</SelectContent></Select>
-             <Select value={statusFilter} onValueChange={changeStatusFilter}><SelectTrigger className="h-10 md:col-span-3"><Filter className="ml-2 h-4 w-4 text-muted-foreground" /><SelectValue placeholder="كل الحالات" /></SelectTrigger><SelectContent><SelectItem value="all">كل الحالات</SelectItem>{CENTRAL_KITCHEN_STATUSES.map(key => <SelectItem key={key} value={key}>{STATUS[key].label}</SelectItem>)}</SelectContent></Select>
-             <Select value={inventoryModeFilter} onValueChange={changeInventoryModeFilter}><SelectTrigger className="h-10 md:col-span-3"><SelectValue placeholder="كل أوضاع المخزون" /></SelectTrigger><SelectContent><SelectItem value="all">كل أوضاع المخزون</SelectItem><SelectItem value="real">فعلي</SelectItem><SelectItem value="shadow">ظلّي — تشغيلي</SelectItem><SelectItem value="unknown">غير محدد / طلب قديم</SelectItem></SelectContent></Select>
+      <nav className="-mx-1 flex overflow-x-auto border-b border-[#e6ddd6] px-1" aria-label="مراحل الطلبات">
+        {([
+          ["attention", "يتطلب تدخلاً"], ["requested", "طلبات جديدة"], ["approved", "قيد التجهيز"],
+          ["prepared", "جاهز للإرسال"], ["dispatched", "في الطريق"], ["archive", "السجل"], ["all", "الكل"],
+        ] as Array<[OrderStage, string]>).map(([key, label]) => <button key={key} type="button" onClick={() => changeStage(key)} aria-current={stage === key ? "page" : undefined} className={cn("flex shrink-0 items-center gap-2 border-b-2 border-transparent px-3 py-3 text-xs text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm", stage === key && "border-[#4f2a63] font-semibold text-[#4f2a63]")}>
+          <span>{label}</span><span className={cn("rounded-full bg-[#e9e0db] px-2 py-0.5 text-[10px]", stage === key && "bg-[#ead8e8] text-[#4f2a63]")}>{stageCounts[key]}</span>
+        </button>)}
+      </nav>
+
+      <section className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <Card className="min-w-0 overflow-hidden border-[#e6ddd6] bg-[#fffdf9] shadow-sm">
+        <CardContent className="p-0">
+          <div className="flex flex-wrap items-center gap-2 border-b border-[#eee5df] p-3">
+            <div className="relative min-w-0 flex-[1_1_260px]"><Search className="absolute right-3 top-3 h-4 w-4 text-muted-foreground" /><Input aria-label="بحث في الطلبات" value={search} onChange={event => setSearch(event.target.value)} className="h-10 bg-[#fbf7f3] pr-9" placeholder="رقم الطلب أو الفرع أو المطبخ" /></div>
+            <Button variant="outline" className="h-10 border-[#e6d9d1] bg-[#fffaf6]" type="button" onClick={() => setFiltersOpen(open => !open)} aria-expanded={filtersOpen} aria-controls="kitchen-order-filters"><SlidersHorizontal className="ml-2 h-4 w-4" />تصفية</Button>
+            <span className="text-xs text-muted-foreground">{filtered.length} طلب</span>
           </div>
-           <p className="mt-2 text-xs text-muted-foreground">يُطبّق نطاق الفرع والحالة على الخادم، بينما يُصفّى وضع المخزون محلياً على كامل قائمة الطلبات غير المرقّمة.</p>
-        </CardContent>
-      </Card>
-       <OrderNotificationsOptIn />
+          <div id="kitchen-order-filters" hidden={!filtersOpen} className="grid gap-2 border-b border-[#eee5df] p-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Select value={branchFilter} onValueChange={setBranchFilter}><SelectTrigger disabled={!canSelectBranch}><SelectValue placeholder="فرع المصدر" /></SelectTrigger><SelectContent>{canSelectBranch && <SelectItem value="all">كل الفروع</SelectItem>}{branches.map(branch => <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>)}</SelectContent></Select>
+            <Select value={kitchenFilter} onValueChange={setKitchenFilter}><SelectTrigger><SelectValue placeholder="المطبخ" /></SelectTrigger><SelectContent><SelectItem value="all">كل المطابخ</SelectItem>{centralKitchens.map(kitchen => <SelectItem key={kitchen.id} value={kitchen.id}>{kitchen.name}</SelectItem>)}</SelectContent></Select>
+            <Select value={dateFilter} onValueChange={setDateFilter}><SelectTrigger><SelectValue placeholder="موعد الحاجة" /></SelectTrigger><SelectContent><SelectItem value="all">كل المواعيد</SelectItem><SelectItem value="today">احتياج اليوم</SelectItem><SelectItem value="past">موعد سابق</SelectItem><SelectItem value="future">موعد لاحق</SelectItem></SelectContent></Select>
+            <Select value={inventoryModeFilter} onValueChange={changeInventoryModeFilter}><SelectTrigger><SelectValue placeholder="وضع المخزون" /></SelectTrigger><SelectContent><SelectItem value="all">كل أوضاع المخزون</SelectItem><SelectItem value="real">فعلي</SelectItem><SelectItem value="shadow">ظلّي — تشغيلي</SelectItem><SelectItem value="unknown">غير محدد / طلب قديم</SelectItem></SelectContent></Select>
+          </div>
 
       {ordersQuery.isLoading ? <Card><CardContent className="space-y-3 p-4">{Array.from({ length: 6 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</CardContent></Card> :
       ordersQuery.isError ? <Card><CardContent className="py-16 text-center"><p className="font-medium">تعذر تحميل الطلبات</p><p className="mt-1 text-sm text-muted-foreground">تحقق من الاتصال ثم أعد المحاولة.</p><Button className="mt-4" variant="outline" onClick={refresh}>إعادة المحاولة</Button></CardContent></Card> :
-      filtered.length === 0 ? <Card><CardContent className="py-16 text-center"><PackagePlus className="mx-auto mb-3 h-10 w-10 text-muted-foreground" /><h2 className="font-semibold">لا توجد طلبات مطابقة</h2><p className="mt-1 text-sm text-muted-foreground">{canCreate("central_kitchen_orders") ? "أنشئ طلباً جديداً أو عدّل عوامل التصفية." : "عدّل عوامل التصفية أو انتظر وصول طلب جديد."}</p>{canCreate("central_kitchen_orders") && <Button className="mt-5" onClick={() => void openCreate()}>إنشاء طلب</Button>}</CardContent></Card> :
-       <>
-       <section className="space-y-3 md:hidden" aria-label="قائمة الطلبات">
-         {filtered.map(order => <button key={order.id} type="button" onClick={() => openDetail(order.id)} className="block min-h-32 w-full rounded-xl border border-border/80 bg-card p-4 text-right shadow-sm transition-colors active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-           <div className="flex items-start justify-between gap-3"><div className="min-w-0"><span className="block font-mono text-sm font-bold text-primary">{order.orderNumber}</span><span className="mt-1 block truncate text-sm font-medium">{order.requestBranchName || branchName(order.requestBranchId)} <span className="font-normal text-muted-foreground">←</span> {order.centralKitchenName || branchName(order.centralKitchenId)}</span></div><StatusBadge status={order.status} /></div>
-           <div className="mt-3 grid grid-cols-2 gap-2 border-t pt-3 text-xs"><div><span className="block text-muted-foreground">موعد الحاجة</span><span className="mt-0.5 block font-medium">{readableDate(order.neededDate)} · {readableTime(order.neededTime)}</span></div><div><span className="block text-muted-foreground">البنود</span><span className="mt-0.5 block font-medium">{order.itemCount ?? order.items?.length ?? 0} بنود</span></div></div>
-           <div className="mt-2"><LateSubmissionBadge schedule={order.orderingSchedule} /><NextStepSummary order={order} /></div>
-         </button>)}
-       </section>
-       <Card className="hidden overflow-hidden border-border/80 md:block"><div className="overflow-x-auto"><Table><TableHeader className="bg-muted/40"><TableRow><TableHead className="text-right">رقم الطلب</TableHead><TableHead className="text-right">من</TableHead><TableHead className="text-right">إلى المطبخ</TableHead><TableHead className="text-right">المطلوب</TableHead><TableHead className="text-right">البنود</TableHead><TableHead className="text-right">الحالة</TableHead><TableHead className="text-left"> </TableHead></TableRow></TableHeader><TableBody>
-         {filtered.map(order => <TableRow key={order.id} className="cursor-pointer hover:bg-muted/35" onClick={() => openDetail(order.id)}>
-           <TableCell className="font-mono font-semibold text-primary">{order.orderNumber}</TableCell><TableCell>{order.requestBranchName || branchName(order.requestBranchId)}</TableCell><TableCell>{order.centralKitchenName || branchName(order.centralKitchenId)}</TableCell><TableCell><span className="text-sm">{readableDate(order.neededDate)} <span className="text-muted-foreground">{readableTime(order.neededTime)}</span></span></TableCell><TableCell>{order.itemCount ?? order.items?.length ?? 0} بنود</TableCell><TableCell><StatusBadge status={order.status} /><LateSubmissionBadge schedule={order.orderingSchedule} /><NextStepSummary order={order} /></TableCell><TableCell className="text-left"><Button variant="ghost" size="icon" aria-label="عرض الطلب" onClick={event => { event.stopPropagation(); openDetail(order.id); }}><ChevronLeft className="h-4 w-4" /></Button></TableCell>
-        </TableRow>)}</TableBody></Table></div></Card></>}
+      filtered.length === 0 ? <div className="py-16 text-center"><PackagePlus className="mx-auto mb-3 h-9 w-9 text-muted-foreground" /><h2 className="font-semibold">لا توجد طلبات ضمن هذا العرض</h2><p className="mt-1 text-sm text-muted-foreground">غيّر المرحلة أو امسح البحث والفلاتر الثانوية.</p><Button variant="link" className="mt-2" onClick={() => { setSearch(""); setKitchenFilter("all"); setDateFilter("all"); changeInventoryModeFilter("all"); }}>مسح الفلاتر</Button></div> :
+      <section className="divide-y divide-[#eee6df] p-1.5" aria-label="قائمة الطلبات">
+        {filtered.map(order => <button key={order.id} type="button" onClick={() => selectDetail(order.id)} className={cn("grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-transparent p-3 text-right transition-colors hover:bg-[#fcf6f1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-[minmax(190px,1.3fr)_minmax(130px,.7fr)_minmax(145px,.8fr)_18px]", String(detailId) === String(order.id) && "border-[#e9d8e7] bg-[#f5edf4]", queueOrderNeedsAttention(order) && "border-r-[3px] border-r-[#c56a45]")}>
+          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><strong className="font-mono text-sm text-[#4f2a63]">{order.orderNumber}</strong>{queueOrderNeedsAttention(order) && <span className="inline-flex items-center gap-1 rounded bg-[#f9e4d6] px-1.5 py-0.5 text-[10px] text-[#934829]"><AlertTriangle className="h-3 w-3" />{isOpenDiscrepancy(order) ? "فروقات مفتوحة" : "متأخر عن موعد الحاجة"}</span>}</div><span className="mt-1 block truncate text-xs text-muted-foreground">{order.requestBranchName || branchName(order.requestBranchId)} <span className="px-1">←</span> {order.centralKitchenName || branchName(order.centralKitchenId)}</span></div>
+          <div className="text-xs sm:block"><span className="block text-[10px] text-muted-foreground">موعد الحاجة</span><strong className="font-medium">{readableDate(order.neededDate)} · {readableTime(order.neededTime)}</strong></div>
+          <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1 sm:block"><StatusBadge status={order.status} /><LateSubmissionBadge schedule={order.orderingSchedule} /><NextStepSummary order={order} /></div>
+          <ChevronLeft className="hidden h-4 w-4 text-muted-foreground sm:block" />
+        </button>)}
+      </section>}
+        </CardContent>
+      </Card>
+      <aside className="sticky top-4 hidden min-h-[520px] rounded-2xl border border-[#e6ddd6] bg-[#fffdf9] p-4 shadow-sm lg:block" aria-label="ملخص الطلب المحدد">
+        <OrderSummaryPane
+          order={selectedDetail}
+          loading={detailId !== null && (detailQuery.isLoading || detailQuery.isFetching)}
+          error={detailId !== null && detailQuery.isError}
+          onRetry={() => detailQuery.refetch()}
+          onOpen={() => detailId !== null && openFullDetail(detailId)}
+          onClear={closeDetail}
+        />
+      </aside>
+      </section>
+
+      <details className="rounded-xl border border-[#e6ddd6] bg-[#fffdf9]">
+        <summary className="flex cursor-pointer list-none items-center gap-2 p-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><BarChart3 className="h-4 w-4" />التقارير والإعدادات الثانوية</summary>
+        <div className="space-y-4 border-t p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">مؤشرات التجربة والتوسع</h2><p className="text-xs text-muted-foreground">قياس دورة الطلب وجودة التوريد قبل تفعيل المخزون الفعلي.</p></div><div className="flex flex-wrap gap-2">{canConfigureRouting && <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)} data-testid="routing-settings-trigger"><Settings className="ml-2 h-4 w-4" />مسؤولو الفروع</Button>}<Select value={pilotDays} onValueChange={setPilotDays}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="7">آخر 7 أيام</SelectItem><SelectItem value="30">آخر 30 يوماً</SelectItem><SelectItem value="90">آخر 90 يوماً</SelectItem></SelectContent></Select></div></div>
+          {metricsQuery.isLoading ? <div className="grid gap-3 md:grid-cols-5">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-20" />)}</div> : metricsQuery.data ? <><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5"><MetricTile label="إجمالي الطلبات" value={metricsQuery.data.totalOrders} /><MetricTile label="متأخرة عن الحاجة" value={metricsQuery.data.overdueOrders} tone={metricsQuery.data.overdueOrders ? "danger" : "normal"} /><MetricTile label="فروقات مفتوحة" value={metricsQuery.data.openDiscrepancies} tone={metricsQuery.data.openDiscrepancies ? "warning" : "normal"} /><MetricTile label="متوسط اكتمال البنود" value={metricsQuery.data.fulfillmentRate === null ? "—" : `${metricsQuery.data.fulfillmentRate}%`} /><MetricTile label="طلبات بها فروقات" value={metricsQuery.data.discrepancyRate === null ? "—" : `${metricsQuery.data.discrepancyRate}%`} /></div><div className="grid gap-2 border-t pt-3 text-xs sm:grid-cols-2 lg:grid-cols-4"><StageTime label="الاعتماد" value={metricsQuery.data.averageStageHours.approval} /><StageTime label="التجهيز" value={metricsQuery.data.averageStageHours.preparation} /><StageTime label="الإرسال" value={metricsQuery.data.averageStageHours.dispatch} /><StageTime label="التوصيل" value={metricsQuery.data.averageStageHours.delivery} /></div><div className="text-xs text-muted-foreground">السجل التجريبي: {metricsQuery.data.shadowLedger.entryCount} حركة{metricsQuery.data.shadowLedger.byUnit.length ? ` · ${metricsQuery.data.shadowLedger.byUnit.map(entry => `${entry.direction === "projected_kitchen_out" ? "خصم" : "إضافة"} ${entry.quantity} ${entry.unit}`).join(" · ")}` : ""}</div></> : <p className="text-sm text-muted-foreground">تعذر تحميل مؤشرات التجربة.</p>}
+          <OrderNotificationsOptIn />
+        </div>
+      </details>
     </main>
 
     <Dialog open={createOpen} onOpenChange={setCreateOpen}><DialogContent dir="rtl" style={{ ...createDialogStyle, display: "flex", flexDirection: "column" }} className="h-[94dvh] max-h-[820px] max-w-4xl gap-0 overflow-hidden p-0 sm:rounded-xl"><DialogHeader className="border-b px-5 py-4 text-right"><DialogTitle>طلب جديد للمطبخ المركزي</DialogTitle><DialogDescription>أضف احتياج الفرع بدقة ليظهر لفريق المطبخ فوراً.</DialogDescription></DialogHeader>
@@ -432,7 +512,7 @@ export default function CentralKitchenOrdersPage() {
 
     {canConfigureRouting && <RoutingSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} branches={routingBranches} />}
 
-      <Dialog open={detailId !== null} onOpenChange={open => { if (!open) closeDetail(); }}><DialogContent dir="rtl" className="max-h-[92dvh] max-w-5xl overflow-y-auto">{(detailQuery.isLoading || (detailQuery.isFetching && detailQuery.isPlaceholderData)) ? <div className="space-y-3 py-8" aria-label="جارٍ تحميل تفاصيل الطلب">{Array.from({ length: 5 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</div> : detailQuery.isError || !selectedDetail ? <DetailQueryError error={detailQuery.error} onRetry={() => detailQuery.refetch()} /> : <OrderDetail order={selectedDetail} products={products} productsQuery={productsQuery} accessibleBranchIds={branches.map(branch => branch.id)} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={workflowMutation.isPending} canApprove={canApprove("central_kitchen_orders")} canEdit={canEdit("central_kitchen_orders")} canConfigureRouting={canConfigureRouting} onConfigureRouting={() => setSettingsOpen(true)} onAction={(action, details) => workflowMutation.mutate({ id: selectedDetail.id, action, details })} />}</DialogContent></Dialog>
+      <Dialog open={detailId !== null && detailDialogOpen} onOpenChange={open => { setDetailDialogOpen(open); if (!open && typeof window !== "undefined" && !window.matchMedia("(min-width: 1024px)").matches) closeDetail(); }}><DialogContent dir="rtl" className="max-h-[92dvh] max-w-5xl overflow-y-auto">{(detailQuery.isLoading || (detailQuery.isFetching && detailQuery.isPlaceholderData)) ? <div className="space-y-3 py-8" aria-label="جارٍ تحميل تفاصيل الطلب">{Array.from({ length: 5 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</div> : detailQuery.isError || !selectedDetail ? <DetailQueryError error={detailQuery.error} onRetry={() => detailQuery.refetch()} /> : <OrderDetail order={selectedDetail} products={products} productsQuery={productsQuery} accessibleBranchIds={branches.map(branch => branch.id)} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={workflowMutation.isPending} canApprove={canApprove("central_kitchen_orders")} canEdit={canEdit("central_kitchen_orders")} canConfigureRouting={canConfigureRouting} onConfigureRouting={() => setSettingsOpen(true)} onAction={(action, details) => workflowMutation.mutate({ id: selectedDetail.id, action, details })} />}</DialogContent></Dialog>
   </Layout>;
 }
 
@@ -472,6 +552,25 @@ function DetailQueryError({ error, onRetry }: { error: unknown; onRetry: () => u
   const forbidden = status === 401 || status === 403;
   const missing = status === 404;
   return <div className="py-12 text-center" role="alert"><p className="font-medium">{forbidden ? "لا تملك صلاحية عرض هذا الطلب" : missing ? "الطلب غير موجود" : "تعذر تحميل تفاصيل الطلب"}</p><p className="mt-1 text-sm text-muted-foreground">{forbidden ? "تم رفض الوصول إلى هذا الطلب. اطلب من مسؤول النظام منحك صلاحية مناسبة." : missing ? "قد يكون الطلب حُذف أو لم يعد متاحاً." : "تحقق من الاتصال ثم أعد المحاولة."}</p>{!forbidden && <Button variant="outline" className="mt-4" onClick={() => onRetry()}>إعادة المحاولة</Button>}</div>;
+}
+function OrderSummaryPane({ order, loading, error, onRetry, onOpen, onClear }: { order?: KitchenOrder; loading: boolean; error: boolean; onRetry: () => unknown; onOpen: () => void; onClear: () => void }) {
+  if (loading) return <div className="space-y-3 py-8" aria-label="جارٍ تحميل ملخص الطلب">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-12" />)}</div>;
+  if (error) return <div className="py-12 text-center" role="alert"><p className="text-sm font-medium">تعذر تحميل ملخص الطلب</p><Button size="sm" variant="outline" className="mt-3" onClick={() => onRetry()}>إعادة المحاولة</Button></div>;
+  if (!order) return <div className="flex min-h-[480px] flex-col items-center justify-center gap-2 px-6 text-center text-muted-foreground"><PackagePlus className="h-7 w-7" /><strong className="text-sm text-[#694d60]">اختر طلباً من القائمة</strong><span className="text-xs leading-6">تظهر البنود ومسار الإجراء هنا دون ازدحام قائمة الانتظار.</span></div>;
+  const nextStep = getCentralKitchenNextStep({
+    status: order.status,
+    inventoryMode: parseCentralKitchenInventoryMode(order.inventoryMode),
+    discrepancyStatus: order.discrepancyStatus,
+  });
+  return <div data-testid="selected-order-summary" className="space-y-4">
+    <div className="flex items-start justify-between gap-3 border-b pb-4"><div><span className="text-[10px] font-semibold tracking-wider text-[#9a725e]">تفاصيل الطلب</span><h2 className="mt-1 font-mono text-lg font-bold text-[#4f2a63]">{order.orderNumber}</h2></div><button type="button" className="rounded p-1 text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={onClear} aria-label="إغلاق ملخص الطلب"><X className="h-4 w-4" /></button></div>
+    <div className="flex items-center gap-2"><div className="min-w-0 flex-1"><span className="block text-[10px] text-muted-foreground">من الفرع</span><strong className="block truncate text-xs">{order.requestBranchName || order.requestBranchId}</strong></div><ChevronLeft className="h-4 w-4 text-muted-foreground" /><div className="min-w-0 flex-1"><span className="block text-[10px] text-muted-foreground">إلى</span><strong className="block truncate text-xs">{order.centralKitchenName || order.centralKitchenId}</strong></div></div>
+    <div className="grid gap-3 rounded-xl bg-[#fbf5f0] p-3 text-xs"><div><span className="text-muted-foreground">موعد الحاجة: </span><strong>{readableDate(order.neededDate)} · {readableTime(order.neededTime)}</strong></div><div className="flex flex-wrap items-center gap-2"><span className="text-muted-foreground">الحالة:</span><StatusBadge status={order.status} /><LateSubmissionBadge schedule={order.orderingSchedule} /></div></div>
+    {queueOrderNeedsAttention(order) && <div className="flex gap-2 rounded-lg bg-[#f9e7dc] p-3 text-xs leading-5 text-[#833e29]"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>{isOpenDiscrepancy(order) ? "تم الاستلام مع فروقات مفتوحة؛ لا يعد الطلب مكتملاً." : "تجاوز الطلب موعد الحاجة المحدد ولم يكتمل بعد."}</span></div>}
+    <section><div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-semibold">البنود المطلوبة</h3><span className="text-[10px] text-muted-foreground">{order.items?.length ?? order.itemCount ?? 0} بنود</span></div><div className="divide-y border-y">{(order.items || []).slice(0, 5).map(item => <div key={item.id || item.productName} className="flex justify-between gap-3 py-2 text-xs"><span className="truncate">{item.productName}</span><strong className="shrink-0 font-medium">{item.requestedQuantity} {item.unit}</strong></div>)}{!order.items?.length && <p className="py-4 text-center text-xs text-muted-foreground">افتح التفاصيل لتحميل البنود الكاملة.</p>}{(order.items?.length || 0) > 5 && <p className="py-2 text-[10px] text-muted-foreground">+ {(order.items?.length || 0) - 5} بنود أخرى</p>}</div></section>
+    {order.notes && <div className="border-r-2 border-[#c7955a] bg-[#f6f0e5] p-3 text-xs"><span className="block text-[10px] text-muted-foreground">ملاحظة الفرع</span><p className="mt-1 leading-5">{order.notes}</p></div>}
+    <div className="border-t pt-3"><p className="mb-2 text-xs text-muted-foreground">{nextStep.isComplete ? nextStep.label : `التالي: ${nextStep.label} · ${nextStep.owner}`}</p><Button className="w-full bg-[#4f2a63] hover:bg-[#3f2250]" onClick={onOpen}>فتح التفاصيل والإجراء</Button></div>
+  </div>;
 }
 function MetricTile({ label, value, tone = "normal" }: { label: string; value: string | number; tone?: "normal" | "warning" | "danger" }) { return <div className={cn("rounded-lg border bg-background p-3", tone === "warning" && "border-amber-200 bg-amber-50", tone === "danger" && "border-red-200 bg-red-50")}><span className="text-xs text-muted-foreground">{label}</span><strong className="mt-1 block text-2xl">{value}</strong></div>; }
 function StageTime({ label, value }: { label: string; value: number | null }) { return <div className="flex items-center justify-between rounded-md bg-background/70 px-3 py-2"><span>متوسط {label}</span><strong>{value === null ? "—" : `${value} ساعة`}</strong></div>; }

@@ -75,3 +75,17 @@ mtime_ms = 1790101698043
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/554c6518-4a9c-40bf-a217-d59b260dec6e/0a3a9ab1-852f-4d3f-bb23-e65b0da12959"
 storage_version_token = "1790101706904202"
 content_type = "image/jpeg"
+
+[[outputs]]
+id = "vylfhbgt3s2lDv9rD5Vi-"
+uri = "file://.local/test-results/kitchen-streamlined-desktop.png"
+type = "image"
+title = "لوحة المطبخ بعد التطبيق داخل النظام"
+description = "صورة من اختبار الصفحة الفعلية ببيانات اختبار معزولة: قائمة المراحل وتفاصيل الطلب الجانبية."
+logical_id = "7425fc9a-3481-43f9-9084-51d3a9430deb"
+content_hash = "sha256:67cf00f0f780ff83e587be1dd692d4ba1fe81d00b75d252619a93285d6f4df3c"
+size = 175820
+mtime_ms = 1790102932091
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/7425fc9a-3481-43f9-9084-51d3a9430deb/03822b0e-5195-4564-8b31-6d6f5d1cb34a"
+storage_version_token = "1790103341302675"
+content_type = "image/png"
