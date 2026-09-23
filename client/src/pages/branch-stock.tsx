@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,11 +15,14 @@ import {
   Boxes, ArrowLeft, Search, AlertTriangle, Package, Edit2, 
   TrendingDown, TrendingUp, Store, RefreshCw
 } from "lucide-react";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/dashboard/page-header";
+import { useBranches } from "@/hooks/useBranches";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type Branch = {
   id: string;
@@ -66,6 +69,10 @@ export default function BranchStockPage() {
   const isRTL = i18n.language === "ar";
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
+  const { branches, userBranchId, isLoading: branchesLoading } = useBranches();
+  const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
+  const { canEdit } = usePermissions();
 
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -75,15 +82,17 @@ export default function BranchStockPage() {
   const [editQuantity, setEditQuantity] = useState("");
   const [editConsumption, setEditConsumption] = useState("");
 
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  useEffect(() => {
+    if (!navigationBranch.isResolving && navigationBranch.hasBranchParam) {
+      setSelectedBranch(navigationBranch.branchId || "");
+    }
+  }, [navigationBranch.branchId, navigationBranch.hasBranchParam, navigationBranch.isResolving]);
 
-  const { data: warehouseItems = [] } = useQuery<WarehouseItem[]>({
+  const { data: warehouseItems = [], isError: itemsError } = useQuery<WarehouseItem[]>({
     queryKey: ["/api/warehouse/items"],
   });
 
-  const { data: branchStock = [], isLoading } = useQuery<BranchStockItem[]>({
+  const { data: branchStock = [], isLoading, isError: stockError } = useQuery<BranchStockItem[]>({
     queryKey: ["/api/warehouse/branch-stock", selectedBranch],
     queryFn: async () => {
       if (!selectedBranch) return [];
@@ -174,6 +183,13 @@ export default function BranchStockPage() {
   };
 
   const selectedBranchData = branches.find(b => b.id === selectedBranch);
+  const warehouseHref = selectedBranch
+    ? `/warehouse?branchId=${encodeURIComponent(selectedBranch)}`
+    : "/warehouse";
+  const changeBranch = (branchId: string) => {
+    setSelectedBranch(branchId);
+    navigate(`/branch-stock?branchId=${encodeURIComponent(branchId)}`, { replace: true });
+  };
 
   return (
     <Layout>
@@ -183,7 +199,7 @@ export default function BranchStockPage() {
           tone="executive"
           title={isRTL ? "مخزون الفروع" : "Branch Stock"}
           description={isRTL ? "متابعة مخزون المواد في الفروع" : "Track material stock in branches"}
-          backHref="/warehouse-dashboard"
+          backHref={warehouseHref}
         />
 
         <Card>
@@ -197,14 +213,14 @@ export default function BranchStockPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+            <Select value={selectedBranch} onValueChange={changeBranch} disabled={branchesLoading}>
               <SelectTrigger className="w-full md:w-[300px]" data-testid="select-branch">
                 <SelectValue placeholder={isRTL ? "اختر الفرع..." : "Select branch..."} />
               </SelectTrigger>
               <SelectContent>
                 {branches.map((branch) => (
                   <SelectItem key={branch.id} value={branch.id}>
-                    {isRTL ? branch.name : branch.nameEn || branch.name}
+                    {branch.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -248,7 +264,7 @@ export default function BranchStockPage() {
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
                     <Boxes className="w-5 h-5" />
-                    {isRTL ? `مخزون ${selectedBranchData?.name || "الفرع"}` : `${selectedBranchData?.nameEn || selectedBranchData?.name || "Branch"} Stock`}
+                    {isRTL ? `مخزون ${selectedBranchData?.name || "الفرع"}` : `${selectedBranchData?.name || "Branch"} Stock`}
                   </CardTitle>
                   <Badge variant="secondary">
                     {filteredStock.length} {isRTL ? "صنف" : "items"}
@@ -299,7 +315,11 @@ export default function BranchStockPage() {
                   </div>
                 </div>
 
-                {isLoading ? (
+                {stockError || itemsError ? (
+                  <div className="py-12 text-center text-sm text-destructive">
+                    {isRTL ? "تعذر تحميل مخزون الفرع. حاول مرة أخرى." : "Branch stock could not be loaded. Please try again."}
+                  </div>
+                ) : isLoading ? (
                   <div className="space-y-2">
                     {[1, 2, 3, 4, 5].map(i => (
                       <Skeleton key={i} className="h-12 w-full" />
@@ -357,7 +377,7 @@ export default function BranchStockPage() {
                                 {new Date(item.lastUpdated).toLocaleDateString(isRTL ? 'en-GB' : 'en-US')}
                               </TableCell>
                               <TableCell>
-                                <Button 
+                                {canEdit("warehouse") && <Button
                                   variant="ghost" 
                                   size="sm"
                                   className="h-7 w-7 sm:h-8 sm:w-8 p-0"
@@ -365,7 +385,7 @@ export default function BranchStockPage() {
                                   data-testid={`btn-edit-${item.id}`}
                                 >
                                   <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                                </Button>
+                                </Button>}
                               </TableCell>
                             </TableRow>
                           );

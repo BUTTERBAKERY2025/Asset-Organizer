@@ -7,14 +7,14 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ExportButtons } from "@/components/export-buttons";
 import { Link } from "wouter";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { 
   BarChart3, Package, TrendingUp, TrendingDown, AlertTriangle, 
   FileText, ArrowRight, Boxes, Send, Clock, CheckCircle, Truck, Calendar,
-  Printer, Download
+  Printer, Loader2, RefreshCw
 } from "lucide-react";
 import { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
@@ -24,7 +24,16 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, Legend
 } from "recharts";
-import type { Branch, WarehouseItem, MaterialTransfer, BranchStock } from "@shared/schema";
+import type { BranchStock } from "@shared/schema";
+import { useBranches } from "@/hooks/useBranches";
+import {
+  aggregateStockByBranchAndUnit,
+  filterTransfersForBranch,
+  mapWithConcurrency,
+  resolveWarehouseReportScope,
+  warehouseBackHref,
+  warehouseBundleUrl,
+} from "@/lib/warehouse-reports";
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
@@ -82,24 +91,76 @@ export default function WarehouseReportsPage() {
   const [reportDateFrom, setReportDateFrom] = useState<string>("");
   const [reportDateTo, setReportDateTo] = useState<string>("");
   const [reportBranchId, setReportBranchId] = useState<string>("all");
+  const { branches, isLoading: areBranchesLoading } = useBranches();
+  const hasAppliedRequestedBranch = useRef(false);
+  const requestedBranchId = useMemo(
+    () => new URLSearchParams(window.location.search).get("branchId"),
+    [],
+  );
 
-  const { data: bundle } = useQuery<{
+  useEffect(() => {
+    if (!areBranchesLoading) {
+      setSelectedBranch((current) => {
+        if (!hasAppliedRequestedBranch.current) {
+          hasAppliedRequestedBranch.current = true;
+          return resolveWarehouseReportScope(requestedBranchId, branches);
+        }
+        return resolveWarehouseReportScope(current, branches);
+      });
+      setReportBranchId((current) => resolveWarehouseReportScope(current, branches));
+    }
+  }, [areBranchesLoading, branches, requestedBranchId]);
+
+  const {
+    data: bundle,
+    isLoading: isBundleLoading,
+    isError: isBundleError,
+    error: bundleError,
+    refetch: refetchBundle,
+  } = useQuery<{
     items?: any[];
     transfers?: any[];
-    movementLogs?: any[];
     branches?: any[];
   }>({
-    queryKey: ["/api/warehouse/bundle", selectedBranch !== "all" ? selectedBranch : undefined],
+    queryKey: ["/api/warehouse/bundle", { branchId: selectedBranch }],
+    queryFn: async () => {
+      const response = await fetch(warehouseBundleUrl(selectedBranch), { credentials: "include" });
+      if (!response.ok) throw new Error(`${response.status}: ${response.statusText}`);
+      return response.json();
+    },
+    enabled: !areBranchesLoading,
     staleTime: 60 * 1000,
   });
 
-  const branches = bundle?.branches;
-  const warehouseItems = bundle?.items;
-  const transfers = bundle?.transfers;
-  const movementLogs = bundle?.movementLogs;
+  const warehouseItems = bundle?.items || [];
+  const transfers = bundle?.transfers || [];
 
-  const { data: branchStock } = useQuery<BranchStock[]>({
-    queryKey: ["/api/warehouse/branch-stock", selectedBranch !== "all" ? selectedBranch : undefined],
+  const {
+    data: branchStock = [],
+    isLoading: isBranchStockLoading,
+    isError: isBranchStockError,
+    error: branchStockError,
+    refetch: refetchBranchStock,
+  } = useQuery<BranchStock[]>({
+    queryKey: ["/api/warehouse/branch-stock", { branchId: selectedBranch, branchIds: branches.map((branch) => branch.id) }],
+    queryFn: async () => {
+      const branchIds = selectedBranch === "all"
+        ? branches.map((branch) => branch.id)
+        : [selectedBranch];
+      const stocks = await mapWithConcurrency(branchIds, 4, async (branchId) => {
+        const response = await fetch(
+          `/api/warehouse/branch-stock/${encodeURIComponent(branchId)}`,
+          { credentials: "include" },
+        );
+        if (!response.ok) {
+          throw new Error(`${response.status}: ${response.statusText}`);
+        }
+        return response.json() as Promise<BranchStock[]>;
+      });
+      return stocks.flat();
+    },
+    enabled: !areBranchesLoading && (selectedBranch === "all" || branches.some((branch) => branch.id === selectedBranch)),
+    staleTime: 60 * 1000,
   });
 
   // Monthly report query
@@ -159,9 +220,10 @@ export default function WarehouseReportsPage() {
 
   // Branch Performance query
   const { data: branchPerformance, isLoading: isLoadingPerformance } = useQuery({
-    queryKey: ["/api/warehouse/reports/branch-performance", reportDateFrom, reportDateTo],
+    queryKey: ["/api/warehouse/reports/branch-performance", selectedBranch, reportDateFrom, reportDateTo],
     queryFn: async () => {
       const params = new URLSearchParams();
+      if (selectedBranch !== "all") params.append("branchId", selectedBranch);
       if (reportDateFrom) params.append("startDate", reportDateFrom);
       if (reportDateTo) params.append("endDate", reportDateTo);
       const res = await fetch(`/api/warehouse/reports/branch-performance?${params.toString()}`);
@@ -169,12 +231,11 @@ export default function WarehouseReportsPage() {
     },
   });
 
-  const filteredTransfers = transfers?.filter(t => {
-    if (selectedBranch !== "all" && t.destinationBranchId !== selectedBranch && t.sourceBranchId !== selectedBranch) return false;
+  const filteredTransfers = filterTransfersForBranch(transfers, selectedBranch).filter(t => {
     if (dateFrom && new Date(t.createdAt!) < new Date(dateFrom)) return false;
-    if (dateTo && new Date(t.createdAt!) > new Date(dateTo)) return false;
+    if (dateTo && new Date(t.createdAt!) > new Date(`${dateTo}T23:59:59.999`)) return false;
     return true;
-  }) || [];
+  });
 
   const transferStats = {
     total: filteredTransfers.length,
@@ -183,8 +244,8 @@ export default function WarehouseReportsPage() {
     delivered: filteredTransfers.filter(t => t.status === "delivered").length,
   };
 
-  const lowStockItems = branchStock?.filter(s => {
-    const item = warehouseItems?.find(i => i.id === s.itemId);
+  const lowStockItems = branchStock.filter(s => {
+    const item = warehouseItems.find(i => i.id === s.itemId);
     return item && (s.currentQuantity || 0) <= (item.reorderPoint || 0);
   }) || [];
 
@@ -194,35 +255,37 @@ export default function WarehouseReportsPage() {
     { name: isRTL ? "تم التسليم" : "Delivered", value: transferStats.delivered, color: "#00C49F" },
   ].filter(d => d.value > 0);
 
-  const stockByBranchData = branches?.map(branch => {
-    const branchItems = branchStock?.filter(s => s.branchId === branch.id) || [];
-    const totalQuantity = branchItems.reduce((sum, s) => sum + (s.currentQuantity || 0), 0);
-    return {
-      name: branch.name,
-      quantity: totalQuantity,
-    };
-  }).filter(d => d.quantity > 0) || [];
+  const stockByBranchData = aggregateStockByBranchAndUnit(
+    branchStock,
+    warehouseItems,
+    branches,
+  ).filter((row) => row.quantity > 0).map((row) => ({
+    ...row,
+    name: `${row.branchName} (${row.unit})`,
+  }));
 
   const stockColumns = [
     { header: isRTL ? "الفرع" : "Branch", key: "branchName", width: 20 },
     { header: isRTL ? "الصنف" : "Item", key: "itemName", width: 25 },
     { header: isRTL ? "الكمية الحالية" : "Current Qty", key: "currentQuantity", width: 15 },
+    { header: isRTL ? "الوحدة" : "Unit", key: "unit", width: 12 },
     { header: isRTL ? "الحد الأدنى" : "Min Level", key: "minLevel", width: 15 },
     { header: isRTL ? "الحالة" : "Status", key: "status", width: 15 },
   ];
 
-  const stockExportData = branchStock?.map(s => {
-    const branch = branches?.find(b => b.id === s.branchId);
-    const item = warehouseItems?.find(i => i.id === s.itemId);
+  const stockExportData = branchStock.map(s => {
+    const branch = branches.find(b => b.id === s.branchId);
+    const item = warehouseItems.find(i => i.id === s.itemId);
     const isLow = item && (s.currentQuantity || 0) <= (item.reorderPoint || 0);
     return {
       branchName: branch?.name || s.branchId,
       itemName: item?.name || `صنف ${s.itemId}`,
       currentQuantity: s.currentQuantity,
+      unit: item?.unit || "-",
       minLevel: item?.reorderPoint || 0,
       status: isLow ? (isRTL ? "منخفض" : "Low") : (isRTL ? "جيد" : "Good"),
     };
-  }) || [];
+  });
 
   const transferColumns = [
     { header: isRTL ? "رقم التحويل" : "Transfer #", key: "transferNumber", width: 18 },
@@ -247,17 +310,11 @@ export default function WarehouseReportsPage() {
   // Monthly report export columns and data
   const monthlyBranchColumns = [
     { header: isRTL ? "الفرع" : "Branch", key: "branchName", width: 25 },
-    { header: isRTL ? "الوارد" : "Incoming", key: "totalIncoming", width: 15 },
-    { header: isRTL ? "الصادر" : "Outgoing", key: "totalOutgoing", width: 15 },
-    { header: isRTL ? "الصافي" : "Net Movement", key: "netMovement", width: 15 },
     { header: isRTL ? "عدد التحويلات" : "Transfer Count", key: "transferCount", width: 15 },
   ];
 
   const monthlyBranchExportData = monthlyReport?.byBranch?.map(row => ({
     branchName: row.branchName,
-    totalIncoming: row.totalIncoming,
-    totalOutgoing: row.totalOutgoing,
-    netMovement: row.netMovement,
     transferCount: row.transferCount,
   })) || [];
 
@@ -285,7 +342,6 @@ export default function WarehouseReportsPage() {
     { header: isRTL ? "إلى" : "To", key: "destinationBranchName", width: 18 },
     { header: isRTL ? "تاريخ التسليم" : "Delivery Date", key: "deliveryDate", width: 15 },
     { header: isRTL ? "عدد الأصناف" : "Item Count", key: "itemCount", width: 10 },
-    { header: isRTL ? "الكمية" : "Total Qty", key: "totalQuantity", width: 10 },
     { header: isRTL ? "الحالة" : "Status", key: "statusText", width: 12 },
   ];
 
@@ -295,7 +351,6 @@ export default function WarehouseReportsPage() {
     destinationBranchName: t.destinationBranchName,
     deliveryDate: t.deliveryDate ? new Date(t.deliveryDate).toLocaleDateString(isRTL ? "en-GB" : "en-US") : "-",
     itemCount: t.itemCount,
-    totalQuantity: t.totalQuantity,
     statusText: t.hasDiscrepancy ? (isRTL ? "فرق" : "Discrepancy") : (isRTL ? "مكتمل" : "Complete"),
   })) || [];
 
@@ -339,8 +394,45 @@ export default function WarehouseReportsPage() {
           tone="executive"
           title={isRTL ? "تقارير المخازن" : "Warehouse Reports"}
           description={isRTL ? "تقارير شاملة عن المخزون والطلبات والتحويلات" : "Comprehensive reports on inventory, requests and transfers"}
-          backHref="/warehouse-dashboard"
+          backHref={warehouseBackHref(selectedBranch)}
         />
+
+        {(areBranchesLoading || isBundleLoading || isBranchStockLoading) && (
+          <Card>
+            <CardContent className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              {isRTL ? "جارٍ تحميل بيانات التقرير..." : "Loading report data..."}
+            </CardContent>
+          </Card>
+        )}
+
+        {(isBundleError || isBranchStockError) && (
+          <Card className="border-destructive/40">
+            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium text-destructive">
+                  {isRTL ? "تعذر تحميل بيانات التقرير" : "Could not load report data"}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {(branchStockError || bundleError) instanceof Error
+                    ? (branchStockError || bundleError)?.message
+                    : (isRTL ? "حدث خطأ غير متوقع" : "An unexpected error occurred")}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  void refetchBundle();
+                  void refetchBranchStock();
+                }}
+                className="gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                {isRTL ? "إعادة المحاولة" : "Retry"}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader className="p-3 sm:p-4 md:p-6">
@@ -591,7 +683,7 @@ export default function WarehouseReportsPage() {
 
               {/* Summary Cards */}
               {monthlyReport?.summary && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <Card>
                     <CardContent className="p-4 text-center">
                       <p className="text-3xl font-bold text-blue-600">{monthlyReport.summary.totalTransfers}</p>
@@ -602,12 +694,6 @@ export default function WarehouseReportsPage() {
                     <CardContent className="p-4 text-center">
                       <p className="text-3xl font-bold text-green-600">{monthlyReport.summary.deliveredTransfers}</p>
                       <p className="text-sm text-muted-foreground">{isRTL ? "تم التسليم" : "Delivered"}</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="p-4 text-center">
-                      <p className="text-3xl font-bold text-purple-600">{monthlyReport.summary.totalItemsReceived}</p>
-                      <p className="text-sm text-muted-foreground">{isRTL ? "إجمالي الكميات" : "Total Items"}</p>
                     </CardContent>
                   </Card>
                   <Card>
@@ -624,14 +710,14 @@ export default function WarehouseReportsPage() {
                 <CardHeader className="flex flex-row items-center justify-between print:pb-2">
                   <CardTitle className="flex items-center gap-2">
                     <Boxes className="w-5 h-5" />
-                    {isRTL ? "حركة المواد حسب الفرع" : "Movement by Branch"}
+                    {isRTL ? "التحويلات حسب الفرع" : "Transfers by Branch"}
                   </CardTitle>
                   <div className="print:hidden">
                     <ExportButtons
                       data={monthlyBranchExportData}
                       columns={monthlyBranchColumns}
                       fileName={`monthly-branch-${selectedMonth}-${selectedYear}`}
-                      title={isRTL ? "حركة المواد حسب الفرع" : "Movement by Branch"}
+                      title={isRTL ? "التحويلات حسب الفرع" : "Transfers by Branch"}
                       subtitle={`${getMonthName(selectedMonth)} ${selectedYear}`}
                       sheetName={isRTL ? "حسب الفرع" : "By Branch"}
                     />
@@ -643,9 +729,6 @@ export default function WarehouseReportsPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>{isRTL ? "الفرع" : "Branch"}</TableHead>
-                        <TableHead className="text-center">{isRTL ? "الوارد" : "Incoming"}</TableHead>
-                        <TableHead className="text-center">{isRTL ? "الصادر" : "Outgoing"}</TableHead>
-                        <TableHead className="text-center">{isRTL ? "الصافي" : "Net"}</TableHead>
                         <TableHead className="text-center">{isRTL ? "عدد التحويلات" : "Transfers"}</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -653,13 +736,6 @@ export default function WarehouseReportsPage() {
                       {monthlyReport.byBranch.map((row) => (
                         <TableRow key={row.branchId}>
                           <TableCell className="font-medium">{row.branchName}</TableCell>
-                          <TableCell className="text-center text-green-600 font-mono">+{row.totalIncoming}</TableCell>
-                          <TableCell className="text-center text-red-600 font-mono">-{row.totalOutgoing}</TableCell>
-                          <TableCell className="text-center font-mono font-bold">
-                            <span className={row.netMovement >= 0 ? "text-green-600" : "text-red-600"}>
-                              {row.netMovement >= 0 ? '+' : ''}{row.netMovement}
-                            </span>
-                          </TableCell>
                           <TableCell className="text-center">{row.transferCount}</TableCell>
                         </TableRow>
                       ))}
@@ -755,7 +831,6 @@ export default function WarehouseReportsPage() {
                         <TableHead>{isRTL ? "إلى" : "To"}</TableHead>
                         <TableHead className="text-center">{isRTL ? "تاريخ التسليم" : "Delivery Date"}</TableHead>
                         <TableHead className="text-center">{isRTL ? "الأصناف" : "Items"}</TableHead>
-                        <TableHead className="text-center">{isRTL ? "الكمية" : "Qty"}</TableHead>
                         <TableHead className="text-center">{isRTL ? "الحالة" : "Status"}</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -769,7 +844,6 @@ export default function WarehouseReportsPage() {
                             {t.deliveryDate ? new Date(t.deliveryDate).toLocaleDateString(isRTL ? 'en-GB' : 'en-US') : '-'}
                           </TableCell>
                           <TableCell className="text-center">{t.itemCount}</TableCell>
-                          <TableCell className="text-center font-mono">{t.totalQuantity}</TableCell>
                           <TableCell className="text-center">
                             {t.hasDiscrepancy ? (
                               <Badge variant="destructive" className="text-xs">
@@ -1244,45 +1318,6 @@ export default function WarehouseReportsPage() {
                       </CardContent>
                     </Card>
 
-                    {/* Branch Efficiency */}
-                    <Card className="lg:col-span-2">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="flex items-center gap-2">
-                          <Boxes className="w-4 h-4" />
-                          {isRTL ? "كفاءة التوريد حسب الفرع" : "Supply Efficiency by Branch"}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        {comparisons.byBranch?.length > 0 ? (
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>{isRTL ? "الفرع" : "Branch"}</TableHead>
-                                <TableHead className="text-center">{isRTL ? "المستلم" : "Received"}</TableHead>
-                                <TableHead className="text-center">{isRTL ? "المطلوب" : "Requested"}</TableHead>
-                                <TableHead className="text-center">{isRTL ? "نسبة الكفاءة" : "Efficiency"}</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {comparisons.byBranch.map((branch: any, idx: number) => (
-                                <TableRow key={idx}>
-                                  <TableCell className="font-medium">{branch.branchName}</TableCell>
-                                  <TableCell className="text-center font-mono text-green-600">{branch.totalReceived}</TableCell>
-                                  <TableCell className="text-center font-mono text-blue-600">{branch.totalRequested}</TableCell>
-                                  <TableCell className="text-center">
-                                    <Badge variant={branch.efficiency >= 90 ? 'default' : branch.efficiency >= 70 ? 'secondary' : 'destructive'}>
-                                      {branch.efficiency}%
-                                    </Badge>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        ) : (
-                          <p className="text-center text-muted-foreground py-4">{isRTL ? "لا توجد بيانات" : "No data"}</p>
-                        )}
-                      </CardContent>
-                    </Card>
                   </div>
                 )}
               </CardContent>
@@ -1315,9 +1350,6 @@ export default function WarehouseReportsPage() {
                     <ExportButtons
                       data={branchPerformance.map((b: any) => ({
                         branchName: b.branchName,
-                        totalReceived: b.totalReceived,
-                        totalSent: b.totalSent,
-                        netMovement: b.netMovement,
                         transfersReceived: b.transfersReceived,
                         transfersSent: b.transfersSent,
                         discrepancyCount: b.discrepancyCount,
@@ -1328,9 +1360,6 @@ export default function WarehouseReportsPage() {
                       }))}
                       columns={[
                         { key: 'branchName', header: isRTL ? 'الفرع' : 'Branch' },
-                        { key: 'totalReceived', header: isRTL ? 'المستلم' : 'Received' },
-                        { key: 'totalSent', header: isRTL ? 'المرسل' : 'Sent' },
-                        { key: 'netMovement', header: isRTL ? 'الصافي' : 'Net' },
                         { key: 'transfersReceived', header: isRTL ? 'تحويلات مستلمة' : 'Transfers Recv' },
                         { key: 'transfersSent', header: isRTL ? 'تحويلات مرسلة' : 'Transfers Sent' },
                         { key: 'discrepancyRate', header: isRTL ? 'نسبة الفروقات' : 'Discrepancy %' },
@@ -1356,20 +1385,6 @@ export default function WarehouseReportsPage() {
                           </CardHeader>
                           <CardContent>
                             <div className="grid grid-cols-2 gap-3 text-sm">
-                              <div>
-                                <p className="text-muted-foreground">{isRTL ? "المستلم" : "Received"}</p>
-                                <p className="font-bold text-green-600">{branch.totalReceived}</p>
-                              </div>
-                              <div>
-                                <p className="text-muted-foreground">{isRTL ? "المرسل" : "Sent"}</p>
-                                <p className="font-bold text-red-600">{branch.totalSent}</p>
-                              </div>
-                              <div>
-                                <p className="text-muted-foreground">{isRTL ? "الصافي" : "Net"}</p>
-                                <p className={`font-bold ${branch.netMovement >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {branch.netMovement >= 0 ? '+' : ''}{branch.netMovement}
-                                </p>
-                              </div>
                               <div>
                                 <p className="text-muted-foreground">{isRTL ? "نسبة الفروقات" : "Discrepancy"}</p>
                                 <Badge variant={branch.discrepancyRate <= 5 ? 'default' : branch.discrepancyRate <= 15 ? 'secondary' : 'destructive'}>
@@ -1407,9 +1422,6 @@ export default function WarehouseReportsPage() {
                             <TableHeader>
                               <TableRow>
                                 <TableHead>{isRTL ? "الفرع" : "Branch"}</TableHead>
-                                <TableHead className="text-center">{isRTL ? "المستلم" : "Recv"}</TableHead>
-                                <TableHead className="text-center">{isRTL ? "المرسل" : "Sent"}</TableHead>
-                                <TableHead className="text-center">{isRTL ? "الصافي" : "Net"}</TableHead>
                                 <TableHead className="text-center">{isRTL ? "تحويلات" : "Transfers"}</TableHead>
                                 <TableHead className="text-center">{isRTL ? "فروقات" : "Discrepancy"}</TableHead>
                                 <TableHead className="text-center">{isRTL ? "متوسط التسليم" : "Avg Days"}</TableHead>
@@ -1419,11 +1431,6 @@ export default function WarehouseReportsPage() {
                               {branchPerformance.map((branch: any, idx: number) => (
                                 <TableRow key={idx}>
                                   <TableCell className="font-medium">{branch.branchName}</TableCell>
-                                  <TableCell className="text-center text-green-600 font-mono">{branch.totalReceived}</TableCell>
-                                  <TableCell className="text-center text-red-600 font-mono">{branch.totalSent}</TableCell>
-                                  <TableCell className={`text-center font-mono font-bold ${branch.netMovement >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {branch.netMovement >= 0 ? '+' : ''}{branch.netMovement}
-                                  </TableCell>
                                   <TableCell className="text-center">{branch.transfersReceived + branch.transfersSent}</TableCell>
                                   <TableCell className="text-center">
                                     <Badge variant={branch.discrepancyRate <= 5 ? 'default' : branch.discrepancyRate <= 15 ? 'secondary' : 'destructive'}>
@@ -1474,6 +1481,7 @@ export default function WarehouseReportsPage() {
                         <th className="p-2 text-right font-semibold">{isRTL ? "الفرع" : "Branch"}</th>
                         <th className="p-2 text-right font-semibold">{isRTL ? "الصنف" : "Item"}</th>
                         <th className="p-2 text-right font-semibold">{isRTL ? "الكمية" : "Quantity"}</th>
+                        <th className="p-2 text-right font-semibold">{isRTL ? "الوحدة" : "Unit"}</th>
                         <th className="p-2 text-right font-semibold">{isRTL ? "الحالة" : "Status"}</th>
                       </tr>
                     </thead>
@@ -1483,6 +1491,7 @@ export default function WarehouseReportsPage() {
                           <td className="p-2">{row.branchName}</td>
                           <td className="p-2">{row.itemName}</td>
                           <td className="p-2">{row.currentQuantity}</td>
+                           <td className="p-2">{row.unit}</td>
                           <td className="p-2">
                             <span className={`px-2 py-1 rounded-full text-xs ${
                               row.status === (isRTL ? "منخفض" : "Low") 

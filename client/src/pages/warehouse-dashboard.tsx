@@ -1,7 +1,7 @@
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
@@ -21,6 +21,9 @@ import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { formatDistanceToNow } from "date-fns";
 import { ar } from "date-fns/locale";
+import { useBranches } from "@/hooks/useBranches";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type DashboardStats = {
   pendingRequests: number;
@@ -55,33 +58,55 @@ export default function WarehouseDashboardPage() {
   const { t, i18n } = useTranslation("platform-home");
   const isRTL = i18n.language === "ar";
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
+  const { branches, userBranchId, isLoading: branchesLoading } = useBranches();
+  const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
+  const { canView, canEdit } = usePermissions();
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [notificationOpen, setNotificationOpen] = useState(false);
 
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-    staleTime: 1000 * 60 * 60, // 1 hour - branches rarely change
-  });
+  useEffect(() => {
+    if (!navigationBranch.isResolving && navigationBranch.hasBranchParam) {
+      setSelectedBranch(navigationBranch.branchId || "all");
+    }
+  }, [navigationBranch.branchId, navigationBranch.hasBranchParam, navigationBranch.isResolving]);
 
-  const { data: stats, isLoading } = useQuery<DashboardStats>({
+  const branchQuery = selectedBranch !== "all"
+    ? `?branchId=${encodeURIComponent(selectedBranch)}`
+    : "";
+  const setBranchScope = (branchId: string) => {
+    setSelectedBranch(branchId);
+    navigate(`/warehouse${branchId !== "all" ? `?branchId=${encodeURIComponent(branchId)}` : ""}`, { replace: true });
+  };
+
+  const { data: stats, isLoading, isError: statsError } = useQuery<DashboardStats>({
     queryKey: ["/api/warehouse/dashboard-stats", selectedBranch],
     queryFn: async () => {
-      const params = selectedBranch !== "all" ? `?branchId=${selectedBranch}` : "";
-      const res = await fetch(`/api/warehouse/dashboard-stats${params}`);
+      const res = await fetch(`/api/warehouse/dashboard-stats${branchQuery}`);
+      if (!res.ok) throw new Error("Failed to fetch warehouse dashboard statistics");
       return res.json();
     },
+    enabled: !navigationBranch.isResolving
+      && (!navigationBranch.hasBranchParam || selectedBranch === navigationBranch.branchId),
     refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 60000),
     staleTime: 1000 * 30, // 30 seconds - dashboard stats
     placeholderData: (prev) => prev, // Keep previous data while loading
   });
 
-  const { data: notifications = [] } = useQuery<Notification[]>({
+  const {
+    data: notifications = [],
+    isLoading: notificationsLoading,
+    isError: notificationsError,
+  } = useQuery<Notification[]>({
     queryKey: ["/api/warehouse/notifications", selectedBranch],
     queryFn: async () => {
       const params = selectedBranch !== "all" ? `?branchId=${selectedBranch}&limit=20` : "?limit=20";
       const res = await fetch(`/api/warehouse/notifications${params}`);
+      if (!res.ok) throw new Error("Failed to fetch warehouse notifications");
       return res.json();
     },
+    enabled: !navigationBranch.isResolving
+      && (!navigationBranch.hasBranchParam || selectedBranch === navigationBranch.branchId),
     refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 60000),
     staleTime: 1000 * 30, // 30 seconds
     placeholderData: (prev) => prev,
@@ -92,8 +117,11 @@ export default function WarehouseDashboardPage() {
     queryFn: async () => {
       const params = selectedBranch !== "all" ? `?branchId=${selectedBranch}` : "";
       const res = await fetch(`/api/warehouse/notifications/unread-count${params}`);
+      if (!res.ok) throw new Error("Failed to fetch unread warehouse notifications");
       return res.json();
     },
+    enabled: !navigationBranch.isResolving
+      && (!navigationBranch.hasBranchParam || selectedBranch === navigationBranch.branchId),
     refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 60000),
     staleTime: 1000 * 30, // 30 seconds
     placeholderData: (prev) => prev,
@@ -125,7 +153,8 @@ export default function WarehouseDashboardPage() {
       title: isRTL ? "طلبات التحويل" : "Transfer Requests",
       description: isRTL ? "طلبات التحويل بين الفروع والمستودع الرئيسي" : "Transfer requests between branches and warehouse",
       icon: ArrowLeftRight,
-      href: `/transfer-requests${selectedBranch !== "all" ? `?branchId=${selectedBranch}` : ""}`,
+      href: `/transfer-requests${branchQuery}`,
+      module: "warehouse" as const,
       color: "bg-green-500",
       stats: stats?.inTransitTransfers,
       statLabel: isRTL ? "في الطريق" : "in transit",
@@ -134,7 +163,8 @@ export default function WarehouseDashboardPage() {
       title: isRTL ? "مخزون المستودع" : "Warehouse Inventory",
       description: isRTL ? "عرض ومتابعة مخزون المستودع الرئيسي" : "View and track main warehouse inventory",
       icon: Boxes,
-      href: "/warehouse-inventory",
+      href: `/warehouse-inventory${branchQuery}`,
+      module: "warehouse" as const,
       color: "bg-amber-500",
       stats: stats?.lowStockItems,
       statLabel: isRTL ? "مواد منخفضة" : "low stock",
@@ -143,56 +173,66 @@ export default function WarehouseDashboardPage() {
       title: isRTL ? "سجل الحركات" : "Movement Logs",
       description: isRTL ? "تتبع جميع حركات المخزون الواردة والصادرة" : "Track all inventory movements",
       icon: History,
-      href: `/warehouse-movement-logs${selectedBranch !== "all" ? `?branchId=${selectedBranch}` : ""}`,
+      href: `/warehouse-movement-logs${branchQuery}`,
+      module: "warehouse" as const,
       color: "bg-indigo-500",
     },
     {
       title: isRTL ? "مخزون الفروع" : "Branch Stock",
       description: isRTL ? "متابعة مستويات المخزون في الفروع" : "Monitor stock levels in branches",
       icon: Store,
-      href: `/branch-stock${selectedBranch !== "all" ? `/${selectedBranch}` : ""}`,
+      href: `/branch-stock${branchQuery}`,
+      module: "warehouse" as const,
       color: "bg-purple-500",
     },
     {
       title: isRTL ? "التقارير" : "Reports",
       description: isRTL ? "تقارير شاملة عن المخزون والطلبات والتحويلات" : "Comprehensive inventory and transfer reports",
       icon: BarChart3,
-      href: "/warehouse-reports",
+      href: `/warehouse-reports${branchQuery}`,
+      module: "warehouse" as const,
       color: "bg-rose-500",
     },
     {
       title: isRTL ? "طلبات المشتريات" : "Purchasing Requests",
       description: isRTL ? "إدارة طلبات الشراء من الموردين" : "Manage purchase orders from vendors",
       icon: ShoppingCart,
-      href: "/purchasing-requests",
+      href: `/purchasing-requests${branchQuery}`,
+      module: "warehouse" as const,
       color: "bg-pink-500",
     },
   ];
 
   const statCards = [
     {
-      title: isRTL ? "طلبات قيد الانتظار" : "Pending Requests",
+      title: selectedBranch !== "all"
+        ? (isRTL ? "تحويلات الفرع الواردة والصادرة بانتظار المراجعة" : "Branch Inbound & Outbound Transfers Pending Review")
+        : (isRTL ? "تحويلات بانتظار المراجعة" : "Transfers Pending Review"),
       value: stats?.pendingRequests ?? 0,
       icon: Clock,
       color: "text-yellow-500",
       bgColor: "bg-yellow-100 dark:bg-yellow-900/20",
     },
     {
-      title: isRTL ? "طلبات موافق عليها" : "Approved Requests",
+      title: selectedBranch !== "all"
+        ? (isRTL ? "تحويلات الفرع الواردة والصادرة المعتمدة" : "Approved Branch Inbound & Outbound Transfers")
+        : (isRTL ? "تحويلات معتمدة" : "Approved Transfers"),
       value: stats?.approvedRequests ?? 0,
       icon: CheckCircle,
       color: "text-green-500",
       bgColor: "bg-green-100 dark:bg-green-900/20",
     },
     {
-      title: isRTL ? "تحويلات في الطريق" : "In Transit",
+      title: selectedBranch !== "all"
+        ? (isRTL ? "تحويلات الفرع الواردة والصادرة في الطريق" : "Branch Inbound & Outbound Transfers in Transit")
+        : (isRTL ? "تحويلات في الطريق" : "Transfers in Transit"),
       value: stats?.inTransitTransfers ?? 0,
       icon: Truck,
       color: "text-blue-500",
       bgColor: "bg-blue-100 dark:bg-blue-900/20",
     },
     {
-      title: isRTL ? "مواد منخفضة المخزون" : "Low Stock Items",
+      title: isRTL ? "مخزون المستودع الرئيسي المنخفض (عام)" : "Main Warehouse Low Stock (Global)",
       value: stats?.lowStockItems ?? 0,
       icon: AlertTriangle,
       color: "text-red-500",
@@ -244,7 +284,7 @@ export default function WarehouseDashboardPage() {
           description={selectedBranch !== "all" ? selectedBranchName : (isRTL ? "إدارة شاملة لجميع الفروع" : "Comprehensive management for all branches")}
           actions={
             <div className="flex items-center gap-2 sm:gap-3">
-            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+            <Select value={selectedBranch} onValueChange={setBranchScope} disabled={branchesLoading}>
               <SelectTrigger className="w-[140px] sm:w-[200px] text-xs sm:text-sm" data-testid="select-branch">
                 <Building2 className="w-4 h-4 opacity-60" />
                 <SelectValue placeholder={isRTL ? "اختر الفرع" : "Select Branch"} />
@@ -286,7 +326,7 @@ export default function WarehouseDashboardPage() {
                       <Bell className="w-5 h-5" />
                       {isRTL ? "الإشعارات" : "Notifications"}
                     </SheetTitle>
-                    {unreadCount.count > 0 && (
+                    {unreadCount.count > 0 && canEdit("warehouse") && (
                       <Button 
                         variant="ghost" 
                         size="sm"
@@ -299,7 +339,15 @@ export default function WarehouseDashboardPage() {
                   </div>
                 </SheetHeader>
                 <ScrollArea className="h-[calc(100vh-100px)] mt-4">
-                  {notifications.length === 0 ? (
+                  {notificationsError ? (
+                    <div className="py-12 text-center text-sm text-destructive">
+                      {isRTL ? "تعذر تحميل الإشعارات." : "Notifications could not be loaded."}
+                    </div>
+                  ) : notificationsLoading ? (
+                    <div className="space-y-3 py-4">
+                      {[1, 2, 3].map((item) => <Skeleton key={item} className="h-20 w-full" />)}
+                    </div>
+                  ) : notifications.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 text-center">
                       <Bell className="w-12 h-12 text-muted-foreground/30 mb-4" />
                       <p className="text-muted-foreground">
@@ -311,16 +359,27 @@ export default function WarehouseDashboardPage() {
                       {notifications.map((notif) => (
                         <div 
                           key={notif.id}
-                          className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                          className={`p-3 rounded-lg border transition-colors ${
                             notif.isRead 
-                              ? "bg-background hover:bg-muted/50" 
-                              : "bg-primary/5 border-primary/20 hover:bg-primary/10"
+                              ? "bg-background"
+                              : `bg-primary/5 border-primary/20 ${canEdit("warehouse") ? "hover:bg-primary/10 cursor-pointer" : ""}`
                           }`}
                           onClick={() => {
-                            if (!notif.isRead) {
+                            if (!notif.isRead && canEdit("warehouse")) {
                               markAsReadMutation.mutate(notif.id);
                             }
                           }}
+                          onKeyDown={(event) => {
+                            if (!notif.isRead && canEdit("warehouse") && (event.key === "Enter" || event.key === " ")) {
+                              event.preventDefault();
+                              markAsReadMutation.mutate(notif.id);
+                            }
+                          }}
+                          role={!notif.isRead && canEdit("warehouse") ? "button" : undefined}
+                          tabIndex={!notif.isRead && canEdit("warehouse") ? 0 : undefined}
+                          aria-label={!notif.isRead && canEdit("warehouse")
+                            ? (isRTL ? `تحديد ${notif.title} كمقروء` : `Mark ${notif.titleEn || notif.title} as read`)
+                            : undefined}
                           data-testid={`notification-${notif.id}`}
                         >
                           <div className="flex items-start gap-3">
@@ -337,6 +396,11 @@ export default function WarehouseDashboardPage() {
                               <p className="text-xs text-muted-foreground/60 mt-2">
                                 {formatTime(notif.createdAt)}
                               </p>
+                              {!notif.isRead && canEdit("warehouse") && (
+                                <p className="text-[11px] text-primary mt-1">
+                                  {isRTL ? "اضغط لتحديده كمقروء" : "Select to mark as read"}
+                                </p>
+                              )}
                             </div>
                             {!notif.isRead && (
                               <div className="w-2 h-2 rounded-full bg-primary mt-2" />
@@ -354,12 +418,18 @@ export default function WarehouseDashboardPage() {
         />
 
         <div className="kpi-grid">
-          {statCards.map((stat, index) => (
+          {statsError ? (
+            <Card className="sm:col-span-2 lg:col-span-4 border-destructive/40">
+              <CardContent className="p-4 text-sm text-destructive">
+                {isRTL ? "تعذر تحميل مؤشرات المستودع. حاول تحديث الصفحة." : "Warehouse metrics could not be loaded. Please refresh the page."}
+              </CardContent>
+            </Card>
+          ) : statCards.map((stat, index) => (
             <Card key={index} className="overflow-hidden" data-testid={`stat-card-${index}`}>
               <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{stat.title}</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground leading-5">{stat.title}</p>
                     {isLoading ? (
                       <Skeleton className="h-6 sm:h-8 w-10 sm:w-12 mt-1" />
                     ) : (
@@ -376,7 +446,7 @@ export default function WarehouseDashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-4">
-          {quickLinks.map((link, index) => (
+          {quickLinks.filter((link) => canView(link.module)).map((link, index) => (
             <Link key={index} href={link.href}>
               <Card 
                 className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/40 h-full group"

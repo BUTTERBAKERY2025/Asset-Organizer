@@ -19,6 +19,8 @@ import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useBranches } from "@/hooks/useBranches";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 
 type WarehouseItem = {
   id: number;
@@ -84,6 +86,11 @@ export default function WarehouseInventoryPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { canCreate, canEdit, canDelete } = usePermissions();
+  const { branches, userBranchId, isLoading: branchesLoading } = useBranches();
+  const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
+  const warehouseHref = navigationBranch.branchId
+    ? `/warehouse?branchId=${encodeURIComponent(navigationBranch.branchId)}`
+    : "/warehouse";
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -105,7 +112,7 @@ export default function WarehouseInventoryPage() {
     notes: "",
   });
 
-  const { data: items = [], isLoading } = useQuery<WarehouseItem[]>({
+  const { data: items = [], isLoading, isError } = useQuery<WarehouseItem[]>({
     queryKey: ["/api/warehouse/items", filterCategory],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -364,7 +371,7 @@ export default function WarehouseInventoryPage() {
       <div className="page-container space-y-4 sm:space-y-6" dir={isRTL ? "rtl" : "ltr"}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/warehouse-dashboard">
+            <Link href={warehouseHref}>
               <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9">
                 <ArrowLeft className={`w-4 h-4 sm:w-5 sm:h-5 ${isRTL ? "rotate-180" : ""}`} />
               </Button>
@@ -381,7 +388,7 @@ export default function WarehouseInventoryPage() {
               </p>
             </div>
           </div>
-          {canCreate("warehouse_inventory") && <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          {canCreate("warehouse") && <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
               <Button data-testid="btn-add-item" className="w-full sm:w-auto">
                 <Plus className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
@@ -412,6 +419,12 @@ export default function WarehouseInventoryPage() {
             </DialogContent>
           </Dialog>}
         </div>
+
+        {!isLoading && !isError && (
+          <p className="text-xs text-muted-foreground" data-testid="global-stock-scope">
+            {isRTL ? "هذه الأرقام تخص المخزون العام للمستودع الرئيسي، وليست مخزون الفرع المحدد." : "These figures are global main-warehouse stock, not the selected branch stock."}
+          </p>
+        )}
 
         {lowStockItems.length > 0 && (
           <Card className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20">
@@ -496,7 +509,13 @@ export default function WarehouseInventoryPage() {
                   </TableRow>
                 </TableHeader>
               <TableBody>
-                {isLoading ? (
+                {isError ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-destructive">
+                      {isRTL ? "تعذر تحميل مخزون المستودع. حاول مرة أخرى." : "Warehouse inventory could not be loaded. Please try again."}
+                    </TableCell>
+                  </TableRow>
+                ) : isLoading ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-8">
                       {isRTL ? "جاري التحميل..." : "Loading..."}
@@ -529,7 +548,7 @@ export default function WarehouseInventoryPage() {
                       <TableCell className="hidden md:table-cell text-xs sm:text-sm">{item.unitCost ? `${item.unitCost.toFixed(2)} ر.س` : "-"}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
-                           {canEdit("warehouse_inventory") && <Button
+                           {canEdit("warehouse") && <Button
                             variant="ghost" 
                             size="icon" 
                             className="h-7 w-7 sm:h-8 sm:w-8"
@@ -538,7 +557,7 @@ export default function WarehouseInventoryPage() {
                           >
                             <Edit className="w-3 h-3 sm:w-4 sm:h-4" />
                            </Button>}
-                           {canDelete("warehouse_inventory") && <Button
+                           {canDelete("warehouse") && <Button
                             variant="ghost" 
                             size="icon" 
                             className="h-7 w-7 sm:h-8 sm:w-8"
@@ -562,7 +581,7 @@ export default function WarehouseInventoryPage() {
           </CardContent>
         </Card>
 
-        {canEdit("warehouse_inventory") && <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        {canEdit("warehouse") && <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>{isRTL ? "تعديل المادة" : "Edit Item"}</DialogTitle>

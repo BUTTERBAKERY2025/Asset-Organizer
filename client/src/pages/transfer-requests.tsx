@@ -891,7 +891,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
           tone="money"
           title={isRTL ? "طلبات التحويل" : "Transfer Requests"}
           description={isRTL ? "إدارة طلبات الأصناف من المستودع الرئيسي" : "Manage item requests from main warehouse"}
-          backHref="/warehouse-dashboard"
+          backHref={visibleBranchId ? `/warehouse?branchId=${encodeURIComponent(visibleBranchId)}` : "/warehouse"}
           actions={
             <div className="flex items-center gap-2">
             <div className="hidden md:block">

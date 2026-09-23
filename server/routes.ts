@@ -34,6 +34,11 @@ import {
   requireNonEmptyMaterialTransferItems,
   requireMaterialTransferIdempotencyKey,
 } from "./material-transfer-creation";
+import {
+  resolveWarehouseAllowedBranchIds,
+  warehouseMovementIsInScope,
+  warehouseTransferIsInScope,
+} from "./warehouse-dashboard-scope";
 
 // Helper to safely get current user from authenticated request
 function getCurrentUser(req: Request): User {
@@ -36525,7 +36530,8 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
       
-      const stats = await storage.getWarehouseDashboardStats(branchFilter.singleBranchId || undefined);
+      const allowedBranchIds = resolveWarehouseAllowedBranchIds(branchFilter);
+      const stats = await storage.getWarehouseDashboardStats(allowedBranchIds);
       res.json(stats);
     } catch (error) {
       console.error("Error fetching warehouse dashboard stats:", error);
@@ -36541,17 +36547,26 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
       
-      const effectiveBranchId = branchFilter.singleBranchId;
+      const allowedBranchIds = resolveWarehouseAllowedBranchIds(branchFilter);
       const startDate = req.query.startDate as string | undefined;
       const endDate = req.query.endDate as string | undefined;
 
-      const transferFilters: { branchId?: string; startDate?: string; endDate?: string } = {};
-      if (effectiveBranchId) transferFilters.branchId = effectiveBranchId;
+      const transferFilters: {
+        branchId?: string;
+        branchIds?: string[];
+        startDate?: string;
+        endDate?: string;
+      } = {};
+      if (branchFilter.singleBranchId) {
+        transferFilters.branchId = branchFilter.singleBranchId;
+      } else if (allowedBranchIds !== null) {
+        transferFilters.branchIds = allowedBranchIds;
+      }
       if (startDate) transferFilters.startDate = startDate;
       if (endDate) transferFilters.endDate = endDate;
 
       const movementFilters: { branchId?: string } = {};
-      if (effectiveBranchId) movementFilters.branchId = effectiveBranchId;
+      if (branchFilter.singleBranchId) movementFilters.branchId = branchFilter.singleBranchId;
 
       const [
         itemsResult,
@@ -36559,29 +36574,25 @@ export async function registerRoutes(
         movementLogsResult,
         branchesResult,
       ] = await Promise.all([
-        (async () => {
-          try { return await storage.getWarehouseItems({}); } catch (e) { return []; }
-        })(),
-        (async () => {
-          try { return await storage.getMaterialTransfers(transferFilters); } catch (e) { return []; }
-        })(),
-        (async () => {
-          try { return await storage.getWarehouseMovementLogs(movementFilters); } catch (e) { return []; }
-        })(),
-        (async () => {
-          try { return await storage.getAllBranches(); } catch (e) { return []; }
-        })(),
+        storage.getWarehouseItems({}),
+        storage.getMaterialTransfers(transferFilters),
+        allowedBranchIds?.length === 0
+          ? Promise.resolve([])
+          : storage.getWarehouseMovementLogs(movementFilters),
+        storage.getAllBranches(),
       ]);
 
-      let transfers = transfersResult;
-      let movementLogs = movementLogsResult;
-      if (!effectiveBranchId && branchFilter.branchIds) {
-        transfers = transfers.filter((t: any) => branchFilter.branchIds!.includes(t.fromBranchId) || branchFilter.branchIds!.includes(t.toBranchId));
-        movementLogs = movementLogs.filter((l: any) => branchFilter.branchIds!.includes(l.branchId));
-      }
+      // Defense in depth: storage performs this filter, and the response enforces
+      // it again using the canonical source/destination field names.
+      const transfers = transfersResult.filter((transfer) =>
+        warehouseTransferIsInScope(transfer, allowedBranchIds)
+      );
+      const movementLogs = movementLogsResult.filter((movement) =>
+        warehouseMovementIsInScope(movement, allowedBranchIds)
+      );
       
-      const branches = branchFilter.branchIds 
-        ? branchesResult.filter((b: any) => branchFilter.branchIds!.includes(b.id))
+      const branches = allowedBranchIds !== null
+        ? branchesResult.filter((branch) => allowedBranchIds.includes(branch.id))
         : branchesResult;
 
       res.json({
@@ -37429,11 +37440,15 @@ export async function registerRoutes(
   app.get("/api/warehouse/monthly-report", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
     try {
       const { branchId, month, year } = req.query;
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
       const targetMonth = month ? parseInt(month as string) : new Date().getMonth() + 1;
       const targetYear = year ? parseInt(year as string) : new Date().getFullYear();
       
       const report = await storage.getMonthlyMovementReport(
-        branchId as string | undefined,
+        resolveWarehouseAllowedBranchIds(branchFilter),
         targetMonth,
         targetYear
       );
@@ -37452,10 +37467,14 @@ export async function registerRoutes(
     try {
       const itemId = parseInt(req.params.itemId);
       const { branchId, startDate, endDate } = req.query;
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
       
       const report = await storage.getItemAccountStatement(
         itemId,
-        branchId as string | undefined,
+        resolveWarehouseAllowedBranchIds(branchFilter),
         startDate as string | undefined,
         endDate as string | undefined
       );
@@ -37471,9 +37490,13 @@ export async function registerRoutes(
   app.get("/api/warehouse/reports/top-requested", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
     try {
       const { branchId, startDate, endDate, limit } = req.query;
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
       
       const report = await storage.getTopRequestedProducts(
-        branchId as string | undefined,
+        resolveWarehouseAllowedBranchIds(branchFilter),
         startDate as string | undefined,
         endDate as string | undefined,
         limit ? parseInt(limit as string) : 10
@@ -37490,11 +37513,15 @@ export async function registerRoutes(
   app.get("/api/warehouse/reports/comparisons", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
     try {
       const { month, year, branchId } = req.query;
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
       
       const report = await storage.getTopReceivedVsRequested(
         month ? parseInt(month as string) : undefined,
         year ? parseInt(year as string) : undefined,
-        branchId as string | undefined
+        resolveWarehouseAllowedBranchIds(branchFilter)
       );
       
       res.json(report);
@@ -37507,9 +37534,14 @@ export async function registerRoutes(
   // Branch Performance Report - تحليل أداء الفروع
   app.get("/api/warehouse/reports/branch-performance", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
     try {
-      const { startDate, endDate } = req.query;
+      const { startDate, endDate, branchId } = req.query;
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
       
       const report = await storage.getBranchPerformanceReport(
+        resolveWarehouseAllowedBranchIds(branchFilter),
         startDate as string | undefined,
         endDate as string | undefined
       );
@@ -37525,7 +37557,7 @@ export async function registerRoutes(
   
   app.get("/api/warehouse/notifications", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
     try {
-      const user = req.currentUser;
+      const user = getCurrentUser(req);
       const filters: { branchId?: string; branchIds?: string[]; userId?: string; isRead?: boolean; limit?: number } = {};
       
       // SECURITY: Enforce branch isolation using getEffectiveBranchFilter
@@ -37541,7 +37573,7 @@ export async function registerRoutes(
         filters.branchIds = branchFilter.branchIds;
       }
       
-      filters.userId = user?.id;
+      filters.userId = user.id;
       if (req.query.isRead !== undefined) filters.isRead = req.query.isRead === 'true';
       if (req.query.limit) filters.limit = parseInt(req.query.limit as string);
       
@@ -37555,9 +37587,15 @@ export async function registerRoutes(
 
   app.get("/api/warehouse/notifications/unread-count", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
     try {
-      const user = req.currentUser;
-      const branchId = (req.query.branchId as string || user?.branchId) ?? undefined;
-      const count = await storage.getUnreadNotificationCount(branchId, user?.id);
+      const user = getCurrentUser(req);
+      const branchFilter = getEffectiveBranchFilter(req, req.query.branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+      const count = await storage.getUnreadNotificationCount(
+        resolveWarehouseAllowedBranchIds(branchFilter),
+        user.id,
+      );
       res.json({ count });
     } catch (error) {
       console.error("Error fetching unread count:", error);
@@ -37577,8 +37615,16 @@ export async function registerRoutes(
 
   app.put("/api/warehouse/notifications/:id/read", isAuthenticated, requirePermission("warehouse", "edit"), async (req, res) => {
     try {
-      const user = req.currentUser;
-      const notification = await storage.markNotificationAsRead(parseInt(req.params.id), user?.id);
+      const user = getCurrentUser(req);
+      const branchFilter = getEffectiveBranchFilter(req, undefined);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+      const notification = await storage.markNotificationAsRead(
+        parseInt(req.params.id),
+        resolveWarehouseAllowedBranchIds(branchFilter),
+        user.id,
+      );
       if (!notification) {
         return res.status(404).json({ error: "الإشعار غير موجود" });
       }
@@ -37591,9 +37637,15 @@ export async function registerRoutes(
 
   app.put("/api/warehouse/notifications/mark-all-read", isAuthenticated, requirePermission("warehouse", "edit"), async (req, res) => {
     try {
-      const user = req.currentUser;
-      const branchId = (req.query.branchId as string || user?.branchId) ?? undefined;
-      await storage.markAllNotificationsAsRead(branchId, user?.id);
+      const user = getCurrentUser(req);
+      const branchFilter = getEffectiveBranchFilter(req, req.query.branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+      await storage.markAllNotificationsAsRead(
+        resolveWarehouseAllowedBranchIds(branchFilter),
+        user.id,
+      );
       res.json({ success: true });
     } catch (error) {
       console.error("Error marking all notifications as read:", error);

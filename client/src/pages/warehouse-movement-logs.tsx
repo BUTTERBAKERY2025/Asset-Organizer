@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,9 @@ import {
   History, Search, Filter, ArrowLeft, TrendingUp, TrendingDown, 
   ArrowRightLeft, Package, Calendar
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { useBranches } from "@/hooks/useBranches";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 
 type MovementLog = {
   id: number;
@@ -64,16 +66,21 @@ function getMovementTypeBadge(movementType: string, isRTL: boolean) {
 export default function WarehouseMovementLogsPage() {
   const { t, i18n } = useTranslation("platform-home");
   const isRTL = i18n.language === "ar";
+  const [, navigate] = useLocation();
+  const { branches, userBranchId, isLoading: branchesLoading } = useBranches();
+  const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
 
   const [filterBranch, setFilterBranch] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
-  });
+  useEffect(() => {
+    if (!navigationBranch.isResolving && navigationBranch.hasBranchParam) {
+      setFilterBranch(navigationBranch.branchId || "all");
+    }
+  }, [navigationBranch.branchId, navigationBranch.hasBranchParam, navigationBranch.isResolving]);
 
-  const { data: logs = [], isLoading } = useQuery<MovementLog[]>({
+  const { data: logs = [], isLoading, isError } = useQuery<MovementLog[]>({
     queryKey: ["/api/warehouse/movement-logs", filterBranch, filterType],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -83,6 +90,8 @@ export default function WarehouseMovementLogsPage() {
       if (!response.ok) throw new Error("Failed to fetch logs");
       return response.json();
     },
+    enabled: !navigationBranch.isResolving
+      && (!navigationBranch.hasBranchParam || filterBranch === navigationBranch.branchId),
   });
 
   const filteredLogs = logs.filter(log => {
@@ -96,12 +105,17 @@ export default function WarehouseMovementLogsPage() {
     }
     return true;
   });
+  const branchQuery = filterBranch !== "all" ? `?branchId=${encodeURIComponent(filterBranch)}` : "";
+  const changeBranch = (branchId: string) => {
+    setFilterBranch(branchId);
+    navigate(`/warehouse-movement-logs${branchId !== "all" ? `?branchId=${encodeURIComponent(branchId)}` : ""}`, { replace: true });
+  };
 
   return (
     <Layout>
       <div className="page-container space-y-4 sm:space-y-6" dir={isRTL ? "rtl" : "ltr"}>
         <div className="flex items-center gap-2 sm:gap-3">
-          <Link href="/warehouse-dashboard">
+          <Link href={`/warehouse${branchQuery}`}>
             <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9">
               <ArrowLeft className={`w-4 h-4 sm:w-5 sm:h-5 ${isRTL ? "rotate-180" : ""}`} />
             </Button>
@@ -145,7 +159,7 @@ export default function WarehouseMovementLogsPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={filterBranch} onValueChange={setFilterBranch}>
+            <Select value={filterBranch} onValueChange={changeBranch} disabled={branchesLoading}>
               <SelectTrigger className="w-[130px] sm:w-[180px] h-9 sm:h-10" data-testid="filter-branch">
                 <SelectValue placeholder={isRTL ? "الفرع" : "Branch"} />
               </SelectTrigger>
@@ -153,7 +167,7 @@ export default function WarehouseMovementLogsPage() {
                 <SelectItem value="all">{isRTL ? "جميع الفروع" : "All Branches"}</SelectItem>
                 {branches.map((branch) => (
                   <SelectItem key={branch.id} value={branch.id}>
-                    {isRTL ? branch.nameAr || branch.name : branch.name}
+                    {branch.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -179,7 +193,13 @@ export default function WarehouseMovementLogsPage() {
                   </TableRow>
                 </TableHeader>
               <TableBody>
-                {isLoading ? (
+                {isError ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center py-8 text-destructive">
+                      {isRTL ? "تعذر تحميل سجل الحركات. حاول مرة أخرى." : "Movement logs could not be loaded. Please try again."}
+                    </TableCell>
+                  </TableRow>
+                ) : isLoading ? (
                   <TableRow>
                     <TableCell colSpan={9} className="text-center py-8">
                       {isRTL ? "جاري التحميل..." : "Loading..."}
@@ -192,7 +212,9 @@ export default function WarehouseMovementLogsPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredLogs.map((log) => (
+                  filteredLogs.map((log) => {
+                    const balanceDelta = Number(log.balanceAfter) - Number(log.balanceBefore);
+                    return (
                     <TableRow key={log.id} data-testid={`log-row-${log.id}`}>
                       <TableCell className="text-xs sm:text-sm">
                         <div className="flex items-center gap-1">
@@ -212,8 +234,8 @@ export default function WarehouseMovementLogsPage() {
                       <TableCell className="hidden sm:table-cell text-xs sm:text-sm">{log.branchName || "-"}</TableCell>
                       <TableCell>{getMovementTypeBadge(log.movementType, isRTL)}</TableCell>
                       <TableCell>
-                        <span className={`text-xs sm:text-sm ${log.quantity > 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}`}>
-                          {log.quantity > 0 ? `+${log.quantity}` : log.quantity}
+                        <span className={`text-xs sm:text-sm ${balanceDelta >= 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}`}>
+                          {balanceDelta > 0 ? `+${balanceDelta}` : balanceDelta}
                         </span>
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground text-xs sm:text-sm">{log.balanceBefore}</TableCell>
@@ -223,7 +245,8 @@ export default function WarehouseMovementLogsPage() {
                         {log.notes || "-"}
                       </TableCell>
                     </TableRow>
-                  ))
+                    );
+                  })
                 )}
               </TableBody>
               </Table>

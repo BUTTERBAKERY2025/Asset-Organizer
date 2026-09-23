@@ -1,6 +1,15 @@
 import memoize from "memoizee";
-import { runIdempotentMaterialTransferCreation } from "./material-transfer-creation";
+import {
+  allocateMaterialTransferCreation,
+  MaterialTransferCreationError,
+  nextMaterialTransferNumber,
+  runIdempotentMaterialTransferCreation,
+} from "./material-transfer-creation";
 import { resolveMaterialTransferCatalogItems } from "./material-transfer-catalog";
+import {
+  destinationCreditSnapshot,
+  sourceDebitSnapshot,
+} from "./material-transfer-ledger";
 
 // Helper function to get Saudi Arabia time (UTC+3)
 function getSaudiArabiaTime(): { date: string; time: string; timeShort: string } {
@@ -2014,7 +2023,7 @@ export class DatabaseStorage implements IStorage {
               : user.username;
           }
         }
-        
+
         await this.createSystemAuditLog({
           module: 'inventory',
           entityId: id,
@@ -14120,6 +14129,13 @@ export class DatabaseStorage implements IStorage {
         ? item.discrepancy
         : requireMaterialQuantity(item.discrepancy, materialQuantitySchema, "فرق الكمية يجب أن يكون حتى 6 منازل عشرية"),
     }));
+    const normalizedItemIds = new Set<number>();
+    for (const item of normalizedItems) {
+      if (!Number.isInteger(item.itemId) || item.itemId <= 0 || normalizedItemIds.has(item.itemId)) {
+        throw new MaterialTransferCreationError("يحتوي التحويل على صنف مكرر أو غير صالح", 400);
+      }
+      normalizedItemIds.add(item.itemId);
+    }
     const idempotencyKey = transfer.idempotencyKey;
     const idempotencyActorId = transfer.idempotencyActorId;
     const idempotencyAction = transfer.idempotencyAction;
@@ -14130,10 +14146,29 @@ export class DatabaseStorage implements IStorage {
     return runIdempotentMaterialTransferCreation({
       payloadHash,
       create: () => db.transaction(async (tx) => {
-        const [row] = await tx.insert(materialTransfers).values(transfer).returning();
+        const row = await allocateMaterialTransferCreation({
+          now: new Date(),
+          // One transaction-scoped lock is intentionally shared by all monthly
+          // sequences. This is cheap (creation only) and avoids hash collisions.
+          lockNumberAllocation: async () => {
+            await tx.execute(sql`SELECT pg_advisory_xact_lock(1979041201)`);
+          },
+          findExistingNumbers: async (prefix) => {
+            const existing = await tx.select({ transferNumber: materialTransfers.transferNumber })
+              .from(materialTransfers)
+              .where(sql`${materialTransfers.transferNumber} LIKE ${`${prefix}-%`}`);
+            return existing.map(({ transferNumber }) => transferNumber);
+          },
+          insert: async (transferNumber) => {
+            const [inserted] = await tx.insert(materialTransfers)
+              .values({ ...transfer, transferNumber })
+              .returning();
+            return inserted;
+          },
+        });
         // Keep the idempotency header insert first: a replay must resolve the
         // durable transfer even if its catalogue snapshot has since changed.
-        const uniqueItemIds = [...new Set(normalizedItems.map((item) => item.itemId))];
+        const uniqueItemIds = Array.from(normalizedItemIds);
         const catalogItems = await tx.select({
           id: warehouseItems.id,
           name: warehouseItems.name,
@@ -14279,6 +14314,7 @@ export class DatabaseStorage implements IStorage {
         receivedQuantity,
         discrepancy,
         discrepancyNotes: receipt?.discrepancyNotes,
+        sourceBalanceAfter: 0,
       };
     });
 
@@ -14326,10 +14362,14 @@ export class DatabaseStorage implements IStorage {
             eq(warehouseItems.id, item.itemId),
             sql`${warehouseItems.currentStock} >= ${sentQuantity}`,
           ))
-          .returning({ id: warehouseItems.id });
+          .returning({
+            id: warehouseItems.id,
+            balanceAfter: warehouseItems.currentStock,
+          });
         if (!debited.length) {
           throw materialDeliveryConflict(`مخزون المستودع للمادة ${item.itemId} غير كافٍ لإتمام التحويل`);
         }
+        line.sourceBalanceAfter = debited[0].balanceAfter;
       } else {
         const debited = await tx.update(branchStock)
           .set({
@@ -14342,10 +14382,14 @@ export class DatabaseStorage implements IStorage {
             eq(branchStock.itemId, item.itemId),
             sql`${branchStock.currentQuantity} - ${branchStock.reservedQuantity} >= ${sentQuantity}`,
           ))
-          .returning({ id: branchStock.id });
+          .returning({
+            id: branchStock.id,
+            balanceAfter: branchStock.currentQuantity,
+          });
         if (!debited.length) {
           throw materialDeliveryConflict(`مخزون المادة ${item.itemId} غير المحجوز غير كافٍ لإتمام التحويل`);
         }
+        line.sourceBalanceAfter = debited[0].balanceAfter;
       }
 
       await tx.update(materialTransferItems)
@@ -14359,7 +14403,7 @@ export class DatabaseStorage implements IStorage {
       // A zero receipt is a valid loss/missing receipt.  It has no incoming
       // stock movement and must not attempt to insert an invalid zero audit row.
       if (receivedQuantity > 0) {
-        await tx.insert(branchStock).values({
+        const [credited] = await tx.insert(branchStock).values({
           branchId: transfer.destinationBranchId,
           itemId: item.itemId,
           currentQuantity: receivedQuantity,
@@ -14371,13 +14415,14 @@ export class DatabaseStorage implements IStorage {
             lastUpdated: new Date(),
             updatedBy: userId,
           },
-        });
+        }).returning({ balanceAfter: branchStock.currentQuantity });
 
         await tx.insert(warehouseMovementLogs).values({
           itemId: item.itemId,
           branchId: transfer.destinationBranchId,
           movementType: "transfer_in",
           quantity: receivedQuantity,
+          ...destinationCreditSnapshot(credited.balanceAfter, receivedQuantity),
           referenceType: "transfer",
           referenceId: transfer.id,
           notes: `استلام ${receivedQuantity} من تحويل ${transfer.transferNumber}${discrepancy !== 0 ? ` (فرق: ${discrepancy})` : ""}`,
@@ -14390,6 +14435,7 @@ export class DatabaseStorage implements IStorage {
         branchId: sourceIsWarehouse ? undefined : transfer.sourceBranchId!,
         movementType: "transfer_out",
         quantity: sentQuantity,
+        ...sourceDebitSnapshot(line.sourceBalanceAfter, sentQuantity),
         referenceType: "transfer",
         referenceId: transfer.id,
         notes: `إرسال ${sentQuantity} في تحويل ${transfer.transferNumber}`,
@@ -14458,15 +14504,9 @@ export class DatabaseStorage implements IStorage {
     const existing = await db.select()
       .from(materialTransfers)
       .where(sql`${materialTransfers.transferNumber} LIKE ${prefix + '%'}`)
-      .orderBy(desc(materialTransfers.transferNumber));
+      .orderBy(desc(materialTransfers.id));
     
-    let nextNum = 1;
-    if (existing.length > 0) {
-      const lastNum = existing[0].transferNumber.split('-').pop();
-      nextNum = parseInt(lastNum || '0') + 1;
-    }
-    
-    return `${prefix}-${String(nextNum).padStart(4, '0')}`;
+    return nextMaterialTransferNumber(today, existing.map(({ transferNumber }) => transferNumber));
   }
 
   // Modify Transfer Quantities - تعديل كميات طلب التحويل (قبل الإرسال فقط)
@@ -14497,6 +14537,21 @@ export class DatabaseStorage implements IStorage {
       
       // Get current items
       const items = await tx.select().from(materialTransferItems).where(eq(materialTransferItems.transferId, transferId));
+
+      const seenItemIds = new Set<number>();
+      for (const mod of modifications) {
+        if (!Number.isInteger(mod.itemId) || mod.itemId <= 0 || seenItemIds.has(mod.itemId)) {
+          throw new Error("قائمة تعديل التحويل تحتوي على صنف مكرر أو غير صالح");
+        }
+        seenItemIds.add(mod.itemId);
+        if (!items.some((item) => item.itemId === mod.itemId)) {
+          throw new Error(`الصنف ${mod.itemId} ليس ضمن التحويل`);
+        }
+        requirePositiveMaterialQuantity(
+          mod.newQuantity,
+          "كمية التحويل يجب أن تكون موجبة حتى 6 منازل عشرية",
+        );
+      }
       
       let hasModifications = false;
       
@@ -14547,10 +14602,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Warehouse Movement Logs
-  async getWarehouseMovementLogs(filters?: { itemId?: number; branchId?: string; movementType?: string }): Promise<WarehouseMovementLog[]> {
+  async getWarehouseMovementLogs(filters?: { itemId?: number; branchId?: string; branchIds?: string[]; movementType?: string }): Promise<WarehouseMovementLog[]> {
     const conditions = [];
     if (filters?.itemId) conditions.push(eq(warehouseMovementLogs.itemId, filters.itemId));
     if (filters?.branchId) conditions.push(eq(warehouseMovementLogs.branchId, filters.branchId));
+    else if (filters?.branchIds) conditions.push(inArray(warehouseMovementLogs.branchId, filters.branchIds));
     if (filters?.movementType) conditions.push(eq(warehouseMovementLogs.movementType, filters.movementType));
     
     if (conditions.length > 0) {
@@ -14571,7 +14627,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Monthly Movement Report - تقرير الحركة الشهري
-  async getMonthlyMovementReport(branchId: string | undefined, month: number, year: number): Promise<{
+  async getMonthlyMovementReport(allowedBranchIds: readonly string[] | null, month: number, year: number): Promise<{
     byBranch: Array<{
       branchId: string;
       branchName: string;
@@ -14614,23 +14670,18 @@ export class DatabaseStorage implements IStorage {
       : `${year}-${String(month + 1).padStart(2, '0')}-01`;
 
     // Get delivered transfers for the month
-    const transfersQuery = branchId
-      ? db.select().from(materialTransfers)
-          .where(and(
-            eq(materialTransfers.status, 'delivered'),
-            or(
-              eq(materialTransfers.destinationBranchId, branchId),
-              eq(materialTransfers.sourceBranchId, branchId)
-            ),
-            sql`${materialTransfers.deliveryDate} >= ${startDate}`,
-            sql`${materialTransfers.deliveryDate} < ${endDate}`
-          ))
-      : db.select().from(materialTransfers)
-          .where(and(
-            eq(materialTransfers.status, 'delivered'),
-            sql`${materialTransfers.deliveryDate} >= ${startDate}`,
-            sql`${materialTransfers.deliveryDate} < ${endDate}`
-          ));
+    const transferConditions = [
+      eq(materialTransfers.status, 'delivered'),
+      sql`${materialTransfers.deliveryDate} >= ${startDate}`,
+      sql`${materialTransfers.deliveryDate} < ${endDate}`,
+    ];
+    if (allowedBranchIds !== null) {
+      transferConditions.push(or(
+        inArray(materialTransfers.destinationBranchId, Array.from(allowedBranchIds)),
+        inArray(materialTransfers.sourceBranchId, Array.from(allowedBranchIds)),
+      )!);
+    }
+    const transfersQuery = db.select().from(materialTransfers).where(and(...transferConditions));
 
     const deliveredTransfers = await transfersQuery;
 
@@ -14651,6 +14702,8 @@ export class DatabaseStorage implements IStorage {
 
     // Calculate by branch
     const branchStats: Map<string, { incoming: number; outgoing: number; count: number }> = new Map();
+    const branchIsAllowed = (branchId: string | null): boolean =>
+      !!branchId && (allowedBranchIds === null || allowedBranchIds.includes(branchId));
     
     for (const transfer of deliveredTransfers) {
       const destBranch = transfer.destinationBranchId;
@@ -14663,15 +14716,17 @@ export class DatabaseStorage implements IStorage {
       );
       
       // Incoming to destination
-      if (!branchStats.has(destBranch)) {
+      if (branchIsAllowed(destBranch) && !branchStats.has(destBranch)) {
         branchStats.set(destBranch, { incoming: 0, outgoing: 0, count: 0 });
       }
-      const destStats = branchStats.get(destBranch)!;
-      destStats.incoming = addMaterialQuantities(destStats.incoming, totalQty);
-      destStats.count++;
+      if (branchIsAllowed(destBranch)) {
+        const destStats = branchStats.get(destBranch)!;
+        destStats.incoming = addMaterialQuantities(destStats.incoming, totalQty);
+        destStats.count++;
+      }
       
       // Outgoing from source (if branch-to-branch)
-      if (srcBranch && srcBranch !== 'main_warehouse') {
+      if (srcBranch && srcBranch !== 'main_warehouse' && branchIsAllowed(srcBranch)) {
         if (!branchStats.has(srcBranch)) {
           branchStats.set(srcBranch, { incoming: 0, outgoing: 0, count: 0 });
         }
@@ -14700,19 +14755,26 @@ export class DatabaseStorage implements IStorage {
       const srcBranch = transfer.sourceBranchId;
       
       for (const item of items) {
+        const includeIncoming = branchIsAllowed(transfer.destinationBranchId);
+        const includeOutgoing = !!srcBranch
+          && srcBranch !== 'main_warehouse'
+          && branchIsAllowed(srcBranch);
+        if (!includeIncoming && !includeOutgoing) continue;
         if (!itemStats.has(item.itemId)) {
           itemStats.set(item.itemId, { incoming: 0, outgoing: 0 });
         }
         const stats = itemStats.get(item.itemId)!;
         
         // Incoming: received quantities at destination
-        stats.incoming = addMaterialQuantities(
-          stats.incoming,
-          item.receivedQuantity ?? item.quantity,
-        );
+        if (includeIncoming) {
+          stats.incoming = addMaterialQuantities(
+            stats.incoming,
+            item.receivedQuantity ?? item.quantity,
+          );
+        }
         
         // Outgoing: sent quantities from source (only for branch-to-branch transfers)
-        if (srcBranch && srcBranch !== 'main_warehouse') {
+        if (includeOutgoing) {
           stats.outgoing = addMaterialQuantities(stats.outgoing, item.quantity);
         }
       }
@@ -14754,10 +14816,18 @@ export class DatabaseStorage implements IStorage {
     const summary = {
       totalTransfers: deliveredTransfers.length,
       deliveredTransfers: deliveredTransfers.length,
-      totalItemsReceived: allTransferItems.reduce(
-        (sum, item) => addMaterialQuantities(sum, item.receivedQuantity ?? item.quantity),
-        0,
-      ),
+      totalItemsReceived: deliveredTransfers.reduce((sum, transfer) => {
+        if (!branchIsAllowed(transfer.destinationBranchId)) return sum;
+        return allTransferItems
+          .filter((item) => item.transferId === transfer.id)
+          .reduce(
+            (transferSum, item) => addMaterialQuantities(
+              transferSum,
+              item.receivedQuantity ?? item.quantity,
+            ),
+            sum,
+          );
+      }, 0),
       transfersWithDiscrepancy: deliveredTransfers.filter(t => t.hasDiscrepancy).length
     };
 
@@ -14767,7 +14837,7 @@ export class DatabaseStorage implements IStorage {
   // Item Account Statement - كشف حساب حسب الصنف
   async getItemAccountStatement(
     itemId: number,
-    branchId?: string,
+    allowedBranchIds: readonly string[] | null,
     startDate?: string,
     endDate?: string
   ): Promise<{
@@ -14799,6 +14869,12 @@ export class DatabaseStorage implements IStorage {
 
     // Build conditions for transfers
     const conditions: any[] = [eq(materialTransfers.status, 'delivered')];
+    if (allowedBranchIds !== null) {
+      conditions.push(or(
+        inArray(materialTransfers.destinationBranchId, Array.from(allowedBranchIds)),
+        inArray(materialTransfers.sourceBranchId, Array.from(allowedBranchIds)),
+      ));
+    }
     if (startDate) conditions.push(sql`${materialTransfers.deliveryDate} >= ${startDate}`);
     if (endDate) conditions.push(sql`${materialTransfers.deliveryDate} <= ${endDate}`);
 
@@ -14838,8 +14914,13 @@ export class DatabaseStorage implements IStorage {
 
       for (const ti of items) {
         const qty = ti.receivedQuantity ?? ti.quantity;
-        const isIncoming = !branchId || transfer.destinationBranchId === branchId;
-        const isOutgoing = branchId && transfer.sourceBranchId === branchId;
+        const isIncoming = allowedBranchIds === null
+          || allowedBranchIds.includes(transfer.destinationBranchId);
+        // Preserve the legacy unrestricted statement (incoming ledger only);
+        // scoped statements additionally show outgoing movements for their branches.
+        const isOutgoing = allowedBranchIds !== null
+          && !!transfer.sourceBranchId
+          && allowedBranchIds.includes(transfer.sourceBranchId);
 
         if (isIncoming) {
           totalIn = addMaterialQuantities(totalIn, qty);
@@ -14888,7 +14969,7 @@ export class DatabaseStorage implements IStorage {
 
   // Top Requested Products by Branch - أكثر المنتجات طلباً حسب الفرع
   async getTopRequestedProducts(
-    branchId?: string,
+    allowedBranchIds: readonly string[] | null,
     startDate?: string,
     endDate?: string,
     limit: number = 10
@@ -14910,7 +14991,9 @@ export class DatabaseStorage implements IStorage {
 
     // Build conditions
     const conditions: any[] = [];
-    if (branchId) conditions.push(eq(materialTransfers.destinationBranchId, branchId));
+    if (allowedBranchIds !== null) {
+      conditions.push(inArray(materialTransfers.destinationBranchId, Array.from(allowedBranchIds)));
+    }
     if (startDate) conditions.push(sql`${materialTransfers.createdAt} >= ${startDate}`);
     if (endDate) conditions.push(sql`${materialTransfers.createdAt} <= ${endDate}`);
 
@@ -14959,7 +15042,7 @@ export class DatabaseStorage implements IStorage {
   async getTopReceivedVsRequested(
     month?: number,
     year?: number,
-    branchId?: string
+    allowedBranchIds: readonly string[] | null = null
   ): Promise<{
     topReceived: Array<{
       itemId: number;
@@ -15000,7 +15083,9 @@ export class DatabaseStorage implements IStorage {
       sql`${materialTransfers.deliveryDate} >= ${startDate}`,
       sql`${materialTransfers.deliveryDate} < ${endDate}`
     ];
-    if (branchId) conditions.push(eq(materialTransfers.destinationBranchId, branchId));
+    if (allowedBranchIds !== null) {
+      conditions.push(inArray(materialTransfers.destinationBranchId, Array.from(allowedBranchIds)));
+    }
 
     const deliveredTransfers = await db.select().from(materialTransfers).where(and(...conditions));
     
@@ -15009,7 +15094,9 @@ export class DatabaseStorage implements IStorage {
       sql`${materialTransfers.createdAt} >= ${startDate}`,
       sql`${materialTransfers.createdAt} < ${endDate}`
     ];
-    if (branchId) requestConditions.push(eq(materialTransfers.destinationBranchId, branchId));
+    if (allowedBranchIds !== null) {
+      requestConditions.push(inArray(materialTransfers.destinationBranchId, Array.from(allowedBranchIds)));
+    }
     
     const allRequests = await db.select().from(materialTransfers).where(and(...requestConditions));
 
@@ -15100,6 +15187,7 @@ export class DatabaseStorage implements IStorage {
 
   // Branch Performance Analysis - تحليل أداء الفروع
   async getBranchPerformanceReport(
+    allowedBranchIds: readonly string[] | null,
     startDate?: string,
     endDate?: string
   ): Promise<Array<{
@@ -15124,6 +15212,12 @@ export class DatabaseStorage implements IStorage {
 
     // Build conditions
     const conditions: any[] = [eq(materialTransfers.status, 'delivered')];
+    if (allowedBranchIds !== null) {
+      conditions.push(or(
+        inArray(materialTransfers.destinationBranchId, Array.from(allowedBranchIds)),
+        inArray(materialTransfers.sourceBranchId, Array.from(allowedBranchIds)),
+      ));
+    }
     if (startDate) conditions.push(sql`${materialTransfers.deliveryDate} >= ${startDate}`);
     if (endDate) conditions.push(sql`${materialTransfers.deliveryDate} <= ${endDate}`);
 
@@ -15151,6 +15245,9 @@ export class DatabaseStorage implements IStorage {
       const destBranch = transfer.destinationBranchId;
       const srcBranch = transfer.sourceBranchId;
       const items = allTransferItems.filter(ti => ti.transferId === transfer.id);
+      const destinationIsAllowed = allowedBranchIds === null || allowedBranchIds.includes(destBranch);
+      const sourceIsAllowed = !!srcBranch
+        && (allowedBranchIds === null || allowedBranchIds.includes(srcBranch));
       
       // Calculate delivery days
       let deliveryDays = 0;
@@ -15161,26 +15258,28 @@ export class DatabaseStorage implements IStorage {
       }
 
       // Destination stats
-      if (!branchStats.has(destBranch)) {
+      if (destinationIsAllowed && !branchStats.has(destBranch)) {
         branchStats.set(destBranch, {
           received: 0, sent: 0, transfersReceived: 0, transfersSent: 0,
           discrepancies: 0, deliveryDays: [], itemsReceived: new Map(), itemsSent: new Map()
         });
       }
-      const destStats = branchStats.get(destBranch)!;
-      destStats.transfersReceived++;
-      destStats.deliveryDays.push(deliveryDays);
-      if (transfer.hasDiscrepancy) destStats.discrepancies++;
-      
-      for (const item of items) {
-        const qty = item.receivedQuantity ?? item.quantity;
-        destStats.received = addMaterialQuantities(destStats.received, qty);
-        const current = destStats.itemsReceived.get(item.itemId) ?? 0;
-        destStats.itemsReceived.set(item.itemId, addMaterialQuantities(current, qty));
+      if (destinationIsAllowed) {
+        const destStats = branchStats.get(destBranch)!;
+        destStats.transfersReceived++;
+        destStats.deliveryDays.push(deliveryDays);
+        if (transfer.hasDiscrepancy) destStats.discrepancies++;
+
+        for (const item of items) {
+          const qty = item.receivedQuantity ?? item.quantity;
+          destStats.received = addMaterialQuantities(destStats.received, qty);
+          const current = destStats.itemsReceived.get(item.itemId) ?? 0;
+          destStats.itemsReceived.set(item.itemId, addMaterialQuantities(current, qty));
+        }
       }
 
       // Source stats (for branch-to-branch)
-      if (srcBranch && srcBranch !== 'main_warehouse') {
+      if (srcBranch && srcBranch !== 'main_warehouse' && sourceIsAllowed) {
         if (!branchStats.has(srcBranch)) {
           branchStats.set(srcBranch, {
             received: 0, sent: 0, transfersReceived: 0, transfersSent: 0,
@@ -15243,39 +15342,47 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Warehouse Dashboard Stats
-  async getWarehouseDashboardStats(branchId?: string): Promise<{
+  async getWarehouseDashboardStats(allowedBranchIds: readonly string[] | null): Promise<{
     pendingRequests: number;
     approvedRequests: number;
     inTransitTransfers: number;
     lowStockItems: number;
   }> {
-    const pendingResult = await db.select({ count: sql<number>`count(*)` })
-      .from(materialTransfers)
-      .where(branchId 
-        ? and(eq(materialTransfers.status, 'pending'), eq(materialTransfers.destinationBranchId, branchId))
-        : eq(materialTransfers.status, 'pending')
-      );
-    
-    const approvedResult = await db.select({ count: sql<number>`count(*)` })
-      .from(materialTransfers)
-      .where(branchId 
-        ? and(eq(materialTransfers.status, 'approved'), eq(materialTransfers.destinationBranchId, branchId))
-        : eq(materialTransfers.status, 'approved')
-      );
-    
-    const inTransitResult = await db.select({ count: sql<number>`count(*)` })
-      .from(materialTransfers)
-      .where(branchId 
-        ? and(eq(materialTransfers.status, 'in_transit'), eq(materialTransfers.destinationBranchId, branchId))
-        : eq(materialTransfers.status, 'in_transit')
-      );
-    
-    const lowStockResult = await db.select({ count: sql<number>`count(*)` })
-      .from(warehouseItems)
-      .where(and(
-        eq(warehouseItems.isActive, true),
-        sql`${warehouseItems.currentStock} <= ${warehouseItems.reorderPoint}`
-      ));
+    const transferScope = allowedBranchIds === null
+      ? undefined
+      : or(
+          inArray(materialTransfers.sourceBranchId, [...allowedBranchIds]),
+          inArray(materialTransfers.destinationBranchId, [...allowedBranchIds]),
+        );
+
+    const countTransfers = async (status: string) => {
+      if (allowedBranchIds?.length === 0) return [{ count: 0 }];
+      return await db.select({ count: sql<number>`count(*)` })
+        .from(materialTransfers)
+        .where(transferScope
+          ? and(eq(materialTransfers.status, status), transferScope)
+          : eq(materialTransfers.status, status)
+        );
+    };
+
+    const [
+      pendingResult,
+      approvedResult,
+      inTransitResult,
+      lowStockResult,
+    ] = await Promise.all([
+      countTransfers('pending'),
+      countTransfers('approved'),
+      countTransfers('in_transit'),
+      // This metric intentionally describes main-warehouse catalog stock and is
+      // global; branch scope applies only to transfer counters.
+      db.select({ count: sql<number>`count(*)` })
+        .from(warehouseItems)
+        .where(and(
+          eq(warehouseItems.isActive, true),
+          sql`${warehouseItems.currentStock} <= ${warehouseItems.reorderPoint}`
+        )),
+    ]);
     
     return {
       pendingRequests: Number(pendingResult[0]?.count || 0),
@@ -15360,6 +15467,7 @@ export class DatabaseStorage implements IStorage {
   
   async getWarehouseNotifications(filters?: { 
     branchId?: string; 
+    branchIds?: string[];
     userId?: string; 
     isRead?: boolean;
     limit?: number;
@@ -15372,6 +15480,13 @@ export class DatabaseStorage implements IStorage {
         or(
           eq(warehouseNotifications.branchId, filters.branchId),
           eq(warehouseNotifications.targetBranchId, filters.branchId)
+        )
+      );
+    } else if (filters?.branchIds) {
+      conditions.push(
+        or(
+          inArray(warehouseNotifications.branchId, filters.branchIds),
+          inArray(warehouseNotifications.targetBranchId, filters.branchIds),
         )
       );
     }
@@ -15395,25 +15510,26 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async getUnreadNotificationCount(branchId?: string, userId?: string): Promise<number> {
+  async getUnreadNotificationCount(
+    allowedBranchIds: readonly string[] | null,
+    userId: string,
+  ): Promise<number> {
     const conditions = [eq(warehouseNotifications.isRead, false)];
     
-    if (branchId) {
+    if (allowedBranchIds !== null) {
       conditions.push(
         or(
-          eq(warehouseNotifications.branchId, branchId),
-          eq(warehouseNotifications.targetBranchId, branchId)
+          inArray(warehouseNotifications.branchId, Array.from(allowedBranchIds)),
+          inArray(warehouseNotifications.targetBranchId, Array.from(allowedBranchIds)),
         ) as any
       );
     }
-    if (userId) {
-      conditions.push(
-        or(
-          eq(warehouseNotifications.userId, userId),
-          isNull(warehouseNotifications.userId)
-        ) as any
-      );
-    }
+    conditions.push(
+      or(
+        eq(warehouseNotifications.userId, userId),
+        isNull(warehouseNotifications.userId)
+      ) as any
+    );
     
     const result = await db.select({ count: sql<number>`count(*)` })
       .from(warehouseNotifications)
@@ -15427,37 +15543,53 @@ export class DatabaseStorage implements IStorage {
     return notification;
   }
 
-  async markNotificationAsRead(id: number, userId?: string): Promise<WarehouseNotification | undefined> {
+  async markNotificationAsRead(
+    id: number,
+    allowedBranchIds: readonly string[] | null,
+    userId: string,
+  ): Promise<WarehouseNotification | undefined> {
+    const conditions: any[] = [eq(warehouseNotifications.id, id)];
+    if (allowedBranchIds !== null) {
+      conditions.push(or(
+        inArray(warehouseNotifications.branchId, Array.from(allowedBranchIds)),
+        inArray(warehouseNotifications.targetBranchId, Array.from(allowedBranchIds)),
+      ));
+    }
+    conditions.push(or(
+      eq(warehouseNotifications.userId, userId),
+      isNull(warehouseNotifications.userId),
+    ));
     const [updated] = await db.update(warehouseNotifications)
       .set({ 
         isRead: true, 
         readAt: new Date(),
         readBy: userId
       })
-      .where(eq(warehouseNotifications.id, id))
+      .where(and(...conditions))
       .returning();
     return updated || undefined;
   }
 
-  async markAllNotificationsAsRead(branchId?: string, userId?: string): Promise<void> {
+  async markAllNotificationsAsRead(
+    allowedBranchIds: readonly string[] | null,
+    userId: string,
+  ): Promise<void> {
     const conditions = [eq(warehouseNotifications.isRead, false)];
     
-    if (branchId) {
+    if (allowedBranchIds !== null) {
       conditions.push(
         or(
-          eq(warehouseNotifications.branchId, branchId),
-          eq(warehouseNotifications.targetBranchId, branchId)
+          inArray(warehouseNotifications.branchId, Array.from(allowedBranchIds)),
+          inArray(warehouseNotifications.targetBranchId, Array.from(allowedBranchIds)),
         ) as any
       );
     }
-    if (userId) {
-      conditions.push(
-        or(
-          eq(warehouseNotifications.userId, userId),
-          isNull(warehouseNotifications.userId)
-        ) as any
-      );
-    }
+    conditions.push(
+      or(
+        eq(warehouseNotifications.userId, userId),
+        isNull(warehouseNotifications.userId)
+      ) as any
+    );
     
     await db.update(warehouseNotifications)
       .set({ isRead: true, readAt: new Date(), readBy: userId })

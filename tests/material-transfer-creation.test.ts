@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  allocateMaterialTransferCreation,
   MaterialTransferCreationError,
   databaseErrorCode,
   materialTransferPayloadHash,
+  nextMaterialTransferNumber,
   requireNonEmptyMaterialTransferItems,
   requireMaterialTransferIdempotencyKey,
   runIdempotentMaterialTransferCreation,
@@ -66,5 +68,54 @@ describe("material transfer creation helpers", () => {
     expect(itemSets).toEqual([[11, 12]]);
     expect(first.transfer).toBe(second.transfer);
     expect([first.replayed, second.replayed].sort()).toEqual([false, true]);
+  });
+
+  it("allocates distinct human numbers while concurrent creates hold one advisory lock", async () => {
+    const numbers: string[] = [];
+    let tail = Promise.resolve();
+
+    const create = async () => {
+      let release!: () => void;
+      const previous = tail;
+      tail = new Promise<void>((resolve) => { release = resolve; });
+      return allocateMaterialTransferCreation({
+        now: new Date(2026, 2, 15),
+        lockNumberAllocation: () => previous,
+        findExistingNumbers: async () => numbers,
+        insert: async (transferNumber) => {
+          // Yield here to make a missing/broken lock reliably race.
+          await Promise.resolve();
+          numbers.push(transferNumber);
+          release();
+          return transferNumber;
+        },
+      });
+    };
+
+    const created = await Promise.all([create(), create(), create()]);
+    expect(created).toEqual([
+      "MT-202603-0001",
+      "MT-202603-0002",
+      "MT-202603-0003",
+    ]);
+    expect(new Set(numbers).size).toBe(3);
+  });
+
+  it("starts a new monthly sequence and ignores malformed latest suffixes", () => {
+    const now = new Date(2026, 3, 1);
+    expect(nextMaterialTransferNumber(now, ["MT-202603-0099"])).toBe("MT-202604-0001");
+    expect(nextMaterialTransferNumber(now, ["MT-202604-oops"])).toBe("MT-202604-0001");
+  });
+
+  it("uses the maximum exact monthly suffix despite historical insertion order", () => {
+    const now = new Date(2026, 3, 1);
+    expect(nextMaterialTransferNumber(now, [
+      "MT-202604-0012",
+      "MT-202604-0003",
+      "MT-202604-9oops",
+      "MT-202604-0012-copy",
+      "MT-202604--99",
+      "MT-202603-9999",
+    ])).toBe("MT-202604-0013");
   });
 });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   addWarehouseCatalogItem,
   filterWarehouseCatalog,
@@ -16,6 +17,15 @@ const catalog: WarehouseCatalogEntry[] = [
 describe("warehouse fast item entry", () => {
   it("exports the split catalog-and-cart editor", () => {
     expect(typeof WarehouseItemEntry).toBe("function");
+  });
+
+  it("integrates the fast editor and branch-aware warehouse return in the transfer page", () => {
+    const page = readFileSync(new URL("../client/src/pages/transfer-requests.tsx", import.meta.url), "utf8");
+    expect(page).toContain('import { WarehouseItemEntry } from "@/components/warehouse-entry/warehouse-item-entry"');
+    expect(page).toMatch(/<WarehouseItemEntry\s+catalog=\{warehouseItems\}\s+items=\{newTransfer\.items\}/);
+    expect(page).toContain('`/warehouse?branchId=${encodeURIComponent(visibleBranchId)}`');
+    expect(page).toContain("resolveWarehouseCreateDestination(filterBranch, branches, userBranchId)");
+    expect(page).toContain("newTransfer.items.some(item => !isValidWarehouseDraftItem(item))");
   });
   it("normalizes Arabic variants and searches name or code", () => {
     expect(normalizeWarehouseCatalogSearch("  أَكيـاس  ")).toBe("اكياس");

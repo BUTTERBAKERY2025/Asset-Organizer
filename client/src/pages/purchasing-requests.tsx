@@ -20,7 +20,7 @@ import {
   ArrowLeft, Eye, Package, Truck, Plus, Printer, Edit, Trash2,
   AlertTriangle, Calendar, ChevronsUpDown, Check
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ExportButtons } from "@/components/export-buttons";
@@ -28,6 +28,7 @@ import { useReactToPrint } from "react-to-print";
 import { cn } from "@/lib/utils";
 import { useBranches } from "@/hooks/useBranches";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type PurchasingRequest = {
   id: number;
@@ -117,6 +118,7 @@ export default function PurchasingRequestsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const printRef = useRef<HTMLDivElement>(null);
+  const [, navigate] = useLocation();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -130,6 +132,7 @@ export default function PurchasingRequestsPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const { branches, userBranchId, isLoading: branchesLoading } = useBranches();
   const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
+  const { canCreate, canEdit, canExport } = usePermissions();
 
   // Create form state
   const [newRequest, setNewRequest] = useState({
@@ -161,9 +164,10 @@ export default function PurchasingRequestsPage() {
   const requestsUrl = filterBranch !== "all"
     ? `/api/purchasing/requests?branchId=${encodeURIComponent(filterBranch)}`
     : "/api/purchasing/requests";
-  const { data: requests = [] } = useQuery<PurchasingRequest[]>({
+  const { data: requests = [], isLoading: requestsLoading, isError: requestsError } = useQuery<PurchasingRequest[]>({
     queryKey: [requestsUrl],
-    enabled: !navigationBranch.isResolving,
+    enabled: !navigationBranch.isResolving
+      && (!navigationBranch.hasBranchParam || filterBranch === navigationBranch.branchId),
   });
 
   const { data: warehouseItems = [] } = useQuery<WarehouseItem[]>({
@@ -340,13 +344,20 @@ export default function PurchasingRequestsPage() {
       dateText: r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-GB") : "",
     };
   });
+  const warehouseHref = navigationBranch.branchId
+    ? `/warehouse?branchId=${encodeURIComponent(filterBranch !== "all" ? filterBranch : navigationBranch.branchId)}`
+    : "/warehouse";
+  const changeBranchFilter = (branchId: string) => {
+    setFilterBranch(branchId);
+    navigate(`/purchasing-requests${branchId !== "all" ? `?branchId=${encodeURIComponent(branchId)}` : ""}`, { replace: true });
+  };
 
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6" dir={isRTL ? "rtl" : "ltr"}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <Link href="/warehouse-dashboard">
+            <Link href={warehouseHref}>
               <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
                 <ArrowLeft className={`w-5 h-5 ${isRTL ? "rotate-180" : ""}`} />
               </Button>
@@ -364,17 +375,17 @@ export default function PurchasingRequestsPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Button onClick={() => setIsCreateOpen(true)} className="flex-1 sm:flex-none h-11 sm:h-9" data-testid="btn-create-request">
+            {canCreate("warehouse") && <Button onClick={() => setIsCreateOpen(true)} className="flex-1 sm:flex-none h-11 sm:h-9" data-testid="btn-create-request">
               <Plus className="w-4 h-4 mr-2" />
               {isRTL ? "طلب جديد" : "New Request"}
-            </Button>
-            <ExportButtons
+            </Button>}
+            {canExport("warehouse") && <ExportButtons
               data={exportData}
               columns={exportColumns}
               fileName={`purchasing-requests-${new Date().toISOString().split('T')[0]}`}
               title={isRTL ? "طلبات المشتريات" : "Purchasing Requests"}
               sheetName={isRTL ? "المشتريات" : "Purchasing"}
-            />
+            />}
           </div>
         </div>
 
@@ -405,7 +416,7 @@ export default function PurchasingRequestsPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={filterBranch} onValueChange={setFilterBranch}>
+            <Select value={filterBranch} onValueChange={changeBranchFilter} disabled={branchesLoading}>
               <SelectTrigger className="w-full sm:w-[140px] h-11 sm:h-9" data-testid="filter-branch">
                 <SelectValue placeholder={isRTL ? "الفرع" : "Branch"} />
               </SelectTrigger>
@@ -449,6 +460,14 @@ export default function PurchasingRequestsPage() {
           </div>
         </div>
 
+        {requestsError && (
+          <Card className="border-destructive/40">
+            <CardContent className="p-4 text-sm text-destructive">
+              {isRTL ? "تعذر تحميل طلبات المشتريات. حاول مرة أخرى." : "Purchasing requests could not be loaded. Please try again."}
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader className="p-3 sm:p-6">
             <CardTitle className="text-base sm:text-lg">{isRTL ? "قائمة طلبات المشتريات" : "Purchasing Requests List"}</CardTitle>
@@ -459,7 +478,11 @@ export default function PurchasingRequestsPage() {
           <CardContent className="p-0 sm:p-6 sm:pt-0">
             {/* عرض البطاقات للموبايل */}
             <div className="md:hidden space-y-2 p-3">
-              {filteredRequests.length === 0 ? (
+              {requestsLoading ? (
+                <div className="text-center py-8 text-muted-foreground text-sm border rounded-md">
+                  {isRTL ? "جاري التحميل..." : "Loading..."}
+                </div>
+              ) : filteredRequests.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground text-sm border rounded-md">
                   {isRTL ? "لا توجد طلبات مشتريات" : "No purchasing requests found"}
                 </div>
@@ -496,7 +519,7 @@ export default function PurchasingRequestsPage() {
                         <Eye className="w-4 h-4 ml-1" />
                         {isRTL ? "عرض" : "View"}
                       </Button>
-                      {request.status === "pending" && (
+                      {canEdit("warehouse") && request.status === "pending" && (
                         <>
                           <Button
                             variant="outline"
@@ -533,7 +556,7 @@ export default function PurchasingRequestsPage() {
                           </Button>
                         </>
                       )}
-                      {request.status === "approved" && (
+                      {canEdit("warehouse") && request.status === "approved" && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -546,7 +569,7 @@ export default function PurchasingRequestsPage() {
                           {isRTL ? "تم الطلب" : "Ordered"}
                         </Button>
                       )}
-                      {request.status === "ordered" && (
+                      {canEdit("warehouse") && request.status === "ordered" && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -581,7 +604,13 @@ export default function PurchasingRequestsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRequests.length === 0 ? (
+                  {requestsLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                        {isRTL ? "جاري التحميل..." : "Loading..."}
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredRequests.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                         {isRTL ? "لا توجد طلبات مشتريات" : "No purchasing requests found"}
@@ -614,7 +643,7 @@ export default function PurchasingRequestsPage() {
                             >
                               <Eye className="w-4 h-4" />
                             </Button>
-                            {request.status === "pending" && (
+                            {canEdit("warehouse") && request.status === "pending" && (
                               <>
                                 <Button
                                   variant="ghost"
@@ -648,7 +677,7 @@ export default function PurchasingRequestsPage() {
                                 </Button>
                               </>
                             )}
-                            {request.status === "approved" && (
+                            {canEdit("warehouse") && request.status === "approved" && (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -660,7 +689,7 @@ export default function PurchasingRequestsPage() {
                                 <Package className="w-4 h-4" />
                               </Button>
                             )}
-                            {request.status === "ordered" && (
+                            {canEdit("warehouse") && request.status === "ordered" && (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -690,7 +719,7 @@ export default function PurchasingRequestsPage() {
               <DialogTitle className="flex items-center justify-between">
                 <span>{isRTL ? "تفاصيل طلب المشتريات" : "Purchasing Request Details"}</span>
                 <div className="flex gap-2">
-                  {selectedRequest?.status === "pending" && (
+                  {canEdit("warehouse") && selectedRequest?.status === "pending" && (
                     <Button variant="outline" size="sm" onClick={openEditDialog} data-testid="btn-edit-request">
                       <Edit className="w-4 h-4 mr-1" />
                       {isRTL ? "تعديل" : "Edit"}

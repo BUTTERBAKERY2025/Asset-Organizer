@@ -45,6 +45,44 @@ export async function runIdempotentMaterialTransferCreation<
   }
 }
 
+export function nextMaterialTransferNumber(
+  now: Date,
+  existingTransferNumbers: readonly string[] = [],
+): string {
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const prefix = `MT-${year}${month}`;
+  const pattern = new RegExp(`^${prefix}-(\\d+)$`);
+  let maximumSequence = 0;
+  for (const transferNumber of existingTransferNumbers) {
+    const match = pattern.exec(transferNumber);
+    if (!match) continue;
+    const sequence = Number(match[1]);
+    if (Number.isSafeInteger(sequence) && sequence > maximumSequence) {
+      maximumSequence = sequence;
+    }
+  }
+  const sequence = maximumSequence + 1;
+  return `${prefix}-${String(sequence).padStart(4, "0")}`;
+}
+
+/**
+ * The caller must supply transaction-bound operations. Keeping the advisory
+ * lock, number read and header insert in this sequence makes the human number
+ * allocation atomic without changing the public create API.
+ */
+export async function allocateMaterialTransferCreation<T>(options: {
+  now: Date;
+  lockNumberAllocation: () => Promise<void>;
+  findExistingNumbers: (prefix: string) => Promise<readonly string[]>;
+  insert: (transferNumber: string) => Promise<T>;
+}): Promise<T> {
+  await options.lockNumberAllocation();
+  const prefix = nextMaterialTransferNumber(options.now).slice(0, -5);
+  const existing = await options.findExistingNumbers(prefix);
+  return options.insert(nextMaterialTransferNumber(options.now, existing));
+}
+
 export function requireMaterialTransferIdempotencyKey(value: string | undefined): string {
   const key = value?.trim();
   if (!key || !IDEMPOTENCY_KEY_PATTERN.test(key)) {
