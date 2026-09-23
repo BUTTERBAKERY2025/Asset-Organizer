@@ -172,45 +172,118 @@
 
 /* Responsive utilities */
 @layer utilities {
-  /* Branch operations: the approachable, color-blocked staff console. */
+  /* Branch operations: compact, warm staff console. Kept fully scoped so
+     the operational desk does not leak its visual language into other pages. */
   .branch-ops-shell {
     --ops-ink: #332c3d;
-    --ops-paper: #fffaf3;
+    --ops-paper: #fff9ef;
     --ops-plum: #713b5d;
     --ops-sand: #f3e5d4;
-    --ops-coral: #e76f5b;
-    --ops-mint: #b8d8cd;
-    --ops-sky: #b8d8e8;
-    --ops-gold: #f3c969;
+    --ops-line: #e7d8c9;
+    --ops-mint: #c9dfd7;
+    --ops-sky: #c9e0e6;
+    --ops-gold: #f2d486;
     color: var(--ops-ink);
-    background: radial-gradient(circle at 94% 2%, #f4e2d2 0, transparent 24rem), var(--ops-paper);
+    background: var(--ops-paper);
     min-height: 100%;
+    container-type: inline-size;
+    container-name: branchops;
   }
-  .branch-ops-tile {
+  .branch-ops-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: .65rem;
+  }
+  .branch-ops-card {
     position: relative;
-    min-height: 150px;
-    overflow: hidden;
-    isolation: isolate;
-    transition: transform 180ms ease, box-shadow 180ms ease;
+    min-width: 0;
+    container-type: inline-size;
+    container-name: opscard;
+    border: 1px solid var(--ops-line);
+    border-radius: 1rem;
+    background: #fffdf9;
+    box-shadow: 0 2px 7px rgb(85 55 58 / .035);
   }
-  .branch-ops-tile:hover { transform: translateY(-3px); box-shadow: 0 15px 26px rgb(74 45 54 / .12); }
-  .branch-ops-tile:focus-visible { outline: 3px solid var(--ops-plum); outline-offset: 3px; }
-  .branch-ops-tile::after {
-    content: "";
-    position: absolute;
-    width: 7rem; height: 7rem; border-radius: 999px;
-    left: -2.75rem; bottom: -3.25rem; opacity: .28;
-    background: currentColor; z-index: -1;
+  .branch-ops-card-main {
+    display: block;
+    position: relative;
+    width: 100%;
+    min-height: 44px;
+    padding: .75rem;
+    border-radius: .95rem;
+    text-align: right;
+    transition: transform 140ms ease, background-color 140ms ease;
+  }
+  .branch-ops-card-main:focus-visible,
+  .branch-ops-action:focus-visible,
+  .branch-ops-refresh:focus-visible {
+    outline: 3px solid var(--ops-plum);
+    outline-offset: 2px;
+  }
+  .branch-ops-icon {
+    display: inline-flex;
+    width: 3.5rem;
+    height: 3.5rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border-radius: 1rem;
+  }
+  .branch-ops-icon svg { width: 1.75rem; height: 1.75rem; stroke-width: 1.8; }
+  .branch-ops-alerts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+    padding: 0 .75rem .75rem;
+  }
+  .branch-ops-action {
+    min-height: 44px;
+    max-width: 100%;
+    border: 1px solid #efcfc7;
+    border-radius: .7rem;
+    background: #fff7f4;
+    padding: .35rem .55rem;
+    color: #8f3f3d;
+    font-size: .75rem;
+    font-weight: 800;
+    line-height: 1.25;
+    transition: transform 120ms ease, background-color 120ms ease;
   }
   .branch-ops-shimmer {
     background: linear-gradient(100deg, #f0e6dc 25%, #fff8ef 42%, #f0e6dc 58%);
     background-size: 220% 100%;
     animation: branch-ops-shimmer 1.35s linear infinite;
   }
+  @container branchops (min-width: 330px) {
+    .branch-ops-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @container branchops (min-width: 680px) {
+    .branch-ops-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
+    .branch-ops-card-main { padding: .9rem; }
+    .branch-ops-icon { width: 4rem; height: 4rem; border-radius: 1.1rem; }
+    .branch-ops-icon svg { width: 2rem; height: 2rem; }
+    .branch-ops-alerts { padding: 0 .9rem .9rem; }
+  }
+  @container branchops (min-width: 980px) {
+    .branch-ops-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+  @container branchops (min-width: 1280px) {
+    .branch-ops-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  }
+  @container opscard (max-width: 235px) {
+    .branch-ops-card-main > div { flex-direction: column; gap: .55rem; }
+    .branch-ops-card-main > div > :nth-child(2) { width: 100%; padding-top: 0; }
+    .branch-ops-card-main > div > :last-child { position: absolute; inset-inline-end: .75rem; top: .85rem; }
+  }
+  @media (hover: hover) {
+    .branch-ops-card-main:hover { background: #fff8f1; transform: translateY(-2px); }
+    .branch-ops-action:hover { background: #fceae5; transform: translateY(-1px); }
+  }
+  .branch-ops-card-main:active, .branch-ops-action:active { transform: scale(.985); }
   @keyframes branch-ops-shimmer { to { background-position: -220% 0; } }
-  @media (max-width: 640px) {
-    .branch-ops-shell { margin-inline: -.75rem; }
-    .branch-ops-tile { min-height: 148px; }
+  @media (prefers-reduced-motion: reduce) {
+    .branch-ops-card-main, .branch-ops-action, .branch-ops-shimmer, .branch-ops-shell .animate-spin { transition: none; animation: none !important; }
+    .branch-ops-card-main:active, .branch-ops-action:active { transform: none; }
   }
   /* Safe area for notched devices */
   .safe-area-inset-top {

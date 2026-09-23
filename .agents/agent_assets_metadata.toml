@@ -145,3 +145,45 @@ mtime_ms = 1790170598592
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/c17d3780-7731-4682-909c-b731447f9235/a3ce9a3e-f9aa-403d-b0b1-7f4873d0f751"
 storage_version_token = "1790170732164454"
 content_type = "image/png"
+
+[[outputs]]
+id = "SjV-0GzkIIAxz4GQEkFpG"
+uri = "file://.local/test-results/branch-operations/branch-operations-360.png"
+type = "image"
+title = "بطاقات لوحة الفرع — الجوال"
+description = "التصميم المنفذ، ببيانات اختبار وليست بيانات إنتاج."
+logical_id = "cbb61153-0593-43f7-99b1-03d723aff07a"
+content_hash = "sha256:a5db7fe06fba02491b4fb0da1d676b7404bf46c3d476a0cbb853ba60cf18b930"
+size = 51910
+mtime_ms = 1790179909472
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/cbb61153-0593-43f7-99b1-03d723aff07a/27ba6d4c-5ab1-404b-b289-8a2fcb4b61e6"
+storage_version_token = "1790180174897941"
+content_type = "image/png"
+
+[[outputs]]
+id = "ctu7wrbRlmvAoDwNlzX0M"
+uri = "file://.local/test-results/branch-operations/branch-operations-768.png"
+type = "image"
+title = "بطاقات لوحة الفرع — التابلت"
+description = "معاينة الواجهة الفعلية ببيانات اختبار."
+logical_id = "558887ab-ea84-4c1b-bbc9-85a9690c3d48"
+content_hash = "sha256:364a9b6d0898fd98f245b9bd6947a2318b98dcce70b1088ed32877d7203409a0"
+size = 85641
+mtime_ms = 1790179910623
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/558887ab-ea84-4c1b-bbc9-85a9690c3d48/81a3df86-2da8-4ca1-ad99-4e63c081059d"
+storage_version_token = "1790180176977526"
+content_type = "image/png"
+
+[[outputs]]
+id = "3n28PUg5Xe643w2DE92K9"
+uri = "file://.local/test-results/branch-operations/branch-operations-1280.png"
+type = "image"
+title = "بطاقات لوحة الفرع — الكمبيوتر"
+description = "معاينة الواجهة الفعلية ببيانات اختبار."
+logical_id = "865bf046-eead-4228-9530-598f452c4586"
+content_hash = "sha256:f2db6666bec57f5cb54af55138c53ddbdc9b7850cc87fb42b48a62e30a54c6da"
+size = 171186
+mtime_ms = 1790179905240
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/865bf046-eead-4228-9530-598f452c4586/ff184008-bc91-4f95-8263-6f30eb161892"
+storage_version_token = "1790180179844752"
+content_type = "image/png"
