@@ -15,7 +15,7 @@ Verify actual geometry, not merely that an action exists or can be clicked progr
 
 Mobile usability also requires an ordered task flow, not only overflow fixes: keep actionable records ahead of advanced filters/history, and separate task sections instead of one long detail form.
 
-**Why:** The user rejected technically fitting layouts that still required excessive scrolling through controls and administrative information.
+**Why:** The user rejected technically fitting layouts that still required excessive scrolling through controls and administrative information, then confirmed improvement after new-order creation was split into details, items, and review steps. Preserve this guided flow rather than reverting to one long form.
 
 **How to apply:** Review viewport-sized captures of the real default list and selected task; full-page screenshots and error-dialog captures cannot establish everyday usability.
 
