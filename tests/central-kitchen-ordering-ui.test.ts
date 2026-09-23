@@ -7,6 +7,15 @@ import {
 } from "../client/src/components/central-kitchen/ordering-schedule";
 import { getOrderSchedule } from "../shared/central-kitchen-ordering-policy";
 
+const policy = {
+  requestDeadline: "16:30",
+  reviewTime: "18:45",
+  defaultNeededTime: "06:30",
+};
+const displayPolicyTime = (value: string) => new Intl.DateTimeFormat("ar-SA", {
+  timeZone: "Asia/Riyadh", hour: "numeric", minute: "2-digit", hour12: true,
+}).format(new Date(`2000-01-01T${value}:00+03:00`));
+
 const late = getOrderSchedule({
   neededDate: "2026-09-23", createdAt: "2026-09-22T14:01:00Z", neededTime: "07:00",
 });
@@ -14,9 +23,14 @@ const onTime = getOrderSchedule({
   neededDate: "2026-09-23", createdAt: "2026-09-22T13:59:00Z", neededTime: "07:00",
 });
 describe("daily kitchen ordering UI", () => {
-  it("displays the agreed Saudi timetable and explains manual operation", () => {
-    const html = renderToStaticMarkup(React.createElement(DailyOrderingNotice));
-    for (const text of ["5 مساءً", "7 مساءً", "7 صباحاً", "بتوقيت السعودية", "الطلب المتأخر مسموح", "يدوياً"]) {
+  it("displays the configured Saudi timetable and explains manual operation", () => {
+    const html = renderToStaticMarkup(React.createElement(DailyOrderingNotice, { policy }));
+    for (const text of [
+      ...Object.values(policy).map(displayPolicyTime),
+      "بتوقيت السعودية",
+      "الطلب المتأخر مسموح",
+      "يدوياً",
+    ]) {
       expect(html).toContain(text);
     }
   });

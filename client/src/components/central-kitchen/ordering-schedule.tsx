@@ -4,16 +4,16 @@ import { apiRequest } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
 import { getOrderSchedule, getOrderingPolicy } from "@shared/central-kitchen-ordering-policy";
 
-type Policy = NonNullable<ReturnType<typeof getOrderingPolicy>>;
+export type KitchenOrderingPolicy = NonNullable<ReturnType<typeof getOrderingPolicy>>;
 type Schedule = ReturnType<typeof getOrderSchedule>;
 
 export function useKitchenOrderingPolicy(active: boolean) {
   const clock = useRef<{ timestamp: number; receivedAt: number } | null>(null);
-  const query = useQuery<Policy>({
+  const query = useQuery<KitchenOrderingPolicy>({
     queryKey: ["/api/central-kitchen-orders/policy"],
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/central-kitchen-orders/policy");
-      const policy = await response.json() as Policy | null;
+      const policy = await response.json() as KitchenOrderingPolicy | null;
       const timestamp = policy ? Date.parse(policy.serverNow) : NaN;
       if (!policy || !Number.isFinite(timestamp) || !/^\d{4}-\d{2}-\d{2}$/.test(policy.defaultNeededDate)) {
         throw new Error("تعذر قراءة توقيت الخادم");
@@ -32,13 +32,19 @@ export function useKitchenOrderingPolicy(active: boolean) {
   return { query, serverNow };
 }
 
-export function DailyOrderingNotice() {
+const displayTime = (value?: string) => value
+  ? new Intl.DateTimeFormat("ar-SA", {
+      timeZone: "Asia/Riyadh", hour: "numeric", minute: "2-digit", hour12: true,
+    }).format(new Date(`2000-01-01T${value}:00+03:00`))
+  : "—";
+
+export function DailyOrderingNotice({ policy }: { policy?: Pick<KitchenOrderingPolicy, "requestDeadline" | "reviewTime" | "defaultNeededTime"> }) {
   return <section className="rounded-lg border bg-sky-50/50 p-4 text-sm" aria-label="مواعيد الطلب اليومية">
     <h2 className="font-semibold">مواعيد الطلب اليومية — بتوقيت السعودية</h2>
     <div className="mt-2 grid gap-2 sm:grid-cols-3">
-      <p><strong>5 مساءً:</strong> آخر موعد لطلبات اليوم التالي.</p>
-      <p><strong>7 مساءً:</strong> موعد مراجعة المطبخ لطلبات الغد.</p>
-      <p><strong>7 صباحاً:</strong> وقت التسليم الافتراضي في يوم الحاجة.</p>
+      <p><strong>{displayTime(policy?.requestDeadline)}:</strong> آخر موعد لطلبات اليوم التالي.</p>
+      <p><strong>{displayTime(policy?.reviewTime)}:</strong> موعد مراجعة المطبخ لطلبات الغد.</p>
+      <p><strong>{displayTime(policy?.defaultNeededTime)}:</strong> وقت التسليم الافتراضي في يوم الحاجة.</p>
     </div>
     <p className="mt-2 text-xs text-muted-foreground">الطلب المتأخر مسموح مع تنبيه. إرسال الطلب والاعتماد يتمان يدوياً؛ لا تُنشأ طلبات أو كميات تلقائياً.</p>
   </section>;

@@ -135,6 +135,8 @@ const ISOLATED_TABLES = [
   "user_permission_overrides",
   "user_branch_access",
   "system_notifications",
+  "system_audit_logs",
+  "portal_settings",
   "central_kitchen_routing",
   "products",
   "warehouse_items",

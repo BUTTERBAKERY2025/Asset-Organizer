@@ -3,6 +3,24 @@ export const CENTRAL_KITCHEN_DEFAULT_NEEDED_TIME = "07:00";
 export const CENTRAL_KITCHEN_REQUEST_DEADLINE = "17:00";
 export const CENTRAL_KITCHEN_REVIEW_TIME = "19:00";
 
+export type CentralKitchenOrderingPolicyConfig = {
+  requestDeadline: string;
+  reviewTime: string;
+  defaultNeededTime: string;
+};
+
+export type CentralKitchenOrderingPolicy = CentralKitchenOrderingPolicyConfig & {
+  serverNow: string;
+  defaultNeededDate: string;
+  timeZone: typeof CENTRAL_KITCHEN_ORDERING_TIME_ZONE;
+};
+
+export const CENTRAL_KITCHEN_DEFAULT_ORDERING_POLICY: Readonly<CentralKitchenOrderingPolicyConfig> = Object.freeze({
+  requestDeadline: CENTRAL_KITCHEN_REQUEST_DEADLINE,
+  reviewTime: CENTRAL_KITCHEN_REVIEW_TIME,
+  defaultNeededTime: CENTRAL_KITCHEN_DEFAULT_NEEDED_TIME,
+});
+
 export type CentralKitchenOrderingSchedule = {
   isLate: boolean;
   cutoffAt: string;
@@ -12,6 +30,22 @@ export type CentralKitchenOrderingSchedule = {
 
 const CALENDAR_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const CLOCK_TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+export function validateOrderingPolicyConfig(value: unknown): CentralKitchenOrderingPolicyConfig | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const input = value as Record<string, unknown>;
+  const keys = Object.keys(input);
+  if (keys.length !== 3
+    || !keys.includes("requestDeadline")
+    || !keys.includes("reviewTime")
+    || !keys.includes("defaultNeededTime")) return null;
+  const { requestDeadline, reviewTime, defaultNeededTime } = input;
+  if (typeof requestDeadline !== "string" || !CLOCK_TIME.test(requestDeadline)
+    || typeof reviewTime !== "string" || !CLOCK_TIME.test(reviewTime)
+    || typeof defaultNeededTime !== "string" || !CLOCK_TIME.test(defaultNeededTime)
+    || requestDeadline > reviewTime) return null;
+  return { requestDeadline, reviewTime, defaultNeededTime };
+}
 
 function isValidDate(date: Date): boolean {
   return Number.isFinite(date.getTime());
@@ -57,13 +91,16 @@ function shiftCalendarDate(value: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-export function getOrderingPolicy(now = new Date()) {
+export function getOrderingPolicy(
+  now = new Date(),
+  config: CentralKitchenOrderingPolicyConfig = CENTRAL_KITCHEN_DEFAULT_ORDERING_POLICY,
+): CentralKitchenOrderingPolicy {
   return {
     serverNow: now.toISOString(),
     defaultNeededDate: shiftCalendarDate(riyadhDate(now), 1),
-    defaultNeededTime: CENTRAL_KITCHEN_DEFAULT_NEEDED_TIME,
-    requestDeadline: CENTRAL_KITCHEN_REQUEST_DEADLINE,
-    reviewTime: CENTRAL_KITCHEN_REVIEW_TIME,
+    defaultNeededTime: config.defaultNeededTime,
+    requestDeadline: config.requestDeadline,
+    reviewTime: config.reviewTime,
     timeZone: CENTRAL_KITCHEN_ORDERING_TIME_ZONE,
   };
 }
@@ -74,18 +111,24 @@ export function getOrderSchedule(
     neededTime?: string | null;
     createdAt: Date | string | null | undefined;
   },
-  _now = new Date(),
+  nowOrConfig: Date | CentralKitchenOrderingPolicyConfig = new Date(),
+  optionalConfig?: CentralKitchenOrderingPolicyConfig,
 ): CentralKitchenOrderingSchedule | null {
+  // Keep the historical Date second argument source-compatible. It was never
+  // used in the calculation because schedule metadata must remain replay-stable.
+  const config = nowOrConfig instanceof Date
+    ? (optionalConfig ?? CENTRAL_KITCHEN_DEFAULT_ORDERING_POLICY)
+    : nowOrConfig;
   if (!order.neededDate) return null;
   const neededDate = parseCalendarDate(order.neededDate);
   const createdAt = order.createdAt instanceof Date ? order.createdAt : new Date(order.createdAt || "");
   if (!neededDate || !isValidDate(createdAt)) return null;
 
-  const cutoffAt = riyadhInstant(neededDate, CENTRAL_KITCHEN_REQUEST_DEADLINE, -1);
-  const reviewAt = riyadhInstant(neededDate, CENTRAL_KITCHEN_REVIEW_TIME, -1);
+  const cutoffAt = riyadhInstant(neededDate, config.requestDeadline, -1);
+  const reviewAt = riyadhInstant(neededDate, config.reviewTime, -1);
   const deliveryAt = riyadhInstant(
     neededDate,
-    order.neededTime ?? CENTRAL_KITCHEN_DEFAULT_NEEDED_TIME,
+    order.neededTime ?? config.defaultNeededTime,
   );
   if (!cutoffAt || !reviewAt || !deliveryAt) return null;
 

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useBranches } from "@/hooks/useBranches";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -25,7 +26,7 @@ import {
 } from "@/components/central-kitchen/order-queue";
 import { OrderNotificationsOptIn } from "@/components/central-kitchen/order-notifications-opt-in";
 import { useVisualViewportDialog } from "@/components/central-kitchen/use-visual-viewport-dialog";
-import { DailyOrderingNotice, LateSubmissionBadge, OrderScheduleNotice, useKitchenOrderingPolicy } from "@/components/central-kitchen/ordering-schedule";
+import { DailyOrderingNotice, LateSubmissionBadge, OrderScheduleNotice, useKitchenOrderingPolicy, type KitchenOrderingPolicy } from "@/components/central-kitchen/ordering-schedule";
 import { getOrderSchedule } from "@shared/central-kitchen-ordering-policy";
 import { PreparationEditor, SavedPreparationSummary } from "@/components/central-kitchen/prepare-fulfillment";
 import { DemandCommitments } from "@/components/central-kitchen/demand-commitments";
@@ -55,6 +56,8 @@ type Routing = {
   deputyName: string | null;
   receiverName: string | null;
   hasKitchenResponsible: boolean;
+  receiverAssignmentSource?: "branch_manager" | "manual" | "unassigned";
+  receiverAssignmentConflict?: boolean;
 };
 type RoutingCandidates = {
   kitchenCandidates: Array<{ id: string; name: string }>;
@@ -206,12 +209,12 @@ export default function CentralKitchenOrdersPage() {
   const detailDialogStyle = useVisualViewportDialog({ open: detailId !== null && detailDialogOpen, maxHeight: 900, viewportFraction: 0.94 });
   const [actionNotes, setActionNotes] = useState("");
   const [pilotDays, setPilotDays] = useState("30");
-  const [draft, setDraft] = useState({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: "", neededTime: "07:00", notes: "", items: [emptyLine()] });
+  const [draft, setDraft] = useState({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: "", neededTime: "", notes: "", items: [emptyLine()] });
   const orderingPolicy = useKitchenOrderingPolicy(createOpen);
   const draftSchedule = orderingPolicy.serverNow ? getOrderSchedule({
     neededDate: draft.neededDate, neededTime: draft.neededTime,
     createdAt: orderingPolicy.serverNow,
-  }) : null;
+  }, orderingPolicy.query.data) : null;
   const openCreate = async () => {
     setDraft(current => ({ ...current, centralKitchenId: "" }));
     setCreateStep(0);
@@ -439,7 +442,7 @@ export default function CentralKitchenOrdersPage() {
     onSuccess: (order) => {
       toast({ title: "تم إنشاء طلب المطبخ", description: `تم تسجيل الطلب ${order.orderNumber || ""}${order.orderingSchedule?.isLate ? " — أُرسل بعد الموعد؛ يرجى التنسيق مع المطبخ." : ""}` });
       createAttemptRef.current = null;
-        setCreateOpen(false); openFullDetail(order.id); setDraft({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: "", neededTime: "07:00", notes: "", items: [emptyLine()] }); refresh(); refreshNotifications();
+        setCreateOpen(false); openFullDetail(order.id); setDraft({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: "", neededTime: "", notes: "", items: [emptyLine()] }); refresh(); refreshNotifications();
     },
     onError: (error) => toast({ title: "تعذر إنشاء الطلب", description: error instanceof Error ? error.message : "تحقق من البيانات وحاول مجدداً.", variant: "destructive" }),
   });
@@ -536,11 +539,12 @@ export default function CentralKitchenOrdersPage() {
         className="kitchen-mobile-header"
         actions={<div className="flex flex-wrap gap-2">
           <a href="/central-kitchen-demand-report"><Button variant="outline" size="sm"><BarChart3 className="ml-2 h-4 w-4" />تقرير الطلب غير الملبّى</Button></a>
-          <Button variant="outline" size="sm" onClick={refresh} data-testid="refresh-kitchen-orders"><RefreshCw className="ml-2 h-4 w-4" />تحديث</Button>
-          {canCreate("central_kitchen_orders") && <Button size="sm" onClick={() => void openCreate()} data-testid="create-kitchen-order"><Plus className="ml-2 h-4 w-4" />طلب جديد</Button>}
+          {canConfigureRouting && <Button variant="outline" size="sm" className="min-h-11" onClick={() => setSettingsOpen(true)} data-testid="kitchen-settings-trigger"><Settings className="ml-2 h-4 w-4" />إعدادات المطبخ</Button>}
+          <Button variant="outline" size="sm" className="min-h-11" onClick={refresh} data-testid="refresh-kitchen-orders"><RefreshCw className="ml-2 h-4 w-4" />تحديث</Button>
+          {canCreate("central_kitchen_orders") && <Button size="sm" className="min-h-11" onClick={() => void openCreate()} data-testid="create-kitchen-order"><Plus className="ml-2 h-4 w-4" />طلب جديد</Button>}
         </div>} />
-      <details className="rounded-xl border bg-background px-3 md:hidden"><summary className="cursor-pointer py-3 text-sm font-medium">مواعيد الطلب والتسليم</summary><DailyOrderingNotice /></details>
-      <div className="hidden md:block"><DailyOrderingNotice /></div>
+      <details className="rounded-xl border bg-background px-3 md:hidden"><summary className="cursor-pointer py-3 text-sm font-medium">مواعيد الطلب والتسليم</summary><DailyOrderingNotice policy={orderingPolicy.query.data} /></details>
+      <div className="hidden md:block"><DailyOrderingNotice policy={orderingPolicy.query.data} /></div>
       <div className={cn("flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs", !online || ordersQuery.isRefetchError ? "border-amber-300 bg-amber-50 text-amber-900" : "kitchen-utility-status border-[#e6ddd6] bg-[#fffdf9] text-muted-foreground")} role="status">
         <span>{!online ? "أنت غير متصل — المعروض آخر بيانات ناجحة." : ordersQuery.isRefetchError ? "فشل التحديث في الخلفية — ما زالت آخر بيانات ناجحة معروضة." : ordersQuery.dataUpdatedAt ? `آخر تحديث ناجح: ${new Date(ordersQuery.dataUpdatedAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}${Date.now() - ordersQuery.dataUpdatedAt > 60_000 ? " · قد تكون البيانات قديمة" : ""}` : "جارٍ تحميل أحدث البيانات…"}</span>
         {(!online || ordersQuery.isRefetchError) && <Button size="sm" variant="outline" disabled={!online || ordersQuery.isFetching} onClick={() => void ordersQuery.refetch()}><RefreshCw className={cn("ml-1 h-3.5 w-3.5", ordersQuery.isFetching && "animate-spin")} />إعادة المحاولة</Button>}
@@ -618,7 +622,7 @@ export default function CentralKitchenOrdersPage() {
       <details className="rounded-xl border border-[#e6ddd6] bg-[#fffdf9]">
         <summary className="flex cursor-pointer list-none items-center gap-2 p-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><BarChart3 className="h-4 w-4" />التقارير والإعدادات الثانوية</summary>
         <div className="space-y-4 border-t p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">مؤشرات التجربة والتوسع</h2><p className="text-xs text-muted-foreground">قياس دورة الطلب وجودة التوريد قبل تفعيل المخزون الفعلي.</p></div><div className="flex flex-wrap gap-2">{canConfigureRouting && <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)} data-testid="routing-settings-trigger"><Settings className="ml-2 h-4 w-4" />مسؤولو الفروع</Button>}<Select value={pilotDays} onValueChange={setPilotDays}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="7">آخر 7 أيام</SelectItem><SelectItem value="30">آخر 30 يوماً</SelectItem><SelectItem value="90">آخر 90 يوماً</SelectItem></SelectContent></Select></div></div>
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">مؤشرات التجربة والتوسع</h2><p className="text-xs text-muted-foreground">قياس دورة الطلب وجودة التوريد قبل تفعيل المخزون الفعلي.</p></div><Select value={pilotDays} onValueChange={setPilotDays}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="7">آخر 7 أيام</SelectItem><SelectItem value="30">آخر 30 يوماً</SelectItem><SelectItem value="90">آخر 90 يوماً</SelectItem></SelectContent></Select></div>
           {metricsQuery.isLoading ? <div className="grid gap-3 md:grid-cols-5">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-20" />)}</div> : metricsQuery.data ? <><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5"><MetricTile label="إجمالي الطلبات" value={metricsQuery.data.totalOrders} /><MetricTile label="متأخرة عن الحاجة" value={metricsQuery.data.overdueOrders} tone={metricsQuery.data.overdueOrders ? "danger" : "normal"} /><MetricTile label="فروقات مفتوحة" value={metricsQuery.data.openDiscrepancies} tone={metricsQuery.data.openDiscrepancies ? "warning" : "normal"} /><MetricTile label="متوسط اكتمال البنود" value={metricsQuery.data.fulfillmentRate === null ? "—" : `${metricsQuery.data.fulfillmentRate}%`} /><MetricTile label="طلبات بها فروقات" value={metricsQuery.data.discrepancyRate === null ? "—" : `${metricsQuery.data.discrepancyRate}%`} /></div><div className="grid gap-2 border-t pt-3 text-xs sm:grid-cols-2 lg:grid-cols-4"><StageTime label="الاعتماد" value={metricsQuery.data.averageStageHours.approval} /><StageTime label="التجهيز" value={metricsQuery.data.averageStageHours.preparation} /><StageTime label="الإرسال" value={metricsQuery.data.averageStageHours.dispatch} /><StageTime label="التوصيل" value={metricsQuery.data.averageStageHours.delivery} /></div><div className="text-xs text-muted-foreground">السجل التجريبي: {metricsQuery.data.shadowLedger.entryCount} حركة{metricsQuery.data.shadowLedger.byUnit.length ? ` · ${metricsQuery.data.shadowLedger.byUnit.map(entry => `${entry.direction === "projected_kitchen_out" ? "خصم" : "إضافة"} ${entry.quantity} ${entry.unit}`).join(" · ")}` : ""}</div></> : <p className="text-sm text-muted-foreground">تعذر تحميل مؤشرات التجربة.</p>}
           <OrderNotificationsOptIn />
         </div>
@@ -652,7 +656,7 @@ export default function CentralKitchenOrdersPage() {
         <div className="flex shrink-0 items-center justify-between gap-2 border-t bg-background px-4 py-3 pb-[max(.75rem,env(safe-area-inset-bottom))] sm:px-6"><Button variant="ghost" className="min-h-11 px-3" disabled={createMutation.isPending} onClick={() => createStep === 0 ? closeCreate() : (setCreateStep((createStep - 1) as 0 | 1), setCreateStepError(""))}>{createStep === 0 ? "إلغاء" : <><ArrowRight className="ml-1 h-4 w-4" />السابق</>}</Button><div className="text-xs text-muted-foreground">{draft.items.length} {draft.items.length === 1 ? "بند" : "بنود"}</div>{createStep < 2 ? <Button className="min-h-11 min-w-28" disabled={createMutation.isPending} onClick={advanceCreateStep}>التالي<ChevronLeft className="mr-1 h-4 w-4" /></Button> : <Button className="min-h-11 min-w-32" disabled={createMutation.isPending} onClick={() => { if (!draft.neededDate || !draft.sourceBranchId || !draft.centralKitchenId || !orderingPolicy.query.data || !isKitchenOrderDraftValid(draft.items)) { setCreateStepError("تغيّرت بيانات المسودة. ارجع إلى الخطوات السابقة وأكمل الحقول المطلوبة."); return; } createMutation.mutate(); }}>{createMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}إرسال الطلب</Button>}</div>
     </DialogContent></Dialog>
 
-    {canConfigureRouting && <RoutingSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} branches={routingBranches} />}
+    {canConfigureRouting && <KitchenSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} branches={routingBranches} />}
     <SheetPreviewDialog sheet={sheetPreview} open={sheetPreviewOpen} onOpenChange={setSheetPreviewOpen} />
 
       <Dialog open={detailId !== null && detailDialogOpen} onOpenChange={open => { setDetailDialogOpen(open); if (!open && typeof window !== "undefined" && !window.matchMedia("(min-width: 1024px)").matches) closeDetail(); }}><DialogContent dir="rtl" style={{ ...detailDialogStyle, display: "flex", flexDirection: "column" }} className="kitchen-detail-dialog h-[94dvh] max-h-[900px] max-w-5xl gap-0 overflow-hidden p-0 sm:rounded-xl [&>button]:left-3 [&>button]:right-auto [&>button]:top-3 [&>button]:z-20 [&>button]:flex [&>button]:h-11 [&>button]:w-11 [&>button]:items-center [&>button]:justify-center">
@@ -724,10 +728,16 @@ function StageTime({ label, value }: { label: string; value: number | null }) { 
 function FormSelect({ label, value, onChange, branches, placeholder, testId }: { label: string; value: string; onChange: (value: string) => void; branches: { id: string; name: string }[]; placeholder: string; testId?: string }) { return <div><Label>{label}</Label><Select value={value} onValueChange={onChange}><SelectTrigger data-testid={testId} className="mt-2"><SelectValue placeholder={placeholder} /></SelectTrigger><SelectContent>{branches.map(branch => <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>)}</SelectContent></Select></div>; }
 
 const CLEAR_ROUTING_VALUE = "__none__";
-function RoutingSettingsDialog({ open, onOpenChange, branches }: { open: boolean; onOpenChange: (open: boolean) => void; branches: Array<{ id: string; name: string }> }) {
+type PolicyTimes = Pick<KitchenOrderingPolicy, "requestDeadline" | "reviewTime" | "defaultNeededTime">;
+const EMPTY_POLICY_TIMES: PolicyTimes = { requestDeadline: "", reviewTime: "", defaultNeededTime: "" };
+
+function KitchenSettingsDialog({ open, onOpenChange, branches }: { open: boolean; onOpenChange: (open: boolean) => void; branches: Array<{ id: string; name: string }> }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const dialogStyle = useVisualViewportDialog({ open, maxHeight: 760, viewportFraction: 0.94 });
+  const dialogStyle = useVisualViewportDialog({ open, maxHeight: 800, viewportFraction: 1 });
+  const [tab, setTab] = useState("appointments");
+  const [policyTimes, setPolicyTimes] = useState<PolicyTimes>(EMPTY_POLICY_TIMES);
+  const [policyError, setPolicyError] = useState("");
   const [branchId, setBranchId] = useState("");
   const [responsibleUserId, setResponsibleUserId] = useState<string | null>(null);
   const [deputyUserId, setDeputyUserId] = useState<string | null>(null);
@@ -736,11 +746,29 @@ function RoutingSettingsDialog({ open, onOpenChange, branches }: { open: boolean
   const candidatesUrl = `/api/central-kitchen-orders/routing/candidates?branchId=${encodeURIComponent(branchId)}`;
   const routingQuery = useQuery<Routing>({ queryKey: [routingUrl], enabled: open && !!branchId, retry: false });
   const candidatesQuery = useQuery<RoutingCandidates>({ queryKey: [candidatesUrl], enabled: open && !!branchId, retry: false });
+  const policyQuery = useQuery<KitchenOrderingPolicy>({
+    queryKey: ["/api/central-kitchen-orders/policy"],
+    enabled: open,
+    staleTime: 0,
+  });
+  useEffect(() => {
+    if (!open) {
+      setTab("appointments");
+      setBranchId("");
+      setPolicyError("");
+      return;
+    }
+    if (policyQuery.data) setPolicyTimes({
+      requestDeadline: policyQuery.data.requestDeadline,
+      reviewTime: policyQuery.data.reviewTime,
+      defaultNeededTime: policyQuery.data.defaultNeededTime,
+    });
+  }, [open, policyQuery.data]);
   useEffect(() => {
     if (!routingQuery.data || routingQuery.data.branchId !== branchId) return;
     setResponsibleUserId(routingQuery.data.responsibleUserId);
     setDeputyUserId(routingQuery.data.deputyUserId);
-    setReceiverUserId(routingQuery.data.receiverUserId);
+    setReceiverUserId(routingQuery.data.receiverAssignmentSource === "branch_manager" ? null : routingQuery.data.receiverUserId);
   }, [branchId, routingQuery.data]);
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -759,6 +787,30 @@ function RoutingSettingsDialog({ open, onOpenChange, branches }: { open: boolean
     },
     onError: (error) => toast({ title: "تعذر حفظ الإعداد", description: error instanceof Error ? error.message : "تحقق من الاتصال ثم أعد المحاولة.", variant: "destructive" }),
   });
+  const savePolicyMutation = useMutation({
+    mutationFn: async () => {
+      setPolicyError("");
+      const validTime = /^([01]\d|2[0-3]):[0-5]\d$/;
+      if (!validTime.test(policyTimes.requestDeadline) || !validTime.test(policyTimes.reviewTime) || !validTime.test(policyTimes.defaultNeededTime)) {
+        throw new Error("أدخل جميع المواعيد بصيغة ساعة ودقيقة صحيحة.");
+      }
+      if (policyTimes.requestDeadline > policyTimes.reviewTime) {
+        throw new Error("يجب أن يكون آخر موعد للطلب قبل موعد المراجعة أو مساوياً له في اليوم السابق.");
+      }
+      const response = await apiRequest("PUT", "/api/central-kitchen-orders/policy", policyTimes);
+      return response.json() as Promise<KitchenOrderingPolicy>;
+    },
+    onSuccess: (policy) => {
+      queryClient.setQueryData(["/api/central-kitchen-orders/policy"], policy);
+      void queryClient.invalidateQueries({ predicate: query => String(query.queryKey[0]).startsWith("/api/central-kitchen-orders") });
+      toast({ title: "تم حفظ مواعيد المطبخ" });
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : "تحقق من الاتصال ثم أعد المحاولة.";
+      setPolicyError(message);
+      toast({ title: "تعذر حفظ المواعيد", description: message, variant: "destructive" });
+    },
+  });
   const loading = !!branchId && (routingQuery.isLoading || candidatesQuery.isLoading);
   const failed = routingQuery.isError || candidatesQuery.isError;
   const candidates = candidatesQuery.data;
@@ -769,12 +821,31 @@ function RoutingSettingsDialog({ open, onOpenChange, branches }: { open: boolean
     setReceiverUserId(null);
   };
   return <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent dir="rtl" style={{ ...dialogStyle, width: "calc(100vw - 1rem)", maxWidth: "42rem", display: "flex", flexDirection: "column" }} className="box-border min-w-0 gap-0 overflow-hidden p-0 [&>button.absolute]:left-4 [&>button.absolute]:right-auto">
+    <DialogContent dir="rtl" style={{ ...dialogStyle, display: "flex", flexDirection: "column" }} className="box-border h-[100dvh] w-screen max-w-none min-w-0 gap-0 overflow-hidden rounded-none border-0 p-0 sm:h-[min(800px,94dvh)] sm:w-[calc(100%-2rem)] sm:max-w-2xl sm:rounded-xl sm:border [&>button.absolute]:left-2 [&>button.absolute]:right-auto [&>button.absolute]:top-2 [&>button.absolute]:flex [&>button.absolute]:h-11 [&>button.absolute]:w-11 [&>button.absolute]:items-center [&>button.absolute]:justify-center">
       <DialogHeader className="shrink-0 border-b px-4 py-4 pl-11 text-right sm:px-6 sm:pl-12">
-        <DialogTitle>مسؤولو المطبخ والاستلام</DialogTitle>
-        <DialogDescription>حدد المسؤولين لكل فرع. هذا الإعداد يوجّه الطلبات والتنبيهات فقط ولا يمنح أي صلاحيات للنظام.</DialogDescription>
+        <DialogTitle>إعدادات المطبخ</DialogTitle>
+        <DialogDescription>إدارة المواعيد اليومية ومسؤولي المطبخ والاستلام.</DialogDescription>
       </DialogHeader>
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
+      <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
+        <TabsList className="mx-4 mt-3 grid h-11 shrink-0 grid-cols-2 sm:mx-6">
+          <TabsTrigger value="appointments" className="min-h-10" data-testid="kitchen-settings-times-tab">المواعيد</TabsTrigger>
+          <TabsTrigger value="responsibles" className="min-h-10" data-testid="kitchen-settings-routing-tab">المسؤولون</TabsTrigger>
+        </TabsList>
+        <TabsContent value="appointments" className="m-0 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
+          {policyQuery.isLoading ? <p role="status" className="flex items-center gap-2 rounded border p-3 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />جارٍ تحميل المواعيد…</p> :
+          policyQuery.isError ? <div role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800"><p>تعذر تحميل مواعيد المطبخ. لم يتم افتراض قيم بديلة.</p><Button className="mt-2 min-h-11" size="sm" variant="outline" onClick={() => void policyQuery.refetch()}>إعادة المحاولة</Button></div> :
+          <div className="space-y-4">
+            <p className="rounded-lg border bg-sky-50/50 p-3 text-sm">جميع المواعيد التالية محفوظة وتُعرض بتوقيت السعودية.</p>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <PolicyTimeInput id="request-deadline" label="آخر موعد للطلب" value={policyTimes.requestDeadline} onChange={value => { setPolicyTimes(current => ({ ...current, requestDeadline: value })); setPolicyError(""); }} />
+              <PolicyTimeInput id="review-time" label="موعد مراجعة المطبخ" value={policyTimes.reviewTime} onChange={value => { setPolicyTimes(current => ({ ...current, reviewTime: value })); setPolicyError(""); }} />
+              <PolicyTimeInput id="default-needed-time" label="وقت التسليم الافتراضي" value={policyTimes.defaultNeededTime} onChange={value => { setPolicyTimes(current => ({ ...current, defaultNeededTime: value })); setPolicyError(""); }} />
+            </div>
+            <p className="text-xs text-muted-foreground">آخر موعد للطلب والمراجعة كلاهما في اليوم السابق ليوم الحاجة، ويجب ألا يتأخر موعد الطلب عن المراجعة.</p>
+            {policyError && <p role="alert" data-testid="policy-save-error" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">{policyError}</p>}
+          </div>}
+        </TabsContent>
+        <TabsContent value="responsibles" className="m-0 min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
         <FormSelect testId="routing-branch-select" label="الفرع" value={branchId} onChange={updateBranch} branches={branches} placeholder="اختر فرعاً أو مطبخاً" />
         {!branchId ? <p className="rounded border bg-muted/20 p-3 text-sm text-muted-foreground">اختر الفرع لعرض الإعداد الحالي والمرشحين المؤهلين.</p> :
          loading ? <p role="status" className="flex items-center gap-2 rounded border p-3 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />جارٍ تحميل الإعداد…</p> :
@@ -782,20 +853,29 @@ function RoutingSettingsDialog({ open, onOpenChange, branches }: { open: boolean
          <div className="grid gap-4 sm:grid-cols-2">
            <RoutingPersonSelect testId="routing-responsible-select" label="مسؤول المطبخ" value={responsibleUserId} onChange={setResponsibleUserId} candidates={candidates?.kitchenCandidates || []} />
            <RoutingPersonSelect testId="routing-deputy-select" label="نائب مسؤول المطبخ" value={deputyUserId} onChange={setDeputyUserId} candidates={candidates?.kitchenCandidates || []} />
-           <div className="sm:col-span-2"><RoutingPersonSelect testId="routing-receiver-select" label="مسؤول استلام الفرع" value={receiverUserId} onChange={setReceiverUserId} candidates={candidates?.receiverCandidates || []} /></div>
+           <div className="sm:col-span-2"><RoutingPersonSelect testId="routing-receiver-select" label="مسؤول استلام الفرع" value={receiverUserId} onChange={setReceiverUserId} candidates={candidates?.receiverCandidates || []} automatic /></div>
+           {routingQuery.data?.receiverAssignmentSource === "branch_manager" && routingQuery.data.receiverName && <p data-testid="automatic-receiver-name" className="sm:col-span-2 rounded border border-sky-200 bg-sky-50 p-3 text-sm">التعيين التلقائي الحالي: <strong>{routingQuery.data.receiverName}</strong> (مدير الفرع)</p>}
+           {routingQuery.data?.receiverAssignmentConflict && <p role="alert" data-testid="automatic-receiver-conflict" className="sm:col-span-2 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">يوجد أكثر من مدير فرع مؤهل؛ اختر مسؤول استلام يدوياً لحسم التعيين.</p>}
          </div>}
         <p className="text-xs text-muted-foreground">تظهر فقط الحسابات المؤهلة التي أعادها الخادم. اختيار شخص هنا لا يمنحه صلاحية عرض أو اعتماد أو استلام الطلبات.</p>
-      </div>
+        </TabsContent>
+      </Tabs>
       <div className="grid shrink-0 grid-cols-2 gap-2 border-t bg-background px-4 py-3 sm:flex sm:justify-end sm:px-6">
         <Button className="min-h-11" variant="outline" onClick={() => onOpenChange(false)}>إغلاق</Button>
-        <Button className="min-h-11" data-testid="routing-save" disabled={!branchId || loading || failed || saveMutation.isPending} onClick={() => saveMutation.mutate()}>{saveMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}حفظ الإعداد</Button>
+        {tab === "appointments"
+          ? <Button className="min-h-11" data-testid="policy-save" disabled={policyQuery.isLoading || policyQuery.isError || savePolicyMutation.isPending} onClick={() => savePolicyMutation.mutate()}>{savePolicyMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}حفظ المواعيد</Button>
+          : <Button className="min-h-11" data-testid="routing-save" disabled={!branchId || loading || failed || saveMutation.isPending} onClick={() => saveMutation.mutate()}>{saveMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}حفظ الإعداد</Button>}
       </div>
     </DialogContent>
   </Dialog>;
 }
 
-function RoutingPersonSelect({ testId, label, value, onChange, candidates }: { testId: string; label: string; value: string | null; onChange: (value: string | null) => void; candidates: Array<{ id: string; name: string }> }) {
-  return <div><Label>{label}</Label><Select value={value || CLEAR_ROUTING_VALUE} onValueChange={next => onChange(next === CLEAR_ROUTING_VALUE ? null : next)}><SelectTrigger data-testid={testId} className="mt-2"><SelectValue /></SelectTrigger><SelectContent><SelectItem value={CLEAR_ROUTING_VALUE}>بدون تعيين</SelectItem>{candidates.filter(candidate => candidate.id && candidate.name.trim()).map(candidate => <SelectItem key={candidate.id} value={candidate.id}>{candidate.name}</SelectItem>)}</SelectContent></Select></div>;
+function PolicyTimeInput({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (value: string) => void }) {
+  return <div><Label htmlFor={id}>{label}</Label><Input id={id} data-testid={id} type="time" className="mt-2 min-h-11" value={value} onChange={event => onChange(event.target.value)} /></div>;
+}
+
+function RoutingPersonSelect({ testId, label, value, onChange, candidates, automatic = false }: { testId: string; label: string; value: string | null; onChange: (value: string | null) => void; candidates: Array<{ id: string; name: string }>; automatic?: boolean }) {
+  return <div><Label>{label}</Label><Select value={value || CLEAR_ROUTING_VALUE} onValueChange={next => onChange(next === CLEAR_ROUTING_VALUE ? null : next)}><SelectTrigger data-testid={testId} className="mt-2 min-h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value={CLEAR_ROUTING_VALUE}>{automatic ? "تلقائي — مدير الفرع" : "بدون تعيين"}</SelectItem>{candidates.filter(candidate => candidate.id && candidate.name.trim()).map(candidate => <SelectItem key={candidate.id} value={candidate.id}>{candidate.name}</SelectItem>)}</SelectContent></Select></div>;
 }
 type CatalogQueryLike = { isLoading: boolean; isError: boolean; error?: Error | null; refetch: () => unknown };
 function CatalogQueryState({ query, count }: { query: CatalogQueryLike; count: number }) {

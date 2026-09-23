@@ -54,7 +54,7 @@ describe("routing authorization", () => {
         const batchRouting = await getKitchenRoutingBatch(tx, [kitchen, branch]);
         expect(batchRouting.get(kitchen)?.responsibleUserId).toBe(lead);
         expect(batchRouting.get(branch)?.receiverUserId).toBe(receiver);
-        expect(await kitchenActionAllowed(tx, manager, order, "receive")).toBe(true);
+        expect(await kitchenActionAllowed(tx, manager, order, "receive")).toBe(false);
         expect(await routedRecipients(tx, order, "created")).toEqual([lead]);
         expect((await routedRecipients(tx, order, "dispatched")).sort()).toEqual([creator, manager, receiver].sort());
         expect((await routedRecipients(tx, order, "received_discrepancy")).sort()).toEqual([lead, ops].sort());
@@ -100,7 +100,10 @@ describe("routing authorization", () => {
         expect(await filterAuthorizedCentralKitchenNotificationUsers(tx, notice, [ops])).toEqual([]);
         await tx.delete(schema.userBranchAccess).where(eq(schema.userBranchAccess.userId, receiver));
         expect(await kitchenActionAllowed(tx, receiver, order, "receive")).toBe(false);
-        expect((await getKitchenRoutingBatch(tx, [branch])).get(branch)?.receiverUserId).toBeNull();
+        expect((await getKitchenRoutingBatch(tx, [branch])).get(branch)).toMatchObject({
+          receiverUserId: manager,
+          receiverAssignmentSource: "branch_manager",
+        });
         throw rollback;
       });
     } catch (error) {

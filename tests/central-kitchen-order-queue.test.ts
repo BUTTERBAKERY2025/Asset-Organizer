@@ -25,13 +25,13 @@ describe("central kitchen queue semantics", () => {
 
   it("does not treat late submission metadata as overdue fulfillment", () => {
     const order = {
-      status: "requested",
+      status: "approved",
       neededDate: "2026-04-03",
       neededTime: "07:00",
       orderingSchedule: { isLate: true },
     };
     expect(queueOrderNeedsAttention(order, now)).toBe(false);
-    expect(matchesOrderQueueStage(order, "requested", now)).toBe(true);
+    expect(matchesOrderQueueStage(order, "approved", now)).toBe(true);
   });
 
   it("keeps only overdue active orders and open received discrepancies in attention", () => {

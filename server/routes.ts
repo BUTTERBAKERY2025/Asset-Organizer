@@ -162,10 +162,13 @@ import { registerAdvancedProductionExecutionRoutes, advancedExecutionRows } from
 import { registerCentralKitchenWorkplanRoute } from "./central-kitchen-workplan";
 import { registerCentralKitchenDemandRoutes } from "./central-kitchen-demand-routes";
 import {
-  CENTRAL_KITCHEN_DEFAULT_NEEDED_TIME,
   getOrderSchedule,
   getOrderingPolicy,
 } from "@shared/central-kitchen-ordering-policy";
+import {
+  loadCentralKitchenOrderingPolicy,
+  registerCentralKitchenOrderingPolicyPutRoute,
+} from "./central-kitchen-ordering-policy";
 import {
   CentralKitchenBatchMaterialsError,
   getBatchMaterialRequirements,
@@ -7822,6 +7825,7 @@ export async function registerRoutes(
   // A coherent snapshot is essential: the event revision must describe the
   // same quantities rendered by an editor, not a later concurrent mutation.
   const getCentralKitchenOrderDetail = async (orderId: number) => db.transaction(async (db) => {
+    const orderingPolicy = await loadCentralKitchenOrderingPolicy(db);
     const [order] = await db.select().from(centralKitchenOrders)
       .where(eq(centralKitchenOrders.id, orderId)).limit(1);
     if (!order) return null;
@@ -7857,7 +7861,7 @@ export async function registerRoutes(
     return {
       ...order,
       routingWarning: routing.hasKitchenResponsible ? null : "لم يتم تعيين مسؤول أو نائب مؤهل للمطبخ؛ تم تنبيه العمليات",
-      orderingSchedule: getOrderSchedule(order),
+      orderingSchedule: getOrderSchedule(order, orderingPolicy),
       requestBranchName: branchNames.get(order.requestBranchId) || null,
       centralKitchenName: branchNames.get(order.centralKitchenId) || null,
       items,
@@ -8002,10 +8006,13 @@ export async function registerRoutes(
           grouped.push(item);
           itemsByOrder.set(item.orderId, grouped);
         }
-        const routingByBranch = await getKitchenRoutingBatch(db, branchIds);
+        const [routingByBranch, orderingPolicy] = await Promise.all([
+          getKitchenRoutingBatch(db, branchIds),
+          loadCentralKitchenOrderingPolicy(db),
+        ]);
         const result = rows.map((row) => ({
           ...row,
-          orderingSchedule: getOrderSchedule(row),
+          orderingSchedule: getOrderSchedule(row, orderingPolicy),
           requestBranchName: names.get(row.requestBranchId) || null,
           centralKitchenName: names.get(row.centralKitchenId) || null,
           itemCount: itemsByOrder.get(row.id)?.length || 0,
@@ -8368,6 +8375,14 @@ export async function registerRoutes(
     },
   );
 
+  registerCentralKitchenOrderingPolicyPutRoute(
+    app,
+    db,
+    isAuthenticated,
+    requirePermission("central_kitchen_orders", "edit"),
+    getCurrentUser,
+  );
+
   app.post(
     "/api/central-kitchen-orders/:id/items/:itemId/production-batches",
     isAuthenticated,
@@ -8579,9 +8594,14 @@ export async function registerRoutes(
     "/api/central-kitchen-orders/policy",
     isAuthenticated,
     requirePermission("central_kitchen_orders", "view"),
-    (_req, res) => {
+    async (_req, res) => {
       res.set("Cache-Control", "private, no-store");
-      return res.json(getOrderingPolicy());
+      try {
+        return res.json(getOrderingPolicy(new Date(), await loadCentralKitchenOrderingPolicy(db)));
+      } catch (error) {
+        console.error("Error loading central kitchen ordering policy:", error);
+        return res.status(500).json({ error: "تعذر تحميل سياسة مواعيد طلبات المطبخ" });
+      }
     },
   );
 
@@ -8672,9 +8692,16 @@ export async function registerRoutes(
       const keyResult = centralKitchenRequestKey(req, parsed.data.idempotencyKey);
       if (!keyResult.key) return res.status(400).json({ error: keyResult.error });
       const user = getCurrentUser(req);
+      let orderingPolicy;
+      try {
+        orderingPolicy = await loadCentralKitchenOrderingPolicy(db);
+      } catch (error) {
+        console.error("Error loading central kitchen ordering policy for order creation:", error);
+        return res.status(500).json({ error: "تعذر تحميل سياسة مواعيد طلبات المطبخ" });
+      }
       const payload = {
         ...parsed.data,
-        neededTime: parsed.data.neededTime ?? CENTRAL_KITCHEN_DEFAULT_NEEDED_TIME,
+        neededTime: parsed.data.neededTime ?? orderingPolicy.defaultNeededTime,
       };
       const payloadFingerprint = createCentralKitchenPayloadFingerprint(payload);
       try {

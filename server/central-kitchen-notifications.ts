@@ -9,6 +9,7 @@ import {
   users,
   type SystemNotification,
 } from "@shared/schema";
+import { loadCentralKitchenOrderingPolicy } from "./central-kitchen-ordering-policy";
 
 export type CentralKitchenNotificationEvent =
   | "created"
@@ -209,12 +210,13 @@ export async function routedRecipients(tx: DatabaseExecutor, order: any, event: 
 // Only open orders qualify. A stable per-order key survives scheduler restarts,
 // retries and multiple server instances; creation/date edits do not spam ops.
 export async function escalateOverdueKitchenOrders(db: any) {
+  const orderingPolicy = await loadCentralKitchenOrderingPolicy(db);
   const ids = await db.transaction(async (tx: any) => {
     const orders = await tx.select().from(centralKitchenOrders).where(and(
       inArray(centralKitchenOrders.status, ["requested", "approved", "prepared", "dispatched"]),
       sql`(${centralKitchenOrders.neededDate}::date +
         (CASE WHEN ${centralKitchenOrders.neededTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
-          THEN ${centralKitchenOrders.neededTime} ELSE '07:00' END)::time)
+          THEN ${centralKitchenOrders.neededTime} ELSE ${orderingPolicy.defaultNeededTime} END)::time)
         < (now() AT TIME ZONE 'Asia/Riyadh')`,
     )).for("update", { skipLocked: true });
     const inserted: number[] = [];

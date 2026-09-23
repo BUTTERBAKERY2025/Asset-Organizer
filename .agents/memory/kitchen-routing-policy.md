@@ -14,3 +14,9 @@ Operations managers receive exception notifications rather than every routine li
 **Why:** The goal is to reduce routine notification noise while retaining oversight of missing responsible staff, overdue requests, and receiving discrepancies.
 
 **How to apply:** Distinguish notification targeting from action authorization. Staff assignments never grant permissions by themselves; assignment and the relevant current action permission must both be checked.
+
+Automatic receiving responsibility follows a unique eligible branch manager's primary branch, not additional branch-access grants. Preserve an eligible explicit manual receiver override; show a conflict rather than choosing arbitrarily among multiple primary managers.
+
+**Why:** The user requested automatic responsibility for the manager assigned to a specific branch while retaining settings for appointing responsible staff. Additional access is not a managerial appointment.
+
+**How to apply:** Resolve against current active membership and receiving permissions on each authorization/notification path; never persist the derived manager as a manual assignment, which would survive transfer incorrectly.

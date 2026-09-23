@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getOrderSchedule,
   getOrderingPolicy,
+  validateOrderingPolicyConfig,
 } from "../shared/central-kitchen-ordering-policy";
 
 describe("central kitchen daily ordering policy", () => {
@@ -55,5 +56,38 @@ describe("central kitchen daily ordering policy", () => {
     const createdAt = "2027-01-02T15:00:00.000Z";
     expect(getOrderSchedule({ neededDate: "2027-01-03", createdAt })?.isLate).toBe(true);
     expect(getOrderSchedule({ neededDate: "2027-01-04", createdAt })?.isLate).toBe(false);
+  });
+
+  it("uses an optional persisted configuration without changing legacy defaults", () => {
+    const config = {
+      requestDeadline: "16:30",
+      reviewTime: "18:15",
+      defaultNeededTime: "08:45",
+    };
+    const order = { neededDate: "2027-01-02", createdAt: "2027-01-01T13:30:00.001Z" };
+    expect(getOrderingPolicy(new Date("2027-01-01T00:00:00Z"), config)).toMatchObject(config);
+    expect(getOrderSchedule(order, config)).toEqual({
+      isLate: true,
+      cutoffAt: "2027-01-01T13:30:00.000Z",
+      reviewAt: "2027-01-01T15:15:00.000Z",
+      deliveryAt: "2027-01-02T05:45:00.000Z",
+    });
+    expect(getOrderSchedule({ ...order, neededTime: "09:20" }, config)?.deliveryAt)
+      .toBe("2027-01-02T06:20:00.000Z");
+  });
+
+  it("accepts only exact HH:mm policy objects with cutoff no later than review", () => {
+    expect(validateOrderingPolicyConfig({
+      requestDeadline: "17:00", reviewTime: "17:00", defaultNeededTime: "07:00",
+    })).not.toBeNull();
+    expect(validateOrderingPolicyConfig({
+      requestDeadline: "17:01", reviewTime: "17:00", defaultNeededTime: "07:00",
+    })).toBeNull();
+    expect(validateOrderingPolicyConfig({
+      requestDeadline: "7:00", reviewTime: "19:00", defaultNeededTime: "07:00",
+    })).toBeNull();
+    expect(validateOrderingPolicyConfig({
+      requestDeadline: "17:00", reviewTime: "19:00", defaultNeededTime: "07:00", extra: true,
+    })).toBeNull();
   });
 });
