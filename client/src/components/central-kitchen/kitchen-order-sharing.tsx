@@ -3,6 +3,7 @@ import { Download, Loader2, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { getButterBakeryLogoDataUri } from "@/lib/company-logo-data";
 import { useVisualViewportDialog } from "./use-visual-viewport-dialog";
 import { preparationSheetPrintHtml, SHORTAGE_LABELS, type PreparationSheet } from "./kitchen-order-share-model";
 import {
@@ -69,7 +70,7 @@ export function SheetPreviewDialog({ sheet, open, onOpenChange, canPrint, canExp
   const [exporting, setExporting] = useState(false);
   const dialogStyle = useVisualViewportDialog({ open, maxHeight: 900, viewportFraction: 0.94 });
   if (!sheet) return null;
-  const print = () => {
+  const print = async () => {
     const popup = window.open("", "_blank", "width=1100,height=800");
     if (!popup) {
       setActionError("حظر المتصفح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم اضغط طباعة مرة أخرى.");
@@ -77,13 +78,15 @@ export function SheetPreviewDialog({ sheet, open, onOpenChange, canPrint, canExp
       return;
     }
     setActionError(null);
-    popup.document.write(preparationSheetPrintHtml(sheet));
+    const logo = await getButterBakeryLogoDataUri();
+    popup.document.write(preparationSheetPrintHtml(sheet, logo));
     popup.document.close();
   };
   const exportPdf = async () => {
     try {
       setExporting(true);
-      await downloadKitchenPdf(preparationSheetPdfDefinition(sheet), `ورقة-التجهيز-${sheet.generatedAt.slice(0, 10)}.pdf`);
+       const logo = await getButterBakeryLogoDataUri();
+       await downloadKitchenPdf(preparationSheetPdfDefinition(sheet, logo), `ورقة-التجهيز-${sheet.generatedAt.slice(0, 10)}.pdf`);
       setActionError(null);
       toast({ title: "تم تنزيل ملف PDF" });
     } catch (error) {
@@ -112,7 +115,7 @@ export function OrderActionsMenu({ order, canPrint, canExport, onPrint }: {
   order: PdfKitchenOrder;
   canPrint: boolean;
   canExport: boolean;
-  onPrint: () => boolean;
+    onPrint: () => boolean | Promise<boolean>;
 }) {
   const { toast } = useToast();
   const [exporting, setExporting] = useState(false);
@@ -120,7 +123,8 @@ export function OrderActionsMenu({ order, canPrint, canExport, onPrint }: {
   const exportPdf = async () => {
     try {
       setExporting(true);
-      await downloadKitchenPdf(kitchenOrderPdfDefinition(order), `طلب-المطبخ-${order.orderNumber}.pdf`);
+       const logo = await getButterBakeryLogoDataUri();
+       await downloadKitchenPdf(kitchenOrderPdfDefinition(order, logo), `طلب-المطبخ-${order.orderNumber}.pdf`);
       setActionError(null);
       toast({ title: "تم تنزيل ملف PDF" });
     } catch (error) {
@@ -132,7 +136,7 @@ export function OrderActionsMenu({ order, canPrint, canExport, onPrint }: {
     }
   };
   return <div className="flex flex-wrap items-center justify-end gap-2">
-    {canPrint && <Button data-testid="order-print" size="sm" variant="outline" className="min-h-11" onClick={() => { if (!onPrint()) { const message = "حظر المتصفح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة."; setActionError(message); toast({ title: "حظر المتصفح نافذة الطباعة", description: message, variant: "destructive" }); } else setActionError(null); }}><Printer className="ml-1 h-4 w-4" />طباعة</Button>}
+    {canPrint && <Button data-testid="order-print" size="sm" variant="outline" className="min-h-11" onClick={async () => { if (!await onPrint()) { const message = "حظر المتصفح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة."; setActionError(message); toast({ title: "حظر المتصفح نافذة الطباعة", description: message, variant: "destructive" }); } else setActionError(null); }}><Printer className="ml-1 h-4 w-4" />طباعة</Button>}
     {canExport && <Button data-testid="order-export-pdf" size="sm" variant="outline" className="min-h-11" disabled={exporting} onClick={() => void exportPdf()}>{exporting ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <Download className="ml-1 h-4 w-4" />}{exporting ? "جارٍ إنشاء PDF…" : "تصدير PDF"}</Button>}
     {actionError && <span role="alert" className="w-full text-xs text-red-700">{actionError}</span>}
   </div>;

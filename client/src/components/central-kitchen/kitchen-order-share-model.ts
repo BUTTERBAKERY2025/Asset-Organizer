@@ -39,6 +39,21 @@ export const SHORTAGE_LABELS: Record<string, string> = {
   other: "سبب آخر",
 };
 
+export function formatSaudiDateTime(input: string | Date | null | undefined) {
+  if (!input) return "—";
+  const date = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(date.getTime())) return String(input);
+  return new Intl.DateTimeFormat("ar-SA-u-ca-gregory", {
+    timeZone: "Asia/Riyadh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }).format(date);
+}
+
 export const orderDeepLink = (
   orderId: string | number,
   origin = typeof window === "undefined" ? "" : window.location.origin,
@@ -71,10 +86,11 @@ export function buildSheetSafeSummary(sheet: PreparationSheet, origin?: string) 
   ].join("\n");
 }
 
-const escapeHtml = (value: unknown) => String(value ?? "—").replace(/[&<>"']/g, character =>
+export const escapePrintHtml = (value: unknown) => String(value ?? "—").replace(/[&<>"']/g, character =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[character] || character));
 
-export function preparationSheetPrintHtml(sheet: PreparationSheet) {
+export function preparationSheetPrintHtml(sheet: PreparationSheet, logoDataUri?: string | null) {
+  const escapeHtml = escapePrintHtml;
   const rows = sheet.groups.map(group => `<tr>
     <td>${escapeHtml(group.productName)}<small>${escapeHtml(group.identity)} · ${group.provenance === "substitute" ? "بديل مجهز" : "صنف أصلي"}</small></td>
     <td>${escapeHtml(group.unit)}</td>
@@ -97,5 +113,5 @@ export function preparationSheetPrintHtml(sheet: PreparationSheet) {
       return `<a href="${escapeHtml(orderDeepLink(order.id))}">${escapeHtml(order.orderNumber)}</a> · ${escapeHtml(order.branchName)}<small>${detail}</small>`;
     }).join("<br>")}</td>
   </tr>`).join("");
-  return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>ورقة التجهيز المجمعة</title><style>html,body{display:block!important;height:auto!important}*{box-sizing:border-box}body{font-family:Arial,sans-serif;padding:28px;color:#2f1c3a}h1{font-size:22px}p{color:#666}table{width:100%;border-collapse:collapse}thead{display:table-header-group}tr{break-inside:avoid;page-break-inside:avoid}th,td{border:1px solid #d8ced5;padding:9px;text-align:right;vertical-align:top;font-size:12px;overflow-wrap:anywhere}th{background:#f5edf4}small{display:block;color:#777;margin-top:3px}a{color:#4f2a63}@page{size:A4 landscape;margin:10mm}@media print{body{padding:0}a{text-decoration:none;color:inherit}}</style></head><body><h1>ورقة التجهيز المجمعة</h1><p>${sheet.orders.length} طلبات · لقطة ${escapeHtml(new Date(sheet.generatedAt).toLocaleString("ar-SA"))} · التجميع فقط عند تطابق هوية الصنف والوحدة والمصدر. غير المجهز في طلب لم يكتمل تجهيزه لا يُعد نقصاً فعلياً.</p><table><thead><tr><th>الصنف</th><th>الوحدة</th><th>المطلوب</th><th>المعتمد</th><th>الأصلي المجهز</th><th>البديل</th><th>لم يُحسم</th><th>نقص فعلي</th><th>تفاصيل الطلبات</th></tr></thead><tbody>${rows}</tbody></table><script>window.onload=()=>window.print()<\/script></body></html>`;
+  return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>ورقة التجهيز المجمعة</title><style>html,body{display:block!important;height:auto!important}*{box-sizing:border-box}body{font-family:Arial,sans-serif;padding:28px;color:#4a2d20}.brand{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #d9822b;padding-bottom:12px;margin-bottom:16px}.brand img{width:66px;height:66px;object-fit:contain}.brand h1{font-size:22px;margin:0}.brand p{margin:3px 0 0}.doc{direction:ltr;color:#8b5a37;font-weight:bold}p{color:#715745}table{width:100%;border-collapse:collapse}thead{display:table-header-group}tr{break-inside:avoid;page-break-inside:avoid}tbody tr:nth-child(even){background:#fff9f0}th,td{border:1px solid #dfcdbb;padding:8px;text-align:right;vertical-align:top;font-size:11px;overflow-wrap:anywhere}th{background:#8b4f2d;color:#fff}small{display:block;color:#806d60;margin-top:3px}a{color:#8b4f2d}.footer{position:fixed;bottom:-7mm;left:0;right:0;text-align:center;color:#8b7564;font-size:9px}@page{size:A4 landscape;margin:12mm 10mm 14mm}@media print{body{padding:0}a{text-decoration:none;color:inherit}}</style></head><body><header class="brand">${logoDataUri ? `<img src="${escapeHtml(logoDataUri)}" alt="Butter Bakery">` : ""}<div><h1>ورقة التجهيز المجمعة</h1><p>باتر بيكري · المطبخ المركزي</p></div><div class="doc">${sheet.orders.length} طلبات</div></header><p>لقطة ${escapeHtml(formatSaudiDateTime(sheet.generatedAt))} بتوقيت السعودية · التجميع فقط عند تطابق هوية الصنف والوحدة والمصدر. غير المجهز في طلب لم يكتمل تجهيزه لا يُعد نقصاً فعلياً.</p><table><thead><tr><th>الصنف</th><th>الوحدة</th><th>المطلوب</th><th>المعتمد</th><th>الأصلي المجهز</th><th>البديل</th><th>لم يُحسم</th><th>نقص فعلي</th><th>تفاصيل الطلبات</th></tr></thead><tbody>${rows}</tbody></table><div class="footer">باتر بيكري · ورقة تجهيز مجمعة</div><script>window.onload=()=>window.print()<\/script></body></html>`;
 }

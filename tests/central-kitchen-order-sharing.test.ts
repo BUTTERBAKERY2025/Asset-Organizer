@@ -65,6 +65,7 @@ describe("central kitchen safe sharing", () => {
   });
 
   it("builds a complete, multipage-safe Arabic order PDF independently of print", () => {
+    const embeddedLogo = "data:image/png;base64,authenticLogoBytes";
     const definition = kitchenOrderPdfDefinition({
       orderNumber: "CK-12",
       status: "dispatched",
@@ -86,27 +87,34 @@ describe("central kitchen safe sharing", () => {
         substituteProductName: "دقيق بديل",
         preparationNotes: "ملاحظة التجهيز",
       }],
-    }) as any;
+    }, embeddedLogo) as any;
     const serialized = JSON.stringify(definition);
-    expect(definition.pageOrientation).toBe("landscape");
+    expect(definition.pageOrientation).toBe("portrait");
     expect(definition.defaultStyle.font).toBe("Amiri");
+    expect(serialized).toContain(embeddedLogo);
     expect(serialized).toContain("في الطريق");
     expect(serialized).toContain("العليا");
     expect(serialized).toContain("2026-09-23");
     expect(serialized).toContain("دقيق بديل");
     expect(serialized).toContain("ملاحظة الطلب");
     expect(serialized).toContain("ملاحظة التجهيز");
-    expect(definition.content.find((entry: any) => entry.table)?.table.headerRows).toBe(1);
-    expect(definition.content.find((entry: any) => entry.table)?.table.dontBreakRows).toBe(false);
+    expect(serialized).not.toContain("2026-09-22T09:00:00.000Z");
+    expect(serialized).toContain("السعودية");
+    expect(typeof definition.footer).toBe("function");
+    const itemTable = definition.content.find((entry: any) => entry.table?.headerRows === 1);
+    expect(itemTable.table.headerRows).toBe(1);
+    expect(itemTable.table.dontBreakRows).toBe(true);
   });
 
   it("keeps all preparation-sheet quantities, notes, branches, and statuses in the PDF model", () => {
-    const definition = preparationSheetPdfDefinition(sheet) as any;
+    const definition = preparationSheetPdfDefinition(sheet, "data:image/png;base64,logo") as any;
     const serialized = JSON.stringify(definition);
     expect(serialized).toContain("CK-12");
     expect(serialized).toContain("العليا");
     expect(serialized).toContain("ملاحظة حساسة");
     expect(serialized).toContain("نقص فعلي");
-    expect(definition.content.find((entry: any) => entry.table)?.table.headerRows).toBe(1);
+    expect(serialized).toContain("data:image/png;base64,logo");
+    expect(serialized).not.toContain("2026-09-22T09:00:00.000Z");
+    expect(definition.content.find((entry: any) => entry.table?.headerRows === 1)?.table.headerRows).toBe(1);
   });
 });

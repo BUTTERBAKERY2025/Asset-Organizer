@@ -117,3 +117,17 @@ mtime_ms = 1790158503745
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/88c34858-1c42-4bdf-86cb-3f5dafc9a19d/06c4b972-0ad3-4de2-8fee-e7a860720bd4"
 storage_version_token = "1790158654314232"
 content_type = "image/png"
+
+[[outputs]]
+id = "x69AfkSh0SvAFidBVVuNF"
+uri = "file://.local/test-results/kitchen-print-pdf-one/order-pdf-page-1.png"
+type = "image"
+title = "معاينة تصميم سند طلب المطبخ"
+description = "نموذج ببيانات اختبار يوضح شعار Butter Bakery وتنسيق المستند الجديد."
+logical_id = "6ab3a6ce-98d0-4046-b43e-6f61b808afb6"
+content_hash = "sha256:a3a40d918c238e760736d38010ba41926cd8ddca2818fa63fd7be3a8fbec1163"
+size = 81749
+mtime_ms = 1790167574077
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/6ab3a6ce-98d0-4046-b43e-6f61b808afb6/c147dcb2-35d5-4d83-b9f9-7427f1e50e37"
+storage_version_token = "1790167709193474"
+content_type = "image/png"

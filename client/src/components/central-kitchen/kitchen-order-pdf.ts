@@ -1,4 +1,4 @@
-import type { PreparationSheet } from "./kitchen-order-share-model";
+import { formatSaudiDateTime, type PreparationSheet } from "./kitchen-order-share-model";
 
 type PdfOrderItem = {
   productName: string;
@@ -59,71 +59,166 @@ const SHORTAGE_LABELS: Record<string, string> = {
 const value = (input: unknown) => input == null || input === "" ? "—" : String(input);
 const quantity = (input: unknown, unit: string) => `${value(input)} ${unit}`;
 const statusLabel = (status: string) => STATUS_LABELS[status?.toLowerCase().replaceAll(" ", "_")] || value(status);
+const COLORS = { brown: "#704126", orange: "#D9822B", cream: "#FFF7EA", line: "#DEC9B5", ink: "#432B20", muted: "#806D60" };
 
 const tableLayout = {
-  fillColor: (rowIndex: number) => rowIndex === 0 ? "#f3f4f6" : null,
-  hLineColor: () => "#d8dee9",
-  vLineColor: () => "#d8dee9",
+  fillColor: (rowIndex: number) => rowIndex === 0 ? COLORS.brown : rowIndex % 2 === 0 ? COLORS.cream : null,
+  hLineColor: () => COLORS.line,
+  vLineColor: () => COLORS.line,
+  hLineWidth: (index: number) => index === 0 ? 0 : 0.6,
+  vLineWidth: () => 0.6,
+  paddingLeft: () => 5,
+  paddingRight: () => 5,
+  paddingTop: () => 6,
+  paddingBottom: () => 6,
 };
 
-export function kitchenOrderPdfDefinition(order: PdfKitchenOrder) {
-  const body = [
-    ["ملاحظات", "النقص", "البديل", "المجهز", "المتوفر في الفرع", "المطلوب", "الصنف"],
-    ...(order.items || []).map(item => {
+const headerCell = (text: string) => ({ text, color: "#FFFFFF", bold: true, alignment: "right" });
+const cell = (text: string) => ({ text, alignment: "right", color: COLORS.ink });
+
+function fulfillmentDetails(item: PdfOrderItem) {
+  return [
+    item.dispatchedQuantity != null ? `المرسل: ${quantity(item.dispatchedQuantity, item.unit)}` : null,
+    item.receivedQuantity != null ? `المستلم: ${quantity(item.receivedQuantity, item.unit)}` : null,
+    item.damagedQuantity != null ? `التالف: ${quantity(item.damagedQuantity, item.unit)}` : null,
+    item.missingQuantity != null ? `المفقود: ${quantity(item.missingQuantity, item.unit)}` : null,
+  ].filter(Boolean).join("\n") || "—";
+}
+
+function itemNotes(item: PdfOrderItem, shortage: number) {
+  return [
+    item.notes,
+    item.preparationNotes,
+    shortage > 0 && item.shortageReason ? SHORTAGE_LABELS[item.shortageReason] || item.shortageReason : null,
+    item.receivingNotes,
+  ].filter(Boolean).join("\n") || "—";
+}
+
+function documentHeader(title: string, documentNumber: string, logoDataUri?: string | null) {
+  return {
+    table: {
+      widths: [88, "*", 118],
+      body: [[
+        logoDataUri ? { image: logoDataUri, width: 76, height: 58, fit: [76, 58], alignment: "left" } : { text: "" },
+        { stack: [{ text: title, style: "title" }, { text: "باتر بيكري · المطبخ المركزي", style: "brandLine" }], alignment: "center", margin: [0, 5, 0, 0] },
+        { stack: [{ text: "رقم المستند", style: "eyebrow" }, { text: value(documentNumber), bold: true, fontSize: 12, color: COLORS.brown }], alignment: "right", margin: [0, 10, 0, 0] },
+      ]],
+    },
+    layout: { hLineColor: () => COLORS.orange, hLineWidth: (index: number) => index === 1 ? 2 : 0, vLineWidth: () => 0 },
+    margin: [0, 0, 0, 14],
+  };
+}
+
+const metaCell = (label: string, text: unknown) => ({
+  stack: [{ text: label, style: "eyebrow" }, { text: value(text), color: COLORS.ink, bold: true, margin: [0, 2, 0, 0] }],
+  fillColor: COLORS.cream,
+  margin: [4, 4, 4, 4],
+});
+
+function footer(documentNumber: string) {
+  return (currentPage: number, pageCount: number) => ({
+    margin: [32, 7, 32, 0],
+    columns: [
+      { text: `الصفحة ${currentPage} / ${pageCount}`, alignment: "left", color: COLORS.muted, fontSize: 8 },
+      { text: `باتر بيكري · ${value(documentNumber)}`, alignment: "right", color: COLORS.muted, fontSize: 8 },
+    ],
+  });
+}
+
+export function kitchenOrderPdfDefinition(order: PdfKitchenOrder, logoDataUri?: string | null) {
+  const items = order.items || [];
+  const compact = items.length <= 3;
+  const body = compact
+    ? [
+      ["الصنف", "المطلوب والمتوفر", "التجهيز والبديل والنقص", "ملاحظات وتفاصيل الاستلام"].map(headerCell),
+      ...items.map(item => {
+        const prepared = Number(item.preparedQuantity || 0);
+        const substitute = Number(item.substituteQuantity || 0);
+        const shortage = Math.max(0, Number(item.requestedQuantity) - prepared - substitute);
+        const preparedText = [
+          `الأصلي: ${quantity(prepared, item.unit)}`,
+          substitute > 0 ? `البديل: ${quantity(substitute, item.substituteUnit || item.unit)} — ${value(item.substituteProductName)}` : "البديل: —",
+          `النقص: ${quantity(shortage, item.unit)}`,
+        ].join("\n");
+        return [
+          { stack: [{ text: value(item.productName), bold: true }, { text: value(item.unit), fontSize: 8, color: COLORS.muted }], alignment: "right" },
+          cell(`المطلوب: ${quantity(item.requestedQuantity, item.unit)}\nالمتوفر: ${item.reportedAvailableQuantity == null ? "غير مسجل" : quantity(item.reportedAvailableQuantity, item.unit)}`),
+          cell(preparedText),
+          cell([itemNotes(item, shortage), fulfillmentDetails(item)].filter(text => text !== "—").join("\n") || "—"),
+        ];
+      }),
+    ]
+    : [
+      ["الصنف", "المطلوب", "المتوفر بالفرع", "المجهز", "البديل", "النقص", "الملاحظات والاستلام"].map(headerCell),
+      ...items.map(item => {
       const prepared = Number(item.preparedQuantity || 0);
       const substitute = Number(item.substituteQuantity || 0);
       const shortage = Math.max(0, Number(item.requestedQuantity) - prepared - substitute);
       return [
-        value(item.receivingNotes || item.preparationNotes || (shortage > 0 ? SHORTAGE_LABELS[item.shortageReason || ""] : item.notes)),
-        quantity(shortage, item.unit),
-        substitute > 0 ? `${quantity(substitute, item.substituteUnit || item.unit)} — ${value(item.substituteProductName)}` : "—",
-        quantity(prepared, item.unit),
-        item.reportedAvailableQuantity == null ? "غير مسجل" : quantity(item.reportedAvailableQuantity, item.unit),
-        quantity(item.requestedQuantity, item.unit),
-        value(item.productName),
+        { text: value(item.productName), bold: true, alignment: "right", color: COLORS.ink },
+        cell(quantity(item.requestedQuantity, item.unit)),
+        cell(item.reportedAvailableQuantity == null ? "غير مسجل" : quantity(item.reportedAvailableQuantity, item.unit)),
+        cell(quantity(prepared, item.unit)),
+        cell(substitute > 0 ? `${quantity(substitute, item.substituteUnit || item.unit)}\n${value(item.substituteProductName)}` : "—"),
+        cell(quantity(shortage, item.unit)),
+        cell([itemNotes(item, shortage), fulfillmentDetails(item)].filter(text => text !== "—").join("\n") || "—"),
       ];
-    }),
-  ];
+      }),
+    ];
   return {
     pageSize: "A4",
-    pageOrientation: "landscape",
-    pageMargins: [28, 34, 28, 34],
-    defaultStyle: { font: "Amiri", fontSize: 9, alignment: "right" },
+    pageOrientation: compact ? "portrait" : "landscape",
+    pageMargins: [32, 28, 32, 38],
+    defaultStyle: { font: "Amiri", fontSize: compact ? 10 : 8.5, alignment: "right", color: COLORS.ink, lineHeight: 1.12 },
+    footer: footer(order.orderNumber),
     content: [
-      { text: "سند طلب المطبخ المركزي", style: "title" },
-      { text: value(order.orderNumber), alignment: "center", margin: [0, 2, 0, 14] },
+      documentHeader("سند طلب المطبخ المركزي", order.orderNumber, logoDataUri),
+      {
+        table: {
+          widths: ["*", "*", "*"],
+          body: [
+            [metaCell("الحالة", statusLabel(order.status)), metaCell("المطبخ المركزي", order.centralKitchenName || order.centralKitchenId), metaCell("الفرع الطالب", order.requestBranchName || order.requestBranchId)],
+            [metaCell("تاريخ ووقت الإنشاء · السعودية", formatSaudiDateTime(order.createdAt)), metaCell("وقت الحاجة", order.neededTime), metaCell("تاريخ الحاجة", order.neededDate)],
+          ],
+        },
+        layout: { hLineColor: () => "#FFFFFF", vLineColor: () => "#FFFFFF", hLineWidth: () => 4, vLineWidth: () => 4 },
+        margin: [0, 0, 0, 12],
+      },
+      ...(order.notes ? [{ stack: [{ text: "ملاحظات الطلب", style: "eyebrow" }, { text: order.notes, margin: [0, 3, 0, 0] }], fillColor: COLORS.cream, margin: [8, 7, 8, 10] }] : []),
+      { table: { headerRows: 1, widths: compact ? ["*", 105, 145, 132] : ["*", 54, 66, 52, 82, 45, 122], dontBreakRows: true, body }, layout: tableLayout },
+      ...(order.driverName || order.vehicleNumber ? [{ stack: [{ text: "بيانات الإرسال", style: "sectionLabel" }, { text: `السائق: ${value(order.driverName)}   ·   المركبة: ${value(order.vehicleNumber)}` }], margin: [0, 12, 0, 0] }] : []),
+      ...(order.discrepancyStatus === "open" || order.discrepancyResolutionNotes ? [{ stack: [{ text: "الفروقات", style: "sectionLabel" }, { text: `${order.discrepancyStatus === "open" ? "مفتوحة" : "تمت المعالجة"} · ${value(order.discrepancyResolutionNotes)}` }], margin: [0, 9, 0, 0] }] : []),
       {
         columns: [
-          { text: `الحالة: ${statusLabel(order.status)}` },
-          { text: `المطبخ المركزي: ${value(order.centralKitchenName || order.centralKitchenId)}` },
-          { text: `الفرع الطالب: ${value(order.requestBranchName || order.requestBranchId)}` },
+          { stack: [{ text: "\n\n", margin: [0, 16, 0, 0] }, { text: "مسؤول الإرسال", alignment: "center", border: [false, true, false, false] }] },
+          { text: "", width: 70 },
+          { stack: [{ text: "\n\n", margin: [0, 16, 0, 0] }, { text: "مسؤول التجهيز", alignment: "center", border: [false, true, false, false] }] },
         ],
-        columnGap: 12,
-        margin: [0, 0, 0, 8],
+        unbreakable: true,
+        margin: [20, 20, 20, 0],
       },
-      {
-        columns: [
-          { text: `تاريخ الإنشاء: ${value(order.createdAt)}` },
-          { text: `وقت الحاجة: ${value(order.neededTime)}` },
-          { text: `تاريخ الحاجة: ${value(order.neededDate)}` },
-        ],
-        columnGap: 12,
-        margin: [0, 0, 0, 10],
-      },
-      ...(order.notes ? [{ text: `ملاحظات الطلب: ${order.notes}`, margin: [0, 0, 0, 10] }] : []),
-      { table: { headerRows: 1, widths: ["*", 48, 90, 58, 70, 62, 95], dontBreakRows: false, body }, layout: tableLayout },
-      ...(order.driverName || order.vehicleNumber ? [{ text: `بيانات الإرسال: السائق ${value(order.driverName)} · المركبة ${value(order.vehicleNumber)}`, margin: [0, 12, 0, 0] }] : []),
-      ...(order.discrepancyStatus === "open" || order.discrepancyResolutionNotes ? [{ text: `حالة الفروقات: ${order.discrepancyStatus === "open" ? "مفتوحة" : "تمت المعالجة"} · ${value(order.discrepancyResolutionNotes)}`, margin: [0, 8, 0, 0] }] : []),
-      { columns: [{ text: "مسؤول الإرسال", alignment: "center" }, { text: "مسؤول التجهيز", alignment: "center" }], margin: [0, 42, 0, 0] },
     ],
-    styles: { title: { fontSize: 18, bold: true, alignment: "center" } },
+    styles: {
+      title: { fontSize: 18, bold: true, alignment: "center", color: COLORS.brown },
+      brandLine: { fontSize: 9, alignment: "center", color: COLORS.orange, margin: [0, 2, 0, 0] },
+      eyebrow: { fontSize: 8, color: COLORS.muted },
+      sectionLabel: { fontSize: 9, bold: true, color: COLORS.orange, margin: [0, 0, 0, 2] },
+    },
   };
 }
 
-export function preparationSheetPdfDefinition(sheet: PreparationSheet) {
+export function preparationSheetPdfDefinition(sheet: PreparationSheet, logoDataUri?: string | null) {
   const body = [
-    ["تفاصيل الطلبات", "نقص فعلي", "لم يُحسم", "البديل", "الأصلي", "المعتمد", "المطلوب", "الوحدة", "الصنف"],
+    ["الصنف", "الوحدة", "المطلوب", "المعتمد", "الأصلي", "البديل", "لم يُحسم", "نقص فعلي", "تفاصيل الطلبات"].map(headerCell),
     ...sheet.groups.map(group => [
+      `${group.productName}\n${group.provenance === "substitute" ? "بديل مجهز" : "صنف أصلي"}`,
+      value(group.unit),
+      value(group.requestedQuantity),
+      value(group.approvedQuantity),
+      value(group.preparedQuantity),
+      value(group.substitutedQuantity || null),
+      value(group.unpreparedQuantity || null),
+      value(group.actualShortageQuantity || null),
       group.orders.map(order => {
         const details = [
           order.orderNumber,
@@ -138,28 +233,25 @@ export function preparationSheetPdfDefinition(sheet: PreparationSheet) {
         ].filter(Boolean);
         return details.join(" · ");
       }).join("\n"),
-      value(group.actualShortageQuantity || null),
-      value(group.unpreparedQuantity || null),
-      value(group.substitutedQuantity || null),
-      value(group.preparedQuantity),
-      value(group.approvedQuantity),
-      value(group.requestedQuantity),
-      value(group.unit),
-      `${group.productName}\n${group.provenance === "substitute" ? "بديل مجهز" : "صنف أصلي"}`,
     ]),
   ];
   return {
     pageSize: "A4",
     pageOrientation: "landscape",
-    pageMargins: [24, 30, 24, 30],
-    defaultStyle: { font: "Amiri", fontSize: 8, alignment: "right" },
+    pageMargins: [28, 26, 28, 38],
+    defaultStyle: { font: "Amiri", fontSize: 8, alignment: "right", color: COLORS.ink },
+    footer: footer(`ورقة تجهيز · ${sheet.generatedAt.slice(0, 10)}`),
     content: [
-      { text: "ورقة التجهيز المجمعة", style: "title" },
-      { text: `${sheet.orders.length} طلبات · لقطة ${new Date(sheet.generatedAt).toLocaleString("ar-SA")}`, alignment: "center", margin: [0, 3, 0, 12] },
+      documentHeader("ورقة التجهيز المجمعة", `${sheet.orders.length} طلبات`, logoDataUri),
+      { text: `${sheet.orders.length} طلبات · لقطة ${formatSaudiDateTime(sheet.generatedAt)} بتوقيت السعودية`, alignment: "center", color: COLORS.muted, margin: [0, 0, 0, 10] },
       { text: sheet.orders.map(order => `${order.orderNumber} · ${order.requestBranchName || "—"} · ${statusLabel(order.status)}`).join("\n"), margin: [0, 0, 0, 10] },
-      { table: { headerRows: 1, widths: ["*", 45, 45, 45, 45, 45, 45, 38, 75], dontBreakRows: false, body }, layout: tableLayout },
+      { table: { headerRows: 1, widths: [82, 38, 45, 45, 45, 45, 45, 45, "*"], dontBreakRows: true, body }, layout: tableLayout },
     ],
-    styles: { title: { fontSize: 18, bold: true, alignment: "center" } },
+    styles: {
+      title: { fontSize: 18, bold: true, alignment: "center", color: COLORS.brown },
+      brandLine: { fontSize: 9, alignment: "center", color: COLORS.orange },
+      eyebrow: { fontSize: 8, color: COLORS.muted },
+    },
   };
 }
 
