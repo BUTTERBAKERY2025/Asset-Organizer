@@ -60,9 +60,9 @@ export default function CentralKitchenDemandReportPage() {
   params.set("pageSize", "50");
   Object.entries(filters).forEach(([key, value]) => { if (value && value !== "all") params.set(key, value); });
   const url = `/api/central-kitchen-demand${params.size ? `?${params}` : ""}`;
-  const report = useQuery<{ rows: Row[]; groups: Group[]; responsibleUsers: ResponsibleUser[]; total: number; totalPages: number }>({ queryKey: [url], retry: false });
+  const report = useQuery<{ rows: Row[]; groups: Group[]; responsibleUsers: ResponsibleUser[]; total: number; totalPages: number }>({ queryKey: [url] });
   const candidatesUrl = `/api/central-kitchen-demand/legacy-candidates?page=${candidatePage}&pageSize=50`;
-  const candidates = useQuery<{ rows: Candidate[]; total: number; totalPages: number }>({ queryKey: [candidatesUrl], retry: false });
+  const candidates = useQuery<{ rows: Candidate[]; total: number; totalPages: number }>({ queryKey: [candidatesUrl] });
   const activate = useMutation({
     mutationFn: async (itemId: number) => (await apiRequest("POST", `/api/central-kitchen-demand/activate/${itemId}`, {})).json(),
     onSuccess: () => {

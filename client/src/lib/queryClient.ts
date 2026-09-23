@@ -1,4 +1,4 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { isCancelledError, QueryClient, QueryFunction } from "@tanstack/react-query";
 import { getCachedData, setCachedData, shouldPersist } from "./persistentCache";
 
 const CACHE_TIMES = {
@@ -9,10 +9,81 @@ const CACHE_TIMES = {
   DYNAMIC: 1000 * 30, // 30 seconds - for real-time data (dashboards)
 };
 
+export class HttpError extends Error {
+  readonly status: number;
+
+  constructor(status: number, detail: string) {
+    // Keep the long-standing message shape for existing callers and toasts.
+    super(`${status}: ${detail}`);
+    this.name = "HttpError";
+    this.status = status;
+  }
+}
+
+export function getHttpStatus(error: unknown): number | undefined {
+  if (error instanceof HttpError) return error.status;
+  if (typeof error === "object" && error !== null && "status" in error) {
+    const status = (error as { status?: unknown }).status;
+    if (typeof status === "number" && Number.isInteger(status) && status >= 100 && status <= 599) {
+      return status;
+    }
+  }
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  const legacyStatus = /^(\d{3}):/.exec(message);
+  return legacyStatus ? Number(legacyStatus[1]) : undefined;
+}
+
+export function isAbortOrCancellation(error: unknown): boolean {
+  if (isCancelledError(error)) return true;
+  if (error instanceof Error && (error.name === "AbortError" || error.name === "CanceledError" || error.name === "CancelledError")) {
+    return true;
+  }
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  return /\b(?:aborted|abort|cancelled|canceled)\b/i.test(message);
+}
+
+export function isTransientQueryError(error: unknown): boolean {
+  if (isAbortOrCancellation(error)) return false;
+  const status = getHttpStatus(error);
+  if (status === undefined) return true;
+  if (status === 408 || status === 425 || status === 429) return true;
+  if (status >= 400 && status < 500) return false;
+  return status >= 500;
+}
+
+export function shouldRetryQuery(failureCount: number, error: unknown): boolean {
+  return failureCount < 2 && isTransientQueryError(error);
+}
+
+export type DataErrorCategory = "connection" | "timeout" | "server" | "status";
+
+export type DataErrorClassification = {
+  category: DataErrorCategory;
+  status?: number;
+  safeArabicLabel: string;
+};
+
+export function classifyDataError(error: unknown): DataErrorClassification | null {
+  if (!isTransientQueryError(error)) return null;
+  const status = getHttpStatus(error);
+  const name = error instanceof Error ? error.name : "";
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  if (name === "TimeoutError" || /\b(?:timed out|timeout)\b/i.test(message)) {
+    return { category: "timeout", status, safeArabicLabel: "انتهت مهلة الاتصال" };
+  }
+  if (status !== undefined) {
+    if (status >= 500) {
+      return { category: "server", status, safeArabicLabel: `خطأ مؤقت في الخادم (${status})` };
+    }
+    return { category: "status", status, safeArabicLabel: `تعذّر الطلب (الحالة ${status})` };
+  }
+  return { category: "connection", safeArabicLabel: "تعذّر الاتصال بالخادم" };
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    throw new HttpError(res.status, text);
   }
 }
 
@@ -31,7 +102,7 @@ function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = FE
     if (externalSignal.aborted) controller.abort(externalSignal.reason);
     else externalSignal.addEventListener("abort", onExternalAbort, { once: true });
   }
-  const timeoutId = setTimeout(() => controller.abort(new Error("Request timed out")), timeoutMs);
+  const timeoutId = setTimeout(() => controller.abort(new DOMException("Request timed out", "TimeoutError")), timeoutMs);
   return fetch(url, { ...options, signal: controller.signal }).finally(() => {
     clearTimeout(timeoutId);
     if (externalSignal) externalSignal.removeEventListener("abort", onExternalAbort);
@@ -133,15 +204,7 @@ export const queryClient = new QueryClient({
       // Solves the "I have to reload to get my data" problem — Supabase Pooler often
       // returns 502/503/504 on cold-start, and mobile networks drop one packet here
       // and there. Without retry, each glitch becomes a visible failure.
-      retry: (failureCount, error) => {
-        const msg = error instanceof Error ? error.message : "";
-        // Permanent / authoritative errors — never retry, the answer won't change
-        // (auth, permissions, validation, not-found):
-        if (/^(400|401|403|404|409|410|422):/.test(msg)) return false;
-        // Everything else (network failure, timeout, 408/425/429/500/502/503/504,
-        // dropped connection mid-stream) is transient — try up to 3 times total.
-        return failureCount < 2;
-      },
+      retry: shouldRetryQuery,
       // Exponential backoff: 1s → 3s → 6s. Gives Supabase enough time to recover
       // from a cold-start without making the user wait forever.
       retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2.5, attemptIndex), 6000),

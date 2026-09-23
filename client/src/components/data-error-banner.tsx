@@ -3,6 +3,7 @@ import { useQueryClient, type Query } from "@tanstack/react-query";
 import { AlertCircle, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { classifyDataError } from "@/lib/queryClient";
 
 const SHOW_DELAY_MS = 4000;
 const MIN_DISPLAY_MS = 4000;
@@ -35,16 +36,15 @@ function isTransientError(q: Query): boolean {
   // already shows an inline error message — no need to nag with a banner too).
   if ((q.meta as any)?.silentError === true) return false;
   const err = q.state.error;
-  const msg = err instanceof Error ? err.message : String(err || "");
-  if (/^(400|401|403|404|409|410|422):/.test(msg)) return false;
-  if (/abort/i.test(msg) || /cancel/i.test(msg)) return false;
+  const classification = classifyDataError(err);
+  if (!classification) return false;
   // Log once per error so we can diagnose recurring failures
   const w = window as any;
   w.__failedQueryLog = w.__failedQueryLog || new Set<string>();
-  const sig = `${JSON.stringify(q.queryKey)}::${msg}`;
+  const sig = `${JSON.stringify(q.queryKey)}::${classification.category}:${classification.status ?? "none"}`;
   if (!w.__failedQueryLog.has(sig)) {
     w.__failedQueryLog.add(sig);
-    console.warn("[data-error-banner] failing query:", q.queryKey, "→", msg);
+    console.warn("[data-error-banner] failing query:", endpointFromQueryKey(q.queryKey), "→", classification.category, classification.status ?? "");
   }
   return true;
 }
@@ -61,6 +61,7 @@ export function DataErrorBanner() {
   const queryClient = useQueryClient();
   const [failedCount, setFailedCount] = useState(0);
   const [failedEndpoints, setFailedEndpoints] = useState<string[]>([]);
+  const [failureLabels, setFailureLabels] = useState<string[]>([]);
   const [visible, setVisible] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [retrying, setRetrying] = useState(false);
@@ -80,6 +81,10 @@ export function DataErrorBanner() {
       const failed = failedQueries.length;
       setFailedCount(failed);
       setFailedEndpoints(Array.from(new Set(failedQueries.map((q) => endpointFromQueryKey(q.queryKey)))));
+      setFailureLabels(Array.from(new Set(failedQueries.flatMap((q) => {
+        const classification = classifyDataError(q.state.error);
+        return classification ? [classification.safeArabicLabel] : [];
+      }))));
       if (failed === 0) {
         clearShow();
         const elapsed = shownAt.current ? Date.now() - shownAt.current : Infinity;
@@ -190,6 +195,11 @@ export function DataErrorBanner() {
             ? "طلب واحد لم يكتمل — اضغط لإعادة المحاولة بدون إعادة تحميل الصفحة."
             : `${failedCount} طلبات لم تكتمل — اضغط لإعادة المحاولة بدون إعادة تحميل الصفحة.`}
         </p>
+        {failureLabels.length > 0 && (
+          <p className="text-xs text-amber-900 mt-1" data-testid="text-failure-category">
+            {failureLabels.join(" • ")}
+          </p>
+        )}
         {failedEndpoints.length > 0 && (
           <p
             className="text-[10px] text-amber-700/70 mt-1 font-mono break-all leading-tight"

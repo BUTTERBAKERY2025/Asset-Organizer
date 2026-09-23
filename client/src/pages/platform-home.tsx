@@ -18,6 +18,7 @@ import {
 import type { SystemModule } from "@shared/schema";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { HeroWidgets } from "@/components/hero-widgets";
+import { apiRequest } from "@/lib/queryClient";
 
 type SemanticColor =
   | "money"
@@ -113,8 +114,7 @@ export default function PlatformHomePage() {
     queryKey: ["/api/dashboard/stats", activeBranch?.id],
     queryFn: async () => {
       const branchParam = activeBranch?.id ? `?branchId=${activeBranch.id}` : "";
-      const res = await fetch(`/api/dashboard/stats${branchParam}`);
-      if (!res.ok) throw new Error(`${res.status}: request failed`);
+      const res = await apiRequest("GET", `/api/dashboard/stats${branchParam}`);
       return res.json();
     },
     enabled: isAuthenticated,
@@ -131,14 +131,14 @@ export default function PlatformHomePage() {
   });
 
   const { data: employeesCount } = useQuery({
-    queryKey: ["/api/branch-employees/count"],
+    queryKey: ["/api/branch-employees?countOnly=true"],
     queryFn: async () => {
-      const res = await fetch("/api/branch-employees?countOnly=true");
-      if (!res.ok) throw new Error(`${res.status}: request failed`);
+      const res = await apiRequest("GET", "/api/branch-employees?countOnly=true");
       const data = await res.json();
       if (typeof data === "number") return data;
       if (Array.isArray(data)) return data.filter((e: any) => e.status === "active").length;
-      return data?.count || 0;
+      if (typeof data?.count === "number") return data.count;
+      throw new Error("Invalid employee count response");
     },
     enabled: isAuthenticated,
     staleTime: 10 * 60 * 1000,
@@ -332,7 +332,7 @@ export default function PlatformHomePage() {
                   data-testid="kpi-employees"
                 >
                   <p className="text-[11px] text-gray-500 mb-1">{t("stats.employees")}</p>
-                  <p className="text-2xl font-bold text-gray-900">{formatNumber(employeesCount || 0)}</p>
+                  <p className="text-2xl font-bold text-gray-900">{employeesCount === undefined ? "—" : formatNumber(employeesCount)}</p>
                 </button>
               )}
               {canView("production") && (
