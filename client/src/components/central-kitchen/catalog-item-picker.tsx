@@ -45,8 +45,8 @@ export function CatalogItemPicker({ value, products, selectedKeys, disabled, onC
         <Search className="mr-3 h-4 w-4 shrink-0 text-muted-foreground" />
       </Button>
     </DialogTrigger>
-    <DialogContent dir="rtl" style={{ ...dialogStyle, display: "flex", flexDirection: "column" }} className="h-[min(680px,92dvh)] max-w-lg gap-0 overflow-hidden p-0 sm:rounded-xl">
-      <DialogHeader className="border-b px-5 py-4 text-right">
+    <DialogContent dir="rtl" style={{ ...dialogStyle, display: "flex", flexDirection: "column" }} className="h-[min(680px,92dvh)] max-w-lg gap-0 overflow-hidden p-0 sm:rounded-xl [&>button]:left-2 [&>button]:right-auto [&>button]:top-2 [&>button]:flex [&>button]:h-11 [&>button]:w-11 [&>button]:items-center [&>button]:justify-center">
+      <DialogHeader className="border-b py-4 pl-14 pr-5 text-right">
         <DialogTitle>اختيار صنف</DialogTitle>
         <DialogDescription>ابحث بالاسم أو الرمز، ثم اختر الصنف مرة واحدة.</DialogDescription>
       </DialogHeader>

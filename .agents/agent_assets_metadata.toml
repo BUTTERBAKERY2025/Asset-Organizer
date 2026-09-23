@@ -103,3 +103,17 @@ mtime_ms = 1790120505709
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/6e71ca48-9804-414f-96b9-4c84204543e0/3d48e0c9-a1dd-4885-a7bc-3635b740153b"
 storage_version_token = "1790120531681262"
 content_type = "image/png"
+
+[[outputs]]
+id = "8pp_q-F3_Fpc2CsG1P7Xe"
+uri = "file://.local/test-results/kitchen-mobile-create-step-details-390.png"
+type = "image"
+title = "طلب جديد — الخطوة الأولى على الجوال"
+description = "النافذة الفعلية بعد التنظيم إلى ثلاث خطوات، ببيانات اختبار."
+logical_id = "88c34858-1c42-4bdf-86cb-3f5dafc9a19d"
+content_hash = "sha256:cf61fca8199930ec39c30219ba2963999df8e5d58d99dd342ca49f414923c144"
+size = 37588
+mtime_ms = 1790158503745
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/88c34858-1c42-4bdf-86cb-3f5dafc9a19d/06c4b972-0ad3-4de2-8fee-e7a860720bd4"
+storage_version_token = "1790158654314232"
+content_type = "image/png"

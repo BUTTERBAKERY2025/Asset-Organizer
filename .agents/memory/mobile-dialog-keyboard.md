@@ -18,3 +18,9 @@ Mobile usability also requires an ordered task flow, not only overflow fixes: ke
 **Why:** The user rejected technically fitting layouts that still required excessive scrolling through controls and administrative information.
 
 **How to apply:** Review viewport-sized captures of the real default list and selected task; full-page screenshots and error-dialog captures cannot establish everyday usability.
+
+Keyboard-sensitive dialog geometry must update without height/top transitions or entry animation interpolation.
+
+**Why:** Generic dialog animation retained a taller shell during viewport shrink even after correct bounds were calculated. CSS viewport units also differed from measured visible height during resize.
+
+**How to apply:** Use measured pixel bounds, remeasure after layout, and disable geometry animations for these shells; verify immediately after shrink rather than waiting for transitions to hide the defect.

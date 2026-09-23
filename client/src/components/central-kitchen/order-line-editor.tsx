@@ -76,12 +76,12 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
   const selectedKeys = new Set(items.map(item => item.warehouseItemId !== undefined ? `warehouse:${item.warehouseItemId}` : item.productId !== undefined ? `product:${item.productId}` : "").filter(Boolean));
 
   return <section className="overflow-hidden rounded-xl border bg-muted/15" aria-label="بنود طلب المطبخ">
-    <div className="flex items-center justify-between gap-3 border-b bg-background/70 px-4 py-3">
-      <div>
+    <div className="flex items-start justify-between gap-3 border-b bg-background/70 px-3 py-3 sm:px-4">
+      <div className="min-w-0">
         <h3 className="font-semibold">بنود الطلب</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">المتوفر الذي تدخله معلومة للمطبخ ولا يغيّر رصيد المخزون.</p>
       </div>
-      <Button type="button" variant="outline" size="sm" onClick={() => onChange([...items, emptyLine()])}>
+      <Button type="button" variant="outline" size="sm" className="min-h-10 shrink-0" onClick={() => onChange([...items, emptyLine()])}>
         <Plus className="ml-1 h-4 w-4" />إضافة صنف
       </Button>
     </div>
@@ -98,7 +98,7 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
         const quantityStep = isProduct ? "1" : "0.000001";
         const requestedInvalid = !isValidKitchenQuantity(item.requestedQuantity, isProduct);
         const stockInvalid = !isValidKitchenQuantity(item.reportedAvailableQuantity, isProduct, true);
-        return <article key={index} className="rounded-lg border bg-background p-3 shadow-sm">
+        return <article key={index} data-testid={`order-line-${index}`} className="rounded-lg border bg-background p-3 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-2">
             <span className="text-xs font-semibold text-muted-foreground">البند {index + 1}</span>
             {items.length > 1 && <Button type="button" variant="ghost" size="sm" className="h-8 text-destructive" onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))}><X className="ml-1 h-4 w-4" />حذف</Button>}
@@ -122,12 +122,12 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
               {item.manualMode && <div className="mt-2 grid gap-2 sm:grid-cols-2"><Input value={item.productName} onChange={event => patch(index, { productName: event.target.value })} placeholder="اسم الصنف اليدوي" aria-label="اسم الصنف اليدوي" /><Input value={item.unit} onChange={event => patch(index, { unit: event.target.value })} placeholder="الوحدة" aria-label="وحدة الصنف اليدوي" /></div>}
               {!item.manualMode && item.productName && <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md bg-muted/50 px-2 py-1.5 text-xs"><span className="font-medium">الصنف المختار: {item.productName}</span><Badge variant="outline">{item.unit}</Badge><AvailabilitySnapshot kitchenId={kitchenId} productId={item.productId} warehouseItemId={item.warehouseItemId} requested={item.requestedQuantity} /></div>}
             </div>
-            <div className="md:col-span-3">
+             <div className="col-span-2 sm:col-span-1 md:col-span-3">
               <Label className="text-xs" htmlFor={`request-qty-${index}`}>الكمية المطلوب توريدها</Label>
                <Input id={`request-qty-${index}`} className="mt-1 h-12 text-base" type="number" min={isProduct ? "1" : "0.000001"} step={quantityStep} inputMode="decimal" value={item.requestedQuantity} onChange={event => patch(index, { requestedQuantity: event.target.value })} aria-invalid={requestedInvalid} />
               <p className="mt-1 text-[11px] text-muted-foreground">{isProduct ? "المنتجات بأعداد صحيحة." : "المواد تقبل حتى 6 منازل عشرية."}</p>
             </div>
-            <div className="md:col-span-3">
+             <div className="col-span-2 sm:col-span-1 md:col-span-3">
               <Label className="text-xs" htmlFor={`reported-stock-${index}`}>المتوفر حالياً في الفرع <span className="text-destructive">*</span></Label>
                <Input id={`reported-stock-${index}`} className="mt-1 h-12 border-amber-300 bg-amber-50/60 text-base" type="number" min="0" step={quantityStep} inputMode="decimal" value={item.reportedAvailableQuantity} onChange={event => patch(index, { reportedAvailableQuantity: event.target.value })} placeholder="مثال: 0" aria-invalid={stockInvalid} aria-describedby={`reported-stock-help-${index}`} />
               <p id={`reported-stock-help-${index}`} className="mt-1 text-[11px] text-muted-foreground">{stockInvalid ? "أدخل صفراً أو كمية صحيحة حتى 6 منازل عشرية؛ لا يُفترض الرصيد تلقائياً." : "معلومة للمطبخ ولا تغيّر رصيد المخزون."}</p>
