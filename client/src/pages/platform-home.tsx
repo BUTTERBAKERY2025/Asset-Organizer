@@ -60,7 +60,7 @@ function AppTile({ title, icon: Icon, href, color }: AppTileProps) {
       data-testid={`app-tile-${href.replace(/\//g, "")}`}
     >
       <div
-        className={`w-[72px] h-[72px] sm:w-[80px] sm:h-[80px] rounded-2xl flex items-center justify-center ${c.bg} shadow-sm group-hover:shadow-lg group-hover:-translate-y-1 transition-all duration-300`}
+        className={`platform-app-icon flex items-center justify-center ${c.bg} shadow-sm group-hover:shadow-lg group-hover:-translate-y-1 transition-all duration-300`}
       >
         <Icon className="w-8 h-8 text-white" />
       </div>

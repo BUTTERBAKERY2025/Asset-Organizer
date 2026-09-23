@@ -177,7 +177,7 @@ export function OperationCardView({ card, section, onOpen, onRefresh }: { card: 
   return <article id={`branch-operation-card-${card.id}`} className="branch-ops-card border border-border bg-card text-card-foreground shadow-sm" data-testid={`branch-operation-card-${card.id}`}>
     <button type="button" className="branch-ops-card-main" onClick={() => onOpen(card.href)} aria-label={`فتح ${card.title}`}>
       <div className="flex items-start gap-3">
-        <span className={`branch-ops-icon ring-1 text-primary ${section.badge}`}><Artwork src={meta.art} fallback={meta.icon} /></span>
+        <span className={`platform-app-icon branch-ops-icon ring-1 text-primary ${section.badge}`}><Artwork src={meta.art} fallback={meta.icon} /></span>
         <span className="min-w-0 flex-1 pt-1">
           <h3 className="block break-words text-base font-black leading-snug text-foreground">{card.title}</h3>
           {card.state === "error" ? <span className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-destructive"><AlertTriangle className="h-3.5 w-3.5" />تعذر تحديث المؤشرات</span>

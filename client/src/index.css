@@ -172,6 +172,16 @@
 
 /* Responsive utilities */
 @layer utilities {
+  /* Shared sizing for home shortcuts and branch-operation illustrations. */
+  .platform-app-icon {
+    width: 72px;
+    height: 72px;
+    flex-shrink: 0;
+    border-radius: 1rem;
+  }
+  @media (min-width: 640px) {
+    .platform-app-icon { width: 80px; height: 80px; }
+  }
   /* Branch operations board: layout-only rules (container-query grid and the
      compact card variant). Colors are Tailwind theme utilities on the elements
      so the board follows the platform theme exactly like every other page. */
@@ -186,6 +196,8 @@
     gap: .65rem;
   }
   .branch-ops-card {
+    display: flex;
+    flex-direction: column;
     position: relative;
     min-width: 0;
     container-type: inline-size;
@@ -194,6 +206,7 @@
     transition: box-shadow 160ms ease, transform 160ms ease;
   }
   .branch-ops-card-main {
+    flex: 1;
     display: block;
     position: relative;
     width: 100%;
@@ -210,17 +223,14 @@
   }
   .branch-ops-icon {
     display: inline-flex;
-    width: 3.75rem;
-    height: 3.75rem;
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    border-radius: 1.05rem;
   }
-  .branch-ops-icon svg { width: 1.75rem; height: 1.75rem; stroke-width: 1.8; }
+  .branch-ops-icon svg { width: 32px; height: 32px; stroke-width: 1.8; }
   .branch-ops-icon img {
-    width: 2.85rem;
-    height: 2.85rem;
+    width: 48px;
+    height: 48px;
     object-fit: contain;
     filter: drop-shadow(0 2px 2px rgb(76 29 149 / .16));
     transition: transform 160ms ease;
@@ -242,6 +252,8 @@
     font-size: .75rem;
     font-weight: 800;
     line-height: 1.25;
+    overflow-wrap: anywhere;
+    touch-action: manipulation;
     transition: transform 120ms ease, background-color 120ms ease;
   }
   .branch-ops-shimmer {
@@ -249,27 +261,24 @@
     background-size: 220% 100%;
     animation: branch-ops-shimmer 1.35s linear infinite;
   }
-  @container branchops (min-width: 330px) {
+  @media (min-width: 640px) {
+    .branch-ops-icon img { width: 52px; height: 52px; }
+  }
+  @container branchops (min-width: 300px) {
     .branch-ops-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @container branchops (min-width: 680px) {
     .branch-ops-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
     .branch-ops-card-main { padding: .9rem; }
-    .branch-ops-icon { width: 4.35rem; height: 4.35rem; border-radius: 1.2rem; }
-    .branch-ops-icon svg { width: 2rem; height: 2rem; }
-    .branch-ops-icon img { width: 3.35rem; height: 3.35rem; }
     .branch-ops-alerts { padding: 0 .9rem .9rem; }
   }
-  @container branchops (min-width: 980px) {
-    .branch-ops-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  }
-  @container branchops (min-width: 1280px) {
-    .branch-ops-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  }
-  @container opscard (max-width: 235px) {
-    .branch-ops-card-main > div { flex-direction: column; gap: .55rem; }
+  @container opscard (max-width: 280px) {
+    .branch-ops-card-main { text-align: center; }
+    .branch-ops-card-main > div { flex-direction: column; align-items: center; gap: .75rem; }
     .branch-ops-card-main > div > :nth-child(2) { width: 100%; padding-top: 0; }
     .branch-ops-card-main > div > :last-child { position: absolute; inset-inline-end: .75rem; top: .85rem; }
+    .branch-ops-card-main h3 { font-size: .875rem; overflow-wrap: anywhere; }
+    .branch-ops-alerts { justify-content: center; }
   }
   @media (hover: hover) {
     .branch-ops-card:hover { box-shadow: 0 10px 24px -12px color-mix(in oklab, var(--color-primary) 35%, transparent); transform: translateY(-2px); }
