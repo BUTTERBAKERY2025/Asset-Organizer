@@ -10,8 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import {
-  AlertTriangle, Artwork, BOARD_ART, BoardSkeleton, BusinessDate, EmptyState, GROUP_META, NeedsActionStrip,
-  OperationCardView, Settings2, ShieldAlert, Store, type OperationCard,
+  AlertTriangle, Artwork, BOARD_ART, BoardSkeleton, BusinessDate, EmptyState, NeedsActionStrip,
+  OperationCardView, SectionHeader, Settings2, ShieldAlert, Store, groupCards, type OperationCard,
 } from "@/components/branch-operations/presentation";
 
 type BranchOperationsSummary = {
@@ -84,39 +84,39 @@ export default function BranchOperationsPage() {
     <Layout>
       <main className="branch-ops-shell page-container pb-10" dir="rtl" data-testid="branch-operations-page">
         <section className="pt-5 sm:pt-8">
-          <div className="flex flex-col gap-4 border-b border-[#decdbd] pb-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex items-start gap-3">
-              <img src="/butter-logo.png" alt="Butter Bakery" className="mt-1 h-11 w-11 rounded-2xl object-contain bg-[#713b5d] p-1.5 shadow-sm" />
+              <img src="/butter-logo.png" alt="Butter Bakery" className="mt-1 h-11 w-11 rounded-2xl bg-primary object-contain p-1.5 shadow-sm" />
               <div>
-                <p className="text-xs font-bold tracking-[.16em] text-[#713b5d]">BUTTER BAKERY · BRANCH DESK</p>
-                <h1 className="mt-1 text-2xl font-black tracking-tight text-[#332c3d] sm:text-3xl">لوحة الفرع التشغيلية</h1>
-                <p className="mt-1 text-sm text-[#6d6270]">نقطة البداية اليومية للفريق — اختر ما يحتاج إلى متابعة الآن.</p>
+                <p className="text-xs font-bold tracking-[.16em] text-primary">BUTTER BAKERY · BRANCH DESK</p>
+                <h1 className="mt-1 text-2xl font-black tracking-tight text-foreground sm:text-3xl">لوحة الفرع التشغيلية</h1>
+                <p className="mt-1 text-sm text-muted-foreground">نقطة البداية اليومية للفريق — ابدأ بالمبيعات والأهداف، ثم الطلبيات، ثم بقية المتابعات.</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" className="border-[#d9c4b4] bg-[#fffaf3] text-[#713b5d] hover:bg-[#f3e5d4]" onClick={() => board.refetch()} disabled={!selectedBranchId || board.isFetching} data-testid="button-refresh-branch-operations">
+              <Button variant="outline" size="sm" onClick={() => board.refetch()} disabled={!selectedBranchId || board.isFetching} data-testid="button-refresh-branch-operations">
                 <RefreshCw className={`ml-2 h-4 w-4 ${board.isFetching ? "animate-spin" : ""}`} />تحديث
               </Button>
-              <span className="hidden text-xs text-[#786b72] sm:block">
+              <span className="hidden text-xs text-muted-foreground sm:block">
                 {validBoard ? `آخر تحديث: ${new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Riyadh", hour: "2-digit", minute: "2-digit", numberingSystem: "latn" }).format(new Date(validBoard.generatedAt))}` : ""}
               </span>
             </div>
           </div>
 
-          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-[#e7d7c7] bg-[#fffdf9] p-3 shadow-[0_8px_24px_rgb(89_58_62/.05)] sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-border bg-card p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <div className="branch-ops-badge flex h-12 w-12 items-center justify-center rounded-xl bg-[#f3e5d4] text-[#713b5d]"><Artwork src={BOARD_ART.store} fallback={Store} className="h-9 w-9" /></div>
+              <div className="branch-ops-badge flex h-12 w-12 items-center justify-center rounded-xl bg-accent text-primary ring-1 ring-primary/10"><Artwork src={BOARD_ART.store} fallback={Store} className="h-9 w-9" /></div>
               <div>
-                <p className="text-xs font-semibold text-[#76666b]">الفرع الحالي</p>
-                <p className="font-extrabold text-[#332c3d]">{selectedBranch?.name ?? "اختر فرعًا للبدء"}</p>
+                <p className="text-xs font-semibold text-muted-foreground">الفرع الحالي</p>
+                <p className="font-extrabold text-foreground">{selectedBranch?.name ?? "اختر فرعًا للبدء"}</p>
               </div>
             </div>
             <Select value={selectedBranchId ?? undefined} onValueChange={changeBranch} disabled={branchesLoading || isSwitchingBranch || allowedBranches.length === 0}>
-              <SelectTrigger className="min-h-11 w-full border-[#d9c4b4] bg-[#fffaf3] sm:w-[245px]" data-testid="select-branch-operations"><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
+              <SelectTrigger className="min-h-11 w-full sm:w-[245px]" data-testid="select-branch-operations"><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
               <SelectContent>{allowedBranches.map((branch) => <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          {switchError && <p className="mt-2 text-sm font-semibold text-[#b34c48]" role="alert">{switchError}</p>}
+          {switchError && <p className="mt-2 text-sm font-semibold text-destructive" role="alert">{switchError}</p>}
         </section>
 
         {!selectedBranchId && !branchesLoading && (
@@ -138,18 +138,14 @@ export default function BranchOperationsPage() {
             <NeedsActionStrip branchId={validBoard.branchId} cards={validBoard.cards} onOpen={go} />
             {validBoard.cards.length === 0 ? <EmptyState title="لا توجد وحدات متاحة" text="لا توجد صفحات تشغيلية مسموح بها لهذا الحساب في الفرع المحدد." icon={Settings2} /> : (
               <div className="mt-6 space-y-8">
-                {(["operations", "sales", "people"] as const).map((group) => {
-                  const cards = validBoard.cards.filter((card) => card.group === group);
-                  if (!cards.length) return null;
-                  const meta = GROUP_META[group];
-                  const GroupIcon = meta.icon;
-                  return <section key={group} aria-labelledby={`branch-ops-${group}`}>
-                    <div className="mb-3 flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: meta.accent }}><GroupIcon className="h-4 w-4" /></span><h2 id={`branch-ops-${group}`} className="font-black text-[#403442]">{meta.label}</h2><span className="h-px flex-1 bg-[#decdbd]" /></div>
+                {groupCards(validBoard.cards).map(({ section, cards }) => (
+                  <section key={section.id} aria-labelledby={`branch-ops-${section.id}`} data-testid={`branch-operations-section-${section.id}`}>
+                    <SectionHeader section={section} count={cards.length} />
                     <div className="branch-ops-grid">
-                      {cards.map((card) => <OperationCardView key={card.id} card={card} onOpen={go} onRefresh={() => board.refetch()} />)}
+                      {cards.map((card) => <OperationCardView key={card.id} card={card} section={section} onOpen={go} onRefresh={() => board.refetch()} />)}
                     </div>
-                  </section>;
-                })}
+                  </section>
+                ))}
               </div>
             )}
           </>
