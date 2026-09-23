@@ -1,3 +1,4 @@
+- [Complaint attachment privacy](complaint-storage-boundary.md) — generic Supabase bucket privacy cannot be verified; keep complaint files in private storage behind complaint authorization.
 - [Branch operations boundaries](branch-operations-boundary.md) — compose existing authoritative modules; similar labels do not justify substituting workflows or inventing counters.
 - [Home dashboard sales gating](home-dashboard-sales-gating.md) — home hero + hero-widgets + /api/dashboard/stats|widgets leak sales by default; gate by sales-view perm on BOTH client and server, not by role.
 - [Notification surfaces](notification-surfaces.md) — bell/popup read `systemNotifications` (branch+role targeting); the `notifications` table is invisible to users.
