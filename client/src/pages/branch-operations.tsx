@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import {
-  AlertTriangle, BoardSkeleton, BusinessDate, EmptyState, GROUP_META, NeedsActionStrip,
+  AlertTriangle, Artwork, BOARD_ART, BoardSkeleton, BusinessDate, EmptyState, GROUP_META, NeedsActionStrip,
   OperationCardView, Settings2, ShieldAlert, Store, type OperationCard,
 } from "@/components/branch-operations/presentation";
 
@@ -105,7 +105,7 @@ export default function BranchOperationsPage() {
 
           <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-[#e7d7c7] bg-[#fffdf9] p-3 shadow-[0_8px_24px_rgb(89_58_62/.05)] sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#f3e5d4] text-[#713b5d]"><Store className="h-5 w-5" /></div>
+              <div className="branch-ops-badge flex h-12 w-12 items-center justify-center rounded-xl bg-[#f3e5d4] text-[#713b5d]"><Artwork src={BOARD_ART.store} fallback={Store} className="h-9 w-9" /></div>
               <div>
                 <p className="text-xs font-semibold text-[#76666b]">الفرع الحالي</p>
                 <p className="font-extrabold text-[#332c3d]">{selectedBranch?.name ?? "اختر فرعًا للبدء"}</p>

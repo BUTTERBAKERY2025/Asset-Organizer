@@ -5,6 +5,19 @@ import {
   Settings2, ShieldAlert, ShoppingBasket, Store, UsersRound, WalletCards, Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import maintenanceArt from "@/assets/branch-ops-icons/maintenance.svg";
+import wasteArt from "@/assets/branch-ops-icons/waste.svg";
+import purchasingArt from "@/assets/branch-ops-icons/purchasing.svg";
+import kitchenArt from "@/assets/branch-ops-icons/kitchen.svg";
+import closingArt from "@/assets/branch-ops-icons/closing.svg";
+import targetsArt from "@/assets/branch-ops-icons/targets.svg";
+import salesArt from "@/assets/branch-ops-icons/sales.svg";
+import employeesArt from "@/assets/branch-ops-icons/employees.svg";
+import documentsArt from "@/assets/branch-ops-icons/documents.svg";
+import advancesArt from "@/assets/branch-ops-icons/advances.svg";
+import complaintsArt from "@/assets/branch-ops-icons/complaints.svg";
+import needsActionArt from "@/assets/branch-ops-icons/needs-action.svg";
+import storeArt from "@/assets/branch-ops-icons/store.svg";
 
 export type OperationCard = {
   id: string;
@@ -16,23 +29,35 @@ export type OperationCard = {
   alerts: Array<{ label: string; count: number; href: string }>;
 };
 
-type IconMeta = { icon: typeof Wrench; tone: string; wash: string };
+type IconMeta = { icon: typeof Wrench; tone: string; wash: string; art?: string };
 
+// Bespoke paper-cut illustration set (client/src/assets/branch-ops-icons). The
+// lucide glyph stays as the fallback whenever an illustration fails to load.
 const CARD_META: Record<string, IconMeta> = {
-  maintenance: { icon: Wrench, tone: "#ad604d", wash: "#f7e4de" },
-  waste: { icon: PackageCheck, tone: "#9b536b", wash: "#f3e3e9" },
-  purchasing: { icon: ShoppingBasket, tone: "#477a70", wash: "#dfeee9" },
-  kitchen: { icon: ClipboardCheck, tone: "#5875a0", wash: "#e4ebf5" },
-  closing: { icon: BriefcaseBusiness, tone: "#8f623f", wash: "#f2e7da" },
-  targets: { icon: Gauge, tone: "#85568e", wash: "#efe4f0" },
-  sales: { icon: WalletCards, tone: "#39768b", wash: "#e1edf0" },
-  employees: { icon: UsersRound, tone: "#58744d", wash: "#e6eddf" },
-  documents: { icon: FileText, tone: "#81694f", wash: "#eee7df" },
-  advances: { icon: BadgeAlert, tone: "#a44c59", wash: "#f5e2e4" },
-  complaints: { icon: MessageSquareWarning, tone: "#9b536b", wash: "#f3e3e9" },
+  maintenance: { icon: Wrench, tone: "#ad604d", wash: "#f7e4de", art: maintenanceArt },
+  waste: { icon: PackageCheck, tone: "#9b536b", wash: "#f3e3e9", art: wasteArt },
+  purchasing: { icon: ShoppingBasket, tone: "#477a70", wash: "#dfeee9", art: purchasingArt },
+  kitchen: { icon: ClipboardCheck, tone: "#5875a0", wash: "#e4ebf5", art: kitchenArt },
+  closing: { icon: BriefcaseBusiness, tone: "#8f623f", wash: "#f2e7da", art: closingArt },
+  targets: { icon: Gauge, tone: "#85568e", wash: "#efe4f0", art: targetsArt },
+  sales: { icon: WalletCards, tone: "#39768b", wash: "#e1edf0", art: salesArt },
+  employees: { icon: UsersRound, tone: "#58744d", wash: "#e6eddf", art: employeesArt },
+  documents: { icon: FileText, tone: "#81694f", wash: "#eee7df", art: documentsArt },
+  advances: { icon: BadgeAlert, tone: "#a44c59", wash: "#f5e2e4", art: advancesArt },
+  complaints: { icon: MessageSquareWarning, tone: "#9b536b", wash: "#f3e3e9", art: complaintsArt },
 };
 
 const FALLBACK_META: IconMeta = { icon: Settings2, tone: "#6f5267", wash: "#eee5e9" };
+
+export const BOARD_ART = { needsAction: needsActionArt, store: storeArt } as const;
+
+/** Decorative illustration with a glyph fallback; the adjacent title carries the meaning. */
+export function Artwork({ src, fallback: Fallback, className }: { src?: string; fallback: typeof Wrench; className?: string }) {
+  const [broken, setBroken] = useState(false);
+  useEffect(() => setBroken(false), [src]);
+  if (!src || broken) return <Fallback aria-hidden="true" className={className} />;
+  return <img src={src} alt="" aria-hidden="true" decoding="async" draggable={false} className={className} onError={() => setBroken(true)} />;
+}
 
 export const GROUP_META = {
   operations: { label: "تشغيل الفرع", accent: "var(--ops-mint)", icon: Gauge },
@@ -63,7 +88,7 @@ export function NeedsActionStrip({ branchId, cards, onOpen }: { branchId: string
 
   return <section className="mt-4 rounded-2xl border border-[#e4cabc] bg-[#fff8f0] p-3" aria-labelledby="branch-ops-needs-action" data-testid="branch-operations-needs-action">
     <div className="flex items-center gap-2">
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#f7ddd7] text-[#a54640]"><BadgeAlert className="h-5 w-5" /></span>
+      <span className="branch-ops-badge flex h-11 w-11 items-center justify-center rounded-xl bg-[#f7ddd7] text-[#a54640]"><Artwork src={BOARD_ART.needsAction} fallback={BadgeAlert} className="h-8 w-8" /></span>
       <h2 id="branch-ops-needs-action" className="font-black text-[#403442]">يحتاج إجراء</h2>
     </div>
     {actions.length ? <div className="mt-2.5 flex flex-wrap gap-2">
@@ -77,12 +102,11 @@ export function NeedsActionStrip({ branchId, cards, onOpen }: { branchId: string
 
 export function OperationCardView({ card, onOpen, onRefresh }: { card: OperationCard; onOpen: (href: string) => void; onRefresh: () => void }) {
   const meta = CARD_META[card.id] ?? FALLBACK_META;
-  const Icon = meta.icon;
   const urgent = card.alerts.filter((alert) => alert.count > 0);
   return <article className="branch-ops-card text-[#332c3d]" data-testid={`branch-operation-card-${card.id}`}>
     <button type="button" className="branch-ops-card-main" onClick={() => onOpen(card.href)} aria-label={`فتح ${card.title}`}>
       <div className="flex items-start gap-3">
-        <span className="branch-ops-icon" style={{ color: meta.tone, backgroundColor: meta.wash }}><Icon aria-hidden="true" /></span>
+        <span className="branch-ops-icon" style={{ color: meta.tone, backgroundColor: meta.wash }}><Artwork src={meta.art} fallback={meta.icon} /></span>
         <span className="min-w-0 flex-1 pt-1">
           <h3 className="block break-words text-base font-black leading-snug text-[#332c3d]">{card.title}</h3>
           {card.state === "error" ? <span className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-[#a53e3e]"><AlertTriangle className="h-3.5 w-3.5" />تعذر تحديث المؤشرات</span>

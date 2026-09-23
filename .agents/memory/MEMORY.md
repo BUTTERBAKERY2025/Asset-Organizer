@@ -66,3 +66,5 @@
 - [Kitchen routing policy](kitchen-routing-policy.md) — explicit kitchen choice every request; operations get exception alerts without losing intervention authority.
 - [Production development role](production-development-role.md) — all branches by explicit choice; material/production stock, not fixed assets or accounting.
 - [Unmet kitchen demand](kitchen-unmet-demand.md) — replacements earn credit at receipt, waiver is not fulfillment, and uncertain original/substitute attribution needs branch confirmation.
+- [Headless dev screenshots hang](headless-dev-screenshot-hang.md) — puppeteer against dev server never leaves page Suspense skeleton; verify protected-page visuals via a throwaway static harness linking /src/index.css.
+- [Generated SVG icon hygiene](generated-svg-icon-hygiene.md) — AI-generated SVGs can decode fine yet carry stray text, dark-mode @media overrides or full-canvas paths; lint each file before shipping.
