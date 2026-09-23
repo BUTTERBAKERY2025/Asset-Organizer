@@ -221,3 +221,17 @@ export async function findLegacyMatch(
 export function isSupabaseAvailable(): boolean {
   return supabase !== null;
 }
+
+// Security-sensitive callers can fail closed when the shared documents bucket
+// cannot be proven private. This never creates or changes bucket policy.
+export async function isDocumentsBucketPrivate(): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { data, error } = await supabase.storage.listBuckets();
+    if (error) return false;
+    const bucket = data?.find((candidate) => candidate.name === DOCUMENTS_BUCKET);
+    return !!bucket && bucket.public === false;
+  } catch {
+    return false;
+  }
+}

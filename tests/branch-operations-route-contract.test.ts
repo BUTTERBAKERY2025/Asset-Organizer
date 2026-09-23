@@ -127,7 +127,7 @@ describe("registered branch operations summary handler", () => {
     const response = await request({ id: "employee", role: "employee" });
     expect(response.statusCode).toBe(200);
     expect(response.body.cards.map((card: any) => card.id)).toEqual(["maintenance"]);
-    expect(fakes.permissionCalls).toHaveLength(10);
+    expect(fakes.permissionCalls).toHaveLength(11);
     expect(fakes.selectCalls).toBe(1);
   });
 
@@ -156,9 +156,11 @@ describe("registered branch operations summary handler", () => {
     expect(fakes.selectCalls).toBe(2);
   });
 
-  it("serves the real ten-card contract and marks a failed card as error, not zero", async () => {
+  it("serves the real eleven-card contract and marks a failed card as error, not zero", async () => {
     fakes.rows.push(
       [{ id: "branch-a" }],
+      [{ value: 2 }],
+      [{ value: 1 }],
       new Error("waste metric unavailable"),
       [{ value: 2 }],
       [],
@@ -172,11 +174,11 @@ describe("registered branch operations summary handler", () => {
     expect(response.statusCode).toBe(200);
     expect(response.body.branchId).toBe("branch-a");
     expect(response.body.cards.map((card: any) => card.id)).toEqual([
-      "maintenance", "waste", "purchasing", "kitchen", "closing",
+      "maintenance", "complaints", "waste", "purchasing", "kitchen", "closing",
       "targets", "sales", "employees", "documents", "advances",
     ]);
     expect(response.body.cards.map((card: any) => card.group)).toEqual([
-      "operations", "operations", "operations", "operations", "operations",
+      "operations", "operations", "operations", "operations", "operations", "operations",
       "sales", "sales", "people", "people", "people",
     ]);
     expect(response.body.cards.every((card: any) => card.href.includes("branchId=branch-a"))).toBe(true);

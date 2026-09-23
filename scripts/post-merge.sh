@@ -8,3 +8,7 @@ set -e
 
 rm -rf node_modules/.xlsx-* 2>/dev/null || true
 npm install --no-audit --no-fund
+
+# Additive complaints schema, guarded to local development databases only.
+# External production migrations remain an explicitly reviewed release step.
+bash scripts/apply-branch-complaints-development.sh

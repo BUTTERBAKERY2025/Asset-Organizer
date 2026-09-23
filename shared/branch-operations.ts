@@ -22,6 +22,7 @@ export interface BranchOperationsAction {
 export interface BranchOperationsCard {
   id:
     | "maintenance"
+    | "complaints"
     | "waste"
     | "purchasing"
     | "kitchen"

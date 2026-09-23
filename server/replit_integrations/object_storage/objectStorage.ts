@@ -1,6 +1,8 @@
 import { Storage, File } from "@google-cloud/storage";
 import { Response } from "express";
 import { randomUUID } from "crypto";
+import { Readable } from "stream";
+import { pipeline } from "stream/promises";
 import {
   ObjectAclPolicy,
   ObjectPermission,
@@ -156,29 +158,79 @@ export class ObjectStorageService {
 
   // Gets the object entity file from the object path.
   async getObjectEntityFile(objectPath: string): Promise<File> {
-    if (!objectPath.startsWith("/objects/")) {
-      throw new ObjectNotFoundError();
-    }
-
-    const parts = objectPath.slice(1).split("/");
-    if (parts.length < 2) {
-      throw new ObjectNotFoundError();
-    }
-
-    const entityId = parts.slice(1).join("/");
-    let entityDir = this.getPrivateObjectDir();
-    if (!entityDir.endsWith("/")) {
-      entityDir = `${entityDir}/`;
-    }
-    const objectEntityPath = `${entityDir}${entityId}`;
-    const { bucketName, objectName } = parseObjectPath(objectEntityPath);
-    const bucket = objectStorageClient.bucket(bucketName);
-    const objectFile = bucket.file(objectName);
+    const objectFile = this.getPrivateObjectFile(objectPath);
     const [exists] = await objectFile.exists();
     if (!exists) {
       throw new ObjectNotFoundError();
     }
     return objectFile;
+  }
+
+  /**
+   * Resolve a server-owned private object path. This deliberately does not
+   * create a public ACL or accept a bucket/object path from the caller.
+   */
+  getPrivateObjectFile(objectPath: string): File {
+    if (!objectPath.startsWith("/objects/")) {
+      throw new ObjectNotFoundError();
+    }
+    const entityId = objectPath.slice("/objects/".length);
+    const parts = entityId.split("/");
+    if (!entityId || parts.some((part) => !part || part === "." || part === ".." || part.includes("\\"))) {
+      throw new ObjectNotFoundError();
+    }
+    let entityDir = this.getPrivateObjectDir();
+    if (!entityDir.endsWith("/")) entityDir = `${entityDir}/`;
+    const { bucketName, objectName } = parseObjectPath(`${entityDir}${entityId}`);
+    return objectStorageClient.bucket(bucketName).file(objectName);
+  }
+
+  async isPrivateObjectStorageReady(): Promise<boolean> {
+    try {
+      // Replit's object-scoped credentials may correctly allow object reads and
+      // writes while denying bucket metadata (bucket.exists returns 403). Probe
+      // a reserved, non-user object with a read-only object metadata request.
+      // Both "present" and "not found" prove that the configured private path
+      // and object credentials are usable.
+      await this.getPrivateObjectFile("/objects/branch-complaints/.readiness").exists();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async uploadPrivateObject(objectPath: string, data: Buffer, contentType: string): Promise<void> {
+    const file = this.getPrivateObjectFile(objectPath);
+    await pipeline(
+      Readable.from([data]),
+      file.createWriteStream({
+        resumable: false,
+        metadata: {
+          contentType,
+          cacheControl: "private, no-store",
+        },
+      }),
+    );
+  }
+
+  async downloadPrivateObject(objectPath: string): Promise<{ data: Buffer; contentType?: string; size?: number }> {
+    const file = await this.getObjectEntityFile(objectPath);
+    const [metadata] = await file.getMetadata();
+    const chunks: Buffer[] = [];
+    for await (const chunk of file.createReadStream()) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    const data = Buffer.concat(chunks);
+    return {
+      data,
+      contentType: metadata.contentType,
+      size: metadata.size == null ? data.length : Number(metadata.size),
+    };
+  }
+
+  async deletePrivateObject(objectPath: string): Promise<void> {
+    const file = this.getPrivateObjectFile(objectPath);
+    await file.delete({ ignoreNotFound: true });
   }
 
   normalizeObjectEntityPath(

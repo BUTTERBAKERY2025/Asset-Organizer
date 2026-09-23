@@ -13,7 +13,7 @@ import {
   HardDrive, LayoutDashboard, Factory, Megaphone,
   UsersRound, ClipboardList, Receipt, TrendingUp, TrendingDown,
   Sun, Moon, CloudSun, Languages, Warehouse,
-  Store, Briefcase, Sparkles, Search,
+  Store, Briefcase, Sparkles, Search, MessageSquareWarning,
 } from "lucide-react";
 import type { SystemModule } from "@shared/schema";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -150,6 +150,7 @@ export default function PlatformHomePage() {
     { title: "مركز الموارد البشرية",          icon: UsersRound,     href: "/hr-hub",                  color: "people",     module: "hr_management" },
     { title: t("modules.sales.title"),       icon: Receipt,        href: "/cashier-journals",        color: "money",      module: "cashier_journal" },
     { title: t("modules.operations.title"),  icon: Factory,        href: "/operations",              color: "production", module: "operations" },
+    { title: "شكاوى الفروع",                 icon: MessageSquareWarning, href: "/branch-complaints",   color: "people",     module: "branch_complaints" },
     { title: t("modules.production.title"),  icon: ClipboardList,  href: "/production-dashboard",    color: "production", module: "production" },
     { title: "دفتر وصفات المطبخ المركزي",     icon: ClipboardList,  href: "/central-kitchen-recipes",  color: "production", module: "central_kitchen_recipes" },
     { title: t("modules.assets.title"),      icon: Package,        href: "/inventory",               color: "inventory",  module: "inventory" },

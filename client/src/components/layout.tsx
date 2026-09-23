@@ -16,7 +16,7 @@ import {
   Shield, MapPin, Megaphone, UserCheck, Calendar, UsersRound, Building, Briefcase,
   Receipt, PieChart, Lock, Layers, PieChartIcon, Share2, Languages, Warehouse,
   PackageCheck, Send, ShoppingCart, FolderOpen, Landmark, Scale, Vote, FileCheck,
-  Sparkles, Crown, Handshake, DoorOpen, Bell, Store, ShieldAlert, MessageCircle, LayoutGrid, Camera, UserCircle
+  Sparkles, Crown, Handshake, DoorOpen, Bell, Store, ShieldAlert, MessageCircle, MessageSquareWarning, LayoutGrid, Camera, UserCircle
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
@@ -248,7 +248,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const allStandaloneItems: NavItem[] = useMemo(() => [
     { href: "/", label: t("sidebar.home"), icon: Home, module: "dashboard" },
-    { href: "/branch-operations", label: "لوحة الفرع التشغيلية", icon: Store, modules: ["operations", "maintenance", "waste_tracking", "warehouse", "daily_closures", "cashier_journal", "branch_employees", "documents", "hr_advances"] as SystemModule[] },
+    { href: "/branch-operations", label: "لوحة الفرع التشغيلية", icon: Store, modules: ["operations", "maintenance", "waste_tracking", "warehouse", "daily_closures", "cashier_journal", "branch_employees", "documents", "hr_advances", "branch_complaints"] as SystemModule[] },
+    { href: "/branch-complaints", label: "شكاوى الفروع", icon: MessageSquareWarning, module: "branch_complaints" },
     { href: "/my-portal", label: t("sidebar.myPortal"), icon: UserCircle },
     { href: "/central-kitchen-recipes", label: "دفتر وصفات المطبخ المركزي", icon: ClipboardList, module: "central_kitchen_recipes" },
   ], [t, user?.role]);

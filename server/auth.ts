@@ -198,6 +198,12 @@ export const OPERATIONS_MANAGER_PERMISSIONS: Record<string, string[]> =
 // Branch managers can create requests for, and receive requests at, their own
 // branch. Kitchen-side branch checks still prevent approve/prepare/dispatch.
 export const BRANCH_MANAGER_CENTRAL_KITCHEN_PERMISSIONS = ["view", "create", "edit"] as const;
+export const BRANCH_MANAGER_INTRINSIC_PERMISSIONS: Record<string, string[]> =
+  Object.fromEntries(
+    ((ROLE_PERMISSION_TEMPLATES as any).branch_manager || []).map(
+      (entry: { module: string; actions: string[] }) => [entry.module, [...entry.actions]],
+    ),
+  );
 
 // Resolve a module's allowed actions for an operations_manager, tolerating the
 // historical attendance/attendance_check and quality/quality_control synonyms.
@@ -1244,13 +1250,13 @@ export const requirePermission = (module: string, action?: string): RequestHandl
       }
     }
 
-    if (
-      user.role === "branch_manager"
-      && module === "central_kitchen_orders"
-      && action != null
-      && BRANCH_MANAGER_CENTRAL_KITCHEN_PERMISSIONS.includes(action as any)
-    ) {
-      return next();
+    if (user.role === "branch_manager") {
+      const allowed = BRANCH_MANAGER_INTRINSIC_PERMISSIONS[module];
+      const methodActions: Record<string, string> = {
+        GET: "view", HEAD: "view", OPTIONS: "view", POST: "create",
+        PATCH: "edit", PUT: "edit", DELETE: "delete",
+      };
+      if (allowed?.includes(action ?? methodActions[req.method] ?? "edit")) return next();
     }
     
     // Use cached permissions (pre-fetched by isAuthenticated middleware)

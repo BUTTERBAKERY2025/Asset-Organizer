@@ -139,7 +139,7 @@ import { recipientsSchema as reportRecipientsSchema } from "./scheduler";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertContractMilestoneSchema, insertContractVariationSchema, insertContractGuaranteeSchema, insertContractTemplateSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
 import { registerKitchenRoutingRoutes, kitchenActionAllowed, getKitchenRouting, getKitchenRoutingBatch } from "./central-kitchen-routing";
-import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS, BRANCH_MANAGER_CENTRAL_KITCHEN_PERMISSIONS, hasCrossBranchHrReadAccess } from "./auth";
+import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS, BRANCH_MANAGER_INTRINSIC_PERMISSIONS, hasCrossBranchHrReadAccess } from "./auth";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
 import { registerFinancialReviewRoutes } from "./financial-review-routes";
@@ -161,6 +161,7 @@ import { registerProductionOperationsReportRoute } from "./production-operations
 import { registerAdvancedProductionExecutionRoutes, advancedExecutionRows } from "./advanced-production-execution";
 import { registerCentralKitchenWorkplanRoute } from "./central-kitchen-workplan";
 import { registerBranchOperationsRoute } from "./branch-operations";
+import { registerBranchComplaintRoutes } from "./branch-complaints";
 import { registerCentralKitchenDemandRoutes } from "./central-kitchen-demand-routes";
 import {
   getOrderSchedule,
@@ -547,6 +548,7 @@ export async function registerRoutes(
   registerAdvancedProductionExecutionRoutes(app);
   registerCentralKitchenWorkplanRoute(app);
   registerBranchOperationsRoute(app);
+  registerBranchComplaintRoutes(app);
 
   // Cached data fetchers
   const getCachedBranches = memoize(async () => {
@@ -1362,9 +1364,11 @@ export async function registerRoutes(
         for (const p of permissions) {
           merged.set(p.module, new Set(p.actions || []));
         }
-        const set = merged.get("central_kitchen_orders") || new Set<string>();
-        for (const action of BRANCH_MANAGER_CENTRAL_KITCHEN_PERMISSIONS) set.add(action);
-        merged.set("central_kitchen_orders", set);
+        for (const [module, intrinsicActions] of Object.entries(BRANCH_MANAGER_INTRINSIC_PERMISSIONS)) {
+          const set = merged.get(module) || new Set<string>();
+          for (const action of intrinsicActions) set.add(action);
+          merged.set(module, set);
+        }
         permissions = Array.from(merged.entries()).map(([module, actions]) => ({
           module,
           actions: Array.from(actions),

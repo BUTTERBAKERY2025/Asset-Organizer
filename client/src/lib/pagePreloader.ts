@@ -1,6 +1,7 @@
 const pageImports: Record<string, () => Promise<any>> = {
   "platform-home": () => import("@/pages/platform-home"),
   "branch-operations": () => import("@/pages/branch-operations"),
+  "branch-complaints": () => import("@/pages/branch-complaints"),
   "floor-plan": () => import("@/pages/floor-plan"),
   "hr-hub": () => import("@/pages/hr-hub"),
   "my-portal": () => import("@/pages/my-portal"),
@@ -251,7 +252,8 @@ export function startAggressivePreload() {
 
 const ADJACENT_PAGES: Record<string, string[]> = {
   "/": ["branch-operations", "dashboard", "cashier-journals", "operations-dashboard"],
-  "/branch-operations": ["operations-dashboard", "cashier-journals", "branch-employees"],
+  "/branch-operations": ["branch-complaints", "operations-dashboard", "cashier-journals", "branch-employees"],
+  "/branch-complaints": ["branch-operations"],
   "/dashboard": ["inventory", "manage", "reports"],
   "/cashier-journals": ["cashier-journal-form", "branch-daily-closures", "sales-analytics"],
   "/operations": ["central-kitchen-orders", "products", "quality-control", "branch-shifts", "operations-reports-dashboard"],
@@ -277,6 +279,7 @@ export function prefetchAdjacentPages(currentRoute: string) {
 const ROUTE_TO_PAGE: Record<string, string> = {
   "/": "platform-home",
   "/branch-operations": "branch-operations",
+  "/branch-complaints": "branch-complaints",
   "/dashboard": "dashboard",
   "/inventory": "inventory",
   "/manage": "manage",

@@ -1,8 +1,9 @@
 import type { Express, Request } from "express";
-import { and, count, eq, gte, inArray, lt, lte, ne } from "drizzle-orm";
+import { and, count, eq, gte, inArray, lt, lte, ne, sql } from "drizzle-orm";
 import {
   advanceRequests,
   branchDailyClosures,
+  branchComplaints,
   branchEmployees,
   branches,
   branchShifts,
@@ -46,6 +47,31 @@ const emptyData = async () => ({ metrics: [], alerts: [] });
 
 const definitions: CardDefinition[] = [
   { id: "maintenance", title: "الصيانة", group: "operations", module: "maintenance", href: "/maintenance", load: emptyData },
+  {
+    id: "complaints", title: "شكاوى الفروع", group: "operations", module: "branch_complaints", href: "/branch-complaints",
+    load: async (branchId) => {
+      const now = new Date();
+      const [[open], [overdue]] = await Promise.all([
+        db.select({ value: count() }).from(branchComplaints).where(and(
+          eq(branchComplaints.branchId, branchId),
+          inArray(branchComplaints.status, ["open", "in_progress", "resolved"]),
+        )),
+        db.select({ value: count() }).from(branchComplaints).where(and(
+          eq(branchComplaints.branchId, branchId),
+          ne(branchComplaints.status, "closed"),
+          lt(branchComplaints.responseDue, now),
+          sql`${branchComplaints.firstRespondedAt} is null`,
+        )),
+      ]);
+      const openCount = Number(open.value);
+      const overdueCount = Number(overdue.value);
+      const href = branchHref("/branch-complaints", branchId);
+      return {
+        metrics: [{ label: "شكاوى مفتوحة", value: openCount }, { label: "تجاوزت موعد الرد", value: overdueCount }],
+        alerts: overdueCount ? [{ label: "شكاوى متأخرة بلا رد أول", count: overdueCount, href }] : [],
+      };
+    },
+  },
   {
     id: "waste", title: "الهدر", group: "operations", module: "waste_tracking", href: "/display-bar-waste",
     load: async (branchId, businessDate) => {

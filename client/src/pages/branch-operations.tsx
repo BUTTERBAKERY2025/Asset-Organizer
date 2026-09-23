@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
   AlertTriangle, BadgeAlert, BriefcaseBusiness, CalendarDays, ChevronLeft,
-  ClipboardCheck, FileText, Gauge, PackageCheck, RefreshCw, Settings2, ShieldAlert,
+  ClipboardCheck, FileText, Gauge, MessageSquareWarning, PackageCheck, RefreshCw, Settings2, ShieldAlert,
   ShoppingBasket, Store, UsersRound, WalletCards, Wrench,
 } from "lucide-react";
 import { Layout } from "@/components/layout";
@@ -13,7 +13,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 
 type BranchOperationsCard = {
-  id: "maintenance" | "waste" | "purchasing" | "kitchen" | "closing" | "targets" | "sales" | "employees" | "documents" | "advances";
+  id: "maintenance" | "waste" | "purchasing" | "kitchen" | "closing" | "targets" | "sales" | "employees" | "documents" | "advances" | "complaints";
   title: string;
   group: "operations" | "sales" | "people";
   href: string;
@@ -46,6 +46,7 @@ const CARD_META: Record<BranchOperationsCard["id"], { icon: typeof Wrench; tint:
   employees: { icon: UsersRound, tint: "#56754c" },
   documents: { icon: FileText, tint: "#856a4d" },
   advances: { icon: BadgeAlert, tint: "#a44c59" },
+  complaints: { icon: MessageSquareWarning, tint: "#a05b74" },
 };
 
 function toUrl(href: string, branchId: string) {

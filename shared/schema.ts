@@ -91,6 +91,72 @@ export const insertBranchSchema = createInsertSchema(branches).omit({
 export type Branch = typeof branches.$inferSelect;
 export type InsertBranch = z.infer<typeof insertBranchSchema>;
 
+// Branch complaints are an operations-owned workflow. Events and attachment
+// metadata are append-only records; attachment removal archives metadata and
+// intentionally retains the object for audit/recovery.
+export const branchComplaints = pgTable("branch_complaints", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  subject: text("subject").notNull(),
+  description: text("description").notNull(),
+  category: text("category").notNull(),
+  priority: text("priority").notNull().default("normal"),
+  ownerUserId: varchar("owner_user_id").references(() => users.id),
+  responseDue: timestamp("response_due"),
+  status: text("status").notNull().default("open"),
+  resolution: text("resolution"),
+  firstRespondedAt: timestamp("first_responded_at"),
+  version: integer("version").notNull().default(1),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  updatedBy: varchar("updated_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_complaints_branch_status").on(table.branchId, table.status),
+  index("idx_branch_complaints_branch_priority").on(table.branchId, table.priority),
+  index("idx_branch_complaints_owner").on(table.ownerUserId),
+  index("idx_branch_complaints_response_due").on(table.responseDue),
+  check("chk_branch_complaints_category", sql`${table.category} in ('service','product','cleanliness','staff','other')`),
+  check("chk_branch_complaints_priority", sql`${table.priority} in ('low','normal','high','urgent')`),
+  check("chk_branch_complaints_status", sql`${table.status} in ('open','in_progress','resolved','closed')`),
+  check("chk_branch_complaints_version", sql`${table.version} > 0`),
+]);
+
+export const branchComplaintEvents = pgTable("branch_complaint_events", {
+  id: serial("id").primaryKey(),
+  complaintId: integer("complaint_id").notNull().references(() => branchComplaints.id),
+  actorUserId: varchar("actor_user_id").notNull().references(() => users.id),
+  eventType: text("event_type").notNull(),
+  fromStatus: text("from_status"),
+  toStatus: text("to_status"),
+  reason: text("reason"),
+  changes: jsonb("changes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_complaint_events_complaint").on(table.complaintId, table.createdAt),
+]);
+
+export const branchComplaintAttachments = pgTable("branch_complaint_attachments", {
+  id: serial("id").primaryKey(),
+  complaintId: integer("complaint_id").notNull().references(() => branchComplaints.id),
+  originalName: text("original_name").notNull(),
+  storagePath: text("storage_path").notNull(),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
+  archivedAt: timestamp("archived_at"),
+  archivedBy: varchar("archived_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_branch_complaint_attachments_complaint").on(table.complaintId, table.createdAt),
+  uniqueIndex("uq_branch_complaint_attachment_path").on(table.storagePath),
+  check("chk_branch_complaint_attachment_size", sql`${table.sizeBytes} > 0`),
+]);
+
+export type BranchComplaint = typeof branchComplaints.$inferSelect;
+export type BranchComplaintEvent = typeof branchComplaintEvents.$inferSelect;
+export type BranchComplaintAttachment = typeof branchComplaintAttachments.$inferSelect;
+
 // Inventory items table
 export const inventoryItems = pgTable("inventory_items", {
   id: varchar("id").primaryKey(),
@@ -1063,6 +1129,7 @@ export const SYSTEM_MODULES = [
   "quality", // اسم مختصر للتوافق
   "products",
   "operations",
+  "branch_complaints",
   "central_kitchen_orders",
   "central_kitchen_recipes",
   "ai_production_planner",
@@ -1279,6 +1346,7 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   quality: "الجودة",
   products: "المنتجات",
   operations: "التشغيل",
+  branch_complaints: "شكاوى الفروع",
   central_kitchen_orders: "طلبات المطبخ المركزي",
   central_kitchen_recipes: "وصفات المطبخ المركزي",
   ai_production_planner: "مخطط الإنتاج الذكي",
@@ -1583,6 +1651,10 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
     ],
   },
   {
+    label: "تشغيل الفروع",
+    modules: ["branch_complaints"],
+  },
+  {
     label: "إدارة النظام",
     modules: ["rbac_management", "audit_logs", "backups", "integrations", "reports"],
   },
@@ -1772,6 +1844,7 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
     { module: "dashboard", actions: ["view", "export"] },
     // التشغيل والإنتاج والجودة
     { module: "operations", actions: ["view", "create", "edit", "delete", "export", "print"] },
+    { module: "branch_complaints", actions: ["view", "create", "edit", "approve"] },
     { module: "central_kitchen_orders", actions: ["view", "create", "edit", "approve", "export", "print"] },
     { module: "production", actions: ["view", "create", "edit", "export", "print"] },
     { module: "daily_production", actions: ["view", "create", "edit", "export", "print"] },
@@ -1829,6 +1902,7 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
     { module: "shifts", actions: ["view", "create", "edit", "export"] },
     { module: "timesheet", actions: ["view", "export"] },
     { module: "operations", actions: ["view", "create", "edit", "export"] },
+    { module: "branch_complaints", actions: ["view", "create", "edit"] },
     { module: "central_kitchen_orders", actions: ["view", "create", "edit", "export"] },
     { module: "waste_tracking", actions: ["view", "create", "edit", "export"] },
     { module: "waste", actions: ["view", "create", "edit", "export"] },
