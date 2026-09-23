@@ -19,38 +19,18 @@ import type { SystemModule } from "@shared/schema";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { HeroWidgets } from "@/components/hero-widgets";
 import { apiRequest } from "@/lib/queryClient";
-
-type SemanticColor =
-  | "money"
-  | "production"
-  | "people"
-  | "inventory"
-  | "projects"
-  | "marketing"
-  | "executive"
-  | "system";
-
-const COLOR_MAP: Record<SemanticColor, { bg: string; soft: string; ring: string }> = {
-  money:      { bg: "bg-emerald-500",  soft: "bg-emerald-50",  ring: "ring-emerald-100" },
-  production: { bg: "bg-blue-500",     soft: "bg-blue-50",     ring: "ring-blue-100" },
-  people:     { bg: "bg-teal-500",     soft: "bg-teal-50",     ring: "ring-teal-100" },
-  inventory:  { bg: "bg-amber-500",    soft: "bg-amber-50",    ring: "ring-amber-100" },
-  projects:   { bg: "bg-orange-500",   soft: "bg-orange-50",   ring: "ring-orange-100" },
-  marketing:  { bg: "bg-pink-500",     soft: "bg-pink-50",     ring: "ring-pink-100" },
-  executive:  { bg: "bg-violet-500",   soft: "bg-violet-50",   ring: "ring-violet-100" },
-  system:     { bg: "bg-slate-500",    soft: "bg-slate-50",    ring: "ring-slate-100" },
-};
+import { PlatformAppIcon, type SemanticColor } from "@/components/platform-app-icon";
+import type { LucideIcon } from "lucide-react";
 
 interface AppTileProps {
   title: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: LucideIcon;
   href: string;
   color: SemanticColor;
 }
 
 function AppTile({ title, icon: Icon, href, color }: AppTileProps) {
   const [, navigate] = useLocation();
-  const c = COLOR_MAP[color];
 
   return (
     <button
@@ -59,11 +39,7 @@ function AppTile({ title, icon: Icon, href, color }: AppTileProps) {
       className="group flex flex-col items-center gap-2 p-2 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-all"
       data-testid={`app-tile-${href.replace(/\//g, "")}`}
     >
-      <div
-        className={`platform-app-icon flex items-center justify-center ${c.bg} shadow-sm group-hover:shadow-lg group-hover:-translate-y-1 transition-all duration-300`}
-      >
-        <Icon className="w-8 h-8 text-white" />
-      </div>
+      <PlatformAppIcon icon={Icon} color={color} />
       <span className="text-[12px] sm:text-[13px] font-medium text-gray-700 text-center leading-tight line-clamp-2 max-w-[96px] group-hover:text-primary transition-colors">
         {title}
       </span>

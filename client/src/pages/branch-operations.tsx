@@ -12,7 +12,7 @@ import { useBranches } from "@/hooks/useBranches";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { branchBoardUrl, branchOperationUrl } from "@/lib/branch-operation-navigation";
 import {
-  AlertTriangle, Artwork, BOARD_ART, BoardSkeleton, BusinessDate, EmptyState, NeedsActionStrip,
+  AlertTriangle, BoardSkeleton, BusinessDate, EmptyState, NeedsActionStrip,
   OperationCardView, SectionHeader, Settings2, ShieldAlert, Store, groupCards, type OperationCard,
 } from "@/components/branch-operations/presentation";
 
@@ -120,7 +120,7 @@ export default function BranchOperationsPage() {
 
           <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-border bg-card p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <div className="branch-ops-badge flex h-12 w-12 items-center justify-center rounded-xl bg-accent text-primary ring-1 ring-primary/10"><Artwork src={BOARD_ART.store} fallback={Store} className="h-9 w-9" /></div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-white shadow-sm"><Store className="h-6 w-6" aria-hidden="true" /></div>
               <div>
                 <p className="text-xs font-semibold text-muted-foreground">الفرع الحالي</p>
                 <p className="font-extrabold text-foreground">{selectedBranch?.name ?? "اختر فرعًا للبدء"}</p>

@@ -2,22 +2,10 @@ import { useEffect, useState } from "react";
 import {
   AlertTriangle, BadgeAlert, BriefcaseBusiness, CalendarDays, ChevronLeft, ClipboardCheck,
   FileText, Gauge, MessageSquareWarning, PackageCheck, RefreshCw, Settings2, ShieldAlert,
-  ShoppingBasket, Store, TrendingUp, Truck, UsersRound, WalletCards, Wrench,
+  ShoppingBasket, Store, TrendingUp, Truck, UsersRound, Receipt, Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import maintenanceArt from "@/assets/branch-ops-icons/maintenance.svg";
-import wasteArt from "@/assets/branch-ops-icons/waste.svg";
-import purchasingArt from "@/assets/branch-ops-icons/purchasing.svg";
-import kitchenArt from "@/assets/branch-ops-icons/kitchen.svg";
-import closingArt from "@/assets/branch-ops-icons/closing.svg";
-import targetsArt from "@/assets/branch-ops-icons/targets.svg";
-import salesArt from "@/assets/branch-ops-icons/sales.svg";
-import employeesArt from "@/assets/branch-ops-icons/employees.svg";
-import documentsArt from "@/assets/branch-ops-icons/documents.svg";
-import advancesArt from "@/assets/branch-ops-icons/advances.svg";
-import complaintsArt from "@/assets/branch-ops-icons/complaints.svg";
-import needsActionArt from "@/assets/branch-ops-icons/needs-action.svg";
-import storeArt from "@/assets/branch-ops-icons/store.svg";
+import { PlatformAppIcon, type SemanticColor } from "@/components/platform-app-icon";
 
 export type OperationCard = {
   id: string;
@@ -91,35 +79,22 @@ export function groupCards(cards: OperationCard[]): Array<{ section: SectionMeta
   return buckets.filter((bucket) => bucket.cards.length > 0);
 }
 
-type IconMeta = { icon: Glyph; art?: string };
-
-// Bespoke illustration set (client/src/assets/branch-ops-icons), drawn in the
-// platform palette. The lucide glyph is the fallback when an illustration fails to load.
+type IconMeta = { icon: Glyph; color: SemanticColor };
 const CARD_META: Record<string, IconMeta> = {
-  sales: { icon: WalletCards, art: salesArt },
-  targets: { icon: Gauge, art: targetsArt },
-  closing: { icon: BriefcaseBusiness, art: closingArt },
-  kitchen: { icon: ClipboardCheck, art: kitchenArt },
-  purchasing: { icon: ShoppingBasket, art: purchasingArt },
-  waste: { icon: PackageCheck, art: wasteArt },
-  maintenance: { icon: Wrench, art: maintenanceArt },
-  complaints: { icon: MessageSquareWarning, art: complaintsArt },
-  employees: { icon: UsersRound, art: employeesArt },
-  documents: { icon: FileText, art: documentsArt },
-  advances: { icon: BadgeAlert, art: advancesArt },
+  sales: { icon: Receipt, color: "money" },
+  targets: { icon: Gauge, color: "money" },
+  closing: { icon: BriefcaseBusiness, color: "money" },
+  kitchen: { icon: ClipboardCheck, color: "production" },
+  purchasing: { icon: ShoppingBasket, color: "inventory" },
+  waste: { icon: PackageCheck, color: "inventory" },
+  maintenance: { icon: Wrench, color: "projects" },
+  complaints: { icon: MessageSquareWarning, color: "people" },
+  employees: { icon: UsersRound, color: "people" },
+  documents: { icon: FileText, color: "people" },
+  advances: { icon: BadgeAlert, color: "people" },
 };
 
-const FALLBACK_META: IconMeta = { icon: Settings2 };
-
-export const BOARD_ART = { needsAction: needsActionArt, store: storeArt } as const;
-
-/** Decorative illustration with a glyph fallback; the adjacent title carries the meaning. */
-export function Artwork({ src, fallback: Fallback, className }: { src?: string; fallback: Glyph; className?: string }) {
-  const [broken, setBroken] = useState(false);
-  useEffect(() => setBroken(false), [src]);
-  if (!src || broken) return <Fallback aria-hidden="true" className={className} />;
-  return <img src={src} alt="" aria-hidden="true" decoding="async" draggable={false} className={className} onError={() => setBroken(true)} />;
-}
+const FALLBACK_META: IconMeta = { icon: Settings2, color: "system" };
 
 export function formatServerDate(value: string) {
   const parsed = new Date(value);
@@ -156,7 +131,7 @@ export function NeedsActionStrip({ branchId, cards, onOpen }: { branchId: string
 
   return <section className="mt-4 rounded-2xl border border-rose-100 bg-card p-3 shadow-sm dark:border-rose-900/50" aria-labelledby="branch-ops-needs-action" data-testid="branch-operations-needs-action">
     <div className="flex items-center gap-2">
-      <span className="branch-ops-badge flex h-11 w-11 items-center justify-center rounded-xl bg-rose-50 ring-1 ring-rose-100 dark:bg-rose-950/40 dark:ring-rose-900/60"><Artwork src={BOARD_ART.needsAction} fallback={BadgeAlert} className="h-8 w-8 text-rose-600" /></span>
+      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-500 text-white"><BadgeAlert className="h-6 w-6" aria-hidden="true" /></span>
       <div>
         <h2 id="branch-ops-needs-action" className="font-black text-foreground">يحتاج إجراء</h2>
         {actions.length > 0 && <p className="text-[11px] text-muted-foreground">{actions.length.toLocaleString("en-US")} تنبيهًا مرتبة حسب أولوية العمل</p>}
@@ -175,9 +150,9 @@ export function OperationCardView({ card, section, onOpen, onRefresh }: { card: 
   const meta = CARD_META[card.id] ?? FALLBACK_META;
   const urgent = card.alerts.filter((alert) => alert.count > 0);
   return <article id={`branch-operation-card-${card.id}`} className="branch-ops-card border border-border bg-card text-card-foreground shadow-sm" data-testid={`branch-operation-card-${card.id}`}>
-    <button type="button" className="branch-ops-card-main" onClick={() => onOpen(card.href)} aria-label={`فتح ${card.title}`}>
+    <button type="button" className="group branch-ops-card-main" onClick={() => onOpen(card.href)} aria-label={`فتح ${card.title}`}>
       <div className="flex items-start gap-3">
-        <span className={`platform-app-icon branch-ops-icon ring-1 text-primary ${section.badge}`}><Artwork src={meta.art} fallback={meta.icon} /></span>
+        <PlatformAppIcon icon={meta.icon} color={meta.color} />
         <span className="min-w-0 flex-1 pt-1">
           <h3 className="block break-words text-base font-black leading-snug text-foreground">{card.title}</h3>
           {card.state === "error" ? <span className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-destructive"><AlertTriangle className="h-3.5 w-3.5" />تعذر تحديث المؤشرات</span>
