@@ -1,3 +1,5 @@
+import { formatKitchenNumber, formatKitchenSaudiDateTime } from "./display-format";
+
 export type PreparationSheet = {
   generatedAt: string;
   snapshotStatus: "current_at_generation";
@@ -40,18 +42,7 @@ export const SHORTAGE_LABELS: Record<string, string> = {
 };
 
 export function formatSaudiDateTime(input: string | Date | null | undefined) {
-  if (!input) return "—";
-  const date = input instanceof Date ? input : new Date(input);
-  if (Number.isNaN(date.getTime())) return String(input);
-  return new Intl.DateTimeFormat("ar-SA-u-ca-gregory", {
-    timeZone: "Asia/Riyadh",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  }).format(date);
+  return formatKitchenSaudiDateTime(input);
 }
 
 export const orderDeepLink = (
@@ -78,8 +69,8 @@ export function buildOrderSafeSummary(order: {
 
 export function buildSheetSafeSummary(sheet: PreparationSheet, origin?: string) {
   return [
-    `ملخص ورقة تجهيز مجمعة — ${sheet.orders.length} طلبات`,
-    `لقطة وقت الإنشاء: ${new Date(sheet.generatedAt).toLocaleString("ar-SA")}`,
+    `ملخص ورقة تجهيز مجمعة — ${formatKitchenNumber(sheet.orders.length)} طلبات`,
+    `لقطة وقت الإنشاء: ${formatSaudiDateTime(sheet.generatedAt)}`,
     ...sheet.orders.map(order =>
       `${order.orderNumber} · ${order.requestBranchName || "—"}\n${orderDeepLink(order.id, origin)}`),
     "الروابط تتطلب تسجيل الدخول والصلاحية. راجع الورقة داخل النظام للكميات والتفاصيل.",
@@ -91,22 +82,23 @@ export const escapePrintHtml = (value: unknown) => String(value ?? "—").replac
 
 export function preparationSheetPrintHtml(sheet: PreparationSheet, logoDataUri?: string | null) {
   const escapeHtml = escapePrintHtml;
+  const number = (value: number) => escapeHtml(formatKitchenNumber(value));
   const rows = sheet.groups.map(group => `<tr>
     <td>${escapeHtml(group.productName)}<small>${escapeHtml(group.identity)} · ${group.provenance === "substitute" ? "بديل مجهز" : "صنف أصلي"}</small></td>
     <td>${escapeHtml(group.unit)}</td>
-    <td>${escapeHtml(group.requestedQuantity)}</td>
-    <td>${escapeHtml(group.approvedQuantity)}</td>
-    <td>${escapeHtml(group.preparedQuantity)}</td>
-    <td>${escapeHtml(group.substitutedQuantity)}</td>
-    <td>${group.unpreparedQuantity > 0 ? `${escapeHtml(group.unpreparedQuantity)} (التجهيز لم يُحسم بعد)` : "—"}</td>
-    <td>${group.actualShortageQuantity > 0 ? escapeHtml(group.actualShortageQuantity) : "—"}</td>
+    <td>${number(group.requestedQuantity)}</td>
+    <td>${number(group.approvedQuantity)}</td>
+    <td>${number(group.preparedQuantity)}</td>
+    <td>${number(group.substitutedQuantity)}</td>
+    <td>${group.unpreparedQuantity > 0 ? `${number(group.unpreparedQuantity)} (التجهيز لم يُحسم بعد)` : "—"}</td>
+    <td>${group.actualShortageQuantity > 0 ? number(group.actualShortageQuantity) : "—"}</td>
     <td>${group.orders.map(order => {
       const detail = [
-        `مطلوب ${escapeHtml(order.requestedQuantity)}`,
-        `أصلي ${escapeHtml(order.preparedQuantity)}`,
-        order.substitutedQuantity > 0 ? `بديل ${escapeHtml(order.substitutedQuantity)} ${escapeHtml(order.substituteUnit || group.unit)} — ${escapeHtml(order.substituteProductName)} (${escapeHtml(order.substituteIdentity)})` : null,
-        order.unpreparedQuantity > 0 ? `غير مجهز بعد ${escapeHtml(order.unpreparedQuantity)}` : null,
-        order.actualShortageQuantity > 0 ? `نقص فعلي ${escapeHtml(order.actualShortageQuantity)}` : null,
+        `مطلوب ${number(order.requestedQuantity)}`,
+        `أصلي ${number(order.preparedQuantity)}`,
+        order.substitutedQuantity > 0 ? `بديل ${number(order.substitutedQuantity)} ${escapeHtml(order.substituteUnit || group.unit)} — ${escapeHtml(order.substituteProductName)} (${escapeHtml(order.substituteIdentity)})` : null,
+        order.unpreparedQuantity > 0 ? `غير مجهز بعد ${number(order.unpreparedQuantity)}` : null,
+        order.actualShortageQuantity > 0 ? `نقص فعلي ${number(order.actualShortageQuantity)}` : null,
         order.shortageReason ? escapeHtml(SHORTAGE_LABELS[order.shortageReason] || order.shortageReason) : null,
         order.preparationNotes ? escapeHtml(order.preparationNotes) : null,
       ].filter(Boolean).join(" · ");

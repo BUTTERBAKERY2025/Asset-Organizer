@@ -88,7 +88,7 @@ export function AdvancedExecution({ orderId, status, startDate }: { orderId: num
     setDate(pending?.body.productionDate ?? startDate);
     setDestination(pending?.body.destination ?? "display_bar");
   };
-  const quantityText = (value: number | null) => value === null ? "غير معلوم" : Number(value).toLocaleString();
+  const quantityText = (value: number | null) => value === null ? "غير معلوم" : Number(value).toLocaleString("en-US");
   return <Card>
     <CardHeader><CardTitle>تنفيذ بنود الخطة — دفعات مرتبطة صراحة</CardTitle></CardHeader>
     <CardContent className="space-y-3">
@@ -100,7 +100,7 @@ export function AdvancedExecution({ orderId, status, startDate }: { orderId: num
         <thead><tr>{["البند / الوحدة", "المخطط", "قيد التنفيذ", "المكتمل", "متبقٍ للإنشاء", "الإجراءات"].map(label => <th key={label} className="p-2 text-right">{label}</th>)}</tr></thead>
         <tbody>{!query.isError && query.data?.map(row => <tr key={row.itemId} className="border-t">
           <td className="p-2">{row.productName} / {row.unit || "غير محددة"}{row.linkageStatus === "unknown" && <p className="text-xs text-amber-700">لا يوجد تنفيذ صريح — المقارنة غير متاحة</p>}</td>
-          <td>{Number(row.plannedQuantity).toLocaleString()}</td><td>{quantityText(row.inProgressQuantity)}</td><td>{quantityText(row.completedQuantity)}</td><td>{quantityText(row.remainingQuantity)}</td>
+          <td>{Number(row.plannedQuantity).toLocaleString("en-US")}</td><td>{quantityText(row.inProgressQuantity)}</td><td>{quantityText(row.completedQuantity)}</td><td>{quantityText(row.remainingQuantity)}</td>
           <td className="space-y-2 p-2">
             {canCreate("production") && <Button size="sm" variant="outline" disabled={!active || !row.productId || !row.unit || mutation.isPending || (pending ? pending.itemId !== row.itemId : row.remainingQuantity === 0)} onClick={() => open(row)}>{pending?.itemId === row.itemId ? "إعادة محاولة إنشاء الدفعة" : "إنشاء دفعة من البند"}</Button>}
             {row.batches.map(batch => <div key={batch.id} className="flex flex-wrap items-center gap-2 text-xs">
@@ -116,8 +116,8 @@ export function AdvancedExecution({ orderId, status, startDate }: { orderId: num
       <Dialog open={!!selected} onOpenChange={open => { if (!open && !mutation.isPending) setSelected(null); }}>
         <DialogContent dir="rtl"><DialogHeader><DialogTitle>دفعة مرتبطة — {selected?.productName}</DialogTitle></DialogHeader>
           <p className="text-sm">وحدة التنفيذ: {selected?.unit}. تُجمّد الوصفة المعتمدة ولا يُرحّل مخزون قبل الإتمام.</p>
-          <label>الكمية<Input type="number" min={1} step={1} value={quantity} disabled={!!pending} onChange={e => setQuantity(e.target.value)} /></label>
-          <label>تاريخ الإنتاج<Input type="date" value={date} disabled={!!pending} onChange={e => setDate(e.target.value)} /></label>
+          <label>الكمية<Input lang="en" type="number" min={1} step={1} value={quantity} disabled={!!pending} onChange={e => setQuantity(e.target.value)} /></label>
+          <label>تاريخ الإنتاج<Input lang="en" type="date" value={date} disabled={!!pending} onChange={e => setDate(e.target.value)} /></label>
           <label>الوجهة<select className="block w-full rounded border p-2" value={destination} disabled={!!pending} onChange={e => setDestination(e.target.value)}>
             <option value="display_bar">العرض</option><option value="kitchen_trolley">عربة المطبخ</option><option value="freezer">الفريزر</option><option value="refrigerator">الثلاجة</option>
           </select></label>

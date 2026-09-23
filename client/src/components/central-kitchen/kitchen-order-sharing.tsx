@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getButterBakeryLogoDataUri } from "@/lib/company-logo-data";
 import { useVisualViewportDialog } from "./use-visual-viewport-dialog";
 import { preparationSheetPrintHtml, SHORTAGE_LABELS, type PreparationSheet } from "./kitchen-order-share-model";
+import { formatKitchenNumber, formatKitchenSaudiDateTime } from "./display-format";
 import {
   downloadKitchenPdf,
   kitchenOrderPdfDefinition,
@@ -21,7 +22,7 @@ function Quantity({ label, value, tone = "default" }: { label: string; value: nu
   };
   return <div className={`min-w-0 rounded-lg border px-2.5 py-2 ${tones[tone]}`}>
     <span className="block text-[11px] font-medium text-muted-foreground">{label}</span>
-    <strong className="mt-0.5 block text-base tabular-nums">{value || "—"}</strong>
+    <strong className="mt-0.5 block text-base tabular-nums">{value ? formatKitchenNumber(value) : "—"}</strong>
   </div>;
 }
 
@@ -98,7 +99,7 @@ export function SheetPreviewDialog({ sheet, open, onOpenChange, canPrint, canExp
     }
   };
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent dir="rtl" style={{ ...dialogStyle, width: "calc(100vw - 1rem)", maxWidth: "72rem", display: "flex", flexDirection: "column" }} className="box-border h-[94dvh] min-w-0 gap-0 overflow-hidden p-0 sm:rounded-xl">
-    <DialogHeader className="shrink-0 min-w-0 break-words border-b px-4 py-4 pl-10 text-right sm:px-6"><DialogTitle className="leading-normal">معاينة ورقة التجهيز المجمعة</DialogTitle><DialogDescription className="break-words">{sheet.orders.length} طلبات · لقطة {new Date(sheet.generatedAt).toLocaleString("ar-SA")} · راجع الكميات أولاً، ثم اختر الطباعة أو تصدير PDF.</DialogDescription></DialogHeader>
+    <DialogHeader className="shrink-0 min-w-0 break-words border-b px-4 py-4 pl-10 text-right sm:px-6"><DialogTitle className="leading-normal">معاينة ورقة التجهيز المجمعة</DialogTitle><DialogDescription className="break-words">{formatKitchenNumber(sheet.orders.length)} طلبات · لقطة {formatKitchenSaudiDateTime(sheet.generatedAt)} · راجع الكميات أولاً، ثم اختر الطباعة أو تصدير PDF.</DialogDescription></DialogHeader>
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-3 sm:px-6">
     <div role="status" className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs leading-5 text-sky-900">حالة اللقطة: محدثة وقت الإنشاء. «لم يُحسم» يعني أن التجهيز لم يكتمل بعد، ولا يُعد نقصاً فعلياً.</div>
     <div className="space-y-3 md:hidden" aria-label="بطاقات ورقة التجهيز">{sheet.groups.map(group => <PreparationGroupCard key={`${group.provenance}:${group.identity}:${group.unit}`} group={group} />)}</div>

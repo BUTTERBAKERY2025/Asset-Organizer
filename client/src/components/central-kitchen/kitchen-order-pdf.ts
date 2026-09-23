@@ -1,4 +1,5 @@
 import { formatSaudiDateTime, type PreparationSheet } from "./kitchen-order-share-model";
+import { formatKitchenNumber } from "./display-format";
 
 type PdfOrderItem = {
   productName: string;
@@ -57,7 +58,7 @@ const SHORTAGE_LABELS: Record<string, string> = {
 };
 
 const value = (input: unknown) => input == null || input === "" ? "—" : String(input);
-const quantity = (input: unknown, unit: string) => `${value(input)} ${unit}`;
+const quantity = (input: unknown, unit: string) => `${typeof input === "number" || (typeof input === "string" && input.trim() !== "" && Number.isFinite(Number(input))) ? formatKitchenNumber(input as number | string) : value(input)} ${unit}`;
 const statusLabel = (status: string) => STATUS_LABELS[status?.toLowerCase().replaceAll(" ", "_")] || value(status);
 const COLORS = { brown: "#704126", orange: "#D9822B", cream: "#FFF7EA", line: "#DEC9B5", ink: "#432B20", muted: "#806D60" };
 
@@ -119,7 +120,7 @@ function footer(documentNumber: string) {
   return (currentPage: number, pageCount: number) => ({
     margin: [32, 7, 32, 0],
     columns: [
-      { text: `الصفحة ${currentPage} / ${pageCount}`, alignment: "left", color: COLORS.muted, fontSize: 8 },
+      { text: `الصفحة ${formatKitchenNumber(currentPage)} / ${formatKitchenNumber(pageCount)}`, alignment: "left", color: COLORS.muted, fontSize: 8 },
       { text: `باتر بيكري · ${value(documentNumber)}`, alignment: "right", color: COLORS.muted, fontSize: 8 },
     ],
   });
@@ -213,21 +214,21 @@ export function preparationSheetPdfDefinition(sheet: PreparationSheet, logoDataU
     ...sheet.groups.map(group => [
       `${group.productName}\n${group.provenance === "substitute" ? "بديل مجهز" : "صنف أصلي"}`,
       value(group.unit),
-      value(group.requestedQuantity),
-      value(group.approvedQuantity),
-      value(group.preparedQuantity),
-      value(group.substitutedQuantity || null),
-      value(group.unpreparedQuantity || null),
-      value(group.actualShortageQuantity || null),
+      formatKitchenNumber(group.requestedQuantity),
+      formatKitchenNumber(group.approvedQuantity),
+      formatKitchenNumber(group.preparedQuantity),
+      group.substitutedQuantity ? formatKitchenNumber(group.substitutedQuantity) : "—",
+      group.unpreparedQuantity ? formatKitchenNumber(group.unpreparedQuantity) : "—",
+      group.actualShortageQuantity ? formatKitchenNumber(group.actualShortageQuantity) : "—",
       group.orders.map(order => {
         const details = [
           order.orderNumber,
           order.branchName,
-          `مطلوب ${order.requestedQuantity}`,
-          `أصلي ${order.preparedQuantity}`,
-          order.substitutedQuantity ? `بديل ${order.substitutedQuantity} ${order.substituteUnit || group.unit} — ${value(order.substituteProductName)}` : null,
-          order.unpreparedQuantity ? `لم يُحسم ${order.unpreparedQuantity}` : null,
-          order.actualShortageQuantity ? `نقص فعلي ${order.actualShortageQuantity}` : null,
+          `مطلوب ${formatKitchenNumber(order.requestedQuantity)}`,
+          `أصلي ${formatKitchenNumber(order.preparedQuantity)}`,
+          order.substitutedQuantity ? `بديل ${formatKitchenNumber(order.substitutedQuantity)} ${order.substituteUnit || group.unit} — ${value(order.substituteProductName)}` : null,
+          order.unpreparedQuantity ? `لم يُحسم ${formatKitchenNumber(order.unpreparedQuantity)}` : null,
+          order.actualShortageQuantity ? `نقص فعلي ${formatKitchenNumber(order.actualShortageQuantity)}` : null,
           order.shortageReason ? SHORTAGE_LABELS[order.shortageReason] || order.shortageReason : null,
           order.preparationNotes,
         ].filter(Boolean);
@@ -242,8 +243,8 @@ export function preparationSheetPdfDefinition(sheet: PreparationSheet, logoDataU
     defaultStyle: { font: "Amiri", fontSize: 8, alignment: "right", color: COLORS.ink },
     footer: footer(`ورقة تجهيز · ${sheet.generatedAt.slice(0, 10)}`),
     content: [
-      documentHeader("ورقة التجهيز المجمعة", `${sheet.orders.length} طلبات`, logoDataUri),
-      { text: `${sheet.orders.length} طلبات · لقطة ${formatSaudiDateTime(sheet.generatedAt)} بتوقيت السعودية`, alignment: "center", color: COLORS.muted, margin: [0, 0, 0, 10] },
+      documentHeader("ورقة التجهيز المجمعة", `${formatKitchenNumber(sheet.orders.length)} طلبات`, logoDataUri),
+      { text: `${formatKitchenNumber(sheet.orders.length)} طلبات · لقطة ${formatSaudiDateTime(sheet.generatedAt)} بتوقيت السعودية`, alignment: "center", color: COLORS.muted, margin: [0, 0, 0, 10] },
       { text: sheet.orders.map(order => `${order.orderNumber} · ${order.requestBranchName || "—"} · ${statusLabel(order.status)}`).join("\n"), margin: [0, 0, 0, 10] },
       { table: { headerRows: 1, widths: [82, 38, 45, 45, 45, 45, 45, 45, "*"], dontBreakRows: true, body }, layout: tableLayout },
     ],

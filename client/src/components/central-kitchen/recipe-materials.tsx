@@ -1,3 +1,4 @@
+import { formatKitchenSaudiDateTime } from "./display-format";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
 import type {
@@ -41,7 +42,7 @@ function formatConsumedAt(value?: string) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return `في ${value}`;
-  return `في ${new Intl.DateTimeFormat("ar-SA", { dateStyle: "medium", timeStyle: "short" }).format(date)}`;
+  return `في ${formatKitchenSaudiDateTime(date, { dateStyle: "medium", timeStyle: "short" })}`;
 }
 
 export function useRecipeMaterialRequirements(options: RecipeRequirementsOptions): UseQueryResult<CentralKitchenMaterialRequirementsContract, Error> {

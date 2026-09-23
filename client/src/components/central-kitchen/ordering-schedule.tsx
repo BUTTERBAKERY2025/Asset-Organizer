@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
 import { getOrderSchedule, getOrderingPolicy } from "@shared/central-kitchen-ordering-policy";
+import { formatKitchenSaudiDateTime } from "./display-format";
 
 export type KitchenOrderingPolicy = NonNullable<ReturnType<typeof getOrderingPolicy>>;
 type Schedule = ReturnType<typeof getOrderSchedule>;
@@ -33,9 +34,9 @@ export function useKitchenOrderingPolicy(active: boolean) {
 }
 
 const displayTime = (value?: string) => value
-  ? new Intl.DateTimeFormat("ar-SA", {
-      timeZone: "Asia/Riyadh", hour: "numeric", minute: "2-digit", hour12: true,
-    }).format(new Date(`2000-01-01T${value}:00+03:00`))
+  ? formatKitchenSaudiDateTime(new Date(`2000-01-01T${value}:00+03:00`), {
+      hour: "numeric", minute: "2-digit", hour12: true,
+    })
   : "—";
 
 export function DailyOrderingNotice({ policy }: { policy?: Pick<KitchenOrderingPolicy, "requestDeadline" | "reviewTime" | "defaultNeededTime"> }) {
@@ -57,10 +58,10 @@ export function LateSubmissionBadge({ schedule }: { schedule?: Schedule }) {
 }
 
 function saudiTimestamp(value: string) {
-  return new Intl.DateTimeFormat("ar-SA", {
-    calendar: "gregory", timeZone: "Asia/Riyadh", month: "short", day: "numeric",
+  return formatKitchenSaudiDateTime(value, {
+    month: "short", day: "numeric",
     hour: "numeric", minute: "2-digit", hour12: true,
-  }).format(new Date(value));
+  });
 }
 
 export function OrderScheduleNotice({ schedule, preview = false }: { schedule?: Schedule; preview?: boolean }) {
