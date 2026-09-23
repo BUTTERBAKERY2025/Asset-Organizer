@@ -1,25 +1,16 @@
 import { useState } from "react";
-import { Copy, EllipsisVertical, MessageCircle, Printer } from "lucide-react";
+import { Download, Loader2, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useVisualViewportDialog } from "./use-visual-viewport-dialog";
+import { preparationSheetPrintHtml, SHORTAGE_LABELS, type PreparationSheet } from "./kitchen-order-share-model";
 import {
-  buildOrderSafeSummary, buildSheetSafeSummary, preparationSheetPrintHtml,
-  SHORTAGE_LABELS, type PreparationSheet,
-} from "./kitchen-order-share-model";
-
-async function copyText(text: string) {
-  if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable");
-  await navigator.clipboard.writeText(text);
-}
-
-function openWhatsApp(text: string) {
-  const popup = window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
-  if (popup) popup.opener = null;
-  return !!popup;
-}
+  downloadKitchenPdf,
+  kitchenOrderPdfDefinition,
+  preparationSheetPdfDefinition,
+  type PdfKitchenOrder,
+} from "./kitchen-order-pdf";
 
 function Quantity({ label, value, tone = "default" }: { label: string; value: number; tone?: "default" | "warning" | "danger" }) {
   const tones = {
@@ -66,17 +57,18 @@ function PreparationGroupCard({ group }: { group: PreparationSheet["groups"][num
   </article>;
 }
 
-export function SheetPreviewDialog({ sheet, open, onOpenChange }: {
+export function SheetPreviewDialog({ sheet, open, onOpenChange, canPrint, canExport }: {
   sheet: PreparationSheet | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  canPrint: boolean;
+  canExport: boolean;
 }) {
   const { toast } = useToast();
   const [actionError, setActionError] = useState<string | null>(null);
-  const [shareReviewOpen, setShareReviewOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const dialogStyle = useVisualViewportDialog({ open, maxHeight: 900, viewportFraction: 0.94 });
   if (!sheet) return null;
-  const safeText = buildSheetSafeSummary(sheet);
   const print = () => {
     const popup = window.open("", "_blank", "width=1100,height=800");
     if (!popup) {
@@ -88,24 +80,22 @@ export function SheetPreviewDialog({ sheet, open, onOpenChange }: {
     popup.document.write(preparationSheetPrintHtml(sheet));
     popup.document.close();
   };
-  const copy = async () => {
+  const exportPdf = async () => {
     try {
-      await copyText(safeText);
+      setExporting(true);
+      await downloadKitchenPdf(preparationSheetPdfDefinition(sheet), `ورقة-التجهيز-${sheet.generatedAt.slice(0, 10)}.pdf`);
       setActionError(null);
-      toast({ title: "تم نسخ الملخص الآمن" });
-    } catch {
-      setActionError("تعذر النسخ تلقائياً. حدد النص الظاهر وانسخه يدوياً.");
-      toast({ title: "تعذر النسخ", description: "حدد النص الظاهر وانسخه يدوياً.", variant: "destructive" });
+      toast({ title: "تم تنزيل ملف PDF" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "تعذر إنشاء ملف PDF";
+      setActionError(message);
+      toast({ title: "تعذر تصدير PDF", description: message, variant: "destructive" });
+    } finally {
+      setExporting(false);
     }
   };
-  const whatsapp = () => {
-    if (!openWhatsApp(safeText)) {
-      setActionError("حظر المتصفح نافذة واتساب. اسمح بالنوافذ المنبثقة أو انسخ الملخص يدوياً.");
-      toast({ title: "حظر المتصفح نافذة واتساب", description: "اسمح بالنوافذ المنبثقة أو انسخ الملخص يدوياً.", variant: "destructive" });
-    } else setActionError(null);
-  };
-  return <Dialog open={open} onOpenChange={nextOpen => { if (!nextOpen) setShareReviewOpen(false); onOpenChange(nextOpen); }}><DialogContent dir="rtl" style={{ ...dialogStyle, width: "calc(100vw - 1rem)", maxWidth: "72rem", display: "flex", flexDirection: "column" }} className="box-border h-[94dvh] min-w-0 gap-0 overflow-hidden p-0 sm:rounded-xl">
-    <DialogHeader className="shrink-0 min-w-0 break-words border-b px-4 py-4 pl-10 text-right sm:px-6"><DialogTitle className="leading-normal">معاينة ورقة التجهيز المجمعة</DialogTitle><DialogDescription className="break-words">{sheet.orders.length} طلبات · لقطة {new Date(sheet.generatedAt).toLocaleString("ar-SA")} · راجع الكميات أولاً، ثم اختر الطباعة أو المشاركة.</DialogDescription></DialogHeader>
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent dir="rtl" style={{ ...dialogStyle, width: "calc(100vw - 1rem)", maxWidth: "72rem", display: "flex", flexDirection: "column" }} className="box-border h-[94dvh] min-w-0 gap-0 overflow-hidden p-0 sm:rounded-xl">
+    <DialogHeader className="shrink-0 min-w-0 break-words border-b px-4 py-4 pl-10 text-right sm:px-6"><DialogTitle className="leading-normal">معاينة ورقة التجهيز المجمعة</DialogTitle><DialogDescription className="break-words">{sheet.orders.length} طلبات · لقطة {new Date(sheet.generatedAt).toLocaleString("ar-SA")} · راجع الكميات أولاً، ثم اختر الطباعة أو تصدير PDF.</DialogDescription></DialogHeader>
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-3 sm:px-6">
     <div role="status" className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs leading-5 text-sky-900">حالة اللقطة: محدثة وقت الإنشاء. «لم يُحسم» يعني أن التجهيز لم يكتمل بعد، ولا يُعد نقصاً فعلياً.</div>
     <div className="space-y-3 md:hidden" aria-label="بطاقات ورقة التجهيز">{sheet.groups.map(group => <PreparationGroupCard key={`${group.provenance}:${group.identity}:${group.unit}`} group={group} />)}</div>
@@ -113,30 +103,37 @@ export function SheetPreviewDialog({ sheet, open, onOpenChange }: {
       <td className="p-2 font-medium">{group.productName}<span className="block text-xs text-muted-foreground">{group.provenance === "substitute" ? "بديل مجهز معتمد" : "صنف أصلي"}</span></td><td className="p-2">{group.unit}</td><td className="p-2">{group.requestedQuantity}</td><td className="p-2">{group.approvedQuantity}</td><td className="p-2">{group.preparedQuantity}</td><td className="p-2">{group.substitutedQuantity || "—"}</td><td className="p-2 text-amber-800">{group.unpreparedQuantity || "—"}</td><td className="p-2 text-red-800">{group.actualShortageQuantity || "—"}</td>
       <td className="space-y-2 p-2">{group.orders.map(order => <div key={order.id}><a className="font-medium text-primary underline" href={`/central-kitchen-orders?orderId=${encodeURIComponent(String(order.id))}`}>{order.orderNumber}</a> · {order.branchName}<span className="block text-xs text-muted-foreground">مطلوب {order.requestedQuantity} · أصلي {order.preparedQuantity}{order.substitutedQuantity ? ` · بديل ${order.substitutedQuantity} ${order.substituteUnit || group.unit} — ${order.substituteProductName}` : ""}{order.unpreparedQuantity ? ` · لم يُحسم ${order.unpreparedQuantity}` : ""}{order.actualShortageQuantity ? ` · نقص فعلي ${order.actualShortageQuantity}` : ""}{order.shortageReason ? ` · ${SHORTAGE_LABELS[order.shortageReason] || order.shortageReason}` : ""}{order.preparationNotes ? ` · ${order.preparationNotes}` : ""}</span></div>)}</td>
     </tr>)}</tbody></table></div>
-    {shareReviewOpen && <section id="sheet-share-review" className="min-w-0 rounded-lg border bg-muted/10 p-3 sm:p-4" aria-label="نص المشاركة الآمن"><div className="mb-2"><h3 className="text-sm font-semibold">راجع نص المشاركة الآمن</h3><p className="mt-1 break-words text-xs text-muted-foreground">لا يتضمن ملاحظات التجهيز أو المخزون أو تفاصيل النقص؛ الروابط محمية بتسجيل الدخول والصلاحيات.</p></div><textarea readOnly aria-label="نص المشاركة الآمن للمراجعة" className="block min-h-32 w-full max-w-full rounded-md border bg-background p-3 text-xs leading-5" value={safeText} /></section>}
     {actionError && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">{actionError}</p>}
-    </div><div data-testid="sheet-preview-controls" className="flex shrink-0 min-w-0 flex-col gap-2 border-t bg-background px-3 py-3 sm:flex-row sm:justify-end sm:px-6"><Button className="w-full sm:w-auto sm:order-3" onClick={print}><Printer className="ml-1 h-4 w-4" />طباعة / حفظ PDF</Button><Button variant="outline" className="w-full sm:w-auto sm:order-1" onClick={() => setShareReviewOpen(value => !value)} aria-expanded={shareReviewOpen} aria-controls="sheet-share-review"><MessageCircle className="ml-1 h-4 w-4" />{shareReviewOpen ? "إخفاء المشاركة" : "مراجعة ومشاركة"}</Button>{shareReviewOpen && <><Button variant="outline" className="w-full sm:w-auto sm:order-2" onClick={copy}><Copy className="ml-1 h-4 w-4" />نسخ الملخص</Button><Button variant="outline" className="w-full sm:w-auto sm:order-2" onClick={whatsapp}><MessageCircle className="ml-1 h-4 w-4" />فتح واتساب</Button></>}</div>
+    </div><div data-testid="sheet-preview-controls" className="flex shrink-0 min-w-0 flex-col gap-2 border-t bg-background px-3 py-3 sm:flex-row sm:justify-end sm:px-6">{canPrint && <Button className="min-h-11 w-full sm:w-auto" onClick={print}><Printer className="ml-1 h-4 w-4" />طباعة</Button>}{canExport && <Button data-testid="sheet-export-pdf" variant="outline" className="min-h-11 w-full sm:w-auto" disabled={exporting} onClick={() => void exportPdf()}>{exporting ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <Download className="ml-1 h-4 w-4" />}{exporting ? "جارٍ إنشاء PDF…" : "تصدير PDF"}</Button>}</div>
   </DialogContent></Dialog>;
 }
 
-export function OrderActionsMenu({ order, canPrint, onPrint }: {
-  order: Parameters<typeof buildOrderSafeSummary>[0];
+export function OrderActionsMenu({ order, canPrint, canExport, onPrint }: {
+  order: PdfKitchenOrder;
   canPrint: boolean;
+  canExport: boolean;
   onPrint: () => boolean;
 }) {
   const { toast } = useToast();
-  const [preview, setPreview] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const previewDialogStyle = useVisualViewportDialog({ open: preview, maxHeight: 680, viewportFraction: 0.94 });
-  const text = buildOrderSafeSummary(order);
-  const copy = async () => {
-    try { await copyText(text); setActionError(null); toast({ title: "تم نسخ ملخص الطلب والرابط" }); }
-    catch { setPreview(true); setActionError("تعذر النسخ تلقائياً. انسخ النص يدوياً من المعاينة."); toast({ title: "تعذر النسخ", description: "انسخ النص يدوياً من المعاينة.", variant: "destructive" }); }
+  const exportPdf = async () => {
+    try {
+      setExporting(true);
+      await downloadKitchenPdf(kitchenOrderPdfDefinition(order), `طلب-المطبخ-${order.orderNumber}.pdf`);
+      setActionError(null);
+      toast({ title: "تم تنزيل ملف PDF" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "تعذر إنشاء ملف PDF";
+      setActionError(message);
+      toast({ title: "تعذر تصدير PDF", description: message, variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
   };
-  return <><DropdownMenu><DropdownMenuTrigger asChild><Button size="sm" variant="outline" aria-label="خيارات طباعة ومشاركة الطلب"><EllipsisVertical className="ml-1 h-4 w-4" />طباعة ومشاركة</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="text-right">
-    {canPrint && <DropdownMenuItem onSelect={() => { if (!onPrint()) { setActionError("حظر المتصفح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة."); setPreview(true); toast({ title: "حظر المتصفح نافذة الطباعة", description: "اسمح بالنوافذ المنبثقة ثم أعد المحاولة.", variant: "destructive" }); } else setActionError(null); }}><Printer />سند التجهيز</DropdownMenuItem>}
-    <DropdownMenuItem onSelect={() => setPreview(true)}><MessageCircle />معاينة مشاركة واتساب</DropdownMenuItem>
-    <DropdownMenuItem onSelect={() => void copy()}><Copy />نسخ الملخص والرابط</DropdownMenuItem>
-  </DropdownMenuContent></DropdownMenu>
-  <Dialog open={preview} onOpenChange={setPreview}><DialogContent dir="rtl" style={{ ...previewDialogStyle, width: "calc(100vw - 1rem)", maxWidth: "32rem", display: "flex", flexDirection: "column" }} className="box-border min-w-0 gap-0 overflow-hidden p-0 [&>button.absolute]:left-4 [&>button.absolute]:right-auto"><DialogHeader className="shrink-0 border-b px-4 py-4 pl-11 text-right sm:px-6 sm:pl-12"><DialogTitle className="leading-normal">راجع نص مشاركة الطلب</DialogTitle><DialogDescription>لن يتم الإرسال تلقائياً. الرابط يتطلب تسجيل الدخول والصلاحية.</DialogDescription></DialogHeader><div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6"><textarea readOnly value={text} aria-label="نص مشاركة الطلب" className="block min-h-48 w-full max-w-full rounded-md border bg-muted/20 p-3 text-sm" />{actionError && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">{actionError}</p>}</div><div className="grid shrink-0 grid-cols-2 gap-2 border-t bg-background px-4 py-3 sm:flex sm:justify-end sm:px-6"><Button className="min-h-11" variant="outline" onClick={() => void copy()}><Copy className="ml-1 h-4 w-4" />نسخ</Button><Button className="min-h-11" onClick={() => { if (!openWhatsApp(text)) { setActionError("حظر المتصفح نافذة واتساب. اسمح بالنوافذ المنبثقة أو انسخ النص."); toast({ title: "حظر المتصفح نافذة واتساب", description: "اسمح بالنوافذ المنبثقة أو انسخ النص.", variant: "destructive" }); } else setActionError(null); }}><MessageCircle className="ml-1 h-4 w-4" />فتح واتساب</Button></div></DialogContent></Dialog></>;
+  return <div className="flex flex-wrap items-center justify-end gap-2">
+    {canPrint && <Button data-testid="order-print" size="sm" variant="outline" className="min-h-11" onClick={() => { if (!onPrint()) { const message = "حظر المتصفح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة."; setActionError(message); toast({ title: "حظر المتصفح نافذة الطباعة", description: message, variant: "destructive" }); } else setActionError(null); }}><Printer className="ml-1 h-4 w-4" />طباعة</Button>}
+    {canExport && <Button data-testid="order-export-pdf" size="sm" variant="outline" className="min-h-11" disabled={exporting} onClick={() => void exportPdf()}>{exporting ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <Download className="ml-1 h-4 w-4" />}{exporting ? "جارٍ إنشاء PDF…" : "تصدير PDF"}</Button>}
+    {actionError && <span role="alert" className="w-full text-xs text-red-700">{actionError}</span>}
+  </div>;
 }
