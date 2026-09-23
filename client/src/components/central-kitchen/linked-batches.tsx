@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { RecipeMaterialsPreview, useRecipeMaterialRequirements } from "@/components/central-kitchen/recipe-materials";
 import { getFinishReadiness } from "@/components/central-kitchen/finish-readiness";
+import { useVisualViewportDialog } from "@/components/central-kitchen/use-visual-viewport-dialog";
 
 type Batch = {
   id: number;
@@ -170,6 +171,7 @@ function LinkedBatchRow({
   const materials = useRecipeMaterialRequirements({ batchId: batch.id });
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const confirmDialogStyle = useVisualViewportDialog({ open: confirmOpen, maxHeight: 820, viewportFraction: 0.94 });
   const readiness = getFinishReadiness({
     data: materials.data,
     isLoading: materials.isLoading,
@@ -344,20 +346,35 @@ function LinkedBatchRow({
 
       {isInProgress && (readiness.kind === "ready" || readiness.kind === "legacy") && (
         <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-          <AlertDialogContent dir="rtl" className="max-h-[90dvh] max-w-2xl overflow-y-auto">
-            <AlertDialogHeader>
+          <AlertDialogContent dir="rtl" style={{ ...confirmDialogStyle, width: "calc(100vw - 1rem)", maxWidth: "42rem", display: "flex", flexDirection: "column" }} className="box-border min-w-0 gap-0 overflow-hidden p-0">
+            <AlertDialogHeader className="shrink-0 border-b px-4 py-4 text-right sm:px-6">
               <AlertDialogTitle>تأكيد إنهاء دفعة الإنتاج #{batch.id}</AlertDialogTitle>
               <AlertDialogDescription>
                 هذا إجراء لا يمكن التراجع عنه. راجع أثر المخزون ثم أكد الإنهاء صراحةً.
               </AlertDialogDescription>
             </AlertDialogHeader>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
             {recipeBacked && materials.data?.recipeBacked && materials.data.recipe ? (
               <>
                 <div className="rounded-md border border-rose-300 bg-rose-50 p-3 text-sm text-rose-950">
                   <p className="font-semibold">الأثر الفعلي غير القابل للعكس</p>
                   <p className="mt-1">سيُخصم احتياج الوصفة من مخزون مواد المطبخ، ويُضاف ناتج الدفعة {materials.data.batchQuantity} {materials.data.recipe.outputUnit} إلى مخزون المنتج النهائي. المعاينة لا تحجز رصيداً؛ الخادم يعيد التحقق ويطبق الحركة ذرّياً، وقد يرفض العملية إذا تغيّر الرصيد.</p>
                 </div>
-                <div className="overflow-x-auto rounded-md border">
+                <div className="space-y-3 md:hidden" aria-label="مواد الوصفة التي ستخصم">
+                  {materials.data.requirements.map(item => (
+                    <article key={item.warehouseItemId} className="rounded-lg border bg-background p-3">
+                      <h3 className="break-words text-sm font-semibold">{item.materialName}</h3>
+                      <p className="mt-0.5 text-xs text-muted-foreground">الوحدة: {item.unit}</p>
+                      <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                        <div className="rounded-md bg-muted/40 p-2"><dt className="text-muted-foreground">سيُخصم فعلياً</dt><dd className="mt-1 font-mono font-semibold">{item.requiredQuantity} {item.unit}</dd></div>
+                        <div className="rounded-md bg-muted/40 p-2"><dt className="text-muted-foreground">مخزون المطبخ الحالي</dt><dd className="mt-1 font-mono font-semibold">{item.currentQuantity} {item.unit}</dd></div>
+                        <div className="rounded-md bg-muted/40 p-2"><dt className="text-muted-foreground">المتاح بعد الحجوزات</dt><dd className="mt-1 font-mono font-semibold">{item.availableQuantity} {item.unit}</dd></div>
+                        <div className={item.shortageQuantity === "0.000000" ? "rounded-md bg-emerald-50 p-2 text-emerald-800" : "rounded-md bg-rose-50 p-2 text-rose-800"}><dt>النقص</dt><dd className="mt-1 font-mono font-semibold">{item.shortageQuantity} {item.unit}</dd></div>
+                      </dl>
+                    </article>
+                  ))}
+                </div>
+                <div className="hidden overflow-x-auto rounded-md border md:block">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/40">
                       <tr>
@@ -389,13 +406,16 @@ function LinkedBatchRow({
                 <p className="mt-1">سيستخدم الإنهاء القديم لتسجيل ناتج الدفعة ({batch.quantity}) في مخزون المنتج النهائي فقط. لا توجد لقطة مواد، ولن يُقرأ أو يُخصم أي مخزون خام.</p>
               </div>
             )}
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={finishPending}>إلغاء</AlertDialogCancel>
+            {finishError && <div role="alert" className="rounded-md border border-rose-300 bg-rose-50 p-3 text-sm text-rose-950"><p className="font-semibold">لم يتم إنهاء الدفعة</p><p className="mt-1">{finishError.outcomeUnknown ? "نتيجة الطلب غير معروفة. أغلق المراجعة واستخدم «إعادة التحقق» قبل أي محاولة أخرى." : finishError.message}</p></div>}
+            </div>
+            <AlertDialogFooter className="grid shrink-0 grid-cols-2 gap-2 border-t bg-background px-4 py-3 sm:flex sm:px-6">
+              <AlertDialogCancel className="min-h-11" disabled={finishPending}>إلغاء</AlertDialogCancel>
               <AlertDialogAction
+                className="min-h-11"
                 disabled={!canConfirm}
                 onClick={event => {
+                  event.preventDefault();
                   if (!canConfirm) {
-                    event.preventDefault();
                     return;
                   }
                   onFinish();

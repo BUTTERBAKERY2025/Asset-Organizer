@@ -727,6 +727,7 @@ const CLEAR_ROUTING_VALUE = "__none__";
 function RoutingSettingsDialog({ open, onOpenChange, branches }: { open: boolean; onOpenChange: (open: boolean) => void; branches: Array<{ id: string; name: string }> }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const dialogStyle = useVisualViewportDialog({ open, maxHeight: 760, viewportFraction: 0.94 });
   const [branchId, setBranchId] = useState("");
   const [responsibleUserId, setResponsibleUserId] = useState<string | null>(null);
   const [deputyUserId, setDeputyUserId] = useState<string | null>(null);
@@ -768,24 +769,26 @@ function RoutingSettingsDialog({ open, onOpenChange, branches }: { open: boolean
     setReceiverUserId(null);
   };
   return <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent dir="rtl" className="max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-2xl overflow-y-auto p-4 sm:p-6">
-      <DialogHeader className="text-right">
+    <DialogContent dir="rtl" style={{ ...dialogStyle, width: "calc(100vw - 1rem)", maxWidth: "42rem", display: "flex", flexDirection: "column" }} className="box-border min-w-0 gap-0 overflow-hidden p-0 [&>button.absolute]:left-4 [&>button.absolute]:right-auto">
+      <DialogHeader className="shrink-0 border-b px-4 py-4 pl-11 text-right sm:px-6 sm:pl-12">
         <DialogTitle>مسؤولو المطبخ والاستلام</DialogTitle>
         <DialogDescription>حدد المسؤولين لكل فرع. هذا الإعداد يوجّه الطلبات والتنبيهات فقط ولا يمنح أي صلاحيات للنظام.</DialogDescription>
       </DialogHeader>
-      <FormSelect testId="routing-branch-select" label="الفرع" value={branchId} onChange={updateBranch} branches={branches} placeholder="اختر فرعاً أو مطبخاً" />
-      {!branchId ? <p className="rounded border bg-muted/20 p-3 text-sm text-muted-foreground">اختر الفرع لعرض الإعداد الحالي والمرشحين المؤهلين.</p> :
-       loading ? <p role="status" className="flex items-center gap-2 rounded border p-3 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />جارٍ تحميل الإعداد…</p> :
-       failed ? <div role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800"><p>تعذر تحميل الإعداد أو المرشحين. لم يتم افتراض أي مسؤول.</p><Button className="mt-2" size="sm" variant="outline" onClick={() => { void routingQuery.refetch(); void candidatesQuery.refetch(); }}>إعادة المحاولة</Button></div> :
-       <div className="grid gap-4 sm:grid-cols-2">
-         <RoutingPersonSelect testId="routing-responsible-select" label="مسؤول المطبخ" value={responsibleUserId} onChange={setResponsibleUserId} candidates={candidates?.kitchenCandidates || []} />
-         <RoutingPersonSelect testId="routing-deputy-select" label="نائب مسؤول المطبخ" value={deputyUserId} onChange={setDeputyUserId} candidates={candidates?.kitchenCandidates || []} />
-         <div className="sm:col-span-2"><RoutingPersonSelect testId="routing-receiver-select" label="مسؤول استلام الفرع" value={receiverUserId} onChange={setReceiverUserId} candidates={candidates?.receiverCandidates || []} /></div>
-       </div>}
-      <p className="text-xs text-muted-foreground">تظهر فقط الحسابات المؤهلة التي أعادها الخادم. اختيار شخص هنا لا يمنحه صلاحية عرض أو اعتماد أو استلام الطلبات.</p>
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="outline" onClick={() => onOpenChange(false)}>إغلاق</Button>
-        <Button data-testid="routing-save" disabled={!branchId || loading || failed || saveMutation.isPending} onClick={() => saveMutation.mutate()}>{saveMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}حفظ الإعداد</Button>
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
+        <FormSelect testId="routing-branch-select" label="الفرع" value={branchId} onChange={updateBranch} branches={branches} placeholder="اختر فرعاً أو مطبخاً" />
+        {!branchId ? <p className="rounded border bg-muted/20 p-3 text-sm text-muted-foreground">اختر الفرع لعرض الإعداد الحالي والمرشحين المؤهلين.</p> :
+         loading ? <p role="status" className="flex items-center gap-2 rounded border p-3 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />جارٍ تحميل الإعداد…</p> :
+         failed ? <div role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800"><p>تعذر تحميل الإعداد أو المرشحين. لم يتم افتراض أي مسؤول.</p><Button className="mt-2 min-h-11" size="sm" variant="outline" onClick={() => { void routingQuery.refetch(); void candidatesQuery.refetch(); }}>إعادة المحاولة</Button></div> :
+         <div className="grid gap-4 sm:grid-cols-2">
+           <RoutingPersonSelect testId="routing-responsible-select" label="مسؤول المطبخ" value={responsibleUserId} onChange={setResponsibleUserId} candidates={candidates?.kitchenCandidates || []} />
+           <RoutingPersonSelect testId="routing-deputy-select" label="نائب مسؤول المطبخ" value={deputyUserId} onChange={setDeputyUserId} candidates={candidates?.kitchenCandidates || []} />
+           <div className="sm:col-span-2"><RoutingPersonSelect testId="routing-receiver-select" label="مسؤول استلام الفرع" value={receiverUserId} onChange={setReceiverUserId} candidates={candidates?.receiverCandidates || []} /></div>
+         </div>}
+        <p className="text-xs text-muted-foreground">تظهر فقط الحسابات المؤهلة التي أعادها الخادم. اختيار شخص هنا لا يمنحه صلاحية عرض أو اعتماد أو استلام الطلبات.</p>
+      </div>
+      <div className="grid shrink-0 grid-cols-2 gap-2 border-t bg-background px-4 py-3 sm:flex sm:justify-end sm:px-6">
+        <Button className="min-h-11" variant="outline" onClick={() => onOpenChange(false)}>إغلاق</Button>
+        <Button className="min-h-11" data-testid="routing-save" disabled={!branchId || loading || failed || saveMutation.isPending} onClick={() => saveMutation.mutate()}>{saveMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}حفظ الإعداد</Button>
       </div>
     </DialogContent>
   </Dialog>;
