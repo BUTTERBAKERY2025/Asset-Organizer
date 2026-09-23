@@ -70,6 +70,7 @@ import {
   runLeaveCarryover,
 } from "./leave-helpers";
 import { storage } from "./storage";
+import { readEmployeeDocumentMetadata } from "./employee-documents-read";
 
 function getUserId(req: any): string | null {
   return (req as any).user?.id || (req as any).user?.claims?.sub || null;
@@ -137,44 +138,20 @@ export function registerHrRoutes(app: Express) {
       const requestedBranchId = req.query.branchId as string | undefined;
       const { branchIds, hasAccess } = getBranchScope(req, requestedBranchId);
       if (!hasAccess) return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا الفرع" });
-      const employeeId = req.query.employeeId ? parseInt(req.query.employeeId as string, 10) : null;
-      const docType = req.query.type as string | undefined;
-      const status = req.query.status as string | undefined;
-
-      const conds: any[] = [];
-      const scopeCond = applyBranchScope(employeeDocuments, branchIds);
-      if (scopeCond !== undefined) conds.push(scopeCond);
-      if (employeeId) conds.push(eq(employeeDocuments.branchEmployeeId, employeeId));
-      if (docType) conds.push(eq(employeeDocuments.documentType, docType));
-      if (status) conds.push(eq(employeeDocuments.status, status));
-
-      const rows = await db
-        .select({
-          doc: employeeDocuments,
-          employeeName: branchEmployees.employeeName,
-          employeeJob: branchEmployees.jobTitle,
-          branchName: branches.name,
-        })
-        .from(employeeDocuments)
-        .leftJoin(branchEmployees, eq(employeeDocuments.branchEmployeeId, branchEmployees.id))
-        .leftJoin(branches, eq(employeeDocuments.branchId, branches.id))
-        .where(conds.length ? and(...conds) : undefined)
-        .orderBy(desc(employeeDocuments.createdAt))
-        .limit(1000);
-
-      // Auto-update status based on expiry
-      const today = new Date().toISOString().slice(0, 10);
-      const thirtyDaysOut = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const enriched = rows.map((r) => {
-        let computedStatus = r.doc.status;
-        if (r.doc.expiryDate) {
-          if (r.doc.expiryDate < today) computedStatus = "expired";
-          else if (r.doc.expiryDate <= thirtyDaysOut) computedStatus = "expiring_soon";
-        }
-        return { ...r.doc, employeeName: r.employeeName, employeeJob: r.employeeJob, branchName: r.branchName, computedStatus };
+      const employeeId = req.query.employeeId ? parseInt(req.query.employeeId as string, 10) : undefined;
+      const page = Math.max(1, Number(req.query.page) || 1);
+      const pageSize = Math.min(500, Math.max(1, Number(req.query.pageSize) || 100));
+      const result = await readEmployeeDocumentMetadata({
+        branchIds,
+        employeeId,
+        type: req.query.type as string | undefined,
+        status: req.query.status as string | undefined,
+        activeOnly: req.query.activeOnly !== "false",
+        includeArchived: req.query.includeArchived === "true" || req.query.status === "archived",
+        page,
+        pageSize,
       });
-
-      res.json(enriched);
+      res.json(result);
     } catch (e: any) {
       console.error("[hr/documents] list error:", e);
       res.status(500).json({ error: e.message });
@@ -211,9 +188,15 @@ export function registerHrRoutes(app: Express) {
     try {
       const id = parseInt(req.params.id, 10);
       const { branchIds } = getBranchScope(req);
-      const [existing] = await db.select().from(employeeDocuments).where(eq(employeeDocuments.id, id));
+      const [existingRow] = await db.select({
+        document: employeeDocuments,
+        currentBranchId: branchEmployees.branchId,
+      }).from(employeeDocuments)
+        .innerJoin(branchEmployees, eq(employeeDocuments.branchEmployeeId, branchEmployees.id))
+        .where(eq(employeeDocuments.id, id));
+      const existing = existingRow?.document;
       if (!existing) return res.status(404).json({ error: "الوثيقة غير موجودة" });
-      if (branchIds !== null && (!existing.branchId || !branchIds.includes(existing.branchId))) {
+      if (branchIds !== null && !branchIds.includes(existingRow.currentBranchId)) {
         return res.status(403).json({ error: "ليس لديك صلاحية" });
       }
       // SECURITY: strip branchId/branchEmployeeId from client payload — they
@@ -236,9 +219,15 @@ export function registerHrRoutes(app: Express) {
     try {
       const id = parseInt(req.params.id, 10);
       const { branchIds } = getBranchScope(req);
-      const [existing] = await db.select().from(employeeDocuments).where(eq(employeeDocuments.id, id));
+      const [existingRow] = await db.select({
+        document: employeeDocuments,
+        currentBranchId: branchEmployees.branchId,
+      }).from(employeeDocuments)
+        .innerJoin(branchEmployees, eq(employeeDocuments.branchEmployeeId, branchEmployees.id))
+        .where(eq(employeeDocuments.id, id));
+      const existing = existingRow?.document;
       if (!existing) return res.status(404).json({ error: "الوثيقة غير موجودة" });
-      if (branchIds !== null && (!existing.branchId || !branchIds.includes(existing.branchId))) {
+      if (branchIds !== null && !branchIds.includes(existingRow.currentBranchId)) {
         return res.status(403).json({ error: "ليس لديك صلاحية" });
       }
       await db.delete(employeeDocuments).where(eq(employeeDocuments.id, id));
@@ -255,27 +244,13 @@ export function registerHrRoutes(app: Express) {
       const requestedBranchId = req.query.branchId as string | undefined;
       const { branchIds, hasAccess } = getBranchScope(req, requestedBranchId);
       if (!hasAccess) return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا الفرع" });
-      const scopeCond = applyBranchScope(employeeDocuments, branchIds);
-      const today = new Date().toISOString().slice(0, 10);
-      const thirtyDaysOut = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-
-      const [summary] = await db.select({
-        total: sql<number>`count(*)::int`,
-        expired: sql<number>`count(*) filter (where ${employeeDocuments.expiryDate} is not null and ${employeeDocuments.expiryDate} < ${today})::int`,
-        expiringSoon: sql<number>`count(*) filter (where ${employeeDocuments.expiryDate} is not null and ${employeeDocuments.expiryDate} >= ${today} and ${employeeDocuments.expiryDate} <= ${thirtyDaysOut})::int`,
-      }).from(employeeDocuments).where(scopeCond);
-      const typeRows = await db.select({
-        documentType: employeeDocuments.documentType,
-        total: sql<number>`count(*)::int`,
-      }).from(employeeDocuments).where(scopeCond).groupBy(employeeDocuments.documentType);
-      const byType: Record<string, number> = {};
-      typeRows.forEach(d => { byType[d.documentType] = Number(d.total); });
-      res.json({
-        total: Number(summary?.total || 0),
-        expired: Number(summary?.expired || 0),
-        expiringSoon: Number(summary?.expiringSoon || 0),
-        byType,
+      const result = await readEmployeeDocumentMetadata({
+        branchIds,
+        activeOnly: req.query.activeOnly !== "false",
+        includeArchived: req.query.includeArchived === "true",
+        pageSize: 1,
       });
+      res.json(result.stats);
     } catch (e: any) {
       console.error("[hr/documents/stats] error:", e);
       res.status(500).json({ error: e.message });

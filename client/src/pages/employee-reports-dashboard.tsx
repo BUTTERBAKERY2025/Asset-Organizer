@@ -90,7 +90,7 @@ import {
   FileX,
 } from "lucide-react";
 import type { BranchEmployee, AttendanceRecord, SalaryDeduction } from "@shared/schema";
-import { SALARY_DEDUCTION_TYPE_LABELS } from "@shared/schema";
+import { SALARY_DEDUCTION_TYPE_LABELS, EMPLOYEE_DOCUMENT_TYPE_LABELS } from "@shared/schema";
 
 
 const COLORS = ["#f59e0b", "#10b981", "#3b82f6", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"];
@@ -121,7 +121,7 @@ export default function EmployeeReportsDashboardPage() {
   const isRTL = i18n.language === "ar";
   const [, navigate] = useLocation();
   const printRef = useRef<HTMLDivElement>(null);
-  const { canView: canViewModule, canEdit: canEditModule } = usePermissions();
+  const { canView: canViewModule, canEdit: canEditModule, canExport: canExportModule } = usePermissions();
   const { isAdmin, user } = useAuth();
   const { toast } = useToast();
   // إغلاق الرواتب الشهري متاح فقط لمدير الموارد البشرية والمدير العام (الأدمن)
@@ -131,13 +131,16 @@ export default function EmployeeReportsDashboardPage() {
   const canCloseSalary = isAdmin || isHrManager || canEditModule("salary_closing");
   const canApproveSalaryClosing = isAdmin || isHrManager || canEditModule("salary_closing");
   
-  const [selectedBranch, setSelectedBranch] = useState<string>("");
+  const initialReportParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const [selectedBranch, setSelectedBranch] = useState<string>(() => initialReportParams.get("branchId") || "");
   const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
   const [selectedJobTitle, setSelectedJobTitle] = useState<string>("all");
   const [selectedEmployee, setSelectedEmployee] = useState<string>("all");
   // فلتر "الموظفون النشطون فقط" — موحّد لكل التبويبات (مفعّل افتراضياً)
-  const [activeOnly, setActiveOnly] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeOnly, setActiveOnly] = useState<boolean>(() => initialReportParams.get("activeOnly") !== "false");
+  const [activeTab, setActiveTab] = useState(() => initialReportParams.get("tab") || "overview");
+  const [documentType, setDocumentType] = useState(() => initialReportParams.get("type") || "all");
+  const [documentStatus, setDocumentStatus] = useState(() => initialReportParams.get("status") || "all");
   const [salarySearchQuery, setSalarySearchQuery] = useState<string>("");
   const [salaryMinFilter, setSalaryMinFilter] = useState<string>("");
   const [salaryMaxFilter, setSalaryMaxFilter] = useState<string>("");
@@ -148,12 +151,13 @@ export default function EmployeeReportsDashboardPage() {
   const { branches, userBranchId, canSelectBranch } = useBranches();
 
   useEffect(() => {
+    if (selectedBranch) return;
     if (userBranchId) {
       setSelectedBranch(userBranchId);
     } else if (canSelectBranch) {
       setSelectedBranch("all");
     }
-  }, [userBranchId, canSelectBranch]);
+  }, [userBranchId, canSelectBranch, selectedBranch]);
 
   const { data: bundle, isLoading: bundleLoading, isError: bundleError, refetch: refetchBundle } = useQuery<{
     employees: BranchEmployee[];
@@ -170,7 +174,7 @@ export default function EmployeeReportsDashboardPage() {
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
-    enabled: !!selectedBranch,
+    enabled: !!selectedBranch && activeTab !== "documents",
     staleTime: 60_000,
   });
 
@@ -180,6 +184,56 @@ export default function EmployeeReportsDashboardPage() {
 
   const employeesLoading = bundleLoading;
   const attendanceLoading = bundleLoading;
+
+  const { data: documentReport, isFetching: documentsFetching, isError: documentsError, refetch: refetchDocuments } = useQuery<{
+    items: any[]; total: number; stats: any;
+  }>({
+    queryKey: ["/api/employee-reports/documents", selectedBranch, selectedEmployee, documentType, documentStatus, activeOnly],
+    queryFn: async () => {
+      const all: any[] = [];
+      let page = 1;
+      let total = 0;
+      let stats: any = {};
+      do {
+        const before = all.length;
+        const params = new URLSearchParams({ page: String(page), pageSize: "500", activeOnly: String(activeOnly) });
+        if (selectedBranch !== "all") params.set("branchId", selectedBranch);
+        if (selectedEmployee !== "all") params.set("employeeId", selectedEmployee);
+        if (documentType !== "all") params.set("type", documentType);
+        if (documentStatus !== "all") params.set("status", documentStatus);
+        if (documentStatus === "archived") params.set("includeArchived", "true");
+        const response = await apiRequest("GET", `/api/employee-reports/documents?${params}`);
+        const batch = await response.json();
+        all.push(...batch.items);
+        total = batch.total;
+        stats = batch.stats;
+        page += 1;
+        if (all.length === before && all.length < total) {
+          throw new Error("Document report pagination made no progress");
+        }
+        if (page > 10000) throw new Error("Document report pagination exceeded its safety limit");
+      } while (all.length < total);
+      return { items: all, total, stats };
+    },
+    enabled: activeTab === "documents" && !!selectedBranch && canViewModule("employee_reports"),
+  });
+
+  const exportDocuments = async () => {
+    if (!canExportModule("employee_reports") || documentsFetching || documentsError || !documentReport?.items) return;
+    const XLSX = await import("xlsx");
+    const rows = documentReport.items.map((doc) => ({
+      الموظف: doc.employeeName,
+      الفرع: doc.branchName || doc.branchId,
+      النوع: EMPLOYEE_DOCUMENT_TYPE_LABELS[doc.documentType] || doc.documentType,
+      الرقم: doc.documentNumber || "",
+      الانتهاء: doc.expiryDate || "",
+      الحالة: doc.computedStatus,
+      المصدر: doc.source === "employee_profile" ? "ملف الموظف" : "وثيقة مسجلة",
+    }));
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), "وثائق الموظفين");
+    XLSX.writeFile(workbook, `employee_documents_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
 
   const { data: cashierJournals } = useQuery<{ id: number; branchId: string; cashierName: string; cashierId: string; reportDate: string; totalSales: number; totalCash: number; status: string }[]>({
     queryKey: ["/api/cashier-journals"],
@@ -2602,7 +2656,7 @@ export default function EmployeeReportsDashboardPage() {
           </CardContent>
         </Card>
 
-        {bundleError && (
+        {activeTab !== "documents" && bundleError && (
           <Card className="border-red-200 bg-red-50/50 dark:border-red-900/50 dark:bg-red-950/10">
             <CardContent className="py-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -2619,7 +2673,7 @@ export default function EmployeeReportsDashboardPage() {
           </Card>
         )}
 
-        <div className="kpi-grid">
+        {activeTab !== "documents" && <div className="kpi-grid">
           <KpiCard
             label={isRTL ? "إجمالي الموظفين" : "Total Employees"}
             value={bundleLoading ? "…" : overviewStats.totalEmployees}
@@ -2663,9 +2717,9 @@ export default function EmployeeReportsDashboardPage() {
             tone="violet"
             data-testid="kpi-total-insurance"
           />
-        </div>
+        </div>}
 
-        {unlinkedRecordsCount > 0 && (
+        {activeTab !== "documents" && unlinkedRecordsCount > 0 && (
           <Card className="border-gray-100 dark:border-border border-l-4 border-l-amber-400 bg-amber-50/40 dark:bg-amber-950/10">
             <CardContent className="py-3">
               <div className="flex items-center justify-between">
@@ -2697,7 +2751,7 @@ export default function EmployeeReportsDashboardPage() {
           </Card>
         )}
 
-        {isLoading ? (
+        {activeTab !== "documents" && isLoading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
@@ -2737,6 +2791,7 @@ export default function EmployeeReportsDashboardPage() {
                         { value: "data-quality", label: isRTL ? "جودة البيانات" : "Data Quality", Icon: AlertCircle },
                         { value: "compliance", label: isRTL ? "الامتثال" : "Compliance", Icon: CheckCircle },
                         { value: "health-certificates", label: isRTL ? "الشهادات الصحية" : "Health Certs", Icon: CheckCircle },
+                         { value: "documents", label: isRTL ? "الوثائق" : "Documents", Icon: FileText },
                       ],
                     },
                   ]).map((g) => (
@@ -2755,6 +2810,68 @@ export default function EmployeeReportsDashboardPage() {
                 </div>
               </CardContent>
             </Card>
+
+            <TabsContent value="documents" className="space-y-4" data-testid="tab-content-documents">
+              <Card>
+                <CardHeader className="flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>{isRTL ? "وثائق الموظفين" : "Employee Documents"}</CardTitle>
+                    <CardDescription>{isRTL ? "بيانات الوثائق فقط دون مرفقات أو مسارات ملفات" : "Document metadata only; attachments are not included"}</CardDescription>
+                  </div>
+                  {canExportModule("employee_reports") && <Button variant="outline" onClick={exportDocuments} disabled={documentsFetching || documentsError || !documentReport?.items.length} data-testid="button-export-documents">
+                    <Download className="w-4 h-4 ml-2" />{isRTL ? "تصدير Excel" : "Export Excel"}
+                  </Button>}
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Select value={documentType} onValueChange={setDocumentType}>
+                      <SelectTrigger data-testid="select-document-type"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{isRTL ? "كل الأنواع" : "All types"}</SelectItem>
+                        {Object.entries(EMPLOYEE_DOCUMENT_TYPE_LABELS).map(([value, label]) =>
+                          <SelectItem key={value} value={value}>{label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Select value={documentStatus} onValueChange={setDocumentStatus}>
+                      <SelectTrigger data-testid="select-document-status"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{isRTL ? "كل الحالات" : "All statuses"}</SelectItem>
+                        <SelectItem value="active">{isRTL ? "سارية" : "Active"}</SelectItem>
+                        <SelectItem value="expiring_soon">{isRTL ? "قاربت على الانتهاء" : "Expiring soon"}</SelectItem>
+                        <SelectItem value="expired">{isRTL ? "منتهية" : "Expired"}</SelectItem>
+                        <SelectItem value="unknown">{isRTL ? "غير معروفة" : "Unknown"}</SelectItem>
+                        <SelectItem value="archived">{isRTL ? "مؤرشفة" : "Archived"}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {documentsFetching ? <div className="py-12 text-center"><Loader2 className="w-6 h-6 animate-spin inline" /></div>
+                    : documentsError ? <div className="py-8 text-center"><Button variant="outline" onClick={() => refetchDocuments()}>{isRTL ? "تعذر التحميل — إعادة المحاولة" : "Retry"}</Button></div>
+                    : <div className="overflow-auto border rounded-lg">
+                      <Table>
+                        <TableHeader><TableRow>
+                          <TableHead>{isRTL ? "الموظف" : "Employee"}</TableHead>
+                          <TableHead>{isRTL ? "النوع" : "Type"}</TableHead>
+                          <TableHead>{isRTL ? "الرقم" : "Number"}</TableHead>
+                          <TableHead>{isRTL ? "الانتهاء" : "Expiry"}</TableHead>
+                          <TableHead>{isRTL ? "الحالة" : "Status"}</TableHead>
+                          <TableHead>{isRTL ? "المصدر" : "Source"}</TableHead>
+                        </TableRow></TableHeader>
+                        <TableBody>
+                          {!documentReport?.items.length && <TableRow><TableCell colSpan={6} className="text-center py-8">{isRTL ? "لا توجد وثائق" : "No documents"}</TableCell></TableRow>}
+                          {documentReport?.items.map(doc => <TableRow key={doc.id}>
+                            <TableCell><div className="font-medium">{doc.employeeName}</div><div className="text-xs text-muted-foreground">{doc.branchName}</div></TableCell>
+                            <TableCell>{EMPLOYEE_DOCUMENT_TYPE_LABELS[doc.documentType] || doc.documentType}</TableCell>
+                            <TableCell>{doc.documentNumber || "—"}</TableCell>
+                            <TableCell>{doc.expiryDate || "—"}</TableCell>
+                            <TableCell><Badge variant="outline">{doc.computedStatus}</Badge></TableCell>
+                            <TableCell>{doc.source === "employee_profile" ? <Badge variant="secondary">{isRTL ? "ملف الموظف" : "Employee profile"}</Badge> : (isRTL ? "وثيقة مسجلة" : "Registered document")}</TableCell>
+                          </TableRow>)}
+                        </TableBody>
+                      </Table>
+                    </div>}
+                </CardContent>
+              </Card>
+            </TabsContent>
 
             <TabsContent value="overview" className="space-y-4">
               {/* KPI Cards */}

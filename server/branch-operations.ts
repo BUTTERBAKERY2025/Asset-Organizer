@@ -18,6 +18,7 @@ import type {
 } from "@shared/branch-operations";
 import { db } from "./db";
 import { storage } from "./storage";
+import { readEmployeeDocumentMetadata } from "./employee-documents-read";
 import {
   BRANCH_MANAGER_CENTRAL_KITCHEN_PERMISSIONS,
   FINANCIAL_MANAGER_PERMISSIONS,
@@ -144,30 +145,19 @@ const definitions: CardDefinition[] = [
   {
     id: "documents", title: "وثائق الموظفين", group: "people", module: "hr_documents", href: "/hr/employee-documents",
     load: async (branchId, businessDate) => {
-      const until = new Date(`${businessDate}T12:00:00Z`);
-      until.setUTCDate(until.getUTCDate() + 30);
-      const untilDate = until.toISOString().slice(0, 10);
-      const base = and(
-        eq(branchEmployees.branchId, branchId),
-        eq(branchEmployees.status, "active"),
-        ne(employeeDocuments.status, "archived"),
-      );
-      const [[expired], [soon]] = await Promise.all([
-        db.select({ value: count() }).from(employeeDocuments)
-          .innerJoin(branchEmployees, eq(employeeDocuments.branchEmployeeId, branchEmployees.id))
-          .where(and(base, lt(employeeDocuments.expiryDate, businessDate))),
-        db.select({ value: count() }).from(employeeDocuments)
-          .innerJoin(branchEmployees, eq(employeeDocuments.branchEmployeeId, branchEmployees.id))
-          .where(and(base, gte(employeeDocuments.expiryDate, businessDate), lte(employeeDocuments.expiryDate, untilDate))),
-      ]);
-      const expiredCount = Number(expired?.value || 0);
-      const soonCount = Number(soon?.value || 0);
-      const href = branchHref("/hr/employee-documents", branchId);
+      const result = await readEmployeeDocumentMetadata({
+        branchIds: [branchId], activeOnly: true, includeArchived: false,
+        today: businessDate, pageSize: 1,
+      });
+      const expiredCount = result.stats.expired;
+      const soonCount = result.stats.expiringSoon;
+      const hrefFor = (status: string) =>
+        branchHref(`/hr/employee-documents?status=${status}&activeOnly=true`, branchId);
       return {
         metrics: [{ label: "منتهية", value: expiredCount }, { label: "تنتهي خلال 30 يوماً", value: soonCount }],
         alerts: [
-          ...(expiredCount ? [{ label: "وثائق منتهية", count: expiredCount, href }] : []),
-          ...(soonCount ? [{ label: "وثائق قاربت على الانتهاء", count: soonCount, href }] : []),
+          ...(expiredCount ? [{ label: "وثائق منتهية", count: expiredCount, href: hrefFor("expired") }] : []),
+          ...(soonCount ? [{ label: "وثائق قاربت على الانتهاء", count: soonCount, href: hrefFor("expiring_soon") }] : []),
         ],
       };
     },

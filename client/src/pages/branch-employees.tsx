@@ -1347,6 +1347,14 @@ export default function BranchEmployeesPage() {
   const watchedOtherAllowances = useWatch({ control: form.control, name: "otherAllowances" });
   const watchedSocialInsurance = useWatch({ control: form.control, name: "socialInsuranceDeduction" });
 
+  const invalidateEmployeeDocumentReads = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/hr/documents"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/hr/documents/stats"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/employee-reports/documents"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/employee-reports/bundle"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/branch-operations/summary"] });
+  };
+
   const createMutation = useMutation({
     mutationFn: async (data: EmployeeFormData) => {
       const res = await fetch("/api/branch-employees", {
@@ -1359,6 +1367,7 @@ export default function BranchEmployeesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/branch-employees/bundle"] });
+      invalidateEmployeeDocumentReads();
       setIsDialogOpen(false);
       form.reset();
       toast({
@@ -1387,6 +1396,7 @@ export default function BranchEmployeesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/branch-employees/bundle"] });
+      invalidateEmployeeDocumentReads();
       setIsDialogOpen(false);
       setEditingEmployee(null);
       form.reset();
@@ -1417,6 +1427,7 @@ export default function BranchEmployeesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/branch-employees/bundle"] });
+      invalidateEmployeeDocumentReads();
       setIsDeleteDialogOpen(false);
       setEmployeeToDelete(null);
       toast({

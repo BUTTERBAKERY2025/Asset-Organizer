@@ -3,6 +3,7 @@ import { centralKitchenInventoryMovements } from "@shared/schema";
 import { createServer, type Server } from "http";
 import memoize from "memoizee";
 import { storage } from "./storage";
+import { readEmployeeDocumentMetadata } from "./employee-documents-read";
 import { ProductionStockPostingError } from "./production-stock-posting";
 import {
   manualProductionOperations,
@@ -32198,6 +32199,33 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching employee reports bundle:", error);
       res.status(500).json({ error: "فشل في جلب بيانات تقارير الموظفين" });
+    }
+  });
+
+  // Metadata-only document report. Deliberately separate from the HR document
+  // manager: employee_reports grants no attachment URL or document mutation access.
+  app.get("/api/employee-reports/documents", isAuthenticated, requirePermission("employee_reports", "view"), async (req, res) => {
+    try {
+      const branchFilter = getEffectiveBranchFilter(req, req.query.branchId as string | undefined);
+      if (!branchFilter.hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
+      const employeeId = req.query.employeeId ? Number(req.query.employeeId) : undefined;
+      if (employeeId !== undefined && (!Number.isInteger(employeeId) || employeeId <= 0)) {
+        return res.status(400).json({ error: "رقم الموظف غير صحيح" });
+      }
+      const result = await readEmployeeDocumentMetadata({
+        branchIds: branchFilter.branchIds,
+        employeeId,
+        type: req.query.type as string | undefined,
+        status: req.query.status as string | undefined,
+        activeOnly: req.query.activeOnly !== "false",
+        includeArchived: req.query.includeArchived === "true",
+        page: Number(req.query.page) || 1,
+        pageSize: Number(req.query.pageSize) || 100,
+      });
+      res.json(result);
+    } catch (error) {
+      console.error("[employee-reports/documents] error:", error);
+      res.status(500).json({ error: "فشل في جلب تقرير وثائق الموظفين" });
     }
   });
 
