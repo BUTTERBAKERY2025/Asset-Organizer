@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { getButterBakeryLogoDataUri } from "@/lib/company-logo-data";
+import { openPrintWindow, renderToPrintWindow } from "@/lib/print-window";
 import { isKitchenOrderDraftValid, isValidKitchenQuantity, normalizeReportedAvailableQuantity, OrderLineEditor, type KitchenOrderDraftLine } from "@/components/central-kitchen/order-line-editor";
 import { LinkedBatches } from "@/components/central-kitchen/linked-batches";
 import {
@@ -32,7 +33,8 @@ import { getOrderSchedule } from "@shared/central-kitchen-ordering-policy";
 import { PreparationEditor, SavedPreparationSummary } from "@/components/central-kitchen/prepare-fulfillment";
 import { DemandCommitments } from "@/components/central-kitchen/demand-commitments";
 import { OrderActionsMenu, SheetPreviewDialog } from "@/components/central-kitchen/kitchen-order-sharing";
-import { escapePrintHtml, formatSaudiDateTime, type PreparationSheet } from "@/components/central-kitchen/kitchen-order-share-model";
+import { type PreparationSheet } from "@/components/central-kitchen/kitchen-order-share-model";
+import { kitchenOrderPrintHtml } from "@/components/central-kitchen/kitchen-order-pdf";
 import { formatKitchenSaudiDateTime } from "@/components/central-kitchen/display-format";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
@@ -1074,29 +1076,18 @@ function ReceiptEditor({ items, pending, onSubmit }: { items: KitchenItem[]; pen
 }
 
 async function printPreparationNote(order: KitchenOrder): Promise<boolean> {
-  const escape = escapePrintHtml;
-  const statusLabel = STATUS[normalized(order.status)]?.label || order.status || "—";
-  const rows = (order.items || []).map(item => {
-    const prepared = Number(item.preparedQuantity || 0);
-    const substitute = Number(item.substituteQuantity || 0);
-    const shortage = Math.max(0, Number(item.requestedQuantity) - prepared - substitute);
-    const declaredAvailable = item.reportedAvailableQuantity == null ? "غير مسجل" : `${escape(item.reportedAvailableQuantity)} ${escape(item.unit)}`;
-    const details = [
-      item.notes,
-      item.preparationNotes,
-      item.shortageReason ? SHORTAGE_LABELS[item.shortageReason] || item.shortageReason : null,
-      item.dispatchedQuantity != null ? `المرسل: ${item.dispatchedQuantity} ${item.unit}` : null,
-      item.receivedQuantity != null ? `المستلم: ${item.receivedQuantity} ${item.unit}` : null,
-      item.damagedQuantity != null ? `التالف: ${item.damagedQuantity} ${item.unit}` : null,
-      item.missingQuantity != null ? `المفقود: ${item.missingQuantity} ${item.unit}` : null,
-      item.receivingNotes,
-    ].filter(Boolean).map(escape).join("<br>");
-    return `<tr><td>${escape(item.productName)}</td><td>${escape(item.requestedQuantity)} ${escape(item.unit)}</td><td>${declaredAvailable}</td><td>${prepared} ${escape(item.unit)}</td><td>${substitute > 0 ? `${substitute} ${escape(item.substituteUnit || item.unit)} — ${escape(item.substituteProductName)}` : "—"}</td><td>${shortage} ${escape(item.unit)}</td><td>${details || "—"}</td></tr>`;
-  }).join("");
-  const printWindow = window.open("", "_blank", "width=900,height=700");
-  if (!printWindow) return false;
+  const target = import.meta.env.DEV
+    ? { key: "", win: window.open("", "_blank", "width=1100,height=800") }
+    : openPrintWindow();
+  if (!target.win) return false;
   const logo = await getButterBakeryLogoDataUri();
-  printWindow.document.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>سند تجهيز ${escape(order.orderNumber)}</title><style>html,body{display:block!important;height:auto!important}*{box-sizing:border-box}body{font-family:Arial,sans-serif;padding:28px;color:#432b20}.brand{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #d9822b;padding-bottom:12px}.brand img{width:68px;height:68px;object-fit:contain}.brand h1{font-size:22px;margin:0;color:#704126}.brand p{margin:4px 0 0;color:#d9822b}.doc{direction:ltr;color:#704126;font-weight:bold}.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:14px 0}.box{background:#fff7ea;border:1px solid #f0dfca;border-radius:5px;padding:9px;break-inside:avoid}small{display:block;color:#806d60;margin-bottom:3px}.notes{border-right:4px solid #d9822b;background:#fff7ea;padding:10px;margin:0 0 14px;white-space:pre-wrap}table{width:100%;border-collapse:collapse}thead{display:table-header-group}tr{break-inside:avoid;page-break-inside:avoid}tbody tr:nth-child(even){background:#fff9f0}th,td{border:1px solid #dec9b5;padding:8px;text-align:right;font-size:11px;vertical-align:top;overflow-wrap:anywhere}th{background:#704126;color:#fff}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:80px;margin-top:55px;break-inside:avoid}.line{border-top:1px solid #704126;padding-top:8px;text-align:center}.footer{position:fixed;bottom:-8mm;left:0;right:0;text-align:center;color:#806d60;font-size:9px}@page{size:A4 landscape;margin:12mm 10mm 15mm}@media print{body{padding:0}}</style></head><body><header class="brand">${logo ? `<img src="${escape(logo)}" alt="Butter Bakery">` : ""}<div><h1>سند تجهيز طلب المطبخ المركزي</h1><p>باتر بيكري · المطبخ المركزي</p></div><div class="doc">${escape(order.orderNumber)}</div></header><div class="meta"><div class="box"><small>الفرع الطالب</small>${escape(order.requestBranchName || order.requestBranchId)}</div><div class="box"><small>المطبخ المركزي</small>${escape(order.centralKitchenName || order.centralKitchenId)}</div><div class="box"><small>الحالة</small>${escape(statusLabel)}</div><div class="box"><small>تاريخ الحاجة</small>${escape(order.neededDate)} · ${escape(order.neededTime)}</div><div class="box"><small>تاريخ الإنشاء · السعودية</small>${escape(formatSaudiDateTime(order.createdAt))}</div><div class="box"><small>عدد البنود</small>${order.items?.length || 0}</div></div>${order.notes ? `<div class="notes"><small>ملاحظات الطلب</small>${escape(order.notes)}</div>` : ""}<table><thead><tr><th>الصنف</th><th>المطلوب</th><th>المتوفر في الفرع</th><th>الأصلي المجهز</th><th>البديل</th><th>النقص</th><th>ملاحظات</th></tr></thead><tbody>${rows}</tbody></table><div class="signatures"><div class="line">مسؤول التجهيز</div><div class="line">مسؤول الإرسال</div></div><div class="footer">باتر بيكري · ${escape(order.orderNumber)}</div><script>window.onload=()=>window.print()<\/script></body></html>`);
-  printWindow.document.close();
+  const html = kitchenOrderPrintHtml(order, logo);
+  if (import.meta.env.DEV) {
+    target.win.document.open();
+    target.win.document.write(html);
+    target.win.document.close();
+  } else {
+    renderToPrintWindow(target, html);
+  }
   return true;
 }

@@ -6,6 +6,7 @@ import {
   type PreparationSheet,
 } from "../client/src/components/central-kitchen/kitchen-order-share-model";
 import {
+  kitchenOrderPrintHtml,
   kitchenOrderPdfDefinition,
   preparationSheetPdfDefinition,
 } from "../client/src/components/central-kitchen/kitchen-order-pdf";
@@ -67,7 +68,7 @@ describe("central kitchen safe sharing", () => {
   it("builds a complete, multipage-safe Arabic order PDF independently of print", () => {
     const embeddedLogo = "data:image/png;base64,authenticLogoBytes";
     const definition = kitchenOrderPdfDefinition({
-      orderNumber: "CK-12",
+      orderNumber: "CK-20260922-71F64FEC871A",
       status: "dispatched",
       requestBranchId: "branch-1",
       centralKitchenId: "kitchen-1",
@@ -86,24 +87,40 @@ describe("central kitchen safe sharing", () => {
         substituteQuantity: 1,
         substituteProductName: "دقيق بديل",
         preparationNotes: "ملاحظة التجهيز",
+        dispatchedQuantity: 4,
+        receivedQuantity: 2,
+        damagedQuantity: 1,
+        missingQuantity: 1,
+        receivingNotes: "ملاحظة الاستلام",
       }],
     }, embeddedLogo) as any;
     const serialized = JSON.stringify(definition);
-    expect(definition.pageOrientation).toBe("portrait");
+    const runningHeader = JSON.stringify(definition.header(1, 1));
+    expect(definition.pageOrientation).toBe("landscape");
     expect(definition.defaultStyle.font).toBe("Amiri");
-    expect(serialized).toContain(embeddedLogo);
+    expect(definition.defaultStyle.fontSize).toBeGreaterThanOrEqual(9);
+    expect(runningHeader).toContain(embeddedLogo);
+    expect(runningHeader).toContain("CK-20260922-71F64FEC871A");
     expect(serialized).toContain("في الطريق");
     expect(serialized).toContain("العليا");
     expect(serialized).toContain("2026-09-23");
     expect(serialized).toContain("دقيق بديل");
     expect(serialized).toContain("ملاحظة الطلب");
     expect(serialized).toContain("ملاحظة التجهيز");
+    expect(serialized).toContain("ملاحظة الاستلام");
+    expect(serialized).toContain("التالف");
+    expect(serialized).toContain("المفقود");
     expect(serialized).not.toContain("2026-09-22T09:00:00.000Z");
     expect(serialized).toContain("السعودية");
     expect(typeof definition.footer).toBe("function");
-    const itemTable = definition.content.find((entry: any) => entry.table?.headerRows === 1);
+    const closingBlock = definition.content.find((entry: any) => entry.stack?.some((node: any) => node.table?.headerRows === 1));
+    const itemTable = closingBlock.stack.find((entry: any) => entry.table?.headerRows === 1);
     expect(itemTable.table.headerRows).toBe(1);
     expect(itemTable.table.dontBreakRows).toBe(true);
+    expect(itemTable.table.body[0].map((entry: any) => entry.text)).toEqual([
+      "م", "الصنف", "الوحدة", "المطلوب", "المتوفر", "المجهز", "النقص", "البديل", "الملاحظات",
+    ]);
+    expect(closingBlock.stack.find((entry: any) => entry.table?.widths?.length === 3).table.body[0]).toHaveLength(3);
   });
 
   it("keeps all preparation-sheet quantities, notes, branches, and statuses in the PDF model", () => {
@@ -116,5 +133,38 @@ describe("central kitchen safe sharing", () => {
     expect(serialized).toContain("data:image/png;base64,logo");
     expect(serialized).not.toContain("2026-09-22T09:00:00.000Z");
     expect(definition.content.find((entry: any) => entry.table?.headerRows === 1)?.table.headerRows).toBe(1);
+  });
+
+  it("builds the matching formal landscape print document with safe repeated headers", () => {
+    const html = kitchenOrderPrintHtml({
+      orderNumber: "CK-20260922-71F64FEC871A",
+      status: "received",
+      requestBranchId: "branch-1",
+      centralKitchenId: "kitchen-1",
+      createdAt: "2026-09-22T09:00:00.000Z",
+      items: [{
+        productName: "<كرواسون>",
+        unit: "قطعة",
+        requestedQuantity: 4,
+        preparedQuantity: 2,
+        substituteQuantity: 1,
+        substituteProductName: "بديل",
+        substituteUnit: "علبة",
+        dispatchedQuantity: 3,
+        receivedQuantity: 1,
+        damagedQuantity: 1,
+        missingQuantity: 1,
+        receivingNotes: "<ملاحظة استلام>",
+      }],
+    }, "data:image/png;base64,logo");
+    expect(html).toContain("@page{size:A4 landscape");
+    expect(html).toContain("display:table-header-group");
+    expect(html).toContain("CK-20260922-71F64FEC871A");
+    expect(html).toContain("&lt;كرواسون&gt;");
+    expect(html).toContain("&lt;ملاحظة استلام&gt;");
+    expect(html).toContain("مسؤول التجهيز");
+    expect(html).toContain("مسؤول الإرسال");
+    expect(html).toContain("مسؤول الاستلام");
+    expect(html).toContain("counter(pages)");
   });
 });

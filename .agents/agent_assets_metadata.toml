@@ -131,3 +131,17 @@ mtime_ms = 1790167574077
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/6ab3a6ce-98d0-4046-b43e-6f61b808afb6/c147dcb2-35d5-4d83-b9f9-7427f1e50e37"
 storage_version_token = "1790167709193474"
 content_type = "image/png"
+
+[[outputs]]
+id = "oYcJdPMn7SfezZCUyQARz"
+uri = "file://.local/test-results/kitchen-print-pdf-long-realistic/order-pdf-page-1.png"
+type = "image"
+title = "التنسيق الرسمي الجديد لسند المطبخ"
+description = "معاينة ببيانات اختبار لأصناف متعددة، بتنسيق A4 أفقي وأعمدة مستقلة للكميات."
+logical_id = "c17d3780-7731-4682-909c-b731447f9235"
+content_hash = "sha256:af9d1b4bb0a6ae1550ac172c13606e8b4a13264e0ee160de2aeedc0b8579edd2"
+size = 134717
+mtime_ms = 1790170598592
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/c17d3780-7731-4682-909c-b731447f9235/a3ce9a3e-f9aa-403d-b0b1-7f4873d0f751"
+storage_version_token = "1790170732164454"
+content_type = "image/png"
