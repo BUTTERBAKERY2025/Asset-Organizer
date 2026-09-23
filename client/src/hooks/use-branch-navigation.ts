@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useSearch } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 
 type AllowedBranch = { id: string };
@@ -32,7 +33,8 @@ export function useBranchNavigation(
   userBranchId?: string | null,
 ) {
   const { activeBranchId } = useAuth();
-  const search = typeof window === "undefined" ? "" : window.location.search;
+  // Subscribe to query-only navigation (including browser back/forward).
+  const search = useSearch();
 
   return useMemo(() => {
     const result = resolveNavigationBranch(search, branches, activeBranchId, userBranchId);

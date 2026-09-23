@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef, startTransition } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
+import { BranchOperationsNavigation } from "@/components/branch-operations/navigation";
 import logo from "@assets/logo_-5_1765206843638.png";
 import { useTranslation } from "react-i18next";
 import { changeLanguage } from "@/lib/i18n";
@@ -855,6 +856,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </header>
 
         <div ref={contentRef} className="flex-1 overflow-auto scroll-smooth safe-area-inset-bottom page-content">
+          <BranchOperationsNavigation />
           {children}
         </div>
       </main>

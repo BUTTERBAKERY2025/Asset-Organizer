@@ -174,7 +174,7 @@ export function NeedsActionStrip({ branchId, cards, onOpen }: { branchId: string
 export function OperationCardView({ card, section, onOpen, onRefresh }: { card: OperationCard; section: SectionMeta; onOpen: (href: string) => void; onRefresh: () => void }) {
   const meta = CARD_META[card.id] ?? FALLBACK_META;
   const urgent = card.alerts.filter((alert) => alert.count > 0);
-  return <article className="branch-ops-card border border-border bg-card text-card-foreground shadow-sm" data-testid={`branch-operation-card-${card.id}`}>
+  return <article id={`branch-operation-card-${card.id}`} className="branch-ops-card border border-border bg-card text-card-foreground shadow-sm" data-testid={`branch-operation-card-${card.id}`}>
     <button type="button" className="branch-ops-card-main" onClick={() => onOpen(card.href)} aria-label={`فتح ${card.title}`}>
       <div className="flex items-start gap-3">
         <span className={`branch-ops-icon ring-1 text-primary ${section.badge}`}><Artwork src={meta.art} fallback={meta.icon} /></span>

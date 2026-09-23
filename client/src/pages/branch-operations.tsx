@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
+import { branchBoardUrl, branchOperationUrl } from "@/lib/branch-operation-navigation";
 import {
   AlertTriangle, Artwork, BOARD_ART, BoardSkeleton, BusinessDate, EmptyState, NeedsActionStrip,
   OperationCardView, SectionHeader, Settings2, ShieldAlert, Store, groupCards, type OperationCard,
@@ -21,27 +23,23 @@ type BranchOperationsSummary = {
   cards: OperationCard[];
 };
 
-function toUrl(href: string, branchId: string) {
-  const url = new URL(href, window.location.origin);
-  url.searchParams.set("branchId", branchId);
-  return `${url.pathname}${url.search}${url.hash}`;
-}
-
 export default function BranchOperationsPage() {
   const [, navigate] = useLocation();
   const client = useQueryClient();
   const { activeBranch, activeBranchId, switchBranch, isSwitchingBranch } = useAuth();
   const { branches, isLoading: branchesLoading } = useBranches();
+  const navigation = useBranchNavigation(branches, branchesLoading);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [requestedBranchId, setRequestedBranchId] = useState<string | null>(null);
-  const selectedBranchId = requestedBranchId ?? activeBranchId ?? activeBranch?.id ?? null;
-  const selectedBranch = branches.find((branch) => branch.id === selectedBranchId) ?? activeBranch;
+  const selectedBranchId = requestedBranchId ?? (navigation.hasBranchParam
+    ? navigation.branchId : branches.find((branch) => branch.id === (activeBranchId ?? activeBranch?.id))?.id ?? branches[0]?.id ?? null);
+  const selectedBranch = branches.find((branch) => branch.id === selectedBranchId);
   // useBranches is server-filtered; this selector intentionally never exposes an all-branches option.
   const allowedBranches = useMemo(() => branches, [branches]);
 
   const board = useQuery<BranchOperationsSummary>({
     queryKey: ["/api/branch-operations/summary", selectedBranchId],
-    enabled: Boolean(selectedBranchId) && !isSwitchingBranch,
+    enabled: Boolean(selectedBranchId) && !branchesLoading && !isSwitchingBranch,
     staleTime: 0,
     placeholderData: undefined,
     retry: false,
@@ -54,6 +52,18 @@ export default function BranchOperationsPage() {
 
   const validBoard = board.data?.branchId === selectedBranchId ? board.data : undefined;
   const isForbidden = board.error instanceof Error && board.error.message === "403";
+
+  useEffect(() => {
+    if (!validBoard || isSwitchingBranch) return;
+    const target = window.location.hash.slice(1);
+    if (!validBoard.cards.some((card) => target === `branch-operation-card-${card.id}`)) return;
+    const frame = requestAnimationFrame(() => {
+      const element = document.getElementById(target);
+      element?.scrollIntoView({ block: "center", behavior: "instant" });
+      element?.querySelector("button")?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [validBoard?.branchId, Boolean(validBoard), isSwitchingBranch]);
 
   const changeBranch = async (branchId: string) => {
     if (branchId === selectedBranchId) return;
@@ -68,6 +78,7 @@ export default function BranchOperationsPage() {
         activeBranchId: result.activeBranchId,
         activeBranch: result.activeBranch,
       }) : current);
+      navigate(branchBoardUrl(branchId), { replace: true });
     } catch {
       setSwitchError("تعذر تغيير الفرع. لم يتم فتح أي شاشة أخرى.");
     } finally {
@@ -77,7 +88,11 @@ export default function BranchOperationsPage() {
 
   const go = (href: string) => {
     if (!selectedBranchId || isSwitchingBranch) return;
-    navigate(toUrl(href, selectedBranchId));
+    try {
+      navigate(branchOperationUrl(href, selectedBranchId));
+    } catch {
+      setSwitchError("تعذر فتح هذا المسار من لوحة الفرع. حدّث اللوحة وحاول مجددًا.");
+    }
   };
 
   return (
