@@ -30,6 +30,8 @@ import { BranchSupplySources } from "@/components/branch-supply/sources";
 import { WarehouseItemEntry } from "@/components/warehouse-entry/warehouse-item-entry";
 import { isValidWarehouseDraftItem } from "@/components/warehouse-entry/warehouse-item-entry-helpers";
 import { generateTransferPdf, generateQuickTransferPdf } from "@/lib/pdf-utils";
+import { TransferDocument } from "@/components/transfer-document";
+import { buildTransferListWorkbook, buildTransferWorkbook } from "@/lib/transfer-export";
 import {
   consumeWarehouseCreateIntent,
   parseWarehouseSupplyIntent,
@@ -88,6 +90,8 @@ type TransferItem = {
   quantity: number;
   originalQuantity: number | null;
   receivedQuantity: number | null;
+  discrepancy?: number | null;
+  discrepancyNotes?: string | null;
   notes: string | null;
   availableQuantity?: number | null;
   isModified?: boolean;
@@ -696,7 +700,7 @@ _مُرسل من BUTTER BAKERY SYSTEM_`;
 
   // Download PDF only (lazy-loaded)
   const handleDownloadPdf = async () => {
-    if (!selectedTransfer) return;
+    if (!selectedTransfer || isLoadingItems || isTransferItemsError) return;
     try {
       await generateTransferPdf(selectedTransfer as any, transferItems as any);
       toast({
@@ -714,6 +718,7 @@ _مُرسل من BUTTER BAKERY SYSTEM_`;
 
   // Download single transfer as Excel
   const handleDownloadTransferExcel = async () => {
+    if (isLoadingItems || isTransferItemsError) return;
     if (!selectedTransfer || transferItems.length === 0) {
       toast({
         title: isRTL ? "لا توجد بيانات" : "No Data",
@@ -724,66 +729,9 @@ _مُرسل من BUTTER BAKERY SYSTEM_`;
     }
 
     try {
-      const XLSX = await import('xlsx-js-style');
-      
-      const headers = ["#", "الصنف", "التصنيف", "المتوفر", "الكمية", "الوحدة", "ملاحظات"];
-      
-      const rows = transferItems.map((item, index) => [
-        index + 1,
-        item.itemName,
-        item.category || "-",
-        item.availableQuantity ?? "-",
-        item.quantity,
-        item.unit,
-        item.notes || "-",
-      ]);
-
-      const data = [headers, ...rows];
-      const worksheet = XLSX.utils.aoa_to_sheet(data);
-      
-      const headerStyle = {
-        font: { name: "Tahoma", sz: 12, bold: true, color: { rgb: "FFFFFF" } },
-        fill: { fgColor: { rgb: "D4A853" } },
-        alignment: { horizontal: "center", vertical: "center", wrapText: true },
-        border: {
-          top: { style: "thin", color: { rgb: "000000" } },
-          bottom: { style: "thin", color: { rgb: "000000" } },
-          left: { style: "thin", color: { rgb: "000000" } },
-          right: { style: "thin", color: { rgb: "000000" } },
-        }
-      };
-      
-      const cellStyle = {
-        font: { name: "Tahoma", sz: 11 },
-        alignment: { horizontal: "center", vertical: "center", wrapText: true },
-        border: {
-          top: { style: "thin", color: { rgb: "CCCCCC" } },
-          bottom: { style: "thin", color: { rgb: "CCCCCC" } },
-          left: { style: "thin", color: { rgb: "CCCCCC" } },
-          right: { style: "thin", color: { rgb: "CCCCCC" } },
-        }
-      };
-
-      const range = XLSX.utils.decode_range(worksheet['!ref'] || "A1");
-      for (let row = range.s.r; row <= range.e.r; row++) {
-        for (let col = range.s.c; col <= range.e.c; col++) {
-          const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
-          if (!worksheet[cellAddress]) continue;
-          worksheet[cellAddress].s = row === 0 ? headerStyle : cellStyle;
-        }
-      }
-
-      const colWidths = [
-        { wch: 5 }, { wch: 25 }, { wch: 15 }, { wch: 10 }, 
-        { wch: 10 }, { wch: 10 }, { wch: 20 }
-      ];
-      worksheet['!cols'] = colWidths;
-      
-      (worksheet as any)['!views'] = [{ rightToLeft: true }];
-
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, selectedTransfer.transferNumber);
-      XLSX.writeFile(workbook, `${selectedTransfer.transferNumber}.xlsx`);
+      const XLSX = await import("xlsx-js-style");
+      const { workbook, filename } = buildTransferWorkbook(XLSX, selectedTransfer, transferItems);
+      XLSX.writeFile(workbook, filename);
       
       toast({
         title: isRTL ? "تم التصدير" : "Exported",
@@ -840,68 +788,19 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
     }
 
     try {
-      const XLSX = await import('xlsx-js-style');
-      
-      const headers = ["رقم التحويل", "من", "إلى", "الحالة", "السائق", "المركبة", "تاريخ التحويل", "ملاحظات", "أنشأه"];
-      
-      const rows = filteredTransfers.map((transfer) => [
-        transfer.transferNumber,
-        transfer.sourceBranchName || "المستودع الرئيسي",
-        transfer.destinationBranchName || "-",
-        STATUS_OPTIONS.find(s => s.value === transfer.status)?.labelAr || transfer.status,
-        transfer.driverName || "-",
-        transfer.vehicleNumber || "-",
-        transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('en-GB') : "-",
-        transfer.notes || "-",
-        transfer.createdByName || "-",
-      ]);
-
-      const data = [headers, ...rows];
-      const worksheet = XLSX.utils.aoa_to_sheet(data);
-      
-      const headerStyle = {
-        font: { name: "Tahoma", sz: 12, bold: true, color: { rgb: "FFFFFF" } },
-        fill: { fgColor: { rgb: "D4A853" } },
-        alignment: { horizontal: "right", vertical: "center", wrapText: true },
-        border: {
-          top: { style: "thin", color: { rgb: "000000" } },
-          bottom: { style: "thin", color: { rgb: "000000" } },
-          left: { style: "thin", color: { rgb: "000000" } },
-          right: { style: "thin", color: { rgb: "000000" } },
-        }
-      };
-      
-      const cellStyle = {
-        font: { name: "Tahoma", sz: 11 },
-        alignment: { horizontal: "right", vertical: "center", wrapText: true },
-        border: {
-          top: { style: "thin", color: { rgb: "CCCCCC" } },
-          bottom: { style: "thin", color: { rgb: "CCCCCC" } },
-          left: { style: "thin", color: { rgb: "CCCCCC" } },
-          right: { style: "thin", color: { rgb: "CCCCCC" } },
-        }
-      };
-
-      const range = XLSX.utils.decode_range(worksheet['!ref'] || "A1");
-      for (let row = range.s.r; row <= range.e.r; row++) {
-        for (let col = range.s.c; col <= range.e.c; col++) {
-          const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
-          if (!worksheet[cellAddress]) continue;
-          worksheet[cellAddress].s = row === 0 ? headerStyle : cellStyle;
-        }
-      }
-
-      const colWidths = [
-        { wch: 18 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, 
-        { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 25 }, { wch: 15 }
-      ];
-      worksheet['!cols'] = colWidths;
-      
-      (worksheet as any)['!views'] = [{ rightToLeft: true }];
-
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "طلبات التحويل");
-      XLSX.writeFile(workbook, `طلبات-التحويل-${new Date().toISOString().split('T')[0]}.xlsx`);
+      const XLSX = await import("xlsx-js-style");
+      const statusContext = filterStatus === "all"
+        ? (isRTL ? "جميع الحالات" : "All statuses")
+        : (STATUS_OPTIONS.find(option => option.value === filterStatus)?.labelAr || filterStatus);
+      const branchContext = filterBranch === "all"
+        ? (isRTL ? "جميع الفروع" : "All branches")
+        : (branches.find(branch => branch.id === filterBranch)?.name || filterBranch);
+      const { workbook, filename } = buildTransferListWorkbook(
+        XLSX,
+        filteredTransfers,
+        `${statusContext} | ${branchContext}${searchQuery ? ` | بحث: ${searchQuery}` : ""}`,
+      );
+      XLSX.writeFile(workbook, filename);
       
       toast({
         title: isRTL ? "تم التصدير" : "Exported",
@@ -1597,13 +1496,13 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
         <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <DialogTitle className="flex items-center gap-2">
                   <Send className="w-5 h-5" />
                   {isRTL ? "تفاصيل طلب التحويل" : "Transfer Request Details"}
                 </DialogTitle>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handlePrint()} data-testid="btn-print">
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={() => handlePrint()} disabled={isLoadingItems || isTransferItemsError || !transferItems.length} data-testid="btn-print">
                     <Printer className="w-4 h-4 mr-1" />
                     {isRTL ? "طباعة" : "Print"}
                   </Button>
@@ -1611,6 +1510,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                     variant="outline" 
                     size="sm" 
                     onClick={handleDownloadPdf}
+                    disabled={isLoadingItems || isTransferItemsError || !transferItems.length}
                     className="bg-red-50 hover:bg-red-100 text-red-700 border-red-200"
                     data-testid="btn-pdf"
                   >
@@ -1621,6 +1521,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                     variant="outline" 
                     size="sm" 
                     onClick={handleDownloadTransferExcel}
+                    disabled={isLoadingItems || isTransferItemsError || !transferItems.length}
                     className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200"
                     data-testid="btn-excel"
                   >
@@ -1641,7 +1542,21 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
               </div>
             </DialogHeader>
             {selectedTransfer && (
-              <div ref={printRef} className="space-y-6 p-4 print:p-8">
+              <>
+                {isLoadingItems ? (
+                  <p className="py-12 text-center text-muted-foreground">{isRTL ? "جاري تحميل مستند التحويل..." : "Loading transfer document..."}</p>
+                ) : isTransferItemsError ? (
+                  <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-5 text-center" role="alert">
+                    <p className="font-semibold text-destructive">{isRTL ? "تعذر تحميل أصناف التحويل" : "Could not load transfer items"}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{transferItemsError instanceof Error ? transferItemsError.message : ""}</p>
+                    <Button variant="outline" size="sm" className="mt-3" onClick={() => void refetchTransferItems()}>
+                      {isRTL ? "إعادة المحاولة" : "Retry"}
+                    </Button>
+                  </div>
+                ) : (
+                  <TransferDocument ref={printRef} transfer={selectedTransfer} items={transferItems} />
+                )}
+                <div className="hidden">
                 {/* Header for print */}
                 <div className="hidden print:block text-center mb-6">
                   <h1 className="text-2xl font-bold">{isRTL ? "أمر تحويل مواد" : "Material Transfer Order"}</h1>
@@ -1826,7 +1741,8 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                     </div>
                   </div>
                 </div>
-              </div>
+                </div>
+              </>
             )}
           </DialogContent>
         </Dialog>
