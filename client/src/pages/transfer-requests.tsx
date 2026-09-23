@@ -20,14 +20,22 @@ import {
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useReactToPrint } from "react-to-print";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { SignaturePad, SignatureDisplay } from "@/components/signature-pad";
 import { ExportButtons } from "@/components/export-buttons";
 import { useBranches } from "@/hooks/useBranches";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
+import { BranchSupplySources } from "@/components/branch-supply/sources";
 import { generateTransferPdf, generateQuickTransferPdf } from "@/lib/pdf-utils";
+import {
+  consumeWarehouseCreateIntent,
+  parseWarehouseSupplyIntent,
+  resolveVisibleBranchFilter,
+  resolveWarehouseCreateDestination,
+} from "@/lib/warehouse-branch-supply";
 
 type MaterialTransfer = {
   id: number;
@@ -117,8 +125,11 @@ export default function TransferRequestsPage() {
   const isRTL = i18n.language === "ar";
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { branches, userBranchId, canSelectBranch } = useBranches();
-  const { canCreate, canEdit, canApprove } = usePermissions();
+  const { branches, isLoading: branchesLoading, userBranchId, canSelectBranch } = useBranches();
+  const permissions = usePermissions();
+  const { canView, canCreate, canEdit, isLoading: permissionsLoading } = permissions;
+  const search = useSearch();
+  const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
@@ -131,6 +142,7 @@ export default function TransferRequestsPage() {
   const [transferType, setTransferType] = useState<"to_warehouse" | "between_branches">("to_warehouse");
   const [openItemIndex, setOpenItemIndex] = useState<number | null>(null);
   const shortagePrefillRef = useRef<string | null>(null);
+  const createIntentConsumedRef = useRef(false);
   const createIdempotencyKeyRef = useRef<string | null>(null);
   const [modifyingItems, setModifyingItems] = useState<Array<{ 
     itemId: number; 
@@ -159,12 +171,18 @@ export default function TransferRequestsPage() {
   });
 
   // Fetch transfer items when viewing details
-  const { data: transferItems = [], isLoading: isLoadingItems } = useQuery<TransferItem[]>({
+  const {
+    data: transferItems = [],
+    isLoading: isLoadingItems,
+    isError: isTransferItemsError,
+    error: transferItemsError,
+    refetch: refetchTransferItems,
+  } = useQuery<TransferItem[]>({
     queryKey: ["/api/warehouse/material-transfers", selectedTransfer?.id, "items"],
     queryFn: async () => {
       if (!selectedTransfer) return [];
       const response = await fetch(`/api/warehouse/material-transfers/${selectedTransfer.id}/items`);
-      if (!response.ok) return [];
+      if (!response.ok) throw new Error(`Failed to fetch transfer items (${response.status})`);
       return response.json();
     },
     enabled: !!selectedTransfer && isViewOpen,
@@ -183,8 +201,52 @@ export default function TransferRequestsPage() {
     items: [] as { itemId: number; itemName: string; category: string; quantity: string; availableQuantity: string | null; unit: string; notes: string }[],
   });
 
+  const setDestinationBranch = useCallback((branchId: string) => {
+    const branch = branches.find(entry => entry.id === branchId);
+    if (!branch) return false;
+    setNewTransfer(prev => ({
+      ...prev,
+      sourceBranchId: "main_warehouse",
+      sourceBranchName: isRTL ? "المستودع الرئيسي" : "Main Warehouse",
+      destinationBranchId: branch.id,
+      destinationBranchName: branch.name,
+    }));
+    return true;
+  }, [branches, isRTL]);
+
+  // A scoped link initializes both the list and request destination. Invalid
+  // scopes are resolved by useBranchNavigation and never broaden to "all".
+  useEffect(() => {
+    if (navigationBranch.isResolving || !navigationBranch.hasBranchParam) return;
+    if (!navigationBranch.branchId || !setDestinationBranch(navigationBranch.branchId)) return;
+    setFilterBranch(navigationBranch.branchId);
+  }, [navigationBranch, setDestinationBranch]);
+
+  // Consume the cross-source create intent once. replaceState deliberately
+  // preserves branchId/from and prevents close/rerender from reopening it.
+  useEffect(() => {
+    if (createIntentConsumedRef.current || navigationBranch.isResolving || permissionsLoading) return;
+    const intent = parseWarehouseSupplyIntent(search);
+    if (!intent.shouldCreate || !intent.fromBranchSupply) return;
+    createIntentConsumedRef.current = true;
+    const canOpen = canCreate("warehouse")
+      && !!navigationBranch.branchId
+      && setDestinationBranch(navigationBranch.branchId);
+    if (canOpen) {
+      createIdempotencyKeyRef.current = crypto.randomUUID();
+      setIsCreateOpen(true);
+    }
+    const nextSearch = consumeWarehouseCreateIntent(search);
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${nextSearch}${window.location.hash}`);
+  }, [canCreate, navigationBranch, permissionsLoading, search, setDestinationBranch]);
+
   // Fetch warehouse items for selection
-  const { data: warehouseItems = [] } = useQuery<WarehouseItem[]>({
+  const {
+    data: warehouseItems = [],
+    isError: isWarehouseItemsError,
+    error: warehouseItemsError,
+    refetch: refetchWarehouseItems,
+  } = useQuery<WarehouseItem[]>({
     queryKey: ["/api/warehouse/items"],
     queryFn: async () => {
       const response = await fetch("/api/warehouse/items?isActive=true");
@@ -224,8 +286,8 @@ export default function TransferRequestsPage() {
         notes: "احتياج مواد وصفة إنتاج",
       }],
     }));
-    setIsCreateOpen(true);
-  }, [branches, isRTL, warehouseItems]);
+    if (canCreate("warehouse")) setIsCreateOpen(true);
+  }, [branches, canCreate, isRTL, warehouseItems]);
 
   // Add item to transfer
   const addTransferItem = () => {
@@ -295,16 +357,23 @@ export default function TransferRequestsPage() {
     deliveryNotes: ""
   });
 
-  const { data: transfers = [], isLoading } = useQuery<MaterialTransfer[]>({
-    queryKey: ["/api/warehouse/material-transfers", filterStatus, userBranchId, canSelectBranch],
+  const {
+    data: transfers = [],
+    isLoading,
+    isError: isTransfersError,
+    error: transfersError,
+    refetch: refetchTransfers,
+  } = useQuery<MaterialTransfer[]>({
+    queryKey: ["/api/warehouse/material-transfers", filterStatus, filterBranch, userBranchId, canSelectBranch],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filterStatus !== "all") params.append("status", filterStatus);
       // For non-admin branch users, filter by their branch (as source or destination)
       // Admins (canSelectBranch=true) see all transfers
-      if (userBranchId && !canSelectBranch) {
-        params.append("branchId", userBranchId);
-      }
+      const requestedBranchId = filterBranch !== "all"
+        ? filterBranch
+        : (userBranchId && !canSelectBranch ? userBranchId : null);
+      if (requestedBranchId) params.append("branchId", requestedBranchId);
       const response = await fetch(`/api/warehouse/material-transfers?${params.toString()}`);
       if (!response.ok) throw new Error("Failed to fetch transfers");
       return response.json();
@@ -320,6 +389,8 @@ export default function TransferRequestsPage() {
       const destBranch = branches.find(b => b.id === data.destinationBranchId);
       const response = await apiRequest("POST", "/api/warehouse/material-transfers", {
         ...data,
+        sourceBranchId: "main_warehouse",
+        sourceBranchName: isRTL ? "المستودع الرئيسي" : "Main Warehouse",
         items: data.items.map(item => ({
           ...item,
           quantity: Number(item.quantity),
@@ -444,19 +515,18 @@ export default function TransferRequestsPage() {
     setSelectedTransfer(transfer);
     try {
       const response = await fetch(`/api/warehouse/material-transfers/${transfer.id}/items`);
-      if (response.ok) {
-        const items = await response.json();
-        setModifyingItems(items.map((item: TransferItem) => ({
-          itemId: item.itemId,
-          itemName: item.itemName,
-          originalQuantity: item.originalQuantity || item.quantity,
-          currentQuantity: item.quantity,
-          newQuantity: quantityText(item.quantity),
-          unit: item.unit,
-          modificationNotes: ""
-        })));
-        setIsModifyQuantitiesOpen(true);
-      }
+      if (!response.ok) throw new Error(`Failed to fetch transfer items (${response.status})`);
+      const items = await response.json();
+      setModifyingItems(items.map((item: TransferItem) => ({
+        itemId: item.itemId,
+        itemName: item.itemName,
+        originalQuantity: item.originalQuantity || item.quantity,
+        currentQuantity: item.quantity,
+        newQuantity: quantityText(item.quantity),
+        unit: item.unit,
+        modificationNotes: ""
+      })));
+      setIsModifyQuantitiesOpen(true);
     } catch (error) {
       console.error("Error fetching items:", error);
       toast({
@@ -480,6 +550,40 @@ export default function TransferRequestsPage() {
     });
     setTransferType("to_warehouse");
   };
+
+  const visibleBranchId = resolveVisibleBranchFilter(filterBranch, branches);
+
+  const openCreateRequest = useCallback(() => {
+    if (!canCreate("warehouse")) return;
+    const destinationBranchId = resolveWarehouseCreateDestination(filterBranch, branches, userBranchId);
+    const destination = destinationBranchId
+      ? branches.find(branch => branch.id === destinationBranchId)
+      : null;
+    setNewTransfer(prev => ({
+      ...prev,
+      sourceBranchId: "main_warehouse",
+      sourceBranchName: isRTL ? "المستودع الرئيسي" : "Main Warehouse",
+      destinationBranchId: destination?.id || "",
+      destinationBranchName: destination?.name || "",
+    }));
+    createIdempotencyKeyRef.current = crypto.randomUUID();
+    setIsCreateOpen(true);
+  }, [branches, canCreate, filterBranch, isRTL, userBranchId]);
+
+  const handleBranchFilterChange = useCallback((value: string) => {
+    const branchId = resolveVisibleBranchFilter(value, branches);
+    setFilterBranch(branchId || "all");
+    const params = new URLSearchParams(window.location.search);
+    if (branchId) params.set("branchId", branchId);
+    else params.delete("branchId");
+    const nextSearch = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`,
+    );
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, [branches]);
 
   const handleViewDetails = (transfer: MaterialTransfer) => {
     setSelectedTransfer(transfer);
@@ -505,22 +609,21 @@ export default function TransferRequestsPage() {
     // Fetch transfer items to populate received quantities
     try {
       const response = await fetch(`/api/warehouse/material-transfers/${transfer.id}/items`);
-      if (response.ok) {
-        const items = await response.json();
-        setDeliveryConfirmData({
-          receivedItems: items.map((item: TransferItem) => ({
-            itemId: item.itemId,
-            itemName: item.itemName,
-            sentQuantity: item.quantity,
-            receivedQuantity: quantityText(item.quantity), // Default to sent quantity
-            unit: item.unit,
-            discrepancyNotes: ""
-          })),
-          receiverSignature: null,
-          deliveryNotes: ""
-        });
-        setIsDeliveryConfirmOpen(true);
-      }
+      if (!response.ok) throw new Error(`Failed to fetch transfer items (${response.status})`);
+      const items = await response.json();
+      setDeliveryConfirmData({
+        receivedItems: items.map((item: TransferItem) => ({
+          itemId: item.itemId,
+          itemName: item.itemName,
+          sentQuantity: item.quantity,
+          receivedQuantity: quantityText(item.quantity), // Default to sent quantity
+          unit: item.unit,
+          discrepancyNotes: ""
+        })),
+        receiverSignature: null,
+        deliveryNotes: ""
+      });
+      setIsDeliveryConfirmOpen(true);
     } catch (error) {
       console.error("Error fetching items for delivery confirmation:", error);
       toast({
@@ -859,11 +962,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
 
   // Status workflow: Warehouse (source) approves → dispatches → Branch (destination) confirms delivery
   const getNextStatus = (transfer: MaterialTransfer): string[] => {
-    const permitted = (statuses: string[]) => statuses.filter((status) =>
-      status === "approved" || status === "rejected"
-        ? canApprove("transfer_requests")
-        : canEdit("transfer_requests")
-    );
+    const permitted = (statuses: string[]) => canEdit("warehouse") ? statuses : [];
     // Admins can manage all transfers
     if (canSelectBranch) {
       switch (transfer.status) {
@@ -926,22 +1025,22 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                 sheetName={isRTL ? "التحويلات" : "Transfers"}
               />
             </div>
-            {canCreate("transfer_requests") && <Dialog open={isCreateOpen} onOpenChange={(open) => {
+            {canCreate("warehouse") && <Dialog open={isCreateOpen} onOpenChange={(open) => {
               if (open && !isCreateOpen) createIdempotencyKeyRef.current = crypto.randomUUID();
               if (!open && !createMutation.isPending) createIdempotencyKeyRef.current = null;
               setIsCreateOpen(open);
             }}>
               <DialogTrigger asChild>
-                <Button data-testid="btn-create-transfer" className="w-full sm:w-auto">
+                <Button data-testid="btn-create-transfer" className="w-full sm:w-auto" onClick={openCreateRequest}>
                   <Plus className={`w-4 h-4 ${isRTL ? "ml-1 sm:ml-2" : "mr-1 sm:mr-2"}`} />
                   <span className="hidden sm:inline">{isRTL ? "طلب جديد" : "New Request"}</span>
                   <span className="sm:hidden">{isRTL ? "طلب" : "New"}</span>
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+              <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto border-border bg-background">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <Package className="w-5 h-5 text-green-600" />
+                  <Package className="w-5 h-5 text-primary" />
                   {isRTL ? "طلب أصناف من المستودع الرئيسي" : "Request Items from Main Warehouse"}
                 </DialogTitle>
                 <DialogDescription>
@@ -952,30 +1051,24 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
               </DialogHeader>
               <div className="space-y-4 py-4">
                 {/* Request Info Banner - Shows flow dynamically based on selection */}
-                <div className="p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
+                <div className="rounded-lg border border-border bg-muted/40 p-3">
                   <div className="flex items-center justify-center gap-4 text-sm">
-                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-sm">
-                      {newTransfer.sourceBranchId === "main_warehouse" ? (
-                        <Warehouse className="w-5 h-5 text-green-600" />
-                      ) : (
-                        <Building2 className="w-5 h-5 text-green-600" />
-                      )}
+                    <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
+                      <Warehouse className="w-5 h-5 text-primary" />
                       <div>
                         <p className="text-xs text-muted-foreground">{isRTL ? "المصدر" : "Source"}</p>
-                        <p className="font-bold text-green-700">
-                          {newTransfer.sourceBranchName || (isRTL ? "المستودع الرئيسي" : "Main Warehouse")}
-                        </p>
+                        <p className="font-bold text-foreground">{isRTL ? "المستودع الرئيسي" : "Main Warehouse"}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <Send className="w-4 h-4" />
                       <span className="text-xs">{isRTL ? "إرسال إلى" : "sends to"}</span>
                     </div>
-                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-sm">
-                      <Building2 className="w-5 h-5 text-blue-600" />
+                    <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
+                      <Building2 className="w-5 h-5 text-primary" />
                       <div>
                         <p className="text-xs text-muted-foreground">{isRTL ? "الوجهة" : "Destination"}</p>
-                        <p className="font-bold text-blue-700">
+                        <p className="font-bold text-foreground">
                           {newTransfer.destinationBranchName || (isRTL ? "اختر الفرع" : "Select Branch")}
                         </p>
                       </div>
@@ -983,9 +1076,9 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                   </div>
                 </div>
 
-                {/* Admin can select source/destination */}
+                {/* Multi-branch users may select the receiver; source is always the main warehouse. */}
                 {canSelectBranch && (
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
                     <div className="space-y-2">
                       <Label>{isRTL ? "الفرع الطالب (المستلم)" : "Requesting Branch (Receiver)"}</Label>
                       <Select 
@@ -1011,34 +1104,27 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label>{isRTL ? "المصدر (المرسل)" : "Source (Sender)"}</Label>
-                      <Select 
-                        value={newTransfer.sourceBranchId} 
-                        onValueChange={(value) => {
-                          const branch = branches.find(b => b.id === value);
-                          setNewTransfer(prev => ({ 
-                            ...prev, 
-                            sourceBranchId: value,
-                            sourceBranchName: branch ? branch.name : (isRTL ? "المستودع الرئيسي" : "Main Warehouse")
-                          }));
-                        }}
-                      >
-                        <SelectTrigger data-testid="select-source">
-                          <SelectValue placeholder={isRTL ? "اختر المصدر" : "Select source"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="main_warehouse">
-                            {isRTL ? "المستودع الرئيسي" : "Main Warehouse"}
-                          </SelectItem>
-                          {branches.map((branch) => (
-                            <SelectItem key={branch.id} value={branch.id}>
-                              {branch.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  </div>
+                )}
+
+                <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm leading-6 text-foreground" role="note" data-testid="warehouse-transfer-lifecycle">
+                  <p className="font-semibold">{isRTL ? "ماذا يحدث بعد إرسال الطلب؟" : "What happens next?"}</p>
+                  <p className="text-muted-foreground">
+                    {isRTL
+                      ? "لا يُخصم المخزون عند إنشاء الطلب. عند تأكيد التسليم، يسجل تحويل المواد الحالي خصم المستودع الرئيسي وإضافة رصيد الفرع. هذا مسار تحويل مخزني، وليس نموذج إرسال المطبخ المركزي."
+                      : "Creating the request does not debit stock. On confirmed delivery, the existing material-transfer lifecycle debits the main warehouse and credits the destination branch. This is a stock transfer, unlike the central-kitchen dispatch model."}
+                  </p>
+                </div>
+
+                {isWarehouseItemsError && (
+                  <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm" role="alert">
+                    <p className="font-semibold text-destructive">
+                      {isRTL ? "تعذر تحميل أصناف المستودع" : "Could not load warehouse items"}
+                    </p>
+                    <p className="mt-1 text-muted-foreground">{warehouseItemsError instanceof Error ? warehouseItemsError.message : ""}</p>
+                    <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => void refetchWarehouseItems()}>
+                      {isRTL ? "إعادة المحاولة" : "Retry"}
+                    </Button>
                   </div>
                 )}
 
@@ -1242,6 +1328,25 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
           }
         />
 
+        <BranchSupplySources
+          current="warehouse"
+          branchId={visibleBranchId}
+          canKitchen={canView("central_kitchen_orders")}
+          canWarehouse={canView("warehouse")}
+          onWarehouseRequest={canCreate("warehouse") ? openCreateRequest : undefined}
+        />
+
+        <Card className="border-border bg-card">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">{isRTL ? "مسار التحويل المخزني" : "Warehouse transfer lifecycle"}</CardTitle>
+            <CardDescription className="leading-6">
+              {isRTL
+                ? "الطلب لا يخصم المخزون. عند تأكيد التسليم فقط، يخصم تحويل المواد من المستودع الرئيسي ويضيف الكمية المستلمة إلى رصيد فرع الوجهة؛ وهذا يختلف عن نموذج إرسال المطبخ المركزي."
+                : "A request does not debit stock. Only confirmed delivery uses the existing material transfer to debit the main warehouse and credit the received quantity to the destination branch; this differs from central-kitchen dispatch."}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+
         {/* Status Summary Cards */}
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3">
           {[
@@ -1299,14 +1404,13 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                 ))}
               </SelectContent>
             </Select>
-            <Select value={filterBranch} onValueChange={setFilterBranch}>
+            <Select value={filterBranch} onValueChange={handleBranchFilterChange}>
               <SelectTrigger className="w-[120px] sm:w-[150px] h-9 sm:h-10" data-testid="filter-branch">
                 <Building2 className={`w-3 h-3 sm:w-4 sm:h-4 ${isRTL ? "ml-1 sm:ml-2" : "mr-1 sm:mr-2"}`} />
                 <SelectValue placeholder={isRTL ? "الفرع" : "Branch"} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{isRTL ? "جميع الفروع" : "All Branches"}</SelectItem>
-                <SelectItem value="main_warehouse">{isRTL ? "المستودع الرئيسي" : "Main Warehouse"}</SelectItem>
                 {branches.map((branch) => (
                   <SelectItem key={branch.id} value={branch.id}>
                     {branch.name}
@@ -1346,6 +1450,16 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8">
                       {isRTL ? "جاري التحميل..." : "Loading..."}
+                    </TableCell>
+                  </TableRow>
+                ) : isTransfersError ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="py-8 text-center" role="alert">
+                      <p className="font-semibold text-destructive">{isRTL ? "تعذر تحميل طلبات التحويل" : "Could not load transfer requests"}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">{transfersError instanceof Error ? transfersError.message : ""}</p>
+                      <Button variant="outline" size="sm" className="mt-3" onClick={() => void refetchTransfers()}>
+                        {isRTL ? "إعادة المحاولة" : "Retry"}
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ) : filteredTransfers.length === 0 ? (
@@ -1442,7 +1556,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                                   <Download className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"} text-red-600`} />
                                   {isRTL ? "تحميل PDF" : "Download PDF"}
                                 </DropdownMenuItem>
-                                {(['pending', 'approved'].includes(transfer.status) && canSelectBranch) && (
+                                {(['pending', 'approved'].includes(transfer.status) && canSelectBranch && canEdit("warehouse")) && (
                                   <>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem 
@@ -1455,7 +1569,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                                     </DropdownMenuItem>
                                   </>
                                 )}
-                                {(transfer.status === 'pending' && (canSelectBranch || transfer.destinationBranchId === userBranchId)) && (
+                                {(transfer.status === 'pending' && canEdit("warehouse") && (canSelectBranch || transfer.destinationBranchId === userBranchId)) && (
                                   <>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem 
@@ -1579,6 +1693,14 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                   </h3>
                   {isLoadingItems ? (
                     <p className="text-center py-4 text-muted-foreground">{isRTL ? "جاري التحميل..." : "Loading..."}</p>
+                  ) : isTransferItemsError ? (
+                    <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-center" role="alert">
+                      <p className="font-semibold text-destructive">{isRTL ? "تعذر تحميل أصناف التحويل" : "Could not load transfer items"}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">{transferItemsError instanceof Error ? transferItemsError.message : ""}</p>
+                      <Button variant="outline" size="sm" className="mt-3 print:hidden" onClick={() => void refetchTransferItems()}>
+                        {isRTL ? "إعادة المحاولة" : "Retry"}
+                      </Button>
+                    </div>
                   ) : transferItems.length === 0 ? (
                     <p className="text-center py-4 text-muted-foreground">{isRTL ? "لا توجد أصناف" : "No items"}</p>
                   ) : (

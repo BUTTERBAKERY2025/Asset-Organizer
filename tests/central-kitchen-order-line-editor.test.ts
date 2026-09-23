@@ -3,6 +3,7 @@ vi.mock("../client/src/lib/queryClient", () => ({ apiRequest: vi.fn(), getQueryF
 import {
   isKitchenOrderDraftValid,
   isValidKitchenOrderLine,
+  kitchenCatalogSupplyLabel,
   normalizeReportedAvailableQuantity,
   type KitchenOrderDraftLine,
 } from "../client/src/components/central-kitchen/order-line-editor";
@@ -47,5 +48,9 @@ describe("declared branch stock entry", () => {
   it("does not allow an empty or zero delivery quantity", () => {
     expect(isValidKitchenOrderLine({ ...product("0"), requestedQuantity: "" })).toBe(false);
     expect(isValidKitchenOrderLine({ ...product("0"), requestedQuantity: "0" })).toBe(false);
+  });
+  it("describes catalogue identity without implying direct main-warehouse supply", () => {
+    expect(kitchenCatalogSupplyLabel(material("0"))).toBe("مادة مستودع · من مخزون المطبخ");
+    expect(kitchenCatalogSupplyLabel(product("0"))).toBe("منتج مطبخ");
   });
 });

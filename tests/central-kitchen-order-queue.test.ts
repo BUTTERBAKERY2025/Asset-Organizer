@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isOrderOverdue,
+  isQueueOrderComplete,
   matchesOrderQueueStage,
   matchesSaudiNeededDate,
   queueOrderNeedsAttention,
@@ -46,5 +47,10 @@ describe("central kitchen queue semantics", () => {
     expect(matchesOrderQueueStage({ status: "cancelled" }, "archive", now)).toBe(true);
     expect(matchesOrderQueueStage({ status: "legacy_import" }, "archive", now)).toBe(true);
     expect(matchesOrderQueueStage({ status: "received", discrepancyStatus: "open" }, "archive", now)).toBe(false);
+  });
+
+  it("does not present a partial receipt with open discrepancies as complete", () => {
+    expect(isQueueOrderComplete({ status: "received", discrepancyStatus: "open" })).toBe(false);
+    expect(isQueueOrderComplete({ status: "received", discrepancyStatus: "resolved" })).toBe(true);
   });
 });

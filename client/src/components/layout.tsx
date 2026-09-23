@@ -418,7 +418,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         icon: Warehouse,
         items: [
           { href: "/warehouse", label: t("sidebar.warehouseDashboard"), icon: LayoutDashboard, module: "warehouse", isHeader: true },
-          { href: "/transfer-requests", label: t("sidebar.transferRequests"), icon: Send, module: "transfer_requests", indent: true },
+          { href: "/transfer-requests", label: t("sidebar.transferRequests"), icon: Send, module: "warehouse", indent: true },
           { href: "/warehouse-inventory", label: t("sidebar.warehouseInventory"), icon: Boxes, module: "warehouse_inventory", indent: true },
           { href: "/branch-stock", label: t("sidebar.branchStock"), icon: PackageCheck, module: "warehouse", indent: true },
           { href: "/warehouse-movement-logs", label: t("sidebar.warehouseMovementLogs"), icon: FileBarChart, module: "warehouse", indent: true },

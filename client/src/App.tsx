@@ -502,7 +502,7 @@ const Router = React.memo(function Router() {
       {/* Warehouse - المخازن والتحويلات */}
       <Route path="/warehouse">{() => <ModulePage component={WarehouseDashboardPage} module="warehouse" />}</Route>
       <Route path="/warehouse-dashboard">{() => <ModulePage component={WarehouseDashboardPage} module="warehouse" />}</Route>
-      <Route path="/transfer-requests">{() => <ModulePage component={TransferRequestsPage} module="transfer_requests" />}</Route>
+      <Route path="/transfer-requests">{() => <ModulePage component={TransferRequestsPage} module="warehouse" />}</Route>
       <Route path="/warehouse-inventory">{() => <ModulePage component={WarehouseInventoryPage} module="warehouse_inventory" />}</Route>
       <Route path="/warehouse-movement-logs">{() => <ModulePage component={WarehouseMovementLogsPage} module="warehouse" />}</Route>
       <Route path="/branch-stock">{() => <ModulePage component={BranchStockPage} module="warehouse" />}</Route>

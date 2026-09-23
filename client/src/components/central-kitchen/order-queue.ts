@@ -44,13 +44,17 @@ export const queueOrderNeedsAttention = (order: QueueOrder, now: Date = new Date
   return ["requested", "pending", "draft"].includes(status) || isOrderOverdue(order, now);
 };
 
+/** A received order is only complete after every receipt discrepancy is closed. */
+export const isQueueOrderComplete = (order: QueueOrder) =>
+  normalizeQueueStatus(order.status) === "received" && order.discrepancyStatus !== "open";
+
 export const matchesOrderQueueStage = (order: QueueOrder, stage: OrderQueueStage, now: Date = new Date()) => {
   const status = normalizeQueueStatus(order.status);
   if (stage === "attention") return queueOrderNeedsAttention(order, now);
   if (stage === "requested") return ["requested", "pending", "draft"].includes(status);
   if (stage === "archive") {
     return status === "cancelled"
-      || (status === "received" && order.discrepancyStatus !== "open")
+      || isQueueOrderComplete(order)
       || !ACTIVE_STATUSES.includes(status);
   }
   if (stage === "all") return true;

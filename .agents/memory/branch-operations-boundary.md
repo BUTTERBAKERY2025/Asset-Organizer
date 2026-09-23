@@ -8,3 +8,9 @@ Build the branch operational board as a composition of authoritative existing mo
 **Why:** The user approved a familiar branch-staff entry point while explicitly requiring every piece of information to match the real system structure. Similar labels are not interchangeable: asset maintenance status is not a maintenance ticket, visitor logs are not supervisory visits, and cashier closing is not a cash-custody ledger.
 
 **How to apply:** Verify domain semantics before reusing a source. Navigation-only cards are acceptable until trustworthy counters exist; never invent metrics or silently substitute a different workflow. Keep missing-domain development staged according to the branch operations roadmap.
+
+Multi-source branch supply means a common entry into separate kitchen-order and main-warehouse material-transfer workflows, not treating the warehouse as a kitchen.
+
+**Why:** The two suppliers use different catalog identities, approval responsibilities, and stock-posting times. A warehouse material listed in a kitchen order is supplied from kitchen-local stock; it is not permission to debit the main warehouse.
+
+**How to apply:** Preserve the selected authorized branch across source changes, choose the kitchen explicitly, and keep each supplier's request and receipt records independent. A genuinely mixed basket requires explicit split-request linkage rather than silently combining inventory movements.

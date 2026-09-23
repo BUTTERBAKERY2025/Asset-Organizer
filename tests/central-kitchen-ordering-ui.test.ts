@@ -13,7 +13,7 @@ const policy = {
   defaultNeededTime: "06:30",
 };
 const displayPolicyTime = (value: string) => new Intl.DateTimeFormat("ar-SA", {
-  timeZone: "Asia/Riyadh", hour: "numeric", minute: "2-digit", hour12: true,
+  timeZone: "Asia/Riyadh", numberingSystem: "latn", hour: "numeric", minute: "2-digit", hour12: true,
 }).format(new Date(`2000-01-01T${value}:00+03:00`));
 
 const late = getOrderSchedule({

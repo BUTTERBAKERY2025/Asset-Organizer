@@ -27,7 +27,7 @@ export function CatalogItemPicker({ value, products, selectedKeys, disabled, onC
   const results = useMemo(() => {
     const query = term.trim().toLocaleLowerCase("ar");
     if (!query) return products;
-    return products.filter(item => [item.name, item.sku, item.unit, item.source === "warehouse" ? "مستودع مواد" : "منتج"]
+    return products.filter(item => [item.name, item.sku, item.unit, item.source === "warehouse" ? "مادة مستودع في كتالوج المطبخ" : "منتج مطبخ"]
       .filter(Boolean).some(part => String(part).toLocaleLowerCase("ar").includes(query)));
   }, [products, term]);
   const choose = (next: string) => {
@@ -48,7 +48,7 @@ export function CatalogItemPicker({ value, products, selectedKeys, disabled, onC
     <DialogContent dir="rtl" style={{ ...dialogStyle, display: "flex", flexDirection: "column" }} className="h-[min(680px,92dvh)] max-w-lg gap-0 overflow-hidden p-0 sm:rounded-xl [&>button]:left-2 [&>button]:right-auto [&>button]:top-2 [&>button]:flex [&>button]:h-11 [&>button]:w-11 [&>button]:items-center [&>button]:justify-center">
       <DialogHeader className="border-b py-4 pl-14 pr-5 text-right">
         <DialogTitle>اختيار صنف</DialogTitle>
-        <DialogDescription>ابحث بالاسم أو الرمز، ثم اختر الصنف مرة واحدة.</DialogDescription>
+        <DialogDescription>ابحث بالاسم أو الرمز. هوية «مادة مستودع» لا تغيّر مصدر التوريد: الطلب كله من مخزون المطبخ.</DialogDescription>
       </DialogHeader>
       <div className="border-b px-4 py-3">
         <label className="sr-only" htmlFor="catalog-picker-search">ابحث في الأصناف</label>
@@ -66,7 +66,7 @@ export function CatalogItemPicker({ value, products, selectedKeys, disabled, onC
           const unavailable = selectedKeys.has(itemKey) && value !== itemKey;
           return <button key={itemKey} type="button" disabled={unavailable} data-testid={dataTestid ? `${dataTestid}-option-${itemKey}` : undefined} onClick={() => choose(itemKey)} className={cn("mb-1 flex min-h-16 w-full items-center justify-between rounded-lg px-3 py-2 text-right transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45", value === itemKey && "bg-primary/10")}>
             <span className="min-w-0"><span className="block break-words whitespace-normal font-medium">{item.name}</span><span className="block text-xs text-muted-foreground">{item.sku ? `الرمز: ${item.sku} · ` : ""}{item.unit}{unavailable ? " · مضاف إلى الطلب" : ""}</span></span>
-            <span className="mr-3 flex shrink-0 items-center gap-2"><Badge variant="outline">{item.source === "warehouse" ? "مستودع" : "منتج"}</Badge>{value === itemKey && <Check className="h-4 w-4 text-primary" />}</span>
+            <span className="mr-3 flex shrink-0 items-center gap-2"><Badge variant="outline">{item.source === "warehouse" ? "مادة مستودع · من المطبخ" : "منتج مطبخ"}</Badge>{value === itemKey && <Check className="h-4 w-4 text-primary" />}</span>
           </button>;
         })}
         {!results.length && <p className="px-3 py-10 text-center text-sm text-muted-foreground">لا توجد أصناف مطابقة لعبارة البحث.</p>}

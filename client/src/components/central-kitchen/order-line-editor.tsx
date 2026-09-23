@@ -54,6 +54,14 @@ export function isKitchenOrderDraftValid(items: KitchenOrderDraftLine[]) {
   return items.length > 0 && items.every(isValidKitchenOrderLine);
 }
 
+export function kitchenCatalogSupplyLabel(line: Pick<KitchenOrderDraftLine, "productId" | "warehouseItemId">) {
+  return line.warehouseItemId !== undefined
+    ? "مادة مستودع · من مخزون المطبخ"
+    : line.productId !== undefined
+      ? "منتج مطبخ"
+      : "إدخال يدوي";
+}
+
 type Props = {
   items: KitchenOrderDraftLine[];
   products: CentralKitchenCatalogItem[];
@@ -79,7 +87,7 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
     <div className="flex items-start justify-between gap-3 border-b bg-background/70 px-3 py-3 sm:px-4">
       <div className="min-w-0">
         <h3 className="font-semibold">بنود الطلب</h3>
-        <p className="mt-0.5 text-xs text-muted-foreground">المتوفر الذي تدخله معلومة للمطبخ ولا يغيّر رصيد المخزون.</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">التوريد من مخزون المطبخ المختار. «مادة مستودع» هوية كتالوج وليست طلباً مباشراً من المستودع الرئيسي.</p>
       </div>
       <Button type="button" variant="outline" size="sm" className="min-h-10 shrink-0" onClick={() => onChange([...items, emptyLine()])}>
         <Plus className="ml-1 h-4 w-4" />إضافة صنف
@@ -120,7 +128,7 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
               }} dataTestid={`catalog-item-${index}`} />
               <p className="mt-1 text-[11px] text-muted-foreground">ابحث بالاسم أو الرمز. الأصناف المختارة في بنود أخرى غير متاحة لتفادي التكرار.</p>
               {item.manualMode && <div className="mt-2 grid gap-2 sm:grid-cols-2"><Input value={item.productName} onChange={event => patch(index, { productName: event.target.value })} placeholder="اسم الصنف اليدوي" aria-label="اسم الصنف اليدوي" /><Input value={item.unit} onChange={event => patch(index, { unit: event.target.value })} placeholder="الوحدة" aria-label="وحدة الصنف اليدوي" /></div>}
-              {!item.manualMode && item.productName && <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md bg-muted/50 px-2 py-1.5 text-xs"><span className="font-medium">الصنف المختار: {item.productName}</span><Badge variant="outline">{item.unit}</Badge><AvailabilitySnapshot kitchenId={kitchenId} productId={item.productId} warehouseItemId={item.warehouseItemId} requested={item.requestedQuantity} /></div>}
+              {!item.manualMode && item.productName && <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md bg-muted/50 px-2 py-1.5 text-xs"><span className="font-medium">الصنف المختار: {item.productName}</span><Badge variant="outline">{kitchenCatalogSupplyLabel(item)}</Badge><Badge variant="outline">{item.unit}</Badge><AvailabilitySnapshot kitchenId={kitchenId} productId={item.productId} warehouseItemId={item.warehouseItemId} requested={item.requestedQuantity} /></div>}
             </div>
              <div className="col-span-2 sm:col-span-1 md:col-span-3">
               <Label className="text-xs" htmlFor={`request-qty-${index}`}>الكمية المطلوب توريدها</Label>

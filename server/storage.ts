@@ -1,5 +1,6 @@
 import memoize from "memoizee";
 import { runIdempotentMaterialTransferCreation } from "./material-transfer-creation";
+import { resolveMaterialTransferCatalogItems } from "./material-transfer-catalog";
 
 // Helper function to get Saudi Arabia time (UTC+3)
 function getSaudiArabiaTime(): { date: string; time: string; timeShort: string } {
@@ -14130,8 +14131,21 @@ export class DatabaseStorage implements IStorage {
       payloadHash,
       create: () => db.transaction(async (tx) => {
         const [row] = await tx.insert(materialTransfers).values(transfer).returning();
+        // Keep the idempotency header insert first: a replay must resolve the
+        // durable transfer even if its catalogue snapshot has since changed.
+        const uniqueItemIds = [...new Set(normalizedItems.map((item) => item.itemId))];
+        const catalogItems = await tx.select({
+          id: warehouseItems.id,
+          name: warehouseItems.name,
+          category: warehouseItems.category,
+          unit: warehouseItems.unit,
+          isActive: warehouseItems.isActive,
+        })
+          .from(warehouseItems)
+          .where(inArray(warehouseItems.id, uniqueItemIds));
+        const canonicalItems = resolveMaterialTransferCatalogItems(normalizedItems, catalogItems);
         await tx.insert(materialTransferItems).values(
-          normalizedItems.map(item => ({ ...item, transferId: row.id }))
+          canonicalItems.map(item => ({ ...item, transferId: row.id }))
         );
         return row;
       }),
