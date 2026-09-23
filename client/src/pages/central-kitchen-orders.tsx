@@ -426,8 +426,8 @@ export default function CentralKitchenOrdersPage() {
       const invalidIndex = draft.items.findIndex(item => !item.productName.trim() || !item.unit.trim() || !isValidKitchenQuantity(item.requestedQuantity, item.productId !== undefined) || !isValidKitchenQuantity(item.reportedAvailableQuantity, item.productId !== undefined, true));
       const index = Math.max(0, invalidIndex);
       const item = draft.items[index];
-      const selector = !item?.productName.trim() || !item?.unit.trim()
-        ? `[data-testid='catalog-item-${index}']`
+       const selector = !item?.productName.trim() || !item?.unit.trim()
+        ? item?.manualMode ? `#manual-name-${index}` : "#kitchen-catalog-search"
         : !isValidKitchenQuantity(item.requestedQuantity, item.productId !== undefined)
           ? `#request-qty-${index}`
           : `#reported-stock-${index}`;

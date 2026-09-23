@@ -10,13 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Send, Plus, Search, Filter, Clock, CheckCircle, Truck, 
-  ArrowLeft, FileText, MapPin, User, Calendar, PenTool, Building2, Warehouse, Trash2, Package, Printer, Download, MessageCircle, FileSpreadsheet, MoreHorizontal, XCircle, Copy, Check, ChevronsUpDown, AlertTriangle
+  ArrowLeft, FileText, MapPin, User, Calendar, PenTool, Building2, Warehouse, Package, Printer, Download, MessageCircle, FileSpreadsheet, MoreHorizontal, XCircle, Copy, AlertTriangle
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useReactToPrint } from "react-to-print";
@@ -29,6 +27,8 @@ import { useBranches } from "@/hooks/useBranches";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { BranchSupplySources } from "@/components/branch-supply/sources";
+import { WarehouseItemEntry } from "@/components/warehouse-entry/warehouse-item-entry";
+import { isValidWarehouseDraftItem } from "@/components/warehouse-entry/warehouse-item-entry-helpers";
 import { generateTransferPdf, generateQuickTransferPdf } from "@/lib/pdf-utils";
 import {
   consumeWarehouseCreateIntent,
@@ -69,6 +69,9 @@ type Branch = {
 type WarehouseItem = {
   id: number;
   name: string;
+  nameEn?: string | null;
+  sku?: string | null;
+  barcode?: string | null;
   category: string;
   unit: string;
   quantity: number;
@@ -140,7 +143,6 @@ export default function TransferRequestsPage() {
   const [filterBranch, setFilterBranch] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [transferType, setTransferType] = useState<"to_warehouse" | "between_branches">("to_warehouse");
-  const [openItemIndex, setOpenItemIndex] = useState<number | null>(null);
   const shortagePrefillRef = useRef<string | null>(null);
   const createIntentConsumedRef = useRef(false);
   const createIdempotencyKeyRef = useRef<string | null>(null);
@@ -281,7 +283,7 @@ export default function TransferRequestsPage() {
         itemName: item.name,
         category: item.category,
         quantity: requestedQuantity,
-        availableQuantity: availableQuantity && decimalInput(availableQuantity) ? availableQuantity : "0",
+        availableQuantity: availableQuantity && decimalInput(availableQuantity) ? availableQuantity : null,
         unit: item.unit,
         notes: "احتياج مواد وصفة إنتاج",
       }],
@@ -289,29 +291,6 @@ export default function TransferRequestsPage() {
     if (canCreate("warehouse")) setIsCreateOpen(true);
   }, [branches, canCreate, isRTL, warehouseItems]);
 
-  // Add item to transfer
-  const addTransferItem = () => {
-    setNewTransfer(prev => ({
-      ...prev,
-      items: [...prev.items, { itemId: 0, itemName: "", category: "", quantity: "1", availableQuantity: null, unit: "كجم", notes: "" }],
-    }));
-  };
-
-  // Remove item from transfer
-  const removeTransferItem = (index: number) => {
-    setNewTransfer(prev => ({
-      ...prev,
-      items: prev.items.filter((_, i) => i !== index),
-    }));
-  };
-
-  // Update item field
-  const updateTransferItem = (index: number, field: string, value: string | number | null) => {
-    setNewTransfer(prev => ({
-      ...prev,
-      items: prev.items.map((item, i) => i === index ? { ...item, [field]: value } : item),
-    }));
-  };
 
   // Initialize transfer form: source = warehouse, destination = user's branch
   // This models the correct flow: branch requests items FROM warehouse
@@ -1037,7 +1016,8 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                   <span className="sm:hidden">{isRTL ? "طلب" : "New"}</span>
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto border-border bg-background">
+              <DialogContent className="flex max-h-[92vh] max-w-6xl flex-col overflow-hidden border-border bg-background p-0">
+              <div className="shrink-0 px-6 pt-6">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Package className="w-5 h-5 text-primary" />
@@ -1049,7 +1029,8 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                     : "Specify items and quantities needed from warehouse - request will be sent for approval then dispatch"}
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4 py-4">
+              </div>
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
                 {/* Request Info Banner - Shows flow dynamically based on selection */}
                 <div className="rounded-lg border border-border bg-muted/40 p-3">
                   <div className="flex items-center justify-center gap-4 text-sm">
@@ -1128,7 +1109,14 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                   </div>
                 )}
 
-                {/* Items Section */}
+                <WarehouseItemEntry
+                  catalog={warehouseItems}
+                  items={newTransfer.items}
+                  isRTL={isRTL}
+                  onChange={(items) => setNewTransfer(prev => ({ ...prev, items }))}
+                />
+
+                {/* Legacy picker removed from rendering; retained temporarily as a source comment for review.
                 <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
                   <div className="flex items-center justify-between">
                     <Label className="flex items-center gap-2">
@@ -1283,7 +1271,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                       {isRTL ? "لم تتم إضافة أي أصناف بعد - اضغط على 'إضافة صنف'" : "No items added yet - click 'Add Item'"}
                     </p>
                   )}
-                </div>
+                </div> */}
 
                 <div className="space-y-2">
                   <Label>{isRTL ? "ملاحظات" : "Notes"}</Label>
@@ -1295,7 +1283,17 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                   />
                 </div>
               </div>
-              <DialogFooter>
+              <DialogFooter className="shrink-0 border-t border-border bg-background px-4 py-3 sm:px-6">
+                <div className="me-auto text-start text-xs text-muted-foreground" aria-live="polite">
+                  <p className="font-medium text-foreground">
+                    {newTransfer.items.length} {isRTL ? "صنف للمراجعة" : "items to review"}
+                  </p>
+                  <p>
+                    {newTransfer.items.length > 0 && newTransfer.items.every(isValidWarehouseDraftItem)
+                      ? (isRTL ? "الكميات والمتوفر المعلن مكتملة." : "Quantities and declared on-hand are complete.")
+                      : (isRTL ? "راجع كل صنف وأكمل الكميات قبل الإرسال." : "Review every item and complete quantities before submitting.")}
+                  </p>
+                </div>
                 <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
                   {isRTL ? "إلغاء" : "Cancel"}
                 </Button>
@@ -1310,13 +1308,13 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                       toast({ title: isRTL ? "خطأ" : "Error", description: isRTL ? "يجب إدخال الكمية المتوفرة بالفرع لجميع الأصناف" : "Please enter available quantity for all items", variant: "destructive" });
                       return;
                     }
-                    if (newTransfer.items.some(item => !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0 || Number(item.availableQuantity) < 0)) {
+                    if (newTransfer.items.some(item => !isValidWarehouseDraftItem(item))) {
                       toast({ title: isRTL ? "خطأ" : "Error", description: isRTL ? "أدخل كميات موجبة حتى ست منازل عشرية" : "Enter positive quantities with up to 6 decimal places", variant: "destructive" });
                       return;
                     }
                     createMutation.mutate(newTransfer);
                   }} 
-                  disabled={!newTransfer.destinationBranchId || !newTransfer.sourceBranchId || newTransfer.items.length === 0 || newTransfer.items.some(item => item.availableQuantity === null || !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) || createMutation.isPending}
+                  disabled={!newTransfer.destinationBranchId || !newTransfer.sourceBranchId || newTransfer.items.length === 0 || newTransfer.items.some(item => !isValidWarehouseDraftItem(item)) || createMutation.isPending}
                   data-testid="btn-submit-transfer"
                 >
                   {createMutation.isPending ? (isRTL ? "جاري الإرسال..." : "Submitting...") : (isRTL ? "إرسال الطلب" : "Submit Request")}
