@@ -12,6 +12,7 @@ import { Target, TrendingUp, TrendingDown, Building2, Users, Trophy, Calendar, A
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import { useBranches } from "@/hooks/useBranches";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 
 interface BranchPerformance {
   branchId: string;
@@ -122,17 +123,20 @@ const YEARS = Array.from({ length: 10 }, (_, i) => {
 });
 
 export default function TargetsDashboard() {
-  const { branches, userBranchId, canSelectBranch } = useBranches();
+  const { branches, userBranchId, canSelectBranch, isLoading: branchesLoading } = useBranches();
+  const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear().toString());
   const [selectedMonthNum, setSelectedMonthNum] = useState(() => String(new Date().getMonth() + 1).padStart(2, '0'));
   const selectedMonth = `${selectedYear}-${selectedMonthNum}`;
   const [selectedBranch, setSelectedBranch] = useState<string>(userBranchId || "all");
 
   useEffect(() => {
-    if (userBranchId) {
+    if (navigationBranch.hasBranchParam) {
+      if (navigationBranch.branchId) setSelectedBranch(navigationBranch.branchId);
+    } else if (userBranchId) {
       setSelectedBranch(userBranchId);
     }
-  }, [userBranchId]);
+  }, [navigationBranch.hasBranchParam, navigationBranch.branchId, userBranchId]);
 
   const { data: leaderboard, isLoading: leaderboardLoading } = useQuery<Leaderboard>({
     queryKey: ["/api/targets/leaderboard", selectedMonth],

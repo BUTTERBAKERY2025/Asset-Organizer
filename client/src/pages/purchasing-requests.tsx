@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ExportButtons } from "@/components/export-buttons";
 import { useReactToPrint } from "react-to-print";
 import { cn } from "@/lib/utils";
+import { useBranches } from "@/hooks/useBranches";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 
 type PurchasingRequest = {
   id: number;
@@ -126,6 +128,8 @@ export default function PurchasingRequestsPage() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const { branches, userBranchId, isLoading: branchesLoading } = useBranches();
+  const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
 
   // Create form state
   const [newRequest, setNewRequest] = useState({
@@ -147,12 +151,19 @@ export default function PurchasingRequestsPage() {
   // Track open state for each item's combobox
   const [openItemPopovers, setOpenItemPopovers] = useState<Record<number, boolean>>({});
 
-  const { data: requests = [] } = useQuery<PurchasingRequest[]>({
-    queryKey: ["/api/purchasing/requests"],
-  });
+  useEffect(() => {
+    if (navigationBranch.hasBranchParam && navigationBranch.branchId) {
+      setFilterBranch(navigationBranch.branchId);
+      setNewRequest((current) => ({ ...current, branchId: current.branchId || navigationBranch.branchId! }));
+    }
+  }, [navigationBranch.hasBranchParam, navigationBranch.branchId]);
 
-  const { data: branches = [] } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
+  const requestsUrl = filterBranch !== "all"
+    ? `/api/purchasing/requests?branchId=${encodeURIComponent(filterBranch)}`
+    : "/api/purchasing/requests";
+  const { data: requests = [] } = useQuery<PurchasingRequest[]>({
+    queryKey: [requestsUrl],
+    enabled: !navigationBranch.isResolving,
   });
 
   const { data: warehouseItems = [] } = useQuery<WarehouseItem[]>({
@@ -207,7 +218,7 @@ export default function PurchasingRequestsPage() {
 
   const resetCreateForm = () => {
     setNewRequest({
-      branchId: "",
+      branchId: navigationBranch.branchId || userBranchId || "",
       priority: "normal",
       vendorName: "",
       expectedDeliveryDate: "",

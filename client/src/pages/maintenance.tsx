@@ -3,6 +3,7 @@ import { Layout } from "@/components/layout";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { useQuery } from "@tanstack/react-query";
 import { useBranches } from "@/hooks/useBranches";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import {
   Table,
   TableBody,
@@ -28,22 +29,27 @@ export default function MaintenancePage() {
   const printRef = useRef<HTMLDivElement>(null);
 
   const { branches, canSelectBranch, userBranchId, isLoading: branchesLoading } = useBranches();
+  const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
 
   useEffect(() => {
-    if (userBranchId) {
+    if (navigationBranch.hasBranchParam) {
+      if (navigationBranch.branchId) setSelectedBranch(navigationBranch.branchId);
+    } else if (userBranchId) {
       setSelectedBranch(userBranchId);
     } else if (canSelectBranch) {
       setSelectedBranch("all");
     }
-  }, [userBranchId, canSelectBranch]);
+  }, [navigationBranch.hasBranchParam, navigationBranch.branchId, userBranchId, canSelectBranch]);
 
   const { data: inventoryItems = [], isLoading: inventoryLoading } = useQuery<InventoryItem[]>({
-    queryKey: ["/api/inventory"],
+    queryKey: ["/api/inventory", selectedBranch],
     queryFn: async () => {
-      const res = await fetch("/api/inventory");
+      const params = selectedBranch && selectedBranch !== "all" ? `?branchId=${encodeURIComponent(selectedBranch)}` : "";
+      const res = await fetch(`/api/inventory${params}`);
       if (!res.ok) throw new Error("Failed to fetch inventory");
       return res.json();
     },
+    enabled: !!selectedBranch && !navigationBranch.isResolving,
   });
 
   const branchMap = useMemo(() => {

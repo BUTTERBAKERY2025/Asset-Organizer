@@ -26,6 +26,7 @@ import { makeLazy, startAggressivePreload, prefetchAdjacentPages } from "@/lib/p
 import { installAutoReconnectOnVisibility, ensurePrinterConnection, getSavedPrinter, isPrinterConnected } from "@/lib/thermal-printer";
 
 const PlatformHomePage = makeLazy("platform-home");
+const BranchOperationsPage = makeLazy("branch-operations");
 const DashboardPage = makeLazy("dashboard");
 const InventoryPage = makeLazy("inventory");
 const ManagePage = makeLazy("manage");
@@ -319,6 +320,7 @@ const Router = React.memo(function Router() {
   return (
     <Switch>
       <Route path="/">{() => <ProtectedPage component={PlatformHomePage} />}</Route>
+      <Route path="/branch-operations">{() => <ProtectedPage component={BranchOperationsPage} />}</Route>
       <Route path="/login">
         {() => (
           <PublicOnlyRoute>

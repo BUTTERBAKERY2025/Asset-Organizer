@@ -61,3 +61,6 @@ VITE_PUBLIC_SITE_URL = "https://www.thebutterbakery.com"
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 180000
+
+[objectStorage]
+defaultBucketID = "replit-objstore-71795943-6a27-44b8-be2f-4cc573fd31c9"

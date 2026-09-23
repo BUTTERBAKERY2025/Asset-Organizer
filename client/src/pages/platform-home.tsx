@@ -166,6 +166,10 @@ export default function PlatformHomePage() {
     canView("cashier_journal") ||
     canView("sales_analytics") ||
     canView("cashier_performance");
+  const canViewBranchOperations = [
+    "operations", "maintenance", "waste_tracking", "warehouse", "daily_closures",
+    "cashier_journal", "branch_employees", "documents", "hr_advances",
+  ].some((module) => canView(module as SystemModule));
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -365,6 +369,23 @@ export default function PlatformHomePage() {
         )}
 
         {/* ============ APPS GRID (Odoo style) ============ */}
+        {canViewBranchOperations && (
+          <section className="relative overflow-hidden rounded-2xl border border-[#ead7c8] bg-[#fffaf3] p-5 shadow-sm" data-testid="branch-operations-entry">
+            <div className="pointer-events-none absolute -left-12 -bottom-14 h-40 w-40 rounded-full bg-[#f1c866]/30 blur-2xl" />
+            <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#713b5d] text-[#fffaf3] shadow-sm"><Store className="h-6 w-6" /></div>
+                <div>
+                  <p className="text-xs font-bold tracking-wide text-[#713b5d]">مساحة عمل الفرع</p>
+                  <h2 className="font-bold text-gray-900">لوحة الفرع التشغيلية</h2>
+                  <p className="text-sm text-gray-600">تنبيهات اليوم وطرق الدخول السريعة بحسب صلاحياتك.</p>
+                </div>
+              </div>
+              <Button className="min-h-11 bg-[#713b5d] hover:bg-[#593049]" onClick={() => navigate("/branch-operations")} data-testid="button-open-branch-operations">فتح اللوحة</Button>
+            </div>
+          </section>
+        )}
+
         <section data-testid="apps-grid-section">
           <div className="flex items-center gap-2 mb-4 px-1">
             <LayoutDashboard className="w-4 h-4 text-gray-400" />

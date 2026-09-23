@@ -1,5 +1,6 @@
 const pageImports: Record<string, () => Promise<any>> = {
   "platform-home": () => import("@/pages/platform-home"),
+  "branch-operations": () => import("@/pages/branch-operations"),
   "floor-plan": () => import("@/pages/floor-plan"),
   "hr-hub": () => import("@/pages/hr-hub"),
   "my-portal": () => import("@/pages/my-portal"),
@@ -193,7 +194,7 @@ export function preloadPage(pageKey: string) {
 }
 
 const PRIORITY_WAVE_1 = [
-  "platform-home", "dashboard", "cashier-journals", "operations-dashboard",
+  "platform-home", "branch-operations", "dashboard", "cashier-journals", "operations-dashboard",
 ];
 const PRIORITY_WAVE_2 = [
   "branch-employees", "sales-analytics", "products",
@@ -249,7 +250,8 @@ export function startAggressivePreload() {
 }
 
 const ADJACENT_PAGES: Record<string, string[]> = {
-  "/": ["dashboard", "cashier-journals", "operations-dashboard"],
+  "/": ["branch-operations", "dashboard", "cashier-journals", "operations-dashboard"],
+  "/branch-operations": ["operations-dashboard", "cashier-journals", "branch-employees"],
   "/dashboard": ["inventory", "manage", "reports"],
   "/cashier-journals": ["cashier-journal-form", "branch-daily-closures", "sales-analytics"],
   "/operations": ["central-kitchen-orders", "products", "quality-control", "branch-shifts", "operations-reports-dashboard"],
@@ -274,6 +276,7 @@ export function prefetchAdjacentPages(currentRoute: string) {
 
 const ROUTE_TO_PAGE: Record<string, string> = {
   "/": "platform-home",
+  "/branch-operations": "branch-operations",
   "/dashboard": "dashboard",
   "/inventory": "inventory",
   "/manage": "manage",

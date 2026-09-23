@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useBranches } from "@/hooks/useBranches";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -174,7 +175,8 @@ const errorStatus = (error: unknown): number | null => {
 const isOpenDiscrepancy = (order: KitchenOrder) => order.discrepancyStatus === "open";
 
 export default function CentralKitchenOrdersPage() {
-  const { branches, userBranchId, canSelectBranch } = useBranches();
+  const { branches, userBranchId, canSelectBranch, isLoading: branchesLoading } = useBranches();
+  const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
   const { canView, canCreate, canEdit, canApprove, canExport, hasPermission } = usePermissions();
   const { user, isAdmin } = useAuth();
   const canConfigureRouting = isAdmin || (
@@ -234,7 +236,13 @@ export default function CentralKitchenOrdersPage() {
   const createAttemptRef = useRef<{ signature: string; key: string } | null>(null);
   const transitionKeysRef = useRef(new Map<string, { signature: string; key: string }>());
 
-  useEffect(() => { if (userBranchId) setBranchFilter(userBranchId); }, [userBranchId]);
+  useEffect(() => {
+    if (navigationBranch.hasBranchParam) {
+      if (navigationBranch.branchId) setBranchFilter(navigationBranch.branchId);
+    } else if (userBranchId) {
+      setBranchFilter(userBranchId);
+    }
+  }, [navigationBranch.hasBranchParam, navigationBranch.branchId, userBranchId]);
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
     window.addEventListener("online", update);
@@ -281,11 +289,12 @@ export default function CentralKitchenOrdersPage() {
   }, [branchFilter, page, stage, sort, search, kitchenFilter, dateFilter, inventoryModeFilter, focus]);
   const ordersQuery = useQuery<KitchenOrderPage>({
     queryKey: [listUrl],
+    enabled: !navigationBranch.isResolving,
     refetchInterval: 30_000,
     placeholderData: previous => previous,
   });
   const metricsUrl = `/api/central-kitchen-orders/pilot-metrics?days=${pilotDays}${branchFilter !== "all" ? `&branchId=${encodeURIComponent(branchFilter)}` : ""}`;
-  const metricsQuery = useQuery<PilotMetrics>({ queryKey: [metricsUrl] });
+  const metricsQuery = useQuery<PilotMetrics>({ queryKey: [metricsUrl], enabled: !navigationBranch.isResolving });
   const productsQuery = useQuery<ProductOption[]>({
     queryKey: ["/api/central-kitchen-orders/catalog-v2"],
     queryFn: async () => {

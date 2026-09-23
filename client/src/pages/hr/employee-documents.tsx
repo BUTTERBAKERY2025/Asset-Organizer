@@ -14,6 +14,8 @@ import { FileText, Plus, AlertTriangle, CheckCircle2, XCircle, Trash2, Edit2, Ar
 import { EMPLOYEE_DOCUMENT_TYPE_LABELS } from "@shared/schema";
 import { Layout } from "@/components/layout";
 import { Link } from "wouter";
+import { useBranches } from "@/hooks/useBranches";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 
 type Doc = any;
 type Emp = { id: number; employeeName: string; jobTitle: string; branchId: string };
@@ -37,30 +39,40 @@ export default function EmployeeDocumentsPage() {
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState<typeof initialForm>(initialForm);
+  const { branches, userBranchId, isLoading: branchesLoading } = useBranches();
+  const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
+  const branchId = navigationBranch.branchId;
 
   const { data: docs = [], isLoading } = useQuery<Doc[]>({
-    queryKey: ["/api/hr/documents", filterType, filterStatus],
+    queryKey: ["/api/hr/documents", filterType, filterStatus, branchId],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filterType !== "all") params.set("type", filterType);
       if (filterStatus !== "all") params.set("status", filterStatus);
+      if (branchId) params.set("branchId", branchId);
       const res = await apiRequest("GET", `/api/hr/documents?${params}`);
       return res.json();
     },
+    enabled: !navigationBranch.isResolving,
   });
 
-  const { data: stats } = useQuery<any>({
-    queryKey: ["/api/hr/documents/stats"],
-    queryFn: async () => (await apiRequest("GET", "/api/hr/documents/stats")).json(),
+  const { data: stats, isFetching: statsFetching } = useQuery<any>({
+    queryKey: ["/api/hr/documents/stats", branchId],
+    queryFn: async () => (await apiRequest("GET", `/api/hr/documents/stats${branchId ? `?branchId=${encodeURIComponent(branchId)}` : ""}`)).json(),
+    enabled: !navigationBranch.isResolving,
   });
 
   const { data: employees = [] } = useQuery<Emp[]>({
-    queryKey: ["/api/branch-employees"],
-    queryFn: async () => (await apiRequest("GET", "/api/branch-employees")).json(),
+    queryKey: ["/api/branch-employees", branchId],
+    queryFn: async () => {
+      const rows = await (await apiRequest("GET", `/api/branch-employees${branchId ? `?branchId=${encodeURIComponent(branchId)}` : ""}`)).json();
+      return branchId ? rows.filter((employee: Emp) => employee.branchId === branchId) : rows;
+    },
+    enabled: !navigationBranch.isResolving,
   });
 
   const filtered = useMemo(() => {
-    let r = docs;
+    let r = branchId ? docs.filter((d: any) => d.branchId === branchId) : docs;
     if (search.trim()) {
       const q = search.toLowerCase();
       r = r.filter((d: any) =>
@@ -72,7 +84,8 @@ export default function EmployeeDocumentsPage() {
       r = r.filter((d: any) => (d.computedStatus || d.status) === filterStatus);
     }
     return r;
-  }, [docs, search, filterStatus]);
+  }, [docs, search, filterStatus, branchId]);
+  const visibleStats = statsFetching ? undefined : stats;
 
   const saveMutation = useMutation({
     mutationFn: async (payload: any) => {
@@ -163,10 +176,10 @@ export default function EmployeeDocumentsPage() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="إجمالي الوثائق" value={stats?.total ?? 0} icon={<FileText className="h-5 w-5" />} />
-        <StatCard label="منتهية" value={stats?.expired ?? 0} icon={<XCircle className="h-5 w-5" />} accent="red" />
-        <StatCard label="قاربت على الانتهاء (30 يوم)" value={stats?.expiringSoon ?? 0} icon={<AlertTriangle className="h-5 w-5" />} accent="amber" />
-        <StatCard label="سارية" value={(stats?.total ?? 0) - (stats?.expired ?? 0) - (stats?.expiringSoon ?? 0)} icon={<CheckCircle2 className="h-5 w-5" />} accent="emerald" />
+        <StatCard label="إجمالي الوثائق" value={visibleStats?.total ?? 0} icon={<FileText className="h-5 w-5" />} />
+        <StatCard label="منتهية" value={visibleStats?.expired ?? 0} icon={<XCircle className="h-5 w-5" />} accent="red" />
+        <StatCard label="قاربت على الانتهاء (30 يوم)" value={visibleStats?.expiringSoon ?? 0} icon={<AlertTriangle className="h-5 w-5" />} accent="amber" />
+        <StatCard label="سارية" value={(visibleStats?.total ?? 0) - (visibleStats?.expired ?? 0) - (visibleStats?.expiringSoon ?? 0)} icon={<CheckCircle2 className="h-5 w-5" />} accent="emerald" />
       </div>
 
       <Card>

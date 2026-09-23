@@ -160,6 +160,7 @@ import { registerCentralKitchenRecipeRoutes } from "./central-kitchen-recipes";
 import { registerProductionOperationsReportRoute } from "./production-operations-report";
 import { registerAdvancedProductionExecutionRoutes, advancedExecutionRows } from "./advanced-production-execution";
 import { registerCentralKitchenWorkplanRoute } from "./central-kitchen-workplan";
+import { registerBranchOperationsRoute } from "./branch-operations";
 import { registerCentralKitchenDemandRoutes } from "./central-kitchen-demand-routes";
 import {
   getOrderSchedule,
@@ -545,6 +546,7 @@ export async function registerRoutes(
   registerProductionOperationsReportRoute(app);
   registerAdvancedProductionExecutionRoutes(app);
   registerCentralKitchenWorkplanRoute(app);
+  registerBranchOperationsRoute(app);
 
   // Cached data fetchers
   const getCachedBranches = memoize(async () => {

@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -131,14 +132,17 @@ export default function BranchDailyClosingPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { branches, userBranchId, canSelectBranch } = useBranches();
+  const { branches, userBranchId, canSelectBranch, isLoading: branchesLoading } = useBranches();
+  const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
   const [, navigate] = useLocation();
 
   useEffect(() => {
-    if (userBranchId && !selectedBranch) {
+    if (navigationBranch.hasBranchParam) {
+      if (navigationBranch.branchId) setSelectedBranch(navigationBranch.branchId);
+    } else if (userBranchId && !selectedBranch) {
       setSelectedBranch(userBranchId);
     }
-  }, [userBranchId, selectedBranch]);
+  }, [navigationBranch.hasBranchParam, navigationBranch.branchId, userBranchId]);
 
   const { data: journalPreview, isLoading: isLoadingPreview } = useQuery<JournalPreviewResponse | null>({
     queryKey: ["/api/branch-daily-closures/journals-preview", selectedBranch, selectedDate],
@@ -150,7 +154,7 @@ export default function BranchDailyClosingPage() {
       if (!response.ok) return null;
       return response.json();
     },
-    enabled: !!selectedBranch && !!selectedDate,
+    enabled: !!selectedBranch && !!selectedDate && !navigationBranch.isResolving,
   });
 
   useEffect(() => {

@@ -101,16 +101,25 @@ function hasCrossBranchHrAccess(req: any): boolean {
  * `applyBranchScope` will return `sql\`false\`` and per-route
  * `branchIds.includes(...)` guards will fail closed for writes.
  */
-function getBranchScope(req: any): { branchIds: string[] | null; hasAccess: boolean } {
-  const f = getEffectiveBranchFilter(req);
-  const isSafeMethod = req.method === "GET" || req.method === "HEAD";
-  // Elevate cross-branch HR users (hr_manager role, or non-assigned hr_management
-  // permission holders) to all-branches on reads — unconditionally, so even if an
-  // hr_manager has a default branchId, they still see HR data org-wide.
-  if (isSafeMethod && hasCrossBranchHrAccess(req)) {
-    return { branchIds: null, hasAccess: true };
+export function resolveHrBranchScope(
+  effective: { branchIds: string[] | null; hasAccess: boolean },
+  requestedBranchId: string | undefined,
+  isSafeMethod: boolean,
+  hasCrossBranchAccess: boolean,
+): { branchIds: string[] | null; hasAccess: boolean } {
+  const hasRequestedBranch = !!requestedBranchId && requestedBranchId !== "all";
+  if (isSafeMethod && hasCrossBranchAccess) {
+    return hasRequestedBranch
+      ? { branchIds: [requestedBranchId!], hasAccess: true }
+      : { branchIds: null, hasAccess: true };
   }
-  return { branchIds: f.branchIds, hasAccess: f.hasAccess };
+  return { branchIds: effective.branchIds, hasAccess: effective.hasAccess };
+}
+
+function getBranchScope(req: any, requestedBranchId?: string): { branchIds: string[] | null; hasAccess: boolean } {
+  const f = getEffectiveBranchFilter(req, requestedBranchId);
+  const isSafeMethod = req.method === "GET" || req.method === "HEAD";
+  return resolveHrBranchScope(f, requestedBranchId, isSafeMethod, hasCrossBranchHrAccess(req));
 }
 
 function applyBranchScope<T extends { branchId: any }>(table: T, branchIds: string[] | null) {
@@ -125,7 +134,9 @@ export function registerHrRoutes(app: Express) {
   // ========================================================================
   app.get("/api/hr/documents", isAuthenticated, requirePermission("hr_documents"), async (req, res) => {
     try {
-      const { branchIds } = getBranchScope(req);
+      const requestedBranchId = req.query.branchId as string | undefined;
+      const { branchIds, hasAccess } = getBranchScope(req, requestedBranchId);
+      if (!hasAccess) return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا الفرع" });
       const employeeId = req.query.employeeId ? parseInt(req.query.employeeId as string, 10) : null;
       const docType = req.query.type as string | undefined;
       const status = req.query.status as string | undefined;
@@ -241,18 +252,30 @@ export function registerHrRoutes(app: Express) {
   // إحصائيات الوثائق (للوحة HR)
   app.get("/api/hr/documents/stats", isAuthenticated, requirePermission("hr_documents"), async (req, res) => {
     try {
-      const { branchIds } = getBranchScope(req);
+      const requestedBranchId = req.query.branchId as string | undefined;
+      const { branchIds, hasAccess } = getBranchScope(req, requestedBranchId);
+      if (!hasAccess) return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا الفرع" });
       const scopeCond = applyBranchScope(employeeDocuments, branchIds);
       const today = new Date().toISOString().slice(0, 10);
       const thirtyDaysOut = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-      const all = await db.select().from(employeeDocuments).where(scopeCond);
-      const total = all.length;
-      const expired = all.filter(d => d.expiryDate && d.expiryDate < today).length;
-      const expiringSoon = all.filter(d => d.expiryDate && d.expiryDate >= today && d.expiryDate <= thirtyDaysOut).length;
+      const [summary] = await db.select({
+        total: sql<number>`count(*)::int`,
+        expired: sql<number>`count(*) filter (where ${employeeDocuments.expiryDate} is not null and ${employeeDocuments.expiryDate} < ${today})::int`,
+        expiringSoon: sql<number>`count(*) filter (where ${employeeDocuments.expiryDate} is not null and ${employeeDocuments.expiryDate} >= ${today} and ${employeeDocuments.expiryDate} <= ${thirtyDaysOut})::int`,
+      }).from(employeeDocuments).where(scopeCond);
+      const typeRows = await db.select({
+        documentType: employeeDocuments.documentType,
+        total: sql<number>`count(*)::int`,
+      }).from(employeeDocuments).where(scopeCond).groupBy(employeeDocuments.documentType);
       const byType: Record<string, number> = {};
-      all.forEach(d => { byType[d.documentType] = (byType[d.documentType] || 0) + 1; });
-      res.json({ total, expired, expiringSoon, byType });
+      typeRows.forEach(d => { byType[d.documentType] = Number(d.total); });
+      res.json({
+        total: Number(summary?.total || 0),
+        expired: Number(summary?.expired || 0),
+        expiringSoon: Number(summary?.expiringSoon || 0),
+        byType,
+      });
     } catch (e: any) {
       console.error("[hr/documents/stats] error:", e);
       res.status(500).json({ error: e.message });
@@ -2997,7 +3020,9 @@ export function registerHrRoutes(app: Express) {
   // ========================================================================
   app.get("/api/hr/advances", isAuthenticated, requirePermission("hr_advances"), async (req, res) => {
     try {
-      const { branchIds } = getBranchScope(req);
+      const requestedBranchId = req.query.branchId as string | undefined;
+      const { branchIds, hasAccess } = getBranchScope(req, requestedBranchId);
+      if (!hasAccess) return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا الفرع" });
       const employeeId = req.query.employeeId ? parseInt(req.query.employeeId as string, 10) : null;
       const month = req.query.month as string | undefined;
       const type = req.query.type as string | undefined;
@@ -3059,7 +3084,9 @@ export function registerHrRoutes(app: Express) {
   // تقرير شامل بدون حد الصفوف — للاستخدام في كشف الحساب والتقرير الشهري وتصدير الإدارة المالية
   app.get("/api/hr/advances/report", isAuthenticated, requirePermission("hr_advances"), async (req, res) => {
     try {
-      const { branchIds } = getBranchScope(req);
+      const requestedBranchId = req.query.branchId as string | undefined;
+      const { branchIds, hasAccess } = getBranchScope(req, requestedBranchId);
+      if (!hasAccess) return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا الفرع" });
       const employeeId = req.query.employeeId ? parseInt(req.query.employeeId as string, 10) : null;
       const month = req.query.month as string | undefined;
 
@@ -3283,25 +3310,31 @@ export function registerHrRoutes(app: Express) {
 
   app.get("/api/hr/advances/stats", isAuthenticated, requirePermission("hr_advances"), async (req, res) => {
     try {
-      const { branchIds } = getBranchScope(req);
+      const requestedBranchId = req.query.branchId as string | undefined;
+      const { branchIds, hasAccess } = getBranchScope(req, requestedBranchId);
+      if (!hasAccess) return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا الفرع" });
       const scopeCond = applyBranchScope(salaryDeductions, branchIds);
       const conds: any[] = [inArray(salaryDeductions.type, ["advance", "loan_installment", "sales_deficit"])];
       if (scopeCond !== undefined) conds.push(scopeCond);
-      const all = await db.select().from(salaryDeductions).where(and(...conds));
-      const total = all.length;
-      const totalAmount = all.reduce((s, d) => s + (d.amount || 0), 0);
       const thisMonth = new Date().toISOString().slice(0, 7);
-      const thisMonthAmount = all.filter(d => d.month === thisMonth).reduce((s, d) => s + (d.amount || 0), 0);
-      // مستحق حتى الآن (شهر القسط <= الشهر الحالي) وأقساط قادمة (بعد الشهر الحالي)
-      const dueAmount = all.filter(d => d.month <= thisMonth).reduce((s, d) => s + (d.amount || 0), 0);
-      const upcomingAmount = all.filter(d => d.month > thisMonth).reduce((s, d) => s + (d.amount || 0), 0);
-      const upcomingCount = all.filter(d => d.month > thisMonth).length;
-      // أعلى 5 موظفين بأقساط قادمة (دين قائم)
-      const byEmp = new Map<number, number>();
-      for (const d of all) {
-        if (d.month > thisMonth) byEmp.set(d.branchEmployeeId, (byEmp.get(d.branchEmployeeId) || 0) + (d.amount || 0));
-      }
-      res.json({ total, totalAmount, thisMonthAmount, dueAmount, upcomingAmount, upcomingCount, debtors: byEmp.size });
+      const [summary] = await db.select({
+        total: sql<number>`count(*)::int`,
+        totalAmount: sql<number>`coalesce(sum(${salaryDeductions.amount}), 0)`,
+        thisMonthAmount: sql<number>`coalesce(sum(${salaryDeductions.amount}) filter (where ${salaryDeductions.month} = ${thisMonth}), 0)`,
+        dueAmount: sql<number>`coalesce(sum(${salaryDeductions.amount}) filter (where ${salaryDeductions.month} <= ${thisMonth}), 0)`,
+        upcomingAmount: sql<number>`coalesce(sum(${salaryDeductions.amount}) filter (where ${salaryDeductions.month} > ${thisMonth}), 0)`,
+        upcomingCount: sql<number>`count(*) filter (where ${salaryDeductions.month} > ${thisMonth})::int`,
+        debtors: sql<number>`count(distinct ${salaryDeductions.branchEmployeeId}) filter (where ${salaryDeductions.month} > ${thisMonth})::int`,
+      }).from(salaryDeductions).where(and(...conds));
+      res.json({
+        total: Number(summary?.total || 0),
+        totalAmount: Number(summary?.totalAmount || 0),
+        thisMonthAmount: Number(summary?.thisMonthAmount || 0),
+        dueAmount: Number(summary?.dueAmount || 0),
+        upcomingAmount: Number(summary?.upcomingAmount || 0),
+        upcomingCount: Number(summary?.upcomingCount || 0),
+        debtors: Number(summary?.debtors || 0),
+      });
     } catch (e: any) {
       console.error("[hr/advances/stats] error:", e);
       res.status(500).json({ error: e.message });

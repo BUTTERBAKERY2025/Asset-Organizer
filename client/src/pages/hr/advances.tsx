@@ -16,6 +16,8 @@ import { Link } from "wouter";
 import { ADVANCE_REQUEST_STATUS_LABELS } from "@shared/schema";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/hooks/useAuth";
+import { useBranches } from "@/hooks/useBranches";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { printAdvanceDocument } from "@/lib/advance-print";
 import { Printer, FileSpreadsheet, FileText, Search } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -41,6 +43,9 @@ export default function AdvancesPage() {
   const qc = useQueryClient();
   const { hasPermission } = usePermissions();
   const { user } = useAuth();
+  const { branches, userBranchId, isLoading: branchesLoading } = useBranches();
+  const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
+  const branchId = navigationBranch.branchId;
   // القرار النهائي — مطابق لمنطق الخادم hasAdvanceFinalAuthority:
   // admin/super_admin/hr_manager دائماً، و hr_specialist بشرط صلاحية التعديل.
   const role = user?.role || "";
@@ -63,37 +68,52 @@ export default function AdvancesPage() {
   const [reportAll, setReportAll] = useState(false);
 
   const { data: statementRows = [], isLoading: stLoading } = useQuery<any[]>({
-    queryKey: ["/api/hr/advances", "statement", stEmp?.id],
-    enabled: !!stEmp,
-    queryFn: async () => (await apiRequest("GET", `/api/hr/advances/report?employeeId=${stEmp!.id}`)).json(),
-  });
-
-  const { data: reportRows = [], isLoading: repLoading } = useQuery<any[]>({
-    queryKey: ["/api/hr/advances/report", reportAll ? "all" : reportMonth],
+    queryKey: ["/api/hr/advances", "statement", stEmp?.id, branchId],
+    enabled: !!stEmp && !navigationBranch.isResolving,
     queryFn: async () => {
-      const q = reportAll ? "" : `?month=${reportMonth}`;
-      return (await apiRequest("GET", `/api/hr/advances/report${q}`)).json();
+      const params = new URLSearchParams({ employeeId: String(stEmp!.id) });
+      if (branchId) params.set("branchId", branchId);
+      return (await apiRequest("GET", `/api/hr/advances/report?${params}`)).json();
     },
   });
 
+  const { data: reportRows = [], isLoading: repLoading } = useQuery<any[]>({
+    queryKey: ["/api/hr/advances/report", reportAll ? "all" : reportMonth, branchId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (!reportAll) params.set("month", reportMonth);
+      if (branchId) params.set("branchId", branchId);
+      return (await apiRequest("GET", `/api/hr/advances/report?${params}`)).json();
+    },
+    enabled: !navigationBranch.isResolving,
+  });
+
   const { data: advances = [], isLoading } = useQuery<Adv[]>({
-    queryKey: ["/api/hr/advances", filterMonth, filterType],
+    queryKey: ["/api/hr/advances", filterMonth, filterType, branchId],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filterMonth) params.set("month", filterMonth);
       if (filterType !== "all") params.set("type", filterType);
+      if (branchId) params.set("branchId", branchId);
       return (await apiRequest("GET", `/api/hr/advances?${params}`)).json();
     },
+    enabled: !navigationBranch.isResolving,
   });
 
-  const { data: stats } = useQuery<any>({
-    queryKey: ["/api/hr/advances/stats"],
-    queryFn: async () => (await apiRequest("GET", "/api/hr/advances/stats")).json(),
+  const { data: statsData, isFetching: statsFetching } = useQuery<any>({
+    queryKey: ["/api/hr/advances/stats", branchId],
+    queryFn: async () => (await apiRequest("GET", `/api/hr/advances/stats${branchId ? `?branchId=${encodeURIComponent(branchId)}` : ""}`)).json(),
+    enabled: !navigationBranch.isResolving,
   });
+  const stats = statsFetching ? undefined : statsData;
 
   const { data: employees = [] } = useQuery<Emp[]>({
-    queryKey: ["/api/branch-employees"],
-    queryFn: async () => (await apiRequest("GET", "/api/branch-employees")).json(),
+    queryKey: ["/api/branch-employees", branchId],
+    queryFn: async () => {
+      const rows = await (await apiRequest("GET", `/api/branch-employees${branchId ? `?branchId=${encodeURIComponent(branchId)}` : ""}`)).json();
+      return branchId ? rows.filter((employee: Emp) => employee.branchId === branchId) : rows;
+    },
+    enabled: !navigationBranch.isResolving,
   });
 
   const { data: pendingRequests = [] } = useQuery<any[]>({
@@ -110,17 +130,27 @@ export default function AdvancesPage() {
   // تنظيم الطلبات الجارية: مجموعات حسب المرحلة + بحث
   const [reqFilter, setReqFilter] = useState<"action" | "signature" | "done" | "all">("action");
   const [reqSearch, setReqSearch] = useState("");
+  const scopedPendingRequests = useMemo(
+    () => branchId ? pendingRequests.filter((r: any) => r.branchId === branchId) : pendingRequests,
+    [pendingRequests, branchId],
+  );
+  useEffect(() => {
+    if (branchId && stEmp && stEmp.branchId !== branchId) {
+      setStEmp(null);
+      setSettleIds(new Set());
+    }
+  }, [branchId, stEmp?.branchId]);
   const reqGroups = useMemo(() => {
-    const action = pendingRequests.filter((r: any) => ["pending", "pre_approved", "signed", "approved"].includes(r.status));
-    const signature = pendingRequests.filter((r: any) => r.status === "awaiting_signature");
-    const done = pendingRequests.filter((r: any) => r.status === "disbursed");
+    const action = scopedPendingRequests.filter((r: any) => ["pending", "pre_approved", "signed", "approved"].includes(r.status));
+    const signature = scopedPendingRequests.filter((r: any) => r.status === "awaiting_signature");
+    const done = scopedPendingRequests.filter((r: any) => r.status === "disbursed");
     return { action, signature, done };
-  }, [pendingRequests]);
+  }, [scopedPendingRequests]);
   const visibleRequests = useMemo(() => {
-    const base = reqFilter === "all" ? pendingRequests : reqGroups[reqFilter];
+    const base = reqFilter === "all" ? scopedPendingRequests : reqGroups[reqFilter];
     const q = reqSearch.trim().toLowerCase();
     return q ? base.filter((r: any) => (r.employeeName || "").toLowerCase().includes(q)) : base;
-  }, [pendingRequests, reqGroups, reqFilter, reqSearch]);
+  }, [scopedPendingRequests, reqGroups, reqFilter, reqSearch]);
 
   const reviewMutation = useMutation({
     mutationFn: async ({ id, decision, note }: { id: number; decision: "approved" | "rejected"; note?: string }) =>
@@ -176,10 +206,11 @@ export default function AdvancesPage() {
   });
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return advances;
+    const scoped = branchId ? advances.filter((a: any) => a.branchId === branchId) : advances;
+    if (!search.trim()) return scoped;
     const q = search.toLowerCase();
-    return advances.filter((a: any) => (a.employeeName || "").toLowerCase().includes(q));
-  }, [advances, search]);
+    return scoped.filter((a: any) => (a.employeeName || "").toLowerCase().includes(q));
+  }, [advances, search, branchId]);
 
   // ترقيم صفحات لسجل الأقساط (الجدول يطول مع كثرة الحركات)
   const PAGE_SIZE = 25;
@@ -203,9 +234,13 @@ export default function AdvancesPage() {
   // تحذير تجاوز حد الالتزامات (30% من الراتب) عند تسجيل سلفة جديدة
   const dlgEmpId = form.branchEmployeeId ? parseInt(form.branchEmployeeId, 10) : null;
   const { data: dlgEmpRows = [] } = useQuery<any[]>({
-    queryKey: ["/api/hr/advances", "limit-check", dlgEmpId],
+    queryKey: ["/api/hr/advances", "limit-check", dlgEmpId, branchId],
     enabled: open && !!dlgEmpId,
-    queryFn: async () => (await apiRequest("GET", `/api/hr/advances/report?employeeId=${dlgEmpId}`)).json(),
+    queryFn: async () => {
+      const params = new URLSearchParams({ employeeId: String(dlgEmpId) });
+      if (branchId) params.set("branchId", branchId);
+      return (await apiRequest("GET", `/api/hr/advances/report?${params}`)).json();
+    },
   });
   const limitWarning = useMemo(() => {
     if (!dlgEmpId || !form.month || !(Number(form.amount) > 0)) return null;
@@ -335,14 +370,14 @@ export default function AdvancesPage() {
           hint={`${stats?.upcomingCount ?? 0} قسطاً على ${stats?.debtors ?? 0} موظفاً`} />
       </div>
 
-      {pendingRequests.length > 0 && (
+      {scopedPendingRequests.length > 0 && (
         <Card className="border-amber-300 dark:border-amber-800">
           <CardContent className="pt-6 space-y-3">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
                 <Inbox className="h-5 w-5 text-amber-600" />
                 <h2 className="text-lg font-bold">طلبات السلف الجارية</h2>
-                <Badge className="bg-amber-100 text-amber-700">{pendingRequests.length}</Badge>
+                <Badge className="bg-amber-100 text-amber-700">{scopedPendingRequests.length}</Badge>
               </div>
               <div className="relative w-full sm:w-56">
                 <Search className="h-4 w-4 absolute top-2.5 end-3 text-muted-foreground" />
@@ -355,7 +390,7 @@ export default function AdvancesPage() {
                 ["action", "تحتاج إجراءً", reqGroups.action.length, "bg-amber-600 text-white", "border-amber-300 text-amber-700"],
                 ["signature", "بانتظار التوقيع", reqGroups.signature.length, "bg-sky-600 text-white", "border-sky-300 text-sky-700"],
                 ["done", "مصروفة (مكتملة)", reqGroups.done.length, "bg-teal-600 text-white", "border-teal-300 text-teal-700"],
-                ["all", "الكل", pendingRequests.length, "bg-slate-700 text-white", "border-slate-300 text-slate-700"],
+                ["all", "الكل", scopedPendingRequests.length, "bg-slate-700 text-white", "border-slate-300 text-slate-700"],
               ] as const).map(([key, label, count, active, idle]) => (
                 <button key={key} type="button"
                   className={`px-3 py-1 rounded-full text-xs font-semibold border transition ${reqFilter === key ? active : `bg-card ${idle}`}`}

@@ -26,6 +26,7 @@ import { useLocation } from "wouter";
 import React, { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -827,7 +828,8 @@ export default function BranchEmployeesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   
-  const { branches, canSelectBranch, userBranchId } = useBranches();
+  const { branches, canSelectBranch, userBranchId, isLoading: branchesLoading } = useBranches();
+  const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
   const [selectedBranch, setSelectedBranch] = useState<string>(userBranchId || "all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNationality, setSelectedNationality] = useState<string>("all");
@@ -880,10 +882,14 @@ export default function BranchEmployeesPage() {
   const [hireDateTo, setHireDateTo] = useState<string>("");
 
   React.useEffect(() => {
-    if (!canSelectBranch && userBranchId && selectedBranch !== userBranchId) {
+    if (navigationBranch.hasBranchParam) {
+      if (navigationBranch.branchId) {
+        setSelectedBranch(navigationBranch.branchId);
+      }
+    } else if (!canSelectBranch && userBranchId && selectedBranch !== userBranchId) {
       setSelectedBranch(userBranchId);
     }
-  }, [canSelectBranch, userBranchId, selectedBranch]);
+  }, [navigationBranch.hasBranchParam, navigationBranch.branchId, canSelectBranch, userBranchId]);
 
   const isBranchReady = canSelectBranch || !!userBranchId;
   const { data: bundle, isLoading, error: bundleError } = useQuery<{
@@ -902,7 +908,7 @@ export default function BranchEmployeesPage() {
       if (!res.ok) throw new Error(`${res.status}: failed to fetch employees bundle`);
       return res.json();
     },
-    enabled: isBranchReady,
+    enabled: isBranchReady && !navigationBranch.isResolving,
     staleTime: 60 * 1000,
     retry: 1,
   });

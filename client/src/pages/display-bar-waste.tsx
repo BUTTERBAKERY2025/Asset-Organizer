@@ -15,6 +15,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { usePermissions } from "@/hooks/usePermissions";
 import { apiRequest } from "@/lib/queryClient";
 import { 
@@ -160,16 +161,22 @@ export default function DisplayBarWastePage() {
     { value: "night", label: "الوردية الليلية", time: "22:00 - 06:00" },
   ];
 
-  const { branches, canSelectBranch, userBranchId } = useBranches();
+  const { branches, canSelectBranch, userBranchId, isLoading: branchesLoading } = useBranches();
+  const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
 
   useEffect(() => {
-    if (userBranchId) {
+    if (navigationBranch.hasBranchParam) {
+      if (navigationBranch.branchId) {
+        setSelectedBranch(navigationBranch.branchId);
+        setWasteBranch(navigationBranch.branchId);
+      }
+    } else if (userBranchId) {
       setSelectedBranch(userBranchId);
       setWasteBranch(userBranchId);
     } else if (canSelectBranch) {
       setSelectedBranch("all");
     }
-  }, [userBranchId, canSelectBranch]);
+  }, [navigationBranch.hasBranchParam, navigationBranch.branchId, userBranchId, canSelectBranch]);
 
   const { data: products = [] } = useQuery<Product[]>({
     queryKey: ["/api/products"],

@@ -172,6 +172,46 @@
 
 /* Responsive utilities */
 @layer utilities {
+  /* Branch operations: the approachable, color-blocked staff console. */
+  .branch-ops-shell {
+    --ops-ink: #332c3d;
+    --ops-paper: #fffaf3;
+    --ops-plum: #713b5d;
+    --ops-sand: #f3e5d4;
+    --ops-coral: #e76f5b;
+    --ops-mint: #b8d8cd;
+    --ops-sky: #b8d8e8;
+    --ops-gold: #f3c969;
+    color: var(--ops-ink);
+    background: radial-gradient(circle at 94% 2%, #f4e2d2 0, transparent 24rem), var(--ops-paper);
+    min-height: 100%;
+  }
+  .branch-ops-tile {
+    position: relative;
+    min-height: 150px;
+    overflow: hidden;
+    isolation: isolate;
+    transition: transform 180ms ease, box-shadow 180ms ease;
+  }
+  .branch-ops-tile:hover { transform: translateY(-3px); box-shadow: 0 15px 26px rgb(74 45 54 / .12); }
+  .branch-ops-tile:focus-visible { outline: 3px solid var(--ops-plum); outline-offset: 3px; }
+  .branch-ops-tile::after {
+    content: "";
+    position: absolute;
+    width: 7rem; height: 7rem; border-radius: 999px;
+    left: -2.75rem; bottom: -3.25rem; opacity: .28;
+    background: currentColor; z-index: -1;
+  }
+  .branch-ops-shimmer {
+    background: linear-gradient(100deg, #f0e6dc 25%, #fff8ef 42%, #f0e6dc 58%);
+    background-size: 220% 100%;
+    animation: branch-ops-shimmer 1.35s linear infinite;
+  }
+  @keyframes branch-ops-shimmer { to { background-position: -220% 0; } }
+  @media (max-width: 640px) {
+    .branch-ops-shell { margin-inline: -.75rem; }
+    .branch-ops-tile { min-height: 148px; }
+  }
   /* Safe area for notched devices */
   .safe-area-inset-top {
     padding-top: env(safe-area-inset-top);

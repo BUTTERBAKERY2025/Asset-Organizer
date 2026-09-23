@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { useBranches } from "@/hooks/useBranches";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -99,15 +100,18 @@ export default function SalesAnalytics() {
   const fromDate = `${yearMonth}-01`;
   const toDate = `${yearMonth}-${daysInMonth.toString().padStart(2, "0")}`;
 
-  const { branches, userBranchId, canSelectBranch } = useBranches();
+  const { branches, userBranchId, canSelectBranch, isLoading: branchesLoading } = useBranches();
+  const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
 
   useEffect(() => {
-    if (userBranchId) {
+    if (navigationBranch.hasBranchParam) {
+      if (navigationBranch.branchId) setSelectedBranch(navigationBranch.branchId);
+    } else if (userBranchId) {
       setSelectedBranch(userBranchId);
     } else if (canSelectBranch) {
       setSelectedBranch("all");
     }
-  }, [userBranchId, canSelectBranch]);
+  }, [navigationBranch.hasBranchParam, navigationBranch.branchId, userBranchId, canSelectBranch]);
 
   const { data: targetsVsActuals = [], isLoading: loadingTargets, refetch: refetchTargets } = useQuery<any[]>({
     queryKey: ["/api/analytics/targets-vs-actuals", selectedBranch, fromDate, toDate, journalStatus, discrepancyType],
