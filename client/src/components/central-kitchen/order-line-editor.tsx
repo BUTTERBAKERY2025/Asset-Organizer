@@ -103,8 +103,8 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
             <span className="text-xs font-semibold text-muted-foreground">البند {index + 1}</span>
             {items.length > 1 && <Button type="button" variant="ghost" size="sm" className="h-8 text-destructive" onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))}><X className="ml-1 h-4 w-4" />حذف</Button>}
           </div>
-          <div className="grid gap-3 md:grid-cols-12">
-            <div className="md:col-span-5">
+           <div className="grid grid-cols-2 gap-3 md:grid-cols-12">
+             <div className="col-span-2 md:col-span-5">
               <Label className="text-xs">الصنف</Label>
               <CatalogItemPicker value={value} disabled={catalogLoading} products={products} selectedKeys={selectedKeys} onChange={next => {
                 if (next === "__manual") {
@@ -132,7 +132,7 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
                <Input id={`reported-stock-${index}`} className="mt-1 h-12 border-amber-300 bg-amber-50/60 text-base" type="number" min="0" step={quantityStep} inputMode="decimal" value={item.reportedAvailableQuantity} onChange={event => patch(index, { reportedAvailableQuantity: event.target.value })} placeholder="مثال: 0" aria-invalid={stockInvalid} aria-describedby={`reported-stock-help-${index}`} />
               <p id={`reported-stock-help-${index}`} className="mt-1 text-[11px] text-muted-foreground">{stockInvalid ? "أدخل صفراً أو كمية صحيحة حتى 6 منازل عشرية؛ لا يُفترض الرصيد تلقائياً." : "معلومة للمطبخ ولا تغيّر رصيد المخزون."}</p>
             </div>
-            <div className="md:col-span-1">
+             <div className="col-span-2 md:col-span-1">
               <Label className="text-xs" htmlFor={`line-note-${index}`}>ملاحظة</Label>
               <Input id={`line-note-${index}`} className="mt-1 h-10" value={item.notes} onChange={event => patch(index, { notes: event.target.value })} placeholder="—" />
             </div>
