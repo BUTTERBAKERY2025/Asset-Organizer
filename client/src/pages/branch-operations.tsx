@@ -1,16 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
   RefreshCw,
 } from "lucide-react";
 import { Layout } from "@/components/layout";
+import { MobilePushSettings } from "@/components/push-notification-prompt";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { branchBoardUrl, branchOperationUrl } from "@/lib/branch-operation-navigation";
+import { captureBranchDeskReturn, resolveBranchDeskReturnForCurrentSession, restoreBranchDeskScroll } from "@/lib/branch-operation-return-state";
 import {
   AlertTriangle, BoardSkeleton, BusinessDate, EmptyState, NeedsActionStrip,
   OperationCardView, DayOverview, DailySalesProgress, QuickActions, SectionHeader, Settings2, ShieldAlert, Store, groupCards, isNavigationOnly, SECTIONS, type OperationCard,
@@ -26,12 +28,13 @@ type BranchOperationsSummary = {
 export default function BranchOperationsPage() {
   const [, navigate] = useLocation();
   const client = useQueryClient();
-  const { activeBranch, activeBranchId, switchBranch, isSwitchingBranch } = useAuth();
+  const { user, activeBranch, activeBranchId, switchBranch, isSwitchingBranch } = useAuth();
   const { branches, isLoading: branchesLoading } = useBranches();
   const navigation = useBranchNavigation(branches, branchesLoading);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [requestedBranchId, setRequestedBranchId] = useState<string | null>(null);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
+  const restoredReturnToken = useRef<string | null>(null);
   const selectedBranchId = requestedBranchId ?? (navigation.hasBranchParam
     ? navigation.branchId : branches.find((branch) => branch.id === (activeBranchId ?? activeBranch?.id))?.id ?? branches[0]?.id ?? null);
   const selectedBranch = branches.find((branch) => branch.id === selectedBranchId);
@@ -62,27 +65,37 @@ export default function BranchOperationsPage() {
     if (!validBoard || isSwitchingBranch) return;
     let frame = 0;
     const reveal = () => {
-    const target = window.location.hash.slice(1);
+      const restored = user?.id && selectedBranchId
+        ? resolveBranchDeskReturnForCurrentSession(String(user.id), selectedBranchId, window.location.search, window.history.state)
+        : null;
+      if (restored) {
+        if (restoredReturnToken.current === restored.token) return;
+        restoredReturnToken.current = restored.token;
+        frame = requestAnimationFrame(() => restoreBranchDeskScroll(restored));
+        return;
+      }
+      const target = window.location.hash.slice(1);
       const card = validBoard.cards.find((item) => target === `branch-operation-card-${item.id}`);
       if (!card) return;
-      setExpandedCardId(card.id);
-    frame = requestAnimationFrame(() => {
-      const element = document.getElementById(target);
-      let parent = element?.parentElement;
-      while (parent) {
-        if (parent instanceof HTMLDetailsElement) parent.open = true;
-        parent = parent.parentElement;
-      }
-      element?.scrollIntoView({ block: "center", behavior: "instant" });
-       element?.querySelector<HTMLButtonElement>(".branch-ops-card-main")?.focus({ preventScroll: true });
-    });
+      frame = requestAnimationFrame(() => {
+        const element = document.getElementById(target);
+        let parent = element?.parentElement;
+        while (parent) {
+          if (parent instanceof HTMLDetailsElement) parent.open = true;
+          parent = parent.parentElement;
+        }
+        element?.scrollIntoView({ block: "center", behavior: "instant" });
+        element?.querySelector<HTMLButtonElement>(".branch-ops-card-main")?.focus({ preventScroll: true });
+      });
     };
     reveal();
     window.addEventListener("hashchange", reveal);
     return () => { cancelAnimationFrame(frame); window.removeEventListener("hashchange", reveal); };
-  }, [validBoard, isSwitchingBranch]);
+  }, [validBoard, isSwitchingBranch, selectedBranchId, user?.id]);
 
-  useEffect(() => { setExpandedCardId(null); }, [selectedBranchId]);
+  useEffect(() => {
+    setExpandedCardId(null);
+  }, [selectedBranchId]);
 
   const changeBranch = async (branchId: string) => {
     if (branchId === selectedBranchId) return;
@@ -106,9 +119,10 @@ export default function BranchOperationsPage() {
   };
 
   const go = (href: string) => {
-    if (!selectedBranchId || isSwitchingBranch) return;
+    if (!selectedBranchId || !user?.id || isSwitchingBranch) return;
     try {
-      navigate(branchOperationUrl(href, selectedBranchId));
+      const destination = branchOperationUrl(href, selectedBranchId);
+      navigate(captureBranchDeskReturn(String(user.id), selectedBranchId, destination));
     } catch {
       setSwitchError("تعذر فتح هذا المسار من لوحة الفرع. حدّث اللوحة وحاول مجددًا.");
     }
@@ -194,6 +208,10 @@ export default function BranchOperationsPage() {
                 </details>}
               </div>
             )}
+            <details className="mt-8 rounded-xl border border-border bg-muted/20 px-3 py-2" data-testid="branch-operations-push-settings">
+              <summary className="flex min-h-11 cursor-pointer items-center font-bold text-foreground">إعدادات إشعارات الجوال</summary>
+              <MobilePushSettings compact className="mb-1 mt-2 border-0 bg-card shadow-none" />
+            </details>
           </>
         )}
       </main>

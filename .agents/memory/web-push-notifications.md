@@ -8,3 +8,9 @@ description: Mobile push for systemNotifications — VAPID in DB, targeting pari
 - Unsubscribe deletes by endpoint AND session userId (endpoint-only was a cross-user DoS).
 - iOS: push only works when PWA saved to home screen (iOS 16.4+); prompt component skips iOS browser mode.
 - Tables auto-created in startup migrations (server/db.ts) — safe on Render deploys.
+
+Shared-device subscriptions must not silently transfer between accounts during sync.
+
+**Why:** A delayed sync or logout cleanup can overlap the next login; aborting a browser request cannot undo server work already executing. Endpoint-global reassignment can therefore route notifications to the wrong account.
+
+**How to apply:** Keep subscription ownership checks atomic, revoke the browser endpoint when leaving an account, suppress stale sync generations, and bound cleanup without leaving cookie-bearing requests running into the next session. Do not weaken ownership conflicts to make re-enablement seem successful.

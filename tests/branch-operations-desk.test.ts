@@ -71,5 +71,27 @@ describe("daily branch desk", () => {
     expect(detail).toContain("navigation-status");
     expect(detail).toContain("navigation-detail");
     expect(detail).toContain("فتح kitchen");
+    expect(detail).toContain('class="group branch-ops-card-main"');
+    expect(detail).toContain('aria-label="فتح kitchen"');
+    expect(detail).toContain("التفاصيل");
+    expect(detail).toContain('aria-controls="branch-operation-card-panel-kitchen"');
+  });
+  it("keeps primary navigation and the details toggle as separate actions", () => {
+    const opened: string[] = [];
+    let toggles = 0;
+    const view = OperationCardView({
+      card: card("kitchen"),
+      section: SECTIONS[0],
+      onOpen: href => opened.push(href),
+      onRefresh() {},
+      onToggle: () => { toggles += 1; },
+    }) as React.ReactElement<{ children: React.ReactElement<any>[] }>;
+    const [primary, details] = view.props.children;
+    primary.props.onClick();
+    expect(opened).toEqual(["/central-kitchen-orders"]);
+    expect(toggles).toBe(0);
+    details.props.onClick();
+    expect(opened).toEqual(["/central-kitchen-orders"]);
+    expect(toggles).toBe(1);
   });
 });

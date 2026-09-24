@@ -3,7 +3,8 @@ import { ArrowRight, Home } from "lucide-react";
 import { useBranches } from "@/hooks/useBranches";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
-import { branchBoardUrl, branchOperationDestination } from "@/lib/branch-operation-navigation";
+import { branchOperationDestination } from "@/lib/branch-operation-navigation";
+import { branchDeskReturnUrl } from "@/lib/branch-operation-return-state";
 import { Button } from "@/components/ui/button";
 
 export function BranchOperationsNavigation() {
@@ -30,7 +31,7 @@ function NavigationContext({ path, destination }: {
       <span aria-hidden="true">/</span><span aria-current="page" className="font-bold text-foreground">{destination.label}</span>
     </div>
     {isLoading ? <Button variant="outline" size="sm" className="min-h-11" disabled>جار تحديد الفرع…</Button> : <Button asChild variant="outline" size="sm" className="min-h-11">
-      <Link href={branchBoardUrl(branchId, path)} aria-label={`العودة إلى لوحة الفرع${branch ? ` · ${branch.name}` : ""}`} data-testid="return-to-branch-operations">
+      <Link href={branchDeskReturnUrl(branchId, path, window.location.search)} aria-label={`العودة إلى لوحة الفرع${branch ? ` · ${branch.name}` : ""}`} data-testid="return-to-branch-operations">
         <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />لوحة الفرع{branch ? ` · ${branch.name}` : ""}
       </Link>
     </Button>}

@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { detachPushSubscriptionFromCurrentUser } from "@/lib/push-notifications";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -203,6 +204,7 @@ export default function AuditPortalPage() {
 
 function AuditorShell({ userName, children, lang, onToggleLang }: { userName: string; children: React.ReactNode; lang: "ar" | "en"; onToggleLang: () => void }) {
   const logout = async () => {
+    await detachPushSubscriptionFromCurrentUser();
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
     window.location.href = "/login";
   };

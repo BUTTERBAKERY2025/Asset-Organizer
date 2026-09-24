@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Loader2, User, Lock, Eye, EyeOff, HelpCircle, MessageCircle, Mail, Languages } from "lucide-react";
 import logo from "@assets/logo_butter_bakery__1768502624540.png";
+import { loginReturnDestination } from "@/lib/safe-navigation";
 
 const REMEMBER_KEY = "__btr_ru";
 const LANG_KEY = "__btr_lang";
@@ -145,7 +146,7 @@ export default function LoginPage() {
   }, []);
 
   if (isAuthenticated) {
-    setLocation("/");
+    setLocation(loginReturnDestination());
     return null;
   }
 
@@ -157,19 +158,14 @@ export default function LoginPage() {
     }
 
     // Restore intended path if present
-    let next = "/";
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const r = params.get("redirect");
-      if (r && r.startsWith("/") && !r.startsWith("//")) next = r;
-    } catch {}
+    const next = loginReturnDestination();
 
     if (userData?.role === "attendance_clerk") {
-      setLocation("/attendance-check");
+      setLocation(next !== "/" ? next : "/attendance-check");
     } else if (userData?.role === "shareholder") {
       setLocation(next !== "/" ? next : "/shareholder-portal");
     } else if (userData?.role === "external_auditor") {
-      setLocation("/audit-portal");
+      setLocation(next !== "/" ? next : "/audit-portal");
     } else {
       setLocation(next);
     }

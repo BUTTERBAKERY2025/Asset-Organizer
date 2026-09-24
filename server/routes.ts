@@ -41221,7 +41221,10 @@ export async function registerRoutes(
         return res.status(400).json({ error: "بيانات اشتراك غير صالحة" });
       }
       const { savePushSubscription } = await import("./push-service");
-      await savePushSubscription(req.session.userId, sub, req.headers["user-agent"]);
+      const saved = await savePushSubscription(req.session.userId!, sub, req.headers["user-agent"]);
+      if (!saved) {
+        return res.status(409).json({ error: "اشتراك هذا الجهاز مرتبط بجلسة أخرى؛ أوقف الإشعارات ثم فعّلها مجدداً" });
+      }
       res.json({ success: true });
     } catch (error) {
       console.error("Error saving push subscription:", error);
@@ -41234,7 +41237,7 @@ export async function registerRoutes(
       const endpoint = req.body?.endpoint;
       if (endpoint) {
         const { removePushSubscription } = await import("./push-service");
-        await removePushSubscription(req.session.userId, endpoint);
+        await removePushSubscription(req.session.userId!, endpoint);
       }
       res.json({ success: true });
     } catch (error) {
@@ -41243,12 +41246,42 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/push/status", isAuthenticated, async (req, res) => {
+    try {
+      const endpoint = req.body?.subscription?.endpoint;
+      if (typeof endpoint !== "string") {
+        return res.status(400).json({ error: "بيانات اشتراك غير صالحة" });
+      }
+      const { hasPushSubscription } = await import("./push-service");
+      res.json({ subscribed: await hasPushSubscription(req.session.userId!, endpoint) });
+    } catch (error) {
+      console.error("Error checking push subscription:", error);
+      res.status(500).json({ error: "فشل في التحقق من اشتراك الإشعارات" });
+    }
+  });
+
+  app.post("/api/push/test-current-device", isAuthenticated, async (req, res) => {
+    try {
+      const endpoint = req.body?.endpoint;
+      if (typeof endpoint !== "string") {
+        return res.status(400).json({ error: "بيانات اشتراك غير صالحة" });
+      }
+      const { sendTestPushToOwnedDevice } = await import("./push-service");
+      const sent = await sendTestPushToOwnedDevice(req.session.userId!, endpoint);
+      if (!sent) return res.status(404).json({ error: "هذا الجهاز غير مسجل للحساب الحالي" });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error sending current-device test push:", error);
+      res.status(502).json({ error: "تعذر إرسال الإشعار التجريبي" });
+    }
+  });
+
   app.get("/api/active-notifications", isAuthenticated, async (req, res) => {
     try {
       const userId = req.session.userId;
       const user = (req as any).currentUser;
       const branchId = user?.activeBranch || user?.branchId || "";
-      const notifications = await storage.getActiveNotificationsForUser(userId, branchId);
+      const notifications = await storage.getActiveNotificationsForUser(userId!, branchId);
       res.json(notifications);
     } catch (error) {
       console.error("Error fetching active notifications:", error);

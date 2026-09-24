@@ -15,6 +15,7 @@ import {
   users,
   type SystemNotification,
 } from "@shared/schema";
+import { isKnownPushProviderEndpoint } from "./push-endpoint-security";
 
 let vapidReady: Promise<string> | null = null;
 
@@ -53,7 +54,7 @@ export async function savePushSubscription(
   userId: string,
   sub: { endpoint: string; keys: { p256dh: string; auth: string } },
   userAgent?: string
-): Promise<void> {
+): Promise<boolean> {
   if (
     typeof sub.endpoint !== "string" ||
     !/^https:\/\//.test(sub.endpoint) ||
@@ -63,13 +64,21 @@ export async function savePushSubscription(
   ) {
     throw new Error("Invalid push subscription");
   }
-  await db
+  const updated = await db
+    .update(pushSubscriptions)
+    .set({ p256dh: sub.keys.p256dh, auth: sub.keys.auth, userAgent })
+    .where(and(eq(pushSubscriptions.endpoint, sub.endpoint), eq(pushSubscriptions.userId, userId)))
+    .returning({ id: pushSubscriptions.id });
+  if (updated.length) return true;
+
+  const inserted = await db
     .insert(pushSubscriptions)
     .values({ userId, endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth: sub.keys.auth, userAgent })
-    .onConflictDoUpdate({
-      target: pushSubscriptions.endpoint,
-      set: { userId, p256dh: sub.keys.p256dh, auth: sub.keys.auth, userAgent },
-    });
+    .onConflictDoNothing({ target: pushSubscriptions.endpoint })
+    .returning({ id: pushSubscriptions.id });
+  // Never transfer an endpoint between accounts implicitly. A shared device
+  // must revoke the old browser endpoint and create a new one after login.
+  return inserted.length === 1;
 }
 
 // الحذف مقيَّد بمالك الجلسة — لا يمكن لمستخدم إلغاء اشتراك جهاز مستخدم آخر
@@ -77,6 +86,51 @@ export async function removePushSubscription(userId: string, endpoint: string): 
   await db
     .delete(pushSubscriptions)
     .where(and(eq(pushSubscriptions.endpoint, endpoint), eq(pushSubscriptions.userId, userId)));
+}
+
+export async function hasPushSubscription(userId: string, endpoint: string): Promise<boolean> {
+  if (typeof endpoint !== "string" || endpoint.length > 2000) return false;
+  const rows = await db
+    .select({ id: pushSubscriptions.id })
+    .from(pushSubscriptions)
+    .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)))
+    .limit(1);
+  return rows.length === 1;
+}
+
+// A deliberately narrow test path: the caller can only target an endpoint
+// already owned by their authenticated account. Payload and destination are
+// server-controlled, so this cannot become a broad-send or SSRF endpoint.
+export async function sendTestPushToOwnedDevice(userId: string, endpoint: string): Promise<boolean> {
+  if (typeof endpoint !== "string" || endpoint.length > 2000 || !isKnownPushProviderEndpoint(endpoint)) return false;
+  await ensureVapid();
+  const [sub] = await db
+    .select()
+    .from(pushSubscriptions)
+    .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)))
+    .limit(1);
+  if (!sub) return false;
+  try {
+    await webpush.sendNotification(
+      { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+      JSON.stringify({
+        title: "اختبار إشعارات BUTTER BAKERY",
+        body: "هذا إشعار تجريبي لهذا الجهاز فقط.",
+        url: "/",
+        tag: `push-test-${userId}`,
+      }),
+      { TTL: 60, urgency: "normal" },
+    );
+    return true;
+  } catch (error: any) {
+    if (error?.statusCode === 404 || error?.statusCode === 410) {
+      await db.delete(pushSubscriptions)
+        .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)))
+        .catch(() => {});
+      return false;
+    }
+    throw error;
+  }
 }
 
 // تحديد المستخدمين المستهدفين بنفس منطق getActiveNotificationsForUser

@@ -246,21 +246,37 @@ self.addEventListener('push', (event) => {
     icon: '/favicon.png',
     badge: '/favicon.png',
     tag: data.tag || undefined,
-    data: { url: data.url || '/' },
+    data: { url: safeNotificationDestination(data.url) },
     vibrate: [100, 50, 100],
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
+function safeNotificationDestination(value) {
+  try {
+    if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || /[\u0000-\u001f\\]/.test(value)) {
+      return '/';
+    }
+    const parsed = new URL(value, self.location.origin);
+    if (parsed.origin !== self.location.origin || (parsed.protocol !== 'https:' && parsed.protocol !== 'http:')) return '/';
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch (e) {
+    return '/';
+  }
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || '/';
+  const destination = safeNotificationDestination(event.notification.data && event.notification.data.url);
+  const absoluteUrl = new URL(destination, self.location.origin).href;
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const c of list) {
-        if ('focus' in c) { c.navigate(url); return c.focus(); }
+        if (new URL(c.url).origin === self.location.origin && 'focus' in c) {
+          return c.navigate(absoluteUrl).then(() => c.focus());
+        }
       }
-      return clients.openWindow(url);
+      return clients.openWindow(absoluteUrl);
     })
   );
 });

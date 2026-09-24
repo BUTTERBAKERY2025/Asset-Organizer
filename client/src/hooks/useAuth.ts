@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { User, Branch } from "@shared/schema";
 import { clearPersistentCache, setCurrentUser } from "@/lib/persistentCache";
+import { detachPushSubscriptionFromCurrentUser, resumePushSubscriptionSync } from "@/lib/push-notifications";
 
 type UserWithoutPassword = Omit<User, 'password'>;
 
@@ -60,6 +61,7 @@ export function useAuth() {
     onSuccess: (userData) => {
       // المرحلة 5: إذا طُلب التحقق بخطوتين فلا تُنشئ الجلسة بعد — ننتظر رمز OTP
       if (userData?.otpRequired) return;
+      resumePushSubscriptionSync();
       queryClient.clear();
       clearPersistentCache();
       setCurrentUser(userData?.id?.toString() || null);
@@ -83,6 +85,7 @@ export function useAuth() {
       return res.json();
     },
     onSuccess: (userData) => {
+      resumePushSubscriptionSync();
       queryClient.clear();
       clearPersistentCache();
       setCurrentUser(userData?.id?.toString() || null);
@@ -108,6 +111,7 @@ export function useAuth() {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
+      await detachPushSubscriptionFromCurrentUser();
       const res = await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
       if (!res.ok) {
         throw new Error("فشل تسجيل الخروج");
@@ -119,6 +123,9 @@ export function useAuth() {
       setCurrentUser(null);
       queryClient.setQueryData(["/api/auth/me"], null);
       queryClient.clear();
+    },
+    onError: () => {
+      resumePushSubscriptionSync();
     },
   });
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation, Redirect } from "wouter";
+import { Redirect } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuthReady } from "@/contexts/AuthContext";
@@ -8,6 +8,8 @@ import { useStuckPageWatchdog, StuckPageMessage } from "@/hooks/useStuckPageWatc
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { SystemModule } from "@shared/schema";
+import { currentLocalDestination, loginReturnDestination } from "@/lib/safe-navigation";
+import { detachPushSubscriptionFromCurrentUser } from "@/lib/push-notifications";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -29,6 +31,7 @@ interface AnyModuleProtectedRouteProps {
 function AccessDeniedPage({ message }: { message?: string }) {
   const handleLogout = async () => {
     try {
+      await detachPushSubscriptionFromCurrentUser();
       await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
       window.location.href = '/login';
     } catch (error) {
@@ -113,7 +116,6 @@ function InlineSkeleton() {
 export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
   const { isReady } = useAuthReady();
   const { user, isAuthenticated } = useAuth();
-  const [location] = useLocation();
 
   // Show lightweight skeleton during any transient loading
   if (!isReady) {
@@ -121,7 +123,7 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
   }
 
   if (!isAuthenticated) {
-    const returnUrl = encodeURIComponent(location);
+    const returnUrl = encodeURIComponent(currentLocalDestination());
     return <Redirect to={`/login?returnUrl=${returnUrl}`} />;
   }
 
@@ -147,7 +149,6 @@ export function ModuleProtectedRoute({ children, module, requiredRole }: ModuleP
   const { isReady } = useAuthReady();
   const { user, isAuthenticated, isAdmin } = useAuth();
   const { canView } = usePermissions();
-  const [location] = useLocation();
 
   // Show lightweight skeleton during any transient loading
   if (!isReady) {
@@ -155,7 +156,7 @@ export function ModuleProtectedRoute({ children, module, requiredRole }: ModuleP
   }
 
   if (!isAuthenticated) {
-    const returnUrl = encodeURIComponent(location);
+    const returnUrl = encodeURIComponent(currentLocalDestination());
     return <Redirect to={`/login?returnUrl=${returnUrl}`} />;
   }
 
@@ -190,14 +191,13 @@ export function AnyModuleProtectedRoute({ children, modules, requiredRole }: Any
   const { isReady } = useAuthReady();
   const { user, isAuthenticated, isAdmin } = useAuth();
   const { canView } = usePermissions();
-  const [location] = useLocation();
 
   if (!isReady) {
     return <InlineSkeleton />;
   }
 
   if (!isAuthenticated) {
-    const returnUrl = encodeURIComponent(location);
+    const returnUrl = encodeURIComponent(currentLocalDestination());
     return <Redirect to={`/login?returnUrl=${returnUrl}`} />;
   }
 
@@ -233,7 +233,7 @@ export function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (isAuthenticated) {
-    return <Redirect to="/" />;
+    return <Redirect to={loginReturnDestination()} />;
   }
 
   return <>{children}</>;

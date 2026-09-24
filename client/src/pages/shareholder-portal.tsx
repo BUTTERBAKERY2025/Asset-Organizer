@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { detachPushSubscriptionFromCurrentUser } from "@/lib/push-notifications";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -217,6 +218,7 @@ export default function ShareholderPortalPage() {
 
   const logout = async () => {
     try {
+      await detachPushSubscriptionFromCurrentUser();
       await apiRequest("POST", "/api/auth/logout");
     } catch {}
     window.location.href = "/login";

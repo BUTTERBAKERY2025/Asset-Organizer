@@ -134,8 +134,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
     if (prevLocationRef.current !== location) {
       if (contentRef.current) {
         saveScrollPosition(prevLocationRef.current, contentRef.current.scrollTop);
+        const branchDeskRestoresOwnScroll = location === "/branch-operations"
+          && new URLSearchParams(window.location.search).has("branchReturn");
         const saved = getScrollPosition(location);
-        if (saved > 0) {
+        if (branchDeskRestoresOwnScroll) {
+          // The board restores its exact user/branch-scoped inner-scroll position
+          // after its async cards render.
+        } else if (saved > 0) {
           requestAnimationFrame(() => {
             if (contentRef.current) contentRef.current.scrollTop = saved;
           });
@@ -856,7 +861,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <div ref={contentRef} className="flex-1 overflow-auto scroll-smooth safe-area-inset-bottom page-content">
+        <div ref={contentRef} data-app-scroll-container className="flex-1 overflow-auto scroll-smooth safe-area-inset-bottom page-content">
           <BranchOperationsNavigation />
           {children}
         </div>

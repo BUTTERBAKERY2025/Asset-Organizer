@@ -274,14 +274,18 @@ export function OperationCardView({ card, section, onOpen, onRefresh, expanded =
   const meta = CARD_META[card.id] ?? FALLBACK_META;
   const panelId = `branch-operation-card-panel-${card.id}`;
   return <article id={`branch-operation-card-${card.id}`} className={`branch-ops-card border border-border bg-card text-card-foreground shadow-sm ${expanded ? "branch-ops-card-expanded" : ""}`} data-testid={`branch-operation-card-${card.id}`}>
-    <button type="button" className="group branch-ops-card-main" onClick={onToggle} aria-expanded={expanded} aria-controls={panelId} aria-label={`${expanded ? "إخفاء تفاصيل" : "إظهار تفاصيل"} ${card.title}`}>
+    <button type="button" className="group branch-ops-card-main" onClick={() => onOpen(card.href)} aria-label={`فتح ${card.title}`}>
       <div className="flex items-center gap-3">
         <PlatformAppIcon icon={meta.icon} color={meta.color} />
         <span className="min-w-0 flex-1">
           <h3 className="branch-ops-card-title block break-words text-base font-black leading-snug text-foreground">{card.title}</h3>
+          <span className="mt-1 block text-xs font-semibold text-muted-foreground">فتح صفحة العمل</span>
         </span>
-        <ChevronDown className={`branch-ops-card-chevron h-5 w-5 shrink-0 text-primary ${expanded ? "rotate-180" : ""}`} aria-hidden="true" />
+        <ChevronLeft className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
       </div>
+    </button>
+    <button type="button" className="branch-ops-card-details" onClick={onToggle} aria-expanded={expanded} aria-controls={panelId} aria-label={`${expanded ? "إخفاء" : "عرض"} تفاصيل ${card.title}`}>
+      <span>التفاصيل</span><ChevronDown className={`branch-ops-card-chevron h-4 w-4 ${expanded ? "rotate-180" : ""}`} aria-hidden="true" />
     </button>
     {expanded && <div id={panelId} className="branch-ops-card-panel">
       {isNavigationOnly(card) && <p className="text-xs font-bold text-muted-foreground">رابط تنقل فقط · لا يعكس حالة إنجاز</p>}
@@ -289,10 +293,7 @@ export function OperationCardView({ card, section, onOpen, onRefresh, expanded =
         : card.metrics.length > 0 ? <div className="space-y-1 text-xs leading-5 text-muted-foreground">{card.statusLabel && <p className="font-semibold">{card.statusLabel}</p>}{card.metrics.map((metric) => <p className="break-words" key={metric.label}><b className="font-black text-foreground">{metric.value.toLocaleString("en-US")}{metric.unit ? ` ${metric.unit}` : ""}</b> {metric.label}</p>)}</div>
           : <p className="text-xs text-muted-foreground">{card.statusLabel ?? (isNavigationOnly(card) ? "صفحة متابعة — لا توجد مؤشرات معروضة" : "المؤشرات غير متاحة — لا يعني ذلك صفرًا")}</p>}
       {card.state === "ready" && card.description && <p className="mt-2 text-xs leading-5 text-muted-foreground">{card.description}</p>}
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button variant="outline" className="branch-ops-open-module min-h-11" onClick={() => onOpen(card.href)}>فتح {card.title}<ChevronLeft className="mr-1 h-4 w-4" /></Button>
-        {card.state === "error" && <Button variant="ghost" className="branch-ops-refresh min-h-11 text-destructive" onClick={onRefresh}><RefreshCw className="ml-2 h-4 w-4" />إعادة المحاولة</Button>}
-      </div>
+      {card.state === "error" && <Button variant="ghost" className="branch-ops-refresh mt-3 min-h-11 text-destructive" onClick={onRefresh}><RefreshCw className="ml-2 h-4 w-4" />إعادة المحاولة</Button>}
     </div>}
   </article>;
 }
