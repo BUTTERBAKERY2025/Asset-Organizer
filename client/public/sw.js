@@ -1,7 +1,7 @@
-const CACHE_NAME = 'butter-v8';
-const STATIC_CACHE = 'butter-static-v8';
+const CACHE_NAME = 'butter-v9';
+const STATIC_CACHE = 'butter-static-v9';
 const FONT_CACHE = 'butter-fonts-v4';
-const API_CACHE = 'butter-api-v7';
+const API_CACHE = 'butter-api-v8';
 
 const STATIC_ASSETS = [
   '/',
@@ -65,6 +65,11 @@ self.addEventListener('fetch', (event) => {
     if (url.pathname === '/api/my-permissions') {
       return;
     }
+    // Notification state and push-subscription APIs are user/device-specific.
+    // Let the browser use the network directly; never read or write them here.
+    if (isNotificationApiPath(url.pathname)) {
+      return;
+    }
     const SAFE_STALE_ENDPOINTS = [
       '/api/branches', '/api/products', '/api/product-categories',
       '/api/departments', '/api/roles', '/api/operations/products',
@@ -105,6 +110,11 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(staleWhileRevalidate(event.request));
 });
+
+function isNotificationApiPath(pathname) {
+  return pathname.startsWith('/api/push/')
+    || /(^|[-/])notifications?(?=\/|-|$)/.test(pathname.slice('/api/'.length));
+}
 
 async function networkFirstJs(request) {
   // مهلة زمنية: لو علّقت الشبكة لا يبقى استيراد الصفحة معلقاً للأبد (هيكل رمادي دائم)
@@ -254,11 +264,21 @@ self.addEventListener('push', (event) => {
 
 function safeNotificationDestination(value) {
   try {
-    if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || /[\u0000-\u001f\\]/.test(value)) {
+    if (
+      typeof value !== 'string'
+      || value.startsWith('//')
+      || /[\u0000-\u001f\\]/.test(value)
+      || (!value.startsWith('/') && !/^https?:\/\//i.test(value))
+    ) {
       return '/';
     }
     const parsed = new URL(value, self.location.origin);
-    if (parsed.origin !== self.location.origin || (parsed.protocol !== 'https:' && parsed.protocol !== 'http:')) return '/';
+    if (
+      parsed.origin !== self.location.origin
+      || (parsed.protocol !== 'https:' && parsed.protocol !== 'http:')
+      || parsed.username
+      || parsed.password
+    ) return '/';
     return `${parsed.pathname}${parsed.search}${parsed.hash}`;
   } catch (e) {
     return '/';
@@ -272,8 +292,12 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const c of list) {
-        if (new URL(c.url).origin === self.location.origin && 'focus' in c) {
-          return c.navigate(absoluteUrl).then(() => c.focus());
+        try {
+          if (new URL(c.url).href === absoluteUrl && 'focus' in c) {
+            return c.focus();
+          }
+        } catch (e) {
+          // Ignore a malformed client URL and open the safe destination below.
         }
       }
       return clients.openWindow(absoluteUrl);

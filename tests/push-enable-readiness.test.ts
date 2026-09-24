@@ -44,7 +44,9 @@ describe("explicit mobile push activation", () => {
     environment(Promise.resolve({
       pushManager: { getSubscription: async () => ({ toJSON: () => subscription }) },
     }));
-    vi.mocked(fetch).mockResolvedValue({ ok: true } as Response);
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ publicKey: "AQ" }) } as Response)
+      .mockResolvedValueOnce({ ok: true } as Response);
     expect(await enablePushNotifications()).toBe("enabled");
     expect(fetch).toHaveBeenCalledWith("/api/push/subscribe", expect.objectContaining({
       method: "POST", credentials: "include", body: JSON.stringify({ subscription }),
@@ -54,8 +56,26 @@ describe("explicit mobile push activation", () => {
     environment(Promise.resolve({
       pushManager: { getSubscription: async () => ({ toJSON: () => ({}) }) },
     }));
-    vi.mocked(fetch).mockResolvedValue({ ok: false } as Response);
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ publicKey: "AQ" }) } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        clone: () => ({ json: async () => ({ code: "push_storage_unavailable" }) }),
+      } as unknown as Response);
     expect(await enablePushNotifications()).toBe("server-error");
+  });
+  it("surfaces an endpoint ownership conflict instead of blaming the network", async () => {
+    const subscription = { endpoint: "https://fcm.googleapis.com/fcm/send/device", toJSON: () => ({ endpoint: "https://fcm.googleapis.com/fcm/send/device" }) };
+    environment(Promise.resolve({ pushManager: { getSubscription: async () => subscription } }));
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ publicKey: "AQ" }) } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        clone: () => ({ json: async () => ({ code: "endpoint_owned_by_another_user" }) }),
+      } as unknown as Response);
+    expect(await enablePushNotifications()).toBe("ownership-conflict");
   });
   it("never requests permission during silent subscription sync", async () => {
     const requestPermission = environment(Promise.resolve({

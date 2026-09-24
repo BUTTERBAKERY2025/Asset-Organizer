@@ -13,6 +13,7 @@ import {
 
 // Helper function to get Saudi Arabia time (UTC+3)
 import { updateCatalogueBranchStock } from "./catalogue-branch-stock";
+import { riyadhTimeShort } from "@shared/riyadh-time";
 function getSaudiArabiaTime(): { date: string; time: string; timeShort: string } {
   const now = new Date();
   // Format date and time components directly in Saudi Arabia timezone
@@ -18358,7 +18359,7 @@ export class DatabaseStorage implements IStorage {
         }
       }
       if (n.displayTimeStart || n.displayTimeEnd) {
-        const nowTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+        const nowTime = riyadhTimeShort(now);
         if (n.displayTimeStart && nowTime < n.displayTimeStart) return false;
         if (n.displayTimeEnd && nowTime > n.displayTimeEnd) return false;
       }

@@ -41223,12 +41223,18 @@ export async function registerRoutes(
       const { savePushSubscription } = await import("./push-service");
       const saved = await savePushSubscription(req.session.userId!, sub, req.headers["user-agent"]);
       if (!saved) {
-        return res.status(409).json({ error: "اشتراك هذا الجهاز مرتبط بجلسة أخرى؛ أوقف الإشعارات ثم فعّلها مجدداً" });
+        return res.status(409).json({
+          code: "endpoint_owned_by_another_user",
+          error: "اشتراك هذا الجهاز مرتبط بحساب آخر. استخدم «إعادة تهيئة هذا الجهاز» لإنشاء اشتراك جديد دون نقل اشتراك الحساب الآخر.",
+        });
       }
       res.json({ success: true });
     } catch (error) {
       console.error("Error saving push subscription:", error);
-      res.status(500).json({ error: "فشل في تفعيل إشعارات الجوال" });
+      if ((error as Error)?.message?.startsWith("Invalid push subscription")) {
+        return res.status(400).json({ code: "unsupported_push_provider", error: "مزود إشعارات هذا المتصفح غير مدعوم بأمان" });
+      }
+      res.status(503).json({ code: "push_storage_unavailable", error: "تعذر حفظ اشتراك الإشعارات في الخادم" });
     }
   });
 
@@ -41242,7 +41248,7 @@ export async function registerRoutes(
       res.json({ success: true });
     } catch (error) {
       console.error("Error removing push subscription:", error);
-      res.status(500).json({ error: "فشل في إلغاء الاشتراك" });
+      res.status(503).json({ code: "push_storage_unavailable", error: "تعذر حذف اشتراك الإشعارات من الخادم" });
     }
   });
 
@@ -41256,7 +41262,7 @@ export async function registerRoutes(
       res.json({ subscribed: await hasPushSubscription(req.session.userId!, endpoint) });
     } catch (error) {
       console.error("Error checking push subscription:", error);
-      res.status(500).json({ error: "فشل في التحقق من اشتراك الإشعارات" });
+      res.status(503).json({ code: "push_storage_unavailable", error: "تعذر قراءة حالة اشتراك الإشعارات من الخادم" });
     }
   });
 

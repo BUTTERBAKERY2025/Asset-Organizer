@@ -8,6 +8,7 @@ import {
   disablePushNotifications,
   enablePushNotifications,
   getPushNotificationStatus,
+  reinitializePushNotifications,
   sendTestPushToCurrentDevice,
   syncPushSubscription,
   type PushNotificationStatus,
@@ -26,12 +27,16 @@ export function MobilePushSettings({ className, compact = true }: MobilePushSett
   const { isAuthenticated, user } = useAuth();
   const { toast } = useToast();
   const [status, setStatus] = useState<PushNotificationStatus>("checking");
-  const [busy, setBusy] = useState<"enable" | "disable" | "sync" | "test" | null>(null);
+  const [busy, setBusy] = useState<"enable" | "disable" | "sync" | "reset" | "test" | null>(null);
 
   const refresh = useCallback(async () => {
     if (!isAuthenticated) return;
     setStatus("checking");
-    await syncPushSubscription();
+    const synced = await syncPushSubscription();
+    if (synced !== "enabled" && synced !== "none") {
+      setStatus(synced);
+      return;
+    }
     setStatus(await getPushNotificationStatus());
   }, [isAuthenticated]);
 
@@ -65,7 +70,14 @@ export function MobilePushSettings({ className, compact = true }: MobilePushSett
     setBusy("sync");
     const result = await syncPushSubscription();
     setBusy(null);
-    setStatus(result === "enabled" ? "enabled" : result === "none" ? "disabled" : "server-error");
+    setStatus(result === "enabled" ? "enabled" : result === "none" ? "disabled" : result);
+  };
+
+  const reset = async () => {
+    setBusy("reset");
+    const result = await reinitializePushNotifications();
+    setBusy(null);
+    setStatus(result === "error" ? "server-error" : result);
   };
 
   const test = async () => {
@@ -84,7 +96,10 @@ export function MobilePushSettings({ className, compact = true }: MobilePushSett
     denied: "الإشعارات محجوبة. اسمح بها من إعدادات الموقع في المتصفح ثم أعد المحاولة.",
     unsupported: "هذا المتصفح أو الجهاز لا يدعم إشعارات الويب.",
     "not-installed": "على iPhone أو iPad: اضغط مشاركة، ثم «إضافة إلى الشاشة الرئيسية»، وافتح التطبيق من الأيقونة الجديدة.",
-    "server-error": "تعذر مزامنة الإشعارات مع الخادم. تحقق من الاتصال ثم أعد المحاولة.",
+    "ownership-conflict": "اشتراك المتصفح القديم مرتبط بحساب آخر. أعد تهيئة هذا الجهاز لإنشاء اشتراك جديد؛ لن يُنقل اشتراك الحساب الآخر.",
+    "session-expired": "انتهت جلسة الدخول. سجّل الدخول مجدداً ثم أعد مزامنة الإشعارات.",
+    "provider-unsupported": "عنوان مزود الإشعارات الذي أعاده هذا المتصفح غير مدعوم. حدّث المتصفح أو استخدم متصفحاً مدعوماً.",
+    "server-error": "خدمة اشتراكات الإشعارات غير متاحة حالياً. أعد المحاولة؛ المشكلة ليست بالضرورة في اتصال جهازك.",
   };
 
   return (
@@ -113,12 +128,13 @@ export function MobilePushSettings({ className, compact = true }: MobilePushSett
                 {busy === "enable" && <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin" />} تفعيل
               </Button>
             )}
-            {status === "server-error" && (
+            {(status === "server-error" || status === "ownership-conflict" || status === "provider-unsupported") && (
               <>
                 <Button type="button" size="sm" variant="outline" className="h-8 text-xs" disabled={busy !== null} onClick={() => void sync()}>
                   {busy === "sync" ? <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="ml-1 h-3.5 w-3.5" />} إعادة المزامنة
                 </Button>
-                <Button type="button" size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground" disabled={busy !== null} onClick={() => void disable()}>
+                <Button type="button" size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground" disabled={busy !== null} onClick={() => void reset()}>
+                  {busy === "reset" && <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin" />}
                   إعادة تهيئة هذا الجهاز
                 </Button>
               </>
@@ -152,8 +168,10 @@ export function PushNotificationPrompt() {
     void (async () => {
       // If permission was granted earlier, safely associate only the existing
       // browser subscription with the user who is authenticated now.
-      await syncPushSubscription();
-      const status = await getPushNotificationStatus();
+      const syncResult = await syncPushSubscription();
+      const status = syncResult === "enabled" || syncResult === "none"
+        ? await getPushNotificationStatus()
+        : syncResult;
       if (cancelled) return;
       if (status === "enabled") {
         return;

@@ -11198,6 +11198,10 @@ export const systemNotifications = pgTable("system_notifications", {
   createdBy: varchar("created_by").references(() => users.id),
   // وقت إرسال إشعار الجوال (Push) — يمنع الإرسال المزدوج بين الإنشاء والمسح الدوري للمجدولة
   pushSentAt: timestamp("push_sent_at"),
+  pushClaimedAt: timestamp("push_claimed_at"),
+  pushAttemptCount: integer("push_attempt_count").default(0).notNull(),
+  pushNextRetryAt: timestamp("push_next_retry_at"),
+  pushFailedAt: timestamp("push_failed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
@@ -13072,6 +13076,22 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
   index("idx_push_subs_user").on(t.userId),
 ]);
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+
+// Per-device receipts make a partial provider failure retryable without
+// delivering the same notification again to devices which already accepted it.
+export const pushNotificationDeliveries = pgTable("push_notification_deliveries", {
+  id: serial("id").primaryKey(),
+  notificationId: integer("notification_id").notNull().references(() => systemNotifications.id, { onDelete: "cascade" }),
+  subscriptionId: integer("subscription_id").notNull().references(() => pushSubscriptions.id, { onDelete: "cascade" }),
+  status: text("status").notNull(),
+  attempts: integer("attempts").default(0).notNull(),
+  lastError: text("last_error"),
+  deliveredAt: timestamp("delivered_at"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("idx_push_delivery_notification_subscription").on(t.notificationId, t.subscriptionId),
+  index("idx_push_delivery_notification").on(t.notificationId),
+]);
 
 // مفاتيح VAPID تُولَّد تلقائياً عند أول تشغيل وتُخزَّن هنا (تعمل في التطوير والإنتاج بدون إعداد يدوي)
 export const pushVapidConfig = pgTable("push_vapid_config", {

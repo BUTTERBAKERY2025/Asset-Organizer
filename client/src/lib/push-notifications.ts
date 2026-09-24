@@ -10,7 +10,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return arr;
 }
 
-export type EnablePushResult = "enabled" | "denied" | "unsupported" | "not-installed" | "server-error" | "error";
+export type EnablePushResult = "enabled" | "denied" | "unsupported" | "not-installed" | "ownership-conflict" | "session-expired" | "provider-unsupported" | "server-error" | "error";
 export type DisablePushResult = "disabled" | "server-error" | "unsupported";
 export type PushNotificationStatus =
   | "checking"
@@ -19,6 +19,9 @@ export type PushNotificationStatus =
   | "denied"
   | "unsupported"
   | "not-installed"
+  | "ownership-conflict"
+  | "session-expired"
+  | "provider-unsupported"
   | "server-error";
 
 let pushSessionGeneration = 0;
@@ -73,6 +76,34 @@ async function postSubscription(path: string, sub: PushSubscription, signal?: Ab
   });
 }
 
+async function classifyResponse(response: Response): Promise<Exclude<EnablePushResult, "enabled" | "denied" | "unsupported" | "not-installed" | "error">> {
+  if (response.status === 401 || response.status === 403) return "session-expired";
+  let code = "";
+  try {
+    code = String((await response.clone().json())?.code || "");
+  } catch {
+    // A proxy may return HTML; the HTTP status still remains useful below.
+  }
+  if (response.status === 409 || code === "endpoint_owned_by_another_user") return "ownership-conflict";
+  if (code === "unsupported_push_provider") return "provider-unsupported";
+  return "server-error";
+}
+
+async function getServerPublicKey(): Promise<string | null> {
+  const response = await fetch("/api/push/vapid-public-key", { credentials: "include" });
+  if (!response.ok) return null;
+  const data = await response.json();
+  return typeof data?.publicKey === "string" && data.publicKey ? data.publicKey : null;
+}
+
+function subscriptionUsesKey(sub: PushSubscription, publicKey: string): boolean {
+  const actual = sub.options?.applicationServerKey;
+  if (!actual) return true; // Older implementations do not expose the key.
+  const expected = urlBase64ToUint8Array(publicKey);
+  const bytes = new Uint8Array(actual);
+  return bytes.length === expected.length && bytes.every((value, index) => value === expected[index]);
+}
+
 export async function getPushNotificationStatus(): Promise<PushNotificationStatus> {
   if (iosNeedsInstall()) return "not-installed";
   if (!pushSupported()) return "unsupported";
@@ -82,7 +113,7 @@ export async function getPushNotificationStatus(): Promise<PushNotificationStatu
     const sub = await (await readyPushWorker()).pushManager.getSubscription();
     if (!sub) return "disabled";
     const response = await postSubscription("/api/push/status", sub);
-    if (!response.ok) return "server-error";
+    if (!response.ok) return await classifyResponse(response);
     const data = await response.json();
     return data?.subscribed === true ? "enabled" : "disabled";
   } catch (error) {
@@ -103,18 +134,23 @@ export async function enablePushNotifications(): Promise<EnablePushResult> {
 
     const reg = await readyPushWorker();
     let sub = await reg.pushManager.getSubscription();
+    const publicKey = await getServerPublicKey();
+    if (!publicKey) return "server-error";
+    // A deployment must keep one VAPID identity. If a legacy subscription was
+    // nevertheless created with another key, the browser cannot repair it by
+    // merely POSTing the old endpoint; revoke and create a compatible one.
+    if (sub && !subscriptionUsesKey(sub, publicKey)) {
+      await sub.unsubscribe();
+      sub = null;
+    }
     if (!sub) {
-      const res = await fetch("/api/push/vapid-public-key", { credentials: "include" });
-      if (!res.ok) return "server-error";
-      const { publicKey } = await res.json();
-      if (typeof publicKey !== "string" || !publicKey) return "server-error";
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(publicKey),
       });
     }
     const save = await postSubscription("/api/push/subscribe", sub);
-    return save.ok ? "enabled" : "server-error";
+    return save.ok ? "enabled" : await classifyResponse(save);
   } catch (error) {
     console.error("[push] enable failed:", error);
     return "error";
@@ -123,7 +159,7 @@ export async function enablePushNotifications(): Promise<EnablePushResult> {
 
 // Re-associate only an already-existing browser subscription. This never asks
 // for permission and never creates a subscription without a user gesture.
-export async function syncPushSubscription(): Promise<"enabled" | "none" | "server-error"> {
+export async function syncPushSubscription(): Promise<"enabled" | "none" | "ownership-conflict" | "session-expired" | "provider-unsupported" | "server-error"> {
   if (logoutCleanupActive || !pushSupported() || Notification.permission !== "granted") return "none";
   const generation = pushSessionGeneration;
   try {
@@ -143,11 +179,37 @@ export async function syncPushSubscription(): Promise<"enabled" | "none" | "serv
       activeSyncRequests.delete(controller);
     }
     if (generation !== pushSessionGeneration) return "none";
-    return response.ok ? "enabled" : "server-error";
+    return response.ok ? "enabled" : await classifyResponse(response);
   } catch (error) {
     if (logoutCleanupActive || generation !== pushSessionGeneration || (error as Error)?.name === "AbortError") return "none";
     console.error("[push] sync failed:", error);
     return "server-error";
+  }
+}
+
+// Repairs a stale/conflicting browser endpoint without ever transferring or
+// deleting an endpoint owned by another account. The server delete is scoped
+// to the authenticated owner; provider unsubscribe then forces a fresh endpoint.
+export async function reinitializePushNotifications(): Promise<EnablePushResult> {
+  if (!pushSupported()) return "unsupported";
+  if (Notification.permission !== "granted") return "denied";
+  try {
+    const reg = await readyPushWorker();
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      const response = await fetch("/api/push/unsubscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ endpoint: sub.endpoint }),
+      });
+      if (!response.ok && (response.status === 401 || response.status === 403)) return "session-expired";
+      await sub.unsubscribe();
+    }
+    return enablePushNotifications();
+  } catch (error) {
+    console.error("[push] reinitialize failed:", error);
+    return "error";
   }
 }
 
