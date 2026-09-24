@@ -18,3 +18,9 @@ Shared-device subscriptions must not silently transfer between accounts during s
 **Why:** A delayed sync or logout cleanup can overlap the next login; aborting a browser request cannot undo server work already executing. Endpoint-global reassignment can therefore route notifications to the wrong account.
 
 **How to apply:** Keep subscription ownership checks atomic, revoke the browser endpoint when leaving an account, suppress stale sync generations, and bound cleanup without leaving cookie-bearing requests running into the next session. Do not weaken ownership conflicts to make re-enablement seem successful.
+
+Production push bootstrap must work with strict `script-src 'self'`, without inline-script exceptions.
+
+**Why:** The live custom domain served an inline service-worker registration script while its CSP blocked inline execution. Development readiness checks and successful builds did not expose the production-only failure.
+
+**How to apply:** Keep registration in an allowed same-origin external script, test emitted production HTML against CSP, and check live response headers plus deployed worker version before blaming device connectivity. Existing registered workers can mask this failure on older devices.
