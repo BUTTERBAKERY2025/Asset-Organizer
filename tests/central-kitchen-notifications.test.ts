@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildCentralKitchenNotificationPayload,
   canReceiveCentralKitchenNotification,
+  dispatchAfterCommitSafely,
   type CentralKitchenNotificationEvent,
 } from "../server/central-kitchen-notifications";
 
@@ -58,5 +59,38 @@ describe("central kitchen lifecycle notifications", () => {
     });
     expect(payload.title).toBe(title);
     expect(payload.content.length).toBeGreaterThan(10);
+  });
+
+  it("contains both synchronous throws and rejected post-commit tasks", async () => {
+    const errors: unknown[] = [];
+    const syncFailure = new Error("sync import boundary");
+    const asyncFailure = new Error("rejected push");
+
+    expect(() => dispatchAfterCommitSafely(() => {
+      throw syncFailure;
+    }, error => errors.push(error))).not.toThrow();
+    dispatchAfterCommitSafely(
+      () => Promise.reject(asyncFailure),
+      error => errors.push(error),
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(errors).toEqual([syncFailure, asyncFailure]);
+  });
+
+  it("does not leak a rejection when post-commit error reporting itself throws", async () => {
+    const unhandled: unknown[] = [];
+    const listener = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", listener);
+    try {
+      dispatchAfterCommitSafely(
+        () => Promise.reject(new Error("push failure")),
+        () => { throw new Error("logger failure"); },
+      );
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", listener);
+    }
   });
 });

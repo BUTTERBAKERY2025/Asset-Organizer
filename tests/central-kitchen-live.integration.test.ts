@@ -13,6 +13,7 @@ import {
   centralKitchenRecipes,
   centralKitchenOrderItems,
   centralKitchenOrders,
+  centralKitchenRouting,
   centralKitchenRuntime,
   dailyProductionBatches,
   finishedGoodsInventory,
@@ -366,10 +367,23 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
       branchId: kitchenBranchId,
       accessLevel: "full",
     });
-    await databaseState.db.insert(userPermissions).values({
-      userId: scopedKitchenUser.id,
-      module: "central_kitchen_orders",
-      actions: ["view"],
+    await databaseState.db.insert(userPermissions).values([
+      {
+        userId: kitchenUser.id,
+        module: "central_kitchen_orders",
+        actions: ["view", "edit", "approve"],
+      },
+      {
+        userId: scopedKitchenUser.id,
+        module: "central_kitchen_orders",
+        actions: ["view", "approve"],
+      },
+    ]);
+    await databaseState.db.insert(centralKitchenRouting).values({
+      branchId: kitchenBranchId,
+      responsibleUserId: kitchenUser.id,
+      deputyUserId: scopedKitchenUser.id,
+      updatedBy: adminUser.id,
     });
 
     const idResult = await databaseState.db.execute(sql`
@@ -537,7 +551,7 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     await registerRoutes(createServer(), captureApp());
   }, 30_000);
 
-  it("HTTP edits and cancels a branch request once without stock changes and denies the kitchen branch", async () => {
+  it("HTTP edits, approves, and cancels a branch request once without stock changes and denies the kitchen branch", async () => {
     expect((await setRuntime("real")).statusCode).toBe(200);
     const [product] = await databaseState.db.select().from(products).where(eq(products.id, fixture.stockedProductId));
     const stockBefore = await productBalance(fixture.kitchenBranchId, product.id);
@@ -552,7 +566,7 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     });
     expect(created.statusCode).toBe(201);
     const createdNotifications = await databaseState.db.select().from(systemNotifications)
-      .where(eq(systemNotifications.buttonAction, `/central-kitchen-orders?orderId=${created.body.id}`));
+      .where(eq(systemNotifications.buttonAction, `/central-kitchen-orders?branchId=${encodeURIComponent(fixture.kitchenBranchId)}&orderId=${created.body.id}`));
     expect(createdNotifications).toHaveLength(1);
     expect(createdNotifications[0]).toMatchObject({
       title: "طلب جديد للمطبخ المركزي",
@@ -574,6 +588,8 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
       targetUserIds: [fixture.scopedKitchenUser.id],
       accessModule: "central_kitchen_orders",
       accessBranchIds: [fixture.kitchenBranchId],
+      buttonAction: `/central-kitchen-orders?branchId=${encodeURIComponent(fixture.kitchenBranchId)}&readGate=1&orderId=${created.body.id}`,
+      dedupeKey: `central-kitchen-event:${created.body.id + 1_000_000_000}:created`,
       showOnce: true,
     }).returning();
     expect((await invoke("post", "/api/system-notifications/:id/read", {
@@ -643,7 +659,7 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     });
     expect(changedDeclarationRetry.statusCode).toBe(409);
     expect(await databaseState.db.select().from(systemNotifications)
-      .where(eq(systemNotifications.buttonAction, `/central-kitchen-orders?orderId=${created.body.id}`)))
+      .where(eq(systemNotifications.buttonAction, `/central-kitchen-orders?branchId=${encodeURIComponent(fixture.kitchenBranchId)}&orderId=${created.body.id}`)))
       .toHaveLength(1);
     const detail = await httpInvoke("get", "/api/central-kitchen-orders/:id", {
       user: fixture.requestUser,
@@ -686,10 +702,17 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     expect(editedReplay.headers["idempotent-replayed"]).toBe("true");
     expect(editedReplay.body.events).toHaveLength(edited.body.events.length);
     expect((await databaseState.db.select().from(systemNotifications)
-      .where(eq(systemNotifications.buttonAction, `/central-kitchen-orders?orderId=${created.body.id}`)))
+      .where(eq(systemNotifications.buttonAction, `/central-kitchen-orders?branchId=${encodeURIComponent(fixture.kitchenBranchId)}&orderId=${created.body.id}`)))
       .filter((notification: any) => notification.title === "تم تعديل طلب المطبخ المركزي"))
       .toHaveLength(1);
-    const cancel = { expectedEventId: revision(edited.body), reason: "HTTP request withdrawn", idempotencyKey: key("http-cancel") };
+    const approved = await httpInvoke("post", "/api/central-kitchen-orders/:id/approve", {
+      user: fixture.kitchenUser,
+      params,
+      body: { idempotencyKey: key("http-approve-before-cancel") },
+    });
+    expect(approved.statusCode).toBe(200);
+    expect(approved.body.status).toBe("approved");
+    const cancel = { expectedEventId: revision(approved.body), reason: "HTTP request withdrawn", idempotencyKey: key("http-cancel") };
     const cancelled = await httpInvoke("post", path, { user: fixture.requestUser, params, body: cancel });
     expect(cancelled.statusCode).toBe(200);
     expect(cancelled.body.status).toBe("cancelled");
@@ -699,12 +722,12 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     expect(replay.body.events).toHaveLength(cancelled.body.events.length);
     expect(replay.body.events.filter((event: any) => event.eventType === "cancelled")).toHaveLength(1);
     expect((await databaseState.db.select().from(systemNotifications)
-      .where(eq(systemNotifications.buttonAction, `/central-kitchen-orders?orderId=${created.body.id}`)))
+      .where(eq(systemNotifications.buttonAction, `/central-kitchen-orders?branchId=${encodeURIComponent(fixture.kitchenBranchId)}&orderId=${created.body.id}`)))
       .filter((notification: any) => notification.title === "تم إلغاء طلب المطبخ المركزي"))
       .toHaveLength(1);
     const notificationCountBeforeFailedTransition = (await databaseState.db.select()
       .from(systemNotifications)
-      .where(eq(systemNotifications.buttonAction, `/central-kitchen-orders?orderId=${created.body.id}`))).length;
+      .where(eq(systemNotifications.buttonAction, `/central-kitchen-orders?branchId=${encodeURIComponent(fixture.kitchenBranchId)}&orderId=${created.body.id}`))).length;
     const failedTransition = await httpInvoke("post", "/api/central-kitchen-orders/:id/approve", {
       user: fixture.kitchenUser,
       params,
@@ -712,7 +735,7 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     });
     expect(failedTransition.statusCode).toBe(409);
     expect((await databaseState.db.select().from(systemNotifications)
-      .where(eq(systemNotifications.buttonAction, `/central-kitchen-orders?orderId=${created.body.id}`))))
+      .where(eq(systemNotifications.buttonAction, `/central-kitchen-orders?branchId=${encodeURIComponent(fixture.kitchenBranchId)}&orderId=${created.body.id}`))))
       .toHaveLength(notificationCountBeforeFailedTransition);
     expect(await productBalance(fixture.kitchenBranchId, product.id)).toEqual(stockBefore);
     expect(await warehouseBalance(fixture.kitchenBranchId, fixture.materialId)).toEqual(materialBefore);

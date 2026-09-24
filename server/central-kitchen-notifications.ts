@@ -236,15 +236,38 @@ export async function escalateOverdueKitchenOrders(db: any) {
   return ids.length;
 }
 
+export function dispatchAfterCommitSafely(
+  task: () => void | Promise<void>,
+  onError: (error: unknown) => void,
+): void {
+  const report = (error: unknown) => {
+    try {
+      onError(error);
+    } catch {
+      // Post-commit diagnostics must never turn a contained failure into an
+      // unhandled rejection or alter the already-committed HTTP operation.
+    }
+  };
+  try {
+    void Promise.resolve(task()).catch(report);
+  } catch (error) {
+    report(error);
+  }
+}
+
 export function dispatchCentralKitchenNotificationAfterCommit(notificationId: number | null): void {
   if (!notificationId) return;
-  void import("./db").then(async ({ db }) => {
+  dispatchAfterCommitSafely(async () => {
+    const { db } = await import("./db");
     const [notification] = await db.select().from(systemNotifications)
       .where(eq(systemNotifications.id, notificationId)).limit(1);
     if (!notification) return;
     const { sendPushForSystemNotification } = await import("./push-service");
     await sendPushForSystemNotification(notification);
-  }).catch((error) => {
-    console.error("[central-kitchen-notification] post-commit push failed:", error?.message || error);
+  }, (error) => {
+    console.error(
+      "[central-kitchen-notification] post-commit push failed:",
+      (error as any)?.message || error,
+    );
   });
 }
