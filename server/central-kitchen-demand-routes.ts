@@ -1,4 +1,4 @@
-import type { Express, Request } from "express";
+import type { Express, Request, RequestHandler } from "express";
 import { createHash, randomUUID } from "crypto";
 import { and, eq, gte, ilike, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -173,8 +173,15 @@ function groupedReportTotals(rows: Awaited<ReturnType<typeof reportRows>>["rows"
   }));
 }
 
+// Express 4 does not forward rejected async handlers to error middleware.
+// Cover the entire handler, including reads before transaction-level catches.
+const forwardAsyncErrors = (handler: RequestHandler): RequestHandler =>
+  (req, res, next) => {
+    Promise.resolve().then(() => handler(req, res, next)).catch(next);
+  };
+
 export function registerCentralKitchenDemandRoutes(app: Express) {
-  app.get("/api/central-kitchen-demand/legacy-candidates", isAuthenticated, requirePermission("central_kitchen_orders", "view"), async (req, res) => {
+  app.get("/api/central-kitchen-demand/legacy-candidates", isAuthenticated, requirePermission("central_kitchen_orders", "view"), forwardAsyncErrors(async (req, res) => {
     const parsed = z.object({ orderId: id.optional(), page: z.coerce.number().int().positive().default(1), pageSize: z.coerce.number().int().min(1).max(200).default(100) }).safeParse(req.query);
     if (!parsed.success) return res.status(400).json({ error: "معايير المصالحة القديمة غير صالحة" });
     const conditions = [
@@ -222,9 +229,9 @@ export function registerCentralKitchenDemandRoutes(app: Express) {
     }
     res.set("Cache-Control", "private, no-store");
     return res.json({ rows: visible, total, page: parsed.data.page, pageSize: parsed.data.pageSize, totalPages: Math.ceil(total / parsed.data.pageSize) });
-  });
+  }));
 
-  app.get("/api/central-kitchen-demand", isAuthenticated, requirePermission("central_kitchen_orders", "view"), async (req, res) => {
+  app.get("/api/central-kitchen-demand", isAuthenticated, requirePermission("central_kitchen_orders", "view"), forwardAsyncErrors(async (req, res) => {
     const query = z.object({
       kitchenId: z.string().optional(), branchId: z.string().optional(), status: z.string().optional(),
       originalOrderId: z.coerce.number().int().positive().optional(),
@@ -262,9 +269,9 @@ export function registerCentralKitchenDemandRoutes(app: Express) {
       rows = rows.slice((q.page - 1) * q.pageSize, q.page * q.pageSize);
     }
     return res.json({ rows, groups: groupedReportTotals(allFiltered), responsibleUsers, total, page: q.page, pageSize: q.pageSize, totalPages: Math.ceil(total / q.pageSize) });
-  });
+  }));
 
-  app.post("/api/central-kitchen-demand/activate/:itemId", isAuthenticated, requirePermission("central_kitchen_orders", "edit"), async (req, res) => {
+  app.post("/api/central-kitchen-demand/activate/:itemId", isAuthenticated, requirePermission("central_kitchen_orders", "edit"), forwardAsyncErrors(async (req, res) => {
     const itemId = id.safeParse(req.params.itemId);
     if (!itemId.success) return res.status(400).json({ error: "معرف البند غير صالح" });
     const [item] = await db.select({ item: centralKitchenOrderItems, order: centralKitchenOrders })
@@ -312,9 +319,9 @@ export function registerCentralKitchenDemandRoutes(app: Express) {
       }
       throw error;
     }
-  });
+  }));
 
-  app.post("/api/central-kitchen-demand/:id/actions", isAuthenticated, requirePermission("central_kitchen_orders", "edit"), async (req, res) => {
+  app.post("/api/central-kitchen-demand/:id/actions", isAuthenticated, requirePermission("central_kitchen_orders", "edit"), forwardAsyncErrors(async (req, res) => {
     const commitmentId = id.safeParse(req.params.id);
     const body = centralKitchenDemandActionSchema.safeParse(req.body);
     if (!commitmentId.success || !body.success) return res.status(400).json({ error: "بيانات القرار غير صالحة" });
@@ -482,5 +489,5 @@ export function registerCentralKitchenDemandRoutes(app: Express) {
       }
       throw error;
     }
-  });
+  }));
 }
