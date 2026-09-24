@@ -157,6 +157,7 @@ export default function TransferRequestsPage() {
   const [transferType, setTransferType] = useState<"to_warehouse" | "between_branches">("to_warehouse");
   const shortagePrefillRef = useRef<string | null>(null);
   const createIntentConsumedRef = useRef(false);
+  const detailIntentConsumedRef = useRef<string | null>(null);
   const createIdempotencyKeyRef = useRef<string | null>(null);
   const [modifyingItems, setModifyingItems] = useState<Array<{ 
     itemId: number; 
@@ -374,6 +375,68 @@ export default function TransferRequestsPage() {
     enabled: !navigationBranch.isResolving
       && (!navigationBranch.hasBranchParam || (!!navigationBranch.branchId && filterBranch === navigationBranch.branchId)),
   });
+
+  // Notification deep links carry both the exact transfer and its intended
+  // branch scope. Load the row through the server's branch-authorized endpoint;
+  // never fall back to searching an unscoped list after a 403/404.
+  useEffect(() => {
+    if (navigationBranch.isResolving || permissionsLoading || !canView("warehouse")) return;
+    const params = new URLSearchParams(search);
+    const rawTransferId = params.get("transferId");
+    const transferId = Number(rawTransferId);
+    if (!rawTransferId || !Number.isInteger(transferId) || transferId <= 0) return;
+    const intentKey = `${params.get("branchId") || ""}:${transferId}`;
+    if (detailIntentConsumedRef.current === intentKey) return;
+
+    const consumeIntent = () => {
+      const next = new URLSearchParams(window.location.search);
+      next.delete("transferId");
+      const query = next.toString();
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+      );
+    };
+    const showUnavailable = () => toast({
+      title: isRTL ? "تعذر فتح التحويل" : "Unable to open transfer",
+      description: isRTL
+        ? "التحويل غير متاح أو لا تملك صلاحية الوصول إليه"
+        : "The transfer is unavailable or you do not have access",
+      variant: "destructive",
+    });
+    detailIntentConsumedRef.current = intentKey;
+    // An explicit but invalid/revoked branch scope must not degrade into an
+    // unscoped exact-row request.
+    if (params.has("branchId") && !navigationBranch.branchId) {
+      showUnavailable();
+      consumeIntent();
+      return;
+    }
+
+    void fetch(`/api/warehouse/material-transfers/${transferId}`)
+      .then(async response => {
+        if (!response.ok) throw new Error(String(response.status));
+        return response.json();
+      })
+      .then(result => {
+        const transfer = result?.transfer as MaterialTransfer | undefined;
+        const scopedBranchId = navigationBranch.branchId;
+        if (!transfer || (scopedBranchId
+          && transfer.sourceBranchId !== scopedBranchId
+          && transfer.destinationBranchId !== scopedBranchId)) {
+          throw new Error("scope_mismatch");
+        }
+        setSelectedTransfer(transfer);
+        setIsViewOpen(true);
+      })
+      .catch(() => {
+        // Deliberately identical for forbidden, missing and mismatched rows:
+        // no transfer metadata is disclosed through this surface.
+        showUnavailable();
+      })
+      .finally(consumeIntent);
+  }, [canView, isRTL, navigationBranch, permissionsLoading, search, toast]);
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof newTransfer) => {

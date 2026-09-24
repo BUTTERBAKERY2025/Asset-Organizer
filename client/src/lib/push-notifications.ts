@@ -1,5 +1,6 @@
-// Web Push is always activated from an explicit user gesture. Existing
-// subscriptions may be re-associated with the authenticated user silently.
+// The permission prompt is only opened from an explicit user gesture. After
+// permission was granted, the browser subscription may be restored and
+// associated with the authenticated user silently.
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -27,10 +28,29 @@ export type PushNotificationStatus =
 let pushSessionGeneration = 0;
 let logoutCleanupActive = false;
 const activeSyncRequests = new Set<AbortController>();
+let activeSessionUserId: string | null = null;
+let syncInFlight: Promise<PushSyncResult> | null = null;
+
+export type PushSyncResult = "enabled" | "none" | "ownership-conflict" | "session-expired" | "provider-unsupported" | "server-error";
+
+function abortStalePushOperations(): void {
+  pushSessionGeneration += 1;
+  activeSyncRequests.forEach((controller) => controller.abort());
+  activeSyncRequests.clear();
+  syncInFlight = null;
+}
 
 export function resumePushSubscriptionSync(): void {
-  pushSessionGeneration += 1;
+  abortStalePushOperations();
   logoutCleanupActive = false;
+}
+
+/** Prevents delayed browser work from one account crossing into another. */
+export function setPushSubscriptionSession(userId: string | null): void {
+  if (activeSessionUserId === userId) return;
+  activeSessionUserId = userId;
+  abortStalePushOperations();
+  logoutCleanupActive = userId === null;
 }
 
 export function pushSupported(): boolean {
@@ -96,6 +116,15 @@ async function getServerPublicKey(): Promise<string | null> {
   return typeof data?.publicKey === "string" && data.publicKey ? data.publicKey : null;
 }
 
+async function subscribeWithServerKey(registration: ServiceWorkerRegistration): Promise<PushSubscription | null> {
+  const publicKey = await getServerPublicKey();
+  if (!publicKey) return null;
+  return registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(publicKey),
+  });
+}
+
 function subscriptionUsesKey(sub: PushSubscription, publicKey: string): boolean {
   const actual = sub.options?.applicationServerKey;
   if (!actual) return true; // Older implementations do not expose the key.
@@ -157,14 +186,23 @@ export async function enablePushNotifications(): Promise<EnablePushResult> {
   }
 }
 
-// Re-associate only an already-existing browser subscription. This never asks
-// for permission and never creates a subscription without a user gesture.
-export async function syncPushSubscription(): Promise<"enabled" | "none" | "ownership-conflict" | "session-expired" | "provider-unsupported" | "server-error"> {
+// Permission itself is never requested here. Once the user has already granted
+// it, a missing provider subscription can be restored without another gesture.
+async function performPushSubscriptionSync(): Promise<PushSyncResult> {
   if (logoutCleanupActive || !pushSupported() || Notification.permission !== "granted") return "none";
   const generation = pushSessionGeneration;
   try {
-    const sub = await (await readyPushWorker()).pushManager.getSubscription();
-    if (!sub || logoutCleanupActive || generation !== pushSessionGeneration) return "none";
+    const registration = await readyPushWorker();
+    let sub = await registration.pushManager.getSubscription();
+    if (logoutCleanupActive || generation !== pushSessionGeneration) return "none";
+    if (!sub) {
+      sub = await subscribeWithServerKey(registration);
+      if (!sub) return "server-error";
+      if (logoutCleanupActive || generation !== pushSessionGeneration) {
+        void sub.unsubscribe().catch(() => false);
+        return "none";
+      }
+    }
     const controller = new AbortController();
     activeSyncRequests.add(controller);
     if (logoutCleanupActive || generation !== pushSessionGeneration) {
@@ -187,6 +225,17 @@ export async function syncPushSubscription(): Promise<"enabled" | "none" | "owne
   }
 }
 
+// Start, foreground, and reconnect events may race. They all share one attempt.
+export function syncPushSubscription(): Promise<PushSyncResult> {
+  if (syncInFlight) return syncInFlight;
+  const attempt = performPushSubscriptionSync();
+  syncInFlight = attempt;
+  void attempt.finally(() => {
+    if (syncInFlight === attempt) syncInFlight = null;
+  });
+  return attempt;
+}
+
 // Repairs a stale/conflicting browser endpoint without ever transferring or
 // deleting an endpoint owned by another account. The server delete is scoped
 // to the authenticated owner; provider unsubscribe then forces a fresh endpoint.
@@ -197,6 +246,13 @@ export async function reinitializePushNotifications(): Promise<EnablePushResult>
     const reg = await readyPushWorker();
     const sub = await reg.pushManager.getSubscription();
     if (sub) {
+      // A browser endpoint on a shared device can still belong to the prior
+      // account. Only the account that currently owns it may revoke it.
+      const ownership = await postSubscription("/api/push/status", sub);
+      if (!ownership.ok) return await classifyResponse(ownership);
+      const ownershipData = await ownership.json();
+      if (ownershipData?.subscribed !== true) return "ownership-conflict";
+
       const response = await fetch("/api/push/unsubscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -237,9 +293,8 @@ export async function disablePushNotifications(): Promise<DisablePushResult> {
 // running that could execute under a later account on a shared device.
 export async function detachPushSubscriptionFromCurrentUser(): Promise<void> {
   logoutCleanupActive = true;
-  pushSessionGeneration += 1;
-  activeSyncRequests.forEach((controller) => controller.abort());
-  activeSyncRequests.clear();
+  activeSessionUserId = null;
+  abortStalePushOperations();
   if (!pushSupported() || Notification.permission !== "granted") return;
   try {
     const registration = await Promise.race([

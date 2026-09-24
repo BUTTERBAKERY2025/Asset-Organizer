@@ -31,7 +31,7 @@ describe("central kitchen lifecycle notifications", () => {
       accessModule: "central_kitchen_orders",
       accessBranchIds: ["kitchen-a"],
       dedupeKey: "central-kitchen-event:91:created",
-      buttonAction: "/central-kitchen-orders?orderId=42",
+      buttonAction: "/central-kitchen-orders?branchId=kitchen-a&orderId=42",
       title: "طلب جديد للمطبخ المركزي",
       showOnce: true,
     });

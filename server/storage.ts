@@ -14499,7 +14499,7 @@ export class DatabaseStorage implements IStorage {
     }>,
     modifiedBy: string,
     modifiedByName: string
-  ): Promise<MaterialTransfer> {
+  ): Promise<{ transfer: MaterialTransfer; changed: boolean }> {
     return await db.transaction(async (tx) => {
       // Get the transfer and verify it's in a modifiable state
       const [transfer] = await tx.select().from(materialTransfers)
@@ -14577,7 +14577,7 @@ export class DatabaseStorage implements IStorage {
       
       // Return updated transfer
       const [updated] = await tx.select().from(materialTransfers).where(eq(materialTransfers.id, transferId));
-      return updated;
+      return { transfer: updated, changed: hasModifications };
     });
   }
 
@@ -18365,20 +18365,21 @@ export class DatabaseStorage implements IStorage {
       }
       return true;
     });
-    const scoped = visible.filter(n => n.accessModule === "central_kitchen_orders");
+    const scoped = visible.filter(n =>
+      n.accessModule === "central_kitchen_orders"
+      || (n.accessModule === "warehouse" && n.autoSource === "warehouse_material_transfer"));
     if (!scoped.length) return visible;
     const { filterAuthorizedCentralKitchenNotificationUsers } = await import("./central-kitchen-notifications");
     const allowedIds = new Set<number>();
     await Promise.all(scoped.map(async (notification) => {
-      const authorized = await filterAuthorizedCentralKitchenNotificationUsers(
-        db,
-        notification,
-        [userId],
-      );
+      const authorized = notification.accessModule === "central_kitchen_orders"
+        ? await filterAuthorizedCentralKitchenNotificationUsers(db, notification, [userId])
+        : await (await import("./warehouse-transfer-notifications"))
+          .filterAuthorizedWarehouseTransferNotificationUsers(db, notification, [userId]);
       if (authorized.includes(userId)) allowedIds.add(notification.id);
     }));
     return visible.filter(n =>
-      n.accessModule !== "central_kitchen_orders" || allowedIds.has(n.id));
+      !scoped.some(scopedNotification => scopedNotification.id === n.id) || allowedIds.has(n.id));
   }
 
   async markNotificationRead(notificationId: number, userId: string): Promise<NotificationRead> {

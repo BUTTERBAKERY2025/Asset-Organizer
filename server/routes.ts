@@ -293,6 +293,10 @@ import {
   dispatchCentralKitchenNotificationAfterCommit,
   insertCentralKitchenNotification,
 } from "./central-kitchen-notifications";
+import {
+  notifyWarehouseTransferAfterCommit,
+  type WarehouseTransferNotificationEvent,
+} from "./warehouse-transfer-notifications";
 
 // Normalize date to YYYY-MM-DD format
 function normalizeDate(dateStr: string | null | undefined): string | null {
@@ -37277,6 +37281,9 @@ export async function registerRoutes(
         idempotencyAction,
         idempotencyPayloadHash,
       }, normalizedItems);
+      if (!creation.replayed) {
+        void notifyWarehouseTransferAfterCommit(creation.transfer, "created", user.id);
+      }
 
       // Authorization is evaluated again against the durable row on replay.
       // This prevents an old key from returning a transfer whose branch scope
@@ -37441,8 +37448,16 @@ export async function registerRoutes(
         return res.status(404).json({ error: "التحويل غير موجود" });
       }
       
-      // Create notification for the destination branch
-      try {
+      const transferEvent: WarehouseTransferNotificationEvent = status === "delivered" && transfer.hasDiscrepancy
+        ? "delivered_discrepancy"
+        : status as WarehouseTransferNotificationEvent;
+      if (currentStatus !== transfer.status && user?.id) {
+        void notifyWarehouseTransferAfterCommit(transfer, transferEvent, user.id);
+      }
+
+      // Preserve the legacy warehouse inbox without duplicating it on a
+      // same-state retry. The system notification above is the push source.
+      if (currentStatus !== transfer.status) try {
         const notifType = status === "in_transit" ? "transfer_started" : 
                          status === "delivered" ? "transfer_delivered" : "transfer_cancelled";
         const titleAr = status === "in_transit" ? `شحنة في الطريق: ${transfer.transferNumber}` :
@@ -37493,6 +37508,10 @@ export async function registerRoutes(
     try {
       const user = req.currentUser;
       const { modifications } = req.body;
+      const existingTransfer = await storage.getMaterialTransferWithItems(parseInt(req.params.id));
+      if (!existingTransfer) {
+        return res.status(404).json({ error: "التحويل غير موجود" });
+      }
       
       // modifications: [{ itemId: number, newQuantity: number, modificationNotes?: string }]
       if (!modifications || !Array.isArray(modifications)) {
@@ -37501,15 +37520,12 @@ export async function registerRoutes(
       
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req)) {
-        const existingTransfer = await storage.getMaterialTransferWithItems(parseInt(req.params.id));
-        if (existingTransfer) {
-          const hasAccess = await canAccessWarehouseTransferSource(
-            req,
-            existingTransfer.transfer.sourceBranchId,
-          );
-          if (!hasAccess) {
-            return res.status(403).json({ error: "غير مصرح بتعديل كميات هذا التحويل" });
-          }
+        const hasAccess = await canAccessWarehouseTransferSource(
+          req,
+          existingTransfer.transfer.sourceBranchId,
+        );
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بتعديل كميات هذا التحويل" });
         }
       }
       
@@ -37530,15 +37546,31 @@ export async function registerRoutes(
         normalizedModifications.push(normalizedModification);
       }
       
-      const transfer = await storage.modifyTransferQuantities(
+      const modificationResult = await storage.modifyTransferQuantities(
         parseInt(req.params.id),
         normalizedModifications,
         user?.id || '',
         [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || ''
       );
+      const transfer = modificationResult.transfer;
+      // Computed under the transfer row lock by storage. Timestamp comparison
+      // loses real edits in the same millisecond and stale pre-read comparison
+      // duplicates concurrent same-payload retries.
+      const transferWasModified = modificationResult.changed;
+      if (user?.id && transferWasModified) {
+        void notifyWarehouseTransferAfterCommit(
+          transfer,
+          "modified",
+          user.id,
+          // Every committed quantity change gets its own durable event key.
+          // A timestamp is not sufficient: PostgreSQL writes can commit within
+          // the same JavaScript millisecond, causing one notification to vanish.
+          randomUUID(),
+        );
+      }
       
       // Create notification about quantity modification
-      try {
+      if (transferWasModified) try {
         await storage.createWarehouseNotification({
           type: "transfer_modified",
           title: `تم تعديل كميات: ${transfer.transferNumber}`,
@@ -37635,9 +37667,16 @@ export async function registerRoutes(
       if (!transfer) {
         return res.status(404).json({ error: "التحويل غير موجود" });
       }
+      if (existingTransfer.transfer.status !== "delivered" && user?.id) {
+        void notifyWarehouseTransferAfterCommit(
+          transfer,
+          transfer.hasDiscrepancy ? "delivered_discrepancy" : "delivered",
+          user.id,
+        );
+      }
       
       // Create notification for delivery confirmation
-      try {
+      if (existingTransfer.transfer.status !== "delivered") try {
         await storage.createWarehouseNotification({
           type: "transfer_delivered",
           title: `تم تأكيد استلام: ${transfer.transferNumber}`,

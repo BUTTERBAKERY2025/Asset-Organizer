@@ -67,7 +67,7 @@ export function buildCentralKitchenNotificationPayload(input: {
     targetBranchIds: [input.branchId],
     targetUserIds: input.recipientIds,
     buttonText: "فتح الطلب",
-    buttonAction: `/central-kitchen-orders?orderId=${input.orderId}`,
+    buttonAction: `/central-kitchen-orders?branchId=${encodeURIComponent(input.branchId)}&orderId=${input.orderId}`,
     soundEnabled: true,
     // NotificationDisplay marks the row read as soon as it is rendered.
     // showOnce prevents the same lifecycle banner/sound replaying on reload,

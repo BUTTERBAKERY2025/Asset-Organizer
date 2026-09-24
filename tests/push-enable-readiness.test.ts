@@ -3,6 +3,7 @@ import {
   disablePushNotifications,
   detachPushSubscriptionFromCurrentUser,
   enablePushNotifications,
+  reinitializePushNotifications,
   resumePushSubscriptionSync,
   syncPushSubscription,
 } from "../client/src/lib/push-notifications";
@@ -77,13 +78,71 @@ describe("explicit mobile push activation", () => {
       } as unknown as Response);
     expect(await enablePushNotifications()).toBe("ownership-conflict");
   });
+  it("does not revoke a shared-device endpoint owned by another account", async () => {
+    const unsubscribe = vi.fn(async () => true);
+    const subscription = {
+      endpoint: "https://fcm.googleapis.com/fcm/send/prior-account",
+      toJSON: () => ({ endpoint: "https://fcm.googleapis.com/fcm/send/prior-account" }),
+      unsubscribe,
+    };
+    environment(Promise.resolve({ pushManager: { getSubscription: async () => subscription } }));
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      clone: () => ({ json: async () => ({ code: "endpoint_owned_by_another_user" }) }),
+    } as unknown as Response);
+
+    expect(await reinitializePushNotifications()).toBe("ownership-conflict");
+    expect(unsubscribe).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalledWith("/api/push/unsubscribe", expect.anything());
+  });
   it("never requests permission during silent subscription sync", async () => {
     const requestPermission = environment(Promise.resolve({
       pushManager: { getSubscription: async () => null },
-    }));
+    }), "default");
     expect(await syncPushSubscription()).toBe("none");
     expect(requestPermission).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
+  });
+  it("silently restores a missing subscription after permission was previously granted", async () => {
+    const subscription = {
+      endpoint: "https://push.example/restored",
+      toJSON: () => ({ endpoint: "https://push.example/restored" }),
+      unsubscribe: vi.fn(async () => true),
+    };
+    const subscribe = vi.fn(async () => subscription);
+    const requestPermission = environment(Promise.resolve({
+      pushManager: { getSubscription: async () => null, subscribe },
+    }));
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ publicKey: "AQ" }) } as Response)
+      .mockResolvedValueOnce({ ok: true } as Response);
+
+    expect(await syncPushSubscription()).toBe("enabled");
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(subscribe).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenLastCalledWith("/api/push/subscribe", expect.objectContaining({
+      body: JSON.stringify({ subscription: subscription.toJSON() }),
+    }));
+  });
+  it("coalesces overlapping automatic sync attempts", async () => {
+    let resolveSave!: (response: Response) => void;
+    const subscription = {
+      endpoint: "https://push.example/device",
+      toJSON: () => ({ endpoint: "https://push.example/device" }),
+    };
+    environment(Promise.resolve({ pushManager: { getSubscription: async () => subscription } }));
+    vi.mocked(fetch).mockImplementation(() => new Promise<Response>((resolve) => {
+      resolveSave = resolve;
+    }));
+
+    const first = syncPushSubscription();
+    const second = syncPushSubscription();
+    expect(first).toBe(second);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    resolveSave({ ok: true } as Response);
+    expect(await first).toBe("enabled");
+    expect(await second).toBe("enabled");
   });
   it("disables only the current browser endpoint", async () => {
     const unsubscribe = vi.fn(async () => true);

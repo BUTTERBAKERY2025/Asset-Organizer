@@ -10,7 +10,9 @@ import {
   getPushNotificationStatus,
   reinitializePushNotifications,
   sendTestPushToCurrentDevice,
+  setPushSubscriptionSession,
   syncPushSubscription,
+  type PushSyncResult,
   type PushNotificationStatus,
 } from "@/lib/push-notifications";
 
@@ -33,7 +35,11 @@ export function MobilePushSettings({ className, compact = true }: MobilePushSett
     if (!isAuthenticated) return;
     setStatus("checking");
     const synced = await syncPushSubscription();
-    if (synced !== "enabled" && synced !== "none") {
+    if (synced === "enabled") {
+      setStatus("enabled");
+      return;
+    }
+    if (synced !== "none") {
       setStatus(synced);
       return;
     }
@@ -123,7 +129,7 @@ export function MobilePushSettings({ className, compact = true }: MobilePushSett
             </div>
           )}
           <div className="mt-2 flex flex-wrap gap-2">
-            {(status === "disabled" || status === "denied") && (
+            {status === "disabled" && (
               <Button type="button" size="sm" className="h-8 text-xs" disabled={busy !== null} onClick={() => void enable()}>
                 {busy === "enable" && <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin" />} تفعيل
               </Button>
@@ -162,16 +168,27 @@ export function PushNotificationPrompt() {
   const [iosGuide, setIosGuide] = useState(false);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    const sessionUserId = isAuthenticated && user?.id != null ? String(user.id) : null;
+    setPushSubscriptionSession(sessionUserId);
+    if (!sessionUserId) {
+      setShow(false);
+      setIosGuide(false);
+      return;
+    }
+
     let cancelled = false;
     let timer: number | undefined;
-    void (async () => {
-      // If permission was granted earlier, safely associate only the existing
-      // browser subscription with the user who is authenticated now.
-      const syncResult = await syncPushSubscription();
-      const status = syncResult === "enabled" || syncResult === "none"
-        ? await getPushNotificationStatus()
-        : syncResult;
+    let retryTimer: number | undefined;
+    let running = false;
+    let runAgain = false;
+    let failures = 0;
+
+    const updatePrompt = async (syncResult: PushSyncResult) => {
+      const status = syncResult === "enabled"
+        ? "enabled"
+        : syncResult === "none"
+          ? await getPushNotificationStatus()
+          : syncResult;
       if (cancelled) return;
       if (status === "enabled") {
         return;
@@ -181,10 +198,46 @@ export function PushNotificationPrompt() {
       if (!dismissed && status !== "unsupported" && status !== "denied") {
         timer = window.setTimeout(() => ios ? setIosGuide(true) : setShow(true), 4000);
       }
-    })();
+    };
+
+    const runSync = async () => {
+      if (cancelled) return;
+      if (running) {
+        runAgain = true;
+        return;
+      }
+      running = true;
+      const result = await syncPushSubscription();
+      running = false;
+      if (cancelled) return;
+      await updatePrompt(result);
+      if (result === "server-error" && failures < 2) {
+        const delays = [1_000, 4_000] as const;
+        retryTimer = window.setTimeout(() => void runSync(), delays[failures]);
+        failures += 1;
+      } else if (result !== "server-error") {
+        failures = 0;
+      }
+      if (runAgain) {
+        runAgain = false;
+        void runSync();
+      }
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void runSync();
+    };
+    const onOnline = () => void runSync();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onOnline);
+    void runSync();
+
     return () => {
       cancelled = true;
       if (timer !== undefined) window.clearTimeout(timer);
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onOnline);
     };
   }, [isAuthenticated, user?.id]);
 
