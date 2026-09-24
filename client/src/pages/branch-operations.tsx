@@ -4,6 +4,8 @@ import { useLocation } from "wouter";
 import {
   RefreshCw,
 } from "lucide-react";
+import { DailyWorkspace } from "@/components/branch-operations/daily-workspace";
+import "@/components/branch-operations/daily-workspace.css";
 import { Layout } from "@/components/layout";
 import { MobilePushSettings } from "@/components/push-notification-prompt";
 import { Button } from "@/components/ui/button";
@@ -14,8 +16,8 @@ import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { branchBoardUrl, branchOperationUrl, resolveBoardBranch } from "@/lib/branch-operation-navigation";
 import { captureBranchDeskReturn, resolveBranchDeskReturnForCurrentSession, restoreBranchDeskScroll } from "@/lib/branch-operation-return-state";
 import {
-  AlertTriangle, BoardSkeleton, BusinessDate, EmptyState, NeedsActionStrip,
-  OperationCardView, DayOverview, DailySalesProgress, QuickActions, SectionHeader, Settings2, ShieldAlert, Store, groupCards, isNavigationOnly, SECTIONS, type OperationCard,
+  AlertTriangle, BoardSkeleton, EmptyState,
+  OperationCardView, SectionHeader, Settings2, ShieldAlert, Store, formatServerDate, groupCards, isNavigationOnly, SECTIONS, type OperationCard,
 } from "@/components/branch-operations/presentation";
 
 type BranchOperationsSummary = {
@@ -133,11 +135,12 @@ export default function BranchOperationsPage() {
     <Layout>
       <main className="branch-ops-shell page-container pb-10" dir="rtl" data-testid="branch-operations-page">
         <section className="pt-4">
-          <div className="branch-ops-head border-b border-border pb-3">
+          <div className="branch-ops-head branch-desk-header border-b border-border pb-4">
             <div className="min-w-0">
               <div>
-                <h1 className="text-xl font-black text-foreground">لوحة الفرع التشغيلية</h1>
-                <p className="mt-1 text-xs text-muted-foreground">متابعة يوم العمل في فرعك {validBoard && !board.isError && <span className="mr-2 inline-block"><BusinessDate value={validBoard.businessDate} /></span>}</p>
+                <p className="text-xs font-bold text-muted-foreground">BUTTER BAKERY · عمليات الفروع</p>
+                <h1 className="mt-1 text-2xl font-black text-foreground">مساحة عمل الفرع</h1>
+                <p className="mt-1 text-sm text-muted-foreground">متابعة يوم العمل في فرعك {validBoard && !board.isError && <span className="mr-2 inline-block">· يوم العمل: {formatServerDate(validBoard.businessDate)}</span>}</p>
               </div>
             </div>
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -149,7 +152,7 @@ export default function BranchOperationsPage() {
                 <RefreshCw className={`ml-2 h-4 w-4 ${board.isFetching ? "animate-spin" : ""}`} />تحديث
               </Button>
               <span className="basis-full text-xs text-muted-foreground sm:basis-auto">
-                {validBoard && !board.isError ? `آخر تحديث: ${new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Riyadh", hour: "2-digit", minute: "2-digit", numberingSystem: "latn" }).format(new Date(validBoard.generatedAt))}` : ""}
+                {validBoard && !board.isError ? `آخر تحديث: ${new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Riyadh", hour: "2-digit", minute: "2-digit", numberingSystem: "latn" }).format(new Date(validBoard.generatedAt))} بتوقيت السعودية` : ""}
               </span>
             </div>
           </div>
@@ -171,17 +174,7 @@ export default function BranchOperationsPage() {
         )}
         {validBoard && !isSwitchingBranch && !board.isLoading && !board.isError && (
           <>
-            <div className="branch-ops-daily-deck">
-              <DayOverview cards={validBoard.cards} compact />
-              <DailySalesProgress cards={validBoard.cards} compact />
-              <div className="branch-ops-action-layout">
-                <NeedsActionStrip key={validBoard.branchId} branchId={validBoard.branchId} cards={validBoard.cards} onOpen={go} compact />
-                <div className="branch-ops-side-stack">
-                  <QuickActions key={`quick-${validBoard.branchId}`} cards={validBoard.cards} onOpen={go} compact />
-                  <NeedsActionStrip key={`routine-${validBoard.branchId}`} branchId={validBoard.branchId} cards={validBoard.cards} onOpen={go} routine compact />
-                </div>
-              </div>
-            </div>
+            <DailyWorkspace key={validBoard.branchId} branchId={validBoard.branchId} cards={validBoard.cards} onOpen={go} onRefresh={() => board.refetch()} refreshing={board.isFetching} />
             {validBoard.cards.length === 0 ? <EmptyState title="لا توجد وحدات متاحة" text="لا توجد صفحات تشغيلية مسموح بها لهذا الحساب في الفرع المحدد." icon={Settings2} /> : (
               <div className="mt-6 space-y-8">
                 <h2 className="text-lg font-black">المؤشرات وصفحات العمل</h2>

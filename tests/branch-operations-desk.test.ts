@@ -2,6 +2,7 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 import React, { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { groupCards, requiredActions, dailySalesProgress, DailySalesProgress, DayOverview, QuickActions, NeedsActionStrip, OperationCardView, SECTIONS, type OperationCard } from "../client/src/components/branch-operations/presentation";
+import { DailyWorkspace, topQuickLinks } from "../client/src/components/branch-operations/daily-workspace";
 
 const card = (id: string, alerts: OperationCard["alerts"] = []): OperationCard => ({
   id, title: id, group: "operations", href: id === "warehouse" ? "/transfer-requests" : "/central-kitchen-orders", state: "ready", metrics: [], alerts,
@@ -9,6 +10,36 @@ const card = (id: string, alerts: OperationCard["alerts"] = []): OperationCard =
 vi.stubGlobal("React", React);
 afterAll(() => vi.unstubAllGlobals());
 describe("daily branch desk", () => {
+  it("separates server-announced create/receive actions from every former fallback quick link", () => {
+    const cards: OperationCard[] = [
+      { ...card("kitchen"), quickActions: [{ label: "طلب جديد", href: "/central-kitchen-orders?intent=create", kind: "create" }, { label: "استلام", href: "/central-kitchen-orders?stage=dispatched", kind: "receive" }] },
+      card("warehouse"), card("waste"), card("complaints"), card("maintenance"), card("cashier"), card("closing"),
+      { ...card("sales"), quickActions: [{ label: "غير مدرج", href: "/sales", kind: "create" }] },
+    ];
+    const result = topQuickLinks(cards);
+    expect(result.create.map(link => link.label)).toEqual(["طلب جديد"]);
+    expect(result.receive.map(link => link.label)).toEqual(["استلام"]);
+    expect(result.navigate.map(link => link.label)).toEqual(["فتح warehouse", "فتح waste", "فتح complaints", "فتح maintenance", "فتح cashier", "فتح closing"]);
+    expect(topQuickLinks([card("kitchen")]).create).toEqual([]);
+    expect(topQuickLinks([{ ...card("kitchen"), state: "error", quickActions: [{ label: "طلب", href: "/new", kind: "create" }] }]).create).toEqual([]);
+  });
+  it("renders one partial-data warning outside both priorities and preserves lower card contracts", () => {
+    const cards = [
+      { ...card("kitchen", [{ label: "urgent-topic", count: 8, href: "/central-kitchen-orders", priority: "high" as const }, { label: "routine-topic", count: 3, href: "/central-kitchen-orders", priority: "normal" as const }]) },
+      { ...card("warehouse"), state: "error" as const },
+    ];
+    const html = renderToStaticMarkup(createElement(DailyWorkspace, { branchId: "b", cards, onOpen() {}, onRefresh() {} }));
+    expect(html).toContain("branch-operations-needs-action");
+    expect(html).toContain("branch-operations-routine");
+    expect(html).toContain("branch-operation-top-action-kitchen-0");
+    expect(html).toContain("1 موضوع متابعة");
+    expect((html.match(/branch-operations-partial-warning/g) ?? []).length).toBe(1);
+    expect(html).not.toContain("القائمة غير مكتملة حتى إعادة المحاولة");
+    expect(html).not.toContain("routine-topic");
+    expect(renderToStaticMarkup(createElement(NeedsActionStrip, { branchId: "b", cards, onOpen() {} }))).toContain("القائمة غير مكتملة");
+    const lower = renderToStaticMarkup(createElement(OperationCardView, { card: cards[0], section: SECTIONS[0], onOpen() {}, onRefresh() {} }));
+    expect(lower).toContain("branch-operation-card-kitchen");
+  });
   const sales = { ...card("sales"), metrics: [{ label: "مبيعات اليوميات المعتمدة والمرحلة", value: 750, unit: "ر.س" }] };
   const targets = { ...card("targets"), metrics: [{ label: "هدف اليوم المعتمد", value: 1000, unit: "ر.س" }] };
   it("derives progress only from actual approved daily fields and discloses ledger basis", () => {

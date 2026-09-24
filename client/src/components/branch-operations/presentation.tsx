@@ -229,7 +229,7 @@ export function QuickActions({ cards, onOpen, compact = false }: { cards: Operat
   </section>;
 }
 
-export function NeedsActionStrip({ branchId, cards, onOpen, routine = false, compact = false }: { branchId: string; cards: OperationCard[]; onOpen: (href: string) => void; routine?: boolean; compact?: boolean }) {
+export function NeedsActionStrip({ branchId, cards, onOpen, routine = false, compact = false, suppressIncompleteWarning = false }: { branchId: string; cards: OperationCard[]; onOpen: (href: string) => void; routine?: boolean; compact?: boolean; suppressIncompleteWarning?: boolean }) {
   const [routineOpen, setRoutineOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [search, setSearch] = useState("");
@@ -264,7 +264,7 @@ export function NeedsActionStrip({ branchId, cards, onOpen, routine = false, com
       })}
       {actions.length > 4 && <button type="button" className="min-h-11 px-2 text-xs font-black text-primary" onClick={() => setExpanded(value => !value)} data-testid="button-toggle-branch-actions">{expanded ? "عرض أقل" : `عرض المزيد (${actions.length - 4})`}</button>}
     </div> : <p className="mt-2 text-sm text-muted-foreground" data-testid="branch-operations-actions-empty">{search ? "لا توجد نتائج مطابقة للبحث." : cards.length === 0 ? "لا توجد وحدات مسموحة للتحقق من إجراءاتها." : cards.every(isNavigationOnly) ? "المتاح روابط تنقل فقط؛ لا توجد بيانات للتحقق من المتابعات." : routine ? "لا توجد موضوعات روتينية معروضة من المصادر المتاحة." : "لا توجد موضوعات حرجة أو عالية معروضة من المصادر المتاحة؛ راجع المتابعات الروتينية."}</p>}
-    {!allReady && <p className={compact ? "branch-ops-compact-warning text-destructive" : "mt-3 text-xs text-destructive"} role="status">تعذر التحقق من بعض الوحدات؛ القائمة غير مكتملة حتى إعادة المحاولة.</p>}
+    {!allReady && !suppressIncompleteWarning && <p className={compact ? "branch-ops-compact-warning text-destructive" : "mt-3 text-xs text-destructive"} role="status">تعذر التحقق من بعض الوحدات؛ القائمة غير مكتملة حتى إعادة المحاولة.</p>}
   </>;
   return <section className={`${compact ? "branch-ops-compact-panel" : "mt-4 rounded-2xl p-4 shadow-sm"} border border-border bg-card`} aria-labelledby={headingId} data-testid={routine ? "branch-operations-routine" : "branch-operations-needs-action"}>
     <div className="flex items-center gap-2">
@@ -276,7 +276,7 @@ export function NeedsActionStrip({ branchId, cards, onOpen, routine = false, com
         {routineOpen ? "إخفاء" : "عرض المتابعات"}<ChevronDown className={`h-4 w-4 transition-transform ${routineOpen ? "rotate-180" : ""}`} aria-hidden="true" />
       </button>}
     </div>
-    {routine && !allReady && <p className="branch-ops-compact-warning text-destructive" role="status">تعذر التحقق من بعض الوحدات؛ المتابعات المعروضة غير مكتملة حتى إعادة المحاولة.</p>}
+    {routine && !allReady && !suppressIncompleteWarning && <p className="branch-ops-compact-warning text-destructive" role="status">تعذر التحقق من بعض الوحدات؛ المتابعات المعروضة غير مكتملة حتى إعادة المحاولة.</p>}
     {routine ? routineOpen && <div id="branch-ops-routine-content">{content}</div> : content}
   </section>;
 }
