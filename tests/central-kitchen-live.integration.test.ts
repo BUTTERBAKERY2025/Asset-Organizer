@@ -721,6 +721,37 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     expect(replay.headers["idempotent-replayed"]).toBe("true");
     expect(replay.body.events).toHaveLength(cancelled.body.events.length);
     expect(replay.body.events.filter((event: any) => event.eventType === "cancelled")).toHaveLength(1);
+    const postCancelDetail = await invoke("get", "/api/central-kitchen-orders/:id", {
+      user: fixture.requestUser,
+      params,
+    });
+    expect(postCancelDetail.statusCode).toBe(200);
+    expect(postCancelDetail.body.status).toBe("cancelled");
+    expect(postCancelDetail.body.events.some((event: any) => event.eventType === "cancelled")).toBe(true);
+    const postCancelList = await invoke("get", "/api/central-kitchen-orders", {
+      user: fixture.requestUser,
+      query: { branchId: fixture.requestBranchId, stage: "archive", page: 1, pageSize: 25 },
+    });
+    expect(postCancelList.statusCode).toBe(200);
+    expect(postCancelList.body.data.some((order: any) =>
+      order.id === created.body.id && order.status === "cancelled")).toBe(true);
+    const postCancelOperations = await invoke("get", "/api/central-kitchen-orders/operations", {
+      user: fixture.kitchenUser,
+      query: { kitchenId: fixture.kitchenBranchId },
+    });
+    expect(postCancelOperations.statusCode).toBe(200);
+    expect(postCancelOperations.body.demands.some((demand: any) => demand.orderId === created.body.id)).toBe(false);
+    const postCancelDemand = await invoke("get", "/api/central-kitchen-demand", {
+      user: fixture.requestUser,
+      query: { originalOrderId: created.body.id, pageSize: 200 },
+    });
+    expect(postCancelDemand.statusCode).toBe(200);
+    expect(Array.isArray(postCancelDemand.body.rows)).toBe(true);
+    const postCancelRouting = await invoke("get", "/api/central-kitchen-orders/routing", {
+      user: fixture.requestUser,
+      query: { branchId: fixture.kitchenBranchId },
+    });
+    expect(postCancelRouting.statusCode).toBe(200);
     expect((await databaseState.db.select().from(systemNotifications)
       .where(eq(systemNotifications.buttonAction, `/central-kitchen-orders?branchId=${encodeURIComponent(fixture.kitchenBranchId)}&orderId=${created.body.id}`)))
       .filter((notification: any) => notification.title === "تم إلغاء طلب المطبخ المركزي"))

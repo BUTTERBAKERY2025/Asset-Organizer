@@ -9,6 +9,10 @@ import compression from "compression";
 import { db, pool, runStartupMigrations, warmupPool } from "./db";
 import { sql } from "drizzle-orm";
 import { securityHeaders, csrfProtection, apiRateLimiter } from "./security";
+import {
+  createCentralKitchenHttpDiagnostics,
+  logCentralKitchenDiagnosticBoot,
+} from "./central-kitchen-http-diagnostics";
 
 const app = express();
 const httpServer = createServer(app);
@@ -170,6 +174,11 @@ app.use((req, res, next) => {
 
   next();
 });
+
+const centralKitchenDiagnosticLogger = (record: object) =>
+  log(JSON.stringify(record), "central-kitchen-http");
+logCentralKitchenDiagnosticBoot({ logger: centralKitchenDiagnosticLogger });
+app.use(createCentralKitchenHttpDiagnostics({ logger: centralKitchenDiagnosticLogger }));
 
 app.set('json spaces', 0);
 

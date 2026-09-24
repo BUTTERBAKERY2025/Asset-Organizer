@@ -71,3 +71,4 @@
 - [Theme tokens are inline](theme-inline-dark-mode.md) — @theme inline: utilities bake light values, .dark only flips var(--color-*); never mix var() surfaces with utilities.
 - [Arabic PDF tables](rtl-pdf-tables.md) — right-aligned text does not reorder pdfMake columns; reverse headers, cells, and widths together for RTL consistency.
 - [Warehouse transfer authority](warehouse-transfer-authority.md) — source-authorized outbound requests are legitimate; destination alone confirms receipt, without exposing counterparty-wide data.
+- [Production evidence boundaries](production-evidence-boundaries.md) — the custom-domain Render service is separate from Replit publishing; match logs and database evidence to the affected deployment.
