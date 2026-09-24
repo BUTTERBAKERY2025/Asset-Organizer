@@ -1,0 +1,195 @@
+@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap");
+
+/* Scoped values copied from client/src/index.css @theme inline (light theme).
+   The sandbox's Tailwind theme maps these HSL values to semantic utilities. */
+.branch-workspace-scope {
+  --background: 270 40% 99%;
+  --foreground: 260 20% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 260 20% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 260 20% 12%;
+  --primary: 262 83% 58%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 265 30% 96%;
+  --secondary-foreground: 260 25% 18%;
+  --muted: 265 25% 95%;
+  --muted-foreground: 260 10% 42%;
+  --accent: 265 70% 94%;
+  --accent-foreground: 262 60% 30%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 265 25% 90%;
+  --input: 265 25% 90%;
+  --ring: 262 83% 58%;
+  --radius: .5rem;
+  font-family: "Cairo", "Plus Jakarta Sans", sans-serif;
+}
+
+/* Relevant branch-ops rules copied from client/src/index.css, scoped to this mockup. */
+.branch-workspace-scope .page-container {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: .75rem;
+  padding-block: .75rem;
+  max-width: 100%;
+}
+@media (min-width: 640px) {
+  .branch-workspace-scope .page-container { padding-inline: 1.25rem; padding-block: 1rem; }
+}
+@media (min-width: 768px) {
+  .branch-workspace-scope .page-container { padding-inline: 1.5rem; padding-block: 1.25rem; }
+}
+@media (min-width: 1024px) {
+  .branch-workspace-scope .page-container { padding-inline: 2rem; padding-block: 1.5rem; max-width: 1400px; }
+}
+@media (min-width: 1536px) {
+  .branch-workspace-scope .page-container { max-width: 1560px; }
+}
+.branch-workspace-scope .platform-app-icon {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+  border-radius: 1rem;
+}
+@media (min-width: 640px) {
+  .branch-workspace-scope .platform-app-icon { width: 80px; height: 80px; }
+}
+.branch-workspace-scope .branch-ops-shell .platform-app-icon { width: 56px; height: 56px; border-radius: .875rem; }
+.branch-workspace-scope .branch-ops-shell .platform-app-icon svg { width: 28px; height: 28px; }
+@media (min-width: 640px) {
+  .branch-workspace-scope .branch-ops-shell .platform-app-icon { width: 64px; height: 64px; }
+  .branch-workspace-scope .branch-ops-shell .platform-app-icon svg { width: 32px; height: 32px; }
+}
+.branch-workspace-scope .branch-ops-shell {
+  min-height: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+  padding-bottom: max(2.5rem, env(safe-area-inset-bottom));
+  container-type: inline-size;
+  container-name: branchops;
+}
+.branch-workspace-scope .branch-ops-daily-deck { display: grid; gap: .75rem; margin-top: .75rem; min-width: 0; }
+.branch-workspace-scope .branch-ops-head { display: grid; gap: .5rem; min-width: 0; }
+.branch-workspace-scope .branch-ops-day-strip { display: grid; gap: .45rem; min-width: 0; }
+.branch-workspace-scope .branch-ops-day-strip-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); min-width: 0; }
+.branch-workspace-scope .branch-ops-day-strip-metric { min-width: 0; padding-inline: .35rem; }
+.branch-workspace-scope .branch-ops-day-strip-note { font-size: .6875rem; line-height: 1.25; }
+.branch-workspace-scope .branch-ops-action-layout { display: grid; gap: .75rem; min-width: 0; }
+.branch-workspace-scope .branch-ops-side-stack { display: grid; gap: .75rem; align-content: start; min-width: 0; }
+.branch-workspace-scope .branch-ops-compact-panel { margin-top: 0; border-radius: .875rem; padding: .75rem; }
+.branch-workspace-scope .branch-ops-compact-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: .45rem; margin-top: .6rem; }
+.branch-workspace-scope .branch-ops-compact-action {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .5rem;
+  min-width: 0; border: 1px solid var(--color-border); border-radius: .65rem; padding: .5rem .55rem;
+}
+.branch-workspace-scope .branch-ops-compact-action[data-urgent="true"] { border-color: color-mix(in oklab, var(--color-destructive) 32%, var(--color-border)); }
+.branch-workspace-scope .branch-ops-compact-action-copy { min-width: 0; font-size: .75rem; line-height: 1.25; }
+.branch-workspace-scope .branch-ops-compact-action-copy p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.branch-workspace-scope .branch-ops-compact-action .branch-ops-followup { min-height: 44px; white-space: nowrap; }
+.branch-workspace-scope .branch-ops-compact-warning { margin-top: .55rem; font-size: .75rem; }
+@media (min-width: 768px) {
+  .branch-workspace-scope .branch-ops-head { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .branch-workspace-scope .branch-ops-day-strip { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .75rem; min-height: 3.75rem; }
+  .branch-workspace-scope .branch-ops-day-strip-title { display: block; }
+  .branch-workspace-scope .branch-ops-day-strip-title p { display: none; }
+  .branch-workspace-scope .branch-ops-day-strip-metrics { display: flex; }
+  .branch-workspace-scope .branch-ops-day-strip-metric { flex: 1; }
+  .branch-workspace-scope .branch-ops-day-strip-note { max-width: 10rem; }
+  .branch-workspace-scope .branch-ops-action-layout { grid-template-columns: minmax(0, 1.18fr) minmax(0, .82fr); align-items: start; }
+  .branch-workspace-scope .branch-ops-action-layout > [data-testid="branch-operations-needs-action"] { grid-column: 1; grid-row: 1; }
+  .branch-workspace-scope .branch-ops-side-stack { grid-column: 2; grid-row: 1; }
+}
+.branch-workspace-scope .branch-ops-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: .65rem;
+  align-items: start;
+}
+.branch-workspace-scope .branch-ops-card {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  min-width: 0;
+  container-type: inline-size;
+  container-name: opscard;
+  border-radius: 1rem;
+  min-height: 7.25rem;
+  transition: box-shadow 160ms ease, transform 160ms ease;
+}
+.branch-workspace-scope .branch-ops-card-main {
+  flex: 1;
+  display: block;
+  position: relative;
+  width: 100%;
+  min-height: 5.75rem;
+  padding: .75rem;
+  border-radius: .95rem;
+  text-align: right;
+}
+.branch-workspace-scope .branch-ops-card-expanded { min-height: auto; }
+.branch-workspace-scope .branch-ops-card-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.branch-workspace-scope .branch-ops-card-chevron { transition: transform 160ms ease; }
+.branch-workspace-scope .branch-ops-card-details {
+  display: inline-flex;
+  min-height: 44px;
+  min-width: 44px;
+  align-items: center;
+  align-self: flex-start;
+  gap: .25rem;
+  margin-inline-start: .75rem;
+  padding: .25rem .25rem;
+  color: var(--color-primary);
+  font-size: .75rem;
+  font-weight: 800;
+  touch-action: manipulation;
+}
+.branch-workspace-scope .branch-ops-card-panel {
+  border-top: 1px solid var(--color-border);
+  padding: .75rem;
+}
+.branch-workspace-scope .branch-ops-card-main:focus-visible,
+.branch-workspace-scope .branch-ops-card-details:focus-visible,
+.branch-workspace-scope .branch-ops-action:focus-visible,
+.branch-workspace-scope .branch-ops-refresh:focus-visible {
+  outline: 3px solid var(--color-ring);
+  outline-offset: 2px;
+}
+.branch-workspace-scope .branch-ops-shimmer {
+  background: linear-gradient(100deg, hsl(265 25% 95%) 25%, hsl(0 0% 100%) 42%, hsl(265 25% 95%) 58%);
+  background-size: 220% 100%;
+  animation: branch-ops-shimmer 1.35s linear infinite;
+}
+@container branchops (min-width: 300px) {
+  .branch-workspace-scope .branch-ops-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container branchops (min-width: 680px) {
+  .branch-workspace-scope .branch-ops-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
+  .branch-workspace-scope .branch-ops-card-main { padding: .9rem; }
+  .branch-workspace-scope .branch-ops-card-panel { padding: .9rem; }
+}
+@container opscard (max-width: 280px) {
+  .branch-workspace-scope .branch-ops-card-main { text-align: center; }
+  .branch-workspace-scope .branch-ops-card-main > div { flex-direction: column; align-items: center; gap: .75rem; }
+  .branch-workspace-scope .branch-ops-card-main > div > :nth-child(2) { width: 100%; padding-top: 0; }
+  .branch-workspace-scope .branch-ops-card-main > div > :last-child { display: none; }
+  .branch-workspace-scope .branch-ops-card-main h3 { font-size: .875rem; overflow-wrap: anywhere; }
+}
+@media (hover: hover) {
+  .branch-workspace-scope .branch-ops-card:hover { box-shadow: 0 10px 24px -12px color-mix(in oklab, var(--color-primary) 35%, transparent); transform: translateY(-2px); }
+}
+.branch-workspace-scope .branch-ops-card-main:active,
+.branch-workspace-scope .branch-ops-card-details:active { transform: scale(.985); }
+@keyframes branch-ops-shimmer { to { background-position: -220% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .branch-workspace-scope .branch-ops-card,
+  .branch-workspace-scope .branch-ops-card-main,
+  .branch-workspace-scope .branch-ops-card-details,
+  .branch-workspace-scope .branch-ops-shimmer { transition: none; animation: none !important; }
+  .branch-workspace-scope .branch-ops-card:hover { transform: none; }
+}
