@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiRequest } from "@/lib/queryClient";
+import { syncAppBadge } from "@/lib/app-badge";
 import { formatDistanceToNow } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { InventoryItem } from "@shared/schema";
@@ -166,6 +167,7 @@ export function NotificationsDropdown() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/system-notifications/my-reads"] });
+      void syncAppBadge();
     },
   });
 
@@ -190,6 +192,7 @@ export function NotificationsDropdown() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/system-notifications/my-reads"] });
+      void syncAppBadge();
     },
   });
 

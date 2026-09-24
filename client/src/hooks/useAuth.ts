@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { User, Branch } from "@shared/schema";
 import { clearPersistentCache, setCurrentUser } from "@/lib/persistentCache";
 import { detachPushSubscriptionFromCurrentUser, resumePushSubscriptionSync } from "@/lib/push-notifications";
+import { setBadgeAccount, syncAppBadge } from "@/lib/app-badge";
 
 type UserWithoutPassword = Omit<User, 'password'>;
 
@@ -49,6 +50,7 @@ export function useAuth() {
       // Revoke while the old account cookie is still active. The login response
       // replaces that cookie, after which owner-scoped cleanup is too late.
       if (user) await detachPushSubscriptionFromCurrentUser();
+      if (user) setBadgeAccount(null);
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -72,6 +74,8 @@ export function useAuth() {
     },
     onError: () => {
       resumePushSubscriptionSync();
+      setBadgeAccount(user?.id ? String(user.id) : null);
+      void syncAppBadge();
     },
   });
 
@@ -79,6 +83,7 @@ export function useAuth() {
   const verifyOtpMutation = useMutation({
     mutationFn: async (payload: { code: string }) => {
       if (user) await detachPushSubscriptionFromCurrentUser();
+      if (user) setBadgeAccount(null);
       const res = await fetch("/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -100,6 +105,8 @@ export function useAuth() {
     },
     onError: () => {
       resumePushSubscriptionSync();
+      setBadgeAccount(user?.id ? String(user.id) : null);
+      void syncAppBadge();
     },
   });
 
@@ -122,6 +129,7 @@ export function useAuth() {
   const logoutMutation = useMutation({
     mutationFn: async () => {
       await detachPushSubscriptionFromCurrentUser();
+      setBadgeAccount(null);
       const res = await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
       if (!res.ok) {
         throw new Error("فشل تسجيل الخروج");
@@ -136,6 +144,8 @@ export function useAuth() {
     },
     onError: () => {
       resumePushSubscriptionSync();
+      setBadgeAccount(user?.id ? String(user.id) : null);
+      void syncAppBadge();
     },
   });
 

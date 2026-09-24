@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { setBadgeAccount, syncAppBadge } from "@/lib/app-badge";
 import {
   disablePushNotifications,
   enablePushNotifications,
@@ -162,6 +163,13 @@ export function MobilePushSettings({ className, compact = true }: MobilePushSett
               </>
             )}
           </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            تنبيهات النظام خارج التطبيق تُدار من أذونات إشعارات الموقع والتطبيق في إعدادات الجهاز؛
+            رقم الإشعارات غير المقروءة على أيقونة التطبيق ميزة مستقلة تدعمها بعض الأجهزة فقط.
+            على iPhone/iPad تتطلب الإشعارات تثبيت التطبيق من الشاشة الرئيسية (iOS/iPadOS 16.4+)،
+            وعلى Android ظهور الرقم يعتمد على المتصفح ومشغّل الشاشة الرئيسية وقد يظهر مؤشر بلا رقم.
+            فتح التطبيق وحده لا يمسح الرقم؛ ينخفض عند قراءة الإشعارات أو إخفائها.
+          </p>
         </div>
       </div>
     </section>
@@ -176,6 +184,8 @@ export function PushNotificationPrompt() {
   useEffect(() => {
     const sessionUserId = isAuthenticated && user?.id != null ? String(user.id) : null;
     setPushSubscriptionSession(sessionUserId);
+    setBadgeAccount(sessionUserId);
+    if (sessionUserId) void syncAppBadge();
     if (!sessionUserId) {
       setShow(false);
       setIosGuide(false);
@@ -232,9 +242,12 @@ export function PushNotificationPrompt() {
     };
 
     const onVisible = () => {
-      if (document.visibilityState === "visible") void runSync();
+      if (document.visibilityState === "visible") {
+        void runSync();
+        void syncAppBadge();
+      }
     };
-    const onOnline = () => void runSync();
+    const onOnline = () => { void runSync(); void syncAppBadge(); };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("online", onOnline);
     void runSync();
@@ -246,7 +259,7 @@ export function PushNotificationPrompt() {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", onOnline);
     };
-  }, [isAuthenticated, user?.id]);
+  }, [isAuthenticated, user?.id, user?.activeBranchId]);
 
   if (!show && !iosGuide) return null;
   const dismiss = () => {

@@ -121,6 +121,7 @@ export async function sendTestPushToOwnedDevice(userId: string, endpoint: string
         body: "هذا إشعار تجريبي لهذا الجهاز فقط.",
         url: "/",
         tag: `push-test-${userId}`,
+        userId,
       }),
       { TTL: 60, urgency: "normal", timeout: 30_000 },
     );
@@ -237,19 +238,18 @@ async function deliverPush(n: SystemNotification): Promise<void> {
   const pendingSubs = subs.filter((sub) => !deliveredIds.has(sub.id));
   if (!pendingSubs.length) return;
 
-  const payload = JSON.stringify({
-    title: n.title || "إشعار جديد",
-    body: (n.content || "").slice(0, 300),
-    url: n.buttonAction || "/",
-    tag: `sysnotif-${n.id}`,
-  });
-
   const results = await Promise.allSettled(
     pendingSubs.map(async (s) => {
       try {
         await webpush.sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-          payload,
+          JSON.stringify({
+            title: n.title || "إشعار جديد",
+            body: (n.content || "").slice(0, 300),
+            url: n.buttonAction || "/",
+            tag: `sysnotif-${n.id}`,
+            userId: s.userId,
+          }),
           { timeout: 30_000 },
         );
         // Web Push has no provider idempotency key or acceptance lookup.

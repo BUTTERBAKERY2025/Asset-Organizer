@@ -41334,6 +41334,20 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/push/unread-badge", isAuthenticated, async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      const { getUnreadBadgeCount } = await import("./notification-badge");
+      const userId = req.session.userId!;
+      const user = (req as any).currentUser;
+      const count = await getUnreadBadgeCount(userId, user?.activeBranch || user?.branchId || "");
+      res.json({ userId, count });
+    } catch (error) {
+      console.error("Error fetching unread badge:", error);
+      res.status(500).json({ error: "فشل في جلب عدد الإشعارات غير المقروءة" });
+    }
+  });
+
   app.post("/api/system-notifications/:id/read", isAuthenticated, async (req, res) => {
     try {
       const userId = req.session.userId;

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { syncAppBadge } from "@/lib/app-badge";
 import { useAuth } from "@/hooks/useAuth";
 
 interface SystemNotification {
@@ -125,7 +126,7 @@ export function NotificationContent({ notification, onDismiss, isPreview }: { no
   useEffect(() => {
     if (!hasMarkedRead.current && !isPreview) {
       hasMarkedRead.current = true;
-      apiRequest("POST", `/api/system-notifications/${notification.id}/read`).catch(() => {});
+      apiRequest("POST", `/api/system-notifications/${notification.id}/read`).then(() => syncAppBadge()).catch(() => {});
     }
     if (notification.soundEnabled) {
       playSound(notification.soundType || "default");
@@ -142,7 +143,7 @@ export function NotificationContent({ notification, onDismiss, isPreview }: { no
 
   const handleDismiss = useCallback(() => {
     if (!isPreview) {
-      apiRequest("POST", `/api/system-notifications/${notification.id}/dismiss`).catch(() => {});
+      apiRequest("POST", `/api/system-notifications/${notification.id}/dismiss`).then(() => syncAppBadge()).catch(() => {});
     }
     onDismiss();
   }, [notification.id, onDismiss, isPreview]);

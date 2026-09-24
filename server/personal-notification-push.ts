@@ -13,12 +13,13 @@ import { isKnownPushProviderEndpoint } from "./push-endpoint-security";
 
 const MAX_ATTEMPTS = 5;
 const LEASE_MS = 10 * 60_000;
-export const personalPushPayload = (id: number) => JSON.stringify({
+export const personalPushPayload = (id: number, userId?: string) => JSON.stringify({
   // Do not put notification titles/messages or HR links on a locked screen.
   title: "إشعار جديد",
   body: "لديك إشعار جديد. افتح بوابتك للاطلاع عليه.",
   url: "/my-portal",
   tag: `personal-notification-${id}`,
+  ...(userId ? { userId } : {}),
 });
 
 export function personalPushDue(
@@ -155,7 +156,7 @@ async function dispatch(id: number, userId: string) {
     },
     send: (s, payload) => webpush.sendNotification(
       { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-      payload, { timeout: 30_000, TTL: 300 },
+      JSON.stringify({ ...JSON.parse(payload), userId }), { timeout: 30_000, TTL: 300 },
     ),
     receipt: (s, status, attempts, error) => record(id, s.id, status, attempts, error),
     revoke: async (s) => {

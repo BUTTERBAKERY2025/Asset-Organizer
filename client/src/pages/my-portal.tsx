@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { changeLanguage } from "@/lib/i18n";
 import { apiRequest } from "@/lib/queryClient";
+import { syncAppBadge } from "@/lib/app-badge";
 import { useToast } from "@/hooks/use-toast";
 import { Layout } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -198,11 +199,17 @@ export default function MyPortalPage() {
   const markNotifRead = useMutation({
     mutationFn: async ({ id, source }: { id: number; source?: string }) =>
       (await apiRequest("POST", `/api/my/notifications/${id}/read`, { source: source || "personal" })).json(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/my/notifications"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/my/notifications"] });
+      void syncAppBadge();
+    },
   });
   const markAllNotifRead = useMutation({
     mutationFn: async () => (await apiRequest("POST", "/api/my/notifications/read-all")).json(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/my/notifications"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/my/notifications"] });
+      void syncAppBadge();
+    },
   });
 
   const [notifOpen, setNotifOpen] = useState(false);

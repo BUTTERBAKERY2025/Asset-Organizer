@@ -30,3 +30,9 @@ Personal notification push must capture new direct inserts, never replay histori
 **Why:** Personal notifications are written through multiple paths, not only the central notification service. Their contents can include sensitive HR details, and a branch identifier alone does not establish who may see them.
 
 **How to apply:** Preserve the durable insert boundary and activation cutoff; retain generic personal lock-screen text with authenticated portal navigation. Resolve branch-only recipients from an authoritative access rule before extending coverage. Provider acceptance is not proof of physical lock-screen display.
+
+Installed-app icon badges are distinct from a notification's `badge` image. Count authorized unread items, not pushes received, and never clear unread counts just because the app opens.
+
+**Why:** Push retries and the portal's merged notification view can inflate an incremented count. iOS installed apps support numeric Badging API updates; Android Chrome typically derives a dot from active system notifications, not this API.
+
+**How to apply:** Keep badge failures independent of external notification display, validate the current account before applying background counts, and avoid promising an exact number on unsupported launchers.

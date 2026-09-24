@@ -1,5 +1,5 @@
-const CACHE_NAME = 'butter-v9';
-const STATIC_CACHE = 'butter-static-v9';
+const CACHE_NAME = 'butter-v10';
+const STATIC_CACHE = 'butter-static-v10';
 const FONT_CACHE = 'butter-fonts-v4';
 const API_CACHE = 'butter-api-v8';
 
@@ -244,7 +244,43 @@ self.addEventListener('message', (event) => {
       });
     });
   }
+  if (event.data && event.data.type === 'SYNC_BADGE' && typeof event.data.userId === 'string') {
+    event.waitUntil(refreshBadge(event.data.userId));
+  }
+  if (event.data && event.data.type === 'CLEAR_BADGE') {
+    event.waitUntil(applyBadge(0));
+  }
 });
+
+async function applyBadge(count) {
+  // The Badging API is independent from the notification icon's image badge.
+  // In service workers it lives on self.navigator (not registration).
+  try {
+    if (count === 0 && typeof self.navigator?.clearAppBadge === 'function') {
+      await self.navigator.clearAppBadge();
+    } else if (Number.isSafeInteger(count) && count > 0 && typeof self.navigator?.setAppBadge === 'function') {
+      await self.navigator.setAppBadge(count);
+    }
+  } catch (e) {
+    // Unsupported platforms/OS policy must not prevent a push popup.
+  }
+}
+
+async function refreshBadge(expectedUserId) {
+  if (!expectedUserId) return;
+  try {
+    const response = await fetch('/api/push/unread-badge', {
+      credentials: 'include', cache: 'no-store',
+    });
+    if (!response.ok) return; // No stale count on offline or expired sessions.
+    const state = await response.json();
+    if (state.userId === expectedUserId && Number.isSafeInteger(state.count) && state.count >= 0) {
+      await applyBadge(state.count);
+    }
+  } catch (e) {
+    // Leave the last known state unchanged if the network is unavailable.
+  }
+}
 
 // ===== إشعارات الجوال (Web Push) =====
 self.addEventListener('push', (event) => {
@@ -261,7 +297,10 @@ self.addEventListener('push', (event) => {
     data: { url: safeNotificationDestination(data?.url) },
     vibrate: [100, 50, 100],
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(Promise.all([
+    self.registration.showNotification(title, options),
+    refreshBadge(typeof data?.userId === 'string' ? data.userId : null),
+  ]));
 });
 
 function safeNotificationDestination(value) {

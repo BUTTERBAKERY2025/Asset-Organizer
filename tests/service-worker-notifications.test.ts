@@ -37,6 +37,7 @@ function loadWorker() {
     },
     self: {
       location: { origin: "https://app.example" },
+      navigator: { setAppBadge: vi.fn(), clearAppBadge: vi.fn() },
       registration: { showNotification: vi.fn() },
       clients,
       skipWaiting: vi.fn(),
@@ -50,6 +51,47 @@ function loadWorker() {
 }
 
 describe("service worker notification safety", () => {
+  it("shows push and refreshes the authenticated recipient badge without caching", async () => {
+    const { context, listeners } = loadWorker();
+    context.fetch.mockResolvedValue({ ok: true, json: async () => ({ userId: "alice", count: 4 }) });
+    let done: Promise<unknown> | undefined;
+    listeners.get("push")!({
+      data: { json: () => ({ title: "تنبيه", userId: "alice", url: "/my-portal" }) },
+      waitUntil: (promise: Promise<unknown>) => { done = promise; },
+    });
+    await done;
+    expect(context.self.registration.showNotification).toHaveBeenCalledTimes(1);
+    expect(context.fetch).toHaveBeenCalledWith("/api/push/unread-badge", { credentials: "include", cache: "no-store" });
+    expect(context.self.navigator.setAppBadge).toHaveBeenCalledWith(4);
+  });
+
+  it("clears at zero, but never applies another account's count", async () => {
+    const { context, listeners } = loadWorker();
+    let done: Promise<unknown> | undefined;
+    context.fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ userId: "alice", count: 0 }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ userId: "bob", count: 20 }) });
+    for (const _ of [1, 2]) {
+      listeners.get("push")!({ data: { json: () => ({ userId: "alice" }) }, waitUntil: (p: Promise<unknown>) => { done = p; } });
+      await done;
+    }
+    expect(context.self.navigator.clearAppBadge).toHaveBeenCalledTimes(1);
+    expect(context.self.navigator.setAppBadge).not.toHaveBeenCalled();
+    expect(context.self.registration.showNotification).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["denied", "offline", "expired", "unsupported"])("keeps notification delivery on %s", async (condition) => {
+    const { context, listeners } = loadWorker();
+    if (condition === "unsupported") context.self.navigator = {};
+    if (condition === "denied") context.self.navigator.setAppBadge.mockRejectedValue(new Error("denied"));
+    if (condition === "offline") context.fetch.mockRejectedValue(new Error("offline"));
+    else context.fetch.mockResolvedValue({ ok: condition !== "expired", status: 401, json: async () => ({ userId: "alice", count: 8 }) });
+    let done: Promise<unknown> | undefined;
+    listeners.get("push")!({ data: { json: () => ({ userId: "alice" }) }, waitUntil: (p: Promise<unknown>) => { done = p; } });
+    await expect(done).resolves.toBeDefined();
+    expect(context.self.registration.showNotification).toHaveBeenCalledTimes(1);
+    if (condition === "expired" || condition === "offline") expect(context.self.navigator.setAppBadge).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["https://app.example/my/notifications?id=7#latest", "/my/notifications?id=7#latest"],
     ["/my/notifications?id=7", "/my/notifications?id=7"],
