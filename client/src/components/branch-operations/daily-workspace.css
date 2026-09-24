@@ -1,75 +1,41 @@
 .branch-desk-header {
   padding: .9rem clamp(.8rem, 2vw, 1.35rem) 1rem;
-  border: 1px solid color-mix(in oklab, var(--color-border) 80%, #b98962);
+  border: 1px solid var(--color-border);
   border-radius: 1rem;
-  background: color-mix(in oklab, var(--color-card) 93%, #d5a875);
-}
-.dark .branch-desk-header {
-  background: color-mix(in oklab, var(--color-card) 94%, #a96e43);
+  background: var(--color-card);
 }
 .branch-desk-top {
-  --desk-ink: var(--color-foreground);
-  --desk-soft: color-mix(in oklab, var(--color-card) 90%, #e1ad76);
-  --desk-focus: color-mix(in oklab, var(--color-card) 80%, #dbab76);
-  --desk-border: color-mix(in oklab, var(--color-border) 76%, #c99667);
-  color: var(--desk-ink);
-  gap: .8rem;
+  display: grid;
+  gap: .65rem;
+  margin-top: .75rem;
 }
-.branch-desk-snapshot { display: grid; gap: .6rem; min-width: 0; }
-.branch-desk-snapshot > :only-child { grid-column: 1 / -1; }
-.branch-desk-snapshot > section {
-  min-width: 0;
-  border-color: var(--desk-border);
-  background: var(--desk-soft);
-  border-radius: .85rem;
+.branch-desk-toolbar {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
 }
-.branch-desk-focus {
-  min-width: 0;
-  padding: clamp(1rem, 2vw, 1.5rem);
-  border: 1px solid var(--desk-border);
-  border-radius: 1.1rem;
-  background: linear-gradient(125deg, var(--desk-focus), var(--desk-soft));
-}
-.branch-desk-focus-head { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; }
-.branch-desk-kicker { color: color-mix(in oklab, var(--desk-ink) 72%, #a25b34); font-size: .75rem; font-weight: 800; }
-.branch-desk-focus-head h2 { font-size: clamp(1.1rem, 2vw, 1.35rem); font-weight: 900; line-height: 1.5; }
-.branch-desk-caption { font-size: .8rem; line-height: 1.8; color: var(--color-muted-foreground); }
 .branch-desk-menus { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
-.branch-desk-priorities { display: grid; gap: .6rem; margin-top: 1rem; }
-.branch-desk-priorities .branch-ops-compact-panel {
-  min-width: 0;
-  border-color: var(--desk-border);
-  background: var(--color-card);
-  padding: 1rem;
-}
-.branch-desk-priorities .branch-ops-compact-actions { gap: .6rem; }
-.branch-desk-priorities .branch-ops-compact-action { background: var(--desk-soft); padding: .75rem; }
-.branch-desk-priorities .branch-ops-compact-action-copy { font-size: .875rem; line-height: 1.55; }
-.branch-desk-priorities .branch-ops-compact-action-copy p { white-space: normal; }
-.branch-desk-warning {
+.branch-desk-notification {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: .5rem 1rem;
-  padding: .7rem .25rem;
-  border-bottom: 1px solid var(--desk-border);
+  padding: .55rem .75rem;
+  border: 1px solid var(--color-border);
+  border-radius: .75rem;
+  background: var(--color-muted);
   font-size: .8rem;
 }
-.branch-desk-warning-intro { display: flex; align-items: center; gap: .5rem; flex: 1; min-width: min(100%, 18rem); color: var(--color-muted-foreground); line-height: 1.7; }
-.branch-desk-warning-intro svg, .branch-desk-details { color: color-mix(in oklab, var(--desk-ink) 75%, #b16b34); }
-.branch-desk-warning-intro strong { color: var(--desk-ink); }
-.branch-desk-details { display: inline-flex; align-items: center; gap: .25rem; min-height: 44px; font-weight: 800; }
-.branch-desk-error-list { display: flex; width: 100%; flex-wrap: wrap; align-items: center; gap: .5rem; }
-.branch-desk-error-list span { border: 1px solid var(--desk-border); border-radius: .5rem; padding: .35rem .6rem; background: var(--desk-soft); }
-.dark .branch-desk-top {
-  --desk-soft: color-mix(in oklab, var(--color-card) 90%, #a96e43);
-  --desk-focus: color-mix(in oklab, var(--color-card) 83%, #b27445);
-  --desk-border: color-mix(in oklab, var(--color-border) 80%, #a96e43);
-}
-@media (min-width: 900px) {
-  .branch-desk-snapshot { grid-template-columns: 1fr 1fr; }
-}
+.branch-desk-notification-incomplete { border-color: var(--color-destructive); }
+.branch-desk-notification-intro { display: flex; align-items: center; gap: .5rem; flex: 1; min-width: min(100%, 18rem); color: var(--color-muted-foreground); line-height: 1.65; }
+.branch-desk-notification-intro svg { color: var(--color-destructive); }
+.branch-desk-notification-intro strong { color: var(--color-foreground); }
+.branch-desk-details { display: inline-flex; align-items: center; gap: .25rem; min-height: 40px; color: var(--color-primary); font-weight: 800; }
+.branch-desk-notification-details { display: grid; width: 100%; gap: .35rem; padding-top: .2rem; }
+.branch-desk-action { display: flex; align-items: center; justify-content: space-between; gap: .75rem; border-top: 1px solid var(--color-border); padding-top: .5rem; }
+.branch-desk-error-list { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; border-top: 1px solid var(--color-border); padding-top: .5rem; }
+.branch-desk-error-list span { border: 1px solid var(--color-border); border-radius: .45rem; padding: .28rem .5rem; background: var(--color-card); }
 @media (max-width: 600px) {
   .branch-desk-menus { width: 100%; }
-  .branch-desk-focus { padding: .9rem; }
+  .branch-desk-menus > * { flex: 1 1 auto; }
 }

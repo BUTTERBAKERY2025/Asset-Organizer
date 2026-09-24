@@ -23,17 +23,16 @@ describe("daily branch desk", () => {
     expect(topQuickLinks([card("kitchen")]).create).toEqual([]);
     expect(topQuickLinks([{ ...card("kitchen"), state: "error", quickActions: [{ label: "طلب", href: "/new", kind: "create" }] }]).create).toEqual([]);
   });
-  it("renders one partial-data warning outside both priorities and preserves lower card contracts", () => {
+  it("renders one collapsed intervention notification and preserves lower card contracts", () => {
     const cards = [
       { ...card("kitchen", [{ label: "urgent-topic", count: 8, href: "/central-kitchen-orders", priority: "high" as const }, { label: "routine-topic", count: 3, href: "/central-kitchen-orders", priority: "normal" as const }]) },
       { ...card("warehouse"), state: "error" as const },
     ];
     const html = renderToStaticMarkup(createElement(DailyWorkspace, { branchId: "b", cards, onOpen() {}, onRefresh() {} }));
-    expect(html).toContain("branch-operations-needs-action");
-    expect(html).toContain("branch-operations-routine");
-    expect(html).toContain("branch-operation-top-action-kitchen-0");
-    expect(html).toContain("1 موضوع متابعة");
-    expect((html.match(/branch-operations-partial-warning/g) ?? []).length).toBe(1);
+    expect(html).toContain("branch-operations-intervention-notification");
+    expect(html).toContain("نتائج المتابعة غير مكتملة");
+    expect(html).toContain("عرض التفاصيل");
+    expect((html.match(/branch-operations-intervention-notification/g) ?? []).length).toBe(1);
     expect(html).not.toContain("القائمة غير مكتملة حتى إعادة المحاولة");
     expect(html).not.toContain("routine-topic");
     expect(renderToStaticMarkup(createElement(NeedsActionStrip, { branchId: "b", cards, onOpen() {} }))).toContain("القائمة غير مكتملة");

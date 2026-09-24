@@ -26,3 +26,9 @@ Do not merge dashboard alerts solely because they open the same destination.
 **Why:** Different operational topics can share a page while representing different priorities, populations, or responsibilities. Combining their counts or hiding one can lose actionable work.
 
 **How to apply:** Retain semantic identity when deduplicating. Verify destination query handling and authoritative action permissions before treating an apparently repeated link or supplier-specific policy as a defect.
+
+Keep the board's top area in the existing system identity, without repeating lower-page metrics or expanding every follow-up by default.
+
+**Why:** On 2026-09-25 the user rejected the separate warm visual identity and repeated nested headings/panels; requested simple notifications for work needing intervention and explicitly limited the redesign to the top.
+
+**How to apply:** Keep alerts compact with details on demand; preserve access to distinct topics and partial-data warnings. Do not redesign the lower sections or introduce tabs without a new request.

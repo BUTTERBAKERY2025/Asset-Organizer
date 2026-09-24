@@ -135,7 +135,7 @@ export default function BranchOperationsPage() {
     <Layout>
       <main className="branch-ops-shell page-container pb-10" dir="rtl" data-testid="branch-operations-page">
         <section className="pt-4">
-          <div className="branch-ops-head branch-desk-header border-b border-border pb-4">
+          <div className="branch-ops-head branch-desk-header">
             <div className="min-w-0">
               <div>
                 <p className="text-xs font-bold text-muted-foreground">BUTTER BAKERY · عمليات الفروع</p>
