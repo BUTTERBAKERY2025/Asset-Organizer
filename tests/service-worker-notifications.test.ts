@@ -56,10 +56,45 @@ describe("service worker notification safety", () => {
     ["https://evil.example/my/notifications", "/"],
     ["//evil.example/my/notifications", "/"],
     ["javascript:alert(1)", "/"],
+    ["/\\evil.example", "/"],
+    ["https://app.example@evil.example/", "/"],
   ])("normalizes notification destination %s", (input, expected) => {
     const { context } = loadWorker();
     expect(vm.runInContext(`safeNotificationDestination(${JSON.stringify(input)})`, context))
       .toBe(expected);
+  });
+  it("renders branded push with readable fallback when payload is missing or malformed", async () => {
+    const { context, listeners } = loadWorker();
+    for (const payload of [undefined, { json: () => { throw new Error("bad JSON"); } }, { json: () => null }]) {
+      let completion: Promise<unknown> | undefined;
+      listeners.get("push")!({
+        data: payload,
+        waitUntil: (promise: Promise<unknown>) => { completion = promise; },
+      });
+      await completion;
+    }
+    expect(context.self.registration.showNotification).toHaveBeenCalledTimes(3);
+    expect(context.self.registration.showNotification).toHaveBeenCalledWith(
+      "إشعار جديد من BUTTER BAKERY",
+      expect.objectContaining({
+        body: "لديك تحديث جديد. افتح التطبيق للاطلاع عليه.",
+        icon: "/butter-bakery-logo.png",
+        badge: "/push-badge.svg",
+        data: { url: "/" },
+      }),
+    );
+  });
+  it("does not navigate to an external URL even if notification data was tampered with", async () => {
+    const { clients, listeners } = loadWorker();
+    clients.matchAll.mockResolvedValue([]);
+    clients.openWindow.mockResolvedValue(undefined);
+    let completion: Promise<unknown> | undefined;
+    listeners.get("notificationclick")!({
+      notification: { close: vi.fn(), data: { url: "https://evil.example/phish" } },
+      waitUntil: (promise: Promise<unknown>) => { completion = promise; },
+    });
+    await completion;
+    expect(clients.openWindow).toHaveBeenCalledWith("https://app.example/");
   });
 
   it("focuses only an existing exact destination without navigating another tab", async () => {

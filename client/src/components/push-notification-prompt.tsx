@@ -59,7 +59,7 @@ export function MobilePushSettings({ className, compact = true }: MobilePushSett
     if (result === "enabled") {
       setStatus("enabled");
       localStorage.setItem(DISMISS_KEY, "1");
-      toast({ title: "تم تفعيل إشعارات الجوال", description: "ستصل التنبيهات الخاصة بحسابك إلى هذا الجهاز." });
+      toast({ title: "تم تسجيل هذا الجهاز للإشعارات", description: "قد تمنع إعدادات الجهاز أو وضع التركيز ظهور التنبيه؛ جرّب الاختبار للتحقق." });
     } else {
       setStatus(result === "error" ? "server-error" : result);
     }
@@ -91,18 +91,18 @@ export function MobilePushSettings({ className, compact = true }: MobilePushSett
     const sent = await sendTestPushToCurrentDevice();
     setBusy(null);
     toast(sent
-      ? { title: "تم إرسال إشعار تجريبي لهذا الجهاز" }
-      : { title: "تعذر إرسال الإشعار التجريبي", description: "لم يُرسل لأي مستخدم أو جهاز آخر.", variant: "destructive" });
+      ? { title: "قبل مزود الإشعارات طلب الاختبار", description: "هذا لا يؤكد ظهوره على الجهاز. تحقق من الإشعارات وشاشة القفل وإعدادات التركيز." }
+      : { title: "تعذر إرسال طلب الإشعار التجريبي", description: "تحقق من اتصالك واشتراك هذا الجهاز ثم أعد المحاولة.", variant: "destructive" });
   };
 
   const messages: Record<PushNotificationStatus, string> = {
     checking: "جارٍ التحقق من حالة الإشعارات…",
-    enabled: "الإشعارات مفعّلة لهذا الحساب على هذا الجهاز.",
+    enabled: "هذا الجهاز مسجّل للحساب. وصول التنبيه وظهوره يتأثران بإعدادات الجهاز.",
     disabled: "الإشعارات غير مفعّلة على هذا الجهاز.",
     denied: "الإشعارات محجوبة. اسمح بها من إعدادات الموقع في المتصفح ثم أعد المحاولة.",
     unsupported: "هذا المتصفح أو الجهاز لا يدعم إشعارات الويب.",
-    "not-installed": "على iPhone أو iPad: اضغط مشاركة، ثم «إضافة إلى الشاشة الرئيسية»، وافتح التطبيق من الأيقونة الجديدة.",
-    "ownership-conflict": "اشتراك المتصفح القديم مرتبط بحساب آخر. أعد تهيئة هذا الجهاز لإنشاء اشتراك جديد؛ لن يُنقل اشتراك الحساب الآخر.",
+    "not-installed": "على iPhone أو iPad بنظام iOS/iPadOS 16.4 أو أحدث: افتح الموقع في Safari، اضغط «مشاركة» ثم «إضافة إلى الشاشة الرئيسية»، وافتحه من الأيقونة الجديدة. بعدها اضغط «تفعيل» للموافقة على الإشعارات.",
+    "ownership-conflict": "اشتراك هذا المتصفح مرتبط بحساب آخر. اختر «إعادة تهيئة هذا الجهاز» لإلغاء اشتراك المتصفح القديم وإنشاء اشتراك جديد دون نقل بيانات الحساب الآخر.",
     "session-expired": "انتهت جلسة الدخول. سجّل الدخول مجدداً ثم أعد مزامنة الإشعارات.",
     "provider-unsupported": "عنوان مزود الإشعارات الذي أعاده هذا المتصفح غير مدعوم. حدّث المتصفح أو استخدم متصفحاً مدعوماً.",
     "server-error": "خدمة اشتراكات الإشعارات غير متاحة حالياً. أعد المحاولة؛ المشكلة ليست بالضرورة في اتصال جهازك.",
@@ -122,6 +122,12 @@ export function MobilePushSettings({ className, compact = true }: MobilePushSett
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold">إشعارات الجوال</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground" role="status">{messages[status]}</p>
+          {(status === "enabled" || status === "disabled") && (
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              على Android تحقق من السماح بإشعارات المتصفح أو التطبيق وشاشة القفل؛ وعلى iPhone تحقق من إشعارات تطبيق الشاشة الرئيسية. قد تؤخر أو تخفي إعدادات «عدم الإزعاج» والتركيز التنبيه.
+            </p>
+          )}
+          {status === "enabled" && <p className="mt-1 text-xs leading-5 text-muted-foreground">لا تدعم إشعارات الويب اختيار صوت مخصص بشكل موثوق؛ يتحكم النظام في صوت التنبيه.</p>}
           {status === "not-installed" && (
             <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1"><Share className="h-3.5 w-3.5 text-blue-600" /> مشاركة</span>
@@ -211,9 +217,10 @@ export function PushNotificationPrompt() {
       running = false;
       if (cancelled) return;
       await updatePrompt(result);
-      if (result === "server-error" && failures < 2) {
-        const delays = [1_000, 4_000] as const;
-        retryTimer = window.setTimeout(() => void runSync(), delays[failures]);
+      if (result === "server-error") {
+        // Continue retrying recoverable failures while this session is active;
+        // cap the interval to avoid hammering an unavailable server.
+        retryTimer = window.setTimeout(() => void runSync(), Math.min(60_000, 1_000 * 2 ** Math.min(failures, 6)));
         failures += 1;
       } else if (result !== "server-error") {
         failures = 0;

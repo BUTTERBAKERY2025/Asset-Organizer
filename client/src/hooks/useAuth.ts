@@ -46,6 +46,9 @@ export function useAuth() {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: { username: string; password: string; rememberMe?: boolean }) => {
+      // Revoke while the old account cookie is still active. The login response
+      // replaces that cookie, after which owner-scoped cleanup is too late.
+      if (user) await detachPushSubscriptionFromCurrentUser();
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -67,11 +70,15 @@ export function useAuth() {
       setCurrentUser(userData?.id?.toString() || null);
       queryClient.setQueryData(["/api/auth/me"], userData);
     },
+    onError: () => {
+      resumePushSubscriptionSync();
+    },
   });
 
   // المرحلة 5: التحقق من رمز OTP لإكمال تسجيل الدخول للمساهمين
   const verifyOtpMutation = useMutation({
     mutationFn: async (payload: { code: string }) => {
+      if (user) await detachPushSubscriptionFromCurrentUser();
       const res = await fetch("/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -90,6 +97,9 @@ export function useAuth() {
       clearPersistentCache();
       setCurrentUser(userData?.id?.toString() || null);
       queryClient.setQueryData(["/api/auth/me"], userData);
+    },
+    onError: () => {
+      resumePushSubscriptionSync();
     },
   });
 

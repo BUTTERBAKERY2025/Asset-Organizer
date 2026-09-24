@@ -30,6 +30,9 @@ let logoutCleanupActive = false;
 const activeSyncRequests = new Set<AbortController>();
 let activeSessionUserId: string | null = null;
 let syncInFlight: Promise<PushSyncResult> | null = null;
+let retryAfter = 0;
+let retryFailures = 0;
+let accountChangeRevocation: Promise<void> = Promise.resolve();
 
 export type PushSyncResult = "enabled" | "none" | "ownership-conflict" | "session-expired" | "provider-unsupported" | "server-error";
 
@@ -38,6 +41,8 @@ function abortStalePushOperations(): void {
   activeSyncRequests.forEach((controller) => controller.abort());
   activeSyncRequests.clear();
   syncInFlight = null;
+  retryAfter = 0;
+  retryFailures = 0;
 }
 
 export function resumePushSubscriptionSync(): void {
@@ -48,6 +53,16 @@ export function resumePushSubscriptionSync(): void {
 /** Prevents delayed browser work from one account crossing into another. */
 export function setPushSubscriptionSession(userId: string | null): void {
   if (activeSessionUserId === userId) return;
+  // A newly observed account must never inherit the previous browser endpoint.
+  // Explicit login paths revoke before swapping cookies; this also covers
+  // external session changes where that pre-login hook could not run.
+  if (activeSessionUserId && userId && pushSupported()) {
+    accountChangeRevocation = (async () => {
+      const registration = await navigator.serviceWorker.getRegistration?.();
+      const sub = await registration?.pushManager.getSubscription();
+      if (sub) await sub.unsubscribe();
+    })().catch((error) => console.error("[push] account change revocation failed:", error));
+  }
   activeSessionUserId = userId;
   abortStalePushOperations();
   logoutCleanupActive = userId === null;
@@ -139,6 +154,7 @@ export async function getPushNotificationStatus(): Promise<PushNotificationStatu
   if (Notification.permission === "denied") return "denied";
   if (Notification.permission !== "granted") return "disabled";
   try {
+    await accountChangeRevocation;
     const sub = await (await readyPushWorker()).pushManager.getSubscription();
     if (!sub) return "disabled";
     const response = await postSubscription("/api/push/status", sub);
@@ -155,6 +171,7 @@ export async function enablePushNotifications(): Promise<EnablePushResult> {
   if (iosNeedsInstall()) return "not-installed";
   if (!pushSupported()) return "unsupported";
   try {
+    await accountChangeRevocation;
     // This function must only be called directly from a click/tap handler.
     const permission = Notification.permission === "granted"
       ? "granted"
@@ -169,7 +186,7 @@ export async function enablePushNotifications(): Promise<EnablePushResult> {
     // nevertheless created with another key, the browser cannot repair it by
     // merely POSTing the old endpoint; revoke and create a compatible one.
     if (sub && !subscriptionUsesKey(sub, publicKey)) {
-      await sub.unsubscribe();
+      if (!await sub.unsubscribe()) return "error";
       sub = null;
     }
     if (!sub) {
@@ -179,7 +196,16 @@ export async function enablePushNotifications(): Promise<EnablePushResult> {
       });
     }
     const save = await postSubscription("/api/push/subscribe", sub);
-    return save.ok ? "enabled" : await classifyResponse(save);
+    if (save.ok) return "enabled";
+    const failure = await classifyResponse(save);
+    if (failure === "ownership-conflict") {
+      // The browser cannot keep offering an endpoint owned by another user.
+      // Revoke locally only; never delete the other account's server record.
+      if (!await sub.unsubscribe()) console.error("[push] conflicting endpoint revocation failed");
+    }
+    // Keep an existing endpoint on transient failures so retry does not
+    // produce a new device record; ownership conflicts must stay isolated.
+    return failure;
   } catch (error) {
     console.error("[push] enable failed:", error);
     return "error";
@@ -190,8 +216,11 @@ export async function enablePushNotifications(): Promise<EnablePushResult> {
 // it, a missing provider subscription can be restored without another gesture.
 async function performPushSubscriptionSync(): Promise<PushSyncResult> {
   if (logoutCleanupActive || !pushSupported() || Notification.permission !== "granted") return "none";
+  if (Date.now() < retryAfter) return "server-error";
   const generation = pushSessionGeneration;
   try {
+    await accountChangeRevocation;
+    if (logoutCleanupActive || generation !== pushSessionGeneration) return "none";
     const registration = await readyPushWorker();
     let sub = await registration.pushManager.getSubscription();
     if (logoutCleanupActive || generation !== pushSessionGeneration) return "none";
@@ -217,10 +246,18 @@ async function performPushSubscriptionSync(): Promise<PushSyncResult> {
       activeSyncRequests.delete(controller);
     }
     if (generation !== pushSessionGeneration) return "none";
-    return response.ok ? "enabled" : await classifyResponse(response);
+    const result = response.ok ? "enabled" : await classifyResponse(response);
+    if (result === "server-error") {
+      retryAfter = Date.now() + Math.min(60_000, 1000 * 2 ** retryFailures++);
+    } else {
+      retryAfter = 0;
+      retryFailures = 0;
+    }
+    return result;
   } catch (error) {
     if (logoutCleanupActive || generation !== pushSessionGeneration || (error as Error)?.name === "AbortError") return "none";
     console.error("[push] sync failed:", error);
+    retryAfter = Date.now() + Math.min(60_000, 1000 * 2 ** retryFailures++);
     return "server-error";
   }
 }
@@ -243,6 +280,7 @@ export async function reinitializePushNotifications(): Promise<EnablePushResult>
   if (!pushSupported()) return "unsupported";
   if (Notification.permission !== "granted") return "denied";
   try {
+    await accountChangeRevocation;
     const reg = await readyPushWorker();
     const sub = await reg.pushManager.getSubscription();
     if (sub) {
@@ -251,16 +289,18 @@ export async function reinitializePushNotifications(): Promise<EnablePushResult>
       const ownership = await postSubscription("/api/push/status", sub);
       if (!ownership.ok) return await classifyResponse(ownership);
       const ownershipData = await ownership.json();
-      if (ownershipData?.subscribed !== true) return "ownership-conflict";
-
-      const response = await fetch("/api/push/unsubscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ endpoint: sub.endpoint }),
-      });
-      if (!response.ok && (response.status === 401 || response.status === 403)) return "session-expired";
-      await sub.unsubscribe();
+      if (ownershipData?.subscribed === true) {
+        const response = await fetch("/api/push/unsubscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        });
+        if (!response.ok) return await classifyResponse(response);
+      }
+      // When this belongs to another account, only revoke the local provider
+      // endpoint. Never delete or transfer the other user's server record.
+      if (!await sub.unsubscribe()) return "error";
     }
     return enablePushNotifications();
   } catch (error) {
@@ -280,8 +320,9 @@ export async function disablePushNotifications(): Promise<DisablePushResult> {
       credentials: "include",
       body: JSON.stringify({ endpoint: sub.endpoint }),
     });
-    const removedLocally = await sub.unsubscribe();
-    return serverResponse.ok && removedLocally ? "disabled" : "server-error";
+    // If server deletion failed, retain the local endpoint for a retry.
+    if (!serverResponse.ok) return "server-error";
+    return await sub.unsubscribe() ? "disabled" : "server-error";
   } catch (error) {
     console.error("[push] disable failed:", error);
     return "server-error";
@@ -303,13 +344,19 @@ export async function detachPushSubscriptionFromCurrentUser(): Promise<void> {
         : navigator.serviceWorker.ready,
       new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 500)),
     ]);
-    const sub = await registration?.pushManager.getSubscription();
+    const sub = await Promise.race([
+      registration?.pushManager.getSubscription(),
+      new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 500)),
+    ]);
     if (!sub) return;
 
     // Start both privacy barriers immediately: provider revocation and the
     // user-scoped server delete. Only the fetch can carry session cookies, so
     // it is explicitly aborted before this bounded cleanup returns.
-    const revoke = sub.unsubscribe().catch(() => false);
+    const revoke = sub.unsubscribe().catch((error) => {
+      console.error("[push] provider revocation failed:", error);
+      return false;
+    });
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 750);
     const serverCleanup = fetch("/api/push/unsubscribe", {
@@ -318,10 +365,15 @@ export async function detachPushSubscriptionFromCurrentUser(): Promise<void> {
       credentials: "include",
       body: JSON.stringify({ endpoint: sub.endpoint }),
       signal: controller.signal,
-    }).catch(() => undefined);
+    }).then((response) => {
+      if (!response.ok) console.error("[push] account endpoint cleanup failed:", response.status);
+    }).catch((error) => {
+      if (controller.signal.aborted) console.error("[push] account endpoint cleanup timed out");
+      else console.error("[push] account endpoint cleanup failed:", error);
+    });
     try {
       await Promise.allSettled([
-        serverCleanup,
+        Promise.race([serverCleanup, new Promise((resolve) => setTimeout(resolve, 750))]),
         Promise.race([
           revoke,
           new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 750)),

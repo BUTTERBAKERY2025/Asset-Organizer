@@ -13,7 +13,7 @@ import {
 
 // Helper function to get Saudi Arabia time (UTC+3)
 import { updateCatalogueBranchStock } from "./catalogue-branch-stock";
-import { riyadhTimeShort } from "@shared/riyadh-time";
+import { isWithinRiyadhDailyWindow } from "@shared/riyadh-time";
 function getSaudiArabiaTime(): { date: string; time: string; timeShort: string } {
   const now = new Date();
   // Format date and time components directly in Saudi Arabia timezone
@@ -18358,12 +18358,7 @@ export class DatabaseStorage implements IStorage {
           if (!userRole || !roleIds.includes(userRole)) return false;
         }
       }
-      if (n.displayTimeStart || n.displayTimeEnd) {
-        const nowTime = riyadhTimeShort(now);
-        if (n.displayTimeStart && nowTime < n.displayTimeStart) return false;
-        if (n.displayTimeEnd && nowTime > n.displayTimeEnd) return false;
-      }
-      return true;
+      return isWithinRiyadhDailyWindow(n.displayTimeStart, n.displayTimeEnd, now);
     });
     const scoped = visible.filter(n =>
       n.accessModule === "central_kitchen_orders"

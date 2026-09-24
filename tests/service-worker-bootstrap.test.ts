@@ -1,7 +1,8 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import vm from "node:vm";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { build } from "vite";
 
 const html = readFileSync(
@@ -13,12 +14,72 @@ const bootstrap = readFileSync(
   "utf8",
 );
 
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
+function loadBootstrap(register: ReturnType<typeof vi.fn>) {
+  const listeners = new Map<string, () => void>();
+  vm.runInNewContext(bootstrap, {
+    navigator: { serviceWorker: { register } },
+    window: { addEventListener: (event: string, callback: () => void) => listeners.set(event, callback) },
+    console,
+    setTimeout,
+    clearTimeout,
+  });
+  return listeners;
+}
+
 describe("service worker bootstrap recovery", () => {
-  it("reports registration failures and retries transient failures", () => {
-    expect(bootstrap).toContain('console.error("Service worker registration failed:", error)');
-    expect(bootstrap).toContain("attempts < 3");
-    expect(bootstrap).toContain("setTimeout(registerServiceWorker, attempts * 3000)");
-    expect(bootstrap).toContain('window.addEventListener("online", registerServiceWorker)');
+  it("continues retrying beyond three failures with capped backoff then resets after recovery", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const update = vi.fn(async () => {});
+    const register = vi.fn().mockRejectedValueOnce(new Error("offline"))
+      .mockRejectedValueOnce(new Error("offline")).mockRejectedValueOnce(new Error("offline"))
+      .mockRejectedValueOnce(new Error("offline")).mockRejectedValueOnce(new Error("offline"))
+      .mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ update });
+    loadBootstrap(register);
+    await vi.advanceTimersByTimeAsync(0);
+    for (const delay of [3000, 6000, 12000, 24000, 48000, 60000]) {
+      await vi.advanceTimersByTimeAsync(delay - 1);
+      expect(register).toHaveBeenCalledTimes(1 + [3000, 6000, 12000, 24000, 48000, 60000].indexOf(delay));
+      await vi.advanceTimersByTimeAsync(1);
+    }
+    expect(register).toHaveBeenCalledTimes(7);
+    expect(update).toHaveBeenCalledOnce();
+  });
+
+  it("keeps one attempt and one timer when online fires during an in-flight registration", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    let reject!: (reason: Error) => void;
+    const register = vi.fn().mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }))
+      .mockResolvedValue({ update: vi.fn(async () => {}) });
+    const listeners = loadBootstrap(register);
+    listeners.get("online")!();
+    listeners.get("online")!();
+    expect(register).toHaveBeenCalledOnce();
+    reject(new Error("offline"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(register).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(register).toHaveBeenCalledTimes(2);
+  });
+
+  it("online event cancels an existing delayed retry and triggers one immediate attempt", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const register = vi.fn().mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValue({ update: vi.fn(async () => {}) });
+    const listeners = loadBootstrap(register);
+    await vi.advanceTimersByTimeAsync(0);
+    listeners.get("online")!();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(register).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(register).toHaveBeenCalledTimes(2);
   });
 
   it("checks an existing registration for updates without hiding failures", () => {

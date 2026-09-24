@@ -18,6 +18,7 @@ import {
   numeric,
   bigint,
   foreignKey,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -13076,6 +13077,34 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
   index("idx_push_subs_user").on(t.userId),
 ]);
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+
+// INSERT-triggered outbox; intentionally no backfill for pre-install notifications.
+export const personalNotificationPushOutbox = pgTable("personal_notification_push_outbox", {
+  notificationId: integer("notification_id").primaryKey().references(() => notifications.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  claimedAt: timestamp("claimed_at"),
+  attemptCount: integer("attempt_count").default(0).notNull(),
+  nextRetryAt: timestamp("next_retry_at"),
+  deliveredAt: timestamp("delivered_at"),
+  failedAt: timestamp("failed_at"),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [
+  index("idx_personal_push_due").on(t.nextRetryAt, t.notificationId)
+    .where(sql`${t.deliveredAt} IS NULL AND ${t.failedAt} IS NULL`),
+]);
+
+export const personalNotificationPushDeliveries = pgTable("personal_notification_push_deliveries", {
+  notificationId: integer("notification_id").notNull().references(() => personalNotificationPushOutbox.notificationId, { onDelete: "cascade" }),
+  subscriptionId: integer("subscription_id").notNull().references(() => pushSubscriptions.id, { onDelete: "cascade" }),
+  status: text("status").notNull(),
+  attempts: integer("attempts").default(0).notNull(),
+  lastError: text("last_error"),
+  deliveredAt: timestamp("delivered_at"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.notificationId, t.subscriptionId] }),
+]);
 
 // Per-device receipts make a partial provider failure retryable without
 // delivering the same notification again to devices which already accepted it.

@@ -24,3 +24,9 @@ Production push bootstrap must work with strict `script-src 'self'`, without inl
 **Why:** The live custom domain served an inline service-worker registration script while its CSP blocked inline execution. Development readiness checks and successful builds did not expose the production-only failure.
 
 **How to apply:** Keep registration in an allowed same-origin external script, test emitted production HTML against CSP, and check live response headers plus deployed worker version before blaming device connectivity. Existing registered workers can mask this failure on older devices.
+
+Personal notification push must capture new direct inserts, never replay historical rows, and require a proven individual recipient. Branch-only records are not permission to broadcast.
+
+**Why:** Personal notifications are written through multiple paths, not only the central notification service. Their contents can include sensitive HR details, and a branch identifier alone does not establish who may see them.
+
+**How to apply:** Preserve the durable insert boundary and activation cutoff; retain generic personal lock-screen text with authenticated portal navigation. Resolve branch-only recipients from an authoritative access rule before extending coverage. Provider acceptance is not proof of physical lock-screen display.

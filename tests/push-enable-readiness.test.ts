@@ -67,7 +67,7 @@ describe("explicit mobile push activation", () => {
     expect(await enablePushNotifications()).toBe("server-error");
   });
   it("surfaces an endpoint ownership conflict instead of blaming the network", async () => {
-    const subscription = { endpoint: "https://fcm.googleapis.com/fcm/send/device", toJSON: () => ({ endpoint: "https://fcm.googleapis.com/fcm/send/device" }) };
+    const subscription = { endpoint: "https://fcm.googleapis.com/fcm/send/device", toJSON: () => ({ endpoint: "https://fcm.googleapis.com/fcm/send/device" }), unsubscribe: vi.fn(async () => true) };
     environment(Promise.resolve({ pushManager: { getSubscription: async () => subscription } }));
     vi.mocked(fetch)
       .mockResolvedValueOnce({ ok: true, json: async () => ({ publicKey: "AQ" }) } as Response)
@@ -77,8 +77,19 @@ describe("explicit mobile push activation", () => {
         clone: () => ({ json: async () => ({ code: "endpoint_owned_by_another_user" }) }),
       } as unknown as Response);
     expect(await enablePushNotifications()).toBe("ownership-conflict");
+    expect(subscription.unsubscribe).toHaveBeenCalledOnce();
   });
-  it("does not revoke a shared-device endpoint owned by another account", async () => {
+  it("retains a newly created endpoint on transient save failure for safe retry", async () => {
+    const subscription = { endpoint: "https://push.example/new", toJSON: () => ({ endpoint: "https://push.example/new" }), unsubscribe: vi.fn(async () => true) };
+    const subscribe = vi.fn(async () => subscription);
+    environment(Promise.resolve({ pushManager: { getSubscription: async () => null, subscribe } }));
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ publicKey: "AQ" }) } as Response)
+      .mockResolvedValueOnce({ ok: false, status: 503, clone: () => ({ json: async () => ({}) }) } as unknown as Response);
+    expect(await enablePushNotifications()).toBe("server-error");
+    expect(subscribe).toHaveBeenCalledOnce();
+    expect(subscription.unsubscribe).not.toHaveBeenCalled();
+  });
+  it("does not delete a shared-device endpoint owned by another account, but revokes it locally", async () => {
     const unsubscribe = vi.fn(async () => true);
     const subscription = {
       endpoint: "https://fcm.googleapis.com/fcm/send/prior-account",
@@ -86,15 +97,41 @@ describe("explicit mobile push activation", () => {
       unsubscribe,
     };
     environment(Promise.resolve({ pushManager: { getSubscription: async () => subscription } }));
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: false,
-      status: 409,
-      clone: () => ({ json: async () => ({ code: "endpoint_owned_by_another_user" }) }),
-    } as unknown as Response);
-
-    expect(await reinitializePushNotifications()).toBe("ownership-conflict");
-    expect(unsubscribe).not.toHaveBeenCalled();
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ subscribed: false }) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ publicKey: "AQ" }) } as Response)
+      .mockResolvedValueOnce({ ok: true } as Response);
+    expect(await reinitializePushNotifications()).toBe("enabled");
+    expect(unsubscribe).toHaveBeenCalledOnce();
     expect(fetch).not.toHaveBeenCalledWith("/api/push/unsubscribe", expect.anything());
+  });
+  it("retains local subscription when disabling fails at server, allowing cleanup retry", async () => {
+    const unsubscribe = vi.fn(async () => true);
+    environment(Promise.resolve({ pushManager: { getSubscription: async () => ({ endpoint: "https://push.example/a", unsubscribe }) } }));
+    vi.mocked(fetch).mockResolvedValue({ ok: false, status: 503 } as Response);
+    expect(await disablePushNotifications()).toBe("server-error");
+    expect(unsubscribe).not.toHaveBeenCalled();
+  });
+  it("does not revoke an owned endpoint when reinitialization server cleanup fails", async () => {
+    const unsubscribe = vi.fn(async () => true);
+    const sub = { endpoint: "https://push.example/a", toJSON: () => ({ endpoint: "https://push.example/a" }), unsubscribe };
+    environment(Promise.resolve({ pushManager: { getSubscription: async () => sub } }));
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ subscribed: true }) } as Response)
+      .mockResolvedValueOnce({ ok: false, status: 503, clone: () => ({ json: async () => ({}) }) } as unknown as Response);
+    expect(await reinitializePushNotifications()).toBe("server-error");
+    expect(unsubscribe).not.toHaveBeenCalled();
+  });
+  it("backs off recoverable automatic registration errors and retries later", async () => {
+    vi.useFakeTimers();
+    const sub = { endpoint: "https://push.example/a", toJSON: () => ({ endpoint: "https://push.example/a" }) };
+    environment(Promise.resolve({ pushManager: { getSubscription: async () => sub } }));
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status: 503, clone: () => ({ json: async () => ({}) }) } as unknown as Response)
+      .mockResolvedValueOnce({ ok: true } as Response);
+    expect(await syncPushSubscription()).toBe("server-error");
+    expect(await syncPushSubscription()).toBe("server-error");
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(await syncPushSubscription()).toBe("enabled");
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
   it("never requests permission during silent subscription sync", async () => {
     const requestPermission = environment(Promise.resolve({

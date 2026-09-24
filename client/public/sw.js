@@ -6,7 +6,9 @@ const API_CACHE = 'butter-api-v8';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
-  '/favicon.png'
+  '/favicon.png',
+  '/butter-bakery-logo.png',
+  '/push-badge.svg'
 ];
 
 const API_CACHE_MAX_AGE = 60 * 1000;
@@ -248,15 +250,15 @@ self.addEventListener('message', (event) => {
 self.addEventListener('push', (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (e) {}
-  const title = data.title || 'إشعار جديد';
+  const title = typeof data?.title === 'string' && data.title.trim() ? data.title : 'إشعار جديد من BUTTER BAKERY';
   const options = {
-    body: data.body || '',
+    body: typeof data?.body === 'string' && data.body.trim() ? data.body : 'لديك تحديث جديد. افتح التطبيق للاطلاع عليه.',
     dir: 'rtl',
     lang: 'ar',
-    icon: '/favicon.png',
-    badge: '/favicon.png',
-    tag: data.tag || undefined,
-    data: { url: safeNotificationDestination(data.url) },
+    icon: '/butter-bakery-logo.png',
+    badge: '/push-badge.svg',
+    tag: typeof data?.tag === 'string' ? data.tag : undefined,
+    data: { url: safeNotificationDestination(data?.url) },
     vibrate: [100, 50, 100],
   };
   event.waitUntil(self.registration.showNotification(title, options));

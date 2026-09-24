@@ -17,7 +17,7 @@ import {
   type SystemNotification,
 } from "@shared/schema";
 import { isKnownPushProviderEndpoint } from "./push-endpoint-security";
-import { riyadhTimeShort } from "@shared/riyadh-time";
+import { isWithinRiyadhDailyWindow, riyadhTimeShort } from "@shared/riyadh-time";
 
 let vapidReady: Promise<string> | null = null;
 
@@ -325,10 +325,7 @@ async function completePushClaim(id: number, claimedAt: Date): Promise<void> {
 export function isPushVisibleNow(n: Pick<SystemNotification, "startDate" | "endDate" | "displayTimeStart" | "displayTimeEnd">, now = new Date()): boolean {
   if (n.startDate && new Date(n.startDate).getTime() > now.getTime()) return false;
   if (n.endDate && new Date(n.endDate).getTime() < now.getTime()) return false;
-  const nowTime = riyadhTimeShort(now);
-  if (n.displayTimeStart && nowTime < n.displayTimeStart) return false;
-  if (n.displayTimeEnd && nowTime > n.displayTimeEnd) return false;
-  return true;
+  return isWithinRiyadhDailyWindow(n.displayTimeStart, n.displayTimeEnd, now);
 }
 
 // يُستدعى بعد إنشاء إشعار نظام (fire-and-forget)
@@ -365,8 +362,19 @@ export async function sweepScheduledPush(): Promise<void> {
         sql`${systemNotifications.pushAttemptCount} < ${MAX_PUSH_ATTEMPTS}`,
         or(isNull(systemNotifications.startDate), lte(systemNotifications.startDate, now)),
         or(isNull(systemNotifications.endDate), gte(systemNotifications.endDate, now)),
-        or(isNull(systemNotifications.displayTimeStart), lte(systemNotifications.displayTimeStart, nowTime)),
-        or(isNull(systemNotifications.displayTimeEnd), gte(systemNotifications.displayTimeEnd, nowTime)),
+        // Keep this SQL prefilter equivalent to isWithinRiyadhDailyWindow: inclusive
+        // daytime/overnight windows, open ends, and malformed HH:mm fail closed.
+        sql`(${systemNotifications.displayTimeStart} IS NULL OR ${systemNotifications.displayTimeStart} ~ '^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$')`,
+        sql`(${systemNotifications.displayTimeEnd} IS NULL OR ${systemNotifications.displayTimeEnd} ~ '^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$')`,
+        sql`(
+          (${systemNotifications.displayTimeStart} IS NULL AND (${systemNotifications.displayTimeEnd} IS NULL OR ${systemNotifications.displayTimeEnd} >= ${nowTime}))
+          OR (${systemNotifications.displayTimeEnd} IS NULL AND ${systemNotifications.displayTimeStart} <= ${nowTime})
+          OR (${systemNotifications.displayTimeStart} <= ${systemNotifications.displayTimeEnd}
+            AND ${systemNotifications.displayTimeStart} <= ${nowTime}
+            AND ${systemNotifications.displayTimeEnd} >= ${nowTime})
+          OR (${systemNotifications.displayTimeStart} > ${systemNotifications.displayTimeEnd}
+            AND (${systemNotifications.displayTimeStart} <= ${nowTime} OR ${systemNotifications.displayTimeEnd} >= ${nowTime}))
+        )`,
       ))
       .orderBy(asc(systemNotifications.startDate), asc(systemNotifications.id))
       .limit(100);

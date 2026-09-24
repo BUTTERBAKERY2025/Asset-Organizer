@@ -757,4 +757,10 @@ export function startScheduler() {
       .catch(() => {});
   setTimeout(pushSweep, 20_000);
   setInterval(pushSweep, 5 * 60_000);
+  const personalPushSweep = () =>
+    import("./personal-notification-push")
+      .then((m) => m.sweepPersonalNotificationPush())
+      .catch((error) => console.error("[personal-push] scheduler failed:", error));
+  setTimeout(personalPushSweep, 25_000);
+  setInterval(personalPushSweep, 60_000);
 }
