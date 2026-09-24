@@ -1,6 +1,6 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { rm, readFile } from "fs/promises";
+import { rm, readFile, mkdir, copyFile } from "fs/promises";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
@@ -59,6 +59,16 @@ async function buildAll() {
     external: externals,
     logLevel: "info",
   });
+
+  // The catalogue importer is deliberately server-only.  Bundle the approved
+  // immutable workbooks beside the production build rather than relying on the
+  // development workspace's attached_assets directory.
+  await mkdir("dist/catalogue-source", { recursive: true });
+  await Promise.all([
+    "items_by_cod_1789494218526.xlsx",
+    "item_store_1789494218529.xlsx",
+    "items_by_category_1789494218529.xlsx",
+  ].map((name) => copyFile(`attached_assets/${name}`, `dist/catalogue-source/${name}`)));
 }
 
 buildAll().catch((err) => {

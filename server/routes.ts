@@ -5,6 +5,7 @@ import memoize from "memoizee";
 import { storage } from "./storage";
 import { readEmployeeDocumentMetadata } from "./employee-documents-read";
 import { ProductionStockPostingError } from "./production-stock-posting";
+import { InactiveBranchStockReferenceError } from "./catalogue-branch-stock";
 import {
   manualProductionOperations,
   ManualProductionOperationError,
@@ -39,6 +40,14 @@ import {
   warehouseMovementIsInScope,
   warehouseTransferIsInScope,
 } from "./warehouse-dashboard-scope";
+import {
+  canReactivatePendingPriceCatalogRecord,
+  getEffectiveSalePrice,
+  isCatalogRecordActive,
+  isExplicitCatalogActivation,
+  isExplicitCatalogActivityValue,
+  isNewCatalogReferenceAllowed,
+} from "@shared/catalog-activity";
 
 // Helper to safely get current user from authenticated request
 function getCurrentUser(req: Request): User {
@@ -46,6 +55,48 @@ function getCurrentUser(req: Request): User {
     throw new Error("User not authenticated");
   }
   return req.currentUser;
+}
+
+async function isImportedPendingPriceCatalogRecord(
+  namespace: "products" | "warehouse",
+  currentId: number,
+): Promise<boolean> {
+  const result = await db.execute(sql`
+    SELECT EXISTS (
+      SELECT 1
+      FROM catalogue_import_plans AS plan
+      CROSS JOIN LATERAL jsonb_array_elements(
+        COALESCE(plan.applied_summary -> 'operations', '[]'::jsonb)
+      ) AS operation
+      WHERE plan.status = 'applied'
+        AND operation ->> 'namespace' = ${namespace}
+        AND operation ->> 'action' = 'add'
+        AND operation ->> 'availabilityDisposition' = 'inactive_pending_price'
+        AND NULLIF(operation ->> 'currentId', '')::integer = ${currentId}
+    ) AS pending
+  `);
+  const value = result.rows[0]?.pending;
+  return value === true || value === "true" || value === 1;
+}
+
+/**
+ * New writes must resolve the supplied id against the current catalog rather
+ * than trusting a historical display record. Callers deliberately invoke this
+ * only when they are replacing a reference; unchanged historical references
+ * remain editable and visible.
+ */
+async function getSelectableProductReference(productId: unknown) {
+  const id = Number(productId);
+  if (!Number.isInteger(id) || id <= 0) return undefined;
+  const product = await storage.getProduct(id);
+  return isNewCatalogReferenceAllowed(product) ? product : undefined;
+}
+
+async function getSelectableWarehouseItemReference(itemId: unknown) {
+  const id = Number(itemId);
+  if (!Number.isInteger(id) || id <= 0) return undefined;
+  const item = await storage.getWarehouseItem(id);
+  return isNewCatalogReferenceAllowed(item) ? item : undefined;
 }
 
 // Helper to parse query params to string | undefined
@@ -177,6 +228,11 @@ import {
   loadCentralKitchenOrderingPolicy,
   registerCentralKitchenOrderingPolicyPutRoute,
 } from "./central-kitchen-ordering-policy";
+import {
+  catalogueTargetIdentityFromRow,
+  createCatalogueBackupManifest,
+  registerCatalogueImporterRoutes,
+} from "./catalogue-importer";
 import {
   CentralKitchenBatchMaterialsError,
   getBatchMaterialRequirements,
@@ -555,6 +611,7 @@ export async function registerRoutes(
   registerCentralKitchenWorkplanRoute(app);
   registerBranchOperationsRoute(app);
   registerBranchComplaintRoutes(app);
+  registerCatalogueImporterRoutes(app);
 
   // Cached data fetchers
   const getCachedBranches = memoize(async () => {
@@ -1075,7 +1132,6 @@ export async function registerRoutes(
         .filter((perm: any) => perm.actions.length > 0);
       
 
-      
       // Build a set of requested module:action pairs
       const requestedPerms = new Set<string>();
       for (const perm of validatedPermissions) {
@@ -5905,24 +5961,63 @@ export async function registerRoutes(
 
       (async () => {
         try {
-          const backupPayload: Record<string, any[]> = {};
+          const backupPayload: Record<string, any> = {};
           let totalRows = 0;
-
-          for (const tableName of tablesToBackup) {
-            if (!safeTableNameRegex.test(tableName)) continue;
-            try {
-              const result = await pool.query(`SELECT * FROM "${tableName}"`);
+          const backupClient = await pool.connect();
+          let targetIdentity: string | null = null;
+          try {
+            // The entire selected-table image and database identity must be
+            // read from one immutable PostgreSQL snapshot. A sequence of pool
+            // queries can otherwise mix catalogue versions in one backup.
+            await backupClient.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+            const identity = await backupClient.query(`
+              SELECT current_database() AS database_name,
+                     (SELECT oid::text FROM pg_database WHERE datname = current_database()) AS database_oid,
+                     COALESCE(inet_server_addr()::text, 'local') AS server_address,
+                     COALESCE(inet_server_port()::text, 'local') AS server_port
+            `);
+            // Ordinary backups remain available before catalogue adoption is
+            // configured. Only target-bound backups can authorize an import.
+            if (process.env.CATALOGUE_IMPORT_TARGET_ID) {
+              targetIdentity = catalogueTargetIdentityFromRow(identity.rows[0]);
+            }
+            for (const tableName of tablesToBackup) {
+              if (!safeTableNameRegex.test(tableName)) continue;
+              // A failed SELECT aborts this transaction; never label a
+              // partial/empty replacement image as a completed backup.
+              const result = await backupClient.query(`SELECT * FROM "${tableName}"`);
               backupPayload[tableName] = result.rows;
               totalRows += result.rows.length;
-            } catch (err) {
-              console.warn(`Skipping table ${tableName}:`, err);
-              backupPayload[tableName] = [];
             }
+            await backupClient.query("COMMIT");
+          } catch (error) {
+            await backupClient.query("ROLLBACK").catch(() => undefined);
+            throw error;
+          } finally {
+            backupClient.release();
           }
 
           const jsonData = JSON.stringify(backupPayload);
           const sizeBytes = Buffer.byteLength(jsonData, 'utf8');
 
+          // A catalogue plan may use this backup only when its exact database
+          // identity and the captured catalogue snapshot are attested here.
+          // Backups that omit either catalogue table intentionally have no
+          // manifest and cannot satisfy the destructive-import gate.
+          if (targetIdentity && Array.isArray(backupPayload.products) && Array.isArray(backupPayload.warehouse_items)) {
+            const manifest = createCatalogueBackupManifest(
+              targetIdentity!,
+              backupPayload.products,
+              backupPayload.warehouse_items,
+            );
+            await db.execute(sql`
+              INSERT INTO catalogue_backup_manifests (
+                backup_id, target_identity, snapshot_checksum, manifest_checksum
+              ) VALUES (
+                ${backup.id}, ${manifest.targetIdentity}, ${manifest.snapshotChecksum}, ${manifest.manifestChecksum}
+              )
+            `);
+          }
           await storage.updateBackup(backup.id, {
             status: 'completed',
             backupData: jsonData,
@@ -7215,6 +7310,17 @@ export async function registerRoutes(
       const existing = await storage.getProduct(id);
       if (!existing) {
         return res.status(404).json({ error: "Product not found" });
+      }
+      const isReactivating = parsed.data.isActive === "true"
+        && !isCatalogRecordActive(existing.isActive);
+      if (
+        isReactivating
+        && await isImportedPendingPriceCatalogRecord("products", id)
+        && !canReactivatePendingPriceCatalogRecord(existing.basePrice, parsed.data.basePrice)
+      ) {
+        return res.status(400).json({
+          error: "لا يمكن تفعيل الصنف المستورد قبل إدخال سعر أساس موجب وصالح",
+        });
       }
       if (parsed.data.sku && await storage.getProductBySku(parsed.data.sku, id)) {
         return res.status(409).json({ error: "A product with this SKU already exists" });
@@ -9476,6 +9582,10 @@ export async function registerRoutes(
         ...req.body,
         createdBy: req.currentUser?.id,
       });
+      const product = await getSelectableProductReference(validatedData.productId);
+      if (!product) {
+        return res.status(400).json({ error: "المنتج المحدد غير متاح لأمر إنتاج جديد" });
+      }
       const order = await storage.createProductionOrder(validatedData);
       res.status(201).json(order);
     } catch (error) {
@@ -9496,6 +9606,15 @@ export async function registerRoutes(
         const hasAccess = await canAccessBranch(req, existingOrder.branchId);
         if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بتعديل أمر إنتاج هذا الفرع" });
+        }
+      }
+      if (
+        req.body.productId !== undefined
+        && Number(req.body.productId) !== Number(existingOrder.productId)
+      ) {
+        const product = await getSelectableProductReference(req.body.productId);
+        if (!product) {
+          return res.status(400).json({ error: "المنتج المحدد غير متاح لأمر إنتاج جديد" });
         }
       }
       const order = await storage.updateProductionOrder(id, req.body);
@@ -17194,6 +17313,10 @@ export async function registerRoutes(
       }
       
       const validatedData = insertDisplayBarReceiptSchema.parse(req.body);
+      const product = await getSelectableProductReference(validatedData.productId);
+      if (!product) {
+        return res.status(400).json({ error: "لا يمكن تسجيل استلام لمنتج غير متاح" });
+      }
       const receipt = await storage.createDisplayBarReceipt(validatedData);
       res.status(201).json(receipt);
     } catch (error) {
@@ -17349,6 +17472,15 @@ export async function registerRoutes(
       // Prevent branchId changes for non-admin users
       if (user?.role !== "admin" && partialData.branchId && partialData.branchId !== existingSummary.branchId) {
         return res.status(403).json({ error: "لا يمكن تغيير الفرع" });
+      }
+      // Keep historical totals editable after product deactivation, but do not
+      // permit a PATCH to replace their product reference with an inactive id.
+      if (
+        partialData.productId !== undefined
+        && Number(partialData.productId) !== Number(existingSummary.productId)
+        && !await getSelectableProductReference(partialData.productId)
+      ) {
+        return res.status(400).json({ error: "لا يمكن ربط الملخص بمنتج غير متاح" });
       }
       
       const summary = await storage.updateDisplayBarDailySummary(id, partialData);
@@ -18205,6 +18337,10 @@ export async function registerRoutes(
         ...req.body,
         wasteReportId: reportId,
       });
+      const product = await getSelectableProductReference(validatedData.productId);
+      if (!product) {
+        return res.status(400).json({ error: "لا يمكن تسجيل هدر لمنتج غير متاح" });
+      }
       const item = await storage.createWasteItem(validatedData);
       
       const allItems = await storage.getWasteItems(reportId);
@@ -18270,6 +18406,15 @@ export async function registerRoutes(
           wasteReportId: reportId,
         });
       });
+       // Validate every replacement before the atomic delete/insert call. This
+       // is a new-reference boundary, unlike edits that retain an existing
+       // historical item row.
+       const catalogProducts = await Promise.all(
+         validatedItems.map((item) => getSelectableProductReference(item.productId)),
+       );
+       if (catalogProducts.some((product) => !product)) {
+         return res.status(400).json({ error: "لا يمكن تسجيل هدر لمنتج غير متاح" });
+       }
       
       const created = await storage.batchReplaceWasteItems(reportId, validatedItems);
       console.log(`[WASTE BATCH] Report ${reportId}: Saved ${created.length} items successfully`);
@@ -18314,6 +18459,15 @@ export async function registerRoutes(
       if (user?.role !== "admin" && partialData.wasteReportId && partialData.wasteReportId !== existingItem.wasteReportId) {
         return res.status(403).json({ error: "لا يمكن نقل العنصر لتقرير آخر" });
       }
+       // A non-reference edit of a historical waste row must remain possible
+       // after its product is deactivated. Validate only an actual replacement.
+       if (
+         partialData.productId !== undefined
+         && Number(partialData.productId) !== Number(existingItem.productId)
+         && !await getSelectableProductReference(partialData.productId)
+       ) {
+         return res.status(400).json({ error: "لا يمكن تسجيل هدر لمنتج غير متاح" });
+       }
       
       const item = await storage.updateWasteItem(id, partialData);
       
@@ -18495,6 +18649,24 @@ export async function registerRoutes(
   app.post("/api/advanced-production-orders", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
     try {
       const { items, schedules, ...orderData } = req.body;
+      const normalizedItems: any[] = [];
+      if (items !== undefined && !Array.isArray(items)) {
+        return res.status(400).json({ error: "بنود أمر الإنتاج يجب أن تكون قائمة" });
+      }
+      for (const item of items || []) {
+        const product = await getSelectableProductReference(item?.productId);
+        if (!product) {
+          return res.status(400).json({ error: "يتضمن أمر الإنتاج منتجاً غير متاح" });
+        }
+        // Store the current authoritative catalog text for a newly selected
+        // product, not a mutable client-provided display value.
+        normalizedItems.push({
+          ...item,
+          productId: product.id,
+          productName: product.name,
+          productCategory: product.category,
+        });
+      }
       
       // Generate order number
       const timestamp = Date.now().toString(36).toUpperCase();
@@ -18505,8 +18677,8 @@ export async function registerRoutes(
       const order = await storage.createAdvancedProductionOrder(orderData);
       
       // Create items if provided
-      if (items && Array.isArray(items) && items.length > 0) {
-        const itemsWithOrderId = items.map((item: any) => ({
+      if (normalizedItems.length > 0) {
+        const itemsWithOrderId = normalizedItems.map((item: any) => ({
           ...item,
           orderId: order.id
         }));
@@ -18514,8 +18686,8 @@ export async function registerRoutes(
         
         // Update order totals
         await storage.updateAdvancedProductionOrder(order.id, {
-          totalItems: items.length,
-          estimatedCost: items.reduce((sum: number, i: any) => sum + (i.totalValue || 0), 0)
+          totalItems: normalizedItems.length,
+          estimatedCost: normalizedItems.reduce((sum: number, i: any) => sum + (i.totalValue || 0), 0)
         });
       }
       
@@ -18790,10 +18962,17 @@ export async function registerRoutes(
           return res.status(403).json({ error: "غير مصرح بإضافة عناصر لأمر إنتاج هذا الفرع - يجب أن يكون لديك صلاحية للفرعين" });
         }
       }
+      const catalogProduct = await getSelectableProductReference(req.body?.productId);
+      if (!catalogProduct) {
+        return res.status(400).json({ error: "المنتج المحدد غير متاح لأمر إنتاج جديد" });
+      }
       
       const item = await storage.createProductionOrderItem({
         ...req.body,
-        orderId
+        orderId,
+        productId: catalogProduct.id,
+        productName: catalogProduct.name,
+        productCategory: catalogProduct.category,
       });
       
       // Update order totals
@@ -18835,7 +19014,23 @@ export async function registerRoutes(
         }
       }
       
-      const item = await storage.updateProductionOrderItem(id, req.body);
+      let updateData = req.body;
+      if (
+        req.body.productId !== undefined
+        && Number(req.body.productId) !== Number(existingItem.productId)
+      ) {
+        const catalogProduct = await getSelectableProductReference(req.body.productId);
+        if (!catalogProduct) {
+          return res.status(400).json({ error: "المنتج المحدد غير متاح لأمر إنتاج جديد" });
+        }
+        updateData = {
+          ...req.body,
+          productId: catalogProduct.id,
+          productName: catalogProduct.name,
+          productCategory: catalogProduct.category,
+        };
+      }
+      const item = await storage.updateProductionOrderItem(id, updateData);
       
       // Update order completion percentage
       const allItems = await storage.getProductionOrderItems(item!.orderId);
@@ -21031,7 +21226,7 @@ export async function registerRoutes(
         }
       }
       
-      const activeProducts = products.filter(p => p.isActive);
+      const activeProducts = products.filter((product) => isNewCatalogReferenceAllowed(product));
       
       // SMART AI ALGORITHM - Revenue-Based Analysis
       // If we have sales analytics with revenue data, use revenue shares to distribute production
@@ -21269,6 +21464,18 @@ export async function registerRoutes(
       if (!plan) {
         return res.status(404).json({ error: "Plan not found" });
       }
+      // Validate all future order references before creating the parent order.
+      // That prevents a stale plan from leaving a partially-created order when
+      // one of its products was deactivated after planning.
+      const recommendedProducts = plan.recommendedProducts as any[];
+      const resolvedRecommendations: Array<{ recommendation: any; product: any }> = [];
+      for (const recommendation of recommendedProducts || []) {
+        const product = await getSelectableProductReference(recommendation?.productId);
+        if (!product) {
+          return res.status(400).json({ error: "تتضمن الخطة منتجاً غير متاح؛ حدّث الخطة قبل تطبيقها" });
+        }
+        resolvedRecommendations.push({ recommendation, product });
+      }
       
       // Create production order from plan
       const timestamp = Date.now().toString(36).toUpperCase();
@@ -21293,20 +21500,21 @@ export async function registerRoutes(
       });
       
       // Create order items from recommended products
-      const recommendedProducts = plan.recommendedProducts as any[];
-      if (recommendedProducts && recommendedProducts.length > 0) {
-        const items = recommendedProducts.map((p: any) => ({
-          orderId: order.id,
-          productId: p.productId,
-          productName: p.productName,
-          productCategory: p.category,
-          targetQuantity: p.quantity,
-          unitPrice: p.unitPrice || (p.totalPrice ? p.totalPrice / p.quantity : p.estimatedValue / p.quantity),
-          totalValue: p.totalPrice || p.estimatedValue,
-          salesVelocity: p.salesVelocity,
-          priority: p.priority === 'high' ? 1 : 0,
-          status: 'pending'
-        }));
+      if (resolvedRecommendations.length > 0) {
+        const items = resolvedRecommendations.map(({ recommendation, product }) => ({
+            orderId: order.id,
+            productId: product.id,
+            productName: product.name,
+            productCategory: product.category,
+            targetQuantity: recommendation.quantity,
+            unitPrice: recommendation.unitPrice || (recommendation.totalPrice
+              ? recommendation.totalPrice / recommendation.quantity
+              : recommendation.estimatedValue / recommendation.quantity),
+            totalValue: recommendation.totalPrice || recommendation.estimatedValue,
+            salesVelocity: recommendation.salesVelocity,
+            priority: recommendation.priority === 'high' ? 1 : 0,
+            status: 'pending',
+          }));
         
         await storage.bulkCreateProductionOrderItems(items);
         await storage.updateAdvancedProductionOrder(order.id, { totalItems: items.length });
@@ -21783,7 +21991,10 @@ export async function registerRoutes(
         });
         
         // Create analytics records with more detailed data
-        const products = await storage.getAllProducts();
+        // Analytics imports may preserve unmatched historical names, but a new
+        // analytics row must not attach one of them to an inactive catalog id.
+        const products = (await storage.getAllProducts())
+          .filter((product) => isNewCatalogReferenceAllowed(product));
         const analyticsRecords = Object.entries(productVelocity).map(([name, velocity]) => {
           const product = products.find(p => p.name === name);
           const revenue = productRevenue[name] || 0;
@@ -22008,7 +22219,11 @@ export async function registerRoutes(
       }
       
       // Get all products for matching
-      const products = await storage.getAllProducts();
+      // Fuzzy matching below is a new-reference boundary. Restrict its entire
+      // candidate set first so a historical analytics row cannot resolve to an
+      // inactive product with a matching name.
+      const products = (await storage.getAllProducts())
+        .filter((product) => isNewCatalogReferenceAllowed(product));
       
       // Filter: Only categories that require pre-production go into the production order
       // مخبوزات (bakery), حلويات (sweets), سندوتشات/ساندويتشات (sandwiches) need pre-production
@@ -22279,6 +22494,13 @@ export async function registerRoutes(
           notes: `نسبة المبيعات: ${item.salesRatio}% | مصدر السعر: ${priceSource}${product ? '' : ' | منتج غير مطابق'}`
         };
       });
+      // Keep this explicit final check even though fuzzy matching is restricted
+      // above: future matching changes cannot introduce an inactive id into the
+      // transactional create path.
+      if (orderItems.some((item) => item.productId != null
+        && !isNewCatalogReferenceAllowed(products.find((product) => product.id === item.productId)))) {
+        return res.status(400).json({ error: "تتضمن التوقعات منتجاً غير متاح؛ حدّث بيانات المبيعات ثم أعد المحاولة" });
+      }
       
       // Create order and items in a single transaction
       let txResult;
@@ -22730,6 +22952,12 @@ export async function registerRoutes(
           return res.status(400).json({ error: "معرف المنتج غير صالح" });
         }
       }
+      const catalogProduct = normalizedProductId
+        ? await getSelectableProductReference(normalizedProductId)
+        : undefined;
+      if (normalizedProductId && !catalogProduct) {
+        return res.status(400).json({ error: "المنتج المحدد غير متاح لتسجيل إنتاج جديد" });
+      }
 
       // Validate status value if provided
       const validStatuses = ['finished', 'in_progress'];
@@ -22748,10 +22976,10 @@ export async function registerRoutes(
       const batchData = {
         branchId,
         productId: normalizedProductId,
-        productName: productName.trim(),
-        productCategory: productCategory || null,
+        productName: catalogProduct?.name.trim() || productName.trim(),
+        productCategory: catalogProduct?.category || productCategory || null,
         quantity: Number(quantity),
-        unit: unit || 'قطعة',
+        unit: catalogProduct?.unit?.trim() || unit || 'قطعة',
         destination,
         notes: notes || null,
         recordedBy: user?.id || null,
@@ -23809,7 +24037,6 @@ export async function registerRoutes(
       }
       
 
-      
       if (!roleId) {
         return res.status(400).json({ error: "معرف الدور مطلوب" });
       }
@@ -24640,7 +24867,6 @@ export async function registerRoutes(
       if (shiftType) filters.shiftType = shiftType;
       
 
-      
       let targets = await storage.getAllCashierShiftTargets(filters);
 
       
@@ -36674,10 +36900,30 @@ export async function registerRoutes(
       if (!normalizedBody) {
         return res.status(400).json({ error: invalidWarehouseQuantityMessage });
       }
-      const item = await storage.updateWarehouseItem(parseInt(req.params.id), normalizedBody as any);
-      if (!item) {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: "معرف المادة غير صالح" });
+      }
+      const existingItem = await storage.getWarehouseItem(id);
+      if (!existingItem) {
         return res.status(404).json({ error: "المادة غير موجودة" });
       }
+      if (normalizedBody.isActive !== undefined && !isExplicitCatalogActivityValue(normalizedBody.isActive)) {
+        return res.status(400).json({ error: "حالة تفعيل المادة غير صالحة" });
+      }
+      const isReactivating = normalizedBody.isActive !== undefined
+        && !isCatalogRecordActive(existingItem.isActive)
+        && isExplicitCatalogActivation(normalizedBody.isActive);
+      if (
+        isReactivating
+        && await isImportedPendingPriceCatalogRecord("warehouse", id)
+        && !canReactivatePendingPriceCatalogRecord(existingItem.unitPrice, normalizedBody.unitPrice)
+      ) {
+        return res.status(400).json({
+          error: "لا يمكن تفعيل المادة المستوردة قبل إدخال سعر وحدة موجب وصالح",
+        });
+      }
+      const item = await storage.updateWarehouseItem(id, normalizedBody as any);
       res.json(item);
     } catch (error) {
       console.error("Error updating warehouse item:", error);
@@ -36734,6 +36980,10 @@ export async function registerRoutes(
       const normalizedDailyConsumption = dailyConsumption === undefined
         ? undefined
         : parseWarehouseQuantity(dailyConsumption);
+      const itemId = Number(req.params.itemId);
+      if (!Number.isInteger(itemId) || itemId <= 0) {
+        return res.status(400).json({ error: "معرّف صنف المستودع غير صالح" });
+      }
       if (normalizedQuantity === undefined || (
         dailyConsumption !== undefined &&
         normalizedDailyConsumption === undefined
@@ -36742,7 +36992,7 @@ export async function registerRoutes(
       }
       const stock = await storage.updateBranchStock(
         branchId,
-        parseInt(req.params.itemId),
+        itemId,
         normalizedQuantity,
         normalizedDailyConsumption,
         user?.id
@@ -36750,6 +37000,9 @@ export async function registerRoutes(
       res.json(stock);
     } catch (error) {
       console.error("Error updating branch stock:", error);
+      if (error instanceof InactiveBranchStockReferenceError) {
+        return res.status(400).json({ error: error.message });
+      }
       const statusCode = getWarehouseTransferErrorStatus(error) ?? 500;
       res.status(statusCode).json({
         error: statusCode === 409
@@ -36963,13 +37216,19 @@ export async function registerRoutes(
           ) {
             return res.status(400).json({ error: "يحتوي التحويل على صنف غير صالح" });
           }
+          const warehouseItem = await getSelectableWarehouseItemReference(
+            normalizedItemId,
+          );
+          if (!warehouseItem) {
+            return res.status(400).json({ error: "يتضمن التحويل صنف مستودع غير متاح" });
+          }
           // Requesters may not seed receipt, discrepancy, modification, or
           // other audit columns on a pending transfer.
           normalizedItems.push({
-            itemId: normalizedItemId,
-            itemName: normalizedOptionalQuantities.itemName,
-            category: normalizedOptionalQuantities.category,
-            unit: normalizedOptionalQuantities.unit,
+            itemId: warehouseItem.id,
+            itemName: warehouseItem.name,
+            category: warehouseItem.category,
+            unit: warehouseItem.unit,
             quantity: normalizedOptionalQuantities.quantity,
             originalQuantity: normalizedOptionalQuantities.originalQuantity,
             availableQuantity: normalizedOptionalQuantities.availableQuantity,
@@ -37748,14 +38007,21 @@ export async function registerRoutes(
       const requestNumber = await storage.generatePurchasingRequestNumber();
       
       // Map frontend field names to database field names
-      const mappedItems = (items || []).map(item => ({
-        itemId: item.itemId,
-        itemName: item.itemName,
-        unit: item.unit,
-        requestedQuantity: Number(item.quantityRequested) || 0,
-        approvedQuantity: Number(item.availableQuantity) || 0, // Store availableQuantity as approvedQuantity
-        unitPrice: item.estimatedUnitCost ? String(item.estimatedUnitCost) : null,
-      }));
+      const mappedItems: any[] = [];
+      for (const item of items || []) {
+        const warehouseItem = await getSelectableWarehouseItemReference(item.itemId);
+        if (!warehouseItem) {
+          return res.status(400).json({ error: "يتضمن طلب الشراء صنف مستودع غير متاح" });
+        }
+        mappedItems.push({
+          itemId: warehouseItem.id,
+          itemName: warehouseItem.name,
+          unit: warehouseItem.unit,
+          requestedQuantity: Number(item.quantityRequested) || 0,
+          approvedQuantity: Number(item.availableQuantity) || 0, // Store availableQuantity as approvedQuantity
+          unitPrice: item.estimatedUnitCost ? String(item.estimatedUnitCost) : null,
+        });
+      }
       
       // Calculate total estimated cost from items
       const totalEstimatedCost = mappedItems.reduce((sum, item) => {
@@ -41796,7 +42062,12 @@ export async function registerRoutes(
       if (!await canAccessBranch(req, branchId)) {
         return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
       }
-      const product = await storage.addBranchProduct({ branchId, productId: Number(productId), isActive: isActive ?? true, priceOverride, sortOrder });
+      const normalizedProductId = Number(productId);
+      const catalogProduct = await getSelectableProductReference(normalizedProductId);
+      if (!catalogProduct) {
+        return res.status(400).json({ error: "لا يمكن إضافة منتج غير متاح لنقطة البيع" });
+      }
+      const product = await storage.addBranchProduct({ branchId, productId: catalogProduct.id, isActive: isActive ?? true, priceOverride, sortOrder });
       res.status(201).json(product);
     } catch (error: any) {
       console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
@@ -41828,7 +42099,17 @@ export async function registerRoutes(
       if (!await canAccessBranch(req, product.branchId)) {
         return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
       }
-      const { branchId, ...safeData } = req.body;
+      const { branchId, productId, ...safeData } = req.body;
+      // Configuration edits that retain an historical product remain allowed.
+      // Replacing the linked product is a new catalog selection and must pass
+      // the same active-record boundary as initial POS configuration.
+      if (productId !== undefined && Number(productId) !== Number(product.productId)) {
+        const catalogProduct = await getSelectableProductReference(productId);
+        if (!catalogProduct) {
+          return res.status(400).json({ error: "لا يمكن ربط منتج غير متاح بنقطة البيع" });
+        }
+        safeData.productId = catalogProduct.id;
+      }
       const updated = await storage.updateBranchProduct(Number(req.params.id), safeData);
       res.json(updated);
     } catch (error: any) {
@@ -41918,10 +42199,13 @@ export async function registerRoutes(
           return res.status(400).json({ error: "بيانات أصناف غير صالحة" });
         }
         const bp = catalogMap.get(productId);
-        if (!bp || bp.isActive === false) {
+        if (!bp || bp.isActive === false || !isNewCatalogReferenceAllowed(bp.product)) {
           return res.status(400).json({ error: "صنف غير متاح في هذا الفرع" });
         }
-        const unitPrice = Number(bp.priceOverride ?? bp.product?.basePrice) || 0;
+        const unitPrice = getEffectiveSalePrice(bp.priceOverride, bp.product?.basePrice);
+        if (unitPrice === null) {
+          return res.status(400).json({ error: "سعر الصنف غير صالح للبيع؛ أدخل سعراً موجباً أولاً" });
+        }
         const vatRate = Number(bp.product?.vatRate ?? 0.15);
         const priceExclVat = unitPrice / (1 + vatRate);
         rawSubtotal += priceExclVat * quantity;
@@ -42184,6 +42468,32 @@ export async function registerRoutes(
       }
       if (!await canAccessBranch(req, branchId)) {
         return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      let heldCart: any[];
+      try {
+        heldCart = JSON.parse(cartData);
+      } catch {
+        return res.status(400).json({ error: "بنود الطلب المعلق غير صالحة" });
+      }
+      if (!Array.isArray(heldCart) || heldCart.length === 0) {
+        return res.status(400).json({ error: "بنود الطلب المعلق غير صالحة" });
+      }
+      const branchCatalog = await storage.getBranchProducts(branchId);
+      const branchCatalogByProductId = new Map<number, any>(
+        branchCatalog.map((item: any) => [item.productId, item]),
+      );
+      for (const item of heldCart) {
+        const productId = Number(item?.productId);
+        const branchProduct = branchCatalogByProductId.get(productId);
+        if (
+          !Number.isInteger(productId)
+          || !branchProduct
+          || branchProduct.isActive === false
+          || !isNewCatalogReferenceAllowed(branchProduct.product)
+          || getEffectiveSalePrice(branchProduct.priceOverride, branchProduct.product?.basePrice) === null
+        ) {
+          return res.status(400).json({ error: "يتضمن الطلب المعلق صنفاً غير متاح للبيع" });
+        }
       }
       const holdUser = (req as any).currentUser;
       const order = await storage.createHeldOrder({
@@ -43217,4 +43527,3 @@ export async function registerRoutes(
 
   return httpServer;
 }
-

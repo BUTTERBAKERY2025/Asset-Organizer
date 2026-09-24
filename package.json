@@ -10,6 +10,8 @@
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "test:pos": "vitest run --config vitest.config.ts tests/pos-financials.test.ts",
+    "test:catalogue-import:browser": "tsx tests/catalogue-import.browser.fixture.ts",
+    "preview:catalogue-import:fixture": "tsx tests/catalogue-import.browser.fixture.ts --serve",
     "test:portal": "vitest run --config vitest.config.ts tests/portal-evaluations.test.ts",
     "test:portal-tabs": "vitest run --config vitest.config.ts tests/portal-tabs-sync.test.ts",
     "test:hq-schedule": "vitest run --config vitest.config.ts tests/hq-monthly-schedule.test.ts",

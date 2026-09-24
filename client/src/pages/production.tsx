@@ -18,6 +18,7 @@ import { Plus, Search, Edit, Trash2, Factory, Clock, Calendar, CheckCircle, Aler
 import { Skeleton } from "@/components/ui/skeleton";
 import { TablePagination } from "@/components/ui/pagination";
 import type { ProductionOrder, Product, Branch } from "@shared/schema";
+import { getSelectableCatalogRecords } from "@shared/catalog-activity";
 
 const ORDER_STATUS = {
   pending: { label: "في الانتظار", color: "bg-yellow-100 text-yellow-800", icon: Clock },
@@ -210,8 +211,10 @@ export default function ProductionPage() {
                         <SelectValue placeholder="اختر المنتج" />
                       </SelectTrigger>
                       <SelectContent>
-                        {products?.filter(p => p.isActive === 'true' || p.isActive === 't' || p.isActive === true).map(product => (
-                          <SelectItem key={product.id} value={product.id.toString()}>{product.name}</SelectItem>
+                        {getSelectableCatalogRecords(products || []).map(product => (
+                          <SelectItem key={product.id} value={product.id.toString()}>
+                            {product.sku ? `${product.sku} — ${product.name}` : product.name}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

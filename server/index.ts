@@ -87,7 +87,10 @@ app.use((req, res, next) => {
   } catch {
     return res.status(400).end();
   }
-  if (requestedName === 'STANDER_RECIPE_PASTRY_8-9-2026_(1)_1789474534195.xlsx'
+   if (requestedName === 'STANDER_RECIPE_PASTRY_8-9-2026_(1)_1789474534195.xlsx'
+       || requestedName === 'items_by_cod_1789494218526.xlsx'
+       || requestedName === 'item_store_1789494218529.xlsx'
+       || requestedName === 'items_by_category_1789494218529.xlsx'
       || requestedName === 'central-kitchen-recipe-import.ts') {
     return res.status(404).end();
   }

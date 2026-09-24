@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import type { Product } from "@shared/schema";
+import { getSelectableCatalogRecords } from "@shared/catalog-activity";
 
 interface ProductSelectorProps {
   products: Product[];
@@ -45,15 +46,23 @@ export function ProductSelector({
     [products, value]
   );
 
+  // Retain an already-linked inactive product in the trigger for historical
+  // records, but never offer it as a new selection.
+  const selectableProducts = useMemo(
+    () => getSelectableCatalogRecords(products),
+    [products],
+  );
+
   const filteredProducts = useMemo(() => {
-    if (!search.trim()) return products;
+    if (!search.trim()) return selectableProducts;
     const term = search.toLowerCase();
-    return products.filter(p =>
+    return selectableProducts.filter(p =>
       p.name.toLowerCase().includes(term) ||
+      (p.nameEn || "").toLowerCase().includes(term) ||
       (p.sku || "").toLowerCase().includes(term) ||
       p.category.toLowerCase().includes(term)
     );
-  }, [products, search]);
+  }, [selectableProducts, search]);
 
   const groupedProducts = useMemo(() => {
     const groups: Record<string, Product[]> = {};

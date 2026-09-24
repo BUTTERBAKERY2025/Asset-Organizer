@@ -20,6 +20,7 @@ import { format, subDays } from "date-fns";
 import { ar } from "date-fns/locale";
 import { TablePagination, usePagination } from "@/components/ui/pagination";
 import type { Branch, Product } from "@shared/schema";
+import { getSelectableCatalogRecords } from "@shared/catalog-activity";
 import { 
   Factory, Plus, Clock, Package, Trash2, RefreshCw, Calendar,
   Refrigerator, ShoppingCart, Snowflake, ChefHat, ArrowLeft,
@@ -1272,7 +1273,10 @@ export default function DailyProductionPage() {
 
   // Filter products by search
   const bakeryProducts = useMemo(() => {
-    const filtered = products?.filter(p => p.category && BAKERY_CATEGORIES.includes(p.category)) || [];
+    const filtered = getSelectableCatalogRecords(products || []).filter(p =>
+      p.category
+      && BAKERY_CATEGORIES.includes(p.category)
+    ) || [];
     if (!productSearch) return filtered;
     const search = productSearch.toLowerCase();
     return filtered.filter(p => 
@@ -1288,14 +1292,20 @@ export default function DailyProductionPage() {
     batches.forEach(b => {
       productCounts[b.productName] = (productCounts[b.productName] || 0) + 1;
     });
-    return products
-      .filter(p => p.category && BAKERY_CATEGORIES.includes(p.category))
+    return getSelectableCatalogRecords(products)
+      .filter(p =>
+        p.category
+        && BAKERY_CATEGORIES.includes(p.category)
+      )
       .sort((a, b) => (productCounts[b.name] || 0) - (productCounts[a.name] || 0))
       .slice(0, 8);
   }, [batches, products]);
 
   const categoryFilteredProducts = useMemo(() => {
-    const allBakery = products?.filter(p => p.category && BAKERY_CATEGORIES.includes(p.category)) || [];
+    const allBakery = getSelectableCatalogRecords(products || []).filter(p =>
+      p.category
+      && BAKERY_CATEGORIES.includes(p.category)
+    ) || [];
     let filtered = selectedCategoryFilter === "الكل" ? allBakery : allBakery.filter(p => p.category === selectedCategoryFilter);
     if (productSearch) {
       const search = productSearch.toLowerCase();
@@ -1305,7 +1315,10 @@ export default function DailyProductionPage() {
   }, [products, selectedCategoryFilter, productSearch]);
 
   const categoryCounts = useMemo(() => {
-    const allBakery = products?.filter(p => p.category && BAKERY_CATEGORIES.includes(p.category)) || [];
+    const allBakery = getSelectableCatalogRecords(products || []).filter(p =>
+      p.category
+      && BAKERY_CATEGORIES.includes(p.category)
+    ) || [];
     const counts: Record<string, number> = { "الكل": allBakery.length };
     BAKERY_CATEGORIES.forEach(cat => {
       counts[cat] = allBakery.filter(p => p.category === cat).length;
@@ -2023,6 +2036,9 @@ export default function DailyProductionPage() {
                          <Factory className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />}
                       </div>
                       <span className="text-xs sm:text-sm font-medium leading-tight line-clamp-2">{product.name}</span>
+                      {product.sku && (
+                        <span className="text-[10px] text-muted-foreground font-mono leading-tight">{product.sku}</span>
+                      )}
                       {product.nameEn && (
                         <span className="text-xs text-muted-foreground leading-tight line-clamp-1">{product.nameEn}</span>
                       )}

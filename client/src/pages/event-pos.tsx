@@ -21,6 +21,10 @@ import {
 import { useReactToPrint } from "react-to-print";
 import { isPrinterConnected, printElement, reconnectSavedPrinter, getSavedPrinter, ensurePrinterConnection, installAutoReconnectOnVisibility } from "@/lib/thermal-printer";
 import { QRCodeSVG } from "qrcode.react";
+import {
+  getEffectiveSalePrice,
+  isNewCatalogReferenceAllowed,
+} from "@shared/catalog-activity";
 
 const EVENT_BRANCH_ID = "EVENT-BB";
 
@@ -47,10 +51,12 @@ interface BranchProductWithDetails {
   product?: {
     id: number;
     name: string;
+    sku?: string | null;
     category: string;
     basePrice: number | null;
     vatRate: number | null;
     unit: string | null;
+    isActive?: string | boolean | null;
   };
 }
 
@@ -408,22 +414,27 @@ export default function EventPosPage() {
   });
 
   const filteredProducts = useMemo(() => {
-    const activeProducts = (branchProducts as BranchProductWithDetails[]).filter((bp: BranchProductWithDetails) => bp.isActive && bp.product);
+    const activeProducts = (branchProducts as BranchProductWithDetails[]).filter((bp: BranchProductWithDetails) =>
+      bp.isActive
+      && isNewCatalogReferenceAllowed(bp.product)
+      && getEffectiveSalePrice(bp.priceOverride, bp.product?.basePrice) !== null
+    );
     if (!searchQuery.trim()) return activeProducts;
     const q = searchQuery.toLowerCase();
     return activeProducts.filter((bp: BranchProductWithDetails) => 
-      bp.product?.name?.toLowerCase().includes(q) || 
+      bp.product?.name?.toLowerCase().includes(q) ||
+      bp.product?.sku?.toLowerCase().includes(q) ||
       bp.product?.category?.toLowerCase().includes(q)
     );
   }, [branchProducts, searchQuery]);
 
   const categories = useMemo(() => {
     const cats = new Set<string>();
-    (branchProducts as BranchProductWithDetails[]).forEach((bp: BranchProductWithDetails) => {
+    filteredProducts.forEach((bp: BranchProductWithDetails) => {
       if (bp.product?.category) cats.add(bp.product.category);
     });
     return Array.from(cats);
-  }, [branchProducts]);
+  }, [filteredProducts]);
 
   const displayProducts = useMemo(() => {
     if (selectedCategory === "all") return filteredProducts;
@@ -475,7 +486,8 @@ export default function EventPosPage() {
 
   const addToCart = useCallback((bp: BranchProductWithDetails) => {
     if (!bp.product) return;
-    const price = bp.priceOverride ?? bp.product.basePrice ?? 0;
+    const price = getEffectiveSalePrice(bp.priceOverride, bp.product.basePrice);
+    if (price === null) return;
     const vatRate = bp.product.vatRate ?? 0.15;
     setCart(prev => {
       const existing = prev.find(c => c.productId === bp.productId);
@@ -1168,6 +1180,9 @@ export default function EventPosPage() {
                       <div className="text-[13px] font-black text-[#2C201A] mb-1 line-clamp-2 leading-tight min-h-[36px] flex items-center justify-center">
                         {bp.product?.name}
                       </div>
+                      {bp.product?.sku && (
+                        <div className="text-[10px] font-mono text-[#8C6C50] mb-1">{bp.product.sku}</div>
+                      )}
                       <div className="text-[11px] text-[#A69587] mb-2 font-bold">{bp.product?.category}</div>
                       <div className={`rounded-[12px] py-2 px-2 transition-colors ${
                         inCart ? "bg-[#1C1411] text-[#D4A373]" : "bg-[#FAF8F5] text-[#5C422E] group-hover:bg-[#F4EBE1]"

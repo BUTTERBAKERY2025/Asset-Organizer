@@ -12,6 +12,7 @@ import {
 } from "./material-transfer-ledger";
 
 // Helper function to get Saudi Arabia time (UTC+3)
+import { updateCatalogueBranchStock } from "./catalogue-branch-stock";
 function getSaudiArabiaTime(): { date: string; time: string; timeShort: string } {
   const now = new Date();
   // Format date and time components directly in Saudi Arabia timezone
@@ -14043,31 +14044,9 @@ export class DatabaseStorage implements IStorage {
     const normalizedDailyConsumption = dailyConsumption === undefined
       ? undefined
       : requireNonnegativeMaterialQuantity(dailyConsumption, "معدل الاستهلاك اليومي يجب أن يكون كمية غير سالبة حتى 6 منازل عشرية");
-    const existing = await db.select().from(branchStock)
-      .where(and(eq(branchStock.branchId, branchId), eq(branchStock.itemId, itemId)));
-    
-    if (existing.length > 0) {
-      const [updated] = await db.update(branchStock)
-        .set({ 
-          currentQuantity: normalizedQuantity,
-          dailyConsumption: normalizedDailyConsumption ?? existing[0].dailyConsumption,
-          lastUpdated: new Date(),
-          updatedBy: userId 
-        })
-        .where(and(
-          eq(branchStock.branchId, branchId),
-          eq(branchStock.itemId, itemId),
-          sql`${normalizedQuantity} >= ${branchStock.reservedQuantity}`,
-        ))
-        .returning();
-      if (!updated) throw new Error("لا يمكن خفض مخزون المواد عن الكمية المحجوزة");
-      return updated;
-    } else {
-      const [created] = await db.insert(branchStock)
-        .values({ branchId, itemId, currentQuantity: normalizedQuantity, dailyConsumption: normalizedDailyConsumption, updatedBy: userId })
-        .returning();
-      return created;
-    }
+    return updateCatalogueBranchStock(
+      db, branchId, itemId, normalizedQuantity, normalizedDailyConsumption, userId,
+    );
   }
 
   // Material Transfers
@@ -18472,10 +18451,12 @@ export class DatabaseStorage implements IStorage {
         sortOrder: branchProducts.sortOrder,
         createdAt: branchProducts.createdAt,
         productName: products.name,
+        productSku: products.sku,
         productCategory: products.category,
         productPrice: products.basePrice,
         productUnit: products.unit,
         productVatRate: products.vatRate,
+        productIsActive: products.isActive,
       })
       .from(branchProducts)
       .leftJoin(products, eq(branchProducts.productId, products.id))
@@ -18492,10 +18473,12 @@ export class DatabaseStorage implements IStorage {
       product: {
         id: r.productId,
         name: r.productName,
+        sku: r.productSku,
         category: r.productCategory,
         basePrice: r.productPrice,
         unit: r.productUnit,
         vatRate: r.productVatRate ?? 0.15,
+        isActive: r.productIsActive,
       },
     }));
   }

@@ -27,6 +27,7 @@ import {
   getPaperWidth, setPaperWidth, onPrinterDisconnect, onPrinterReconnect,
   ensurePrinterConnection, installAutoReconnectOnVisibility, type SavedPrinter, type PaperWidth,
 } from "@/lib/thermal-printer";
+import { getSelectableCatalogRecords } from "@shared/catalog-activity";
 
 const EVENT_BRANCH_ID = "EVENT-BB";
 
@@ -253,11 +254,14 @@ export default function EventPosSettingsPage() {
 
   const availableToAdd = useMemo(() => {
     const existingIds = new Set(branchProducts.map((bp: any) => bp.productId));
-    let filtered = allProducts.filter((p: any) => !existingIds.has(p.id));
+    let filtered = getSelectableCatalogRecords(allProducts)
+      .filter((p: any) => !existingIds.has(p.id));
     if (productSearch.trim()) {
       const q = productSearch.toLowerCase();
       filtered = filtered.filter((p: any) =>
-        p.name?.toLowerCase().includes(q) || p.category?.toLowerCase().includes(q)
+          p.name?.toLowerCase().includes(q)
+          || p.sku?.toLowerCase().includes(q)
+          || p.category?.toLowerCase().includes(q)
       );
     }
     return filtered;
@@ -726,7 +730,10 @@ export default function EventPosSettingsPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="text-xs font-medium text-gray-700 truncate">{p.name}</div>
-                          <div className="text-[10px] text-gray-400">{p.category} • {(p.basePrice || 0).toFixed(2)} ر.س</div>
+                          <div className="text-[10px] text-gray-400">
+                            {p.sku && <span className="font-mono">{p.sku} • </span>}
+                            {p.category} • {(p.basePrice || 0).toFixed(2)} ر.س
+                          </div>
                         </div>
                         <button
                           onClick={() => addBranchProductMutation.mutate(p.id)}

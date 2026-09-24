@@ -72,6 +72,7 @@ type WarehouseItem = {
   name: string;
   unit: string;
   category: string;
+  sku?: string | null;
 };
 
 const STATUS_OPTIONS = [
@@ -171,7 +172,12 @@ export default function PurchasingRequestsPage() {
   });
 
   const { data: warehouseItems = [] } = useQuery<WarehouseItem[]>({
-    queryKey: ["/api/warehouse/items"],
+    queryKey: ["/api/warehouse/items", "active"],
+    queryFn: async () => {
+      const response = await fetch("/api/warehouse/items?isActive=true");
+      if (!response.ok) throw new Error("Failed to fetch warehouse items");
+      return response.json();
+    },
   });
 
   const updateStatusMutation = useMutation({
@@ -976,7 +982,7 @@ export default function PurchasingRequestsPage() {
                                     {warehouseItems.map((wi) => (
                                       <CommandItem
                                         key={wi.id}
-                                        value={wi.name}
+                                        value={`${wi.sku || ""} ${wi.name}`}
                                         onSelect={() => {
                                           updateItemInRequest(idx, 'itemId', wi.id);
                                           setOpenItemPopovers(prev => ({ ...prev, [idx]: false }));
@@ -990,6 +996,7 @@ export default function PurchasingRequestsPage() {
                                           )}
                                         />
                                         <span className="flex-1 truncate">{wi.name}</span>
+                                        {wi.sku && <span className="text-xs font-mono text-muted-foreground">{wi.sku}</span>}
                                         <span className="text-xs text-muted-foreground ml-2">{wi.category}</span>
                                       </CommandItem>
                                     ))}

@@ -59,6 +59,8 @@ const BudgetPlanningPage = makeLazy("budget-planning");
 const AssetTransfersPage = makeLazy("asset-transfers");
 const AuditLogsPage = makeLazy("audit-logs");
 const BackupsPage = makeLazy("backups");
+
+const CatalogueImportPage = makeLazy("catalogue-import");
 const IntegrationsPage = makeLazy("integrations");
 const OperationsDashboardPage = makeLazy("operations-dashboard");
 const BranchShiftsPage = makeLazy("branch-shifts");
@@ -493,6 +495,7 @@ const Router = React.memo(function Router() {
       <Route path="/integrations">{() => <AdminPage component={IntegrationsPage} module="integrations" />}</Route>
       <Route path="/audit-logs">{() => <AdminPage component={AuditLogsPage} module="audit_logs" />}</Route>
       <Route path="/backups">{() => <AdminPage component={BackupsPage} module="backups" />}</Route>
+       <Route path="/catalogue-import">{() => <AdminPage component={CatalogueImportPage} module="settings" />}</Route>
       <Route path="/biometric-settings">{() => <AdminPage component={BiometricSettingsPage} module="settings" />}</Route>
       <Route path="/portal-settings">{() => <AdminPage component={PortalSettingsPage} module="settings" />}</Route>
       <Route path="/approval-settings">{() => <AdminPage component={ApprovalSettingsPage} module="settings" />}</Route>
