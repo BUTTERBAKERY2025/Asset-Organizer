@@ -12,6 +12,10 @@ export interface BranchOperationsAlert {
   label: string;
   count: number;
   href: string;
+  priority?: "critical" | "high" | "normal" | "low";
+  dueAt?: string;
+  actionLabel?: string;
+  description?: string;
 }
 
 export interface BranchOperationsAction {
@@ -26,6 +30,9 @@ export interface BranchOperationsCard {
     | "waste"
     | "purchasing"
     | "kitchen"
+    | "warehouse"
+    | "cashier"
+    | "attendance"
     | "closing"
     | "targets"
     | "sales"
@@ -36,6 +43,8 @@ export interface BranchOperationsCard {
   group: BranchOperationsGroup;
   href: string;
   state: BranchOperationsCardState;
+  statusLabel?: string;
+  description?: string;
   metrics: BranchOperationsMetric[];
   alerts: BranchOperationsAlert[];
   actions?: BranchOperationsAction[];

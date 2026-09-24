@@ -1,0 +1,74 @@
+import { afterAll, describe, expect, it, vi } from "vitest";
+import React, { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { groupCards, requiredActions, dailySalesProgress, DailySalesProgress, QuickActions, NeedsActionStrip, OperationCardView, SECTIONS, type OperationCard } from "../client/src/components/branch-operations/presentation";
+
+const card = (id: string, alerts: OperationCard["alerts"] = []): OperationCard => ({
+  id, title: id, group: "operations", href: id === "warehouse" ? "/transfer-requests" : "/central-kitchen-orders", state: "ready", metrics: [], alerts,
+});
+vi.stubGlobal("React", React);
+afterAll(() => vi.unstubAllGlobals());
+describe("daily branch desk", () => {
+  const sales = { ...card("sales"), metrics: [{ label: "مبيعات اليوميات المعتمدة والمرحلة", value: 750, unit: "ر.س" }] };
+  const targets = { ...card("targets"), metrics: [{ label: "هدف اليوم المعتمد", value: 1000, unit: "ر.س" }] };
+  it("derives progress only from actual approved daily fields and discloses ledger basis", () => {
+    expect(dailySalesProgress([sales, targets])).toEqual({ actual: 750, target: 1000, percentage: 75 });
+    const html = renderToStaticMarkup(createElement(DailySalesProgress, { cards: [sales, targets] }));
+    expect(html).toContain("75");
+    expect(html).toContain("مبيعات اليوميات المعتمدة والمرحلة فقط");
+  });
+  it("omits comparison for absent permissions, missing daily records, error, invalid or unapproved target", () => {
+    for (const cards of [
+      [sales], [targets], [sales, { ...targets, state: "error" as const }],
+      [{ ...sales, metrics: [] }, targets], [sales, { ...targets, metrics: [] }],
+      [sales, { ...targets, metrics: [{ label: "هدف اليوم المعتمد", unit: "ر.س", value: 0 }] }],
+      [sales, { ...targets, metrics: [{ label: "هدف الشهر", unit: "ر.س", value: 1000 }] }],
+      [{ ...sales, metrics: [{ ...sales.metrics[0], value: NaN }] }, targets],
+    ]) {
+      expect(dailySalesProgress(cards)).toBeNull();
+      expect(renderToStaticMarkup(createElement(DailySalesProgress, { cards }))).toBe("");
+    }
+  });
+  it("does not show a percentage for a recorded zero and does not cap above-target text", () => {
+    const zero = { ...sales, metrics: [{ ...sales.metrics[0], value: 0 }] };
+    expect(dailySalesProgress([zero, targets])?.percentage).toBeNull();
+    expect(renderToStaticMarkup(createElement(DailySalesProgress, { cards: [zero, targets] }))).not.toContain("%");
+    expect(dailySalesProgress([{ ...sales, metrics: [{ ...sales.metrics[0], value: 1250 }] }, targets])?.percentage).toBe(125);
+  });
+  it("places independently permitted supply and shift cards without inventing absent cards", () => {
+    expect(groupCards([card("attendance"), card("warehouse"), card("cashier")]).map(g => g.cards.map(c => c.id)))
+      .toEqual([["warehouse"], ["cashier", "attendance"]]);
+  });
+  it("deduplicates equivalent actions then orders priority before due date", () => {
+    const actions = requiredActions([card("kitchen", [
+      { label: "normal later", count: 1, href: "/central-kitchen-orders", dueAt: "2026-03-05T00:00:00Z" },
+      { label: "normal earlier", count: 1, href: "/central-kitchen-orders", dueAt: "2026-03-01T00:00:00Z" },
+      { label: "urgent", count: 1, href: "/central-kitchen-orders?branchId=b", priority: "high" },
+      { label: "urgent", count: 1, href: "/central-kitchen-orders?from=branch-operations", priority: "high" },
+      { label: "critical", count: 1, href: "/central-kitchen-orders", priority: "critical" },
+      { label: "zero", count: 0, href: "/central-kitchen-orders" },
+    ])]);
+    expect(actions.map(a => a.label)).toEqual(["critical", "urgent", "normal earlier", "normal later"]);
+  });
+  it("never renders missing permissions in quick-action choices", () => {
+    const html = renderToStaticMarkup(createElement(QuickActions, { cards: [card("kitchen")], onOpen() {} }));
+    expect(html).toContain("فتح طلبات المطبخ");
+    expect(html).not.toContain("تحويلات المستودع الرئيسي");
+    expect(html).not.toContain("فتح cashier");
+    expect(renderToStaticMarkup(createElement(QuickActions, { cards: [], onOpen() {} }))).toBe("");
+  });
+  it("renders actionable alerts only once, supports navigation-only status and incomplete results", () => {
+    const ready = card("kitchen", [{ label: "unique-alert", count: 2, href: "/central-kitchen-orders" }]);
+    const failed = { ...card("warehouse"), state: "error" as const };
+    const html = renderToStaticMarkup(createElement(NeedsActionStrip, { branchId: "b", cards: [ready, failed], onOpen() {} }));
+    expect(html).toContain("القائمة غير مكتملة");
+    expect(requiredActions([failed])).toEqual([]);
+    const detail = renderToStaticMarkup(createElement(OperationCardView, {
+      card: { ...ready, statusLabel: "navigation-status", description: "navigation-detail" },
+      section: SECTIONS[0], onOpen() {}, onRefresh() {},
+    }));
+    expect(detail).not.toContain("unique-alert");
+    expect(detail).toContain("navigation-status");
+    expect(detail).toContain("navigation-detail");
+  });
+});

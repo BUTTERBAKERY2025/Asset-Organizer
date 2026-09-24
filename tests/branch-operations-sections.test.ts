@@ -8,13 +8,13 @@ const serverCards = ["maintenance", "complaints", "waste", "purchasing", "kitche
   .concat(["targets", "sales"].map((id) => card(id, "sales")), ["employees", "documents", "advances"].map((id) => card(id, "people")));
 
 describe("branch operations board sections", () => {
-  it("orders sections and cards by working priority: sales first, then orders, upkeep, team", () => {
+  it("orders sections by daily work: supply, shift, issues, secondary team", () => {
     const grouped = groupCards(serverCards);
-    expect(grouped.map((bucket) => bucket.section.id)).toEqual(["sales", "orders", "operations", "people"]);
+    expect(grouped.map((bucket) => bucket.section.id)).toEqual(["orders", "sales", "operations", "people"]);
     expect(grouped.map((bucket) => bucket.cards.map((c) => c.id))).toEqual([
+      ["kitchen", "purchasing"],
       ["sales", "targets", "closing"],
-      ["kitchen", "purchasing", "waste"],
-      ["maintenance", "complaints"],
+      ["complaints", "maintenance", "waste"],
       ["employees", "documents", "advances"],
     ]);
   });
@@ -22,7 +22,7 @@ describe("branch operations board sections", () => {
   it("never drops or duplicates a card and hides empty sections", () => {
     const subset = serverCards.filter((c) => ["waste", "advances"].includes(c.id));
     const grouped = groupCards(subset);
-    expect(grouped.map((bucket) => bucket.section.id)).toEqual(["orders", "people"]);
+    expect(grouped.map((bucket) => bucket.section.id)).toEqual(["operations", "people"]);
     expect(grouped.flatMap((bucket) => bucket.cards.map((c) => c.id)).sort()).toEqual(["advances", "waste"]);
     expect(groupCards([])).toEqual([]);
   });
@@ -31,7 +31,7 @@ describe("branch operations board sections", () => {
     const grouped = groupCards([...serverCards, card("deliveries", "people"), card("mystery", "unknown-group")]);
     const byId = Object.fromEntries(grouped.map((bucket) => [bucket.section.id, bucket.cards.map((c) => c.id)]));
     expect(byId.people).toEqual(["employees", "documents", "advances", "deliveries"]);
-    expect(byId.operations).toEqual(["maintenance", "complaints", "mystery"]);
+    expect(byId.operations).toEqual(["complaints", "maintenance", "waste", "mystery"]);
     expect(grouped.flatMap((bucket) => bucket.cards)).toHaveLength(serverCards.length + 2);
   });
 

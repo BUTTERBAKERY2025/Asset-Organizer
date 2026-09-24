@@ -14,3 +14,9 @@ Multi-source branch supply means a common entry into separate kitchen-order and 
 **Why:** The two suppliers use different catalog identities, approval responsibilities, and stock-posting times. A warehouse material listed in a kitchen order is supplied from kitchen-local stock; it is not permission to debit the main warehouse.
 
 **How to apply:** Preserve the selected authorized branch across source changes, choose the kitchen explicitly, and keep each supplier's request and receipt records independent. A genuinely mixed basket requires explicit split-request linkage rather than silently combining inventory movements.
+
+The approved branch desk is a daily-work surface, not a second system launcher. Keep administrative follow-up secondary and put actual next steps ahead of module shortcuts.
+
+**Why:** The user approved reorganizing the board because repeated alerts, informational counts, and module links were presented as equally urgent. A recorded waste entry or an approved advance does not establish pending work; a missing closing today does not establish lateness without a real deadline.
+
+**How to apply:** Separate status from action, use actual deadlines and actor authority, and distinguish a read-only follow-up link from permission to execute an operation. Do not invent shift coverage or daily target allocations to fill a dashboard section.

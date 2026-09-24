@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 const fakes = vi.hoisted(() => ({
   rows: [] as Array<unknown>,
@@ -6,14 +7,20 @@ const fakes = vi.hoisted(() => ({
   permissionCalls: [] as string[],
   branchAllowed: true,
   allowMaintenance: true,
+  modules: [] as string[],
+  editAllowed: false,
+  kitchenReceiver: false,
+  predicates: [] as any[],
+  selections: [] as any[],
 }));
 
 function queryBuilder() {
   const builder: any = {
     from: () => builder,
     innerJoin: () => builder,
-    where: () => builder,
+    where: (predicate: unknown) => { fakes.predicates.push(predicate); return builder; },
     groupBy: () => builder,
+    orderBy: () => builder,
     limit: () => builder,
     then: (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => {
       const next = fakes.rows.shift() ?? [];
@@ -25,8 +32,9 @@ function queryBuilder() {
 
 vi.mock("../server/db", () => ({
   db: {
-    select: () => {
+    select: (selection: unknown) => {
       fakes.selectCalls += 1;
+      fakes.selections.push(selection);
       return queryBuilder();
     },
   },
@@ -34,11 +42,19 @@ vi.mock("../server/db", () => ({
 
 vi.mock("../server/storage", () => ({
   storage: {
-    hasPermission: vi.fn(async (_userId: string, module: string) => {
+    hasPermission: vi.fn(async (_userId: string, module: string, action: string) => {
       fakes.permissionCalls.push(module);
-      return fakes.allowMaintenance && module === "maintenance";
+      if (action !== "view") return fakes.editAllowed;
+      return (fakes.allowMaintenance && module === "maintenance") || fakes.modules.includes(module);
     }),
   },
+}));
+
+vi.mock("../server/central-kitchen-routing", () => ({
+  kitchenActionAllowed: vi.fn(async () => fakes.kitchenReceiver),
+}));
+vi.mock("../server/employee-documents-read", () => ({
+  readEmployeeDocumentMetadata: vi.fn(async () => ({ stats: { expired: 2, expiringSoon: 3 } })),
 }));
 
 vi.mock("../server/auth", () => ({
@@ -50,6 +66,7 @@ vi.mock("../server/auth", () => ({
   FINANCIAL_MANAGER_PERMISSIONS: {},
   OPERATIONS_MANAGER_PERMISSIONS: { waste: ["view"] },
   BRANCH_MANAGER_CENTRAL_KITCHEN_PERMISSIONS: ["view", "create", "edit"],
+  BRANCH_MANAGER_INTRINSIC_PERMISSIONS: { central_kitchen_orders: ["view", "create", "edit"] },
 }));
 
 import { registerBranchOperationsRoute } from "../server/branch-operations";
@@ -103,6 +120,11 @@ describe("registered branch operations summary handler", () => {
     fakes.permissionCalls.length = 0;
     fakes.branchAllowed = true;
     fakes.allowMaintenance = true;
+    fakes.modules = [];
+    fakes.editAllowed = false;
+    fakes.kitchenReceiver = false;
+    fakes.predicates = [];
+    fakes.selections = [];
   });
 
   it("rejects all-branch requests before any database or permission query", async () => {
@@ -127,7 +149,7 @@ describe("registered branch operations summary handler", () => {
     const response = await request({ id: "employee", role: "employee" });
     expect(response.statusCode).toBe(200);
     expect(response.body.cards.map((card: any) => card.id)).toEqual(["maintenance"]);
-    expect(fakes.permissionCalls).toHaveLength(11);
+    expect(fakes.permissionCalls).toHaveLength(14);
     expect(fakes.selectCalls).toBe(1);
   });
 
@@ -156,34 +178,133 @@ describe("registered branch operations summary handler", () => {
     expect(fakes.selectCalls).toBe(2);
   });
 
-  it("serves the real eleven-card contract and marks a failed card as error, not zero", async () => {
+  it("isolates failed metrics instead of reporting fake zeros", async () => {
+    fakes.modules = ["waste_tracking"];
     fakes.rows.push(
       [{ id: "branch-a" }],
-      [{ value: 2 }],
-      [{ value: 1 }],
       new Error("waste metric unavailable"),
-      [{ value: 2 }],
-      [],
-      [],
-      [{ value: 4 }],
-      [{ value: 1 }],
-      [{ value: 3 }],
-      [{ value: 5 }],
     );
-    const response = await request({ id: "admin", role: "admin" });
+    const response = await request({ id: "employee", role: "employee" });
     expect(response.statusCode).toBe(200);
     expect(response.body.branchId).toBe("branch-a");
     expect(response.body.cards.map((card: any) => card.id)).toEqual([
-      "maintenance", "complaints", "waste", "purchasing", "kitchen", "closing",
-      "targets", "sales", "employees", "documents", "advances",
-    ]);
-    expect(response.body.cards.map((card: any) => card.group)).toEqual([
-      "operations", "operations", "operations", "operations", "operations", "operations",
-      "sales", "sales", "people", "people", "people",
+      "maintenance", "waste",
     ]);
     expect(response.body.cards.every((card: any) => card.href.includes("branchId=branch-a"))).toBe(true);
     const failed = response.body.cards.find((card: any) => card.id === "waste");
     expect(failed).toMatchObject({ state: "error", metrics: [], alerts: [] });
     expect(failed.metrics).not.toEqual([{ value: 0 }]);
+  });
+
+  it.each([[false, false], [true, false], [true, true]])(
+    "requires edit=%s and assigned receiver=%s for a kitchen receipt",
+    async (edit, receiver) => {
+      fakes.allowMaintenance = false;
+      fakes.modules = ["central_kitchen_orders"];
+      fakes.editAllowed = edit;
+      fakes.kitchenReceiver = receiver;
+      fakes.rows.push([{ id: "branch-a" }], [{ status: "dispatched", value: 3 }]);
+      const response = await request({ id: "employee", role: "employee" });
+      const card = response.body.cards[0];
+      expect(card.metrics[3].value).toBe(3);
+      expect(card.alerts.length).toBe(edit && receiver ? 1 : 0);
+    },
+  );
+
+  it("never turns source-side shipments into destination receipt actions", async () => {
+    fakes.allowMaintenance = false;
+    fakes.modules = ["warehouse"];
+    fakes.editAllowed = true;
+    fakes.rows.push([{ id: "branch-a" }], [{ value: 8 }], [
+      { source: "branch-a", destination: "branch-b", status: "in_transit", value: 7 },
+      { source: "branch-b", destination: "branch-a", status: "in_transit", value: 2 },
+    ]);
+    const response = await request({ id: "employee", role: "employee" });
+    expect(response.body.cards[0].alerts).toEqual([]);
+    expect(response.body.cards[1].alerts[0].count).toBe(2);
+    expect(response.body.cards[1].metrics[1].value).toBe(7);
+    const scope = new PgDialect().sqlToQuery(fakes.predicates[2]);
+    expect(scope.sql).toContain('"material_transfers"."source_branch_id"');
+    expect(scope.sql).toContain('"material_transfers"."destination_branch_id"');
+    expect(scope.params.slice(0, 2)).toEqual(["branch-a", "branch-a"]);
+  });
+
+  it.each([undefined, { status: "open" }])("does not alarm about today's missing or unfinished closing", async closure => {
+    fakes.allowMaintenance = false;
+    fakes.modules = ["daily_closures"];
+    fakes.rows.push([{ id: "branch-a" }], closure ? [closure] : [], [{ value: 0 }]);
+    const response = await request({ id: "employee", role: "employee" });
+    expect(response.body.cards[0].alerts).toEqual([]);
+    expect(response.body.cards[0].actions).toBeUndefined();
+  });
+
+  it("separates unresolved complaints from resolved cases and overdue first responses", async () => {
+    fakes.modules = ["branch_complaints"];
+    fakes.allowMaintenance = false;
+    fakes.rows.push([{ id: "branch-a" }], [{ value: 4 }], [{ value: 2 }], [{ value: 1, oldestDue: new Date("2025-01-01T09:00:00Z") }]);
+    const response = await request({ id: "employee", role: "employee" });
+    expect(response.body.cards[0].metrics.map((m: any) => m.value)).toEqual([4, 2, 1]);
+    expect(response.body.cards[0].alerts[0]).toMatchObject({
+      dueAt: "2025-01-01T09:00:00.000Z", actionLabel: "عرض المتابعة", priority: "high",
+    });
+    expect(response.body.cards[0].alerts[0].label).toContain("أقدم");
+    const dialect = new PgDialect();
+    const open = dialect.sqlToQuery(fakes.predicates[1]);
+    expect(open.params).toEqual(["branch-a", "open", "in_progress"]);
+    expect(dialect.sqlToQuery(fakes.predicates[3]).sql).toContain('"first_responded_at" is null');
+  });
+
+  it("keeps approved advances out of pending stages and does not invent actor actions", async () => {
+    fakes.modules = ["hr_advances"];
+    fakes.allowMaintenance = false;
+    fakes.rows.push([{ id: "branch-a" }], [{ status: "awaiting_signature", value: 3 }]);
+    const response = await request({ id: "employee", role: "employee" });
+    expect(response.body.cards[0].alerts).toEqual([]);
+    expect(response.body.cards[0].actions).toBeUndefined();
+    expect(new PgDialect().sqlToQuery(fakes.predicates[1]).params).toEqual([
+      "branch-a", "pending", "pre_approved", "awaiting_signature", "signed",
+    ]);
+  });
+
+  it("does not fabricate a daily target when no approved allocation exists", async () => {
+    fakes.modules = ["targets"];
+    fakes.allowMaintenance = false;
+    fakes.rows.push([{ id: "branch-a" }], []);
+    const response = await request({ id: "employee", role: "employee" });
+    expect(response.body.cards[0].metrics).toEqual([]);
+    expect(response.body.cards[0].statusLabel).toContain("لا يوجد");
+    expect(fakes.selectCalls).toBe(2);
+  });
+
+  it("exposes the oldest unclosed business date without inventing a cutoff instant", async () => {
+    fakes.modules = ["daily_closures"];
+    fakes.allowMaintenance = false;
+    fakes.rows.push([{ id: "branch-a" }], [], [{ value: 2, oldestDate: "2025-01-01" }]);
+    const response = await request({ id: "viewer", role: "viewer" });
+    const alert = response.body.cards[0].alerts[0];
+    expect(alert.dueAt).toBeUndefined();
+    expect(alert.description).toContain("2025-01-01");
+    expect(alert.actionLabel).toBe("عرض المتابعة");
+  });
+
+  it("uses different document urgency and read-only follow-up labels", async () => {
+    fakes.modules = ["hr_documents"];
+    fakes.allowMaintenance = false;
+    fakes.rows.push([{ id: "branch-a" }]);
+    const response = await request({ id: "viewer", role: "viewer" });
+    const alerts = response.body.cards[0].alerts;
+    expect(alerts.map((alert: any) => alert.priority)).toEqual(["high", "low"]);
+    expect(alerts.every((alert: any) => alert.actionLabel === "عرض المتابعة")).toBe(true);
+    expect(response.body.cards[0].actions).toBeUndefined();
+  });
+
+  it("casts real sales values before aggregation, not after the sum", async () => {
+    fakes.modules = ["sales_analytics"];
+    fakes.allowMaintenance = false;
+    fakes.rows.push([{ id: "branch-a" }], [{ records: 2, value: 25.5 }]);
+    const response = await request({ id: "viewer", role: "viewer" });
+    expect(response.body.cards[0].metrics[0].value).toBe(25.5);
+    const aggregate = new PgDialect().sqlToQuery(fakes.selections[1].value);
+    expect(aggregate.sql).toContain('sum("cashier_sales_journals"."total_sales"::double precision)');
   });
 });

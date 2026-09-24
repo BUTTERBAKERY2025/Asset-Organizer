@@ -42,6 +42,7 @@ import { TablePagination } from "@/components/ui/pagination";
 import { ExportButtons } from "@/components/export-buttons";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { Riyal } from "@/components/ui/riyal";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 
 const STATUS_ICONS: Record<string, { variant: "default" | "secondary" | "destructive" | "outline" }> = {
   draft: { variant: "secondary" },
@@ -61,7 +62,8 @@ export default function CashierJournalsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, isAdmin } = useAuth();
-  const { branches, canSelectBranch, userBranchId } = useBranches();
+  const { branches, canSelectBranch, userBranchId, isLoading: branchesLoading } = useBranches();
+  const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -92,7 +94,15 @@ export default function CashierJournalsPage() {
   // list defaulted to branch A (their primary) and the journal vanished.
   const branchFilterInitialized = useRef(false);
   useEffect(() => {
-    if (branchFilterInitialized.current) return;
+    if (navigationBranch.hasBranchParam) {
+      if (navigationBranch.isResolving) return;
+      if (navigationBranch.branchId) {
+        setBranchFilter(navigationBranch.branchId);
+        branchFilterInitialized.current = true;
+      }
+      return;
+    }
+    if (branchFilterInitialized.current || branchesLoading) return;
     if (canSelectBranch) {
       setBranchFilter("all");
       branchFilterInitialized.current = true;
@@ -100,7 +110,14 @@ export default function CashierJournalsPage() {
       setBranchFilter(userBranchId);
       branchFilterInitialized.current = true;
     }
-  }, [userBranchId, canSelectBranch]);
+  }, [
+    navigationBranch.hasBranchParam,
+    navigationBranch.branchId,
+    navigationBranch.isResolving,
+    branchesLoading,
+    userBranchId,
+    canSelectBranch,
+  ]);
 
   const { data: userPermissions } = useQuery<{ module: string; actions: string[] }[]>({
     queryKey: ["/api/my-permissions"],
@@ -113,7 +130,7 @@ export default function CashierJournalsPage() {
     || journalPerms?.actions.includes('approve') || perfPerms?.actions.includes('approve');
   const canViewAllCashiers = isManager;
 
-  const isBranchFilterReady = branchFilter !== "";
+  const isBranchFilterReady = branchFilter !== "" && !navigationBranch.isResolving;
 
   // ===== Journals list: ALL filters server-side + server-side pagination =====
   // Previously this fetched every matching journal (~1000+ rows) and paginated

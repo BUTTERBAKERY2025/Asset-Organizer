@@ -9,7 +9,7 @@ describe("branch operation round-trip navigation", () => {
     expect(destination.searchParams.get("from")).toBe("branch-operations");
     const back = new URL(branchBoardUrl("branch & 2", route.path), "https://app.test");
     expect(back.pathname).toBe("/branch-operations");
-    expect(back.hash).toBe(`#branch-operation-card-${route.id === "warehouse" ? "kitchen" : route.id}`);
+    expect(back.hash).toBe(`#branch-operation-card-${route.id}`);
     expect(resolveNavigationBranch(back.search, [{ id: "branch & 2" }, { id: "other" }], "other").branchId).toBe("branch & 2");
   });
 

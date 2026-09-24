@@ -1,12 +1,15 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { PageHeader, SectionCard } from "@/components/dashboard";
 import { getQueryFn } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
+import { useBranches } from "@/hooks/useBranches";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Printer, Search, UserCheck, Building2, CalendarDays } from "lucide-react";
 
 interface BranchEmployee {
@@ -73,16 +76,49 @@ function currentMonth() {
 
 export default function EmployeeAttendanceReportPage() {
   const { isAuthenticated } = useAuth();
+  const { branches, canSelectBranch, userBranchId, isLoading: branchesLoading } = useBranches();
+  const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
+  const branchFilterInitialized = useRef(false);
   const [search, setSearch] = useState("");
+  const [branchFilter, setBranchFilter] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [month, setMonth] = useState(currentMonth());
   const [activeEmployeeId, setActiveEmployeeId] = useState<string | null>(null);
   const [activeMonth, setActiveMonth] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (navigationBranch.hasBranchParam) {
+      if (!navigationBranch.isResolving && navigationBranch.branchId) {
+        setBranchFilter(navigationBranch.branchId);
+        branchFilterInitialized.current = true;
+      }
+      return;
+    }
+    if (branchesLoading || branchFilterInitialized.current) return;
+    setBranchFilter(userBranchId || (canSelectBranch ? "all" : ""));
+    if (userBranchId || canSelectBranch) branchFilterInitialized.current = true;
+  }, [
+    navigationBranch.hasBranchParam,
+    navigationBranch.branchId,
+    navigationBranch.isResolving,
+    branchesLoading,
+    userBranchId,
+    canSelectBranch,
+  ]);
+
+  const isBranchScopeReady = branchFilter !== "" && !navigationBranch.isResolving;
+  const employeesUrl = branchFilter && branchFilter !== "all"
+    ? `/api/branch-employees?branchId=${encodeURIComponent(branchFilter)}`
+    : "/api/branch-employees";
+
   const { data: employees = [], isLoading: empLoading } = useQuery<BranchEmployee[]>({
-    queryKey: ["/api/branch-employees"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
-    enabled: isAuthenticated,
+    queryKey: ["/api/branch-employees", branchFilter],
+    queryFn: async () => {
+      const response = await fetch(employeesUrl, { credentials: "include" });
+      if (!response.ok) throw new Error(`${response.status}: failed to fetch employees`);
+      return response.json();
+    },
+    enabled: isAuthenticated && isBranchScopeReady,
     staleTime: 60000,
   });
 
@@ -98,17 +134,49 @@ export default function EmployeeAttendanceReportPage() {
   }, [employees, search]);
 
   const reportUrl = activeEmployeeId && activeMonth
-    ? `/api/employee-attendance-report?employeeId=${encodeURIComponent(activeEmployeeId)}&month=${activeMonth}`
+    ? `/api/employee-attendance-report?employeeId=${encodeURIComponent(activeEmployeeId)}&month=${activeMonth}${
+        branchFilter !== "all" ? `&branchId=${encodeURIComponent(branchFilter)}` : ""
+      }`
     : null;
 
-  const { data: report, isLoading: reportLoading } = useQuery<ReportResponse>({
+  const { data: rawReport, isLoading: reportLoading } = useQuery<ReportResponse>({
     queryKey: [reportUrl],
     queryFn: getQueryFn({ on401: "returnNull" }),
-    enabled: !!reportUrl,
+    enabled: !!reportUrl && isBranchScopeReady,
     staleTime: 15000,
   });
 
   const selectedEmployee = employees.find((e) => e.id === selectedId);
+
+  const report = useMemo<ReportResponse | undefined>(() => {
+    if (!rawReport || branchFilter === "all") return rawReport;
+    const rows = rawReport.rows.filter((row) => row.branchId === branchFilter);
+    const totals: Agg = {
+      days: rows.length,
+      present: rows.filter((row) => row.status === "present").length,
+      late: rows.filter((row) => row.status === "late").length,
+      absent: rows.filter((row) => row.status === "absent").length,
+      earlyLeave: rows.filter((row) => row.status === "early_leave").length,
+      leave: rows.filter((row) => row.status === "on_leave").length,
+      workingHours: rows.reduce((sum, row) => sum + Number(row.workingHours || 0), 0),
+      overtimeHours: 0,
+      lateMinutes: rows.reduce((sum, row) => sum + Number(row.lateMinutes || 0), 0),
+    };
+    return {
+      ...rawReport,
+      rows,
+      byBranch: rawReport.byBranch.filter((branch) => branch.branchId === branchFilter),
+      totals,
+    };
+  }, [rawReport, branchFilter]);
+
+  function changeBranch(value: string) {
+    setBranchFilter(value);
+    setSelectedId(null);
+    setActiveEmployeeId(null);
+    setActiveMonth(null);
+    setSearch("");
+  }
 
   function generate() {
     if (!selectedId) return;
@@ -214,6 +282,18 @@ export default function EmployeeAttendanceReportPage() {
         <SectionCard title="اختر الموظف والشهر" data-testid="section-controls">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2">
+              <label className="text-sm font-medium mb-1.5 block">الفرع</label>
+              <Select value={branchFilter} onValueChange={changeBranch} disabled={!canSelectBranch}>
+                <SelectTrigger className="mb-3" data-testid="select-branch">
+                  <SelectValue placeholder="اختر الفرع" />
+                </SelectTrigger>
+                <SelectContent>
+                  {canSelectBranch && <SelectItem value="all">كل الفروع</SelectItem>}
+                  {branches.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <label className="text-sm font-medium mb-1.5 block">الموظف</label>
               <div className="relative mb-2">
                 <Search className="absolute top-1/2 -translate-y-1/2 start-3 w-4 h-4 text-muted-foreground" />

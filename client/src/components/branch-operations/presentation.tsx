@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import {
   AlertTriangle, BadgeAlert, BriefcaseBusiness, CalendarDays, ChevronLeft, ClipboardCheck,
   FileText, Gauge, MessageSquareWarning, PackageCheck, RefreshCw, Settings2, ShieldAlert,
-  ShoppingBasket, Store, TrendingUp, Truck, UsersRound, Receipt, Wrench,
+  ShoppingBasket, Store, TrendingUp, Truck, UsersRound, Receipt, Wrench, Warehouse, Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PlatformAppIcon, type SemanticColor } from "@/components/platform-app-icon";
@@ -13,18 +13,15 @@ export type OperationCard = {
   group: string;
   href: string;
   state: "ready" | "error";
+  statusLabel?: string;
+  description?: string;
   metrics: Array<{ label: string; value: number; unit?: string }>;
-  alerts: Array<{ label: string; count: number; href: string }>;
+  alerts: Array<{ label: string; count: number; href: string; priority?: "critical" | "high" | "normal" | "low"; dueAt?: string; actionLabel?: string; description?: string }>;
 };
 
 type Glyph = typeof Wrench;
 
-/**
- * Sections follow the branch's working order: numbers first (sales, targets,
- * closing), then the supply chain, then upkeep, then the team. Colors reuse the
- * platform's semantic families (money = emerald, inventory = amber,
- * projects = orange, people = teal) so the board reads like the rest of the app.
- */
+/** Daily workflow groups; administrative follow-up is secondary. */
 export type SectionId = "sales" | "orders" | "operations" | "people";
 
 export type SectionMeta = {
@@ -40,29 +37,29 @@ export type SectionMeta = {
 
 export const SECTIONS: readonly SectionMeta[] = [
   {
-    id: "sales", label: "المبيعات والأهداف", hint: "ابدأ من هنا: أرقام اليوم مقابل الهدف، ثم إقفال الوردية.", icon: TrendingUp,
-    cardIds: ["sales", "targets", "closing"],
+    id: "orders", label: "التوريد والاستلام", hint: "طلبات المطبخ والمستودع الرئيسي والمشتريات.", icon: Truck,
+    cardIds: ["kitchen", "warehouse", "purchasing"],
     tile: "bg-emerald-500", badge: "bg-emerald-50 ring-emerald-100 dark:bg-emerald-950/40 dark:ring-emerald-900/60", dot: "bg-emerald-500",
   },
   {
-    id: "orders", label: "الطلبيات والمخزون", hint: "ما يحتاجه الفرع من المطبخ والمشتريات، وما يُهدر منه.", icon: Truck,
-    cardIds: ["kitchen", "purchasing", "waste"],
+    id: "sales", label: "الوردية والمبيعات والإغلاق", hint: "يومية الكاشير وأداء اليوم والإغلاق والحضور.", icon: TrendingUp,
+    cardIds: ["cashier", "sales", "targets", "closing", "attendance"],
     tile: "bg-amber-500", badge: "bg-amber-50 ring-amber-100 dark:bg-amber-950/40 dark:ring-amber-900/60", dot: "bg-amber-500",
   },
   {
-    id: "operations", label: "تشغيل الفرع", hint: "أعطال الفرع وشكاوى العملاء التي تنتظر الرد.", icon: Gauge,
-    cardIds: ["maintenance", "complaints"],
+    id: "operations", label: "مشكلات الفرع", hint: "الشكاوى والصيانة ومتابعة الهدر.", icon: Gauge,
+    cardIds: ["complaints", "maintenance", "waste"],
     tile: "bg-orange-500", badge: "bg-orange-50 ring-orange-100 dark:bg-orange-950/40 dark:ring-orange-900/60", dot: "bg-orange-500",
   },
   {
-    id: "people", label: "الفريق والملفات", hint: "الموظفون، وثائقهم، وطلبات السلف.", icon: UsersRound,
+    id: "people", label: "الفريق والمتابعات الإدارية", hint: "الموظفون والوثائق والسلف عند الحاجة.", icon: UsersRound,
     cardIds: ["employees", "documents", "advances"],
     tile: "bg-teal-500", badge: "bg-teal-50 ring-teal-100 dark:bg-teal-950/40 dark:ring-teal-900/60", dot: "bg-teal-500",
   },
 ] as const;
 
 // Cards the server may add later land in the section matching their server group.
-const SERVER_GROUP_FALLBACK: Record<string, SectionId> = { sales: "sales", operations: "operations", people: "people" };
+const SERVER_GROUP_FALLBACK: Record<string, SectionId> = { orders: "orders", sales: "sales", operations: "operations", people: "people" };
 
 export function groupCards(cards: OperationCard[]): Array<{ section: SectionMeta; cards: OperationCard[] }> {
   const byId = new Map(cards.map((card) => [card.id, card]));
@@ -75,6 +72,7 @@ export function groupCards(cards: OperationCard[]): Array<{ section: SectionMeta
     if (placed.has(card.id)) continue;
     const target = buckets.find((bucket) => bucket.section.id === (SERVER_GROUP_FALLBACK[card.group] ?? "operations")) ?? buckets[2];
     target.cards.push(card);
+    placed.add(card.id);
   }
   return buckets.filter((bucket) => bucket.cards.length > 0);
 }
@@ -82,6 +80,9 @@ export function groupCards(cards: OperationCard[]): Array<{ section: SectionMeta
 type IconMeta = { icon: Glyph; color: SemanticColor };
 const CARD_META: Record<string, IconMeta> = {
   sales: { icon: Receipt, color: "money" },
+  cashier: { icon: Receipt, color: "money" },
+  warehouse: { icon: Warehouse, color: "inventory" },
+  attendance: { icon: Clock, color: "people" },
   targets: { icon: Gauge, color: "money" },
   closing: { icon: BriefcaseBusiness, color: "money" },
   kitchen: { icon: ClipboardCheck, color: "production" },
@@ -104,66 +105,133 @@ export function formatServerDate(value: string) {
 }
 
 export function BusinessDate({ value }: { value: string }) {
-  return <div className="mt-5 flex flex-wrap items-center gap-2 text-sm">
-    <span className="inline-flex min-h-9 items-center gap-2 rounded-full bg-primary px-3 py-1.5 font-bold text-primary-foreground shadow-sm"><CalendarDays className="h-4 w-4" />يوم العمل: {formatServerDate(value)}</span>
-    <span className="text-muted-foreground">المؤشرات والتنبيهات حسب صلاحياتك في هذا الفرع.</span>
+  return <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+    <CalendarDays className="h-4 w-4" />يوم العمل: {formatServerDate(value)}
   </div>;
 }
 
 export function SectionHeader({ section, count }: { section: SectionMeta; count: number }) {
-  const Icon = section.icon;
   return <div className="mb-3 flex items-start gap-3">
-    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white shadow-sm ${section.tile}`}><Icon className="h-4.5 w-4.5" aria-hidden="true" /></span>
     <div className="min-w-0">
-      <h2 id={`branch-ops-${section.id}`} className="flex items-center gap-2 font-black text-foreground">{section.label}<span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">{count.toLocaleString("en-US")}</span></h2>
+      <h2 id={`branch-ops-${section.id}`} className="font-black text-foreground">{section.label}</h2>
       <p className="mt-0.5 text-xs text-muted-foreground">{section.hint}</p>
     </div>
   </div>;
 }
 
+export function requiredActions(cards: OperationCard[]) {
+  const rank = { critical: 0, high: 1, normal: 2, low: 3 };
+  const due = (value?: string) => value && Number.isFinite(Date.parse(value)) ? Date.parse(value) : Infinity;
+  const sorted = cards.flatMap(card => card.state === "ready" ? card.alerts.filter(alert => alert.count > 0)
+    .map((alert, index) => ({ ...alert, cardId: card.id, cardTitle: card.title, index })) : [])
+    .sort((a, b) => rank[a.priority ?? "normal"] - rank[b.priority ?? "normal"] || due(a.dueAt) - due(b.dueAt));
+  const seen = new Set<string>();
+  return sorted.filter(action => {
+    const url = new URL(action.href, "https://internal.invalid");
+    url.searchParams.delete("branchId");
+    url.searchParams.delete("from");
+    url.searchParams.sort();
+    const key = `${url.pathname}${url.search}|${action.label.trim()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function dailySalesProgress(cards: OperationCard[]) {
+  const sales = cards.find(card => card.id === "sales" && card.state === "ready");
+  const targets = cards.find(card => card.id === "targets" && card.state === "ready");
+  const actual = sales?.metrics.find(metric => metric.label === "مبيعات اليوميات المعتمدة والمرحلة" && metric.unit === "ر.س")?.value;
+  const target = targets?.metrics.find(metric => metric.label === "هدف اليوم المعتمد" && metric.unit === "ر.س")?.value;
+  if (typeof actual !== "number" || !Number.isFinite(actual) || actual < 0
+    || typeof target !== "number" || !Number.isFinite(target) || target <= 0) return null;
+  const ratio = actual / target * 100;
+  return { actual, target, percentage: actual > 0 && Number.isFinite(ratio) ? ratio : null };
+}
+
+export function DailySalesProgress({ cards }: { cards: OperationCard[] }) {
+  const progress = dailySalesProgress(cards);
+  if (!progress) return null;
+  const format = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  return <section className="mt-4 rounded-xl border border-border bg-card p-3" aria-labelledby="branch-daily-sales-progress" data-testid="branch-daily-sales-progress">
+    <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+      <h2 id="branch-daily-sales-progress" className="font-bold">مبيعات اليوم مقابل الهدف</h2>
+      <p><b>{format(progress.actual)}</b> من {format(progress.target)} ر.س{progress.percentage !== null && <span className="mr-2 font-bold text-emerald-700 dark:text-emerald-300">{format(progress.percentage)}%</span>}</p>
+    </div>
+    {progress.percentage !== null && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, progress.percentage)}%` }} /></div>}
+    <p className="mt-2 text-xs text-muted-foreground">مبيعات اليوميات المعتمدة والمرحلة فقط، مقابل هدف اليوم المعتمد من التوزيع اليومي الفعلي.</p>
+  </section>;
+}
+
+export function QuickActions({ cards, onOpen }: { cards: OperationCard[]; onOpen: (href: string) => void }) {
+  // Server-filtered cards grant navigation, not mutation. Destination pages enforce create/edit.
+  const byId = new Map(cards.map(card => [card.id, card]));
+  const supplies = ["kitchen", "warehouse"].flatMap(id => byId.has(id) ? [byId.get(id)!] : []);
+  const direct = ["waste", "complaints", "maintenance", "cashier", "closing"].flatMap(id => byId.has(id) ? [byId.get(id)!] : []);
+  if (!supplies.length && !direct.length) return null;
+  return <section className="mt-5" aria-labelledby="branch-quick-actions">
+    <h2 id="branch-quick-actions" className="mb-2 text-sm font-bold">وصول سريع</h2>
+    <div className="flex flex-wrap items-start gap-2">
+      {["طلب احتياجات", "الاستلام"].map(label => supplies.length > 0 && <details key={label} className="rounded-xl border bg-card px-3 py-2">
+        <summary className="min-h-7 cursor-pointer text-sm font-semibold">{label}</summary>
+        <div className="mt-2 flex flex-col gap-1">{supplies.map(card => <Button key={card.id} variant="ghost" className="min-h-11 justify-start" onClick={() => onOpen(card.href)}>فتح {card.id === "kitchen" ? "طلبات المطبخ" : "تحويلات المستودع الرئيسي"}</Button>)}</div>
+      </details>)}
+      {direct.map(card => <Button key={card.id} variant="outline" className="min-h-11" onClick={() => onOpen(card.href)}>فتح {card.title}</Button>)}
+    </div>
+    <p className="mt-2 text-xs text-muted-foreground">تفتح صفحة العمل للفرع الحالي؛ إنشاء الطلب أو تسجيل الاستلام حسب صلاحياتك داخل الصفحة.</p>
+  </section>;
+}
+
 export function NeedsActionStrip({ branchId, cards, onOpen }: { branchId: string; cards: OperationCard[]; onOpen: (href: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   useEffect(() => setExpanded(false), [branchId]);
-  const ordered = groupCards(cards).flatMap((bucket) => bucket.cards);
-  const actions = ordered.flatMap((card) => card.state === "ready" ? card.alerts.filter((alert) => alert.count > 0)
-    .map((alert, index) => ({ ...alert, cardId: card.id, cardTitle: card.title, index })) : []);
+  const actions = requiredActions(cards);
   const allReady = cards.every((card) => card.state === "ready");
 
-  return <section className="mt-4 rounded-2xl border border-rose-100 bg-card p-3 shadow-sm dark:border-rose-900/50" aria-labelledby="branch-ops-needs-action" data-testid="branch-operations-needs-action">
+  return <section className="mt-4 rounded-2xl border border-border bg-card p-4 shadow-sm" aria-labelledby="branch-ops-needs-action" data-testid="branch-operations-needs-action">
     <div className="flex items-center gap-2">
-      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-500 text-white"><BadgeAlert className="h-6 w-6" aria-hidden="true" /></span>
       <div>
-        <h2 id="branch-ops-needs-action" className="font-black text-foreground">يحتاج إجراء</h2>
+        <h2 id="branch-ops-needs-action" className="font-black text-foreground">المطلوب الآن</h2>
         {actions.length > 0 && <p className="text-[11px] text-muted-foreground">{actions.length.toLocaleString("en-US")} تنبيهًا مرتبة حسب أولوية العمل</p>}
       </div>
     </div>
-    {actions.length ? <div className="mt-2.5 flex flex-wrap gap-2">
-      {actions.map((action, position) => <button key={`${action.cardId}-${action.index}-${action.href}`} type="button" className={`${!expanded && position >= 4 ? "hidden sm:inline-flex" : "inline-flex"} branch-ops-action border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-900/60 dark:bg-rose-950/45 dark:text-rose-200 dark:hover:bg-rose-900/60 items-center gap-1.5`} onClick={() => onOpen(action.href)} data-testid={`branch-operation-top-action-${action.cardId}-${action.index}`} aria-label={`${action.cardTitle}: ${action.label}`}>
-        <span className="rounded-md bg-rose-100 px-1.5 py-0.5 font-black text-rose-800 dark:bg-rose-900/60 dark:text-rose-100">{action.count.toLocaleString("en-US")}</span><span>{action.cardTitle} · {action.label}</span>
-      </button>)}
-      {actions.length > 4 && <button type="button" className="min-h-11 px-2 text-xs font-black text-primary sm:hidden" onClick={() => setExpanded((value) => !value)} data-testid="button-toggle-branch-actions">{expanded ? "عرض أقل" : `عرض المزيد (${actions.length - 4})`}</button>}
+    {actions.length ? <div className="mt-3 space-y-2">
+      {actions.slice(0, expanded ? undefined : 4).map(action => {
+        const urgent = action.priority === "critical" || action.priority === "high";
+        return <div key={`${action.cardId}-${action.index}`} className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 ${urgent ? "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30" : "border-border bg-muted/30"}`} data-testid={`branch-operation-top-action-${action.cardId}-${action.index}`}>
+          <div className="min-w-0 flex-1 text-sm">
+            <span className={`text-xs font-bold ${urgent ? "text-amber-800 dark:text-amber-200" : "text-muted-foreground"}`}>{urgent ? "عاجل" : "متابعة"}</span>
+            <p className="font-semibold">{action.cardTitle} · {action.label} <b>({action.count.toLocaleString("en-US")})</b></p>
+            {action.description && <p className="mt-1 text-xs text-muted-foreground">{action.description}</p>}
+            {action.dueAt && <p className="mt-1 text-xs text-muted-foreground">الموعد: {formatServerDate(action.dueAt)}{Number.isFinite(Date.parse(action.dueAt)) && ` · ${new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Riyadh", hour: "2-digit", minute: "2-digit" }).format(new Date(action.dueAt))}`}</p>}
+          </div>
+          <Button variant="outline" className="min-h-11 shrink-0" onClick={() => onOpen(action.href)} aria-label={`${action.cardTitle}: ${action.label}`}>{action.actionLabel ? `فتح صفحة ${action.actionLabel}` : "فتح المتابعة"}<ChevronLeft className="mr-1 h-4 w-4" /></Button>
+        </div>;
+      })}
+      {actions.length > 4 && <button type="button" className="min-h-11 px-2 text-xs font-black text-primary" onClick={() => setExpanded(value => !value)} data-testid="button-toggle-branch-actions">{expanded ? "عرض أقل" : `عرض المزيد (${actions.length - 4})`}</button>}
     </div> : <p className="mt-2 text-sm text-muted-foreground" data-testid="branch-operations-actions-empty">{allReady ? "لا توجد إجراءات معلقة ضمن الوحدات المتاحة." : "تعذر التحقق من بعض الوحدات؛ أعد المحاولة قبل اعتبار يوم العمل مكتملًا."}</p>}
+    {actions.length > 0 && !allReady && <p className="mt-3 text-xs text-destructive" role="status">تعذر التحقق من بعض الوحدات؛ القائمة غير مكتملة حتى إعادة المحاولة.</p>}
   </section>;
 }
 
 export function OperationCardView({ card, section, onOpen, onRefresh }: { card: OperationCard; section: SectionMeta; onOpen: (href: string) => void; onRefresh: () => void }) {
   const meta = CARD_META[card.id] ?? FALLBACK_META;
-  const urgent = card.alerts.filter((alert) => alert.count > 0);
   return <article id={`branch-operation-card-${card.id}`} className="branch-ops-card border border-border bg-card text-card-foreground shadow-sm" data-testid={`branch-operation-card-${card.id}`}>
     <button type="button" className="group branch-ops-card-main" onClick={() => onOpen(card.href)} aria-label={`فتح ${card.title}`}>
       <div className="flex items-start gap-3">
         <PlatformAppIcon icon={meta.icon} color={meta.color} />
         <span className="min-w-0 flex-1 pt-1">
           <h3 className="block break-words text-base font-black leading-snug text-foreground">{card.title}</h3>
+          {card.state === "ready" && card.metrics.length > 0 && card.statusLabel && <span className="mt-1 block text-xs font-semibold text-muted-foreground">{card.statusLabel}</span>}
           {card.state === "error" ? <span className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-destructive"><AlertTriangle className="h-3.5 w-3.5" />تعذر تحديث المؤشرات</span>
             : card.metrics.length > 0 ? <span className="mt-1.5 block space-y-0.5 text-xs leading-5 text-muted-foreground">{card.metrics.map((metric) => <span className="block break-words" key={metric.label}><b className="font-black text-foreground">{metric.value.toLocaleString("en-US")}{metric.unit ? ` ${metric.unit}` : ""}</b> {metric.label}</span>)}</span>
-              : <span className="mt-1.5 block text-xs text-muted-foreground">فتح التفاصيل والمتابعة</span>}
+              : <span className="mt-1.5 block text-xs text-muted-foreground">{card.statusLabel ?? "صفحة متابعة — لا توجد مؤشرات معروضة"}</span>}
+          {card.state === "ready" && card.description && <span className="mt-1.5 block text-xs leading-5 text-muted-foreground">{card.description}</span>}
         </span>
         <span className="mt-1 inline-flex shrink-0 items-center gap-0.5 text-xs font-black text-primary"><span className="sr-only">فتح الصفحة</span><ChevronLeft className="h-4 w-4" aria-hidden="true" /></span>
       </div>
     </button>
-    {card.state === "error" ? <div className="px-3 pb-3 md:px-3.5 md:pb-3.5"><Button variant="ghost" className="branch-ops-refresh min-h-11 px-2 font-bold text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={onRefresh}><RefreshCw className="ml-2 h-4 w-4" />إعادة المحاولة</Button></div>
-      : urgent.length > 0 && <div className="branch-ops-alerts">{urgent.map((alert) => <button key={`${alert.label}-${alert.href}`} type="button" className="branch-ops-action border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-900/60 dark:bg-rose-950/45 dark:text-rose-200 dark:hover:bg-rose-900/60 inline-flex items-center gap-1" onClick={() => onOpen(alert.href)} aria-label={`${card.title}: ${alert.count} ${alert.label}`}><b>{alert.count.toLocaleString("en-US")}</b><span className="break-words">{alert.label}</span></button>)}</div>}
+    {card.state === "error" && <div className="px-3 pb-3"><Button variant="ghost" className="min-h-11 text-destructive" onClick={onRefresh}><RefreshCw className="ml-2 h-4 w-4" />إعادة المحاولة</Button></div>}
   </article>;
 }
 

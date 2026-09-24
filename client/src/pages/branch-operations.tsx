@@ -13,7 +13,7 @@ import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { branchBoardUrl, branchOperationUrl } from "@/lib/branch-operation-navigation";
 import {
   AlertTriangle, BoardSkeleton, BusinessDate, EmptyState, NeedsActionStrip,
-  OperationCardView, SectionHeader, Settings2, ShieldAlert, Store, groupCards, type OperationCard,
+  OperationCardView, DailySalesProgress, QuickActions, SectionHeader, Settings2, ShieldAlert, Store, groupCards, type OperationCard,
 } from "@/components/branch-operations/presentation";
 
 type BranchOperationsSummary = {
@@ -59,6 +59,8 @@ export default function BranchOperationsPage() {
     if (!validBoard.cards.some((card) => target === `branch-operation-card-${card.id}`)) return;
     const frame = requestAnimationFrame(() => {
       const element = document.getElementById(target);
+      const disclosure = element?.closest("details");
+      if (disclosure) disclosure.open = true;
       element?.scrollIntoView({ block: "center", behavior: "instant" });
       element?.querySelector("button")?.focus({ preventScroll: true });
     });
@@ -98,32 +100,29 @@ export default function BranchOperationsPage() {
   return (
     <Layout>
       <main className="branch-ops-shell page-container pb-10" dir="rtl" data-testid="branch-operations-page">
-        <section className="pt-5 sm:pt-8">
-          <div className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <section className="pt-4">
+          <div className="flex flex-col gap-3 border-b border-border pb-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
-              <img src="/butter-logo.png" alt="Butter Bakery" className="mt-1 h-11 w-11 rounded-2xl bg-primary object-contain p-1.5 shadow-sm" />
               <div>
-                <p className="text-xs font-bold tracking-[.16em] text-primary">BUTTER BAKERY · BRANCH DESK</p>
-                <h1 className="mt-1 text-2xl font-black tracking-tight text-foreground sm:text-3xl">لوحة الفرع التشغيلية</h1>
-                <p className="mt-1 text-sm text-muted-foreground">نقطة البداية اليومية للفريق — ابدأ بالمبيعات والأهداف، ثم الطلبيات، ثم بقية المتابعات.</p>
+                <h1 className="text-xl font-black text-foreground">لوحة الفرع التشغيلية</h1>
+                <p className="mt-1 text-xs text-muted-foreground">متابعة يوم العمل في فرعك</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => board.refetch()} disabled={!selectedBranchId || board.isFetching} data-testid="button-refresh-branch-operations">
                 <RefreshCw className={`ml-2 h-4 w-4 ${board.isFetching ? "animate-spin" : ""}`} />تحديث
               </Button>
-              <span className="hidden text-xs text-muted-foreground sm:block">
+              <span className="text-xs text-muted-foreground">
                 {validBoard ? `آخر تحديث: ${new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Riyadh", hour: "2-digit", minute: "2-digit", numberingSystem: "latn" }).format(new Date(validBoard.generatedAt))}` : ""}
               </span>
             </div>
           </div>
 
-          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-border bg-card p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-white shadow-sm"><Store className="h-6 w-6" aria-hidden="true" /></div>
               <div>
-                <p className="text-xs font-semibold text-muted-foreground">الفرع الحالي</p>
-                <p className="font-extrabold text-foreground">{selectedBranch?.name ?? "اختر فرعًا للبدء"}</p>
+                <p className="mb-1 font-extrabold text-foreground">{selectedBranch?.name ?? "اختر فرعًا للبدء"}</p>
+                {validBoard && !board.isError && <BusinessDate value={validBoard.businessDate} />}
               </div>
             </div>
             <Select value={selectedBranchId ?? undefined} onValueChange={changeBranch} disabled={branchesLoading || isSwitchingBranch || allowedBranches.length === 0}>
@@ -149,11 +148,18 @@ export default function BranchOperationsPage() {
         )}
         {validBoard && !isSwitchingBranch && !board.isLoading && !board.isError && (
           <>
-            <BusinessDate value={validBoard.businessDate} />
-            <NeedsActionStrip branchId={validBoard.branchId} cards={validBoard.cards} onOpen={go} />
+            <NeedsActionStrip key={validBoard.branchId} branchId={validBoard.branchId} cards={validBoard.cards} onOpen={go} />
+            <QuickActions key={`quick-${validBoard.branchId}`} cards={validBoard.cards} onOpen={go} />
+            <DailySalesProgress cards={validBoard.cards} />
             {validBoard.cards.length === 0 ? <EmptyState title="لا توجد وحدات متاحة" text="لا توجد صفحات تشغيلية مسموح بها لهذا الحساب في الفرع المحدد." icon={Settings2} /> : (
               <div className="mt-6 space-y-8">
-                {groupCards(validBoard.cards).map(({ section, cards }) => (
+                {groupCards(validBoard.cards).map(({ section, cards }) => section.id === "people" ? (
+                  <details key={`${validBoard.branchId}-${section.id}`} className="rounded-xl border border-border bg-muted/20 p-4" data-testid="branch-operations-section-people">
+                    <summary className="min-h-8 cursor-pointer font-bold" id="branch-ops-people">{section.label}</summary>
+                    <p className="mb-3 text-xs text-muted-foreground">{section.hint}</p>
+                    <div className="branch-ops-grid">{cards.map(card => <OperationCardView key={card.id} card={card} section={section} onOpen={go} onRefresh={() => board.refetch()} />)}</div>
+                  </details>
+                ) : (
                   <section key={section.id} aria-labelledby={`branch-ops-${section.id}`} data-testid={`branch-operations-section-${section.id}`}>
                     <SectionHeader section={section} count={cards.length} />
                     <div className="branch-ops-grid">

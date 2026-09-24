@@ -146,6 +146,7 @@ export default function PlatformHomePage() {
   const canViewBranchOperations = [
     "operations", "maintenance", "waste_tracking", "warehouse", "daily_closures",
     "cashier_journal", "branch_employees", "documents", "hr_advances",
+    "central_kitchen_orders", "branch_complaints", "sales_analytics", "targets", "hr_documents", "attendance",
   ].some((module) => canView(module as SystemModule));
 
   const getGreeting = () => {
@@ -355,7 +356,7 @@ export default function PlatformHomePage() {
                 <div>
                   <p className="text-xs font-bold tracking-wide text-primary">مساحة عمل الفرع</p>
                   <h2 className="font-bold text-gray-900">لوحة الفرع التشغيلية</h2>
-                  <p className="text-sm text-gray-600">المبيعات والأهداف أولًا، ثم الطلبيات وبقية متابعات اليوم بحسب صلاحياتك.</p>
+                  <p className="text-sm text-gray-600">المطلوب الآن، التوريد والاستلام، ومتابعة الوردية في فرعك بحسب صلاحياتك.</p>
                 </div>
               </div>
               <Button className="min-h-11" onClick={() => navigate("/branch-operations")} data-testid="button-open-branch-operations">فتح اللوحة</Button>
