@@ -85,6 +85,20 @@ export function serveStatic(app: Express) {
   buildPreloadHeaders(distPath);
   cacheIndexHtml(distPath);
 
+  // These stable URLs control installed-app updates; never serve an hour-old
+  // bootstrap/worker (including a precompressed copy) after a deployment.
+  for (const file of ["sw.js", "sw-register.js", "manifest.json"]) {
+    app.get("/" + file, (_req, res, next) => {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      res.sendFile(path.join(distPath, file), {
+        cacheControl: false,
+        lastModified: false,
+      }, (error) => {
+        if (error) next(error);
+      });
+    });
+  }
+
   const assetsPath = path.join(distPath, "assets");
   if (fs.existsSync(assetsPath)) {
     app.use("/assets", servePrecompressed(assetsPath));

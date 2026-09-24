@@ -118,7 +118,7 @@ describe("service worker bootstrap recovery", () => {
       const emittedBootstrap = readFileSync(join(outDir, "sw-register.js"), "utf8");
       expect(emittedHtml).toMatch(/<script\s+defer\s+src="\/sw-register\.js"><\/script>/);
       expect(emittedHtml).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?serviceWorker\.register/);
-      expect(emittedBootstrap).toContain('navigator.serviceWorker.register("/sw.js")');
+      expect(emittedBootstrap).toContain('navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" })');
     } finally {
       rmSync(rootDir, { recursive: true, force: true });
     }

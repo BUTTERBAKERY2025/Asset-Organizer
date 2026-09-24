@@ -14,7 +14,7 @@
       return;
     }
     inFlight = true;
-    navigator.serviceWorker.register("/sw.js").then(function (registration) {
+    navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).then(function (registration) {
       attempts = 0;
       onlinePending = false;
       registration.update().catch(function (error) {
