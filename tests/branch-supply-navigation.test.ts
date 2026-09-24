@@ -20,6 +20,6 @@ describe("branch supply sources", () => {
     expect(branchSupplyUrl("warehouse", "a", true)).toContain("create=1");
   });
   it("returns warehouse visitors to the supply entry on the branch board", () => {
-    expect(branchBoardUrl("a", "/transfer-requests")).toBe("/branch-operations?branchId=a#branch-operation-card-kitchen");
+    expect(branchBoardUrl("a", "/transfer-requests")).toBe("/branch-operations?branchId=a#branch-operation-card-warehouse");
   });
 });

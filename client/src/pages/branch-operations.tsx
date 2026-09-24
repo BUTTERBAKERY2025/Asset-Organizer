@@ -31,6 +31,7 @@ export default function BranchOperationsPage() {
   const navigation = useBranchNavigation(branches, branchesLoading);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [requestedBranchId, setRequestedBranchId] = useState<string | null>(null);
+  const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const selectedBranchId = requestedBranchId ?? (navigation.hasBranchParam
     ? navigation.branchId : branches.find((branch) => branch.id === (activeBranchId ?? activeBranch?.id))?.id ?? branches[0]?.id ?? null);
   const selectedBranch = branches.find((branch) => branch.id === selectedBranchId);
@@ -62,7 +63,9 @@ export default function BranchOperationsPage() {
     let frame = 0;
     const reveal = () => {
     const target = window.location.hash.slice(1);
-    if (!validBoard.cards.some((card) => target === `branch-operation-card-${card.id}`)) return;
+      const card = validBoard.cards.find((item) => target === `branch-operation-card-${item.id}`);
+      if (!card) return;
+      setExpandedCardId(card.id);
     frame = requestAnimationFrame(() => {
       const element = document.getElementById(target);
       let parent = element?.parentElement;
@@ -71,13 +74,15 @@ export default function BranchOperationsPage() {
         parent = parent.parentElement;
       }
       element?.scrollIntoView({ block: "center", behavior: "instant" });
-      element?.querySelector("button")?.focus({ preventScroll: true });
+       element?.querySelector<HTMLButtonElement>(".branch-ops-card-main")?.focus({ preventScroll: true });
     });
     };
     reveal();
     window.addEventListener("hashchange", reveal);
     return () => { cancelAnimationFrame(frame); window.removeEventListener("hashchange", reveal); };
   }, [validBoard, isSwitchingBranch]);
+
+  useEffect(() => { setExpandedCardId(null); }, [selectedBranchId]);
 
   const changeBranch = async (branchId: string) => {
     if (branchId === selectedBranchId) return;
@@ -172,20 +177,20 @@ export default function BranchOperationsPage() {
                   <details key={`${validBoard.branchId}-${section.id}`} className="rounded-xl border border-border bg-muted/20 p-4" data-testid="branch-operations-section-people">
                     <summary className="min-h-8 cursor-pointer font-bold" id="branch-ops-people">{section.label}</summary>
                     <p className="mb-3 text-xs text-muted-foreground">{section.hint}</p>
-                    <div className="branch-ops-grid">{cards.map(card => <OperationCardView key={card.id} card={card} section={section} onOpen={go} onRefresh={() => board.refetch()} />)}</div>
+                    <div className="branch-ops-grid">{cards.map(card => <OperationCardView key={card.id} card={card} section={section} onOpen={go} onRefresh={() => board.refetch()} expanded={expandedCardId === card.id} onToggle={() => setExpandedCardId(current => current === card.id ? null : card.id)} />)}</div>
                   </details>
                 ) : (
                   <section key={section.id} aria-labelledby={`branch-ops-${section.id}`} data-testid={`branch-operations-section-${section.id}`}>
                     <SectionHeader section={section} count={cards.length} />
                     <div className="branch-ops-grid">
-                      {cards.map((card) => <OperationCardView key={card.id} card={card} section={section} onOpen={go} onRefresh={() => board.refetch()} />)}
+                      {cards.map((card) => <OperationCardView key={card.id} card={card} section={section} onOpen={go} onRefresh={() => board.refetch()} expanded={expandedCardId === card.id} onToggle={() => setExpandedCardId(current => current === card.id ? null : card.id)} />)}
                     </div>
                   </section>
                 ))}
                 {validBoard.cards.some(isNavigationOnly) && <details className="rounded-xl border bg-muted/20 p-4" data-testid="branch-operations-navigation-only">
                   <summary className="min-h-11 cursor-pointer font-bold">روابط تنقل فقط ({validBoard.cards.filter(isNavigationOnly).length})</summary>
                   <p className="mb-3 text-xs text-muted-foreground">هذه الصفحات لا توفر مؤشرات للوحة؛ فتحها لا يعني وجود إجراء مطلوب أو اكتماله.</p>
-                  <div className="branch-ops-grid">{validBoard.cards.filter(isNavigationOnly).map(card => <OperationCardView key={card.id} card={card} section={SECTIONS[2]} onOpen={go} onRefresh={() => board.refetch()} />)}</div>
+                  <div className="branch-ops-grid">{validBoard.cards.filter(isNavigationOnly).map(card => <OperationCardView key={card.id} card={card} section={SECTIONS[2]} onOpen={go} onRefresh={() => board.refetch()} expanded={expandedCardId === card.id} onToggle={() => setExpandedCardId(current => current === card.id ? null : card.id)} />)}</div>
                 </details>}
               </div>
             )}

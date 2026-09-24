@@ -65,10 +65,11 @@ describe("daily branch desk", () => {
     expect(requiredActions([failed])).toEqual([]);
     const detail = renderToStaticMarkup(createElement(OperationCardView, {
       card: { ...ready, statusLabel: "navigation-status", description: "navigation-detail" },
-      section: SECTIONS[0], onOpen() {}, onRefresh() {},
+      section: SECTIONS[0], onOpen() {}, onRefresh() {}, expanded: true,
     }));
     expect(detail).not.toContain("unique-alert");
     expect(detail).toContain("navigation-status");
     expect(detail).toContain("navigation-detail");
+    expect(detail).toContain("فتح kitchen");
   });
 });

@@ -51,9 +51,10 @@ describe("priority desk components", () => {
     expect(renderToStaticMarkup(createElement(DayOverview, { cards: [] }))).toBe("");
   });
   it("marks navigation-only cards without treating zero metrics as navigation-only", () => {
-    const markup = (value: OperationCard) => renderToStaticMarkup(createElement(OperationCardView, { card: value, section: SECTIONS[0], onOpen() {}, onRefresh() {} }));
-    expect(markup(card({ id: "maintenance" }))).toContain("رابط تنقل فقط");
-    expect(markup(card({ id: "targets" }))).toContain("المؤشرات غير متاحة");
-    expect(markup(card({ metrics: [{ label: "count", value: 0 }] }))).not.toContain("رابط تنقل فقط");
+    const markup = (value: OperationCard, expanded = false) => renderToStaticMarkup(createElement(OperationCardView, { card: value, section: SECTIONS[0], onOpen() {}, onRefresh() {}, expanded }));
+    expect(markup(card({ id: "maintenance" }))).not.toContain("رابط تنقل فقط");
+    expect(markup(card({ id: "maintenance" }), true)).toContain("رابط تنقل فقط");
+    expect(markup(card({ id: "targets" }), true)).toContain("المؤشرات غير متاحة");
+    expect(markup(card({ metrics: [{ label: "count", value: 0 }] }), true)).not.toContain("رابط تنقل فقط");
   });
 });

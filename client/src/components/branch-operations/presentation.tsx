@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  AlertTriangle, BadgeAlert, BriefcaseBusiness, CalendarDays, ChevronLeft, ClipboardCheck,
+  AlertTriangle, BadgeAlert, BriefcaseBusiness, CalendarDays, ChevronDown, ChevronLeft, ClipboardCheck,
   FileText, Gauge, MessageSquareWarning, PackageCheck, RefreshCw, Settings2, ShieldAlert,
   ShoppingBasket, Store, TrendingUp, Truck, UsersRound, Receipt, Wrench, Warehouse, Clock,
 } from "lucide-react";
@@ -169,13 +169,17 @@ export function DayOverview({ cards }: { cards: OperationCard[] }) {
     return [{ ...field, value: metric && Number.isFinite(metric.value) ? metric.value : null }];
   });
   if (!visible.length) return null;
-  return <section className="mt-4 rounded-xl border bg-card p-3" aria-labelledby="branch-day-overview">
-    <h2 id="branch-day-overview" className="text-sm font-bold">نظرة على اليوم</h2>
-    <dl className="mt-2 grid gap-3 sm:grid-cols-3">{visible.map(field => <div key={field.id}>
-      <dt className="text-xs text-muted-foreground">{field.label}</dt>
-      <dd className="mt-1 text-sm font-bold">{field.value === null ? "غير متاح" : `${field.value.toLocaleString("en-US")}${field.unit ? ` ${field.unit}` : ""}`}</dd>
+  const compactLabels: Record<string, string> = { sales: "مبيعات معتمدة", targets: "هدف اليوم", waste: "الهدر" };
+  return <section className="mt-4 rounded-xl border bg-card px-3 py-2.5" aria-labelledby="branch-day-overview">
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+      <h2 id="branch-day-overview" className="text-sm font-bold">نظرة على اليوم</h2>
+      <p className="text-[11px] text-muted-foreground">المتاح فقط</p>
+    </div>
+    <dl className="mt-2 flex flex-wrap divide-x divide-x-reverse divide-border">{visible.map(field => <div key={field.id} className="min-w-28 flex-1 px-3 first:pr-0 last:pl-0">
+      <dt className="text-[11px] text-muted-foreground" title={field.label}>{compactLabels[field.id] ?? field.label}</dt>
+      <dd className="mt-0.5 text-sm font-bold">{field.value === null ? "غير متاح" : `${field.value.toLocaleString("en-US")}${field.unit ? ` ${field.unit}` : ""}`}</dd>
     </div>)}</dl>
-    <p className="mt-2 text-xs text-muted-foreground">المؤشرات المتاحة فقط؛ عدم توفر البيانات لا يعني صفرًا.</p>
+    <p className="mt-2 text-[11px] text-muted-foreground">عدم توفر البيانات لا يعني صفرًا.</p>
   </section>;
 }
 
@@ -224,21 +228,16 @@ export function QuickActions({ cards, onOpen }: { cards: OperationCard[]; onOpen
 }
 
 export function NeedsActionStrip({ branchId, cards, onOpen, routine = false }: { branchId: string; cards: OperationCard[]; onOpen: (href: string) => void; routine?: boolean }) {
+  const [routineOpen, setRoutineOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [search, setSearch] = useState("");
-  useEffect(() => { setExpanded(false); setSearch(""); }, [branchId]);
+  useEffect(() => { setRoutineOpen(false); setExpanded(false); setSearch(""); }, [branchId]);
   const topics = partitionActions(cards)[routine ? "routine" : "now"];
   const actions = topics.filter(action => `${action.cardTitle} ${action.label}`.includes(search.trim()));
   const allReady = cards.every((card) => card.state === "ready");
   const headingId = routine ? "branch-ops-routine" : "branch-ops-needs-action";
 
-  return <section className="mt-4 rounded-2xl border border-border bg-card p-4 shadow-sm" aria-labelledby={headingId} data-testid={routine ? "branch-operations-routine" : "branch-operations-needs-action"}>
-    <div className="flex items-center gap-2">
-      <div>
-        <h2 id={headingId} className="font-black text-foreground">{routine ? "المتابعات الروتينية" : "المطلوب الآن"}</h2>
-        <p className="text-[11px] text-muted-foreground">{topics.length.toLocaleString("en-US")} موضوع متابعة · {routine ? "أولوية عادية ومنخفضة" : "أولوية حرجة وعالية"} — ليست مجموع السجلات</p>
-      </div>
-    </div>
+  const content = <>
     {routine && topics.length > 4 && <input aria-label="بحث المتابعات الروتينية" placeholder="بحث باسم الوحدة أو المتابعة" value={search} onChange={event => { setSearch(event.target.value); setExpanded(true); }} className="mt-3 min-h-11 w-full rounded-lg border bg-background px-3 text-sm" />}
     {actions.length ? <div className="mt-3 space-y-2">
       {actions.slice(0, expanded ? undefined : 4).map(action => {
@@ -256,28 +255,45 @@ export function NeedsActionStrip({ branchId, cards, onOpen, routine = false }: {
       {actions.length > 4 && <button type="button" className="min-h-11 px-2 text-xs font-black text-primary" onClick={() => setExpanded(value => !value)} data-testid="button-toggle-branch-actions">{expanded ? "عرض أقل" : `عرض المزيد (${actions.length - 4})`}</button>}
     </div> : <p className="mt-2 text-sm text-muted-foreground" data-testid="branch-operations-actions-empty">{search ? "لا توجد نتائج مطابقة للبحث." : cards.length === 0 ? "لا توجد وحدات مسموحة للتحقق من إجراءاتها." : cards.every(isNavigationOnly) ? "المتاح روابط تنقل فقط؛ لا توجد بيانات للتحقق من المتابعات." : routine ? "لا توجد موضوعات روتينية معروضة من المصادر المتاحة." : "لا توجد موضوعات حرجة أو عالية معروضة من المصادر المتاحة؛ راجع المتابعات الروتينية."}</p>}
     {!allReady && <p className="mt-3 text-xs text-destructive" role="status">تعذر التحقق من بعض الوحدات؛ القائمة غير مكتملة حتى إعادة المحاولة.</p>}
+  </>;
+  return <section className="mt-4 rounded-2xl border border-border bg-card p-4 shadow-sm" aria-labelledby={headingId} data-testid={routine ? "branch-operations-routine" : "branch-operations-needs-action"}>
+    <div className="flex items-center gap-2">
+      <div>
+        <h2 id={headingId} className="font-black text-foreground">{routine ? "المتابعات الروتينية" : "المطلوب الآن"}</h2>
+        <p className="text-[11px] text-muted-foreground">{topics.length.toLocaleString("en-US")} موضوع متابعة · {routine ? "أولوية عادية ومنخفضة" : "أولوية حرجة وعالية"} — ليست مجموع السجلات</p>
+      </div>
+      {routine && <button type="button" className="mr-auto inline-flex min-h-10 items-center gap-1 text-xs font-black text-primary" onClick={() => setRoutineOpen(value => !value)} aria-expanded={routineOpen} aria-controls="branch-ops-routine-content">
+        {routineOpen ? "إخفاء" : "عرض المتابعات"}<ChevronDown className={`h-4 w-4 transition-transform ${routineOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+      </button>}
+    </div>
+    {routine ? routineOpen && <div id="branch-ops-routine-content">{content}</div> : content}
   </section>;
 }
 
-export function OperationCardView({ card, section, onOpen, onRefresh }: { card: OperationCard; section: SectionMeta; onOpen: (href: string) => void; onRefresh: () => void }) {
+export function OperationCardView({ card, section, onOpen, onRefresh, expanded = false, onToggle }: { card: OperationCard; section: SectionMeta; onOpen: (href: string) => void; onRefresh: () => void; expanded?: boolean; onToggle?: () => void }) {
   const meta = CARD_META[card.id] ?? FALLBACK_META;
-  return <article id={`branch-operation-card-${card.id}`} className="branch-ops-card border border-border bg-card text-card-foreground shadow-sm" data-testid={`branch-operation-card-${card.id}`}>
-    <button type="button" className="group branch-ops-card-main" onClick={() => onOpen(card.href)} aria-label={`فتح ${card.title}`}>
-      <div className="flex items-start gap-3">
+  const panelId = `branch-operation-card-panel-${card.id}`;
+  return <article id={`branch-operation-card-${card.id}`} className={`branch-ops-card border border-border bg-card text-card-foreground shadow-sm ${expanded ? "branch-ops-card-expanded" : ""}`} data-testid={`branch-operation-card-${card.id}`}>
+    <button type="button" className="group branch-ops-card-main" onClick={onToggle} aria-expanded={expanded} aria-controls={panelId} aria-label={`${expanded ? "إخفاء تفاصيل" : "إظهار تفاصيل"} ${card.title}`}>
+      <div className="flex items-center gap-3">
         <PlatformAppIcon icon={meta.icon} color={meta.color} />
-        <span className="min-w-0 flex-1 pt-1">
-          <h3 className="block break-words text-base font-black leading-snug text-foreground">{card.title}</h3>
-          {isNavigationOnly(card) && <span className="mt-1 block text-xs font-bold text-muted-foreground">رابط تنقل فقط · لا يعكس حالة إنجاز</span>}
-          {card.state === "ready" && card.metrics.length > 0 && card.statusLabel && <span className="mt-1 block text-xs font-semibold text-muted-foreground">{card.statusLabel}</span>}
-          {card.state === "error" ? <span className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-destructive"><AlertTriangle className="h-3.5 w-3.5" />تعذر تحديث المؤشرات</span>
-            : card.metrics.length > 0 ? <span className="mt-1.5 block space-y-0.5 text-xs leading-5 text-muted-foreground">{card.metrics.map((metric) => <span className="block break-words" key={metric.label}><b className="font-black text-foreground">{metric.value.toLocaleString("en-US")}{metric.unit ? ` ${metric.unit}` : ""}</b> {metric.label}</span>)}</span>
-              : <span className="mt-1.5 block text-xs text-muted-foreground">{card.statusLabel ?? (isNavigationOnly(card) ? "صفحة متابعة — لا توجد مؤشرات معروضة" : "المؤشرات غير متاحة — لا يعني ذلك صفرًا")}</span>}
-          {card.state === "ready" && card.description && <span className="mt-1.5 block text-xs leading-5 text-muted-foreground">{card.description}</span>}
+        <span className="min-w-0 flex-1">
+          <h3 className="branch-ops-card-title block break-words text-base font-black leading-snug text-foreground">{card.title}</h3>
         </span>
-        <span className="mt-1 inline-flex shrink-0 items-center gap-0.5 text-xs font-black text-primary"><span className="sr-only">فتح الصفحة</span><ChevronLeft className="h-4 w-4" aria-hidden="true" /></span>
+        <ChevronDown className={`branch-ops-card-chevron h-5 w-5 shrink-0 text-primary ${expanded ? "rotate-180" : ""}`} aria-hidden="true" />
       </div>
     </button>
-    {card.state === "error" && <div className="px-3 pb-3"><Button variant="ghost" className="min-h-11 text-destructive" onClick={onRefresh}><RefreshCw className="ml-2 h-4 w-4" />إعادة المحاولة</Button></div>}
+    {expanded && <div id={panelId} className="branch-ops-card-panel">
+      {isNavigationOnly(card) && <p className="text-xs font-bold text-muted-foreground">رابط تنقل فقط · لا يعكس حالة إنجاز</p>}
+      {card.state === "error" ? <p className="inline-flex items-center gap-1 text-xs font-bold text-destructive"><AlertTriangle className="h-3.5 w-3.5" />تعذر تحديث المؤشرات</p>
+        : card.metrics.length > 0 ? <div className="space-y-1 text-xs leading-5 text-muted-foreground">{card.statusLabel && <p className="font-semibold">{card.statusLabel}</p>}{card.metrics.map((metric) => <p className="break-words" key={metric.label}><b className="font-black text-foreground">{metric.value.toLocaleString("en-US")}{metric.unit ? ` ${metric.unit}` : ""}</b> {metric.label}</p>)}</div>
+          : <p className="text-xs text-muted-foreground">{card.statusLabel ?? (isNavigationOnly(card) ? "صفحة متابعة — لا توجد مؤشرات معروضة" : "المؤشرات غير متاحة — لا يعني ذلك صفرًا")}</p>}
+      {card.state === "ready" && card.description && <p className="mt-2 text-xs leading-5 text-muted-foreground">{card.description}</p>}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button variant="outline" className="branch-ops-open-module min-h-11" onClick={() => onOpen(card.href)}>فتح {card.title}<ChevronLeft className="mr-1 h-4 w-4" /></Button>
+        {card.state === "error" && <Button variant="ghost" className="branch-ops-refresh min-h-11 text-destructive" onClick={onRefresh}><RefreshCw className="ml-2 h-4 w-4" />إعادة المحاولة</Button>}
+      </div>
+    </div>}
   </article>;
 }
 

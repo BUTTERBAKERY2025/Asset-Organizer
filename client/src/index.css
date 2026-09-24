@@ -200,6 +200,7 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: .65rem;
+    align-items: start;
   }
   .branch-ops-card {
     display: flex;
@@ -209,6 +210,7 @@
     container-type: inline-size;
     container-name: opscard;
     border-radius: 1rem;
+    min-height: 5.75rem;
     transition: box-shadow 160ms ease, transform 160ms ease;
   }
   .branch-ops-card-main {
@@ -216,10 +218,22 @@
     display: block;
     position: relative;
     width: 100%;
-    min-height: 44px;
+    min-height: 5.625rem;
     padding: .75rem;
     border-radius: .95rem;
     text-align: right;
+  }
+  .branch-ops-card-expanded { min-height: auto; }
+  .branch-ops-card-title {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .branch-ops-card-chevron { transition: transform 160ms ease; }
+  .branch-ops-card-panel {
+    border-top: 1px solid var(--color-border);
+    padding: .75rem;
   }
   .branch-ops-card-main:focus-visible,
   .branch-ops-action:focus-visible,
@@ -276,6 +290,7 @@
   @container branchops (min-width: 680px) {
     .branch-ops-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
     .branch-ops-card-main { padding: .9rem; }
+    .branch-ops-card-panel { padding: .9rem; }
     .branch-ops-alerts { padding: 0 .9rem .9rem; }
   }
   @container opscard (max-width: 280px) {
