@@ -106,9 +106,9 @@ export function formatServerDate(value: string) {
 }
 
 export function BusinessDate({ value }: { value: string }) {
-  return <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+  return <span className="inline-flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
     <CalendarDays className="h-4 w-4" />يوم العمل: {formatServerDate(value)}
-  </div>;
+  </span>;
 }
 
 export function SectionHeader({ section, count }: { section: SectionMeta; count: number }) {
@@ -154,7 +154,7 @@ export function partitionActions(cards: OperationCard[]) {
   };
 }
 
-export function DayOverview({ cards }: { cards: OperationCard[] }) {
+export function DayOverview({ cards, compact = false }: { cards: OperationCard[]; compact?: boolean }) {
   const hasSalesComparison = dailySalesProgress(cards) !== null;
   const fields = [
     { id: "sales", label: "مبيعات اليوميات المعتمدة والمرحلة", unit: "ر.س" },
@@ -170,16 +170,16 @@ export function DayOverview({ cards }: { cards: OperationCard[] }) {
   });
   if (!visible.length) return null;
   const compactLabels: Record<string, string> = { sales: "مبيعات معتمدة", targets: "هدف اليوم", waste: "الهدر" };
-  return <section className="mt-4 rounded-xl border bg-card px-3 py-2.5" aria-labelledby="branch-day-overview">
-    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+  return <section className={`${compact ? "branch-ops-day-strip mt-0" : "mt-4"} rounded-xl border bg-card px-3 py-2.5`} aria-labelledby="branch-day-overview">
+    <div className={compact ? "branch-ops-day-strip-title flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1" : "flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"}>
       <h2 id="branch-day-overview" className="text-sm font-bold">نظرة على اليوم</h2>
       <p className="text-[11px] text-muted-foreground">المتاح فقط</p>
     </div>
-    <dl className="mt-2 flex flex-wrap divide-x divide-x-reverse divide-border">{visible.map(field => <div key={field.id} className="min-w-28 flex-1 px-3 first:pr-0 last:pl-0">
+    <dl className={`${compact ? "branch-ops-day-strip-metrics mt-0 divide-x divide-x-reverse divide-border" : "mt-2 flex flex-wrap divide-x divide-x-reverse divide-border"}`}>{visible.map(field => <div key={field.id} className={compact ? "branch-ops-day-strip-metric" : "min-w-28 flex-1 px-3 first:pr-0 last:pl-0"}>
       <dt className="text-[11px] text-muted-foreground" title={field.label}>{compactLabels[field.id] ?? field.label}</dt>
       <dd className="mt-0.5 text-sm font-bold">{field.value === null ? "غير متاح" : `${field.value.toLocaleString("en-US")}${field.unit ? ` ${field.unit}` : ""}`}</dd>
     </div>)}</dl>
-    <p className="mt-2 text-[11px] text-muted-foreground">عدم توفر البيانات لا يعني صفرًا.</p>
+    <p className={compact ? "branch-ops-day-strip-note text-muted-foreground" : "mt-2 text-[11px] text-muted-foreground"}>عدم توفر البيانات لا يعني صفرًا.</p>
   </section>;
 }
 
@@ -194,11 +194,11 @@ export function dailySalesProgress(cards: OperationCard[]) {
   return { actual, target, percentage: actual > 0 && Number.isFinite(ratio) ? ratio : null };
 }
 
-export function DailySalesProgress({ cards }: { cards: OperationCard[] }) {
+export function DailySalesProgress({ cards, compact = false }: { cards: OperationCard[]; compact?: boolean }) {
   const progress = dailySalesProgress(cards);
   if (!progress) return null;
   const format = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 2 });
-  return <section className="mt-4 rounded-xl border border-border bg-card p-3" aria-labelledby="branch-daily-sales-progress" data-testid="branch-daily-sales-progress">
+  return <section className={`${compact ? "mt-0" : "mt-4"} rounded-xl border border-border bg-card p-3`} aria-labelledby="branch-daily-sales-progress" data-testid="branch-daily-sales-progress">
     <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
       <h2 id="branch-daily-sales-progress" className="font-bold">مبيعات اليوم مقابل الهدف</h2>
       <p><b>{format(progress.actual)}</b> من {format(progress.target)} ر.س{progress.percentage !== null && <span className="mr-2 font-bold text-emerald-700 dark:text-emerald-300">{format(progress.percentage)}%</span>}</p>
@@ -208,13 +208,13 @@ export function DailySalesProgress({ cards }: { cards: OperationCard[] }) {
   </section>;
 }
 
-export function QuickActions({ cards, onOpen }: { cards: OperationCard[]; onOpen: (href: string) => void }) {
+export function QuickActions({ cards, onOpen, compact = false }: { cards: OperationCard[]; onOpen: (href: string) => void; compact?: boolean }) {
   // Server-filtered cards grant navigation, not mutation. Destination pages enforce create/edit.
   const byId = new Map(cards.map(card => [card.id, card]));
   const supplies = ["kitchen", "warehouse"].flatMap(id => byId.has(id) ? [byId.get(id)!] : []);
   const direct = ["waste", "complaints", "maintenance", "cashier", "closing"].flatMap(id => byId.has(id) ? [byId.get(id)!] : []);
   if (!supplies.length && !direct.length) return null;
-  return <section className="mt-5" aria-labelledby="branch-quick-actions">
+  return <section className={compact ? "mt-0 rounded-xl border border-border bg-card p-3" : "mt-5"} aria-labelledby="branch-quick-actions">
     <h2 id="branch-quick-actions" className="mb-2 text-sm font-bold">وصول سريع</h2>
     <div className="flex flex-wrap items-start gap-2">
       {["طلب احتياجات", "الاستلام"].map(label => supplies.length > 0 && <details key={label} className="rounded-xl border bg-card px-3 py-2">
@@ -227,7 +227,7 @@ export function QuickActions({ cards, onOpen }: { cards: OperationCard[]; onOpen
   </section>;
 }
 
-export function NeedsActionStrip({ branchId, cards, onOpen, routine = false }: { branchId: string; cards: OperationCard[]; onOpen: (href: string) => void; routine?: boolean }) {
+export function NeedsActionStrip({ branchId, cards, onOpen, routine = false, compact = false }: { branchId: string; cards: OperationCard[]; onOpen: (href: string) => void; routine?: boolean; compact?: boolean }) {
   const [routineOpen, setRoutineOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [search, setSearch] = useState("");
@@ -239,9 +239,17 @@ export function NeedsActionStrip({ branchId, cards, onOpen, routine = false }: {
 
   const content = <>
     {routine && topics.length > 4 && <input aria-label="بحث المتابعات الروتينية" placeholder="بحث باسم الوحدة أو المتابعة" value={search} onChange={event => { setSearch(event.target.value); setExpanded(true); }} className="mt-3 min-h-11 w-full rounded-lg border bg-background px-3 text-sm" />}
-    {actions.length ? <div className="mt-3 space-y-2">
+    {actions.length ? <div className={compact && !routine ? "branch-ops-compact-actions" : "mt-3 space-y-2"}>
       {actions.slice(0, expanded ? undefined : 4).map(action => {
         const urgent = action.priority === "critical" || action.priority === "high";
+        if (compact && !routine) return <div key={`${action.cardId}-${action.index}`} className="branch-ops-compact-action" data-urgent={urgent} data-testid={`branch-operation-top-action-${action.cardId}-${action.index}`}>
+          <div className="branch-ops-compact-action-copy">
+            <span className={`text-[11px] font-bold ${urgent ? "text-destructive" : "text-muted-foreground"}`}>{urgent ? "عاجل" : "متابعة"}</span>
+            <p className="font-semibold" title={`${action.cardTitle} · ${action.label}`}>{action.cardTitle} · {action.label} ({action.count.toLocaleString("en-US")})</p>
+            {(action.description || action.dueAt && Number.isFinite(Date.parse(action.dueAt))) && <p className="mt-0.5 text-[11px] text-muted-foreground" title={action.description ?? undefined}>{action.description ?? `أقدم موعد: ${formatServerDate(action.dueAt!)}`}</p>}
+          </div>
+          <Button variant="outline" size="sm" className="branch-ops-followup shrink-0" onClick={() => onOpen(action.href)} aria-label={`فتح المتابعة: ${action.cardTitle}: ${action.label}`}>متابعة<ChevronLeft className="mr-1 h-4 w-4" /></Button>
+        </div>;
         return <div key={`${action.cardId}-${action.index}`} className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 ${urgent ? "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30" : "border-border bg-muted/30"}`} data-testid={`branch-operation-top-action-${action.cardId}-${action.index}`}>
           <div className="min-w-0 flex-1 text-sm">
             <span className={`text-xs font-bold ${urgent ? "text-amber-800 dark:text-amber-200" : "text-muted-foreground"}`}>{urgent ? "عاجل" : "متابعة"}</span>
@@ -254,9 +262,9 @@ export function NeedsActionStrip({ branchId, cards, onOpen, routine = false }: {
       })}
       {actions.length > 4 && <button type="button" className="min-h-11 px-2 text-xs font-black text-primary" onClick={() => setExpanded(value => !value)} data-testid="button-toggle-branch-actions">{expanded ? "عرض أقل" : `عرض المزيد (${actions.length - 4})`}</button>}
     </div> : <p className="mt-2 text-sm text-muted-foreground" data-testid="branch-operations-actions-empty">{search ? "لا توجد نتائج مطابقة للبحث." : cards.length === 0 ? "لا توجد وحدات مسموحة للتحقق من إجراءاتها." : cards.every(isNavigationOnly) ? "المتاح روابط تنقل فقط؛ لا توجد بيانات للتحقق من المتابعات." : routine ? "لا توجد موضوعات روتينية معروضة من المصادر المتاحة." : "لا توجد موضوعات حرجة أو عالية معروضة من المصادر المتاحة؛ راجع المتابعات الروتينية."}</p>}
-    {!allReady && <p className="mt-3 text-xs text-destructive" role="status">تعذر التحقق من بعض الوحدات؛ القائمة غير مكتملة حتى إعادة المحاولة.</p>}
+    {!allReady && <p className={compact ? "branch-ops-compact-warning text-destructive" : "mt-3 text-xs text-destructive"} role="status">تعذر التحقق من بعض الوحدات؛ القائمة غير مكتملة حتى إعادة المحاولة.</p>}
   </>;
-  return <section className="mt-4 rounded-2xl border border-border bg-card p-4 shadow-sm" aria-labelledby={headingId} data-testid={routine ? "branch-operations-routine" : "branch-operations-needs-action"}>
+  return <section className={`${compact ? "branch-ops-compact-panel" : "mt-4 rounded-2xl p-4 shadow-sm"} border border-border bg-card`} aria-labelledby={headingId} data-testid={routine ? "branch-operations-routine" : "branch-operations-needs-action"}>
     <div className="flex items-center gap-2">
       <div>
         <h2 id={headingId} className="font-black text-foreground">{routine ? "المتابعات الروتينية" : "المطلوب الآن"}</h2>
@@ -266,6 +274,7 @@ export function NeedsActionStrip({ branchId, cards, onOpen, routine = false }: {
         {routineOpen ? "إخفاء" : "عرض المتابعات"}<ChevronDown className={`h-4 w-4 transition-transform ${routineOpen ? "rotate-180" : ""}`} aria-hidden="true" />
       </button>}
     </div>
+    {routine && !allReady && <p className="branch-ops-compact-warning text-destructive" role="status">تعذر التحقق من بعض الوحدات؛ المتابعات المعروضة غير مكتملة حتى إعادة المحاولة.</p>}
     {routine ? routineOpen && <div id="branch-ops-routine-content">{content}</div> : content}
   </section>;
 }

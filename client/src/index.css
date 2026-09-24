@@ -199,6 +199,38 @@
     container-type: inline-size;
     container-name: branchops;
   }
+   /* The daily-work deck is deliberately isolated from the work-page grid below. */
+   .branch-ops-daily-deck { display: grid; gap: .75rem; margin-top: .75rem; min-width: 0; }
+   .branch-ops-head { display: grid; gap: .5rem; min-width: 0; }
+   .branch-ops-day-strip { display: grid; gap: .45rem; min-width: 0; }
+   .branch-ops-day-strip-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); min-width: 0; }
+   .branch-ops-day-strip-metric { min-width: 0; padding-inline: .35rem; }
+   .branch-ops-day-strip-note { font-size: .6875rem; line-height: 1.25; }
+   .branch-ops-action-layout { display: grid; gap: .75rem; min-width: 0; }
+   .branch-ops-side-stack { display: grid; gap: .75rem; align-content: start; min-width: 0; }
+   .branch-ops-compact-panel { margin-top: 0; border-radius: .875rem; padding: .75rem; }
+   .branch-ops-compact-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: .45rem; margin-top: .6rem; }
+   .branch-ops-compact-action {
+     display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .5rem;
+     min-width: 0; border: 1px solid var(--color-border); border-radius: .65rem; padding: .5rem .55rem;
+   }
+   .branch-ops-compact-action[data-urgent="true"] { border-color: color-mix(in oklab, var(--color-destructive) 32%, var(--color-border)); }
+   .branch-ops-compact-action-copy { min-width: 0; font-size: .75rem; line-height: 1.25; }
+   .branch-ops-compact-action-copy p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+   .branch-ops-compact-action .branch-ops-followup { min-height: 44px; white-space: nowrap; }
+   .branch-ops-compact-warning { margin-top: .55rem; font-size: .75rem; }
+   @media (min-width: 768px) {
+     .branch-ops-head { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+     .branch-ops-day-strip { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .75rem; min-height: 3.75rem; }
+     .branch-ops-day-strip-title { display: block; }
+     .branch-ops-day-strip-title p { display: none; }
+     .branch-ops-day-strip-metrics { display: flex; }
+     .branch-ops-day-strip-metric { flex: 1; }
+     .branch-ops-day-strip-note { max-width: 10rem; }
+     .branch-ops-action-layout { grid-template-columns: minmax(0, 1.18fr) minmax(0, .82fr); align-items: start; }
+     .branch-ops-action-layout > [data-testid="branch-operations-needs-action"] { grid-column: 1; grid-row: 1; }
+     .branch-ops-side-stack { grid-column: 2; grid-row: 1; }
+   }
   .branch-ops-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr);

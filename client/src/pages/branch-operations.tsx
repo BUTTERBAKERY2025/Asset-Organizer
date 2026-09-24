@@ -37,7 +37,6 @@ export default function BranchOperationsPage() {
   const restoredReturnToken = useRef<string | null>(null);
   const selectedBranchId = requestedBranchId ?? (navigation.hasBranchParam
     ? navigation.branchId : branches.find((branch) => branch.id === (activeBranchId ?? activeBranch?.id))?.id ?? branches[0]?.id ?? null);
-  const selectedBranch = branches.find((branch) => branch.id === selectedBranchId);
   // useBranches is server-filtered; this selector intentionally never exposes an all-branches option.
   const allowedBranches = useMemo(() => branches, [branches]);
 
@@ -132,34 +131,25 @@ export default function BranchOperationsPage() {
     <Layout>
       <main className="branch-ops-shell page-container pb-10" dir="rtl" data-testid="branch-operations-page">
         <section className="pt-4">
-          <div className="flex flex-col gap-3 border-b border-border pb-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
+          <div className="branch-ops-head border-b border-border pb-3">
+            <div className="min-w-0">
               <div>
                 <h1 className="text-xl font-black text-foreground">لوحة الفرع التشغيلية</h1>
-                <p className="mt-1 text-xs text-muted-foreground">متابعة يوم العمل في فرعك</p>
+                <p className="mt-1 text-xs text-muted-foreground">متابعة يوم العمل في فرعك {validBoard && !board.isError && <span className="mr-2 inline-block"><BusinessDate value={validBoard.businessDate} /></span>}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => board.refetch()} disabled={!selectedBranchId || board.isFetching} data-testid="button-refresh-branch-operations">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <Select value={selectedBranchId ?? undefined} onValueChange={changeBranch} disabled={branchesLoading || isSwitchingBranch || allowedBranches.length === 0}>
+                <SelectTrigger className="min-h-11 min-w-0 flex-1 sm:w-[220px] sm:flex-none" data-testid="select-branch-operations"><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
+                <SelectContent>{allowedBranches.map((branch) => <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>)}</SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" className="min-h-11 shrink-0" onClick={() => board.refetch()} disabled={!selectedBranchId || board.isFetching} data-testid="button-refresh-branch-operations">
                 <RefreshCw className={`ml-2 h-4 w-4 ${board.isFetching ? "animate-spin" : ""}`} />تحديث
               </Button>
-              <span className="text-xs text-muted-foreground">
+              <span className="basis-full text-xs text-muted-foreground sm:basis-auto">
                 {validBoard && !board.isError ? `آخر تحديث: ${new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Riyadh", hour: "2-digit", minute: "2-digit", numberingSystem: "latn" }).format(new Date(validBoard.generatedAt))}` : ""}
               </span>
             </div>
-          </div>
-
-          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div>
-                <p className="mb-1 font-extrabold text-foreground">{selectedBranch?.name ?? "اختر فرعًا للبدء"}</p>
-                {validBoard && !board.isError && <BusinessDate value={validBoard.businessDate} />}
-              </div>
-            </div>
-            <Select value={selectedBranchId ?? undefined} onValueChange={changeBranch} disabled={branchesLoading || isSwitchingBranch || allowedBranches.length === 0}>
-              <SelectTrigger className="min-h-11 w-full sm:w-[245px]" data-testid="select-branch-operations"><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
-              <SelectContent>{allowedBranches.map((branch) => <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>)}</SelectContent>
-            </Select>
           </div>
           {switchError && <p className="mt-2 text-sm font-semibold text-destructive" role="alert">{switchError}</p>}
         </section>
@@ -179,11 +169,17 @@ export default function BranchOperationsPage() {
         )}
         {validBoard && !isSwitchingBranch && !board.isLoading && !board.isError && (
           <>
-            <NeedsActionStrip key={validBoard.branchId} branchId={validBoard.branchId} cards={validBoard.cards} onOpen={go} />
-            <DayOverview cards={validBoard.cards} />
-            <DailySalesProgress cards={validBoard.cards} />
-            <NeedsActionStrip key={`routine-${validBoard.branchId}`} branchId={validBoard.branchId} cards={validBoard.cards} onOpen={go} routine />
-            <QuickActions key={`quick-${validBoard.branchId}`} cards={validBoard.cards} onOpen={go} />
+            <div className="branch-ops-daily-deck">
+              <DayOverview cards={validBoard.cards} compact />
+              <DailySalesProgress cards={validBoard.cards} compact />
+              <div className="branch-ops-action-layout">
+                <NeedsActionStrip key={validBoard.branchId} branchId={validBoard.branchId} cards={validBoard.cards} onOpen={go} compact />
+                <div className="branch-ops-side-stack">
+                  <QuickActions key={`quick-${validBoard.branchId}`} cards={validBoard.cards} onOpen={go} compact />
+                  <NeedsActionStrip key={`routine-${validBoard.branchId}`} branchId={validBoard.branchId} cards={validBoard.cards} onOpen={go} routine compact />
+                </div>
+              </div>
+            </div>
             {validBoard.cards.length === 0 ? <EmptyState title="لا توجد وحدات متاحة" text="لا توجد صفحات تشغيلية مسموح بها لهذا الحساب في الفرع المحدد." icon={Settings2} /> : (
               <div className="mt-6 space-y-8">
                 <h2 className="text-lg font-black">المؤشرات وصفحات العمل</h2>

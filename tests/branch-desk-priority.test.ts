@@ -39,6 +39,18 @@ describe("priority desk components", () => {
     expect(render([card({ id: "maintenance" })])).toContain("روابط تنقل فقط");
     expect(render([card({ state: "error" })])).toContain("القائمة غير مكتملة");
   });
+  it("keeps each compact urgent follow-up on its own full row with a 44px action", () => {
+    const html = renderToStaticMarkup(createElement(NeedsActionStrip, { branchId: "b", compact: true, onOpen() {}, cards: [card({
+      alerts: [
+        { label: "one", count: 1, href: "/central-kitchen-orders", priority: "critical" },
+        { label: "two", count: 2, href: "/central-kitchen-orders?tab=two", priority: "high" },
+        { label: "three", count: 3, href: "/central-kitchen-orders?tab=three", priority: "high" },
+        { label: "four", count: 4, href: "/central-kitchen-orders?tab=four", priority: "critical" },
+      ],
+    })] }));
+    expect((html.match(/branch-ops-compact-action"/g) ?? []).length).toBe(4);
+    expect(html).toContain("branch-ops-followup");
+  });
   it("renders ready exact-unit metrics with unknown distinct from measured zero", () => {
     const html = renderToStaticMarkup(createElement(DayOverview, { cards: [
       card({ id: "sales", metrics: [{ label: "مبيعات اليوميات المعتمدة والمرحلة", value: 0, unit: "ر.س" }] }),
