@@ -36,8 +36,17 @@ CREATE TABLE IF NOT EXISTS central_kitchen_demand_commitments (
 );
 CREATE INDEX IF NOT EXISTS idx_central_kitchen_demand_commitments_scope ON central_kitchen_demand_commitments(central_kitchen_id, request_branch_id, status);
 
-ALTER TABLE central_kitchen_order_items
-  ADD CONSTRAINT uq_central_kitchen_order_items_order_identity UNIQUE(order_id,id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'central_kitchen_order_items'::regclass
+      AND conname = 'uq_central_kitchen_order_items_order_identity'
+  ) THEN
+    ALTER TABLE central_kitchen_order_items
+      ADD CONSTRAINT uq_central_kitchen_order_items_order_identity UNIQUE(order_id,id);
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS central_kitchen_demand_actions (
   id serial PRIMARY KEY,
@@ -66,3 +75,8 @@ CREATE TABLE IF NOT EXISTS central_kitchen_demand_actions (
   )
 );
 CREATE INDEX IF NOT EXISTS idx_central_kitchen_demand_actions_commitment ON central_kitchen_demand_actions(commitment_id,created_at);
+
+-- Match the existing kitchen tables: server-side database access only.
+-- Do not expose order follow-up data through Supabase's public Data API.
+ALTER TABLE central_kitchen_demand_commitments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE central_kitchen_demand_actions ENABLE ROW LEVEL SECURITY;
