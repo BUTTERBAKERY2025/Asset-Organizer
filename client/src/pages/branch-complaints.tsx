@@ -18,6 +18,8 @@ import { useVisualViewportDialog } from "@/components/central-kitchen/use-visual
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
+import { useBranchDeskIntent } from "@/hooks/use-branch-desk-intent";
+import { useSearch } from "wouter";
 import { usePermissions } from "@/hooks/usePermissions";
 import { HttpError, apiRequest, getHttpStatus } from "@/lib/queryClient";
 
@@ -128,12 +130,15 @@ export default function BranchComplaintsPage() {
   const createAllowed = canCreate("branch_complaints");
   const editAllowed = canEdit("branch_complaints");
   const approveAllowed = canApprove("branch_complaints");
-  const params = new URLSearchParams(window.location.search);
+  const linkedSearch = useSearch();
+  const params = new URLSearchParams(linkedSearch);
+  const overdueOnly = params.get("overdue") === "true";
   const initialBranch = navigation.branchId ?? activeBranchId ?? userBranchId ?? branches[0]?.id ?? null;
   const [branchId, setBranchId] = useState<string | null>(initialBranch);
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState("all");
   const [priority, setPriority] = useState("all");
+  useEffect(() => { setPage(1); setStatus("all"); setPriority("all"); }, [overdueOnly]);
   const [selectedId, setSelectedId] = useState<number | null>(() => {
     const id = Number(params.get("complaintId"));
     return Number.isInteger(id) && id > 0 ? id : null;
@@ -143,6 +148,12 @@ export default function BranchComplaintsPage() {
   const [transition, setTransition] = useState<{ action: "start" | "resolve" | "close" | "reopen"; label: string } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
+  useBranchDeskIntent(navigation.branchId, !navigation.isResolving && !permissionsLoading && branchId === navigation.branchId, intent => {
+    if (intent === "create" && createAllowed) {
+      setEditing(null);
+      setFormOpen(true);
+    }
+  });
 
   useEffect(() => {
     if (!branchId && initialBranch) setBranchId(initialBranch);
@@ -167,12 +178,14 @@ export default function BranchComplaintsPage() {
     const query = new URLSearchParams({ branchId, page: String(page) });
     if (status !== "all") query.set("status", status);
     if (priority !== "all") query.set("priority", priority);
+    if (overdueOnly) query.set("overdue", "true");
     return query.toString();
-  }, [branchId, page, status, priority]);
+  }, [branchId, page, status, priority, overdueOnly]);
 
   const complaints = useQuery<ListResult>({
     queryKey: ["/api/branch-complaints", branchId, page, status, priority],
-    enabled: Boolean(branchId && viewAllowed && !isSwitchingBranch && !navigation.isResolving),
+    enabled: Boolean(branchId && viewAllowed && !isSwitchingBranch && !navigation.isResolving
+      && (!navigation.hasBranchParam || branchId === navigation.branchId)),
     staleTime: 0,
     placeholderData: undefined,
     queryFn: async ({ signal }) => {
@@ -261,6 +274,15 @@ export default function BranchComplaintsPage() {
             <div><Label>الحالة</Label><Select value={status} onValueChange={(value) => { setStatus(value); setPage(1); }}><SelectTrigger className="mt-1 min-h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">كل الحالات</SelectItem>{Object.entries(statusLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
             <div><Label>الأولوية</Label><Select value={priority} onValueChange={(value) => { setPriority(value); setPage(1); }}><SelectTrigger className="mt-1 min-h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">كل الأولويات</SelectItem>{Object.entries(priorityLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
           </div>
+          {overdueOnly && <div className="mt-3 flex flex-wrap items-center gap-2 text-sm" role="status">
+            <span>الشكاوى المتأخرة عن الرد الأول فقط</span>
+            <Button variant="outline" size="sm" onClick={() => {
+              const url = new URL(window.location.href);
+              url.searchParams.delete("overdue");
+              window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}`);
+              window.dispatchEvent(new PopStateEvent("popstate"));
+            }}>عرض كل الشكاوى</Button>
+          </div>}
           {switchError && <Alert variant="destructive" className="mt-3"><AlertCircle className="h-4 w-4" /><AlertDescription>{switchError}</AlertDescription></Alert>}
           {notice && <Alert className="mt-3 border-amber-300 bg-amber-50 text-amber-900"><AlertCircle className="h-4 w-4" /><AlertDescription>{notice}</AlertDescription></Alert>}
         </header>

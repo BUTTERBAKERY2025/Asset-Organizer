@@ -10,7 +10,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
+import { branchDeskDate, branchOperationUrl } from "@/lib/branch-operation-navigation";
 import { useTranslation } from "react-i18next";
 import { Plus, Search, Eye, CheckCircle, XCircle, Clock, AlertTriangle, TrendingUp, TrendingDown, Minus, Wallet, Calendar, DollarSign, Users, Printer, Filter, Trash2, RotateCcw, History, User as UserIcon, Paperclip } from "lucide-react";
 import {
@@ -74,6 +75,16 @@ export default function CashierJournalsPage() {
   const [dateTo, setDateTo] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 20;
+  const linkedSearch = useSearch();
+  useEffect(() => {
+    const params = new URLSearchParams(linkedSearch);
+    if (params.get("from") !== "branch-operations") return;
+    const status = params.get("status");
+    setStatusFilter(status && ["draft", "submitted", "approved", "rejected", "posted"].includes(status) ? status : "all");
+    setDateFrom(branchDeskDate(params.get("startDate")));
+    setDateTo(branchDeskDate(params.get("endDate")));
+    setCurrentPage(1);
+  }, [linkedSearch]);
 
   // Debounce free-text search so we don't fire a request on every keystroke.
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -159,7 +170,7 @@ export default function CashierJournalsPage() {
     enabled: isBranchFilterReady,
     staleTime: 30_000,
     gcTime: 5 * 60_000,
-    placeholderData: (prev) => prev,
+    placeholderData: undefined,
   });
   const journals = journalsResponse?.journals;
   const totalCount = journalsResponse?.totalCount ?? 0;
@@ -503,7 +514,7 @@ export default function CashierJournalsPage() {
               <span className="hidden sm:inline">{t("printList")}</span>
               <span className="sm:hidden">{t("print")}</span>
             </Button>
-            <Link href="/cashier-journals/new">
+            <Link href={branchFilter && branchFilter !== "all" ? branchOperationUrl("/cashier-journals/new", branchFilter) : "/cashier-journals/new"}>
               <Button className="gap-2 h-11 sm:h-9 min-h-[44px] sm:min-h-0 text-sm px-3 sm:px-4" data-testid="button-new-journal">
                 <Plus className="w-4 h-4" />
                 <span className="hidden sm:inline">{t("newJournal")}</span>

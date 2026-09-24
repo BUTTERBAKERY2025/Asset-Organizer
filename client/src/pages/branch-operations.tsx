@@ -41,6 +41,10 @@ export default function BranchOperationsPage() {
     queryKey: ["/api/branch-operations/summary", selectedBranchId],
     enabled: Boolean(selectedBranchId) && !branchesLoading && !isSwitchingBranch,
     staleTime: 0,
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: "always",
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
     placeholderData: undefined,
     retry: false,
     queryFn: async ({ signal }) => {
@@ -113,7 +117,7 @@ export default function BranchOperationsPage() {
                 <RefreshCw className={`ml-2 h-4 w-4 ${board.isFetching ? "animate-spin" : ""}`} />تحديث
               </Button>
               <span className="text-xs text-muted-foreground">
-                {validBoard ? `آخر تحديث: ${new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Riyadh", hour: "2-digit", minute: "2-digit", numberingSystem: "latn" }).format(new Date(validBoard.generatedAt))}` : ""}
+                {validBoard && !board.isError ? `آخر تحديث: ${new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Riyadh", hour: "2-digit", minute: "2-digit", numberingSystem: "latn" }).format(new Date(validBoard.generatedAt))}` : ""}
               </span>
             </div>
           </div>

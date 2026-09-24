@@ -26,6 +26,7 @@ import { ExportButtons } from "@/components/export-buttons";
 import { useBranches } from "@/hooks/useBranches";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
+import { useBranchDeskIntent } from "@/hooks/use-branch-desk-intent";
 import { BranchSupplySources } from "@/components/branch-supply/sources";
 import { WarehouseItemEntry } from "@/components/warehouse-entry/warehouse-item-entry";
 import { isValidWarehouseDraftItem } from "@/components/warehouse-entry/warehouse-item-entry-helpers";
@@ -144,6 +145,13 @@ export default function TransferRequestsPage() {
   const [isModifyQuantitiesOpen, setIsModifyQuantitiesOpen] = useState(false);
   const [selectedTransfer, setSelectedTransfer] = useState<MaterialTransfer | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const incomingOnly = new URLSearchParams(search).get("direction") === "incoming";
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    if (params.get("from") !== "branch-operations") return;
+    const status = params.get("status");
+    setFilterStatus(STATUS_OPTIONS.some(option => option.value === status) ? status! : "all");
+  }, [search]);
   const [filterBranch, setFilterBranch] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [transferType, setTransferType] = useState<"to_warehouse" | "between_branches">("to_warehouse");
@@ -362,7 +370,9 @@ export default function TransferRequestsPage() {
       return response.json();
     },
     staleTime: 1000 * 60 * 2, // 2 minutes - frequently changing
-    placeholderData: (prev) => prev,
+    placeholderData: undefined,
+    enabled: !navigationBranch.isResolving
+      && (!navigationBranch.hasBranchParam || (!!navigationBranch.branchId && filterBranch === navigationBranch.branchId)),
   });
 
   const createMutation = useMutation({
@@ -568,6 +578,13 @@ export default function TransferRequestsPage() {
     window.dispatchEvent(new PopStateEvent("popstate"));
   }, [branches]);
 
+  useBranchDeskIntent(navigationBranch.branchId,
+    !navigationBranch.isResolving && !permissionsLoading && filterBranch === navigationBranch.branchId,
+    intent => {
+      if (intent === "create" && canCreate("warehouse")) openCreateRequest();
+      if (intent === "receive") setFilterStatus("in_transit");
+    });
+
   const handleViewDetails = (transfer: MaterialTransfer) => {
     setSelectedTransfer(transfer);
     setIsViewOpen(true);
@@ -678,6 +695,7 @@ _مُرسل من BUTTER BAKERY SYSTEM_`;
   };
 
   const filteredTransfers = useMemo(() => transfers.filter(transfer => {
+    if (incomingOnly && transfer.destinationBranchId !== filterBranch) return false;
     // Filter by branch (destination or source)
     if (filterBranch !== "all") {
       const matchesBranch = transfer.destinationBranchId === filterBranch || 
@@ -696,7 +714,7 @@ _مُرسل من BUTTER BAKERY SYSTEM_`;
       );
     }
     return true;
-  }), [transfers, filterBranch, searchQuery]);
+  }), [transfers, filterBranch, searchQuery, incomingOnly]);
 
   // Download PDF only (lazy-loaded)
   const handleDownloadPdf = async () => {
@@ -1287,6 +1305,12 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
             />
           </div>
           <div className="flex gap-2 flex-wrap">
+            {incomingOnly && <Button variant="outline" onClick={() => {
+              const url = new URL(window.location.href);
+              url.searchParams.delete("direction");
+              window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}`);
+              window.dispatchEvent(new PopStateEvent("popstate"));
+            }}>الواردة للفرع فقط · عرض الاتجاهين</Button>}
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-[120px] sm:w-[150px] h-9 sm:h-10" data-testid="filter-status">
                 <Filter className={`w-3 h-3 sm:w-4 sm:h-4 ${isRTL ? "ml-1 sm:ml-2" : "mr-1 sm:mr-2"}`} />

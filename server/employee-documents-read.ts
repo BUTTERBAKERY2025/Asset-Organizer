@@ -66,7 +66,8 @@ const emptyResult = (page: number, pageSize: number) => ({
   page,
   pageSize,
   total: 0,
-  stats: { total: 0, active: 0, expired: 0, expiringSoon: 0, unknown: 0, archived: 0, byType: {} as Record<string, number> },
+  stats: { total: 0, active: 0, expired: 0, expiringSoon: 0, unknown: 0, archived: 0, byType: {} as Record<string, number>,
+    oldestExpiredDate: null as string | null, oldestExpiringSoonDate: null as string | null },
 });
 
 /**
@@ -152,6 +153,8 @@ export async function readEmployeeDocumentMetadata(options: EmployeeDocumentRead
         count(*) filter(where computed_status='expiring_soon')::int expiring_soon,
         count(*) filter(where computed_status='unknown')::int unknown,
         count(*) filter(where computed_status='archived')::int archived,
+        min(expiry_date) filter(where computed_status='expired') oldest_expired_date,
+        min(expiry_date) filter(where computed_status='expiring_soon') oldest_expiring_soon_date,
         (select coalesce(jsonb_object_agg(tc.document_type, tc.amount), '{}'::jsonb)
           from (select document_type, count(*)::int amount from filtered group by document_type) tc
         ) as by_type
@@ -185,6 +188,8 @@ export async function readEmployeeDocumentMetadata(options: EmployeeDocumentRead
       total: Number(first.total), active: Number(first.active), expired: Number(first.expired),
       expiringSoon: Number(first.expiring_soon), unknown: Number(first.unknown),
       archived: Number(first.archived), byType,
+      oldestExpiredDate: (first.oldest_expired_date || null) as string | null,
+      oldestExpiringSoonDate: (first.oldest_expiring_soon_date || null) as string | null,
     },
   };
 }

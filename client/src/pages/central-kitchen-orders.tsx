@@ -17,6 +17,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useBranches } from "@/hooks/useBranches";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
+import { useBranchDeskIntent } from "@/hooks/use-branch-desk-intent";
+import { updateBranchDeskScope } from "@/lib/branch-operation-navigation";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -240,6 +242,11 @@ export default function CentralKitchenOrdersPage() {
     }));
   };
   const createAttemptRef = useRef<{ signature: string; key: string } | null>(null);
+  useBranchDeskIntent(navigationBranch.branchId, !navigationBranch.isResolving && canCreate("central_kitchen_orders"), intent => {
+    if (intent !== "create") return;
+    setDraft(current => ({ ...current, sourceBranchId: navigationBranch.branchId! }));
+    void openCreate();
+  });
   const transitionKeysRef = useRef(new Map<string, { signature: string; key: string }>());
 
   useEffect(() => {
@@ -295,12 +302,14 @@ export default function CentralKitchenOrdersPage() {
   }, [branchFilter, page, stage, sort, search, kitchenFilter, dateFilter, inventoryModeFilter, focus]);
   const ordersQuery = useQuery<KitchenOrderPage>({
     queryKey: [listUrl],
-    enabled: !navigationBranch.isResolving,
+    enabled: !navigationBranch.isResolving
+      && (!navigationBranch.hasBranchParam || (!!navigationBranch.branchId && branchFilter === navigationBranch.branchId)),
     refetchInterval: 30_000,
-    placeholderData: previous => previous,
+    placeholderData: undefined,
   });
   const metricsUrl = `/api/central-kitchen-orders/pilot-metrics?days=${pilotDays}${branchFilter !== "all" ? `&branchId=${encodeURIComponent(branchFilter)}` : ""}`;
-  const metricsQuery = useQuery<PilotMetrics>({ queryKey: [metricsUrl], enabled: !navigationBranch.isResolving });
+  const metricsQuery = useQuery<PilotMetrics>({ queryKey: [metricsUrl], enabled: !navigationBranch.isResolving
+    && (!navigationBranch.hasBranchParam || (!!navigationBranch.branchId && branchFilter === navigationBranch.branchId)) });
   const productsQuery = useQuery<ProductOption[]>({
     queryKey: ["/api/central-kitchen-orders/catalog-v2"],
     queryFn: async () => {
@@ -617,7 +626,7 @@ export default function CentralKitchenOrdersPage() {
             <span className="text-xs text-muted-foreground">{ordersQuery.data?.total || 0} طلب</span>
           </div>
           <div id="kitchen-order-filters" hidden={!filtersOpen} className="grid gap-2 border-b border-border p-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Select value={branchFilter} onValueChange={setBranchFilter}><SelectTrigger disabled={!canSelectBranch}><SelectValue placeholder="فرع المصدر" /></SelectTrigger><SelectContent>{canSelectBranch && <SelectItem value="all">كل الفروع</SelectItem>}{branches.map(branch => <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>)}</SelectContent></Select>
+            <Select value={branchFilter} onValueChange={value => { setBranchFilter(value); updateBranchDeskScope(value); }}><SelectTrigger disabled={!canSelectBranch}><SelectValue placeholder="فرع المصدر" /></SelectTrigger><SelectContent>{canSelectBranch && <SelectItem value="all">كل الفروع</SelectItem>}{branches.map(branch => <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>)}</SelectContent></Select>
             <Select value={kitchenFilter} onValueChange={setKitchenFilter}><SelectTrigger><SelectValue placeholder="المطبخ" /></SelectTrigger><SelectContent><SelectItem value="all">كل المطابخ</SelectItem>{centralKitchens.map(kitchen => <SelectItem key={kitchen.id} value={kitchen.id}>{kitchen.name}</SelectItem>)}</SelectContent></Select>
             <Select value={dateFilter} onValueChange={setDateFilter}><SelectTrigger><SelectValue placeholder="موعد الحاجة" /></SelectTrigger><SelectContent><SelectItem value="all">كل المواعيد</SelectItem><SelectItem value="today">احتياج اليوم</SelectItem><SelectItem value="past">موعد سابق</SelectItem><SelectItem value="future">موعد لاحق</SelectItem></SelectContent></Select>
             <Select value={inventoryModeFilter} onValueChange={changeInventoryModeFilter}><SelectTrigger><SelectValue placeholder="وضع المخزون" /></SelectTrigger><SelectContent><SelectItem value="all">كل أوضاع المخزون</SelectItem><SelectItem value="real">فعلي</SelectItem><SelectItem value="shadow">ظلّي — تشغيلي</SelectItem><SelectItem value="unknown">غير محدد / طلب قديم</SelectItem></SelectContent></Select>

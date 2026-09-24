@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
+import { useSearch } from "wouter";
 import { usePermissions } from "@/hooks/usePermissions";
 import { apiRequest } from "@/lib/queryClient";
 import { 
@@ -163,6 +164,11 @@ export default function DisplayBarWastePage() {
 
   const { branches, canSelectBranch, userBranchId, isLoading: branchesLoading } = useBranches();
   const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
+  const linkedSearch = useSearch();
+  useEffect(() => {
+    const params = new URLSearchParams(linkedSearch);
+    if (params.get("from") === "branch-operations" && params.get("tab") === "waste") setActiveTab("waste");
+  }, [linkedSearch]);
 
   useEffect(() => {
     if (navigationBranch.hasBranchParam) {

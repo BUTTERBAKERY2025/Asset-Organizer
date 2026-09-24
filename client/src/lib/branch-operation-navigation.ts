@@ -17,7 +17,44 @@ export const BRANCH_OPERATION_ROUTES = [
 ] as const;
 
 export function branchOperationDestination(path: string) {
+  if (path === "/cashier-journals/new") return BRANCH_OPERATION_ROUTES.find(route => route.id === "cashier");
   return BRANCH_OPERATION_ROUTES.find((route) => route.path === path);
+}
+
+/** Intent is a UI selection, never authorization or an automatic mutation. */
+export function branchDeskActionUrl(href: string, intent: "create" | "receive") {
+  const url = new URL(href, "https://internal.invalid");
+  if (url.pathname === "/cashier-journals" && intent === "create") {
+    url.pathname = "/cashier-journals/new";
+  } else if (url.pathname === "/display-bar-waste" && intent === "create") {
+    url.searchParams.set("tab", "waste");
+  } else if (url.pathname === "/central-kitchen-orders" && intent === "receive") {
+    url.searchParams.set("stage", "dispatched");
+  } else if (url.pathname === "/transfer-requests" && intent === "receive") {
+    url.searchParams.set("status", "in_transit");
+    url.searchParams.set("direction", "incoming");
+  } else {
+    url.searchParams.set("intent", intent);
+  }
+  return `${url.pathname}${url.search}`;
+}
+
+export function branchDeskDate(value: string | null) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return "";
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : "";
+}
+
+/** Keep the return breadcrumb in sync when a destination's selector changes. */
+export function updateBranchDeskScope(branchId: string) {
+  const url = new URL(window.location.href);
+  if (url.searchParams.get("from") !== "branch-operations") return;
+  if (branchId === "all") {
+    url.searchParams.delete("branchId");
+    url.searchParams.delete("from");
+  } else url.searchParams.set("branchId", branchId);
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
 export function branchOperationUrl(href: string, branchId: string) {

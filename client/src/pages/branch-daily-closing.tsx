@@ -12,7 +12,8 @@ import { useBranches } from "@/hooks/useBranches";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
+import { branchDeskDate, updateBranchDeskScope } from "@/lib/branch-operation-navigation";
 import { Link } from "wouter";
 import { 
   Calendar, 
@@ -135,6 +136,17 @@ export default function BranchDailyClosingPage() {
   const { branches, userBranchId, canSelectBranch, isLoading: branchesLoading } = useBranches();
   const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
   const [, navigate] = useLocation();
+  const linkedSearch = useSearch();
+  useEffect(() => {
+    const params = new URLSearchParams(linkedSearch);
+    const date = branchDeskDate(params.get("date"));
+    if (params.get("from") === "branch-operations" && date) {
+      setSelectedDate(date);
+      setSelectedJournals([]);
+      setExpandedJournals([]);
+      setNotes("");
+    }
+  }, [linkedSearch]);
 
   useEffect(() => {
     if (navigationBranch.hasBranchParam) {
@@ -154,7 +166,8 @@ export default function BranchDailyClosingPage() {
       if (!response.ok) return null;
       return response.json();
     },
-    enabled: !!selectedBranch && !!selectedDate && !navigationBranch.isResolving,
+    enabled: !!selectedBranch && !!selectedDate && !navigationBranch.isResolving
+      && (!navigationBranch.hasBranchParam || selectedBranch === navigationBranch.branchId),
   });
 
   useEffect(() => {
@@ -328,7 +341,7 @@ export default function BranchDailyClosingPage() {
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 p-3 sm:p-4 md:p-6 pt-0">
             <div className="space-y-1 sm:space-y-2">
               <Label className="text-xs sm:text-sm">الفرع</Label>
-              <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+              <Select value={selectedBranch} onValueChange={value => { setSelectedBranch(value); updateBranchDeskScope(value); }}>
                 <SelectTrigger disabled={!canSelectBranch} className="h-11 sm:h-10 text-xs sm:text-sm">
                   <SelectValue placeholder="اختر الفرع" />
                 </SelectTrigger>

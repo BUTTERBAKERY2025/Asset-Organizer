@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 const fakes = vi.hoisted(() => ({
   rows: [] as any[],
+  predicates: [] as any[],
   branchAllowed: true,
   permissions: new Set(["view", "create", "edit", "approve"]),
   storageReady: true,
@@ -15,7 +17,7 @@ vi.mock("../server/db", () => {
   function builder() {
     const value = () => fakes.rows.shift() ?? [];
     const result: any = {
-      from: () => result, where: () => result, orderBy: () => result,
+      from: () => result, where: (predicate: unknown) => { fakes.predicates.push(predicate); return result; }, orderBy: () => result,
       limit: () => result, offset: () => result, set: () => result,
       values: () => result,
       returning: () => Promise.resolve(value()),
@@ -124,6 +126,7 @@ const complaint = {
 describe("branch complaint registered handlers", () => {
   beforeEach(() => {
     fakes.rows.length = 0;
+    fakes.predicates.length = 0;
     fakes.branchAllowed = true;
     fakes.permissions = new Set(["view", "create", "edit", "approve"]);
     fakes.storageReady = true;
@@ -146,6 +149,22 @@ describe("branch complaint registered handlers", () => {
       "GET /api/branch-complaints/:id/attachments/:attachmentId",
       "DELETE /api/branch-complaints/:id/attachments/:attachmentId",
     ]);
+  });
+
+  it("filters overdue notifications and their list destination to unresolved unresponded complaints", async () => {
+    fakes.rows.push([], [{ value: 0 }]);
+    const response = await invoke(route("GET", "/api/branch-complaints"), { query: { branchId: "branch-a", overdue: "true" } });
+    expect(response.statusCode).toBe(200);
+    const queries = fakes.predicates.map(predicate => new PgDialect().sqlToQuery(predicate));
+    const filters = queries.filter(query => query.sql.includes('"first_responded_at" is null'));
+    expect(filters).toHaveLength(2);
+    for (const filter of filters) {
+      expect(filter.params).toContain("branch-a");
+      expect(filter.params).toContain("open");
+      expect(filter.params).toContain("in_progress");
+      expect(filter.params).not.toContain("resolved");
+      expect(filter.sql).toContain('"response_due" <');
+    }
   });
 
   it("rejects unauthenticated and revoked-view requests before handlers", async () => {

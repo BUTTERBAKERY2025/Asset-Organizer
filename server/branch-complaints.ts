@@ -1,6 +1,6 @@
 import type { Express, Request, RequestHandler, Response } from "express";
 import multer from "multer";
-import { and, count, desc, eq, inArray, isNull, lt, ne } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import {
   branchComplaintAttachments,
   branchComplaintEvents,
@@ -144,10 +144,10 @@ export function registerBranchComplaintRoutes(app: Express): void {
       const now = new Date();
       const [open, overdue] = await Promise.all([
         db.select({ value: count() }).from(branchComplaints).where(and(
-          eq(branchComplaints.branchId, branchId), inArray(branchComplaints.status, ["open", "in_progress", "resolved"]),
+          eq(branchComplaints.branchId, branchId), inArray(branchComplaints.status, ["open", "in_progress"]),
         )),
         db.select({ value: count() }).from(branchComplaints).where(and(
-          eq(branchComplaints.branchId, branchId), ne(branchComplaints.status, "closed"),
+          eq(branchComplaints.branchId, branchId), inArray(branchComplaints.status, ["open", "in_progress"]),
           lt(branchComplaints.responseDue, now), isNull(branchComplaints.firstRespondedAt),
         )),
       ]);
@@ -176,6 +176,11 @@ export function registerBranchComplaintRoutes(app: Express): void {
       const { branchId, page, status, priority, owner } = parsed.data;
       if (!(await canAccessBranch(req, branchId))) return res.status(403).json({ message: "غير مسموح بالوصول إلى الفرع" });
       const filters = [eq(branchComplaints.branchId, branchId)];
+      if (req.query.overdue === "true") filters.push(
+        inArray(branchComplaints.status, ["open", "in_progress"]),
+        isNull(branchComplaints.firstRespondedAt),
+        lt(branchComplaints.responseDue, new Date()),
+      );
       if (status) filters.push(eq(branchComplaints.status, status));
       if (priority) filters.push(eq(branchComplaints.priority, priority));
       if (owner) filters.push(eq(branchComplaints.ownerUserId, owner));

@@ -82,7 +82,17 @@ export default function EmployeeAttendanceReportPage() {
   const [search, setSearch] = useState("");
   const [branchFilter, setBranchFilter] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [month, setMonth] = useState(currentMonth());
+  const linkedDates = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const start = params.get("startDate") || "";
+    const end = params.get("endDate") || "";
+    const valid = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date)
+      && Number.isFinite(Date.parse(`${date}T00:00:00Z`))
+      && new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
+    return valid(start) && valid(end) && start <= end && start.slice(0, 7) === end.slice(0, 7)
+      ? { start, end } : null;
+  }, []);
+  const [month, setMonth] = useState(linkedDates?.start.slice(0, 7) || currentMonth());
   const [activeEmployeeId, setActiveEmployeeId] = useState<string | null>(null);
   const [activeMonth, setActiveMonth] = useState<string | null>(null);
 
@@ -134,7 +144,10 @@ export default function EmployeeAttendanceReportPage() {
   }, [employees, search]);
 
   const reportUrl = activeEmployeeId && activeMonth
-    ? `/api/employee-attendance-report?employeeId=${encodeURIComponent(activeEmployeeId)}&month=${activeMonth}${
+    ? `/api/employee-attendance-report?employeeId=${encodeURIComponent(activeEmployeeId)}&${
+        linkedDates && activeMonth === linkedDates.start.slice(0, 7)
+          ? `startDate=${linkedDates.start}&endDate=${linkedDates.end}` : `month=${activeMonth}`
+      }${
         branchFilter !== "all" ? `&branchId=${encodeURIComponent(branchFilter)}` : ""
       }`
     : null;
@@ -334,6 +347,11 @@ export default function EmployeeAttendanceReportPage() {
             </div>
             <div className="flex flex-col">
               <label className="text-sm font-medium mb-1.5 block">الشهر</label>
+              {linkedDates && month === linkedDates.start.slice(0, 7) && (
+                <p className="text-sm text-muted-foreground mb-2">
+                  متابعة لوحة الفرع: {linkedDates.start} — {linkedDates.end}. اختر الموظف لعرض سجلاته في هذا النطاق.
+                </p>
+              )}
               <Input
                 type="month"
                 value={month}

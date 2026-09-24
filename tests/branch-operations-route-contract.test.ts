@@ -12,12 +12,14 @@ const fakes = vi.hoisted(() => ({
   kitchenReceiver: false,
   predicates: [] as any[],
   selections: [] as any[],
+  joins: [] as any[],
 }));
 
 function queryBuilder() {
   const builder: any = {
     from: () => builder,
     innerJoin: () => builder,
+    leftJoin: (_table: unknown, predicate: unknown) => { fakes.joins.push(predicate); return builder; },
     where: (predicate: unknown) => { fakes.predicates.push(predicate); return builder; },
     groupBy: () => builder,
     orderBy: () => builder,
@@ -125,6 +127,7 @@ describe("registered branch operations summary handler", () => {
     fakes.kitchenReceiver = false;
     fakes.predicates = [];
     fakes.selections = [];
+    fakes.joins = [];
   });
 
   it("rejects all-branch requests before any database or permission query", async () => {
@@ -140,7 +143,7 @@ describe("registered branch operations summary handler", () => {
     fakes.branchAllowed = false;
     const response = await request({ id: "employee", role: "employee" });
     expect(response.statusCode).toBe(403);
-    expect(fakes.selectCalls).toBe(1);
+    expect(fakes.selectCalls).toBe(0);
     expect(fakes.permissionCalls).toEqual([]);
   });
 
@@ -252,6 +255,59 @@ describe("registered branch operations summary handler", () => {
     const open = dialect.sqlToQuery(fakes.predicates[1]);
     expect(open.params).toEqual(["branch-a", "open", "in_progress"]);
     expect(dialect.sqlToQuery(fakes.predicates[3]).sql).toContain('"first_responded_at" is null');
+    expect(dialect.sqlToQuery(fakes.predicates[3]).params).toContain("in_progress");
+    expect(dialect.sqlToQuery(fakes.predicates[3]).params).not.toContain("resolved");
+    expect(response.body.cards[0].alerts[0].href).toContain("overdue=true");
+  });
+
+  it("scopes cashier counters and backlog to the current actor without approve authority", async () => {
+    fakes.modules = ["cashier_journal"];
+    fakes.allowMaintenance = false;
+    fakes.rows.push([{ id: "branch-a" }], [{ status: "draft", value: 1 }],
+      [{ status: "draft", value: 2, oldestDate: "2026-01-01" }, { status: "rejected", value: 1, oldestDate: "2026-02-01" }]);
+    const response = await request({ id: "cashier-a", role: "employee" });
+    const dialect = new PgDialect();
+    for (const predicate of fakes.predicates.slice(1)) expect(dialect.sqlToQuery(predicate).params).toContain("cashier-a");
+    const card = response.body.cards[0];
+    expect(card.alerts[0].href).toContain("status=draft&startDate=2026-01-01");
+    expect(card.alerts[1].description).toContain("لا يدعم");
+    expect(card.alerts.every((alert: any) => !alert.dueAt)).toBe(true);
+  });
+
+  it("does not query schedules without shifts permission", async () => {
+    fakes.modules = ["attendance"];
+    fakes.allowMaintenance = false;
+    fakes.rows.push([{ id: "branch-a" }], []);
+    const response = await request({ id: "employee", role: "employee" });
+    expect(fakes.selectCalls).toBe(2);
+    expect(response.body.cards[0].statusLabel).toContain("تتطلب صلاحية");
+    expect(response.body.cards[0].metrics.some((metric: any) => metric.label.includes("مجدول"))).toBe(false);
+    const identitySql = new PgDialect().sqlToQuery(fakes.joins[0]).sql;
+    expect(identitySql).toContain('"attendance_records"."branch_employee_id"');
+    expect(identitySql).toContain("^branch_emp_[0-9]+$");
+    expect(identitySql).toContain("linked_user_id");
+    expect(identitySql).not.toContain("employee_name");
+  });
+
+  it("queries branch/day scoped schedules only with a shifts grant and no fabricated missing schedules", async () => {
+    fakes.modules = ["attendance", "shifts"];
+    fakes.allowMaintenance = false;
+    fakes.rows.push([{ id: "branch-a" }], [], []);
+    const response = await request({ id: "employee", role: "employee" });
+    expect(fakes.selectCalls).toBe(3);
+    const dialect = new PgDialect();
+    for (const predicate of fakes.predicates.slice(1)) {
+      expect(dialect.sqlToQuery(predicate).params).toEqual(["branch-a", response.body.businessDate]);
+    }
+    expect(response.body.cards[0]).toMatchObject({ state: "ready", statusLabel: "لا توجد جدولة محفوظة اليوم", alerts: [] });
+  });
+
+  it("returns error with no false zero attendance counters if the source fails", async () => {
+    fakes.modules = ["attendance"];
+    fakes.allowMaintenance = false;
+    fakes.rows.push([{ id: "branch-a" }], new Error("attendance unavailable"));
+    const response = await request({ id: "employee", role: "employee" });
+    expect(response.body.cards[0]).toMatchObject({ state: "error", metrics: [], alerts: [] });
   });
 
   it("keeps approved advances out of pending stages and does not invent actor actions", async () => {

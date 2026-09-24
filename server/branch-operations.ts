@@ -1,5 +1,5 @@
 import type { Express, Request } from "express";
-import { and, count, desc, eq, inArray, lt, ne, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, lt, lte, gte, ne, or, sql } from "drizzle-orm";
 import {
   advanceRequests,
   branchDailyClosures,
@@ -14,6 +14,9 @@ import {
   branchMonthlyTargets,
   targetDailyAllocations,
   purchasingRequests,
+  employeeSchedules,
+  attendanceRecords,
+  leaveRequests,
 } from "@shared/schema";
 import type {
   BranchOperationsCard,
@@ -23,6 +26,7 @@ import { db } from "./db";
 import { storage } from "./storage";
 import { readEmployeeDocumentMetadata } from "./employee-documents-read";
 import { kitchenActionAllowed } from "./central-kitchen-routing";
+import { summarizeBranchAttendance } from "./branch-attendance-summary";
 import {
   BRANCH_MANAGER_INTRINSIC_PERMISSIONS,
   FINANCIAL_MANAGER_PERMISSIONS,
@@ -65,14 +69,14 @@ const definitions: CardDefinition[] = [
         )),
         db.select({ value: count(), oldestDue: sql<string | Date | null>`min(${branchComplaints.responseDue})` }).from(branchComplaints).where(and(
           eq(branchComplaints.branchId, branchId),
-          ne(branchComplaints.status, "closed"),
+          inArray(branchComplaints.status, ["open", "in_progress"]),
           lt(branchComplaints.responseDue, now),
           sql`${branchComplaints.firstRespondedAt} is null`,
         )),
       ]);
       const openCount = Number(open.value);
       const overdueCount = Number(overdue.value);
-      const href = branchHref("/branch-complaints", branchId);
+      const href = branchHref("/branch-complaints?overdue=true", branchId);
       return {
         metrics: [{ label: "مفتوحة وقيد المعالجة", value: openCount }, { label: "محلولة بانتظار الإغلاق", value: Number(resolved.value) }, { label: "تجاوزت موعد الرد الأول", value: overdueCount }],
         alerts: overdueCount ? [{ label: "شكاوى متأخرة بلا رد أول (أقدم موعد)", count: overdueCount, href, priority: "high",
@@ -116,7 +120,13 @@ const definitions: CardDefinition[] = [
   {
     id: "kitchen", title: "طلبات المطبخ", group: "operations", module: "central_kitchen_orders", href: "/central-kitchen-orders",
     load: async (branchId, _businessDate, req) => {
-      const rows = await db.select({ status: centralKitchenOrders.status, value: count() })
+      const rows = await db.select({ status: centralKitchenOrders.status, value: count(),
+        oldestNeededDate: sql<string | null>`min(${centralKitchenOrders.neededDate})`,
+        oldestDue: sql<string | Date | null>`min(case
+          when ${centralKitchenOrders.neededDate} is not null
+            and ${centralKitchenOrders.neededTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$'
+          then (${centralKitchenOrders.neededDate}::text || ' ' || ${centralKitchenOrders.neededTime})::timestamp at time zone 'Asia/Riyadh'
+          end)` })
         .from(centralKitchenOrders)
         .where(and(
           eq(centralKitchenOrders.requestBranchId, branchId),
@@ -125,14 +135,19 @@ const definitions: CardDefinition[] = [
         .groupBy(centralKitchenOrders.status);
       const counts = new Map(rows.map((row) => [row.status, Number(row.value)]));
       const incoming = counts.get("dispatched") || 0;
+      const dispatched = rows.find(row => row.status === "dispatched");
       const canReceive = incoming > 0 && await hasEffectiveViewPermission(req, "central_kitchen_orders", "edit")
         && await kitchenActionAllowed(db, req.currentUser!.id, { requestBranchId: branchId }, "receive");
-      const href = branchHref("/central-kitchen-orders", branchId);
+      const href = branchHref("/central-kitchen-orders?status=dispatched", branchId);
       return {
         metrics: ["requested", "approved", "prepared", "dispatched"].map((status, index) => ({
           label: ["مطلوبة", "معتمدة", "مجهزة", "مرسلة للفرع"][index], value: counts.get(status) || 0,
         })),
-        alerts: canReceive ? [{ label: "طلبات يمكنك استلامها", count: incoming, href, priority: "normal", actionLabel: "تأكيد الاستلام" }] : [],
+        alerts: canReceive ? [{ label: "طلبات يمكنك استلامها", count: incoming, href, priority: "normal", actionLabel: "تأكيد الاستلام",
+          dueAt: dispatched?.oldestDue ? new Date(dispatched.oldestDue).toISOString() : undefined,
+          description: dispatched?.oldestNeededDate
+            ? `أقدم تاريخ احتياج: ${dispatched.oldestNeededDate}؛ الوقت المعروض إن وجد هو أقدم وقت احتياج محدد، وليس موعد وصول مؤكداً.`
+            : "لم يحدد وقت احتياج؛ تحقق من وصول الشحنة قبل تأكيد الاستلام." }] : [],
         description: "مراحل طلبات الفرع؛ يظهر إجراء الاستلام للمستلم المخول فقط.",
       };
     },
@@ -148,7 +163,7 @@ const definitions: CardDefinition[] = [
         eq(branchDailyClosures.branchId, branchId), lt(branchDailyClosures.closureDate, businessDate), ne(branchDailyClosures.status, "closed"),
       ));
       const overdue = Number(previous.value);
-      const href = branchHref("/branch-daily-closing", branchId);
+      const href = branchHref(`/branch-daily-closing${previous.oldestDate ? `?date=${encodeURIComponent(previous.oldestDate)}` : ""}`, branchId);
       return {
         statusLabel: !closure ? "لم يبدأ إغلاق اليوم" : closure.status === "closed" ? "إغلاق اليوم مكتمل" : "إغلاق اليوم قيد الإكمال",
         metrics: [{ label: "إغلاقات سابقة غير مكتملة", value: overdue }],
@@ -183,13 +198,35 @@ const definitions: CardDefinition[] = [
         description: "نفس مصدر تحليلات المبيعات، وليس إجمالي مبيعات نقاط البيع المباشر." };
     } },
   { id: "cashier", title: "يوميات الكاشير", group: "sales", module: "cashier_journal", href: "/cashier-journals",
-    load: async (branchId, businessDate) => {
+    load: async (branchId, businessDate, req) => {
+      // Match cashier route actor scope, not generic role/intrinsic approve grants.
+      const user = req.currentUser!;
+      const allCashiers = ["admin", "manager"].includes(user.role)
+        || await storage.hasPermission(user.id, "cashier_performance", "approve")
+        || await storage.hasPermission(user.id, "cashier_journal", "approve");
+      const canEdit = await hasEffectiveViewPermission(req, "cashier_journal", "edit");
+      const actor = allCashiers ? undefined : eq(cashierSalesJournals.cashierId, user.id);
       const rows = await db.select({ status: cashierSalesJournals.status, value: count() }).from(cashierSalesJournals)
-        .where(and(eq(cashierSalesJournals.branchId, branchId), eq(cashierSalesJournals.journalDate, businessDate)))
+        .where(and(eq(cashierSalesJournals.branchId, branchId), eq(cashierSalesJournals.journalDate, businessDate), actor))
+        .groupBy(cashierSalesJournals.status);
+      const pending = await db.select({ status: cashierSalesJournals.status, value: count(),
+        oldestDate: sql<string>`min(${cashierSalesJournals.journalDate})` }).from(cashierSalesJournals)
+        .where(and(eq(cashierSalesJournals.branchId, branchId), lte(cashierSalesJournals.journalDate, businessDate),
+          inArray(cashierSalesJournals.status, ["draft", "rejected"]), actor))
         .groupBy(cashierSalesJournals.status);
       const labels: Record<string, string> = { draft: "مسودة", submitted: "بانتظار الاعتماد", approved: "معتمدة", posted: "مرحلة", rejected: "مرفوضة" };
       return { metrics: rows.map(row => ({ label: labels[row.status] || row.status, value: Number(row.value) })),
-        alerts: [], statusLabel: rows.length ? "يوميات اليوم" : "لا توجد يوميات اليوم" };
+        alerts: pending.filter(row => Number(row.value) > 0).map(row => ({
+          label: row.status === "draft" ? "مسودات تحتاج المراجعة والإكمال" : "يوميات مرفوضة تحتاج متابعة",
+          count: Number(row.value), priority: "normal" as const,
+          href: branchHref(`/cashier-journals?status=${row.status}&startDate=${row.oldestDate}&endDate=${businessDate}`, branchId),
+          actionLabel: row.status === "draft" && canEdit ? "مراجعة المسودات" : "عرض المتابعة",
+          description: row.status === "rejected"
+            ? `أقدم يومية: ${row.oldestDate}. راجع سبب الرفض مع المراجع؛ لا يدعم المسار الحالي إعادة المرفوضة إلى مسودة.`
+            : `أقدم يومية: ${row.oldestDate}. تاريخ اليومية ليس موعد استحقاق؛ الإكمال والتقديم يخضعان لصلاحيات اليومية وحالة الإغلاق.`,
+        })),
+        statusLabel: rows.length ? "يوميات اليوم" : "لا توجد يوميات اليوم",
+        description: allCashiers ? "أرقام اليوم لكل الكاشيرات؛ المتابعة تشمل المسودات والمرفوضة السابقة." : "يومياتك فقط؛ المتابعة تشمل المسودات والمرفوضة السابقة." };
     } },
   { id: "warehouse", title: "تحويلات المستودع", group: "operations", module: "warehouse", href: "/transfer-requests",
     load: async (branchId, _businessDate, req) => {
@@ -202,13 +239,55 @@ const definitions: CardDefinition[] = [
       const outgoing = rows.filter(r => r.source === branchId).reduce((sum, r) => sum + Number(r.value), 0);
       const canReceive = incoming > 0 && await hasEffectiveViewPermission(req, "warehouse", "edit");
       return { metrics: [{ label: "واردة بانتظار الاستلام", value: incoming }, { label: "تحويلات صادرة مفتوحة", value: outgoing }],
-        alerts: canReceive ? [{ label: "تحويلات يمكنك استلامها", count: incoming, href: branchHref("/transfer-requests", branchId),
+        alerts: canReceive ? [{ label: "تحويلات يمكنك استلامها", count: incoming, href: branchHref("/transfer-requests?status=in_transit&direction=incoming", branchId),
           priority: "normal", actionLabel: "تأكيد الاستلام" }] : [],
         description: "سجل تحويلات المواد مستقل عن طلبات المطبخ؛ الاستلام للفرع الوجهة فقط." };
     } },
   { id: "attendance", title: "الحضور والورديات", group: "people", module: "attendance", href: "/employee-attendance-report",
-    load: async () => ({ metrics: [], alerts: [], statusLabel: "عرض تقرير الحضور",
-      description: "راجع التقرير للتحقق من هوية الموظف وسجلات الحضور؛ عدد الموظفين النشطين ليس تغطية وردية." }) },
+    load: async (branchId, businessDate, req) => {
+      const canReadSchedules = await hasEffectiveViewPermission(req, "shifts");
+      // Resolve all legacy identities against a real profile, including transferred
+      // staff. Only attendance/schedules from the authorized branch are read.
+      const identity = (table: typeof employeeSchedules | typeof attendanceRecords) =>
+        eq(branchEmployees.id, sql<number>`coalesce(${table.branchEmployeeId},
+          case when ${table.employeeId} ~ '^branch_emp_[0-9]+$'
+            then substring(${table.employeeId} from 12)::integer end,
+          (select be.id from branch_employees be where be.linked_user_id = ${table.employeeId} limit 1))`);
+      const [schedules, records] = await Promise.all([
+        canReadSchedules ? db.select({ id: employeeSchedules.id, branchId: employeeSchedules.branchId, scheduleDate: employeeSchedules.scheduleDate,
+          canonicalId: branchEmployees.id, startTime: employeeSchedules.startTime, isOff: employeeSchedules.isOff, status: employeeSchedules.status })
+          .from(employeeSchedules).leftJoin(branchEmployees, identity(employeeSchedules))
+          .where(and(eq(employeeSchedules.branchId, branchId), eq(employeeSchedules.scheduleDate, businessDate))) : Promise.resolve([]),
+        db.select({ id: attendanceRecords.id, branchId: attendanceRecords.branchId, attendanceDate: attendanceRecords.attendanceDate,
+          canonicalId: branchEmployees.id, actualCheckIn: attendanceRecords.actualCheckIn, actualCheckOut: attendanceRecords.actualCheckOut, status: attendanceRecords.status })
+          .from(attendanceRecords).leftJoin(branchEmployees, identity(attendanceRecords))
+          .where(and(eq(attendanceRecords.branchId, branchId), eq(attendanceRecords.attendanceDate, businessDate))),
+      ]);
+      const ids = [...new Set(schedules.flatMap(row => row.canonicalId == null ? [] : [row.canonicalId]))];
+      const leaves = ids.length ? await db.select({ id: leaveRequests.branchEmployeeId }).from(leaveRequests)
+        .where(and(inArray(leaveRequests.branchEmployeeId, ids), eq(leaveRequests.status, "approved"),
+          lte(leaveRequests.startDate, businessDate), gte(leaveRequests.endDate, businessDate))) : [];
+      const summary = summarizeBranchAttendance(branchId, businessDate, new Date(), schedules, records, leaves.map(row => row.id));
+      return {
+        statusLabel: !canReadSchedules ? "الحضور المسجل؛ الجدولة تتطلب صلاحية الورديات" : !schedules.length ? "لا توجد جدولة محفوظة اليوم" : "الجدولة والحضور المسجل اليوم",
+        metrics: [
+          ...(canReadSchedules ? [
+            { label: "مجدولون للعمل (بعد استبعاد الإجازات)", value: summary.scheduled },
+            { label: "حضور مسجل من المجدولين", value: summary.scheduledArrived },
+            { label: "لم يبدأ موعدهم بعد", value: summary.future },
+            { label: "جدولة بلا وقت صالح", value: summary.unknownTime },
+          ] : []),
+          { label: "إجمالي حضور مسجل بهوية موحدة", value: summary.arrived },
+          { label: "حضور دون انصراف مسجل", value: summary.open },
+          { label: "سجلات بهوية غير مرتبطة", value: summary.unresolved },
+        ],
+        alerts: summary.awaiting ? [{ label: "بدأ موعدهم دون حضور مسجل", count: summary.awaiting,
+          href: branchHref(`/employee-attendance-report?startDate=${businessDate}&endDate=${businessDate}`, branchId),
+          priority: "normal", dueAt: summary.oldestDue, actionLabel: "مراجعة الحضور",
+          description: "أقدم بداية دوام محفوظة؛ ليست إثبات غياب أو خصماً. تحقق من الإدخال والهوية والجدولة." }] : [],
+        description: "اليوم حسب توقيت السعودية. التغطية تخص الجدولة المحفوظة فقط، لا جميع العاملين. السجلات غير المرتبطة لا تدخل الأعداد الموحدة؛ تعذر المصدر يظهر خطأ لا صفراً.",
+      };
+    } },
   {
     id: "employees", title: "الموظفون", group: "people", module: "branch_employees", href: "/branch-employees",
     load: async (branchId) => {
@@ -232,9 +311,9 @@ const definitions: CardDefinition[] = [
         metrics: [{ label: "منتهية", value: expiredCount }, { label: "تنتهي خلال 30 يوماً", value: soonCount }],
         alerts: [
           ...(expiredCount ? [{ label: "وثائق منتهية", count: expiredCount, href: hrefFor("expired"), priority: "high" as const,
-            actionLabel: "عرض المتابعة", description: "عرض الوثائق المنتهية؛ تعديلها يتطلب صلاحية مستقلة." }] : []),
+            actionLabel: "عرض المتابعة", description: `عرض الوثائق المنتهية؛ تعديلها يتطلب صلاحية مستقلة.${result.stats.oldestExpiredDate ? ` أقدم انتهاء: ${result.stats.oldestExpiredDate}.` : ""}` }] : []),
           ...(soonCount ? [{ label: "وثائق قاربت على الانتهاء", count: soonCount, href: hrefFor("expiring_soon"), priority: "low" as const,
-            actionLabel: "عرض المتابعة", description: "تنبيه مبكر للوثائق التي تنتهي خلال 30 يوماً، وليس إجراءً متأخراً." }] : []),
+            actionLabel: "عرض المتابعة", description: `تنبيه مبكر للوثائق التي تنتهي خلال 30 يوماً، وليس إجراءً متأخراً.${result.stats.oldestExpiringSoonDate ? ` أقرب انتهاء: ${result.stats.oldestExpiringSoonDate}.` : ""}` }] : []),
         ],
       };
     },
@@ -289,8 +368,11 @@ export function registerBranchOperationsRoute(app: Express): void {
       return res.status(400).json({ message: "branchId مطلوب ويجب أن يحدد فرعاً واحداً" });
     }
 
+    if (!(await canAccessBranch(req, branchId))) {
+      return res.status(403).json({ message: "غير مسموح بالوصول إلى الفرع" });
+    }
     const [branch] = await db.select({ id: branches.id }).from(branches).where(eq(branches.id, branchId)).limit(1);
-    if (!branch || !(await canAccessBranch(req, branchId))) {
+    if (!branch) {
       return res.status(403).json({ message: "غير مسموح بالوصول إلى الفرع" });
     }
 

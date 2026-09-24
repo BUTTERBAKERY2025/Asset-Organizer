@@ -12,6 +12,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
+import { useBranchNavigation } from "@/hooks/use-branch-navigation";
+import { branchOperationUrl } from "@/lib/branch-operation-navigation";
 import { useLocation, useParams, Link } from "wouter";
 import { ArrowRight, Save, Send, Plus, Trash2, Wallet, CreditCard, Smartphone, Truck, AlertCircle, AlertTriangle, CheckCircle, Calculator, Users, Receipt, Camera, ImageIcon, X, Upload, FileDown, Copy, RotateCcw, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, ChevronDown, Maximize2, Store, CalendarDays, Clock, User, TrendingUp, ClipboardList } from "lucide-react";
 import {
@@ -462,7 +464,7 @@ export default function CashierJournalFormPage() {
         ...prev,
         cashierName: getUserDisplayName(),
         cashierId: user.id,
-        branchId: user.branchId || prev.branchId,
+        branchId: prev.branchId || user.branchId || "",
       }));
     }
   }, [user, isEdit]);
@@ -537,7 +539,15 @@ export default function CashierJournalFormPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [lightboxOpen, closeLightbox, navigateLightbox]);
 
-  const { branches: filteredBranches, userBranchId, canSelectBranch } = useBranches();
+  const { branches: filteredBranches, userBranchId, canSelectBranch, isLoading: branchesLoading } = useBranches();
+  const navigationBranch = useBranchNavigation(filteredBranches, branchesLoading, userBranchId);
+  const journalListUrl = navigationBranch.hasBranchParam && navigationBranch.branchId
+    ? branchOperationUrl("/cashier-journals", navigationBranch.branchId) : "/cashier-journals";
+  useEffect(() => {
+    if (!isEdit && !navigationBranch.isResolving && navigationBranch.branchId) {
+      setFormData(prev => ({ ...prev, branchId: navigationBranch.branchId! }));
+    }
+  }, [isEdit, navigationBranch.isResolving, navigationBranch.branchId]);
 
   useEffect(() => {
     if (userBranchId && !formData.branchId && !isEdit) {
@@ -793,7 +803,7 @@ export default function CashierJournalFormPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals"] });
       queryClient.invalidateQueries({ queryKey: [`/api/cashier-journals/${id}`] });
       toast({ title: "تم تحديث اليومية بنجاح" });
-      setLocation("/cashier-journals");
+      setLocation(journalListUrl);
     },
     onError: (err: any) => {
       toast({
@@ -810,7 +820,7 @@ export default function CashierJournalFormPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals"] });
       toast({ title: "تم تقديم اليومية للمراجعة" });
-      setLocation("/cashier-journals");
+      setLocation(journalListUrl);
     },
     onError: () => {
       toast({ title: "خطأ", description: "فشل في تقديم اليومية", variant: "destructive" });
@@ -824,7 +834,7 @@ export default function CashierJournalFormPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals"] });
       queryClient.invalidateQueries({ queryKey: [`/api/cashier-journals/${id}`] });
       toast({ title: "تم ترحيل اليومية بنجاح", description: "لم يعد بإمكانك تعديل هذه اليومية" });
-      setLocation("/cashier-journals");
+      setLocation(journalListUrl);
     },
     onError: () => {
       toast({ title: "خطأ", description: "فشل في ترحيل اليومية", variant: "destructive" });
@@ -1399,7 +1409,9 @@ export default function CashierJournalFormPage() {
   };
 
   // Allow saving drafts even with mismatch, and allow posting with variance (after confirmation)
-  const canSave = formData.totalSales > 0 && formData.branchId && formData.cashierName;
+  const canSave = formData.totalSales > 0 && formData.branchId && formData.cashierName
+    && !navigationBranch.isResolving
+    && (isEdit || filteredBranches.some(branch => branch.id === formData.branchId));
   const canPost = canSave; // Allow posting with variance - confirmation dialog will be shown
 
   const getDiscrepancyAnalysis = () => {
@@ -1838,7 +1850,7 @@ export default function CashierJournalFormPage() {
       <div className="page-container space-y-2" dir="rtl">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Link href="/cashier-journals">
+            <Link href={journalListUrl}>
               <Button variant="ghost" size="sm" className="h-8 w-8" data-testid="button-back">
                 <ArrowRight className="w-4 h-4" />
               </Button>
@@ -3253,7 +3265,7 @@ export default function CashierJournalFormPage() {
                 <Button
                   variant="outline"
                   className="w-full gap-2 h-12"
-                  onClick={() => setLocation("/cashier-journals")}
+                  onClick={() => setLocation(journalListUrl)}
                   data-testid="button-back-list"
                 >
                   <ArrowRight className="w-4 h-4" />
@@ -3395,7 +3407,7 @@ export default function CashierJournalFormPage() {
                   variant="outline"
                   size="default"
                   className="gap-1.5 h-9 px-4 text-sm"
-                  onClick={() => setLocation("/cashier-journals")}
+                  onClick={() => setLocation(journalListUrl)}
                 >
                   <ArrowRight className="w-4 h-4" />
                   العودة

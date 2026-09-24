@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PlatformAppIcon, type SemanticColor } from "@/components/platform-app-icon";
+import { branchDeskActionUrl } from "@/lib/branch-operation-navigation";
 
 export type OperationCard = {
   id: string;
@@ -174,9 +175,9 @@ export function QuickActions({ cards, onOpen }: { cards: OperationCard[]; onOpen
     <div className="flex flex-wrap items-start gap-2">
       {["طلب احتياجات", "الاستلام"].map(label => supplies.length > 0 && <details key={label} className="rounded-xl border bg-card px-3 py-2">
         <summary className="min-h-7 cursor-pointer text-sm font-semibold">{label}</summary>
-        <div className="mt-2 flex flex-col gap-1">{supplies.map(card => <Button key={card.id} variant="ghost" className="min-h-11 justify-start" onClick={() => onOpen(card.href)}>فتح {card.id === "kitchen" ? "طلبات المطبخ" : "تحويلات المستودع الرئيسي"}</Button>)}</div>
+        <div className="mt-2 flex flex-col gap-1">{supplies.map(card => <Button key={card.id} variant="ghost" className="min-h-11 justify-start" onClick={() => onOpen(branchDeskActionUrl(card.href, label === "الاستلام" ? "receive" : "create"))}>فتح {card.id === "kitchen" ? "طلبات المطبخ" : "تحويلات المستودع الرئيسي"}</Button>)}</div>
       </details>)}
-      {direct.map(card => <Button key={card.id} variant="outline" className="min-h-11" onClick={() => onOpen(card.href)}>فتح {card.title}</Button>)}
+      {direct.map(card => <Button key={card.id} variant="outline" className="min-h-11" onClick={() => onOpen(["complaints", "cashier", "waste"].includes(card.id) ? branchDeskActionUrl(card.href, "create") : card.href)}>فتح {card.title}</Button>)}
     </div>
     <p className="mt-2 text-xs text-muted-foreground">تفتح صفحة العمل للفرع الحالي؛ إنشاء الطلب أو تسجيل الاستلام حسب صلاحياتك داخل الصفحة.</p>
   </section>;
@@ -209,7 +210,7 @@ export function NeedsActionStrip({ branchId, cards, onOpen }: { branchId: string
         </div>;
       })}
       {actions.length > 4 && <button type="button" className="min-h-11 px-2 text-xs font-black text-primary" onClick={() => setExpanded(value => !value)} data-testid="button-toggle-branch-actions">{expanded ? "عرض أقل" : `عرض المزيد (${actions.length - 4})`}</button>}
-    </div> : <p className="mt-2 text-sm text-muted-foreground" data-testid="branch-operations-actions-empty">{allReady ? "لا توجد إجراءات معلقة ضمن الوحدات المتاحة." : "تعذر التحقق من بعض الوحدات؛ أعد المحاولة قبل اعتبار يوم العمل مكتملًا."}</p>}
+    </div> : <p className="mt-2 text-sm text-muted-foreground" data-testid="branch-operations-actions-empty">{cards.length === 0 ? "لا توجد وحدات مسموحة للتحقق من إجراءاتها." : allReady ? "لا توجد إجراءات معلقة ضمن الوحدات المتاحة." : "تعذر التحقق من بعض الوحدات؛ أعد المحاولة قبل اعتبار يوم العمل مكتملًا."}</p>}
     {actions.length > 0 && !allReady && <p className="mt-3 text-xs text-destructive" role="status">تعذر التحقق من بعض الوحدات؛ القائمة غير مكتملة حتى إعادة المحاولة.</p>}
   </section>;
 }
