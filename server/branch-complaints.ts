@@ -1,6 +1,6 @@
 import type { Express, Request, RequestHandler, Response } from "express";
 import multer from "multer";
-import { and, count, desc, eq, inArray, isNull, lt } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import {
   branchComplaintAttachments,
   branchComplaintEvents,
@@ -173,13 +173,18 @@ export function registerBranchComplaintRoutes(app: Express): void {
     try {
       const parsed = branchComplaintListQuerySchema.safeParse(req.query);
       if (!parsed.success) return validationError(res, parsed.error);
-      const { branchId, page, status, priority, owner } = parsed.data;
+      const { branchId, page, status, priority, owner, unresolved, overdue } = parsed.data;
       if (!(await canAccessBranch(req, branchId))) return res.status(403).json({ message: "غير مسموح بالوصول إلى الفرع" });
       const filters = [eq(branchComplaints.branchId, branchId)];
-      if (req.query.overdue === "true") filters.push(
+      if (unresolved === "true" || overdue === "true") filters.push(
         inArray(branchComplaints.status, ["open", "in_progress"]),
+      );
+      if (overdue === "true") filters.push(
         isNull(branchComplaints.firstRespondedAt),
         lt(branchComplaints.responseDue, new Date()),
+      );
+      if (unresolved === "true" && overdue === "false") filters.push(
+        or(isNotNull(branchComplaints.firstRespondedAt), gte(branchComplaints.responseDue, new Date())),
       );
       if (status) filters.push(eq(branchComplaints.status, status));
       if (priority) filters.push(eq(branchComplaints.priority, priority));

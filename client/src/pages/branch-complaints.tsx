@@ -133,12 +133,14 @@ export default function BranchComplaintsPage() {
   const linkedSearch = useSearch();
   const params = new URLSearchParams(linkedSearch);
   const overdueOnly = params.get("overdue") === "true";
+  const unresolvedOnly = params.get("unresolved") === "true";
+  const excludeOverdue = unresolvedOnly && params.get("overdue") === "false";
   const initialBranch = navigation.branchId ?? activeBranchId ?? userBranchId ?? branches[0]?.id ?? null;
   const [branchId, setBranchId] = useState<string | null>(initialBranch);
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState("all");
   const [priority, setPriority] = useState("all");
-  useEffect(() => { setPage(1); setStatus("all"); setPriority("all"); }, [overdueOnly]);
+  useEffect(() => { setPage(1); setStatus("all"); setPriority("all"); }, [overdueOnly, unresolvedOnly, excludeOverdue]);
   const [selectedId, setSelectedId] = useState<number | null>(() => {
     const id = Number(params.get("complaintId"));
     return Number.isInteger(id) && id > 0 ? id : null;
@@ -179,11 +181,13 @@ export default function BranchComplaintsPage() {
     if (status !== "all") query.set("status", status);
     if (priority !== "all") query.set("priority", priority);
     if (overdueOnly) query.set("overdue", "true");
+    if (unresolvedOnly) query.set("unresolved", "true");
+    if (excludeOverdue) query.set("overdue", "false");
     return query.toString();
-  }, [branchId, page, status, priority, overdueOnly]);
+  }, [branchId, page, status, priority, overdueOnly, unresolvedOnly, excludeOverdue]);
 
   const complaints = useQuery<ListResult>({
-    queryKey: ["/api/branch-complaints", branchId, page, status, priority, overdueOnly],
+    queryKey: ["/api/branch-complaints", branchId, page, status, priority, overdueOnly, unresolvedOnly, excludeOverdue],
     enabled: Boolean(branchId && viewAllowed && !isSwitchingBranch && !navigation.isResolving
       && (!navigation.hasBranchParam || branchId === navigation.branchId)),
     staleTime: 0,
@@ -274,11 +278,12 @@ export default function BranchComplaintsPage() {
             <div><Label>الحالة</Label><Select value={status} onValueChange={(value) => { setStatus(value); setPage(1); }}><SelectTrigger className="mt-1 min-h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">كل الحالات</SelectItem>{Object.entries(statusLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
             <div><Label>الأولوية</Label><Select value={priority} onValueChange={(value) => { setPriority(value); setPage(1); }}><SelectTrigger className="mt-1 min-h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">كل الأولويات</SelectItem>{Object.entries(priorityLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
           </div>
-          {overdueOnly && <div className="mt-3 flex flex-wrap items-center gap-2 text-sm" role="status">
-            <span>الشكاوى المتأخرة عن الرد الأول فقط</span>
+           {(overdueOnly || unresolvedOnly) && <div className="mt-3 flex flex-wrap items-center gap-2 text-sm" role="status">
+             <span>{overdueOnly ? "الشكاوى المتأخرة عن الرد الأول فقط" : excludeOverdue ? "الشكاوى غير المحلولة باستثناء المتأخرة عن الرد الأول" : "الشكاوى غير المحلولة فقط"}</span>
             <Button variant="outline" size="sm" onClick={() => {
               const url = new URL(window.location.href);
               url.searchParams.delete("overdue");
+               url.searchParams.delete("unresolved");
               window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}`);
               window.dispatchEvent(new PopStateEvent("popstate"));
             }}>عرض كل الشكاوى</Button>

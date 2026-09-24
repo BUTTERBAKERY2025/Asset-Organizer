@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
-import { branchBoardUrl, branchOperationUrl } from "@/lib/branch-operation-navigation";
+import { branchBoardUrl, branchOperationUrl, resolveBoardBranch } from "@/lib/branch-operation-navigation";
 import { captureBranchDeskReturn, resolveBranchDeskReturnForCurrentSession, restoreBranchDeskScroll } from "@/lib/branch-operation-return-state";
 import {
   AlertTriangle, BoardSkeleton, BusinessDate, EmptyState, NeedsActionStrip,
@@ -35,8 +35,9 @@ export default function BranchOperationsPage() {
   const [requestedBranchId, setRequestedBranchId] = useState<string | null>(null);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const restoredReturnToken = useRef<string | null>(null);
-  const selectedBranchId = requestedBranchId ?? (navigation.hasBranchParam
-    ? navigation.branchId : branches.find((branch) => branch.id === (activeBranchId ?? activeBranch?.id))?.id ?? branches[0]?.id ?? null);
+  const requestedScope = navigation.hasBranchParam ? new URLSearchParams(window.location.search).get("branchId") ?? "" : null;
+  const scope = resolveBoardBranch(requestedScope, branches, activeBranchId ?? activeBranch?.id);
+  const selectedBranchId = requestedBranchId ?? scope.branchId;
   // useBranches is server-filtered; this selector intentionally never exposes an all-branches option.
   const allowedBranches = useMemo(() => branches, [branches]);
 
@@ -97,6 +98,7 @@ export default function BranchOperationsPage() {
   }, [selectedBranchId]);
 
   const changeBranch = async (branchId: string) => {
+    if (!allowedBranches.some(branch => branch.id === branchId) || isSwitchingBranch) return;
     if (branchId === selectedBranchId) return;
     setSwitchError(null);
     setRequestedBranchId(branchId);
@@ -154,11 +156,11 @@ export default function BranchOperationsPage() {
           {switchError && <p className="mt-2 text-sm font-semibold text-destructive" role="alert">{switchError}</p>}
         </section>
 
-        {!selectedBranchId && !branchesLoading && (
-          <EmptyState title="لا يوجد فرع محدد" text="تحتاج إلى فرع مسموح حتى تظهر أدوات يوم العمل." icon={Store} />
+        {scope.invalidScope && !branchesLoading && !requestedBranchId && !switchError && (
+          <EmptyState title="الفرع المطلوب غير متاح" text="هذا الفرع غير موجود ضمن فروعك المسموح بها. اختر فرعًا من القائمة للمتابعة." icon={ShieldAlert} />
         )}
-        {selectedBranchId && allowedBranches.length === 0 && !branchesLoading && (
-          <EmptyState title="لا توجد فروع متاحة" text="لا توجد فروع مسموح بها في جلسة المستخدم الحالية." icon={ShieldAlert} />
+        {!selectedBranchId && !scope.invalidScope && !branchesLoading && (
+          <EmptyState title="لا يوجد فرع محدد" text="تحتاج إلى فرع مسموح حتى تظهر أدوات يوم العمل." icon={Store} />
         )}
         {selectedBranchId && (board.isLoading || isSwitchingBranch) && <BoardSkeleton />}
         {selectedBranchId && !board.isLoading && isForbidden && (

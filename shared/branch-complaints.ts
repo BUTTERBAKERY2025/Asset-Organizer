@@ -52,6 +52,8 @@ export const branchComplaintListQuerySchema = z.object({
   status: z.enum(branchComplaintStatuses).optional(),
   priority: z.enum(branchComplaintPriorities).optional(),
   owner: z.string().trim().min(1).optional(),
+  unresolved: z.enum(["true", "false"]).optional(),
+  overdue: z.enum(["true", "false"]).optional(),
 });
 
 export type BranchComplaintCreateInput = z.infer<typeof branchComplaintCreateSchema>;

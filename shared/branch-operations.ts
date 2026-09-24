@@ -48,6 +48,7 @@ export interface BranchOperationsCard {
   metrics: BranchOperationsMetric[];
   alerts: BranchOperationsAlert[];
   actions?: BranchOperationsAction[];
+  quickActions?: { label: string; href: string; kind: "create" | "receive" }[];
 }
 
 export interface BranchOperationsSummaryResponse {

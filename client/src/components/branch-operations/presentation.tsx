@@ -6,7 +6,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PlatformAppIcon, type SemanticColor } from "@/components/platform-app-icon";
-import { branchDeskActionUrl } from "@/lib/branch-operation-navigation";
 
 export type OperationCard = {
   id: string;
@@ -18,6 +17,7 @@ export type OperationCard = {
   description?: string;
   metrics: Array<{ label: string; value: number; unit?: string }>;
   alerts: Array<{ label: string; count: number; href: string; priority?: "critical" | "high" | "normal" | "low"; dueAt?: string; actionLabel?: string; description?: string }>;
+  quickActions?: Array<{ label: string; href: string; kind: "create" | "receive" }>;
 };
 
 type Glyph = typeof Wrench;
@@ -132,7 +132,7 @@ export function requiredActions(cards: OperationCard[]) {
     url.searchParams.delete("branchId");
     url.searchParams.delete("from");
     url.searchParams.sort();
-    const key = `${url.pathname}${url.search}|${action.label.trim()}`;
+    const key = JSON.stringify([action.cardId, url.pathname, url.search, action.label, action.count, action.priority, action.dueAt, action.actionLabel, action.description]);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -169,7 +169,7 @@ export function DayOverview({ cards, compact = false }: { cards: OperationCard[]
     return [{ ...field, value: metric && Number.isFinite(metric.value) ? metric.value : null }];
   });
   if (!visible.length) return null;
-  const compactLabels: Record<string, string> = { sales: "مبيعات معتمدة", targets: "هدف اليوم", waste: "الهدر" };
+  const compactLabels: Record<string, string> = { sales: "مبيعات معتمدة", targets: "هدف اليوم", waste: "سجلات هدر" };
   return <section className={`${compact ? "branch-ops-day-strip mt-0" : "mt-4"} rounded-xl border bg-card px-3 py-2.5`} aria-labelledby="branch-day-overview">
     <div className={compact ? "branch-ops-day-strip-title flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1" : "flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"}>
       <h2 id="branch-day-overview" className="text-sm font-bold">نظرة على اليوم</h2>
@@ -200,7 +200,7 @@ export function DailySalesProgress({ cards, compact = false }: { cards: Operatio
   const format = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 2 });
   return <section className={`${compact ? "mt-0" : "mt-4"} rounded-xl border border-border bg-card p-3`} aria-labelledby="branch-daily-sales-progress" data-testid="branch-daily-sales-progress">
     <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-      <h2 id="branch-daily-sales-progress" className="font-bold">مبيعات اليوم مقابل الهدف</h2>
+      <h2 id="branch-daily-sales-progress" className="font-bold">مبيعات اليوميات المعتمدة مقابل الهدف</h2>
       <p><b>{format(progress.actual)}</b> من {format(progress.target)} ر.س{progress.percentage !== null && <span className="mr-2 font-bold text-emerald-700 dark:text-emerald-300">{format(progress.percentage)}%</span>}</p>
     </div>
     {progress.percentage !== null && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, progress.percentage)}%` }} /></div>}
@@ -209,21 +209,23 @@ export function DailySalesProgress({ cards, compact = false }: { cards: Operatio
 }
 
 export function QuickActions({ cards, onOpen, compact = false }: { cards: OperationCard[]; onOpen: (href: string) => void; compact?: boolean }) {
-  // Server-filtered cards grant navigation, not mutation. Destination pages enforce create/edit.
+  // Only explicit server permission metadata can advertise an action.
   const byId = new Map(cards.map(card => [card.id, card]));
   const supplies = ["kitchen", "warehouse"].flatMap(id => byId.has(id) ? [byId.get(id)!] : []);
   const direct = ["waste", "complaints", "maintenance", "cashier", "closing"].flatMap(id => byId.has(id) ? [byId.get(id)!] : []);
-  if (!supplies.length && !direct.length) return null;
+  const visible = [...supplies, ...direct].filter(card => card.state === "ready");
+  if (!visible.length) return null;
   return <section className={compact ? "mt-0 rounded-xl border border-border bg-card p-3" : "mt-5"} aria-labelledby="branch-quick-actions">
     <h2 id="branch-quick-actions" className="mb-2 text-sm font-bold">وصول سريع</h2>
     <div className="flex flex-wrap items-start gap-2">
-      {["طلب احتياجات", "الاستلام"].map(label => supplies.length > 0 && <details key={label} className="rounded-xl border bg-card px-3 py-2">
-        <summary className="min-h-7 cursor-pointer text-sm font-semibold">{label}</summary>
-        <div className="mt-2 flex flex-col gap-1">{supplies.map(card => <Button key={card.id} variant="ghost" className="min-h-11 justify-start" onClick={() => onOpen(branchDeskActionUrl(card.href, label === "الاستلام" ? "receive" : "create"))}>فتح {card.id === "kitchen" ? "طلبات المطبخ" : "تحويلات المستودع الرئيسي"}</Button>)}</div>
-      </details>)}
-      {direct.map(card => <Button key={card.id} variant="outline" className="min-h-11" onClick={() => onOpen(["complaints", "cashier", "waste"].includes(card.id) ? branchDeskActionUrl(card.href, "create") : card.href)}>فتح {card.title}</Button>)}
+      {visible.map(card => <div key={card.id} className="flex flex-wrap gap-1">
+        {(card.quickActions?.length ? card.quickActions : [{ label: `فتح ${card.title}`, href: card.href, kind: null }]).map((action, index) =>
+          <Button key={`${card.id}-${index}`} variant="outline" className="min-h-11" onClick={() => onOpen(action.href)}>
+            {action.kind ? `${action.label} · ${card.title}` : action.label}
+          </Button>)}
+      </div>)}
     </div>
-    <p className="mt-2 text-xs text-muted-foreground">تفتح صفحة العمل للفرع الحالي؛ إنشاء الطلب أو تسجيل الاستلام حسب صلاحياتك داخل الصفحة.</p>
+    <p className="mt-2 text-xs text-muted-foreground">الإجراءات الظاهرة حسب الصلاحيات المعلنة؛ بقية الروابط تفتح صفحة العمل فقط.</p>
   </section>;
 }
 

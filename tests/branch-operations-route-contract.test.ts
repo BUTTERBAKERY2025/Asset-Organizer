@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
+import { branchOperationUrl } from "../client/src/lib/branch-operation-navigation";
+import { readFileSync } from "node:fs";
 
 const fakes = vi.hoisted(() => ({
   rows: [] as Array<unknown>,
@@ -9,6 +11,7 @@ const fakes = vi.hoisted(() => ({
   allowMaintenance: true,
   modules: [] as string[],
   editAllowed: false,
+  createAllowed: false,
   approveModules: [] as string[],
   kitchenReceiver: false,
   predicates: [] as any[],
@@ -48,6 +51,7 @@ vi.mock("../server/storage", () => ({
     hasPermission: vi.fn(async (_userId: string, module: string, action: string) => {
       fakes.permissionCalls.push(module);
       if (action === "approve") return fakes.approveModules.includes(module);
+      if (action === "create") return fakes.createAllowed;
       if (action !== "view") return fakes.editAllowed;
       return (fakes.allowMaintenance && module === "maintenance") || fakes.modules.includes(module);
     }),
@@ -126,6 +130,7 @@ describe("registered branch operations summary handler", () => {
     fakes.allowMaintenance = true;
     fakes.modules = [];
     fakes.editAllowed = false;
+    fakes.createAllowed = false;
     fakes.approveModules = [];
     fakes.kitchenReceiver = false;
     fakes.predicates = [];
@@ -215,8 +220,40 @@ describe("registered branch operations summary handler", () => {
       expect(card.metrics[3].value).toBe(3);
       expect(card.alerts.length).toBe(1);
       expect(card.alerts[0].actionLabel).toBe(edit && receiver ? "تأكيد الاستلام" : "عرض المتابعة");
+      expect(card.alerts[0].href).toBe("/central-kitchen-orders?stage=dispatched&branchId=branch-a");
+      expect(card.quickActions.some((action: any) => action.kind === "receive")).toBe(edit && receiver);
     },
   );
+
+  it("uses the actual earliest timestamp rather than pairing it with a different earliest date", async () => {
+    fakes.allowMaintenance = false;
+    fakes.modules = ["central_kitchen_orders"];
+    fakes.rows.push([{ id: "branch-a" }], [{
+      status: "dispatched", value: 1, oldestNeededDate: "2026-01-01",
+      oldestDue: "2026-01-05T08:00:00.000Z",
+    }]);
+    const response = await request({ id: "employee", role: "employee" });
+    expect(response.body.cards[0].alerts[0].description).toContain("أقدم وقت احتياج محدد");
+    expect(response.body.cards[0].alerts[0].description).not.toContain("2026-01-01");
+  });
+
+  it("exposes a cashier creation link only with create permission and through a registered destination", async () => {
+    fakes.allowMaintenance = false;
+    fakes.modules = ["cashier_journal"];
+    fakes.rows.push([{ id: "branch-a" }], [], []);
+    const reader = await request({ id: "cashier-a", role: "employee" });
+    expect(reader.body.cards[0].quickActions).toEqual([]);
+
+    fakes.createAllowed = true;
+    fakes.rows.push([{ id: "branch-a" }], [], []);
+    const creator = await request({ id: "cashier-a", role: "employee" });
+    const action = creator.body.cards[0].quickActions[0];
+    expect(action).toEqual({
+      label: "يومية جديدة", href: "/cashier-journals/new?branchId=branch-a", kind: "create",
+    });
+    expect(branchOperationUrl(action.href, "branch-a")).toBe("/cashier-journals/new?branchId=branch-a&from=branch-operations");
+    expect(readFileSync("client/src/App.tsx", "utf8")).toContain('<Route path="/cashier-journals/new">');
+  });
 
   it("never turns source-side shipments into destination receipt actions", async () => {
     fakes.allowMaintenance = false;
@@ -230,10 +267,29 @@ describe("registered branch operations summary handler", () => {
     expect(response.body.cards[0].alerts).toEqual([]);
     expect(response.body.cards[1].alerts[0].count).toBe(2);
     expect(response.body.cards[1].metrics[1].value).toBe(7);
+    expect(response.body.cards[1].quickActions).toContainEqual({
+      label: "استلام تحويلات واردة",
+      href: "/transfer-requests?status=in_transit&direction=incoming&branchId=branch-a",
+      kind: "receive",
+    });
     const scope = new PgDialect().sqlToQuery(fakes.predicates[2]);
     expect(scope.sql).toContain('"material_transfers"."source_branch_id"');
     expect(scope.sql).toContain('"material_transfers"."destination_branch_id"');
     expect(scope.params.slice(0, 2)).toEqual(["branch-a", "branch-a"]);
+  });
+
+  it("does not infer warehouse creation from edit or receipt from create", async () => {
+    fakes.allowMaintenance = false;
+    fakes.modules = ["warehouse"];
+    fakes.createAllowed = true;
+    fakes.rows.push([{ id: "branch-a" }], [{ value: 0 }], [
+      { source: "main_warehouse", destination: "branch-a", status: "in_transit", value: 2 },
+    ]);
+    const response = await request({ id: "employee", role: "employee" });
+    expect(response.body.cards[1].quickActions).toEqual([{
+      label: "طلب تحويل جديد", href: "/transfer-requests?intent=create&from=branch-operations&branchId=branch-a", kind: "create",
+    }]);
+    expect(response.body.cards[1].alerts[0].actionLabel).toBe("عرض المتابعة");
   });
 
   it.each([undefined, { status: "open" }])("does not alarm about today's missing or unfinished closing", async closure => {
@@ -264,7 +320,7 @@ describe("registered branch operations summary handler", () => {
     expect(response.body.cards[0].alerts[0].href).toContain("overdue=true");
     expect(response.body.cards[0].alerts[1]).toMatchObject({
       count: 3, priority: "normal", actionLabel: "عرض المتابعة",
-      href: "/branch-complaints?branchId=branch-a",
+      href: "/branch-complaints?unresolved=true&overdue=false&branchId=branch-a",
     });
     expect(response.body.cards[0].alerts[1].dueAt).toBeUndefined();
   });
@@ -302,7 +358,7 @@ describe("registered branch operations summary handler", () => {
     const alerts = response.body.cards[0].alerts;
     expect(alerts.map((a: any) => a.count)).toEqual([2, 3, 1]);
     expect(alerts.every((a: any) => a.actionLabel === "عرض المتابعة" && a.priority === "low" && !a.dueAt)).toBe(true);
-    expect(alerts[0].href).toBe("/central-kitchen-orders?status=requested&branchId=branch-a");
+    expect(alerts[0].href).toBe("/central-kitchen-orders?stage=requested&branchId=branch-a");
   });
 
   it("keeps incoming pending warehouse stages separate from outgoing shipments", async () => {

@@ -4,9 +4,17 @@ import {
   branchComplaintPatchSchema,
   branchComplaintTransitionSchema,
   getBranchComplaintTransition,
+  branchComplaintListQuerySchema,
 } from "../shared/branch-complaints";
 
 describe("branch complaints contract", () => {
+  it("accepts exact unresolved excluding overdue and overdue-only destination filters", () => {
+    expect(branchComplaintListQuerySchema.parse({ branchId: "b1", unresolved: "true", overdue: "false" })).toMatchObject({
+      unresolved: "true", overdue: "false",
+    });
+    expect(branchComplaintListQuerySchema.parse({ branchId: "b1", overdue: "true" }).overdue).toBe("true");
+    expect(branchComplaintListQuerySchema.safeParse({ branchId: "b1", overdue: "other" }).success).toBe(false);
+  });
   it("whitelists create and patch fields", () => {
     expect(branchComplaintCreateSchema.safeParse({
       branchId: "b1", subject: "شكوى", description: "تفاصيل", category: "service",

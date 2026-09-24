@@ -46,7 +46,7 @@ interface CardDefinition {
   group: BranchOperationsCard["group"];
   module: string;
   href: string;
-  load: (branchId: string, businessDate: string, req: Request) => Promise<Pick<BranchOperationsCard, "metrics" | "alerts" | "actions" | "description" | "statusLabel">>;
+  load: (branchId: string, businessDate: string, req: Request) => Promise<Pick<BranchOperationsCard, "metrics" | "alerts" | "actions" | "quickActions" | "description" | "statusLabel">>;
 }
 
 const branchHref = (path: string, branchId: string) =>
@@ -57,7 +57,7 @@ const definitions: CardDefinition[] = [
     load: async () => ({ metrics: [], alerts: [], statusLabel: "سجل الصيانة", description: "عرض سجل الصيانة الحالي؛ لا يتوفر مصدر بلاغات بمسؤول وموعد إغلاق." }) },
   {
     id: "complaints", title: "شكاوى الفروع", group: "operations", module: "branch_complaints", href: "/branch-complaints",
-    load: async (branchId) => {
+    load: async (branchId, _businessDate, req) => {
       const now = new Date();
       const [[open], [resolved], [overdue]] = await Promise.all([
         db.select({ value: count() }).from(branchComplaints).where(and(
@@ -84,10 +84,13 @@ const definitions: CardDefinition[] = [
           actionLabel: "عرض المتابعة", description: "الموعد المعروض هو أقدم موعد رد أول متجاوز بين هذه الشكاوى؛ رابط متابعة وليس إجراء تعديل." }] : []),
           ...(openCount > overdueCount ? [{
             label: "شكاوى غير محلولة للمتابعة", count: openCount - overdueCount,
-            href: branchHref("/branch-complaints", branchId), priority: "normal" as const,
+            href: branchHref("/branch-complaints?unresolved=true&overdue=false", branchId), priority: "normal" as const,
             actionLabel: "عرض المتابعة",
-            description: "مفتوحة وقيد المعالجة باستثناء المتأخرة بلا رد أول أعلاه؛ تشمل ما تم الرد عليه ولم يحل بعد. الرابط يعرض سجل الفرع لا قائمة مفلترة، وليس صلاحية تعديل.",
+            description: "مفتوحة وقيد المعالجة باستثناء المتأخرة بلا رد أول أعلاه؛ رابط متابعة وليس صلاحية تعديل.",
           }] : [])],
+        quickActions: await hasEffectiveViewPermission(req, "branch_complaints", "create")
+          ? [{ label: "بلاغ جديد", href: branchHref("/branch-complaints?intent=create&from=branch-operations", branchId), kind: "create" as const }]
+          : [],
       };
     },
   },
@@ -144,24 +147,32 @@ const definitions: CardDefinition[] = [
       const dispatched = rows.find(row => row.status === "dispatched");
       const canReceive = incoming > 0 && await hasEffectiveViewPermission(req, "central_kitchen_orders", "edit")
         && await kitchenActionAllowed(db, req.currentUser!.id, { requestBranchId: branchId }, "receive");
-      const href = branchHref("/central-kitchen-orders?status=dispatched", branchId);
+      // Destination reads status as a stage, but stage is the canonical list filter.
+      const href = branchHref("/central-kitchen-orders?stage=dispatched", branchId);
       return {
         metrics: ["requested", "approved", "prepared", "dispatched"].map((status, index) => ({
           label: ["مطلوبة", "معتمدة", "مجهزة", "مرسلة للفرع"][index], value: counts.get(status) || 0,
         })),
         alerts: [...(incoming ? [{ label: canReceive ? "طلبات يمكنك استلامها" : "طلبات مرسلة بانتظار مستلم مخول", count: incoming, href, priority: "normal" as const, actionLabel: canReceive ? "تأكيد الاستلام" : "عرض المتابعة",
           dueAt: dispatched?.oldestDue ? new Date(dispatched.oldestDue).toISOString() : undefined,
-          description: dispatched?.oldestNeededDate
-            ? `أقدم تاريخ احتياج: ${dispatched.oldestNeededDate}؛ الوقت المعروض إن وجد هو أقدم وقت احتياج محدد، وليس موعد وصول مؤكداً.`
-             : "لم يحدد وقت احتياج؛ تحقق من وصول الشحنة قبل تأكيد الاستلام بواسطة المستلم المخول." }] : []),
+          description: dispatched?.oldestDue
+            ? `أقدم وقت احتياج محدد: ${new Date(dispatched.oldestDue).toLocaleString("ar-SA-u-ca-gregory", { timeZone: "Asia/Riyadh" })}؛ ليس موعد وصول مؤكداً.`
+            : dispatched?.oldestNeededDate
+              ? `أقدم تاريخ احتياج: ${dispatched.oldestNeededDate}؛ لا يوجد وقت احتياج صالح لهذه الطلبات.`
+              : "لم يحدد وقت احتياج؛ تحقق من وصول الشحنة قبل تأكيد الاستلام بواسطة المستلم المخول." }] : []),
           ...["requested", "approved", "prepared"].flatMap((status, index) => {
             const value = counts.get(status) || 0;
             return value ? [{ label: ["طلبات بانتظار اعتماد المطبخ", "طلبات بانتظار تجهيز المطبخ", "طلبات مجهزة بانتظار إرسال المطبخ"][index],
-              count: value, href: branchHref(`/central-kitchen-orders?status=${status}`, branchId),
+              count: value, href: branchHref(`/central-kitchen-orders?stage=${status}`, branchId),
               priority: "low" as const, actionLabel: "عرض المتابعة",
               description: "المتابعة لدى المطبخ المورد؛ ليست طلبات جاهزة لتأكيد استلام الفرع." }] : [];
           })],
         description: "مراحل طلبات الفرع؛ يظهر إجراء الاستلام للمستلم المخول فقط.",
+        quickActions: [
+          ...(await hasEffectiveViewPermission(req, "central_kitchen_orders", "create")
+            ? [{ label: "طلب جديد", href: branchHref("/central-kitchen-orders?intent=create&from=branch-operations", branchId), kind: "create" as const }] : []),
+          ...(canReceive ? [{ label: "استلام طلبات المطبخ", href: branchHref("/central-kitchen-orders?stage=dispatched", branchId), kind: "receive" as const }] : []),
+        ],
       };
     },
   },
@@ -243,6 +254,9 @@ const definitions: CardDefinition[] = [
             : `أقدم يومية: ${row.oldestDate}. تاريخ اليومية ليس موعد استحقاق؛ الإكمال والتقديم يخضعان لصلاحيات اليومية وحالة الإغلاق.`,
         })),
         statusLabel: rows.length ? "يوميات اليوم" : "لا توجد يوميات اليوم",
+        quickActions: await hasEffectiveViewPermission(req, "cashier_journal", "create")
+          ? [{ label: "يومية جديدة", href: branchHref("/cashier-journals/new", branchId), kind: "create" as const }]
+          : [],
         description: allCashiers ? "أرقام اليوم لكل الكاشيرات؛ المتابعة تشمل المسودات والمرفوضة والمقدمة حتى اليوم." : "يومياتك فقط؛ المتابعة تشمل المسودات والمرفوضة والمقدمة حتى اليوم." };
     } },
   { id: "warehouse", title: "تحويلات المستودع", group: "operations", module: "warehouse", href: "/transfer-requests",
@@ -257,6 +271,8 @@ const definitions: CardDefinition[] = [
       const awaitingSupplier = ["pending", "approved"].map(status => ({
         status, value: rows.filter(r => r.destination === branchId && r.status === status).reduce((sum, r) => sum + Number(r.value), 0),
       }));
+      // Warehouse receipt uses warehouse/edit and destination scope, not kitchen routing.
+      // This summary's branch is already authorized by canAccessBranch above.
       const canReceive = incoming > 0 && await hasEffectiveViewPermission(req, "warehouse", "edit");
       return { metrics: [{ label: "واردة بانتظار الاستلام", value: incoming }, { label: "تحويلات صادرة مفتوحة", value: outgoing }],
         alerts: [...(incoming ? [{ label: canReceive ? "تحويلات يمكنك استلامها" : "تحويلات واردة بانتظار مستلم مخول", count: incoming, href: branchHref("/transfer-requests?status=in_transit&direction=incoming", branchId),
@@ -268,7 +284,12 @@ const definitions: CardDefinition[] = [
             priority: "low" as const, actionLabel: "عرض المتابعة",
             description: "متابعة مع جهة التوريد؛ لم ترسل بعد ولا يمكن تأكيد استلامها.",
           }))],
-        description: "سجل تحويلات المواد مستقل عن طلبات المطبخ؛ الاستلام للفرع الوجهة فقط." };
+        description: "سجل تحويلات المواد مستقل عن طلبات المطبخ؛ الاستلام للفرع الوجهة فقط.",
+        quickActions: [
+          ...(await hasEffectiveViewPermission(req, "warehouse", "create")
+            ? [{ label: "طلب تحويل جديد", href: branchHref("/transfer-requests?intent=create&from=branch-operations", branchId), kind: "create" as const }] : []),
+          ...(canReceive ? [{ label: "استلام تحويلات واردة", href: branchHref("/transfer-requests?status=in_transit&direction=incoming", branchId), kind: "receive" as const }] : []),
+        ] };
     } },
   { id: "attendance", title: "الحضور والورديات", group: "people", module: "attendance", href: "/employee-attendance-report",
     load: async (branchId, businessDate, req) => {

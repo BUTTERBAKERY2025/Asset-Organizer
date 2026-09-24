@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BRANCH_OPERATION_ROUTES, branchOperationDestination, branchOperationUrl, branchBoardUrl } from "../client/src/lib/branch-operation-navigation";
+import { BRANCH_OPERATION_ROUTES, branchOperationDestination, branchOperationUrl, branchBoardUrl, resolveBoardBranch } from "../client/src/lib/branch-operation-navigation";
 import { resolveNavigationBranch } from "../client/src/hooks/use-branch-navigation";
 
 describe("branch operation round-trip navigation", () => {
@@ -32,5 +32,14 @@ describe("branch operation round-trip navigation", () => {
     const back = new URL(branchBoardUrl("removed", "/maintenance"), "https://app.test");
     expect(resolveNavigationBranch(back.search, [{ id: "allowed" }], "allowed").branchId).toBe("allowed");
     expect(resolveNavigationBranch(back.search, [], "removed").branchId).toBeNull();
+  });
+  it("does not load a fallback branch for unknown, all, or empty explicit board scopes", () => {
+    const allowed = [{ id: "allowed" }];
+    for (const scope of ["removed", "all", ""]) {
+      expect(resolveBoardBranch(scope, allowed, "allowed")).toEqual({ branchId: null, invalidScope: true });
+    }
+    expect(resolveBoardBranch("allowed", allowed, "removed")).toEqual({ branchId: "allowed", invalidScope: false });
+    expect(resolveBoardBranch(null, allowed, "removed")).toEqual({ branchId: "allowed", invalidScope: false });
+    expect(resolveBoardBranch(null, [], "removed")).toEqual({ branchId: null, invalidScope: false });
   });
 });

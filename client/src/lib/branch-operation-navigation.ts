@@ -39,6 +39,21 @@ export function branchDeskActionUrl(href: string, intent: "create" | "receive") 
   return `${url.pathname}${url.search}`;
 }
 
+/** A board URL with an explicit unknown scope must not silently show another branch. */
+export function resolveBoardBranch(
+  requested: string | null,
+  allowed: readonly { id: string }[],
+  activeId?: string | null,
+): { branchId: string | null; invalidScope: boolean } {
+  if (requested !== null) {
+    const branchId = requested.trim();
+    return allowed.some(branch => branch.id === branchId)
+      ? { branchId, invalidScope: false }
+      : { branchId: null, invalidScope: true };
+  }
+  return { branchId: allowed.find(branch => branch.id === activeId)?.id ?? allowed[0]?.id ?? null, invalidScope: false };
+}
+
 export function branchDeskDate(value: string | null) {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return "";
   const date = new Date(`${value}T00:00:00Z`);

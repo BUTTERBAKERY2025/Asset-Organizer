@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it, vi } from "vitest";
 import React, { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { groupCards, requiredActions, dailySalesProgress, DailySalesProgress, QuickActions, NeedsActionStrip, OperationCardView, SECTIONS, type OperationCard } from "../client/src/components/branch-operations/presentation";
+import { groupCards, requiredActions, dailySalesProgress, DailySalesProgress, DayOverview, QuickActions, NeedsActionStrip, OperationCardView, SECTIONS, type OperationCard } from "../client/src/components/branch-operations/presentation";
 
 const card = (id: string, alerts: OperationCard["alerts"] = []): OperationCard => ({
   id, title: id, group: "operations", href: id === "warehouse" ? "/transfer-requests" : "/central-kitchen-orders", state: "ready", metrics: [], alerts,
@@ -15,7 +15,16 @@ describe("daily branch desk", () => {
     expect(dailySalesProgress([sales, targets])).toEqual({ actual: 750, target: 1000, percentage: 75 });
     const html = renderToStaticMarkup(createElement(DailySalesProgress, { cards: [sales, targets] }));
     expect(html).toContain("75");
+    expect(html).toContain("مبيعات اليوميات المعتمدة مقابل الهدف");
     expect(html).toContain("مبيعات اليوميات المعتمدة والمرحلة فقط");
+  });
+  it("labels waste as a count of records, never currency or waste cost", () => {
+    const html = renderToStaticMarkup(createElement(DayOverview, { compact: true, cards: [
+      { ...card("waste"), metrics: [{ label: "سجلات هدر اليوم", value: 4 }] },
+    ] }));
+    expect(html).toContain("سجلات هدر");
+    expect(html).toContain(">4<");
+    expect(html).not.toContain("ر.س");
   });
   it("omits comparison for absent permissions, missing daily records, error, invalid or unapproved target", () => {
     for (const cards of [
@@ -39,7 +48,7 @@ describe("daily branch desk", () => {
     expect(groupCards([card("attendance"), card("warehouse"), card("cashier")]).map(g => g.cards.map(c => c.id)))
       .toEqual([["warehouse"], ["cashier", "attendance"]]);
   });
-  it("deduplicates equivalent actions then orders priority before due date", () => {
+  it("deduplicates exact repeated alerts, not distinct priorities, counts, or sources sharing a destination", () => {
     const actions = requiredActions([card("kitchen", [
       { label: "normal later", count: 1, href: "/central-kitchen-orders", dueAt: "2026-03-05T00:00:00Z" },
       { label: "normal earlier", count: 1, href: "/central-kitchen-orders", dueAt: "2026-03-01T00:00:00Z" },
@@ -49,13 +58,32 @@ describe("daily branch desk", () => {
       { label: "zero", count: 0, href: "/central-kitchen-orders" },
     ])]);
     expect(actions.map(a => a.label)).toEqual(["critical", "urgent", "normal earlier", "normal later"]);
+    const shared = requiredActions([
+      card("kitchen", [{ label: "المتابعة", count: 2, href: "/central-kitchen-orders", priority: "high" },
+        { label: "المتابعة", count: 5, href: "/central-kitchen-orders", priority: "critical" }]),
+      card("warehouse", [{ label: "المتابعة", count: 3, href: "/central-kitchen-orders", priority: "high" }]),
+    ]);
+    expect(shared.map(a => [a.cardId, a.count, a.priority])).toEqual([
+      ["kitchen", 5, "critical"], ["kitchen", 2, "high"], ["warehouse", 3, "high"],
+    ]);
   });
-  it("never renders missing permissions in quick-action choices", () => {
+  it("shows navigation-only links for unknown permissions, and explicit server-granted actions only", () => {
     const html = renderToStaticMarkup(createElement(QuickActions, { cards: [card("kitchen")], onOpen() {} }));
-    expect(html).toContain("فتح طلبات المطبخ");
-    expect(html).not.toContain("تحويلات المستودع الرئيسي");
+    expect(html).toContain("فتح kitchen");
+    expect(html).not.toContain("الاستلام");
+    expect(html).not.toContain("طلب احتياجات");
     expect(html).not.toContain("فتح cashier");
     expect(renderToStaticMarkup(createElement(QuickActions, { cards: [], onOpen() {} }))).toBe("");
+    const permitted = renderToStaticMarkup(createElement(QuickActions, { cards: [
+      { ...card("kitchen"), quickActions: [{ label: "طلب احتياجات", href: "/central-kitchen-orders?intent=create", kind: "create" }] },
+      card("warehouse"),
+    ], onOpen() {} }));
+    expect(permitted).toContain("طلب احتياجات · kitchen");
+    expect(permitted).toContain("فتح warehouse");
+    expect(permitted).not.toContain("الاستلام");
+    expect(renderToStaticMarkup(createElement(QuickActions, { cards: [
+      { ...card("kitchen"), state: "error" },
+    ], onOpen() {} }))).toBe("");
   });
   it("renders actionable alerts only once, supports navigation-only status and incomplete results", () => {
     const ready = card("kitchen", [{ label: "unique-alert", count: 2, href: "/central-kitchen-orders" }]);

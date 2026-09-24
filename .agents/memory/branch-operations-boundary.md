@@ -20,3 +20,9 @@ The approved branch desk is a daily-work surface, not a second system launcher. 
 **Why:** The user approved reorganizing the board because repeated alerts, informational counts, and module links were presented as equally urgent. A recorded waste entry or an approved advance does not establish pending work; a missing closing today does not establish lateness without a real deadline.
 
 **How to apply:** Separate status from action, use actual deadlines and actor authority, and distinguish a read-only follow-up link from permission to execute an operation. Do not invent shift coverage or daily target allocations to fill a dashboard section.
+
+Do not merge dashboard alerts solely because they open the same destination.
+
+**Why:** Different operational topics can share a page while representing different priorities, populations, or responsibilities. Combining their counts or hiding one can lose actionable work.
+
+**How to apply:** Retain semantic identity when deduplicating. Verify destination query handling and authoritative action permissions before treating an apparently repeated link or supplier-specific policy as a defect.
