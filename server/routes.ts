@@ -10985,7 +10985,7 @@ export async function registerRoutes(
     });
     
     try {
-      const { branchId, status, cashierId, cashierName, search, dateFrom, dateTo } = req.query;
+      const { branchId, status, discrepancyStatus, cashierId, cashierName, search, dateFrom, dateTo } = req.query;
       const user = getCurrentUser(req);
       
       // SECURITY: Use getEffectiveBranchFilter for multi-branch support
@@ -11012,6 +11012,7 @@ export async function registerRoutes(
         filters.branchId = branchFilter.singleBranchId;
       }
       if (status && status !== "all") filters.status = status as string;
+      if (discrepancyStatus && discrepancyStatus !== "all") filters.discrepancyStatus = String(discrepancyStatus);
       if (canViewAllCashiers) {
         if (cashierId && cashierId !== "all") filters.cashierId = String(cashierId);
         if (cashierName && cashierName !== "all") filters.cashierName = String(cashierName);

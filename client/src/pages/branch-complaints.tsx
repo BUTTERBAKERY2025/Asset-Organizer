@@ -183,7 +183,7 @@ export default function BranchComplaintsPage() {
   }, [branchId, page, status, priority, overdueOnly]);
 
   const complaints = useQuery<ListResult>({
-    queryKey: ["/api/branch-complaints", branchId, page, status, priority],
+    queryKey: ["/api/branch-complaints", branchId, page, status, priority, overdueOnly],
     enabled: Boolean(branchId && viewAllowed && !isSwitchingBranch && !navigation.isResolving
       && (!navigation.hasBranchParam || branchId === navigation.branchId)),
     staleTime: 0,

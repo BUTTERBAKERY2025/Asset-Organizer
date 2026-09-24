@@ -184,12 +184,13 @@ export default function CashierJournalsPage() {
     surplusAmount: number;
     averageTicket: number;
   }>({
-    queryKey: ["/api/cashier-journals/stats/summary", branchFilter, statusFilter, cashierFilter, debouncedSearch, dateFrom, dateTo],
+    queryKey: ["/api/cashier-journals/stats/summary", branchFilter, statusFilter, discrepancyFilter, cashierFilter, debouncedSearch, dateFrom, dateTo],
     queryFn: async ({ queryKey }) => {
-      const [, branch, status, cashier, search, from, to] = queryKey as string[];
+      const [, branch, status, discrepancy, cashier, search, from, to] = queryKey as string[];
       const params = new URLSearchParams();
       if (branch && branch !== "all") params.set("branchId", branch);
       if (status && status !== "all") params.set("status", status);
+      if (discrepancy && discrepancy !== "all") params.set("discrepancyStatus", discrepancy);
       if (cashier && cashier !== "all") params.set("cashierName", cashier);
       if (search) params.set("search", search);
       if (from) params.set("dateFrom", from);
