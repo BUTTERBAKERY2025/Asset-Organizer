@@ -79,9 +79,15 @@ const definitions: CardDefinition[] = [
       const href = branchHref("/branch-complaints?overdue=true", branchId);
       return {
         metrics: [{ label: "مفتوحة وقيد المعالجة", value: openCount }, { label: "محلولة بانتظار الإغلاق", value: Number(resolved.value) }, { label: "تجاوزت موعد الرد الأول", value: overdueCount }],
-        alerts: overdueCount ? [{ label: "شكاوى متأخرة بلا رد أول (أقدم موعد)", count: overdueCount, href, priority: "high",
+        alerts: [...(overdueCount ? [{ label: "شكاوى متأخرة بلا رد أول (أقدم موعد)", count: overdueCount, href, priority: "high" as const,
           dueAt: overdue.oldestDue ? new Date(overdue.oldestDue).toISOString() : undefined,
-          actionLabel: "عرض المتابعة", description: "الموعد المعروض هو أقدم موعد رد أول متجاوز بين هذه الشكاوى؛ رابط متابعة وليس إجراء تعديل." }] : [],
+          actionLabel: "عرض المتابعة", description: "الموعد المعروض هو أقدم موعد رد أول متجاوز بين هذه الشكاوى؛ رابط متابعة وليس إجراء تعديل." }] : []),
+          ...(openCount > overdueCount ? [{
+            label: "شكاوى غير محلولة للمتابعة", count: openCount - overdueCount,
+            href: branchHref("/branch-complaints", branchId), priority: "normal" as const,
+            actionLabel: "عرض المتابعة",
+            description: "مفتوحة وقيد المعالجة باستثناء المتأخرة بلا رد أول أعلاه؛ تشمل ما تم الرد عليه ولم يحل بعد. الرابط يعرض سجل الفرع لا قائمة مفلترة، وليس صلاحية تعديل.",
+          }] : [])],
       };
     },
   },
@@ -143,11 +149,18 @@ const definitions: CardDefinition[] = [
         metrics: ["requested", "approved", "prepared", "dispatched"].map((status, index) => ({
           label: ["مطلوبة", "معتمدة", "مجهزة", "مرسلة للفرع"][index], value: counts.get(status) || 0,
         })),
-        alerts: canReceive ? [{ label: "طلبات يمكنك استلامها", count: incoming, href, priority: "normal", actionLabel: "تأكيد الاستلام",
+        alerts: [...(incoming ? [{ label: canReceive ? "طلبات يمكنك استلامها" : "طلبات مرسلة بانتظار مستلم مخول", count: incoming, href, priority: "normal" as const, actionLabel: canReceive ? "تأكيد الاستلام" : "عرض المتابعة",
           dueAt: dispatched?.oldestDue ? new Date(dispatched.oldestDue).toISOString() : undefined,
           description: dispatched?.oldestNeededDate
             ? `أقدم تاريخ احتياج: ${dispatched.oldestNeededDate}؛ الوقت المعروض إن وجد هو أقدم وقت احتياج محدد، وليس موعد وصول مؤكداً.`
-            : "لم يحدد وقت احتياج؛ تحقق من وصول الشحنة قبل تأكيد الاستلام." }] : [],
+             : "لم يحدد وقت احتياج؛ تحقق من وصول الشحنة قبل تأكيد الاستلام بواسطة المستلم المخول." }] : []),
+          ...["requested", "approved", "prepared"].flatMap((status, index) => {
+            const value = counts.get(status) || 0;
+            return value ? [{ label: ["طلبات بانتظار اعتماد المطبخ", "طلبات بانتظار تجهيز المطبخ", "طلبات مجهزة بانتظار إرسال المطبخ"][index],
+              count: value, href: branchHref(`/central-kitchen-orders?status=${status}`, branchId),
+              priority: "low" as const, actionLabel: "عرض المتابعة",
+              description: "المتابعة لدى المطبخ المورد؛ ليست طلبات جاهزة لتأكيد استلام الفرع." }] : [];
+          })],
         description: "مراحل طلبات الفرع؛ يظهر إجراء الاستلام للمستلم المخول فقط.",
       };
     },
@@ -205,6 +218,8 @@ const definitions: CardDefinition[] = [
         || await storage.hasPermission(user.id, "cashier_performance", "approve")
         || await storage.hasPermission(user.id, "cashier_journal", "approve");
       const canEdit = await hasEffectiveViewPermission(req, "cashier_journal", "edit");
+      // Seeing all cashiers (e.g. manager/performance approver) is not journal approval authority.
+      const canApprove = await hasEffectiveViewPermission(req, "cashier_journal", "approve");
       const actor = allCashiers ? undefined : eq(cashierSalesJournals.cashierId, user.id);
       const rows = await db.select({ status: cashierSalesJournals.status, value: count() }).from(cashierSalesJournals)
         .where(and(eq(cashierSalesJournals.branchId, branchId), eq(cashierSalesJournals.journalDate, businessDate), actor))
@@ -212,21 +227,23 @@ const definitions: CardDefinition[] = [
       const pending = await db.select({ status: cashierSalesJournals.status, value: count(),
         oldestDate: sql<string>`min(${cashierSalesJournals.journalDate})` }).from(cashierSalesJournals)
         .where(and(eq(cashierSalesJournals.branchId, branchId), lte(cashierSalesJournals.journalDate, businessDate),
-          inArray(cashierSalesJournals.status, ["draft", "rejected"]), actor))
+          inArray(cashierSalesJournals.status, ["draft", "rejected", "submitted"]), actor))
         .groupBy(cashierSalesJournals.status);
       const labels: Record<string, string> = { draft: "مسودة", submitted: "بانتظار الاعتماد", approved: "معتمدة", posted: "مرحلة", rejected: "مرفوضة" };
       return { metrics: rows.map(row => ({ label: labels[row.status] || row.status, value: Number(row.value) })),
         alerts: pending.filter(row => Number(row.value) > 0).map(row => ({
-          label: row.status === "draft" ? "مسودات تحتاج المراجعة والإكمال" : "يوميات مرفوضة تحتاج متابعة",
+          label: row.status === "submitted" ? "يوميات مقدمة بانتظار المراجعة" : row.status === "draft" ? "مسودات تحتاج المراجعة والإكمال" : "يوميات مرفوضة تحتاج متابعة",
           count: Number(row.value), priority: "normal" as const,
           href: branchHref(`/cashier-journals?status=${row.status}&startDate=${row.oldestDate}&endDate=${businessDate}`, branchId),
-          actionLabel: row.status === "draft" && canEdit ? "مراجعة المسودات" : "عرض المتابعة",
-          description: row.status === "rejected"
+          actionLabel: row.status === "submitted" && canApprove ? "مراجعة للاعتماد" : row.status === "draft" && canEdit ? "مراجعة المسودات" : "عرض المتابعة",
+          description: row.status === "submitted"
+            ? `أقدم يومية: ${row.oldestDate}. مقدمة للمراجع المخول؛ تاريخ اليومية ليس موعد استحقاق. ${canApprove ? "يمكنك مراجعتها للاعتماد أو الرفض." : "عرض متابعة فقط، وليس إجراء اعتماد."}`
+            : row.status === "rejected"
             ? `أقدم يومية: ${row.oldestDate}. راجع سبب الرفض مع المراجع؛ لا يدعم المسار الحالي إعادة المرفوضة إلى مسودة.`
             : `أقدم يومية: ${row.oldestDate}. تاريخ اليومية ليس موعد استحقاق؛ الإكمال والتقديم يخضعان لصلاحيات اليومية وحالة الإغلاق.`,
         })),
         statusLabel: rows.length ? "يوميات اليوم" : "لا توجد يوميات اليوم",
-        description: allCashiers ? "أرقام اليوم لكل الكاشيرات؛ المتابعة تشمل المسودات والمرفوضة السابقة." : "يومياتك فقط؛ المتابعة تشمل المسودات والمرفوضة السابقة." };
+        description: allCashiers ? "أرقام اليوم لكل الكاشيرات؛ المتابعة تشمل المسودات والمرفوضة والمقدمة حتى اليوم." : "يومياتك فقط؛ المتابعة تشمل المسودات والمرفوضة والمقدمة حتى اليوم." };
     } },
   { id: "warehouse", title: "تحويلات المستودع", group: "operations", module: "warehouse", href: "/transfer-requests",
     load: async (branchId, _businessDate, req) => {
@@ -237,10 +254,20 @@ const definitions: CardDefinition[] = [
         .groupBy(materialTransfers.sourceBranchId, materialTransfers.destinationBranchId, materialTransfers.status);
       const incoming = rows.filter(r => r.destination === branchId && r.status === "in_transit").reduce((sum, r) => sum + Number(r.value), 0);
       const outgoing = rows.filter(r => r.source === branchId).reduce((sum, r) => sum + Number(r.value), 0);
+      const awaitingSupplier = ["pending", "approved"].map(status => ({
+        status, value: rows.filter(r => r.destination === branchId && r.status === status).reduce((sum, r) => sum + Number(r.value), 0),
+      }));
       const canReceive = incoming > 0 && await hasEffectiveViewPermission(req, "warehouse", "edit");
       return { metrics: [{ label: "واردة بانتظار الاستلام", value: incoming }, { label: "تحويلات صادرة مفتوحة", value: outgoing }],
-        alerts: canReceive ? [{ label: "تحويلات يمكنك استلامها", count: incoming, href: branchHref("/transfer-requests?status=in_transit&direction=incoming", branchId),
-          priority: "normal", actionLabel: "تأكيد الاستلام" }] : [],
+        alerts: [...(incoming ? [{ label: canReceive ? "تحويلات يمكنك استلامها" : "تحويلات واردة بانتظار مستلم مخول", count: incoming, href: branchHref("/transfer-requests?status=in_transit&direction=incoming", branchId),
+          priority: "normal" as const, actionLabel: canReceive ? "تأكيد الاستلام" : "عرض المتابعة",
+          description: "تحويلات مرسلة إلى الفرع؛ تأكيد الاستلام بعد التحقق من الوصول وبصلاحية التعديل فقط." }] : []),
+          ...awaitingSupplier.filter(row => row.value > 0).map(row => ({
+            label: row.status === "pending" ? "تحويلات واردة بانتظار الاعتماد" : "تحويلات واردة بانتظار الإرسال",
+            count: row.value, href: branchHref(`/transfer-requests?status=${row.status}&direction=incoming`, branchId),
+            priority: "low" as const, actionLabel: "عرض المتابعة",
+            description: "متابعة مع جهة التوريد؛ لم ترسل بعد ولا يمكن تأكيد استلامها.",
+          }))],
         description: "سجل تحويلات المواد مستقل عن طلبات المطبخ؛ الاستلام للفرع الوجهة فقط." };
     } },
   { id: "attendance", title: "الحضور والورديات", group: "people", module: "attendance", href: "/employee-attendance-report",

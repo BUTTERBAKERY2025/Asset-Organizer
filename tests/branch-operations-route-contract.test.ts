@@ -9,6 +9,7 @@ const fakes = vi.hoisted(() => ({
   allowMaintenance: true,
   modules: [] as string[],
   editAllowed: false,
+  approveModules: [] as string[],
   kitchenReceiver: false,
   predicates: [] as any[],
   selections: [] as any[],
@@ -46,6 +47,7 @@ vi.mock("../server/storage", () => ({
   storage: {
     hasPermission: vi.fn(async (_userId: string, module: string, action: string) => {
       fakes.permissionCalls.push(module);
+      if (action === "approve") return fakes.approveModules.includes(module);
       if (action !== "view") return fakes.editAllowed;
       return (fakes.allowMaintenance && module === "maintenance") || fakes.modules.includes(module);
     }),
@@ -124,6 +126,7 @@ describe("registered branch operations summary handler", () => {
     fakes.allowMaintenance = true;
     fakes.modules = [];
     fakes.editAllowed = false;
+    fakes.approveModules = [];
     fakes.kitchenReceiver = false;
     fakes.predicates = [];
     fakes.selections = [];
@@ -210,7 +213,8 @@ describe("registered branch operations summary handler", () => {
       const response = await request({ id: "employee", role: "employee" });
       const card = response.body.cards[0];
       expect(card.metrics[3].value).toBe(3);
-      expect(card.alerts.length).toBe(edit && receiver ? 1 : 0);
+      expect(card.alerts.length).toBe(1);
+      expect(card.alerts[0].actionLabel).toBe(edit && receiver ? "تأكيد الاستلام" : "عرض المتابعة");
     },
   );
 
@@ -258,6 +262,72 @@ describe("registered branch operations summary handler", () => {
     expect(dialect.sqlToQuery(fakes.predicates[3]).params).toContain("in_progress");
     expect(dialect.sqlToQuery(fakes.predicates[3]).params).not.toContain("resolved");
     expect(response.body.cards[0].alerts[0].href).toContain("overdue=true");
+    expect(response.body.cards[0].alerts[1]).toMatchObject({
+      count: 3, priority: "normal", actionLabel: "عرض المتابعة",
+      href: "/branch-complaints?branchId=branch-a",
+    });
+    expect(response.body.cards[0].alerts[1].dueAt).toBeUndefined();
+  });
+
+  it.each([
+    ["employee", [], false, true],
+    ["manager", [], false, false],
+    ["employee", ["cashier_performance"], false, false],
+    ["employee", ["cashier_journal"], true, false],
+    ["viewer", ["cashier_journal"], false, false],
+  ])("distinguishes submitted journal review authority for %s with %j", async (role, grants, approve, ownOnly) => {
+    fakes.allowMaintenance = false;
+    fakes.modules = ["cashier_journal"];
+    fakes.approveModules = grants as string[];
+    fakes.rows.push([{ id: "branch-a" }], [], [{ status: "submitted", value: 2, oldestDate: "2026-01-01" }]);
+    const response = await request({ id: "cashier-a", role });
+    const alert = response.body.cards[0].alerts[0];
+    expect(alert.actionLabel).toBe(approve ? "مراجعة للاعتماد" : "عرض المتابعة");
+    expect(alert.href).toBe(`/cashier-journals?status=submitted&startDate=2026-01-01&endDate=${response.body.businessDate}&branchId=branch-a`);
+    expect(alert.dueAt).toBeUndefined();
+    const scope = new PgDialect().sqlToQuery(fakes.predicates[2]);
+    expect(scope.params.includes("cashier-a")).toBe(ownOnly);
+    expect(scope.params).toContain("branch-a");
+    expect(scope.params).toContain("submitted");
+    expect(response.body.cards.map((c: any) => c.id)).toEqual(["cashier"]);
+  });
+
+  it("separates kitchen supplier stages from receipt without fake deadlines", async () => {
+    fakes.allowMaintenance = false;
+    fakes.modules = ["central_kitchen_orders"];
+    fakes.rows.push([{ id: "branch-a" }], [
+      { status: "requested", value: 2 }, { status: "approved", value: 3 }, { status: "prepared", value: 1 },
+    ]);
+    const response = await request({ id: "employee", role: "employee" });
+    const alerts = response.body.cards[0].alerts;
+    expect(alerts.map((a: any) => a.count)).toEqual([2, 3, 1]);
+    expect(alerts.every((a: any) => a.actionLabel === "عرض المتابعة" && a.priority === "low" && !a.dueAt)).toBe(true);
+    expect(alerts[0].href).toBe("/central-kitchen-orders?status=requested&branchId=branch-a");
+  });
+
+  it("keeps incoming pending warehouse stages separate from outgoing shipments", async () => {
+    fakes.allowMaintenance = false;
+    fakes.modules = ["warehouse"];
+    fakes.rows.push([{ id: "branch-a" }], [], [
+      { source: "branch-a", destination: "branch-b", status: "pending", value: 9 },
+      { source: "branch-b", destination: "branch-a", status: "pending", value: 2 },
+      { source: "branch-b", destination: "branch-a", status: "approved", value: 3 },
+      { source: "branch-b", destination: "branch-a", status: "in_transit", value: 1 },
+    ]);
+    const response = await request({ id: "reader", role: "viewer" });
+    const card = response.body.cards[1];
+    expect(card.alerts.map((a: any) => a.count)).toEqual([1, 2, 3]);
+    expect(card.alerts.every((a: any) => a.actionLabel === "عرض المتابعة" && a.href.includes("direction=incoming") && !a.dueAt)).toBe(true);
+    expect(card.metrics[1].value).toBe(9);
+  });
+
+  it.each(["cashier_journal", "branch_complaints", "central_kitchen_orders"])("surfaces failed %s followups as an error, not completion", async module => {
+    fakes.allowMaintenance = false;
+    fakes.modules = [module];
+    fakes.rows.push([{ id: "branch-a" }], new Error("source unavailable"));
+    const response = await request({ id: "employee", role: "employee" });
+    expect(response.body.cards[0]).toMatchObject({ state: "error", metrics: [], alerts: [] });
+    expect(response.body.cards[0].statusLabel).toBeUndefined();
   });
 
   it("scopes cashier counters and backlog to the current actor without approve authority", async () => {

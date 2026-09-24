@@ -139,6 +139,46 @@ export function requiredActions(cards: OperationCard[]) {
   });
 }
 
+export function isNavigationOnly(card: OperationCard) {
+  // Empty results from a measured source (e.g. no approved sales or target)
+  // mean unavailable data, not a navigation-only module.
+  const measured = ["sales", "targets", "cashier", "kitchen", "warehouse", "purchasing", "waste", "closing", "attendance", "complaints", "employees", "documents", "advances"];
+  return card.state === "ready" && !measured.includes(card.id) && card.metrics.length === 0 && card.alerts.length === 0;
+}
+
+export function partitionActions(cards: OperationCard[]) {
+  const actions = requiredActions(cards);
+  return {
+    now: actions.filter(action => action.priority === "critical" || action.priority === "high"),
+    routine: actions.filter(action => action.priority !== "critical" && action.priority !== "high"),
+  };
+}
+
+export function DayOverview({ cards }: { cards: OperationCard[] }) {
+  const hasSalesComparison = dailySalesProgress(cards) !== null;
+  const fields = [
+    { id: "sales", label: "مبيعات اليوميات المعتمدة والمرحلة", unit: "ر.س" },
+    { id: "targets", label: "هدف اليوم المعتمد", unit: "ر.س" },
+    { id: "waste", label: "سجلات هدر اليوم", unit: undefined },
+  ];
+  const visible = fields.flatMap(field => {
+    if (hasSalesComparison && (field.id === "sales" || field.id === "targets")) return [];
+    const card = cards.find(card => card.id === field.id && card.state === "ready");
+    if (!card) return [];
+    const metric = card.metrics.find(metric => metric.label === field.label && metric.unit === field.unit);
+    return [{ ...field, value: metric && Number.isFinite(metric.value) ? metric.value : null }];
+  });
+  if (!visible.length) return null;
+  return <section className="mt-4 rounded-xl border bg-card p-3" aria-labelledby="branch-day-overview">
+    <h2 id="branch-day-overview" className="text-sm font-bold">نظرة على اليوم</h2>
+    <dl className="mt-2 grid gap-3 sm:grid-cols-3">{visible.map(field => <div key={field.id}>
+      <dt className="text-xs text-muted-foreground">{field.label}</dt>
+      <dd className="mt-1 text-sm font-bold">{field.value === null ? "غير متاح" : `${field.value.toLocaleString("en-US")}${field.unit ? ` ${field.unit}` : ""}`}</dd>
+    </div>)}</dl>
+    <p className="mt-2 text-xs text-muted-foreground">المؤشرات المتاحة فقط؛ عدم توفر البيانات لا يعني صفرًا.</p>
+  </section>;
+}
+
 export function dailySalesProgress(cards: OperationCard[]) {
   const sales = cards.find(card => card.id === "sales" && card.state === "ready");
   const targets = cards.find(card => card.id === "targets" && card.state === "ready");
@@ -183,19 +223,23 @@ export function QuickActions({ cards, onOpen }: { cards: OperationCard[]; onOpen
   </section>;
 }
 
-export function NeedsActionStrip({ branchId, cards, onOpen }: { branchId: string; cards: OperationCard[]; onOpen: (href: string) => void }) {
+export function NeedsActionStrip({ branchId, cards, onOpen, routine = false }: { branchId: string; cards: OperationCard[]; onOpen: (href: string) => void; routine?: boolean }) {
   const [expanded, setExpanded] = useState(false);
-  useEffect(() => setExpanded(false), [branchId]);
-  const actions = requiredActions(cards);
+  const [search, setSearch] = useState("");
+  useEffect(() => { setExpanded(false); setSearch(""); }, [branchId]);
+  const topics = partitionActions(cards)[routine ? "routine" : "now"];
+  const actions = topics.filter(action => `${action.cardTitle} ${action.label}`.includes(search.trim()));
   const allReady = cards.every((card) => card.state === "ready");
+  const headingId = routine ? "branch-ops-routine" : "branch-ops-needs-action";
 
-  return <section className="mt-4 rounded-2xl border border-border bg-card p-4 shadow-sm" aria-labelledby="branch-ops-needs-action" data-testid="branch-operations-needs-action">
+  return <section className="mt-4 rounded-2xl border border-border bg-card p-4 shadow-sm" aria-labelledby={headingId} data-testid={routine ? "branch-operations-routine" : "branch-operations-needs-action"}>
     <div className="flex items-center gap-2">
       <div>
-        <h2 id="branch-ops-needs-action" className="font-black text-foreground">المطلوب الآن</h2>
-        {actions.length > 0 && <p className="text-[11px] text-muted-foreground">{actions.length.toLocaleString("en-US")} تنبيهًا مرتبة حسب أولوية العمل</p>}
+        <h2 id={headingId} className="font-black text-foreground">{routine ? "المتابعات الروتينية" : "المطلوب الآن"}</h2>
+        <p className="text-[11px] text-muted-foreground">{topics.length.toLocaleString("en-US")} موضوع متابعة · {routine ? "أولوية عادية ومنخفضة" : "أولوية حرجة وعالية"} — ليست مجموع السجلات</p>
       </div>
     </div>
+    {routine && topics.length > 4 && <input aria-label="بحث المتابعات الروتينية" placeholder="بحث باسم الوحدة أو المتابعة" value={search} onChange={event => { setSearch(event.target.value); setExpanded(true); }} className="mt-3 min-h-11 w-full rounded-lg border bg-background px-3 text-sm" />}
     {actions.length ? <div className="mt-3 space-y-2">
       {actions.slice(0, expanded ? undefined : 4).map(action => {
         const urgent = action.priority === "critical" || action.priority === "high";
@@ -204,14 +248,14 @@ export function NeedsActionStrip({ branchId, cards, onOpen }: { branchId: string
             <span className={`text-xs font-bold ${urgent ? "text-amber-800 dark:text-amber-200" : "text-muted-foreground"}`}>{urgent ? "عاجل" : "متابعة"}</span>
             <p className="font-semibold">{action.cardTitle} · {action.label} <b>({action.count.toLocaleString("en-US")})</b></p>
             {action.description && <p className="mt-1 text-xs text-muted-foreground">{action.description}</p>}
-            {action.dueAt && <p className="mt-1 text-xs text-muted-foreground">الموعد: {formatServerDate(action.dueAt)}{Number.isFinite(Date.parse(action.dueAt)) && ` · ${new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Riyadh", hour: "2-digit", minute: "2-digit" }).format(new Date(action.dueAt))}`}</p>}
+            {action.dueAt && Number.isFinite(Date.parse(action.dueAt)) && <p className="mt-1 text-xs text-muted-foreground">أقدم موعد ضمن الموضوع: {formatServerDate(action.dueAt)} · {new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Riyadh", hour: "2-digit", minute: "2-digit" }).format(new Date(action.dueAt))}</p>}
           </div>
-          <Button variant="outline" className="min-h-11 shrink-0" onClick={() => onOpen(action.href)} aria-label={`${action.cardTitle}: ${action.label}`}>{action.actionLabel ? `فتح صفحة ${action.actionLabel}` : "فتح المتابعة"}<ChevronLeft className="mr-1 h-4 w-4" /></Button>
+          <Button variant="outline" className="min-h-11 shrink-0" onClick={() => onOpen(action.href)} aria-label={`فتح المتابعة: ${action.cardTitle}: ${action.label}`}>فتح المتابعة<ChevronLeft className="mr-1 h-4 w-4" /></Button>
         </div>;
       })}
       {actions.length > 4 && <button type="button" className="min-h-11 px-2 text-xs font-black text-primary" onClick={() => setExpanded(value => !value)} data-testid="button-toggle-branch-actions">{expanded ? "عرض أقل" : `عرض المزيد (${actions.length - 4})`}</button>}
-    </div> : <p className="mt-2 text-sm text-muted-foreground" data-testid="branch-operations-actions-empty">{cards.length === 0 ? "لا توجد وحدات مسموحة للتحقق من إجراءاتها." : allReady ? "لا توجد إجراءات معلقة ضمن الوحدات المتاحة." : "تعذر التحقق من بعض الوحدات؛ أعد المحاولة قبل اعتبار يوم العمل مكتملًا."}</p>}
-    {actions.length > 0 && !allReady && <p className="mt-3 text-xs text-destructive" role="status">تعذر التحقق من بعض الوحدات؛ القائمة غير مكتملة حتى إعادة المحاولة.</p>}
+    </div> : <p className="mt-2 text-sm text-muted-foreground" data-testid="branch-operations-actions-empty">{search ? "لا توجد نتائج مطابقة للبحث." : cards.length === 0 ? "لا توجد وحدات مسموحة للتحقق من إجراءاتها." : cards.every(isNavigationOnly) ? "المتاح روابط تنقل فقط؛ لا توجد بيانات للتحقق من المتابعات." : routine ? "لا توجد موضوعات روتينية معروضة من المصادر المتاحة." : "لا توجد موضوعات حرجة أو عالية معروضة من المصادر المتاحة؛ راجع المتابعات الروتينية."}</p>}
+    {!allReady && <p className="mt-3 text-xs text-destructive" role="status">تعذر التحقق من بعض الوحدات؛ القائمة غير مكتملة حتى إعادة المحاولة.</p>}
   </section>;
 }
 
@@ -223,10 +267,11 @@ export function OperationCardView({ card, section, onOpen, onRefresh }: { card: 
         <PlatformAppIcon icon={meta.icon} color={meta.color} />
         <span className="min-w-0 flex-1 pt-1">
           <h3 className="block break-words text-base font-black leading-snug text-foreground">{card.title}</h3>
+          {isNavigationOnly(card) && <span className="mt-1 block text-xs font-bold text-muted-foreground">رابط تنقل فقط · لا يعكس حالة إنجاز</span>}
           {card.state === "ready" && card.metrics.length > 0 && card.statusLabel && <span className="mt-1 block text-xs font-semibold text-muted-foreground">{card.statusLabel}</span>}
           {card.state === "error" ? <span className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-destructive"><AlertTriangle className="h-3.5 w-3.5" />تعذر تحديث المؤشرات</span>
             : card.metrics.length > 0 ? <span className="mt-1.5 block space-y-0.5 text-xs leading-5 text-muted-foreground">{card.metrics.map((metric) => <span className="block break-words" key={metric.label}><b className="font-black text-foreground">{metric.value.toLocaleString("en-US")}{metric.unit ? ` ${metric.unit}` : ""}</b> {metric.label}</span>)}</span>
-              : <span className="mt-1.5 block text-xs text-muted-foreground">{card.statusLabel ?? "صفحة متابعة — لا توجد مؤشرات معروضة"}</span>}
+              : <span className="mt-1.5 block text-xs text-muted-foreground">{card.statusLabel ?? (isNavigationOnly(card) ? "صفحة متابعة — لا توجد مؤشرات معروضة" : "المؤشرات غير متاحة — لا يعني ذلك صفرًا")}</span>}
           {card.state === "ready" && card.description && <span className="mt-1.5 block text-xs leading-5 text-muted-foreground">{card.description}</span>}
         </span>
         <span className="mt-1 inline-flex shrink-0 items-center gap-0.5 text-xs font-black text-primary"><span className="sr-only">فتح الصفحة</span><ChevronLeft className="h-4 w-4" aria-hidden="true" /></span>

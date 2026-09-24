@@ -13,7 +13,7 @@ import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { branchBoardUrl, branchOperationUrl } from "@/lib/branch-operation-navigation";
 import {
   AlertTriangle, BoardSkeleton, BusinessDate, EmptyState, NeedsActionStrip,
-  OperationCardView, DailySalesProgress, QuickActions, SectionHeader, Settings2, ShieldAlert, Store, groupCards, type OperationCard,
+  OperationCardView, DayOverview, DailySalesProgress, QuickActions, SectionHeader, Settings2, ShieldAlert, Store, groupCards, isNavigationOnly, SECTIONS, type OperationCard,
 } from "@/components/branch-operations/presentation";
 
 type BranchOperationsSummary = {
@@ -59,17 +59,25 @@ export default function BranchOperationsPage() {
 
   useEffect(() => {
     if (!validBoard || isSwitchingBranch) return;
+    let frame = 0;
+    const reveal = () => {
     const target = window.location.hash.slice(1);
     if (!validBoard.cards.some((card) => target === `branch-operation-card-${card.id}`)) return;
-    const frame = requestAnimationFrame(() => {
+    frame = requestAnimationFrame(() => {
       const element = document.getElementById(target);
-      const disclosure = element?.closest("details");
-      if (disclosure) disclosure.open = true;
+      let parent = element?.parentElement;
+      while (parent) {
+        if (parent instanceof HTMLDetailsElement) parent.open = true;
+        parent = parent.parentElement;
+      }
       element?.scrollIntoView({ block: "center", behavior: "instant" });
       element?.querySelector("button")?.focus({ preventScroll: true });
     });
-    return () => cancelAnimationFrame(frame);
-  }, [validBoard?.branchId, Boolean(validBoard), isSwitchingBranch]);
+    };
+    reveal();
+    window.addEventListener("hashchange", reveal);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("hashchange", reveal); };
+  }, [validBoard, isSwitchingBranch]);
 
   const changeBranch = async (branchId: string) => {
     if (branchId === selectedBranchId) return;
@@ -153,11 +161,14 @@ export default function BranchOperationsPage() {
         {validBoard && !isSwitchingBranch && !board.isLoading && !board.isError && (
           <>
             <NeedsActionStrip key={validBoard.branchId} branchId={validBoard.branchId} cards={validBoard.cards} onOpen={go} />
-            <QuickActions key={`quick-${validBoard.branchId}`} cards={validBoard.cards} onOpen={go} />
+            <DayOverview cards={validBoard.cards} />
             <DailySalesProgress cards={validBoard.cards} />
+            <NeedsActionStrip key={`routine-${validBoard.branchId}`} branchId={validBoard.branchId} cards={validBoard.cards} onOpen={go} routine />
+            <QuickActions key={`quick-${validBoard.branchId}`} cards={validBoard.cards} onOpen={go} />
             {validBoard.cards.length === 0 ? <EmptyState title="لا توجد وحدات متاحة" text="لا توجد صفحات تشغيلية مسموح بها لهذا الحساب في الفرع المحدد." icon={Settings2} /> : (
               <div className="mt-6 space-y-8">
-                {groupCards(validBoard.cards).map(({ section, cards }) => section.id === "people" ? (
+                <h2 className="text-lg font-black">المؤشرات وصفحات العمل</h2>
+                {groupCards(validBoard.cards.filter(card => !isNavigationOnly(card))).map(({ section, cards }) => section.id === "people" ? (
                   <details key={`${validBoard.branchId}-${section.id}`} className="rounded-xl border border-border bg-muted/20 p-4" data-testid="branch-operations-section-people">
                     <summary className="min-h-8 cursor-pointer font-bold" id="branch-ops-people">{section.label}</summary>
                     <p className="mb-3 text-xs text-muted-foreground">{section.hint}</p>
@@ -171,6 +182,11 @@ export default function BranchOperationsPage() {
                     </div>
                   </section>
                 ))}
+                {validBoard.cards.some(isNavigationOnly) && <details className="rounded-xl border bg-muted/20 p-4" data-testid="branch-operations-navigation-only">
+                  <summary className="min-h-11 cursor-pointer font-bold">روابط تنقل فقط ({validBoard.cards.filter(isNavigationOnly).length})</summary>
+                  <p className="mb-3 text-xs text-muted-foreground">هذه الصفحات لا توفر مؤشرات للوحة؛ فتحها لا يعني وجود إجراء مطلوب أو اكتماله.</p>
+                  <div className="branch-ops-grid">{validBoard.cards.filter(isNavigationOnly).map(card => <OperationCardView key={card.id} card={card} section={SECTIONS[2]} onOpen={go} onRefresh={() => board.refetch()} />)}</div>
+                </details>}
               </div>
             )}
           </>
