@@ -20,6 +20,14 @@ export type OperationCard = {
   quickActions?: Array<{ label: string; href: string; kind: "create" | "receive" }>;
 };
 
+function workflowHref(cardId: string, href: string) {
+  if (cardId !== "maintenance") return href;
+  const url = new URL(href, "https://internal.invalid");
+  // The maintenance landing page is now the ticket workflow; keep the branch
+  // scope supplied by the dashboard and open actionable tickets by default.
+  if (!url.searchParams.has("status")) url.searchParams.set("status", "open");
+  return `${url.pathname}${url.search}${url.hash}`;
+}
 type Glyph = typeof Wrench;
 
 /** Daily workflow groups; administrative follow-up is secondary. */
@@ -124,7 +132,7 @@ export function requiredActions(cards: OperationCard[]) {
   const rank = { critical: 0, high: 1, normal: 2, low: 3 };
   const due = (value?: string) => value && Number.isFinite(Date.parse(value)) ? Date.parse(value) : Infinity;
   const sorted = cards.flatMap(card => card.state === "ready" ? card.alerts.filter(alert => alert.count > 0)
-    .map((alert, index) => ({ ...alert, cardId: card.id, cardTitle: card.title, index })) : [])
+    .map((alert, index) => ({ ...alert, href: workflowHref(card.id, alert.href), cardId: card.id, cardTitle: card.title, index })) : [])
     .sort((a, b) => rank[a.priority ?? "normal"] - rank[b.priority ?? "normal"] || due(a.dueAt) - due(b.dueAt));
   const seen = new Set<string>();
   return sorted.filter(action => {
@@ -219,7 +227,7 @@ export function QuickActions({ cards, onOpen, compact = false }: { cards: Operat
     <h2 id="branch-quick-actions" className="mb-2 text-sm font-bold">وصول سريع</h2>
     <div className="flex flex-wrap items-start gap-2">
       {visible.map(card => <div key={card.id} className="flex flex-wrap gap-1">
-        {(card.quickActions?.length ? card.quickActions : [{ label: `فتح ${card.title}`, href: card.href, kind: null }]).map((action, index) =>
+        {(card.quickActions?.length ? card.quickActions : [{ label: `فتح ${card.title}`, href: workflowHref(card.id, card.href), kind: null }]).map((action, index) =>
           <Button key={`${card.id}-${index}`} variant="outline" className="min-h-11" onClick={() => onOpen(action.href)}>
             {action.kind ? `${action.label} · ${card.title}` : action.label}
           </Button>)}
@@ -285,7 +293,7 @@ export function OperationCardView({ card, section, onOpen, onRefresh, expanded =
   const meta = CARD_META[card.id] ?? FALLBACK_META;
   const panelId = `branch-operation-card-panel-${card.id}`;
   return <article id={`branch-operation-card-${card.id}`} className={`branch-ops-card border border-border bg-card text-card-foreground shadow-sm ${expanded ? "branch-ops-card-expanded" : ""}`} data-testid={`branch-operation-card-${card.id}`}>
-    <button type="button" className="group branch-ops-card-main" onClick={() => onOpen(card.href)} aria-label={`فتح ${card.title}`}>
+    <button type="button" className="group branch-ops-card-main" onClick={() => onOpen(workflowHref(card.id, card.href))} aria-label={`فتح ${card.title}`}>
       <div className="flex items-center gap-3">
         <PlatformAppIcon icon={meta.icon} color={meta.color} />
         <span className="min-w-0 flex-1">

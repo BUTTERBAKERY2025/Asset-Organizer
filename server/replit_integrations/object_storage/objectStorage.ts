@@ -158,6 +158,11 @@ export class ObjectStorageService {
 
   // Gets the object entity file from the object path.
   async getObjectEntityFile(objectPath: string): Promise<File> {
+    // Server-owned maintenance evidence must never be served through generic
+    // object or governance endpoints, even to another authenticated user.
+    if (decodeURIComponent(objectPath).startsWith("/objects/maintenance-tickets/")) {
+      throw new ObjectNotFoundError();
+    }
     const objectFile = this.getPrivateObjectFile(objectPath);
     const [exists] = await objectFile.exists();
     if (!exists) {
@@ -214,7 +219,7 @@ export class ObjectStorageService {
   }
 
   async downloadPrivateObject(objectPath: string): Promise<{ data: Buffer; contentType?: string; size?: number }> {
-    const file = await this.getObjectEntityFile(objectPath);
+    const file = this.getPrivateObjectFile(objectPath);
     const [metadata] = await file.getMetadata();
     const chunks: Buffer[] = [];
     for await (const chunk of file.createReadStream()) {

@@ -22,8 +22,26 @@ import { useReactToPrint } from "react-to-print";
 import type { Branch, InventoryItem } from "@shared/schema";
 import { PrintHeader, PrintFooter } from "@/components/print-header";
 import { finalizeBrandedWorkbook } from "@/lib/excel-utils";
+import { MaintenanceTickets } from "@/components/maintenance-tickets";
 
 export default function MaintenancePage() {
+  const search = new URLSearchParams(window.location.search);
+  const [section, setSection] = useState<"tickets" | "report">(search.get("section") === "report" ? "report" : "tickets");
+  const changeSection = (next: "tickets" | "report") => {
+    setSection(next);
+    const url = new URL(window.location.href);
+    if (next === "report") url.searchParams.set("section", "report");
+    else url.searchParams.delete("section");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+  };
+  if (section === "report") return <MaintenanceReport onShowTickets={() => changeSection("tickets")} />;
+  return <Layout><div className="page-container space-y-4 py-5 sm:py-8" dir="rtl">
+    <div className="flex justify-end"><Button variant="outline" onClick={() => changeSection("report")} data-testid="button-maintenance-inventory-report"><AlertTriangle className="ml-2 h-4 w-4" />تقرير الأصول والصيانة</Button></div>
+    <MaintenanceTickets />
+  </div></Layout>;
+}
+
+function MaintenanceReport({ onShowTickets }: { onShowTickets: () => void }) {
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const printRef = useRef<HTMLDivElement>(null);
@@ -155,7 +173,11 @@ export default function MaintenancePage() {
           description="الأصناف التي تحتاج صيانة أو تالفة أو مفقودة"
           backHref="/dashboard"
           actions={
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={onShowTickets} className="gap-2">
+                <Wrench className="w-4 h-4" />
+                <span>بلاغات الصيانة</span>
+              </Button>
               <Button variant="outline" size="sm" onClick={() => handlePrint()} className="gap-2" data-testid="button-print-maintenance">
                 <Printer className="w-4 h-4" />
                 <span>طباعة</span>

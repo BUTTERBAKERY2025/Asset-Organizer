@@ -72,6 +72,10 @@ self.addEventListener('fetch', (event) => {
     if (isNotificationApiPath(url.pathname)) {
       return;
     }
+    // Ticket access must be re-authorized, including private image downloads.
+    if (url.pathname === '/api/maintenance-tickets' || url.pathname.startsWith('/api/maintenance-tickets/')) {
+      return;
+    }
     const SAFE_STALE_ENDPOINTS = [
       '/api/branches', '/api/products', '/api/product-categories',
       '/api/departments', '/api/roles', '/api/operations/products',

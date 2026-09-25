@@ -988,7 +988,7 @@ export interface IStorage {
   getDailyLogExpenses(dailyLogId: number): Promise<ProjectExpense[]>;
 
   // User Permissions
-  getUserPermissions(userId: string): Promise<UserPermission[]>;
+  getUserPermissions(userId: string, options?: { bypassCache?: boolean }): Promise<UserPermission[]>;
   getUserPermissionsWithSources(userId: string): Promise<PermissionWithSource[]>;
   getInheritedPermissions(userId: string): Promise<{ module: string; action: string; permissionId: number }[]>;
   setUserPermission(permission: InsertUserPermission): Promise<UserPermission>;
@@ -3960,10 +3960,10 @@ export class DatabaseStorage implements IStorage {
   private permissionsCache = new Map<string, { data: UserPermission[], timestamp: number }>();
   private PERMISSIONS_CACHE_TTL = 30000; // 30 seconds cache
 
-  async getUserPermissions(userId: string): Promise<UserPermission[]> {
+  async getUserPermissions(userId: string, options?: { bypassCache?: boolean }): Promise<UserPermission[]> {
     const cached = this.permissionsCache.get(userId);
     const now = Date.now();
-    if (cached && (now - cached.timestamp) < this.PERMISSIONS_CACHE_TTL) {
+    if (!options?.bypassCache && cached && (now - cached.timestamp) < this.PERMISSIONS_CACHE_TTL) {
       return cached.data;
     }
     
@@ -4051,7 +4051,9 @@ export class DatabaseStorage implements IStorage {
       });
     });
     
-    this.permissionsCache.set(userId, { data: mergedPerms, timestamp: now });
+    // Security-sensitive callers resolve fresh without reading OR populating
+    // the shared cache. Keep the existing effective-grant algorithm identical.
+    if (!options?.bypassCache) this.permissionsCache.set(userId, { data: mergedPerms, timestamp: now });
     return mergedPerms;
   }
 

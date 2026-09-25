@@ -161,7 +161,7 @@ describe("registered branch operations summary handler", () => {
     expect(response.statusCode).toBe(200);
     expect(response.body.cards.map((card: any) => card.id)).toEqual(["maintenance"]);
     expect(fakes.permissionCalls).toHaveLength(14);
-    expect(fakes.selectCalls).toBe(1);
+    expect(fakes.selectCalls).toBe(3);
   });
 
   it("returns global 403 when no module is authorized, without metric queries", async () => {
@@ -193,6 +193,8 @@ describe("registered branch operations summary handler", () => {
     fakes.modules = ["waste_tracking"];
     fakes.rows.push(
       [{ id: "branch-a" }],
+      [],
+      [],
       new Error("waste metric unavailable"),
     );
     const response = await request({ id: "employee", role: "employee" });
@@ -205,6 +207,57 @@ describe("registered branch operations summary handler", () => {
     const failed = response.body.cards.find((card: any) => card.id === "waste");
     expect(failed).toMatchObject({ state: "error", metrics: [], alerts: [] });
     expect(failed.metrics).not.toEqual([{ value: 0 }]);
+  });
+
+  it("reports real branch-scoped maintenance status and overdue counts with disjoint alerts", async () => {
+    fakes.rows.push(
+      [{ id: "branch-a" }],
+      [
+        { status: "open", value: 5 },
+        { status: "assigned", value: 2 },
+        { status: "in_progress", value: 3 },
+        { status: "closed", value: 4 },
+      ],
+      [
+        { status: "open", value: 2, oldestDue: new Date("2025-01-01T09:00:00Z") },
+        { status: "assigned", value: 1, oldestDue: new Date("2025-01-02T09:00:00Z") },
+        { status: "in_progress", value: 1, oldestDue: new Date("2025-01-03T09:00:00Z") },
+      ],
+    );
+    const response = await request({ id: "employee", role: "employee" });
+    const card = response.body.cards[0];
+    expect(card.metrics.map((metric: any) => metric.value)).toEqual([5, 2, 3, 4, 4]);
+    expect(card.alerts.map((alert: any) => alert.count)).toEqual([4, 3]);
+    expect(card.alerts[0]).toMatchObject({
+      href: "/maintenance?branchId=branch-a&status=active&overdue=true",
+      dueAt: "2025-01-01T09:00:00.000Z",
+      actionLabel: "عرض المتابعة",
+      priority: "high",
+    });
+    expect(card.alerts[1]).toMatchObject({
+      href: "/maintenance?branchId=branch-a&status=open",
+      actionLabel: "عرض المتابعة",
+      priority: "normal",
+    });
+    expect(card.alerts.reduce((sum: number, alert: any) => sum + alert.count, 0)).toBe(7);
+
+    const dialect = new PgDialect();
+    expect(dialect.sqlToQuery(fakes.predicates[1]).params).toEqual(["branch-a"]);
+    const overdueScope = dialect.sqlToQuery(fakes.predicates[2]);
+    expect(overdueScope.params.slice(0, 4)).toEqual(["branch-a", "open", "assigned", "in_progress"]);
+    expect(overdueScope.sql).toContain('"maintenance_tickets"."due_at" <');
+  });
+
+  it("surfaces an unavailable maintenance migration as a card error without synthetic zeros", async () => {
+    fakes.rows.push([{ id: "branch-a" }], new Error("relation maintenance_tickets does not exist"), []);
+    const response = await request({ id: "employee", role: "employee" });
+    expect(response.body.cards[0]).toMatchObject({
+      id: "maintenance",
+      state: "error",
+      metrics: [],
+      alerts: [],
+    });
+    expect(response.body.cards[0].statusLabel).toBeUndefined();
   });
 
   it.each([[false, false], [true, false], [true, true]])(

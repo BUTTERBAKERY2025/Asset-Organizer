@@ -194,7 +194,29 @@ export const insertInventoryItemSchema = createInsertSchema(
 export type InventoryItem = typeof inventoryItems.$inferSelect;
 export type InsertInventoryItem = z.infer<typeof insertInventoryItemSchema>;
 
-// Audit logs table for tracking changes (legacy - for inventory items)
+export const maintenanceTickets = pgTable("maintenance_tickets", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  assetId: varchar("asset_id").references(() => inventoryItems.id),
+  description: text("description").notNull(),
+  priority: text("priority").notNull().default("normal"),
+  assigneeUserId: varchar("assignee_user_id").references(() => users.id),
+  dueAt: timestamp("due_at"),
+  status: text("status").notNull().default("open"),
+  closedAt: timestamp("closed_at"),
+  version: integer("version").notNull().default(1),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  updatedBy: varchar("updated_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => [
+  index("idx_maintenance_tickets_branch_status_due").on(t.branchId, t.status, t.dueAt),
+  index("idx_maintenance_tickets_assignee").on(t.assigneeUserId),
+  check("chk_maintenance_tickets_status", sql`${t.status} in ('open','assigned','in_progress','closed')`),
+  check("chk_maintenance_tickets_priority", sql`${t.priority} in ('low','normal','high','urgent')`),
+  check("chk_maintenance_tickets_version", sql`${t.version} > 0`),
+  check("chk_maintenance_tickets_assignment", sql`${t.status} not in ('assigned','in_progress') or ${t.assigneeUserId} is not null`),
+]);
 export const auditLogs = pgTable("audit_logs", {
   id: serial("id").primaryKey(),
   itemId: varchar("item_id")
@@ -1874,7 +1896,7 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
     // المخزون والمخازن والصيانة
     { module: "inventory", actions: ["view", "create", "edit", "export"] },
     { module: "asset_transfers", actions: ["view", "create", "edit", "export"] },
-    { module: "maintenance", actions: ["view", "create", "edit", "export"] },
+    { module: "maintenance", actions: ["view", "create", "edit", "approve", "export"] },
     { module: "inspections", actions: ["view", "create", "edit", "export"] },
     { module: "warehouse", actions: ["view", "create", "edit", "export"] },
     { module: "delivery_tasks", actions: ["view", "create", "edit", "approve", "export"] },
@@ -1908,6 +1930,7 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
     { module: "timesheet", actions: ["view", "export"] },
     { module: "operations", actions: ["view", "create", "edit", "export"] },
     { module: "branch_complaints", actions: ["view", "create", "edit"] },
+    { module: "maintenance", actions: ["view", "create", "edit"] },
     { module: "central_kitchen_orders", actions: ["view", "create", "edit", "export"] },
     { module: "delivery_tasks", actions: ["view", "approve", "export"] },
     { module: "waste_tracking", actions: ["view", "create", "edit", "export"] },
@@ -2048,6 +2071,7 @@ export const JOB_ROLE_PERMISSION_TEMPLATES: Record<
     { module: "dashboard", actions: ["view"] },
     { module: "inventory", actions: ["view", "edit"] },
     { module: "asset_transfers", actions: ["view", "create"] },
+    { module: "maintenance", actions: ["view", "create", "edit"] },
   ],
 
   // سكرتير تنفيذي - صلاحيات السكرتارية التنفيذية الكاملة
@@ -13514,3 +13538,38 @@ export const centralKitchenRecipeOperations = pgTable("central_kitchen_recipe_op
 export type CentralKitchenRecipe = typeof centralKitchenRecipes.$inferSelect;
 export type CentralKitchenRecipeIngredient = typeof centralKitchenRecipeIngredients.$inferSelect;
 export type CentralKitchenRecipeOperation = typeof centralKitchenRecipeOperations.$inferSelect;
+
+export type MaintenanceTicket = typeof maintenanceTickets.$inferSelect;
+
+export const maintenanceTicketAttachments = pgTable("maintenance_ticket_attachments", {
+  id: serial("id").primaryKey(),
+  ticketId: integer("ticket_id").notNull().references(() => maintenanceTickets.id),
+  originalName: text("original_name").notNull(),
+  storagePath: text("storage_path").notNull(),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
+  archivedAt: timestamp("archived_at"),
+  archivedBy: varchar("archived_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, t => [
+  index("idx_maintenance_ticket_attachments_ticket").on(t.ticketId),
+  uniqueIndex("uq_maintenance_ticket_attachment_path").on(t.storagePath),
+  check("chk_maintenance_ticket_attachment_size", sql`${t.sizeBytes} > 0`),
+]);
+
+export const maintenanceTicketEvents = pgTable("maintenance_ticket_events", {
+  id: serial("id").primaryKey(),
+  ticketId: integer("ticket_id").notNull().references(() => maintenanceTickets.id),
+  actorUserId: varchar("actor_user_id").notNull().references(() => users.id),
+  eventType: text("event_type").notNull(),
+  fromStatus: text("from_status"),
+  toStatus: text("to_status"),
+  reason: text("reason"),
+  changes: jsonb("changes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, t => [index("idx_maintenance_ticket_events_ticket").on(t.ticketId, t.createdAt)]);
+
+export type MaintenanceTicketEvent = typeof maintenanceTicketEvents.$inferSelect;
+
+export type MaintenanceTicketAttachment = typeof maintenanceTicketAttachments.$inferSelect;

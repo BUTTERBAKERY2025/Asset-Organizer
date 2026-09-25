@@ -76,6 +76,10 @@ export function registerObjectStorageRoutes(app: Express): void {
     try {
       // Extract the object path from the URL (everything after /api/protected-files)
       const objectPath = req.path.replace('/api/protected-files', '');
+      // Maintenance evidence is served only by its branch/permission-scoped API.
+      if (decodeURIComponent(objectPath).startsWith("/objects/maintenance-tickets/")) {
+        return res.status(404).json({ error: "Object not found" });
+      }
       const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
       await objectStorageService.downloadObject(objectFile, res);
     } catch (error) {
@@ -93,6 +97,9 @@ export function registerObjectStorageRoutes(app: Express): void {
    */
   app.get("/objects/:objectPath(*)", async (req, res) => {
     try {
+      if (decodeURIComponent(req.path).startsWith("/objects/maintenance-tickets/")) {
+        return res.status(404).json({ error: "Object not found" });
+      }
       const objectFile = await objectStorageService.getObjectEntityFile(req.path);
       await objectStorageService.downloadObject(objectFile, res);
     } catch (error) {

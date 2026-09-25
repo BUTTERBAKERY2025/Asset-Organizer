@@ -17,6 +17,7 @@ import {
   employeeSchedules,
   attendanceRecords,
   leaveRequests,
+  maintenanceTickets,
 } from "@shared/schema";
 import type {
   BranchOperationsCard,
@@ -53,8 +54,68 @@ const branchHref = (path: string, branchId: string) =>
   `${path}${path.includes("?") ? "&" : "?"}branchId=${encodeURIComponent(branchId)}`;
 
 const definitions: CardDefinition[] = [
-  { id: "maintenance", title: "الصيانة", group: "operations", module: "maintenance", href: "/maintenance",
-    load: async () => ({ metrics: [], alerts: [], statusLabel: "سجل الصيانة", description: "عرض سجل الصيانة الحالي؛ لا يتوفر مصدر بلاغات بمسؤول وموعد إغلاق." }) },
+  {
+    id: "maintenance", title: "الصيانة", group: "operations", module: "maintenance", href: "/maintenance",
+    load: async (branchId) => {
+      const now = new Date();
+      const [statusRows, overdueRows] = await Promise.all([
+        db.select({ status: maintenanceTickets.status, value: count() }).from(maintenanceTickets)
+          .where(eq(maintenanceTickets.branchId, branchId))
+          .groupBy(maintenanceTickets.status),
+        db.select({
+          status: maintenanceTickets.status,
+          value: count(),
+          oldestDue: sql<string | Date | null>`min(${maintenanceTickets.dueAt})`,
+        }).from(maintenanceTickets)
+          .where(and(
+            eq(maintenanceTickets.branchId, branchId),
+            inArray(maintenanceTickets.status, ["open", "assigned", "in_progress"]),
+            lt(maintenanceTickets.dueAt, now),
+          ))
+          .groupBy(maintenanceTickets.status),
+      ]);
+      const counts = new Map(statusRows.map(row => [row.status, Number(row.value)]));
+      const overdueByStatus = new Map(overdueRows.map(row => [row.status, Number(row.value)]));
+      const overdueCount = overdueRows.reduce((sum, row) => sum + Number(row.value), 0);
+      const overdueOpen = overdueByStatus.get("open") || 0;
+      const openNotOverdue = Math.max(0, (counts.get("open") || 0) - overdueOpen);
+      const oldestDue = overdueRows.reduce<Date | undefined>((oldest, row) => {
+        if (!row.oldestDue) return oldest;
+        const value = new Date(row.oldestDue);
+        return !oldest || value < oldest ? value : oldest;
+      }, undefined);
+      return {
+        metrics: [
+          { label: "مفتوحة", value: counts.get("open") || 0 },
+          { label: "مسندة", value: counts.get("assigned") || 0 },
+          { label: "قيد التنفيذ", value: counts.get("in_progress") || 0 },
+          { label: "مغلقة", value: counts.get("closed") || 0 },
+          { label: "نشطة متأخرة", value: overdueCount },
+        ],
+        alerts: [
+          ...(overdueCount ? [{
+            label: "بلاغات صيانة نشطة تجاوزت موعدها",
+            count: overdueCount,
+            href: `${branchHref("/maintenance", branchId)}&status=active&overdue=true`,
+            priority: "high" as const,
+            dueAt: oldestDue?.toISOString(),
+            actionLabel: "عرض المتابعة",
+            description: "تشمل البلاغات المفتوحة والمسندة وقيد التنفيذ التي تجاوز موعدها؛ الرابط للعرض والمتابعة فقط.",
+          }] : []),
+          ...(openNotOverdue ? [{
+            label: "بلاغات مفتوحة غير متأخرة",
+            count: openNotOverdue,
+            href: `${branchHref("/maintenance", branchId)}&status=open`,
+            priority: "normal" as const,
+            actionLabel: "عرض المتابعة",
+            description: "العدد يستبعد البلاغات المفتوحة المتأخرة المحسوبة أعلاه؛ يعرض الرابط جميع البلاغات المفتوحة ولا يمنح صلاحية تعديل.",
+          }] : []),
+        ],
+        statusLabel: overdueCount ? "توجد بلاغات متأخرة" : "متابعة بلاغات الصيانة",
+        description: "عدادات بلاغات الصيانة للفرع حسب الحالة؛ الروابط للعرض والمتابعة فقط.",
+      };
+    },
+  },
   {
     id: "complaints", title: "شكاوى الفروع", group: "operations", module: "branch_complaints", href: "/branch-complaints",
     load: async (branchId, _businessDate, req) => {
