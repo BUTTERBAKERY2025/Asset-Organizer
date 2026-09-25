@@ -36,3 +36,8 @@ CREATE TABLE IF NOT EXISTS delivery_assignment_events (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_delivery_events_assignment ON delivery_assignment_events(assignment_id, created_at);
+
+-- Private operational proof: access is through the application's authorized
+-- server connection, never through the public Supabase data API.
+ALTER TABLE delivery_assignments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE delivery_assignment_events ENABLE ROW LEVEL SECURITY;
