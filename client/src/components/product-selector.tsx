@@ -148,6 +148,7 @@ export function ProductSelector({
             <div className="flex items-center gap-2">
               <Package className="w-4 h-4 text-primary" />
               <span className="font-medium">{selectedProduct.name}</span>
+              {selectedProduct.unit && <span className="text-xs text-muted-foreground">· {selectedProduct.unit}</span>}
               {selectedProduct.sku && (
                 <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{selectedProduct.sku}</code>
               )}
@@ -250,6 +251,7 @@ export function ProductSelector({
                                 <span className={cn("text-sm", isSelected && "font-medium")}>
                                   {product.name}
                                 </span>
+                                {product.unit && <span className="text-xs text-muted-foreground">· {product.unit}</span>}
                                 {product.sku && (
                                   <code className="text-xs bg-muted px-1 py-0.5 rounded text-muted-foreground">
                                     {product.sku}

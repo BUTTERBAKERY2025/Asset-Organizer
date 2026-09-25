@@ -85,7 +85,7 @@ describe("central kitchen workflow rules", () => {
       neededDate: "2028-02-29",
       neededTime: "09:30",
       idempotencyKey: "request-123",
-      items: [{ productName: "Bread", requestedQuantity: 2, reportedAvailableQuantity: 0, unit: "tray" }],
+      items: [{ productId: 7, productName: "Bread", requestedQuantity: 2, reportedAvailableQuantity: 0, unit: "tray" }],
     }).success).toBe(true);
   });
 
@@ -93,7 +93,7 @@ describe("central kitchen workflow rules", () => {
     const createBase = {
       requestBranchId: "branch-a",
       centralKitchenId: "kitchen",
-      items: [{ warehouseItemId: 7, productName: "Flour", requestedQuantity: 2, unit: "kg" }],
+      items: [{ productId: 7, productName: "Bread", requestedQuantity: 2, unit: "tray" }],
     };
     for (const reportedAvailableQuantity of [undefined, null, "", -1, 0.1234567]) {
       expect(createCentralKitchenOrderSchema.safeParse({
@@ -107,7 +107,7 @@ describe("central kitchen workflow rules", () => {
     }).success).toBe(true);
     expect(createCentralKitchenOrderSchema.safeParse({
       ...createBase,
-      items: [{ ...createBase.items[0], reportedAvailableQuantity: 1.234567 }],
+      items: [{ ...createBase.items[0], reportedAvailableQuantity: 1 }],
     }).success).toBe(true);
     expect(createCentralKitchenOrderSchema.safeParse({
       ...createBase,
@@ -146,7 +146,7 @@ describe("central kitchen workflow rules", () => {
     }
   });
 
-  it("accepts product, warehouse, and explicit legacy/manual identities but never mixed identities", () => {
+  it("requires a finished product for every new line; warehouse/manual identities remain historical only", () => {
     const base = {
       requestBranchId: "branch-a",
       centralKitchenId: "kitchen",
@@ -158,15 +158,39 @@ describe("central kitchen workflow rules", () => {
     expect(createCentralKitchenOrderSchema.safeParse({
       ...base,
       items: [{ warehouseItemId: 7, productName: "Flour", requestedQuantity: 2, reportedAvailableQuantity: 0.25, unit: "kg" }],
-    }).success).toBe(true);
+    }).success).toBe(false);
     expect(createCentralKitchenOrderSchema.safeParse({
       ...base,
       items: [{ productName: "Manual line", requestedQuantity: 2, reportedAvailableQuantity: 0, unit: "tray" }],
-    }).success).toBe(true);
+    }).success).toBe(false);
     expect(createCentralKitchenOrderSchema.safeParse({
       ...base,
       items: [{ productId: 7, warehouseItemId: 7, productName: "Collision", requestedQuantity: 2, reportedAvailableQuantity: 0, unit: "tray" }],
     }).success).toBe(false);
+  });
+
+  it("edits an unchanged historical warehouse line by item ID without resubmitting catalogue identity", () => {
+    const oldSnapshot = {
+      itemId: 41, warehouseItemId: 7, productName: "Old material name",
+      unit: "kg", requestedQuantity: 1.25, reportedAvailableQuantity: 0.5,
+    };
+    const edit = centralKitchenRequestChangeSchema.parse({
+      expectedEventId: 1,
+      reason: "Historical quantity correction",
+      edit: {
+        neededDate: "2028-02-29",
+        neededTime: null,
+        notes: null,
+        items: [{
+          itemId: oldSnapshot.itemId,
+          requestedQuantity: oldSnapshot.requestedQuantity,
+          reportedAvailableQuantity: oldSnapshot.reportedAvailableQuantity,
+        }],
+      },
+    });
+    expect(edit.edit?.items[0]).toEqual({
+      itemId: 41, requestedQuantity: 1.25, reportedAvailableQuantity: 0.5,
+    });
   });
 
   it("binds idempotent replays to the same transition operation", () => {
@@ -181,7 +205,7 @@ describe("central kitchen workflow rules", () => {
       centralKitchenId: "kitchen",
       neededDate: "2028-02-29",
       neededTime: "09:30",
-      items: [{ productName: "Bread", requestedQuantity: 2, reportedAvailableQuantity: 0, unit: "tray" }],
+      items: [{ productId: 7, productName: "Bread", requestedQuantity: 2, reportedAvailableQuantity: 0, unit: "tray" }],
     });
     expect(createCentralKitchenPayloadFingerprint(base))
       .toBe(createCentralKitchenPayloadFingerprint({ ...base }));
@@ -199,7 +223,7 @@ describe("central kitchen workflow rules", () => {
       requestBranchId: "branch-a",
       centralKitchenId: "kitchen",
       neededDate: "2028-02-29",
-      items: [{ productName: "Bread", requestedQuantity: 2, reportedAvailableQuantity: 0, unit: "tray" }],
+      items: [{ productId: 7, productName: "Bread", requestedQuantity: 2, reportedAvailableQuantity: 0, unit: "tray" }],
     });
     expect(createCentralKitchenPayloadFingerprint(omitted))
       .toBe(createCentralKitchenPayloadFingerprint({
@@ -208,7 +232,7 @@ describe("central kitchen workflow rules", () => {
       }));
   });
 
-  it("keeps colliding numeric IDs distinct in new catalog fingerprints", () => {
+  it("keeps distinct finished-product IDs distinct in new catalog fingerprints", () => {
     const common = {
       requestBranchId: "branch-a",
       centralKitchenId: "kitchen",
@@ -218,12 +242,12 @@ describe("central kitchen workflow rules", () => {
       ...common,
       items: [{ ...common.items[0], productId: 42 }],
     });
-    const warehouse = createCentralKitchenOrderSchema.parse({
+    const otherProduct = createCentralKitchenOrderSchema.parse({
       ...common,
-      items: [{ ...common.items[0], warehouseItemId: 42 }],
+      items: [{ ...common.items[0], productId: 43 }],
     });
     expect(createCentralKitchenPayloadFingerprint(product))
-      .not.toBe(createCentralKitchenPayloadFingerprint(warehouse));
+      .not.toBe(createCentralKitchenPayloadFingerprint(otherProduct));
   });
 
   it("requires complete, non-excessive preparation details", () => {

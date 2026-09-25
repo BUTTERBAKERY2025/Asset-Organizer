@@ -6,7 +6,41 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import type { CentralKitchenCatalogItem } from "@shared/central-kitchen-catalog";
+import { parseCentralKitchenCatalogV2, type CentralKitchenCatalogItem } from "@shared/central-kitchen-catalog";
+
+export type KitchenCatalogProduct = CentralKitchenCatalogItem & { category?: string; nameEn?: string };
+
+export function kitchenCategoryLabel(category: string): string {
+  const labels: Record<string, string> = {
+    bakery: "مخبوزات", pastry: "حلويات", "sandwiches-salads": "ساندويتشات وسلطات",
+    sandwiches_salads: "ساندويتشات وسلطات", "sandwiches_and_salads": "ساندويتشات وسلطات", "ساندويتشات/سلطات": "ساندويتشات وسلطات",
+    boxes: "بوكسات", bread: "مخبوزات", cake: "حلويات", sandwich: "ساندويتشات وسلطات",
+  };
+  return labels[category] || category;
+}
+
+// Keep the legacy strict contract for identity while accepting catalog display metadata.
+export function parseKitchenProductCatalog(payload: unknown): KitchenCatalogProduct[] {
+  if (!payload || typeof payload !== "object" || !Array.isArray((payload as { items?: unknown }).items)) {
+    return parseCentralKitchenCatalogV2(payload).items;
+  }
+  const items = (payload as { items: unknown[] }).items;
+  const identity = {
+    ...(payload as object),
+    items: items.map(raw => {
+      if (!raw || typeof raw !== "object") return raw;
+      const { category, nameEn, ...item } = raw as Record<string, unknown>;
+      return item;
+    }),
+  };
+  const parsed = parseCentralKitchenCatalogV2(identity).items;
+  return parsed.map((item, index) => {
+    const raw = items[index] as Record<string, unknown>;
+    if (raw.category !== undefined && (typeof raw.category !== "string" || !raw.category.trim())) throw new Error("فئة صنف غير صالحة في كتالوج المطبخ.");
+    if (raw.nameEn != null && (typeof raw.nameEn !== "string" || !raw.nameEn.trim())) throw new Error("اسم إنجليزي غير صالح في كتالوج المطبخ.");
+    return { ...item, ...(typeof raw.category === "string" ? { category: raw.category } : {}), ...(typeof raw.nameEn === "string" ? { nameEn: raw.nameEn } : {}) };
+  });
+}
 
 export type KitchenOrderDraftLine = {
   productId?: number;
@@ -101,15 +135,17 @@ export function normalizeKitchenCatalogSearch(value: string) {
 }
 
 export function filterKitchenCatalog(
-  products: CentralKitchenCatalogItem[],
+  products: KitchenCatalogProduct[],
   search: string,
   source: KitchenCatalogSourceFilter,
+  category = "all",
 ) {
   const query = normalizeKitchenCatalogSearch(search);
   return products.filter(item => {
     if (source !== "all" && item.source !== source) return false;
+    if (category !== "all" && item.category !== category) return false;
     if (!query) return true;
-    return normalizeKitchenCatalogSearch([item.name, item.sku, item.unit].filter(Boolean).join(" ")).includes(query);
+    return normalizeKitchenCatalogSearch([item.name, item.nameEn, item.sku, item.category, item.category && kitchenCategoryLabel(item.category), item.unit].filter(Boolean).join(" ")).includes(query);
   });
 }
 
@@ -143,7 +179,7 @@ export function addKitchenCatalogItem(
 
 type Props = {
   items: KitchenOrderDraftLine[];
-  products: CentralKitchenCatalogItem[];
+  products: KitchenCatalogProduct[];
   kitchenId: string;
   catalogLoading: boolean;
   catalogError: boolean;
@@ -161,7 +197,7 @@ const productKey = (item: CentralKitchenCatalogItem) => `${item.source}:${item.i
 
 export function OrderLineEditor({ items, products, kitchenId, catalogLoading, catalogError, onRetryCatalog, onChange, mobileView: controlledMobileView, onMobileViewChange }: Props) {
   const [search, setSearch] = useState("");
-  const [source, setSource] = useState<KitchenCatalogSourceFilter>("all");
+  const [category, setCategory] = useState("all");
   const [uncontrolledMobileView, setUncontrolledMobileView] = useState<"choose" | "selected">("choose");
   const [touched, setTouched] = useState<string[]>([]);
   const [showErrors, setShowErrors] = useState(false);
@@ -178,7 +214,9 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
   const selectedKeys = new Set(items.map(item => item.warehouseItemId !== undefined ? `warehouse:${item.warehouseItemId}` : item.productId !== undefined ? `product:${item.productId}` : "").filter(Boolean));
   const visibleItems = items.map((item, index) => ({ item, index })).filter(({ item }) => !isBlankDraftLine(item));
   const incompleteCount = visibleItems.filter(({ item }) => !isValidKitchenOrderLine(item)).length;
-  const catalogResults = useMemo(() => filterKitchenCatalog(products, search, source), [products, search, source]);
+  const catalogResults = useMemo(() => filterKitchenCatalog(products, search, "product", category)
+    .sort((a, b) => kitchenCategoryLabel(a.category || "").localeCompare(kitchenCategoryLabel(b.category || ""), "ar") || a.name.localeCompare(b.name, "ar")), [products, search, category]);
+  const categories = useMemo(() => [...new Set(products.map(item => item.category).filter((value): value is string => !!value))].sort((a, b) => kitchenCategoryLabel(a).localeCompare(kitchenCategoryLabel(b), "ar")), [products]);
   const focusTarget = (selector: string) => requestAnimationFrame(() =>
     requestAnimationFrame(() => {
       const input = document.querySelector<HTMLInputElement>(selector);
@@ -221,18 +259,6 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
       focusTarget(`#request-qty-${nextIndex}`);
     }
   };
-  const addManualItem = () => {
-    const blankIndex = items.findIndex(isBlankDraftLine);
-    const line = emptyLine();
-    line.manualMode = true;
-    const next = blankIndex >= 0
-      ? items.map((item, index) => index === blankIndex ? line : item)
-      : [...items, line];
-    const nextIndex = blankIndex >= 0 ? blankIndex : items.length;
-    onChange(next);
-    setMobileView("selected");
-    focusTarget(`#manual-name-${nextIndex}`);
-  };
   const removeItem = (index: number) => {
     const next = items.filter((_, itemIndex) => itemIndex !== index);
     setTouched(previous => previous.flatMap(key => {
@@ -255,16 +281,13 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
         <h3 className="font-semibold text-foreground">بنود الطلب <Badge variant="secondary" className="mr-1">{visibleItems.length} مختار</Badge></h3>
         <p className="mt-0.5 hidden text-xs text-muted-foreground lg:block">اختر بسرعة ثم عدّل الكميات والمتوفر. لا يُفترض رصيد صفري عند الإضافة.</p>
       </div>
-      <Button type="button" variant="outline" size="sm" className="min-h-10 shrink-0" onClick={addManualItem}>
-        <Plus className="ml-1 h-4 w-4" />إدخال يدوي
-      </Button>
     </div>
     {catalogLoading && <div className="border-b px-4 py-3 text-sm text-muted-foreground">جارٍ تحميل أصناف المطبخ…</div>}
     {catalogError && <div className="flex flex-wrap items-center justify-between gap-2 border-b border-destructive/25 bg-destructive/5 px-4 py-3 text-sm" role="alert">
       <span>تعذر تحميل كتالوج الأصناف. لا يمكن اختيار صنف من الكتالوج الآن.</span>
       <Button type="button" variant="outline" size="sm" onClick={onRetryCatalog}>إعادة المحاولة</Button>
     </div>}
-    {!catalogLoading && !catalogError && products.length === 0 && <div className="border-b px-4 py-3 text-sm text-muted-foreground">لا توجد أصناف متاحة حالياً. استخدم الإدخال اليدوي عند الحاجة فقط.</div>}
+    {!catalogLoading && !catalogError && products.length === 0 && <div className="border-b px-4 py-3 text-sm text-muted-foreground">لا توجد منتجات مطبخ متاحة حالياً.</div>}
       <div className="sticky top-0 z-10 border-b border-border bg-card p-2 lg:hidden">
         <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="مهمة الأصناف">
           <Button type="button" variant={mobileView === "choose" ? "default" : "outline"} className="min-h-11" onClick={() => enterView("choose")} role="tab" aria-selected={mobileView === "choose"}>1. اختيار الأصناف</Button>
@@ -299,19 +322,22 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
             />
           </div>
           <div className="grid grid-cols-3 gap-1" aria-label="تصفية مصدر الكتالوج">
-            {([
-              ["all", "الكل"],
-              ["product", "منتجات"],
-              ["warehouse", "مواد"],
-            ] as const).map(([value, label]) => <Button key={value} type="button" size="sm" variant={source === value ? "default" : "outline"} className="min-h-9 px-2" onClick={() => setSource(value)}>{label}</Button>)}
+            <span className="col-span-3 text-xs text-muted-foreground">منتجات نهائية فقط</span>
           </div>
+          <Label htmlFor="kitchen-category-filter" className="text-xs">الفئة</Label>
+          <select id="kitchen-category-filter" className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={category} onChange={event => setCategory(event.target.value)}>
+            <option value="all">كل الفئات</option>
+            {categories.map(value => <option value={value} key={value}>{kitchenCategoryLabel(value)}</option>)}
+          </select>
           <p className="hidden text-[11px] text-muted-foreground lg:block">Enter يضيف أول نتيجة غير مختارة وينقل المؤشر إلى كميتها. لا يرسل الطلب.</p>
         </div>
           <div className="space-y-1 lg:max-h-[34rem] lg:overflow-y-auto lg:overscroll-contain" aria-live="polite">
-          {catalogResults.slice(0, 100).map(product => {
+          {catalogResults.slice(0, 100).map((product, index) => {
             const key = productKey(product);
             const selected = selectedKeys.has(key);
-            return <button
+            return <React.Fragment key={key}>
+              {(index === 0 || catalogResults[index - 1].category !== product.category) && <h4 className="px-2 pt-2 text-xs font-semibold text-muted-foreground">{product.category ? kitchenCategoryLabel(product.category) : "غير مصنف"}</h4>}
+              <button
               key={key}
               type="button"
               disabled={selected}
@@ -319,11 +345,11 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
               className={cn("flex min-h-14 w-full items-center justify-between gap-2 rounded-lg border border-transparent px-3 py-2 text-right transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", selected ? "cursor-default border-border bg-muted/60" : "bg-card hover:border-primary/30 hover:bg-muted/40")}
               data-testid={`quick-catalog-${key}`}
             >
-              <span className="min-w-0"><strong className="block truncate text-sm text-foreground">{product.name}</strong><span className="block truncate text-[11px] text-muted-foreground">{product.sku ? `${product.sku} · ` : ""}{product.unit} · {product.source === "warehouse" ? "مادة من مخزون المطبخ" : "منتج مطبخ"}</span></span>
+              <span className="min-w-0"><strong className="block truncate text-sm text-foreground">{product.name}</strong><span className="block truncate text-[11px] text-muted-foreground">{product.sku ? `${product.sku} · ` : ""}{product.nameEn ? `${product.nameEn} · ` : ""}{product.category ? `${kitchenCategoryLabel(product.category)} · ` : ""}{product.unit}</span></span>
               {selected ? <span className="flex shrink-0 items-center text-xs font-medium text-primary"><Check className="ml-1 h-4 w-4" />مختار</span> : <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />}
-            </button>;
+            </button></React.Fragment>;
           })}
-          {!catalogLoading && !catalogError && !catalogResults.length && <p className="px-3 py-10 text-center text-sm text-muted-foreground">لا توجد نتائج مطابقة. غيّر البحث أو استخدم الإدخال اليدوي.</p>}
+          {!catalogLoading && !catalogError && !catalogResults.length && <p className="px-3 py-10 text-center text-sm text-muted-foreground">لا توجد نتائج مطابقة. غيّر البحث أو الفئة.</p>}
           {catalogResults.length > 100 && <p className="p-2 text-center text-xs text-muted-foreground">تظهر أول 100 نتيجة؛ اكتب جزءاً أدق من الاسم أو الرمز.</p>}
         </div>
       </section>

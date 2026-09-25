@@ -255,6 +255,7 @@ export default function EventPosSettingsPage() {
   const availableToAdd = useMemo(() => {
     const existingIds = new Set(branchProducts.map((bp: any) => bp.productId));
     let filtered = getSelectableCatalogRecords(allProducts)
+      .filter((p: any) => p.saleEnabled !== false)
       .filter((p: any) => !existingIds.has(p.id));
     if (productSearch.trim()) {
       const q = productSearch.toLowerCase();

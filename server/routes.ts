@@ -48,6 +48,8 @@ import {
   isExplicitCatalogActivation,
   isExplicitCatalogActivityValue,
   isNewCatalogReferenceAllowed,
+  isPositiveCatalogPrice,
+  isProductSaleEnabled,
 } from "@shared/catalog-activity";
 
 // Helper to safely get current user from authenticated request
@@ -7296,7 +7298,14 @@ export async function registerRoutes(
       if (parsed.data.sku && await storage.getProductBySku(parsed.data.sku)) {
         return res.status(409).json({ error: "A product with this SKU already exists" });
       }
-      const product = await storage.createProduct(parsed.data);
+      // is_active is still the sale gate on older nodes during deployment.
+      const unpriced = !isPositiveCatalogPrice(parsed.data.basePrice);
+      if (unpriced && (parsed.data.isActive === "true" || parsed.data.saleEnabled === true)) {
+        return res.status(400).json({ error: "لا يمكن إتاحة منتج غير مسعّر للبيع" });
+      }
+      const product = await storage.createProduct(unpriced
+        ? { ...parsed.data, isActive: "false", operationsEnabled: true, saleEnabled: false }
+        : parsed.data);
       await auditEvent({
         req,
         module: "products",
@@ -7328,6 +7337,11 @@ export async function registerRoutes(
       const existing = await storage.getProduct(id);
       if (!existing) {
         return res.status(404).json({ error: "Product not found" });
+      }
+      if ((parsed.data.saleEnabled === true || parsed.data.isActive === "true")
+        && (existing.saleEnabled === false || parsed.data.saleEnabled === true)
+        && !isPositiveCatalogPrice(parsed.data.basePrice ?? existing.basePrice)) {
+        return res.status(400).json({ error: "لا يمكن إتاحة منتج غير مسعّر للبيع" });
       }
       const isReactivating = parsed.data.isActive === "true"
         && !isCatalogRecordActive(existing.isActive);
@@ -7749,10 +7763,11 @@ export async function registerRoutes(
   };
   // Some older product schemas do not have is_active. Reading through to_jsonb
   // treats that missing key as active without directly referencing an absent column.
-  const activeCentralKitchenProduct = sql<boolean>`
-    COALESCE(to_jsonb(${productsTable}) ->> 'is_active', 'true')
+  const activeCentralKitchenProduct = sql<boolean>`(
+    ${productsTable.operationsEnabled} = true
+    OR COALESCE(to_jsonb(${productsTable}) ->> 'is_active', 'true')
       NOT IN ('false', 'inactive', '0')
-  `;
+  )`;
 
   const getActiveCentralKitchenCatalog = async () => {
     const [productRows, warehouseRows] = await Promise.all([
@@ -7760,6 +7775,9 @@ export async function registerRoutes(
         id: productsTable.id,
         name: productsTable.name,
         unit: productsTable.unit,
+        sku: productsTable.sku,
+        category: productsTable.category,
+        nameEn: productsTable.nameEn,
       }).from(productsTable)
         .where(activeCentralKitchenProduct)
         .orderBy(productsTable.name),
@@ -7777,6 +7795,9 @@ export async function registerRoutes(
         id: row.id,
         name: row.name,
          unit: row.unit?.trim() || "قطعة",
+        ...(row.sku ? { sku: row.sku } : {}),
+        category: row.category,
+        ...(row.nameEn ? { nameEn: row.nameEn } : {}),
       })),
       warehouse: warehouseRows.map((row) => ({
         id: row.id,
@@ -7789,7 +7810,12 @@ export async function registerRoutes(
 
   const validateCentralKitchenCatalogIdentities = async (
     items: CentralKitchenCatalogIdentity[],
+    allowHistorical = false,
   ): Promise<string | null> => {
+    if (allowHistorical) return null; // Stored order-line identity, name and unit are immutable snapshots.
+    if (items.some(item => item.warehouseItemId != null)) {
+      return "أصناف المستودع ليست منتجات نهائية قابلة للطلب من المطبخ.";
+    }
     const productIds = Array.from(new Set(items.flatMap((item) => item.productId != null ? [item.productId] : [])));
     const warehouseItemIds = Array.from(new Set(items.flatMap((item) => item.warehouseItemId != null ? [item.warehouseItemId] : [])));
     const [productRows, warehouseRows] = await Promise.all([
@@ -7900,7 +7926,7 @@ export async function registerRoutes(
             if (items.some(item => item.productId == null && item.warehouseItemId == null)) {
               throw new CentralKitchenLiveError("طلب قديم غير مرتبط بالكتالوج: ألغ الطلب وأنشئ طلباً موثقاً", 400);
             }
-            const catalogError = await validateCentralKitchenCatalogIdentities(items);
+            const catalogError = await validateCentralKitchenCatalogIdentities(items, true);
             if (catalogError) throw new CentralKitchenLiveError(catalogError, 400);
             for (const item of edit.items) {
               const original = items.find(row => row.id === item.itemId)!;
@@ -8313,7 +8339,7 @@ export async function registerRoutes(
       try {
         const catalog = await getActiveCentralKitchenCatalog();
         res.set("Cache-Control", "private, no-store");
-        return res.json(catalog.products);
+        return res.json(catalog.products.map(({ id, name, unit }) => ({ id, name, unit })));
       } catch (error) {
         console.error("Error listing central kitchen order products:", error);
         return res.status(500).json({ error: "فشل في جلب المنتجات" });
@@ -8333,7 +8359,6 @@ export async function registerRoutes(
           schemaVersion: 2,
           items: [
             ...catalog.products.map((item) => ({ ...item, source: "product" as const })),
-            ...catalog.warehouse.map((item) => ({ ...item, source: "warehouse" as const })),
           ],
         });
       } catch (error) {
@@ -8829,7 +8854,7 @@ export async function registerRoutes(
           && detail.items.every((item: any) => item.productId != null || item.warehouseItemId != null)
           && !(await db.select({ id: centralKitchenDemandActions.id }).from(centralKitchenDemandActions)
             .where(eq(centralKitchenDemandActions.replacementOrderId, detail.id)).limit(1)).length
-          && !(await validateCentralKitchenCatalogIdentities(detail.items));
+          && !(await validateCentralKitchenCatalogIdentities(detail.items, true));
         allowedActions.edit = !!requestEditable;
         allowedActions.cancel = !!(branchEditor && !centralKitchenRequestChangeBlock(detail.status, false, committed));
         allowedActions.resolveDiscrepancy = !!(detail.status === "received" && detail.discrepancyStatus === "open"
@@ -42204,7 +42229,8 @@ export async function registerRoutes(
       }
       const normalizedProductId = Number(productId);
       const catalogProduct = await getSelectableProductReference(normalizedProductId);
-      if (!catalogProduct) {
+      if (!catalogProduct || !isProductSaleEnabled(catalogProduct)
+        || getEffectiveSalePrice(priceOverride, catalogProduct.basePrice) === null) {
         return res.status(400).json({ error: "لا يمكن إضافة منتج غير متاح لنقطة البيع" });
       }
       const product = await storage.addBranchProduct({ branchId, productId: catalogProduct.id, isActive: isActive ?? true, priceOverride, sortOrder });
@@ -42245,7 +42271,8 @@ export async function registerRoutes(
       // the same active-record boundary as initial POS configuration.
       if (productId !== undefined && Number(productId) !== Number(product.productId)) {
         const catalogProduct = await getSelectableProductReference(productId);
-        if (!catalogProduct) {
+        if (!catalogProduct || !isProductSaleEnabled(catalogProduct)
+          || getEffectiveSalePrice(safeData.priceOverride ?? product.priceOverride, catalogProduct.basePrice) === null) {
           return res.status(400).json({ error: "لا يمكن ربط منتج غير متاح بنقطة البيع" });
         }
         safeData.productId = catalogProduct.id;
@@ -42339,7 +42366,7 @@ export async function registerRoutes(
           return res.status(400).json({ error: "بيانات أصناف غير صالحة" });
         }
         const bp = catalogMap.get(productId);
-        if (!bp || bp.isActive === false || !isNewCatalogReferenceAllowed(bp.product)) {
+        if (!bp || bp.isActive === false || !isProductSaleEnabled(bp.product)) {
           return res.status(400).json({ error: "صنف غير متاح في هذا الفرع" });
         }
         const unitPrice = getEffectiveSalePrice(bp.priceOverride, bp.product?.basePrice);
@@ -42629,7 +42656,7 @@ export async function registerRoutes(
           !Number.isInteger(productId)
           || !branchProduct
           || branchProduct.isActive === false
-          || !isNewCatalogReferenceAllowed(branchProduct.product)
+          || !isProductSaleEnabled(branchProduct.product)
           || getEffectiveSalePrice(branchProduct.priceOverride, branchProduct.product?.basePrice) === null
         ) {
           return res.status(400).json({ error: "يتضمن الطلب المعلق صنفاً غير متاح للبيع" });

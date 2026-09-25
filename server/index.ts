@@ -241,6 +241,17 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 (async () => {
   await warmupPool();
   await runStartupMigrations();
+  // Read-only release gate: do not publish a server that needs columns the
+  // confirmed target has not yet received. Never perform startup DDL here.
+  const catalogueColumns = await pool.query(`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_schema = current_schema() AND table_name = 'products'
+      AND column_name IN ('operations_enabled', 'sale_enabled')
+      AND data_type = 'boolean' AND is_nullable = 'NO'
+  `);
+  if (catalogueColumns.rows.length !== 2) {
+    throw new Error("Catalogue migration 039 is required before this release can start");
+  }
   await registerRoutes(httpServer, app);
   
   // Ensure Supabase Storage bucket exists on startup

@@ -1,0 +1,1328 @@
+[
+  {
+    "code": "330394",
+    "name": "بان سويس راسبيري",
+    "cashier_alias": "RASPBERRY PAIN SWISS - رازبيري بان سويس",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 1,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330393",
+    "name": "بان سويس شوكو براوني",
+    "cashier_alias": "CHOCO BROWNIE SWISS - شوكو براوني سويس",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 2,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-0954",
+    "name": "خبز براون",
+    "cashier_alias": "bag براون🥖 خبز",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 3,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330068",
+    "name": "خبز بريوش",
+    "cashier_alias": "Brioche bread - خبز بريوش",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 4,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330091",
+    "name": "خبز ساوردو",
+    "cashier_alias": "Sourdough bread - ساوردو",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 5,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-0915",
+    "name": "خبز سميط تركي (3 حبات)",
+    "cashier_alias": "Turkish Simit pcs 3| خبز السميط التركي",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 6,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-0912",
+    "name": "خبز شباتا إيطالي (3 حبات)",
+    "cashier_alias": "Italian Ciabatta pcs 3 | خبز الشيباتا الإيطالي",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 7,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-0913",
+    "name": "خبز فوكاتشيا",
+    "cashier_alias": "Focaccia bread - خبز الفوكاتشيا",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 8,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-0916",
+    "name": "خبز كرواسون (3 حبات)",
+    "cashier_alias": "3pcs Croissant Bread | خبز الكرواسون برد",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 9,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330026",
+    "name": "دانش بن حلومي",
+    "cashier_alias": "Danish bun halomy - دانش بن حلومي",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 10,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330303",
+    "name": "دانش بيستو",
+    "cashier_alias": "Danish pesto-دانش بيستو",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 11,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1089",
+    "name": "دانش تيراميسو",
+    "cashier_alias": "Tiramisue Bun - دانش تيراميسو",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 12,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-0903",
+    "name": "دانش تين",
+    "cashier_alias": "Fig Danish - دانش التين",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 13,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-0950",
+    "name": "دانش جبنة شمر وطماطم مجففة",
+    "cashier_alias": "الطماطم المجففة + دانش شمر تشيز",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 14,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1133",
+    "name": "دانش دقة",
+    "cashier_alias": "Danish Douqqa - دانيش دقة",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 15,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1181",
+    "name": "دانش فستق",
+    "cashier_alias": "DANISH PISTACHIO",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 16,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330035",
+    "name": "دانش كريمة فرنسية",
+    "cashier_alias": "Danish French Cream - دانش كريمة فرنسية",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 17,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1182",
+    "name": "دانش موز",
+    "cashier_alias": "DANISH BANANA",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 18,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1183",
+    "name": "سلة دانش فواكه",
+    "cashier_alias": "FRUIT DANISH BASKET",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 19,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-0868",
+    "name": "فلكي بان سويس",
+    "cashier_alias": "Flaky Pain Suisse - فلكي بان سويس",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 20,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330287",
+    "name": "كاسترد كوكونت رول",
+    "cashier_alias": "Custar roll- كاسترد كوكنت روول",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 21,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330039",
+    "name": "كرواسون بيكان فرنسي",
+    "cashier_alias": "French croissant pecan - كرواسون بيكان فرنسي",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 22,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-0902",
+    "name": "كرواسون جبنة",
+    "cashier_alias": "Cheese Croissant - كرواسون جبنة",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 23,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1086",
+    "name": "كرواسون جبنة وتركي",
+    "cashier_alias": "Cheese Ana turkey croissant - كرواسون جبنة و تركي",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 24,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1085",
+    "name": "كرواسون روستد بيف بالجبنة والزيتون",
+    "cashier_alias": "Roasted beef cheese,olive - روستد بيف مع جبنة و زيتون",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 25,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-0833",
+    "name": "كرواسون رول بيكان",
+    "cashier_alias": "Pecan رول كروسون بيكان ROOL",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 26,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330031",
+    "name": "كرواسون زعتر",
+    "cashier_alias": "Thyme croissant - كرواسون زعتر",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 27,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330015",
+    "name": "كرواسون سادة",
+    "cashier_alias": "plain croissant - كرواسون سادة",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 28,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330036",
+    "name": "كرواسون شوكولاتة",
+    "cashier_alias": "Croissant Chocolate - كرواسون شوكولاته",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 29,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330037",
+    "name": "كرواسون فستق",
+    "cashier_alias": "pistachio croissant - كرواسون فستق",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 30,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-0878",
+    "name": "كرواسون كوكيز",
+    "cashier_alias": "cookies croissant - كوكيز كرواسون",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 31,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330029",
+    "name": "كرواسون لوز",
+    "cashier_alias": "Almond croissant - كرواسون اللوز",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 32,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330081",
+    "name": "لندن تشيز بن",
+    "cashier_alias": "London Cheese Bun - لندن تشيز بن",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 33,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330043",
+    "name": "لندن دونات بيكان",
+    "cashier_alias": "London Donut peacan - لندن دونت بيكان",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 34,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330045",
+    "name": "لندن دونات زعتر",
+    "cashier_alias": "London donut thyme - لندن دونت زعتر",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 35,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1132",
+    "name": "ماتيلدا كرواسون نوتيلا",
+    "cashier_alias": "Matilda Croissant Nutella",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 36,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-0860",
+    "name": "ماريتوزو",
+    "cashier_alias": "Maritozzo ماري توزو",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 37,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1171",
+    "name": "مافن",
+    "cashier_alias": "MUFFIN",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 38,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1157",
+    "name": "ميني ماتيلدا كرواسون",
+    "cashier_alias": "ميني ماتيلدا كروسون",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 39,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330288",
+    "name": "نوتيلا رول",
+    "cashier_alias": "Nutella roll-نوتيلا رول",
+    "category": "bakery",
+    "category_source": "bakery مخبوزات",
+    "unit": "حبة",
+    "source": {
+      "page": 1,
+      "row": 40,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1141",
+    "name": "بودنج كرنشي",
+    "cashier_alias": "Brawinse crunchy بودنج كرنشي",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "كوب",
+    "source": {
+      "page": 2,
+      "row": 1,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330187",
+    "name": "بي بي كيك",
+    "cashier_alias": "B.B Cake- بي بي كيك",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 2,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330290",
+    "name": "تارت ليمون",
+    "cashier_alias": "Lemon Tart تارت ليمون",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 3,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330062",
+    "name": "تارت ميكس بيري",
+    "cashier_alias": "Mix berry tart-تارت مكس بيري",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 4,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330342",
+    "name": "تشيز كيك كريم بروليه",
+    "cashier_alias": "Crem Brulee Cheese cake-كريم بروليه تشيز كيك",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 5,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330094",
+    "name": "تيراميسو",
+    "cashier_alias": "Tiramisu - تيرامسيو",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 6,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1184",
+    "name": "جاكاراندا كيك",
+    "cashier_alias": "Jacaranda cake",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 7,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330336",
+    "name": "روشيه",
+    "cashier_alias": "rocher-روشيه",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 8,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1198",
+    "name": "سمر كيك",
+    "cashier_alias": "Summer cake",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 9,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1039",
+    "name": "كراميليتو",
+    "cashier_alias": "Caramelito -كرامليتو",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 10,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1041",
+    "name": "كرنشي شوكولاتة",
+    "cashier_alias": "Crunchy Choclate - كرنشي تشوكلت",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 11,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330388",
+    "name": "كوكيز شوكولاتة",
+    "cashier_alias": "choclate cookies - كوكيز شوكولاته",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 12,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330010",
+    "name": "كيك برتقال سلايس",
+    "cashier_alias": "orange slice cake - كيك برتقال سلايس",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 13,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330112",
+    "name": "كيك برتقال فرنسي",
+    "cashier_alias": "French orange cake - كيك برتقال فرنسي",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 14,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330183",
+    "name": "كيك ليمون سلايس",
+    "cashier_alias": "Lemon slice cake - كيك ليمون سلايس",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 15,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330111",
+    "name": "كيك ليمون فرنسي",
+    "cashier_alias": "French lemon cake - كيك ليمون فرنسي",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 16,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330095",
+    "name": "كيكة العسل ميجا",
+    "cashier_alias": "Honey cake - كيك العسل ميجا",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 17,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330291",
+    "name": "كيكة ريد فيلفت",
+    "cashier_alias": "Red velvet كيك ريد فالفت",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 18,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330069",
+    "name": "كيكة سان سباستيان",
+    "cashier_alias": "san Sebastian cake - كيك سان سابستيان",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 19,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1188",
+    "name": "كيكة شوكولاتة بريميوم",
+    "cashier_alias": "Premium Chocolate cake",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 20,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1201",
+    "name": "كيكة شوكولاتة طبقات",
+    "cashier_alias": "Chocolate layer cake",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 21,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1106",
+    "name": "ماتيلدا شوكولاتة",
+    "cashier_alias": "Choclate Matilda",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 22,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1227",
+    "name": "مانجو دوم",
+    "cashier_alias": "Mango Dome",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 23,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1114",
+    "name": "مدريد تشيز كيك بيكان",
+    "cashier_alias": "Madrid cheesecakepecan - مدريد تشيز كيك بيكان",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 24,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1115",
+    "name": "مدريد تشيز كيك شوكولاتة",
+    "cashier_alias": "Madrid Cheescake Chocolate - مدريد تشيز كيك تشوكلت",
+    "category": "pastry",
+    "category_source": "pastry حلويات",
+    "unit": "قطعة",
+    "source": {
+      "page": 2,
+      "row": 25,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1109",
+    "name": "أفوكادو سكرامبل كب",
+    "cashier_alias": "Avocado scramble cups",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "كوب",
+    "source": {
+      "page": 3,
+      "row": 1,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1127",
+    "name": "بريوش بريزاولا",
+    "cashier_alias": "Brioche Birsaola",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "حبة",
+    "source": {
+      "page": 3,
+      "row": 2,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1126",
+    "name": "بريوش تركي مدخن",
+    "cashier_alias": "Brioche Smoked Turkey",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "حبة",
+    "source": {
+      "page": 3,
+      "row": 3,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1125",
+    "name": "بريوش تونة",
+    "cashier_alias": "Brioche Tunna",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "حبة",
+    "source": {
+      "page": 3,
+      "row": 4,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1128",
+    "name": "بريوش حلومي",
+    "cashier_alias": "Brioche Haloumey",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "حبة",
+    "source": {
+      "page": 3,
+      "row": 5,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "330392",
+    "name": "جرانولا",
+    "cashier_alias": "granola",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "كوب",
+    "source": {
+      "page": 3,
+      "row": 6,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1228",
+    "name": "جرانولا بتر بيكري",
+    "cashier_alias": "Granolla bb",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "كوب",
+    "source": {
+      "page": 3,
+      "row": 7,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk26",
+    "name": "ساندويتش براون تونة",
+    "cashier_alias": "Brown tuna sandwich- ساندوتش براون تونة",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "حبة",
+    "source": {
+      "page": 3,
+      "row": 8,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-0921",
+    "name": "ساندويتش بيبروني",
+    "cashier_alias": "Pepproni Sandwich | ساندويتش بيبروني",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "حبة",
+    "source": {
+      "page": 3,
+      "row": 9,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1196",
+    "name": "ساندويتش تركي",
+    "cashier_alias": "Sandwich Turky bb",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "حبة",
+    "source": {
+      "page": 3,
+      "row": 10,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "340168",
+    "name": "ساندويتش حلومي",
+    "cashier_alias": "Halloumi Sandwich -حلومي ساندويتش بتربيكري",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "حبة",
+    "source": {
+      "page": 3,
+      "row": 11,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-0923",
+    "name": "ساندويتش ديك رومي",
+    "cashier_alias": "Turkey Sandwich | ساندويتش ديك رومي",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "حبة",
+    "source": {
+      "page": 3,
+      "row": 12,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "340169",
+    "name": "سلطة حلومي باربكيو",
+    "cashier_alias": "Halloumi BBQ Salad - سلطة باربكيو الحلومي",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "علبة",
+    "source": {
+      "page": 3,
+      "row": 13,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1021",
+    "name": "سلطة دجاج",
+    "cashier_alias": "Chicken salad - سلطة دجاج",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "علبة",
+    "source": {
+      "page": 3,
+      "row": 14,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1140",
+    "name": "سلطة شمندر (وسط)",
+    "cashier_alias": "Beet root Salad M",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "علبة",
+    "source": {
+      "page": 3,
+      "row": 15,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "340172",
+    "name": "شباتا تركي مدخن",
+    "cashier_alias": "Turkey Ciabbata -شباطا التركي المدخن",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "حبة",
+    "source": {
+      "page": 3,
+      "row": 16,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "340174",
+    "name": "شباتا دجاج",
+    "cashier_alias": "CHICKEN CIABBATA-شباطا الدجاج",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "حبة",
+    "source": {
+      "page": 3,
+      "row": 17,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1081",
+    "name": "فوكاشيا تركي",
+    "cashier_alias": "Turkey Focaccia - فوكاشيا تركي",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "حبة",
+    "source": {
+      "page": 3,
+      "row": 18,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1122",
+    "name": "كرواسون أفوكادو",
+    "cashier_alias": "Avocado croissant",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "حبة",
+    "source": {
+      "page": 3,
+      "row": 19,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-0875",
+    "name": "كرواسون السيجنتشر",
+    "cashier_alias": "Signuture croissant - كرواسون السجنتشر",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "حبة",
+    "source": {
+      "page": 3,
+      "row": 20,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "340053",
+    "name": "كرواسون تونة",
+    "cashier_alias": "Croissant tuna - كرواسون تونه",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "حبة",
+    "source": {
+      "page": 3,
+      "row": 21,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1218",
+    "name": "كلوب ساندويتش",
+    "cashier_alias": "Club Sandwich bb",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "حبة",
+    "source": {
+      "page": 3,
+      "row": 22,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1129",
+    "name": "ميني تريبل دانش مالح",
+    "cashier_alias": "Mini Triple Danish savoury",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "بوكس",
+    "source": {
+      "page": 3,
+      "row": 23,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1130",
+    "name": "ميني تريبل كرواسون مالح",
+    "cashier_alias": "Mini Triple Croissant Savory",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "بوكس",
+    "source": {
+      "page": 3,
+      "row": 24,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-0926",
+    "name": "فوكاشيا لبنة",
+    "cashier_alias": "Focaccia di labna | فوكاشيا بلبنة",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "حبة",
+    "source": {
+      "page": 3,
+      "row": 25,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-0927",
+    "name": "فوكاشيا لبنة وزعتر",
+    "cashier_alias": "FOCACIA Labna and thyme| فوكاشيا لبنة وزعتر",
+    "category": "sandwiches_salads",
+    "category_source": "ساندويتشات وسلطات",
+    "unit": "حبة",
+    "source": {
+      "page": 3,
+      "row": 26,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1108",
+    "name": "بوكس دانش مالح",
+    "cashier_alias": "Box Danish savory",
+    "category": "boxes",
+    "category_source": "بوكسات",
+    "unit": "بوكس",
+    "source": {
+      "page": 4,
+      "row": 1,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1162",
+    "name": "بوكس ميني بن (12 حبة)",
+    "cashier_alias": "Box Mini Bun 12",
+    "category": "boxes",
+    "category_source": "بوكسات",
+    "unit": "بوكس",
+    "source": {
+      "page": 4,
+      "row": 2,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1161",
+    "name": "بوكس ميني دانش (12 حبة)",
+    "cashier_alias": "Box Mini Danish 12",
+    "category": "boxes",
+    "category_source": "بوكسات",
+    "unit": "بوكس",
+    "source": {
+      "page": 4,
+      "row": 3,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1043",
+    "name": "بوكس ميني دانش (3 حبات)",
+    "cashier_alias": "PCs 3 بوكس ميني دانش",
+    "category": "boxes",
+    "category_source": "بوكسات",
+    "unit": "بوكس",
+    "source": {
+      "page": 4,
+      "row": 4,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1047",
+    "name": "بوكس ميني ساندويتش شباتا",
+    "cashier_alias": "بوكس ميني ساندوتش شباتا",
+    "category": "boxes",
+    "category_source": "بوكسات",
+    "unit": "بوكس",
+    "source": {
+      "page": 4,
+      "row": 5,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1213",
+    "name": "بوكس ميني شباتا",
+    "cashier_alias": "Box Mini ciabatta",
+    "category": "boxes",
+    "category_source": "بوكسات",
+    "unit": "بوكس",
+    "source": {
+      "page": 4,
+      "row": 6,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1234",
+    "name": "بوكس ميني عسل ودانش (96)",
+    "cashier_alias": "ND* MininHoney&Danish Box 96",
+    "category": "boxes",
+    "category_source": "بوكسات",
+    "unit": "بوكس",
+    "source": {
+      "page": 4,
+      "row": 7,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1011",
+    "name": "بوكس ميني كرواسون",
+    "cashier_alias": "Mini croissant box - بوكس ميني كرواسون",
+    "category": "boxes",
+    "category_source": "بوكسات",
+    "unit": "بوكس",
+    "source": {
+      "page": 4,
+      "row": 8,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1160",
+    "name": "بوكس ميني كرواسون (12 حبة)",
+    "cashier_alias": "Box Mini Crosson 12",
+    "category": "boxes",
+    "category_source": "بوكسات",
+    "unit": "بوكس",
+    "source": {
+      "page": 4,
+      "row": 9,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1046",
+    "name": "بوكس ميني كرواسون حلو (4 حبات)",
+    "cashier_alias": "4pcs بوكس ميني كرواسون حالي",
+    "category": "boxes",
+    "category_source": "بوكسات",
+    "unit": "بوكس",
+    "source": {
+      "page": 4,
+      "row": 10,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  },
+  {
+    "code": "sk-1026",
+    "name": "بوكس ميني كيكة عسل",
+    "cashier_alias": "Mini honey cake box - بوكس ميني كيكة عسل",
+    "category": "boxes",
+    "category_source": "بوكسات",
+    "unit": "بوكس",
+    "source": {
+      "page": 4,
+      "row": 11,
+      "pdf": "قائمة_الأصناف_النهائية_للتحويل_(والطلب_من_المطبخ_المركزي_)_1790343754311.pdf"
+    }
+  }
+]

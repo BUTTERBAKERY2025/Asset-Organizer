@@ -22,7 +22,7 @@ export function isExplicitCatalogActivation(value: unknown): boolean {
   return isCatalogRecordActive(value);
 }
 
-export type CatalogActivityRecord = { isActive?: unknown };
+export type CatalogActivityRecord = { isActive?: unknown; operationsEnabled?: boolean | null };
 
 /**
  * New operational records must point to an existing active catalog record.
@@ -31,7 +31,15 @@ export type CatalogActivityRecord = { isActive?: unknown };
 export function isNewCatalogReferenceAllowed(
   record: CatalogActivityRecord | null | undefined,
 ): boolean {
-  return record !== null && record !== undefined && isCatalogRecordActive(record.isActive);
+  return record !== null && record !== undefined
+    && (isCatalogRecordActive(record.isActive) || record.operationsEnabled === true);
+}
+
+/** POS is deliberately stricter than the operational (kitchen/production) gate. */
+export function isProductSaleEnabled(
+  record: (CatalogActivityRecord & { saleEnabled?: boolean | null }) | null | undefined,
+): boolean {
+  return !!record && isCatalogRecordActive(record.isActive) && record.saleEnabled !== false;
 }
 
 /**
@@ -41,7 +49,7 @@ export function isNewCatalogReferenceAllowed(
 export function getSelectableCatalogRecords<T extends CatalogActivityRecord>(
   records: readonly T[],
 ): T[] {
-  return records.filter(record => isCatalogRecordActive(record.isActive));
+  return records.filter(record => isNewCatalogReferenceAllowed(record));
 }
 
 export function isPositiveCatalogPrice(value: unknown): boolean {

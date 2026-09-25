@@ -21,6 +21,12 @@ import { getProductCatalogWriteAccess } from "@/lib/product-catalog-permissions"
 import type { Product } from "@shared/schema";
 
 const PRODUCT_CATEGORIES = [
+  { value: "bakery", label: "مخبوزات (bakery)" },
+  { value: "pastry", label: "حلويات (pastry)" },
+  { value: "sandwiches_salads", label: "ساندويتشات وسلطات (sandwiches_salads)" },
+  { value: "boxes", label: "بوكسات (boxes)" },
+  { value: "ساندويتشات وسلطات", label: "ساندويتشات وسلطات" },
+  { value: "بوكسات", label: "بوكسات" },
   { value: "إفطار", label: "إفطار" },
   { value: "مخبوزات", label: "مخبوزات" },
   { value: "حلويات", label: "حلويات" },
@@ -31,7 +37,7 @@ const PRODUCT_CATEGORIES = [
 ];
 
 const PRODUCT_TYPES = [
-  { value: "finish", label: "نهائي (للبيع)", color: "bg-green-100 text-green-700" },
+  { value: "finish", label: "نهائي (للإنتاج؛ البيع يتطلب تفعيلًا منفصلًا)", color: "bg-green-100 text-green-700" },
   { value: "inventory", label: "مخزني (خام)", color: "bg-blue-100 text-blue-700" },
 ];
 
@@ -79,6 +85,7 @@ export default function ProductsPage() {
     priceExclVat: "",
     vatAmount: "",
     vatRate: "0.15",
+    saleEnabled: false,
   });
 
   const { toast } = useToast();
@@ -146,13 +153,18 @@ export default function ProductsPage() {
   });
 
   const resetForm = () => {
-    setFormData({ name: "", nameEn: "", sku: "", category: "", productType: "finish", unit: "قطعة", basePrice: "", priceExclVat: "", vatAmount: "", vatRate: "0.15" });
+    setFormData({ name: "", nameEn: "", sku: "", category: "", productType: "finish", unit: "قطعة", basePrice: "", priceExclVat: "", vatAmount: "", vatRate: "0.15", saleEnabled: false });
     setEditingProduct(null);
     setIsDialogOpen(false);
   };
 
   const handleSubmit = () => {
     if (editingProduct ? !canEditProduct : !canCreateProduct) return;
+    const price = Number(formData.basePrice);
+    if (formData.saleEnabled && (!Number.isFinite(price) || price <= 0)) {
+      toast({ title: "لا يمكن تفعيل البيع دون سعر موجب", variant: "destructive" });
+      return;
+    }
 
     const data = {
       name: formData.name,
@@ -165,6 +177,8 @@ export default function ProductsPage() {
       priceExclVat: formData.priceExclVat ? parseFloat(formData.priceExclVat) : null,
       vatAmount: formData.vatAmount ? parseFloat(formData.vatAmount) : null,
       vatRate: formData.vatRate ? parseFloat(formData.vatRate) : 0.15,
+      saleEnabled: formData.saleEnabled,
+      ...(editingProduct && formData.saleEnabled && editingProduct.isActive === "false" ? { isActive: "true" } : {}),
     };
 
     if (editingProduct) {
@@ -194,6 +208,7 @@ export default function ProductsPage() {
       priceExclVat: priceExclVat ? priceExclVat.toString() : "",
       vatAmount: vatAmount ? vatAmount.toString() : "",
       vatRate: vatRateStr,
+      saleEnabled: (product as Product & { saleEnabled?: boolean }).saleEnabled === true,
     });
     setIsDialogOpen(true);
   };
@@ -255,6 +270,7 @@ export default function ProductsPage() {
 
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      ((p as any).nameEn || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       ((p as any).sku || "").toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = categoryFilter === "all" || p.category === categoryFilter;
     const matchesType = productTypeFilter === "all" || (p as any).productType === productTypeFilter;
@@ -284,9 +300,9 @@ export default function ProductsPage() {
     return type === "finish" ? "نهائي" : "مخزني";
   };
 
-  const categoryCounts = PRODUCT_CATEGORIES.map(cat => ({
-    ...cat,
-    count: products.filter(p => p.category === cat.value).length,
+  const categoryCounts = [...new Set(products.map(p => p.category))].map(value => ({
+    value, label: PRODUCT_CATEGORIES.find(cat => cat.value === value)?.label || value,
+    count: products.filter(p => p.category === value).length,
   }));
 
   const exportColumns = [
@@ -393,7 +409,7 @@ export default function ProductsPage() {
                             <SelectValue placeholder="اختر الفئة" />
                           </SelectTrigger>
                           <SelectContent className="max-h-60 overflow-y-auto">
-                            {PRODUCT_CATEGORIES.map(cat => (
+                            {[...PRODUCT_CATEGORIES, ...(formData.category && !PRODUCT_CATEGORIES.some(cat => cat.value === formData.category) ? [{ value: formData.category, label: formData.category }] : [])].map(cat => (
                               <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                             ))}
                           </SelectContent>
@@ -419,7 +435,7 @@ export default function ProductsPage() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="max-h-60 overflow-y-auto">
-                            {UNITS.map(u => (
+                            {[...UNITS, ...(formData.unit && !UNITS.some(u => u.value === formData.unit) ? [{ value: formData.unit, label: formData.unit }] : [])].map(u => (
                               <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
                             ))}
                           </SelectContent>
@@ -438,6 +454,11 @@ export default function ProductsPage() {
                         </Select>
                       </div>
                     </div>
+                    <label className="flex items-center gap-2 rounded-md border p-3 text-sm">
+                      <input type="checkbox" checked={formData.saleEnabled} onChange={e => setFormData({ ...formData, saleEnabled: e.target.checked })} disabled={!canEditProduct || !editingProduct || !(Number(formData.basePrice) > 0)} />
+                      إتاحة البيع في نقطة البيع
+                    </label>
+                    {editingProduct && !formData.saleEnabled && <p className="text-xs text-amber-800">المنتج غير متاح للبيع حتى تحدد سعراً موجباً وتفعّل البيع صراحةً ثم تحفظ.</p>}
                     <div className="grid grid-cols-3 gap-3">
                       <div>
                         <Label>السعر بدون ضريبة</Label>
@@ -598,7 +619,7 @@ export default function ProductsPage() {
                         </tr>
                       ) : (
                         paginatedProducts.map((product, index) => (
-                          <tr key={product.id} className={`hover:bg-muted/30 ${product.isActive === "false" ? "opacity-60" : ""}`} data-testid={`row-product-${product.id}`}>
+                          <tr key={product.id} className={`hover:bg-muted/30 ${product.isActive === "false" && !(product as Product & { operationsEnabled?: boolean }).operationsEnabled ? "opacity-60" : ""}`} data-testid={`row-product-${product.id}`}>
                             <td className="p-2 sm:p-3 text-muted-foreground text-xs">
                               {(currentPage - 1) * itemsPerPage + index + 1}
                             </td>
@@ -629,8 +650,8 @@ export default function ProductsPage() {
                               {(product.basePrice || 0).toFixed(2)} ر.س
                             </td>
                             <td className="p-2 sm:p-3">
-                              <Badge variant={product.isActive === "false" ? "secondary" : "default"}>
-                                {product.isActive === "false" ? "مؤرشف" : "نشط"}
+                              <Badge variant={product.isActive === "false" || (product as Product & { saleEnabled?: boolean }).saleEnabled === false ? "secondary" : "default"}>
+                                {(product as Product & { operationsEnabled?: boolean }).operationsEnabled && (product as Product & { saleEnabled?: boolean }).saleEnabled === false ? "متاح للإنتاج · البيع معطل (بانتظار السعر)" : product.isActive === "false" ? "مؤرشف" : (product as Product & { saleEnabled?: boolean }).saleEnabled === false ? "نشط · البيع معطل" : "نشط"}
                               </Badge>
                             </td>
                             {canManageProducts && (

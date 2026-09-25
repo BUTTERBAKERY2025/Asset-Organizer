@@ -6,6 +6,7 @@ import {
   isExplicitCatalogActivation,
   isExplicitCatalogActivityValue,
   isNewCatalogReferenceAllowed,
+  isProductSaleEnabled,
 } from "../shared/catalog-activity";
 
 type CatalogRecord = {
@@ -76,6 +77,21 @@ describe("catalog consumer activity boundaries", () => {
     expect(isNewCatalogReferenceAllowed(activeProduct)).toBe(true);
     expect(isNewCatalogReferenceAllowed(inactiveProduct)).toBe(false);
     expect(isNewCatalogReferenceAllowed(undefined)).toBe(false);
+  });
+
+  it("keeps unpriced imported goods operational while blocking POS on old and new deployments", () => {
+    const unpriced = {
+      id: 12, name: "New finished good", isActive: "false",
+      operationsEnabled: true, saleEnabled: false, basePrice: null,
+    };
+    expect(isNewCatalogReferenceAllowed(unpriced)).toBe(true);
+    expect(getSelectableCatalogRecords([activeProduct, inactiveProduct, unpriced])).toEqual([activeProduct, unpriced]);
+    expect(isProductSaleEnabled(unpriced)).toBe(false);
+    expect(isProductSaleEnabled({ ...unpriced, isActive: "true" })).toBe(false);
+    expect(isProductSaleEnabled({ ...unpriced, isActive: "true", saleEnabled: true })).toBe(true);
+    expect(isProductSaleEnabled(inactiveProduct)).toBe(false);
+    expect(isProductSaleEnabled(activeProduct)).toBe(true);
+    expect(getEffectiveSalePrice(null, unpriced.basePrice)).toBeNull();
   });
 
   it("rejects inactive warehouse items for new material transfers", () => {

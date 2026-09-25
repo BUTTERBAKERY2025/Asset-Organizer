@@ -18454,6 +18454,7 @@ export class DatabaseStorage implements IStorage {
         productUnit: products.unit,
         productVatRate: products.vatRate,
         productIsActive: products.isActive,
+        productSaleEnabled: products.saleEnabled,
       })
       .from(branchProducts)
       .leftJoin(products, eq(branchProducts.productId, products.id))
@@ -18476,6 +18477,7 @@ export class DatabaseStorage implements IStorage {
         unit: r.productUnit,
         vatRate: r.productVatRate ?? 0.15,
         isActive: r.productIsActive,
+        saleEnabled: r.productSaleEnabled,
       },
     }));
   }

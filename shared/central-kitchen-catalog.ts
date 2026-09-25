@@ -4,6 +4,8 @@ export type CentralKitchenCatalogItem = {
   name: string;
   unit: string;
   sku?: string;
+  category?: string;
+  nameEn?: string;
 };
 
 export type CentralKitchenCatalogV2 = {
@@ -43,12 +45,14 @@ export function parseCentralKitchenCatalogV2(value: unknown): CentralKitchenCata
       throw new CentralKitchenCatalogContractError();
     }
     const item = raw as Record<string, unknown>;
-    const validKeys = new Set(["id", "source", "name", "unit", "sku"]);
+    const validKeys = new Set(["id", "source", "name", "unit", "sku", "category", "nameEn"]);
     if (Object.keys(item).some((key) => !validKeys.has(key))
       || typeof item.id !== "number" || !Number.isInteger(item.id) || item.id <= 0
       || (item.source !== "product" && item.source !== "warehouse")
       || typeof item.name !== "string" || !item.name.trim()
       || typeof item.unit !== "string" || !item.unit.trim()
+      || (item.category !== undefined && (typeof item.category !== "string" || !item.category.trim()))
+      || (item.nameEn !== undefined && (typeof item.nameEn !== "string" || !item.nameEn.trim()))
       || (item.sku !== undefined && (typeof item.sku !== "string" || !item.sku.trim()))) {
       throw new CentralKitchenCatalogContractError();
     }
@@ -58,6 +62,8 @@ export function parseCentralKitchenCatalogV2(value: unknown): CentralKitchenCata
       name: item.name.trim(),
       unit: item.unit.trim(),
       ...(item.sku !== undefined ? { sku: item.sku } : {}),
+      ...(item.category !== undefined ? { category: item.category } : {}),
+      ...(item.nameEn !== undefined ? { nameEn: item.nameEn } : {}),
     } as CentralKitchenCatalogItem;
   });
   return { schemaVersion: 2, items };

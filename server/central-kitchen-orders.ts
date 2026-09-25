@@ -106,6 +106,9 @@ export const createCentralKitchenOrderSchema = z.object({
     unit: trimmedText(50),
     notes: z.string().trim().max(1000).optional().nullable(),
   }).strict().superRefine((item, ctx) => {
+    if (item.productId == null || item.warehouseItemId != null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["productId"], message: "اختر منتجاً نهائياً من كتالوج المطبخ" });
+    }
     if (item.productId != null && item.warehouseItemId != null) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Choose only one catalog identity" });
     }

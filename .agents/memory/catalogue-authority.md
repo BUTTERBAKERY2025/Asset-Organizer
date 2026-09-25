@@ -21,6 +21,12 @@ An item missing a supplied price must remain explicitly unavailable until a revi
 
 **How to apply:** Preserve existing prices during identity adoption. For genuine additions, require an explicit priced/active or unpriced/inactive decision, and enforce inactivity at both selection and write boundaries.
 
+Finished goods may be explicitly available for production and internal transfers while pending sales pricing. This is not permission to activate them for POS.
+
+**Why:** The final kitchen list specifies operational units/categories but no prices. During rolling/manual deployments an older server ignores newly added sales flags; making an unpriced row legacy-active before deployment could expose a zero-priced sale.
+
+**How to apply:** Keep unpriced additions legacy-inactive and sales-disabled, with a separate explicit operational opt-in. New production consumers honor that opt-in; sales consumers must still require sales eligibility and a positive reviewed price. Never infer that changing "قطعة" to "بوكس" preserves the stock-count meaning without reviewing package identity.
+
 Database names and database OIDs alone do not identify a deployment.
 
 **Why:** Independent PostgreSQL installations can share the same default database name and OID; an operator label or completed-backup flag cannot prove that a backup covers the reviewed target.

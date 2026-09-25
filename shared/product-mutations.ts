@@ -15,6 +15,8 @@ export const productUpdateSchema = z.object({
   vatAmount: optionalPrice,
   vatRate: z.number().finite().min(0).max(1).optional(),
   isActive: z.enum(["true", "false"]).optional(),
+  operationsEnabled: z.boolean().optional(),
+  saleEnabled: z.boolean().optional(),
   description: optionalNullableText,
   notes: optionalNullableText,
 }).strict().refine((value) => Object.keys(value).length > 0, {

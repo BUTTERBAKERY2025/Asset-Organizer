@@ -24,7 +24,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { getButterBakeryLogoDataUri } from "@/lib/company-logo-data";
 import { openPrintWindow, renderToPrintWindow } from "@/lib/print-window";
-import { getKitchenDraftInvalidTarget, isKitchenOrderDraftValid, isValidKitchenQuantity, kitchenCatalogSupplyLabel, normalizeReportedAvailableQuantity, OrderLineEditor, type KitchenOrderDraftLine } from "@/components/central-kitchen/order-line-editor";
+import { getKitchenDraftInvalidTarget, isKitchenOrderDraftValid, isValidKitchenQuantity, kitchenCatalogSupplyLabel, normalizeReportedAvailableQuantity, OrderLineEditor, parseKitchenProductCatalog, type KitchenCatalogProduct, type KitchenOrderDraftLine } from "@/components/central-kitchen/order-line-editor";
 import { LinkedBatches } from "@/components/central-kitchen/linked-batches";
 import { KitchenStageRail } from "@/components/central-kitchen/kitchen-stage-rail";
 import {
@@ -42,10 +42,6 @@ import { type PreparationSheet } from "@/components/central-kitchen/kitchen-orde
 import { kitchenOrderPrintHtml } from "@/components/central-kitchen/kitchen-order-pdf";
 import { formatKitchenSaudiDateTime } from "@/components/central-kitchen/display-format";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import {
-  CentralKitchenCatalogItem,
-  parseCentralKitchenCatalogV2,
-} from "@shared/central-kitchen-catalog";
 import {
   getCentralKitchenNextStep,
   parseCentralKitchenInventoryMode,
@@ -117,7 +113,7 @@ type KitchenOrderPage = {
   arrival: { count: number; maxId: number | null };
   counts: Record<OrderStage, number> & { new: number; overdue: number; dueToday: number; openDiscrepancies: number };
 };
-type ProductOption = CentralKitchenCatalogItem;
+type ProductOption = KitchenCatalogProduct;
 type DraftItem = KitchenOrderDraftLine;
 type ShadowInventoryEntry = {
   id: number; direction: "projected_kitchen_out" | "projected_branch_in";
@@ -343,7 +339,7 @@ export default function CentralKitchenOrdersPage() {
       } catch {
         throw new Error("إصدار كتالوج الأصناف غير متوافق. أعد تحميل الصفحة للحصول على الإصدار الأحدث.");
       }
-      return parseCentralKitchenCatalogV2(payload).items;
+      return parseKitchenProductCatalog(payload).filter(item => item.source === "product");
     },
     staleTime: 0,
     refetchOnMount: "always",
@@ -423,6 +419,10 @@ export default function CentralKitchenOrdersPage() {
     setCreateStepError("");
     focusCreateField(`#request-qty-${index}`);
   };
+  const validNewOrderLines = () => isKitchenOrderDraftValid(draft.items)
+    && draft.items.every(item => item.productId !== undefined
+      && products.some(product => product.source === "product" && product.id === item.productId
+        && product.name === item.productName && product.unit === item.unit));
   const advanceCreateStep = () => {
     if (createStep === 0) {
       if (!draft.sourceBranchId) {
@@ -448,8 +448,8 @@ export default function CentralKitchenOrdersPage() {
       setCreateStep(1);
       return;
     }
-    if (!isKitchenOrderDraftValid(draft.items)) {
-      setCreateStepError("اختر كل صنف، ثم أدخل كمية الطلب والمتوفر الحالي. اكتب 0 صراحةً عند عدم توفر الصنف.");
+    if (!validNewOrderLines()) {
+      setCreateStepError("اختر منتجات نهائية من الكتالوج، ثم أدخل كمية الطلب والمتوفر الحالي. اكتب 0 صراحةً عند عدم توفر الصنف.");
       const target = getKitchenDraftInvalidTarget(draft.items);
       if (target) {
         setItemMobileView(target.mobileView);
@@ -463,7 +463,7 @@ export default function CentralKitchenOrdersPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const invalid = !isKitchenOrderDraftValid(draft.items);
+      const invalid = !validNewOrderLines();
       if (!draft.sourceBranchId || !draft.centralKitchenId || draft.centralKitchenId === draft.sourceBranchId || !centralKitchens.some(kitchen => kitchen.id === draft.centralKitchenId) || !draft.neededDate || invalid) throw new Error("أكمل الفروع وبنود الطلب بالكميات الصحيحة.");
       const payload = {
         requestBranchId: draft.sourceBranchId, centralKitchenId: draft.centralKitchenId, neededDate: draft.neededDate || undefined,
@@ -500,7 +500,7 @@ export default function CentralKitchenOrdersPage() {
   });
   const submitCreate = () => {
     if (createSubmittingRef.current || createMutation.isPending) return;
-    if (!draft.neededDate || !draft.sourceBranchId || !draft.centralKitchenId || draft.centralKitchenId === draft.sourceBranchId || !centralKitchens.some(kitchen => kitchen.id === draft.centralKitchenId) || !orderingPolicy.query.data || !isKitchenOrderDraftValid(draft.items)) {
+    if (!draft.neededDate || !draft.sourceBranchId || !draft.centralKitchenId || draft.centralKitchenId === draft.sourceBranchId || !centralKitchens.some(kitchen => kitchen.id === draft.centralKitchenId) || !orderingPolicy.query.data || !validNewOrderLines()) {
       setCreateStepError("تغيّرت بيانات المسودة. ارجع إلى الخطوات السابقة وأكمل الحقول المطلوبة.");
       return;
     }
@@ -714,7 +714,7 @@ export default function CentralKitchenOrdersPage() {
         <div><Label htmlFor="needed-date">تاريخ الحاجة</Label><Input id="needed-date" lang="en" type="date" className="mt-2" value={draft.neededDate} onChange={event => { dateTouchedRef.current = true; setDraft({ ...draft, neededDate: event.target.value }); }} /></div><div><Label htmlFor="needed-time">وقت الحاجة</Label><Input id="needed-time" lang="en" type="time" className="mt-2" value={draft.neededTime} onChange={event => { timeTouchedRef.current = true; setDraft({ ...draft, neededTime: event.target.value }); }} /></div>
       </div>
        {!!draft.sourceBranchId && <ReceiverRoutingNotice routing={receiverRoutingQuery.data} loading={receiverRoutingQuery.isLoading} error={receiverRoutingQuery.isError} onRetry={() => void receiverRoutingQuery.refetch()} />}
-       <details className="rounded-lg border border-border bg-card px-3 py-2 text-sm"><summary className="min-h-11 cursor-pointer content-center font-medium">تفاصيل التوريد والتعيين</summary><div className="space-y-3 pt-3 text-muted-foreground"><p>جميع الأصناف، بما فيها مواد المستودع في الكتالوج، تُورّد من مخزون المطبخ المختار وليست طلباً مباشراً من المستودع الرئيسي.</p>{!!draft.centralKitchenId && <p>مهام المطبخ موجّهة تلقائياً إلى مدير التطوير والإنتاج وفق الصلاحيات الحالية، دون تعيين يدوي.</p>}</div></details>
+       <details className="rounded-lg border border-border bg-card px-3 py-2 text-sm"><summary className="min-h-11 cursor-pointer content-center font-medium">تفاصيل التوريد والتعيين</summary><div className="space-y-3 pt-3 text-muted-foreground"><p>الطلبات الجديدة تختار منتجات نهائية فقط، وتُورّد من مخزون المطبخ المختار. تبقى مواد الطلبات السابقة ظاهرة في سجلاتها وقابلة للاستلام.</p>{!!draft.centralKitchenId && <p>مهام المطبخ موجّهة تلقائياً إلى مدير التطوير والإنتاج وفق الصلاحيات الحالية، دون تعيين يدوي.</p>}</div></details>
       {orderingPolicy.query.isError ? <p role="alert" className="rounded border border-amber-300 p-3 text-sm">تعذر تحميل مواعيد الطلب من الخادم. <Button variant="link" onClick={() => void orderingPolicy.query.refetch()}>إعادة المحاولة</Button></p> : !orderingPolicy.query.data ? <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل مواعيد الطلب بتوقيت السعودية…</p> : <OrderScheduleNotice schedule={draftSchedule} preview />}
       </div>}
       {createStep === 1 && <div className="space-y-4" data-testid="create-step-items">
@@ -723,7 +723,7 @@ export default function CentralKitchenOrdersPage() {
       </div>}
       {createStep === 2 && <section className="space-y-4" data-testid="create-step-review" aria-label="مراجعة الطلب">
          <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">راجع الطلب قبل الإرسال</h3><Button type="button" variant="outline" className="min-h-11" onClick={() => { setCreateStep(0); setCreateStepError(""); }}>تعديل الفرع أو الموعد</Button></div>
-        <div className="rounded-xl border bg-muted/15 p-4"><h3 className="font-semibold">المورد والوجهة والموعد</h3><dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 text-sm"><div><dt className="text-xs text-muted-foreground">الفرع الطالب</dt><dd className="mt-1 font-medium">{branchName(draft.sourceBranchId)}</dd></div><div><dt className="text-xs text-muted-foreground">المورد المختار</dt><dd className="mt-1 font-medium">المطبخ: {branchName(draft.centralKitchenId)}</dd></div><div><dt className="text-xs text-muted-foreground">تاريخ الحاجة</dt><dd className="mt-1 font-medium">{readableDate(draft.neededDate)}</dd></div><div><dt className="text-xs text-muted-foreground">الوقت</dt><dd className="mt-1 font-medium">{readableTime(draft.neededTime)}</dd></div></dl><p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">مواد المستودع في كتالوج المطبخ تعرّف نوع الصنف فقط؛ التوريد هنا من مخزون المطبخ المختار، وليس من المستودع الرئيسي مباشرةً.</p></div>
+        <div className="rounded-xl border bg-muted/15 p-4"><h3 className="font-semibold">المورد والوجهة والموعد</h3><dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 text-sm"><div><dt className="text-xs text-muted-foreground">الفرع الطالب</dt><dd className="mt-1 font-medium">{branchName(draft.sourceBranchId)}</dd></div><div><dt className="text-xs text-muted-foreground">المورد المختار</dt><dd className="mt-1 font-medium">المطبخ: {branchName(draft.centralKitchenId)}</dd></div><div><dt className="text-xs text-muted-foreground">تاريخ الحاجة</dt><dd className="mt-1 font-medium">{readableDate(draft.neededDate)}</dd></div><div><dt className="text-xs text-muted-foreground">الوقت</dt><dd className="mt-1 font-medium">{readableTime(draft.neededTime)}</dd></div></dl><p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">المنتجات النهائية المختارة تُورّد من مخزون المطبخ المحدد وبوحداتها المسجلة في الكتالوج.</p></div>
          <div className="rounded-xl border">
            <div className="border-b px-4 py-3"><h3 className="font-semibold">الأصناف ({draft.items.length})</h3><p className="text-xs text-muted-foreground">راجع المطلوب والمتوفر في الفرع. يمكنك تعديل أي صنف مباشرةً.</p></div>
            <div className="divide-y">{draft.items.map((item, index) => <article key={index} className="px-4 py-3">

@@ -1,0 +1,3870 @@
+{
+  "target": "Supabase production irgeqdrdaejhedlcbvzz / public.products",
+  "schema_columns_read": [
+    "id",
+    "name",
+    "name_en",
+    "sku",
+    "category",
+    "unit",
+    "product_type",
+    "is_active",
+    "base_price"
+  ],
+  "read_only": true,
+  "source_rows": 102,
+  "production_rows": 196,
+  "exact_business_code_matches": 0,
+  "source_unit_differences": 61,
+  "unique_candidate_rows": 76,
+  "ambiguous_candidate_rows": 2,
+  "no_candidate_rows": 24,
+  "candidates": [
+    {
+      "source_code": "330394",
+      "source_page": 1,
+      "source_row": 1,
+      "source_name": "بان سويس راسبيري",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 520,
+          "sku": "F-BK-0024",
+          "name": "رازبيرى بان سويس",
+          "name_en": "RASPBERRY PAIN SWISS",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 25.06,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330393",
+      "source_page": 1,
+      "source_row": 2,
+      "source_name": "بان سويس شوكو براوني",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 524,
+          "sku": "F-BK-0017",
+          "name": "شوكو براونى سويس",
+          "name_en": "CHOCO BROWNIE SWISS",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 24.9,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-0954",
+      "source_page": 1,
+      "source_row": 3,
+      "source_name": "خبز براون",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 511,
+          "sku": "F-BK-0001",
+          "name": "خبز 🥖 براون bag",
+          "name_en": "Brown Bread",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 15,
+          "evidence": [
+            "human_review_proposal"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": "كاشير المصدر يحتوي رمز 🥖، والسجل الحالي اسم خبز براون bag؛ تحقق من وحدة البيع.",
+      "apply": false
+    },
+    {
+      "source_code": "330068",
+      "source_page": 1,
+      "source_row": 4,
+      "source_name": "خبز بريوش",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 510,
+          "sku": "F-BK-0007",
+          "name": "خبز بريوش",
+          "name_en": "Brioche bread",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 27.38,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330091",
+      "source_page": 1,
+      "source_row": 5,
+      "source_name": "خبز ساوردو",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 523,
+          "sku": "F-BK-0014",
+          "name": "ساوردو",
+          "name_en": "Sourdough bread",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 39.38,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-0915",
+      "source_page": 1,
+      "source_row": 6,
+      "source_name": "خبز سميط تركي (3 حبات)",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 506,
+          "sku": "F-BK-0003",
+          "name": "خبز السميط التركي",
+          "name_en": "3 Turkish Simit pcs",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 14,
+          "evidence": [
+            "human_review_proposal"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-0912",
+      "source_page": 1,
+      "source_row": 7,
+      "source_name": "خبز شباتا إيطالي (3 حبات)",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 507,
+          "sku": "F-BK-0006",
+          "name": "خبز الشيباتا الإيطالي",
+          "name_en": "3 Italian Ciabatta pcs",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 16.45,
+          "evidence": [
+            "human_review_proposal"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-0913",
+      "source_page": 1,
+      "source_row": 8,
+      "source_name": "خبز فوكاتشيا",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 508,
+          "sku": "F-BK-0002",
+          "name": "خبز الفوكاتشيا",
+          "name_en": "Focaccia bread",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 16,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-0916",
+      "source_page": 1,
+      "source_row": 9,
+      "source_name": "خبز كرواسون (3 حبات)",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 509,
+          "sku": "F-BK-0008",
+          "name": "خبز الكرواسون برد",
+          "name_en": "3pcs Croissant Bread",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 19.75,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330026",
+      "source_page": 1,
+      "source_row": 10,
+      "source_name": "دانش بن حلومي",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330303",
+      "source_page": 1,
+      "source_row": 11,
+      "source_name": "دانش بيستو",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 514,
+          "sku": "F-BK-0028",
+          "name": "دانش بيستو",
+          "name_en": "Danish pesto",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 21.78,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1089",
+      "source_page": 1,
+      "source_row": 12,
+      "source_name": "دانش تيراميسو",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 515,
+          "sku": "F-BK-0019",
+          "name": "دانش تيراميسو",
+          "name_en": "Tiramisue Danish",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 27,
+          "evidence": [
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-0903",
+      "source_page": 1,
+      "source_row": 13,
+      "source_name": "دانش تين",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 512,
+          "sku": "F-BK-0021",
+          "name": "دانش التين",
+          "name_en": "Fig Danish",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 26.27,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-0950",
+      "source_page": 1,
+      "source_row": 14,
+      "source_name": "دانش جبنة شمر وطماطم مجففة",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 516,
+          "sku": "F-BK-0025",
+          "name": "دانش شمر تشيز + الطماطم المجففة",
+          "name_en": "Danish Shammar + Sundried Tomatto",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 21.83,
+          "evidence": [
+            "human_review_proposal"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1133",
+      "source_page": 1,
+      "source_row": 15,
+      "source_name": "دانش دقة",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 519,
+          "sku": "F-BK-0015",
+          "name": "دانيش دقة",
+          "name_en": "Danish Douqqa",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 21.56,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1181",
+      "source_page": 1,
+      "source_row": 16,
+      "source_name": "دانش فستق",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330035",
+      "source_page": 1,
+      "source_row": 17,
+      "source_name": "دانش كريمة فرنسية",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 518,
+          "sku": "F-BK-0034",
+          "name": "دانش كريمة فرنسية",
+          "name_en": "Danish French Cream",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 27.15,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1182",
+      "source_page": 1,
+      "source_row": 18,
+      "source_name": "دانش موز",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1183",
+      "source_page": 1,
+      "source_row": 19,
+      "source_name": "سلة دانش فواكه",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-0868",
+      "source_page": 1,
+      "source_row": 20,
+      "source_name": "فلكي بان سويس",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 525,
+          "sku": "F-BK-0012",
+          "name": "فلكي بان سويس",
+          "name_en": "Flaky Pain Suisse",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 23.44,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330287",
+      "source_page": 1,
+      "source_row": 21,
+      "source_name": "كاسترد كوكونت رول",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330039",
+      "source_page": 1,
+      "source_row": 22,
+      "source_name": "كرواسون بيكان فرنسي",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 527,
+          "sku": "F-BK-0029",
+          "name": "كرواسون بيكان فرنسى",
+          "name_en": "French croissant pecan",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 24.28,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-0902",
+      "source_page": 1,
+      "source_row": 23,
+      "source_name": "كرواسون جبنة",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 528,
+          "sku": "F-BK-0027",
+          "name": "كرواسون جبنة",
+          "name_en": "Cheese Croissant",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 21.17,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1086",
+      "source_page": 1,
+      "source_row": 24,
+      "source_name": "كرواسون جبنة وتركي",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1085",
+      "source_page": 1,
+      "source_row": 25,
+      "source_name": "كرواسون روستد بيف بالجبنة والزيتون",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 521,
+          "sku": "F-BK-0010",
+          "name": "روستد بيف مع جبنة و زيتون",
+          "name_en": "Roasted beef cheese,olive",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 21,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-0833",
+      "source_page": 1,
+      "source_row": 26,
+      "source_name": "كرواسون رول بيكان",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 522,
+          "sku": "F-BK-0018",
+          "name": "رول كروسون بيكان",
+          "name_en": "Pecan  ROOL",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 22.91,
+          "evidence": [
+            "human_review_proposal"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330031",
+      "source_page": 1,
+      "source_row": 27,
+      "source_name": "كرواسون زعتر",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330015",
+      "source_page": 1,
+      "source_row": 28,
+      "source_name": "كرواسون سادة",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 529,
+          "sku": "F-BK-0026",
+          "name": "كرواسون سادة",
+          "name_en": "plain croissant",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 17.24,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330036",
+      "source_page": 1,
+      "source_row": 29,
+      "source_name": "كرواسون شوكولاتة",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 530,
+          "sku": "F-BK-0032",
+          "name": "كرواسون شوكولاته",
+          "name_en": "Croissant Chocolate",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 22.25,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330037",
+      "source_page": 1,
+      "source_row": 30,
+      "source_name": "كرواسون فستق",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-0878",
+      "source_page": 1,
+      "source_row": 31,
+      "source_name": "كرواسون كوكيز",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 531,
+          "sku": "F-BK-0022",
+          "name": "كوكيز كرواسون",
+          "name_en": "cookies croissant",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 27.28,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330029",
+      "source_page": 1,
+      "source_row": 32,
+      "source_name": "كرواسون لوز",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 526,
+          "sku": "F-BK-0031",
+          "name": "كرواسون اللوز",
+          "name_en": "Almond croissant",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 19.24,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330081",
+      "source_page": 1,
+      "source_row": 33,
+      "source_name": "لندن تشيز بن",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 532,
+          "sku": "F-BK-0033",
+          "name": "لندن تشيز بن",
+          "name_en": "London Cheese Bun",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 27.13,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330043",
+      "source_page": 1,
+      "source_row": 34,
+      "source_name": "لندن دونات بيكان",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 533,
+          "sku": "F-BK-0020",
+          "name": "لندن دونت بيكان",
+          "name_en": "London Donut peacan",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 11.9,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330045",
+      "source_page": 1,
+      "source_row": 35,
+      "source_name": "لندن دونات زعتر",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 534,
+          "sku": "F-BK-0023",
+          "name": "لندن دونت زعتر",
+          "name_en": "London donut thyme",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 11.9,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1132",
+      "source_page": 1,
+      "source_row": 36,
+      "source_name": "ماتيلدا كرواسون نوتيلا",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 536,
+          "sku": "F-BK-0030",
+          "name": "ماتيلدا كرواسون نوتيلا",
+          "name_en": "Matilda Croissant Nutella",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 55.19,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-0860",
+      "source_page": 1,
+      "source_row": 37,
+      "source_name": "ماريتوزو",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1171",
+      "source_page": 1,
+      "source_row": 38,
+      "source_name": "مافن",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1157",
+      "source_page": 1,
+      "source_row": 39,
+      "source_name": "ميني ماتيلدا كرواسون",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 537,
+          "sku": "F-BK-0016",
+          "name": "ميني ماتيلدا كروسون",
+          "name_en": "Mini Matilda Croissant",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 28.99,
+          "evidence": [
+            "human_review_proposal"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330288",
+      "source_page": 1,
+      "source_row": 40,
+      "source_name": "نوتيلا رول",
+      "source_unit": "حبة",
+      "source_category": "bakery",
+      "candidates": [
+        {
+          "id": 538,
+          "sku": "F-BK-0005",
+          "name": "نوتيلا رول",
+          "name_en": "Nutella roll",
+          "unit": "قطعة",
+          "category": "مخبوزات",
+          "is_active": "true",
+          "base_price": 21.56,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1141",
+      "source_page": 2,
+      "source_row": 1,
+      "source_name": "بودنج كرنشي",
+      "source_unit": "كوب",
+      "source_category": "pastry",
+      "candidates": [
+        {
+          "id": 482,
+          "sku": "F-PS-0010",
+          "name": "بودنج كرنشي",
+          "name_en": "Brawinse crunchy",
+          "unit": "قطعة",
+          "category": "حلويات",
+          "is_active": "true",
+          "base_price": 18.48,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330187",
+      "source_page": 2,
+      "source_row": 2,
+      "source_name": "بي بي كيك",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [
+        {
+          "id": 484,
+          "sku": "F-PS-0003",
+          "name": "بى بى كيك",
+          "name_en": "B.B Cake",
+          "unit": "قطعة",
+          "category": "حلويات",
+          "is_active": "true",
+          "base_price": 28.07,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": false
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330290",
+      "source_page": 2,
+      "source_row": 3,
+      "source_name": "تارت ليمون",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330062",
+      "source_page": 2,
+      "source_row": 4,
+      "source_name": "تارت ميكس بيري",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [
+        {
+          "id": 486,
+          "sku": "F-PS-0011",
+          "name": "تارت مكس بيرى",
+          "name_en": "Mix berry tart",
+          "unit": "قطعة",
+          "category": "حلويات",
+          "is_active": "true",
+          "base_price": 28.9,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": false
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330342",
+      "source_page": 2,
+      "source_row": 5,
+      "source_name": "تشيز كيك كريم بروليه",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [
+        {
+          "id": 492,
+          "sku": "F-PS-0002",
+          "name": "كريم بروليه تشيز كيك",
+          "name_en": "Crem Brulee Cheese cake",
+          "unit": "قطعة",
+          "category": "حلويات",
+          "is_active": "true",
+          "base_price": 25.1,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": false
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330094",
+      "source_page": 2,
+      "source_row": 6,
+      "source_name": "تيراميسو",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [
+        {
+          "id": 487,
+          "sku": "F-PS-0014",
+          "name": "تيرامسيو",
+          "name_en": "Tiramisu",
+          "unit": "قطعة",
+          "category": "حلويات",
+          "is_active": "true",
+          "base_price": 25.94,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": false
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1184",
+      "source_page": 2,
+      "source_row": 7,
+      "source_name": "جاكاراندا كيك",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330336",
+      "source_page": 2,
+      "source_row": 8,
+      "source_name": "روشيه",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [
+        {
+          "id": 488,
+          "sku": "F-PS-0009",
+          "name": "روشيه",
+          "name_en": "rocher",
+          "unit": "قطعة",
+          "category": "حلويات",
+          "is_active": "true",
+          "base_price": 34.06,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": false
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1198",
+      "source_page": 2,
+      "source_row": 9,
+      "source_name": "سمر كيك",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1039",
+      "source_page": 2,
+      "source_row": 10,
+      "source_name": "كراميليتو",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [
+        {
+          "id": 490,
+          "sku": "F-PS-0008",
+          "name": "كرامليتو",
+          "name_en": "Caramelito",
+          "unit": "قطعة",
+          "category": "حلويات",
+          "is_active": "true",
+          "base_price": 27.93,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": false
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1041",
+      "source_page": 2,
+      "source_row": 11,
+      "source_name": "كرنشي شوكولاتة",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [
+        {
+          "id": 491,
+          "sku": "F-PS-0019",
+          "name": "كرنشى تشوكلت",
+          "name_en": "Crunchy Choclate",
+          "unit": "قطعة",
+          "category": "حلويات",
+          "is_active": "true",
+          "base_price": 25,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": false
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330388",
+      "source_page": 2,
+      "source_row": 12,
+      "source_name": "كوكيز شوكولاتة",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [
+        {
+          "id": 493,
+          "sku": "F-PS-0017",
+          "name": "كوكيز شوكولاته",
+          "name_en": "choclate cookies",
+          "unit": "قطعة",
+          "category": "حلويات",
+          "is_active": "true",
+          "base_price": 15.31,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": false
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330010",
+      "source_page": 2,
+      "source_row": 13,
+      "source_name": "كيك برتقال سلايس",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [
+        {
+          "id": 495,
+          "sku": "F-PS-0020",
+          "name": "كيك برتقال سلايس",
+          "name_en": "orange slice cake",
+          "unit": "قطعة",
+          "category": "حلويات",
+          "is_active": "true",
+          "base_price": 6,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": false
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330112",
+      "source_page": 2,
+      "source_row": 14,
+      "source_name": "كيك برتقال فرنسي",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [
+        {
+          "id": 496,
+          "sku": "F-PS-0022",
+          "name": "كيك برتقال فرنسى",
+          "name_en": "French orange cake",
+          "unit": "قطعة",
+          "category": "حلويات",
+          "is_active": "true",
+          "base_price": 47.15,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": false
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330183",
+      "source_page": 2,
+      "source_row": 15,
+      "source_name": "كيك ليمون سلايس",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [
+        {
+          "id": 499,
+          "sku": "F-PS-0024",
+          "name": "كيك ليمون سلايس",
+          "name_en": "Lemon slice cake",
+          "unit": "قطعة",
+          "category": "حلويات",
+          "is_active": "true",
+          "base_price": 6,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": false
+        },
+        {
+          "id": 500,
+          "sku": "F-PS-0001",
+          "name": "كيك ليمون سلايس",
+          "name_en": "Lemon slice cake",
+          "unit": "قطعة",
+          "category": "حلويات",
+          "is_active": "true",
+          "base_price": 6,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": false
+        }
+      ],
+      "decision": "ambiguous_multiple_candidates",
+      "review_note": "هناك سجلان مطابقان بالاسم واسم الكاشير (499 و500) ولا يمكن اختيار هوية واحدة بدون تحقق تاريخ الاستخدام.",
+      "apply": false
+    },
+    {
+      "source_code": "330111",
+      "source_page": 2,
+      "source_row": 16,
+      "source_name": "كيك ليمون فرنسي",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [
+        {
+          "id": 501,
+          "sku": "F-PS-0023",
+          "name": "كيك ليمون فرنسى",
+          "name_en": "French lemon cake",
+          "unit": "قطعة",
+          "category": "حلويات",
+          "is_active": "true",
+          "base_price": 47.15,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": false
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330095",
+      "source_page": 2,
+      "source_row": 17,
+      "source_name": "كيكة العسل ميجا",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [
+        {
+          "id": 494,
+          "sku": "F-PS-0006",
+          "name": "كيك العسل ميجا",
+          "name_en": "Honey cake",
+          "unit": "قطعة",
+          "category": "حلويات",
+          "is_active": "true",
+          "base_price": 27.99,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": false
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330291",
+      "source_page": 2,
+      "source_row": 18,
+      "source_name": "كيكة ريد فيلفت",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [
+        {
+          "id": 497,
+          "sku": "F-PS-0018",
+          "name": "كيك ريد فالفت",
+          "name_en": "Red velvet",
+          "unit": "قطعة",
+          "category": "حلويات",
+          "is_active": "true",
+          "base_price": 28.39,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": false
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330069",
+      "source_page": 2,
+      "source_row": 19,
+      "source_name": "كيكة سان سباستيان",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [
+        {
+          "id": 498,
+          "sku": "F-PS-0005",
+          "name": "كيك سان سابستيان",
+          "name_en": "san Sebastian cake",
+          "unit": "قطعة",
+          "category": "حلويات",
+          "is_active": "true",
+          "base_price": 26.94,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": false
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1188",
+      "source_page": 2,
+      "source_row": 20,
+      "source_name": "كيكة شوكولاتة بريميوم",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1201",
+      "source_page": 2,
+      "source_row": 21,
+      "source_name": "كيكة شوكولاتة طبقات",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1106",
+      "source_page": 2,
+      "source_row": 22,
+      "source_name": "ماتيلدا شوكولاتة",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [
+        {
+          "id": 502,
+          "sku": "F-PS-0004",
+          "name": "ماتيلدا شوكولاته",
+          "name_en": "Choclate Matilda",
+          "unit": "قطعة",
+          "category": "حلويات",
+          "is_active": "true",
+          "base_price": 23.14,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": false
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1227",
+      "source_page": 2,
+      "source_row": 23,
+      "source_name": "مانجو دوم",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1114",
+      "source_page": 2,
+      "source_row": 24,
+      "source_name": "مدريد تشيز كيك بيكان",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1115",
+      "source_page": 2,
+      "source_row": 25,
+      "source_name": "مدريد تشيز كيك شوكولاتة",
+      "source_unit": "قطعة",
+      "source_category": "pastry",
+      "candidates": [
+        {
+          "id": 503,
+          "sku": "F-PS-0016",
+          "name": "مدريد تشيز كيك تشوكلت",
+          "name_en": "Madrid Cheescake Chocolate",
+          "unit": "قطعة",
+          "category": "حلويات",
+          "is_active": "true",
+          "base_price": 36.9,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": false
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1109",
+      "source_page": 3,
+      "source_row": 1,
+      "source_name": "أفوكادو سكرامبل كب",
+      "source_unit": "كوب",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 404,
+          "sku": "F-BF-0036",
+          "name": "مكعبات كرواسون أفوكادو مع البيض الاسكرمبل",
+          "name_en": "Avocado scramble cubs",
+          "unit": "قطعة",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 17,
+          "evidence": [
+            "human_review_proposal"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": "اسم الإنتاج مكعبات كرواسون أفوكادو مع البيض الاسكرمبل، واسمها الإنجليزي cubs بدل cups؛ تحقق من هوية المنتج مقابل كرواسون أفوكادو مستقل.",
+      "apply": false
+    },
+    {
+      "source_code": "sk-1127",
+      "source_page": 3,
+      "source_row": 2,
+      "source_name": "بريوش بريزاولا",
+      "source_unit": "حبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 378,
+          "sku": "F-BF-0028",
+          "name": "بريوش بيرزاولا",
+          "name_en": "Brioche Birsaola",
+          "unit": "قطعة",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 23,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1126",
+      "source_page": 3,
+      "source_row": 3,
+      "source_name": "بريوش تركي مدخن",
+      "source_unit": "حبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 379,
+          "sku": "F-BF-0009",
+          "name": "بريوش تركى مدخن",
+          "name_en": "Brioche Smoked Turkey",
+          "unit": "قطعة",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 19,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1125",
+      "source_page": 3,
+      "source_row": 4,
+      "source_name": "بريوش تونة",
+      "source_unit": "حبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 380,
+          "sku": "F-BF-0006",
+          "name": "بريوش تونة",
+          "name_en": "Brioche Tunna",
+          "unit": "قطعة",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 19,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1128",
+      "source_page": 3,
+      "source_row": 5,
+      "source_name": "بريوش حلومي",
+      "source_unit": "حبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 381,
+          "sku": "F-BF-0017",
+          "name": "بريوش حلومى",
+          "name_en": "Brioche Haloumey",
+          "unit": "قطعة",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 21.15,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "330392",
+      "source_page": 3,
+      "source_row": 6,
+      "source_name": "جرانولا",
+      "source_unit": "كوب",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 388,
+          "sku": "F-BF-0013",
+          "name": "جرانولا",
+          "name_en": "granola",
+          "unit": "قطعة",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 33.13,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1228",
+      "source_page": 3,
+      "source_row": 7,
+      "source_name": "جرانولا بتر بيكري",
+      "source_unit": "كوب",
+      "source_category": "sandwiches_salads",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk26",
+      "source_page": 3,
+      "source_row": 8,
+      "source_name": "ساندويتش براون تونة",
+      "source_unit": "حبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 392,
+          "sku": "F-BF-0002",
+          "name": "ساندوتش براون تونة",
+          "name_en": "Brown tuna sandwich",
+          "unit": "قطعة",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 26.27,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-0921",
+      "source_page": 3,
+      "source_row": 9,
+      "source_name": "ساندويتش بيبروني",
+      "source_unit": "حبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 463,
+          "sku": "F-PZ-0013",
+          "name": "ساندويتش بيبروني",
+          "name_en": "Pepproni Sandwich",
+          "unit": "قطعة",
+          "category": "بيتزا",
+          "is_active": "true",
+          "base_price": 37.31,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1196",
+      "source_page": 3,
+      "source_row": 10,
+      "source_name": "ساندويتش تركي",
+      "source_unit": "حبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "340168",
+      "source_page": 3,
+      "source_row": 11,
+      "source_name": "ساندويتش حلومي",
+      "source_unit": "حبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 389,
+          "sku": "F-BF-0001",
+          "name": "حلومي ساندويتش بتربيكري",
+          "name_en": "Halloumi Sandwich -",
+          "unit": "قطعة",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 29.44,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-0923",
+      "source_page": 3,
+      "source_row": 12,
+      "source_name": "ساندويتش ديك رومي",
+      "source_unit": "حبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 464,
+          "sku": "F-PZ-0004",
+          "name": "ساندويتش ديك رومي",
+          "name_en": "Turkey Sandwich",
+          "unit": "قطعة",
+          "category": "بيتزا",
+          "is_active": "true",
+          "base_price": 35.67,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "340169",
+      "source_page": 3,
+      "source_row": 13,
+      "source_name": "سلطة حلومي باربكيو",
+      "source_unit": "علبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 394,
+          "sku": "F-BF-0025",
+          "name": "سلطة باربكيو الحلومي",
+          "name_en": "Halloumi BBQ Salad",
+          "unit": "قطعة",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 35.16,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1021",
+      "source_page": 3,
+      "source_row": 14,
+      "source_name": "سلطة دجاج",
+      "source_unit": "علبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 395,
+          "sku": "F-BF-0023",
+          "name": "سلطة دجاج",
+          "name_en": "Chicken salad",
+          "unit": "قطعة",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 19.83,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1140",
+      "source_page": 3,
+      "source_row": 15,
+      "source_name": "سلطة شمندر (وسط)",
+      "source_unit": "علبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 396,
+          "sku": "F-BF-0034",
+          "name": "سلطة شمندر",
+          "name_en": "Beet root Salad",
+          "unit": "قطعة",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 16,
+          "evidence": [
+            "human_review_proposal"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "340172",
+      "source_page": 3,
+      "source_row": 16,
+      "source_name": "شباتا تركي مدخن",
+      "source_unit": "حبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 397,
+          "sku": "F-BF-0004",
+          "name": "شباطا التركي المدخن",
+          "name_en": "Turkey Ciabbata",
+          "unit": "قطعة",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 23.97,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "340174",
+      "source_page": 3,
+      "source_row": 17,
+      "source_name": "شباتا دجاج",
+      "source_unit": "حبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 398,
+          "sku": "F-BF-0015",
+          "name": "شباطا الدجاج",
+          "name_en": "CHICKEN CIABBATA",
+          "unit": "قطعة",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 24.44,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1081",
+      "source_page": 3,
+      "source_row": 18,
+      "source_name": "فوكاشيا تركي",
+      "source_unit": "حبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 400,
+          "sku": "F-BF-0020",
+          "name": "فوكاشيا تركى",
+          "name_en": "Turkey Focaccia",
+          "unit": "قطعة",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 24.03,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1122",
+      "source_page": 3,
+      "source_row": 19,
+      "source_name": "كرواسون أفوكادو",
+      "source_unit": "حبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-0875",
+      "source_page": 3,
+      "source_row": 20,
+      "source_name": "كرواسون السيجنتشر",
+      "source_unit": "حبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 401,
+          "sku": "F-BF-0008",
+          "name": "كرواسون السجنتشر",
+          "name_en": "Signuture croissant",
+          "unit": "قطعة",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 25.28,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "340053",
+      "source_page": 3,
+      "source_row": 21,
+      "source_name": "كرواسون تونة",
+      "source_unit": "حبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 403,
+          "sku": "F-BF-0018",
+          "name": "كرواسون تونه",
+          "name_en": "Croissant tuna",
+          "unit": "قطعة",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 25.41,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1218",
+      "source_page": 3,
+      "source_row": 22,
+      "source_name": "كلوب ساندويتش",
+      "source_unit": "حبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1129",
+      "source_page": 3,
+      "source_row": 23,
+      "source_name": "ميني تريبل دانش مالح",
+      "source_unit": "بوكس",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 406,
+          "sku": "F-BF-0033",
+          "name": "ميني دانِش ثلاثي بحشوات مالحة",
+          "name_en": "Mini Triple Danish savoy",
+          "unit": "قطعة",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 19,
+          "evidence": [
+            "human_review_proposal"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1130",
+      "source_page": 3,
+      "source_row": 24,
+      "source_name": "ميني تريبل كرواسون مالح",
+      "source_unit": "بوكس",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 407,
+          "sku": "F-BF-0035",
+          "name": "ميني كرواسون مالح (3 قطع)",
+          "name_en": "Mini Triple Croissant Savory",
+          "unit": "قطعة",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 19,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-0926",
+      "source_page": 3,
+      "source_row": 25,
+      "source_name": "فوكاشيا لبنة",
+      "source_unit": "حبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 468,
+          "sku": "F-PZ-0009",
+          "name": "فوكاشيا بلبنة",
+          "name_en": "Focaccia di labna",
+          "unit": "قطعة",
+          "category": "بيتزا",
+          "is_active": "true",
+          "base_price": 46.2,
+          "evidence": [
+            "exact_cashier_english"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-0927",
+      "source_page": 3,
+      "source_row": 26,
+      "source_name": "فوكاشيا لبنة وزعتر",
+      "source_unit": "حبة",
+      "source_category": "sandwiches_salads",
+      "candidates": [
+        {
+          "id": 469,
+          "sku": "F-PZ-0008",
+          "name": "فوكاشيا لبنة وزعتر",
+          "name_en": "FOCACIA Labna and thyme",
+          "unit": "قطعة",
+          "category": "بيتزا",
+          "is_active": "true",
+          "base_price": 46.18,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1108",
+      "source_page": 4,
+      "source_row": 1,
+      "source_name": "بوكس دانش مالح",
+      "source_unit": "بوكس",
+      "source_category": "boxes",
+      "candidates": [
+        {
+          "id": 382,
+          "sku": "F-BF-0030",
+          "name": "بوكس دانش مالح",
+          "name_en": "Box Danish savory",
+          "unit": "قطعة",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 19,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1162",
+      "source_page": 4,
+      "source_row": 2,
+      "source_name": "بوكس ميني بن (12 حبة)",
+      "source_unit": "بوكس",
+      "source_category": "boxes",
+      "candidates": [
+        {
+          "id": 547,
+          "sku": "",
+          "name": "بوكس ميني بن كبير ",
+          "name_en": "mini bun box LRG",
+          "unit": "باكيت",
+          "category": "إفطار",
+          "is_active": "true",
+          "base_price": 29,
+          "evidence": [
+            "human_review_proposal"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": "السجل 547 ميني بن كبير ولا يذكر 12 حبة: ليس تطابقاً مؤكداً.",
+      "apply": false
+    },
+    {
+      "source_code": "sk-1161",
+      "source_page": 4,
+      "source_row": 3,
+      "source_name": "بوكس ميني دانش (12 حبة)",
+      "source_unit": "بوكس",
+      "source_category": "boxes",
+      "candidates": [
+        {
+          "id": 471,
+          "sku": "F-GT-0003",
+          "name": "بوكس مينى داش",
+          "name_en": "mini danish box",
+          "unit": "قطعة",
+          "category": "تجمعات",
+          "is_active": "true",
+          "base_price": 39.9,
+          "evidence": [
+            "human_review_proposal"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": "السجل 471 بوكس ميني دانش دون عدد؛ السجل 472 ثلاث قطع ويخص sk-1043.",
+      "apply": false
+    },
+    {
+      "source_code": "sk-1043",
+      "source_page": 4,
+      "source_row": 4,
+      "source_name": "بوكس ميني دانش (3 حبات)",
+      "source_unit": "بوكس",
+      "source_category": "boxes",
+      "candidates": [
+        {
+          "id": 472,
+          "sku": "F-GT-0005",
+          "name": "بوكس مينى دانش 3 PCs",
+          "name_en": "Box Mini Danish 3pcs",
+          "unit": "قطعة",
+          "category": "تجمعات",
+          "is_active": "true",
+          "base_price": 24.9,
+          "evidence": [
+            "human_review_proposal"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1047",
+      "source_page": 4,
+      "source_row": 5,
+      "source_name": "بوكس ميني ساندويتش شباتا",
+      "source_unit": "بوكس",
+      "source_category": "boxes",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1213",
+      "source_page": 4,
+      "source_row": 6,
+      "source_name": "بوكس ميني شباتا",
+      "source_unit": "بوكس",
+      "source_category": "boxes",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1234",
+      "source_page": 4,
+      "source_row": 7,
+      "source_name": "بوكس ميني عسل ودانش (96)",
+      "source_unit": "بوكس",
+      "source_category": "boxes",
+      "candidates": [],
+      "decision": "no_evidenced_existing_candidate",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1011",
+      "source_page": 4,
+      "source_row": 8,
+      "source_name": "بوكس ميني كرواسون",
+      "source_unit": "بوكس",
+      "source_category": "boxes",
+      "candidates": [
+        {
+          "id": 473,
+          "sku": "F-GT-0010",
+          "name": "بوكس مينى كرواسون",
+          "name_en": "Mini croissant box",
+          "unit": "قطعة",
+          "category": "تجمعات",
+          "is_active": "true",
+          "base_price": 49,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    },
+    {
+      "source_code": "sk-1160",
+      "source_page": 4,
+      "source_row": 9,
+      "source_name": "بوكس ميني كرواسون (12 حبة)",
+      "source_unit": "بوكس",
+      "source_category": "boxes",
+      "candidates": [
+        {
+          "id": 551,
+          "sku": "",
+          "name": "ميني كروسون بوكس ( 12 حبة )",
+          "name_en": "Box mini croisaant (12 pc)",
+          "unit": "قطعة",
+          "category": "تجمعات",
+          "is_active": "true",
+          "base_price": 45,
+          "evidence": [
+            "human_review_proposal"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": "السجل 551 يذكر 12 قطعة ولكنه سجل إضافي بلا SKU.",
+      "apply": false
+    },
+    {
+      "source_code": "sk-1046",
+      "source_page": 4,
+      "source_row": 10,
+      "source_name": "بوكس ميني كرواسون حلو (4 حبات)",
+      "source_unit": "بوكس",
+      "source_category": "boxes",
+      "candidates": [
+        {
+          "id": 474,
+          "sku": "F-GT-0001",
+          "name": "بوكس مينى كرواسون حالى 4pcs",
+          "name_en": "Box Mini Croissant Savoury 4 pcs",
+          "unit": "قطعة",
+          "category": "تجمعات",
+          "is_active": "true",
+          "base_price": 23.9,
+          "evidence": [
+            "human_review_proposal"
+          ],
+          "unit_difference": true
+        },
+        {
+          "id": 550,
+          "sku": "",
+          "name": "بوكس ميني كروسون (4حبة)",
+          "name_en": "Box mini croissant (4pc)",
+          "unit": "قطعة",
+          "category": "تجمعات",
+          "is_active": "true",
+          "base_price": 17,
+          "evidence": [
+            "human_review_proposal"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "ambiguous_multiple_candidates",
+      "review_note": "السجل 474 مكتوب savoury بينما المصدر حلو؛ 550 أربع حبات دون تحديد حلو. لا تربط.",
+      "apply": false
+    },
+    {
+      "source_code": "sk-1026",
+      "source_page": 4,
+      "source_row": 11,
+      "source_name": "بوكس ميني كيكة عسل",
+      "source_unit": "بوكس",
+      "source_category": "boxes",
+      "candidates": [
+        {
+          "id": 476,
+          "sku": "F-GT-0007",
+          "name": "بوكس مينى كيكة عسل",
+          "name_en": "Mini honey cake box",
+          "unit": "قطعة",
+          "category": "تجمعات",
+          "is_active": "true",
+          "base_price": 54.97,
+          "evidence": [
+            "exact_cashier_english",
+            "exact_normalized_arabic_name"
+          ],
+          "unit_difference": true
+        }
+      ],
+      "decision": "manual_identity_review_required",
+      "review_note": null,
+      "apply": false
+    }
+  ],
+  "legacy_or_unresolved_production": [
+    {
+      "id": 372,
+      "sku": "F-BF-0003",
+      "name": "أفوكادو سكرمبل كرواسون",
+      "name_en": "Avocado Scrumble croissant",
+      "category": "إفطار",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 27,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 373,
+      "sku": "F-BF-0024",
+      "name": "أميريكان ايج",
+      "name_en": "American egg",
+      "category": "إفطار",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 32.21,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 374,
+      "sku": "F-BF-0022",
+      "name": "أومليت فرنسى",
+      "name_en": "French omelette",
+      "category": "إفطار",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 36,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 375,
+      "sku": "F-BF-0011",
+      "name": "اسكرمبل البيض والأفوكادو",
+      "name_en": "Avocado Scramble",
+      "category": "إفطار",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 37.71,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 376,
+      "sku": "F-BF-0010",
+      "name": "بروسكيتا البيض",
+      "name_en": "Bruschetta egg",
+      "category": "إفطار",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 25.35,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 377,
+      "sku": "F-BF-0007",
+      "name": "بروسكيتا بيض مع شيدر",
+      "name_en": "Bruschetta Egg Cheddar",
+      "category": "إفطار",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 25,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 383,
+      "sku": "F-BF-0032",
+      "name": "بيض بروسكيتا",
+      "name_en": "Egg bruschetta",
+      "category": "إفطار",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 27.48,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 384,
+      "sku": "F-BF-0027",
+      "name": "بيض بنديكت كرواسون مع روستدبيف",
+      "name_en": "Eggs Benedict Croissant , Roast Beef",
+      "category": "إفطار",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 36.9,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 385,
+      "sku": "F-BF-0029",
+      "name": "بيض بنديكت كرواسون مع سالمون",
+      "name_en": "Eggs Benedict Croissant – Smoked Salmon",
+      "category": "إفطار",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 36.9,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 386,
+      "sku": "F-BF-0019",
+      "name": "بيض ترافل",
+      "name_en": "Trufflle egg",
+      "category": "إفطار",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 32.33,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 387,
+      "sku": "F-BF-0014",
+      "name": "بيض تركى",
+      "name_en": "Turkish egg",
+      "category": "إفطار",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 23,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 390,
+      "sku": "F-BF-0031",
+      "name": "رويال بيندكيت",
+      "name_en": "ROYAL PENDICT",
+      "category": "إفطار",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 38.13,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 391,
+      "sku": "F-BF-0021",
+      "name": "ساندوتش البيض اليوناني",
+      "name_en": "greek Scrumble Sandwich",
+      "category": "إفطار",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 24.62,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 393,
+      "sku": "F-BF-0026",
+      "name": "سبايسى براون تونة",
+      "name_en": "Spicy Brown Tunna",
+      "category": "إفطار",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 26,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 399,
+      "sku": "F-BF-0012",
+      "name": "فرنش توست",
+      "name_en": "French toast",
+      "category": "إفطار",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 27,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 402,
+      "sku": "F-BF-0005",
+      "name": "كرواسون بيض جبنة",
+      "name_en": "Egg and cheese",
+      "category": "إفطار",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 28.52,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 405,
+      "sku": "F-BF-0016",
+      "name": "منيمين",
+      "name_en": "Menemen",
+      "category": "إفطار",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 23,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 408,
+      "sku": "F-BR-0031",
+      "name": "V 60 بن يمنى بارد",
+      "name_en": "V 60 بن يمنى بارد",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 26.5,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 409,
+      "sku": "F-BR-0032",
+      "name": "V 60 بن يمنى حار",
+      "name_en": "V 60 بن يمنى حار",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 26.5,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 410,
+      "sku": "F-BR-0018",
+      "name": "v 60 راسبيرى",
+      "name_en": "V60 + raspberry - في 60 توت",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 22,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 411,
+      "sku": "F-BR-0011",
+      "name": "v60",
+      "name_en": "v60",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 19.03,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 412,
+      "sku": "F-BR-0005",
+      "name": "v60 بارد",
+      "name_en": "v60 بارد \\ cold",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 21.03,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 413,
+      "sku": "F-BR-0019",
+      "name": "اسبريسو",
+      "name_en": "espresso",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 11.04,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 414,
+      "sku": "F-BR-0015",
+      "name": "امريكانو",
+      "name_en": "amricano",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 12.05,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 415,
+      "sku": "F-BR-0023",
+      "name": "ايس تى خوخ",
+      "name_en": "ice tea",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 21.86,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 416,
+      "sku": "F-BR-0030",
+      "name": "بريز باشون فروت",
+      "name_en": "BREEZE PASSION FRUIT",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 22.57,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 417,
+      "sku": "F-BR-0024",
+      "name": "بريز بلو بيرى",
+      "name_en": "BREEZE BLUE BERRY",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 22.36,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 418,
+      "sku": "F-BR-0028",
+      "name": "بريز فراولة",
+      "name_en": "Strawberry breeze",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 22.59,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 419,
+      "sku": "F-BR-0029",
+      "name": "بريز ليمون",
+      "name_en": "Lemon breeze",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 22.56,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 420,
+      "sku": "F-BR-0022",
+      "name": "بريز ميكس بيرى",
+      "name_en": "Breeze Mix Berries",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 22.49,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 421,
+      "sku": "F-BR-0027",
+      "name": "بوكس قهوة اليوم",
+      "name_en": "box coffee",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 57.06,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 422,
+      "sku": "F-BR-0034",
+      "name": "دلة قهوة عربى",
+      "name_en": "Arabic Coffee Dalla",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 29,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 423,
+      "sku": "F-BR-0017",
+      "name": "سبانش لاتيه بارد",
+      "name_en": "Spanish latte Cold",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 23.61,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 424,
+      "sku": "F-BR-0012",
+      "name": "سبانش لاتيه حار",
+      "name_en": "Spanish latte hot",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 18.96,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 425,
+      "sku": "F-BR-0025",
+      "name": "سبشيال أيس أمريكانو",
+      "name_en": "Special ice amricano",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 17.91,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 426,
+      "sku": "F-BR-0006",
+      "name": "شاى",
+      "name_en": "tea",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 7,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 427,
+      "sku": "F-BR-0021",
+      "name": "شاى أخضر",
+      "name_en": "green tea",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 7,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 428,
+      "sku": "F-BR-0010",
+      "name": "عصير برتقال",
+      "name_en": "Orange juice",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 17.32,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 429,
+      "sku": "F-BR-0008",
+      "name": "فلات وايت",
+      "name_en": "Flat white",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 15.9,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 430,
+      "sku": "F-BR-0001",
+      "name": "قهوة اليوم بارد",
+      "name_en": "ICE COFFEE DAY",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 125.28,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 431,
+      "sku": "F-BR-0002",
+      "name": "قهوة اليوم حار",
+      "name_en": "Coffee Day Butterbeaker",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 12.75,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 432,
+      "sku": "F-BR-0007",
+      "name": "كابتشينو",
+      "name_en": "cappuccino",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 17.94,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 433,
+      "sku": "F-BR-0016",
+      "name": "كركديه",
+      "name_en": "carcadeh",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 19.75,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 434,
+      "sku": "F-BR-0035",
+      "name": "كوب قهوة عربى 12oz",
+      "name_en": "Arabic Coffee Cub 12 oz",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 11.99,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 435,
+      "sku": "F-BR-0033",
+      "name": "كوب قهوة عربى 9oz",
+      "name_en": "Arabic Coffee Cub 9oz",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 7,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 436,
+      "sku": "F-BR-0020",
+      "name": "كورتادو",
+      "name_en": "cortado",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 15.06,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 437,
+      "sku": "F-BR-0009",
+      "name": "لاتيه",
+      "name_en": "latte",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 16.05,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 438,
+      "sku": "F-BR-0003",
+      "name": "ماء",
+      "name_en": "water",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 4.15,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 439,
+      "sku": "F-BR-0014",
+      "name": "ماتشا",
+      "name_en": "Matcha",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 22.16,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 440,
+      "sku": "F-BR-0026",
+      "name": "ماكياتو",
+      "name_en": "machiato",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 15.05,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 441,
+      "sku": "F-BR-0013",
+      "name": "هوت شوكلت فرنسا كلاسيك",
+      "name_en": "Classic Hot Choclate",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 33.35,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 442,
+      "sku": "F-BR-0004",
+      "name": "هوت شوكليت",
+      "name_en": "Hot chocolate Barista",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 18.92,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 443,
+      "sku": "F-PZ-0022",
+      "name": "أومليت بيتزا",
+      "name_en": "omlete pizza",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 27,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 444,
+      "sku": "F-PZ-0003",
+      "name": "بتزا بوراتا - بيستو",
+      "name_en": "PIZZA Burrata - Pesto",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 49.11,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 445,
+      "sku": "F-PZ-0005",
+      "name": "بتزا بوراتا - عسل",
+      "name_en": "PIZZA Burrata - Hony",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 43.44,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 446,
+      "sku": "F-PZ-0023",
+      "name": "بتزا بوراتا بالسميك",
+      "name_en": "PIZZA Burrata  balsmec",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 65,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 447,
+      "sku": "F-PZ-0007",
+      "name": "بتزا ترافل",
+      "name_en": "Pizza TARTUFO",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 69.23,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 448,
+      "sku": "F-PZ-0016",
+      "name": "بتزا كواترو فروماج",
+      "name_en": "Pizza quattro fromage",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 63,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 449,
+      "sku": "F-PZ-0019",
+      "name": "بتزا موظفين",
+      "name_en": "Employee pizza",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 19,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 450,
+      "sku": "F-PZ-0028",
+      "name": "بيتزا بورتا فلات",
+      "name_en": "pizza puratta flat",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 37,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 451,
+      "sku": "F-PZ-0025",
+      "name": "بيتزا بيبروني مانزو",
+      "name_en": "pepproni DI MANZO -",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 34.01,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 452,
+      "sku": "F-PZ-0017",
+      "name": "بيتزا ترافل فلات",
+      "name_en": "pizza truffle flat",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 37,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 453,
+      "sku": "F-PZ-0011",
+      "name": "بيتزا رانش فلات",
+      "name_en": "Pizza Ruch Flat",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 37,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 454,
+      "sku": "F-PZ-0010",
+      "name": "بيتزا روكولا فلات",
+      "name_en": "pizza roculla flat",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 37,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 455,
+      "sku": "F-PZ-0026",
+      "name": "بيتزا فلات",
+      "name_en": "Chicken Truffle Flat Pizza",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 28,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 456,
+      "sku": "F-PZ-0020",
+      "name": "بيتزا كواترو فورماج فلات",
+      "name_en": "- Pizza Quattro Fromage ( flat )",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 27,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 457,
+      "sku": "F-PZ-0027",
+      "name": "بيتزا كون تركى",
+      "name_en": "Pizza cone turkey",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 26.45,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 458,
+      "sku": "F-PZ-0021",
+      "name": "بيتزا كون مكس أجبان",
+      "name_en": "Pizza cone mix cheese",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 23,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 459,
+      "sku": "F-PZ-0006",
+      "name": "بيتزا مارجريتا فلات",
+      "name_en": "Pizza Margrita Flat",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 37,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 460,
+      "sku": "F-PZ-0001",
+      "name": "بيتزا مي - رانش",
+      "name_en": "Pizza Me - Runch",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 63.2,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 461,
+      "sku": "F-PZ-0015",
+      "name": "بيتزا مي، روكولا",
+      "name_en": "Pizz Me, Rucola",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 54.02,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 462,
+      "sku": "F-PZ-0018",
+      "name": "بيتزا ميكس أجبان",
+      "name_en": "pizza mix cheese",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 37,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 465,
+      "sku": "F-PZ-0012",
+      "name": "ساندويتش لحم بقر",
+      "name_en": "Beef Sandwich",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 37.28,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 466,
+      "sku": "F-PZ-0014",
+      "name": "سبشيال هوت تشكن بتزا",
+      "name_en": "special hot chicken pizza",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 63.55,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 467,
+      "sku": "F-PZ-0024",
+      "name": "فوكاتشا-روستد بيف",
+      "name_en": "sourdough Beef",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 34.01,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 470,
+      "sku": "F-PZ-0002",
+      "name": "مارجريتا بيتزا",
+      "name_en": "Margherita Pizza",
+      "category": "بيتزا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 55.15,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 475,
+      "sku": "F-GT-0009",
+      "name": "بوكس مينى كيك ريدفلفت",
+      "name_en": "Mini red velvet box",
+      "category": "تجمعات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 55.4,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 477,
+      "sku": "F-GT-0002",
+      "name": "جمعات مينى ريد فلفت و القهوة",
+      "name_en": "Redvelvet And Coffee Gatherings",
+      "category": "تجمعات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 99,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 478,
+      "sku": "F-GT-0004",
+      "name": "جمعات مينى كرواسون و القهوة",
+      "name_en": "Croissant And Coffee Get Togethers",
+      "category": "تجمعات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 98.34,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 479,
+      "sku": "F-GT-0008",
+      "name": "جمعات مينى كيكة عسل و القهوة",
+      "name_en": "Honey Cake And Coffee Get Togethers",
+      "category": "تجمعات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 97.58,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 480,
+      "sku": "F-GT-0006",
+      "name": "عرض الكرنشى تشوكلت",
+      "name_en": "Crunchy Chocolate Offer",
+      "category": "تجمعات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 29,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 481,
+      "sku": "F-PS-0015",
+      "name": "أيس مان 2026",
+      "name_en": "Ice man 2026",
+      "category": "حلويات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 23,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 483,
+      "sku": "F-PS-0021",
+      "name": "بودينج التمر",
+      "name_en": "Pudding dates",
+      "category": "حلويات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 13,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 485,
+      "sku": "F-PS-0012",
+      "name": "تارت بيكان",
+      "name_en": "pecan tart",
+      "category": "حلويات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 16,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 489,
+      "sku": "F-PS-0013",
+      "name": "شاي الشتاء",
+      "name_en": "Winter tea",
+      "category": "حلويات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 11.39,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 504,
+      "sku": "F-PS-0007",
+      "name": "مدريد تشيز كيك فانيلا",
+      "name_en": "Madrid cheesecake vanilla",
+      "category": "حلويات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 37.04,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 505,
+      "sku": "F-BK-0009",
+      "name": "تشوكلت ماري توزو",
+      "name_en": "Maritozzo Choclate",
+      "category": "مخبوزات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 28,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 513,
+      "sku": "F-BK-0011",
+      "name": "دانش بار لبنة و زعتر",
+      "name_en": "Danish Bar Labna And Thyme",
+      "category": "مخبوزات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 26,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 517,
+      "sku": "F-BK-0004",
+      "name": "دانش فواكه",
+      "name_en": "Danish fruits",
+      "category": "مخبوزات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 22.75,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 535,
+      "sku": "F-BK-0013",
+      "name": "ماتيلدا كرواسون بيكان",
+      "name_en": "Matilda croissant Pecan",
+      "category": "مخبوزات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 54,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 539,
+      "sku": "",
+      "name": "فرنش توست ايفنت ",
+      "name_en": "French Toast Event",
+      "category": "إفطار",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 14,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 540,
+      "sku": "",
+      "name": "قهوة اليوم ايفنت حار",
+      "name_en": " coffee day hot event.",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 9,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 541,
+      "sku": "",
+      "name": "قهوة اليوم ايفنت بارد ",
+      "name_en": " coffee day cold event.",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 8.97,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 542,
+      "sku": "",
+      "name": "كريم بورلية فخار",
+      "name_en": "cream burlee pottery",
+      "category": "حلويات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 13,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 543,
+      "sku": "",
+      "name": "بوكس ميني  ايفنت ( 3)",
+      "name_en": "Mini Bun Trio (event)",
+      "category": "إفطار",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 13,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 544,
+      "sku": "",
+      "name": "كرانشي بار ايفنت",
+      "name_en": "Crunchy Bar event",
+      "category": "حلويات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 13,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 545,
+      "sku": "",
+      "name": "تشورو",
+      "name_en": "Churro",
+      "category": "حلويات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 14,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 546,
+      "sku": "",
+      "name": "هوت شوكلت ",
+      "name_en": "Hot chocolate",
+      "category": "باريستا",
+      "unit": "كوب",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 14,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 548,
+      "sku": "",
+      "name": "مياه ايفنت ",
+      "name_en": "WATER EVENT",
+      "category": "باريستا",
+      "unit": "زجاجة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 2,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 549,
+      "sku": "",
+      "name": "شاي",
+      "name_en": "TEA",
+      "category": "باريستا",
+      "unit": "كوب",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 4,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 552,
+      "sku": "",
+      "name": "مياة معدنية صغيرة ",
+      "name_en": "Minral water sm",
+      "category": "تجمعات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 1,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 553,
+      "sku": "",
+      "name": " honey bites box",
+      "name_en": " honey bites box",
+      "category": "تجمعات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 21,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 554,
+      "sku": "",
+      "name": "فلات وايت ",
+      "name_en": "Flat white",
+      "category": "باريستا",
+      "unit": "كوب",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 14,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 555,
+      "sku": "",
+      "name": "لاتية",
+      "name_en": "Latte",
+      "category": "باريستا",
+      "unit": "كوب",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 16,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 556,
+      "sku": "",
+      "name": "كابتشينو",
+      "name_en": "Cappuccino",
+      "category": "باريستا",
+      "unit": "كوب",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 16,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 557,
+      "sku": "",
+      "name": "اسبريسو",
+      "name_en": "Espresso",
+      "category": "باريستا",
+      "unit": "كوب",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 9,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 558,
+      "sku": "",
+      "name": "اسبريسو",
+      "name_en": "Espresso",
+      "category": "باريستا",
+      "unit": "كوب",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 9,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 559,
+      "sku": "",
+      "name": "ميني كوكيز ",
+      "name_en": "mini cookise",
+      "category": "حلويات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 5,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 560,
+      "sku": "",
+      "name": "ميني كوكيز توينز",
+      "name_en": "Twins mini cookise ",
+      "category": "حلويات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 9,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 561,
+      "sku": "",
+      "name": "ايس كريم بن ",
+      "name_en": "ICE CREAM BUN",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 14,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 562,
+      "sku": "",
+      "name": "شيمني ايس كريم ",
+      "name_en": "cheminy ic cream ",
+      "category": "حلويات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 17,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 563,
+      "sku": "",
+      "name": "دانيش ايس كريم بستاشيو ",
+      "name_en": "danish ic cream ",
+      "category": "حلويات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 18,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 564,
+      "sku": "",
+      "name": "شيمني كاسترد",
+      "name_en": "cheminy frui",
+      "category": "حلويات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 17,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 565,
+      "sku": "",
+      "name": "وافيل ",
+      "name_en": "Waffle ",
+      "category": "حلويات",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 13,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 566,
+      "sku": "",
+      "name": "مياة",
+      "name_en": "Minral water",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 5,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    },
+    {
+      "id": 567,
+      "sku": "",
+      "name": "مياة برين ",
+      "name_en": "MINRAL WATER",
+      "category": "باريستا",
+      "unit": "قطعة",
+      "product_type": "finish",
+      "is_active": "true",
+      "base_price": 4.15,
+      "disposition": "preserve_pending_usage_review_no_automatic_deactivation_or_deletion"
+    }
+  ]
+}

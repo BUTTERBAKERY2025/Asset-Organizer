@@ -209,6 +209,26 @@ describe("catalog reference write route boundaries", () => {
     expect(mocks.storage.createHeldOrder).not.toHaveBeenCalled();
   });
 
+  it("rejects operational-only finished goods even with a branch price override", async () => {
+    mocks.storage.getBranchProducts.mockResolvedValue([{
+      productId: 92,
+      isActive: true,
+      priceOverride: 20,
+      product: { id: 92, name: "Pending price", isActive: "false", operationsEnabled: true, saleEnabled: false, basePrice: null },
+    }]);
+    const held = await invoke("post", "/api/pos/held-orders", {}, {
+      branchId: "branch-a",
+      cartData: JSON.stringify([{ productId: 92, quantity: 1 }]),
+    });
+    expect(held.statusCode).toBe(400);
+    expect(mocks.storage.createHeldOrder).not.toHaveBeenCalled();
+    const sale = await invoke("post", "/api/pos/sales", {}, {
+      branchId: "branch-a",
+      items: [{ productId: 92, quantity: 1 }],
+    });
+    expect(sale.statusCode).toBe(400);
+  });
+
   it("rejects inactive display-bar receipt and summary product replacements", async () => {
     mocks.storage.getProduct.mockResolvedValue(inactiveProduct);
     const receiptResult = await invoke("post", "/api/display-bar/receipts", {}, {

@@ -42,6 +42,7 @@ vi.mock("../server/auth", () => {
     setupAuth: vi.fn(async () => undefined),
     isAuthenticated,
     requirePermission,
+    requireProductWritePermission: (action: string) => requirePermission("operations", action),
     requireAnyPermission: middleware,
     requireRole: middleware,
     requireBranchAccess: middleware,

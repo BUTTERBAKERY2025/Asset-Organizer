@@ -7,6 +7,8 @@ import {
   isValidKitchenOrderLine,
   kitchenCatalogSupplyLabel,
   normalizeKitchenCatalogSearch,
+  parseKitchenProductCatalog,
+  kitchenCategoryLabel,
   normalizeReportedAvailableQuantity,
   type KitchenOrderDraftLine,
 } from "../client/src/components/central-kitchen/order-line-editor";
@@ -60,6 +62,20 @@ describe("declared branch stock entry", () => {
 });
 
 describe("fast kitchen catalogue entry", () => {
+  it("retains product identity and units while filtering by category and searching Arabic, English and SKU", () => {
+    const items = parseKitchenProductCatalog({ schemaVersion: 2, items: [
+      { id: 101, source: "product", name: "كرواسون", nameEn: "Croissant", sku: "B-101", category: "bakery", unit: "صينية" },
+      { id: 102, source: "product", name: "بوكس حلويات", nameEn: "Dessert Box", sku: "BX-4", category: "بوكسات", unit: "بوكس" },
+    ] });
+    expect(kitchenCategoryLabel("bakery")).toBe("مخبوزات");
+    expect(kitchenCategoryLabel("بوكسات")).toBe("بوكسات");
+    expect(filterKitchenCatalog(items, "croissant", "product")).toEqual([items[0]]);
+    expect(filterKitchenCatalog(items, "B-101", "product")).toEqual([items[0]]);
+    expect(filterKitchenCatalog(items, "مخبوزات", "product")).toEqual([items[0]]);
+    expect(filterKitchenCatalog(items, "", "product", "بوكسات")).toEqual([items[1]]);
+    expect(addKitchenCatalogItem([], items[0])[0]).toMatchObject({ productId: 101, unit: "صينية" });
+    expect(() => parseKitchenProductCatalog({ schemaVersion: 2, items: [{ id: 2, source: "product", name: "س", unit: "قطعة", category: 1 }] })).toThrow();
+  });
   const catalog: CentralKitchenCatalogItem[] = [
     { id: 1, source: "product", name: "كعكة التمر", sku: "CK-101", unit: "قطعة" },
     { id: 2, source: "warehouse", name: "قِشطة طازجة", sku: "RM-22", unit: "كيلو" },

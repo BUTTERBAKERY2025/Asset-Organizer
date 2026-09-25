@@ -2480,6 +2480,10 @@ export const products = pgTable("products", {
   vatAmount: doublePrecision("vat_amount"), // قيمة الضريبة
   vatRate: doublePrecision("vat_rate").default(0.15), // نسبة الضريبة
   isActive: text("is_active").default("true"),
+  // is_active remains the legacy POS gate: old deployments must not sell
+  // newly imported, unpriced operational products during a rolling deploy.
+  operationsEnabled: boolean("operations_enabled").default(false).notNull(),
+  saleEnabled: boolean("sale_enabled").default(true).notNull(),
   description: text("description"), // وصف المنتج
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
