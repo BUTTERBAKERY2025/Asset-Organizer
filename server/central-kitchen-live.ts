@@ -20,6 +20,7 @@ import type {
 import { formatExact6 } from "@shared/central-kitchen-batch-materials";
 import { postProductionBatchToStock } from "./production-stock-posting";
 import { getBatchMaterialRequirements } from "./central-kitchen-batch-materials";
+import { isNewCatalogReferenceAllowed } from "@shared/catalog-activity";
 
 export class CentralKitchenLiveError extends Error {
   constructor(message: string, public status = 409) {
@@ -355,10 +356,12 @@ export async function getKitchenAvailability(
   tx: Transaction = db,
 ): Promise<CentralKitchenAvailabilityContract> {
   if ("productId" in identity) {
-    const [catalog] = await tx.select({ unit: products.unit, isActive: products.isActive }).from(products)
+    const [catalog] = await tx.select({
+      unit: products.unit, isActive: products.isActive, operationsEnabled: products.operationsEnabled,
+    }).from(products)
       .where(eq(products.id, identity.productId)).limit(1);
     if (!catalog) throw new CentralKitchenLiveError("المنتج غير موجود", 404);
-    if (["false", "inactive", "0"].includes(String(catalog.isActive).toLowerCase())) {
+    if (!isNewCatalogReferenceAllowed(catalog)) {
       throw new CentralKitchenLiveError("المنتج غير مفعّل", 409);
     }
     const unit = catalog?.unit?.trim() || "قطعة";

@@ -13,6 +13,7 @@ import {
   CentralKitchenBatchMaterialsError,
   consumeRecipeBackedBatchMaterials,
 } from "./central-kitchen-batch-materials";
+import { isNewCatalogReferenceAllowed } from "@shared/catalog-activity";
 
 type Transaction = any;
 
@@ -51,12 +52,13 @@ export async function postProductionBatchToStock(
     name: products.name,
     unit: products.unit,
     isActive: products.isActive,
+    operationsEnabled: products.operationsEnabled,
   }).from(products)
     .where(eq(products.id, batch.productId)).limit(1);
   if (!validProduct) {
     throw new ProductionStockPostingError(`منتج دفعة الإنتاج ${batch.productId} غير موجود`);
   }
-  if (!["true", "active", "1"].includes(String(validProduct.isActive).toLowerCase())) {
+  if (!isNewCatalogReferenceAllowed(validProduct)) {
     throw new ProductionStockPostingError("لا يمكن ترحيل إنتاج لمنتج غير نشط");
   }
   const unit = validProduct.unit?.trim() || "قطعة";

@@ -36563,6 +36563,10 @@ export async function registerRoutes(
       res.status(201).json(transfer);
     } catch (error: any) {
       console.error("Error transferring finished goods:", error);
+      if (error?.message === "المنتج المؤرشف غير متاح لتحويل جديد"
+        || error?.message === "منتج المخزون غير مرتبط بكتالوج حالي للتحويل") {
+        return res.status(400).json({ error: error.message });
+      }
       // Return 400 for validation/business logic errors from storage
       const isClientError = error.message?.includes('غير كافية') || 
                            error.message?.includes('غير موجود') ||
@@ -38167,6 +38171,9 @@ export async function registerRoutes(
       
       res.json(request);
     } catch (error) {
+      if (error instanceof Error && error.message === "يتضمن طلب الشراء صنف مستودع غير متاح") {
+        return res.status(400).json({ error: error.message });
+      }
       console.error("Error creating purchasing request:", error);
       res.status(500).json({ error: "فشل في إنشاء طلب المشتريات" });
     }

@@ -255,8 +255,11 @@ async function validateCatalogPayload(
     SELECT p.id, p.name, p.unit
     FROM products p
     WHERE p.id = ${payload.productId}
-      AND lower(COALESCE(to_jsonb(p)->>'is_active', 'true'))
-        IN ('true', 'active', '1', 'yes')
+      AND (
+        COALESCE(to_jsonb(p)->>'operations_enabled', 'false') = 'true'
+        OR lower(COALESCE(to_jsonb(p)->>'is_active', 'true'))
+          NOT IN ('false', 'inactive', '0', 'f', 'no')
+      )
     LIMIT 1
   `);
   const product = productResult.rows[0] as { id: number; name: string; unit: string } | undefined;
@@ -440,8 +443,9 @@ export function registerCentralKitchenRecipeRoutes(app: Express): void {
           db.execute(sql`
             SELECT p.id, p.name, p.unit
             FROM products p
-            WHERE lower(COALESCE(to_jsonb(p)->>'is_active', 'true'))
-              IN ('true', 'active', '1', 'yes')
+            WHERE COALESCE(to_jsonb(p)->>'operations_enabled', 'false') = 'true'
+              OR lower(COALESCE(to_jsonb(p)->>'is_active', 'true'))
+                NOT IN ('false', 'inactive', '0', 'f', 'no')
             ORDER BY p.name, p.id
           `),
           db
@@ -487,8 +491,9 @@ export function registerCentralKitchenRecipeRoutes(app: Express): void {
           db.execute(sql`
             SELECT p.id, p.name, p.unit
             FROM products p
-            WHERE lower(COALESCE(to_jsonb(p)->>'is_active', 'true'))
-              IN ('true', 'active', '1', 'yes')
+            WHERE COALESCE(to_jsonb(p)->>'operations_enabled', 'false') = 'true'
+              OR lower(COALESCE(to_jsonb(p)->>'is_active', 'true'))
+                NOT IN ('false', 'inactive', '0', 'f', 'no')
             ORDER BY p.name, p.id
           `),
           db

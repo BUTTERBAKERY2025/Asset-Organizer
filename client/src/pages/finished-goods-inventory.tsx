@@ -17,6 +17,8 @@ import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { TablePagination, usePagination } from "@/components/ui/pagination";
 import type { Branch, FinishedGoodsInventory, FinishedGoodsTransfer } from "@shared/schema";
+import { isNewCatalogReferenceAllowed } from "@shared/catalog-activity";
+import type { Product } from "@shared/schema";
 import { 
   Package, ArrowRight, Building, ShoppingCart, Refrigerator, Snowflake, ChefHat,
   RefreshCw, Search, History, Filter, Calendar, Download, FileSpreadsheet, Printer
@@ -92,6 +94,8 @@ export default function FinishedGoodsInventoryPage() {
     },
     enabled: !!branchId,
   });
+  const { data: products = [] } = useQuery<Product[]>({ queryKey: ["/api/products"] });
+  const selectableProductIds = new Set(products.filter(isNewCatalogReferenceAllowed).map(product => product.id));
 
   const { data: transfers } = useQuery<FinishedGoodsTransfer[]>({
     queryKey: ["/api/finished-goods-transfers", branchId],
@@ -405,7 +409,7 @@ export default function FinishedGoodsInventoryPage() {
                         <TableCell className="hidden sm:table-cell text-xs sm:text-sm">{item.unit}</TableCell>
                         <TableCell className="hidden md:table-cell text-xs sm:text-sm">{item.productionDate}</TableCell>
                         <TableCell>
-                           {canEdit("production") && <Button
+                           {canEdit("production") && item.productId != null && selectableProductIds.has(item.productId) && <Button
                             size="sm"
                             onClick={() => openTransferDialog(item)}
                             disabled={item.quantity <= 0}

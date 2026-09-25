@@ -6,6 +6,7 @@ import {
   runIdempotentMaterialTransferCreation,
 } from "./material-transfer-creation";
 import { resolveMaterialTransferCatalogItems } from "./material-transfer-catalog";
+import { isNewCatalogReferenceAllowed } from "@shared/catalog-activity";
 import {
   destinationCreditSnapshot,
   sourceDebitSnapshot,
@@ -13893,7 +13894,16 @@ export class DatabaseStorage implements IStorage {
         })
         .where(and(
           eq(finishedGoodsInventory.id, inventoryId),
-          sql`${finishedGoodsInventory.quantity} - ${finishedGoodsInventory.reservedQuantity} >= ${quantity}`
+          sql`${finishedGoodsInventory.quantity} - ${finishedGoodsInventory.reservedQuantity} >= ${quantity}`,
+          // A transfer is a new operational movement, not receipt of an
+          // existing document. Keep historical inventory visible but do not
+          // move stock belonging to an archived catalogue identity.
+          sql`EXISTS (
+            SELECT 1 FROM ${products} AS catalog
+            WHERE catalog.id = ${finishedGoodsInventory.productId}
+              AND (catalog.operations_enabled = true OR
+                COALESCE(lower(trim(catalog.is_active)), 'true') NOT IN ('false', 'inactive', '0', 'f', 'no'))
+          )`
         ))
         .returning();
       
@@ -13904,6 +13914,15 @@ export class DatabaseStorage implements IStorage {
         
         if (!existingItem) {
           throw new Error(`عنصر المخزون ${inventoryId} غير موجود`);
+        }
+        if (!existingItem.productId) {
+          throw new Error("منتج المخزون غير مرتبط بكتالوج حالي للتحويل");
+        }
+        const [catalogProduct] = await tx.select({
+          isActive: products.isActive, operationsEnabled: products.operationsEnabled,
+        }).from(products).where(eq(products.id, existingItem.productId)).limit(1);
+        if (!catalogProduct || !isNewCatalogReferenceAllowed(catalogProduct)) {
+          throw new Error("المنتج المؤرشف غير متاح لتحويل جديد");
         }
         const available = existingItem.quantity - existingItem.reservedQuantity;
         throw new Error(`الكمية غير المحجوزة غير كافية. المتاح: ${available}, المطلوب: ${quantity}`);
@@ -15410,6 +15429,18 @@ export class DatabaseStorage implements IStorage {
 
   async createPurchasingRequest(request: InsertPurchasingRequest, items: Omit<InsertPurchasingRequestItem, 'purchasingRequestId'>[]): Promise<PurchasingRequest> {
     return await db.transaction(async (tx) => {
+      if (items.length) {
+        const ids = [...new Set(items.map(item => item.itemId))];
+        if (ids.some(id => !Number.isInteger(id) || (id ?? 0) <= 0)) {
+          throw new Error("يتضمن طلب الشراء صنف مستودع غير متاح");
+        }
+        const activeItems = await tx.select({ id: warehouseItems.id })
+          .from(warehouseItems)
+          .where(and(inArray(warehouseItems.id, ids as number[]), eq(warehouseItems.isActive, true)));
+        if (activeItems.length !== ids.length) {
+          throw new Error("يتضمن طلب الشراء صنف مستودع غير متاح");
+        }
+      }
       const [created] = await tx.insert(purchasingRequests).values(request).returning();
       
       if (items.length > 0) {
