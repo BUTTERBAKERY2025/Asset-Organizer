@@ -5,6 +5,12 @@ description: Fixed dialog action bars need visual-viewport bounds, not just dyna
 
 Size and position keyboard-sensitive dialogs using the visual viewport, with ordinary viewport fallbacks.
 
+When simulating a keyboard, changing `visualViewport.height` alone is not a resize test: dispatch its `resize` event and wait for layout before measuring. Distinguish fixed footers from actions inside a scrollable body, which must be scrolled into view.
+
+**Why:** A browser audit reported a hidden action after overriding height without notifying the viewport listener, and measured a scroll-body action as if it were a fixed footer. The corrected measurement passed.
+
+**How to apply:** Check the dialog bounds, fixed footer bounds, and scroll-to-action reachability separately. Compare close controls against the dialog title, not the app header behind its overlay.
+
 **Why:** A fixed footer inside a `dvh`-sized dialog can still be hidden by the iPhone keyboard: the visible viewport can shrink without the layout viewport shrinking. Merely adding internal scrolling or a sticky footer does not solve that.
 
 **How to apply:** Listen to visual-viewport resize/scroll while the dialog is open, clean up listeners on close, and keep fields in one scrollable body. Browser tests should simulate a smaller visual viewport without changing the layout viewport, then verify the submit action is visible.

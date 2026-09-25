@@ -19,7 +19,7 @@
   .kitchen-order-row > :nth-child(4) { grid-column: 2; grid-row: 3; }
   .kitchen-order-row .kitchen-order-next { display: none; }
   .kitchen-detail-dialog [data-slot="dialog-content"] { border-radius: 0; }
-  .kitchen-detail-dialog .kitchen-detail-body { padding: .9rem .85rem 5.5rem; }
+  .kitchen-detail-dialog .kitchen-detail-body { min-width: 0; overflow-x: hidden; padding: .9rem .85rem 5.5rem; }
   .demand-mobile-summary { position: sticky; top: 0; z-index: 15; margin-inline: -.75rem; padding: .6rem .75rem; background: hsl(var(--background) / .97); border-bottom: 1px solid hsl(var(--border)); }
   .demand-workspace [data-testid="page-header"] p,
   .demand-workspace [data-testid="page-header-actions"],
