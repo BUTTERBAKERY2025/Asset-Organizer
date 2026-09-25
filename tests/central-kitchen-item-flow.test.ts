@@ -12,7 +12,12 @@ import {
   OrderLineEditor,
   type KitchenOrderDraftLine,
 } from "../client/src/components/central-kitchen/order-line-editor";
-import type { CentralKitchenCatalogItem } from "../shared/central-kitchen-catalog";
+import { createCentralKitchenOrderSchema } from "../server/central-kitchen-orders";
+import {
+  matchesCentralKitchenCatalogIdentity,
+  parseCentralKitchenCatalogV2,
+  type CentralKitchenCatalogItem,
+} from "../shared/central-kitchen-catalog";
 
 const product: CentralKitchenCatalogItem = { id: 11, name: "منتج", unit: "قطعة", source: "product" };
 const material: CentralKitchenCatalogItem = { id: 12, name: "طحين", unit: "كيلو", source: "warehouse" };
@@ -26,6 +31,42 @@ const target = (index: number, selector: string, mobileView: "choose" | "selecte
   ({ index, selector, mobileView });
 
 describe("kitchen item selection and completion flow", () => {
+  it("accepts the selected catalog identities after client and request-schema trimming", () => {
+    const dbItems = [
+      { id: 11, source: "product", name: " علبة هاني بايتس", unit: "قطعة" },
+      { id: 12, source: "warehouse", name: "\tطحين ", unit: " كيلو\n" },
+    ] as const;
+    const selected = parseCentralKitchenCatalogV2({ schemaVersion: 2, items: dbItems }).items;
+    const drafts = selected.reduce((lines, item) => addKitchenCatalogItem(lines, item), [] as KitchenOrderDraftLine[]);
+    const payload = createCentralKitchenOrderSchema.parse({
+      requestBranchId: "branch-a",
+      centralKitchenId: "kitchen",
+      items: drafts.map(line => ({
+        productId: line.productId,
+        warehouseItemId: line.warehouseItemId,
+        productName: line.productName.trim(),
+        unit: line.unit.trim(),
+        requestedQuantity: Number(line.requestedQuantity),
+        reportedAvailableQuantity: 0,
+      })),
+    });
+    expect(payload.items).toHaveLength(2);
+    expect(payload.items[0]).toMatchObject({ productName: "علبة هاني بايتس", unit: "قطعة" });
+    payload.items.forEach((item, index) => {
+      expect(matchesCentralKitchenCatalogIdentity(item, dbItems[index])).toBe(true);
+    });
+  });
+
+  it("rejects actual name or unit changes, including case and inner whitespace changes", () => {
+    const catalog = { name: "خبز عربي", unit: "قطعة" };
+    expect(matchesCentralKitchenCatalogIdentity({ productName: "  خبز عربي ", unit: " قطعة " }, catalog)).toBe(true);
+    expect(matchesCentralKitchenCatalogIdentity({ productName: "خبز  عربي", unit: "قطعة" }, catalog)).toBe(false);
+    expect(matchesCentralKitchenCatalogIdentity({ productName: "خبز آخر", unit: "قطعة" }, catalog)).toBe(false);
+    expect(matchesCentralKitchenCatalogIdentity({ productName: "خبز عربي", unit: "كيلو" }, catalog)).toBe(false);
+    expect(matchesCentralKitchenCatalogIdentity({ productName: "Bread", unit: "piece" }, { name: "bread", unit: "piece" })).toBe(false);
+    expect(matchesCentralKitchenCatalogIdentity({ productName: "خبز عربي", unit: "كيلو" }, catalog, false)).toBe(true);
+  });
+
   it("treats the initial blank row as an advance blocker, not a selected item", () => {
     expect(getKitchenDraftInvalidTarget([])).toEqual(target(0, "#kitchen-catalog-search", "choose"));
     expect(getKitchenDraftInvalidTarget([blank])).toEqual(target(0, "#kitchen-catalog-search", "choose"));

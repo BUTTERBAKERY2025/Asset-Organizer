@@ -18,6 +18,7 @@ import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, lt, gt, sql, or, isNull, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
 import { groupPreparationSheet, invalidPreparationSheetOrderIds } from "@shared/central-kitchen-preparation-sheet";
+import { matchesCentralKitchenCatalogIdentity } from "@shared/central-kitchen-catalog";
 import { buildCentralKitchenCounts, centralKitchenPageMeta } from "@shared/central-kitchen-list";
 import { shifts as shiftsTable, cashierPointsLedger, cashierDailyChallenges, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS, centralKitchenOrders, centralKitchenOrderItems, centralKitchenOrderEvents, centralKitchenShadowInventoryConfig, centralKitchenShadowInventoryEntries, centralKitchenInventoryAllocations, centralKitchenDemandCommitments, centralKitchenDemandActions, warehouseItems, dailyProductionBatches, productionInventoryLogs } from "@shared/schema";
 import { demandDecimal, demandMicros } from "@shared/central-kitchen-demand";
@@ -7762,7 +7763,7 @@ export async function registerRoutes(
       products: productRows.map((row) => ({
         id: row.id,
         name: row.name,
-        unit: row.unit || "قطعة",
+         unit: row.unit?.trim() || "قطعة",
       })),
       warehouse: warehouseRows.map((row) => ({
         id: row.id,
@@ -7798,7 +7799,7 @@ export async function registerRoutes(
     ]);
     const productCatalog = new Map(productRows.map((row) => [
       row.id,
-      { name: row.name, unit: row.unit || "قطعة", active: row.active },
+      { name: row.name, unit: row.unit?.trim() || "قطعة", active: row.active },
     ]));
     const warehouseCatalog = new Map(warehouseRows.map((row) => [
       row.id,
@@ -7815,9 +7816,9 @@ export async function registerRoutes(
         : warehouseCatalog.get(item.warehouseItemId!);
       if (!catalogItem) return "الصنف المختار لم يعد موجوداً. أعد تحميل الصفحة واختر صنفاً آخر.";
       if (!catalogItem.active) return "الصنف المختار غير مفعّل حالياً. أعد تحميل الصفحة واختر صنفاً مفعّلاً.";
-      if (item.productName !== catalogItem.name
-        || (item.validateCatalogUnit !== false && item.unit !== catalogItem.unit)) {
-        return "تغيّر اسم الصنف أو وحدته في الكتالوج. أعد تحميل الصفحة ثم اختر الصنف من جديد.";
+      if (!matchesCentralKitchenCatalogIdentity(item, catalogItem, item.validateCatalogUnit !== false)) {
+        const identity = item.productId != null ? `منتج #${item.productId}` : `صنف مستودع #${item.warehouseItemId}`;
+        return `تغيّر اسم الصنف أو وحدته في الكتالوج (${identity}). أعد تحميل الصفحة ثم اختر الصنف من جديد.`;
       }
     }
     return null;

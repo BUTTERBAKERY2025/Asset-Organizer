@@ -18,6 +18,17 @@ export class CentralKitchenCatalogContractError extends Error {
   }
 }
 
+// The request schema trims names and units. Compare the same outer whitespace
+// on both sides while preserving every character inside the identity.
+export function matchesCentralKitchenCatalogIdentity(
+  submitted: { productName: string; unit: string },
+  catalog: { name: string; unit: string },
+  validateUnit = true,
+): boolean {
+  return submitted.productName.trim() === catalog.name.trim()
+    && (!validateUnit || submitted.unit.trim() === catalog.unit.trim());
+}
+
 export function parseCentralKitchenCatalogV2(value: unknown): CentralKitchenCatalogV2 {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new CentralKitchenCatalogContractError();
