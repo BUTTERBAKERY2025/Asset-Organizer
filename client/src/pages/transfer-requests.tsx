@@ -1725,6 +1725,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                             <TableCell className="font-mono text-xs">{index + 1}</TableCell>
                             <TableCell className="font-medium">
                               {item.itemName}
+                              {selectedTransfer.status === "delivered" && <a className="mr-2 inline-block text-xs text-primary underline print:hidden" href={`/reverse-logistics?transferItemId=${item.id}`}>إرجاع مستلم</a>}
                               {item.isModified && (
                                 <Badge variant="outline" className="mr-2 text-xs text-amber-600 border-amber-300">
                                   {isRTL ? "معدّل" : "Modified"}

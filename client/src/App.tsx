@@ -138,6 +138,7 @@ const ProductionComparisonReportsPage = makeLazy("production-comparison-reports"
 const ProductCategoryManagementPage = makeLazy("product-category-management");
 const FinishedGoodsInventoryPage = makeLazy("finished-goods-inventory");
 const WarehouseDashboardPage = makeLazy("warehouse-dashboard");
+const ReverseLogisticsPage = makeLazy("reverse-logistics");
 const TransferRequestsPage = makeLazy("transfer-requests");
 const WarehouseInventoryPage = makeLazy("warehouse-inventory");
 const WarehouseMovementLogsPage = makeLazy("warehouse-movement-logs");
@@ -506,6 +507,7 @@ const Router = React.memo(function Router() {
       
       {/* Warehouse - المخازن والتحويلات */}
       <Route path="/warehouse">{() => <ModulePage component={WarehouseDashboardPage} module="warehouse" />}</Route>
+      <Route path="/reverse-logistics">{() => <AnyModulePage component={ReverseLogisticsPage} modules={["warehouse","central_kitchen_orders"]} />}</Route>
       <Route path="/warehouse-dashboard">{() => <ModulePage component={WarehouseDashboardPage} module="warehouse" />}</Route>
       <Route path="/transfer-requests">{() => <ModulePage component={TransferRequestsPage} module="warehouse" />}</Route>
       <Route path="/warehouse-inventory">{() => <ModulePage component={WarehouseInventoryPage} module="warehouse" />}</Route>

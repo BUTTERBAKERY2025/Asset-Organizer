@@ -14372,7 +14372,7 @@ export class DatabaseStorage implements IStorage {
           })
           .where(and(
             eq(warehouseItems.id, item.itemId),
-            sql`${warehouseItems.currentStock} >= ${sentQuantity}`,
+            sql`${warehouseItems.currentStock} - ${warehouseItems.reverseReservedQuantity} >= ${sentQuantity}`,
           ))
           .returning({
             id: warehouseItems.id,

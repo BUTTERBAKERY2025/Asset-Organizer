@@ -7,6 +7,7 @@ import {
   real,
   timestamp,
   serial,
+  bigserial,
   index,
   uniqueIndex,
   unique,
@@ -7886,6 +7887,7 @@ export const warehouseItems = pgTable("warehouse_items", {
   maxStockLevel: numeric("max_stock_level", { precision: 18, scale: 6, mode: "number" }), // الحد الأقصى
   reorderPoint: numeric("reorder_point", { precision: 18, scale: 6, mode: "number" }), // نقطة إعادة الطلب
   currentStock: numeric("current_stock", { precision: 18, scale: 6, mode: "number" }).default(0), // المخزون الحالي في المستودع الرئيسي
+  reverseReservedQuantity: numeric("reverse_reserved_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
   unitPrice: text("unit_price"), // سعر الوحدة
   supplierId: integer("supplier_id"), // المورد الرئيسي
   isActive: boolean("is_active").default(true),
@@ -13573,3 +13575,74 @@ export const maintenanceTicketEvents = pgTable("maintenance_ticket_events", {
 export type MaintenanceTicketEvent = typeof maintenanceTicketEvents.$inferSelect;
 
 export type MaintenanceTicketAttachment = typeof maintenanceTicketAttachments.$inferSelect;
+
+// Main warehouse inventory remains warehouse_items.current_stock. Only managed
+// satellite warehouses require an additional per-location balance.
+export const managedWarehouses = pgTable("managed_warehouses", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  name: text("name").notNull().unique(),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export const managedWarehouseStock = pgTable("managed_warehouse_stock", {
+  warehouseId: bigint("warehouse_id", { mode: "number" }).notNull().references(() => managedWarehouses.id),
+  itemId: integer("item_id").notNull().references(() => warehouseItems.id),
+  quantity: numeric("quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  reservedQuantity: numeric("reserved_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+}, t => [primaryKey({ columns: [t.warehouseId,t.itemId] })]);
+export const reverseMovements = pgTable("reverse_movements", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  kind: text("kind").notNull(),
+  status: text("status").notNull().default("draft"),
+  sourceBranchId: varchar("source_branch_id").references(() => branches.id),
+  destinationBranchId: varchar("destination_branch_id").references(() => branches.id),
+  sourceWarehouseId: bigint("source_warehouse_id", { mode: "number" }).references(() => managedWarehouses.id),
+  destinationWarehouseId: bigint("destination_warehouse_id", { mode: "number" }).references(() => managedWarehouses.id),
+  originalTransferItemId: integer("original_transfer_item_id").references(() => materialTransferItems.id),
+  originalOrderItemId: integer("original_order_item_id").references(() => centralKitchenOrderItems.id),
+  component: text("component"),
+  itemId: integer("item_id").references(() => warehouseItems.id),
+  productId: integer("product_id").references(() => products.id),
+  itemName: text("item_name").notNull(),
+  unit: text("unit").notNull(),
+  quantity: numeric("quantity", { precision: 18, scale: 6, mode: "number" }).notNull(),
+  shippedQuantity: numeric("shipped_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  receivedQuantity: numeric("received_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  usableQuantity: numeric("usable_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  damagedQuantity: numeric("damaged_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  writtenOffQuantity: numeric("written_off_quantity", { precision: 18, scale: 6, mode: "number" }).notNull().default(0),
+  carrierName: text("carrier_name"),
+  vehicleNumber: text("vehicle_number"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createKey: varchar("create_key", { length: 128 }).notNull(),
+  createFingerprint: varchar("create_fingerprint", { length: 64 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export const reverseMovementEvents = pgTable("reverse_movement_events", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  movementId: bigint("movement_id", { mode: "number" }).notNull().references(() => reverseMovements.id),
+  action: text("action").notNull(),
+  actorId: varchar("actor_id").notNull().references(() => users.id),
+  idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+  payload: jsonb("payload").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [uniqueIndex("reverse_movement_events_movement_id_key").on(t.movementId,t.idempotencyKey)]);
+export const reverseProductReservations = pgTable("reverse_product_reservations", {
+  movementId: bigint("movement_id", { mode: "number" }).notNull().references(() => reverseMovements.id),
+  stockId: integer("stock_id").notNull().references(() => finishedGoodsInventory.id),
+  quantity: integer("quantity").notNull(),
+}, t => [primaryKey({ columns: [t.movementId,t.stockId] })]);
+export const managedWarehouseMovementLogs = pgTable("managed_warehouse_movement_logs", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  warehouseId: bigint("warehouse_id", { mode: "number" }).notNull().references(() => managedWarehouses.id),
+  itemId: integer("item_id").notNull().references(() => warehouseItems.id),
+  movementId: bigint("movement_id", { mode: "number" }).notNull().references(() => reverseMovements.id),
+  movementType: text("movement_type").notNull(),
+  quantity: numeric("quantity", { precision: 18, scale: 6, mode: "number" }).notNull(),
+  balanceBefore: numeric("balance_before", { precision: 18, scale: 6, mode: "number" }).notNull(),
+  balanceAfter: numeric("balance_after", { precision: 18, scale: 6, mode: "number" }).notNull(),
+  actorId: varchar("actor_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

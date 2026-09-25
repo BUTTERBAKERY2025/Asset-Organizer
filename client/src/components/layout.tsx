@@ -320,6 +320,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         items: [
           { href: "/operations", label: t("sidebar.operationsDashboard"), icon: LayoutDashboard, module: "operations", isHeader: true, hideIfNoPermission: true },
           { href: "/central-kitchen-orders", label: "طلبات المطبخ المركزي", icon: ClipboardList, module: "central_kitchen_orders", indent: true },
+          { href: "/reverse-logistics", label: "الإرجاع والنقل بين المستودعات", icon: Warehouse, module: "central_kitchen_orders", indent: true },
           { href: "/branch-shifts", label: t("sidebar.branchShifts"), icon: DoorOpen, module: "branch_closure", indent: true },
           { href: "/products", label: t("sidebar.products"), icon: Package, modules: PRODUCT_CATALOG_READ_MODULES, indent: true },
           { href: "/quality-control", label: t("sidebar.qualityControl"), icon: CheckCircle, module: "quality_control", indent: true },
@@ -426,6 +427,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         items: [
           { href: "/warehouse", label: t("sidebar.warehouseDashboard"), icon: LayoutDashboard, module: "warehouse", isHeader: true },
           { href: "/transfer-requests", label: t("sidebar.transferRequests"), icon: Send, module: "warehouse", indent: true },
+          { href: "/reverse-logistics", label: "الإرجاع ونقل المستودعات", icon: Warehouse, module: "warehouse", indent: true },
           { href: "/warehouse-inventory", label: t("sidebar.warehouseInventory"), icon: Boxes, module: "warehouse", indent: true },
           { href: "/branch-stock", label: t("sidebar.branchStock"), icon: PackageCheck, module: "warehouse", indent: true },
           { href: "/warehouse-movement-logs", label: t("sidebar.warehouseMovementLogs"), icon: FileBarChart, module: "warehouse", indent: true },

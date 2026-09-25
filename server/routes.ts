@@ -11,6 +11,7 @@ import {
   ManualProductionOperationError,
 } from "./manual-production-operations";
 import { db, pool } from "./db";
+import { registerReverseLogisticsRoutes } from "./reverse-logistics-routes";
 import * as NotificationService from "./notification-service";
 import { computeBranchIssues, formatBranchIssuesMessage } from "./branch-issues";
 import { evaluateWasteGovernance, checkApprovalGate } from "./waste-governance";
@@ -616,6 +617,7 @@ export async function registerRoutes(
   registerCentralKitchenRecipeRoutes(app);
   registerCentralKitchenDemandRoutes(app);
   registerDeliveryRoutes(app);
+  registerReverseLogisticsRoutes(app);
   registerProductionOperationsReportRoute(app);
   registerAdvancedProductionExecutionRoutes(app);
   registerCentralKitchenWorkplanRoute(app);

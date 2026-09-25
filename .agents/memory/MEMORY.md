@@ -74,3 +74,4 @@
 - [Delivery orchestration](delivery-orchestration.md) — driver proof is not stock receipt; bind approval to the original authenticated recipient before allowing delivery closure.
 - [Production evidence boundaries](production-evidence-boundaries.md) — the custom-domain Render service is separate from Replit publishing; match logs and database evidence to the affected deployment.
 - [Async route crash testing](async-route-crash-testing.md) — Express 4 ignores rejected handler promises; successful DB fixtures and direct-await tests can hide process-killing schema failures.
+- [Return inspection authority](reverse-logistics-authority.md) — recipient inspects and classifies; operations manager approves write-off; quarantine is not usable stock.
