@@ -29,7 +29,7 @@ import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { useBranchDeskIntent } from "@/hooks/use-branch-desk-intent";
 import { BranchSupplySources } from "@/components/branch-supply/sources";
 import { WarehouseItemEntry } from "@/components/warehouse-entry/warehouse-item-entry";
-import { isValidWarehouseDraftItem } from "@/components/warehouse-entry/warehouse-item-entry-helpers";
+import { isValidWarehouseDraftItem, warehouseCategoryLabel } from "@/components/warehouse-entry/warehouse-item-entry-helpers";
 import { generateTransferPdf, generateQuickTransferPdf } from "@/lib/pdf-utils";
 import { TransferDocument } from "@/components/transfer-document";
 import { buildTransferListWorkbook, buildTransferWorkbook } from "@/lib/transfer-export";
@@ -1129,7 +1129,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                                 {item.itemId ? (
                                   <span className="flex items-center gap-2">
                                     <span className="font-medium">{item.itemName}</span>
-                                    <Badge variant="secondary" className="text-xs">{item.category}</Badge>
+                                    <Badge variant="secondary" className="text-xs">{warehouseCategoryLabel(item.category, isRTL)}</Badge>
                                   </span>
                                 ) : (
                                   <span className="text-muted-foreground">{isRTL ? "ابحث واختر الصنف..." : "Search and select item..."}</span>
@@ -1161,7 +1161,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                                         />
                                         <div className="flex flex-col flex-1">
                                           <span className="font-medium">{wItem.name}</span>
-                                          <span className="text-xs text-muted-foreground">{wItem.category} • {wItem.unit}</span>
+                                          <span className="text-xs text-muted-foreground">{warehouseCategoryLabel(wItem.category, isRTL)} • {wItem.unit}</span>
                                         </div>
                                       </CommandItem>
                                     ))}
@@ -1196,11 +1196,11 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                           <Input 
                             type="number" 
                             min="0"
-                             step="0.000001"
+                             step={item.unit === "قطعة" ? "1" : "0.000001"}
                             value={item.availableQuantity ?? ""}
                             onChange={(e) => {
                                const val = e.target.value === "" ? null : e.target.value;
-                               if (val === null || decimalInput(val)) updateTransferItem(index, "availableQuantity", val);
+                               if (val === null || (decimalInput(val) && (item.unit !== "قطعة" || !val.includes(".")))) updateTransferItem(index, "availableQuantity", val);
                             }}
                             placeholder={isRTL ? "أدخل الكمية المتوفرة" : "Enter available qty"}
                             className={`text-center font-bold ${item.availableQuantity === null ? 'border-red-500 bg-red-50' : 'border-blue-300 focus:border-blue-500'}`}
@@ -1220,9 +1220,9 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                           <Input 
                             type="number" 
                              min="0.000001"
-                             step="0.000001"
+                             step={item.unit === "قطعة" ? "1" : "0.000001"}
                             value={item.quantity}
-                             onChange={(e) => { if (decimalInput(e.target.value)) updateTransferItem(index, "quantity", e.target.value); }}
+                             onChange={(e) => { if (decimalInput(e.target.value) && (item.unit !== "قطعة" || !e.target.value.includes("."))) updateTransferItem(index, "quantity", e.target.value); }}
                             className="border-orange-300 focus:border-orange-500 text-center font-bold"
                             data-testid={`input-qty-${index}`}
                           />

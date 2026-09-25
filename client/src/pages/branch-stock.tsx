@@ -60,7 +60,11 @@ const displayQuantity = (value: number) => Number.isFinite(value) ? value.toFixe
 const CATEGORY_LABELS = {
   raw: { ar: "مواد خام", en: "Raw Materials" },
   consumable: { ar: "مستهلكات", en: "Consumables" },
-  packaging: { ar: "مواد تغليف", en: "Packaging" },
+  raw_materials: { ar: "مواد خام", en: "Raw Materials" },
+  packaging: { ar: "مواد تعبئة وتغليف", en: "Packaging Items" },
+  perishables: { ar: "مواد سريعة التلف", en: "Perishables" },
+  cleaning: { ar: "مواد تنظيف", en: "Cleaning Items" },
+  stationery: { ar: "قرطاسية", en: "Stationery" },
   primary: { ar: "مواد إنتاج أولية", en: "Primary Production" },
 };
 
@@ -89,7 +93,13 @@ export default function BranchStockPage() {
   }, [navigationBranch.branchId, navigationBranch.hasBranchParam, navigationBranch.isResolving]);
 
   const { data: warehouseItems = [], isError: itemsError } = useQuery<WarehouseItem[]>({
-    queryKey: ["/api/warehouse/items"],
+    // Keep existing branch stock readable even when its referenced item is archived.
+    queryKey: ["/api/warehouse/items", "all"],
+    queryFn: async () => {
+      const response = await fetch("/api/warehouse/items?isActive=all");
+      if (!response.ok) throw new Error("Failed to fetch warehouse items");
+      return response.json();
+    },
   });
 
   const { data: branchStock = [], isLoading, isError: stockError } = useQuery<BranchStockItem[]>({

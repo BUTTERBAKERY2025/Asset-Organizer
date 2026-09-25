@@ -29,13 +29,14 @@ try {
   const products = (await client.query("SELECT * FROM public.products ORDER BY id")).rows;
   const warehouse = (await client.query("SELECT * FROM public.warehouse_items ORDER BY id")).rows;
   const fingerprint = (await client.query("SELECT md5(COALESCE(jsonb_agg(to_jsonb(p) ORDER BY p.id),'[]'::jsonb)::text) hash FROM public.products p")).rows[0].hash;
-  const data = Buffer.from(JSON.stringify({ target: local ? "development" : "supabase:irgeqdrdaejhedlcbvzz", createdAt: new Date().toISOString(), fingerprint, products, warehouse }));
+  const warehouseFingerprint = (await client.query("SELECT md5(COALESCE(jsonb_agg(to_jsonb(w) ORDER BY w.id),'[]'::jsonb)::text) hash FROM public.warehouse_items w")).rows[0].hash;
+  const data = Buffer.from(JSON.stringify({ target: local ? "development" : "supabase:irgeqdrdaejhedlcbvzz", createdAt: new Date().toISOString(), fingerprint, warehouseFingerprint, products, warehouse }));
   const compressed = gzipSync(data);
   assert(gunzipSync(compressed).equals(data), "Snapshot verification failed");
   await mkdir(directory, { recursive: true, mode: 0o700 });
   await chmod(directory, 0o700);
   await writeFile(`${directory}/catalogue.json.gz`, compressed, { mode: 0o600 });
-  const manifest = { directory, target: local ? "development" : "production", productCount: products.length, warehouseCount: warehouse.length, fingerprint, sha256: createHash("sha256").update(compressed).digest("hex") };
+  const manifest = { directory, target: local ? "development" : "production", productCount: products.length, warehouseCount: warehouse.length, fingerprint, warehouseFingerprint, sha256: createHash("sha256").update(compressed).digest("hex") };
   await writeFile(`${directory}/manifest.json`, JSON.stringify(manifest, null, 2), { mode: 0o600 });
   await client.query("COMMIT");
   console.log(JSON.stringify(manifest));

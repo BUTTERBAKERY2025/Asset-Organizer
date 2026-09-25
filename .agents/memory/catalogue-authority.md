@@ -31,7 +31,13 @@ For the final kitchen finished-goods list, the user explicitly chose all-new ide
 
 **Why:** Existing codes all differed, several packs/units were ambiguous, and some names were duplicated. The user chose a fresh catalogue after those consequences were explained.
 
-**How to apply:** Do not treat the saved name-match candidates as approved mappings. Keep legacy history/stock/prices on their original identities; do not automatically copy prices, move balances, or attach old recipes to new products. Warehouse items are a separate forthcoming catalogue.
+**How to apply:** Do not treat the saved name-match candidates as approved mappings. Keep legacy history/stock/prices on their original identities; do not automatically copy prices, move balances, or attach old recipes to new products.
+
+The user also explicitly chose all-new warehouse identities, despite overlapping business codes: zero opening balances, unspecified prices, and old identities archived with their balances/history intact.
+
+**Why:** Preserving matched warehouse identities was offered as the recommended alternative, but the user chose fresh records. Reusing old IDs or transferring old balances would contradict that decision.
+
+**How to apply:** An archived and a current warehouse row may intentionally share a business code. Resolve new operations/pricing to the current identity, not the first code match; historical operations remain ID-bound. Unpriced warehouse materials may be requested internally, but missing cost must not be presented as an approved zero valuation. Do not reactivate old ingredients or attach existing recipes automatically.
 
 Database names and database OIDs alone do not identify a deployment.
 
@@ -50,3 +56,15 @@ Audit inactive-item write boundaries from reference-writing storage methods, not
 **Why:** An update/upsert may create a new association, and forecasts or held carts may create operational records indirectly. Checking familiar selectors and POST endpoints repeatedly missed such paths.
 
 **How to apply:** Trace all callers that introduce or replace catalogue IDs; permit unchanged historical associations. When an upsert chooses between creation and an existing association, make that decision and the activity check atomic.
+
+Batch remote catalogue inserts rather than issuing one network request per row while holding an exclusive lock.
+
+**Why:** Round-trip latency alone can exceed the shell execution budget and roll back a healthy migration while blocking operational writers.
+
+**How to apply:** Validate the entire source before locking; use parameterized bulk insertion, then verify and commit atomically. After a timeout, independently check the audit record and committed counts before retrying.
+
+Compare backup fields using their database types, not raw JSON equality.
+
+**Why:** Node's PostgreSQL driver serializes NUMERIC values as strings and timestamps with different formatting/precision from PostgreSQL JSON; a direct JSON comparison can falsely flag every unchanged record.
+
+**How to apply:** Normalize numeric/date representations explicitly during independent verification while comparing business names, codes and other fields exactly.

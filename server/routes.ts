@@ -36914,11 +36914,14 @@ export async function registerRoutes(
   // Warehouse Items
   app.get("/api/warehouse/items", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
     try {
-      const filters: { category?: string; isActive?: boolean } = {};
+      // Selectors default to current catalogue identities. Historical identities
+      // remain available only through an explicit archive/all management request.
+      const activity = req.query.isActive;
+      if (activity !== undefined && activity !== "true" && activity !== "false" && activity !== "all") {
+        return res.status(400).json({ error: "مرشح حالة المادة غير صالح" });
+      }
+      const filters: { category?: string; isActive?: boolean } = { isActive: activity === "all" ? undefined : activity !== "false" };
       if (req.query.category) filters.category = req.query.category as string;
-      if (req.query.startDate) filters.startDate = req.query.startDate as string;
-      if (req.query.endDate) filters.endDate = req.query.endDate as string;
-      if (req.query.isActive !== undefined) filters.isActive = req.query.isActive === 'true';
       
       const items = await storage.getWarehouseItems(filters);
       res.json(items);
@@ -37010,7 +37013,16 @@ export async function registerRoutes(
 
   app.delete("/api/warehouse/items/:id", isAuthenticated, requirePermission("warehouse", "delete"), async (req, res) => {
     try {
-      await storage.deleteWarehouseItem(parseInt(req.params.id));
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: "معرف المادة غير صالح" });
+      }
+      const item = await storage.getWarehouseItem(id);
+      if (!item) return res.status(404).json({ error: "المادة غير موجودة" });
+      if (item.isActive !== true) {
+        return res.status(409).json({ error: "لا يمكن حذف مادة مؤرشفة؛ تُحفظ للأرشيف والسجلات التاريخية" });
+      }
+      await storage.deleteWarehouseItem(id);
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting warehouse item:", error);

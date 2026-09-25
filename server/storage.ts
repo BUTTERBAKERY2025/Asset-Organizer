@@ -5015,12 +5015,12 @@ export class DatabaseStorage implements IStorage {
         .limit(10),
 
       db.select().from(warehouseItems)
-        .where(or(
+        .where(and(eq(warehouseItems.isActive, true), or(
           ilike(warehouseItems.name, pattern),
           ilike(warehouseItems.sku, pattern),
           ilike(warehouseItems.category, pattern),
           ilike(warehouseItems.notes, pattern)
-        ))
+        )))
         .limit(10),
 
       db.select().from(branches)

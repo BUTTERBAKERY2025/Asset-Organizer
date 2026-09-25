@@ -11,10 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { 
-  Boxes, Plus, Search, Filter, AlertTriangle, Package,
-  ArrowLeft, Edit, Trash2, CheckCircle
-} from "lucide-react";
+import { Boxes, Plus, Search, Filter, AlertTriangle, ArrowLeft, Edit, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -25,25 +22,26 @@ import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 type WarehouseItem = {
   id: number;
   name: string;
-  nameEn: string;
-  sku: string;
+  nameEn: string | null;
+  sku: string | null;
   category: string;
   unit: string;
   currentStock: number;
-  minStock: number;
-  reorderPoint: number;
-  unitCost: number;
-  isActive: boolean;
-  notes: string;
+  minStockLevel: number | null;
+  reorderPoint: number | null;
+  unitPrice: string | null;
+  isActive: boolean | null;
+  notes: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
 const MATERIAL_CATEGORIES = [
   { value: "raw_materials", labelAr: "مواد خام", labelEn: "Raw Materials", color: "bg-amber-500" },
-  { value: "consumables", labelAr: "مستهلكات", labelEn: "Consumables", color: "bg-blue-500" },
-  { value: "packaging", labelAr: "مواد تغليف", labelEn: "Packaging", color: "bg-purple-500" },
-  { value: "primary_production", labelAr: "مواد إنتاج أولية", labelEn: "Primary Production", color: "bg-green-500" },
+  { value: "packaging", labelAr: "مواد تعبئة وتغليف", labelEn: "Packaging Items", color: "bg-purple-500" },
+  { value: "perishables", labelAr: "مواد سريعة التلف", labelEn: "Perishables", color: "bg-green-500" },
+  { value: "cleaning", labelAr: "مواد تنظيف", labelEn: "Cleaning Items", color: "bg-blue-500" },
+  { value: "stationery", labelAr: "قرطاسية", labelEn: "Stationery", color: "bg-slate-500" },
 ];
 
 const UNITS = [
@@ -57,7 +55,6 @@ const UNITS = [
   { value: "كيس", labelAr: "كيس", labelEn: "Bag" },
 ];
 
-const decimalInput = (value: string) => value === "" || /^\d*(?:\.\d{0,6})?$/.test(value);
 const displayQuantity = (value: number) => Number.isFinite(value) ? value.toFixed(6).replace(/\.?0+$/, "") : "0";
 
 function getCategoryBadge(category: string, isRTL: boolean) {
@@ -71,10 +68,10 @@ function getCategoryBadge(category: string, isRTL: boolean) {
 }
 
 function getStockStatus(item: WarehouseItem, isRTL: boolean) {
-  if (item.currentStock <= item.minStock) {
+  if (item.currentStock <= (item.minStockLevel ?? 0)) {
     return <Badge variant="destructive">{isRTL ? "نفاد" : "Out of Stock"}</Badge>;
   }
-  if (item.currentStock <= item.reorderPoint) {
+  if (item.currentStock <= (item.reorderPoint ?? 0)) {
     return <Badge className="bg-yellow-500 text-white">{isRTL ? "منخفض" : "Low Stock"}</Badge>;
   }
   return <Badge className="bg-green-500 text-white">{isRTL ? "متوفر" : "In Stock"}</Badge>;
@@ -96,6 +93,7 @@ export default function WarehouseInventoryPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<WarehouseItem | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>("all");
+  const [filterActivity, setFilterActivity] = useState<string>("active");
   const [filterStock, setFilterStock] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -105,19 +103,15 @@ export default function WarehouseInventoryPage() {
     sku: "",
     category: "raw_materials",
     unit: "كجم",
-    currentStock: "0",
-    minStock: "0",
-    reorderPoint: "0",
-    unitCost: 0,
     notes: "",
   });
 
   const { data: items = [], isLoading, isError } = useQuery<WarehouseItem[]>({
-    queryKey: ["/api/warehouse/items", filterCategory],
+    queryKey: ["/api/warehouse/items", filterCategory, filterActivity],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filterCategory !== "all") params.append("category", filterCategory);
-      params.append("isActive", "true");
+      params.append("isActive", filterActivity === "active" ? "true" : filterActivity === "archived" ? "false" : "all");
       const response = await fetch(`/api/warehouse/items?${params.toString()}`);
       if (!response.ok) throw new Error("Failed to fetch items");
       return response.json();
@@ -130,9 +124,6 @@ export default function WarehouseInventoryPage() {
     mutationFn: async (data: typeof formData) => {
       const response = await apiRequest("POST", "/api/warehouse/items", {
         ...data,
-        currentStock: Number(data.currentStock),
-        minStock: Number(data.minStock),
-        reorderPoint: Number(data.reorderPoint),
         isActive: true,
       });
       return response.json();
@@ -156,9 +147,6 @@ export default function WarehouseInventoryPage() {
     mutationFn: async ({ id, data }: { id: number; data: typeof formData }) => {
       const response = await apiRequest("PUT", `/api/warehouse/items/${id}`, {
         ...data,
-        currentStock: Number(data.currentStock),
-        minStock: Number(data.minStock),
-        reorderPoint: Number(data.reorderPoint),
       });
       return response.json();
     },
@@ -202,10 +190,6 @@ export default function WarehouseInventoryPage() {
       sku: "",
       category: "raw_materials",
       unit: "كجم",
-       currentStock: "0",
-       minStock: "0",
-       reorderPoint: "0",
-      unitCost: 0,
       notes: "",
     });
   };
@@ -218,18 +202,14 @@ export default function WarehouseInventoryPage() {
       sku: item.sku || "",
       category: item.category,
       unit: item.unit,
-       currentStock: displayQuantity(item.currentStock),
-       minStock: displayQuantity(item.minStock),
-       reorderPoint: displayQuantity(item.reorderPoint),
-      unitCost: item.unitCost || 0,
       notes: item.notes || "",
     });
     setIsEditOpen(true);
   };
 
   const filteredItems = items.filter(item => {
-    if (filterStock === "low" && item.currentStock > item.reorderPoint) return false;
-    if (filterStock === "ok" && item.currentStock <= item.reorderPoint) return false;
+    if (filterStock === "low" && item.currentStock > (item.reorderPoint ?? 0)) return false;
+    if (filterStock === "ok" && item.currentStock <= (item.reorderPoint ?? 0)) return false;
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
@@ -241,9 +221,9 @@ export default function WarehouseInventoryPage() {
     return true;
   });
 
-  const lowStockItems = items.filter(item => item.currentStock <= item.reorderPoint);
+  const lowStockItems = items.filter(item => item.isActive && item.currentStock <= (item.reorderPoint ?? 0));
 
-  const ItemForm = ({ isEdit = false }: { isEdit?: boolean }) => (
+  const ItemForm = () => (
     <div className="space-y-4 py-4">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
@@ -306,52 +286,6 @@ export default function WarehouseInventoryPage() {
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>{isRTL ? "تكلفة الوحدة" : "Unit Cost"}</Label>
-          <Input 
-            type="number"
-            min={0}
-            step={0.01}
-            value={formData.unitCost}
-            onChange={(e) => setFormData(prev => ({ ...prev, unitCost: parseFloat(e.target.value) || 0 }))}
-            data-testid="input-cost"
-          />
-        </div>
-      </div>
-      <div className="grid grid-cols-3 gap-4">
-        <div className="space-y-2">
-          <Label>{isRTL ? "المخزون الحالي" : "Current Stock"}</Label>
-          <Input 
-            type="number"
-            min={0}
-            value={formData.currentStock}
-            step="0.000001"
-            onChange={(e) => { if (decimalInput(e.target.value)) setFormData(prev => ({ ...prev, currentStock: e.target.value })); }}
-            data-testid="input-current-stock"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>{isRTL ? "الحد الأدنى" : "Min Stock"}</Label>
-          <Input 
-            type="number"
-            min={0}
-            value={formData.minStock}
-            step="0.000001"
-            onChange={(e) => { if (decimalInput(e.target.value)) setFormData(prev => ({ ...prev, minStock: e.target.value })); }}
-            data-testid="input-min-stock"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>{isRTL ? "نقطة إعادة الطلب" : "Reorder Point"}</Label>
-          <Input 
-            type="number"
-            min={0}
-            value={formData.reorderPoint}
-            step="0.000001"
-            onChange={(e) => { if (decimalInput(e.target.value)) setFormData(prev => ({ ...prev, reorderPoint: e.target.value })); }}
-            data-testid="input-reorder"
-          />
         </div>
       </div>
       <div className="space-y-2">
@@ -465,6 +399,16 @@ export default function WarehouseInventoryPage() {
             />
           </div>
           <div className="flex gap-2">
+            <Select value={filterActivity} onValueChange={setFilterActivity}>
+              <SelectTrigger className="w-[130px] sm:w-[160px] h-9 sm:h-10" data-testid="filter-activity">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">{isRTL ? "الحالية" : "Current"}</SelectItem>
+                <SelectItem value="archived">{isRTL ? "المؤرشفة" : "Archived"}</SelectItem>
+                <SelectItem value="all">{isRTL ? "الكل" : "All"}</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={filterCategory} onValueChange={setFilterCategory}>
               <SelectTrigger className="w-[140px] sm:w-[180px] h-9 sm:h-10" data-testid="filter-category">
                 <Filter className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
@@ -532,23 +476,23 @@ export default function WarehouseInventoryPage() {
                     <TableRow key={item.id} data-testid={`item-row-${item.id}`}>
                       <TableCell>
                         <div>
-                          <p className="font-medium text-sm sm:text-base">{item.name}</p>
+                          <p className="font-medium text-sm sm:text-base">{item.name} {!item.isActive && <Badge variant="outline">{isRTL ? "مؤرشف" : "Archived"}</Badge>}</p>
                           {item.nameEn && <p className="text-[10px] sm:text-xs text-muted-foreground">{item.nameEn}</p>}
                         </div>
                       </TableCell>
                       <TableCell className="hidden md:table-cell font-mono text-xs sm:text-sm">{item.sku || "-"}</TableCell>
                       <TableCell className="hidden sm:table-cell">{getCategoryBadge(item.category, isRTL)}</TableCell>
                       <TableCell>
-                        <span className={`text-xs sm:text-sm ${item.currentStock <= item.reorderPoint ? "text-red-500 font-bold" : ""}`}>
+                        <span className={`text-xs sm:text-sm ${item.currentStock <= (item.reorderPoint ?? 0) ? "text-red-500 font-bold" : ""}`}>
                            {displayQuantity(item.currentStock)} {item.unit}
                         </span>
                       </TableCell>
-                       <TableCell className="hidden lg:table-cell text-xs sm:text-sm">{displayQuantity(item.minStock)} {item.unit}</TableCell>
+                       <TableCell className="hidden lg:table-cell text-xs sm:text-sm">{displayQuantity(item.minStockLevel ?? 0)} {item.unit}</TableCell>
                       <TableCell>{getStockStatus(item, isRTL)}</TableCell>
-                      <TableCell className="hidden md:table-cell text-xs sm:text-sm">{item.unitCost ? `${item.unitCost.toFixed(2)} ر.س` : "-"}</TableCell>
+                      <TableCell className="hidden md:table-cell text-xs sm:text-sm">{item.unitPrice !== null && item.unitPrice !== "" && Number.isFinite(Number(item.unitPrice)) ? `${Number(item.unitPrice).toFixed(2)} ر.س` : (isRTL ? "غير مسعّر" : "Unpriced")}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
-                           {canEdit("warehouse") && <Button
+                           {item.isActive && canEdit("warehouse") && <Button
                             variant="ghost" 
                             size="icon" 
                             className="h-7 w-7 sm:h-8 sm:w-8"
@@ -557,7 +501,7 @@ export default function WarehouseInventoryPage() {
                           >
                             <Edit className="w-3 h-3 sm:w-4 sm:h-4" />
                            </Button>}
-                           {canDelete("warehouse") && <Button
+                           {item.isActive && canDelete("warehouse") && <Button
                             variant="ghost" 
                             size="icon" 
                             className="h-7 w-7 sm:h-8 sm:w-8"
@@ -589,7 +533,7 @@ export default function WarehouseInventoryPage() {
                 {isRTL ? `تعديل بيانات ${selectedItem?.name}` : `Edit details for ${selectedItem?.name}`}
               </DialogDescription>
             </DialogHeader>
-            <ItemForm isEdit />
+            <ItemForm />
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsEditOpen(false)}>
                 {isRTL ? "إلغاء" : "Cancel"}

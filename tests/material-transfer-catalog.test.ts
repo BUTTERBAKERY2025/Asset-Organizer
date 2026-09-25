@@ -62,6 +62,21 @@ describe("material transfer catalogue snapshots", () => {
     )).toThrowError(expect.objectContaining({ status: 400 }));
   });
 
+  it("allows fractional kilograms but requires whole pieces", () => {
+    expect(() => resolveMaterialTransferCatalogItems(
+      [transferItem({ quantity: 0.5, availableQuantity: 0.25 })],
+      [catalogItem()],
+    )).not.toThrow();
+    expect(() => resolveMaterialTransferCatalogItems(
+      [transferItem({ unit: "قطعة", quantity: 0.5 })],
+      [catalogItem({ unit: "قطعة" })],
+    )).toThrowError(expect.objectContaining({ status: 400 }));
+    expect(() => resolveMaterialTransferCatalogItems(
+      [transferItem({ unit: "قطعة", quantity: 2, availableQuantity: 1.5 })],
+      [catalogItem({ unit: "قطعة" })],
+    )).toThrowError(expect.objectContaining({ status: 400 }));
+  });
+
   it("persists canonical identity while preserving line data", () => {
     const [resolved] = resolveMaterialTransferCatalogItems(
       [transferItem()],

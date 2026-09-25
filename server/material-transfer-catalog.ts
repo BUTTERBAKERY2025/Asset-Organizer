@@ -13,6 +13,8 @@ type MaterialTransferItemIdentity = {
   itemName: string;
   category: string;
   unit: string;
+  quantity: number;
+  availableQuantity?: number | null;
 };
 
 export function resolveMaterialTransferCatalogItems<
@@ -40,6 +42,15 @@ export function resolveMaterialTransferCatalogItems<
     if (item.unit !== catalogItem.unit) {
       throw new MaterialTransferCreationError(
         `وحدة صنف المستودع رقم ${item.itemId} لا تطابق الوحدة المعتمدة`,
+        400,
+      );
+    }
+    if (catalogItem.unit === "قطعة" && (
+      !Number.isInteger(item.quantity)
+      || (item.availableQuantity != null && !Number.isInteger(item.availableQuantity))
+    )) {
+      throw new MaterialTransferCreationError(
+        `كمية صنف المستودع رقم ${item.itemId} بالقطعة يجب أن تكون عدداً صحيحاً`,
         400,
       );
     }

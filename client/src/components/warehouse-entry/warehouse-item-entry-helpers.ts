@@ -8,6 +8,17 @@ export type WarehouseCatalogEntry = {
   unit: string;
 };
 
+const CATEGORY_LABELS: Record<string, { ar: string; en: string }> = {
+  raw_materials: { ar: "مواد خام", en: "Raw Materials" },
+  packaging: { ar: "مواد تعبئة وتغليف", en: "Packaging Items" },
+  perishables: { ar: "مواد سريعة التلف", en: "Perishables" },
+  cleaning: { ar: "مواد تنظيف", en: "Cleaning Items" },
+  stationery: { ar: "قرطاسية", en: "Stationery" },
+};
+
+export const warehouseCategoryLabel = (category: string, isRTL: boolean) =>
+  CATEGORY_LABELS[category]?.[isRTL ? "ar" : "en"] ?? category;
+
 export type WarehouseTransferDraftItem = {
   itemId: number;
   itemName: string;
@@ -60,5 +71,9 @@ export function isValidWarehouseDraftItem(item: WarehouseTransferDraftItem) {
     && !!item.category.trim() && !!item.unit.trim()
     && isWarehouseDecimal(item.quantity, false)
     && item.availableQuantity !== null
-    && isWarehouseDecimal(item.availableQuantity, true);
+    && isWarehouseDecimal(item.availableQuantity, true)
+    && (item.unit !== "قطعة" || (
+      Number.isInteger(Number(item.quantity))
+      && Number.isInteger(Number(item.availableQuantity))
+    ));
 }

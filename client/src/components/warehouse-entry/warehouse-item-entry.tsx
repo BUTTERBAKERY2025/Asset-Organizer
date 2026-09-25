@@ -9,6 +9,7 @@ import {
   addWarehouseCatalogItem,
   filterWarehouseCatalog,
   isValidWarehouseDraftItem,
+  warehouseCategoryLabel,
   type WarehouseCatalogEntry,
   type WarehouseTransferDraftItem,
 } from "./warehouse-item-entry-helpers";
@@ -98,7 +99,7 @@ export function WarehouseItemEntry({ catalog, items, isRTL, onChange }: Props) {
               </Button>
               {categories.map(value => (
                 <Button key={value} type="button" size="sm" variant={category === value ? "default" : "outline"} onClick={() => setCategory(value)}>
-                  {value}
+                  {warehouseCategoryLabel(value, isRTL)}
                 </Button>
               ))}
             </div>
@@ -124,7 +125,7 @@ export function WarehouseItemEntry({ catalog, items, isRTL, onChange }: Props) {
                   <span className="min-w-0">
                     <strong className="block truncate text-sm text-foreground">{entry.name}</strong>
                     <span className="block truncate text-[11px] text-muted-foreground">
-                      {entry.sku ? `${entry.sku} · ` : ""}{entry.category} · {entry.unit}
+                      {entry.sku ? `${entry.sku} · ` : ""}{warehouseCategoryLabel(entry.category, isRTL)} · {entry.unit}
                     </span>
                   </span>
                   {selected
@@ -174,11 +175,15 @@ export function WarehouseItemEntry({ catalog, items, isRTL, onChange }: Props) {
                         id={`warehouse-request-qty-${index}`}
                         className="mt-1 h-12 text-base"
                         type="number"
-                        min="0.000001"
-                        step="0.000001"
+                        min={item.unit === "قطعة" ? "1" : "0.000001"}
+                        step={item.unit === "قطعة" ? "1" : "0.000001"}
                         inputMode="decimal"
                         value={item.quantity}
-                        onChange={event => { if (acceptsDecimalInput(event.target.value)) patch(index, { quantity: event.target.value }); }}
+                        onChange={event => {
+                          if (acceptsDecimalInput(event.target.value) && (item.unit !== "قطعة" || !event.target.value.includes("."))) {
+                            patch(index, { quantity: event.target.value });
+                          }
+                        }}
                         onKeyDown={event => {
                           if (event.key === "Enter") {
                             event.preventDefault();
@@ -197,12 +202,14 @@ export function WarehouseItemEntry({ catalog, items, isRTL, onChange }: Props) {
                         className="mt-1 h-12 text-base"
                         type="number"
                         min="0"
-                        step="0.000001"
+                        step={item.unit === "قطعة" ? "1" : "0.000001"}
                         inputMode="decimal"
                         value={item.availableQuantity ?? ""}
                         onChange={event => {
                           const value = event.target.value;
-                          if (value === "" || acceptsDecimalInput(value)) patch(index, { availableQuantity: value === "" ? null : value });
+                          if ((value === "" || acceptsDecimalInput(value)) && (item.unit !== "قطعة" || !value.includes("."))) {
+                            patch(index, { availableQuantity: value === "" ? null : value });
+                          }
                         }}
                         placeholder={isRTL ? "أدخل القيمة" : "Enter value"}
                         aria-invalid={item.availableQuantity === null}

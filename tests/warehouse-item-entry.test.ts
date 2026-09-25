@@ -53,4 +53,11 @@ describe("warehouse fast item entry", () => {
     expect(isValidWarehouseDraftItem({ ...base, quantity: "1.123456", availableQuantity: "0.000001" })).toBe(true);
     expect(isValidWarehouseDraftItem({ ...base, quantity: "1.1234567", availableQuantity: "0" })).toBe(false);
   });
+
+  it("requires whole quantities for pieces, while kilograms remain fractional", () => {
+    const piece = { ...addWarehouseCatalogItem([], catalog[0])[0], unit: "قطعة" };
+    expect(isValidWarehouseDraftItem({ ...piece, quantity: "1.5", availableQuantity: "0" })).toBe(false);
+    expect(isValidWarehouseDraftItem({ ...piece, quantity: "2", availableQuantity: "0.5" })).toBe(false);
+    expect(isValidWarehouseDraftItem({ ...piece, quantity: "2", availableQuantity: "0" })).toBe(true);
+  });
 });
