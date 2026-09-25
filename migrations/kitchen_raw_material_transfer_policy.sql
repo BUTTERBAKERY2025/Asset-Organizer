@@ -1,3 +1,8 @@
+-- Required by dispatch availability checks even when reverse logistics has not
+-- yet been installed. This creates no reservation and changes no stock balance.
+ALTER TABLE warehouse_items
+  ADD COLUMN IF NOT EXISTS reverse_reserved_quantity numeric(18,6) NOT NULL DEFAULT 0;
+
 ALTER TABLE material_transfers
   ADD COLUMN IF NOT EXISTS stock_posting_policy text NOT NULL DEFAULT 'on_receipt';
 DO $$

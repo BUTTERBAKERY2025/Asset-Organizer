@@ -1,5 +1,13 @@
 -- Managed warehouse PRODUCT lots are separate from raw material managed_warehouse_stock.
 -- Existing managed_warehouses are reused; this migration does not create opening balances.
+CREATE TABLE IF NOT EXISTS managed_warehouses (
+  id bigserial PRIMARY KEY,
+  name text NOT NULL UNIQUE,
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE managed_warehouses ENABLE ROW LEVEL SECURITY;
+
 CREATE TABLE IF NOT EXISTS kitchen_warehouse_shipments (
   id bigserial PRIMARY KEY,
   source_branch_id varchar NOT NULL REFERENCES branches(id),
@@ -48,3 +56,9 @@ CREATE TABLE IF NOT EXISTS kitchen_warehouse_shipment_events (
 );
 CREATE INDEX IF NOT EXISTS kitchen_warehouse_shipments_source_idx ON kitchen_warehouse_shipments(source_branch_id,id DESC);
 CREATE INDEX IF NOT EXISTS kitchen_warehouse_shipments_destination_idx ON kitchen_warehouse_shipments(destination_warehouse_id,id DESC);
+
+-- Trusted server connection only; no public browser-role policies.
+ALTER TABLE kitchen_warehouse_shipments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE kitchen_warehouse_shipment_lots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE managed_warehouse_product_stock ENABLE ROW LEVEL SECURITY;
+ALTER TABLE kitchen_warehouse_shipment_events ENABLE ROW LEVEL SECURITY;
