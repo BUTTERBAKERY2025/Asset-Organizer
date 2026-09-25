@@ -24,7 +24,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { getButterBakeryLogoDataUri } from "@/lib/company-logo-data";
 import { openPrintWindow, renderToPrintWindow } from "@/lib/print-window";
-import { isKitchenOrderDraftValid, isValidKitchenQuantity, kitchenCatalogSupplyLabel, normalizeReportedAvailableQuantity, OrderLineEditor, type KitchenOrderDraftLine } from "@/components/central-kitchen/order-line-editor";
+import { getKitchenDraftInvalidTarget, isKitchenOrderDraftValid, isValidKitchenQuantity, kitchenCatalogSupplyLabel, normalizeReportedAvailableQuantity, OrderLineEditor, type KitchenOrderDraftLine } from "@/components/central-kitchen/order-line-editor";
 import { LinkedBatches } from "@/components/central-kitchen/linked-batches";
 import {
   queueOrderNeedsAttention,
@@ -213,6 +213,8 @@ export default function CentralKitchenOrdersPage() {
   const [createStep, setCreateStep] = useState<0 | 1 | 2>(0);
   const [itemMobileView, setItemMobileView] = useState<"choose" | "selected">("choose");
   const [createStepError, setCreateStepError] = useState("");
+  const createBodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { createBodyRef.current?.scrollTo({ top: 0 }); }, [createStep, createOpen]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const createDialogStyle = useVisualViewportDialog({ open: createOpen, maxHeight: 820, viewportFraction: 1 });
   const [detailId, setDetailId] = useState<string | number | null>(null);
@@ -399,7 +401,17 @@ export default function CentralKitchenOrdersPage() {
     setCreateStepError("");
   };
   const focusCreateField = (selector: string) => {
-    requestAnimationFrame(() => document.querySelector<HTMLElement>(selector)?.focus());
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const field = document.querySelector<HTMLElement>(selector);
+      field?.scrollIntoView({ block: "center" });
+      field?.focus({ preventScroll: true });
+    }));
+  };
+  const editDraftItem = (index: number) => {
+    setCreateStep(1);
+    setItemMobileView("selected");
+    setCreateStepError("");
+    focusCreateField(`#request-qty-${index}`);
   };
   const advanceCreateStep = () => {
     if (createStep === 0) {
@@ -428,16 +440,11 @@ export default function CentralKitchenOrdersPage() {
     }
     if (!isKitchenOrderDraftValid(draft.items)) {
       setCreateStepError("اختر كل صنف، ثم أدخل كمية الطلب والمتوفر الحالي. اكتب 0 صراحةً عند عدم توفر الصنف.");
-      const invalidIndex = draft.items.findIndex(item => !item.productName.trim() || !item.unit.trim() || !isValidKitchenQuantity(item.requestedQuantity, item.productId !== undefined) || !isValidKitchenQuantity(item.reportedAvailableQuantity, item.productId !== undefined, true));
-      const index = Math.max(0, invalidIndex);
-      const item = draft.items[index];
-       const selector = !item?.productName.trim() || !item?.unit.trim()
-        ? item?.manualMode ? `#manual-name-${index}` : "#kitchen-catalog-search"
-        : !isValidKitchenQuantity(item.requestedQuantity, item.productId !== undefined)
-          ? `#request-qty-${index}`
-          : `#reported-stock-${index}`;
-       setItemMobileView(item?.manualMode || (!!item?.productName.trim() && !!item?.unit.trim()) ? "selected" : "choose");
-       focusCreateField(selector);
+      const target = getKitchenDraftInvalidTarget(draft.items);
+      if (target) {
+        setItemMobileView(target.mobileView);
+        focusCreateField(target.selector);
+      }
       return;
     }
     setCreateStepError("");
@@ -679,14 +686,15 @@ export default function CentralKitchenOrdersPage() {
       <nav className="grid shrink-0 grid-cols-3 border-b bg-muted/20 px-3 py-2" aria-label="خطوات الطلب">
         {(["بيانات الطلب", "الأصناف", "المراجعة"] as const).map((label, index) => <button key={label} type="button" disabled={index > createStep || createMutation.isPending} onClick={() => { setCreateStep(index as 0 | 1 | 2); setCreateStepError(""); }} aria-current={index === createStep ? "step" : undefined} className={cn("min-h-10 rounded-lg px-1 text-xs font-medium text-muted-foreground disabled:cursor-default", index === createStep && "bg-background text-primary shadow-sm", index < createStep && "text-emerald-700")}>{index < createStep && <Check className="ml-1 inline h-3.5 w-3.5" />}{label}</button>)}
       </nav>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-6 sm:px-6">
+      <div ref={createBodyRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-6 sm:px-6">
       {createStepError && <p className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{createStepError}</p>}
       {createStep === 0 && <div className="space-y-4" data-testid="create-step-details">
         <div className="rounded-xl border border-border bg-muted/10 p-3 text-sm text-muted-foreground">اختر الفرع والمطبخ وموعد الحاجة أولاً. <strong className="font-medium text-foreground">المطبخ المورّد اختيار إلزامي.</strong></div>
         <div className="grid gap-4 md:grid-cols-2"><FormSelect testId="source-branch-select" label="الفرع الطالب" value={draft.sourceBranchId} onChange={value => setDraft(current => ({ ...current, sourceBranchId: value, items: current.items.map(item => ({ ...item, reportedAvailableQuantity: "" })) }))} branches={branches} placeholder="اختر الفرع" /><FormSelect testId="kitchen-select" label="المطبخ المورّد (مطلوب)" value={draft.centralKitchenId} onChange={value => setDraft({ ...draft, centralKitchenId: value })} branches={centralKitchens.filter(branch => branch.id !== draft.sourceBranchId)} placeholder={kitchensQuery.isLoading ? "جارٍ تحميل المطابخ..." : centralKitchens.length ? "اختر المطبخ صراحةً" : kitchensQuery.isError ? "تعذر تحميل المطابخ المركزية" : "لا يوجد مطبخ مركزي مفعّل"} />
         <div><Label htmlFor="needed-date">تاريخ الحاجة</Label><Input id="needed-date" lang="en" type="date" className="mt-2" value={draft.neededDate} onChange={event => setDraft({ ...draft, neededDate: event.target.value })} /></div><div><Label htmlFor="needed-time">وقت الحاجة</Label><Input id="needed-time" lang="en" type="time" className="mt-2" value={draft.neededTime} onChange={event => setDraft({ ...draft, neededTime: event.target.value })} /></div>
       </div>
-       <details className="rounded-lg border border-border bg-card px-3 py-2 text-sm"><summary className="cursor-pointer font-medium">تفاصيل التوريد والتعيين</summary><div className="space-y-3 pt-3 text-muted-foreground"><p>جميع الأصناف، بما فيها مواد المستودع في الكتالوج، تُورّد من مخزون المطبخ المختار وليست طلباً مباشراً من المستودع الرئيسي.</p>{!!draft.centralKitchenId && <p>مهام المطبخ موجّهة تلقائياً إلى مدير التطوير والإنتاج وفق الصلاحيات الحالية، دون تعيين يدوي.</p>}{!!draft.sourceBranchId && <ReceiverRoutingNotice routing={receiverRoutingQuery.data} loading={receiverRoutingQuery.isLoading} error={receiverRoutingQuery.isError} onRetry={() => void receiverRoutingQuery.refetch()} />}</div></details>
+       {!!draft.sourceBranchId && <ReceiverRoutingNotice routing={receiverRoutingQuery.data} loading={receiverRoutingQuery.isLoading} error={receiverRoutingQuery.isError} onRetry={() => void receiverRoutingQuery.refetch()} />}
+       <details className="rounded-lg border border-border bg-card px-3 py-2 text-sm"><summary className="min-h-11 cursor-pointer content-center font-medium">تفاصيل التوريد والتعيين</summary><div className="space-y-3 pt-3 text-muted-foreground"><p>جميع الأصناف، بما فيها مواد المستودع في الكتالوج، تُورّد من مخزون المطبخ المختار وليست طلباً مباشراً من المستودع الرئيسي.</p>{!!draft.centralKitchenId && <p>مهام المطبخ موجّهة تلقائياً إلى مدير التطوير والإنتاج وفق الصلاحيات الحالية، دون تعيين يدوي.</p>}</div></details>
       {orderingPolicy.query.isError ? <p role="alert" className="rounded border border-amber-300 p-3 text-sm">تعذر تحميل مواعيد الطلب من الخادم. <Button variant="link" onClick={() => void openCreate()}>إعادة المحاولة</Button></p> : !orderingPolicy.query.data ? <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل مواعيد الطلب بتوقيت السعودية…</p> : <OrderScheduleNotice schedule={draftSchedule} preview />}
       </div>}
       {createStep === 1 && <div className="space-y-4" data-testid="create-step-items">
@@ -694,8 +702,19 @@ export default function CentralKitchenOrdersPage() {
        <div><Label htmlFor="order-notes">ملاحظات عامة</Label><textarea id="order-notes" className="mt-2 min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={draft.notes} onChange={event => setDraft({ ...draft, notes: event.target.value })} placeholder="تعليمات خاصة للاستلام أو التجهيز..." /></div>
       </div>}
       {createStep === 2 && <section className="space-y-4" data-testid="create-step-review" aria-label="مراجعة الطلب">
+         <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">راجع الطلب قبل الإرسال</h3><Button type="button" variant="outline" className="min-h-11" onClick={() => { setCreateStep(0); setCreateStepError(""); }}>تعديل الفرع أو الموعد</Button></div>
         <div className="rounded-xl border bg-muted/15 p-4"><h3 className="font-semibold">المورد والوجهة والموعد</h3><dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 text-sm"><div><dt className="text-xs text-muted-foreground">الفرع الطالب</dt><dd className="mt-1 font-medium">{branchName(draft.sourceBranchId)}</dd></div><div><dt className="text-xs text-muted-foreground">المورد المختار</dt><dd className="mt-1 font-medium">المطبخ: {branchName(draft.centralKitchenId)}</dd></div><div><dt className="text-xs text-muted-foreground">تاريخ الحاجة</dt><dd className="mt-1 font-medium">{readableDate(draft.neededDate)}</dd></div><div><dt className="text-xs text-muted-foreground">الوقت</dt><dd className="mt-1 font-medium">{readableTime(draft.neededTime)}</dd></div></dl><p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">مواد المستودع في كتالوج المطبخ تعرّف نوع الصنف فقط؛ التوريد هنا من مخزون المطبخ المختار، وليس من المستودع الرئيسي مباشرةً.</p></div>
-        <div className="rounded-xl border"><div className="border-b px-4 py-3"><h3 className="font-semibold">الأصناف ({draft.items.length})</h3><p className="text-xs text-muted-foreground">راجع المطلوب وإقرار المتوفر في الفرع قبل الإرسال.</p></div><div className="divide-y">{draft.items.map((item, index) => <article key={index} className="px-4 py-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><strong className="block break-words text-sm">{item.productName}</strong><span className="text-xs text-muted-foreground">{kitchenCatalogSupplyLabel(item)} · {item.unit}</span></div><Badge variant="outline" className="shrink-0">{item.requestedQuantity} {item.unit}</Badge></div><p className="mt-2 text-xs">المتوفر المعلن: <strong>{item.reportedAvailableQuantity} {item.unit}</strong></p>{item.notes && <p className="mt-1 break-words text-xs text-muted-foreground">ملاحظة: {item.notes}</p>}</article>)}</div></div>
+         <div className="rounded-xl border">
+           <div className="border-b px-4 py-3"><h3 className="font-semibold">الأصناف ({draft.items.length})</h3><p className="text-xs text-muted-foreground">راجع المطلوب والمتوفر في الفرع. يمكنك تعديل أي صنف مباشرةً.</p></div>
+           <div className="divide-y">{draft.items.map((item, index) => <article key={index} className="px-4 py-3">
+             <div className="flex items-start justify-between gap-2">
+               <div className="min-w-0"><strong className="block break-words text-sm">{item.productName}</strong><span className="text-xs text-muted-foreground">{kitchenCatalogSupplyLabel(item)} · {item.unit}</span></div>
+               <Button type="button" variant="ghost" className="min-h-11 shrink-0" aria-label={`تعديل كميات ${item.productName}`} onClick={() => editDraftItem(index)}>تعديل</Button>
+             </div>
+             <dl className="mt-2 grid grid-cols-2 gap-3 rounded-lg bg-muted/30 p-3 text-sm"><div><dt className="text-xs text-muted-foreground">المطلوب توريده</dt><dd className="mt-1 font-semibold">{item.requestedQuantity} {item.unit}</dd></div><div><dt className="text-xs text-muted-foreground">المتوفر في الفرع</dt><dd className="mt-1 font-semibold">{item.reportedAvailableQuantity} {item.unit}</dd></div></dl>
+             {item.notes && <p className="mt-2 break-words text-xs text-muted-foreground">ملاحظة: {item.notes}</p>}
+           </article>)}</div>
+         </div>
         {draft.notes && <div className="rounded-xl border p-4"><h3 className="text-sm font-semibold">ملاحظات عامة</h3><p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">{draft.notes}</p></div>}
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">بإرسال الطلب، تؤكد أن كميات «المتوفر المعلن» أُدخلت من واقع الفرع. لا تغيّر هذه القيم رصيد المخزون.</p>
       </section>}

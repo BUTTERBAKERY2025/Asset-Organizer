@@ -55,6 +55,26 @@ export function isKitchenOrderDraftValid(items: KitchenOrderDraftLine[]) {
   return items.length > 0 && items.every(isValidKitchenOrderLine);
 }
 
+export type KitchenDraftInvalidTarget = {
+  index: number;
+  selector: string;
+  mobileView: "choose" | "selected";
+};
+
+/** The same field order used by the editor's "complete missing" action. */
+export function getKitchenDraftInvalidTarget(items: KitchenOrderDraftLine[]): KitchenDraftInvalidTarget | null {
+  if (!items.length) return { index: 0, selector: "#kitchen-catalog-search", mobileView: "choose" };
+  for (const [index, item] of items.entries()) {
+    if (isBlankDraftLine(item)) return { index, selector: "#kitchen-catalog-search", mobileView: "choose" };
+    if (!item.productName.trim()) return { index, selector: `#manual-name-${index}`, mobileView: "selected" };
+    if (!item.unit.trim()) return { index, selector: `#manual-unit-${index}`, mobileView: "selected" };
+    const integerOnly = item.productId !== undefined;
+    if (!isValidKitchenQuantity(item.requestedQuantity, integerOnly)) return { index, selector: `#request-qty-${index}`, mobileView: "selected" };
+    if (!isValidKitchenQuantity(item.reportedAvailableQuantity, integerOnly, true)) return { index, selector: `#reported-stock-${index}`, mobileView: "selected" };
+  }
+  return null;
+}
+
 export function kitchenCatalogSupplyLabel(line: Pick<KitchenOrderDraftLine, "productId" | "warehouseItemId">) {
   return line.warehouseItemId !== undefined
     ? "مادة مستودع · من مخزون المطبخ"
@@ -143,38 +163,63 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
   const [search, setSearch] = useState("");
   const [source, setSource] = useState<KitchenCatalogSourceFilter>("all");
   const [uncontrolledMobileView, setUncontrolledMobileView] = useState<"choose" | "selected">("choose");
+  const [touched, setTouched] = useState<string[]>([]);
+  const [showErrors, setShowErrors] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const mobileView = controlledMobileView ?? uncontrolledMobileView;
   const setMobileView = (view: "choose" | "selected") => {
     setUncontrolledMobileView(view);
     onMobileViewChange?.(view);
   };
-  const patch = (index: number, values: Partial<KitchenOrderDraftLine>) =>
+  const patch = (index: number, values: Partial<KitchenOrderDraftLine>) => {
+    setTouched(previous => [...new Set([...previous, ...Object.keys(values).map(key => `${index}:${key}`)])]);
     onChange(items.map((item, itemIndex) => itemIndex === index ? { ...item, ...values } : item));
+  };
   const selectedKeys = new Set(items.map(item => item.warehouseItemId !== undefined ? `warehouse:${item.warehouseItemId}` : item.productId !== undefined ? `product:${item.productId}` : "").filter(Boolean));
   const visibleItems = items.map((item, index) => ({ item, index })).filter(({ item }) => !isBlankDraftLine(item));
+  const incompleteCount = visibleItems.filter(({ item }) => !isValidKitchenOrderLine(item)).length;
   const catalogResults = useMemo(() => filterKitchenCatalog(products, search, source), [products, search, source]);
-   const focusQuantity = (index: number) => requestAnimationFrame(() =>
-     requestAnimationFrame(() => {
-       const input = document.querySelector<HTMLInputElement>(`#request-qty-${index}`);
-       input?.scrollIntoView({ block: "center", behavior: "smooth" });
-       input?.focus({ preventScroll: true });
-     }));
-   const addCatalogItem = (selected: CentralKitchenCatalogItem, _focus = false) => {
+  const focusTarget = (selector: string) => requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      const input = document.querySelector<HTMLInputElement>(selector);
+      input?.scrollIntoView({ block: "center", behavior: "smooth" });
+      input?.focus({ preventScroll: true });
+    }));
+  const enterView = (view: "choose" | "selected") => {
+    setMobileView(view);
+    if (view === "choose") focusTarget("#kitchen-catalog-search");
+    else {
+      const target = getKitchenDraftInvalidTarget(items);
+      focusTarget(target?.mobileView === "selected"
+      ? target.selector
+      : `#request-qty-${visibleItems[0]?.index ?? 0}`);
+    }
+  };
+  const focusIncomplete = () => {
+    const target = getKitchenDraftInvalidTarget(items);
+    if (!target) return;
+    setShowErrors(true);
+    setMobileView(target.mobileView);
+    focusTarget(target.selector);
+  };
+  const addCatalogItem = (selected: CentralKitchenCatalogItem, focusQuantity = false) => {
     const existingIndex = items.findIndex(item => selected.source === "product"
       ? item.productId === selected.id
       : item.warehouseItemId === selected.id);
     if (existingIndex >= 0) {
-       focusQuantity(existingIndex);
+      if (focusQuantity) {
+        setMobileView("selected");
+        focusTarget(`#request-qty-${existingIndex}`);
+      }
       return;
     }
     const blankIndex = items.findIndex(isBlankDraftLine);
     const nextIndex = blankIndex >= 0 ? blankIndex : items.length;
     onChange(addKitchenCatalogItem(items, selected));
-     // Bring the newly added row into view on narrow screens instead of leaving it
-     // below the catalog list; the search text remains available for another item.
-     focusQuantity(nextIndex);
-      setMobileView("selected");
+    if (focusQuantity || (typeof window !== "undefined" && window.matchMedia?.("(min-width: 1024px)").matches)) {
+      if (focusQuantity) setMobileView("selected");
+      focusTarget(`#request-qty-${nextIndex}`);
+    }
   };
   const addManualItem = () => {
     const blankIndex = items.findIndex(isBlankDraftLine);
@@ -186,18 +231,20 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
     const nextIndex = blankIndex >= 0 ? blankIndex : items.length;
     onChange(next);
     setMobileView("selected");
-     requestAnimationFrame(() => requestAnimationFrame(() => {
-       const input = document.querySelector<HTMLInputElement>(`#manual-name-${nextIndex}`);
-       input?.scrollIntoView({ block: "center", behavior: "smooth" });
-       input?.focus({ preventScroll: true });
-     }));
+    focusTarget(`#manual-name-${nextIndex}`);
   };
   const removeItem = (index: number) => {
     const next = items.filter((_, itemIndex) => itemIndex !== index);
+    setTouched(previous => previous.flatMap(key => {
+      const [row, field] = key.split(":");
+      const current = Number(row);
+      return current === index ? [] : [`${current > index ? current - 1 : current}:${field}`];
+    }));
     onChange(next.length ? next : [emptyLine()]);
-    if (next.length === 0) {
+    if (!next.some(item => !isBlankDraftLine(item))) {
       setMobileView("choose");
-      requestAnimationFrame(() => searchRef.current?.focus());
+      setShowErrors(false);
+      focusTarget("#kitchen-catalog-search");
     }
   };
   const firstAvailableResult = catalogResults.find(item => !selectedKeys.has(productKey(item)));
@@ -220,8 +267,14 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
     {!catalogLoading && !catalogError && products.length === 0 && <div className="border-b px-4 py-3 text-sm text-muted-foreground">لا توجد أصناف متاحة حالياً. استخدم الإدخال اليدوي عند الحاجة فقط.</div>}
       <div className="sticky top-0 z-10 border-b border-border bg-card p-2 lg:hidden">
         <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="مهمة الأصناف">
-          <Button type="button" variant={mobileView === "choose" ? "default" : "outline"} className="min-h-11" onClick={() => setMobileView("choose")} role="tab" aria-selected={mobileView === "choose"}>1. اختيار الأصناف</Button>
-          <Button type="button" variant={mobileView === "selected" ? "default" : "outline"} className="min-h-11" onClick={() => setMobileView("selected")} role="tab" aria-selected={mobileView === "selected"}>2. الكميات ({visibleItems.length})</Button>
+          <Button type="button" variant={mobileView === "choose" ? "default" : "outline"} className="min-h-11" onClick={() => enterView("choose")} role="tab" aria-selected={mobileView === "choose"}>1. اختيار الأصناف</Button>
+          <Button type="button" variant={mobileView === "selected" ? "default" : "outline"} className="min-h-11" onClick={() => enterView("selected")} role="tab" aria-selected={mobileView === "selected"}>2. الكميات ({visibleItems.length})</Button>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+          <span>{visibleItems.length} مختار · {incompleteCount} ناقص الإكمال</span>
+          {mobileView === "choose"
+            ? <Button type="button" size="sm" className="min-h-10" onClick={() => enterView("selected")}>إدخال الكميات</Button>
+            : incompleteCount > 0 && <Button type="button" size="sm" variant="outline" className="min-h-10" onClick={focusIncomplete}>إكمال الناقص ({incompleteCount})</Button>}
         </div>
       </div>
       <div className="grid min-w-0 lg:min-h-[28rem] lg:grid-cols-[minmax(260px,.8fr)_minmax(0,1.4fr)]">
@@ -275,30 +328,32 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
         </div>
       </section>
        <section className={cn("min-w-0 p-3 lg:block", mobileView === "selected" ? "block" : "hidden")} aria-label="الأصناف المختارة">
-        <div className="mb-3 flex items-center justify-between gap-2"><div><h4 className="font-semibold text-foreground">المختار والكميات</h4><p className="text-xs text-muted-foreground">المتوفر الحالي مطلوب صراحةً، ويظل فارغاً حتى تدخله.</p></div><Badge variant="outline">{visibleItems.length}</Badge></div>
-        {!visibleItems.length && <div className="flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed border-border p-6 text-center text-muted-foreground"><PackagePlus className="mb-2 h-7 w-7" /><p className="text-sm font-medium text-foreground">لم تختر أصنافاً بعد</p><p className="mt-1 text-xs">ارجع إلى «اختيار الأصناف» ثم أضف ما تحتاجه.</p><Button type="button" variant="outline" className="mt-4 min-h-11 lg:hidden" onClick={() => setMobileView("choose")}>اختيار الأصناف</Button></div>}
+         <div className="mb-3 flex items-center justify-between gap-2"><div><h4 className="font-semibold text-foreground">المختار والكميات</h4><p className="text-xs text-muted-foreground">المتوفر الحالي مطلوب صراحةً، ويظل فارغاً حتى تدخله.</p></div><div className="flex items-center gap-2"><Badge variant="outline">{visibleItems.length} مختار · {incompleteCount} ناقص</Badge>{incompleteCount > 0 && <Button type="button" variant="outline" size="sm" className="hidden lg:inline-flex" onClick={focusIncomplete}>إكمال الناقص</Button>}</div></div>
+         {!visibleItems.length && <div className="flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed border-border p-6 text-center text-muted-foreground"><PackagePlus className="mb-2 h-7 w-7" /><p className="text-sm font-medium text-foreground">لم تختر أصنافاً بعد</p><p className="mt-1 text-xs">ارجع إلى «اختيار الأصناف» ثم أضف ما تحتاجه.</p><Button type="button" variant="outline" className="mt-4 min-h-11 lg:hidden" onClick={() => enterView("choose")}>اختيار الأصناف</Button></div>}
         <div className="space-y-2">
       {visibleItems.map(({ item, index }) => {
         const isProduct = item.productId !== undefined;
         const quantityStep = isProduct ? "1" : "0.000001";
         const requestedInvalid = !isValidKitchenQuantity(item.requestedQuantity, isProduct);
         const stockInvalid = !isValidKitchenQuantity(item.reportedAvailableQuantity, isProduct, true);
+        const showRequestedError = requestedInvalid && (showErrors || touched.includes(`${index}:requestedQuantity`));
+        const showStockError = stockInvalid && (showErrors || touched.includes(`${index}:reportedAvailableQuantity`));
         return <article key={index} data-testid={`order-line-${index}`} className="rounded-lg border border-border bg-background p-3">
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="min-w-0"><strong className="block truncate text-sm text-foreground">{item.productName || "صنف يدوي"}</strong>{!item.manualMode && <span className="text-[11px] text-muted-foreground">{kitchenCatalogSupplyLabel(item)} · {item.unit}</span>}</div>
             <Button type="button" variant="ghost" size="sm" className="h-9 shrink-0 text-destructive" onClick={() => removeItem(index)}><X className="ml-1 h-4 w-4" />حذف</Button>
           </div>
-          {item.manualMode && <div className="mb-3 grid gap-2 sm:grid-cols-2"><div><Label className="text-xs" htmlFor={`manual-name-${index}`}>اسم الصنف</Label><Input id={`manual-name-${index}`} className="mt-1 h-11" value={item.productName} onChange={event => patch(index, { productName: event.target.value })} placeholder="اسم الصنف اليدوي" /></div><div><Label className="text-xs">الوحدة</Label><Input className="mt-1 h-11" value={item.unit} onChange={event => patch(index, { unit: event.target.value })} placeholder="الوحدة" /></div></div>}
+           {item.manualMode && <div className="mb-3 grid gap-2 sm:grid-cols-2"><div><Label className="text-xs" htmlFor={`manual-name-${index}`}>اسم الصنف</Label><Input id={`manual-name-${index}`} className="mt-1 h-11" value={item.productName} onChange={event => patch(index, { productName: event.target.value })} placeholder="اسم الصنف اليدوي" aria-invalid={!item.productName.trim() && (showErrors || touched.includes(`${index}:productName`))} /></div><div><Label className="text-xs" htmlFor={`manual-unit-${index}`}>الوحدة</Label><Input id={`manual-unit-${index}`} className="mt-1 h-11" value={item.unit} onChange={event => patch(index, { unit: event.target.value })} placeholder="الوحدة" aria-invalid={!item.unit.trim() && (showErrors || touched.includes(`${index}:unit`))} /></div></div>}
            <div className="grid grid-cols-1 gap-3 min-[390px]:grid-cols-2 lg:grid-cols-6">
                <div className="lg:col-span-2">
               <Label className="text-xs" htmlFor={`request-qty-${index}`}>الكمية المطلوب توريدها</Label>
-                <Input id={`request-qty-${index}`} className="mt-1 h-12 text-base" type="number" min={isProduct ? "1" : "0.000001"} step={quantityStep} inputMode={isProduct ? "numeric" : "decimal"} value={item.requestedQuantity} onChange={event => patch(index, { requestedQuantity: event.target.value })} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); searchRef.current?.focus(); } }} aria-invalid={requestedInvalid} />
+                 <Input id={`request-qty-${index}`} className="mt-1 h-12 text-base" type="number" min={isProduct ? "1" : "0.000001"} step={quantityStep} inputMode={isProduct ? "numeric" : "decimal"} value={item.requestedQuantity} onChange={event => patch(index, { requestedQuantity: event.target.value })} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); enterView("choose"); } }} aria-invalid={showRequestedError} />
               <p className="mt-1 text-[11px] text-muted-foreground">{isProduct ? "المنتجات بأعداد صحيحة." : "المواد تقبل حتى 6 منازل عشرية."}</p>
             </div>
                <div className="lg:col-span-2">
               <Label className="text-xs" htmlFor={`reported-stock-${index}`}>المتوفر حالياً في الفرع <span className="text-destructive">*</span></Label>
-                <Input id={`reported-stock-${index}`} className="mt-1 h-12 text-base" type="number" min="0" step={quantityStep} inputMode={isProduct ? "numeric" : "decimal"} value={item.reportedAvailableQuantity} onChange={event => patch(index, { reportedAvailableQuantity: event.target.value })} placeholder="أدخل القيمة" aria-invalid={stockInvalid} aria-describedby={`reported-stock-help-${index}`} />
-              <p id={`reported-stock-help-${index}`} className="mt-1 text-[11px] text-muted-foreground">{stockInvalid ? "أدخل صفراً أو كمية صحيحة حتى 6 منازل عشرية؛ لا يُفترض الرصيد تلقائياً." : "معلومة للمطبخ ولا تغيّر رصيد المخزون."}</p>
+                 <Input id={`reported-stock-${index}`} className="mt-1 h-12 text-base" type="number" min="0" step={quantityStep} inputMode={isProduct ? "numeric" : "decimal"} value={item.reportedAvailableQuantity} onChange={event => patch(index, { reportedAvailableQuantity: event.target.value })} placeholder="أدخل القيمة" aria-invalid={showStockError} aria-describedby={`reported-stock-help-${index}`} />
+               <p id={`reported-stock-help-${index}`} className="mt-1 text-[11px] text-muted-foreground">{showStockError ? "أدخل صفراً أو كمية صحيحة حتى 6 منازل عشرية؛ لا يُفترض الرصيد تلقائياً." : "معلومة للمطبخ ولا تغيّر رصيد المخزون."}</p>
             </div>
                <div className="min-[390px]:col-span-2 lg:col-span-2">
               <Label className="text-xs" htmlFor={`line-note-${index}`}>ملاحظة</Label>
@@ -306,7 +361,7 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
             </div>
           </div>
            {!item.manualMode && <div className="mt-2"><AvailabilitySnapshot kitchenId={kitchenId} productId={item.productId} warehouseItemId={item.warehouseItemId} requested={item.requestedQuantity} /></div>}
-          {(requestedInvalid || stockInvalid) && <p className="mt-2 flex items-center gap-1 text-xs text-destructive"><AlertTriangle className="h-3.5 w-3.5" />راجع كمية التوريد والرصيد المعلن قبل الإرسال.</p>}
+           {(showRequestedError || showStockError) && <p className="mt-2 flex items-center gap-1 text-xs text-destructive"><AlertTriangle className="h-3.5 w-3.5" />راجع كمية التوريد والرصيد المعلن قبل الإرسال.</p>}
         </article>;
       })}
         </div>
