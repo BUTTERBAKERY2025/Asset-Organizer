@@ -7961,6 +7961,8 @@ export const materialTransfers = pgTable("material_transfers", {
   transferDate: text("transfer_date").notNull(), // تاريخ التحويل
   deliveryDate: text("delivery_date"), // تاريخ التسليم الفعلي
   status: text("status").notNull().default("pending"), // pending, approved, rejected, in_transit, delivered, cancelled
+  // Only kitchen raw requests debit the source on dispatch; legacy rows keep receipt-time debit.
+  stockPostingPolicy: text("stock_posting_policy").notNull().default("on_receipt"),
   // حقول الموافقة
   approvedBy: varchar("approved_by").references(() => users.id),
   approvedByName: text("approved_by_name"),

@@ -39,6 +39,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useReactToPrint } from "react-to-print";
+import { Link } from "wouter";
 
 const DESTINATION_TYPES = [
   { value: "branch", label: "فرع آخر", icon: Building },
@@ -265,6 +266,7 @@ export default function FinishedGoodsInventoryPage() {
             <p className="text-xs sm:text-sm text-muted-foreground">إدارة وتحويل المنتجات النهائية للفروع أو بار العرض</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Link href="/kitchen-warehouse-shipping"><Button variant="outline" size="sm">شحن المنتجات للمستودعات المستقلة</Button></Link>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" data-testid="btn-export">

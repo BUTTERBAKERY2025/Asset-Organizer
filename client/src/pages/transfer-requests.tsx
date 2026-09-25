@@ -42,6 +42,7 @@ import {
 
 type MaterialTransfer = {
   id: number;
+  stockPostingPolicy?: string;
   transferNumber: string;
   requestId: number;
   sourceBranchId: string;
@@ -137,6 +138,8 @@ export default function TransferRequestsPage() {
   const permissions = usePermissions();
   const { canView, canCreate, canEdit, isLoading: permissionsLoading } = permissions;
   const search = useSearch();
+  const kitchenRawMode = new URLSearchParams(search).get("kitchenRaw") === "1";
+  const kitchenBranches = branches.filter(branch => branch.isCentralKitchen);
   const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -443,7 +446,7 @@ export default function TransferRequestsPage() {
       const idempotencyKey = createIdempotencyKeyRef.current || crypto.randomUUID();
       createIdempotencyKeyRef.current = idempotencyKey;
       const destBranch = branches.find(b => b.id === data.destinationBranchId);
-      const response = await apiRequest("POST", "/api/warehouse/material-transfers", {
+      const response = await apiRequest("POST", kitchenRawMode ? "/api/warehouse/kitchen-raw-requests" : "/api/warehouse/material-transfers", {
         ...data,
         sourceBranchId: "main_warehouse",
         sourceBranchName: isRTL ? "المستودع الرئيسي" : "Main Warehouse",
@@ -611,7 +614,9 @@ export default function TransferRequestsPage() {
 
   const openCreateRequest = useCallback(() => {
     if (!canCreate("warehouse")) return;
-    const destinationBranchId = resolveWarehouseCreateDestination(filterBranch, branches, userBranchId);
+    const destinationBranchId = kitchenRawMode
+      ? (kitchenBranches.find(branch => branch.id === filterBranch || branch.id === userBranchId)?.id || (kitchenBranches.length === 1 ? kitchenBranches[0].id : ""))
+      : resolveWarehouseCreateDestination(filterBranch, branches, userBranchId);
     const destination = destinationBranchId
       ? branches.find(branch => branch.id === destinationBranchId)
       : null;
@@ -624,7 +629,7 @@ export default function TransferRequestsPage() {
     }));
     createIdempotencyKeyRef.current = crypto.randomUUID();
     setIsCreateOpen(true);
-  }, [branches, canCreate, filterBranch, isRTL, userBranchId]);
+  }, [branches, canCreate, filterBranch, isRTL, userBranchId, kitchenRawMode]);
 
   const handleBranchFilterChange = useCallback((value: string) => {
     const branchId = resolveVisibleBranchFilter(value, branches);
@@ -758,6 +763,7 @@ _مُرسل من BUTTER BAKERY SYSTEM_`;
   };
 
   const filteredTransfers = useMemo(() => transfers.filter(transfer => {
+    if (kitchenRawMode && transfer.stockPostingPolicy !== "on_dispatch") return false;
     if (incomingOnly && transfer.destinationBranchId !== filterBranch) return false;
     // Filter by branch (destination or source)
     if (filterBranch !== "all") {
@@ -777,7 +783,7 @@ _مُرسل من BUTTER BAKERY SYSTEM_`;
       );
     }
     return true;
-  }), [transfers, filterBranch, searchQuery, incomingOnly]);
+  }), [transfers, filterBranch, searchQuery, incomingOnly, kitchenRawMode]);
 
   // Download PDF only (lazy-loaded)
   const handleDownloadPdf = async () => {
@@ -970,9 +976,9 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
         <PageHeader
           icon={Send}
           tone="money"
-          title={isRTL ? "طلبات التحويل" : "Transfer Requests"}
-          description={isRTL ? "إدارة طلبات الأصناف من المستودع الرئيسي" : "Manage item requests from main warehouse"}
-          backHref={visibleBranchId ? `/warehouse?branchId=${encodeURIComponent(visibleBranchId)}` : "/warehouse"}
+          title={kitchenRawMode ? "طلبات مواد المطبخ من المستودع الرئيسي" : (isRTL ? "طلبات التحويل" : "Transfer Requests")}
+          description={kitchenRawMode ? "مواد خام من كتالوج المستودع → اعتماد وتجهيز وإرسال → استلام فعلي في مخزون المطبخ. لا تُستهلك المواد تلقائياً." : (isRTL ? "إدارة طلبات الأصناف من المستودع الرئيسي" : "Manage item requests from main warehouse")}
+          backHref={kitchenRawMode ? "/central-kitchen-orders" : (visibleBranchId ? `/warehouse?branchId=${encodeURIComponent(visibleBranchId)}` : "/warehouse")}
           actions={
             <div className="flex items-center gap-2">
             <div className="hidden md:block">
@@ -992,7 +998,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
               <DialogTrigger asChild>
                 <Button data-testid="btn-create-transfer" className="w-full sm:w-auto" onClick={openCreateRequest}>
                   <Plus className={`w-4 h-4 ${isRTL ? "ml-1 sm:ml-2" : "mr-1 sm:mr-2"}`} />
-                  <span className="hidden sm:inline">{isRTL ? "طلب جديد" : "New Request"}</span>
+                  <span className="hidden sm:inline">{kitchenRawMode ? "طلب مواد خام" : (isRTL ? "طلب جديد" : "New Request")}</span>
                   <span className="sm:hidden">{isRTL ? "طلب" : "New"}</span>
                 </Button>
               </DialogTrigger>
@@ -1057,7 +1063,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                           <SelectValue placeholder={isRTL ? "اختر الفرع" : "Select branch"} />
                         </SelectTrigger>
                         <SelectContent>
-                          {branches.map((branch) => (
+                          {(kitchenRawMode ? kitchenBranches : branches).map((branch) => (
                             <SelectItem key={branch.id} value={branch.id}>
                               {branch.name}
                             </SelectItem>
@@ -1090,9 +1096,10 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                 )}
 
                 <WarehouseItemEntry
-                  catalog={warehouseItems}
+                  catalog={kitchenRawMode ? warehouseItems.filter(item => item.isActive) : warehouseItems}
                   items={newTransfer.items}
                   isRTL={isRTL}
+                  requireAvailableQuantity={!kitchenRawMode}
                   onChange={(items) => setNewTransfer(prev => ({ ...prev, items }))}
                 />
 
@@ -1283,18 +1290,18 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                       toast({ title: isRTL ? "خطأ" : "Error", description: isRTL ? "يجب إضافة صنف واحد على الأقل" : "Please add at least one item", variant: "destructive" });
                       return;
                     }
-                    const missingAvailableQty = newTransfer.items.some(item => item.availableQuantity === null);
+                    const missingAvailableQty = !kitchenRawMode && newTransfer.items.some(item => item.availableQuantity === null);
                     if (missingAvailableQty) {
                       toast({ title: isRTL ? "خطأ" : "Error", description: isRTL ? "يجب إدخال الكمية المتوفرة بالفرع لجميع الأصناف" : "Please enter available quantity for all items", variant: "destructive" });
                       return;
                     }
-                    if (newTransfer.items.some(item => !isValidWarehouseDraftItem(item))) {
+                    if (newTransfer.items.some(item => !isValidWarehouseDraftItem(item, !kitchenRawMode))) {
                       toast({ title: isRTL ? "خطأ" : "Error", description: isRTL ? "أدخل كميات موجبة حتى ست منازل عشرية" : "Enter positive quantities with up to 6 decimal places", variant: "destructive" });
                       return;
                     }
                     createMutation.mutate(newTransfer);
                   }} 
-                  disabled={!newTransfer.destinationBranchId || !newTransfer.sourceBranchId || newTransfer.items.length === 0 || newTransfer.items.some(item => !isValidWarehouseDraftItem(item)) || createMutation.isPending}
+                  disabled={!newTransfer.destinationBranchId || !newTransfer.sourceBranchId || newTransfer.items.length === 0 || newTransfer.items.some(item => !isValidWarehouseDraftItem(item, !kitchenRawMode)) || createMutation.isPending}
                   data-testid="btn-submit-transfer"
                 >
                   {createMutation.isPending ? (isRTL ? "جاري الإرسال..." : "Submitting...") : (isRTL ? "إرسال الطلب" : "Submit Request")}

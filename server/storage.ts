@@ -14246,6 +14246,35 @@ export class DatabaseStorage implements IStorage {
         throw materialDeliveryConflict("يجب تأكيد استلام التحويل لإتمام التسليم");
       }
 
+      // Kitchen raw requests leave the warehouse at dispatch. Serialize the
+      // header, item quantities and source debit in this one transaction.
+      if (status === "in_transit" && transfer.stockPostingPolicy === "on_dispatch") {
+        if (transfer.sourceBranchId !== "main_warehouse" || transfer.sourceType !== "warehouse") {
+          throw materialDeliveryConflict("مصدر طلب مواد المطبخ غير صالح");
+        }
+        const lines = await tx.select().from(materialTransferItems)
+          .where(eq(materialTransferItems.transferId, id)).orderBy(materialTransferItems.itemId);
+        if (!lines.length) throw materialDeliveryConflict("لا توجد عناصر في التحويل");
+        for (const line of lines) {
+          const sent = requirePositiveMaterialQuantity(line.quantity, "كمية التحويل يجب أن تكون موجبة حتى 6 منازل عشرية");
+          const [debited] = await tx.update(warehouseItems)
+            .set({ currentStock: sql`${warehouseItems.currentStock} - ${sent}`, updatedAt: new Date() })
+            .where(and(
+              eq(warehouseItems.id, line.itemId),
+              sql`${warehouseItems.currentStock} - ${warehouseItems.reverseReservedQuantity} >= ${sent}`,
+            ))
+            .returning({ balanceAfter: warehouseItems.currentStock });
+          if (!debited) throw materialDeliveryConflict(`مخزون المستودع للمادة ${line.itemId} غير كافٍ لإرسال التحويل`);
+          await tx.insert(warehouseMovementLogs).values({
+            itemId: line.itemId, movementType: "transfer_out", quantity: sent,
+            ...sourceDebitSnapshot(debited.balanceAfter, sent),
+            referenceType: "transfer", referenceId: id,
+            notes: `إرسال ${sent} في تحويل ${transfer.transferNumber}`,
+            createdBy: transfer.createdBy ?? undefined,
+          });
+        }
+      }
+
       // Source/destination identity is fixed once a transfer is created.
       const {
         sourceType: _sourceType,
@@ -14364,7 +14393,9 @@ export class DatabaseStorage implements IStorage {
       // Debit the actual source atomically before any destination credit.
       // Branch reservations are intentionally retained; only unreserved
       // branch stock may be transferred.
-      if (sourceIsWarehouse) {
+      if (sourceIsWarehouse && transfer.stockPostingPolicy === "on_dispatch") {
+        // Already posted on dispatch. Never debit twice on receipt or retry.
+      } else if (sourceIsWarehouse) {
         const debited = await tx.update(warehouseItems)
           .set({
             currentStock: sql`${warehouseItems.currentStock} - ${sentQuantity}`,
@@ -14442,17 +14473,19 @@ export class DatabaseStorage implements IStorage {
         });
       }
 
-      await tx.insert(warehouseMovementLogs).values({
-        itemId: item.itemId,
-        branchId: sourceIsWarehouse ? undefined : transfer.sourceBranchId!,
-        movementType: "transfer_out",
-        quantity: sentQuantity,
-        ...sourceDebitSnapshot(line.sourceBalanceAfter, sentQuantity),
-        referenceType: "transfer",
-        referenceId: transfer.id,
-        notes: `إرسال ${sentQuantity} في تحويل ${transfer.transferNumber}`,
-        createdBy: userId,
-      });
+      if (transfer.stockPostingPolicy !== "on_dispatch") {
+        await tx.insert(warehouseMovementLogs).values({
+          itemId: item.itemId,
+          branchId: sourceIsWarehouse ? undefined : transfer.sourceBranchId!,
+          movementType: "transfer_out",
+          quantity: sentQuantity,
+          ...sourceDebitSnapshot(line.sourceBalanceAfter, sentQuantity),
+          referenceType: "transfer",
+          referenceId: transfer.id,
+          notes: `إرسال ${sentQuantity} في تحويل ${transfer.transferNumber}`,
+          createdBy: userId,
+        });
+      }
     }
 
     const [updated] = await tx.update(materialTransfers)
@@ -14563,6 +14596,11 @@ export class DatabaseStorage implements IStorage {
           mod.newQuantity,
           "كمية التحويل يجب أن تكون موجبة حتى 6 منازل عشرية",
         );
+        if (transfer.stockPostingPolicy === "on_dispatch"
+          && items.find(item => item.itemId === mod.itemId)?.unit === "قطعة"
+          && !Number.isInteger(mod.newQuantity)) {
+          throw materialDeliveryConflict("كمية المادة بالقطعة يجب أن تكون عدداً صحيحاً");
+        }
       }
       
       let hasModifications = false;

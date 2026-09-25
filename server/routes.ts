@@ -12,6 +12,7 @@ import {
 } from "./manual-production-operations";
 import { db, pool } from "./db";
 import { registerReverseLogisticsRoutes } from "./reverse-logistics-routes";
+import { registerKitchenWarehouseShippingRoutes } from "./kitchen-warehouse-shipping-routes";
 import * as NotificationService from "./notification-service";
 import { computeBranchIssues, formatBranchIssuesMessage } from "./branch-issues";
 import { evaluateWasteGovernance, checkApprovalGate } from "./waste-governance";
@@ -618,6 +619,7 @@ export async function registerRoutes(
   registerCentralKitchenDemandRoutes(app);
   registerDeliveryRoutes(app);
   registerReverseLogisticsRoutes(app);
+  registerKitchenWarehouseShippingRoutes(app);
   registerProductionOperationsReportRoute(app);
   registerAdvancedProductionExecutionRoutes(app);
   registerCentralKitchenWorkplanRoute(app);
@@ -37233,12 +37235,13 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/warehouse/material-transfers", isAuthenticated, requirePermission("warehouse", "create"), async (req, res) => {
+  const createWarehouseMaterialTransfer = async (req: any, res: any) => {
     try {
       const user = req.currentUser;
       if (!user?.id) return res.status(401).json({ error: "المستخدم غير مصادق عليه" });
       const idempotencyKey = requireMaterialTransferIdempotencyKey(req.get("Idempotency-Key"));
       const body = req.body && typeof req.body === "object" ? req.body : {};
+      const kitchenRawRequest = req.path === "/api/warehouse/kitchen-raw-requests";
       const {
         items,
         sourceBranchId: requestedSourceBranchId,
@@ -37255,6 +37258,17 @@ export async function registerRoutes(
         || requestedSourceBranchId === requestedDestinationBranchId
       ) {
         return res.status(400).json({ error: "يجب تحديد مصدر ووجهة تحويل صالحين" });
+      }
+      if (kitchenRawRequest) {
+        if (requestedSourceBranchId !== mainWarehouseBranchId || requestId != null) {
+          return res.status(400).json({ error: "طلب مواد المطبخ يجب أن يكون من المستودع الرئيسي دون ربطه بطلب منتجات" });
+        }
+        const [kitchen] = await db.select({ id: branches.id })
+          .from(branches).where(and(
+            eq(branches.id, requestedDestinationBranchId),
+            eq(branches.isCentralKitchen, true),
+          )).limit(1);
+        if (!kitchen) return res.status(400).json({ error: "اختر فرع مطبخ مركزي لاستلام المواد الخام" });
       }
 
       // sourceType is derived from the canonical source sentinel.  Never trust
@@ -37319,6 +37333,9 @@ export async function registerRoutes(
           if (!warehouseItem) {
             return res.status(400).json({ error: "يتضمن التحويل صنف مستودع غير متاح" });
           }
+          if (kitchenRawRequest && warehouseItem.unit === "قطعة" && !Number.isInteger(normalizedOptionalQuantities.quantity)) {
+            return res.status(400).json({ error: "كمية المادة بالقطعة يجب أن تكون عدداً صحيحاً" });
+          }
           // Requesters may not seed receipt, discrepancy, modification, or
           // other audit columns on a pending transfer.
           normalizedItems.push({
@@ -37345,15 +37362,17 @@ export async function registerRoutes(
         destinationBranchId: requestedDestinationBranchId,
         transferDate: normalizedTransferDate,
         status: "pending",
+        stockPostingPolicy: kitchenRawRequest ? "on_dispatch" : "on_receipt",
         notes: typeof notes === "string" ? notes : undefined,
         createdBy: user?.id,
         createdByName: [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.username,
       };
-      const idempotencyAction = "create_material_transfer";
+      const idempotencyAction = kitchenRawRequest ? "create_kitchen_raw_request" : "create_material_transfer";
       const idempotencyPayloadHash = materialTransferPayloadHash({
         transfer: {
           requestId: sanitizedTransferData.requestId,
           sourceType,
+          ...(kitchenRawRequest ? { stockPostingPolicy: "on_dispatch" } : {}),
           sourceBranchId: requestedSourceBranchId,
           destinationBranchId: requestedDestinationBranchId,
           // An omitted date remains omitted for payload binding even if the
@@ -37382,6 +37401,9 @@ export async function registerRoutes(
       // This prevents an old key from returning a transfer whose branch scope
       // was changed after it was originally created.
       if (creation.replayed && !isUserAdmin(req)) {
+        if (kitchenRawRequest && creation.transfer.stockPostingPolicy !== "on_dispatch") {
+          return res.status(409).json({ error: "سياسة خصم المخزون لا تطابق طلب المطبخ" });
+        }
         const actualSourceId = creation.transfer.sourceBranchId;
         const actualDestinationId = creation.transfer.destinationBranchId;
         const actualSourceAccess = typeof actualSourceId === "string"
@@ -37410,7 +37432,9 @@ export async function registerRoutes(
       console.error("Error creating material transfer:", error);
       res.status(500).json({ error: "فشل في إنشاء التحويل" });
     }
-  });
+  };
+  app.post("/api/warehouse/material-transfers", isAuthenticated, requirePermission("warehouse", "create"), createWarehouseMaterialTransfer);
+  app.post("/api/warehouse/kitchen-raw-requests", isAuthenticated, requirePermission("warehouse", "create"), createWarehouseMaterialTransfer);
 
   app.put("/api/warehouse/material-transfers/:id/status", isAuthenticated, requirePermission("warehouse", "edit"), async (req, res) => {
     try {

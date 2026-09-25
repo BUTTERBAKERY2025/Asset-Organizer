@@ -19,11 +19,12 @@ type Props = {
   items: WarehouseTransferDraftItem[];
   isRTL: boolean;
   onChange: (items: WarehouseTransferDraftItem[]) => void;
+  requireAvailableQuantity?: boolean;
 };
 
 const acceptsDecimalInput = (value: string) => value === "" || /^\d*(?:\.\d{0,6})?$/.test(value);
 
-export function WarehouseItemEntry({ catalog, items, isRTL, onChange }: Props) {
+export function WarehouseItemEntry({ catalog, items, isRTL, onChange, requireAvailableQuantity = true }: Props) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const searchRef = useRef<HTMLInputElement>(null);
@@ -65,9 +66,9 @@ export function WarehouseItemEntry({ catalog, items, isRTL, onChange }: Props) {
             {isRTL ? "عدد الأصناف فقط؛ لا تُجمع كميات بوحدات مختلفة." : "Item count only; quantities with different units are not summed."}
           </p>
         </div>
-        <p className="text-xs text-muted-foreground">
+        {requireAvailableQuantity && <p className="text-xs text-muted-foreground">
           {isRTL ? "المتوفر المعلن يبقى غير معروف حتى تدخله." : "Declared on-hand remains unknown until entered."}
-        </p>
+        </p>}
       </header>
 
       <div className="grid min-h-[26rem] lg:grid-cols-[minmax(260px,.8fr)_minmax(0,1.4fr)]">
@@ -156,7 +157,7 @@ export function WarehouseItemEntry({ catalog, items, isRTL, onChange }: Props) {
           )}
           <div className="max-h-[34rem] space-y-2 overflow-y-auto overscroll-contain pe-1">
             {items.map((item, index) => {
-              const invalid = !isValidWarehouseDraftItem(item);
+              const invalid = !isValidWarehouseDraftItem(item, requireAvailableQuantity);
               return (
                 <article key={item.itemId} className="rounded-lg border border-border bg-background p-3" data-testid={`item-row-${index}`}>
                   <div className="mb-3 flex items-center justify-between gap-2">
@@ -193,7 +194,7 @@ export function WarehouseItemEntry({ catalog, items, isRTL, onChange }: Props) {
                         }}
                       />
                     </div>
-                    <div className="lg:col-span-2">
+                    {requireAvailableQuantity && <div className="lg:col-span-2">
                       <Label className="text-xs" htmlFor={`warehouse-on-hand-${index}`}>
                         {isRTL ? "المتوفر المعلن بالفرع" : "Declared branch on-hand"} <span className="text-destructive">*</span>
                       </Label>
@@ -214,7 +215,7 @@ export function WarehouseItemEntry({ catalog, items, isRTL, onChange }: Props) {
                         placeholder={isRTL ? "أدخل القيمة" : "Enter value"}
                         aria-invalid={item.availableQuantity === null}
                       />
-                    </div>
+                    </div>}
                     <div className="sm:col-span-2 lg:col-span-1">
                       <Label className="text-xs" htmlFor={`warehouse-line-note-${index}`}>{isRTL ? "ملاحظة" : "Note"}</Label>
                       <Input id={`warehouse-line-note-${index}`} className="mt-1 h-12" value={item.notes} onChange={event => patch(index, { notes: event.target.value })} />
@@ -223,7 +224,9 @@ export function WarehouseItemEntry({ catalog, items, isRTL, onChange }: Props) {
                   {invalid && (
                     <p className="mt-2 flex items-center gap-1 text-xs text-destructive">
                       <AlertTriangle className="h-3.5 w-3.5" />
-                      {isRTL ? "راجع الكمية المطلوبة وأدخل المتوفر المعلن (الصفر مقبول عند التصريح به)." : "Review requested quantity and enter declared on-hand (an explicitly entered zero is valid)."}
+                      {requireAvailableQuantity
+                        ? (isRTL ? "راجع الكمية المطلوبة وأدخل المتوفر المعلن (الصفر مقبول عند التصريح به)." : "Review requested quantity and enter declared on-hand (an explicitly entered zero is valid).")
+                        : (isRTL ? "راجع الكمية المطلوبة ووحدتها." : "Review requested quantity and unit.")}
                     </p>
                   )}
                 </article>

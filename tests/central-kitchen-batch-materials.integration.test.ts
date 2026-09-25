@@ -139,6 +139,7 @@ async function invoke(
   const response: TestResponse = { statusCode: 200, body: undefined, headers: {} };
   const req: any = {
     method: method.toUpperCase(),
+    path,
     currentUser: options.user,
     params: options.params || {},
     query: options.query || {},
@@ -435,6 +436,9 @@ describe.sequential("recipe-backed central-kitchen batch materials (development 
       (error) => { if (error !== rollback) throw error; },
     );
     await readyPromise;
+    // Transaction-local DDL; fixture rolls it back together with its rows.
+    await databaseState.db.execute(sql`ALTER TABLE material_transfers
+      ADD COLUMN IF NOT EXISTS stock_posting_policy text NOT NULL DEFAULT 'on_receipt'`);
 
     const migrations = await databaseState.db.execute(sql`
       SELECT to_regclass('central_kitchen_batch_recipe_snapshots') AS snapshots,
@@ -1083,5 +1087,48 @@ describe.sequential("recipe-backed central-kitchen batch materials (development 
     const movements = await batchEffects(fixture.recipeBatchId);
     expect(movements.movements).toHaveLength(1);
     expect(movements.logs).toHaveLength(1);
+  });
+  it("debits kitchen raw materials at dispatch, credits actual receipt once, and isolates roles", async () => {
+    const before = await supplyBalances();
+    const body = {
+      sourceBranchId: "main_warehouse", destinationBranchId: fixture.kitchenBranchId,
+      items: [{ itemId: fixture.transferMaterialId, itemName: "Fractional supply material", category: "raw", unit: "kg", quantity: 0.5 }],
+    };
+    const keyValue = key("kitchen-raw");
+    const create = (user: any, payload = body) => invoke("post", "/api/warehouse/kitchen-raw-requests", {
+      user, body: payload, headers: { "Idempotency-Key": keyValue },
+    });
+    expect((await create(fixture.outsiderUser)).statusCode).toBe(403);
+    expect((await create(fixture.kitchenUser, { ...body, sourceBranchId: fixture.requestBranchId })).statusCode).toBe(400);
+    const created = await create(fixture.kitchenUser);
+    expect(created.statusCode, JSON.stringify(created.body)).toBe(201);
+    const id = created.body.id;
+    expect(created.body.stockPostingPolicy).toBe("on_dispatch");
+    expect((await create(fixture.kitchenUser)).body.id).toBe(id);
+    const status = (user: any, next: string) => invoke("put", "/api/warehouse/material-transfers/:id/status", {
+      user, params: { id: String(id) }, body: { status: next },
+    });
+    expect((await status(fixture.destinationUser, "approved")).statusCode).toBe(403);
+    expect((await status(fixture.warehouseUser, "approved")).statusCode).toBe(200);
+    expect(await supplyBalances()).toEqual(before);
+    expect((await status(fixture.warehouseUser, "in_transit")).statusCode).toBe(200);
+    const afterDispatch = await supplyBalances();
+    expect(afterDispatch).toEqual({ warehouse: (Number(before.warehouse) - 0.5).toFixed(6), kitchen: before.kitchen });
+    expect((await status(fixture.warehouseUser, "in_transit")).statusCode).toBe(200);
+    expect((await status(fixture.sourceWarehouseUser, "delivered")).statusCode).toBe(403);
+    const confirm = (user: any, receivedQuantity = 0.3) => invoke("post", "/api/warehouse/material-transfers/:id/confirm-delivery", {
+      user, params: { id: String(id) }, body: { receivedItems: [{ itemId: fixture.transferMaterialId, receivedQuantity }] },
+    });
+    expect((await confirm(fixture.sourceWarehouseUser)).statusCode).toBe(403);
+    expect((await confirm(fixture.kitchenUser)).statusCode).toBe(200);
+    expect(await supplyBalances()).toEqual({
+      warehouse: afterDispatch.warehouse, kitchen: (Number(before.kitchen) + 0.3).toFixed(6),
+    });
+    const posted = await transferRows(id);
+    expect(posted.logs.filter(log => log.movement_type === "transfer_out")).toHaveLength(1);
+    expect(posted.logs.filter(log => log.movement_type === "transfer_in")).toHaveLength(1);
+    expect((await confirm(fixture.kitchenUser)).statusCode).toBe(200);
+    expect((await confirm(fixture.kitchenUser, 0.4)).statusCode).toBe(409);
+    expect(await transferRows(id)).toEqual(posted);
   });
 });

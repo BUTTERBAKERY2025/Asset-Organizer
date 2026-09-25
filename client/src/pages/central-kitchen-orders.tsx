@@ -603,6 +603,7 @@ export default function CentralKitchenOrdersPage() {
       <PageHeader icon={Factory} tone="production" title="طلبات المطبخ" description="رتّب ما يحتاج قراراً الآن، ثم افتح التفاصيل عند الحاجة"
         className="kitchen-mobile-header"
         actions={<div className="flex flex-wrap gap-2">
+          {canView("warehouse") && <Button asChild variant="outline" size="sm" className="min-h-11"><a href="/transfer-requests?kitchenRaw=1">طلب مواد من المستودع الرئيسي</a></Button>}
           <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex"><a href="/central-kitchen-demand-report"><BarChart3 className="ml-2 h-4 w-4" />تقرير الطلب غير الملبّى</a></Button>
           {canConfigureRouting && <Button variant="outline" size="sm" className="hidden min-h-11 sm:inline-flex" onClick={() => setSettingsOpen(true)} data-testid="kitchen-settings-trigger"><Settings className="ml-2 h-4 w-4" />إعدادات المطبخ</Button>}
           <Button variant="outline" size="sm" className="min-h-11" aria-label="تحديث الطلبات" onClick={refresh} data-testid="refresh-kitchen-orders"><RefreshCw className="h-4 w-4 sm:ml-2" /><span className="hidden sm:inline">تحديث</span></Button>

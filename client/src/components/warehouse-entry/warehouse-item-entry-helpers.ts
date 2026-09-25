@@ -66,14 +66,13 @@ export function isWarehouseDecimal(value: string, allowZero: boolean) {
   return Number.isFinite(parsed) && (allowZero ? parsed >= 0 : parsed > 0);
 }
 
-export function isValidWarehouseDraftItem(item: WarehouseTransferDraftItem) {
+export function isValidWarehouseDraftItem(item: WarehouseTransferDraftItem, requireAvailableQuantity = true) {
   return Number.isInteger(item.itemId) && item.itemId > 0 && !!item.itemName.trim()
     && !!item.category.trim() && !!item.unit.trim()
     && isWarehouseDecimal(item.quantity, false)
-    && item.availableQuantity !== null
-    && isWarehouseDecimal(item.availableQuantity, true)
+    && (!requireAvailableQuantity || (item.availableQuantity !== null && isWarehouseDecimal(item.availableQuantity, true)))
     && (item.unit !== "قطعة" || (
       Number.isInteger(Number(item.quantity))
-      && Number.isInteger(Number(item.availableQuantity))
+      && (!requireAvailableQuantity || Number.isInteger(Number(item.availableQuantity)))
     ));
 }
