@@ -26,6 +26,7 @@ import { getButterBakeryLogoDataUri } from "@/lib/company-logo-data";
 import { openPrintWindow, renderToPrintWindow } from "@/lib/print-window";
 import { getKitchenDraftInvalidTarget, isKitchenOrderDraftValid, isValidKitchenQuantity, kitchenCatalogSupplyLabel, normalizeReportedAvailableQuantity, OrderLineEditor, type KitchenOrderDraftLine } from "@/components/central-kitchen/order-line-editor";
 import { LinkedBatches } from "@/components/central-kitchen/linked-batches";
+import { KitchenStageRail } from "@/components/central-kitchen/kitchen-stage-rail";
 import {
   queueOrderNeedsAttention,
   type OrderQueueStage,
@@ -643,14 +644,7 @@ export default function CentralKitchenOrdersPage() {
         <p className="col-span-2 text-[10px] text-muted-foreground sm:col-span-4">المؤشرات تشمل كامل نتائج الفرع والبحث والفلاتر الثانوية، ولا تتقيد بتبويب المرحلة الحالي.</p>
       </section>
 
-      <nav className="kitchen-stage-rail -mx-1 flex overflow-x-auto border-b border-border px-1" aria-label="مراحل الطلبات">
-        {([
-          ["attention", "يتطلب تدخلاً"], ["requested", "طلبات جديدة"], ["approved", "قيد التجهيز"],
-          ["prepared", "جاهز للإرسال"], ["dispatched", "في الطريق"], ["archive", "السجل"], ["all", "الكل"],
-        ] as Array<[OrderStage, string]>).map(([key, label]) => <button key={key} type="button" onClick={() => changeStage(key)} aria-current={stage === key ? "page" : undefined} className={cn("flex shrink-0 items-center gap-2 border-b-2 border-transparent px-3 py-3 text-xs text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm", stage === key && "border-primary font-semibold text-foreground")}>
-          <span>{label}</span><span className={cn("rounded-full bg-muted px-2 py-0.5 text-[10px]", stage === key && "bg-primary/10 text-foreground")}>{stageCounts[key]}</span>
-        </button>)}
-      </nav>
+      <KitchenStageRail stage={stage} counts={stageCounts} onStageChange={changeStage} />
 
       <section className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
       <Card className="min-w-0 overflow-hidden border-border bg-card shadow-sm">

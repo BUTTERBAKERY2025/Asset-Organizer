@@ -9,8 +9,7 @@
   .kitchen-mobile-header [data-testid="page-header-actions"] > div { display: flex; flex-wrap: nowrap; width: 100%; }
   .kitchen-mobile-header [data-testid="create-kitchen-order"] { flex: 1; }
   .kitchen-utility-status, .kitchen-secondary-metrics { display: none; }
-  .kitchen-stage-rail { position: sticky; top: 0; z-index: 20; margin-inline: -0.75rem; padding-inline: 0.75rem; background: hsl(var(--background) / .97); box-shadow: 0 8px 18px hsl(20 18% 25% / .07); }
-  .kitchen-stage-rail button { min-height: 48px; padding-inline: .7rem; }
+  .kitchen-stage-rail { position: sticky; top: 0; z-index: 20; margin-inline: -0.75rem; padding-inline: 0.75rem; background: color-mix(in srgb, var(--color-background) 97%, transparent); box-shadow: 0 8px 18px color-mix(in srgb, var(--color-foreground) 7%, transparent); }
   .kitchen-queue-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; padding: .75rem !important; }
   .kitchen-queue-toolbar > .kitchen-search { grid-column: 1 / -1; }
   .kitchen-queue-toolbar > span { align-self: center; }
@@ -26,6 +25,102 @@
   .demand-explanation { display: none; }
   .demand-row-card { padding: .8rem !important; }
   .demand-decision { margin-inline: -.15rem; border-width: 2px !important; padding: .85rem !important; }
+}
+
+/* Central kitchen stage rail: a compact workflow switcher rather than a
+   generic tab row. It stays dense at desktop scale and becomes a deliberate,
+   touch-scrollable lane on phones. */
+.kitchen-stage-rail {
+  --stage-rail-surface: color-mix(in srgb, var(--color-card) 86%, var(--color-secondary));
+  --stage-rail-line: color-mix(in srgb, var(--color-border) 86%, var(--color-primary));
+  --stage-rail-active: color-mix(in srgb, var(--color-primary) 13%, var(--color-card));
+  --stage-rail-active-line: color-mix(in srgb, var(--color-primary) 42%, var(--color-border));
+  border: 1px solid var(--stage-rail-line);
+  border-radius: .8rem;
+  background: var(--stage-rail-surface);
+  min-width: 0;
+}
+.kitchen-stage-rail__scroller {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.kitchen-stage-rail__scroller::-webkit-scrollbar { display: none; }
+.kitchen-stage-rail__track {
+  display: flex;
+  align-items: stretch;
+  width: max-content;
+  min-width: 100%;
+  padding: .22rem;
+  gap: .15rem;
+}
+.kitchen-stage-rail__item {
+  display: inline-flex;
+  min-height: 2.75rem;
+  flex: 1 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: .38rem;
+  border: 1px solid transparent;
+  border-radius: .58rem;
+  padding: .35rem .56rem;
+  color: var(--color-muted-foreground);
+  font-size: .82rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 140ms ease;
+}
+.kitchen-stage-rail__icon { width: .9rem; height: .9rem; stroke-width: 1.9; }
+.kitchen-stage-rail__count {
+  display: inline-grid;
+  min-width: 1.2rem;
+  height: 1.2rem;
+  place-items: center;
+  border-radius: 999px;
+  padding-inline: .27rem;
+  background: color-mix(in srgb, var(--color-muted) 83%, var(--color-border));
+  color: var(--color-muted-foreground);
+  font-size: .62rem;
+  font-variant-numeric: tabular-nums;
+}
+.kitchen-stage-rail__item[data-active="true"] {
+  border-color: var(--stage-rail-active-line);
+  background: var(--stage-rail-active);
+  color: var(--color-primary);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-foreground) 8%, transparent);
+}
+.kitchen-stage-rail__item[data-active="true"] .kitchen-stage-rail__count {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+.kitchen-stage-rail__item[data-stage="attention"][data-active="true"] {
+  border-color: color-mix(in srgb, var(--color-destructive) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-destructive) 9%, var(--color-card));
+  color: var(--color-destructive);
+}
+.kitchen-stage-rail__item[data-stage="attention"][data-active="true"] .kitchen-stage-rail__count {
+  background: var(--color-destructive);
+  color: var(--color-destructive-foreground);
+}
+.kitchen-stage-rail__item:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; }
+@media (hover: hover) {
+  .kitchen-stage-rail__item:not([data-active="true"]):hover { background: color-mix(in srgb, var(--color-muted) 72%, var(--color-card)); color: var(--color-foreground); }
+  .kitchen-stage-rail__item:hover { transform: translateY(-1px); }
+}
+.kitchen-stage-rail__item:active { transform: scale(.985); }
+@media (min-width: 768px) {
+  .kitchen-stage-rail__track { width: 100%; }
+  .kitchen-stage-rail__item { min-width: 0; padding-inline: .52rem; font-size: .82rem; }
+}
+@media (max-width: 767px) {
+  .kitchen-stage-rail { border-inline: 0; border-radius: 0; }
+  .kitchen-stage-rail__track { padding-block: .32rem; }
+  .kitchen-stage-rail__item { min-height: 2.55rem; padding-inline: .72rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kitchen-stage-rail__item { transition: none; }
+  .kitchen-stage-rail__item:hover, .kitchen-stage-rail__item:active { transform: none; }
 }
 
 /* Safelist: narrowly scoped to the exact KPI tone + tab active-state classes
