@@ -347,7 +347,7 @@ function LinkedBatchRow({
       {isInProgress && (readiness.kind === "ready" || readiness.kind === "legacy") && (
         <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
           <AlertDialogContent dir="rtl" style={{ ...confirmDialogStyle, width: "calc(100vw - 1rem)", maxWidth: "42rem", display: "flex", flexDirection: "column" }} className="box-border min-w-0 gap-0 overflow-hidden p-0">
-            <AlertDialogHeader className="shrink-0 border-b px-4 py-4 text-right sm:px-6">
+            <AlertDialogHeader className="shrink-0 border-b px-4 py-3 text-right sm:px-6">
               <AlertDialogTitle>تأكيد إنهاء دفعة الإنتاج #{batch.id}</AlertDialogTitle>
               <AlertDialogDescription>
                 هذا إجراء لا يمكن التراجع عنه. راجع أثر المخزون ثم أكد الإنهاء صراحةً.
@@ -408,7 +408,7 @@ function LinkedBatchRow({
             )}
             {finishError && <div role="alert" className="rounded-md border border-rose-300 bg-rose-50 p-3 text-sm text-rose-950"><p className="font-semibold">لم يتم إنهاء الدفعة</p><p className="mt-1">{finishError.outcomeUnknown ? "نتيجة الطلب غير معروفة. أغلق المراجعة واستخدم «إعادة التحقق» قبل أي محاولة أخرى." : finishError.message}</p></div>}
             </div>
-            <AlertDialogFooter className="grid shrink-0 grid-cols-2 gap-2 border-t bg-background px-4 py-3 sm:flex sm:px-6">
+            <AlertDialogFooter className="grid shrink-0 grid-cols-2 gap-2 border-t bg-background px-4 py-3 pb-[max(.75rem,env(safe-area-inset-bottom))] sm:flex sm:px-6">
               <AlertDialogCancel className="min-h-11" disabled={finishPending}>إلغاء</AlertDialogCancel>
               <AlertDialogAction
                 className="min-h-11"

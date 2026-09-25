@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 vi.mock("../client/src/lib/queryClient", () => ({ apiRequest: vi.fn(), getQueryFn: vi.fn() }));
 vi.mock("../client/src/components/layout", () => ({ Layout: ({ children }: { children: React.ReactNode }) => children }));
 import { createKitchenSubmitGuard, DispatchEditor, ReceiptEditor, RequestChangeControls } from "../client/src/pages/central-kitchen-orders";
+import { PreparationEditor } from "../client/src/components/central-kitchen/prepare-fulfillment";
 
 const products = [
   { id: 1, productId: 10, productName: "خبز اختبار", unit: "قطعة", requestedQuantity: 4, preparedQuantity: 4, dispatchedQuantity: 4 },
@@ -44,6 +45,18 @@ describe("kitchen workflow mobile quantity evidence", () => {
       const html = renderToStaticMarkup(React.createElement(Editor, { items: products, pending: true, onSubmit: vi.fn() }));
       expect(html).toMatch(/<button[^>]*disabled=""[^>]*>.*?مراجعة (الإرسال|الاستلام)<\/button>/s);
     }
+  });
+  it("offers a real mobile substitute-picker trigger and preserves decimal material keyboards in preparation", () => {
+    const html = renderToStaticMarkup(React.createElement(QueryClientProvider, { client: new QueryClient() }, React.createElement(PreparationEditor, {
+      orderId: 9, inventoryMode: "shadow", items: products,
+      products: [{ id: 10, source: "product" as const, name: "خبز اختبار", unit: "قطعة" }],
+      productsQuery: { isLoading: false, isError: false, refetch: vi.fn() },
+      actionNotes: "", setActionNotes: vi.fn(), pending: false, onSubmit: vi.fn(),
+    })));
+    expect(html).toContain("اختيار البديل");
+    expect(html).toContain("md:hidden");
+    expect(html).toContain('inputMode="decimal"');
+    expect(html).toContain('inputMode="numeric"');
   });
   it("only exposes branch request-change actions advertised by the server", () => {
     const base = { id: 9, orderNumber: "TEST-9", status: "requested", neededDate: "2026-11-20", items: products, events: [], allocations: [], linkedBatches: [], shadowInventoryEntries: [] };

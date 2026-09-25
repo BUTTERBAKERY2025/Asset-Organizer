@@ -1,12 +1,15 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
-import { AlertTriangle, Loader2, PackagePlus, RefreshCw } from "lucide-react";
+import { AlertTriangle, Loader2, PackagePlus, RefreshCw, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { isValidKitchenQuantity } from "./order-line-editor";
+import { normalizeKitchenCatalogSearch } from "./order-line-editor";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useVisualViewportDialog } from "./use-visual-viewport-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { CentralKitchenCatalogItem } from "@shared/central-kitchen-catalog";
 import {
@@ -88,6 +91,34 @@ const itemSource = (item: Pick<PreparationEditorItem, "productId" | "warehouseIt
 function numberValue(value: unknown): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function SubstitutePicker({ value, onValueChange, products, disabled }: {
+  value?: string;
+  onValueChange: (value: string) => void;
+  products: CentralKitchenCatalogItem[];
+  disabled: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const style = useVisualViewportDialog({ open, maxHeight: 720, viewportFraction: 1 });
+  const options = [{ value: "__manual", label: "بديل يدوي", sublabel: undefined as string | undefined, badge: "يدوي" }, ...products.map(product => ({
+    value: catalogKey(product), label: product.name, sublabel: product.sku, badge: sourceLabel(product.source),
+  }))];
+  const selected = options.find(option => option.value === value);
+  const results = options.filter(option => normalizeKitchenCatalogSearch(`${option.label} ${option.sublabel || ""}`).includes(normalizeKitchenCatalogSearch(search)));
+  return <>
+    <div className="md:hidden">
+      <Button type="button" variant="outline" className="min-h-11 w-full justify-between text-right" disabled={disabled} onClick={() => setOpen(true)}>{selected?.label || "اختر البديل"}<Search className="mr-2 h-4 w-4 shrink-0" /></Button>
+      <Dialog open={open} onOpenChange={setOpen}><DialogContent dir="rtl" style={{ ...style, display: "flex", flexDirection: "column" }} className="box-border h-[100dvh] w-screen max-w-none gap-0 overflow-hidden rounded-none border-0 p-0 [&>button.absolute]:left-2 [&>button.absolute]:right-auto [&>button.absolute]:top-2 [&>button.absolute]:flex [&>button.absolute]:h-11 [&>button.absolute]:w-11 [&>button.absolute]:items-center [&>button.absolute]:justify-center">
+        <DialogHeader className="shrink-0 border-b px-4 py-3 pl-16 text-right"><DialogTitle>اختيار البديل</DialogTitle><DialogDescription>ابحث عن صنف من كتالوج المطبخ أو اختر بديلاً يدوياً صراحةً.</DialogDescription></DialogHeader>
+        <div className="shrink-0 border-b p-3"><label htmlFor="kitchen-substitute-search" className="sr-only">بحث عن بديل</label><Input id="kitchen-substitute-search" className="min-h-12 text-base" value={search} onChange={event => setSearch(event.target.value)} placeholder="الاسم أو الرمز…" /></div>
+        <div className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain p-3 pb-6" aria-label="نتائج البحث عن بديل">{results.map(option => <button type="button" key={option.value} onClick={() => { onValueChange(option.value); setOpen(false); setSearch(""); }} className="flex min-h-12 w-full items-center justify-between gap-2 rounded-lg border p-3 text-right focus-visible:ring-2 focus-visible:ring-ring"><span className="min-w-0 break-words">{option.label}<span className="block text-xs text-muted-foreground">{option.sublabel}</span></span><span className="shrink-0 text-xs">{option.badge}</span></button>)}{!results.length && <p className="py-6 text-center text-sm text-muted-foreground">لا توجد نتائج مطابقة. جرّب اسماً آخر أو استخدم البديل اليدوي.</p>}</div>
+        <div className="shrink-0 border-t bg-background p-3 pb-[max(.75rem,env(safe-area-inset-bottom))]"><Button variant="outline" className="min-h-11 w-full" onClick={() => setOpen(false)}>العودة للتجهيز</Button></div>
+      </DialogContent></Dialog>
+    </div>
+    <div className="hidden md:block"><SearchableSelect triggerClassName="h-11" disabled={disabled} value={value} onValueChange={onValueChange} options={options} placeholder="اختر البديل" searchPlaceholder="ابحث عن بديل..." /></div>
+  </>;
 }
 
 function readinessState(query: {
@@ -281,7 +312,7 @@ export function PreparationEditor({
          </> : <div><Label className="text-xs" htmlFor={`prepared-${draft.itemId}`}>الكمية الأصلية المجهزة</Label><Input id={`prepared-${draft.itemId}`} className="mt-1 min-h-11" type="number" inputMode={item.productId != null ? "numeric" : "decimal"} min="0" max={requested} step={item.productId != null ? "1" : "0.000001"} value={draft.preparedQuantity} onChange={event => update(index, { preparedQuantity: event.target.value })} /></div>}
         <div className="mt-3 grid gap-3 md:grid-cols-3">
            <div><Label className="text-xs" htmlFor={`substitute-${draft.itemId}`}>كمية البديل</Label><Input id={`substitute-${draft.itemId}`} className="mt-1 min-h-11" type="number" inputMode={item.productId != null ? "numeric" : "decimal"} min="0" max={requested} step={item.productId != null ? "1" : "0.000001"} value={draft.substituteQuantity} onChange={event => update(index, { substituteQuantity: event.target.value })} /></div>
-          <div><Label className="text-xs">اختيار البديل</Label><SearchableSelect className="mt-1" triggerClassName="h-10" disabled={Number(draft.substituteQuantity) <= 0} value={draft.substituteWarehouseItemId !== undefined ? `warehouse:${draft.substituteWarehouseItemId}` : draft.substituteProductId !== undefined ? `product:${draft.substituteProductId}` : draft.substituteManualMode ? "__manual" : undefined} onValueChange={value => { if (value === "__manual") update(index, { substituteManualMode: true, substituteProductId: undefined, substituteWarehouseItemId: undefined, substituteProductName: "" }); else { const selected = products.find(entry => catalogKey(entry) === value); if (selected) { const source = selected.source; update(index, { substituteManualMode: false, substituteProductId: source === "product" ? selected.id : undefined, substituteWarehouseItemId: source === "warehouse" ? selected.id : undefined, substituteProductName: selected.name, substituteUnit: item.unit }); } } }} options={[{ value: "__manual", label: "بديل يدوي", badge: "يدوي" }, ...products.map(product => ({ value: catalogKey(product), label: product.name, sublabel: product.sku, badge: sourceLabel(product.source) }))]} placeholder="اختر البديل" searchPlaceholder="ابحث عن بديل..." /><Input className="mt-2" disabled={Number(draft.substituteQuantity) <= 0 || !draft.substituteManualMode} value={draft.substituteProductName} onChange={event => update(index, { substituteProductName: event.target.value })} placeholder="اسم البديل اليدوي" /></div>
+           <div><Label className="text-xs">اختيار البديل</Label><div className="mt-1"><SubstitutePicker disabled={Number(draft.substituteQuantity) <= 0} value={draft.substituteWarehouseItemId !== undefined ? `warehouse:${draft.substituteWarehouseItemId}` : draft.substituteProductId !== undefined ? `product:${draft.substituteProductId}` : draft.substituteManualMode ? "__manual" : undefined} onValueChange={value => { if (value === "__manual") update(index, { substituteManualMode: true, substituteProductId: undefined, substituteWarehouseItemId: undefined, substituteProductName: "" }); else { const selected = products.find(entry => catalogKey(entry) === value); if (selected) { const source = selected.source; update(index, { substituteManualMode: false, substituteProductId: source === "product" ? selected.id : undefined, substituteWarehouseItemId: source === "warehouse" ? selected.id : undefined, substituteProductName: selected.name, substituteUnit: item.unit }); } } }} products={products} /></div><Input className="mt-2 min-h-11" disabled={Number(draft.substituteQuantity) <= 0 || !draft.substituteManualMode} value={draft.substituteProductName} onChange={event => update(index, { substituteProductName: event.target.value })} placeholder="اسم البديل اليدوي" /></div>
           <div><Label className="text-xs">وحدة احتساب البديل</Label><Input className="mt-1" disabled value={draft.substituteUnit} /><p className="mt-1 text-[11px] text-muted-foreground">مطابقة لوحدة الطلب</p></div>
         </div>
         {shortage > 0 && <div className="mt-3 grid gap-3 md:grid-cols-2"><div><Label className="text-xs">سبب النقص ({shortage} {item?.unit})</Label><Select value={draft.shortageReason} onValueChange={value => update(index, { shortageReason: value })}><SelectTrigger className="mt-1"><SelectValue placeholder="اختر سبب النقص" /></SelectTrigger><SelectContent>{Object.entries(SHORTAGE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div><div><Label className="text-xs">ملاحظة التجهيز</Label><Input className="mt-1" value={draft.preparationNotes} onChange={event => update(index, { preparationNotes: event.target.value })} placeholder="تفاصيل النقص أو البديل" /></div></div>}

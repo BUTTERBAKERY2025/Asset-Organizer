@@ -705,7 +705,7 @@ export default function CentralKitchenOrdersPage() {
     {canConfigureRouting && <KitchenSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} branches={routingBranches} />}
     <SheetPreviewDialog sheet={sheetPreview} open={sheetPreviewOpen} onOpenChange={setSheetPreviewOpen} canPrint={hasPermission("central_kitchen_orders", "print")} canExport={canExport("central_kitchen_orders")} />
 
-      <Dialog open={detailId !== null && detailDialogOpen} onOpenChange={open => { setDetailDialogOpen(open); if (!open && typeof window !== "undefined" && !window.matchMedia("(min-width: 1024px)").matches) closeDetail(); }}><DialogContent dir="rtl" style={{ ...detailDialogStyle, display: "flex", flexDirection: "column" }} className="kitchen-detail-dialog h-[94dvh] max-h-[900px] max-w-5xl gap-0 overflow-hidden p-0 sm:rounded-xl [&>button]:left-3 [&>button]:right-auto [&>button]:top-3 [&>button]:z-20 [&>button]:flex [&>button]:h-11 [&>button]:w-11 [&>button]:items-center [&>button]:justify-center">
+      <Dialog open={detailId !== null && detailDialogOpen} onOpenChange={open => { if (workflowMutation.isPending) return; setDetailDialogOpen(open); if (!open && typeof window !== "undefined" && !window.matchMedia("(min-width: 1024px)").matches) closeDetail(); }}><DialogContent dir="rtl" style={{ ...detailDialogStyle, display: "flex", flexDirection: "column" }} className="kitchen-detail-dialog h-[94dvh] max-h-[900px] max-w-5xl gap-0 overflow-hidden p-0 sm:rounded-xl [&>button]:left-3 [&>button]:right-auto [&>button]:top-3 [&>button]:z-20 [&>button]:flex [&>button]:h-11 [&>button]:w-11 [&>button]:items-center [&>button]:justify-center">
         {selectedDetail && <DialogHeader className="shrink-0 border-b bg-background py-3 pl-16 pr-4 text-right sm:pr-6"><div className="flex min-w-0 items-center gap-2"><div className="min-w-0 flex-1"><DialogTitle className="truncate font-mono text-lg">{selectedDetail.orderNumber}</DialogTitle><DialogDescription className="truncate">طلب الفرع {selectedDetail.requestBranchName || selectedDetail.requestBranchId} من {selectedDetail.centralKitchenName || selectedDetail.centralKitchenId}</DialogDescription></div><StatusBadge status={selectedDetail.status} /></div></DialogHeader>}
         <div className="kitchen-detail-body min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 pb-20 sm:px-6">{(detailQuery.isLoading || (detailQuery.isFetching && detailQuery.isPlaceholderData)) ? <div className="space-y-3 py-8" aria-label="جارٍ تحميل تفاصيل الطلب">{Array.from({ length: 5 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</div> : detailQuery.isError || !selectedDetail ? <DetailQueryError error={detailQuery.error} onRetry={() => detailQuery.refetch()} /> : <div className="space-y-4 pb-20"><OrderDetail showHeader={false} order={selectedDetail} products={products} productsQuery={productsQuery} accessibleBranchIds={branches.map(branch => branch.id)} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={workflowMutation.isPending} failed={workflowMutation.isError} canApprove={canApprove("central_kitchen_orders")} canEdit={canEdit("central_kitchen_orders")} canPrint={hasPermission("central_kitchen_orders", "print")} canExport={canExport("central_kitchen_orders")} canConfigureRouting={canConfigureRouting} onConfigureRouting={() => setSettingsOpen(true)} onAction={(action, details) => { const attempt = `${selectedDetail.id}:${action}`; if (workflowMutation.isPending || workflowSubmissionRef.current === attempt) return; workflowSubmissionRef.current = attempt; workflowMutation.mutate({ id: selectedDetail.id, action, details }); }} /></div>}</div>
       </DialogContent></Dialog>
@@ -789,6 +789,7 @@ function KitchenSettingsDialog({ open, onOpenChange, branches }: { open: boolean
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const dialogStyle = useVisualViewportDialog({ open, maxHeight: 800, viewportFraction: 1 });
+  const [view, setView] = useState<"schedule" | "receiver">("schedule");
   const [policyTimes, setPolicyTimes] = useState<PolicyTimes>(EMPTY_POLICY_TIMES);
   const [policyError, setPolicyError] = useState("");
   const [branchId, setBranchId] = useState("");
@@ -804,6 +805,7 @@ function KitchenSettingsDialog({ open, onOpenChange, branches }: { open: boolean
   });
   useEffect(() => {
     if (!open) {
+      setView("schedule");
       setBranchId("");
       setPolicyError("");
       return;
@@ -864,14 +866,19 @@ function KitchenSettingsDialog({ open, onOpenChange, branches }: { open: boolean
     setBranchId(value);
     setReceiverUserId(null);
   };
-  return <Dialog open={open} onOpenChange={onOpenChange}>
+  const saving = saveMutation.isPending || savePolicyMutation.isPending;
+  return <Dialog open={open} onOpenChange={value => { if (!saving) onOpenChange(value); }}>
     <DialogContent dir="rtl" style={{ ...dialogStyle, display: "flex", flexDirection: "column" }} className="box-border h-[100dvh] w-screen max-w-none min-w-0 gap-0 overflow-hidden rounded-none border-0 p-0 sm:h-[min(800px,94dvh)] sm:w-[calc(100%-2rem)] sm:max-w-2xl sm:rounded-xl sm:border [&>button.absolute]:left-2 [&>button.absolute]:right-auto [&>button.absolute]:top-2 [&>button.absolute]:flex [&>button.absolute]:h-11 [&>button.absolute]:w-11 [&>button.absolute]:items-center [&>button.absolute]:justify-center">
-      <DialogHeader className="shrink-0 border-b px-4 py-4 pl-11 text-right sm:px-6 sm:pl-12">
+      <DialogHeader className="shrink-0 border-b px-4 py-3 pl-16 text-right sm:px-6 sm:pl-16">
         <DialogTitle>إعدادات المطبخ</DialogTitle>
-        <DialogDescription>المواعيد اليومية واستثناءات استلام الفروع. مسؤول المطبخ هو مدير التطوير والإنتاج تلقائياً.</DialogDescription>
+        <DialogDescription>مواعيد الطلب واستثناءات الاستلام. مسؤول المطبخ: مدير التطوير والإنتاج.</DialogDescription>
       </DialogHeader>
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
-        <section aria-label="مواعيد الطلب">
+      <nav className="grid shrink-0 grid-cols-2 gap-2 border-b px-4 py-2" aria-label="أقسام إعدادات المطبخ">
+        <Button variant={view === "schedule" ? "default" : "outline"} className="min-h-11" onClick={() => setView("schedule")}>المواعيد</Button>
+        <Button variant={view === "receiver" ? "default" : "outline"} className="min-h-11" onClick={() => setView("receiver")}>استلام الفرع</Button>
+      </nav>
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-4 py-4 pb-8 sm:px-6">
+        {view === "schedule" && <section aria-label="مواعيد الطلب">
           <h3 className="mb-3 font-semibold">مواعيد الطلب اليومية</h3>
           {policyQuery.isLoading ? <p role="status" className="flex items-center gap-2 rounded border p-3 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />جارٍ تحميل المواعيد…</p> :
           policyQuery.isError ? <div role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800"><p>تعذر تحميل مواعيد المطبخ. لم يتم افتراض قيم بديلة.</p><Button className="mt-2 min-h-11" size="sm" variant="outline" onClick={() => void policyQuery.refetch()}>إعادة المحاولة</Button></div> :
@@ -885,9 +892,9 @@ function KitchenSettingsDialog({ open, onOpenChange, branches }: { open: boolean
             <p className="text-xs text-muted-foreground">آخر موعد للطلب والمراجعة كلاهما في اليوم السابق ليوم الحاجة، ويجب ألا يتأخر موعد الطلب عن المراجعة.</p>
             {policyError && <p role="alert" data-testid="policy-save-error" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">{policyError}</p>}
           </div>}
-        <Button className="mt-3 min-h-11" data-testid="policy-save" disabled={policyQuery.isLoading || policyQuery.isError || savePolicyMutation.isPending} onClick={() => savePolicyMutation.mutate()}>{savePolicyMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}حفظ المواعيد</Button>
         </section>
-        <section aria-label="استثناء استلام الفرع" className="space-y-3 border-t pt-5">
+        }
+        {view === "receiver" && <section aria-label="استثناء استلام الفرع" className="space-y-3">
         <h3 className="font-semibold">استثناء استلام الفرع</h3>
         <p className="text-sm text-muted-foreground">مدير الفرع المعين هو مسؤول الاستلام تلقائياً. استخدم التعيين اليدوي فقط عند تعذر ذلك أو عند وجود تعارض، ولا يمنح هذا التعيين صلاحية جديدة.</p>
         <FormSelect testId="routing-branch-select" label="الفرع" value={branchId} onChange={updateBranch} branches={branches} placeholder="اختر فرعاً أو مطبخاً" />
@@ -901,11 +908,14 @@ function KitchenSettingsDialog({ open, onOpenChange, branches }: { open: boolean
            {!routingQuery.data?.receiverName && !routingQuery.data?.receiverAssignmentConflict && <p role="status" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">لا يوجد مدير فرع مؤهل للاستلام حالياً؛ راجع تعيين المدير أو اختر مستلماً استثنائياً مؤهلاً.</p>}
          </div>}
         <p className="text-xs text-muted-foreground">تظهر فقط الحسابات المؤهلة التي أعادها الخادم. اختيار شخص هنا لا يمنحه صلاحية عرض أو اعتماد أو استلام الطلبات.</p>
-        <Button className="min-h-11" data-testid="routing-save" disabled={!branchId || loading || failed || saveMutation.isPending} onClick={() => saveMutation.mutate()}>{saveMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}حفظ الاستثناء</Button>
         </section>
+         }
       </div>
-      <div className="shrink-0 border-t bg-background px-4 py-3 pb-[max(.75rem,env(safe-area-inset-bottom))] sm:px-6">
-        <Button className="min-h-11" variant="outline" onClick={() => onOpenChange(false)}>إغلاق</Button>
+      <div className="grid shrink-0 grid-cols-2 gap-2 border-t bg-background px-4 py-3 pb-[max(.75rem,env(safe-area-inset-bottom))] sm:px-6">
+        <Button className="min-h-11" variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>إغلاق</Button>
+        {view === "schedule"
+          ? <Button className="min-h-11" data-testid="policy-save" disabled={policyQuery.isLoading || policyQuery.isError || saving} onClick={() => savePolicyMutation.mutate()}>{savePolicyMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}حفظ المواعيد</Button>
+          : <Button className="min-h-11" data-testid="routing-save" disabled={!branchId || loading || failed || saving} onClick={() => saveMutation.mutate()}>{saveMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}حفظ الاستثناء</Button>}
       </div>
     </DialogContent>
   </Dialog>;
@@ -941,8 +951,8 @@ function DetailRoutingSection({ order, canConfigure, onConfigure }: { order: Kit
   </section>;
 }
 function OrderDetail({ showHeader = true, order, products, productsQuery, accessibleBranchIds, actionNotes, setActionNotes, pending, failed, canApprove, canEdit, canPrint, canExport, canConfigureRouting, onConfigureRouting, onAction }: { showHeader?: boolean; order: KitchenOrder; products: ProductOption[]; productsQuery: CatalogQueryLike; accessibleBranchIds: string[]; actionNotes: string; setActionNotes: (value: string) => void; pending: boolean; failed: boolean; canApprove: boolean; canEdit: boolean; canPrint: boolean; canExport: boolean; canConfigureRouting: boolean; onConfigureRouting: () => void; onAction: (action: "approve" | "prepare" | "dispatch" | "receive" | "resolve-discrepancy", details?: Record<string, unknown>) => void }) {
-  const [section, setSection] = useState<"overview" | "items" | "decisions" | "history">(() => ["received", "cancelled"].includes(normalized(order.status)) ? "decisions" : "overview");
-  useEffect(() => { setSection(["received", "cancelled"].includes(normalized(order.status)) ? "decisions" : "overview"); }, [order.id, order.status]);
+  const [section, setSection] = useState<"overview" | "items" | "decisions" | "changes" | "history">("decisions");
+  useEffect(() => { setSection("decisions"); }, [order.id, order.status]);
   const status = normalized(order.status);
   const discrepancyQuantities = (order.items || []).reduce((totals, item) => ({
     damaged: totals.damaged + Math.max(0, Number(item.damagedQuantity || 0)),
@@ -960,7 +970,7 @@ function OrderDetail({ showHeader = true, order, products, productsQuery, access
   const actionConfig = action ? { approve: { label: "اعتماد الطلب", icon: ShieldCheck }, prepare: { label: "تأكيد التجهيز", icon: PackagePlus }, dispatch: { label: "تأكيد الشحن", icon: Truck }, receive: { label: "تأكيد الاستلام", icon: Check } }[action] : null;
    return <>{showHeader ? <DialogHeader><div className="flex items-start justify-between gap-3 pl-8"><div><DialogTitle className="font-mono text-xl">{order.orderNumber}</DialogTitle><DialogDescription className="mt-1">طلب الفرع {order.requestBranchName || order.requestBranchId} من {order.centralKitchenName || order.centralKitchenId}</DialogDescription></div><div className="flex flex-wrap items-center gap-2"><StatusBadge status={order.status} /><OrderActionsMenu order={order} canPrint={canPrint && ["prepared", "dispatched", "received"].includes(status)} canExport={canExport} onPrint={() => printPreparationNote(order)} /></div></div></DialogHeader> : <div className="flex justify-end"><OrderActionsMenu order={order} canPrint={canPrint && ["prepared", "dispatched", "received"].includes(status)} canExport={canExport} onPrint={() => printPreparationNote(order)} /></div>}
     <nav className="sticky top-0 z-10 -mx-4 flex gap-1 overflow-x-auto border-y bg-background px-4 py-2 sm:static sm:mx-0 sm:px-0" aria-label="أقسام تفاصيل الطلب">
-      {([["overview", "نظرة عامة"], ["items", `البنود (${order.items?.length || 0})`], ["decisions", actionConfig?.label || "القرارات"], ["history", "السجل"]] as const).map(([key, label]) => <Button key={key} size="sm" className="min-h-11 shrink-0" variant={section === key ? "default" : "outline"} onClick={() => setSection(key)}>{label}</Button>)}
+      {([["decisions", actionConfig?.label || "القرارات"], ["overview", "نظرة عامة"], ["items", `البنود (${order.items?.length || 0})`], ...((order.allowedActions?.edit || order.allowedActions?.cancel) ? [["changes", "تعديل / إلغاء"]] as const : []), ["history", "السجل"]] as const).map(([key, label]) => <Button key={key} size="sm" className="min-h-11 shrink-0" variant={section === key ? "default" : "outline"} onClick={() => setSection(key)}>{label}</Button>)}
     </nav>
     <div hidden={section !== "overview"} className="space-y-4">
     <div className="grid gap-3 border-y py-4 text-sm md:grid-cols-3"><div><span className="block text-muted-foreground">تاريخ الحاجة</span><span className="mt-1 block font-medium">{readableDate(order.neededDate)}</span></div><div><span className="block text-muted-foreground">وقت الحاجة</span><span className="mt-1 block font-medium">{readableTime(order.neededTime)}</span></div><div><span className="block text-muted-foreground">تاريخ الإنشاء</span><span className="mt-1 block font-medium">{readableDate(order.createdAt)}</span></div></div>
@@ -969,7 +979,6 @@ function OrderDetail({ showHeader = true, order, products, productsQuery, access
      <OrderScheduleNotice schedule={order.orderingSchedule} />
      <LifecycleProgress status={status} discrepancyOpen={isOpenDiscrepancy(order)} />
      <DetailRoutingSection order={order} canConfigure={canConfigureRouting} onConfigure={onConfigureRouting} />
-     {(order.allowedActions?.edit === true || order.allowedActions?.cancel === true) && <RequestChangeControls key={`${order.id}:${Math.max(0, ...(order.events || []).map(event => Number(event.id)))}`} order={order} />}
       {(order.events || []).filter(event => event.eventType === "edited").map(event => <details key={event.id} className="rounded border p-3 text-sm"><summary>تعديل الطلب · {readableDate(event.createdAt)} · {event.notes}</summary><p>تاريخ الاحتياج: {event.changeSnapshot?.before?.order?.neededDate || "—"} ← {event.changeSnapshot?.requested?.edit?.neededDate}</p>{event.changeSnapshot?.before?.items?.map(item => { const updated = event.changeSnapshot?.requested?.edit?.items.find(value => value.itemId === Number(item.id)); return <p key={item.id}>{item.productName}: توريد {item.requestedQuantity} ← {updated?.requestedQuantity} {item.unit} · المتوفر في الفرع {item.reportedAvailableQuantity == null ? "غير مسجل" : item.reportedAvailableQuantity} ← {updated?.reportedAvailableQuantity ?? "غير مسجل"} {item.unit}</p>; })}</details>)}
      <NextStepGuidance step={nextStep} inventoryMode={order.inventoryMode} />
      <div className="flex justify-end"><a href="/production-reports?tab=operations" className="text-xs font-medium text-primary underline-offset-4 hover:underline">عرض تقرير العمليات المترابط</a></div>
@@ -983,6 +992,9 @@ function OrderDetail({ showHeader = true, order, products, productsQuery, access
     </div>
     <div hidden={section !== "history"} className="space-y-4">
     <section><h3 className="mb-3 font-semibold">مسار الطلب</h3><div className="space-y-3 border-r-2 border-muted pr-4">{order.events?.length ? order.events.map(event => <div className="relative" key={event.id}><span className="absolute -right-[23px] top-1 h-3 w-3 rounded-full border-2 border-background bg-primary" /><div className="flex flex-wrap items-center gap-2"><StatusBadge status={event.toStatus} /><span className="text-xs text-muted-foreground">{readableDate(event.createdAt)} · {formatKitchenSaudiDateTime(event.createdAt, { hour: "2-digit", minute: "2-digit" })}</span></div>{event.notes && <p className="mt-1 text-sm text-muted-foreground">{event.notes}</p>}</div>) : <p className="text-sm text-muted-foreground">لم تُسجل تحديثات إضافية بعد.</p>}</div></section>
+    </div>
+    <div hidden={section !== "changes"} className="space-y-4">
+      {(order.allowedActions?.edit === true || order.allowedActions?.cancel === true) && <RequestChangeControls key={`${order.id}:${Math.max(0, ...(order.events || []).map(event => Number(event.id)))}`} order={order} />}
     </div>
     <div hidden={section !== "decisions"} className="space-y-4">
       {["received", "cancelled"].includes(status) && <DemandCommitments orderId={order.id} kitchenId={order.centralKitchenId} items={order.items || []} canConsent={canEdit} />}
