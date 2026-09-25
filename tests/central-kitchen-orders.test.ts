@@ -318,6 +318,10 @@ describe("central kitchen workflow rules", () => {
       prepared.items,
     )).toBeNull();
     expect(validateCentralKitchenPreparation(
+      [{ id: 1, requestedQuantity: 2, unit: " tray \t" }],
+      prepared.items,
+    )).toBeNull();
+    expect(validateCentralKitchenPreparation(
       [{ id: 1, requestedQuantity: 2, unit: "piece" }],
       prepared.items,
     )).toContain("نفس وحدة");

@@ -457,7 +457,7 @@ export function validateCentralKitchenPreparation(
     if (totalReady > requested.requestedQuantity + 0.000001) {
       return "الكمية المجهزة والبديلة لا يمكن أن تتجاوز الكمية المطلوبة";
     }
-    if (prepared.substituteQuantity > 0 && prepared.substituteUnit !== requested.unit) {
+    if (prepared.substituteQuantity > 0 && prepared.substituteUnit?.trim() !== requested.unit.trim()) {
       return "كمية البديل يجب تسجيلها بنفس وحدة قياس الطلب";
     }
     if (prepared.substituteQuantity === 0 && (

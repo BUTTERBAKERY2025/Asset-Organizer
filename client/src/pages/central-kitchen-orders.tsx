@@ -1003,7 +1003,15 @@ function DetailRoutingSection({ order, canConfigure, onConfigure }: { order: Kit
 }
 function OrderDetail({ showHeader = true, order, products, productsQuery, accessibleBranchIds, actionNotes, setActionNotes, pending, failed, canApprove, canEdit, canPrint, canExport, canConfigureRouting, onConfigureRouting, onAction }: { showHeader?: boolean; order: KitchenOrder; products: ProductOption[]; productsQuery: CatalogQueryLike; accessibleBranchIds: string[]; actionNotes: string; setActionNotes: (value: string) => void; pending: boolean; failed: boolean; canApprove: boolean; canEdit: boolean; canPrint: boolean; canExport: boolean; canConfigureRouting: boolean; onConfigureRouting: () => void; onAction: (action: "approve" | "prepare" | "dispatch" | "receive" | "resolve-discrepancy", details?: Record<string, unknown>) => void }) {
   const [section, setSection] = useState<"overview" | "items" | "decisions" | "changes" | "history">("decisions");
-  useEffect(() => { setSection("decisions"); }, [order.id, order.status]);
+  const changeTab = useRef({ id: order.id, shown: false });
+  if (changeTab.current.id !== order.id) changeTab.current = { id: order.id, shown: false };
+  if (order.allowedActions?.edit || order.allowedActions?.cancel) changeTab.current.shown = true;
+  const previousOrderId = useRef(order.id);
+  useEffect(() => {
+    const changedOrder = previousOrderId.current !== order.id;
+    previousOrderId.current = order.id;
+    setSection(current => changedOrder || current !== "changes" ? "decisions" : current);
+  }, [order.id, order.status]);
   const status = normalized(order.status);
   const discrepancyQuantities = (order.items || []).reduce((totals, item) => ({
     damaged: totals.damaged + Math.max(0, Number(item.damagedQuantity || 0)),
@@ -1021,7 +1029,7 @@ function OrderDetail({ showHeader = true, order, products, productsQuery, access
   const actionConfig = action ? { approve: { label: "اعتماد الطلب", icon: ShieldCheck }, prepare: { label: "تأكيد التجهيز", icon: PackagePlus }, dispatch: { label: "تأكيد الشحن", icon: Truck }, receive: { label: "تأكيد الاستلام", icon: Check } }[action] : null;
    return <>{showHeader ? <DialogHeader><div className="flex items-start justify-between gap-3 pl-8"><div><DialogTitle className="font-mono text-xl">{order.orderNumber}</DialogTitle><DialogDescription className="mt-1">طلب الفرع {order.requestBranchName || order.requestBranchId} من {order.centralKitchenName || order.centralKitchenId}</DialogDescription></div><div className="flex flex-wrap items-center gap-2"><StatusBadge status={order.status} /><OrderActionsMenu order={order} canPrint={canPrint && ["prepared", "dispatched", "received"].includes(status)} canExport={canExport} onPrint={() => printPreparationNote(order)} /></div></div></DialogHeader> : <div className="flex justify-end"><OrderActionsMenu order={order} canPrint={canPrint && ["prepared", "dispatched", "received"].includes(status)} canExport={canExport} onPrint={() => printPreparationNote(order)} /></div>}
     <nav className="sticky top-0 z-10 flex min-w-0 flex-wrap gap-1 border-y bg-background py-2 sm:static" aria-label="أقسام تفاصيل الطلب">
-      {([["decisions", actionConfig?.label || "القرارات"], ["overview", "نظرة عامة"], ["items", `البنود (${order.items?.length || 0})`], ...((order.allowedActions?.edit || order.allowedActions?.cancel) ? [["changes", "تعديل / إلغاء"]] as const : []), ["history", "السجل"]] as const).map(([key, label]) => <Button key={key} size="sm" className="min-h-11 shrink-0" variant={section === key ? "default" : "outline"} onClick={() => setSection(key)}>{label}</Button>)}
+      {([["decisions", actionConfig?.label || "القرارات"], ["overview", "نظرة عامة"], ["items", `البنود (${order.items?.length || 0})`], ...(changeTab.current.shown ? [["changes", "تعديل / إلغاء"]] as const : []), ["history", "السجل"]] as const).map(([key, label]) => <Button key={key} size="sm" className="min-h-11 shrink-0" variant={section === key ? "default" : "outline"} onClick={() => setSection(key)}>{label}</Button>)}
     </nav>
     <div hidden={section !== "overview"} className="space-y-4">
     <div className="grid gap-3 border-y py-4 text-sm md:grid-cols-3"><div><span className="block text-muted-foreground">تاريخ الحاجة</span><span className="mt-1 block font-medium">{readableDate(order.neededDate)}</span></div><div><span className="block text-muted-foreground">وقت الحاجة</span><span className="mt-1 block font-medium">{readableTime(order.neededTime)}</span></div><div><span className="block text-muted-foreground">تاريخ الإنشاء</span><span className="mt-1 block font-medium">{readableDate(order.createdAt)}</span></div></div>
@@ -1045,7 +1053,7 @@ function OrderDetail({ showHeader = true, order, products, productsQuery, access
     <section><h3 className="mb-3 font-semibold">مسار الطلب</h3><div className="space-y-3 border-r-2 border-muted pr-4">{order.events?.length ? order.events.map(event => <div className="relative" key={event.id}><span className="absolute -right-[23px] top-1 h-3 w-3 rounded-full border-2 border-background bg-primary" /><div className="flex flex-wrap items-center gap-2"><StatusBadge status={event.toStatus} /><span className="text-xs text-muted-foreground">{readableDate(event.createdAt)} · {formatKitchenSaudiDateTime(event.createdAt, { hour: "2-digit", minute: "2-digit" })}</span></div>{event.notes && <p className="mt-1 text-sm text-muted-foreground">{event.notes}</p>}</div>) : <p className="text-sm text-muted-foreground">لم تُسجل تحديثات إضافية بعد.</p>}</div></section>
     </div>
     <div hidden={section !== "changes"} className="space-y-4">
-      {(order.allowedActions?.edit === true || order.allowedActions?.cancel === true) && <RequestChangeControls key={`${order.id}:${Math.max(0, ...(order.events || []).map(event => Number(event.id)))}`} order={order} />}
+      {changeTab.current.shown && <RequestChangeControls key={order.id} order={order} />}
     </div>
     <div hidden={section !== "decisions"} className="space-y-4">
       {["received", "cancelled"].includes(status) && <DemandCommitments orderId={order.id} kitchenId={order.centralKitchenId} items={order.items || []} canConsent={canEdit} />}
@@ -1072,8 +1080,36 @@ function ApproveEditor({ items, pending, actionNotes, setActionNotes, onSubmit }
   </section>;
 }
 
+export function requestChangeVersion(order: Pick<KitchenOrder, "id" | "events">) {
+  return { orderId: String(order.id), latestEventId: Math.max(0, ...(order.events || []).map(event => Number(event.id))) };
+}
+
+export function requestChangeVersionMatches(draft: ReturnType<typeof requestChangeVersion>, current: Pick<KitchenOrder, "id" | "events">) {
+  const latest = requestChangeVersion(current);
+  return draft.orderId === latest.orderId && draft.latestEventId === latest.latestEventId;
+}
+
+export function requestChangePayload(
+  draft: Pick<KitchenOrder, "events" | "items">,
+  values: { reason: string; date: string; time: string; notes: string; quantities: string[]; reportedAvailable: string[] },
+  edit: boolean,
+) {
+  return {
+    expectedEventId: Math.max(0, ...(draft.events || []).map(event => Number(event.id))),
+    reason: values.reason.trim(),
+    ...(edit ? { edit: { neededDate: values.date, neededTime: values.time || null, notes: values.notes || null,
+      items: (draft.items || []).map((item, index) => ({ itemId: Number(item.id), requestedQuantity: Number(values.quantities[index]), reportedAvailableQuantity: Number(values.reportedAvailable[index]) })) } } : {}),
+  };
+}
+
 export function RequestChangeControls({ order }: { order: KitchenOrder }) {
   const client = useQueryClient();
+  const draftOrder = useRef(order);
+  const currentOrder = useRef(order);
+  currentOrder.current = order;
+  const [revision, setRevision] = useState(0);
+  const draftVersion = requestChangeVersion(draftOrder.current);
+  const stale = !requestChangeVersionMatches(draftVersion, order);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState<"edit" | "cancel" | null>(null);
   const [reason, setReason] = useState("");
@@ -1082,48 +1118,76 @@ export function RequestChangeControls({ order }: { order: KitchenOrder }) {
   const [notes, setNotes] = useState(order.notes || "");
   const [quantities, setQuantities] = useState((order.items || []).map(item => String(item.requestedQuantity)));
   const [reportedAvailable, setReportedAvailable] = useState((order.items || []).map(() => ""));
-  const validEdit = !!date && !!order.items?.length && order.items.every((item, index) =>
+  const validEdit = !!date && !!draftOrder.current.items?.length && draftOrder.current.items.every((item, index) =>
     isValidKitchenQuantity(quantities[index] || "", item.productId != null)
     && isValidKitchenQuantity(reportedAvailable[index] || "", item.productId != null, true));
   const attempt = useRef<{ signature: string; key: string } | null>(null);
+  const submitGuard = useRef(createKitchenSubmitGuard());
+  const [locked, setLocked] = useState(false);
   const mutation = useMutation({
     mutationFn: async (edit: boolean) => {
+      if (!requestChangeVersionMatches(draftVersion, currentOrder.current)) throw new Error("تغيرت نسخة الطلب. أعد تحميل البيانات الحالية قبل الإرسال.");
       if (edit && !validEdit) throw new Error("أكمل تاريخ الحاجة والكميات المطلوبة والمتوفرة لكل صنف.");
-      const payload = {
-        expectedEventId: Math.max(0, ...(order.events || []).map(event => Number(event.id))),
-        reason: reason.trim(),
-        ...(edit ? { edit: { neededDate: date, neededTime: time || null, notes: notes || null,
-          items: (order.items || []).map((item, index) => ({ itemId: Number(item.id), requestedQuantity: Number(quantities[index]), reportedAvailableQuantity: Number(reportedAvailable[index]) })) } } : {}),
-      };
+      const payload = requestChangePayload(draftOrder.current, { reason, date, time, notes, quantities, reportedAvailable }, edit);
       const signature = JSON.stringify(payload);
       if (attempt.current?.signature !== signature) attempt.current = { signature, key: crypto.randomUUID() };
-      const response = await apiRequest("POST", `/api/central-kitchen-orders/${order.id}/request-change`, { ...payload, idempotencyKey: attempt.current.key });
+      const response = await apiRequest("POST", `/api/central-kitchen-orders/${draftVersion.orderId}/request-change`, { ...payload, idempotencyKey: attempt.current.key });
       return response.json();
     },
     onSuccess: () => { attempt.current = null; setConfirming(null); void client.invalidateQueries({ predicate: query => String(query.queryKey[0]).includes("central-kitchen") }); },
+    onError: () => { submitGuard.current.resetAfterFailure(); setLocked(false); },
   });
+  const reloadCurrent = () => {
+    if (mutation.isPending) return;
+    draftOrder.current = order;
+    setDate(order.neededDate || "");
+    setTime(order.neededTime || "");
+    setNotes(order.notes || "");
+    setQuantities((order.items || []).map(item => String(item.requestedQuantity)));
+    setReportedAvailable((order.items || []).map(() => ""));
+    setReason("");
+    setConfirming(null);
+    setEditing(false);
+    attempt.current = null;
+    submitGuard.current.resetAfterFailure();
+    setLocked(false);
+    mutation.reset();
+    setRevision(value => value + 1);
+  };
+  const submit = (edit: boolean) => {
+    if (stale || mutation.isPending || locked || !reason.trim() || (edit && !validEdit)) return;
+    if (submitGuard.current.run(() => mutation.mutate(edit))) setLocked(true);
+  };
+  // Revision forces a render even when the newly loaded fields happen to equal the old values.
+  void revision;
+  if (stale) return <section className="space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-4" role="alert">
+    <p className="font-semibold">{mutation.isSuccess ? "تم حفظ الإجراء وتحديث نسخة الطلب. حمّل البيانات الحالية قبل إجراء تعديل آخر." : "تغيرت نسخة الطلب أثناء التعديل. أوقفنا إرسال المسودة القديمة؛ راجع البيانات الحالية قبل محاولة جديدة."}</p>
+    <p className="text-sm">{mutation.isSuccess ? "سيتم عرض الكميات والحالة الأحدث." : "إعادة تحميل البيانات الحالية ستتجاهل المسودة القديمة والسبب والتأكيد، وتبدأ تعديلاً جديداً. إذا انقطع اتصال محاولة سابقة، راجع السجل لمعرفة نتيجتها."}</p>
+    <Button type="button" variant="outline" disabled={mutation.isPending} onClick={reloadCurrent}><RefreshCw className="ml-2 h-4 w-4" />إعادة تحميل البيانات الحالية</Button>
+  </section>;
+  if (order.allowedActions?.edit !== true && order.allowedActions?.cancel !== true) return null;
   if (order.status === "cancelled") return null;
   const committed = !!order.linkedBatches?.length || !!order.allocations?.length || !!order.shadowInventoryEntries?.length;
   if (committed || !["requested", "approved"].includes(order.status)) return <p className="rounded border p-3 text-sm text-muted-foreground">التعديل والإلغاء غير متاحين بعد الإنتاج أو الحجز أو التجهيز أو الإرسال. الدفعات المتعطلة لا تبرر عكس المخزون؛ راجع مسؤول المطبخ.</p>;
   return <section className="space-y-3 rounded-lg border p-4">
     <h3 className="font-semibold">تعديل / إلغاء من الفرع الطالب</h3>
     <p className="text-sm text-muted-foreground">يُحفظ السبب والتاريخ. يتحقق الخادم من عدم وجود إنتاج أو حجز قبل التنفيذ. تغيير الأصناف يتطلب إلغاء الطلب وإنشاء طلب جديد.</p>
-    <Label htmlFor={`change-reason-${order.id}`}>سبب التعديل أو الإلغاء (إلزامي)</Label><Input id={`change-reason-${order.id}`} className="min-h-11" value={reason} onChange={event => { setReason(event.target.value); setConfirming(null); }} disabled={mutation.isPending} />
+    <Label htmlFor={`change-reason-${order.id}`}>سبب التعديل أو الإلغاء (إلزامي)</Label><Input id={`change-reason-${order.id}`} className="min-h-11" value={reason} onChange={event => { setReason(event.target.value); setConfirming(null); }} disabled={mutation.isPending || locked} />
     {editing && <div className="space-y-3">
-      <Label>تاريخ الاحتياج<Input type="date" value={date} onChange={event => setDate(event.target.value)} /></Label>
-      <Label>وقت الاحتياج<Input type="time" value={time} onChange={event => setTime(event.target.value)} /></Label>
-      <Label>ملاحظات الطلب<Input value={notes} onChange={event => setNotes(event.target.value)} /></Label>
-       {(order.items || []).map((item, index) => <div key={item.id} className="grid gap-3 rounded-md border bg-muted/10 p-3 md:grid-cols-2"><Label className="block">{item.productName} · {item.unit}<span className="mt-1 block text-xs font-normal text-muted-foreground">الكمية المطلوب توريدها</span><Input type="number" inputMode={item.productId != null ? "numeric" : "decimal"} min={item.productId != null ? 1 : 0.000001} step={item.productId != null ? 1 : 0.000001} value={quantities[index]} onChange={event => { setConfirming(null); setQuantities(values => values.map((value, i) => i === index ? event.target.value : value)); }} /></Label><Label className="block">المتوفر حالياً في الفرع <span className="text-destructive">*</span><span className="mt-1 block text-xs font-normal text-muted-foreground">أدخل المتوفر الآن؛ المسجل سابقاً: {item.reportedAvailableQuantity == null ? "غير مسجل" : `${item.reportedAvailableQuantity} ${item.unit}`}</span><Input type="number" inputMode={item.productId != null ? "numeric" : "decimal"} min="0" step={item.productId != null ? 1 : 0.000001} value={reportedAvailable[index]} onChange={event => { setConfirming(null); setReportedAvailable(values => values.map((value, i) => i === index ? event.target.value : value)); }} aria-invalid={!isValidKitchenQuantity(reportedAvailable[index] || "", item.productId != null, true)} /></Label></div>)}
+      <Label>تاريخ الاحتياج<Input type="date" value={date} disabled={mutation.isPending || locked} onChange={event => { setDate(event.target.value); setConfirming(null); }} /></Label>
+      <Label>وقت الاحتياج<Input type="time" value={time} disabled={mutation.isPending || locked} onChange={event => { setTime(event.target.value); setConfirming(null); }} /></Label>
+      <Label>ملاحظات الطلب<Input value={notes} disabled={mutation.isPending || locked} onChange={event => { setNotes(event.target.value); setConfirming(null); }} /></Label>
+       {(draftOrder.current.items || []).map((item, index) => <div key={item.id} className="grid gap-3 rounded-md border bg-muted/10 p-3 md:grid-cols-2"><Label className="block">{item.productName} · {item.unit}<span className="mt-1 block text-xs font-normal text-muted-foreground">الكمية المطلوب توريدها</span><Input type="number" inputMode={item.productId != null ? "numeric" : "decimal"} min={item.productId != null ? 1 : 0.000001} step={item.productId != null ? 1 : 0.000001} value={quantities[index]} disabled={mutation.isPending || locked} onChange={event => { setConfirming(null); setQuantities(values => values.map((value, i) => i === index ? event.target.value : value)); }} /></Label><Label className="block">المتوفر حالياً في الفرع <span className="text-destructive">*</span><span className="mt-1 block text-xs font-normal text-muted-foreground">أدخل المتوفر الآن؛ المسجل سابقاً: {item.reportedAvailableQuantity == null ? "غير مسجل" : `${item.reportedAvailableQuantity} ${item.unit}`}</span><Input type="number" inputMode={item.productId != null ? "numeric" : "decimal"} min="0" step={item.productId != null ? 1 : 0.000001} value={reportedAvailable[index]} disabled={mutation.isPending || locked} onChange={event => { setConfirming(null); setReportedAvailable(values => values.map((value, i) => i === index ? event.target.value : value)); }} aria-invalid={!isValidKitchenQuantity(reportedAvailable[index] || "", item.productId != null, true)} /></Label></div>)}
     </div>}
     {mutation.error && <p role="alert" className="text-sm text-destructive">{mutation.error instanceof Error ? mutation.error.message : "تعذر حفظ الطلب"} — أعد تحميل التفاصيل عند تعارض النسخة.</p>}
     <div className="flex flex-wrap gap-2">
-      {order.allowedActions?.edit === true && order.status === "requested" && <Button variant="outline" disabled={mutation.isPending || (editing && (!reason.trim() || !validEdit))} onClick={() => editing ? setConfirming("edit") : setEditing(true)}>{editing ? "مراجعة التعديل" : "تعديل الطلب"}</Button>}
-      {order.allowedActions?.cancel === true && <Button variant="destructive" disabled={mutation.isPending || !reason.trim()} onClick={() => setConfirming("cancel")}>إلغاء الطلب</Button>}
+      {order.allowedActions?.edit === true && order.status === "requested" && <Button variant="outline" disabled={mutation.isPending || locked || (editing && (!reason.trim() || !validEdit))} onClick={() => editing ? setConfirming("edit") : setEditing(true)}>{editing ? "مراجعة التعديل" : "تعديل الطلب"}</Button>}
+      {order.allowedActions?.cancel === true && <Button variant="destructive" disabled={mutation.isPending || locked || !reason.trim()} onClick={() => setConfirming("cancel")}>إلغاء الطلب</Button>}
     </div>
     {confirming && <div role="group" aria-label={confirming === "edit" ? "تأكيد التعديل" : "تأكيد الإلغاء"} className="space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
       <p className="font-semibold">{confirming === "edit" ? `تأكيد تعديل ${order.orderNumber}` : `تأكيد إلغاء ${order.orderNumber} نهائياً`}</p>
       <p>{confirming === "edit" ? `تاريخ الحاجة الجديد ${date} · ${order.items?.length || 0} بنود. راجع الكميات والمتوفر المعلن قبل الحفظ.` : "سيُلغى الطلب مع الاحتفاظ بسجله؛ لا يمكن إعادة تفعيله."} السبب: {reason.trim()}</p>
-      <div className="flex flex-wrap gap-2"><Button variant={confirming === "cancel" ? "destructive" : "default"} disabled={mutation.isPending || !reason.trim() || (confirming === "edit" && !validEdit)} onClick={() => mutation.mutate(confirming === "edit")}>{mutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}تأكيد {confirming === "edit" ? "حفظ التعديل" : "إلغاء الطلب"}</Button><Button variant="outline" disabled={mutation.isPending} onClick={() => setConfirming(null)}>رجوع دون تنفيذ</Button></div>
+      <div className="flex flex-wrap gap-2"><Button variant={confirming === "cancel" ? "destructive" : "default"} disabled={mutation.isPending || locked || !reason.trim() || (confirming === "edit" && !validEdit)} onClick={() => submit(confirming === "edit")}>{mutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}تأكيد {confirming === "edit" ? "حفظ التعديل" : "إلغاء الطلب"}</Button><Button variant="outline" disabled={mutation.isPending || locked} onClick={() => setConfirming(null)}>رجوع دون تنفيذ</Button></div>
     </div>}
   </section>;
 }

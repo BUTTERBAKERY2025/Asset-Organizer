@@ -55,8 +55,8 @@ export function parseCentralKitchenCatalogV2(value: unknown): CentralKitchenCata
     return {
       id: item.id,
       source: item.source,
-      name: item.name,
-      unit: item.unit,
+      name: item.name.trim(),
+      unit: item.unit.trim(),
       ...(item.sku !== undefined ? { sku: item.sku } : {}),
     } as CentralKitchenCatalogItem;
   });
