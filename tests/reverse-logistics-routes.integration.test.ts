@@ -20,6 +20,7 @@ vi.mock("../server/auth", () => ({
     req.currentUser?.role === "admin" ? null : req.currentUser?.allowedBranches ?? [],
 }));
 import { registerReverseLogisticsRoutes } from "../server/reverse-logistics-routes";
+import { deliverySourceFingerprint } from "../server/delivery-dispatch-guard";
 
 type Actor = { id: string; role: string; branchId?: string; allowedBranches: string[]; permissions: Record<string, string[]> };
 const prefix = `reverse-int-${randomUUID()}`;
@@ -31,6 +32,7 @@ const app: any = {
 let pool: pg.Pool;
 let branch: string, other: string, kitchen: string;
 let admin: Actor, receiver: Actor, outsider: Actor;
+let driver: Actor;
 let item: number, transferItem: number, product: number, substitute: number, orderItem: number, ambiguousItem: number;
 let wh1: string, wh2: string;
 let seq = 0;
@@ -68,6 +70,23 @@ const ok = (response: Awaited<ReturnType<typeof invoke>>) => {
   expect(response.status, JSON.stringify(response.body)).toBe(200);
   return response.body;
 };
+async function acknowledgeHandover(movementId: string) {
+  const { rows } = await q(`SELECT id,item_name AS name,quantity,unit FROM reverse_movements
+    WHERE id=$1 AND status='requested'`, [movementId]);
+  expect(rows).toHaveLength(1);
+  const item = rows[0];
+  const items = [{ id: Number(item.id), quantity: Number(item.quantity), unit: item.unit }];
+  const fingerprint = deliverySourceFingerprint([item]);
+  const vehicle = `${prefix}-vehicle`;
+  const assigned = await q(`INSERT INTO delivery_assignments
+    (source_type,source_id,driver_id,vehicle_number,status,handover_recorded_at,
+     handover_acknowledged_at,handover_driver_id,handover_vehicle_number,
+     handover_items,handover_fingerprint,handover_revision,created_by)
+    VALUES ('reverse_movement',$1,$2,$3,'assigned',now()-interval '1 second',
+      now(),$2,$3,$4::jsonb,$5,1,$6) RETURNING id`,
+    [movementId,driver.id,vehicle,JSON.stringify(items),fingerprint,admin.id]);
+  expect(assigned.rows).toHaveLength(1);
+}
 
 describe("reverse logistics routes against local PostgreSQL", () => {
   beforeAll(async () => {
@@ -89,12 +108,15 @@ describe("reverse logistics routes against local PostgreSQL", () => {
       permissions: { central_kitchen_orders: ["view", "edit"] } };
     outsider = { id: `${prefix}-outsider`, role: "branch_manager", allowedBranches: [other],
       permissions: { central_kitchen_orders: ["view", "edit"] } };
+    driver = { id: `${prefix}-driver`, role: "employee", allowedBranches: [branch], permissions: {} };
     try {
       for (const id of [branch, other, kitchen])
         await q("INSERT INTO branches(id,name,is_central_kitchen) VALUES($1,$2,$3)", [id,id,id === kitchen]);
       for (const actor of [admin, receiver, outsider])
         await q("INSERT INTO users(id,first_name,role,branch_id,is_active) VALUES($1,$2,$3,$4,'active')",
           [actor.id,actor.id,actor.role,actor === admin ? kitchen : actor.allowedBranches[0]]);
+      await q(`INSERT INTO users(id,first_name,role,branch_id,job_title,is_active)
+        VALUES($1,$1,'employee',$2,'delivery','active')`, [driver.id,branch]);
       item = (await q("INSERT INTO warehouse_items(name,category,unit,current_stock,is_active) VALUES($1,'raw','kg',30,true) RETURNING id", [prefix])).rows[0].id;
       await q("INSERT INTO branch_stock(branch_id,item_id,current_quantity) VALUES($1,$2,20)", [branch, item]);
       const transfer = (await q(`INSERT INTO material_transfers
@@ -136,6 +158,17 @@ describe("reverse logistics routes against local PostgreSQL", () => {
       await q("DELETE FROM warehouse_movement_logs WHERE reference_type='reverse_movement' AND reference_id IN (SELECT id FROM reverse_movements WHERE created_by LIKE $1)",[`${prefix}%`]);
       await q("DELETE FROM managed_warehouse_movement_logs WHERE movement_id IN (SELECT id FROM reverse_movements WHERE created_by LIKE $1)",[`${prefix}%`]);
       await q("DELETE FROM reverse_product_reservations WHERE movement_id IN (SELECT id FROM reverse_movements WHERE created_by LIKE $1)",[`${prefix}%`]);
+      await q(`DELETE FROM system_notifications WHERE dedupe_key IN
+        (SELECT 'delivery:' || o.id || ':' || u.id FROM delivery_notification_outbox o
+         JOIN delivery_assignments a ON a.id=o.assignment_id
+         JOIN users u ON u.id=a.driver_id
+         WHERE a.source_type='reverse_movement' AND a.created_by LIKE $1)`,[`${prefix}%`]);
+      await q(`DELETE FROM delivery_notification_outbox WHERE assignment_id IN
+        (SELECT id FROM delivery_assignments WHERE source_type='reverse_movement' AND created_by LIKE $1)`,[`${prefix}%`]);
+      await q(`DELETE FROM delivery_assignment_events WHERE assignment_id IN
+        (SELECT id FROM delivery_assignments WHERE source_type='reverse_movement' AND created_by LIKE $1)`,[`${prefix}%`]);
+      await q(`DELETE FROM delivery_assignments
+        WHERE source_type='reverse_movement' AND created_by LIKE $1`,[`${prefix}%`]);
       await q("DELETE FROM reverse_movement_events WHERE movement_id IN (SELECT id FROM reverse_movements WHERE created_by LIKE $1)",[`${prefix}%`]);
       await q("DELETE FROM reverse_movements WHERE created_by LIKE $1",[`${prefix}%`]);
       await q("DELETE FROM managed_warehouse_stock WHERE warehouse_id IN (SELECT id FROM managed_warehouses WHERE name LIKE $1)",[`${prefix}%`]);
@@ -169,6 +202,7 @@ describe("reverse logistics routes against local PostgreSQL", () => {
     expect(created.status).toBe("draft");
     expect(ok(await act(created.id,"request",receiver)).status).toBe("requested");
     expect(await stock("SELECT reserved_quantity quantity FROM branch_stock WHERE branch_id=$1 AND item_id=$2",[branch,item])).toBe(6);
+    await acknowledgeHandover(created.id);
     expect(ok(await act(created.id,"dispatch",receiver,{carrierName:"Courier"})).status).toBe("dispatched");
     expect(await stock("SELECT current_quantity quantity FROM branch_stock WHERE branch_id=$1 AND item_id=$2",[branch,item])).toBe(14);
     expect((await act(created.id,"receive",receiver,{receivedQuantity:5})).status).toBe(403);
@@ -193,6 +227,7 @@ describe("reverse logistics routes against local PostgreSQL", () => {
       allowedBranches: ["main_warehouse"], permissions: { central_kitchen_orders: ["view", "edit"] } };
     const movement = ok(await create(receiver,material(1)));
     ok(await act(movement.id,"request",receiver));
+    await acknowledgeHandover(movement.id);
     ok(await act(movement.id,"dispatch",receiver,{carrierName:"Courier"}));
     expect(ok(await invoke("GET","/api/reverse-logistics",custodian)).map((x: any) => x.id)).toContain(movement.id);
     expect(ok(await invoke("GET","/api/reverse-logistics/:id",custodian,{}, {id:movement.id})).id).toBe(movement.id);
@@ -241,6 +276,7 @@ describe("reverse logistics routes against local PostgreSQL", () => {
     const run = async (source: string | null,destination: string | null,quantity: number) => {
       const m = ok(await create(admin,move(source,destination,quantity)));
       ok(await act(m.id,"request",admin));
+      await acknowledgeHandover(m.id);
       ok(await act(m.id,"dispatch",admin,{carrierName:"Courier"}));
       ok(await act(m.id,"receive",admin,{receivedQuantity:quantity}));
       ok(await act(m.id,"inspect",admin,{usableQuantity:quantity,damagedQuantity:0}));
@@ -262,6 +298,7 @@ describe("reverse logistics routes against local PostgreSQL", () => {
     const movement = ok(await create(receiver,{kind:"product_return",originalOrderItemId:orderItem,component:"original",quantity:3,idempotencyKey:key()}));
     ok(await act(movement.id,"request",receiver));
     expect(await stock("SELECT reserved_quantity quantity FROM finished_goods_inventory WHERE branch_id=$1 AND product_id=$2",[branch,product])).toBe(3);
+    await acknowledgeHandover(movement.id);
     ok(await act(movement.id,"dispatch",receiver,{carrierName:"Courier"}));
     ok(await act(movement.id,"receive",admin,{receivedQuantity:2}));
     ok(await act(movement.id,"inspect",admin,{usableQuantity:1,damagedQuantity:1}));

@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -94,12 +95,6 @@ export default function ReverseLogisticsPage() {
   };
   const perform = async (row: Movement, operation: string) => {
     const payload: Record<string, string | number> = { idempotencyKey: crypto.randomUUID() };
-    if (operation === "dispatch") {
-      const carrier = window.prompt("اسم الناقل أو السائق (إلزامي)");
-      if (!carrier?.trim()) return;
-      payload.carrierName = carrier.trim();
-      payload.vehicleNumber = window.prompt("رقم المركبة (اختياري)") || "";
-    }
     if (operation === "receive") {
       const entered = window.prompt(`كمية الاستلام الفعلية من ${row.shipped_quantity} ${row.unit}؟ الناقص سيظل ظاهراً.`,row.shipped_quantity);
       if (entered === null || entered.trim() === "") return;
@@ -170,7 +165,7 @@ export default function ReverseLogisticsPage() {
           {row.carrier_name && <p className="text-sm">الناقل: {row.carrier_name} · المركبة: {row.vehicle_number || "غير مسجلة"}</p>}
           <div className="flex flex-wrap gap-2">
             {row.status === "draft" && <Button disabled={pending} onClick={()=>perform(row,"request")}>طلب وحجز المصدر</Button>}
-            {row.status === "requested" && <><Button disabled={pending} onClick={()=>perform(row,"dispatch")}>إرسال وخصم المصدر</Button><Button variant="outline" disabled={pending} onClick={()=>perform(row,"cancel")}>إلغاء وإطلاق الحجز</Button></>}
+            {row.status === "requested" && <><Link href={`/driver-deliveries?sourceType=reverse_movement&sourceId=${row.id}`}><Button variant="outline" size="sm">إسناد السائق وتوثيق التسليم</Button></Link><span className="text-xs text-amber-800">الإرسال بعد توثيق البنود وتأكيد السائق فقط</span><Button disabled={pending} onClick={()=>perform(row,"dispatch")}>إرسال وخصم المصدر</Button><Button variant="outline" disabled={pending} onClick={()=>perform(row,"cancel")}>إلغاء وإطلاق الحجز</Button></>}
             {row.status === "dispatched" && <Button disabled={pending} onClick={()=>perform(row,"receive")}>تسجيل الاستلام الفعلي</Button>}
             {row.status === "received" && <Button disabled={pending} onClick={()=>perform(row,"inspect")}>فحص وإتاحة الصالح</Button>}
             {row.status === "inspected" && number(row.damaged_quantity)>number(row.written_off_quantity) && globalManager && <Button variant="destructive" disabled={pending} onClick={()=>perform(row,"writeoff")}>اعتماد شطب التالف</Button>}

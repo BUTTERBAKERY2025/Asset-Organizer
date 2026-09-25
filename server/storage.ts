@@ -1,4 +1,5 @@
 import memoize from "memoizee";
+import { assertDeliveryDispatchReady, cancelDeliveryAssignmentForSource } from "./delivery-dispatch-guard";
 import {
   allocateMaterialTransferCreation,
   MaterialTransferCreationError,
@@ -13916,6 +13917,12 @@ export class DatabaseStorage implements IStorage {
       if (action === "receive" && (!Number.isInteger(receivedQuantity) || receivedQuantity! < 0 || receivedQuantity! > transfer.quantity)) {
         throw new Error("كمية الاستلام الفعلية غير صالحة");
       }
+      if (action === "dispatch") {
+        await assertDeliveryDispatchReady(tx, { sourceType: "finished_goods_transfer", sourceId: id });
+      }
+      if (action === "cancel") {
+        await cancelDeliveryAssignmentForSource(tx, { sourceType: "finished_goods_transfer", sourceId: id, actorId: userId! });
+      }
       if (action === "dispatch" || action === "cancel") {
         const [source] = await tx.select().from(finishedGoodsInventory)
           .where(eq(finishedGoodsInventory.id, transfer.inventoryId)).for("update");
@@ -14310,7 +14317,7 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async updateMaterialTransferStatus(id: number, status: string, additionalData?: Partial<InsertMaterialTransfer>): Promise<MaterialTransfer | undefined> {
+  async updateMaterialTransferStatus(id: number, status: string, additionalData?: Partial<InsertMaterialTransfer>, actorId?: string): Promise<MaterialTransfer | undefined> {
     const allowedTransitions: Record<string, string[]> = {
       pending: ["approved", "rejected", "cancelled"],
       approved: ["in_transit", "cancelled"],
@@ -14349,6 +14356,14 @@ export class DatabaseStorage implements IStorage {
 
       // Kitchen raw requests leave the warehouse at dispatch. Serialize the
       // header, item quantities and source debit in this one transaction.
+      if (status === "in_transit") {
+        const driver = await assertDeliveryDispatchReady(tx, { sourceType: "material_transfer", sourceId: id });
+        additionalData = { ...additionalData, driverName: driver.driverName, vehicleNumber: driver.vehicleNumber };
+      }
+      if (status === "cancelled") {
+        await cancelDeliveryAssignmentForSource(tx, { sourceType: "material_transfer", sourceId: id,
+          actorId: actorId || transfer.createdBy! });
+      }
       if (status === "in_transit" && transfer.stockPostingPolicy === "on_dispatch") {
         if (transfer.sourceBranchId !== "main_warehouse" || transfer.sourceType !== "warehouse") {
           throw materialDeliveryConflict("مصدر طلب مواد المطبخ غير صالح");

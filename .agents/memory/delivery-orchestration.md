@@ -20,3 +20,9 @@ Use a native anchor for source-receipt links that must open a new tab while reta
 **Why:** The project's router Link intercepted a receipt link despite target="_blank", navigating the existing tab instead. Browser verification confirmed a native anchor preserves both tabs. With rel="noopener", browser-test popup detection must not require an opener reference.
 
 **How to apply:** Keep normal in-app navigation unchanged; use native new-tab links specifically for the source-receipt/return-to-approval workflow.
+
+When source stock operations and delivery metadata share a transaction, lock the source before the assignment, consistently across dispatch, handover, reassignment and cancellation.
+
+**Why:** Source dispatch and driver actions enter from opposite modules; reversing the lock order between them creates a deadlock risk. Acknowledgement must bind the actual shipment, including substitute identity, not only a total quantity.
+
+**How to apply:** Reuse the shared source fingerprint and transactional dispatch guard. Late proof after authenticated source receipt is metadata recovery, not permission to repeat receipt or stock posting.

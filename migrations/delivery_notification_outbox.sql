@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS delivery_notification_outbox (
   assignment_id bigint NOT NULL REFERENCES delivery_assignments(id),
   event_id bigint REFERENCES delivery_assignment_events(id),
   event_type text NOT NULL CHECK (event_type IN
-    ('failed','cancelled','awaiting_receipt','receipt_approved','overdue','escalated')),
+    ('failed','cancelled','awaiting_receipt','receipt_approved','overdue','escalated','assigned','reassigned')),
   revision text NOT NULL,
   available_at timestamptz NOT NULL DEFAULT now(),
   claimed_until timestamptz,

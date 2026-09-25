@@ -5,6 +5,7 @@ import { createHash } from "crypto";
 import { pool } from "./db";
 import { isAuthenticated, requirePermission, getAllowedBranchIds } from "./auth";
 import { reverseCanonical, reverseInspectionAllowed, reverseQuantityAllowed, reverseReceiptAllowed, reverseWriteoffAllowed, reverseReleaseLots } from "@shared/reverse-logistics";
+import { assertDeliveryDispatchReady, cancelDeliveryAssignmentForSource, DeliveryDispatchConflict } from "./delivery-dispatch-guard";
 
 // Main warehouse is represented by null ONLY inside this module. It is never a
 // second balance: warehouse_items.current_stock is its authoritative balance.
@@ -243,8 +244,8 @@ export function registerReverseLogisticsRoutes(app: Express) {
       res.json(result);
     } catch (e: any) {
       await c.query("ROLLBACK");
-      res.status(e instanceof z.ZodError ? 400 : e instanceof Reject ? e.status : 500)
-        .json({ message: e instanceof z.ZodError ? e.issues.map(i => i.message).join("; ") : e instanceof Reject ? e.message : "Reverse logistics failed" });
+      res.status(e instanceof z.ZodError ? 400 : e instanceof Reject || e instanceof DeliveryDispatchConflict ? e.status : 500)
+        .json({ message: e instanceof z.ZodError ? e.issues.map(i => i.message).join("; ") : e instanceof Reject || e instanceof DeliveryDispatchConflict ? e.message : "Reverse logistics failed" });
     } finally { c.release(); }
   };
   app.get("/api/reverse-logistics/warehouses", ...warehouseView, async (req,res) => run(req,res,async c => {
@@ -399,9 +400,14 @@ export function registerReverseLogisticsRoutes(app: Express) {
       }
       await reserve(c,row);
     }
-    if (op === "cancel") await release(c,row);
+    if (op === "cancel") {
+      await cancelDeliveryAssignmentForSource(c, { sourceType: "reverse_movement", sourceId: movementId, actorId: userId });
+      await release(c,row);
+    }
+    const dispatchDriver = op === "dispatch"
+      ? await assertDeliveryDispatchReady(c, { sourceType: "reverse_movement", sourceId: movementId })
+      : null;
     if (op === "dispatch") {
-      if (!body.carrierName) throw new Reject("Carrier name required",400);
       await debit(c,row);
       await recordStock(c,row,Number(row.quantity),"source",userId);
     }
@@ -430,7 +436,7 @@ export function registerReverseLogisticsRoutes(app: Express) {
       written_off_quantity=CASE WHEN $3='writeoff' THEN written_off_quantity+$6 ELSE written_off_quantity END,
       carrier_name=CASE WHEN $3='dispatch' THEN $7 ELSE carrier_name END,
       vehicle_number=CASE WHEN $3='dispatch' THEN $8 ELSE vehicle_number END
-      WHERE id=$1 RETURNING *`,[movementId,next,op,body.receivedQuantity??0,body.usableQuantity??0,body.damagedQuantity??0,body.carrierName??null,body.vehicleNumber??null]))[0];
+      WHERE id=$1 RETURNING *`,[movementId,next,op,body.receivedQuantity??0,body.usableQuantity??0,body.damagedQuantity??0,dispatchDriver?.driverName??null,dispatchDriver?.vehicleNumber??null]))[0];
     await c.query("INSERT INTO reverse_movement_events(movement_id,action,actor_id,idempotency_key,payload) VALUES($1,$2,$3,$4,$5)",
       [movementId,op,userId,body.idempotencyKey,JSON.stringify(body)]);
     return result;

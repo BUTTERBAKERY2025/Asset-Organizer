@@ -32,8 +32,6 @@ export default function KitchenWarehouseShippingPage() {
   const [stockId,setStockId] = useState("");
   const [warehouseId,setWarehouseId] = useState("");
   const [quantity,setQuantity] = useState("");
-  const [carrierName,setCarrierName] = useState("");
-  const [vehicleNumber,setVehicleNumber] = useState("");
   const [receipts,setReceipts] = useState<Record<number,string>>({});
   const [busy,setBusy] = useState(false);
   const shipmentLinkConsumed = useRef(false);
@@ -102,11 +100,10 @@ export default function KitchenWarehouseShippingPage() {
         <div className="font-medium">#{s.id} · {s.product_name} · {s.quantity} {s.unit} · {s.source_branch_id} ← {s.destination_name}</div>
         <div className="text-sm">الحالة: {labels[s.status] || s.status} · الناقل: {s.carrier_name || "—"} · المركبة: {s.vehicle_number || "—"}
           {s.status==="received" && <> · المستلم: {s.received_quantity} · الفرق: {s.quantity-s.received_quantity!}</>}</div>
-        {s.status==="dispatched" && <Link href={`/driver-deliveries?sourceType=kitchen_warehouse_shipment&sourceId=${s.id}`}><Button variant="outline" size="sm">إسناد سائق لهذه الشحنة / فتح مهمة التوصيل</Button></Link>}
+        {(s.status==="requested" || s.status==="dispatched") && <Link href={`/driver-deliveries?sourceType=kitchen_warehouse_shipment&sourceId=${s.id}`}><Button variant="outline" size="sm">إسناد السائق وتوثيق التسليم / مهمة التوصيل</Button></Link>}
         {s.status==="requested" && kitchen && <div className="flex flex-wrap items-end gap-2">
-          <div><Label>الناقل الفعلي</Label><Input value={carrierName} onChange={e=>setCarrierName(e.target.value)} /></div>
-          <div><Label>رقم المركبة</Label><Input value={vehicleNumber} onChange={e=>setVehicleNumber(e.target.value)} /></div>
-          <Button disabled={busy || !carrierName.trim()} onClick={()=>void perform(`${base}/${s.id}/dispatch`,{carrierName,vehicleNumber})}>تأكيد الخروج</Button>
+          <p className="w-full text-sm text-amber-800">قبل الخروج: أسند سائقاً، وثّق الكمية المسلّمة له، ثم انتظر تأكيد السائق. تُؤخذ بيانات الناقل والمركبة من المهمة.</p>
+          <Button disabled={busy} onClick={()=>void perform(`${base}/${s.id}/dispatch`,{})}>تأكيد الخروج</Button>
           <Button disabled={busy} variant="outline" onClick={()=>void perform(`${base}/${s.id}/cancel`,{})}>إلغاء وإطلاق الحجز</Button>
         </div>}
         {s.status==="dispatched" && manager && <div className="flex items-end gap-2">

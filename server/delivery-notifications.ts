@@ -4,7 +4,7 @@ import { routingPeople, routingPersonEligible } from "./central-kitchen-routing"
 import { routedWarehouseTransferRecipients } from "./warehouse-transfer-notifications";
 import type { SystemNotification } from "@shared/schema";
 
-export type DeliveryNoticeEvent = "failed" | "cancelled" | "awaiting_receipt" | "receipt_approved";
+export type DeliveryNoticeEvent = "failed" | "cancelled" | "awaiting_receipt" | "receipt_approved" | "assigned" | "reassigned";
 type NoticeType = DeliveryNoticeEvent | "overdue" | "escalated";
 export const DELIVERY_ESCALATION_MINUTES = 60;
 
@@ -13,10 +13,23 @@ export const DELIVERY_ESCALATION_MINUTES = 60;
 export async function enqueueDeliveryNotice(
   tx: PoolClient, taskId: number, eventId: number, eventType: DeliveryNoticeEvent,
 ): Promise<void> {
+  let revision = `event:${eventId}`;
+  if (eventType === "assigned" || eventType === "reassigned") {
+    const { rows } = await tx.query(`SELECT e.detail,e.action,a.driver_id FROM delivery_assignment_events e
+      JOIN delivery_assignments a ON a.id=e.assignment_id
+      WHERE e.id=$1 AND e.assignment_id=$2`, [eventId, taskId]);
+    const event = rows[0];
+    const newDriverId = event?.detail?.driverId ?? event?.detail?.newDriverId;
+    if (!event || !newDriverId || newDriverId !== event.driver_id
+      || (eventType === "reassigned" && (!event.detail?.previousDriverId
+        || event.detail.previousDriverId === newDriverId)))
+      throw new Error(`Delivery ${eventType} event ${eventId} has no valid driver transition`);
+    revision = `event:${eventId}:driver:${newDriverId}`;
+  }
   await tx.query(
     `INSERT INTO delivery_notification_outbox (assignment_id,event_id,event_type,revision)
      VALUES ($1,$2,$3,$4) ON CONFLICT (assignment_id,event_type,revision) DO NOTHING`,
-    [taskId, eventId, eventType, `event:${eventId}`],
+    [taskId, eventId, eventType, revision],
   );
 }
 
@@ -24,6 +37,22 @@ type Assignment = {
   id: string; source_type: string; source_id: number; driver_id: string;
   scheduled_at: Date | null; status: string; created_by: string;
 };
+type NoticeJob = {
+  id: string; assignment_id: string; event_type: NoticeType; revision: string;
+  event_id: string | null; detail: { driverId?: string; newDriverId?: string; previousDriverId?: string } | null;
+};
+const assignmentEvent = (kind: NoticeType) => kind === "assigned" || kind === "reassigned";
+const driverFromEvent = (job: NoticeJob) => job.detail?.driverId ?? job.detail?.newDriverId;
+const driverMatches = (a: Assignment, job: NoticeJob) =>
+  a.status === "assigned" && !!driverFromEvent(job)
+  && a.driver_id === driverFromEvent(job)
+  && job.revision === `event:${job.event_id}:driver:${a.driver_id}`;
+
+async function activeDriver(id: string): Promise<boolean> {
+  const { rowCount } = await pool.query(`SELECT 1 FROM users WHERE id=$1 AND is_active='active'
+    AND job_title='delivery'`, [id]);
+  return !!rowCount;
+}
 type Source = { source: string | null; destination: string | null; warehouseId?: number };
 
 async function sourceFor(a: Assignment): Promise<Source | null> {
@@ -73,6 +102,7 @@ async function warehouseManagers(): Promise<string[]> {
 
 async function recipients(a: Assignment, s: Source, kind: NoticeType): Promise<string[]> {
   const ids: string[] = [];
+  if (assignmentEvent(kind)) return await activeDriver(a.driver_id) ? [a.driver_id] : [];
   if (kind === "cancelled") {
     const { rows } = await pool.query(`SELECT id FROM users WHERE id=$1 AND is_active='active'
       AND job_title='delivery'`, [a.driver_id]);
@@ -104,13 +134,24 @@ export async function filterAuthorizedDeliveryNoticeUsers(
 ): Promise<string[]> {
   const id = Number(notification.dedupeKey?.match(/^delivery:(\d+):/)?.[1]);
   if (!Number.isSafeInteger(id) || id <= 0) return [];
-  const { rows } = await pool.query(`SELECT o.event_type,a.* FROM delivery_notification_outbox o
-    JOIN delivery_assignments a ON a.id=o.assignment_id WHERE o.id=$1`, [id]);
-  const a = rows[0] as (Assignment & { event_type: NoticeType }) | undefined;
+  const { rows } = await pool.query(`SELECT o.event_type,o.event_id,o.revision,e.detail,a.*
+    FROM delivery_notification_outbox o
+    JOIN delivery_assignments a ON a.id=o.assignment_id
+    LEFT JOIN delivery_assignment_events e ON e.id=o.event_id WHERE o.id=$1`, [id]);
+  const a = rows[0] as (Assignment & NoticeJob) | undefined;
   if (!a) return [];
-  const source = await sourceFor(a);
-  if (!source) return [];
-  const current = await recipients(a, source, a.event_type);
+  const removed = notification.dedupeKey?.endsWith(":removed");
+  // A removed-driver notice contains no assignment link, schedule, source or
+  // current driver information. Historical membership is verified from the
+  // server-authored event; never from target_user_ids alone.
+  if (removed && (a.event_type !== "reassigned" || !a.detail?.previousDriverId
+    || a.detail.previousDriverId === driverFromEvent(a))) return [];
+  if (!removed && assignmentEvent(a.event_type) && !driverMatches(a, a)) return [];
+  const source = removed || assignmentEvent(a.event_type) ? null : await sourceFor(a);
+  if (!removed && !assignmentEvent(a.event_type) && !source) return [];
+  const current = removed ? await activeDriver(a.detail!.previousDriverId!) ? [a.detail!.previousDriverId!] : []
+    : assignmentEvent(a.event_type) ? await activeDriver(a.driver_id) ? [a.driver_id] : []
+    : await recipients(a, source!, a.event_type);
   const { rows: active } = await pool.query(`SELECT id FROM users WHERE id=ANY($1::varchar[])
     AND is_active='active'`, [candidates]);
   const permitted = new Set(active.map(r => r.id));
@@ -119,6 +160,8 @@ export async function filterAuthorizedDeliveryNoticeUsers(
 }
 
 const copy: Record<NoticeType, { title: string; content: string }> = {
+  assigned: { title: "مهمة توصيل مسندة إليك", content: "أُسندت إليك مهمة توصيل جديدة. راجع موعدها وتفاصيلها في مهام التوصيل." },
+  reassigned: { title: "مهمة توصيل مسندة إليك", content: "أُعيد إسناد مهمة توصيل إليك. راجع موعدها وتفاصيلها في مهام التوصيل." },
   failed: { title: "تعذر تسليم مهمة", content: "تعذر التسليم؛ راجع مهمة التوصيل واتخذ الإجراء المناسب." },
   cancelled: { title: "أُلغيت مهمة توصيل", content: "أُلغيت مهمة التوصيل المسندة إليك." },
   awaiting_receipt: { title: "استلام يحتاج إلى إجراء", content: "قدم السائق إثبات التسليم. تحقق من استلام المخزون في المصدر ثم اعتمد الإيصال." },
@@ -143,21 +186,29 @@ export async function queueOverdueDeliveryNotices(): Promise<number> {
   return rowCount || 0;
 }
 
-async function claim(): Promise<{ id: string; assignment_id: string; event_type: NoticeType; revision: string } | null> {
+async function claim(): Promise<NoticeJob | null> {
   const { rows } = await pool.query(`
     UPDATE delivery_notification_outbox SET claimed_until=now()+interval '2 minutes',attempts=attempts+1
     WHERE id=(SELECT id FROM delivery_notification_outbox
       WHERE published_at IS NULL AND available_at<=now()
         AND (claimed_until IS NULL OR claimed_until<now())
       ORDER BY available_at,id FOR UPDATE SKIP LOCKED LIMIT 1)
-    RETURNING id,assignment_id,event_type,revision`);
-  return rows[0] || null;
+    RETURNING id,assignment_id,event_type,revision,event_id`);
+  if (!rows[0]) return null;
+  const job = rows[0] as NoticeJob;
+  if (assignmentEvent(job.event_type)) {
+    const event = await pool.query(`SELECT detail FROM delivery_assignment_events WHERE id=$1 AND assignment_id=$2`,
+      [job.event_id, job.assignment_id]);
+    job.detail = event.rows[0]?.detail ?? null;
+  }
+  return job;
 }
 
 async function publish(job: NonNullable<Awaited<ReturnType<typeof claim>>>): Promise<void> {
   const { rows } = await pool.query(`SELECT * FROM delivery_assignments WHERE id=$1`, [job.assignment_id]);
   const a = rows[0] as Assignment | undefined;
   if (!a) throw new Error(`Delivery assignment ${job.assignment_id} missing`);
+  const staleAssignment = assignmentEvent(job.event_type) && !driverMatches(a, job);
   const deadline = job.event_type === "overdue" || job.event_type === "escalated";
   if (deadline && (["completed", "cancelled", "receipt_approved"].includes(a.status)
     || !a.scheduled_at || a.scheduled_at.getTime() + (job.event_type === "escalated" ? 60 * 60_000 : 0) > Date.now()
@@ -165,14 +216,19 @@ async function publish(job: NonNullable<Awaited<ReturnType<typeof claim>>>): Pro
     await pool.query(`UPDATE delivery_notification_outbox SET published_at=now(),claimed_until=NULL WHERE id=$1`, [job.id]);
     return;
   }
-  const s = await sourceFor(a);
-  if (!s) throw new Error(`Delivery source ${a.source_type}/${a.source_id} missing`);
-  const targets = await recipients(a, s, job.event_type);
+  // Stale new-driver work must not reach the former driver. The old driver can
+  // still receive a context-free removal notice based on the immutable event.
+  const previousDriver = job.event_type === "reassigned" && job.detail?.previousDriverId !== driverFromEvent(job)
+    && job.detail?.previousDriverId && await activeDriver(job.detail.previousDriverId)
+    ? job.detail.previousDriverId : null;
+  const s = staleAssignment ? null : await sourceFor(a);
+  if (!staleAssignment && !s) throw new Error(`Delivery source ${a.source_type}/${a.source_id} missing`);
+  const targets = staleAssignment ? [] : await recipients(a, s!, job.event_type);
   const c = await pool.connect();
   try {
     await c.query("BEGIN");
     for (const id of targets) {
-      const branch = job.event_type === "awaiting_receipt" ? s.destination : s.source;
+      const branch = job.event_type === "awaiting_receipt" ? s!.destination : s!.source;
       await c.query(`INSERT INTO system_notifications
         (title,content,message_type,display_style,priority,target_all_branches,target_branch_ids,
          target_user_ids,button_text,button_action,show_once,auto_generated,auto_source,access_module,access_branch_ids,
@@ -180,11 +236,25 @@ async function publish(job: NonNullable<Awaited<ReturnType<typeof claim>>>): Pro
         VALUES ($1,$2,'delivery_task','banner',3,false,$3,$4,'فتح مهمة التوصيل',$5,true,true,
           'delivery_task','delivery_tasks',$3,$6,$7)
         ON CONFLICT (dedupe_key) DO NOTHING`, [
-        copy[job.event_type].title, copy[job.event_type].content,
+         copy[job.event_type].title,
+         assignmentEvent(job.event_type) && a.scheduled_at
+           ? `${copy[job.event_type].content} الموعد: ${a.scheduled_at.toISOString()}.`
+           : copy[job.event_type].content,
         branch ? [branch] : [], [id],
         `/driver-deliveries?deliveryId=${encodeURIComponent(a.id)}`,
         `delivery:${job.id}:${id}`, a.created_by,
       ]);
+    }
+    if (previousDriver) {
+      await c.query(`INSERT INTO system_notifications
+        (title,content,message_type,display_style,priority,target_all_branches,target_branch_ids,
+         target_user_ids,show_once,auto_generated,auto_source,access_module,access_branch_ids,
+         dedupe_key,created_by)
+        VALUES ('أزيل إسناد مهمة توصيل','لم تعد إحدى مهام التوصيل مسندة إليك.','delivery_task',
+          'banner',3,false,ARRAY[]::text[],$1,true,true,'delivery_task','delivery_tasks',
+          ARRAY[]::text[],$2,$3)
+        ON CONFLICT (dedupe_key) DO NOTHING`,
+      [[previousDriver], `delivery:${job.id}:${previousDriver}:removed`, a.created_by]);
     }
     await c.query(`UPDATE delivery_notification_outbox SET published_at=now(),claimed_until=NULL
       WHERE id=$1`, [job.id]);

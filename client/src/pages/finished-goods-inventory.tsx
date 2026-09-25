@@ -529,6 +529,8 @@ export default function FinishedGoodsInventoryPage() {
                           {transfer.status === "completed" ? "مكتمل" : transfer.status === "pending" ? "محجوز" : transfer.status === "in_transit" ? "قيد النقل" : transfer.status === "received" ? `مستلم (${transfer.receivedQuantity ?? transfer.quantity})` : transfer.status === "cancelled" ? "ملغي" : transfer.status}
                         </Badge>
                         {canEdit("production") && transfer.transportPolicy === "branch_receipt" && transfer.status === "pending" && transfer.sourceBranchId === branchId && <>
+                          <Link href={`/driver-deliveries?sourceType=finished_goods_transfer&sourceId=${transfer.id}`}><Button size="sm" variant="link">إسناد السائق وتوثيق التسليم</Button></Link>
+                          <span className="text-xs text-amber-800">الشحن بعد تأكيد السائق</span>
                           <Button size="sm" variant="outline" disabled={shipmentMutation.isPending} onClick={() => shipmentMutation.mutate({ id: transfer.id, action: "dispatch" })}>شحن</Button>
                           <Button size="sm" variant="ghost" disabled={shipmentMutation.isPending} onClick={() => shipmentMutation.mutate({ id: transfer.id, action: "cancel" })}>إلغاء الحجز</Button>
                         </>}

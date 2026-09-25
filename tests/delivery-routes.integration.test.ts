@@ -210,6 +210,63 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     state.permissions.set(fixture.manager!.id, previous!);
   });
 
+  it("assigns before dispatch and requires a current-driver physical handover and acknowledgement", async () => {
+    const transfer = await client.query(`INSERT INTO finished_goods_transfers
+      (inventory_id,source_branch_id,destination_type,destination_branch_id,product_id,product_name,quantity,unit,
+       transfer_date,status,transport_policy,production_date,created_by)
+      VALUES ($1,$2,'branch',$3,$4,$5,3,'piece',current_date::text,'pending','branch_receipt','2023-02-14',$6)
+      RETURNING id`, [fixture.inventory,fixture.kitchen,fixture.destination,fixture.product,fixture.prefix,fixture.manager!.id]);
+    const sourceId = transfer.rows[0].id;
+    const request = { sourceType: "finished_goods_transfer", sourceId, driverId: fixture.driver!.id, vehicleNumber: "V-1" };
+    const created = await invoke("POST","/api/deliveries",fixture.manager!,request);
+    expect(created.statusCode).toBe(201);
+    const id = created.body.id;
+    expect((await invoke("POST","/api/deliveries/:id/start",fixture.driver!,{}, { id })).statusCode).toBe(409);
+    const items = [{ id: sourceId, quantity: 3 }];
+    expect((await invoke("POST","/api/deliveries/:id/handover",fixture.receiver!,{ items },{ id })).statusCode).toBe(403);
+    expect((await invoke("POST","/api/deliveries/:id/handover",fixture.manager!,{ items: [{ id: sourceId, quantity: 4 }] },{ id })).statusCode).toBe(400);
+    expect((await invoke("POST","/api/deliveries/:id/handover",fixture.manager!,{ items },{ id })).statusCode).toBe(200);
+    expect((await invoke("POST","/api/deliveries/:id/acknowledge-handover",fixture.otherDriver!,{}, { id })).statusCode).toBe(403);
+    expect((await invoke("POST","/api/deliveries/:id/acknowledge-handover",fixture.driver!,{}, { id })).statusCode).toBe(200);
+    expect((await invoke("POST","/api/deliveries/:id/start",fixture.driver!,{}, { id })).statusCode).toBe(409);
+    const revised = await invoke("POST","/api/deliveries/:id/reassign",fixture.manager!,
+      { driverId: fixture.otherDriver!.id, vehicleNumber: "V-2" },{ id });
+    expect(revised.statusCode).toBe(200);
+    expect(revised.body.handoverAcknowledgedAt).toBeNull();
+    expect((await invoke("POST","/api/deliveries/:id/acknowledge-handover",fixture.driver!,{}, { id })).statusCode).toBe(403);
+    expect((await invoke("POST","/api/deliveries/:id/start",fixture.otherDriver!,{}, { id })).statusCode).toBe(409);
+    expect((await invoke("POST","/api/deliveries/:id/handover",fixture.manager!,{ items },{ id })).statusCode).toBe(200);
+    expect((await invoke("POST","/api/deliveries/:id/acknowledge-handover",fixture.otherDriver!,{}, { id })).statusCode).toBe(200);
+    await client.query("UPDATE finished_goods_transfers SET status='in_transit' WHERE id=$1",[sourceId]);
+    expect((await invoke("POST","/api/deliveries/:id/start",fixture.otherDriver!,{}, { id })).body.status).toBe("in_transit");
+  });
+
+  it("recovers legacy assigned work after source receipt with late proof but never posts stock", async () => {
+    const order = await client.query(`INSERT INTO central_kitchen_orders
+      (order_number,request_branch_id,central_kitchen_id,order_date,status,idempotency_key,payload_fingerprint,created_by)
+      VALUES ($1,$2,$3,current_date,'dispatched',$4,$5,$6) RETURNING id`,
+      [`${fixture.prefix}-late`,fixture.destination,fixture.kitchen,`${fixture.prefix}-late-key`,"b".repeat(64),fixture.manager!.id]);
+    const sourceId = order.rows[0].id;
+    const created = await invoke("POST","/api/deliveries",fixture.manager!,
+      { sourceType: "kitchen", sourceId, driverId: fixture.driver!.id, vehicleNumber: "Late-1" });
+    expect(created.statusCode).toBe(201);
+    const id = created.body.id;
+    await client.query("UPDATE central_kitchen_orders SET status='received',received_by=$1 WHERE id=$2",
+      [fixture.receiver!.id,sourceId]);
+    const before = Number((await client.query("SELECT quantity FROM finished_goods_inventory WHERE id=$1",
+      [fixture.inventory])).rows[0].quantity);
+    const view = await invoke("GET","/api/deliveries/:id",fixture.driver!,{}, { id });
+    expect(view.body.capabilities.canStart).toBe(true);
+    expect((await invoke("POST","/api/deliveries/:id/start",fixture.driver!,{}, { id })).body.status).toBe("in_transit");
+    expect((await invoke("POST","/api/deliveries/:id/proof",fixture.driver!,
+      { signatureData: png,receiverName:"Late receiver" },{ id })).body.status).toBe("awaiting_receipt");
+    expect((await invoke("POST","/api/deliveries/:id/approve-receipt",fixture.outsiderUser!,{}, { id })).statusCode).toBe(403);
+    expect((await invoke("POST","/api/deliveries/:id/approve-receipt",fixture.receiver!,{}, { id })).body.status).toBe("receipt_approved");
+    expect((await invoke("POST","/api/deliveries/:id/complete",fixture.driver!,{}, { id })).body.status).toBe("completed");
+    expect(Number((await client.query("SELECT quantity FROM finished_goods_inventory WHERE id=$1",
+      [fixture.inventory])).rows[0].quantity)).toBe(before);
+  });
+
   it("requires live branch scope, actual permission middleware and source receipt proof", async () => {
     const request = { sourceType: "kitchen", sourceId: fixture.source, driverId: fixture.driver!.id, vehicleNumber: "V-1" };
     expect((await invoke("POST", "/api/deliveries", fixture.outsiderUser!, request)).statusCode).toBe(403);
@@ -261,7 +318,7 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     expect(reassigned.body).toEqual(expect.objectContaining({ id, driverId: fixture.otherDriver!.id, status: "assigned", proofPresent: false }));
     expect((await invoke("GET", "/api/deliveries/:id/proof", fixture.driver!, {}, { id })).statusCode).toBe(403);
     expect((await invoke("POST", "/api/deliveries/:id/start", fixture.driver!, {}, { id })).statusCode).toBe(403);
-    expect((await invoke("POST", "/api/deliveries/:id/start", fixture.otherDriver!, {}, { id })).body.status).toBe("in_transit");
+    expect((await invoke("POST", "/api/deliveries/:id/start", fixture.otherDriver!, {}, { id })).statusCode).toBe(409);
   });
 
   it("finished-goods receipt must be posted by the authenticated destination actor; driver proof never posts stock", async () => {

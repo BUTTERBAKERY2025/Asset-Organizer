@@ -5,6 +5,7 @@ import { z } from "zod";
 import { pool } from "./db";
 import { isAuthenticated, requirePermission, getAllowedBranchIds } from "./auth";
 import { shippingAction, shippingCreate, shippingId, allocateReceivedLots } from "@shared/kitchen-warehouse-shipping";
+import { assertDeliveryDispatchReady, cancelDeliveryAssignmentForSource, DeliveryDispatchConflict } from "./delivery-dispatch-guard";
 
 class ShippingError extends Error {
   constructor(message: string, public status = 409) { super(message); }
@@ -45,9 +46,9 @@ export function registerKitchenWarehouseShippingRoutes(app: Express) {
       res.json(result);
     } catch (error: any) {
       await c.query("ROLLBACK");
-      res.status(error instanceof z.ZodError ? 400 : error instanceof ShippingError ? error.status : 500)
+      res.status(error instanceof z.ZodError ? 400 : error instanceof ShippingError || error instanceof DeliveryDispatchConflict ? error.status : 500)
         .json({ message: error instanceof z.ZodError ? error.issues.map(i => i.message).join("; ") :
-          error instanceof ShippingError ? error.message : "Kitchen warehouse shipping failed" });
+          error instanceof ShippingError || error instanceof DeliveryDispatchConflict ? error.message : "Kitchen warehouse shipping failed" });
     } finally { c.release(); }
   };
   const kitchenView = [isAuthenticated, requirePermission("production", "view")] as const;
@@ -146,8 +147,11 @@ export function registerKitchenWarehouseShippingRoutes(app: Express) {
         throw new ShippingError("Actual received quantity required",400);
       if (operation === "receive" && body.receivedQuantity! > shipment.quantity)
         throw new ShippingError("Receipt exceeds dispatched quantity",400);
-      if (operation === "dispatch" && !body.carrierName)
-        throw new ShippingError("Actual carrier name required for dispatch",400);
+      const dispatchDriver = operation === "dispatch"
+        ? await assertDeliveryDispatchReady(c, { sourceType: "kitchen_warehouse_shipment", sourceId: id })
+        : null;
+      if (operation === "cancel")
+        await cancelDeliveryAssignmentForSource(c, { sourceType: "kitchen_warehouse_shipment", sourceId: id, actorId: user });
       if (operation === "dispatch") {
         const product = (await rows(c,`SELECT operations_enabled,is_active FROM products WHERE id=$1 FOR SHARE`,[shipment.product_id]))[0];
         if (!product || (!product.operations_enabled &&
@@ -206,7 +210,7 @@ export function registerKitchenWarehouseShippingRoutes(app: Express) {
         dispatched_at=CASE WHEN $2='dispatched' THEN now() ELSE dispatched_at END,
          received_at=CASE WHEN $2='received' THEN now() ELSE received_at END,
          received_by=CASE WHEN $2='received' THEN $6 ELSE received_by END
-         WHERE id=$1 RETURNING *`,[id,status,body.receivedQuantity ?? null,body.carrierName ?? null,body.vehicleNumber ?? null,user]))[0];
+         WHERE id=$1 RETURNING *`,[id,status,body.receivedQuantity ?? null,dispatchDriver?.driverName ?? null,dispatchDriver?.vehicleNumber ?? null,user]))[0];
       await c.query(`INSERT INTO kitchen_warehouse_shipment_events(shipment_id,action,actor_id,idempotency_key,payload)
         VALUES($1,$2,$3,$4,$5)`,[id,operation,user,body.idempotencyKey,JSON.stringify(body)]);
       return result;

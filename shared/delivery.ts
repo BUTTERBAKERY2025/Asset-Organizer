@@ -1,4 +1,4 @@
-export type DeliverySourceType = "kitchen" | "material_transfer" | "finished_goods_transfer" | "kitchen_warehouse_shipment";
+export type DeliverySourceType = "kitchen" | "material_transfer" | "finished_goods_transfer" | "kitchen_warehouse_shipment" | "reverse_movement";
 export type DeliveryStatus = "assigned" | "in_transit" | "awaiting_receipt" | "receipt_approved" | "completed" | "failed" | "cancelled";
 
 export interface DeliverySource {
@@ -7,11 +7,14 @@ export interface DeliverySource {
   sourceStatus: string;
   sourceLabel: string;
   sourceBranchId: string | null;
+  sourceWarehouseId?: number | null;
   sourceBranchName: string;
   destinationBranchId: string | null;
   destinationBranchName: string;
   destinationWarehouseId?: number | null;
-  items: Array<{ id: number; name: string; quantity: number; unit: string | null }>;
+  items: Array<{ id: number; name: string; quantity: number; unit: string | null;
+    originalQuantity?: number; substituteQuantity?: number; substituteProductId?: number | null;
+    substituteWarehouseItemId?: number | null; substituteName?: string | null; substituteUnit?: string | null }>;
 }
 
 export interface DeliveryDTO extends DeliverySource {
@@ -34,7 +37,13 @@ export interface DeliveryDTO extends DeliverySource {
   cancellationReason: string | null;
   createdAt: string;
   updatedAt: string;
+  handoverRecordedAt: string | null;
+  handoverAcknowledgedAt: string | null;
+  handoverItems: DeliverySource["items"] | null;
+  handoverInvalidated: boolean;
   capabilities: {
+    canRecordHandover: boolean;
+    canAcknowledgeHandover: boolean;
     canStart: boolean;
     canSubmitProof: boolean;
     canApproveReceipt: boolean;
@@ -60,5 +69,7 @@ export function deliveryTransitionAllowed(status: DeliveryStatus, action: "start
 }
 
 export function receiptMatchesSource(sourceType: DeliverySourceType, status: string, receivedBy: string | null, approverId: string): boolean {
-  return !!receivedBy && receivedBy === approverId && status === (sourceType === "material_transfer" ? "delivered" : "received");
+  return !!receivedBy && receivedBy === approverId &&
+    (status === (sourceType === "material_transfer" ? "delivered" : "received")
+      || (sourceType === "reverse_movement" && status === "inspected"));
 }

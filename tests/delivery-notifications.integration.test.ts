@@ -12,11 +12,15 @@ let connection: pg.Pool;
 let taskId: number;
 let eventId: number;
 let driver: string;
+let newDriver: string;
 let manager: string;
 let receiver: string;
 let source: string;
 let destination: string;
 let transferId: number;
+const noticeScope = (row: any) => ({
+  dedupeKey: row.dedupe_key, targetUserIds: row.target_user_ids,
+});
 
 describe("delivery notice outbox (local PostgreSQL only)", () => {
   beforeAll(async () => {
@@ -27,13 +31,17 @@ describe("delivery notice outbox (local PostgreSQL only)", () => {
     const { rows } = await connection.query("SELECT current_database() name");
     if (rows[0].name !== "heliumdb") throw Error("Unexpected database; remote writes refused");
     await connection.query(readFileSync("migrations/delivery_notification_outbox.sql", "utf8"));
+    await connection.query(readFileSync("migrations/delivery_assignment_notices.sql", "utf8"));
     source = `${prefix}-source`; destination = `${prefix}-destination`;
-    driver = `${prefix}-driver`; manager = `${prefix}-manager`; receiver = `${prefix}-receiver`;
+    driver = `${prefix}-driver`; newDriver = `${prefix}-new-driver`;
+    manager = `${prefix}-manager`; receiver = `${prefix}-receiver`;
     await connection.query("INSERT INTO branches (id,name) VALUES ($1,$3),($2,$4)",
       [source, destination, source, destination]);
     await connection.query(`INSERT INTO users (id,first_name,role,branch_id,job_title,is_active)
       VALUES ($1,$4,'employee',$3,'delivery','active'),
       ($2,$5,'employee',$3,'manager','active')`, [driver, manager, source, driver, manager]);
+    await connection.query(`INSERT INTO users (id,first_name,role,branch_id,job_title,is_active)
+      VALUES ($1,$1,'employee',$2,'delivery','active')`, [newDriver, source]);
     await connection.query(`INSERT INTO user_permissions (user_id,module,actions)
       VALUES ($1,'warehouse',ARRAY['view','edit']::text[])`, [manager]);
     await connection.query(`INSERT INTO users (id,first_name,role,branch_id,job_title,is_active)
@@ -59,12 +67,15 @@ describe("delivery notice outbox (local PostgreSQL only)", () => {
     if (!connection) return;
     try {
       await connection.query(`DELETE FROM system_notifications
-        WHERE auto_source='delivery_task' AND button_action=$1`, [`/driver-deliveries?deliveryId=${taskId}`]);
+        WHERE dedupe_key IN (SELECT 'delivery:' || id || ':' || $2 || ':removed'
+          FROM delivery_notification_outbox WHERE assignment_id=$1)
+          OR (auto_source='delivery_task' AND button_action=$3)`,
+        [taskId, driver, `/driver-deliveries?deliveryId=${taskId}`]);
       await connection.query("DELETE FROM delivery_notification_outbox WHERE assignment_id=$1", [taskId]);
       await connection.query("DELETE FROM delivery_assignment_events WHERE assignment_id=$1", [taskId]);
       await connection.query("DELETE FROM delivery_assignments WHERE id=$1", [taskId]);
       await connection.query("DELETE FROM material_transfers WHERE id=$1", [transferId]);
-      await connection.query("DELETE FROM users WHERE id=ANY($1::varchar[])", [[driver, manager, receiver]]);
+      await connection.query("DELETE FROM users WHERE id=ANY($1::varchar[])", [[driver, newDriver, manager, receiver]]);
       await connection.query("DELETE FROM branches WHERE id=ANY($1::varchar[])", [[source, destination]]);
     } finally { await connection.end(); }
   });
@@ -79,6 +90,94 @@ describe("delivery notice outbox (local PostgreSQL only)", () => {
         WHERE assignment_id=$1 AND event_type='failed'`, [taskId]);
       expect(rows[0].count).toBe(0);
     } finally { c.release(); }
+  });
+
+  it("publishes assignments only to the current driver, revokes stale access and dedupes retries", async () => {
+    const first = await connection.query(`INSERT INTO delivery_assignment_events
+      (assignment_id,actor_id,action,to_status,detail)
+      VALUES ($1,$2,'create','assigned',$3::jsonb) RETURNING id`,
+      [taskId, manager, JSON.stringify({ driverId: driver })]);
+    const c = await connection.connect();
+    try {
+      await c.query("BEGIN");
+      await enqueueDeliveryNotice(c, taskId, first.rows[0].id, "assigned");
+      await enqueueDeliveryNotice(c, taskId, first.rows[0].id, "assigned");
+      await c.query("COMMIT");
+    } finally { c.release(); }
+    await sweepDeliveryNotices();
+    const firstNotice = await connection.query(`SELECT n.* FROM system_notifications n
+      JOIN delivery_notification_outbox o ON n.dedupe_key='delivery:'||o.id||':'||$2
+      WHERE o.event_id=$1 AND o.event_type='assigned'`, [first.rows[0].id, driver]);
+    expect(firstNotice.rows).toHaveLength(1);
+    expect(firstNotice.rows[0].button_action).toBe(`/driver-deliveries?deliveryId=${taskId}`);
+    expect(firstNotice.rows[0].content).toContain("الموعد");
+    expect(await filterAuthorizedDeliveryNoticeUsers(noticeScope(firstNotice.rows[0]), [driver, newDriver])).toEqual([driver]);
+
+    const c2 = await connection.connect();
+    let secondEvent: number;
+    try {
+      await c2.query("BEGIN");
+      await c2.query(`UPDATE delivery_assignments SET driver_id=$2,scheduled_at=now()+interval '2 hours'
+        WHERE id=$1`, [taskId, newDriver]);
+      const e = await c2.query(`INSERT INTO delivery_assignment_events
+        (assignment_id,actor_id,action,from_status,to_status,detail)
+        VALUES ($1,$2,'reassign','assigned','assigned',$3::jsonb) RETURNING id`,
+        [taskId, manager, JSON.stringify({ previousDriverId: driver, driverId: newDriver })]);
+      secondEvent = e.rows[0].id;
+      await enqueueDeliveryNotice(c2, taskId, secondEvent, "reassigned");
+      await enqueueDeliveryNotice(c2, taskId, secondEvent, "reassigned");
+      await c2.query("COMMIT");
+    } finally { c2.release(); }
+    expect(await filterAuthorizedDeliveryNoticeUsers(noticeScope(firstNotice.rows[0]), [driver, newDriver])).toEqual([]);
+    await sweepDeliveryNotices();
+    const notices = await connection.query(`SELECT n.* FROM system_notifications n
+      JOIN delivery_notification_outbox o ON n.dedupe_key LIKE 'delivery:'||o.id||':%'
+      WHERE o.event_id=$1`, [secondEvent!]);
+    const replacement = notices.rows.find(n => n.target_user_ids.includes(newDriver));
+    const removed = notices.rows.find(n => n.target_user_ids.includes(driver));
+    expect(notices.rows).toHaveLength(2);
+    expect(replacement.button_action).toBe(`/driver-deliveries?deliveryId=${taskId}`);
+    expect(removed.button_action).toBeNull();
+    expect(removed.content).not.toContain(String(taskId));
+    expect(removed.content).not.toContain(prefix);
+    expect(await filterAuthorizedDeliveryNoticeUsers(noticeScope(removed), [driver, newDriver])).toEqual([driver]);
+    expect(await filterAuthorizedDeliveryNoticeUsers(noticeScope(replacement), [driver, newDriver])).toEqual([newDriver]);
+    await connection.query("UPDATE users SET is_active='inactive' WHERE id=$1", [newDriver]);
+    expect(await filterAuthorizedDeliveryNoticeUsers(noticeScope(replacement), [newDriver])).toEqual([]);
+    await connection.query("UPDATE users SET is_active='active' WHERE id=$1", [newDriver]);
+    await connection.query(`UPDATE delivery_assignments SET scheduled_at=now()+interval '3 hours'
+      WHERE id=$1`, [taskId]);
+    await sweepDeliveryNotices();
+    const scheduled = await connection.query(`SELECT count(*)::int count FROM delivery_notification_outbox
+      WHERE assignment_id=$1 AND event_type='reassigned'`, [taskId]);
+    expect(scheduled.rows[0].count).toBe(1);
+    await connection.query(`UPDATE delivery_notification_outbox SET published_at=NULL,available_at=now()
+      WHERE event_id=$1`, [secondEvent!]);
+    await sweepDeliveryNotices();
+    const duplicate = await connection.query(`SELECT count(*)::int count FROM system_notifications n
+      JOIN delivery_notification_outbox o ON n.dedupe_key LIKE 'delivery:'||o.id||':%'
+      WHERE o.event_id=$1`, [secondEvent!]);
+    expect(duplicate.rows[0].count).toBe(2);
+
+    // Future reassignment suppresses a still-pending previous driver's task link.
+    const third = await connection.query(`INSERT INTO delivery_assignment_events
+      (assignment_id,actor_id,action,to_status,detail)
+      VALUES ($1,$2,'create','assigned',$3::jsonb) RETURNING id`,
+      [taskId, manager, JSON.stringify({ driverId: newDriver })]);
+    const c3 = await connection.connect();
+    try {
+      await c3.query("BEGIN");
+      await enqueueDeliveryNotice(c3, taskId, third.rows[0].id, "assigned");
+      await c3.query("COMMIT");
+    } finally { c3.release(); }
+    await connection.query("UPDATE delivery_assignments SET driver_id=$2 WHERE id=$1", [taskId, driver]);
+    await sweepDeliveryNotices();
+    const stale = await connection.query(`SELECT count(*)::int count FROM system_notifications n
+      JOIN delivery_notification_outbox o ON n.dedupe_key='delivery:'||o.id||':'||$2
+      WHERE o.event_id=$1`, [third.rows[0].id, newDriver]);
+    expect(stale.rows[0].count).toBe(0);
+    await connection.query(`UPDATE delivery_assignments
+      SET scheduled_at=now()-interval '70 minutes' WHERE id=$1`, [taskId]);
   });
 
   it("dedupes transition and deadline revisions under concurrent sweeps", async () => {

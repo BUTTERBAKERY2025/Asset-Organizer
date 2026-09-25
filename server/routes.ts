@@ -13,6 +13,7 @@ import {
 import { db, pool } from "./db";
 import { registerReverseLogisticsRoutes } from "./reverse-logistics-routes";
 import { registerKitchenWarehouseShippingRoutes } from "./kitchen-warehouse-shipping-routes";
+import { assertDeliveryDispatchReady, cancelDeliveryAssignmentForSource, DeliveryDispatchConflict } from "./delivery-dispatch-guard";
 import * as NotificationService from "./notification-service";
 import { computeBranchIssues, formatBranchIssuesMessage } from "./branch-issues";
 import { evaluateWasteGovernance, checkApprovalGate } from "./waste-governance";
@@ -7949,6 +7950,7 @@ export async function registerRoutes(
             }
             await tx.update(centralKitchenOrders).set({ neededDate: edit.neededDate, neededTime: edit.neededTime, notes: edit.notes, updatedAt: sql`now()` }).where(eq(centralKitchenOrders.id, order.id));
           } else {
+            await cancelDeliveryAssignmentForSource(tx, { sourceType: "kitchen", sourceId: order.id, actorId: actor.id });
             await tx.update(centralKitchenOrders).set({ status: "cancelled", updatedAt: sql`now()` }).where(eq(centralKitchenOrders.id, order.id));
           }
           const afterOrder = payload.edit
@@ -9213,6 +9215,13 @@ export async function registerRoutes(
           throw new CentralKitchenLiveError("تغير الطلب أثناء تنفيذ الخطوة. أعد تحميل التفاصيل قبل المتابعة");
         }
         await assertRealOrderWritable(order, tx);
+        const dispatchDriver = dispatchPayload
+          ? await assertDeliveryDispatchReady(tx, { sourceType: "kitchen", sourceId: id.data,
+              items: dispatchPayload.items.map(item => ({
+                id: item.itemId, quantity: item.dispatchedQuantity,
+                unit: "", // Filled from the locked source's canonical item units by the guard.
+              })) })
+          : null;
         let productionEvidenceByItem = new Map<number, Record<string, unknown> | null>();
         if (preparationPayload) {
           productionEvidenceByItem = await reserveRealPreparation(tx, order, preparationPayload.items);
@@ -9222,8 +9231,8 @@ export async function registerRoutes(
           updatedAt: sql`now()`,
           ...actorField,
           ...(dispatchPayload ? {
-            driverName: dispatchPayload.driverName,
-            vehicleNumber: dispatchPayload.vehicleNumber,
+            driverName: dispatchDriver!.driverName,
+            vehicleNumber: dispatchDriver!.vehicleNumber,
           } : {}),
           ...(receivePayload ? {
             discrepancyStatus: receiptHasDiscrepancy ? "open" : "none",
@@ -9449,6 +9458,9 @@ export async function registerRoutes(
     } catch (error: any) {
       if (error instanceof CentralKitchenLiveError) {
         return res.status(error.status).json({ error: error.message });
+      }
+      if (error instanceof DeliveryDispatchConflict) {
+        return res.status(409).json({ error: error.message });
       }
       const errorCode = error?.code || error?.cause?.code;
       if (errorCode === "23505") {
@@ -37590,7 +37602,8 @@ export async function registerRoutes(
         transfer = await storage.updateMaterialTransferStatus(
           transferId,
           status,
-          updateData
+          updateData,
+          user?.id
         );
       }
       
@@ -37639,6 +37652,9 @@ export async function registerRoutes(
       
       res.json(transfer);
     } catch (error) {
+      if (error instanceof DeliveryDispatchConflict) {
+        return res.status(409).json({ error: error.message });
+      }
       console.error("Error updating transfer status:", error);
       const statusCode = getWarehouseTransferErrorStatus(error) ?? 500;
       res.status(statusCode).json({

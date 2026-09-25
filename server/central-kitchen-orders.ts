@@ -225,8 +225,10 @@ export const centralKitchenPreparationSchema = z.object({
 export const centralKitchenDispatchSchema = z.object({
   notes: z.string().trim().max(2000).optional().nullable(),
   idempotencyKey: centralKitchenIdempotencyKeySchema.optional(),
-  driverName: trimmedText(200),
-  vehicleNumber: trimmedText(100),
+  // Legacy clients may still send these values, but the source transition
+  // always takes driver/vehicle from the acknowledged assignment instead.
+  driverName: trimmedText(200).optional(),
+  vehicleNumber: trimmedText(100).optional(),
   items: z.array(z.object({
     itemId: z.number().int().positive(),
     dispatchedQuantity: exactSixDecimalNonnegative,

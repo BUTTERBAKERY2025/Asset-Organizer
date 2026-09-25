@@ -1872,10 +1872,9 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
               {/* Dispatch fields for in_transit status */}
               {statusUpdate.status === "in_transit" && (
                 <div className="space-y-3 border rounded-lg p-3 bg-blue-50 dark:bg-blue-950/20">
-                  <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                    {isRTL ? "بيانات الإرسال" : "Dispatch Information"}
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
+                  <p className="text-sm font-medium text-blue-700 dark:text-blue-300">يجب إسناد السائق وتوثيق كمية كل بند واستلام تأكيد السائق قبل الإرسال. بيانات السائق والمركبة تؤخذ من مهمة التوصيل.</p>
+                  {selectedTransfer && <Link href={`/driver-deliveries?sourceType=material_transfer&sourceId=${selectedTransfer.id}`}><Button variant="outline" type="button">إسناد السائق وتوثيق التسليم</Button></Link>}
+                  <div className="grid grid-cols-1 gap-3">
                     <div className="space-y-1">
                       <Label className="text-xs">{isRTL ? "تاريخ الإرسال" : "Dispatch Date"}</Label>
                       <Input 
@@ -1885,24 +1884,6 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                         data-testid="input-dispatch-date"
                       />
                     </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">{isRTL ? "رقم المركبة" : "Vehicle Number"}</Label>
-                      <Input 
-                        value={statusUpdate.vehicleNumber}
-                        onChange={(e) => setStatusUpdate(prev => ({ ...prev, vehicleNumber: e.target.value }))}
-                        placeholder="ABC-1234"
-                        data-testid="input-dispatch-vehicle"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">{isRTL ? "اسم السائق" : "Driver Name"}</Label>
-                    <Input 
-                      value={statusUpdate.driverName}
-                      onChange={(e) => setStatusUpdate(prev => ({ ...prev, driverName: e.target.value }))}
-                      placeholder={isRTL ? "اسم السائق" : "Driver name"}
-                      data-testid="input-dispatch-driver"
-                    />
                   </div>
                 </div>
               )}
@@ -1943,8 +1924,6 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                       receiverSignature: statusUpdate.receiverSignature,
                       // Include dispatch fields for in_transit
                       ...(statusUpdate.status === "in_transit" && {
-                        driverName: statusUpdate.driverName,
-                        vehicleNumber: statusUpdate.vehicleNumber,
                         transferDate: statusUpdate.transferDate,
                       }),
                     });
@@ -1953,8 +1932,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                 disabled={
                   !statusUpdate.status || 
                   updateStatusMutation.isPending || 
-                  (statusUpdate.status === "delivered" && !statusUpdate.receiverSignature) ||
-                  (statusUpdate.status === "in_transit" && (!statusUpdate.driverName || !statusUpdate.vehicleNumber))
+                  (statusUpdate.status === "delivered" && !statusUpdate.receiverSignature)
                 }
                 data-testid="btn-confirm-status"
               >
