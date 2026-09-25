@@ -6,12 +6,29 @@ vi.mock("../client/src/lib/queryClient", () => ({ apiRequest: vi.fn(), getQueryF
 vi.mock("../client/src/components/layout", () => ({ Layout: ({ children }: { children: React.ReactNode }) => children }));
 import { createKitchenSubmitGuard, DispatchEditor, ReceiptEditor, RequestChangeControls } from "../client/src/pages/central-kitchen-orders";
 import { PreparationEditor } from "../client/src/components/central-kitchen/prepare-fulfillment";
+import { OrderLineEditor } from "../client/src/components/central-kitchen/order-line-editor";
 
 const products = [
   { id: 1, productId: 10, productName: "خبز اختبار", unit: "قطعة", requestedQuantity: 4, preparedQuantity: 4, dispatchedQuantity: 4 },
   { id: 2, warehouseItemId: 11, productName: "طحين اختبار", unit: "كيلو", requestedQuantity: 1.5, preparedQuantity: 1.25, dispatchedQuantity: 1.25 },
 ];
 describe("kitchen workflow mobile quantity evidence", () => {
+  it("separates mobile item selection from quantities without dropping draft values", () => {
+    for (const mobileView of ["choose", "selected"] as const) {
+      const html = renderToStaticMarkup(React.createElement(OrderLineEditor, {
+        mobileView,
+        items: [{ productName: "صنف يدوي", manualMode: true, unit: "كيلو", requestedQuantity: "1.5", reportedAvailableQuantity: "0", notes: "" }],
+        products: [], catalogLoading: false, catalogError: false,
+        onChange: vi.fn(), onRetryCatalog: vi.fn(),
+      }));
+      expect(html).toContain("اختيار الأصناف");
+      expect(html).toContain("الكميات (1)");
+      expect(html).toContain('value="1.5"');
+      expect(html).toContain('value="0"');
+      expect(html).toMatch(/class="[^"]*sticky top-0[^"]*"/);
+      expect(html).toContain('aria-selected="true"');
+    }
+  });
   it("ignores immediate duplicate confirmations and only unlocks for an explicit failed retry", () => {
     const guard = createKitchenSubmitGuard();
     const submit = vi.fn();

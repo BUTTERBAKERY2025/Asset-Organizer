@@ -6,8 +6,8 @@
 @media (max-width: 767px) {
   .kitchen-mobile-header p { display: none; }
   .kitchen-mobile-header [data-testid="page-header-actions"] { width: 100%; }
-  .kitchen-mobile-header [data-testid="page-header-actions"] > div { display: grid; grid-template-columns: 1fr auto; width: 100%; }
-  .kitchen-mobile-header [data-testid="page-header-actions"] > div > :first-child { grid-column: 1 / -1; order: 3; }
+  .kitchen-mobile-header [data-testid="page-header-actions"] > div { display: flex; flex-wrap: nowrap; width: 100%; }
+  .kitchen-mobile-header [data-testid="create-kitchen-order"] { flex: 1; }
   .kitchen-utility-status, .kitchen-secondary-metrics { display: none; }
   .kitchen-stage-rail { position: sticky; top: 0; z-index: 20; margin-inline: -0.75rem; padding-inline: 0.75rem; background: hsl(var(--background) / .97); box-shadow: 0 8px 18px hsl(20 18% 25% / .07); }
   .kitchen-stage-rail button { min-height: 48px; padding-inline: .7rem; }

@@ -211,6 +211,7 @@ export default function CentralKitchenOrdersPage() {
   const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
   const [createOpen, setCreateOpen] = useState(false);
   const [createStep, setCreateStep] = useState<0 | 1 | 2>(0);
+  const [itemMobileView, setItemMobileView] = useState<"choose" | "selected">("choose");
   const [createStepError, setCreateStepError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const createDialogStyle = useVisualViewportDialog({ open: createOpen, maxHeight: 820, viewportFraction: 1 });
@@ -228,6 +229,7 @@ export default function CentralKitchenOrdersPage() {
   const openCreate = async () => {
     setDraft(current => ({ ...current, centralKitchenId: "" }));
     setCreateStep(0);
+    setItemMobileView("choose");
     setCreateStepError("");
     setCreateOpen(true);
     const result = await orderingPolicy.query.refetch();
@@ -434,7 +436,8 @@ export default function CentralKitchenOrdersPage() {
         : !isValidKitchenQuantity(item.requestedQuantity, item.productId !== undefined)
           ? `#request-qty-${index}`
           : `#reported-stock-${index}`;
-      focusCreateField(selector);
+       setItemMobileView(item?.manualMode || (!!item?.productName.trim() && !!item?.unit.trim()) ? "selected" : "choose");
+       focusCreateField(selector);
       return;
     }
     setCreateStepError("");
@@ -567,16 +570,21 @@ export default function CentralKitchenOrdersPage() {
       <PageHeader icon={Factory} tone="production" title="طلبات المطبخ" description="رتّب ما يحتاج قراراً الآن، ثم افتح التفاصيل عند الحاجة"
         className="kitchen-mobile-header"
         actions={<div className="flex flex-wrap gap-2">
-          <a href="/central-kitchen-demand-report"><Button variant="outline" size="sm"><BarChart3 className="ml-2 h-4 w-4" />تقرير الطلب غير الملبّى</Button></a>
-          {canConfigureRouting && <Button variant="outline" size="sm" className="min-h-11" onClick={() => setSettingsOpen(true)} data-testid="kitchen-settings-trigger"><Settings className="ml-2 h-4 w-4" />إعدادات المطبخ</Button>}
-          <Button variant="outline" size="sm" className="min-h-11" onClick={refresh} data-testid="refresh-kitchen-orders"><RefreshCw className="ml-2 h-4 w-4" />تحديث</Button>
-          {canCreate("central_kitchen_orders") && <Button size="sm" className="min-h-11" onClick={() => void openCreate()} data-testid="create-kitchen-order"><Plus className="ml-2 h-4 w-4" />طلب من المطبخ</Button>}
+          <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex"><a href="/central-kitchen-demand-report"><BarChart3 className="ml-2 h-4 w-4" />تقرير الطلب غير الملبّى</a></Button>
+          {canConfigureRouting && <Button variant="outline" size="sm" className="hidden min-h-11 sm:inline-flex" onClick={() => setSettingsOpen(true)} data-testid="kitchen-settings-trigger"><Settings className="ml-2 h-4 w-4" />إعدادات المطبخ</Button>}
+          <Button variant="outline" size="sm" className="min-h-11" aria-label="تحديث الطلبات" onClick={refresh} data-testid="refresh-kitchen-orders"><RefreshCw className="h-4 w-4 sm:ml-2" /><span className="hidden sm:inline">تحديث</span></Button>
+          {canCreate("central_kitchen_orders") && <Button size="sm" className="order-first min-h-11 sm:order-none" onClick={() => void openCreate()} data-testid="create-kitchen-order"><Plus className="ml-2 h-4 w-4" />طلب من المطبخ</Button>}
+          <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="icon" className="h-11 w-11 sm:hidden" aria-label="خيارات طلبات المطبخ"><EllipsisVertical className="h-5 w-5" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" dir="rtl">
+            {canConfigureRouting && <DropdownMenuItem className="min-h-11" onSelect={() => setSettingsOpen(true)}><Settings className="ml-2 h-4 w-4" />إعدادات المطبخ</DropdownMenuItem>}
+            <DropdownMenuItem asChild className="min-h-11"><a href="/central-kitchen-demand-report"><BarChart3 className="ml-2 h-4 w-4" />تقرير الطلب غير الملبّى</a></DropdownMenuItem>
+          </DropdownMenuContent></DropdownMenu>
         </div>} />
       <BranchSupplySources
         current="kitchen"
         branchId={supplyBranchId}
         canKitchen={canView("central_kitchen_orders")}
         canWarehouse={canView("warehouse")}
+        compact
         onKitchenRequest={canCreate("central_kitchen_orders") ? () => void openCreate() : undefined}
         onWarehouseRequest={canCreate("warehouse") && supplyBranchId
           ? () => navigateSupply(branchSupplyUrl("warehouse", supplyBranchId, true)) : undefined}
@@ -674,22 +682,15 @@ export default function CentralKitchenOrdersPage() {
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-6 sm:px-6">
       {createStepError && <p className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{createStepError}</p>}
       {createStep === 0 && <div className="space-y-4" data-testid="create-step-details">
-        <section className="rounded-xl border border-border bg-card p-4" aria-label="ملخص المورد">
-          <p className="text-xs font-medium text-muted-foreground">مصدر التوريد المختار</p>
-          {draft.centralKitchenId
-            ? <p className="mt-1 font-semibold text-foreground">المطبخ المركزي: {branchName(draft.centralKitchenId)}</p>
-            : <p className="mt-1 font-medium text-amber-800">لم يُحدّد مورد بعد — اختر المطبخ المركزي صراحةً.</p>}
-          <p className="mt-1 text-xs text-muted-foreground">كل الأصناف في هذا الطلب، بما فيها مواد المستودع الظاهرة في كتالوج المطبخ، تُورّد من مخزون المطبخ المختار وليست طلباً مباشراً من المستودع الرئيسي.</p>
-        </section>
-        <div className="grid gap-4 md:grid-cols-2"><FormSelect testId="source-branch-select" label="الفرع الطالب" value={draft.sourceBranchId} onChange={value => setDraft(current => ({ ...current, sourceBranchId: value, items: current.items.map(item => ({ ...item, reportedAvailableQuantity: "" })) }))} branches={branches} placeholder="اختر الفرع" /><FormSelect testId="kitchen-select" label="المطبخ المورّد" value={draft.centralKitchenId} onChange={value => setDraft({ ...draft, centralKitchenId: value })} branches={centralKitchens.filter(branch => branch.id !== draft.sourceBranchId)} placeholder={kitchensQuery.isLoading ? "جارٍ تحميل المطابخ..." : centralKitchens.length ? "اختر المطبخ صراحةً" : kitchensQuery.isError ? "تعذر تحميل المطابخ المركزية" : "لا يوجد مطبخ مركزي مفعّل"} />
+        <div className="rounded-xl border border-border bg-muted/10 p-3 text-sm text-muted-foreground">اختر الفرع والمطبخ وموعد الحاجة أولاً. <strong className="font-medium text-foreground">المطبخ المورّد اختيار إلزامي.</strong></div>
+        <div className="grid gap-4 md:grid-cols-2"><FormSelect testId="source-branch-select" label="الفرع الطالب" value={draft.sourceBranchId} onChange={value => setDraft(current => ({ ...current, sourceBranchId: value, items: current.items.map(item => ({ ...item, reportedAvailableQuantity: "" })) }))} branches={branches} placeholder="اختر الفرع" /><FormSelect testId="kitchen-select" label="المطبخ المورّد (مطلوب)" value={draft.centralKitchenId} onChange={value => setDraft({ ...draft, centralKitchenId: value })} branches={centralKitchens.filter(branch => branch.id !== draft.sourceBranchId)} placeholder={kitchensQuery.isLoading ? "جارٍ تحميل المطابخ..." : centralKitchens.length ? "اختر المطبخ صراحةً" : kitchensQuery.isError ? "تعذر تحميل المطابخ المركزية" : "لا يوجد مطبخ مركزي مفعّل"} />
         <div><Label htmlFor="needed-date">تاريخ الحاجة</Label><Input id="needed-date" lang="en" type="date" className="mt-2" value={draft.neededDate} onChange={event => setDraft({ ...draft, neededDate: event.target.value })} /></div><div><Label htmlFor="needed-time">وقت الحاجة</Label><Input id="needed-time" lang="en" type="time" className="mt-2" value={draft.neededTime} onChange={event => setDraft({ ...draft, neededTime: event.target.value })} /></div>
       </div>
-      {!!draft.centralKitchenId && <p className="rounded border border-sky-200 bg-sky-50 p-3 text-sm">مهام المطبخ موجّهة تلقائياً إلى مدير التطوير والإنتاج وفق الصلاحيات الحالية، دون تعيين يدوي.</p>}
-      {!!draft.sourceBranchId && <ReceiverRoutingNotice routing={receiverRoutingQuery.data} loading={receiverRoutingQuery.isLoading} error={receiverRoutingQuery.isError} onRetry={() => void receiverRoutingQuery.refetch()} />}
+       <details className="rounded-lg border border-border bg-card px-3 py-2 text-sm"><summary className="cursor-pointer font-medium">تفاصيل التوريد والتعيين</summary><div className="space-y-3 pt-3 text-muted-foreground"><p>جميع الأصناف، بما فيها مواد المستودع في الكتالوج، تُورّد من مخزون المطبخ المختار وليست طلباً مباشراً من المستودع الرئيسي.</p>{!!draft.centralKitchenId && <p>مهام المطبخ موجّهة تلقائياً إلى مدير التطوير والإنتاج وفق الصلاحيات الحالية، دون تعيين يدوي.</p>}{!!draft.sourceBranchId && <ReceiverRoutingNotice routing={receiverRoutingQuery.data} loading={receiverRoutingQuery.isLoading} error={receiverRoutingQuery.isError} onRetry={() => void receiverRoutingQuery.refetch()} />}</div></details>
       {orderingPolicy.query.isError ? <p role="alert" className="rounded border border-amber-300 p-3 text-sm">تعذر تحميل مواعيد الطلب من الخادم. <Button variant="link" onClick={() => void openCreate()}>إعادة المحاولة</Button></p> : !orderingPolicy.query.data ? <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل مواعيد الطلب بتوقيت السعودية…</p> : <OrderScheduleNotice schedule={draftSchedule} preview />}
       </div>}
       {createStep === 1 && <div className="space-y-4" data-testid="create-step-items">
-      <OrderLineEditor items={draft.items} products={products} kitchenId={draft.centralKitchenId} catalogLoading={productsQuery.isLoading} catalogError={productsQuery.isError} onRetryCatalog={() => void productsQuery.refetch()} onChange={items => setDraft(current => ({ ...current, items }))} />
+      <OrderLineEditor items={draft.items} products={products} kitchenId={draft.centralKitchenId} catalogLoading={productsQuery.isLoading} catalogError={productsQuery.isError} onRetryCatalog={() => void productsQuery.refetch()} onChange={items => setDraft(current => ({ ...current, items }))} mobileView={itemMobileView} onMobileViewChange={setItemMobileView} />
        <div><Label htmlFor="order-notes">ملاحظات عامة</Label><textarea id="order-notes" className="mt-2 min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={draft.notes} onChange={event => setDraft({ ...draft, notes: event.target.value })} placeholder="تعليمات خاصة للاستلام أو التجهيز..." /></div>
       </div>}
       {createStep === 2 && <section className="space-y-4" data-testid="create-step-review" aria-label="مراجعة الطلب">

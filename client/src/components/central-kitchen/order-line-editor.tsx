@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, PackagePlus, Plus, Search, X } from "lucide-react";
 import { AvailabilitySnapshot } from "@/components/central-kitchen/availability-snapshot";
 import { Badge } from "@/components/ui/badge";
@@ -129,6 +129,8 @@ type Props = {
   catalogError: boolean;
   onRetryCatalog: () => void;
   onChange: (items: KitchenOrderDraftLine[]) => void;
+  mobileView?: "choose" | "selected";
+  onMobileViewChange?: (view: "choose" | "selected") => void;
 };
 
 const emptyLine = (): KitchenOrderDraftLine => ({
@@ -137,10 +139,16 @@ const emptyLine = (): KitchenOrderDraftLine => ({
 
 const productKey = (item: CentralKitchenCatalogItem) => `${item.source}:${item.id}`;
 
-export function OrderLineEditor({ items, products, kitchenId, catalogLoading, catalogError, onRetryCatalog, onChange }: Props) {
+export function OrderLineEditor({ items, products, kitchenId, catalogLoading, catalogError, onRetryCatalog, onChange, mobileView: controlledMobileView, onMobileViewChange }: Props) {
   const [search, setSearch] = useState("");
   const [source, setSource] = useState<KitchenCatalogSourceFilter>("all");
+  const [uncontrolledMobileView, setUncontrolledMobileView] = useState<"choose" | "selected">("choose");
   const searchRef = useRef<HTMLInputElement>(null);
+  const mobileView = controlledMobileView ?? uncontrolledMobileView;
+  const setMobileView = (view: "choose" | "selected") => {
+    setUncontrolledMobileView(view);
+    onMobileViewChange?.(view);
+  };
   const patch = (index: number, values: Partial<KitchenOrderDraftLine>) =>
     onChange(items.map((item, itemIndex) => itemIndex === index ? { ...item, ...values } : item));
   const selectedKeys = new Set(items.map(item => item.warehouseItemId !== undefined ? `warehouse:${item.warehouseItemId}` : item.productId !== undefined ? `product:${item.productId}` : "").filter(Boolean));
@@ -166,6 +174,7 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
      // Bring the newly added row into view on narrow screens instead of leaving it
      // below the catalog list; the search text remains available for another item.
      focusQuantity(nextIndex);
+      setMobileView("selected");
   };
   const addManualItem = () => {
     const blankIndex = items.findIndex(isBlankDraftLine);
@@ -176,6 +185,7 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
       : [...items, line];
     const nextIndex = blankIndex >= 0 ? blankIndex : items.length;
     onChange(next);
+    setMobileView("selected");
      requestAnimationFrame(() => requestAnimationFrame(() => {
        const input = document.querySelector<HTMLInputElement>(`#manual-name-${nextIndex}`);
        input?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -185,15 +195,18 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
   const removeItem = (index: number) => {
     const next = items.filter((_, itemIndex) => itemIndex !== index);
     onChange(next.length ? next : [emptyLine()]);
-    requestAnimationFrame(() => searchRef.current?.focus());
+    if (next.length === 0) {
+      setMobileView("choose");
+      requestAnimationFrame(() => searchRef.current?.focus());
+    }
   };
   const firstAvailableResult = catalogResults.find(item => !selectedKeys.has(productKey(item)));
 
   return <section className="rounded-xl border border-border bg-card" aria-label="بنود طلب المطبخ">
-    <div className="sticky top-0 z-10 flex items-start justify-between gap-3 rounded-t-xl border-b border-border bg-card px-3 py-3 shadow-sm sm:px-4">
+    <div className="flex items-start justify-between gap-3 rounded-t-xl border-b border-border bg-card px-3 py-3 sm:px-4">
       <div className="min-w-0">
         <h3 className="font-semibold text-foreground">بنود الطلب <Badge variant="secondary" className="mr-1">{visibleItems.length} مختار</Badge></h3>
-        <p className="mt-0.5 text-xs text-muted-foreground">اختر بسرعة ثم عدّل الكميات والمتوفر. لا يُفترض رصيد صفري عند الإضافة.</p>
+        <p className="mt-0.5 hidden text-xs text-muted-foreground lg:block">اختر بسرعة ثم عدّل الكميات والمتوفر. لا يُفترض رصيد صفري عند الإضافة.</p>
       </div>
       <Button type="button" variant="outline" size="sm" className="min-h-10 shrink-0" onClick={addManualItem}>
         <Plus className="ml-1 h-4 w-4" />إدخال يدوي
@@ -205,8 +218,14 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
       <Button type="button" variant="outline" size="sm" onClick={onRetryCatalog}>إعادة المحاولة</Button>
     </div>}
     {!catalogLoading && !catalogError && products.length === 0 && <div className="border-b px-4 py-3 text-sm text-muted-foreground">لا توجد أصناف متاحة حالياً. استخدم الإدخال اليدوي عند الحاجة فقط.</div>}
-     <div className="grid min-w-0 lg:min-h-[28rem] lg:grid-cols-[minmax(260px,.8fr)_minmax(0,1.4fr)]">
-      <section className="border-b border-border bg-muted/10 p-3 lg:border-b-0 lg:border-l" aria-label="كتالوج أصناف المطبخ">
+      <div className="sticky top-0 z-10 border-b border-border bg-card p-2 lg:hidden">
+        <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="مهمة الأصناف">
+          <Button type="button" variant={mobileView === "choose" ? "default" : "outline"} className="min-h-11" onClick={() => setMobileView("choose")} role="tab" aria-selected={mobileView === "choose"}>1. اختيار الأصناف</Button>
+          <Button type="button" variant={mobileView === "selected" ? "default" : "outline"} className="min-h-11" onClick={() => setMobileView("selected")} role="tab" aria-selected={mobileView === "selected"}>2. الكميات ({visibleItems.length})</Button>
+        </div>
+      </div>
+      <div className="grid min-w-0 lg:min-h-[28rem] lg:grid-cols-[minmax(260px,.8fr)_minmax(0,1.4fr)]">
+       <section className={cn("border-b border-border bg-muted/10 p-3 lg:block lg:border-b-0 lg:border-l", mobileView === "choose" ? "block" : "hidden")} aria-label="كتالوج أصناف المطبخ">
          <div className="space-y-2 bg-card pb-3">
           <Label htmlFor="kitchen-catalog-search" className="sr-only">بحث في كتالوج المطبخ</Label>
           <div className="relative">
@@ -233,9 +252,9 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
               ["warehouse", "مواد"],
             ] as const).map(([value, label]) => <Button key={value} type="button" size="sm" variant={source === value ? "default" : "outline"} className="min-h-9 px-2" onClick={() => setSource(value)}>{label}</Button>)}
           </div>
-          <p className="text-[11px] text-muted-foreground">Enter يضيف أول نتيجة غير مختارة وينقل المؤشر إلى كميتها. لا يرسل الطلب.</p>
+          <p className="hidden text-[11px] text-muted-foreground lg:block">Enter يضيف أول نتيجة غير مختارة وينقل المؤشر إلى كميتها. لا يرسل الطلب.</p>
         </div>
-         <div className="max-h-[10rem] space-y-1 overflow-y-auto overscroll-contain sm:max-h-[16rem] lg:max-h-[34rem]" aria-live="polite">
+          <div className="space-y-1 lg:max-h-[34rem] lg:overflow-y-auto lg:overscroll-contain" aria-live="polite">
           {catalogResults.slice(0, 100).map(product => {
             const key = productKey(product);
             const selected = selectedKeys.has(key);
@@ -255,9 +274,9 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
           {catalogResults.length > 100 && <p className="p-2 text-center text-xs text-muted-foreground">تظهر أول 100 نتيجة؛ اكتب جزءاً أدق من الاسم أو الرمز.</p>}
         </div>
       </section>
-      <section className="min-w-0 p-3" aria-label="الأصناف المختارة">
+       <section className={cn("min-w-0 p-3 lg:block", mobileView === "selected" ? "block" : "hidden")} aria-label="الأصناف المختارة">
         <div className="mb-3 flex items-center justify-between gap-2"><div><h4 className="font-semibold text-foreground">المختار والكميات</h4><p className="text-xs text-muted-foreground">المتوفر الحالي مطلوب صراحةً، ويظل فارغاً حتى تدخله.</p></div><Badge variant="outline">{visibleItems.length}</Badge></div>
-        {!visibleItems.length && <div className="flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed border-border p-6 text-center text-muted-foreground"><PackagePlus className="mb-2 h-7 w-7" /><p className="text-sm font-medium text-foreground">لم تختر أصنافاً بعد</p><p className="mt-1 text-xs">استخدم البحث والقائمة لإضافة عدة أصناف دون إغلاق النافذة.</p></div>}
+        {!visibleItems.length && <div className="flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed border-border p-6 text-center text-muted-foreground"><PackagePlus className="mb-2 h-7 w-7" /><p className="text-sm font-medium text-foreground">لم تختر أصنافاً بعد</p><p className="mt-1 text-xs">ارجع إلى «اختيار الأصناف» ثم أضف ما تحتاجه.</p><Button type="button" variant="outline" className="mt-4 min-h-11 lg:hidden" onClick={() => setMobileView("choose")}>اختيار الأصناف</Button></div>}
         <div className="space-y-2">
       {visibleItems.map(({ item, index }) => {
         const isProduct = item.productId !== undefined;
