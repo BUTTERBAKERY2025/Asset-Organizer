@@ -146,7 +146,8 @@ describe("kitchen warehouse shipping against local PostgreSQL", () => {
     expect((await call("POST",route,receiver,receipt,{id,action:"receive"})).statusCode).toBe(200);
     expect((await q("SELECT production_date,quantity FROM managed_warehouse_product_stock WHERE warehouse_id=$1 AND product_id=$2",[warehouse,product])).rows)
       .toEqual([{production_date:"2024-04-03",quantity:4}]);
-    expect((await q("SELECT quantity-received_quantity shortage FROM kitchen_warehouse_shipments WHERE id=$1",[id])).rows[0].shortage).toBe(2);
+    expect((await q("SELECT quantity-received_quantity shortage,received_by FROM kitchen_warehouse_shipments WHERE id=$1",[id])).rows[0])
+      .toMatchObject({shortage:2,received_by:receiver.id});
     expect((await q("SELECT count(*)::int total FROM managed_warehouse_stock WHERE warehouse_id=$1",[warehouse])).rows[0].total).toBe(0);
   });
 });

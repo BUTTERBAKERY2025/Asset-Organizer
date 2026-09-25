@@ -1,5 +1,5 @@
-export type DeliverySourceType = "kitchen" | "material_transfer";
-export type DeliveryStatus = "assigned" | "in_transit" | "awaiting_receipt" | "receipt_approved" | "completed" | "failed";
+export type DeliverySourceType = "kitchen" | "material_transfer" | "finished_goods_transfer" | "kitchen_warehouse_shipment";
+export type DeliveryStatus = "assigned" | "in_transit" | "awaiting_receipt" | "receipt_approved" | "completed" | "failed" | "cancelled";
 
 export interface DeliverySource {
   sourceType: DeliverySourceType;
@@ -8,8 +8,9 @@ export interface DeliverySource {
   sourceLabel: string;
   sourceBranchId: string | null;
   sourceBranchName: string;
-  destinationBranchId: string;
+  destinationBranchId: string | null;
   destinationBranchName: string;
+  destinationWarehouseId?: number | null;
   items: Array<{ id: number; name: string; quantity: number; unit: string | null }>;
 }
 
@@ -30,6 +31,7 @@ export interface DeliveryDTO extends DeliverySource {
   completedAt: string | null;
   failedAt: string | null;
   failureReason: string | null;
+  cancellationReason: string | null;
   createdAt: string;
   updatedAt: string;
   capabilities: {
@@ -39,22 +41,24 @@ export interface DeliveryDTO extends DeliverySource {
     canComplete: boolean;
     canFail: boolean;
     canReassign: boolean;
+    canCancel: boolean;
   };
 }
 
 export const activeDeliveryStatuses = ["assigned", "in_transit", "awaiting_receipt", "receipt_approved"] as const;
 
-export function deliveryTransitionAllowed(status: DeliveryStatus, action: "start" | "proof" | "approve-receipt" | "complete" | "fail" | "reassign"): boolean {
+export function deliveryTransitionAllowed(status: DeliveryStatus, action: "start" | "proof" | "approve-receipt" | "complete" | "fail" | "reassign" | "cancel"): boolean {
   switch (action) {
     case "start": return status === "assigned";
     case "proof": return status === "in_transit" || status === "awaiting_receipt";
     case "approve-receipt": return status === "awaiting_receipt";
     case "complete": return status === "receipt_approved";
     case "fail": return status === "assigned" || status === "in_transit" || status === "awaiting_receipt";
-    case "reassign": return status === "assigned" || status === "in_transit" || status === "awaiting_receipt" || status === "failed";
+    case "reassign": return status === "assigned" || status === "in_transit" || status === "awaiting_receipt" || status === "failed" || status === "cancelled";
+    case "cancel": return status === "assigned" || status === "in_transit" || status === "awaiting_receipt" || status === "failed";
   }
 }
 
 export function receiptMatchesSource(sourceType: DeliverySourceType, status: string, receivedBy: string | null, approverId: string): boolean {
-  return !!receivedBy && receivedBy === approverId && status === (sourceType === "kitchen" ? "received" : "delivered");
+  return !!receivedBy && receivedBy === approverId && status === (sourceType === "material_transfer" ? "delivered" : "received");
 }

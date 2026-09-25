@@ -7781,6 +7781,12 @@ export const finishedGoodsTransfers = pgTable("finished_goods_transfers", {
   transferDate: text("transfer_date").notNull(), // تاريخ التحويل YYYY-MM-DD
   notes: text("notes"),
   status: text("status").default("completed").notNull(), // pending, completed, cancelled
+  transportPolicy: text("transport_policy"), // null = historical/local immediate transfer; branch_receipt = staged branch shipment
+  productionDate: text("production_date"), // original source lot date, not transfer date
+  receivedQuantity: integer("received_quantity"),
+  receivedBy: varchar("received_by").references(() => users.id),
+  receivedAt: timestamp("received_at"),
+  dispatchedAt: timestamp("dispatched_at"),
   createdBy: varchar("created_by").references(() => users.id),
   createdByName: text("created_by_name"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

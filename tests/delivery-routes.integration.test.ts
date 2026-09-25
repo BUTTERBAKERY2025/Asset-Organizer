@@ -47,6 +47,12 @@ const fixture = {
   prefix: `delivery-integration-${randomUUID()}`,
   source: 0,
   transfer: 0,
+  finishedTransfer: 0,
+  legacyTransfer: 0,
+  warehouseShipment: 0,
+  inventory: 0,
+  product: 0,
+  warehouse: 0,
   kitchen: "",
   destination: "",
   outsider: "",
@@ -55,6 +61,7 @@ const fixture = {
   otherDriver: null as Actor | null,
   receiver: null as Actor | null,
   outsiderUser: null as Actor | null,
+  warehouseManager: null as Actor | null,
 };
 let client: pg.PoolClient;
 let pool: pg.Pool;
@@ -126,13 +133,15 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     fixture.otherDriver = actor("other-driver", fixture.kitchen, "delivery");
     fixture.receiver = actor("receiver", fixture.destination);
     fixture.outsiderUser = actor("outsider", fixture.outsider);
-    for (const user of [fixture.manager, fixture.driver, fixture.otherDriver, fixture.receiver, fixture.outsiderUser]) {
+    fixture.warehouseManager = { ...actor("warehouse-manager", fixture.kitchen), role: "admin" };
+    for (const user of [fixture.manager, fixture.driver, fixture.otherDriver, fixture.receiver, fixture.outsiderUser, fixture.warehouseManager]) {
       await client.query("INSERT INTO users (id,first_name,role,branch_id,job_title,is_active) VALUES ($1,$2,$3,$4,$5,$6)",
         [user.id, user.id, user.role, user.branchId, user.jobTitle, user.isActive]);
     }
-    grant(fixture.manager, { delivery_tasks: ["create", "view", "edit"], central_kitchen_orders: ["edit", "view"], warehouse: ["edit", "view"] });
+    grant(fixture.manager, { delivery_tasks: ["create", "view", "edit"], central_kitchen_orders: ["edit", "view"], warehouse: ["edit", "view"], production: ["edit", "view"] });
     grant(fixture.receiver, { delivery_tasks: ["approve"], central_kitchen_orders: ["edit"] });
     grant(fixture.outsiderUser, { delivery_tasks: ["view", "approve"], central_kitchen_orders: ["view", "edit"] });
+    grant(fixture.warehouseManager, { delivery_tasks: ["approve", "create", "view", "edit"], warehouse: ["edit", "view"], production: ["edit", "view"] });
     const source = await client.query(`INSERT INTO central_kitchen_orders
       (order_number,request_branch_id,central_kitchen_id,order_date,status,idempotency_key,payload_fingerprint,created_by)
       VALUES ($1,$2,$3,current_date,'dispatched',$4,$5,$6) RETURNING id`,
@@ -143,6 +152,28 @@ describe("delivery routes against local PostgreSQL contracts", () => {
       VALUES ($1,'branch',$2,$3,current_date::text,'in_transit',$4) RETURNING id`,
       [fixture.prefix, fixture.kitchen, fixture.destination, fixture.manager.id]);
     fixture.transfer = transfer.rows[0].id;
+    fixture.product = (await client.query(`INSERT INTO products (name,category,unit,operations_enabled,is_active)
+      VALUES ($1,'finish','piece',true,'true') RETURNING id`, [fixture.prefix])).rows[0].id;
+    fixture.inventory = (await client.query(`INSERT INTO finished_goods_inventory
+      (branch_id,product_id,product_name,product_name_normalized,quantity,unit,production_date)
+      VALUES ($1,$2,$3,lower($3),10,'piece','2023-02-14') RETURNING id`,
+      [fixture.kitchen, fixture.product, fixture.prefix])).rows[0].id;
+    fixture.warehouse = Number((await client.query("INSERT INTO managed_warehouses(name) VALUES($1) RETURNING id",
+      [fixture.prefix])).rows[0].id);
+    const fg = async (policy: string | null, status: string) => Number((await client.query(`INSERT INTO finished_goods_transfers
+      (inventory_id,source_branch_id,destination_type,destination_branch_id,product_id,product_name,quantity,unit,
+       transfer_date,status,transport_policy,production_date,created_by)
+      VALUES ($1,$2,'branch',$3,$4,$5,3,'piece',current_date::text,$6,$7,'2023-02-14',$8) RETURNING id`,
+      [fixture.inventory, fixture.kitchen, fixture.destination, fixture.product, fixture.prefix,
+        status, policy, fixture.manager!.id])).rows[0].id);
+    fixture.finishedTransfer = await fg("branch_receipt", "in_transit");
+    fixture.legacyTransfer = await fg(null, "completed");
+    fixture.warehouseShipment = Number((await client.query(`INSERT INTO kitchen_warehouse_shipments
+      (source_branch_id,destination_warehouse_id,product_id,product_name,unit,quantity,status,
+       created_by,create_key,create_fingerprint)
+      VALUES ($1,$2,$3,$4,'piece',3,'dispatched',$5,$6,$7) RETURNING id`,
+      [fixture.kitchen, fixture.warehouse, fixture.product, fixture.prefix, fixture.manager!.id,
+        fixture.prefix, "a".repeat(64)])).rows[0].id);
     registerDeliveryRoutes(app);
   });
   afterAll(async () => {
@@ -160,6 +191,16 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     expect(sources.body.sources).toEqual(expect.arrayContaining([
       expect.objectContaining({ sourceType: "kitchen", sourceId: fixture.source, items: [] }),
       expect.objectContaining({ sourceType: "material_transfer", sourceId: fixture.transfer, items: [] }),
+      expect.objectContaining({ sourceType: "finished_goods_transfer", sourceId: fixture.finishedTransfer,
+        items: [expect.objectContaining({ quantity: 3 })] }),
+    ]));
+    expect(sources.body.sources).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceType: "finished_goods_transfer", sourceId: fixture.legacyTransfer }),
+    ]));
+    const warehouseSources = await invoke("GET", "/api/deliveries/sources", fixture.warehouseManager!);
+    expect(warehouseSources.body.sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceType: "kitchen_warehouse_shipment", sourceId: fixture.warehouseShipment,
+        destinationBranchId: null, destinationWarehouseId: fixture.warehouse }),
     ]));
     const denied = await invoke("GET", "/api/deliveries/sources", fixture.outsiderUser!);
     expect(denied.statusCode).toBe(403);
@@ -221,5 +262,83 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     expect((await invoke("GET", "/api/deliveries/:id/proof", fixture.driver!, {}, { id })).statusCode).toBe(403);
     expect((await invoke("POST", "/api/deliveries/:id/start", fixture.driver!, {}, { id })).statusCode).toBe(403);
     expect((await invoke("POST", "/api/deliveries/:id/start", fixture.otherDriver!, {}, { id })).body.status).toBe("in_transit");
+  });
+
+  it("finished-goods receipt must be posted by the authenticated destination actor; driver proof never posts stock", async () => {
+    const request = { sourceType: "finished_goods_transfer", sourceId: fixture.finishedTransfer,
+      driverId: fixture.driver!.id, vehicleNumber: "FG-1" };
+    expect((await invoke("POST", "/api/deliveries", fixture.outsiderUser!, request)).statusCode).toBe(403);
+    expect((await invoke("POST", "/api/deliveries", fixture.manager!,
+      { ...request, sourceId: fixture.legacyTransfer })).statusCode).toBe(403);
+    const created = await invoke("POST", "/api/deliveries", fixture.manager!, request);
+    expect(created.statusCode).toBe(201);
+    const id = created.body.id;
+    expect((await invoke("POST", "/api/deliveries/:id/start", fixture.driver!, {}, { id })).body.status).toBe("in_transit");
+    expect((await invoke("POST", "/api/deliveries/:id/proof", fixture.driver!,
+      { signatureData: png, receiverName: "Actual recipient" }, { id })).body.status).toBe("awaiting_receipt");
+    const stock = await client.query("SELECT quantity FROM finished_goods_inventory WHERE id=$1", [fixture.inventory]);
+    expect(Number(stock.rows[0].quantity)).toBe(10);
+    expect((await client.query("SELECT received_by,status FROM finished_goods_transfers WHERE id=$1",
+      [fixture.finishedTransfer])).rows[0]).toMatchObject({ received_by: null, status: "in_transit" });
+    expect((await invoke("POST", "/api/deliveries/:id/approve-receipt", fixture.receiver!, {}, { id })).statusCode).toBe(403);
+    grant(fixture.receiver!, { delivery_tasks: ["approve"], production: ["edit", "view"] });
+    expect((await invoke("POST", "/api/deliveries/:id/approve-receipt", fixture.receiver!, {}, { id })).statusCode).toBe(409);
+    await client.query("UPDATE finished_goods_transfers SET status='received',received_by=$1,received_quantity=3 WHERE id=$2",
+      [fixture.warehouseManager!.id, fixture.finishedTransfer]);
+    expect((await invoke("POST", "/api/deliveries/:id/approve-receipt", fixture.receiver!, {}, { id })).statusCode).toBe(403);
+    await client.query("UPDATE finished_goods_transfers SET received_by=$1 WHERE id=$2",
+      [fixture.receiver!.id, fixture.finishedTransfer]);
+    expect((await invoke("POST", "/api/deliveries/:id/cancel", fixture.manager!, { reason: "Cannot deliver" }, { id })).statusCode).toBe(409);
+    expect((await invoke("POST", "/api/deliveries/:id/reassign", fixture.manager!,
+      { driverId: fixture.otherDriver!.id, vehicleNumber: "FG-2" }, { id })).statusCode).toBe(409);
+    expect((await invoke("POST", "/api/deliveries/:id/approve-receipt", fixture.receiver!, {}, { id })).body.status).toBe("receipt_approved");
+    expect((await invoke("POST", "/api/deliveries/:id/complete", fixture.driver!, {}, { id })).body.status).toBe("completed");
+  });
+
+  it("managed warehouse receipt is scoped to global warehouse authority, not an invented branch", async () => {
+    const request = { sourceType: "kitchen_warehouse_shipment", sourceId: fixture.warehouseShipment,
+      driverId: fixture.driver!.id, vehicleNumber: "WH-1" };
+    expect((await invoke("POST", "/api/deliveries", fixture.manager!, request)).statusCode).toBe(403);
+    const created = await invoke("POST", "/api/deliveries", fixture.warehouseManager!, request);
+    expect(created.statusCode).toBe(201);
+    const id = created.body.id;
+    expect(created.body).toMatchObject({ destinationBranchId: null, destinationWarehouseId: fixture.warehouse });
+    expect((await invoke("GET", "/api/deliveries/:id", fixture.receiver!, {}, { id })).statusCode).toBe(403);
+    expect((await invoke("POST", "/api/deliveries/:id/start", fixture.driver!, {}, { id })).body.status).toBe("in_transit");
+    expect((await invoke("POST", "/api/deliveries/:id/proof", fixture.driver!,
+      { signatureData: png, receiverName: "Warehouse receiver" }, { id })).body.status).toBe("awaiting_receipt");
+    expect((await client.query("SELECT received_by,status FROM kitchen_warehouse_shipments WHERE id=$1",
+      [fixture.warehouseShipment])).rows[0]).toMatchObject({ received_by: null, status: "dispatched" });
+    expect(Number((await client.query("SELECT count(*) amount FROM managed_warehouse_product_stock WHERE warehouse_id=$1",
+      [fixture.warehouse])).rows[0].amount)).toBe(0);
+    expect((await invoke("POST", "/api/deliveries/:id/approve-receipt", fixture.warehouseManager!, {}, { id })).statusCode).toBe(409);
+    await client.query("UPDATE kitchen_warehouse_shipments SET status='received',received_by=$1,received_quantity=3 WHERE id=$2",
+      [fixture.receiver!.id, fixture.warehouseShipment]);
+    expect((await invoke("POST", "/api/deliveries/:id/approve-receipt", fixture.warehouseManager!, {}, { id })).statusCode).toBe(403);
+    await client.query("UPDATE kitchen_warehouse_shipments SET received_by=$1 WHERE id=$2",
+      [fixture.warehouseManager!.id, fixture.warehouseShipment]);
+    expect((await invoke("POST", "/api/deliveries/:id/approve-receipt", fixture.warehouseManager!, {}, { id })).body.status).toBe("receipt_approved");
+  });
+
+  it("cancels only metadata with reason, enqueues once and can reassign same unreceived source safely", async () => {
+    const request = { sourceType: "material_transfer", sourceId: fixture.transfer,
+      driverId: fixture.driver!.id, vehicleNumber: "V-4" };
+    // Earlier test already created and failed/reassigned this transfer; reuse its task.
+    const row = (await client.query("SELECT id FROM delivery_assignments WHERE source_type='material_transfer' AND source_id=$1",
+      [fixture.transfer])).rows[0];
+    const id = Number(row.id);
+    expect((await invoke("POST", "/api/deliveries/:id/cancel", fixture.driver!, { reason: "No service" }, { id })).statusCode).toBe(403);
+    expect((await invoke("POST", "/api/deliveries/:id/cancel", fixture.manager!, { reason: "Change carrier" }, { id })).body.status).toBe("cancelled");
+    expect((await invoke("POST", "/api/deliveries/:id/cancel", fixture.manager!, { reason: "Change carrier" }, { id })).statusCode).toBe(409);
+    expect((await invoke("POST", "/api/deliveries", fixture.manager!, request)).statusCode).toBe(409);
+    expect((await client.query("SELECT status FROM material_transfers WHERE id=$1", [fixture.transfer])).rows[0].status).toBe("in_transit");
+    const reassigned = await invoke("POST", "/api/deliveries/:id/reassign", fixture.manager!,
+      { driverId: fixture.driver!.id, vehicleNumber: "V-5" }, { id });
+    expect(reassigned.body).toMatchObject({ id, status: "assigned", proofPresent: false,
+      cancellationReason: null, driverId: fixture.driver!.id });
+    expect(Number((await client.query(`SELECT count(*) amount FROM delivery_assignments
+      WHERE source_type='material_transfer' AND source_id=$1`, [fixture.transfer])).rows[0].amount)).toBe(1);
+    expect(Number((await client.query(`SELECT count(*) amount FROM delivery_notification_outbox
+      WHERE assignment_id=$1 AND event_type='cancelled'`, [id])).rows[0].amount)).toBe(1);
   });
 });

@@ -24,4 +24,18 @@ describe("delivery orchestration never substitutes for source receipt", () => {
     expect([...activeDeliveryStatuses]).toEqual(["assigned", "in_transit", "awaiting_receipt", "receipt_approved"]);
     expect(activeDeliveryStatuses.includes("completed" as any)).toBe(false);
   });
+
+  it("does not treat driver proof or a cancelled task as a source receipt", () => {
+    for (const type of ["finished_goods_transfer", "kitchen_warehouse_shipment"] as const) {
+      expect(receiptMatchesSource(type, "in_transit", "recipient", "recipient")).toBe(false);
+      expect(receiptMatchesSource(type, "received", null, "recipient")).toBe(false);
+      expect(receiptMatchesSource(type, "received", "other", "recipient")).toBe(false);
+      expect(receiptMatchesSource(type, "received", "recipient", "recipient")).toBe(true);
+    }
+    expect(deliveryTransitionAllowed("cancelled", "start")).toBe(false);
+    expect(deliveryTransitionAllowed("cancelled", "complete")).toBe(false);
+    expect(deliveryTransitionAllowed("cancelled", "reassign")).toBe(true);
+    expect(deliveryTransitionAllowed("receipt_approved", "cancel")).toBe(false);
+    expect(deliveryTransitionAllowed("completed", "cancel")).toBe(false);
+  });
 });

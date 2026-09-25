@@ -62,6 +62,10 @@ export default function FinishedGoodsInventoryPage() {
   const [destinationType, setDestinationType] = useState<string>("display_bar");
   const [destinationBranchId, setDestinationBranchId] = useState<string>("");
   const [transferNotes, setTransferNotes] = useState<string>("");
+  const [receiptTransfer, setReceiptTransfer] = useState<FinishedGoodsTransfer | null>(null);
+  const [receiptQuantity, setReceiptQuantity] = useState("");
+  const receiptLinkConsumed = useRef(false);
+  const returnDeliveryId = new URLSearchParams(window.location.search).get("deliveryId");
   
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   
@@ -70,7 +74,7 @@ export default function FinishedGoodsInventoryPage() {
   const queryClient = useQueryClient();
   const { itemsPerPage, getPageItems } = usePagination(15);
   const { user } = useAuth();
-  const { canEdit } = usePermissions();
+  const { canEdit, isLoading: permissionsLoading } = usePermissions();
 
   const { data: branches } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -78,9 +82,14 @@ export default function FinishedGoodsInventoryPage() {
 
   useEffect(() => {
     if (branches && branches.length > 0 && !branchId) {
-      setBranchId(branches[0].id);
+      const requested = new URLSearchParams(window.location.search).get("branchId");
+      setBranchId(branches.find(branch => branch.id === requested)?.id || branches[0].id);
+    } else if (branches && branches.length === 0 && new URLSearchParams(window.location.search).has("transferId")
+      && !receiptLinkConsumed.current) {
+      receiptLinkConsumed.current = true;
+      toast({ title: "لا يوجد فرع استلام متاح لهذه المهمة", variant: "destructive" });
     }
-  }, [branches, branchId]);
+  }, [branches, branchId, toast]);
 
   const { data: inventory, isLoading, refetch } = useQuery<FinishedGoodsInventory[]>({
     queryKey: ["/api/finished-goods-inventory", branchId, selectedDate, categoryFilter],
@@ -98,17 +107,41 @@ export default function FinishedGoodsInventoryPage() {
   const { data: products = [] } = useQuery<Product[]>({ queryKey: ["/api/products"] });
   const selectableProductIds = new Set(products.filter(isNewCatalogReferenceAllowed).map(product => product.id));
 
-  const { data: transfers } = useQuery<FinishedGoodsTransfer[]>({
+  const { data: transfers, isError: transfersError } = useQuery<FinishedGoodsTransfer[]>({
     queryKey: ["/api/finished-goods-transfers", branchId],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (branchId) params.set("sourceBranchId", branchId);
+      if (branchId) params.set("branchId", branchId);
       const res = await fetch(`/api/finished-goods-transfers?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch transfers");
       return res.json();
     },
     enabled: !!branchId,
   });
+  useEffect(() => {
+    if (receiptLinkConsumed.current || !branchId) return;
+    const raw = new URLSearchParams(window.location.search).get("transferId");
+    if (!raw) return;
+    const id = Number(raw);
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      receiptLinkConsumed.current = true;
+      toast({ title: "رابط التحويل غير صالح", variant: "destructive" });
+      return;
+    }
+    if ((!transfers && !transfersError) || permissionsLoading) return;
+    receiptLinkConsumed.current = true;
+    const transfer = transfers?.find(row => row.id === id);
+    if (!transfer || transfer.transportPolicy !== "branch_receipt" || transfer.destinationBranchId !== branchId) {
+      toast({ title: "التحويل غير متاح في فرع الاستلام المحدد", variant: "destructive" });
+    } else if (transfer.status === "in_transit" && canEdit("production")) {
+      setReceiptTransfer(transfer);
+      setReceiptQuantity(String(transfer.quantity));
+    } else if (transfer.status === "received") {
+      toast({ title: "الاستلام مسجل بالفعل", description: "ارجع لمهمة التوصيل لاعتماد الإيصال." });
+    } else {
+      toast({ title: "لا يمكن فتح الاستلام", description: "تحقق من صلاحيتك وحالة الشحنة.", variant: "destructive" });
+    }
+  }, [branchId, transfers, transfersError, permissionsLoading, canEdit, toast]);
 
   const { data: logs } = useQuery({
     queryKey: ["/api/production-inventory-logs", branchId],
@@ -146,11 +179,27 @@ export default function FinishedGoodsInventoryPage() {
       setSelectedItem(null);
       setTransferQuantity("");
       setTransferNotes("");
-      toast({ title: "تم التحويل بنجاح" });
+      toast({ title: destinationType === "branch" ? "تم حجز الكمية، بانتظار شحنها من المصدر" : "تم التحويل بنجاح" });
     },
     onError: (error: any) => {
       toast({ title: "خطأ", description: error.message, variant: "destructive" });
     },
+  });
+
+  const shipmentMutation = useMutation({
+    mutationFn: async ({ id, action, quantity }: { id: number; action: "dispatch" | "receive" | "cancel"; quantity?: number }) => {
+      const res = await apiRequest("POST", `/api/finished-goods-transfers/${id}/${action}`,
+        action === "receive" ? { receivedQuantity: quantity } : {});
+      return res.json();
+    },
+    onSuccess: () => {
+      refetch();
+      queryClient.invalidateQueries({ queryKey: ["/api/finished-goods-transfers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/production-inventory-logs"] });
+      setReceiptTransfer(null);
+      toast({ title: "تم تحديث الشحنة بنجاح" });
+    },
+    onError: (error: Error) => toast({ title: "خطأ", description: error.message, variant: "destructive" }),
   });
 
   const filteredInventory = inventory?.filter(item => {
@@ -169,7 +218,7 @@ export default function FinishedGoodsInventoryPage() {
     if (!canEdit("production")) return;
     if (!selectedItem) return;
     const qty = parseInt(transferQuantity, 10);
-    if (!qty || qty <= 0 || qty > selectedItem.quantity) {
+    if (!Number.isInteger(qty) || String(qty) !== transferQuantity.trim() || qty <= 0 || qty > selectedItem.quantity - selectedItem.reservedQuantity) {
       toast({ title: "خطأ", description: "الكمية غير صحيحة", variant: "destructive" });
       return;
     }
@@ -189,7 +238,7 @@ export default function FinishedGoodsInventoryPage() {
 
   const openTransferDialog = (item: FinishedGoodsInventory) => {
     setSelectedItem(item);
-    setTransferQuantity(String(item.quantity));
+    setTransferQuantity(String(item.quantity - item.reservedQuantity));
     setDestinationType("display_bar");
     setDestinationBranchId("");
     setTransferNotes("");
@@ -266,6 +315,7 @@ export default function FinishedGoodsInventoryPage() {
             <p className="text-xs sm:text-sm text-muted-foreground">إدارة وتحويل المنتجات النهائية للفروع أو بار العرض</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {returnDeliveryId && /^[1-9]\d*$/.test(returnDeliveryId) && <Link href={`/driver-deliveries?deliveryId=${returnDeliveryId}`}><Button variant="outline" size="sm">العودة لمهمة التوصيل لاعتماد الإيصال</Button></Link>}
             <Link href="/kitchen-warehouse-shipping"><Button variant="outline" size="sm">شحن المنتجات للمستودعات المستقلة</Button></Link>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -414,7 +464,7 @@ export default function FinishedGoodsInventoryPage() {
                            {canEdit("production") && item.productId != null && selectableProductIds.has(item.productId) && <Button
                             size="sm"
                             onClick={() => openTransferDialog(item)}
-                            disabled={item.quantity <= 0}
+                            disabled={item.quantity - item.reservedQuantity <= 0}
                             data-testid={`btn-transfer-${item.id}`}
                             className="h-8 sm:h-9 text-xs sm:text-sm"
                           >
@@ -463,7 +513,7 @@ export default function FinishedGoodsInventoryPage() {
                     <TableHead className="text-xs sm:text-sm">الوجهة</TableHead>
                     <TableHead className="hidden md:table-cell text-xs sm:text-sm">الفرع المستهدف</TableHead>
                     <TableHead className="hidden sm:table-cell text-xs sm:text-sm">التاريخ</TableHead>
-                    <TableHead className="text-xs sm:text-sm">الحالة</TableHead>
+                    <TableHead className="text-xs sm:text-sm">الحالة / الإجراء</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -476,8 +526,14 @@ export default function FinishedGoodsInventoryPage() {
                       <TableCell className="hidden sm:table-cell text-xs sm:text-sm">{transfer.transferDate}</TableCell>
                       <TableCell>
                         <Badge variant={transfer.status === "completed" ? "default" : "secondary"} className="text-[10px] sm:text-xs">
-                          {transfer.status === "completed" ? "مكتمل" : transfer.status}
+                          {transfer.status === "completed" ? "مكتمل" : transfer.status === "pending" ? "محجوز" : transfer.status === "in_transit" ? "قيد النقل" : transfer.status === "received" ? `مستلم (${transfer.receivedQuantity ?? transfer.quantity})` : transfer.status === "cancelled" ? "ملغي" : transfer.status}
                         </Badge>
+                        {canEdit("production") && transfer.transportPolicy === "branch_receipt" && transfer.status === "pending" && transfer.sourceBranchId === branchId && <>
+                          <Button size="sm" variant="outline" disabled={shipmentMutation.isPending} onClick={() => shipmentMutation.mutate({ id: transfer.id, action: "dispatch" })}>شحن</Button>
+                          <Button size="sm" variant="ghost" disabled={shipmentMutation.isPending} onClick={() => shipmentMutation.mutate({ id: transfer.id, action: "cancel" })}>إلغاء الحجز</Button>
+                        </>}
+                        {canEdit("production") && transfer.transportPolicy === "branch_receipt" && transfer.status === "in_transit" && transfer.destinationBranchId === branchId && <Button size="sm" disabled={shipmentMutation.isPending} onClick={() => { setReceiptTransfer(transfer); setReceiptQuantity(String(transfer.quantity)); }}>تأكيد الاستلام الفعلي</Button>}
+                        {transfer.transportPolicy === "branch_receipt" && transfer.status === "in_transit" && <Link href={`/driver-deliveries?sourceType=finished_goods_transfer&sourceId=${transfer.id}`}><Button size="sm" variant="link">مهام السائق</Button></Link>}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -499,7 +555,7 @@ export default function FinishedGoodsInventoryPage() {
             <div className="space-y-4 py-4">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">الكمية المتاحة:</span>
-                <span className="font-bold">{selectedItem?.quantity} {selectedItem?.unit}</span>
+                 <span className="font-bold">{(selectedItem?.quantity || 0) - (selectedItem?.reservedQuantity || 0)} {selectedItem?.unit}</span>
               </div>
               <div>
                 <Label>الكمية للتحويل</Label>
@@ -508,7 +564,7 @@ export default function FinishedGoodsInventoryPage() {
                   value={transferQuantity}
                   onChange={(e) => setTransferQuantity(e.target.value)}
                   min={1}
-                  max={selectedItem?.quantity}
+                   max={(selectedItem?.quantity || 0) - (selectedItem?.reservedQuantity || 0)}
                   data-testid="input-transfer-quantity"
                 />
               </div>
@@ -559,11 +615,27 @@ export default function FinishedGoodsInventoryPage() {
                 disabled={transferMutation.isPending}
                 data-testid="btn-confirm-transfer"
               >
-                {transferMutation.isPending ? "جاري التحويل..." : "تأكيد التحويل"}
+                 {transferMutation.isPending ? "جاري التحويل..." : destinationType === "branch" ? "إنشاء طلب النقل" : "تأكيد التحويل"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>}
+
+        <Dialog open={!!receiptTransfer} onOpenChange={open => { if (!open) setReceiptTransfer(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>تأكيد الاستلام الفعلي</DialogTitle>
+              <DialogDescription>أدخل الكمية المستلمة فعلياً. لن يضاف المخزون إلا بعد التأكيد.</DialogDescription>
+            </DialogHeader>
+            <Label htmlFor="fg-received-quantity">الكمية المستلمة (المرسلة: {receiptTransfer?.quantity})</Label>
+            <Input id="fg-received-quantity" type="number" min={0} max={receiptTransfer?.quantity} value={receiptQuantity} onChange={e => setReceiptQuantity(e.target.value)} />
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setReceiptTransfer(null)}>رجوع</Button>
+              <Button disabled={shipmentMutation.isPending || !/^\d+$/.test(receiptQuantity) || Number(receiptQuantity) > (receiptTransfer?.quantity || 0)}
+                onClick={() => receiptTransfer && shipmentMutation.mutate({ id: receiptTransfer.id, action: "receive", quantity: Number(receiptQuantity) })}>تأكيد الاستلام</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
           <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">

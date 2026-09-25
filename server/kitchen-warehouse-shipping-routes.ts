@@ -204,8 +204,9 @@ export function registerKitchenWarehouseShippingRoutes(app: Express) {
         carrier_name=CASE WHEN $2='dispatched' THEN $4 ELSE carrier_name END,
         vehicle_number=CASE WHEN $2='dispatched' THEN $5 ELSE vehicle_number END,
         dispatched_at=CASE WHEN $2='dispatched' THEN now() ELSE dispatched_at END,
-        received_at=CASE WHEN $2='received' THEN now() ELSE received_at END
-        WHERE id=$1 RETURNING *`,[id,status,body.receivedQuantity ?? null,body.carrierName ?? null,body.vehicleNumber ?? null]))[0];
+         received_at=CASE WHEN $2='received' THEN now() ELSE received_at END,
+         received_by=CASE WHEN $2='received' THEN $6 ELSE received_by END
+         WHERE id=$1 RETURNING *`,[id,status,body.receivedQuantity ?? null,body.carrierName ?? null,body.vehicleNumber ?? null,user]))[0];
       await c.query(`INSERT INTO kitchen_warehouse_shipment_events(shipment_id,action,actor_id,idempotency_key,payload)
         VALUES($1,$2,$3,$4,$5)`,[id,operation,user,body.idempotencyKey,JSON.stringify(body)]);
       return result;

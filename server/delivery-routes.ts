@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import { inflateSync } from "node:zlib";
 import { z } from "zod";
 import { pool } from "./db";
+import { enqueueDeliveryNotice, type DeliveryNoticeEvent } from "./delivery-notifications";
 import { isAuthenticated, requirePermission, getAllowedBranchIds, canAccessBranch } from "./auth";
 import { deliveryTransitionAllowed, receiptMatchesSource, type DeliveryDTO, type DeliverySource, type DeliverySourceType, type DeliveryStatus } from "@shared/delivery";
 
@@ -12,12 +13,13 @@ type Assignment = {
   receiver_name: string | null; notes: string | null; signature_data: string | null; proof_at: Date | null;
   receipt_approved_by: string | null; receipt_approved_at: Date | null; started_at: Date | null;
   completed_at: Date | null; failed_at: Date | null; failure_reason: string | null;
+  cancelled_at: Date | null; cancellation_reason: string | null;
   created_at: Date; updated_at: Date;
 };
 type SourceRow = DeliverySource & { receivedBy: string | null };
 const idSchema = z.coerce.number().int().positive();
 const createSchema = z.object({
-  sourceType: z.enum(["kitchen", "material_transfer"]), sourceId: z.number().int().positive(),
+  sourceType: z.enum(["kitchen", "material_transfer", "finished_goods_transfer", "kitchen_warehouse_shipment"]), sourceId: z.number().int().positive(),
   driverId: z.string().min(1), vehicleNumber: z.string().trim().min(1).max(80),
   scheduledAt: z.string().datetime({ offset: true }).optional(),
 }).strict();
@@ -75,6 +77,7 @@ function validateSignature(dataUrl: string) {
 }
 const reassignmentSchema = z.object({ driverId: z.string().min(1), vehicleNumber: z.string().trim().min(1).max(80) }).strict();
 const failSchema = z.object({ reason: z.string().trim().min(3).max(2000) }).strict();
+const cancelSchema = failSchema;
 
 class DeliveryError extends Error {
   constructor(message: string, public status: number) { super(message); }
@@ -85,6 +88,10 @@ function requireUser(req: Request) {
 }
 function managerScope(req: Request, source: SourceRow, action: "view" | "create" | "edit") {
   const allowed = getAllowedBranchIds(req);
+  if (source.sourceBranchId === null) return false;
+  if (source.sourceType === "kitchen_warehouse_shipment"
+    && !["admin", "operations_manager", "production_development_manager"].includes(req.currentUser?.role ?? ""))
+    return false;
   if (source.sourceType === "material_transfer" && source.sourceBranchId === "main_warehouse") {
     return req.currentUser?.role === "admin" || req.currentUser?.role === "production_development_manager"
       || (req.currentUser?.branchId === "main_warehouse" && allowed !== null && allowed.includes("main_warehouse"));
@@ -99,7 +106,22 @@ function permitted(req: Request, _res: Response, module: string, action: string)
     Promise.resolve(requirePermission(module, action)(req, response, (err?: any) => err ? reject(err) : resolve(true))).catch(reject);
   });
 }
-const sourceModule = (type: DeliverySourceType) => type === "kitchen" ? "central_kitchen_orders" : "warehouse";
+const sourceModule = (type: DeliverySourceType) =>
+  type === "kitchen" ? "central_kitchen_orders"
+    : type === "material_transfer" ? "warehouse" : "production";
+const sourceTable = (type: DeliverySourceType) => ({
+  kitchen: "central_kitchen_orders", material_transfer: "material_transfers",
+  finished_goods_transfer: "finished_goods_transfers", kitchen_warehouse_shipment: "kitchen_warehouse_shipments",
+})[type];
+const sourceDispatched = (s: SourceRow) =>
+  s.sourceType === "kitchen" ? s.sourceStatus === "dispatched"
+    : s.sourceType === "material_transfer" || s.sourceType === "finished_goods_transfer"
+      ? ["in_transit", "dispatched"].includes(s.sourceStatus)
+      : s.sourceStatus === "dispatched";
+const warehouseReceiver = (req: Request) =>
+  ["admin", "operations_manager"].includes(req.currentUser?.role ?? "") && getAllowedBranchIds(req) === null;
+const receiverScope = async (req: Request, s: SourceRow) =>
+  s.destinationWarehouseId != null ? warehouseReceiver(req) : s.destinationBranchId !== null && await canAccessBranch(req, s.destinationBranchId);
 const isDriver = (req: Request, row: Assignment) => req.currentUser?.id === row.driver_id && req.currentUser?.jobTitle === "delivery" && req.currentUser?.isActive === "active";
 async function driverExists(client: PoolClient, id: string, req: Request) {
   const allowed = getAllowedBranchIds(req);
@@ -109,7 +131,22 @@ async function driverExists(client: PoolClient, id: string, req: Request) {
 }
 async function source(client: PoolClient, type: DeliverySourceType, id: number): Promise<SourceRow | null> {
   const kitchen = type === "kitchen";
-  const q = kitchen
+  const q = type === "kitchen_warehouse_shipment"
+    ? `SELECT s.id,s.status,('#' || s.id::text || ' · ' || s.product_name) label,
+         s.source_branch_id source_id, NULL::varchar destination_id, s.destination_warehouse_id,
+         s.received_by, b.name source_name,w.name destination_name,
+         jsonb_build_array(jsonb_build_object('id',s.id,'name',s.product_name,'quantity',s.quantity,'unit',s.unit)) items
+       FROM kitchen_warehouse_shipments s JOIN branches b ON b.id=s.source_branch_id
+       JOIN managed_warehouses w ON w.id=s.destination_warehouse_id WHERE s.id=$1`
+    : type === "finished_goods_transfer"
+    ? `SELECT t.id,t.status,('#' || t.id::text || ' · ' || t.product_name) label,
+         t.source_branch_id source_id,t.destination_branch_id destination_id,NULL::bigint destination_warehouse_id,
+         t.received_by,sb.name source_name,db.name destination_name,
+         jsonb_build_array(jsonb_build_object('id',t.id,'name',t.product_name,'quantity',t.quantity,'unit',t.unit)) items
+       FROM finished_goods_transfers t JOIN branches sb ON sb.id=t.source_branch_id
+       JOIN branches db ON db.id=t.destination_branch_id
+       WHERE t.id=$1 AND t.destination_type='branch' AND t.transport_policy='branch_receipt'`
+    : kitchen
     ? `SELECT o.id, o.status, o.order_number label, o.central_kitchen_id source_id, o.request_branch_id destination_id,
          o.received_by, sb.name source_name, db.name destination_name,
          COALESCE((SELECT jsonb_agg(jsonb_build_object('id', i.id, 'name', i.product_name,
@@ -128,8 +165,9 @@ async function source(client: PoolClient, type: DeliverySourceType, id: number):
   if (!rows.length) return null;
   const r = rows[0];
   return {
-    sourceType: type, sourceId: id, sourceStatus: r.status, sourceLabel: r.label,
+    sourceType: type, sourceId: Number(id), sourceStatus: r.status, sourceLabel: r.label,
     sourceBranchId: r.source_id, sourceBranchName: r.source_name, destinationBranchId: r.destination_id,
+    destinationWarehouseId: r.destination_warehouse_id == null ? null : Number(r.destination_warehouse_id),
     destinationBranchName: r.destination_name, receivedBy: r.received_by,
     items: r.items.map((item: any) => ({ ...item, quantity: Number(item.quantity) })),
   };
@@ -147,8 +185,8 @@ async function dto(req: Request, res: Response, client: PoolClient, row: Assignm
   const manager = !driver && managerScope(req, s, "view") && await permitted(req, res, sourceModule(s.sourceType), "view")
     && await permitted(req, res, "delivery_tasks", "view");
   // Receipt rights are destination-specific and must grant a write action.
-  const destination = await canAccessBranch(req, s.destinationBranchId);
-  const receiver = !driver && destination && await permitted(req, res, sourceModule(s.sourceType), "edit")
+  const destination = await receiverScope(req, s);
+  const receiver = !driver && destination && await permitted(req, res, s.destinationWarehouseId != null ? "warehouse" : sourceModule(s.sourceType), "edit")
     && await permitted(req, res, "delivery_tasks", "approve");
   if (!driver && !manager && !receiver) throw new DeliveryError("Delivery is outside your scope", 403);
   const managerWrite = manager && await permitted(req, res, "delivery_tasks", "edit")
@@ -161,7 +199,7 @@ async function dto(req: Request, res: Response, client: PoolClient, row: Assignm
     receiverName: row.receiver_name, notes: row.notes, proofPresent: !!row.signature_data,
     proofAt: iso(row.proof_at), receiptApprovedBy: row.receipt_approved_by, receiptApprovedAt: iso(row.receipt_approved_at),
     startedAt: iso(row.started_at), completedAt: iso(row.completed_at), failedAt: iso(row.failed_at),
-    failureReason: row.failure_reason, createdAt: new Date(row.created_at).toISOString(),
+    failureReason: row.failure_reason, cancellationReason: row.cancellation_reason, createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
     capabilities: {
       canStart: driver && deliveryTransitionAllowed(row.status, "start"),
@@ -170,13 +208,14 @@ async function dto(req: Request, res: Response, client: PoolClient, row: Assignm
       canComplete: driver && !!row.signature_data && !!row.receipt_approved_by
         && receiptMatchesSource(s.sourceType, s.sourceStatus, s.receivedBy, row.receipt_approved_by)
         && deliveryTransitionAllowed(row.status, "complete"),
-      canFail: (driver || managerWrite) && deliveryTransitionAllowed(row.status, "fail"),
-      canReassign: managerWrite && deliveryTransitionAllowed(row.status, "reassign"),
+      canFail: (driver || managerWrite) && sourceDispatched(s) && deliveryTransitionAllowed(row.status, "fail"),
+      canReassign: managerWrite && sourceDispatched(s) && deliveryTransitionAllowed(row.status, "reassign"),
+      canCancel: managerWrite && !eligibleSourceReceipt(s) && deliveryTransitionAllowed(row.status, "cancel"),
     },
   };
 }
 function eligibleSourceReceipt(s: SourceRow) {
-  return !!s.receivedBy && s.sourceStatus === (s.sourceType === "kitchen" ? "received" : "delivered");
+  return s.sourceStatus === (s.sourceType === "material_transfer" ? "delivered" : "received");
 }
 function error(res: Response, e: unknown) {
   if (res.headersSent) return;
@@ -191,8 +230,11 @@ async function withClient<T>(fn: (client: PoolClient) => Promise<T>): Promise<T>
   try { return await fn(client); } finally { client.release(); }
 }
 async function event(client: PoolClient, id: number, actor: string, action: string, oldStatus: string | null, status: string, detail: object = {}) {
-  await client.query(`INSERT INTO delivery_assignment_events (assignment_id, actor_id, action, from_status, to_status, detail)
-    VALUES ($1,$2,$3,$4,$5,$6)`, [id, actor, action, oldStatus, status, JSON.stringify(detail)]);
+  const inserted = await client.query(`INSERT INTO delivery_assignment_events (assignment_id, actor_id, action, from_status, to_status, detail)
+    VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`, [id, actor, action, oldStatus, status, JSON.stringify(detail)]);
+  if (["proof", "approve-receipt", "fail", "cancel"].includes(action))
+    await enqueueDeliveryNotice(client, id, Number(inserted.rows[0].id),
+      ({ proof: "awaiting_receipt", "approve-receipt": "receipt_approved", fail: "failed", cancel: "cancelled" } as Record<string, DeliveryNoticeEvent>)[action]);
 }
 
 export function registerDeliveryRoutes(app: Express) {
@@ -200,14 +242,16 @@ export function registerDeliveryRoutes(app: Express) {
     try {
       const sources = await withClient(async client => {
         const list: DeliverySource[] = [];
-        for (const type of ["kitchen", "material_transfer"] as const) {
+        for (const type of ["kitchen", "material_transfer", "finished_goods_transfer", "kitchen_warehouse_shipment"] as const) {
           if (!(await permitted(req, res, "delivery_tasks", "create"))) throw new DeliveryError("Permission denied", 403);
           if (!(await permitted(req, res, sourceModule(type), "edit"))) continue;
-          const table = type === "kitchen" ? "central_kitchen_orders" : "material_transfers";
-          const ids = await client.query(`SELECT s.id FROM ${table} s WHERE s.status=$1 AND NOT EXISTS
+          const table = sourceTable(type);
+          const ids = await client.query(`SELECT s.id FROM ${table} s WHERE s.status=$1
+             ${type === "finished_goods_transfer" ? "AND s.transport_policy='branch_receipt' AND s.destination_type='branch'" : ""}
+             AND NOT EXISTS
             (SELECT 1 FROM delivery_assignments a WHERE a.source_type=$2 AND a.source_id=s.id)
             ORDER BY s.id DESC LIMIT 200`,
-            [type === "kitchen" ? "dispatched" : "in_transit", type]);
+             [type === "kitchen" || type === "kitchen_warehouse_shipment" ? "dispatched" : "in_transit", type]);
           for (const item of ids.rows) {
             const s = await source(client, type, item.id);
             if (s && managerScope(req, s, "create")) {
@@ -252,7 +296,7 @@ export function registerDeliveryRoutes(app: Express) {
       const to = req.query.to ? z.string().date().parse(req.query.to) : null;
       const sourceBranchId = req.query.sourceBranchId ? z.string().min(1).max(100).parse(req.query.sourceBranchId) : null;
       const destinationBranchId = req.query.destinationBranchId ? z.string().min(1).max(100).parse(req.query.destinationBranchId) : null;
-      const status = req.query.status ? z.enum(["assigned", "in_transit", "awaiting_receipt", "receipt_approved", "completed", "failed"]).parse(req.query.status) : null;
+      const status = req.query.status ? z.enum(["assigned", "in_transit", "awaiting_receipt", "receipt_approved", "completed", "failed", "cancelled"]).parse(req.query.status) : null;
       if (from && to && from > to) throw new DeliveryError("from must precede to", 400);
       const deliveries = await withClient(async client => {
         const { rows } = await client.query(`${assignmentQuery} WHERE ($1::date IS NULL OR a.created_at >= $1::date)
@@ -265,7 +309,7 @@ export function registerDeliveryRoutes(app: Express) {
           if (!s) continue;
           if (sourceBranchId && s.sourceBranchId !== sourceBranchId) continue;
           if (destinationBranchId && s.destinationBranchId !== destinationBranchId) continue;
-          if (!isDriver(req, row) && !(managerScope(req, s, "view") || await canAccessBranch(req, s.destinationBranchId))) continue;
+          if (!isDriver(req, row) && !(managerScope(req, s, "view") || await receiverScope(req, s))) continue;
           try { result.push(await dto(req, res, client, row, s)); }
           catch (e) { if (!(e instanceof DeliveryError) || e.status !== 403) throw e; }
         }
@@ -273,7 +317,7 @@ export function registerDeliveryRoutes(app: Express) {
       });
       if (res.headersSent) return;
       if (!reports) return res.json({ deliveries });
-      const summary: Record<string, number> = { total: deliveries.length, assigned: 0, in_transit: 0, awaiting_receipt: 0, receipt_approved: 0, completed: 0, failed: 0 };
+       const summary: Record<string, number> = { total: deliveries.length, assigned: 0, in_transit: 0, awaiting_receipt: 0, receipt_approved: 0, completed: 0, failed: 0, cancelled: 0 };
       deliveries.forEach(row => summary[row.status]++);
       res.json({ deliveries, summary });
     } catch (e) { error(res, e); }
@@ -319,12 +363,12 @@ export function registerDeliveryRoutes(app: Express) {
         await client.query("BEGIN");
         try {
           // Lock source to serialize with source status transitions and concurrent assignment.
-          const table = payload.sourceType === "kitchen" ? "central_kitchen_orders" : "material_transfers";
+           const table = sourceTable(payload.sourceType);
           const locked = await client.query(`SELECT id FROM ${table} WHERE id=$1 FOR UPDATE`, [payload.sourceId]);
           if (!locked.rowCount) throw new DeliveryError("Source not found", 404);
           const s = await source(client, payload.sourceType, payload.sourceId);
           if (!s || !managerScope(req, s, "create")) throw new DeliveryError("Source is outside your scope", 403);
-          if (s.sourceStatus !== (payload.sourceType === "kitchen" ? "dispatched" : "in_transit")) throw new DeliveryError("Source must already be dispatched", 409);
+           if (!sourceDispatched(s)) throw new DeliveryError("Source must already be dispatched", 409);
           await driverExists(client, payload.driverId, req);
           const inserted = await client.query(`INSERT INTO delivery_assignments
             (source_type,source_id,driver_id,vehicle_number,scheduled_at,created_by)
@@ -340,38 +384,42 @@ export function registerDeliveryRoutes(app: Express) {
     } catch (e) { error(res, e); }
   });
 
-  for (const action of ["start", "proof", "approve-receipt", "complete", "fail", "reassign"] as const) {
+  for (const action of ["start", "proof", "approve-receipt", "complete", "fail", "reassign", "cancel"] as const) {
     app.post(`/api/deliveries/:id/${action}`, isAuthenticated, async (req, res) => {
       try {
         const id = idSchema.parse(req.params.id);
         const payload = action === "proof" ? proofSchema.parse(req.body)
-          : action === "fail" ? failSchema.parse(req.body)
+           : action === "fail" ? failSchema.parse(req.body)
+           : action === "cancel" ? cancelSchema.parse(req.body)
           : action === "reassign" ? reassignmentSchema.parse(req.body) : null;
         await withClient(async client => {
           await client.query("BEGIN");
           try {
             const row = await assignment(client, id, true);
             if (!row) throw new DeliveryError("Delivery not found", 404);
-            if (action === "approve-receipt" || action === "complete") {
-              const sourceTable = row.source_type === "kitchen" ? "central_kitchen_orders" : "material_transfers";
-              await client.query(`SELECT id FROM ${sourceTable} WHERE id=$1 FOR UPDATE`, [row.source_id]);
-            }
+             await client.query(`SELECT id FROM ${sourceTable(row.source_type)} WHERE id=$1 FOR UPDATE`, [row.source_id]);
             const s = await source(client, row.source_type, row.source_id);
             if (!s) throw new DeliveryError("Linked source not found", 409);
             const driver = isDriver(req, row);
             const sourceManager = managerScope(req, s, "edit");
-            const manager = (action === "fail" || action === "reassign") && sourceManager
+             const manager = (action === "fail" || action === "reassign" || action === "cancel") && sourceManager
               && await permitted(req, res, "delivery_tasks", "edit")
               && await permitted(req, res, sourceModule(s.sourceType), "edit");
-            const receiver = action === "approve-receipt" && await canAccessBranch(req, s.destinationBranchId)
+             const receiver = action === "approve-receipt" && await receiverScope(req, s)
               && await permitted(req, res, "delivery_tasks", "approve")
-              && await permitted(req, res, sourceModule(s.sourceType), "edit");
+               && await permitted(req, res, s.destinationWarehouseId != null ? "warehouse" : sourceModule(s.sourceType), "edit");
             if (res.headersSent) throw new DeliveryError("Permission denied", 403);
             if (action === "approve-receipt" ? !receiver
-              : action === "reassign" ? !manager
+               : action === "reassign" || action === "cancel" ? !manager
               : action === "fail" ? !driver && !manager
               : !driver) throw new DeliveryError("Permission denied", 403);
             if (!deliveryTransitionAllowed(row.status, action)) throw new DeliveryError("Invalid delivery state transition", 409);
+             if (["fail", "reassign", "cancel"].includes(action) && eligibleSourceReceipt(s))
+               throw new DeliveryError("Source receipt already recorded; delivery cannot be reset or cancelled", 409);
+             if (["fail", "reassign"].includes(action) && !sourceDispatched(s))
+               throw new DeliveryError("Source is no longer dispatched; cannot restart delivery", 409);
+             if (["start", "proof"].includes(action) && !sourceDispatched(s))
+               throw new DeliveryError("Source is no longer awaiting receipt", 409);
             if (action === "proof") validateSignature((payload as z.infer<typeof proofSchema>).signatureData);
             if (action === "approve-receipt" || action === "complete") {
               if (!row.signature_data || !row.proof_at) throw new DeliveryError("Signature proof required", 409);
@@ -385,7 +433,7 @@ export function registerDeliveryRoutes(app: Express) {
             if (action === "reassign") await driverExists(client, (payload as z.infer<typeof reassignmentSchema>).driverId, req);
             const next: DeliveryStatus = ({
               start: "in_transit", proof: "awaiting_receipt", "approve-receipt": "receipt_approved",
-              complete: "completed", fail: "failed", reassign: "assigned",
+               complete: "completed", fail: "failed", reassign: "assigned", cancel: "cancelled",
             } as const)[action];
             const values: any[] = [id, next];
             let updates = "status=$2, updated_at=now()";
@@ -399,15 +447,19 @@ export function registerDeliveryRoutes(app: Express) {
             if (action === "approve-receipt") { set("receipt_approved_by", requireUser(req).id); updates += ", receipt_approved_at=now()"; }
             if (action === "complete") updates += ", completed_at=now()";
             if (action === "fail") { set("failure_reason", (payload as z.infer<typeof failSchema>).reason); updates += ", failed_at=now()"; }
+             if (action === "cancel") { set("cancellation_reason", (payload as z.infer<typeof cancelSchema>).reason); updates += ", cancelled_at=now()"; }
             if (action === "reassign") {
               const p = payload as z.infer<typeof reassignmentSchema>;
               set("driver_id", p.driverId); set("vehicle_number", p.vehicleNumber);
-              updates += ", signature_data=NULL, receiver_name=NULL, notes=NULL, proof_at=NULL, receipt_approved_by=NULL, receipt_approved_at=NULL, started_at=NULL, failed_at=NULL, failure_reason=NULL";
+               updates += ", signature_data=NULL, receiver_name=NULL, notes=NULL, proof_at=NULL, receipt_approved_by=NULL, receipt_approved_at=NULL, started_at=NULL, failed_at=NULL, failure_reason=NULL, cancelled_at=NULL, cancellation_reason=NULL";
             }
             await client.query(`UPDATE delivery_assignments SET ${updates} WHERE id=$1`, values);
             await event(client, id, requireUser(req).id, action, row.status, next, action === "reassign"
-              ? { previousDriverId: row.driver_id, previousVehicleNumber: row.vehicle_number, newDriverId: (payload as z.infer<typeof reassignmentSchema>).driverId }
-              : action === "fail" ? { reason: (payload as z.infer<typeof failSchema>).reason } : {});
+               ? { previousDriverId: row.driver_id, previousVehicleNumber: row.vehicle_number,
+                   previousProofAt: row.proof_at, previousReceiverName: row.receiver_name,
+                   previousCancellationReason: row.cancellation_reason, previousFailureReason: row.failure_reason,
+                   newDriverId: (payload as z.infer<typeof reassignmentSchema>).driverId }
+               : action === "fail" || action === "cancel" ? { reason: (payload as z.infer<typeof failSchema>).reason, stockShipmentUnchanged: true } : {});
             await client.query("COMMIT");
           } catch (e) { await client.query("ROLLBACK"); throw e; }
         });

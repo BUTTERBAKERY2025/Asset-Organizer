@@ -36494,7 +36494,7 @@ export async function registerRoutes(
       const inventoryId = parseInt(req.params.id);
       const { quantity, destinationType, destinationBranchId, notes } = req.body;
       
-      if (!quantity || quantity <= 0) {
+      if (!Number.isInteger(quantity) || quantity <= 0) {
         return res.status(400).json({ error: "الكمية يجب أن تكون أكبر من صفر" });
       }
       
@@ -36511,13 +36511,6 @@ export async function registerRoutes(
             return res.status(403).json({ error: "غير مصرح بتحويل مخزون هذا الفرع" });
           }
         }
-        // Also verify destination branch access for branch transfers
-        if (destinationType === 'branch' && destinationBranchId) {
-          const hasDestAccess = await canAccessBranch(req, destinationBranchId);
-          if (!hasDestAccess) {
-            return res.status(403).json({ error: "غير مصرح بالتحويل لهذا الفرع" });
-          }
-        }
       }
       
       // Validate destination type at route level
@@ -36529,6 +36522,14 @@ export async function registerRoutes(
       // Validate branch ID for branch transfers
       if (destinationType === 'branch' && !destinationBranchId) {
         return res.status(400).json({ error: "يجب تحديد الفرع المستهدف عند التحويل لفرع آخر" });
+      }
+
+      if (destinationType === 'branch') {
+        const transfer = await storage.createFinishedGoodsBranchShipment(
+          inventoryId, quantity, destinationBranchId, notes, user?.id,
+          [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || undefined,
+        );
+        return res.status(201).json(transfer);
       }
       
       const transfer = await storage.transferFinishedGoods(
@@ -36578,7 +36579,39 @@ export async function registerRoutes(
                            error.message?.includes('غير موجود') ||
                            error.message?.includes('غير صالح');
       const statusCode = isClientError ? 400 : 500;
-      console.error("Inventory transfer error:", error); res.status(statusCode).json({ error: "فشل في تحويل المخزون" });
+      console.error("Inventory transfer error:", error); res.status(statusCode).json({ error: isClientError ? error.message : "فشل في تحويل المخزون" });
+    }
+  });
+
+  // Only the source dispatches; only a user with access to the receiving branch
+  // acknowledges physical receipt. Driver proof never posts finished-goods stock.
+  app.post("/api/finished-goods-transfers/:id/:action", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
+    const { action } = req.params;
+    const id = Number(req.params.id);
+    if (!Number.isSafeInteger(id) || id <= 0 || !["dispatch", "receive", "cancel"].includes(action)) {
+      return res.status(400).json({ error: "إجراء تحويل غير صالح" });
+    }
+    try {
+      const transfer = await storage.getFinishedGoodsTransfer(id);
+      if (!transfer) return res.status(404).json({ error: "التحويل غير موجود" });
+      if (transfer.transportPolicy !== "branch_receipt") return res.status(409).json({ error: "التحويل التاريخي لا يدعم هذا الإجراء" });
+      const permittedBranch = action === "receive" ? transfer.destinationBranchId : transfer.sourceBranchId;
+      if (!permittedBranch || !(await canAccessBranch(req, permittedBranch))) {
+        return res.status(403).json({ error: "غير مصرح بإجراء التحويل لهذا الفرع" });
+      }
+      const receivedQuantity = action === "receive" ? req.body?.receivedQuantity : undefined;
+      if (action === "receive" && (!Number.isInteger(receivedQuantity) || receivedQuantity < 0 || receivedQuantity > transfer.quantity)) {
+        return res.status(400).json({ error: "كمية الاستلام الفعلية غير صالحة" });
+      }
+      const user = req.currentUser;
+      const result = await storage.transitionFinishedGoodsBranchShipment(
+        id, action as "dispatch" | "receive" | "cancel", user?.id,
+        [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || undefined, receivedQuantity,
+      );
+      res.json(result);
+    } catch (error: any) {
+      console.error("Finished goods branch shipment transition failed:", error);
+      res.status(409).json({ error: error?.message || "فشل إجراء التحويل" });
     }
   });
 
@@ -36594,23 +36627,23 @@ export async function registerRoutes(
       if (req.query.endDate) filters.endDate = req.query.endDate as string;
       
       // SECURITY: Apply branch filter (source OR destination)
-      const branchFilter = getEffectiveBranchFilter(req, req.query.sourceBranchId as string | undefined);
+      const requestedBranch = (req.query.branchId || req.query.sourceBranchId) as string | undefined;
+      const branchFilter = getEffectiveBranchFilter(req, requestedBranch);
 
       if (!branchFilter.hasAccess) {
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
 
-      if (branchFilter.singleBranchId) {
-        filters.branchId = branchFilter.singleBranchId;
-      }
-      
       let transfers = await storage.getFinishedGoodsTransfers(filters);
+      if (requestedBranch) transfers = transfers.filter(t => t.sourceBranchId === requestedBranch || t.destinationBranchId === requestedBranch);
       
       // Additional filter for non-admins to match source OR destination
       if (branchFilter.branchIds) {
         transfers = transfers.filter(t => 
           branchFilter.branchIds!.includes(t.sourceBranchId || '') || branchFilter.branchIds!.includes(t.destinationBranchId || '')
         );
+      } else if (branchFilter.singleBranchId) {
+        transfers = transfers.filter(t => t.sourceBranchId === branchFilter.singleBranchId || t.destinationBranchId === branchFilter.singleBranchId);
       }
       
       res.json(transfers);
@@ -41483,6 +41516,11 @@ export async function registerRoutes(
           return res.status(403).json({ error: "لم تعد مصرحاً بالوصول إلى هذا الإشعار" });
         }
       }
+      if (notification.accessModule === "delivery_tasks" && notification.autoSource === "delivery_task") {
+        const { filterAuthorizedDeliveryNoticeUsers } = await import("./delivery-notifications");
+        if (!(await filterAuthorizedDeliveryNoticeUsers(notification, [userId])).includes(userId))
+          return res.status(403).json({ error: "لم تعد مصرحاً بالوصول إلى هذا الإشعار" });
+      }
       const read = await storage.markNotificationRead(notificationId, userId);
       res.json(read);
     } catch (error) {
@@ -41505,6 +41543,11 @@ export async function registerRoutes(
         if (!(await canUserAccessCentralKitchenNotification(db, notification, userId))) {
           return res.status(403).json({ error: "لم تعد مصرحاً بالوصول إلى هذا الإشعار" });
         }
+      }
+      if (notification.accessModule === "delivery_tasks" && notification.autoSource === "delivery_task") {
+        const { filterAuthorizedDeliveryNoticeUsers } = await import("./delivery-notifications");
+        if (!(await filterAuthorizedDeliveryNoticeUsers(notification, [userId])).includes(userId))
+          return res.status(403).json({ error: "لم تعد مصرحاً بالوصول إلى هذا الإشعار" });
       }
       const dismissed = await storage.dismissNotification(notificationId, userId);
       res.json(dismissed);

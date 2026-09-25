@@ -750,6 +750,11 @@ export function startScheduler() {
     .catch(error => console.error("[scheduler] kitchen overdue escalation failed:", error));
   setTimeout(kitchenSweep, 15_000);
   setInterval(kitchenSweep, TICK_MS);
+  const deliverySweep = () => import("./delivery-notifications")
+    .then(m => m.sweepDeliveryNotices())
+    .catch(error => console.error("[scheduler] delivery notice sweep failed:", error));
+  setTimeout(deliverySweep, 18_000);
+  setInterval(deliverySweep, TICK_MS);
   // إشعارات الجوال المجدولة: مسح دوري كل 5 دقائق لإرسال ما حان وقته
   const pushSweep = () =>
     import("./push-service")

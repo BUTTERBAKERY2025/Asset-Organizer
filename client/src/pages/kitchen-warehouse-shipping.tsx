@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
@@ -36,9 +36,25 @@ export default function KitchenWarehouseShippingPage() {
   const [vehicleNumber,setVehicleNumber] = useState("");
   const [receipts,setReceipts] = useState<Record<number,string>>({});
   const [busy,setBusy] = useState(false);
+  const shipmentLinkConsumed = useRef(false);
+  const returnDeliveryId = new URLSearchParams(window.location.search).get("deliveryId");
   const sources = useQuery({ queryKey:[base,"sources"], queryFn:() => fetchList<Stock[]>(`${base}/sources`), enabled:kitchen });
   const warehouses = useQuery({ queryKey:[base,"warehouses"], queryFn:() => fetchList<Warehouse[]>(`${base}/warehouses`), enabled:kitchen });
   const shipments = useQuery({ queryKey:[base,"shipments"], queryFn:() => fetchList<Shipment[]>(base) });
+  useEffect(() => {
+    if (shipmentLinkConsumed.current || !shipments.data) return;
+    const raw = new URLSearchParams(window.location.search).get("shipmentId");
+    if (!raw) return;
+    shipmentLinkConsumed.current = true;
+    const id = Number(raw);
+    const target = Number.isSafeInteger(id) && id > 0 ? shipments.data.find(s => Number(s.id) === id) : null;
+    if (!target) {
+      toast({title:"الشحنة غير متاحة أو خارج نطاق صلاحيتك",variant:"destructive"});
+      return;
+    }
+    window.setTimeout(() => document.getElementById(`warehouse-shipment-${id}`)?.scrollIntoView({behavior:"smooth",block:"center"}), 0);
+    if (target.status === "received") toast({title:"الاستلام مسجل بالفعل",description:"ارجع لمهمة التوصيل لاعتماد الإيصال."});
+  }, [shipments.data, toast]);
   const stored = useQuery({ queryKey:[base,"stock"], queryFn:() => fetchList<WarehouseStock[]>(`${base}/stock`), enabled:manager });
   const selected = sources.data?.find(s => String(s.id) === stockId);
   const perform = async (url: string, body: object) => {
@@ -69,7 +85,7 @@ export default function KitchenWarehouseShippingPage() {
   return <Layout><div dir="rtl" className="page-container space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">شحن المنتجات للمستودعات المستقلة</h1>
       <p className="text-sm text-muted-foreground">حجز من مخزون المطبخ النهائي، خروج فعلي، ثم تأكيد الكمية المستلمة. مخزون المنتجات مستقل عن المواد الخام.</p></div>
-      <Link href="/finished-goods-inventory"><Button variant="outline">مخزون الإنتاج النهائي</Button></Link></div>
+      <div className="flex flex-wrap gap-2">{returnDeliveryId && /^[1-9]\d*$/.test(returnDeliveryId) && <Link href={`/driver-deliveries?deliveryId=${returnDeliveryId}`}><Button variant="outline">العودة لمهمة التوصيل لاعتماد الإيصال</Button></Link>}<Link href="/finished-goods-inventory"><Button variant="outline">مخزون الإنتاج النهائي</Button></Link></div></div>
     {kitchen && <Card><CardHeader><CardTitle>طلب شحن جديد من دفعة إنتاج متاحة</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-4 items-end">
       <div><Label>المنتج والدفعة وتاريخ الإنتاج</Label><Select value={stockId} onValueChange={setStockId}><SelectTrigger><SelectValue placeholder="اختر المخزون الفعلي" /></SelectTrigger>
         <SelectContent>{sources.data?.map(s=><SelectItem key={s.id} value={String(s.id)}>{s.product_name} — {s.branch_id} — {s.production_date} ({s.available} {s.unit})</SelectItem>)}</SelectContent></Select></div>
@@ -82,10 +98,11 @@ export default function KitchenWarehouseShippingPage() {
     <Card><CardHeader><CardTitle>حركات الشحن</CardTitle></CardHeader><CardContent className="space-y-4">
       {shipments.isLoading && <p>جارٍ التحميل...</p>}{shipments.error && <p className="text-destructive">{shipments.error.message}</p>}
       {shipments.data?.length === 0 && <p>لا توجد حركات حتى الآن.</p>}
-      {shipments.data?.map(s=><div key={s.id} className="rounded border p-4 space-y-2">
+      {shipments.data?.map(s=><div id={`warehouse-shipment-${s.id}`} key={s.id} className={`rounded border p-4 space-y-2 ${new URLSearchParams(window.location.search).get("shipmentId") === String(s.id) ? "border-primary bg-primary/5" : ""}`}>
         <div className="font-medium">#{s.id} · {s.product_name} · {s.quantity} {s.unit} · {s.source_branch_id} ← {s.destination_name}</div>
         <div className="text-sm">الحالة: {labels[s.status] || s.status} · الناقل: {s.carrier_name || "—"} · المركبة: {s.vehicle_number || "—"}
           {s.status==="received" && <> · المستلم: {s.received_quantity} · الفرق: {s.quantity-s.received_quantity!}</>}</div>
+        {s.status==="dispatched" && <Link href={`/driver-deliveries?sourceType=kitchen_warehouse_shipment&sourceId=${s.id}`}><Button variant="outline" size="sm">إسناد سائق لهذه الشحنة / فتح مهمة التوصيل</Button></Link>}
         {s.status==="requested" && kitchen && <div className="flex flex-wrap items-end gap-2">
           <div><Label>الناقل الفعلي</Label><Input value={carrierName} onChange={e=>setCarrierName(e.target.value)} /></div>
           <div><Label>رقم المركبة</Label><Input value={vehicleNumber} onChange={e=>setVehicleNumber(e.target.value)} /></div>

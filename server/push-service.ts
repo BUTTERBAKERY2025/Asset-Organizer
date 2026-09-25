@@ -151,6 +151,10 @@ async function resolveTargetUserIds(n: SystemNotification): Promise<string[]> {
       const { filterAuthorizedCentralKitchenNotificationUsers } = await import("./central-kitchen-notifications");
       return filterAuthorizedCentralKitchenNotificationUsers(db, n, activeIds);
     }
+    if (n.accessModule === "delivery_tasks" && n.autoSource === "delivery_task") {
+      const { filterAuthorizedDeliveryNoticeUsers } = await import("./delivery-notifications");
+      return filterAuthorizedDeliveryNoticeUsers(n, activeIds);
+    }
     if (n.accessModule === "warehouse" && n.autoSource === "warehouse_material_transfer") {
       const { filterAuthorizedWarehouseTransferNotificationUsers } = await import("./warehouse-transfer-notifications");
       return filterAuthorizedWarehouseTransferNotificationUsers(db, n, activeIds);
@@ -179,6 +183,10 @@ async function resolveTargetUserIds(n: SystemNotification): Promise<string[]> {
   if (n.accessModule === "central_kitchen_orders") {
     const { filterAuthorizedCentralKitchenNotificationUsers } = await import("./central-kitchen-notifications");
     return filterAuthorizedCentralKitchenNotificationUsers(db, n, userIds);
+  }
+  if (n.accessModule === "delivery_tasks" && n.autoSource === "delivery_task") {
+    const { filterAuthorizedDeliveryNoticeUsers } = await import("./delivery-notifications");
+    return filterAuthorizedDeliveryNoticeUsers(n, userIds);
   }
   if (n.accessModule === "warehouse" && n.autoSource === "warehouse_material_transfer") {
     const { filterAuthorizedWarehouseTransferNotificationUsers } = await import("./warehouse-transfer-notifications");

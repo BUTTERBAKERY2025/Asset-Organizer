@@ -1635,6 +1635,8 @@ export interface IStorage {
   getFinishedGoodsTransfer(id: number): Promise<FinishedGoodsTransfer | undefined>;
   createFinishedGoodsTransfer(transfer: InsertFinishedGoodsTransfer): Promise<FinishedGoodsTransfer>;
   transferFinishedGoods(inventoryId: number, quantity: number, destinationType: string, destinationBranchId?: string, notes?: string, userId?: string, userName?: string): Promise<FinishedGoodsTransfer>;
+  createFinishedGoodsBranchShipment(inventoryId: number, quantity: number, destinationBranchId: string, notes?: string, userId?: string, userName?: string): Promise<FinishedGoodsTransfer>;
+  transitionFinishedGoodsBranchShipment(id: number, action: "dispatch" | "receive" | "cancel", userId?: string, userName?: string, receivedQuantity?: number): Promise<FinishedGoodsTransfer>;
   
   // Production Inventory Logs
   getProductionInventoryLogs(filters?: { branchId?: string; productId?: number; movementType?: string }): Promise<ProductionInventoryLog[]>;
@@ -13871,7 +13873,106 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
+  async createFinishedGoodsBranchShipment(inventoryId: number, quantity: number, destinationBranchId: string, notes?: string, userId?: string, userName?: string): Promise<FinishedGoodsTransfer> {
+    if (!Number.isInteger(quantity) || quantity <= 0) throw new Error("كمية التحويل غير صالحة");
+    if (!destinationBranchId) throw new Error("فرع الوجهة مطلوب");
+    return db.transaction(async (tx) => {
+      const [source] = await tx.select().from(finishedGoodsInventory).where(eq(finishedGoodsInventory.id, inventoryId)).for("update");
+      if (!source) throw new Error("عنصر المخزون غير موجود");
+      if (source.branchId === destinationBranchId) throw new Error("يجب اختيار فرع آخر");
+      if (!source.productId) throw new Error("منتج المخزون غير مرتبط بكتالوج حالي للتحويل");
+      const [catalog] = await tx.select({ isActive: products.isActive, operationsEnabled: products.operationsEnabled })
+        .from(products).where(eq(products.id, source.productId)).limit(1);
+      if (!catalog || !isNewCatalogReferenceAllowed(catalog)) throw new Error("المنتج المؤرشف غير متاح لتحويل جديد");
+      if (source.quantity - source.reservedQuantity < quantity) throw new Error("الكمية غير المحجوزة غير كافية");
+      const [destination] = await tx.select({ id: branches.id }).from(branches).where(eq(branches.id, destinationBranchId));
+      if (!destination) throw new Error("فرع الوجهة غير موجود");
+      await tx.update(finishedGoodsInventory)
+        .set({ reservedQuantity: sql`${finishedGoodsInventory.reservedQuantity} + ${quantity}`, updatedAt: new Date() })
+        .where(eq(finishedGoodsInventory.id, inventoryId));
+      const [transfer] = await tx.insert(finishedGoodsTransfers).values({
+        inventoryId, sourceBranchId: source.branchId, destinationType: "branch", destinationBranchId,
+        productId: source.productId, productName: source.productName, productCategory: source.productCategory,
+        quantity, unit: source.unit, productionDate: source.productionDate,
+        transferDate: new Date().toISOString().slice(0, 10), notes,
+        status: "pending", transportPolicy: "branch_receipt", createdBy: userId, createdByName: userName,
+      }).returning();
+      return transfer;
+    });
+  }
+
+  async transitionFinishedGoodsBranchShipment(id: number, action: "dispatch" | "receive" | "cancel", userId?: string, userName?: string, receivedQuantity?: number): Promise<FinishedGoodsTransfer> {
+    return db.transaction(async (tx) => {
+      const [transfer] = await tx.select().from(finishedGoodsTransfers).where(eq(finishedGoodsTransfers.id, id)).for("update");
+      if (!transfer) throw new Error("التحويل غير موجود");
+      if (transfer.transportPolicy !== "branch_receipt" || transfer.destinationType !== "branch" || !transfer.destinationBranchId || !transfer.productId || !transfer.productionDate) {
+        throw new Error("هذا التحويل ليس شحنة فرع جديدة");
+      }
+      if (action === "dispatch" && transfer.status !== "pending"
+        || action === "cancel" && transfer.status !== "pending"
+        || action === "receive" && transfer.status !== "in_transit") {
+        throw new Error("حالة التحويل لا تسمح بهذا الإجراء");
+      }
+      if (action === "receive" && (!Number.isInteger(receivedQuantity) || receivedQuantity! < 0 || receivedQuantity! > transfer.quantity)) {
+        throw new Error("كمية الاستلام الفعلية غير صالحة");
+      }
+      if (action === "dispatch" || action === "cancel") {
+        const [source] = await tx.select().from(finishedGoodsInventory)
+          .where(eq(finishedGoodsInventory.id, transfer.inventoryId)).for("update");
+        if (!source || source.reservedQuantity < transfer.quantity || (action === "dispatch" && source.quantity < transfer.quantity)) {
+          throw new Error("الرصيد المحجوز غير كاف");
+        }
+        const [updated] = await tx.update(finishedGoodsInventory).set({
+          reservedQuantity: sql`${finishedGoodsInventory.reservedQuantity} - ${transfer.quantity}`,
+          ...(action === "dispatch" ? { quantity: sql`${finishedGoodsInventory.quantity} - ${transfer.quantity}` } : {}),
+          updatedAt: new Date(),
+        }).where(eq(finishedGoodsInventory.id, source.id)).returning();
+        if (action === "dispatch") await tx.insert(productionInventoryLogs).values({
+          branchId: transfer.sourceBranchId, productId: transfer.productId, productName: transfer.productName,
+          movementType: "transfer_out", quantity: -transfer.quantity, balanceBefore: source.quantity,
+          balanceAfter: updated.quantity, referenceType: "transfer", referenceId: transfer.id,
+          notes: `شحن إلى ${transfer.destinationBranchId}`, createdBy: userId, createdByName: userName,
+        });
+      }
+      if (action === "receive" && receivedQuantity! > 0) {
+        const normalized = transfer.productName.trim().toLowerCase();
+        const [existing] = await tx.select().from(finishedGoodsInventory).where(and(
+          eq(finishedGoodsInventory.branchId, transfer.destinationBranchId),
+          eq(finishedGoodsInventory.productId, transfer.productId),
+          eq(finishedGoodsInventory.productionDate, transfer.productionDate),
+          eq(finishedGoodsInventory.unit, transfer.unit || "قطعة"),
+        )).for("update");
+        const [destination] = await tx.insert(finishedGoodsInventory).values({
+          branchId: transfer.destinationBranchId, productId: transfer.productId, productName: transfer.productName,
+          productNameNormalized: normalized, productCategory: transfer.productCategory,
+          productionDate: transfer.productionDate, unit: transfer.unit || "قطعة", quantity: receivedQuantity!,
+        }).onConflictDoUpdate({
+          target: [finishedGoodsInventory.branchId, finishedGoodsInventory.productId, finishedGoodsInventory.productionDate, finishedGoodsInventory.unit],
+          targetWhere: sql`product_id IS NOT NULL`,
+          set: { quantity: sql`${finishedGoodsInventory.quantity} + ${receivedQuantity!}`, updatedAt: new Date() },
+        }).returning();
+        await tx.insert(productionInventoryLogs).values({
+          branchId: transfer.destinationBranchId, productId: transfer.productId, productName: transfer.productName,
+          movementType: "transfer_in", quantity: receivedQuantity!, balanceBefore: existing?.quantity || 0,
+          balanceAfter: destination.quantity, referenceType: "transfer", referenceId: transfer.id,
+          notes: `استلام فعلي من ${transfer.sourceBranchId}`, createdBy: userId, createdByName: userName,
+        });
+      }
+      const [updatedTransfer] = await tx.update(finishedGoodsTransfers).set(
+        action === "dispatch" ? { status: "in_transit", dispatchedAt: new Date() }
+          : action === "cancel" ? { status: "cancelled" }
+            : { status: "received", receivedAt: new Date(), receivedBy: userId, receivedQuantity },
+      ).where(eq(finishedGoodsTransfers.id, id)).returning();
+      return updatedTransfer;
+    });
+  }
+
   async transferFinishedGoods(inventoryId: number, quantity: number, destinationType: string, destinationBranchId?: string, notes?: string, userId?: string, userName?: string): Promise<FinishedGoodsTransfer> {
+    // Never create a new instantly completed cross-branch transfer, even from a
+    // non-HTTP caller. Historical rows retain their original status and balances.
+    if (destinationType === "branch") {
+      return this.createFinishedGoodsBranchShipment(inventoryId, quantity, destinationBranchId || "", notes, userId, userName);
+    }
     if (!Number.isInteger(quantity) || quantity <= 0) {
       throw new Error("كمية التحويل يجب أن تكون عدداً صحيحاً أكبر من صفر");
     }
@@ -18444,13 +18545,17 @@ export class DatabaseStorage implements IStorage {
     });
     const scoped = visible.filter(n =>
       n.accessModule === "central_kitchen_orders"
-      || (n.accessModule === "warehouse" && n.autoSource === "warehouse_material_transfer"));
+      || (n.accessModule === "warehouse" && n.autoSource === "warehouse_material_transfer")
+      || (n.accessModule === "delivery_tasks" && n.autoSource === "delivery_task"));
     if (!scoped.length) return visible;
     const { filterAuthorizedCentralKitchenNotificationUsers } = await import("./central-kitchen-notifications");
     const allowedIds = new Set<number>();
     await Promise.all(scoped.map(async (notification) => {
       const authorized = notification.accessModule === "central_kitchen_orders"
         ? await filterAuthorizedCentralKitchenNotificationUsers(db, notification, [userId])
+        : notification.accessModule === "delivery_tasks"
+        ? await (await import("./delivery-notifications"))
+          .filterAuthorizedDeliveryNoticeUsers(notification, [userId])
         : await (await import("./warehouse-transfer-notifications"))
           .filterAuthorizedWarehouseTransferNotificationUsers(db, notification, [userId]);
       if (authorized.includes(userId)) allowedIds.add(notification.id);
