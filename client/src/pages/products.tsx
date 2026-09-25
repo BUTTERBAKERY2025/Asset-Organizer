@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TablePagination } from "@/components/ui/pagination";
 import { ExportButtons } from "@/components/export-buttons";
 import { getProductCatalogWriteAccess } from "@/lib/product-catalog-permissions";
+import { isNewCatalogReferenceAllowed } from "@shared/catalog-activity";
 import type { Product } from "@shared/schema";
 
 const PRODUCT_CATEGORIES = [
@@ -68,6 +69,7 @@ export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [productTypeFilter, setProductTypeFilter] = useState<string>("all");
+  const [activityScope, setActivityScope] = useState<"current" | "archived" | "all">("current");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productToArchive, setProductToArchive] = useState<Product | null>(null);
@@ -268,7 +270,9 @@ export default function ProductsPage() {
     }
   };
 
-  const filteredProducts = products.filter(p => {
+  const scopedProducts = products.filter(p => activityScope === "all" ||
+    (activityScope === "current" ? isNewCatalogReferenceAllowed(p) : !isNewCatalogReferenceAllowed(p)));
+  const filteredProducts = scopedProducts.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       ((p as any).nameEn || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       ((p as any).sku || "").toLowerCase().includes(searchTerm.toLowerCase());
@@ -300,9 +304,9 @@ export default function ProductsPage() {
     return type === "finish" ? "نهائي" : "مخزني";
   };
 
-  const categoryCounts = [...new Set(products.map(p => p.category))].map(value => ({
+  const categoryCounts = [...new Set(scopedProducts.map(p => p.category))].map(value => ({
     value, label: PRODUCT_CATEGORIES.find(cat => cat.value === value)?.label || value,
-    count: products.filter(p => p.category === value).length,
+    count: scopedProducts.filter(p => p.category === value).length,
   }));
 
   const exportColumns = [
@@ -343,7 +347,7 @@ export default function ProductsPage() {
                 إدارة المنتجات
               </h1>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                {isError ? "تعذر تحميل قائمة المنتجات" : `قائمة المنتجات والأسعار - ${products.length} منتج`}
+                {isError ? "تعذر تحميل قائمة المنتجات" : `قائمة المنتجات والأسعار - ${scopedProducts.length} منتج`}
               </p>
             </div>
           </div>
@@ -353,7 +357,7 @@ export default function ProductsPage() {
               columns={exportColumns}
               fileName="قائمة_المنتجات"
               title="قائمة منتجات BUTTER BAKERY"
-              subtitle={`إجمالي ${products.length} منتج`}
+              subtitle={`إجمالي ${scopedProducts.length} منتج`}
             />
             {canManageProducts && (
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -508,6 +512,17 @@ export default function ProductsPage() {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          <Label htmlFor="products-activity-scope">عرض المنتجات:</Label>
+          <Select value={activityScope} onValueChange={(value: "current" | "archived" | "all") => { setActivityScope(value); setCategoryFilter("all"); setProductTypeFilter("all"); setCurrentPage(1); }}>
+            <SelectTrigger id="products-activity-scope" className="w-56" data-testid="products-activity-scope"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="current">الحالية ({products.filter(isNewCatalogReferenceAllowed).length})</SelectItem>
+              <SelectItem value="archived">المؤرشفة / التاريخية ({products.filter(p => !isNewCatalogReferenceAllowed(p)).length})</SelectItem>
+              <SelectItem value="all">جميع المنتجات ({products.length})</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="flex flex-wrap gap-2 items-center">
           <span className="text-sm text-muted-foreground">نوع الصنف:</span>
           <Badge
@@ -524,7 +539,7 @@ export default function ProductsPage() {
               className={`cursor-pointer px-3 py-1 ${productTypeFilter === type.value ? "" : type.color}`}
               onClick={() => { setProductTypeFilter(type.value); setCurrentPage(1); }}
             >
-              {type.label} ({products.filter(p => (p as any).productType === type.value).length})
+              {type.label} ({scopedProducts.filter(p => (p as any).productType === type.value).length})
             </Badge>
           ))}
         </div>
@@ -535,7 +550,7 @@ export default function ProductsPage() {
             className="cursor-pointer px-3 py-1"
             onClick={() => { setCategoryFilter("all"); setCurrentPage(1); }}
           >
-            الكل ({products.length})
+            الكل ({scopedProducts.length})
           </Badge>
           {categoryCounts.filter(c => c.count > 0).map(cat => (
             <Badge
@@ -668,7 +683,7 @@ export default function ProductsPage() {
                                       <Edit className="w-3 h-3 sm:w-4 sm:h-4" />
                                     </Button>
                                   )}
-                                  {canDeleteProduct && product.isActive !== "false" && (
+                                  {canDeleteProduct && isNewCatalogReferenceAllowed(product) && (
                                     <Button
                                       variant="ghost"
                                       size="icon"

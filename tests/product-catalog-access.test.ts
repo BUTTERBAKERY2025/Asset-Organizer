@@ -328,6 +328,34 @@ describe("product catalog access", () => {
     expect(productStorage.deleteProduct).toHaveBeenCalledWith(1);
     expect(repeated.statusCode).toBe(409);
   });
+
+  it("archives an unpriced operational-only product and rejects a repeat", async () => {
+    const currentUser = user("operations-archive-pending");
+    grant(currentUser.id, "operations", ["delete"]);
+    const pending = {
+      id: 19, name: "Unpriced finished good", isActive: "false",
+      operationsEnabled: true, saleEnabled: false, basePrice: null,
+    };
+    productStorage.getProduct.mockResolvedValueOnce(pending as any);
+    const archived = await invoke("delete", "/api/products/:id", {
+      user: currentUser,
+      params: { id: "19" },
+    });
+    expect(archived.statusCode).toBe(200);
+    expect(archived.body).toEqual({ success: true, archived: true });
+    expect(productStorage.deleteProduct).toHaveBeenCalledTimes(1);
+    expect(productStorage.deleteProduct).toHaveBeenCalledWith(19);
+
+    productStorage.getProduct.mockResolvedValueOnce({
+      ...pending, operationsEnabled: false,
+    } as any);
+    const repeated = await invoke("delete", "/api/products/:id", {
+      user: currentUser,
+      params: { id: "19" },
+    });
+    expect(repeated.statusCode).toBe(409);
+    expect(productStorage.deleteProduct).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("catalog cache boundary", () => {

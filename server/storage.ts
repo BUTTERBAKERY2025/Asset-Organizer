@@ -5331,8 +5331,19 @@ export class DatabaseStorage implements IStorage {
     // and inventory records. "Delete" therefore safely retires the identity.
     const result = await db
       .update(products)
-      .set({ isActive: "false", updatedAt: new Date() })
-      .where(and(eq(products.id, id), eq(products.isActive, "true")))
+      .set({
+        isActive: "false",
+        operationsEnabled: false,
+        saleEnabled: false,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(products.id, id),
+        or(
+          eq(products.operationsEnabled, true),
+          sql`COALESCE(lower(trim(${products.isActive})), 'true') NOT IN ('false', 'inactive', '0', 'f', 'no')`,
+        ),
+      ))
       .returning({ id: products.id });
     return result.length > 0;
   }

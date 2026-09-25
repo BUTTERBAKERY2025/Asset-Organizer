@@ -27,6 +27,12 @@ Finished goods may be explicitly available for production and internal transfers
 
 **How to apply:** Keep unpriced additions legacy-inactive and sales-disabled, with a separate explicit operational opt-in. New production consumers honor that opt-in; sales consumers must still require sales eligibility and a positive reviewed price. Never infer that changing "قطعة" to "بوكس" preserves the stock-count meaning without reviewing package identity.
 
+For the final kitchen finished-goods list, the user explicitly chose all-new identities rather than reusing the old catalogue, with prices to be supplied later. This is an exception to the usual preserve-matched-identity adoption strategy.
+
+**Why:** Existing codes all differed, several packs/units were ambiguous, and some names were duplicated. The user chose a fresh catalogue after those consequences were explained.
+
+**How to apply:** Do not treat the saved name-match candidates as approved mappings. Keep legacy history/stock/prices on their original identities; do not automatically copy prices, move balances, or attach old recipes to new products. Warehouse items are a separate forthcoming catalogue.
+
 Database names and database OIDs alone do not identify a deployment.
 
 **Why:** Independent PostgreSQL installations can share the same default database name and OID; an operator label or completed-backup flag cannot prove that a backup covers the reviewed target.

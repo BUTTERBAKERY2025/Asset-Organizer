@@ -1,5 +1,7 @@
 # مصالحة منتجات المطبخ النهائية مع الإنتاج (قراءة فقط)
 
+> هذه لقطة مراجعة **قبل** الاستبدال بتاريخ 2026-09-25. اختار المستخدم لاحقًا إضافة جميع الأصناف كسجلات جديدة؛ لم تُعتمد المطابقات المقترحة أدناه. النتيجة في `reports/kitchen-finished-catalogue-adoption.md`.
+
 المصدر: server/catalogue-source/kitchen-finished-products.json (102 صفاً، PDF بأربع صفحات). قاعدة المقارنة: Supabase المشروع irgeqdrdaejhedlcbvzz وجدول public.products فقط؛ قراءة 196 سجلاً للحقول id/name/name_en/sku/category/unit/product_type/is_active/base_price. لم تتم أي كتابة لقاعدة البيانات أو warehouse_items أو تغيير الأسعار/الأرصدة/الهويات.
 
 ## خلاصة القرار

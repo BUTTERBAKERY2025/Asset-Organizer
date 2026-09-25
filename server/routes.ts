@@ -7387,7 +7387,7 @@ export async function registerRoutes(
       if (!existing) {
         return res.status(404).json({ error: "Product not found" });
       }
-      if (existing.isActive === "false") {
+      if (!isNewCatalogReferenceAllowed(existing)) {
         return res.status(409).json({ error: "Product is already archived" });
       }
       const deleted = await storage.deleteProduct(id);
