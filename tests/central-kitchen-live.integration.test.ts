@@ -332,7 +332,7 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     const kitchenUser = {
       id: `ck-live-kitchen-user-${suffix}`,
       username: `ck-live-kitchen-${suffix}`,
-      role: "branch_manager",
+      role: "production_development_manager",
       branchId: kitchenBranchId,
     };
     const outsiderUser = {
@@ -576,7 +576,7 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
       accessModule: "central_kitchen_orders",
     });
     expect(createdNotifications[0].targetUserIds).toContain(fixture.kitchenUser.id);
-    expect(createdNotifications[0].targetUserIds).toContain(fixture.scopedKitchenUser.id);
+    expect(createdNotifications[0].targetUserIds).not.toContain(fixture.scopedKitchenUser.id);
     expect(createdNotifications[0].targetUserIds).not.toContain(fixture.requestUser.id);
     expect(createdNotifications[0].targetUserIds).not.toContain(fixture.outsiderUser.id);
     const notificationParams = { id: String(createdNotifications[0].id) };
@@ -595,7 +595,7 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     expect((await invoke("post", "/api/system-notifications/:id/read", {
       user: fixture.scopedKitchenUser,
       params: { id: String(readGateNotification.id) },
-    })).statusCode).toBe(200);
+    })).statusCode).toBe(403);
     expect((await invoke("post", "/api/system-notifications/:id/read", {
       user: fixture.outsiderUser,
       params: notificationParams,
@@ -608,7 +608,7 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     expect((await storage.getActiveNotificationsForUser(
       fixture.scopedKitchenUser.id,
       fixture.kitchenBranchId,
-    )).map((notification: any) => notification.id)).toContain(createdNotifications[0].id);
+    )).map((notification: any) => notification.id)).not.toContain(createdNotifications[0].id);
     await databaseState.db.delete(userBranchAccess)
       .where(and(
         eq(userBranchAccess.userId, fixture.scopedKitchenUser.id),
@@ -667,6 +667,16 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     });
     expect(detail.statusCode).toBe(200);
     expect(detail.body.items[0].reportedAvailableQuantity).toBe(0);
+    expect(detail.body.allowedActions).toMatchObject({
+      edit: true, cancel: true, approve: false, resolveDiscrepancy: false,
+    });
+    const kitchenDetail = await httpInvoke("get", "/api/central-kitchen-orders/:id", {
+      user: fixture.kitchenUser,
+      params: { id: String(created.body.id) },
+    });
+    expect(kitchenDetail.body.allowedActions).toMatchObject({
+      edit: false, cancel: false, approve: true, resolveDiscrepancy: false,
+    });
     const listed = await httpInvoke("get", "/api/central-kitchen-orders", {
       user: fixture.requestUser,
     });
@@ -741,7 +751,7 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     });
     expect(postCancelOperations.statusCode).toBe(200);
     expect(postCancelOperations.body.demands.some((demand: any) => demand.orderId === created.body.id)).toBe(false);
-    const postCancelDemand = await invoke("get", "/api/central-kitchen-demand", {
+    const postCancelDemand = await httpInvoke("get", "/api/central-kitchen-demand", {
       user: fixture.requestUser,
       query: { originalOrderId: created.body.id, pageSize: 200 },
     });
@@ -871,6 +881,7 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
   it("requires runtime admin, keeps legacy orders shadow, and denies outsiders", async () => {
     const deniedRuntime = await setRuntime("real", fixture.kitchenUser);
     expect(deniedRuntime.statusCode).toBe(403);
+    expect((await setRuntime("shadow")).statusCode).toBe(200);
 
     const shadowProductBefore = await productBalance(fixture.kitchenBranchId, fixture.stockedProductId);
     const shadowMaterialBefore = await warehouseBalance(fixture.kitchenBranchId, fixture.materialId);

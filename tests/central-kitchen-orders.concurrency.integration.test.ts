@@ -347,7 +347,7 @@ describe.sequential(
       const kitchenUser = {
         id: `ck-http-kitchen-user-${suffix}`,
         username: `ck-http-kitchen-${suffix}`,
-        role: "manager",
+        role: "production_development_manager",
         branchId: kitchenBranchId,
         testAllowedBranchIds: [kitchenBranchId],
       };

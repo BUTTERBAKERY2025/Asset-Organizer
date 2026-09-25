@@ -45,7 +45,10 @@ export function useVisualViewportDialog({ open, maxHeight, viewportFraction }: O
       frame = requestAnimationFrame(update);
     };
     const viewport = window.visualViewport;
-    handleViewportChange();
+    // The initial effect runs during React's commit phase. flushSync here
+    // warns (and is unnecessary: the initial state was measured at render).
+    // Reserve synchronous updates for actual viewport events.
+    setStyle(read());
     viewport?.addEventListener("resize", handleViewportChange);
     viewport?.addEventListener("scroll", handleViewportChange);
     window.addEventListener("resize", handleViewportChange);

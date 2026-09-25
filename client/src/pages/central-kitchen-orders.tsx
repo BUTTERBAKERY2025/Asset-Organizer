@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { branchSupplyUrl } from "@/lib/branch-supply-navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,14 +13,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useBranches } from "@/hooks/useBranches";
 import { useBranchNavigation } from "@/hooks/use-branch-navigation";
 import { useBranchDeskIntent } from "@/hooks/use-branch-desk-intent";
 import { updateBranchDeskScope } from "@/lib/branch-operation-navigation";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
@@ -79,6 +77,8 @@ type AllowedActions = {
   dispatch?: boolean;
   receive?: boolean;
   resolveDiscrepancy?: boolean;
+  edit?: boolean;
+  cancel?: boolean;
 };
 
 type KitchenItem = {
@@ -186,11 +186,7 @@ export default function CentralKitchenOrdersPage() {
   const { branches, userBranchId, canSelectBranch, isLoading: branchesLoading } = useBranches();
   const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
   const { canView, canCreate, canEdit, canApprove, canExport, hasPermission } = usePermissions();
-  const { user, isAdmin } = useAuth();
-  const canConfigureRouting = isAdmin || (
-    ["operations_manager", "production_development_manager"].includes(user?.role || "") &&
-    canView("central_kitchen_orders")
-  );
+  const canConfigureRouting = canEdit("central_kitchen_orders");
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [branchFilter, setBranchFilter] = useState(userBranchId || "all");
@@ -248,6 +244,9 @@ export default function CentralKitchenOrdersPage() {
     void openCreate();
   });
   const transitionKeysRef = useRef(new Map<string, { signature: string; key: string }>());
+  // React's pending render can lag a rapid second tap. Keep the successful
+  // attempt locked until fresh order detail replaces this lifecycle action.
+  const workflowSubmissionRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (navigationBranch.hasBranchParam) {
@@ -342,11 +341,6 @@ export default function CentralKitchenOrdersPage() {
     queryKey: ["/api/central-kitchen-orders/kitchens"],
     staleTime: 0,
     refetchOnMount: "always",
-  });
-  const kitchenRoutingQuery = useQuery<Routing>({
-    queryKey: [`/api/central-kitchen-orders/routing?branchId=${encodeURIComponent(draft.centralKitchenId)}`],
-    enabled: createOpen && !!draft.centralKitchenId,
-    retry: false,
   });
   const receiverRoutingQuery = useQuery<Routing>({
     queryKey: [`/api/central-kitchen-orders/routing?branchId=${encodeURIComponent(draft.sourceBranchId)}`],
@@ -496,7 +490,10 @@ export default function CentralKitchenOrdersPage() {
       return { order: await response.json(), attemptId };
     },
     onSuccess: ({ attemptId }, { action }) => { transitionKeysRef.current.delete(attemptId); toast({ title: action === "resolve-discrepancy" ? "تمت معالجة الفروقات" : `تم ${action === "approve" ? "اعتماد" : action === "prepare" ? "تجهيز" : action === "dispatch" ? "شحن" : "استلام"} الطلب` }); setActionNotes(""); refresh(); refreshNotifications(); },
-    onError: (error) => toast({ title: "لم تكتمل العملية", description: error instanceof Error ? error.message : "يرجى مراجعة حالة الطلب والصلاحيات.", variant: "destructive" }),
+    onError: (error) => {
+      workflowSubmissionRef.current = null;
+      toast({ title: "لم تكتمل العملية", description: error instanceof Error ? error.message : "يرجى مراجعة حالة الطلب والصلاحيات.", variant: "destructive" });
+    },
   });
   const preparationSheetMutation = useMutation({
     mutationFn: async () => {
@@ -687,8 +684,8 @@ export default function CentralKitchenOrdersPage() {
         <div className="grid gap-4 md:grid-cols-2"><FormSelect testId="source-branch-select" label="الفرع الطالب" value={draft.sourceBranchId} onChange={value => setDraft(current => ({ ...current, sourceBranchId: value, items: current.items.map(item => ({ ...item, reportedAvailableQuantity: "" })) }))} branches={branches} placeholder="اختر الفرع" /><FormSelect testId="kitchen-select" label="المطبخ المورّد" value={draft.centralKitchenId} onChange={value => setDraft({ ...draft, centralKitchenId: value })} branches={centralKitchens.filter(branch => branch.id !== draft.sourceBranchId)} placeholder={kitchensQuery.isLoading ? "جارٍ تحميل المطابخ..." : centralKitchens.length ? "اختر المطبخ صراحةً" : kitchensQuery.isError ? "تعذر تحميل المطابخ المركزية" : "لا يوجد مطبخ مركزي مفعّل"} />
         <div><Label htmlFor="needed-date">تاريخ الحاجة</Label><Input id="needed-date" lang="en" type="date" className="mt-2" value={draft.neededDate} onChange={event => setDraft({ ...draft, neededDate: event.target.value })} /></div><div><Label htmlFor="needed-time">وقت الحاجة</Label><Input id="needed-time" lang="en" type="time" className="mt-2" value={draft.neededTime} onChange={event => setDraft({ ...draft, neededTime: event.target.value })} /></div>
       </div>
-      {!!draft.centralKitchenId && (kitchenRoutingQuery.isLoading ? <p role="status" className="rounded border p-3 text-sm text-muted-foreground">جارٍ تحميل فريق المطبخ المسؤول…</p> : kitchenRoutingQuery.isError ? <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800"><span>تعذر تحميل إعداد المسؤولين. لا نفترض وجود إعداد تلقائياً.</span><Button type="button" size="sm" variant="outline" onClick={() => void kitchenRoutingQuery.refetch()}>إعادة المحاولة</Button></div> : kitchenRoutingQuery.data?.hasKitchenResponsible ? <div className="rounded border border-sky-200 bg-sky-50 p-3 text-sm"><strong>فريق المطبخ:</strong> {kitchenRoutingQuery.data.responsibleName}{kitchenRoutingQuery.data.deputyName ? ` · النائب: ${kitchenRoutingQuery.data.deputyName}` : ""}</div> : <div data-testid="kitchen-routing-warning" role="status" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">لا يوجد مسؤول مطبخ معيّن لهذا الفرع. يمكنك إرسال الطلب، وسيتم تنبيه فريق العمليات للتدخل.</div>)}
-      {!!draft.sourceBranchId && (receiverRoutingQuery.isError ? <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800"><span>تعذر تحميل مسؤول استلام الفرع. لا نفترض وجود تعيين.</span><Button type="button" size="sm" variant="outline" onClick={() => void receiverRoutingQuery.refetch()}>إعادة المحاولة</Button></div> : receiverRoutingQuery.data?.receiverName ? <p className="rounded border bg-muted/20 p-3 text-sm">مسؤول الاستلام في الفرع: <strong>{receiverRoutingQuery.data.receiverName}</strong></p> : null)}
+      {!!draft.centralKitchenId && <p className="rounded border border-sky-200 bg-sky-50 p-3 text-sm">مهام المطبخ موجّهة تلقائياً إلى مدير التطوير والإنتاج وفق الصلاحيات الحالية، دون تعيين يدوي.</p>}
+      {!!draft.sourceBranchId && <ReceiverRoutingNotice routing={receiverRoutingQuery.data} loading={receiverRoutingQuery.isLoading} error={receiverRoutingQuery.isError} onRetry={() => void receiverRoutingQuery.refetch()} />}
       {orderingPolicy.query.isError ? <p role="alert" className="rounded border border-amber-300 p-3 text-sm">تعذر تحميل مواعيد الطلب من الخادم. <Button variant="link" onClick={() => void openCreate()}>إعادة المحاولة</Button></p> : !orderingPolicy.query.data ? <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل مواعيد الطلب بتوقيت السعودية…</p> : <OrderScheduleNotice schedule={draftSchedule} preview />}
       </div>}
       {createStep === 1 && <div className="space-y-4" data-testid="create-step-items">
@@ -710,7 +707,7 @@ export default function CentralKitchenOrdersPage() {
 
       <Dialog open={detailId !== null && detailDialogOpen} onOpenChange={open => { setDetailDialogOpen(open); if (!open && typeof window !== "undefined" && !window.matchMedia("(min-width: 1024px)").matches) closeDetail(); }}><DialogContent dir="rtl" style={{ ...detailDialogStyle, display: "flex", flexDirection: "column" }} className="kitchen-detail-dialog h-[94dvh] max-h-[900px] max-w-5xl gap-0 overflow-hidden p-0 sm:rounded-xl [&>button]:left-3 [&>button]:right-auto [&>button]:top-3 [&>button]:z-20 [&>button]:flex [&>button]:h-11 [&>button]:w-11 [&>button]:items-center [&>button]:justify-center">
         {selectedDetail && <DialogHeader className="shrink-0 border-b bg-background py-3 pl-16 pr-4 text-right sm:pr-6"><div className="flex min-w-0 items-center gap-2"><div className="min-w-0 flex-1"><DialogTitle className="truncate font-mono text-lg">{selectedDetail.orderNumber}</DialogTitle><DialogDescription className="truncate">طلب الفرع {selectedDetail.requestBranchName || selectedDetail.requestBranchId} من {selectedDetail.centralKitchenName || selectedDetail.centralKitchenId}</DialogDescription></div><StatusBadge status={selectedDetail.status} /></div></DialogHeader>}
-        <div className="kitchen-detail-body min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 pb-20 sm:px-6">{(detailQuery.isLoading || (detailQuery.isFetching && detailQuery.isPlaceholderData)) ? <div className="space-y-3 py-8" aria-label="جارٍ تحميل تفاصيل الطلب">{Array.from({ length: 5 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</div> : detailQuery.isError || !selectedDetail ? <DetailQueryError error={detailQuery.error} onRetry={() => detailQuery.refetch()} /> : <div className="space-y-4 pb-20"><OrderDetail showHeader={false} order={selectedDetail} products={products} productsQuery={productsQuery} accessibleBranchIds={branches.map(branch => branch.id)} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={workflowMutation.isPending} canApprove={canApprove("central_kitchen_orders")} canEdit={canEdit("central_kitchen_orders")} canPrint={hasPermission("central_kitchen_orders", "print")} canExport={canExport("central_kitchen_orders")} canConfigureRouting={canConfigureRouting} onConfigureRouting={() => setSettingsOpen(true)} onAction={(action, details) => workflowMutation.mutate({ id: selectedDetail.id, action, details })} /></div>}</div>
+        <div className="kitchen-detail-body min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 pb-20 sm:px-6">{(detailQuery.isLoading || (detailQuery.isFetching && detailQuery.isPlaceholderData)) ? <div className="space-y-3 py-8" aria-label="جارٍ تحميل تفاصيل الطلب">{Array.from({ length: 5 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</div> : detailQuery.isError || !selectedDetail ? <DetailQueryError error={detailQuery.error} onRetry={() => detailQuery.refetch()} /> : <div className="space-y-4 pb-20"><OrderDetail showHeader={false} order={selectedDetail} products={products} productsQuery={productsQuery} accessibleBranchIds={branches.map(branch => branch.id)} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={workflowMutation.isPending} failed={workflowMutation.isError} canApprove={canApprove("central_kitchen_orders")} canEdit={canEdit("central_kitchen_orders")} canPrint={hasPermission("central_kitchen_orders", "print")} canExport={canExport("central_kitchen_orders")} canConfigureRouting={canConfigureRouting} onConfigureRouting={() => setSettingsOpen(true)} onAction={(action, details) => { const attempt = `${selectedDetail.id}:${action}`; if (workflowMutation.isPending || workflowSubmissionRef.current === attempt) return; workflowSubmissionRef.current = attempt; workflowMutation.mutate({ id: selectedDetail.id, action, details }); }} /></div>}</div>
       </DialogContent></Dialog>
   </Layout>;
 }
@@ -792,12 +789,9 @@ function KitchenSettingsDialog({ open, onOpenChange, branches }: { open: boolean
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const dialogStyle = useVisualViewportDialog({ open, maxHeight: 800, viewportFraction: 1 });
-  const [tab, setTab] = useState("appointments");
   const [policyTimes, setPolicyTimes] = useState<PolicyTimes>(EMPTY_POLICY_TIMES);
   const [policyError, setPolicyError] = useState("");
   const [branchId, setBranchId] = useState("");
-  const [responsibleUserId, setResponsibleUserId] = useState<string | null>(null);
-  const [deputyUserId, setDeputyUserId] = useState<string | null>(null);
   const [receiverUserId, setReceiverUserId] = useState<string | null>(null);
   const routingUrl = `/api/central-kitchen-orders/routing?branchId=${encodeURIComponent(branchId)}`;
   const candidatesUrl = `/api/central-kitchen-orders/routing/candidates?branchId=${encodeURIComponent(branchId)}`;
@@ -810,7 +804,6 @@ function KitchenSettingsDialog({ open, onOpenChange, branches }: { open: boolean
   });
   useEffect(() => {
     if (!open) {
-      setTab("appointments");
       setBranchId("");
       setPolicyError("");
       return;
@@ -823,16 +816,12 @@ function KitchenSettingsDialog({ open, onOpenChange, branches }: { open: boolean
   }, [open, policyQuery.data]);
   useEffect(() => {
     if (!routingQuery.data || routingQuery.data.branchId !== branchId) return;
-    setResponsibleUserId(routingQuery.data.responsibleUserId);
-    setDeputyUserId(routingQuery.data.deputyUserId);
     setReceiverUserId(routingQuery.data.receiverAssignmentSource === "branch_manager" ? null : routingQuery.data.receiverUserId);
   }, [branchId, routingQuery.data]);
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!branchId) throw new Error("اختر الفرع أولاً.");
       const response = await apiRequest("PUT", `/api/central-kitchen-orders/routing/${encodeURIComponent(branchId)}`, {
-        responsibleUserId,
-        deputyUserId,
         receiverUserId,
       });
       return response.json() as Promise<Routing>;
@@ -840,7 +829,7 @@ function KitchenSettingsDialog({ open, onOpenChange, branches }: { open: boolean
     onSuccess: (routing) => {
       queryClient.setQueryData([routingUrl], routing);
       void queryClient.invalidateQueries({ predicate: query => String(query.queryKey[0]).startsWith("/api/central-kitchen-orders") });
-      toast({ title: "تم حفظ مسؤولي الفرع" });
+      toast({ title: "تم حفظ استثناء مسؤول الاستلام" });
     },
     onError: (error) => toast({ title: "تعذر حفظ الإعداد", description: error instanceof Error ? error.message : "تحقق من الاتصال ثم أعد المحاولة.", variant: "destructive" }),
   });
@@ -873,22 +862,17 @@ function KitchenSettingsDialog({ open, onOpenChange, branches }: { open: boolean
   const candidates = candidatesQuery.data;
   const updateBranch = (value: string) => {
     setBranchId(value);
-    setResponsibleUserId(null);
-    setDeputyUserId(null);
     setReceiverUserId(null);
   };
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent dir="rtl" style={{ ...dialogStyle, display: "flex", flexDirection: "column" }} className="box-border h-[100dvh] w-screen max-w-none min-w-0 gap-0 overflow-hidden rounded-none border-0 p-0 sm:h-[min(800px,94dvh)] sm:w-[calc(100%-2rem)] sm:max-w-2xl sm:rounded-xl sm:border [&>button.absolute]:left-2 [&>button.absolute]:right-auto [&>button.absolute]:top-2 [&>button.absolute]:flex [&>button.absolute]:h-11 [&>button.absolute]:w-11 [&>button.absolute]:items-center [&>button.absolute]:justify-center">
       <DialogHeader className="shrink-0 border-b px-4 py-4 pl-11 text-right sm:px-6 sm:pl-12">
         <DialogTitle>إعدادات المطبخ</DialogTitle>
-        <DialogDescription>إدارة المواعيد اليومية ومسؤولي المطبخ والاستلام.</DialogDescription>
+        <DialogDescription>المواعيد اليومية واستثناءات استلام الفروع. مسؤول المطبخ هو مدير التطوير والإنتاج تلقائياً.</DialogDescription>
       </DialogHeader>
-      <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
-        <TabsList className="mx-4 mt-3 grid h-11 shrink-0 grid-cols-2 sm:mx-6">
-          <TabsTrigger value="appointments" className="min-h-10" data-testid="kitchen-settings-times-tab">المواعيد</TabsTrigger>
-          <TabsTrigger value="responsibles" className="min-h-10" data-testid="kitchen-settings-routing-tab">المسؤولون</TabsTrigger>
-        </TabsList>
-        <TabsContent value="appointments" className="m-0 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
+        <section aria-label="مواعيد الطلب">
+          <h3 className="mb-3 font-semibold">مواعيد الطلب اليومية</h3>
           {policyQuery.isLoading ? <p role="status" className="flex items-center gap-2 rounded border p-3 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />جارٍ تحميل المواعيد…</p> :
           policyQuery.isError ? <div role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800"><p>تعذر تحميل مواعيد المطبخ. لم يتم افتراض قيم بديلة.</p><Button className="mt-2 min-h-11" size="sm" variant="outline" onClick={() => void policyQuery.refetch()}>إعادة المحاولة</Button></div> :
           <div className="space-y-4">
@@ -901,27 +885,27 @@ function KitchenSettingsDialog({ open, onOpenChange, branches }: { open: boolean
             <p className="text-xs text-muted-foreground">آخر موعد للطلب والمراجعة كلاهما في اليوم السابق ليوم الحاجة، ويجب ألا يتأخر موعد الطلب عن المراجعة.</p>
             {policyError && <p role="alert" data-testid="policy-save-error" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">{policyError}</p>}
           </div>}
-        </TabsContent>
-        <TabsContent value="responsibles" className="m-0 min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
+        <Button className="mt-3 min-h-11" data-testid="policy-save" disabled={policyQuery.isLoading || policyQuery.isError || savePolicyMutation.isPending} onClick={() => savePolicyMutation.mutate()}>{savePolicyMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}حفظ المواعيد</Button>
+        </section>
+        <section aria-label="استثناء استلام الفرع" className="space-y-3 border-t pt-5">
+        <h3 className="font-semibold">استثناء استلام الفرع</h3>
+        <p className="text-sm text-muted-foreground">مدير الفرع المعين هو مسؤول الاستلام تلقائياً. استخدم التعيين اليدوي فقط عند تعذر ذلك أو عند وجود تعارض، ولا يمنح هذا التعيين صلاحية جديدة.</p>
         <FormSelect testId="routing-branch-select" label="الفرع" value={branchId} onChange={updateBranch} branches={branches} placeholder="اختر فرعاً أو مطبخاً" />
         {!branchId ? <p className="rounded border bg-muted/20 p-3 text-sm text-muted-foreground">اختر الفرع لعرض الإعداد الحالي والمرشحين المؤهلين.</p> :
          loading ? <p role="status" className="flex items-center gap-2 rounded border p-3 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />جارٍ تحميل الإعداد…</p> :
          failed ? <div role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800"><p>تعذر تحميل الإعداد أو المرشحين. لم يتم افتراض أي مسؤول.</p><Button className="mt-2 min-h-11" size="sm" variant="outline" onClick={() => { void routingQuery.refetch(); void candidatesQuery.refetch(); }}>إعادة المحاولة</Button></div> :
-         <div className="grid gap-4 sm:grid-cols-2">
-           <RoutingPersonSelect testId="routing-responsible-select" label="مسؤول المطبخ" value={responsibleUserId} onChange={setResponsibleUserId} candidates={candidates?.kitchenCandidates || []} />
-           <RoutingPersonSelect testId="routing-deputy-select" label="نائب مسؤول المطبخ" value={deputyUserId} onChange={setDeputyUserId} candidates={candidates?.kitchenCandidates || []} />
-           <div className="sm:col-span-2"><RoutingPersonSelect testId="routing-receiver-select" label="مسؤول استلام الفرع" value={receiverUserId} onChange={setReceiverUserId} candidates={candidates?.receiverCandidates || []} automatic /></div>
+         <div className="space-y-3">
+           <RoutingPersonSelect testId="routing-receiver-select" label="مسؤول استلام استثنائي" value={receiverUserId} onChange={setReceiverUserId} candidates={candidates?.receiverCandidates || []} automatic />
            {routingQuery.data?.receiverAssignmentSource === "branch_manager" && routingQuery.data.receiverName && <p data-testid="automatic-receiver-name" className="sm:col-span-2 rounded border border-sky-200 bg-sky-50 p-3 text-sm">التعيين التلقائي الحالي: <strong>{routingQuery.data.receiverName}</strong> (مدير الفرع)</p>}
-           {routingQuery.data?.receiverAssignmentConflict && <p role="alert" data-testid="automatic-receiver-conflict" className="sm:col-span-2 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">يوجد أكثر من مدير فرع مؤهل؛ اختر مسؤول استلام يدوياً لحسم التعيين.</p>}
+           {routingQuery.data?.receiverAssignmentConflict && <p role="alert" data-testid="automatic-receiver-conflict" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">يوجد أكثر من مدير فرع مؤهل؛ اختر مسؤول استلام يدوياً لحسم التعيين.</p>}
+           {!routingQuery.data?.receiverName && !routingQuery.data?.receiverAssignmentConflict && <p role="status" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">لا يوجد مدير فرع مؤهل للاستلام حالياً؛ راجع تعيين المدير أو اختر مستلماً استثنائياً مؤهلاً.</p>}
          </div>}
         <p className="text-xs text-muted-foreground">تظهر فقط الحسابات المؤهلة التي أعادها الخادم. اختيار شخص هنا لا يمنحه صلاحية عرض أو اعتماد أو استلام الطلبات.</p>
-        </TabsContent>
-      </Tabs>
-      <div className="grid shrink-0 grid-cols-2 gap-2 border-t bg-background px-4 py-3 sm:flex sm:justify-end sm:px-6">
+        <Button className="min-h-11" data-testid="routing-save" disabled={!branchId || loading || failed || saveMutation.isPending} onClick={() => saveMutation.mutate()}>{saveMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}حفظ الاستثناء</Button>
+        </section>
+      </div>
+      <div className="shrink-0 border-t bg-background px-4 py-3 pb-[max(.75rem,env(safe-area-inset-bottom))] sm:px-6">
         <Button className="min-h-11" variant="outline" onClick={() => onOpenChange(false)}>إغلاق</Button>
-        {tab === "appointments"
-          ? <Button className="min-h-11" data-testid="policy-save" disabled={policyQuery.isLoading || policyQuery.isError || savePolicyMutation.isPending} onClick={() => savePolicyMutation.mutate()}>{savePolicyMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}حفظ المواعيد</Button>
-          : <Button className="min-h-11" data-testid="routing-save" disabled={!branchId || loading || failed || saveMutation.isPending} onClick={() => saveMutation.mutate()}>{saveMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}حفظ الإعداد</Button>}
       </div>
     </DialogContent>
   </Dialog>;
@@ -941,20 +925,22 @@ function CatalogQueryState({ query, count }: { query: CatalogQueryLike; count: n
   if (!count) return <div className="m-3 rounded-md border bg-background p-3 text-sm text-muted-foreground">الكتالوج فارغ حالياً. يمكنك اختيار «إدخال يدوي» بشكل صريح.</div>;
   return null;
 }
+function ReceiverRoutingNotice({ routing, loading, error, onRetry }: { routing?: Routing; loading: boolean; error: boolean; onRetry: () => void }) {
+  if (loading) return <p role="status" className="text-sm text-muted-foreground">جارٍ التحقق من مدير الفرع المسؤول عن الاستلام…</p>;
+  if (error) return <div role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm"><p>تعذر تحديد مسؤول الاستلام من الخادم؛ لا نفترض تعييناً.</p><Button variant="outline" size="sm" onClick={onRetry}>إعادة المحاولة</Button></div>;
+  if (routing?.receiverAssignmentConflict) return <p role="alert" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">يوجد تعارض بين مديري الفرع المؤهلين. يجب حسم المسؤول قبل الاستلام.</p>;
+  return <p className="rounded border bg-muted/20 p-3 text-sm">مسؤول الاستلام: <strong>{routing?.receiverName || "غير متاح حالياً"}</strong>{routing?.receiverAssignmentSource === "manual" ? " · استثناء يدوي" : routing?.receiverName ? " · مدير الفرع" : " · راجع تعيين مدير الفرع أو الاستثناء المؤهل"}</p>;
+}
 function DetailRoutingSection({ order, canConfigure, onConfigure }: { order: KitchenOrder; canConfigure: boolean; onConfigure: () => void }) {
-  const kitchenUrl = `/api/central-kitchen-orders/routing?branchId=${encodeURIComponent(order.centralKitchenId)}`;
   const requestBranchUrl = `/api/central-kitchen-orders/routing?branchId=${encodeURIComponent(order.requestBranchId)}`;
-  const kitchen = useQuery<Routing>({ queryKey: [kitchenUrl], retry: false });
   const requestBranch = useQuery<Routing>({ queryKey: [requestBranchUrl], retry: false });
-  if (kitchen.isLoading || requestBranch.isLoading) return <section className="rounded-lg border p-4 text-sm text-muted-foreground">جارٍ تحميل مسؤولي الطلب الحاليين…</section>;
-  if (kitchen.isError || requestBranch.isError) return <section role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800"><p>تعذر تحميل مسؤولي الطلب. لا نفترض وجود تعيين.</p><Button size="sm" variant="outline" className="mt-2" onClick={() => { void kitchen.refetch(); void requestBranch.refetch(); }}>إعادة المحاولة</Button></section>;
   return <section className="rounded-lg border bg-muted/20 p-4">
-    <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="font-semibold">مسؤولو هذا الطلب حالياً</h3><p className="text-xs text-muted-foreground">يعرض الإعداد الحالي للفرعين، وليس تعييناً تلقائياً داخل الطلب.</p></div>{canConfigure && <Button size="sm" variant="outline" onClick={onConfigure}><Settings className="ml-1 h-4 w-4" />تدخل العمليات</Button>}</div>
-    <div className="mt-3 grid gap-3 text-sm sm:grid-cols-3"><div><span className="block text-xs text-muted-foreground">مسؤول المطبخ</span>{kitchen.data?.responsibleName || "غير معيّن"}</div><div><span className="block text-xs text-muted-foreground">النائب</span>{kitchen.data?.deputyName || "غير معيّن"}</div><div><span className="block text-xs text-muted-foreground">مسؤول استلام الفرع</span>{requestBranch.data?.receiverName || "غير معيّن"}</div></div>
-    {!kitchen.data?.hasKitchenResponsible && <p className="mt-3 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">لا يوجد مسؤول مطبخ معيّن؛ الطلب يبقى مسموحاً ويحتاج متابعة العمليات.</p>}
+    <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">مسؤولية الطلب</h3>{canConfigure && <Button size="sm" variant="outline" onClick={onConfigure}>إعدادات الاستلام والمواعيد</Button>}</div>
+    <p className="mt-2 text-sm">المطبخ: <strong>مدير التطوير والإنتاج</strong> (حسب الصلاحيات الحالية)</p>
+    <div className="mt-2"><ReceiverRoutingNotice routing={requestBranch.data} loading={requestBranch.isLoading} error={requestBranch.isError} onRetry={() => void requestBranch.refetch()} /></div>
   </section>;
 }
-function OrderDetail({ showHeader = true, order, products, productsQuery, accessibleBranchIds, actionNotes, setActionNotes, pending, canApprove, canEdit, canPrint, canExport, canConfigureRouting, onConfigureRouting, onAction }: { showHeader?: boolean; order: KitchenOrder; products: ProductOption[]; productsQuery: CatalogQueryLike; accessibleBranchIds: string[]; actionNotes: string; setActionNotes: (value: string) => void; pending: boolean; canApprove: boolean; canEdit: boolean; canPrint: boolean; canExport: boolean; canConfigureRouting: boolean; onConfigureRouting: () => void; onAction: (action: "approve" | "prepare" | "dispatch" | "receive" | "resolve-discrepancy", details?: Record<string, unknown>) => void }) {
+function OrderDetail({ showHeader = true, order, products, productsQuery, accessibleBranchIds, actionNotes, setActionNotes, pending, failed, canApprove, canEdit, canPrint, canExport, canConfigureRouting, onConfigureRouting, onAction }: { showHeader?: boolean; order: KitchenOrder; products: ProductOption[]; productsQuery: CatalogQueryLike; accessibleBranchIds: string[]; actionNotes: string; setActionNotes: (value: string) => void; pending: boolean; failed: boolean; canApprove: boolean; canEdit: boolean; canPrint: boolean; canExport: boolean; canConfigureRouting: boolean; onConfigureRouting: () => void; onAction: (action: "approve" | "prepare" | "dispatch" | "receive" | "resolve-discrepancy", details?: Record<string, unknown>) => void }) {
   const [section, setSection] = useState<"overview" | "items" | "decisions" | "history">(() => ["received", "cancelled"].includes(normalized(order.status)) ? "decisions" : "overview");
   useEffect(() => { setSection(["received", "cancelled"].includes(normalized(order.status)) ? "decisions" : "overview"); }, [order.id, order.status]);
   const status = normalized(order.status);
@@ -970,13 +956,7 @@ function OrderDetail({ showHeader = true, order, products, productsQuery, access
     missingQuantity: discrepancyQuantities.missing,
   });
   const action = status === "requested" || status === "pending" || status === "draft" ? "approve" : status === "approved" ? "prepare" : status === "prepared" ? "dispatch" : status === "dispatched" ? "receive" : null;
-  const allowAction = action === "approve"
-    ? canApprove && order.allowedActions?.approve === true
-      : action === "receive"
-      ? order.allowedActions?.receive === true
-      : !!action && (order.allowedActions
-        ? order.allowedActions[action as keyof AllowedActions] === true
-        : canEdit && accessibleBranchIds.includes(order.centralKitchenId));
+  const allowAction = !!action && order.allowedActions?.[action] === true;
   const actionConfig = action ? { approve: { label: "اعتماد الطلب", icon: ShieldCheck }, prepare: { label: "تأكيد التجهيز", icon: PackagePlus }, dispatch: { label: "تأكيد الشحن", icon: Truck }, receive: { label: "تأكيد الاستلام", icon: Check } }[action] : null;
    return <>{showHeader ? <DialogHeader><div className="flex items-start justify-between gap-3 pl-8"><div><DialogTitle className="font-mono text-xl">{order.orderNumber}</DialogTitle><DialogDescription className="mt-1">طلب الفرع {order.requestBranchName || order.requestBranchId} من {order.centralKitchenName || order.centralKitchenId}</DialogDescription></div><div className="flex flex-wrap items-center gap-2"><StatusBadge status={order.status} /><OrderActionsMenu order={order} canPrint={canPrint && ["prepared", "dispatched", "received"].includes(status)} canExport={canExport} onPrint={() => printPreparationNote(order)} /></div></div></DialogHeader> : <div className="flex justify-end"><OrderActionsMenu order={order} canPrint={canPrint && ["prepared", "dispatched", "received"].includes(status)} canExport={canExport} onPrint={() => printPreparationNote(order)} /></div>}
     <nav className="sticky top-0 z-10 -mx-4 flex gap-1 overflow-x-auto border-y bg-background px-4 py-2 sm:static sm:mx-0 sm:px-0" aria-label="أقسام تفاصيل الطلب">
@@ -989,7 +969,7 @@ function OrderDetail({ showHeader = true, order, products, productsQuery, access
      <OrderScheduleNotice schedule={order.orderingSchedule} />
      <LifecycleProgress status={status} discrepancyOpen={isOpenDiscrepancy(order)} />
      <DetailRoutingSection order={order} canConfigure={canConfigureRouting} onConfigure={onConfigureRouting} />
-     {canEdit && accessibleBranchIds.includes(order.requestBranchId) && <RequestChangeControls key={`${order.id}:${Math.max(0, ...(order.events || []).map(event => Number(event.id)))}`} order={order} />}
+     {(order.allowedActions?.edit === true || order.allowedActions?.cancel === true) && <RequestChangeControls key={`${order.id}:${Math.max(0, ...(order.events || []).map(event => Number(event.id)))}`} order={order} />}
       {(order.events || []).filter(event => event.eventType === "edited").map(event => <details key={event.id} className="rounded border p-3 text-sm"><summary>تعديل الطلب · {readableDate(event.createdAt)} · {event.notes}</summary><p>تاريخ الاحتياج: {event.changeSnapshot?.before?.order?.neededDate || "—"} ← {event.changeSnapshot?.requested?.edit?.neededDate}</p>{event.changeSnapshot?.before?.items?.map(item => { const updated = event.changeSnapshot?.requested?.edit?.items.find(value => value.itemId === Number(item.id)); return <p key={item.id}>{item.productName}: توريد {item.requestedQuantity} ← {updated?.requestedQuantity} {item.unit} · المتوفر في الفرع {item.reportedAvailableQuantity == null ? "غير مسجل" : item.reportedAvailableQuantity} ← {updated?.reportedAvailableQuantity ?? "غير مسجل"} {item.unit}</p>; })}</details>)}
      <NextStepGuidance step={nextStep} inventoryMode={order.inventoryMode} />
      <div className="flex justify-end"><a href="/production-reports?tab=operations" className="text-xs font-medium text-primary underline-offset-4 hover:underline">عرض تقرير العمليات المترابط</a></div>
@@ -1008,19 +988,31 @@ function OrderDetail({ showHeader = true, order, products, productsQuery, access
       {["received", "cancelled"].includes(status) && <DemandCommitments orderId={order.id} kitchenId={order.centralKitchenId} items={order.items || []} canConsent={canEdit} />}
      {action === "prepare" && allowAction
        ? <PreparationEditor orderId={order.id} inventoryMode={order.inventoryMode} items={order.items || []} products={products} productsQuery={productsQuery} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={pending} onSubmit={items => onAction("prepare", { items })} />
-      : action === "dispatch" && allowAction ? <DispatchEditor items={order.items || []} pending={pending} onSubmit={details => onAction("dispatch", details)} />
-      : action === "receive" && allowAction ? <ReceiptEditor items={order.items || []} pending={pending} onSubmit={details => onAction("receive", details)} />
-      : actionConfig && allowAction && <div className="rounded-lg border bg-muted/20 p-3"><Label htmlFor="action-note">ملاحظة (اختياري)</Label><Input id="action-note" className="mt-2" value={actionNotes} onChange={event => setActionNotes(event.target.value)} placeholder="أضف ملاحظة للفريق..." /><Button className="mt-3 w-full sm:w-auto" disabled={pending} onClick={() => { if (action) onAction(action); }}>{pending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <actionConfig.icon className="ml-2 h-4 w-4" />}{actionConfig.label}</Button></div>}
-     {action && !allowAction && (action === "approve" || action === "receive") && <p className="rounded-lg border bg-muted/20 p-3 text-sm text-muted-foreground">يمكنك عرض الطلب، لكن هذا الإجراء غير مسموح لك وفق التوجيه الحالي من الخادم.</p>}
+      : action === "dispatch" && allowAction ? <DispatchEditor items={order.items || []} pending={pending} failed={failed} onSubmit={details => onAction("dispatch", details)} />
+      : action === "receive" && allowAction ? <ReceiptEditor items={order.items || []} pending={pending} failed={failed} onSubmit={details => onAction("receive", details)} />
+      : actionConfig && allowAction && <ApproveEditor items={order.items || []} pending={pending} actionNotes={actionNotes} setActionNotes={setActionNotes} onSubmit={() => onAction("approve")} />}
+     {action && !allowAction && <p className="rounded-lg border bg-muted/20 p-3 text-sm text-muted-foreground">يمكنك عرض الطلب، لكن هذا الإجراء غير مسموح لك وفق التوجيه الحالي من الخادم.</p>}
      {!action && status === "received" && nextStep.isComplete && <div className="flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800"><Check className="h-4 w-4" />اكتمل مسار هذا الطلب وتم تأكيد الاستلام.</div>}
-     {status === "received" && order.discrepancyStatus === "open" && canEdit && accessibleBranchIds.includes(order.requestBranchId) && <div className="rounded-lg border border-amber-300 bg-amber-50 p-3"><div className="flex items-center gap-2 font-medium text-amber-900"><AlertTriangle className="h-4 w-4" />فروقات استلام مفتوحة</div><Input className="mt-3" value={actionNotes} onChange={event => setActionNotes(event.target.value)} placeholder="اكتب كيف تمت معالجة الناقص أو التالف" /><Button className="mt-3" disabled={pending || !actionNotes.trim()} onClick={() => onAction("resolve-discrepancy", { notes: actionNotes.trim() })}>إغلاق الفروقات بعد المعالجة</Button></div>}
+     {status === "received" && order.discrepancyStatus === "open" && order.allowedActions?.resolveDiscrepancy === true && <div className="rounded-lg border border-amber-300 bg-amber-50 p-3"><div className="flex items-center gap-2 font-medium text-amber-900"><AlertTriangle className="h-4 w-4" />فروقات استلام مفتوحة</div><Input className="mt-3" value={actionNotes} onChange={event => setActionNotes(event.target.value)} placeholder="اكتب كيف تمت معالجة الناقص أو التالف" /><Button className="mt-3" disabled={pending || !actionNotes.trim()} onClick={() => onAction("resolve-discrepancy", { notes: actionNotes.trim() })}>إغلاق الفروقات بعد المعالجة</Button></div>}
     </div>
   </>;
 }
 
-function RequestChangeControls({ order }: { order: KitchenOrder }) {
+function ApproveEditor({ items, pending, actionNotes, setActionNotes, onSubmit }: { items: KitchenItem[]; pending: boolean; actionNotes: string; setActionNotes: (value: string) => void; onSubmit: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  return <section className="space-y-3 rounded-lg border bg-muted/20 p-3">
+    <h3 className="font-semibold">اعتماد طلب الفرع</h3>
+    <p className="text-sm">راجع كميات الطلب والمتوفر الذي أعلنه الفرع قبل تحويله إلى تجهيز المطبخ.</p>
+    <ul className="space-y-1 text-sm">{items.map(item => <li key={item.id}>{item.productName}: مطلوب {item.requestedQuantity} {item.unit} · المتوفر المعلن {item.reportedAvailableQuantity ?? "غير مسجل"}</li>)}</ul>
+    <Label htmlFor="action-note">ملاحظة الاعتماد (اختياري)</Label><Input id="action-note" className="min-h-11" value={actionNotes} onChange={event => { setActionNotes(event.target.value); setConfirming(false); }} placeholder="أضف ملاحظة للفريق..." />
+    {confirming ? <div role="group" aria-label="تأكيد الاعتماد" className="space-y-2 rounded-lg border border-sky-300 bg-background p-3 text-sm"><p>سيُعتمد الطلب ببنوده الحالية ({items.length}) ويُنقل إلى تجهيز مدير التطوير والإنتاج.</p><div className="flex gap-2"><Button disabled={pending} onClick={onSubmit}>{pending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}تأكيد الاعتماد</Button><Button variant="outline" disabled={pending} onClick={() => setConfirming(false)}>رجوع</Button></div></div> : <Button disabled={pending || !items.length} onClick={() => setConfirming(true)}><ShieldCheck className="ml-2 h-4 w-4" />مراجعة الاعتماد</Button>}
+  </section>;
+}
+
+export function RequestChangeControls({ order }: { order: KitchenOrder }) {
   const client = useQueryClient();
   const [editing, setEditing] = useState(false);
+  const [confirming, setConfirming] = useState<"edit" | "cancel" | null>(null);
   const [reason, setReason] = useState("");
   const [date, setDate] = useState(order.neededDate || "");
   const [time, setTime] = useState(order.neededTime || "");
@@ -1045,7 +1037,7 @@ function RequestChangeControls({ order }: { order: KitchenOrder }) {
       const response = await apiRequest("POST", `/api/central-kitchen-orders/${order.id}/request-change`, { ...payload, idempotencyKey: attempt.current.key });
       return response.json();
     },
-    onSuccess: () => { void client.invalidateQueries({ predicate: query => String(query.queryKey[0]).includes("central-kitchen") }); },
+    onSuccess: () => { attempt.current = null; setConfirming(null); void client.invalidateQueries({ predicate: query => String(query.queryKey[0]).includes("central-kitchen") }); },
   });
   if (order.status === "cancelled") return null;
   const committed = !!order.linkedBatches?.length || !!order.allocations?.length || !!order.shadowInventoryEntries?.length;
@@ -1053,18 +1045,23 @@ function RequestChangeControls({ order }: { order: KitchenOrder }) {
   return <section className="space-y-3 rounded-lg border p-4">
     <h3 className="font-semibold">تعديل / إلغاء من الفرع الطالب</h3>
     <p className="text-sm text-muted-foreground">يُحفظ السبب والتاريخ. يتحقق الخادم من عدم وجود إنتاج أو حجز قبل التنفيذ. تغيير الأصناف يتطلب إلغاء الطلب وإنشاء طلب جديد.</p>
-    <Label>سبب التعديل أو الإلغاء (إلزامي)<Input value={reason} onChange={event => setReason(event.target.value)} disabled={mutation.isPending} /></Label>
+    <Label htmlFor={`change-reason-${order.id}`}>سبب التعديل أو الإلغاء (إلزامي)</Label><Input id={`change-reason-${order.id}`} className="min-h-11" value={reason} onChange={event => { setReason(event.target.value); setConfirming(null); }} disabled={mutation.isPending} />
     {editing && <div className="space-y-3">
       <Label>تاريخ الاحتياج<Input type="date" value={date} onChange={event => setDate(event.target.value)} /></Label>
       <Label>وقت الاحتياج<Input type="time" value={time} onChange={event => setTime(event.target.value)} /></Label>
       <Label>ملاحظات الطلب<Input value={notes} onChange={event => setNotes(event.target.value)} /></Label>
-       {(order.items || []).map((item, index) => <div key={item.id} className="grid gap-3 rounded-md border bg-muted/10 p-3 md:grid-cols-2"><Label className="block">{item.productName} · {item.unit}<span className="mt-1 block text-xs font-normal text-muted-foreground">الكمية المطلوب توريدها</span><Input type="number" min={item.productId ? 1 : 0.000001} step={item.productId ? 1 : 0.000001} value={quantities[index]} onChange={event => setQuantities(values => values.map((value, i) => i === index ? event.target.value : value))} /></Label><Label className="block">المتوفر حالياً في الفرع <span className="text-destructive">*</span><span className="mt-1 block text-xs font-normal text-muted-foreground">أدخل المتوفر الآن؛ المسجل سابقاً: {item.reportedAvailableQuantity == null ? "غير مسجل" : `${item.reportedAvailableQuantity} ${item.unit}`}</span><Input type="number" min="0" step={item.productId ? 1 : 0.000001} value={reportedAvailable[index]} onChange={event => setReportedAvailable(values => values.map((value, i) => i === index ? event.target.value : value))} aria-invalid={!isValidKitchenQuantity(reportedAvailable[index] || "", item.productId != null, true)} /></Label></div>)}
+       {(order.items || []).map((item, index) => <div key={item.id} className="grid gap-3 rounded-md border bg-muted/10 p-3 md:grid-cols-2"><Label className="block">{item.productName} · {item.unit}<span className="mt-1 block text-xs font-normal text-muted-foreground">الكمية المطلوب توريدها</span><Input type="number" inputMode={item.productId != null ? "numeric" : "decimal"} min={item.productId != null ? 1 : 0.000001} step={item.productId != null ? 1 : 0.000001} value={quantities[index]} onChange={event => { setConfirming(null); setQuantities(values => values.map((value, i) => i === index ? event.target.value : value)); }} /></Label><Label className="block">المتوفر حالياً في الفرع <span className="text-destructive">*</span><span className="mt-1 block text-xs font-normal text-muted-foreground">أدخل المتوفر الآن؛ المسجل سابقاً: {item.reportedAvailableQuantity == null ? "غير مسجل" : `${item.reportedAvailableQuantity} ${item.unit}`}</span><Input type="number" inputMode={item.productId != null ? "numeric" : "decimal"} min="0" step={item.productId != null ? 1 : 0.000001} value={reportedAvailable[index]} onChange={event => { setConfirming(null); setReportedAvailable(values => values.map((value, i) => i === index ? event.target.value : value)); }} aria-invalid={!isValidKitchenQuantity(reportedAvailable[index] || "", item.productId != null, true)} /></Label></div>)}
     </div>}
     {mutation.error && <p role="alert" className="text-sm text-destructive">{mutation.error instanceof Error ? mutation.error.message : "تعذر حفظ الطلب"} — أعد تحميل التفاصيل عند تعارض النسخة.</p>}
-    <div className="flex gap-2">
-      {order.status === "requested" && <Button variant="outline" disabled={mutation.isPending || (editing && (!reason.trim() || !validEdit))} onClick={() => editing ? mutation.mutate(true) : setEditing(true)}>{editing ? "حفظ التعديل" : "تعديل الطلب"}</Button>}
-      <Button variant="destructive" disabled={mutation.isPending || !reason.trim()} onClick={() => { if (window.confirm("إلغاء الطلب نهائياً مع حفظ السجل؟")) mutation.mutate(false); }}>إلغاء الطلب</Button>
+    <div className="flex flex-wrap gap-2">
+      {order.allowedActions?.edit === true && order.status === "requested" && <Button variant="outline" disabled={mutation.isPending || (editing && (!reason.trim() || !validEdit))} onClick={() => editing ? setConfirming("edit") : setEditing(true)}>{editing ? "مراجعة التعديل" : "تعديل الطلب"}</Button>}
+      {order.allowedActions?.cancel === true && <Button variant="destructive" disabled={mutation.isPending || !reason.trim()} onClick={() => setConfirming("cancel")}>إلغاء الطلب</Button>}
     </div>
+    {confirming && <div role="group" aria-label={confirming === "edit" ? "تأكيد التعديل" : "تأكيد الإلغاء"} className="space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
+      <p className="font-semibold">{confirming === "edit" ? `تأكيد تعديل ${order.orderNumber}` : `تأكيد إلغاء ${order.orderNumber} نهائياً`}</p>
+      <p>{confirming === "edit" ? `تاريخ الحاجة الجديد ${date} · ${order.items?.length || 0} بنود. راجع الكميات والمتوفر المعلن قبل الحفظ.` : "سيُلغى الطلب مع الاحتفاظ بسجله؛ لا يمكن إعادة تفعيله."} السبب: {reason.trim()}</p>
+      <div className="flex flex-wrap gap-2"><Button variant={confirming === "cancel" ? "destructive" : "default"} disabled={mutation.isPending || !reason.trim() || (confirming === "edit" && !validEdit)} onClick={() => mutation.mutate(confirming === "edit")}>{mutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}تأكيد {confirming === "edit" ? "حفظ التعديل" : "إلغاء الطلب"}</Button><Button variant="outline" disabled={mutation.isPending} onClick={() => setConfirming(null)}>رجوع دون تنفيذ</Button></div>
+    </div>}
   </section>;
 }
 
@@ -1110,22 +1107,54 @@ function CatalogSourceBadge({ source }: { source: "product" | "warehouse" }) {
   return <Badge variant="outline" className="mt-1 text-[10px] font-normal">{sourceLabel(source)}</Badge>;
 }
 
-function DispatchEditor({ items, pending, onSubmit }: { items: KitchenItem[]; pending: boolean; onSubmit: (details: Record<string, unknown>) => void }) {
+export function createKitchenSubmitGuard() {
+  let locked = false;
+  return {
+    run(callback: () => void) {
+      if (locked) return false;
+      locked = true;
+      callback();
+      return true;
+    },
+    resetAfterFailure() { locked = false; },
+  };
+}
+
+function useSubmissionLock(pending: boolean, failed: boolean) {
+  const guardRef = useRef(createKitchenSubmitGuard());
+  const [locked, setLocked] = useState(false);
+  useEffect(() => {
+    if (failed && !pending) {
+      guardRef.current.resetAfterFailure();
+      setLocked(false);
+    }
+  }, [failed, pending]);
+  const submitOnce = (callback: () => void) => {
+    if (!pending && guardRef.current.run(callback)) setLocked(true);
+  };
+  return { locked, submitOnce };
+}
+
+export function DispatchEditor({ items, pending, failed = false, onSubmit }: { items: KitchenItem[]; pending: boolean; failed?: boolean; onSubmit: (details: Record<string, unknown>) => void }) {
   const [driverName, setDriverName] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState("");
   const [quantities, setQuantities] = useState(() => items.map(item => String(Number(item.preparedQuantity || 0) + Number(item.substituteQuantity || 0))));
-  const invalid = !driverName.trim() || !vehicleNumber.trim() || quantities.some((value, index) => Number(value) < 0 || Number(value) > Number(items[index].preparedQuantity || 0) + Number(items[index].substituteQuantity || 0));
-  return <section className="rounded-lg border border-orange-200 bg-orange-50/30 p-3 sm:p-4"><h3 className="font-semibold">بيانات الإرسال</h3><p className="mt-1 text-xs text-muted-foreground">أدخل السائق والمركبة أولاً، ثم أكد كمية كل بند بوحدته.</p><div className="mt-3 grid gap-3 md:grid-cols-2"><div><Label>اسم السائق</Label><Input className="mt-1 min-h-11" value={driverName} onChange={e => setDriverName(e.target.value)} /></div><div><Label>رقم المركبة</Label><Input className="mt-1 min-h-11" value={vehicleNumber} onChange={e => setVehicleNumber(e.target.value)} /></div></div><div className="mt-3 space-y-2">{items.map((item, index) => <div className="rounded-md border bg-background p-3" key={item.id}><Label htmlFor={`dispatch-${item.id}`} className="block text-sm">{item.productName}<span className="mt-1 block text-xs font-normal text-muted-foreground">الجاهز للتسليم: {Number(item.preparedQuantity || 0) + Number(item.substituteQuantity || 0)} {item.unit}</span></Label><Input id={`dispatch-${item.id}`} className="mt-2 min-h-11" aria-label={`الكمية المرسلة ${item.productName}`} type="number" min="0" step="any" value={quantities[index]} onChange={e => setQuantities(current => current.map((value, i) => i === index ? e.target.value : value))} /></div>)}</div><Button className="mt-4 min-h-11 w-full sm:w-auto" disabled={pending || invalid} onClick={() => onSubmit({ driverName: driverName.trim(), vehicleNumber: vehicleNumber.trim(), items: items.map((item, index) => ({ itemId: Number(item.id), dispatchedQuantity: Number(quantities[index]) })) })}><Truck className="ml-2 h-4 w-4" />تأكيد الإرسال</Button></section>;
+  const [confirming, setConfirming] = useState(false);
+  const { locked, submitOnce } = useSubmissionLock(pending, failed);
+  const invalid = !items.length || !driverName.trim() || !vehicleNumber.trim() || quantities.some((value, index) => !isValidKitchenQuantity(value, items[index].productId != null, true) || Number(value) > Number(items[index].preparedQuantity || 0) + Number(items[index].substituteQuantity || 0));
+  return <section className="rounded-lg border border-orange-200 bg-orange-50/30 p-3 sm:p-4"><h3 className="font-semibold">بيانات الإرسال</h3><p className="mt-1 text-xs text-muted-foreground">راجع الجاهز والكمية المرسلة لكل بند ثم أكد السائق والمركبة.</p><div className="mt-3 grid gap-3 md:grid-cols-2"><div><Label htmlFor="dispatch-driver">اسم السائق</Label><Input id="dispatch-driver" className="mt-1 min-h-11" value={driverName} onChange={e => { setDriverName(e.target.value); setConfirming(false); }} /></div><div><Label htmlFor="dispatch-vehicle">رقم المركبة</Label><Input id="dispatch-vehicle" className="mt-1 min-h-11" value={vehicleNumber} onChange={e => { setVehicleNumber(e.target.value); setConfirming(false); }} /></div></div><div className="mt-3 space-y-2">{items.map((item, index) => <div className="rounded-md border bg-background p-3" key={item.id}><Label htmlFor={`dispatch-${item.id}`} className="block text-sm">{item.productName}<span className="mt-1 block text-xs font-normal text-muted-foreground">المطلوب: {item.requestedQuantity} · الجاهز: {Number(item.preparedQuantity || 0) + Number(item.substituteQuantity || 0)} {item.unit}</span></Label><Input id={`dispatch-${item.id}`} className="mt-2 min-h-11" aria-label={`الكمية المرسلة ${item.productName}`} type="number" inputMode={item.productId != null ? "numeric" : "decimal"} min="0" step={item.productId != null ? "1" : "0.000001"} value={quantities[index]} onChange={e => { setQuantities(current => current.map((value, i) => i === index ? e.target.value : value)); setConfirming(false); }} /></div>)}</div>{confirming ? <div role="group" aria-label="تأكيد الإرسال" className="mt-4 space-y-3 rounded-lg border border-orange-300 bg-background p-3 text-sm"><p className="font-semibold">تأكيد إرسال {items.length} بنود مع {driverName} · {vehicleNumber}</p><ul className="space-y-1">{items.map((item, index) => <li key={item.id}>{item.productName}: {quantities[index]} من {Number(item.preparedQuantity || 0) + Number(item.substituteQuantity || 0)} {item.unit}</li>)}</ul><div className="flex flex-wrap gap-2"><Button disabled={pending || locked || invalid} onClick={() => submitOnce(() => onSubmit({ driverName: driverName.trim(), vehicleNumber: vehicleNumber.trim(), items: items.map((item, index) => ({ itemId: Number(item.id), dispatchedQuantity: Number(quantities[index]) })) }))}>{pending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}إرسال الكميات المؤكدة</Button><Button variant="outline" disabled={pending || locked} onClick={() => setConfirming(false)}>رجوع للتعديل</Button></div></div> : <Button className="mt-4 min-h-11 w-full sm:w-auto" disabled={pending || locked || invalid} onClick={() => setConfirming(true)}><Truck className="ml-2 h-4 w-4" />مراجعة الإرسال</Button>}</section>;
 }
 
-function ReceiptEditor({ items, pending, onSubmit }: { items: KitchenItem[]; pending: boolean; onSubmit: (details: Record<string, unknown>) => void }) {
+export function ReceiptEditor({ items, pending, failed = false, onSubmit }: { items: KitchenItem[]; pending: boolean; failed?: boolean; onSubmit: (details: Record<string, unknown>) => void }) {
   const [rows, setRows] = useState(() => items.map(item => ({ received: String(item.dispatchedQuantity || 0), damaged: "0", notes: "" })));
-  const update = (index: number, changes: Partial<(typeof rows)[number]>) => setRows(current => current.map((row, i) => i === index ? { ...row, ...changes } : row));
-  const invalid = rows.some((row, index) => {
+  const [confirming, setConfirming] = useState(false);
+  const { locked, submitOnce } = useSubmissionLock(pending, failed);
+  const update = (index: number, changes: Partial<(typeof rows)[number]>) => { setConfirming(false); setRows(current => current.map((row, i) => i === index ? { ...row, ...changes } : row)); };
+  const invalid = !items.length || rows.some((row, index) => {
     const sent = Number(items[index].dispatchedQuantity || 0); const received = Number(row.received); const damaged = Number(row.damaged);
-    return received < 0 || damaged < 0 || received + damaged > sent || ((received + damaged < sent || damaged > 0) && !row.notes.trim());
+    return !isValidKitchenQuantity(row.received, items[index].productId != null, true) || !isValidKitchenQuantity(row.damaged, items[index].productId != null, true) || received + damaged > sent + 0.000001 || ((received + damaged < sent - 0.000001 || damaged > 0) && !row.notes.trim());
   });
-  return <section className="rounded-lg border border-emerald-200 bg-emerald-50/30 p-3 sm:p-4"><h3 className="font-semibold">تسجيل الاستلام الفعلي</h3><p className="mt-1 text-xs text-muted-foreground">لكل بند: سجّل السليم والتالف. تظهر الملاحظة إلزامية عند وجود ناقص أو تالف.</p><div className="mt-3 space-y-3">{items.map((item, index) => { const sent = Number(item.dispatchedQuantity || 0); const missing = Math.max(0, sent - Number(rows[index].received || 0) - Number(rows[index].damaged || 0)); return <div className="rounded-md border bg-background p-3" key={item.id}><div className="mb-2 font-medium">{item.productName} — أرسل {sent} {item.unit}</div><div className="grid gap-2 md:grid-cols-3"><div><Label>المستلم السليم</Label><Input className="mt-1 min-h-11" type="number" min="0" step="any" value={rows[index].received} onChange={e => update(index, { received: e.target.value })} /></div><div><Label>التالف</Label><Input className="mt-1 min-h-11" type="number" min="0" step="any" value={rows[index].damaged} onChange={e => update(index, { damaged: e.target.value })} /></div><div><Label>الناقص: {missing}</Label><Input className="mt-1 min-h-11" value={rows[index].notes} onChange={e => update(index, { notes: e.target.value })} placeholder={missing > 0 || Number(rows[index].damaged) > 0 ? "الملاحظة مطلوبة" : "ملاحظة اختيارية"} /></div></div></div>; })}</div><Button className="mt-4 min-h-11 w-full sm:w-auto" disabled={pending || invalid} onClick={() => onSubmit({ items: items.map((item, index) => ({ itemId: Number(item.id), receivedQuantity: Number(rows[index].received), damagedQuantity: Number(rows[index].damaged), receivingNotes: rows[index].notes.trim() || undefined })) })}><Check className="ml-2 h-4 w-4" />تأكيد الاستلام</Button></section>;
+  return <section className="rounded-lg border border-emerald-200 bg-emerald-50/30 p-3 sm:p-4"><h3 className="font-semibold">تسجيل الاستلام الفعلي</h3><p className="mt-1 text-xs text-muted-foreground">سجّل السليم والتالف؛ الناقص يُحسب من المرسل. الملاحظة إلزامية لأي فرق.</p><div className="mt-3 space-y-3">{items.map((item, index) => { const sent = Number(item.dispatchedQuantity || 0); const missing = Math.max(0, sent - Number(rows[index].received || 0) - Number(rows[index].damaged || 0)); return <div className="rounded-md border bg-background p-3" key={item.id}><div className="mb-2 font-medium">{item.productName} — أرسل {sent} {item.unit}</div><div className="grid gap-2 md:grid-cols-3"><div><Label htmlFor={`received-${item.id}`}>المستلم السليم</Label><Input id={`received-${item.id}`} className="mt-1 min-h-11" type="number" inputMode={item.productId != null ? "numeric" : "decimal"} min="0" step={item.productId != null ? "1" : "0.000001"} value={rows[index].received} onChange={e => update(index, { received: e.target.value })} /></div><div><Label htmlFor={`damaged-${item.id}`}>التالف</Label><Input id={`damaged-${item.id}`} className="mt-1 min-h-11" type="number" inputMode={item.productId != null ? "numeric" : "decimal"} min="0" step={item.productId != null ? "1" : "0.000001"} value={rows[index].damaged} onChange={e => update(index, { damaged: e.target.value })} /></div><div><Label htmlFor={`receipt-note-${item.id}`}>الناقص: {missing} {item.unit} · ملاحظة الفرق</Label><Input id={`receipt-note-${item.id}`} className="mt-1 min-h-11" value={rows[index].notes} onChange={e => update(index, { notes: e.target.value })} placeholder={missing > 0 || Number(rows[index].damaged) > 0 ? "الملاحظة مطلوبة" : "ملاحظة اختيارية"} /></div></div></div>; })}</div>{confirming ? <div role="group" aria-label="تأكيد الاستلام" className="mt-4 space-y-3 rounded-lg border border-emerald-300 bg-background p-3 text-sm"><p className="font-semibold">راجع الاستلام قبل تسجيله نهائياً</p><ul className="space-y-2">{items.map((item, index) => <li key={item.id}>{item.productName}: مرسل {item.dispatchedQuantity || 0} · سليم {rows[index].received} · تالف {rows[index].damaged} · ناقص {Math.max(0, Number(item.dispatchedQuantity || 0) - Number(rows[index].received) - Number(rows[index].damaged))} {item.unit}{rows[index].notes && ` · ${rows[index].notes}`}</li>)}</ul><p className="text-amber-800">أي فرق سيبقى مفتوحاً حتى تسويته، ولا يتحول إلى استلام سليم تلقائياً.</p><div className="flex flex-wrap gap-2"><Button disabled={pending || locked || invalid} onClick={() => submitOnce(() => onSubmit({ items: items.map((item, index) => ({ itemId: Number(item.id), receivedQuantity: Number(rows[index].received), damagedQuantity: Number(rows[index].damaged), receivingNotes: rows[index].notes.trim() || undefined })) }))}>{pending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}تسجيل الاستلام المؤكد</Button><Button variant="outline" disabled={pending || locked} onClick={() => setConfirming(false)}>رجوع للتعديل</Button></div></div> : <Button className="mt-4 min-h-11 w-full sm:w-auto" disabled={pending || locked || invalid} onClick={() => setConfirming(true)}><Check className="ml-2 h-4 w-4" />مراجعة الاستلام</Button>}</section>;
 }
 
 async function printPreparationNote(order: KitchenOrder): Promise<boolean> {

@@ -1,12 +1,9 @@
-import { and, eq, inArray, or, sql } from "drizzle-orm";
-import { getKitchenRouting, routingPeople, routingPermission } from "./central-kitchen-routing";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { getKitchenRouting, kitchenManagerEligible, routingPeople, routingPersonEligible } from "./central-kitchen-routing";
 import {
   systemNotifications,
   centralKitchenOrders,
   centralKitchenOrderEvents,
-  userBranchAccess,
-  userPermissions,
-  users,
   type SystemNotification,
 } from "@shared/schema";
 import { loadCentralKitchenOrderingPolicy } from "./central-kitchen-ordering-policy";
@@ -25,7 +22,7 @@ export type CentralKitchenNotificationEvent =
   | "discrepancy_resolved";
 
 const EVENT_COPY: Record<CentralKitchenNotificationEvent, { title: string; content: string; priority: number }> = {
-  missing_responsible: { title: "طلب دون مسؤول مطبخ", content: "يرجى تعيين مسؤول أو نائب مؤهل للمطبخ.", priority: 4 },
+  missing_responsible: { title: "طلب دون مدير إنتاج متاح", content: "لا يوجد مدير إنتاج وتطوير نشط بصلاحية عرض طلبات المطبخ؛ يرجى مراجعة الحساب والصلاحيات.", priority: 4 },
   overdue: { title: "طلب مطبخ متأخر", content: "تجاوز الطلب موعد الاحتياج ولم يتم استلامه.", priority: 4 },
   created: { title: "طلب جديد للمطبخ المركزي", content: "وصل طلب فرع جديد ويحتاج إلى المراجعة.", priority: 3 },
   edited: { title: "تم تعديل طلب المطبخ المركزي", content: "عدّل الفرع الطالب بيانات طلب قائم.", priority: 2 },
@@ -93,34 +90,11 @@ export async function resolveCentralKitchenNotificationRecipients(
   candidateUserIds?: string[],
 ): Promise<string[]> {
   if (!branchIds.length || candidateUserIds?.length === 0) return [];
-  const branchUsers = executor.select({ userId: userBranchAccess.userId })
-    .from(userBranchAccess)
-    .where(inArray(userBranchAccess.branchId, branchIds));
-  const rows = await executor.select({
-    id: users.id,
-    role: users.role,
-    permissionActions: userPermissions.actions,
-  }).from(users)
-    .leftJoin(userPermissions, and(
-      eq(userPermissions.userId, users.id),
-      eq(userPermissions.module, "central_kitchen_orders"),
-    ))
-    .where(and(
-      eq(users.isActive, "active"),
-      or(
-        ...(candidateUserIds ? [eq(users.role, "admin"), eq(users.role, "operations_manager"), eq(users.role, "production_development_manager")] : []),
-        inArray(users.branchId, branchIds),
-        inArray(users.id, branchUsers),
-      ),
-      ...(candidateUserIds ? [inArray(users.id, candidateUserIds)] : []),
-    ));
-
-  return Array.from(new Set(rows
-    .filter((row: any) => canReceiveCentralKitchenNotification(
-      row.role,
-      Array.isArray(row.permissionActions) ? row.permissionActions : null,
-    ))
-    .map((row: any) => row.id)));
+  const people = await Promise.all(branchIds.map(branchId => routingPeople(executor, branchId)));
+  const candidates = candidateUserIds ? new Set(candidateUserIds) : null;
+  return Array.from(new Set(people.flat().filter((person: any) =>
+    (!candidates || candidates.has(person.id)) && routingPersonEligible(person, "view"))
+    .map((person: any) => person.id)));
 }
 
 export async function filterAuthorizedCentralKitchenNotificationUsers(
@@ -191,20 +165,26 @@ export async function insertCentralKitchenNotification(
 }
 
 export async function routedRecipients(tx: DatabaseExecutor, order: any, event: CentralKitchenNotificationEvent): Promise<string[]> {
-  const kitchen = await getKitchenRouting(tx, order.centralKitchenId);
-  const kitchenIds = [kitchen.responsibleUserId, kitchen.deputyUserId].filter(Boolean) as string[];
+  const kitchenPeople = await routingPeople(tx, order.centralKitchenId);
+  const kitchenIds = kitchenPeople.filter((p: any) => kitchenManagerEligible(p, "view")).map((p: any) => p.id);
   const ops = async () => (await routingPeople(tx)).filter((p: any) =>
-    ["operations_manager", "production_development_manager"].includes(p.role) && routingPermission(p.role, p.actions || [], "view")).map((p: any) => p.id);
+    p.role === "operations_manager" && routingPersonEligible(p, "view")).map((p: any) => p.id);
   if (event === "overdue" && ["received", "cancelled"].includes(order.status)) return [];
-  if (["missing_responsible", "overdue"].includes(event)) return ops();
+  if (event === "missing_responsible") return ops();
+  if (event === "overdue") return Array.from(new Set([
+    ...kitchenPeople.filter((p: any) => kitchenManagerEligible(p, "approve") && routingPersonEligible(p, "view"))
+      .map((p: any) => p.id),
+    ...await ops(),
+  ]));
   if (["created", "edited", "cancelled", "received"].includes(event)) return kitchenIds;
   if (event === "received_discrepancy") return Array.from(new Set([...kitchenIds, ...await ops()]));
   const branchRouting = await getKitchenRouting(tx, order.requestBranchId);
   const people = await routingPeople(tx, order.requestBranchId);
-  return people.filter((p: any) => routingPermission(p.role, p.actions || [], "view")
-    && (p.id === order.createdBy || p.role === "branch_manager"
-      || (["prepared", "dispatched"].includes(event) && p.id === branchRouting.receiverUserId)))
-    .map((p: any) => p.id);
+  const branchIds = people.filter((p: any) => routingPersonEligible(p, "view")
+    && (p.id === order.createdBy || p.id === branchRouting.receiverUserId)).map((p: any) => p.id);
+  return event === "discrepancy_resolved"
+    ? Array.from(new Set([...kitchenIds, ...branchIds]))
+    : branchIds;
 }
 
 // Only open orders qualify. A stable per-order key survives scheduler restarts,

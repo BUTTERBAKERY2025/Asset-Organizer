@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import pg from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import * as schema from "../shared/schema";
 import { getKitchenRouting, getKitchenRoutingBatch, kitchenActionAllowed, registerKitchenRoutingRoutes, routingCandidates, routingPermission, routingSchema } from "../server/central-kitchen-routing";
 import { filterAuthorizedCentralKitchenNotificationUsers, insertCentralKitchenNotification, routedRecipients } from "../server/central-kitchen-notifications";
@@ -29,7 +29,7 @@ describe("routing authorization", () => {
         ]);
         const lead = `${key}-lead`, creator = `${key}-creator`, ops = `${key}-ops`, manager = `${key}-manager`, receiver = `${key}-receiver`, admin = `${key}-admin`;
         await tx.insert(schema.users).values([
-          { id: lead, role: "employee", branchId: kitchen }, { id: creator, role: "employee", branchId: branch },
+          { id: lead, role: "production_development_manager" }, { id: creator, role: "employee", branchId: branch },
           { id: ops, role: "operations_manager" }, { id: manager, role: "branch_manager", branchId: branch },
           { id: receiver, role: "employee", branchId: other }, { id: admin, role: "admin" },
         ]);
@@ -41,7 +41,7 @@ describe("routing authorization", () => {
         ]);
         await tx.insert(schema.userBranchAccess).values({ userId: receiver, branchId: branch });
         await tx.insert(schema.centralKitchenRouting).values([
-          { branchId: kitchen, responsibleUserId: lead }, { branchId: branch, receiverUserId: receiver },
+          { branchId: kitchen }, { branchId: branch, receiverUserId: receiver },
         ]);
         const [order] = await tx.insert(schema.centralKitchenOrders).values({
           requestBranchId: branch, centralKitchenId: kitchen, createdBy: creator,
@@ -49,16 +49,26 @@ describe("routing authorization", () => {
           neededDate: "2001-01-01", neededTime: "07:00", idempotencyKey: key,
         }).returning();
         expect(await kitchenActionAllowed(tx, lead, order, "approve")).toBe(true);
+        expect(await kitchenActionAllowed(tx, lead, order, "prepare")).toBe(true);
+        expect(await kitchenActionAllowed(tx, creator, order, "approve")).toBe(false);
         expect(await kitchenActionAllowed(tx, creator, order, "receive")).toBe(false);
+        expect(await kitchenActionAllowed(tx, creator, order, "resolve_discrepancy")).toBe(false);
         expect(await kitchenActionAllowed(tx, receiver, order, "receive")).toBe(true);
+        expect(await kitchenActionAllowed(tx, receiver, order, "resolve_discrepancy")).toBe(true);
         const batchRouting = await getKitchenRoutingBatch(tx, [kitchen, branch]);
         expect(batchRouting.get(kitchen)?.responsibleUserId).toBe(lead);
         expect(batchRouting.get(branch)?.receiverUserId).toBe(receiver);
         expect(await kitchenActionAllowed(tx, manager, order, "receive")).toBe(false);
         expect(await routedRecipients(tx, order, "created")).toEqual([lead]);
-        expect((await routedRecipients(tx, order, "dispatched")).sort()).toEqual([creator, manager, receiver].sort());
+        for (const event of ["edited", "cancelled", "received"] as const) {
+          expect(await routedRecipients(tx, order, event)).toEqual([lead]);
+        }
+        for (const event of ["approved", "prepared", "dispatched"] as const) {
+          expect((await routedRecipients(tx, order, event)).sort()).toEqual([creator, receiver].sort());
+        }
+        expect((await routedRecipients(tx, order, "discrepancy_resolved")).sort()).toEqual([lead, creator, receiver].sort());
         expect((await routedRecipients(tx, order, "received_discrepancy")).sort()).toEqual([lead, ops].sort());
-        expect(await routedRecipients(tx, order, "overdue")).toEqual([ops]);
+        expect((await routedRecipients(tx, order, "overdue")).sort()).toEqual([lead, ops].sort());
 
         const routes = new Map<string, any>();
         const app: any = { get: (path: string, ...handlers: any[]) => routes.set(`GET ${path}`, handlers.at(-1)),
@@ -76,6 +86,10 @@ describe("routing authorization", () => {
         expect((await invoke("GET /api/central-kitchen-orders/routing/candidates", ops)).status).toBe(200);
         expect((await invoke("PUT /api/central-kitchen-orders/routing/:branchId", admin,
           { responsibleUserId: creator, deputyUserId: null, receiverUserId: null })).status).toBe(400);
+        expect((await invoke("PUT /api/central-kitchen-orders/routing/:branchId", admin,
+          { receiverUserId: receiver })).status).toBe(400);
+        expect((await invoke("PUT /api/central-kitchen-orders/routing/:branchId", admin,
+          { responsibleUserId: null, deputyUserId: null, receiverUserId: null })).status).toBe(200);
 
         // Test durable deduplication without invoking post-commit push in a
         // rollback-only fixture or notifying existing development orders.
@@ -84,15 +98,27 @@ describe("routing authorization", () => {
         expect(first).toBeTypeOf("number");
         expect(await insertCentralKitchenNotification(tx, eventInput)).toBeNull();
         const [notice] = await tx.select().from(schema.systemNotifications).where(eq(schema.systemNotifications.id, first!));
-        expect(await filterAuthorizedCentralKitchenNotificationUsers(tx, notice, [ops, admin, lead])).toEqual([ops]);
+        expect(await filterAuthorizedCentralKitchenNotificationUsers(tx, notice, [ops, admin, lead])).toEqual([ops, lead]);
         expect(await routedRecipients(tx, { ...order, status: "received" }, "overdue")).toEqual([]);
 
         await tx.update(schema.userPermissions).set({ actions: ["view"] }).where(eq(schema.userPermissions.userId, lead));
         expect(await kitchenActionAllowed(tx, lead, order, "approve")).toBe(false);
         expect((await getKitchenRouting(tx, kitchen)).hasKitchenResponsible).toBe(false);
+        expect(await routedRecipients(tx, order, "created")).toEqual([lead]);
+        expect(await filterAuthorizedCentralKitchenNotificationUsers(tx, notice, [lead])).toEqual([]);
+        const createdInput = { eventId: order.id + 1000000, orderId: order.id, event: "created" as const, branchId: kitchen, actorId: creator };
+        const createdId = await insertCentralKitchenNotification(tx, createdInput);
+        expect(createdId).toBeTypeOf("number");
+        const [createdNotice] = await tx.select().from(schema.systemNotifications).where(eq(schema.systemNotifications.id, createdId!));
+        expect(createdNotice.targetUserIds).toEqual([lead]);
+        const [escalation] = await tx.select().from(schema.systemNotifications)
+          .where(eq(schema.systemNotifications.dedupeKey, `central-kitchen-event:${createdInput.eventId}:missing_responsible`));
+        expect(escalation.targetUserIds).toEqual([ops]);
+        await tx.update(schema.users).set({ isActive: "inactive" }).where(eq(schema.users.id, lead));
         expect((await getKitchenRoutingBatch(tx, [kitchen])).get(kitchen)?.hasKitchenResponsible).toBe(false);
         expect((await routingCandidates(tx, kitchen)).kitchenCandidates).toEqual([]);
-        const missing = await insertCentralKitchenNotification(tx, { ...eventInput, event: "created", eventId: order.id + 1000000 });
+        expect(await filterAuthorizedCentralKitchenNotificationUsers(tx, createdNotice, [lead])).toEqual([]);
+        const missing = await insertCentralKitchenNotification(tx, { ...eventInput, event: "created", eventId: order.id + 1000001 });
         expect(missing).toBeTypeOf("number");
         const [missingNotice] = await tx.select().from(schema.systemNotifications).where(eq(schema.systemNotifications.id, missing!));
         expect(missingNotice.targetUserIds).toEqual([ops]);
@@ -104,6 +130,21 @@ describe("routing authorization", () => {
           receiverUserId: manager,
           receiverAssignmentSource: "branch_manager",
         });
+        expect(await kitchenActionAllowed(tx, manager, order, "receive")).toBe(true);
+        expect(await kitchenActionAllowed(tx, manager, order, "resolve_discrepancy")).toBe(true);
+        // Create a module-specific permission if the fixture DB has not seeded it.
+        const [kitchenEdit] = await tx.select().from(schema.permissions)
+          .where(and(eq(schema.permissions.module, "central_kitchen_orders"), eq(schema.permissions.action, "edit")));
+        const permission = kitchenEdit ||
+          (await tx.insert(schema.permissions).values({
+            module: "central_kitchen_orders", action: "edit", name: key,
+          }).returning())[0];
+        await tx.insert(schema.userPermissionOverrides).values({
+          userId: manager, permissionId: permission.id, allow: false,
+        });
+        expect(await kitchenActionAllowed(tx, manager, order, "receive")).toBe(false);
+        expect(await kitchenActionAllowed(tx, manager, order, "resolve_discrepancy")).toBe(false);
+        expect((await getKitchenRouting(tx, branch)).receiverUserId).toBeNull();
         throw rollback;
       });
     } catch (error) {

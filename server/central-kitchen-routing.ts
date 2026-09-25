@@ -5,13 +5,10 @@ import { branches, centralKitchenRouting, systemAuditLogs, userBranchAccess, use
 
 export type RoutingExecutor = { select: (...args: any[]) => any; insert: (...args: any[]) => any };
 export const routingSchema = z.object({
-  responsibleUserId: z.string().min(1).nullable(),
-  deputyUserId: z.string().min(1).nullable(),
+  responsibleUserId: z.null().optional(),
+  deputyUserId: z.null().optional(),
   receiverUserId: z.string().min(1).nullable(),
-}).strict().refine(value => {
-  const ids = Object.values(value).filter(Boolean);
-  return new Set(ids).size === ids.length;
-}, "يجب اختيار أشخاص مختلفين");
+}).strict();
 
 export function routingPermission(role: string, actions: string[], action: string) {
   return role === "admin" || actions.includes(action)
@@ -36,6 +33,10 @@ export function routingPersonEligible(person: RoutingPerson, action: string) {
   if (person._deniedActions?.includes(action)) return false;
   if (person._hasCustomPermissions && !person.actions?.includes(action)) return false;
   return routingPermission(person.role, person.actions || [], action);
+}
+
+export function kitchenManagerEligible(person: RoutingPerson, action: string) {
+  return person.role === "production_development_manager" && routingPersonEligible(person, action);
 }
 
 export async function routingPeople(tx: RoutingExecutor, branchId?: string) {
@@ -88,8 +89,9 @@ export async function routingCandidates(tx: RoutingExecutor, branchId: string) {
   const people = await routingPeople(tx, branchId);
   const named = (p: any) => ({ id: p.id, name: [p.name, p.lastName].filter(Boolean).join(" ") || p.username || p.id });
   return {
-    kitchenCandidates: people.filter((p: any) => routingPersonEligible(p, "approve")).map(named),
-    receiverCandidates: people.filter((p: any) => routingPersonEligible(p, "edit")).map(named),
+    kitchenCandidates: people.filter((p: any) => kitchenManagerEligible(p, "approve")).map(named),
+    receiverCandidates: people.filter((p: any) => p.role !== "production_development_manager"
+      && routingPersonEligible(p, "edit")).map(named),
   };
 }
 
@@ -97,12 +99,11 @@ export function resolveKitchenRouting(branchId: string, row: any, people: Routin
   const named = (person: RoutingPerson | undefined) => person
     ? [person.name, person.lastName].filter(Boolean).join(" ") || person.username || person.id
     : null;
-  const responsible = people.find(person =>
-    person.id === row?.responsibleUserId && routingPersonEligible(person, "approve"));
-  const deputy = people.find(person =>
-    person.id === row?.deputyUserId && routingPersonEligible(person, "approve"));
+  // Legacy named kitchen columns are retained for historical data, not authority.
+  const approvingManagers = people.filter(person => kitchenManagerEligible(person, "approve"));
   const manualReceiver = people.find(person =>
-    person.id === row?.receiverUserId && routingPersonEligible(person, "edit"));
+    person.id === row?.receiverUserId && person.role !== "production_development_manager"
+    && routingPersonEligible(person, "edit"));
   // A branch access grant is intentionally insufficient here: automatic assignment
   // follows the user's authoritative primary branch assignment only.
   const primaryManagers = manualReceiver ? [] : people.filter(person =>
@@ -116,13 +117,14 @@ export function resolveKitchenRouting(branchId: string, row: any, people: Routin
     : automaticReceiver ? "branch_manager" as const : "unassigned" as const;
   return {
     branchId,
-    responsibleUserId: responsible?.id || null,
-    deputyUserId: deputy?.id || null,
+    responsibleUserId: approvingManagers[0]?.id || null,
+    deputyUserId: approvingManagers[1]?.id || null,
     receiverUserId: receiver?.id || null,
-    responsibleName: named(responsible),
-    deputyName: named(deputy),
+    responsibleName: named(approvingManagers[0]),
+    deputyName: named(approvingManagers[1]),
     receiverName: named(receiver),
-    hasKitchenResponsible: !!(responsible || deputy),
+    hasKitchenResponsible: approvingManagers.length > 0,
+    kitchenManagers: approvingManagers.map(person => ({ id: person.id, name: named(person) })),
     receiverAssignmentSource,
     receiverAssignmentConflict: !manualReceiver && primaryManagers.length > 1,
   };
@@ -149,17 +151,18 @@ export async function getKitchenRoutingBatch(tx: RoutingExecutor, branchIds: str
 }
 
 export async function kitchenActionAllowed(tx: RoutingExecutor, userId: string, order: any, action: string) {
-  const branchId = action === "receive" ? order.requestBranchId : order.centralKitchenId;
+  const receiving = action === "receive" || action === "resolve_discrepancy";
+  const branchId = receiving ? order.requestBranchId : order.centralKitchenId;
   const actor = await routingActor(tx, userId);
   if (!actor || !routingPersonEligible(actor, action === "approve" ? "approve" : "edit")) return false;
-  if (["admin", "operations_manager", "production_development_manager"].includes(actor.role)) return true;
+  // Administration may intervene, but a revoked action is never restored by role.
+  if (["admin", "operations_manager"].includes(actor.role)) return true;
+  if (!receiving && kitchenManagerEligible(actor, action === "approve" ? "approve" : "edit")) return true;
+  if (!receiving) return false;
   const people = await routingPeople(tx, branchId);
   if (!people.some((p: any) => p.id === userId)) return false;
-  if (!["approve", "receive"].includes(action)) return true;
   const routing = await getKitchenRouting(tx, branchId);
-  return action === "approve"
-    ? [routing.responsibleUserId, routing.deputyUserId].includes(userId)
-    : routing.receiverUserId === userId;
+  return routing.receiverUserId === userId;
 }
 
 export function registerKitchenRoutingRoutes(app: any, db: any, auth: any, getUser: any, canAccessBranch: any) {
@@ -169,7 +172,7 @@ export function registerKitchenRoutingRoutes(app: any, db: any, auth: any, getUs
       const branchId = kind === "write" ? req.params.branchId : req.query.branchId;
       if (typeof branchId !== "string" || !branchId) return res.status(400).json({ error: "الفرع مطلوب" });
       const actor = await routingActor(db, getUser(req).id);
-      if (!actor || !routingPermission(actor.role, actor.actions || [], "view")) return res.status(403).json({ error: "غير مصرح" });
+      if (!actor || !routingPersonEligible(actor, "view")) return res.status(403).json({ error: "غير مصرح" });
       const [branch] = await db.select().from(branches).where(eq(branches.id, branchId));
       if (!branch) return res.status(404).json({ error: "الفرع غير موجود" });
       if (kind === "read") {
@@ -177,21 +180,21 @@ export function registerKitchenRoutingRoutes(app: any, db: any, auth: any, getUs
         return res.json(await getKitchenRouting(db, branchId));
       }
       if (!["admin", "operations_manager", "production_development_manager"].includes(actor.role)) return res.status(403).json({ error: "إعدادات التوجيه للإدارة فقط" });
-      if (kind === "write" && !routingPermission(actor.role, actor.actions || [], "edit")) return res.status(403).json({ error: "غير مصرح بتعديل التوجيه" });
+      if (kind === "write" && !routingPersonEligible(actor, "edit")) return res.status(403).json({ error: "غير مصرح بتعديل التوجيه" });
       if (kind === "candidates") return res.json(await routingCandidates(db, branchId));
       const parsed = routingSchema.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json({ error: "أشخاص التوجيه غير صالحين أو مكررون" });
+      if (!parsed.success) return res.status(400).json({ error: "لا يمكن تعيين مسؤول أو نائب للمطبخ يدوياً؛ مدير الإنتاج والتطوير مسؤول تلقائياً، أو بيانات المستلم غير صالحة" });
       const result = await db.transaction(async (tx: any) => {
         const currentActor = await routingActor(tx, actor.id);
         if (!currentActor || !["admin", "operations_manager", "production_development_manager"].includes(currentActor.role)
-          || !routingPermission(currentActor.role, currentActor.actions || [], "edit")) throw new Error("ROUTING_FORBIDDEN");
+          || !routingPersonEligible(currentActor, "edit")) throw new Error("ROUTING_FORBIDDEN");
         const candidates = await routingCandidates(tx, branchId);
         for (const [key, id] of Object.entries(parsed.data)) {
           const eligible = key === "receiverUserId" ? candidates.receiverCandidates : candidates.kitchenCandidates;
           if (id && !eligible.some((p: any) => p.id === id)) throw new Error("ROUTING_INELIGIBLE");
         }
         const [before] = await tx.select().from(centralKitchenRouting).where(eq(centralKitchenRouting.branchId, branchId));
-        const values = { ...parsed.data, updatedBy: actor.id, updatedAt: new Date() };
+        const values = { receiverUserId: parsed.data.receiverUserId, updatedBy: actor.id, updatedAt: new Date() };
         await tx.insert(centralKitchenRouting).values({ branchId, ...values }).onConflictDoUpdate({ target: centralKitchenRouting.branchId, set: values });
         await tx.insert(systemAuditLogs).values({ module: "central_kitchen_orders", entityId: branchId,
           action: "update", userId: actor.id, branchId, details: JSON.stringify({ before: before || null, after: values }) });

@@ -211,7 +211,7 @@ describe.sequential("central kitchen database-backed handler pilot", () => {
     const kitchenUser = {
       id: `ck-test-kitchen-user-${suffix}`,
       username: `ck-kitchen-${suffix}`,
-      role: "manager",
+      role: "production_development_manager",
       branchId: kitchenBranchId,
     };
     const outsiderUser = {
@@ -578,6 +578,13 @@ describe.sequential("central kitchen database-backed handler pilot", () => {
     });
     expect(prepareReplay.headers["idempotent-replayed"]).toBe("true");
     expect(prepareReplay.body.status).toBe("prepared");
+    const committedDetail = await invoke("get", "/api/central-kitchen-orders/:id", {
+      user: fixture.requestUser,
+      params: { id: String(orderId) },
+    });
+    expect(committedDetail.body.allowedActions).toMatchObject({
+      edit: false, cancel: false, resolveDiscrepancy: false,
+    });
 
     const dispatchBody = {
       idempotencyKey: key("dispatch"),
@@ -701,6 +708,18 @@ describe.sequential("central kitchen database-backed handler pilot", () => {
       body: { idempotencyKey: key("wrong-resolve"), notes: "Not allowed" },
     });
     expect(wrongBranchResolve.statusCode).toBe(403);
+    const receivingDetail = await invoke("get", "/api/central-kitchen-orders/:id", {
+      user: fixture.requestUser,
+      params: { id: String(orderId) },
+    });
+    expect(receivingDetail.body.allowedActions).toMatchObject({
+      edit: false, cancel: false, resolveDiscrepancy: true,
+    });
+    const kitchenDetail = await invoke("get", "/api/central-kitchen-orders/:id", {
+      user: fixture.kitchenUser,
+      params: { id: String(orderId) },
+    });
+    expect(kitchenDetail.body.allowedActions.resolveDiscrepancy).toBe(false);
 
     const resolveBody = {
       idempotencyKey: key("resolve"),

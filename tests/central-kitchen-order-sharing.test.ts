@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   buildOrderSafeSummary,
   buildSheetSafeSummary,
@@ -10,6 +11,8 @@ import {
   kitchenOrderPdfDefinition,
   preparationSheetPdfDefinition,
 } from "../client/src/components/central-kitchen/kitchen-order-pdf";
+import * as XLSX from "xlsx";
+import { buildKitchenOrderWorkbook, buildPreparationSheetWorkbook } from "../client/src/components/central-kitchen/kitchen-order-excel";
 
 const sheet: PreparationSheet = {
   generatedAt: "2026-09-22T09:00:00.000Z",
@@ -118,8 +121,11 @@ describe("central kitchen safe sharing", () => {
     expect(itemTable.table.headerRows).toBe(1);
     expect(itemTable.table.dontBreakRows).toBe(true);
     expect(itemTable.table.body[0].map((entry: any) => entry.text)).toEqual([
-      "م", "الصنف", "الوحدة", "المطلوب", "المتوفر", "المجهز", "النقص", "البديل", "الملاحظات",
+      "الملاحظات", "البديل", "المتبقي للتجهيز", "المجهز", "المتوفر", "المطلوب", "الوحدة", "الصنف", "م",
     ]);
+    expect(itemTable.table.widths).toEqual(["*", 85, 65, 45, 50, 45, 38, 120, 22]);
+    expect(itemTable.table.body[1][7].text).toBe("دقيق");
+    expect(serialized).toContain("حقول توقيع فارغة");
     expect(closingBlock.stack.find((entry: any) => entry.table?.widths?.length === 3).table.body[0]).toHaveLength(3);
   });
 
@@ -133,6 +139,12 @@ describe("central kitchen safe sharing", () => {
     expect(serialized).toContain("data:image/png;base64,logo");
     expect(serialized).not.toContain("2026-09-22T09:00:00.000Z");
     expect(definition.content.find((entry: any) => entry.table?.headerRows === 1)?.table.headerRows).toBe(1);
+    const table = definition.content.find((entry: any) => entry.table?.headerRows === 1).table;
+    expect(table.body[0].map((cell: any) => cell.text)).toEqual([
+      "تفاصيل الطلبات", "نقص فعلي", "لم يُحسم", "البديل", "الأصلي", "المعتمد", "المطلوب", "الوحدة", "الصنف",
+    ]);
+    expect(table.widths).toEqual(["*", 45, 45, 45, 45, 45, 45, 38, 82]);
+    expect(table.body[1][8]).toContain("product:7");
   });
 
   it("builds the matching formal landscape print document with safe repeated headers", () => {
@@ -166,5 +178,52 @@ describe("central kitchen safe sharing", () => {
     expect(html).toContain("مسؤول الإرسال");
     expect(html).toContain("مسؤول الاستلام");
     expect(html).toContain("counter(pages)");
+  });
+});
+
+describe("central kitchen Excel exports", () => {
+  it("shows both export actions only inside the existing export-permission boundary", () => {
+    const source = readFileSync(new URL("../client/src/components/central-kitchen/kitchen-order-sharing.tsx", import.meta.url), "utf8");
+    expect(source).toMatch(/\{canExport && <><Button data-testid="sheet-export-pdf"[\s\S]*?data-testid="sheet-export-excel"[\s\S]*?<\/Button><\/>\}/);
+    expect(source).toMatch(/\{canExport && <><Button data-testid="order-export-pdf"[\s\S]*?data-testid="order-export-excel"[\s\S]*?<\/Button><\/>\}/);
+    expect(source).toContain('disabled={!!exporting}');
+  });
+  it("preserves source quantities and lifecycle evidence without filling unknowns", () => {
+    const { workbook } = buildKitchenOrderWorkbook(XLSX, {
+      orderNumber: "CK-12", status: "received", requestBranchId: "1", centralKitchenId: "2",
+      requestBranchName: "=branch", centralKitchenName: "المطبخ", createdAt: "2026-09-22T09:00:00.000Z",
+      discrepancyStatus: "open", discrepancyResolutionNotes: null,
+      items: [{ productName: "=SUM(1,1)", unit: "كجم", requestedQuantity: 2.5, reportedAvailableQuantity: 0,
+        preparedQuantity: 1, substituteProductName: "بديل", substituteQuantity: 0.5,
+        dispatchedQuantity: 1.5, receivedQuantity: 1, damagedQuantity: 0.25,
+        missingQuantity: null, receivingNotes: "@note" }],
+    });
+    const meta = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets["بيانات الطلب"], { header: 1 });
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets["بنود الطلب"], { header: 1, defval: "" });
+    expect(meta).toContainEqual(["الفرع الطالب", "'=branch"]);
+    expect(meta).toContainEqual(["حالة الفروقات", "مفتوحة"]);
+    expect(meta.find(row => row[0] === "تاريخ الإنشاء · السعودية")?.[1]).not.toContain("09:00:00.000Z");
+    expect(rows[1][0]).toBe("'=SUM(1,1)");
+    expect(rows[1][2]).toBe(2.5);
+    expect(rows[1][3]).toBe(0);
+    expect(rows[1][8]).toBe(1.5);
+    expect(rows[1][11]).toBe("");
+    expect(rows[1][15]).toBe("'@note");
+    expect(workbook.Sheets["بنود الطلب"].A2.f).toBeUndefined();
+  });
+
+  it("preserves per-order sheet status and separately tracked original and substitute quantities", () => {
+    const { workbook } = buildPreparationSheetWorkbook(XLSX, sheet);
+    const orders = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets["الطلبات"], { header: 1 });
+    const groups = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets["التجهيز المجمع"], { header: 1 });
+    const details = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets["تفاصيل الطلبات"], { header: 1 });
+    expect(orders[1]).toContain("تم التجهيز");
+    expect(groups[1]).toContain("product:7");
+    expect(groups[1]).toContain(2.5);
+    expect(groups[1]).toContain(0.5);
+    expect(details[1]).toContain("دقيق بديل");
+    expect(details[1]).toContain("مشكلة جودة");
+    expect(details[1]).toContain("<ملاحظة حساسة>");
+    expect((workbook.Sheets["الطلبات"] as any)["!views"]).toEqual([{ rightToLeft: true }]);
   });
 });

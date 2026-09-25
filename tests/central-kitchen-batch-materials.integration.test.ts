@@ -94,6 +94,7 @@ let fixture: {
   requestBranchId: string;
   outsiderBranchId: string;
   kitchenUser: any;
+  destinationUser: any;
   requestUser: any;
   outsiderUser: any;
   productId: number;
@@ -250,7 +251,7 @@ async function createApprovedRealOrder(productId = fixture.productId, quantity =
       requestBranchId: fixture.requestBranchId,
       centralKitchenId: fixture.kitchenBranchId,
       idempotencyKey: key("order"),
-      items: [{ productId, productName: product.name, requestedQuantity: quantity, unit: product.unit }],
+      items: [{ productId, productName: product.name, requestedQuantity: quantity, reportedAvailableQuantity: 0, unit: product.unit }],
     },
   });
   expect(created.statusCode).toBe(201);
@@ -330,6 +331,7 @@ async function batchEffects(batchId: number) {
 async function createWarehouseTransfer(quantity = 0.5, additionalTransferData: Record<string, unknown> = {}) {
   const created = await invoke("post", "/api/warehouse/material-transfers", {
     user: fixture.warehouseUser,
+    headers: { "Idempotency-Key": key("warehouse-transfer") },
     body: {
       sourceType: "warehouse",
       // This is the production/UI sentinel, not a made-up test branch.
@@ -347,7 +349,7 @@ async function createWarehouseTransfer(quantity = 0.5, additionalTransferData: R
       }],
     },
   });
-  expect(created.statusCode).toBe(201);
+  expect(created.statusCode, JSON.stringify(created.body)).toBe(201);
   const items = await databaseState.db.execute(sql`
     SELECT id, item_id FROM material_transfer_items WHERE transfer_id = ${created.body.id}
   `);
@@ -465,10 +467,11 @@ describe.sequential("recipe-backed central-kitchen batch materials (development 
     const kitchenUser = actor(
       `ck-material-kitchen-user-${suffix}`,
       kitchenBranchId,
-      "manager",
+      "production_development_manager",
       recipePermissions,
     );
     const requestUser = actor(`ck-material-request-user-${suffix}`, requestBranchId);
+    const destinationUser = actor(`ck-material-destination-user-${suffix}`, kitchenBranchId);
     const outsiderUser = actor(`ck-material-outsider-user-${suffix}`, outsiderBranchId);
     const warehouseUser = actor(`ck-material-warehouse-user-${suffix}`, "main_warehouse", "admin");
     const sourceWarehouseUser = actor(`ck-material-source-user-${suffix}`, "main_warehouse");
@@ -487,6 +490,7 @@ describe.sequential("recipe-backed central-kitchen batch materials (development 
     `);
     await databaseState.db.insert(users).values([
       { id: kitchenUser.id, username: kitchenUser.username, role: kitchenUser.role, branchId: kitchenBranchId },
+      { id: destinationUser.id, username: destinationUser.username, role: destinationUser.role, branchId: kitchenBranchId },
       { id: requestUser.id, username: requestUser.username, role: requestUser.role, branchId: requestBranchId },
       { id: outsiderUser.id, username: outsiderUser.username, role: outsiderUser.role, branchId: outsiderBranchId },
       { id: warehouseUser.id, username: warehouseUser.username, role: warehouseUser.role, branchId: "main_warehouse" },
@@ -543,6 +547,7 @@ describe.sequential("recipe-backed central-kitchen batch materials (development 
     });
 
     fixture = {
+      destinationUser,
       kitchenBranchId,
       requestBranchId,
       outsiderBranchId,
@@ -893,7 +898,7 @@ describe.sequential("recipe-backed central-kitchen batch materials (development 
     await markTransferInTransit(transfer.id);
     const before = await supplyBalances();
     const delivered = await invoke("put", "/api/warehouse/material-transfers/:id/status", {
-      user: fixture.kitchenUser,
+      user: fixture.destinationUser,
       params: { id: String(transfer.id) },
       body: { status: "delivered" },
     });
@@ -922,7 +927,7 @@ describe.sequential("recipe-backed central-kitchen batch materials (development 
     // dispatch the warehouse's pending request.
     for (const status of ["approved", "in_transit"]) {
       const denied = await invoke("put", "/api/warehouse/material-transfers/:id/status", {
-        user: fixture.kitchenUser,
+        user: fixture.destinationUser,
         params: { id: String(transfer.id) },
         body: { status },
       });
@@ -956,7 +961,7 @@ describe.sequential("recipe-backed central-kitchen batch materials (development 
 
     const beforeDelivery = await supplyBalances();
     const delivered = await invoke("put", "/api/warehouse/material-transfers/:id/status", {
-      user: fixture.kitchenUser,
+      user: fixture.destinationUser,
       params: { id: String(transfer.id) },
       body: { status: "delivered" },
     });
@@ -984,7 +989,7 @@ describe.sequential("recipe-backed central-kitchen batch materials (development 
     const beforePrematureReceipt = await supplyBalances();
     const prematureKey = key("premature-receipt");
     const premature = await invoke("post", "/api/warehouse/material-transfers/:id/confirm-delivery", {
-      user: fixture.kitchenUser,
+      user: fixture.destinationUser,
       params: { id: String(pending.transfer.id) },
       headers: { "Idempotency-Key": prematureKey },
       body: {

@@ -24,3 +24,9 @@ Keyboard-sensitive dialog geometry must update without height/top transitions or
 **Why:** Generic dialog animation retained a taller shell during viewport shrink even after correct bounds were calculated. CSS viewport units also differed from measured visible height during resize.
 
 **How to apply:** Use measured pixel bounds, remeasure after layout, and disable geometry animations for these shells; verify immediately after shrink rather than waiting for transitions to hide the defect.
+
+Pending-submit browser fixtures must not silently return to idle on a short timer; use explicit success/failure simulation.
+
+**Why:** A timer reset during repeated-tap testing looked like an in-flight duplicate. A real workflow must also protect the interval between successful submission and refreshed detail, not just the pending network request.
+
+**How to apply:** Verify synchronous tap exclusion and retry-after-failure separately from successful transition/remount behavior; distinguish a fixture reset from an actual duplicate request.

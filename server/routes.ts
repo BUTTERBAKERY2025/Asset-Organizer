@@ -195,7 +195,7 @@ import { sendWhatsAppMessage, isTwilioConfigured } from "./twilio-service";
 import { recipientsSchema as reportRecipientsSchema } from "./scheduler";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertContractMilestoneSchema, insertContractVariationSchema, insertContractGuaranteeSchema, insertContractTemplateSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
-import { registerKitchenRoutingRoutes, kitchenActionAllowed, getKitchenRouting, getKitchenRoutingBatch } from "./central-kitchen-routing";
+import { registerKitchenRoutingRoutes, kitchenActionAllowed, getKitchenRouting, getKitchenRoutingBatch, routingActor, routingPersonEligible } from "./central-kitchen-routing";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache, HR_MANAGER_MODULES, HR_SPECIALIST_PERMISSIONS, FINANCIAL_MANAGER_PERMISSIONS, OPERATIONS_MANAGER_PERMISSIONS, BRANCH_MANAGER_INTRINSIC_PERMISSIONS, hasCrossBranchHrReadAccess } from "./auth";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
@@ -7839,6 +7839,10 @@ export async function registerRoutes(
             .where(eq(centralKitchenOrders.id, id.data)).for("update");
           if (!order) throw new CentralKitchenLiveError("الطلب غير موجود", 404);
           if (!(await canAccessBranch(req, order.requestBranchId))) throw new CentralKitchenLiveError("التعديل والإلغاء للفرع الطالب فقط", 403);
+          const currentActor = await routingActor(tx, actor.id);
+          if (!currentActor || !routingPersonEligible(currentActor, "edit")) {
+            throw new CentralKitchenLiveError("تم سحب صلاحية تعديل طلب المطبخ", 403);
+          }
           const events = await tx.select().from(centralKitchenOrderEvents)
             .where(eq(centralKitchenOrderEvents.orderId, order.id));
           const replay = events.find(event => event.idempotencyKey === key.key);
@@ -7982,7 +7986,7 @@ export async function registerRoutes(
     const routing = await getKitchenRouting(db, order.centralKitchenId);
     return {
       ...order,
-      routingWarning: routing.hasKitchenResponsible ? null : "لم يتم تعيين مسؤول أو نائب مؤهل للمطبخ؛ تم تنبيه العمليات",
+      routingWarning: routing.hasKitchenResponsible ? null : "لا يوجد مدير إنتاج وتطوير نشط بصلاحية الاعتماد؛ تم تنبيه العمليات",
       orderingSchedule: getOrderSchedule(order, orderingPolicy),
       requestBranchName: branchNames.get(order.requestBranchId) || null,
       centralKitchenName: branchNames.get(order.centralKitchenId) || null,
@@ -8789,11 +8793,34 @@ export async function registerRoutes(
         if (!(await canAccessCentralKitchenOrder(req, detail as { requestBranchId: string; centralKitchenId: string }))) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا الطلب" });
         }
+        const actorId = getCurrentUser(req).id;
         const allowedActions = Object.fromEntries(await Promise.all(
           [["approve", "requested"], ["prepare", "approved"], ["dispatch", "prepared"], ["receive", "dispatched"]]
             .map(async ([action, status]) => [action, (detail as any).status === status
-              && await kitchenActionAllowed(db, getCurrentUser(req).id, detail, action)]),
+              && await canAccessBranch(req, action === "receive" ? detail.requestBranchId : detail.centralKitchenId)
+              && await kitchenActionAllowed(db, actorId, detail, action)]),
         ));
+        const actor = await routingActor(db, actorId);
+        const branchEditor = !!actor && routingPersonEligible(actor, "edit")
+          && await canAccessBranch(req, detail.requestBranchId);
+        const committed = !!(
+          detail.linkedBatches.length || detail.allocations.length || detail.shadowInventoryEntries.length
+          || detail.items.some((item: any) =>
+            item.preparedQuantity != null || item.dispatchedQuantity != null || item.receivedQuantity != null)
+          || (await db.select({ id: centralKitchenInventoryMovements.id })
+            .from(centralKitchenInventoryMovements).where(eq(centralKitchenInventoryMovements.orderId, detail.id))
+            .limit(1)).length
+        );
+        const requestEditable = branchEditor && !centralKitchenRequestChangeBlock(detail.status, true, committed)
+          && detail.items.every((item: any) => item.productId != null || item.warehouseItemId != null)
+          && !(await db.select({ id: centralKitchenDemandActions.id }).from(centralKitchenDemandActions)
+            .where(eq(centralKitchenDemandActions.replacementOrderId, detail.id)).limit(1)).length
+          && !(await validateCentralKitchenCatalogIdentities(detail.items));
+        allowedActions.edit = !!requestEditable;
+        allowedActions.cancel = !!(branchEditor && !centralKitchenRequestChangeBlock(detail.status, false, committed));
+        allowedActions.resolveDiscrepancy = !!(detail.status === "received" && detail.discrepancyStatus === "open"
+          && await canAccessBranch(req, detail.requestBranchId)
+          && await kitchenActionAllowed(db, actorId, detail, "resolve_discrepancy"));
         return res.json({ ...detail, allowedActions });
       } catch (error) {
         console.error("Error fetching central kitchen order:", error);
@@ -9428,7 +9455,8 @@ export async function registerRoutes(
         const [order] = await db.select().from(centralKitchenOrders)
           .where(eq(centralKitchenOrders.id, id.data)).limit(1);
         if (!order) return res.status(404).json({ error: "الطلب غير موجود" });
-        if (!isUserAdmin(req) && !(await canAccessBranch(req, order.requestBranchId))) {
+        if (!(await canAccessBranch(req, order.requestBranchId))
+          || !(await kitchenActionAllowed(db, user.id, order, "resolve_discrepancy"))) {
           return res.status(403).json({ error: "معالجة الفروقات متاحة للفرع المستلم فقط" });
         }
         const [replay] = await db.select({
@@ -9450,6 +9478,9 @@ export async function registerRoutes(
           return res.status(409).json({ error: "لا توجد فروقات مفتوحة لمعالجتها" });
         }
         const transitioned = await db.transaction(async (tx) => {
+          if (!(await kitchenActionAllowed(tx, user.id, order, "resolve_discrepancy"))) {
+            throw new CentralKitchenLiveError("تم سحب صلاحية معالجة الفروقات أو تكليف الاستلام", 403);
+          }
           const [updated] = await tx.update(centralKitchenOrders).set({
             discrepancyStatus: "resolved",
             discrepancyResolvedBy: user.id,
@@ -9485,6 +9516,9 @@ export async function registerRoutes(
         dispatchCentralKitchenNotificationAfterCommit(transitioned.notificationId);
         return res.json(await getCentralKitchenOrderDetail(id.data));
       } catch (error: any) {
+        if (error instanceof CentralKitchenLiveError) {
+          return res.status(error.status).json({ error: error.message });
+        }
         const errorCode = error?.cause?.code || error?.code;
         if (errorCode === "23505") {
           const [replay] = await db.select({

@@ -59,7 +59,8 @@ const SHORTAGE_LABELS: Record<string, string> = {
 
 const value = (input: unknown) => input == null || input === "" ? "—" : String(input);
 const quantity = (input: unknown, unit: string) => `${typeof input === "number" || (typeof input === "string" && input.trim() !== "" && Number.isFinite(Number(input))) ? formatKitchenNumber(input as number | string) : value(input)} ${unit}`;
-const statusLabel = (status: string) => STATUS_LABELS[status?.toLowerCase().replaceAll(" ", "_")] || value(status);
+export const kitchenStatusLabel = (status: string) => STATUS_LABELS[status?.toLowerCase().replaceAll(" ", "_")] || value(status);
+const statusLabel = kitchenStatusLabel;
 const COLORS = { brown: "#5E3A28", orange: "#D9822B", cream: "#FAFAF9", line: "#D6D3D1", ink: "#292524", muted: "#78716C" };
 
 const tableLayout = {
@@ -76,12 +77,17 @@ const tableLayout = {
 
 const headerCell = (text: string) => ({ text, color: COLORS.ink, bold: true, alignment: "center", fontSize: 8.5 });
 const cell = (text: string) => ({ text, alignment: "right", color: COLORS.ink });
+// pdfMake table cells and widths are physically left-to-right even with right-aligned text.
+export const rtlPdfTable = (headers: unknown[], rows: unknown[][], widths: (number | string)[]) => ({
+  widths: [...widths].reverse(),
+  body: [[...headers].reverse(), ...rows.map(row => [...row].reverse())],
+});
 
 function itemNotes(item: PdfOrderItem, shortage: number) {
   return [
     item.notes ? `ملاحظة الصنف: ${item.notes}` : null,
     item.preparationNotes ? `ملاحظة التجهيز: ${item.preparationNotes}` : null,
-    shortage > 0 && item.shortageReason ? `سبب النقص: ${SHORTAGE_LABELS[item.shortageReason] || item.shortageReason}` : null,
+    item.shortageReason ? `سبب النقص المسجل: ${SHORTAGE_LABELS[item.shortageReason] || item.shortageReason}` : null,
     item.dispatchedQuantity != null ? `المرسل: ${quantity(item.dispatchedQuantity, item.unit)}` : null,
     item.receivedQuantity != null ? `المستلم: ${quantity(item.receivedQuantity, item.unit)}` : null,
     item.damagedQuantity != null ? `التالف: ${quantity(item.damagedQuantity, item.unit)}` : null,
@@ -93,14 +99,14 @@ function itemNotes(item: PdfOrderItem, shortage: number) {
 function documentHeader(title: string, documentNumber: string, logoDataUri?: string | null, compact = false) {
   return {
     table: {
-      widths: compact ? [72, "*", 205] : [88, "*", 118],
+       widths: compact ? [205, "*", 72] : [118, "*", 88],
       body: [[
+         { stack: [{ text: "رقم المستند", style: "eyebrow" }, { text: value(documentNumber), bold: true, fontSize: compact ? 10 : 12, color: COLORS.brown, noWrap: true }], alignment: "right", margin: [0, compact ? 2 : 10, 0, 0], fillColor: compact ? "#FAFAF9" : undefined },
+         { stack: [{ text: title, style: "title" }, { text: "Butter Bakery · باتر بيكري", style: "brandLine" }], alignment: "center", margin: [0, compact ? 1 : 5, 0, 0] },
         logoDataUri ? compact
           ? { image: logoDataUri, cover: { width: 72, height: 40, align: "center", valign: "center" }, alignment: "left" }
           : { image: logoDataUri, fit: [76, 58], alignment: "left" }
           : { text: "" },
-        { stack: [{ text: title, style: "title" }, { text: "Butter Bakery · باتر بيكري", style: "brandLine" }], alignment: "center", margin: [0, compact ? 1 : 5, 0, 0] },
-        { stack: [{ text: "رقم المستند", style: "eyebrow" }, { text: value(documentNumber), bold: true, fontSize: compact ? 10 : 12, color: COLORS.brown, noWrap: true }], alignment: "right", margin: [0, compact ? 2 : 10, 0, 0], fillColor: compact ? "#FAFAF9" : undefined },
       ]],
     },
     layout: { hLineColor: () => COLORS.orange, hLineWidth: (index: number) => index === 1 ? 1.25 : 0, vLineWidth: () => 0 },
@@ -126,7 +132,7 @@ function footer(documentNumber: string) {
 
 export function kitchenOrderPdfDefinition(order: PdfKitchenOrder, logoDataUri?: string | null) {
   const items = order.items || [];
-  const itemHeader = ["م", "الصنف", "الوحدة", "المطلوب", "المتوفر", "المجهز", "النقص", "البديل", "الملاحظات"].map(headerCell);
+   const itemHeader = ["م", "الصنف", "الوحدة", "المطلوب", "المتوفر", "المجهز", "المتبقي للتجهيز", "البديل", "الملاحظات"].map(headerCell);
   const itemRows = items.map((item, index) => {
       const prepared = Number(item.preparedQuantity || 0);
       const substitute = Number(item.substituteQuantity || 0);
@@ -148,15 +154,15 @@ export function kitchenOrderPdfDefinition(order: PdfKitchenOrder, logoDataUri?: 
   const closingRows = itemRows.slice(itemRows.length - closingRowCount);
   const operationalText = [
     order.driverName || order.vehicleNumber ? `بيانات الإرسال — السائق: ${value(order.driverName)} · المركبة: ${value(order.vehicleNumber)}` : null,
-    order.discrepancyStatus === "open" || order.discrepancyResolutionNotes ? `الفروقات — ${order.discrepancyStatus === "open" ? "مفتوحة" : "تمت المعالجة"} · ${value(order.discrepancyResolutionNotes)}` : null,
+     order.discrepancyStatus === "open" || order.discrepancyStatus === "resolved" || order.discrepancyResolutionNotes ? `الفروقات — ${order.discrepancyStatus === "open" ? "مفتوحة" : order.discrepancyStatus === "resolved" ? "تمت المعالجة" : value(order.discrepancyStatus)} · ${value(order.discrepancyResolutionNotes)}` : null,
   ].filter(Boolean).join("\n");
   const signatures = {
     table: {
       widths: ["*", "*", "*"],
       body: [[
-        { stack: [{ text: "مسؤول الاستلام", bold: true }, { text: "الاسم: ____________________\nالتوقيع: __________________\nالتاريخ: __________________", margin: [0, 3, 0, 0] }] },
-        { stack: [{ text: "مسؤول الإرسال", bold: true }, { text: "الاسم: ____________________\nالتوقيع: __________________\nالتاريخ: __________________", margin: [0, 3, 0, 0] }] },
-        { stack: [{ text: "مسؤول التجهيز", bold: true }, { text: "الاسم: ____________________\nالتوقيع: __________________\nالتاريخ: __________________", margin: [0, 3, 0, 0] }] },
+         { stack: [{ text: "مسؤول التجهيز · حقول توقيع فارغة", bold: true }, { text: "الاسم: ____________________\nالتوقيع: __________________\nالتاريخ: __________________", margin: [0, 3, 0, 0] }] },
+         { stack: [{ text: "مسؤول الإرسال · حقول توقيع فارغة", bold: true }, { text: "الاسم: ____________________\nالتوقيع: __________________\nالتاريخ: __________________", margin: [0, 3, 0, 0] }] },
+         { stack: [{ text: "مسؤول الاستلام · حقول توقيع فارغة", bold: true }, { text: "الاسم: ____________________\nالتوقيع: __________________\nالتاريخ: __________________", margin: [0, 3, 0, 0] }] },
       ]],
     },
     layout: { hLineColor: () => COLORS.line, vLineColor: () => COLORS.line, hLineWidth: () => 0.5, vLineWidth: () => 0.5, paddingLeft: () => 7, paddingRight: () => 7, paddingTop: () => 5, paddingBottom: () => 5 },
@@ -174,18 +180,18 @@ export function kitchenOrderPdfDefinition(order: PdfKitchenOrder, logoDataUri?: 
         table: {
           widths: ["*", "*", "*"],
           body: [
-            [metaCell("الحالة", statusLabel(order.status)), metaCell("المطبخ المركزي", order.centralKitchenName || order.centralKitchenId), metaCell("الفرع الطالب", order.requestBranchName || order.requestBranchId)],
-            [metaCell("تاريخ ووقت الإنشاء · السعودية", formatSaudiDateTime(order.createdAt)), metaCell("وقت الحاجة", order.neededTime), metaCell("تاريخ الحاجة", order.neededDate)],
+             [metaCell("الفرع الطالب", order.requestBranchName || order.requestBranchId), metaCell("المطبخ المركزي", order.centralKitchenName || order.centralKitchenId), metaCell("الحالة", statusLabel(order.status))],
+             [metaCell("تاريخ الحاجة", order.neededDate), metaCell("وقت الحاجة", order.neededTime), metaCell("تاريخ ووقت الإنشاء · السعودية", formatSaudiDateTime(order.createdAt))],
           ],
         },
         layout: { hLineColor: () => "#FFFFFF", vLineColor: () => "#FFFFFF", hLineWidth: () => 4, vLineWidth: () => 4 },
         margin: [0, 0, 0, 6],
       },
       ...(order.notes ? [{ columns: [{ text: "ملاحظات الطلب", style: "eyebrow", width: 72 }, { text: order.notes }], fillColor: COLORS.cream, margin: [5, 4, 5, 6] }] : []),
-      ...(mainRows.length ? [{ table: { headerRows: 1, widths: [22, 120, 38, 45, 50, 45, 42, 85, "*"], dontBreakRows: true, body: [itemHeader, ...mainRows] }, layout: tableLayout }] : []),
+       ...(mainRows.length ? [{ table: { headerRows: 1, ...rtlPdfTable(itemHeader, mainRows, [22, 120, 38, 45, 50, 45, 65, 85, "*"]), dontBreakRows: true }, layout: tableLayout }] : []),
       {
         stack: [
-          { table: { headerRows: 1, widths: [22, 120, 38, 45, 50, 45, 42, 85, "*"], dontBreakRows: true, body: [itemHeader, ...closingRows] }, layout: tableLayout },
+           { table: { headerRows: 1, ...rtlPdfTable(itemHeader, closingRows, [22, 120, 38, 45, 50, 45, 65, 85, "*"]), dontBreakRows: true }, layout: tableLayout },
           ...(operationalText ? [{ text: operationalText, margin: [3, 6, 3, 0], fontSize: 8.5 }] : []),
           signatures,
         ],
@@ -211,7 +217,7 @@ export function kitchenOrderPrintHtml(order: PdfKitchenOrder, logoDataUri?: stri
     const notes = [
       item.notes ? `ملاحظة الصنف: ${item.notes}` : null,
       item.preparationNotes ? `ملاحظة التجهيز: ${item.preparationNotes}` : null,
-      shortage > 0 && item.shortageReason ? `سبب النقص: ${SHORTAGE_LABELS[item.shortageReason] || item.shortageReason}` : null,
+       item.shortageReason ? `سبب النقص المسجل: ${SHORTAGE_LABELS[item.shortageReason] || item.shortageReason}` : null,
       item.dispatchedQuantity != null ? `المرسل: ${quantity(item.dispatchedQuantity, item.unit)}` : null,
       item.receivedQuantity != null ? `المستلم: ${quantity(item.receivedQuantity, item.unit)}` : null,
       item.damagedQuantity != null ? `التالف: ${quantity(item.damagedQuantity, item.unit)}` : null,
@@ -237,12 +243,12 @@ export function kitchenOrderPrintHtml(order: PdfKitchenOrder, logoDataUri?: stri
     order.driverName || order.vehicleNumber
       ? `بيانات الإرسال — السائق: ${value(order.driverName)} · المركبة: ${value(order.vehicleNumber)}`
       : null,
-    order.discrepancyStatus === "open" || order.discrepancyResolutionNotes
-      ? `الفروقات — ${order.discrepancyStatus === "open" ? "مفتوحة" : "تمت المعالجة"} · ${value(order.discrepancyResolutionNotes)}`
+     order.discrepancyStatus === "open" || order.discrepancyStatus === "resolved" || order.discrepancyResolutionNotes
+       ? `الفروقات — ${order.discrepancyStatus === "open" ? "مفتوحة" : order.discrepancyStatus === "resolved" ? "تمت المعالجة" : value(order.discrepancyStatus)} · ${value(order.discrepancyResolutionNotes)}`
       : null,
   ].filter(Boolean).map(escape).join("<br>");
   const logo = logoDataUri ? `<img src="${escape(logoDataUri)}" alt="Butter Bakery">` : "";
-  const signature = (title: string) => `<div class="signature"><strong>${title}</strong><span>الاسم: ____________________</span><span>التوقيع: __________________</span><span>التاريخ: __________________</span></div>`;
+   const signature = (title: string) => `<div class="signature"><strong>${title} · حقول توقيع فارغة</strong><span>الاسم: ____________________</span><span>التوقيع: __________________</span><span>التاريخ: __________________</span></div>`;
   return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>سند طلب المطبخ المركزي ${escape(order.orderNumber)}</title><style>
 html,body{display:block!important;height:auto!important;margin:0}*{box-sizing:border-box}body{font-family:Arial,"Segoe UI",sans-serif;color:#292524;font-size:9.5pt;line-height:1.28}
 .page-wrap{width:100%;border-collapse:collapse}.page-wrap>thead>tr>th,.page-wrap>tbody>tr>td{border:0;padding:0;background:transparent}.page-wrap>thead{display:table-header-group}.page-wrap>tbody>tr{break-inside:auto!important;page-break-inside:auto!important}
@@ -255,17 +261,17 @@ html,body{display:block!important;height:auto!important;margin:0}*{box-sizing:bo
 </style></head><body><table class="page-wrap"><thead><tr><th><header class="running-header">${logo}<div class="heading"><h1>سند طلب المطبخ المركزي</h1><p>Butter Bakery · باتر بيكري</p></div><div class="document-number"><small>رقم المستند</small><b>${escape(order.orderNumber)}</b></div></header></th></tr></thead><tbody><tr><td>
 <section class="meta"><div><small>الفرع الطالب</small><b>${escape(order.requestBranchName || order.requestBranchId)}</b></div><div><small>المطبخ المركزي</small><b>${escape(order.centralKitchenName || order.centralKitchenId)}</b></div><div><small>الحالة</small><b>${escape(statusLabel(order.status))}</b></div><div><small>تاريخ الحاجة</small><b>${escape(order.neededDate)} · ${escape(order.neededTime)}</b></div><div><small>تاريخ الإنشاء · السعودية</small><b>${escape(formatSaudiDateTime(order.createdAt))}</b></div><div><small>عدد البنود</small><b>${escape(formatKitchenNumber(items.length))}</b></div></section>
 ${order.notes ? `<section class="order-note"><small>ملاحظات الطلب</small><span>${escape(order.notes)}</span></section>` : ""}
-<table class="items"><colgroup><col style="width:3%"><col style="width:16%"><col style="width:5%"><col style="width:6%"><col style="width:7%"><col style="width:6%"><col style="width:5%"><col style="width:11%"><col style="width:41%"></colgroup><thead><tr><th>م</th><th>الصنف</th><th>الوحدة</th><th>المطلوب</th><th>المتوفر</th><th>المجهز</th><th>النقص</th><th>البديل</th><th>الملاحظات</th></tr></thead><tbody>${rows}</tbody></table>
+ <table class="items"><colgroup><col style="width:3%"><col style="width:16%"><col style="width:5%"><col style="width:6%"><col style="width:7%"><col style="width:6%"><col style="width:10%"><col style="width:11%"><col style="width:36%"></colgroup><thead><tr><th>م</th><th>الصنف</th><th>الوحدة</th><th>المطلوب</th><th>المتوفر</th><th>المجهز</th><th>المتبقي للتجهيز</th><th>البديل</th><th>الملاحظات</th></tr></thead><tbody>${rows}</tbody></table>
 ${operationalNotes ? `<section class="operational">${operationalNotes}</section>` : ""}
 <section class="signatures">${signature("مسؤول الاستلام")}${signature("مسؤول الإرسال")}${signature("مسؤول التجهيز")}</section>
 </td></tr></tbody></table><footer class="footer"><span class="page-number"></span><span>Butter Bakery · ${escape(order.orderNumber)}</span></footer><script>window.onload=()=>window.print()<\/script></body></html>`;
 }
 
 export function preparationSheetPdfDefinition(sheet: PreparationSheet, logoDataUri?: string | null) {
-  const body = [
+   const body = [
     ["الصنف", "الوحدة", "المطلوب", "المعتمد", "الأصلي", "البديل", "لم يُحسم", "نقص فعلي", "تفاصيل الطلبات"].map(headerCell),
     ...sheet.groups.map(group => [
-      `${group.productName}\n${group.provenance === "substitute" ? "بديل مجهز" : "صنف أصلي"}`,
+       `${group.productName}\n${group.identity} · ${group.provenance === "substitute" ? "بديل مجهز" : "صنف أصلي"}`,
       value(group.unit),
       formatKitchenNumber(group.requestedQuantity),
       formatKitchenNumber(group.approvedQuantity),
@@ -283,7 +289,7 @@ export function preparationSheetPdfDefinition(sheet: PreparationSheet, logoDataU
           order.unpreparedQuantity ? `لم يُحسم ${formatKitchenNumber(order.unpreparedQuantity)}` : null,
           order.actualShortageQuantity ? `نقص فعلي ${formatKitchenNumber(order.actualShortageQuantity)}` : null,
           order.shortageReason ? SHORTAGE_LABELS[order.shortageReason] || order.shortageReason : null,
-          order.preparationNotes,
+           order.preparationNotes,
         ].filter(Boolean);
         return details.join(" · ");
       }).join("\n"),
@@ -299,7 +305,7 @@ export function preparationSheetPdfDefinition(sheet: PreparationSheet, logoDataU
       documentHeader("ورقة التجهيز المجمعة", `${formatKitchenNumber(sheet.orders.length)} طلبات`, logoDataUri),
       { text: `${formatKitchenNumber(sheet.orders.length)} طلبات · لقطة ${formatSaudiDateTime(sheet.generatedAt)} بتوقيت السعودية`, alignment: "center", color: COLORS.muted, margin: [0, 0, 0, 10] },
       { text: sheet.orders.map(order => `${order.orderNumber} · ${order.requestBranchName || "—"} · ${statusLabel(order.status)}`).join("\n"), margin: [0, 0, 0, 10] },
-      { table: { headerRows: 1, widths: [82, 38, 45, 45, 45, 45, 45, 45, "*"], dontBreakRows: true, body }, layout: tableLayout },
+       { table: { headerRows: 1, ...rtlPdfTable(body[0], body.slice(1), [82, 38, 45, 45, 45, 45, 45, 45, "*"]), dontBreakRows: true }, layout: tableLayout },
     ],
     styles: {
       title: { fontSize: 18, bold: true, alignment: "center", color: COLORS.brown },

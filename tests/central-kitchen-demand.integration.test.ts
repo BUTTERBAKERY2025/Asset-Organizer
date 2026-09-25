@@ -48,6 +48,8 @@ function route(method: string, path: string) {
 
 async function invoke(method: string, path: string, options: { user: any; params?: any; query?: any; body?: any }) {
   const output: any = { status: 200, body: undefined, headers: {} };
+  let complete!: () => void;
+  const completed = new Promise<void>(resolve => { complete = resolve; });
   const req: any = {
     currentUser: options.user,
     params: options.params || {},
@@ -57,9 +59,10 @@ async function invoke(method: string, path: string, options: { user: any; params
   const res: any = {
     status(value: number) { output.status = value; return res; },
     set(name: string, value: string) { output.headers[name.toLowerCase()] = value; return res; },
-    json(value: any) { output.body = value; return res; },
+    json(value: any) { output.body = value; complete(); return res; },
   };
   await route(method, path)(req, res);
+  await completed;
   return output;
 }
 
@@ -92,7 +95,7 @@ describe.sequential("central kitchen demand live SQL handlers", () => {
     const kitchenBranch = `demand-kitchen-${suffix}`;
     const outsiderBranch = `demand-outsider-${suffix}`;
     const receiver = { id: `demand-receiver-${suffix}`, role: "employee", branchId: requestBranch, testAllowedBranchIds: [requestBranch] };
-    const owner = { id: `demand-owner-${suffix}`, role: "employee", branchId: kitchenBranch, testAllowedBranchIds: [kitchenBranch] };
+    const owner = { id: `demand-owner-${suffix}`, role: "production_development_manager", branchId: kitchenBranch, testAllowedBranchIds: [kitchenBranch] };
     const outsider = { id: `demand-outsider-user-${suffix}`, role: "employee", branchId: outsiderBranch, testAllowedBranchIds: [outsiderBranch] };
     await databaseState.db.insert(schema.branches).values([
       { id: requestBranch, name: "Demand request" },
@@ -228,11 +231,11 @@ describe.sequential("central kitchen demand live SQL handlers", () => {
     const commitmentId = fixture.commitments[1].id;
     const invalidOwner = await invoke("post", "/api/central-kitchen-demand/:id/actions", {
       user: fixture.owner, params: { id: String(commitmentId) },
-      body: { type: "replacement", quantity: "2", dueDate: "2026-02-01", responsibleUserId: fixture.outsider.id, idempotencyKey: "replacement-bad-owner" },
+      body: { type: "replacement", quantity: "2", dueDate: "2098-02-01", responsibleUserId: fixture.outsider.id, idempotencyKey: "replacement-bad-owner" },
     });
     expect(invalidOwner.status).toBe(400);
 
-    const body = { type: "replacement", quantity: "2", dueDate: "2026-02-01", responsibleUserId: fixture.owner.id, idempotencyKey: "replacement-good-owner" };
+    const body = { type: "replacement", quantity: "2", dueDate: "2098-02-01", responsibleUserId: fixture.owner.id, idempotencyKey: "replacement-good-owner" };
     const created = await invoke("post", "/api/central-kitchen-demand/:id/actions", {
       user: fixture.owner, params: { id: String(commitmentId) }, body,
     });

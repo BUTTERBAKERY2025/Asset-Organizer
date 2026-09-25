@@ -13,6 +13,7 @@ import {
   preparationSheetPdfDefinition,
   type PdfKitchenOrder,
 } from "./kitchen-order-pdf";
+import { downloadKitchenExcel } from "./kitchen-order-excel";
 
 function Quantity({ label, value, tone = "default" }: { label: string; value: number; tone?: "default" | "warning" | "danger" }) {
   const tones = {
@@ -68,7 +69,7 @@ export function SheetPreviewDialog({ sheet, open, onOpenChange, canPrint, canExp
 }) {
   const { toast } = useToast();
   const [actionError, setActionError] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<"pdf" | "excel" | null>(null);
   const dialogStyle = useVisualViewportDialog({ open, maxHeight: 900, viewportFraction: 0.94 });
   if (!sheet) return null;
   const print = async () => {
@@ -79,13 +80,20 @@ export function SheetPreviewDialog({ sheet, open, onOpenChange, canPrint, canExp
       return;
     }
     setActionError(null);
-    const logo = await getButterBakeryLogoDataUri();
-    popup.document.write(preparationSheetPrintHtml(sheet, logo));
-    popup.document.close();
+    try {
+      const logo = await getButterBakeryLogoDataUri();
+      popup.document.write(preparationSheetPrintHtml(sheet, logo));
+      popup.document.close();
+    } catch (error) {
+      popup.close();
+      const message = error instanceof Error ? error.message : "تعذرت الطباعة";
+      setActionError(message);
+      toast({ title: "تعذرت الطباعة", description: message, variant: "destructive" });
+    }
   };
   const exportPdf = async () => {
     try {
-      setExporting(true);
+       setExporting("pdf");
        const logo = await getButterBakeryLogoDataUri();
        await downloadKitchenPdf(preparationSheetPdfDefinition(sheet, logo), `ورقة-التجهيز-${sheet.generatedAt.slice(0, 10)}.pdf`);
       setActionError(null);
@@ -95,11 +103,25 @@ export function SheetPreviewDialog({ sheet, open, onOpenChange, canPrint, canExp
       setActionError(message);
       toast({ title: "تعذر تصدير PDF", description: message, variant: "destructive" });
     } finally {
-      setExporting(false);
+       setExporting(null);
+    }
+  };
+  const exportExcel = async () => {
+    try {
+      setExporting("excel");
+      await downloadKitchenExcel("sheet", sheet);
+      setActionError(null);
+      toast({ title: "تم تنزيل ملف Excel" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "تعذر إنشاء ملف Excel";
+      setActionError(message);
+      toast({ title: "تعذر تصدير Excel", description: message, variant: "destructive" });
+    } finally {
+      setExporting(null);
     }
   };
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent dir="rtl" style={{ ...dialogStyle, width: "calc(100vw - 1rem)", maxWidth: "72rem", display: "flex", flexDirection: "column" }} className="box-border h-[94dvh] min-w-0 gap-0 overflow-hidden p-0 sm:rounded-xl">
-    <DialogHeader className="shrink-0 min-w-0 break-words border-b px-4 py-4 pl-10 text-right sm:px-6"><DialogTitle className="leading-normal">معاينة ورقة التجهيز المجمعة</DialogTitle><DialogDescription className="break-words">{formatKitchenNumber(sheet.orders.length)} طلبات · لقطة {formatKitchenSaudiDateTime(sheet.generatedAt)} · راجع الكميات أولاً، ثم اختر الطباعة أو تصدير PDF.</DialogDescription></DialogHeader>
+    <DialogHeader className="shrink-0 min-w-0 break-words border-b px-4 py-4 pl-10 text-right sm:px-6"><DialogTitle className="leading-normal">معاينة ورقة التجهيز المجمعة</DialogTitle><DialogDescription className="break-words">{formatKitchenNumber(sheet.orders.length)} طلبات · لقطة {formatKitchenSaudiDateTime(sheet.generatedAt)} · راجع الكميات أولاً، ثم اختر الطباعة أو التصدير.</DialogDescription></DialogHeader>
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-3 sm:px-6">
     <div role="status" className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs leading-5 text-sky-900">حالة اللقطة: محدثة وقت الإنشاء. «لم يُحسم» يعني أن التجهيز لم يكتمل بعد، ولا يُعد نقصاً فعلياً.</div>
     <div className="space-y-3 md:hidden" aria-label="بطاقات ورقة التجهيز">{sheet.groups.map(group => <PreparationGroupCard key={`${group.provenance}:${group.identity}:${group.unit}`} group={group} />)}</div>
@@ -108,7 +130,7 @@ export function SheetPreviewDialog({ sheet, open, onOpenChange, canPrint, canExp
       <td className="space-y-2 p-2">{group.orders.map(order => <div key={order.id}><a className="font-medium text-primary underline" href={`/central-kitchen-orders?orderId=${encodeURIComponent(String(order.id))}`}>{order.orderNumber}</a> · {order.branchName}<span className="block text-xs text-muted-foreground">مطلوب {order.requestedQuantity} · أصلي {order.preparedQuantity}{order.substitutedQuantity ? ` · بديل ${order.substitutedQuantity} ${order.substituteUnit || group.unit} — ${order.substituteProductName}` : ""}{order.unpreparedQuantity ? ` · لم يُحسم ${order.unpreparedQuantity}` : ""}{order.actualShortageQuantity ? ` · نقص فعلي ${order.actualShortageQuantity}` : ""}{order.shortageReason ? ` · ${SHORTAGE_LABELS[order.shortageReason] || order.shortageReason}` : ""}{order.preparationNotes ? ` · ${order.preparationNotes}` : ""}</span></div>)}</td>
     </tr>)}</tbody></table></div>
     {actionError && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">{actionError}</p>}
-    </div><div data-testid="sheet-preview-controls" className="flex shrink-0 min-w-0 flex-col gap-2 border-t bg-background px-3 py-3 sm:flex-row sm:justify-end sm:px-6">{canPrint && <Button className="min-h-11 w-full sm:w-auto" onClick={print}><Printer className="ml-1 h-4 w-4" />طباعة</Button>}{canExport && <Button data-testid="sheet-export-pdf" variant="outline" className="min-h-11 w-full sm:w-auto" disabled={exporting} onClick={() => void exportPdf()}>{exporting ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <Download className="ml-1 h-4 w-4" />}{exporting ? "جارٍ إنشاء PDF…" : "تصدير PDF"}</Button>}</div>
+    </div><div data-testid="sheet-preview-controls" className="flex shrink-0 min-w-0 flex-col gap-2 border-t bg-background px-3 py-3 sm:flex-row sm:justify-end sm:px-6">{canPrint && <Button className="min-h-11 w-full sm:w-auto" onClick={() => void print()}><Printer className="ml-1 h-4 w-4" />طباعة</Button>}{canExport && <><Button data-testid="sheet-export-pdf" variant="outline" className="min-h-11 w-full sm:w-auto" disabled={!!exporting} onClick={() => void exportPdf()}>{exporting === "pdf" ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <Download className="ml-1 h-4 w-4" />}{exporting === "pdf" ? "جارٍ إنشاء PDF…" : "تصدير PDF"}</Button><Button data-testid="sheet-export-excel" variant="outline" className="min-h-11 w-full sm:w-auto" disabled={!!exporting} onClick={() => void exportExcel()}>{exporting === "excel" ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <Download className="ml-1 h-4 w-4" />}{exporting === "excel" ? "جارٍ إنشاء Excel…" : "تصدير Excel"}</Button></>}</div>
   </DialogContent></Dialog>;
 }
 
@@ -119,11 +141,11 @@ export function OrderActionsMenu({ order, canPrint, canExport, onPrint }: {
     onPrint: () => boolean | Promise<boolean>;
 }) {
   const { toast } = useToast();
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<"pdf" | "excel" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const exportPdf = async () => {
     try {
-      setExporting(true);
+       setExporting("pdf");
        const logo = await getButterBakeryLogoDataUri();
        await downloadKitchenPdf(kitchenOrderPdfDefinition(order, logo), `طلب-المطبخ-${order.orderNumber}.pdf`);
       setActionError(null);
@@ -133,12 +155,26 @@ export function OrderActionsMenu({ order, canPrint, canExport, onPrint }: {
       setActionError(message);
       toast({ title: "تعذر تصدير PDF", description: message, variant: "destructive" });
     } finally {
-      setExporting(false);
+       setExporting(null);
+    }
+  };
+  const exportExcel = async () => {
+    try {
+      setExporting("excel");
+      await downloadKitchenExcel("order", order);
+      setActionError(null);
+      toast({ title: "تم تنزيل ملف Excel" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "تعذر إنشاء ملف Excel";
+      setActionError(message);
+      toast({ title: "تعذر تصدير Excel", description: message, variant: "destructive" });
+    } finally {
+      setExporting(null);
     }
   };
   return <div className="flex flex-wrap items-center justify-end gap-2">
-    {canPrint && <Button data-testid="order-print" size="sm" variant="outline" className="min-h-11" onClick={async () => { if (!await onPrint()) { const message = "حظر المتصفح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة."; setActionError(message); toast({ title: "حظر المتصفح نافذة الطباعة", description: message, variant: "destructive" }); } else setActionError(null); }}><Printer className="ml-1 h-4 w-4" />طباعة</Button>}
-    {canExport && <Button data-testid="order-export-pdf" size="sm" variant="outline" className="min-h-11" disabled={exporting} onClick={() => void exportPdf()}>{exporting ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <Download className="ml-1 h-4 w-4" />}{exporting ? "جارٍ إنشاء PDF…" : "تصدير PDF"}</Button>}
+    {canPrint && <Button data-testid="order-print" size="sm" variant="outline" className="min-h-11" onClick={async () => { try { if (!await onPrint()) { const message = "حظر المتصفح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة."; setActionError(message); toast({ title: "حظر المتصفح نافذة الطباعة", description: message, variant: "destructive" }); } else setActionError(null); } catch (error) { const message = error instanceof Error ? error.message : "تعذرت الطباعة"; setActionError(message); toast({ title: "تعذرت الطباعة", description: message, variant: "destructive" }); } }}><Printer className="ml-1 h-4 w-4" />طباعة</Button>}
+    {canExport && <><Button data-testid="order-export-pdf" size="sm" variant="outline" className="min-h-11" disabled={!!exporting} onClick={() => void exportPdf()}>{exporting === "pdf" ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <Download className="ml-1 h-4 w-4" />}{exporting === "pdf" ? "جارٍ إنشاء PDF…" : "تصدير PDF"}</Button><Button data-testid="order-export-excel" size="sm" variant="outline" className="min-h-11" disabled={!!exporting} onClick={() => void exportExcel()}>{exporting === "excel" ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <Download className="ml-1 h-4 w-4" />}{exporting === "excel" ? "جارٍ إنشاء Excel…" : "تصدير Excel"}</Button></>}
     {actionError && <span role="alert" className="w-full text-xs text-red-700">{actionError}</span>}
   </div>;
 }

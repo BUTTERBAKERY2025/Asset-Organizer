@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { isValidKitchenQuantity } from "./order-line-editor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { CentralKitchenCatalogItem } from "@shared/central-kitchen-catalog";
 import {
@@ -205,7 +206,8 @@ export function PreparationEditor({
       const requested = numberValue(item?.requestedQuantity);
       const substitute = Number(draft.substituteQuantity);
       const mode = getPrepareFulfillmentMode(item, inventoryMode);
-      if (!Number.isFinite(substitute) || substitute < 0) return "أدخل كميات صحيحة غير سالبة.";
+       const integerOnly = item.productId != null;
+       if (!isValidKitchenQuantity(draft.substituteQuantity, integerOnly, true)) return "أدخل كمية بديل صحيحة غير سالبة بوحدة الصنف المطلوب.";
       let prepared = Number(draft.preparedQuantity);
       if (mode === "mixed") {
         const query = readinessQueries[index];
@@ -218,7 +220,7 @@ export function PreparationEditor({
         if (checked.error) return `${item.productName}: ${checked.error}`;
         prepared = checked.totalPrepared;
       }
-      if (!Number.isFinite(prepared) || prepared < 0) return "أدخل كميات صحيحة غير سالبة.";
+       if (mode !== "mixed" && !isValidKitchenQuantity(draft.preparedQuantity, integerOnly, true)) return "أدخل كمية تجهيز صحيحة غير سالبة.";
       if (prepared + substitute > requested + 0.000001) return `إجمالي تجهيز ${item.productName} يتجاوز المطلوب.`;
       if (substitute > 0 && (!draft.substituteProductName.trim() || !draft.substituteUnit.trim())) return "أدخل اسم ووحدة المنتج البديل.";
       if (prepared + substitute < requested - 0.000001 && !draft.shortageReason) return "حدد سبب النقص لكل بند غير مكتمل.";
@@ -272,13 +274,13 @@ export function PreparationEditor({
         {mode === "mixed" ? <>
           <div className="mb-3 rounded-md border border-violet-200 bg-violet-50/60 p-3 text-xs text-violet-950"><p className="font-semibold">مصدر التجهيز المختلط</p><p className="mt-1">الإنتاج يُحتسب من دفعة وصفة مكتملة فقط. الإجمالي يستهلك مخزون المنتج النهائي مرة واحدة، ولا يضيف استهلاك مخزون إنتاج إضافياً.</p></div>
           <div className="grid gap-3 md:grid-cols-2">
-            <div><Label className="text-xs">جاهز من المخزون</Label><Input className="mt-1" type="number" min="0" max={requested} step="1" value={draft.preparedFromStock} onChange={event => update(index, { preparedFromStock: event.target.value })} /></div>
-            <div><Label className="text-xs">إنتاج جديد مكتمل مرتبط بالطلب</Label><Input className="mt-1" type="number" min="0" max={requested} step="1" value={draft.preparedFromProduction} onChange={event => update(index, { preparedFromProduction: event.target.value })} /><p className="mt-1 text-[11px] text-muted-foreground">لا تُقبل هذه الكمية إلا من دليل دفعة مكتملة مرتبط بهذا البند.</p></div>
+             <div><Label className="text-xs" htmlFor={`stock-${draft.itemId}`}>جاهز من المخزون</Label><Input id={`stock-${draft.itemId}`} className="mt-1 min-h-11" type="number" inputMode="numeric" min="0" max={requested} step="1" value={draft.preparedFromStock} onChange={event => update(index, { preparedFromStock: event.target.value })} /></div>
+             <div><Label className="text-xs" htmlFor={`production-${draft.itemId}`}>إنتاج جديد مكتمل مرتبط بالطلب</Label><Input id={`production-${draft.itemId}`} className="mt-1 min-h-11" type="number" inputMode="numeric" min="0" max={requested} step="1" value={draft.preparedFromProduction} onChange={event => update(index, { preparedFromProduction: event.target.value })} /><p className="mt-1 text-[11px] text-muted-foreground">لا تُقبل هذه الكمية إلا من دليل دفعة مكتملة مرتبط بهذا البند.</p></div>
           </div>
           <ProductionReadiness query={query} onRetry={() => query.refetch()} />
-        </> : <div><Label className="text-xs">الكمية الأصلية المجهزة</Label><Input className="mt-1" type="number" min="0" max={requested} step="any" value={draft.preparedQuantity} onChange={event => update(index, { preparedQuantity: event.target.value })} /></div>}
+         </> : <div><Label className="text-xs" htmlFor={`prepared-${draft.itemId}`}>الكمية الأصلية المجهزة</Label><Input id={`prepared-${draft.itemId}`} className="mt-1 min-h-11" type="number" inputMode={item.productId != null ? "numeric" : "decimal"} min="0" max={requested} step={item.productId != null ? "1" : "0.000001"} value={draft.preparedQuantity} onChange={event => update(index, { preparedQuantity: event.target.value })} /></div>}
         <div className="mt-3 grid gap-3 md:grid-cols-3">
-          <div><Label className="text-xs">كمية البديل</Label><Input className="mt-1" type="number" min="0" max={requested} step="any" value={draft.substituteQuantity} onChange={event => update(index, { substituteQuantity: event.target.value })} /></div>
+           <div><Label className="text-xs" htmlFor={`substitute-${draft.itemId}`}>كمية البديل</Label><Input id={`substitute-${draft.itemId}`} className="mt-1 min-h-11" type="number" inputMode={item.productId != null ? "numeric" : "decimal"} min="0" max={requested} step={item.productId != null ? "1" : "0.000001"} value={draft.substituteQuantity} onChange={event => update(index, { substituteQuantity: event.target.value })} /></div>
           <div><Label className="text-xs">اختيار البديل</Label><SearchableSelect className="mt-1" triggerClassName="h-10" disabled={Number(draft.substituteQuantity) <= 0} value={draft.substituteWarehouseItemId !== undefined ? `warehouse:${draft.substituteWarehouseItemId}` : draft.substituteProductId !== undefined ? `product:${draft.substituteProductId}` : draft.substituteManualMode ? "__manual" : undefined} onValueChange={value => { if (value === "__manual") update(index, { substituteManualMode: true, substituteProductId: undefined, substituteWarehouseItemId: undefined, substituteProductName: "" }); else { const selected = products.find(entry => catalogKey(entry) === value); if (selected) { const source = selected.source; update(index, { substituteManualMode: false, substituteProductId: source === "product" ? selected.id : undefined, substituteWarehouseItemId: source === "warehouse" ? selected.id : undefined, substituteProductName: selected.name, substituteUnit: item.unit }); } } }} options={[{ value: "__manual", label: "بديل يدوي", badge: "يدوي" }, ...products.map(product => ({ value: catalogKey(product), label: product.name, sublabel: product.sku, badge: sourceLabel(product.source) }))]} placeholder="اختر البديل" searchPlaceholder="ابحث عن بديل..." /><Input className="mt-2" disabled={Number(draft.substituteQuantity) <= 0 || !draft.substituteManualMode} value={draft.substituteProductName} onChange={event => update(index, { substituteProductName: event.target.value })} placeholder="اسم البديل اليدوي" /></div>
           <div><Label className="text-xs">وحدة احتساب البديل</Label><Input className="mt-1" disabled value={draft.substituteUnit} /><p className="mt-1 text-[11px] text-muted-foreground">مطابقة لوحدة الطلب</p></div>
         </div>

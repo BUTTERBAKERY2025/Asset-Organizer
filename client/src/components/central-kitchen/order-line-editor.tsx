@@ -146,20 +146,26 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
   const selectedKeys = new Set(items.map(item => item.warehouseItemId !== undefined ? `warehouse:${item.warehouseItemId}` : item.productId !== undefined ? `product:${item.productId}` : "").filter(Boolean));
   const visibleItems = items.map((item, index) => ({ item, index })).filter(({ item }) => !isBlankDraftLine(item));
   const catalogResults = useMemo(() => filterKitchenCatalog(products, search, source), [products, search, source]);
-  const focusQuantity = (index: number) => requestAnimationFrame(() =>
-    requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`#request-qty-${index}`)?.focus()));
-  const addCatalogItem = (selected: CentralKitchenCatalogItem, focus = false) => {
+   const focusQuantity = (index: number) => requestAnimationFrame(() =>
+     requestAnimationFrame(() => {
+       const input = document.querySelector<HTMLInputElement>(`#request-qty-${index}`);
+       input?.scrollIntoView({ block: "center", behavior: "smooth" });
+       input?.focus({ preventScroll: true });
+     }));
+   const addCatalogItem = (selected: CentralKitchenCatalogItem, _focus = false) => {
     const existingIndex = items.findIndex(item => selected.source === "product"
       ? item.productId === selected.id
       : item.warehouseItemId === selected.id);
     if (existingIndex >= 0) {
-      if (focus) focusQuantity(existingIndex);
+       focusQuantity(existingIndex);
       return;
     }
     const blankIndex = items.findIndex(isBlankDraftLine);
     const nextIndex = blankIndex >= 0 ? blankIndex : items.length;
     onChange(addKitchenCatalogItem(items, selected));
-    if (focus) focusQuantity(nextIndex);
+     // Bring the newly added row into view on narrow screens instead of leaving it
+     // below the catalog list; the search text remains available for another item.
+     focusQuantity(nextIndex);
   };
   const addManualItem = () => {
     const blankIndex = items.findIndex(isBlankDraftLine);
@@ -170,8 +176,11 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
       : [...items, line];
     const nextIndex = blankIndex >= 0 ? blankIndex : items.length;
     onChange(next);
-    requestAnimationFrame(() => requestAnimationFrame(() =>
-      document.querySelector<HTMLInputElement>(`#manual-name-${nextIndex}`)?.focus()));
+     requestAnimationFrame(() => requestAnimationFrame(() => {
+       const input = document.querySelector<HTMLInputElement>(`#manual-name-${nextIndex}`);
+       input?.scrollIntoView({ block: "center", behavior: "smooth" });
+       input?.focus({ preventScroll: true });
+     }));
   };
   const removeItem = (index: number) => {
     const next = items.filter((_, itemIndex) => itemIndex !== index);
@@ -196,9 +205,9 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
       <Button type="button" variant="outline" size="sm" onClick={onRetryCatalog}>إعادة المحاولة</Button>
     </div>}
     {!catalogLoading && !catalogError && products.length === 0 && <div className="border-b px-4 py-3 text-sm text-muted-foreground">لا توجد أصناف متاحة حالياً. استخدم الإدخال اليدوي عند الحاجة فقط.</div>}
-    <div className="grid min-h-[28rem] lg:grid-cols-[minmax(260px,.8fr)_minmax(0,1.4fr)]">
+     <div className="grid min-w-0 lg:min-h-[28rem] lg:grid-cols-[minmax(260px,.8fr)_minmax(0,1.4fr)]">
       <section className="border-b border-border bg-muted/10 p-3 lg:border-b-0 lg:border-l" aria-label="كتالوج أصناف المطبخ">
-        <div className="sticky top-[4.5rem] z-[5] space-y-2 bg-card pb-3">
+         <div className="space-y-2 bg-card pb-3">
           <Label htmlFor="kitchen-catalog-search" className="sr-only">بحث في كتالوج المطبخ</Label>
           <div className="relative">
             <Search className="absolute right-3 top-3.5 h-4 w-4 text-muted-foreground" />
@@ -226,7 +235,7 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
           </div>
           <p className="text-[11px] text-muted-foreground">Enter يضيف أول نتيجة غير مختارة وينقل المؤشر إلى كميتها. لا يرسل الطلب.</p>
         </div>
-        <div className="max-h-[22rem] space-y-1 overflow-y-auto overscroll-contain lg:max-h-[34rem]" aria-live="polite">
+         <div className="max-h-[10rem] space-y-1 overflow-y-auto overscroll-contain sm:max-h-[16rem] lg:max-h-[34rem]" aria-live="polite">
           {catalogResults.slice(0, 100).map(product => {
             const key = productKey(product);
             const selected = selectedKeys.has(key);
@@ -261,18 +270,18 @@ export function OrderLineEditor({ items, products, kitchenId, catalogLoading, ca
             <Button type="button" variant="ghost" size="sm" className="h-9 shrink-0 text-destructive" onClick={() => removeItem(index)}><X className="ml-1 h-4 w-4" />حذف</Button>
           </div>
           {item.manualMode && <div className="mb-3 grid gap-2 sm:grid-cols-2"><div><Label className="text-xs" htmlFor={`manual-name-${index}`}>اسم الصنف</Label><Input id={`manual-name-${index}`} className="mt-1 h-11" value={item.productName} onChange={event => patch(index, { productName: event.target.value })} placeholder="اسم الصنف اليدوي" /></div><div><Label className="text-xs">الوحدة</Label><Input className="mt-1 h-11" value={item.unit} onChange={event => patch(index, { unit: event.target.value })} placeholder="الوحدة" /></div></div>}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-              <div className="col-span-1 lg:col-span-2">
+           <div className="grid grid-cols-1 gap-3 min-[390px]:grid-cols-2 lg:grid-cols-6">
+               <div className="lg:col-span-2">
               <Label className="text-xs" htmlFor={`request-qty-${index}`}>الكمية المطلوب توريدها</Label>
                 <Input id={`request-qty-${index}`} className="mt-1 h-12 text-base" type="number" min={isProduct ? "1" : "0.000001"} step={quantityStep} inputMode={isProduct ? "numeric" : "decimal"} value={item.requestedQuantity} onChange={event => patch(index, { requestedQuantity: event.target.value })} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); searchRef.current?.focus(); } }} aria-invalid={requestedInvalid} />
               <p className="mt-1 text-[11px] text-muted-foreground">{isProduct ? "المنتجات بأعداد صحيحة." : "المواد تقبل حتى 6 منازل عشرية."}</p>
             </div>
-              <div className="col-span-1 lg:col-span-2">
+               <div className="lg:col-span-2">
               <Label className="text-xs" htmlFor={`reported-stock-${index}`}>المتوفر حالياً في الفرع <span className="text-destructive">*</span></Label>
                 <Input id={`reported-stock-${index}`} className="mt-1 h-12 text-base" type="number" min="0" step={quantityStep} inputMode={isProduct ? "numeric" : "decimal"} value={item.reportedAvailableQuantity} onChange={event => patch(index, { reportedAvailableQuantity: event.target.value })} placeholder="أدخل القيمة" aria-invalid={stockInvalid} aria-describedby={`reported-stock-help-${index}`} />
               <p id={`reported-stock-help-${index}`} className="mt-1 text-[11px] text-muted-foreground">{stockInvalid ? "أدخل صفراً أو كمية صحيحة حتى 6 منازل عشرية؛ لا يُفترض الرصيد تلقائياً." : "معلومة للمطبخ ولا تغيّر رصيد المخزون."}</p>
             </div>
-              <div className="col-span-2 lg:col-span-2">
+               <div className="min-[390px]:col-span-2 lg:col-span-2">
               <Label className="text-xs" htmlFor={`line-note-${index}`}>ملاحظة</Label>
                <Input id={`line-note-${index}`} className="mt-1 h-12" value={item.notes} onChange={event => patch(index, { notes: event.target.value })} placeholder="اختياري" />
             </div>
