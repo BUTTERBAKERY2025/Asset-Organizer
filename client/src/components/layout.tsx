@@ -84,6 +84,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     "/production-comparisons": "production", "/production-comparison-reports": "production", "/production": "production",
     "/product-category-management": "production",
     "/operations": "operations", "/central-kitchen-orders": "operations", "/branch-shifts": "operations", "/shift-reports": "operations",
+     "/driver-deliveries": "operations",
     "/products": "operations", "/quality-control": "operations", "/display-bar-waste": "operations",
     "/operations-reports": "operations",
     "/cashier-journals": "sales", "/branch-daily-closures": "sales", "/branch-daily-closing": "sales",
@@ -256,6 +257,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/", label: t("sidebar.home"), icon: Home, module: "dashboard" },
     { href: "/branch-operations", label: "لوحة الفرع التشغيلية", icon: Store, modules: ["operations", "maintenance", "waste_tracking", "warehouse", "daily_closures", "cashier_journal", "branch_employees", "documents", "hr_documents", "hr_advances", "branch_complaints", "central_kitchen_orders", "sales_analytics", "targets", "attendance"] as SystemModule[] },
     { href: "/branch-complaints", label: "شكاوى الفروع", icon: MessageSquareWarning, module: "branch_complaints" },
+    { href: "/driver-deliveries", label: "مهام التوصيل", icon: MapPin, module: "delivery_tasks" },
     { href: "/my-portal", label: t("sidebar.myPortal"), icon: UserCircle },
     { href: "/central-kitchen-recipes", label: "دفتر وصفات المطبخ المركزي", icon: ClipboardList, module: "central_kitchen_recipes" },
   ], [t, user?.role]);

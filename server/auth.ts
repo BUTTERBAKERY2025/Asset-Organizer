@@ -4,7 +4,7 @@ import connectPg from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 import { db, pool } from "./db";
-import { systemAuditLogs, ROLE_PERMISSION_TEMPLATES } from "@shared/schema";
+import { systemAuditLogs, ROLE_PERMISSION_TEMPLATES, JOB_ROLE_PERMISSION_TEMPLATES } from "@shared/schema";
 import { isLoginBlocked, trackLoginAttempt } from "./security";
 import {
   getTwoFactorConfig,
@@ -204,6 +204,19 @@ export const BRANCH_MANAGER_INTRINSIC_PERMISSIONS: Record<string, string[]> =
       (entry: { module: string; actions: string[] }) => [entry.module, [...entry.actions]],
     ),
   );
+
+// Existing delivery employees may predate the job-title template being applied
+// to user_permissions. Only this job title + module receives the template's
+// narrow view/edit actions; branch and task ownership are checked by the routes.
+const DELIVERY_EMPLOYEE_ACTIONS = JOB_ROLE_PERMISSION_TEMPLATES.delivery.find(
+  (entry) => entry.module === "delivery_tasks",
+)?.actions ?? [];
+
+function deliveryEmployeeActions(user: { role: string; jobTitle?: string | null }, module: string) {
+  return module === "delivery_tasks" && user.role === "employee" && user.jobTitle === "delivery"
+    ? DELIVERY_EMPLOYEE_ACTIONS
+    : [];
+}
 
 // Resolve a module's allowed actions for an operations_manager, tolerating the
 // historical attendance/attendance_check and quality/quality_control synonyms.
@@ -1205,6 +1218,12 @@ export const requirePermission = (module: string, action?: string): RequestHandl
         return res.status(403).json({ message: "غير مسموح - المشاهد يمكنه العرض فقط" });
       }
     }
+
+    const deliveryAction = action ?? ({
+      GET: "view", HEAD: "view", OPTIONS: "view", POST: "create",
+      PUT: "edit", PATCH: "edit", DELETE: "delete",
+    } as Record<string, string>)[req.method] ?? "edit";
+    if (deliveryEmployeeActions(user, module).includes(deliveryAction)) return next();
     
     // HR Manager role: auto-grants access to all HR modules across all branches.
     // Strictly scoped to HR — financial, inventory, sales, etc. still go through
@@ -1349,6 +1368,8 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
         return res.status(403).json({ message: "غير مسموح - المشاهد يمكنه العرض فقط" });
       }
     }
+
+    if (actions.some((action) => deliveryEmployeeActions(user, module).includes(action))) return next();
     
     // HR Manager auto-grants HR modules (shared constant w/ requirePermission)
     if (user.role === "hr_manager" && HR_MANAGER_MODULES.has(module)) {

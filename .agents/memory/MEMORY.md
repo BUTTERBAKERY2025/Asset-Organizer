@@ -71,5 +71,6 @@
 - [Theme tokens are inline](theme-inline-dark-mode.md) — @theme inline: utilities bake light values, .dark only flips var(--color-*); never mix var() surfaces with utilities.
 - [Arabic PDF tables](rtl-pdf-tables.md) — right-aligned text does not reorder pdfMake columns; reverse headers, cells, and widths together for RTL consistency.
 - [Warehouse transfer authority](warehouse-transfer-authority.md) — source-authorized outbound requests are legitimate; destination alone confirms receipt, without exposing counterparty-wide data.
+- [Delivery orchestration](delivery-orchestration.md) — driver proof is not stock receipt; bind approval to the original authenticated recipient before allowing delivery closure.
 - [Production evidence boundaries](production-evidence-boundaries.md) — the custom-domain Render service is separate from Replit publishing; match logs and database evidence to the affected deployment.
 - [Async route crash testing](async-route-crash-testing.md) — Express 4 ignores rejected handler promises; successful DB fixtures and direct-await tests can hide process-killing schema failures.

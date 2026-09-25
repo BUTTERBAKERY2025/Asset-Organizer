@@ -221,6 +221,7 @@ import { registerCentralKitchenWorkplanRoute } from "./central-kitchen-workplan"
 import { registerBranchOperationsRoute } from "./branch-operations";
 import { registerBranchComplaintRoutes } from "./branch-complaints";
 import { registerCentralKitchenDemandRoutes } from "./central-kitchen-demand-routes";
+import { registerDeliveryRoutes } from "./delivery-routes";
 import {
   getOrderSchedule,
   getOrderingPolicy,
@@ -611,6 +612,7 @@ export async function registerRoutes(
   registerSecurityRoutes(app);
   registerCentralKitchenRecipeRoutes(app);
   registerCentralKitchenDemandRoutes(app);
+  registerDeliveryRoutes(app);
   registerProductionOperationsReportRoute(app);
   registerAdvancedProductionExecutionRoutes(app);
   registerCentralKitchenWorkplanRoute(app);
@@ -1440,6 +1442,17 @@ export async function registerRoutes(
           module,
           actions: Array.from(actions),
         }));
+      }
+
+      if (currentUser.role === "employee" && currentUser.jobTitle === "delivery" && currentUser.isActive === "active") {
+        const merged = new Map<string, Set<string>>(permissions.map((p: any) => [
+          p.module, new Set<string>(Array.isArray(p.actions) ? p.actions : []),
+        ]));
+        const actions = merged.get("delivery_tasks") || new Set<string>();
+        actions.add("view");
+        actions.add("edit");
+        merged.set("delivery_tasks", actions);
+        permissions = Array.from(merged, ([module, moduleActions]) => ({ module, actions: [...moduleActions] }));
       }
 
       res.json(permissions);

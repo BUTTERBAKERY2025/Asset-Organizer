@@ -1131,6 +1131,7 @@ export const SYSTEM_MODULES = [
   "products",
   "operations",
   "branch_complaints",
+  "delivery_tasks",
   "central_kitchen_orders",
   "central_kitchen_recipes",
   "ai_production_planner",
@@ -1348,6 +1349,7 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   products: "المنتجات",
   operations: "التشغيل",
   branch_complaints: "شكاوى الفروع",
+  delivery_tasks: "مهام التوصيل",
   central_kitchen_orders: "طلبات المطبخ المركزي",
   central_kitchen_recipes: "وصفات المطبخ المركزي",
   ai_production_planner: "مخطط الإنتاج الذكي",
@@ -1653,7 +1655,7 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
   },
   {
     label: "تشغيل الفروع",
-    modules: ["branch_complaints"],
+    modules: ["branch_complaints", "delivery_tasks"],
   },
   {
     label: "إدارة النظام",
@@ -1805,6 +1807,7 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
     { module: "central_kitchen_recipes", actions: ["view", "create", "edit", "approve", "print"] },
     { module: "central_kitchen_orders", actions: ["view", "create", "edit", "approve", "export"] },
     { module: "warehouse", actions: ["view", "create", "edit", "export"] },
+    { module: "delivery_tasks", actions: ["view", "create", "edit", "approve", "export"] },
     { module: "material_requests", actions: ["view", "create", "edit", "approve", "export"] },
     { module: "transfer_requests", actions: ["view", "create", "edit", "approve", "export"] },
     { module: "warehouse_inventory", actions: ["view", "create", "edit", "export"] },
@@ -1874,6 +1877,7 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
     { module: "maintenance", actions: ["view", "create", "edit", "export"] },
     { module: "inspections", actions: ["view", "create", "edit", "export"] },
     { module: "warehouse", actions: ["view", "create", "edit", "export"] },
+    { module: "delivery_tasks", actions: ["view", "create", "edit", "approve", "export"] },
     { module: "material_requests", actions: ["view", "create", "edit", "approve", "export"] },
     { module: "transfer_requests", actions: ["view", "create", "edit", "approve", "export"] },
     { module: "warehouse_inventory", actions: ["view", "create", "edit", "export"] },
@@ -1905,6 +1909,7 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
     { module: "operations", actions: ["view", "create", "edit", "export"] },
     { module: "branch_complaints", actions: ["view", "create", "edit"] },
     { module: "central_kitchen_orders", actions: ["view", "create", "edit", "export"] },
+    { module: "delivery_tasks", actions: ["view", "approve", "export"] },
     { module: "waste_tracking", actions: ["view", "create", "edit", "export"] },
     { module: "waste", actions: ["view", "create", "edit", "export"] },
   ],
@@ -1913,7 +1918,7 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
   // Recipe-book permissions are intentionally explicit.  In particular, do
   // not let the broad view-only template silently grant the new module to
   // every viewer when the catalog is extended.
-  viewer: SYSTEM_MODULES.filter((m) => m !== "users" && m !== "central_kitchen_recipes").map((module) => ({
+  viewer: SYSTEM_MODULES.filter((m) => m !== "users" && m !== "central_kitchen_recipes" && m !== "delivery_tasks").map((module) => ({
     module,
     actions: ["view"] as ModuleAction[],
   })),
@@ -2025,10 +2030,11 @@ export const JOB_ROLE_PERMISSION_TEMPLATES: Record<
     { module: "production", actions: ["view"] },
   ],
 
-  // توصيل - عرض يومية الكاشير
+  // توصيل - يبدأ مهامه ويثبت التسليم وينهيه (دون صلاحيات الإدارة أو الاعتماد)
   delivery: [
     { module: "dashboard", actions: ["view"] },
     { module: "cashier_journal", actions: ["view"] },
+    { module: "delivery_tasks", actions: ["view", "edit"] },
   ],
 
   // نظافة - عرض محدود

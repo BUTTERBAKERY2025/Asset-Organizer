@@ -13,7 +13,7 @@ import {
   HardDrive, LayoutDashboard, Factory, Megaphone,
   UsersRound, ClipboardList, Receipt, TrendingUp, TrendingDown,
   Sun, Moon, CloudSun, Languages, Warehouse,
-  Store, Briefcase, Sparkles, Search, MessageSquareWarning,
+  Store, Briefcase, Sparkles, Search, MessageSquareWarning, Truck,
 } from "lucide-react";
 import type { SystemModule } from "@shared/schema";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -77,10 +77,12 @@ export default function PlatformHomePage() {
   useEffect(() => {
     if (isAttendanceClerk) {
       navigate("/attendance-check");
+    } else if (!permsLoading && user?.role === "employee" && user.jobTitle === "delivery" && canView("delivery_tasks")) {
+      navigate("/driver-deliveries");
     } else if (portalOnly) {
       navigate("/my-portal");
     }
-  }, [isAttendanceClerk, portalOnly, navigate]);
+  }, [isAttendanceClerk, portalOnly, permsLoading, user?.role, user?.jobTitle, canView, navigate]);
 
   if (isAttendanceClerk) {
     return null;
@@ -127,6 +129,7 @@ export default function PlatformHomePage() {
     { title: t("modules.sales.title"),       icon: Receipt,        href: "/cashier-journals",        color: "money",      module: "cashier_journal" },
     { title: t("modules.operations.title"),  icon: Factory,        href: "/operations",              color: "production", module: "operations" },
     { title: "شكاوى الفروع",                 icon: MessageSquareWarning, href: "/branch-complaints",   color: "people",     module: "branch_complaints" },
+    { title: "مهام التوصيل",                  icon: Truck,         href: "/driver-deliveries",       color: "inventory",  module: "delivery_tasks" },
     { title: t("modules.production.title"),  icon: ClipboardList,  href: "/production-dashboard",    color: "production", module: "production" },
     { title: "دفتر وصفات المطبخ المركزي",     icon: ClipboardList,  href: "/central-kitchen-recipes",  color: "production", module: "central_kitchen_recipes" },
     { title: t("modules.assets.title"),      icon: Package,        href: "/inventory",               color: "inventory",  module: "inventory" },
