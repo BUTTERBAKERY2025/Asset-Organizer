@@ -187,3 +187,17 @@ mtime_ms = 1790179905240
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/865bf046-eead-4228-9530-598f452c4586/ff184008-bc91-4f95-8263-6f30eb161892"
 storage_version_token = "1790180179844752"
 content_type = "image/png"
+
+[[outputs]]
+id = "Q5mJQDbDkLNb-CEDIPXYb"
+uri = "file://reports/real-delivery-four-role-test.md"
+type = "text"
+title = "نتائج اختبار الرحلة بأربعة حسابات فعلية"
+description = "نتائج فعلية للمخزون والصلاحيات والتوصيل والشطب، مع توثيق عائق واجهة المتصفح وفشل تنبيهات المرتجعات."
+logical_id = "ef35abe1-1bed-4e8f-acfd-624ef503e003"
+content_hash = "sha256:67337dcd9079f8db47b744e87eb21ca7a052831177db35dad7cdec6aadb1638b"
+size = 5563
+mtime_ms = 1790372101451
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/ef35abe1-1bed-4e8f-acfd-624ef503e003/f0981910-20ce-4718-a700-2b74008abf85"
+storage_version_token = "1790372116204058"
+content_type = "text/markdown"
