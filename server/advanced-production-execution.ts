@@ -8,6 +8,8 @@ import { advancedProductionOrders, productionOrderItems, dailyProductionBatches,
 import { isManualProductionIdempotencyKey, canonicalManualProductionPayload } from "@shared/manual-production-operation";
 import { snapshotRecipeBackedBatchMaterials, CentralKitchenBatchMaterialsError } from "./central-kitchen-batch-materials";
 import { postProductionBatchToStock, ProductionStockPostingError } from "./production-stock-posting";
+import { isNewCatalogReferenceAllowed } from "@shared/catalog-activity";
+import { validateFinishedProductionTarget } from "./finished-production-target";
 
 class ExecutionError extends Error {
   constructor(message: string, public status = 409, public code?: string) { super(message); }
@@ -117,8 +119,10 @@ export function registerAdvancedProductionExecutionRoutes(app: Express) {
         }
         executable(order, item);
         const [product] = item.productId ? await tx.select().from(products).where(eq(products.id, item.productId)).for("share") : [];
-        if (!product || product.productType !== "finish" || !["true", "active", "1"].includes(String(product.isActive).toLowerCase())) throw new ExecutionError("يجب ربط البند بمنتج نهائي معتمد نشط");
-        const unit = product.unit?.trim() || "قطعة";
+        if (!isNewCatalogReferenceAllowed(product)) throw new ExecutionError("المنتج غير متاح للتشغيل");
+        const targetError = validateFinishedProductionTarget(product, item.targetQuantity, input.data.unit);
+        if (targetError) throw new ExecutionError(targetError);
+        const unit = product!.unit!.trim();
         if (input.data.unit !== unit || (item.executionUnit && item.executionUnit !== unit)) throw new ExecutionError("الوحدة لا تطابق هوية المنتج والخطة");
         if (input.data.productionDate < order.startDate || input.data.productionDate > order.endDate) throw new ExecutionError("تاريخ الدفعة خارج فترة الخطة");
         const [total] = await tx.select({ quantity: sql<number>`COALESCE(SUM(${dailyProductionBatches.quantity}) FILTER (WHERE ${dailyProductionBatches.status} IN ('finished', 'in_progress')), 0)` })

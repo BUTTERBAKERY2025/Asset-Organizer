@@ -19,6 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ProductSelector } from "@/components/product-selector";
 import { useBranches } from "@/hooks/useBranches";
 import type { Product } from "@shared/schema";
+import { getSelectableCatalogRecords } from "@shared/catalog-activity";
 import { format, addDays, eachDayOfInterval } from "date-fns";
 import { ar } from "date-fns/locale";
 
@@ -140,7 +141,6 @@ export default function AdvancedProductionOrderFormPage() {
             productId: item.productId ? String(item.productId) : "",
             productName: item.productName || item.product_name || "",
             quantity: qty,
-            unit: item.unit || "قطعة",
             unitPrice: price,
             total: qty * price,
             notes: item.notes || ""
@@ -163,8 +163,8 @@ export default function AdvancedProductionOrderFormPage() {
       toast({ title: "تم إنشاء أمر الإنتاج بنجاح" });
       setLocation("/advanced-production-orders");
     },
-    onError: () => {
-      toast({ title: "خطأ", description: "فشل في إنشاء أمر الإنتاج", variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "خطأ", description: error.message || "فشل في إنشاء أمر الإنتاج", variant: "destructive" });
     },
   });
 
@@ -179,8 +179,8 @@ export default function AdvancedProductionOrderFormPage() {
       toast({ title: "تم تحديث أمر الإنتاج بنجاح" });
       setLocation("/advanced-production-orders");
     },
-    onError: () => {
-      toast({ title: "خطأ", description: "فشل في تحديث أمر الإنتاج", variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "خطأ", description: error.message || "فشل في تحديث أمر الإنتاج", variant: "destructive" });
     },
   });
 
@@ -307,6 +307,7 @@ export default function AdvancedProductionOrderFormPage() {
       productName: item.productName,
       productCategory: products?.find(p => p.id.toString() === item.productId)?.category || '',
       targetQuantity: item.quantity,
+      unit: products?.find(p => p.id.toString() === item.productId)?.unit,
       unitPrice: item.unitPrice,
       totalValue: item.total,
       status: 'pending'
@@ -337,6 +338,7 @@ export default function AdvancedProductionOrderFormPage() {
   };
 
   const handleSaveAsDraft = () => {
+    if (!validateTargets()) return;
     const data = prepareOrderData("draft");
     if (isEdit) {
       updateMutation.mutate(data);
@@ -346,6 +348,7 @@ export default function AdvancedProductionOrderFormPage() {
   };
 
   const handleSaveAndSubmit = () => {
+    if (!validateTargets()) return;
     const data = prepareOrderData("pending");
     if (isEdit) {
       updateMutation.mutate(data);
@@ -362,6 +365,25 @@ export default function AdvancedProductionOrderFormPage() {
   ];
 
   const currentStepIndex = steps.findIndex((s) => s.value === currentStep);
+
+  const validItems = () => formData.items.length > 0 && formData.items.every(item => {
+    const product = products?.find(p => String(p.id) === item.productId);
+    return !!product && getSelectableCatalogRecords([product]).length > 0
+      && product.productType === "finish" && !!product.unit?.trim()
+      && Number.isSafeInteger(Number(item.quantity)) && Number(item.quantity) > 0;
+  });
+
+  const validSchedules = () => formData.schedule.every(item =>
+    Number.isSafeInteger(Number(item.quantity)) && Number(item.quantity) > 0
+    && (!item.productId || !!products?.find(p => String(p.id) === item.productId && p.productType === "finish"
+      && !!p.unit?.trim() && getSelectableCatalogRecords([p]).length > 0))
+  );
+
+  const validateTargets = () => {
+    if (validItems() && validSchedules()) return true;
+    toast({ title: "بيانات غير صحيحة", description: "اختر منتجاً نهائياً متاحاً لكل بند، وأدخل كميات صحيحة أكبر من صفر", variant: "destructive" });
+    return false;
+  };
 
   const goToNextStep = () => {
     if (currentStepIndex < steps.length - 1) {
@@ -383,11 +405,11 @@ export default function AdvancedProductionOrderFormPage() {
         console.log("info step valid:", infoValid);
         return infoValid;
       case "products":
-        const productsValid = formData.items.length > 0 && formData.items.every((item) => (item.productId || item.productName) && item.quantity > 0);
+        const productsValid = validItems();
         console.log("products step valid:", productsValid);
         return productsValid;
       case "schedule":
-        return true;
+        return validSchedules();
       default:
         return true;
     }
@@ -655,37 +677,24 @@ export default function AdvancedProductionOrderFormPage() {
                         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-12 gap-2 sm:gap-3 md:gap-4 items-end">
                           <div className="md:col-span-5 space-y-2">
                             <Label>المنتج</Label>
-                            {item.productName ? (
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <Input
-                                    value={item.productName}
-                                    onChange={(e) => updateProduct(index, "productName", e.target.value)}
-                                    placeholder="اسم المنتج"
-                                    className="font-medium text-lg"
-                                    data-testid={`input-product-name-${index}`}
-                                  />
-                                </div>
-                              </div>
-                            ) : (
-                              <ProductSelector
-                                products={products || []}
-                                value={item.productId}
-                                onSelect={(productId, product) =>
-                                  handleProductSelect(index, productId, product)
-                                }
-                                placeholder="اختر المنتج"
-                              />
-                            )}
+                            <ProductSelector
+                              products={(products || []).filter(p => p.productType === "finish" && !!p.unit?.trim())}
+                              value={item.productId}
+                              onSelect={(productId, product) =>
+                                handleProductSelect(index, productId, product)
+                              }
+                              placeholder="اختر المنتج"
+                            />
                           </div>
                           <div className="md:col-span-2 space-y-2">
                             <Label>الكمية المطلوبة</Label>
                             <Input
                               type="number"
                               min="1"
+                              step="1"
                               value={item.quantity}
                               onChange={(e) =>
-                                updateProduct(index, "quantity", parseInt(e.target.value) || 1)
+                                updateProduct(index, "quantity", Number(e.target.value))
                               }
                               data-testid={`input-quantity-${index}`}
                             />
@@ -820,7 +829,7 @@ export default function AdvancedProductionOrderFormPage() {
                                     <div className="md:col-span-5 space-y-2">
                                       <Label>المنتج</Label>
                                       <ProductSelector
-                                        products={products || []}
+                                        products={(products || []).filter(p => p.productType === "finish" && !!p.unit?.trim())}
                                         value={scheduleItem.productId}
                                         onSelect={(productId, product) =>
                                           handleScheduleProductSelect(index, productId, product)
@@ -834,12 +843,13 @@ export default function AdvancedProductionOrderFormPage() {
                                       <Input
                                         type="number"
                                         min="1"
+                                        step="1"
                                         value={scheduleItem.quantity}
                                         onChange={(e) =>
                                           updateScheduleItem(
                                             index,
                                             "quantity",
-                                            parseInt(e.target.value) || 1
+                                            Number(e.target.value)
                                           )
                                         }
                                         data-testid={`input-schedule-quantity-${index}`}

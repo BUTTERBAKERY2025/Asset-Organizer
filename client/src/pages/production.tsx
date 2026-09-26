@@ -88,8 +88,8 @@ export default function ProductionPage() {
       toast({ title: "تم إنشاء أمر الإنتاج بنجاح" });
       resetForm();
     },
-    onError: () => {
-      toast({ title: "خطأ", description: "فشل في إنشاء أمر الإنتاج", variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "خطأ", description: error.message || "فشل في إنشاء أمر الإنتاج", variant: "destructive" });
     },
   });
 
@@ -100,8 +100,8 @@ export default function ProductionPage() {
       toast({ title: "تم تحديث أمر الإنتاج بنجاح" });
       resetForm();
     },
-    onError: () => {
-      toast({ title: "خطأ", description: "فشل في تحديث أمر الإنتاج", variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "خطأ", description: error.message || "فشل في تحديث أمر الإنتاج", variant: "destructive" });
     },
   });
 
@@ -133,10 +133,16 @@ export default function ProductionPage() {
 
   const handleSubmit = () => {
     if (editingOrder ? !canEdit("production") : !canCreate("production")) return;
+    const product = products?.find(p => String(p.id) === formData.productId);
+    if (!product || !getSelectableCatalogRecords([product]).length || product.productType !== "finish"
+      || !Number.isSafeInteger(Number(formData.targetQuantity)) || Number(formData.targetQuantity) <= 0) {
+      toast({ title: "بيانات غير صحيحة", description: "اختر منتجاً نهائياً متاحاً وكمية صحيحة أكبر من صفر", variant: "destructive" });
+      return;
+    }
     const data = {
       ...formData,
       productId: parseInt(formData.productId),
-      targetQuantity: parseInt(formData.targetQuantity),
+      targetQuantity: Number(formData.targetQuantity),
     };
 
     if (editingOrder) {
@@ -211,7 +217,7 @@ export default function ProductionPage() {
                         <SelectValue placeholder="اختر المنتج" />
                       </SelectTrigger>
                       <SelectContent>
-                        {getSelectableCatalogRecords(products || []).map(product => (
+                        {getSelectableCatalogRecords(products || []).filter(product => product.productType === "finish").map(product => (
                           <SelectItem key={product.id} value={product.id.toString()}>
                             {product.sku ? `${product.sku} — ${product.name}` : product.name}
                           </SelectItem>
@@ -230,6 +236,8 @@ export default function ProductionPage() {
                     <Label>الكمية المطلوبة *</Label>
                     <Input
                       type="number"
+                      min="1"
+                      step="1"
                       value={formData.targetQuantity}
                       onChange={e => setFormData({ ...formData, targetQuantity: e.target.value })}
                       placeholder="مثال: 100"

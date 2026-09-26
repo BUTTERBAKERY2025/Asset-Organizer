@@ -17,6 +17,9 @@ const mocks = vi.hoisted(() => ({
     updateProductionOrder: vi.fn(),
     getProductionOrderItemById: vi.fn(),
     getAdvancedProductionOrder: vi.fn(),
+    createAdvancedProductionOrder: vi.fn(),
+    createProductionOrderItem: vi.fn(),
+    getProductionAiPlan: vi.fn(),
     updateProductionOrderItem: vi.fn(),
     getProductionOrderItems: vi.fn(),
     updateAdvancedProductionOrder: vi.fn(),
@@ -90,10 +93,11 @@ async function invoke(method: string, path: string, params: any, body: any) {
   };
   await registration.handlers.at(-1)!({
     currentUser: { id: "test-admin", role: "admin", username: "admin" },
+    user: { id: "test-admin", role: "admin", username: "admin" },
     body,
     params,
     query: {},
-    get: () => undefined,
+    get: (name: string) => name === "Idempotency-Key" ? "test-manual-key-12345" : undefined,
   }, res);
   return response;
 }
@@ -109,6 +113,44 @@ describe("catalog reference write route boundaries", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("rejects raw and fractional advanced plan targets before creating an order", async () => {
+    mocks.storage.getProduct.mockResolvedValue({ id: 91, name: "Raw", category: "material", unit: "كيلو", productType: "inventory", isActive: "true" });
+    const raw = await invoke("post", "/api/advanced-production-orders", {}, { items: [{ productId: 91, targetQuantity: 2 }] });
+    expect(raw.statusCode).toBe(400);
+    mocks.storage.getProduct.mockResolvedValue({ id: 91, name: "Carton", category: "bread", unit: "علبة", productType: "finish", isActive: "false", operationsEnabled: true });
+    for (const item of [{ productId: 91, targetQuantity: 1.5 }, { productId: 91, targetQuantity: 2, unit: "قطعة" }]) {
+      expect((await invoke("post", "/api/advanced-production-orders", {}, { items: [item] })).statusCode).toBe(400);
+    }
+    expect(mocks.storage.createAdvancedProductionOrder).not.toHaveBeenCalled();
+  });
+
+  it("checks add and edit targets against authoritative product units", async () => {
+    mocks.storage.getAdvancedProductionOrder.mockResolvedValue({ id: 3, sourceBranchId: "branch-a", targetBranchId: "branch-a" });
+    mocks.storage.getProduct.mockResolvedValue({ id: 91, name: "Carton", category: "bread", unit: "علبة", productType: "finish", isActive: "true" });
+    const added = await invoke("post", "/api/advanced-production-orders/:orderId/items", { orderId: "3" }, { productId: 91, targetQuantity: 0.5 });
+    expect(added.statusCode).toBe(400);
+    mocks.storage.getProductionOrderItemById.mockResolvedValue({ id: 4, orderId: 3, productId: 91, targetQuantity: 2 });
+    const edited = await invoke("patch", "/api/production-order-items/:id", { id: "4" }, { targetQuantity: 2.5 });
+    expect(edited.statusCode).toBe(400);
+    expect(mocks.storage.createProductionOrderItem).not.toHaveBeenCalled();
+    expect(mocks.storage.updateProductionOrderItem).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid AI targets before creating the parent order", async () => {
+    mocks.storage.getProductionAiPlan.mockResolvedValue({ id: 5, recommendedProducts: [{ productId: 91, quantity: 1.5 }] });
+    mocks.storage.getProduct.mockResolvedValue({ id: 91, name: "Carton", category: "bread", unit: "علبة", productType: "finish", isActive: "true" });
+    const result = await invoke("post", "/api/production-ai-plans/:id/apply", { id: "5" }, {});
+    expect(result.statusCode).toBe(400);
+    expect(mocks.storage.createAdvancedProductionOrder).not.toHaveBeenCalled();
+  });
+
+  it("rejects fractional and raw independent manual batches without a write", async () => {
+    const body = { branchId: "branch-a", productId: 91, productName: "Raw", quantity: 1, unit: "كيلو", destination: "freezer", independentEntryAcknowledged: true };
+    mocks.storage.getProduct.mockResolvedValue({ id: 91, name: "Raw", category: "material", unit: "كيلو", productType: "inventory", isActive: "true" });
+    expect((await invoke("post", "/api/daily-production/batches", {}, body)).statusCode).toBe(400);
+    expect((await invoke("post", "/api/daily-production/batches", {}, { ...body, quantity: 0.5 })).statusCode).toBe(400);
   });
 
   it("rejects inactive products before a waste batch replacement mutates storage", async () => {

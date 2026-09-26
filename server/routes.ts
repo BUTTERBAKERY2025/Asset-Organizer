@@ -6,6 +6,7 @@ import { storage } from "./storage";
 import { readEmployeeDocumentMetadata } from "./employee-documents-read";
 import { authenticatedUploadMatchesActor, makeAuthenticatedUploadName, mayDownloadUpload, resolveUploadBindings, validUploadKey, type UploadBinding } from "./upload-file-access";
 import { ProductionStockPostingError } from "./production-stock-posting";
+import { validateFinishedProductionTarget } from "./finished-production-target";
 import { registerBranchBarHandoffRoutes } from "./branch-bar-handoffs";
 import { InactiveBranchStockReferenceError } from "./catalogue-branch-stock";
 import {
@@ -25,7 +26,7 @@ import type { User } from "@shared/schema";
 import { groupPreparationSheet, invalidPreparationSheetOrderIds } from "@shared/central-kitchen-preparation-sheet";
 import { matchesCentralKitchenCatalogIdentity } from "@shared/central-kitchen-catalog";
 import { buildCentralKitchenCounts, centralKitchenPageMeta } from "@shared/central-kitchen-list";
-import { shifts as shiftsTable, cashierPointsLedger, cashierDailyChallenges, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS, centralKitchenOrders, centralKitchenOrderItems, centralKitchenOrderEvents, centralKitchenShadowInventoryConfig, centralKitchenShadowInventoryEntries, centralKitchenInventoryAllocations, centralKitchenDemandCommitments, centralKitchenDemandActions, warehouseItems, dailyProductionBatches, productionInventoryLogs } from "@shared/schema";
+import { shifts as shiftsTable, cashierPointsLedger, cashierDailyChallenges, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable, PORTAL_SETTING_KEYS, PORTAL_BOOLEAN_KEYS, PORTAL_SETTING_DEFAULTS, centralKitchenOrders, centralKitchenOrderItems, centralKitchenOrderEvents, centralKitchenShadowInventoryConfig, centralKitchenShadowInventoryEntries, centralKitchenInventoryAllocations, centralKitchenDemandCommitments, centralKitchenDemandActions, warehouseItems, dailyProductionBatches, productionInventoryLogs, salesDataUploads, productSalesAnalytics } from "@shared/schema";
 import { demandDecimal, demandMicros } from "@shared/central-kitchen-demand";
 import { auditEvent, getApprovalThresholds, APPROVAL_THRESHOLDS } from "./audit-helpers";
 import {
@@ -18805,13 +18806,17 @@ export async function registerRoutes(
         if (!product) {
           return res.status(400).json({ error: "يتضمن أمر الإنتاج منتجاً غير متاح" });
         }
+        const targetError = validateFinishedProductionTarget(product, item.targetQuantity, item.unit);
+        if (targetError) return res.status(400).json({ error: targetError });
         // Store the current authoritative catalog text for a newly selected
         // product, not a mutable client-provided display value.
+        const { unit: _unit, executionUnit: _executionUnit, ...itemData } = item;
         normalizedItems.push({
-          ...item,
+          ...itemData,
           productId: product.id,
           productName: product.name,
           productCategory: product.category,
+          targetQuantity: Number(item.targetQuantity),
         });
       }
       
@@ -19113,13 +19118,17 @@ export async function registerRoutes(
       if (!catalogProduct) {
         return res.status(400).json({ error: "المنتج المحدد غير متاح لأمر إنتاج جديد" });
       }
+      const targetError = validateFinishedProductionTarget(catalogProduct, req.body?.targetQuantity, req.body?.unit);
+      if (targetError) return res.status(400).json({ error: targetError });
+      const { unit: _unit, executionUnit: _executionUnit, ...itemData } = req.body;
       
       const item = await storage.createProductionOrderItem({
-        ...req.body,
+        ...itemData,
         orderId,
         productId: catalogProduct.id,
         productName: catalogProduct.name,
         productCategory: catalogProduct.category,
+        targetQuantity: Number(req.body.targetQuantity),
       });
       
       // Update order totals
@@ -19161,7 +19170,11 @@ export async function registerRoutes(
         }
       }
       
-      let updateData = req.body;
+      // executionUnit is frozen by the linked batch executor, never by a
+      // client edit. Keep historical references editable without reselecting.
+      const { unit: requestedUnit, executionUnit: _executionUnit, ...editableData } = req.body;
+      let updateData = editableData;
+      let targetProduct;
       if (
         req.body.productId !== undefined
         && Number(req.body.productId) !== Number(existingItem.productId)
@@ -19170,12 +19183,23 @@ export async function registerRoutes(
         if (!catalogProduct) {
           return res.status(400).json({ error: "المنتج المحدد غير متاح لأمر إنتاج جديد" });
         }
+        targetProduct = catalogProduct;
         updateData = {
-          ...req.body,
+          ...editableData,
           productId: catalogProduct.id,
           productName: catalogProduct.name,
           productCategory: catalogProduct.category,
         };
+      }
+      if (req.body.targetQuantity !== undefined || requestedUnit !== undefined || targetProduct) {
+        // An unchanged historical reference is not a new selection. For a
+        // revised target we still need its present catalog identity and unit.
+        targetProduct ||= await storage.getProduct(existingItem.productId!);
+        const targetError = validateFinishedProductionTarget(
+          targetProduct, req.body.targetQuantity ?? existingItem.targetQuantity, requestedUnit,
+        );
+        if (targetError) return res.status(400).json({ error: targetError });
+        updateData = { ...updateData, targetQuantity: Number(req.body.targetQuantity ?? existingItem.targetQuantity) };
       }
       const item = await storage.updateProductionOrderItem(id, updateData);
       
@@ -21621,6 +21645,8 @@ export async function registerRoutes(
         if (!product) {
           return res.status(400).json({ error: "تتضمن الخطة منتجاً غير متاح؛ حدّث الخطة قبل تطبيقها" });
         }
+        const targetError = validateFinishedProductionTarget(product, recommendation.quantity, recommendation.unit);
+        if (targetError) return res.status(400).json({ error: targetError });
         resolvedRecommendations.push({ recommendation, product });
       }
       
@@ -21653,7 +21679,7 @@ export async function registerRoutes(
             productId: product.id,
             productName: product.name,
             productCategory: product.category,
-            targetQuantity: recommendation.quantity,
+            targetQuantity: Number(recommendation.quantity),
             unitPrice: recommendation.unitPrice || (recommendation.totalPrice
               ? recommendation.totalPrice / recommendation.quantity
               : recommendation.estimatedValue / recommendation.quantity),
@@ -21870,7 +21896,12 @@ export async function registerRoutes(
   app.get("/api/sales-data-uploads", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const uploads = await storage.getAllSalesDataUploads();
-      res.json(uploads);
+      if (isUserAdmin(req)) return res.json(uploads);
+      const accessible = new Map<string, boolean>();
+      for (const branchId of new Set(uploads.map(upload => upload.branchId))) {
+        accessible.set(branchId, await canAccessBranch(req, branchId));
+      }
+      res.json(uploads.filter(upload => accessible.get(upload.branchId) === true));
     } catch (error) {
       console.error("Error fetching uploads:", error);
       res.status(500).json({ error: "Failed to fetch uploads" });
@@ -21881,21 +21912,31 @@ export async function registerRoutes(
   app.post("/api/sales-data-uploads", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
     try {
       const { branchId, fileName, fileData, periodStart, periodEnd } = req.body;
-      
-      // Create upload record
-      const upload = await storage.createSalesDataUpload({
-        branchId,
-        fileName,
-        fileType: 'excel',
-        periodStart,
-        periodEnd,
-        status: 'processing',
-        uploadedBy: (req as any).user?.id
-      });
-      
-      // Parse and analyze the data
+      if (typeof branchId !== "string" || !branchId.trim()) {
+        return res.status(400).json({ error: "يجب تحديد الفرع" });
+      }
+      if (!await canAccessBranch(req, branchId)) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
+      // Strict ISO calendar days: Date.parse alone normalizes dates such as February 30.
+      const validPeriodDay = (value: unknown): value is string => {
+        if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+        const date = new Date(`${value}T00:00:00.000Z`);
+        return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+      };
+      if (!validPeriodDay(periodStart) || !validPeriodDay(periodEnd) || periodStart > periodEnd) {
+        return res.status(400).json({ error: "فترة المبيعات غير صالحة" });
+      }
+      let parsedData: unknown;
       try {
-        const parsedData = JSON.parse(fileData || '[]');
+        parsedData = JSON.parse(fileData || '[]');
+      } catch {
+        return res.status(400).json({ error: "فشل في تحليل بيانات الملف - تأكد من تنسيق الأعمدة" });
+      }
+      if (!Array.isArray(parsedData) || parsedData.some(row => !row || typeof row !== "object" || Array.isArray(row))) {
+        return res.status(400).json({ error: "بيانات الملف يجب أن تكون صفوفاً صالحة" });
+      }
+      {
         const productVelocity: Record<string, number> = {};
         const productRevenue: Record<string, number> = {};
         let totalSales = 0;
@@ -22128,15 +22169,6 @@ export async function registerRoutes(
         const endDate = new Date(periodEnd);
         const daysInPeriod = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
         
-        await storage.updateSalesDataUpload(upload.id, {
-          status: 'completed',
-          totalRecords: dataRows.length,
-          totalSalesValue: totalSales,
-          uniqueProducts: uniqueProducts.size,
-          parsedData: dataRows,
-          productVelocity
-        });
-        
         // Create analytics records with more detailed data
         // Analytics imports may preserve unmatched historical names, but a new
         // analytics row must not attach one of them to an inactive catalog id.
@@ -22149,7 +22181,6 @@ export async function registerRoutes(
           const excelDailyAvg = productDailyAvg[name] || 0;
           const calculatedDailyAvg = velocity > 0 ? Math.round((velocity / daysInPeriod) * 100) / 100 : excelDailyAvg;
           return {
-            uploadId: upload.id,
             productId: product?.id || null,
             productName: name,
             productCategory: excelCategory || product?.category || null,
@@ -22160,24 +22191,33 @@ export async function registerRoutes(
           };
         });
         
-        if (analyticsRecords.length > 0) {
-          await storage.bulkCreateProductSalesAnalytics(analyticsRecords);
-          console.log(`Created ${analyticsRecords.length} analytics records for upload ${upload.id}`);
-        } else {
-          console.log('No analytics records created - check if Excel columns match expected names');
-          console.log('Expected product columns:', productColumns.slice(0, 5).join(', '), '...');
-        }
-        
-      } catch (parseError) {
-        console.error('Error parsing file data:', parseError);
-        await storage.updateSalesDataUpload(upload.id, {
-          status: 'failed',
-          errorMessage: 'فشل في تحليل بيانات الملف - تأكد من تنسيق الأعمدة'
+        // Serialize writers for this branch and period, including concurrent retries.
+        // Existing parsed_data is JSONB: equality ignores object key order but preserves row order.
+        const result = await db.transaction(async tx => {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${branchId}), hashtext(${JSON.stringify([periodStart ?? null, periodEnd ?? null])}))`);
+          const [existing] = await tx.select().from(salesDataUploads).where(and(
+            eq(salesDataUploads.branchId, branchId),
+            periodStart == null ? isNull(salesDataUploads.periodStart) : eq(salesDataUploads.periodStart, periodStart),
+            periodEnd == null ? isNull(salesDataUploads.periodEnd) : eq(salesDataUploads.periodEnd, periodEnd),
+            eq(salesDataUploads.status, "completed"),
+            sql`${salesDataUploads.parsedData} = ${JSON.stringify(dataRows)}::jsonb`
+          )).orderBy(salesDataUploads.id).limit(1);
+          if (existing) return { upload: existing, reused: true };
+          const [upload] = await tx.insert(salesDataUploads).values({
+            branchId, fileName, fileType: 'excel', periodStart, periodEnd,
+            status: 'completed', uploadedBy: getCurrentUser(req).id,
+            totalRecords: dataRows.length, totalSalesValue: totalSales,
+            uniqueProducts: uniqueProducts.size, parsedData: dataRows, productVelocity
+          }).returning();
+          if (analyticsRecords.length > 0) {
+            await tx.insert(productSalesAnalytics).values(analyticsRecords.map(record => ({
+              ...record, uploadId: upload.id
+            })));
+          }
+          return { upload, reused: false };
         });
+        res.status(result.reused ? 200 : 201).json(result.upload);
       }
-      
-      const updatedUpload = await storage.getSalesDataUpload(upload.id);
-      res.status(201).json(updatedUpload);
     } catch (error: any) {
       console.error("Error uploading sales data:", error);
       console.error("Error details:", error?.message, error?.code, error?.detail);
@@ -22204,7 +22244,8 @@ export async function registerRoutes(
       
       // SECURITY: Verify branch access for non-admin users
       const upload = await storage.getSalesDataUpload(id);
-      if (upload && !isUserAdmin(req) && upload.branchId) {
+      if (!upload) return res.status(404).json({ error: "Upload not found" });
+      if (!isUserAdmin(req)) {
         const hasAccess = await canAccessBranch(req, upload.branchId);
         if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذه البيانات" });
@@ -23080,7 +23121,7 @@ export async function registerRoutes(
       if (!productName || typeof productName !== 'string') {
         return res.status(400).json({ error: "اسم المنتج مطلوب" });
       }
-      if (quantity === undefined || quantity === null || isNaN(Number(quantity)) || Number(quantity) <= 0) {
+      if (!Number.isSafeInteger(Number(quantity)) || quantity === null || quantity === undefined || Number(quantity) <= 0) {
         return res.status(400).json({ error: "الكمية يجب أن تكون رقماً صحيحاً أكبر من صفر" });
       }
       if (!destination || typeof destination !== 'string') {
@@ -23099,11 +23140,18 @@ export async function registerRoutes(
           return res.status(400).json({ error: "معرف المنتج غير صالح" });
         }
       }
+      if (!normalizedProductId) {
+        return res.status(400).json({ error: "يجب اختيار منتج نهائي من الكتالوج لتسجيل إنتاج جديد" });
+      }
       const catalogProduct = normalizedProductId
         ? await getSelectableProductReference(normalizedProductId)
         : undefined;
       if (normalizedProductId && !catalogProduct) {
         return res.status(400).json({ error: "المنتج المحدد غير متاح لتسجيل إنتاج جديد" });
+      }
+      if (catalogProduct) {
+        const targetError = validateFinishedProductionTarget(catalogProduct, quantity, unit);
+        if (targetError) return res.status(400).json({ error: targetError });
       }
 
       // Validate status value if provided

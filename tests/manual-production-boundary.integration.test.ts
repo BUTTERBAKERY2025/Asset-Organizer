@@ -9,6 +9,7 @@ import {
   centralKitchenOrderItems,
   centralKitchenOrders,
   dailyProductionBatches,
+  products,
   users,
 } from "../shared/schema";
 import { MANUAL_PRODUCTION_RESERVED_FIELDS } from "../shared/manual-production-entry";
@@ -95,6 +96,7 @@ let fixture: {
   branchId: string;
   otherBranchId: string;
   user: any;
+  productId: number;
   sourceBatchId: number;
   otherSourceBatchId: number;
   linkedBatchId: number;
@@ -188,6 +190,7 @@ function actor(id: string, branchId: string) {
 function manualBody(branchId: string, extra: Record<string, unknown> = {}) {
   return {
     branchId,
+    productId: fixture!.productId,
     productName: "Manual boundary batch",
     quantity: 2,
     unit: "قطعة",
@@ -258,6 +261,9 @@ describe.sequential("manual daily-production boundary (development DB)", () => {
       { id: user.id, username: user.username, role: user.role, branchId },
       { id: otherUser.id, username: otherUser.username, role: otherUser.role, branchId: otherBranchId },
     ]);
+    const [product] = await databaseState.db.insert(products).values({
+      name: "Manual boundary batch", category: "bread", productType: "finish", unit: "قطعة",
+    }).returning({ id: products.id });
 
     const [order] = await databaseState.db.insert(centralKitchenOrders).values({
       orderNumber: `MANUAL-BOUNDARY-${suffix}`,
@@ -312,6 +318,7 @@ describe.sequential("manual daily-production boundary (development DB)", () => {
       branchId,
       otherBranchId,
       user,
+      productId: product.id,
       sourceBatchId: sourceBatch.id,
       otherSourceBatchId: otherSourceBatch.id,
       linkedBatchId: linkedBatch.id,

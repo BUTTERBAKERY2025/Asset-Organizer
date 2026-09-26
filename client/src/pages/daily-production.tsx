@@ -195,6 +195,7 @@ export default function DailyProductionPage() {
   const [branchId, setBranchId] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [productName, setProductName] = useState<string>("");
+  const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [productCategory, setProductCategory] = useState<string>("");
   const [quantity, setQuantity] = useState<string>("");
   const [destination, setDestination] = useState<string>("display_bar");
@@ -505,6 +506,7 @@ export default function DailyProductionPage() {
         && submittedPayload.status === "finished";
       if (!quickMode) {
         setProductName("");
+        setSelectedProductId("");
         setProductCategory("");
         setQuantity("");
         setNotes("");
@@ -763,16 +765,20 @@ export default function DailyProductionPage() {
   // Helper to execute the actual batch creation
   const executeCreateBatch = () => {
     if (!requireIndependentEntryAcknowledgement()) return false;
-    const numericQuantity = parseInt(quantity, 10);
-    const product = products?.find(p => p.name === productName);
-    const resolvedCategory = productCategory || product?.category || null;
+    const numericQuantity = Number(quantity);
+    const product = products?.find(p => String(p.id) === selectedProductId);
+    if (!product) {
+      toast({ title: "بيانات ناقصة", description: "يجب اختيار منتج نهائي من الكتالوج", variant: "destructive" });
+      return false;
+    }
+    const resolvedCategory = product.category;
     const payload = {
       branchId,
-      productId: product?.id || null,
-      productName,
+      productId: product.id,
+      productName: product.name,
       productCategory: resolvedCategory,
       quantity: numericQuantity,
-      unit: product?.unit || "قطعة",
+      unit: product.unit,
       destination,
       notes: notes || null,
       productionDate: selectedDate, // User's local date for timezone-independent filtering
@@ -804,14 +810,18 @@ export default function DailyProductionPage() {
       return false;
     }
     
-    const numericQuantity = parseInt(quantity, 10);
-    if (isNaN(numericQuantity) || numericQuantity <= 0) {
+    const numericQuantity = Number(quantity);
+    if (!Number.isSafeInteger(numericQuantity) || numericQuantity <= 0) {
       toast({ title: "خطأ", description: "الكمية يجب أن تكون رقماً صحيحاً أكبر من صفر", variant: "destructive" });
       return false;
     }
     
-    const product = products?.find(p => p.name === productName);
-    const resolvedCategory = productCategory || product?.category || null;
+    const product = products?.find(p => String(p.id) === selectedProductId);
+    if (!product || !getSelectableCatalogRecords([product]).length || product.productType !== "finish" || !product.unit?.trim()) {
+      toast({ title: "بيانات ناقصة", description: "يجب اختيار منتج نهائي متاح بوحدة معتمدة من الكتالوج", variant: "destructive" });
+      return false;
+    }
+    const resolvedCategory = product.category;
     
     // Check for matching in-progress batch (only for sweets category)
     if (isSweetsCategory(resolvedCategory)) {
@@ -829,8 +839,7 @@ export default function DailyProductionPage() {
     }
     
     // No matching in-progress batch, proceed normally
-    executeCreateBatch();
-    return true;
+    return executeCreateBatch();
   };
 
   // Handle dialog: mark existing as finished, then create new batch
@@ -910,6 +919,10 @@ export default function DailyProductionPage() {
   // Helper to execute quick entry batch creation
   const executeQuickEntry = (product: Product, qty: number) => {
     if (!requireIndependentEntryAcknowledgement()) return false;
+    if (!Number.isSafeInteger(qty) || qty <= 0 || !getSelectableCatalogRecords([product]).length || product.productType !== "finish" || !product.unit?.trim()) {
+      toast({ title: "خطأ", description: "اختر منتجاً نهائياً متاحاً وكمية صحيحة بوحدته المعتمدة", variant: "destructive" });
+      return false;
+    }
     if (uncertainCreateIntent) {
       toast({
         title: "يوجد تسجيل غير محسوم",
@@ -924,7 +937,7 @@ export default function DailyProductionPage() {
       productName: product.name,
       productCategory: product.category,
       quantity: qty,
-      unit: product.unit || "قطعة",
+      unit: product.unit,
       destination,
       notes: null,
       productionDate: selectedDate, // User's local date for timezone-independent filtering
@@ -965,6 +978,7 @@ export default function DailyProductionPage() {
     setBranchId(String(payload.branchId || branchId));
     setSelectedDate(String(payload.productionDate || selectedDate));
     setProductName(String(payload.productName || ""));
+    setSelectedProductId(String(payload.productId || ""));
     setProductCategory(String(payload.productCategory || ""));
     setQuantity(String(payload.quantity || ""));
     setDestination(String(payload.destination || "display_bar"));
@@ -1186,8 +1200,8 @@ export default function DailyProductionPage() {
 
   const handleEditSave = () => {
     if (!editingBatch) return;
-    const qty = parseInt(editQuantity, 10);
-    if (isNaN(qty) || qty <= 0) {
+    const qty = Number(editQuantity);
+    if (!Number.isSafeInteger(qty) || qty <= 0) {
       toast({ title: "خطأ", description: "الكمية غير صحيحة", variant: "destructive" });
       return;
     }
@@ -1274,6 +1288,8 @@ export default function DailyProductionPage() {
   // Filter products by search
   const bakeryProducts = useMemo(() => {
     const filtered = getSelectableCatalogRecords(products || []).filter(p =>
+      p.productType === "finish" && !!p.unit?.trim()
+      &&
       p.category
       && BAKERY_CATEGORIES.includes(p.category)
     ) || [];
@@ -1294,6 +1310,8 @@ export default function DailyProductionPage() {
     });
     return getSelectableCatalogRecords(products)
       .filter(p =>
+        p.productType === "finish" && !!p.unit?.trim()
+        &&
         p.category
         && BAKERY_CATEGORIES.includes(p.category)
       )
@@ -1303,6 +1321,8 @@ export default function DailyProductionPage() {
 
   const categoryFilteredProducts = useMemo(() => {
     const allBakery = getSelectableCatalogRecords(products || []).filter(p =>
+      p.productType === "finish" && !!p.unit?.trim()
+      &&
       p.category
       && BAKERY_CATEGORIES.includes(p.category)
     ) || [];
@@ -1316,6 +1336,8 @@ export default function DailyProductionPage() {
 
   const categoryCounts = useMemo(() => {
     const allBakery = getSelectableCatalogRecords(products || []).filter(p =>
+      p.productType === "finish" && !!p.unit?.trim()
+      &&
       p.category
       && BAKERY_CATEGORIES.includes(p.category)
     ) || [];
@@ -1374,8 +1396,11 @@ export default function DailyProductionPage() {
 
   const handleQuickQuantitySubmit = () => {
     if (!quantityDialogProduct) return;
-    const qty = parseInt(quickQuantity, 10);
-    if (isNaN(qty) || qty <= 0) return;
+    const qty = Number(quickQuantity);
+    if (!Number.isSafeInteger(qty) || qty <= 0) {
+      toast({ title: "خطأ", description: "الكمية يجب أن تكون عدداً صحيحاً أكبر من صفر", variant: "destructive" });
+      return;
+    }
 
     if (!selectedChefId) {
       toast({ title: "اختر الشيف أولاً", description: "يرجى اختيار الشيف المنتج قبل تسجيل الإنتاج", variant: "destructive" });
@@ -2779,17 +2804,25 @@ export default function DailyProductionPage() {
           }} className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>اسم المنتج *</Label>
-              <Input
-                placeholder="اكتب اسم المنتج"
-                value={productName}
-                onChange={(e) => setProductName(e.target.value)}
-                className="h-11"
-                data-testid="input-manual-product-name"
-              />
+              <Select value={selectedProductId} onValueChange={(value) => {
+                const product = products?.find(p => String(p.id) === value);
+                setSelectedProductId(value);
+                setProductName(product?.name || "");
+                setProductCategory(product?.category || "");
+              }}>
+                <SelectTrigger className="h-11" data-testid="input-manual-product-name">
+                  <SelectValue placeholder="اختر المنتج من الكتالوج" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  {getSelectableCatalogRecords(products || []).filter(p => p.productType === "finish" && p.unit?.trim()).map(product => (
+                    <SelectItem key={product.id} value={String(product.id)}>{product.name} · {product.unit}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>الفئة</Label>
-              <Select value={productCategory} onValueChange={setProductCategory}>
+              <Select value={productCategory} disabled>
                 <SelectTrigger className="h-11" data-testid="select-manual-category">
                   <SelectValue placeholder="اختر الفئة" />
                 </SelectTrigger>
@@ -2806,6 +2839,7 @@ export default function DailyProductionPage() {
                 type="number"
                 inputMode="numeric"
                 min="1"
+                step="1"
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
                 placeholder="أدخل الكمية"
@@ -2882,6 +2916,7 @@ export default function DailyProductionPage() {
                 type="number"
                 inputMode="numeric"
                 min="1"
+                step="1"
                 value={quickQuantity}
                 onChange={(e) => setQuickQuantity(e.target.value)}
                 placeholder="أدخل الكمية"
@@ -2955,7 +2990,7 @@ export default function DailyProductionPage() {
               </Button>
               <Button
                 onClick={handleQuickQuantitySubmit}
-               disabled={!quickQuantity || parseInt(quickQuantity) <= 0 || createMutation.isPending || !independentEntryAcknowledged}
+               disabled={!Number.isSafeInteger(Number(quickQuantity)) || Number(quickQuantity) <= 0 || createMutation.isPending || !independentEntryAcknowledged}
                 className="h-12 text-sm bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 font-bold"
                 data-testid="btn-confirm-quantity"
               >
@@ -2988,6 +3023,7 @@ export default function DailyProductionPage() {
               <Input
                 type="number"
                 min="1"
+                step="1"
                 value={editQuantity}
                 onChange={(e) => setEditQuantity(e.target.value)}
               />

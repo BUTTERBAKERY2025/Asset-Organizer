@@ -78,3 +78,4 @@
 - [Branch bar custody](branch-bar-custody.md) — independent internal receipt starts prospectively; legacy auto receipts are not opening stock, and receipt totals are not post-sales availability.
 - [Catalog active flag types](catalog-active-types.md) — existing databases may hold boolean or text flags; normalize raw SQL before applying text functions.
 - [Upload provenance boundary](upload-provenance-boundary.md) — editable attachment URLs cannot prove ownership; resource checks alone permit forged references to orphan objects.
+- [External sales evidence](external-sales-evidence.md) — analytical imports and exact-upload retries do not prove inventory consumption or deduplicate overlapping sales events.

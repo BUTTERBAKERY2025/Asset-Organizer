@@ -76,6 +76,20 @@ beforeEach(() => {
 });
 
 describe("advanced explicit execution without database access", () => {
+  it("accepts an operationally enabled final product that is not sale-active", async () => {
+    state.queue = [[order], [item], [], [{ ...product, isActive: "false", operationsEnabled: true }], [{ quantity: 0 }], [{ id: 20, recipeBacked: true }]];
+    expect((await request()).statusCode).toBe(201);
+  });
+  it("rejects operationally disabled or raw products without creating a batch", async () => {
+    for (const invalid of [
+      { ...product, isActive: "false", operationsEnabled: false },
+      { ...product, productType: "inventory" },
+    ]) {
+      state.queue = [[order], [item], [], [invalid]];
+      expect((await request()).statusCode).toBe(409);
+      expect(state.inserted).toBeNull();
+    }
+  });
   it("creates only a linked recipe-backed in-progress batch and snapshots in the same transaction", async () => {
     state.queue = [[order], [item], [], [product], [{ quantity: 0 }], [{ id: 20, recipeBacked: true }]];
     const res = await request();
