@@ -520,7 +520,7 @@ export default function DailyProductionPage() {
       toast({ 
         title: "تم تسجيل الدفعة بنجاح", 
         description: wasDisplayBar 
-          ? `تم الربط التلقائي مع بار العرض - سجلها: ${user?.firstName || user?.username}` 
+          ? `تم ترحيل الإنتاج للمخزون؛ افتح محضر التسليم الداخلي ليؤكد البار الاستلام - سجلها: ${user?.firstName || user?.username}`
           : `سجلها: ${user?.firstName || user?.username}` 
       });
     },
@@ -630,7 +630,7 @@ export default function DailyProductionPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats", branchId, selectedDate] });
       queryClient.invalidateQueries({ queryKey: ["/api/finished-goods-inventory"] });
       queryClient.invalidateQueries({ queryKey: ["/api/display-bar/receipts"] });
-      toast({ title: "تم اكتمال الدفعة", description: result?.destination === 'display_bar' ? "تم ترحيلها للمخزون وبار العرض تلقائياً" : "تم تحديث حالة الدفعة وترحيلها للمخزون النهائي" });
+      toast({ title: "تم اكتمال الدفعة", description: result?.destination === 'display_bar' ? "تم ترحيل الإنتاج للمخزون؛ يلزم محضر تسليم واستلام فعلي قبل إتاحته للبار" : "تم تحديث حالة الدفعة وترحيلها للمخزون النهائي" });
     },
     onError: (error: any, variables: { context: ManualProductionContextIdentity }) => {
       if (!isManualProductionContextCurrent(latestManualContextRef.current, variables.context)) return;
@@ -1572,13 +1572,19 @@ export default function DailyProductionPage() {
           backHref="/production-dashboard"
           actions={
             <div className="flex flex-wrap items-center gap-2">
-              <Link href="/finished-goods-inventory">
+              <Link href={branchId && branchId !== "all" ? `/finished-goods-inventory?branchId=${encodeURIComponent(branchId)}` : "/finished-goods-inventory"}>
                 <Button variant="outline" size="sm" className="gap-2" data-testid="btn-finished-goods">
                   <Package className="h-4 w-4" />
                   <span className="hidden sm:inline">مخزون الإنتاج النهائي</span>
                   <span className="sm:hidden">المخزون</span>
                 </Button>
               </Link>
+              {branchId && branchId !== "all" && <Link href={`/finished-goods-inventory?branchId=${encodeURIComponent(branchId)}#branch-bar-handoffs`}>
+                <Button variant="outline" size="sm" className="gap-2" data-testid="btn-handoff-to-branch-bar">
+                  <Package className="h-4 w-4" />
+                  محضر تسليم إنتاج الفرع للبار
+                </Button>
+              </Link>}
               {user && (
                 <Badge variant="outline" className="gap-1 px-3 py-1.5 text-xs">
                   <User className="h-3 w-3" />

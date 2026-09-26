@@ -468,6 +468,7 @@ import {
   type FinishedGoodsInventory,
   type InsertFinishedGoodsInventory,
   finishedGoodsTransfers,
+  branchBarWorkflowActivation,
   type FinishedGoodsTransfer,
   type InsertFinishedGoodsTransfer,
   productionInventoryLogs,
@@ -674,7 +675,7 @@ import { allocatePosRefundAmounts } from "./pos-refund-allocation";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
 import { db, pool } from "./db";
-import { eq, and, gte, lte, desc, or, inArray, sql, isNull, isNotNull, ilike, ne } from "drizzle-orm";
+import { eq, and, gte, lte, lt, desc, or, inArray, sql, isNull, isNotNull, ilike, ne } from "drizzle-orm";
 
 function requireMaterialQuantity(
   value: number,
@@ -8106,6 +8107,16 @@ export class DatabaseStorage implements IStorage {
       conditions.push(inArray(dailyProductionBatches.branchId, allowedBranchIds));
     }
     
+    const [activation] = await db.select().from(branchBarWorkflowActivation).limit(1);
+    if (activation) {
+      // An older draft finished after activation is also a new receipt:
+      // do not let the historical repair endpoint acknowledge it.
+      conditions.push(lt(dailyProductionBatches.createdAt, activation.activatedAt));
+      conditions.push(or(
+        isNull(dailyProductionBatches.finishedAt),
+        lt(dailyProductionBatches.finishedAt, activation.activatedAt),
+      )!);
+    }
     const batches = await db.select().from(dailyProductionBatches).where(and(...conditions));
     
     const existingRefs = batches.length > 0 
@@ -8643,32 +8654,8 @@ export class DatabaseStorage implements IStorage {
         .returning();
       await postProductionBatchToStock(tx, id, undefined, undefined, { allowInitialPosting: true });
 
-      if (updated.destination === 'display_bar' && updated.productId) {
-        const batchRef = `PROD-${updated.id}`;
-        console.log(`[Auto-Receipt Finish] Creating receipt for batch ${batchRef}, product: ${updated.productName}`);
-        const existingReceipt = await tx.select({ id: displayBarReceipts.id })
-          .from(displayBarReceipts)
-          .where(eq(displayBarReceipts.productionBatch, batchRef))
-          .limit(1);
-        if (existingReceipt.length === 0) {
-          const saudiTime = getSaudiArabiaTime();
-          const receiptDate = updated.productionDate || saudiTime.date;
-          await tx.insert(displayBarReceipts).values({
-            branchId: updated.branchId,
-            productId: updated.productId,
-            receiptDate,
-            receiptTime: saudiTime.timeShort,
-            quantity: updated.quantity,
-            productionBatch: batchRef,
-            notes: `استلام تلقائي من إكمال دفعة الإنتاج - ${updated.productName}`,
-          });
-          console.log(`[Auto-Receipt Finish] Successfully created receipt for ${batchRef}`);
-        } else {
-          console.log(`[Auto-Receipt Finish] Receipt already exists for ${batchRef}, skipping`);
-        }
-      } else {
-        console.log(`[Auto-Receipt Finish] Skipping: destination=${updated.destination}, productId=${updated.productId}`);
-      }
+      // A production destination is intent, not evidence that the bar received it.
+      // The new handoff's receiving action alone posts a bar receipt.
 
       return updated;
     });
@@ -8726,33 +8713,7 @@ export class DatabaseStorage implements IStorage {
         );
         transferred = posting.posted;
 
-        if (newBatch.destination === 'display_bar' && newBatch.productId) {
-          const batchRef = `PROD-${newBatch.id}`;
-          console.log(`[Auto-Receipt] Creating receipt for batch ${batchRef}, product: ${newBatch.productName}, branch: ${newBatch.branchId}`);
-          const existingReceipt = await tx.select({ id: displayBarReceipts.id })
-            .from(displayBarReceipts)
-            .where(eq(displayBarReceipts.productionBatch, batchRef))
-            .limit(1);
-          if (existingReceipt.length === 0) {
-            const saudiTime = getSaudiArabiaTime();
-            const receiptDate = newBatch.productionDate || saudiTime.date;
-            await tx.insert(displayBarReceipts).values({
-              branchId: newBatch.branchId,
-              productId: newBatch.productId,
-              receiptDate,
-              receiptTime: saudiTime.timeShort,
-              quantity: newBatch.quantity,
-              receivedBy: userId || null,
-              productionBatch: batchRef,
-              notes: `استلام تلقائي من الإنتاج الفعلي اليومي - ${newBatch.productName}`,
-            });
-            console.log(`[Auto-Receipt] Successfully created receipt for ${batchRef}`);
-          } else {
-            console.log(`[Auto-Receipt] Receipt already exists for ${batchRef}, skipping`);
-          }
-        } else {
-          console.log(`[Auto-Receipt] Skipping: destination=${newBatch.destination}, productId=${newBatch.productId}`);
-        }
+        // New display-bar batches remain kitchen stock until documented handoff.
       } else {
         console.log(`[Auto-Receipt] Skipping batch ${newBatch?.id}: status=${batch.status}`);
       }
@@ -8863,31 +8824,7 @@ export class DatabaseStorage implements IStorage {
         );
         transferred = postingResult.posted;
 
-        if (updated.destination === 'display_bar' && updated.productId) {
-          const batchRef = `PROD-${updated.id}`;
-          console.log(`[Auto-Receipt Update] Creating receipt for batch ${batchRef}, product: ${updated.productName}`);
-          const existingReceipt = await tx.select({ id: displayBarReceipts.id })
-            .from(displayBarReceipts)
-            .where(eq(displayBarReceipts.productionBatch, batchRef))
-            .limit(1);
-          if (existingReceipt.length === 0) {
-            const saudiTime = getSaudiArabiaTime();
-            const receiptDate = updated.productionDate || saudiTime.date;
-            await tx.insert(displayBarReceipts).values({
-              branchId: updated.branchId,
-              productId: updated.productId,
-              receiptDate,
-              receiptTime: saudiTime.timeShort,
-              quantity: updated.quantity,
-              receivedBy: userId || null,
-              productionBatch: batchRef,
-              notes: `استلام تلقائي من الإنتاج الفعلي اليومي - ${updated.productName}`,
-            });
-            console.log(`[Auto-Receipt Update] Successfully created receipt for ${batchRef}`);
-          } else {
-            console.log(`[Auto-Receipt Update] Receipt already exists for ${batchRef}, skipping`);
-          }
-        }
+        // Finishing a batch cannot acknowledge its physical bar receipt.
       }
       
       return { batch: updated, transferred };
@@ -13975,6 +13912,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async transferFinishedGoods(inventoryId: number, quantity: number, destinationType: string, destinationBranchId?: string, notes?: string, userId?: string, userName?: string): Promise<FinishedGoodsTransfer> {
+    if (destinationType === "display_bar" || destinationType === "بار_العرض")
+      throw new Error("استخدم محضر تسليم البار الداخلي بدلاً من التحويل الفوري");
     // Never create a new instantly completed cross-branch transfer, even from a
     // non-HTTP caller. Historical rows retain their original status and balances.
     if (destinationType === "branch") {

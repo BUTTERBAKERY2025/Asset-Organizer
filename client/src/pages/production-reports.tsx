@@ -220,7 +220,12 @@ interface TransferItem {
   createdBy: string | null;
   createdByName: string | null;
   createdAt: string;
+  transportPolicy?: string | null;
   status: string;
+  usableQuantity?: number | null;
+  damagedQuantity?: number | null;
+  shortageQuantity?: number | null;
+  settlementStatus?: string | null;
 }
 
 function InventoryReportTab({ branchId, startDate, endDate }: { branchId: string; startDate: string; endDate: string }) {
@@ -416,6 +421,8 @@ function InventoryReportTab({ branchId, startDate, endDate }: { branchId: string
 }
 
 function TransfersReportTab({ branchId, startDate, endDate }: { branchId: string; startDate: string; endDate: string }) {
+  const actualTransferred = (t: TransferItem) =>
+    t.transportPolicy === "internal_bar_receipt" ? t.status === "received" ? t.usableQuantity || 0 : 0 : t.quantity || 0;
   const { data: transfers, isLoading } = useQuery<TransferItem[]>({
     queryKey: ["/api/finished-goods-transfers", branchId, startDate, endDate],
     queryFn: async () => {
@@ -430,7 +437,7 @@ function TransfersReportTab({ branchId, startDate, endDate }: { branchId: string
   });
 
   const totalTransferred = useMemo(() => 
-    transfers?.reduce((sum, t) => sum + (t.quantity || 0), 0) || 0
+    transfers?.reduce((sum, t) => sum + actualTransferred(t), 0) || 0
   , [transfers]);
 
   const getDestinationLabel = (type: string, branchName?: string | null) => {
@@ -449,14 +456,14 @@ function TransfersReportTab({ branchId, startDate, endDate }: { branchId: string
     const destinations: Record<string, number> = {};
     transfers?.forEach(t => {
       const dest = getDestinationLabel(t.destinationType, t.destinationBranchName);
-      destinations[dest] = (destinations[dest] || 0) + t.quantity;
+      destinations[dest] = (destinations[dest] || 0) + actualTransferred(t);
     });
     return Object.entries(destinations).map(([name, value]) => ({ name, value }));
   }, [transfers]);
 
   const displayBarTotal = useMemo(() => 
     transfers?.filter(t => t.destinationType === "display_bar" || t.destinationType === "بار_العرض")
-      .reduce((sum, t) => sum + t.quantity, 0) || 0
+      .reduce((sum, t) => sum + actualTransferred(t), 0) || 0
   , [transfers]);
 
   const branchTotal = useMemo(() => 
@@ -476,12 +483,21 @@ function TransfersReportTab({ branchId, startDate, endDate }: { branchId: string
 
   return (
     <div className="space-y-4">
+      {transfers?.some(t => t.transportPolicy === "internal_bar_receipt") && <Card className="border-amber-200"><CardContent className="p-3 text-sm">
+        <strong>عهدة مطبخ الفرع → البار (ليست طلب مطبخ مركزي)</strong>
+        <p>محجوز في المطبخ: {transfers.filter(t => t.transportPolicy === "internal_bar_receipt" && t.status === "pending").reduce((sum,t) => sum+t.quantity,0)}
+          {" · "}خرج وينتظر البار: {transfers.filter(t => t.transportPolicy === "internal_bar_receipt" && t.status === "in_transit").reduce((sum,t) => sum+t.quantity,0)}
+          {" · "}استُلم صالحاً: {transfers.filter(t => t.transportPolicy === "internal_bar_receipt").reduce((sum,t) => sum+(t.usableQuantity || 0),0)}
+          {" · "}تالف بالحجر: {transfers.filter(t => t.transportPolicy === "internal_bar_receipt").reduce((sum,t) => sum+(t.damagedQuantity || 0),0)}
+          {" · "}ناقص مفتوح: {transfers.filter(t => t.transportPolicy === "internal_bar_receipt" && t.settlementStatus === "open").reduce((sum,t) => sum+(t.shortageQuantity || 0),0)}
+        </p><p className="text-muted-foreground">تظهر العمليات ضمن فترة تاريخ التحويل. لا يدخل المحجوز أو المنتظر أو التالف في إجمالي المستلم الصالح للبار. أرقام الاستلام هنا تراكمية وليست رصيداً حالياً بعد المبيعات أو الهدر.</p>
+      </CardContent></Card>}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
           <CardContent className="p-3">
             <div className="flex items-center gap-2 mb-2">
               <ArrowRight className="h-4 w-4 text-blue-600" />
-              <span className="text-xs text-gray-500">إجمالي التحويلات</span>
+              <span className="text-xs text-gray-500">المحوّل / المستلم الصالح للبار</span>
             </div>
             <p className="text-2xl font-bold text-blue-700" data-testid="text-total-transfers">{totalTransferred}</p>
             <p className="text-xs text-gray-400">وحدة</p>
@@ -491,7 +507,7 @@ function TransfersReportTab({ branchId, startDate, endDate }: { branchId: string
           <CardContent className="p-3">
             <div className="flex items-center gap-2 mb-2">
               <Factory className="h-4 w-4 text-orange-600" />
-              <span className="text-xs text-gray-500">بار العرض</span>
+              <span className="text-xs text-gray-500">بار العرض (المستلم الصالح)</span>
             </div>
             <p className="text-2xl font-bold text-orange-700" data-testid="text-display-bar">{displayBarTotal}</p>
             <p className="text-xs text-gray-400">وحدة</p>
@@ -611,6 +627,9 @@ function TransfersReportTab({ branchId, startDate, endDate }: { branchId: string
                     <td className="p-2 font-medium">{t.productName}</td>
                     <td className="p-2">
                       <Badge variant="outline">{t.quantity} {t.unit || "وحدة"}</Badge>
+                      {t.transportPolicy === "internal_bar_receipt" && <p className="text-xs text-muted-foreground">
+                        {t.status === "pending" ? "محجوز بالمطبخ" : t.status === "in_transit" ? "بانتظار البار" : t.status === "received" ? `استلم البار ${t.usableQuantity || 0} صالح · ${t.damagedQuantity || 0} تالف · ${t.shortageQuantity || 0} ناقص` : "ملغى"}
+                      </p>}
                     </td>
                     <td className="p-2 text-gray-500">{t.sourceBranchName || "-"}</td>
                     <td className="p-2">

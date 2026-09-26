@@ -75,3 +75,5 @@
 - [Production evidence boundaries](production-evidence-boundaries.md) — the custom-domain Render service is separate from Replit publishing; match logs and database evidence to the affected deployment.
 - [Async route crash testing](async-route-crash-testing.md) — Express 4 ignores rejected handler promises; successful DB fixtures and direct-await tests can hide process-killing schema failures.
 - [Return inspection authority](reverse-logistics-authority.md) — recipient inspects and classifies; operations manager approves write-off; quarantine is not usable stock.
+- [Branch bar custody](branch-bar-custody.md) — independent internal receipt starts prospectively; legacy auto receipts are not opening stock, and receipt totals are not post-sales availability.
+- [Catalog active flag types](catalog-active-types.md) — existing databases may hold boolean or text flags; normalize raw SQL before applying text functions.

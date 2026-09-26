@@ -5,6 +5,7 @@ import memoize from "memoizee";
 import { storage } from "./storage";
 import { readEmployeeDocumentMetadata } from "./employee-documents-read";
 import { ProductionStockPostingError } from "./production-stock-posting";
+import { registerBranchBarHandoffRoutes } from "./branch-bar-handoffs";
 import { InactiveBranchStockReferenceError } from "./catalogue-branch-stock";
 import {
   manualProductionOperations,
@@ -602,6 +603,7 @@ export async function registerRoutes(
 
   // Register governance routes
   registerGovernanceRoutes(app);
+  registerBranchBarHandoffRoutes(app);
   registerFinancialReviewRoutes(app);
   registerAuditPortalRoutes(app);
   registerJobOfferRoutes(app);
@@ -36505,6 +36507,8 @@ export async function registerRoutes(
       const user = req.currentUser;
       const inventoryId = parseInt(req.params.id);
       const { quantity, destinationType, destinationBranchId, notes } = req.body;
+      if (destinationType === "display_bar" || destinationType === "بار_العرض")
+        return res.status(409).json({ error: "استخدم محضر التسليم الداخلي واستلام البار؛ لا يجوز التحويل الفوري إلى البار" });
       
       if (!Number.isInteger(quantity) || quantity <= 0) {
         return res.status(400).json({ error: "الكمية يجب أن تكون أكبر من صفر" });

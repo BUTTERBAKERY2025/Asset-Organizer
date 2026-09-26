@@ -7782,6 +7782,15 @@ export const finishedGoodsTransfers = pgTable("finished_goods_transfers", {
   notes: text("notes"),
   status: text("status").default("completed").notNull(), // pending, completed, cancelled
   transportPolicy: text("transport_policy"), // null = historical/local immediate transfer; branch_receipt = staged branch shipment
+  requestKey: text("request_key"),
+  dispatchKey: text("dispatch_key"),
+  receiveKey: text("receive_key"),
+  cancelKey: text("cancel_key"),
+  usableQuantity: integer("usable_quantity"),
+  damagedQuantity: integer("damaged_quantity"),
+  shortageQuantity: integer("shortage_quantity"),
+  settlementStatus: text("settlement_status"),
+  receiptNotes: text("receipt_notes"),
   productionDate: text("production_date"), // original source lot date, not transfer date
   receivedQuantity: integer("received_quantity"),
   receivedBy: varchar("received_by").references(() => users.id),
@@ -7796,6 +7805,23 @@ export const finishedGoodsTransfers = pgTable("finished_goods_transfers", {
   index("idx_fg_transfers_type").on(table.destinationType),
   index("idx_fg_transfers_date").on(table.transferDate),
   index("idx_fg_transfers_status").on(table.status),
+  check("ck_internal_bar_handoff_totals", sql`${table.transportPolicy} <> 'internal_bar_receipt' OR (
+    ${table.quantity} > 0 AND ${table.destinationType} = 'display_bar'
+    AND ${table.destinationBranchId} = ${table.sourceBranchId}
+    AND ${table.productId} IS NOT NULL AND ${table.productionDate} IS NOT NULL
+    AND ${table.createdBy} IS NOT NULL AND ${table.requestKey} IS NOT NULL
+    AND ${table.status} IN ('pending','in_transit','received','cancelled')
+    AND (${table.status} <> 'in_transit' OR (${table.dispatchedAt} IS NOT NULL AND ${table.dispatchKey} IS NOT NULL))
+    AND (${table.status} <> 'received' OR (
+      ${table.dispatchedAt} IS NOT NULL AND ${table.receivedAt} IS NOT NULL
+      AND ${table.dispatchKey} IS NOT NULL AND ${table.receiveKey} IS NOT NULL
+      AND ${table.receivedBy} IS NOT NULL
+      AND ${table.usableQuantity} >= 0 AND ${table.damagedQuantity} >= 0
+      AND ${table.shortageQuantity} >= 0
+      AND ${table.receivedQuantity} = ${table.usableQuantity} + ${table.damagedQuantity}
+      AND ${table.shortageQuantity} = ${table.quantity} - ${table.receivedQuantity}
+    ))
+  )`),
 ]);
 
 export const insertFinishedGoodsTransferSchema = createInsertSchema(finishedGoodsTransfers).omit({
@@ -7805,6 +7831,36 @@ export const insertFinishedGoodsTransferSchema = createInsertSchema(finishedGood
 
 export type FinishedGoodsTransfer = typeof finishedGoodsTransfers.$inferSelect;
 export type InsertFinishedGoodsTransfer = z.infer<typeof insertFinishedGoodsTransferSchema>;
+
+// Confirmed bar receipts since activation, held separately from the kitchen
+// inventory. Until POS/waste consumption is integrated, quantity is cumulative
+// received usable units, NOT current saleable stock after sales.
+export const branchBarStock = pgTable("branch_bar_stock", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  productId: integer("product_id").notNull().references(() => products.id),
+  productionDate: text("production_date").notNull(),
+  unit: text("unit").notNull(),
+  quantity: integer("quantity").notNull().default(0),
+  quarantineQuantity: integer("quarantine_quantity").notNull().default(0),
+}, table => [
+  uniqueIndex("uq_branch_bar_stock_lot").on(table.branchId, table.productId, table.productionDate, table.unit),
+  check("ck_branch_bar_stock_nonnegative", sql`${table.quantity} >= 0 AND ${table.quarantineQuantity} >= 0`),
+]);
+
+export const branchBarHandoffEvents = pgTable("branch_bar_handoff_events", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  transferId: integer("transfer_id").notNull().references(() => finishedGoodsTransfers.id),
+  action: text("action").notNull(),
+  actorId: varchar("actor_id").notNull().references(() => users.id),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
+  payload: jsonb("payload").default({}).notNull(),
+}, table => [uniqueIndex("uq_branch_bar_handoff_event").on(table.transferId, table.action)]);
+
+export const branchBarWorkflowActivation = pgTable("branch_bar_workflow_activation", {
+  id: integer("id").primaryKey(),
+  activatedAt: timestamp("activated_at", { withTimezone: true }).defaultNow().notNull(),
+});
 
 // Production Inventory Movement Log - سجل حركة مخزون الإنتاج
 export const productionInventoryLogs = pgTable("production_inventory_logs", {

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Layout } from "@/components/layout";
+import { BranchBarHandoffs } from "@/components/branch-bar-handoffs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +71,7 @@ export default function FinishedGoodsInventoryPage() {
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   
   const printRef = useRef<HTMLDivElement>(null);
+  const barRequestRef = useRef<{ payload: string; key: string } | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { itemsPerPage, getPageItems } = usePagination(15);
@@ -163,6 +165,16 @@ export default function FinishedGoodsInventoryPage() {
       destinationBranchId?: string;
       notes?: string;
     }) => {
+      if (data.destinationType === "display_bar") {
+        const payload = JSON.stringify({ inventoryId: data.inventoryId, quantity: data.quantity, notes: data.notes || "" });
+        if (!barRequestRef.current || barRequestRef.current.payload !== payload)
+          barRequestRef.current = { payload, key: crypto.randomUUID() };
+        const res = await apiRequest("POST", "/api/branch-bar-handoffs", {
+          inventoryId: data.inventoryId, quantity: data.quantity,
+          notes: data.notes, idempotencyKey: barRequestRef.current.key,
+        });
+        return res.json();
+      }
       const res = await apiRequest("POST", `/api/finished-goods-inventory/${data.inventoryId}/transfer`, {
         quantity: data.quantity,
         destinationType: data.destinationType,
@@ -172,14 +184,16 @@ export default function FinishedGoodsInventoryPage() {
       return res.json();
     },
     onSuccess: () => {
+      barRequestRef.current = null;
       refetch();
+      queryClient.invalidateQueries({ queryKey: ["/api/branch-bar-handoffs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/finished-goods-transfers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/production-inventory-logs"] });
       setShowTransferDialog(false);
       setSelectedItem(null);
       setTransferQuantity("");
       setTransferNotes("");
-      toast({ title: destinationType === "branch" ? "تم حجز الكمية، بانتظار شحنها من المصدر" : "تم التحويل بنجاح" });
+      toast({ title: destinationType === "branch" ? "تم حجز الكمية، بانتظار شحنها من المصدر" : destinationType === "display_bar" ? "تم حجز الكمية، وثّق خروجها ثم يؤكد البار استلامها" : "تم التحويل بنجاح" });
     },
     onError: (error: any) => {
       toast({ title: "خطأ", description: error.message, variant: "destructive" });
@@ -306,6 +320,7 @@ export default function FinishedGoodsInventoryPage() {
   return (
     <Layout>
       <div className="page-container space-y-4 sm:space-y-6" dir="rtl">
+        {branchId && <BranchBarHandoffs branchId={branchId} canEdit={canEdit("production")} onChanged={() => { void refetch(); void queryClient.invalidateQueries({ queryKey: ["/api/finished-goods-transfers"] }); }} />}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
             <h1 className="text-lg sm:text-xl md:text-2xl font-bold flex items-center gap-2">
