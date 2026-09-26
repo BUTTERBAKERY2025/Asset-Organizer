@@ -1,4 +1,8 @@
 -- Prospective, same-site branch kitchen to bar handoffs. Legacy receipts are not backfilled.
+BEGIN;
+SET LOCAL search_path = public, pg_catalog;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '60s';
 ALTER TABLE finished_goods_transfers ADD COLUMN IF NOT EXISTS request_key text;
 ALTER TABLE finished_goods_transfers ADD COLUMN IF NOT EXISTS dispatch_key text;
 ALTER TABLE finished_goods_transfers ADD COLUMN IF NOT EXISTS receive_key text;
@@ -41,7 +45,7 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_internal_bar_handoff_totals'
                  AND conrelid = 'finished_goods_transfers'::regclass) THEN
     ALTER TABLE finished_goods_transfers ADD CONSTRAINT ck_internal_bar_handoff_totals CHECK (
-      transport_policy <> 'internal_bar_receipt' OR (
+      transport_policy IS DISTINCT FROM 'internal_bar_receipt' OR COALESCE((
         quantity > 0 AND destination_type = 'display_bar'
         AND destination_branch_id = source_branch_id AND product_id IS NOT NULL
         AND production_date IS NOT NULL AND created_by IS NOT NULL
@@ -54,7 +58,24 @@ BEGIN
           AND received_quantity = usable_quantity + damaged_quantity
           AND shortage_quantity = quantity - received_quantity
         ))
-      )
+      ), false)
     );
   END IF;
 END $$;
+-- Do not change access to the pre-existing finished_goods_transfers table.
+ALTER TABLE public.branch_bar_stock ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.branch_bar_handoff_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.branch_bar_workflow_activation ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.branch_bar_stock, public.branch_bar_handoff_events, public.branch_bar_workflow_activation FROM PUBLIC;
+REVOKE ALL ON SEQUENCE public.branch_bar_stock_id_seq, public.branch_bar_handoff_events_id_seq FROM PUBLIC;
+DO $$
+DECLARE role_name text;
+BEGIN
+  FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
+      EXECUTE format('REVOKE ALL ON public.branch_bar_stock, public.branch_bar_handoff_events, public.branch_bar_workflow_activation FROM %I', role_name);
+      EXECUTE format('REVOKE ALL ON SEQUENCE public.branch_bar_stock_id_seq, public.branch_bar_handoff_events_id_seq FROM %I', role_name);
+    END IF;
+  END LOOP;
+END $$;
+COMMIT;

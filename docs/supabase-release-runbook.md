@@ -1,6 +1,6 @@
 # Supabase release preparation — operator runbook
 
-**Not applied to production or any Supabase project.** These are individually reviewed, additive changes, not a concatenated migration bundle. `docs/supabase-release-gap-audit.md` is historical read-only evidence for the documented target, not proof of Render's effective connection. The application must not be deployed until an authorized operator confirms its actual database target, obtains approval and completes the gates below. Do not use `db:push`, app startup, or Replit managed-production SQL to migrate external Supabase.
+**Application update, 2026-09-26:** Following explicit user approval, hardened 042/045/043/044 were applied individually to `irgeqdrdaejhedlcbvzz`; maintenance 039 was already present and skipped. See `docs/supabase-release-applied-2026-09-26.md` for checks and remaining limitations. Do not replay these scripts merely because an earlier audit called them absent. The procedure below remains guidance for other targets or future changes; it is not a statement that the authorized application is still pending. The target confirmation does not independently prove Render's effective connection. Do not use `db:push`, app startup, or Replit managed-production SQL to migrate external Supabase.
 
 ## Preflight and approval
 

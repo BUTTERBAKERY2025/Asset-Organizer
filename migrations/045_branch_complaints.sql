@@ -2,6 +2,9 @@
 -- as varchar primary keys. App-server access only; no browser-role grants.
 -- No historical data is imported or changed.
 BEGIN;
+SET LOCAL search_path = public, pg_catalog;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '60s';
 
 CREATE TABLE IF NOT EXISTS public.branch_complaints (
   id serial PRIMARY KEY,

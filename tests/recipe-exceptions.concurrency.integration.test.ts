@@ -28,7 +28,13 @@ describe("recipe exception one-use database boundary (isolated development schem
           central_kitchen_order_item_id integer, recipe_backed boolean
         );
       `);
-      await client.query(readFileSync("migrations/043_recipe_exceptions.sql", "utf8"));
+      const migration = readFileSync("migrations/043_recipe_exceptions.sql", "utf8");
+      const publicSearchPath = "SET LOCAL search_path = public, pg_catalog;";
+      expect(migration).toContain(publicSearchPath);
+      // Only the disposable test copy targets this isolated schema; production SQL stays public.
+      await client.query(migration
+        .replace(publicSearchPath, `SET LOCAL search_path = "${schema}", pg_catalog;`)
+        .replaceAll("public.", `"${schema}".`));
       await client.query(`
         INSERT INTO branches VALUES ('kitchen');
         INSERT INTO users VALUES ('requester'), ('responsible');

@@ -44,7 +44,13 @@ describe.skipIf(!localOnly)("migration 044 on an isolated local development sche
           (31, 30, 11, NULL, 'piece', 10, NULL, NULL, NULL, NULL),
           (32, 30, 11, NULL, 'piece', 10, NULL, NULL, NULL, NULL);
       `);
-      await admin.query(readFileSync(new URL("../migrations/044_advanced_request_coverage.sql", import.meta.url), "utf8"));
+      const migration = readFileSync(new URL("../migrations/044_advanced_request_coverage.sql", import.meta.url), "utf8");
+      const publicSearchPath = "SET LOCAL search_path = public, pg_catalog;";
+      expect(migration).toContain(publicSearchPath);
+      // Only the disposable test copy targets this isolated schema; production SQL stays public.
+      await admin.query(migration
+        .replace(publicSearchPath, `SET LOCAL search_path = "${schema}", pg_catalog;`)
+        .replaceAll("public.", `"${schema}".`));
       await a.query("BEGIN");
       await a.query("INSERT INTO advanced_production_request_links(plan_item_id,request_item_id,reason) VALUES (9,31,'approved demand')");
       await expect(a.query("UPDATE production_order_items SET execution_unit = 'kg' WHERE id = 9"))

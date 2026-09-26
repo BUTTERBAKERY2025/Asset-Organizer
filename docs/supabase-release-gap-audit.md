@@ -1,5 +1,7 @@
 # Supabase release gap audit — read-only, 2026-09-26
 
+> Historical pre-application audit. Later on 2026-09-26, the user authorized this exact Supabase target: maintenance was found already present; the remaining 042/043/044/045 additions were hardened, applied and verified. See `supabase-release-applied-2026-09-26.md` for current execution evidence. The missing-object and unreviewed-script statements below describe the earlier snapshot, not current presence. Unrelated drift and full operational readiness remain unresolved.
+
 **Decision: NOT release-ready.** This is an object-level inspection of the **documented external target** `irgeqdrdaejhedlcbvzz` using the connected Supabase MCP's read-only SQL. It does **not** establish that Render/current production traffic actually connects to that project. No DDL/DML, migration, `db:push`, deployment, or application runtime test was performed. Confirm Render's effective database target separately, without disclosing its credentials, before treating this as a production certification.
 
 ## Evidence and scope

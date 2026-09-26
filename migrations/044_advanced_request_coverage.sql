@@ -1,5 +1,8 @@
 -- Prospective full-item coverage only. Apply manually in production after review.
 BEGIN;
+SET LOCAL search_path = public, pg_catalog;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '60s';
 ALTER TABLE daily_production_batches
   ADD COLUMN IF NOT EXISTS advanced_request_item_id integer
     REFERENCES central_kitchen_order_items(id) ON DELETE RESTRICT;
@@ -43,7 +46,7 @@ BEGIN
       OR (SELECT product_type FROM products WHERE id = i.product_id) IS DISTINCT FROM 'finish'
       OR NOT EXISTS (SELECT 1 FROM products product WHERE product.id = i.product_id
         AND (product.operations_enabled IS TRUE OR
-          lower(btrim(COALESCE(product.is_active, 'true'))) NOT IN ('false','inactive','0','f','no')))
+          lower(btrim(COALESCE(product.is_active::text, 'true'))) NOT IN ('false','inactive','0','f','no')))
       OR i.execution_unit IS DISTINCT FROM NULL AND i.execution_unit IS DISTINCT FROM demand.unit
       OR i.target_quantity IS NULL OR i.target_quantity <= 0
       OR demand.requested_quantity <= 0 OR demand.requested_quantity <> trunc(demand.requested_quantity)
@@ -214,4 +217,21 @@ END $$;
 DROP TRIGGER IF EXISTS guard_linked_plan_order ON advanced_production_orders;
 CREATE TRIGGER guard_linked_plan_order BEFORE UPDATE OR DELETE ON advanced_production_orders
 FOR EACH ROW EXECUTE FUNCTION guard_linked_plan_order();
+ALTER TABLE public.advanced_production_request_links ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.advanced_production_request_links FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.check_advanced_request_coverage(integer),
+  public.guard_advanced_request_link(), public.guard_advanced_batch_request_provenance(),
+  public.guard_request_direct_coverage(), public.guard_request_linked_identity(),
+  public.guard_linked_request_order(), public.guard_linked_plan_identity(),
+  public.guard_linked_plan_order() FROM PUBLIC;
+DO $$
+DECLARE role_name text;
+BEGIN
+  FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
+      EXECUTE format('REVOKE ALL ON public.advanced_production_request_links FROM %I', role_name);
+      EXECUTE format('REVOKE ALL ON FUNCTION public.check_advanced_request_coverage(integer), public.guard_advanced_request_link(), public.guard_advanced_batch_request_provenance(), public.guard_request_direct_coverage(), public.guard_request_linked_identity(), public.guard_linked_request_order(), public.guard_linked_plan_identity(), public.guard_linked_plan_order() FROM %I', role_name);
+    END IF;
+  END LOOP;
+END $$;
 COMMIT;

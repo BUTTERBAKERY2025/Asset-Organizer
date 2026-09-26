@@ -1,6 +1,6 @@
 # Live runtime identity — 2026-09-26
 
-Read-only observations; no deployment or database changes.
+Initial read-only observations. Update: the user later explicitly authorized database additions on `irgeqdrdaejhedlcbvzz`; those were applied as documented in `supabase-release-applied-2026-09-26.md`. No deployment was performed. This does not independently establish Render's database connection identity.
 
 - `https://thebutterbakery.com/api/health` returned HTTP 200 with `database: connected`. Response headers identified Render behind Cloudflare. The `www` host redirects to the canonical domain.
 - The same service's `/api/version` returned version `2026-02-23-v3` with a build marker. This identifies the observed response, not a verified repository commit.
@@ -9,6 +9,6 @@ Read-only observations; no deployment or database changes.
 
 **Unresolved:** Public health proves connectivity but does not identify the database host/project used by Render. Neither development environment configuration nor a matching repository name proves that mapping.
 
-Before any database write, obtain the effective database hostname/project reference and database schema from the Render service owner or authorized read-only provider metadata, plus current backup/restore readiness. Only non-secret host/project information is needed; never copy connection strings, passwords, tokens or environment-value screenshots containing credentials.
+The exact Supabase project was subsequently confirmed and authorized by the user, who reported a September 26 backup; restoration was not tested. Before claiming end-to-end Render production verification, still obtain its effective database hostname/project reference and schema from the service owner or authorized read-only provider metadata. Only non-secret host/project information is needed; never copy connection strings, passwords, tokens or environment-value screenshots containing credentials.
 
-The release remains blocked pending target confirmation and the reviewed preflight in `supabase-release-runbook.md`. No automated Replit publication can be treated as a deployment of this Render service.
+Database additions on the authorized Supabase target are complete. Application release and authenticated operational verification remain separate; no automated Replit publication can be treated as a deployment of this Render service.

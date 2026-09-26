@@ -1,4 +1,8 @@
 -- Prospective boundary: no historical batch is changed or retroactively denied.
+BEGIN;
+SET LOCAL search_path = public, pg_catalog;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '60s';
 CREATE TABLE IF NOT EXISTS central_kitchen_recipe_exceptions (
   id serial PRIMARY KEY,
   order_id integer NOT NULL REFERENCES central_kitchen_orders(id) ON DELETE RESTRICT,
@@ -88,3 +92,19 @@ END $$;
 DROP TRIGGER IF EXISTS trg_linked_recipe_exception ON daily_production_batches;
 CREATE TRIGGER trg_linked_recipe_exception BEFORE INSERT OR UPDATE ON daily_production_batches
 FOR EACH ROW EXECUTE FUNCTION enforce_linked_recipe_exception();
+ALTER TABLE public.central_kitchen_recipe_exceptions ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.central_kitchen_recipe_exceptions FROM PUBLIC;
+REVOKE ALL ON SEQUENCE public.central_kitchen_recipe_exceptions_id_seq FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.enforce_linked_recipe_exception() FROM PUBLIC;
+DO $$
+DECLARE role_name text;
+BEGIN
+  FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
+      EXECUTE format('REVOKE ALL ON public.central_kitchen_recipe_exceptions FROM %I', role_name);
+      EXECUTE format('REVOKE ALL ON SEQUENCE public.central_kitchen_recipe_exceptions_id_seq FROM %I', role_name);
+      EXECUTE format('REVOKE ALL ON FUNCTION public.enforce_linked_recipe_exception() FROM %I', role_name);
+    END IF;
+  END LOOP;
+END $$;
+COMMIT;
