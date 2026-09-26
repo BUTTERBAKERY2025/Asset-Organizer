@@ -206,14 +206,14 @@ content_type = "text/markdown"
 id = "vcg8fKr7CntjpenmhOR_H"
 uri = "file://docs/production-phase-one-rules.md"
 type = "text"
-title = "قواعد المرحلة الأولى — المحاور السبعة"
-description = "مسودة اعتماد توضح القواعد الحالية والمطلوبة وأدلة التحقق ومعايير القبول، دون ادعاء مراجعة البيانات الحية."
+title = "قواعد المرحلة الأولى — بعد تثبيت القرارين"
+description = "تسجيل استثناء الوصفة باعتماد مسؤول الإنتاج، والاستيراد الخارجي مصدرًا للمبيعات، مع فصل القرارات عن التنفيذ والتحقق الحي."
 logical_id = "0ab308fa-f8d2-47bd-a2ba-1a112cf2ea80"
-content_hash = "sha256:d2ce1a0bca7fab48003c494d8501fa442287cef7366045053b1943ca64ee39ce"
-size = 17764
-mtime_ms = 1790418911670
-storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/0ab308fa-f8d2-47bd-a2ba-1a112cf2ea80/6e4dce30-c259-495c-bd81-1cb34e08fdde"
-storage_version_token = "1790418940066684"
+content_hash = "sha256:dd88264d749a98055a2864d93aaf5fe217e3344c59acb3dcb04f00921ad6cdf5"
+size = 19792
+mtime_ms = 1790419728005
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/0ab308fa-f8d2-47bd-a2ba-1a112cf2ea80/a3249141-e0ca-40d0-b37d-51c84c8a5bbc"
+storage_version_token = "1790419788425019"
 content_type = "text/markdown"
 
 [[outputs]]
