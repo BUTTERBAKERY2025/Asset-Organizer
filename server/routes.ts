@@ -224,6 +224,7 @@ import { registerCentralKitchenRecipeRoutes } from "./central-kitchen-recipes";
 import { registerProductionOperationsReportRoute } from "./production-operations-report";
 import { registerAdvancedProductionExecutionRoutes, advancedExecutionRows } from "./advanced-production-execution";
 import { registerCentralKitchenWorkplanRoute } from "./central-kitchen-workplan";
+import { registerProductionPlanningRoute } from "./production-planning";
 import { registerBranchOperationsRoute } from "./branch-operations";
 import { registerBranchComplaintRoutes } from "./branch-complaints";
 import { registerMaintenanceTicketRoutes } from "./maintenance-tickets";
@@ -626,6 +627,7 @@ export async function registerRoutes(
   registerProductionOperationsReportRoute(app);
   registerAdvancedProductionExecutionRoutes(app);
   registerCentralKitchenWorkplanRoute(app);
+  registerProductionPlanningRoute(app);
   registerBranchOperationsRoute(app);
   registerBranchComplaintRoutes(app);
   registerMaintenanceTicketRoutes(app);
