@@ -12,7 +12,8 @@ export type ExceptionBinding = {
 };
 
 export function normalizeException(row: Record<string, unknown>): RecipeException {
-  const field = (camel: string, snake: string) => row[camel] ?? row[snake];
+  // Explicit API nulls (notably "not consumed") must survive normalization.
+  const field = (camel: string, snake: string) => row[camel] !== undefined ? row[camel] : row[snake];
   return {
     id: Number(row.id),
     orderId: Number(field("orderId", "order_id")),

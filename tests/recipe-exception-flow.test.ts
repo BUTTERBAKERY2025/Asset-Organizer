@@ -32,6 +32,29 @@ describe("request-linked recipe exception flow", () => {
       quantity: 7, productionDate: binding.productionDate, recipeBacked: true, idempotencyKey: "intent-1",
     });
   });
+  it("preserves explicit nulls in the camelCase API response and enables its exact approval", () => {
+    const response = JSON.parse(JSON.stringify({ exceptions: [approved], canApprove: true }));
+    const normalized = normalizeException(response.exceptions[0]);
+    expect(normalized.consumedBatchId).toBeNull();
+    expect(normalized.consumedAt).toBeNull();
+    expect(normalizeException(normalized as unknown as Record<string, unknown>)).toEqual(normalized);
+    expect(matchingApprovedException([normalized], binding)?.id).toBe(88);
+    expect(linkedBatchPayload(binding, false, [normalized], "api-intent")).toMatchObject({
+      recipeBacked: false, recipeExceptionId: 88,
+    });
+  });
+  it("does not fall back from explicit camelCase nulls or assume a missing consumption field is unused", () => {
+    const normalized = normalizeException({
+      ...approved, consumed_batch_id: 999, reviewedBy: null, reviewed_by: "stale-reviewer",
+    });
+    expect(normalized.consumedBatchId).toBeNull();
+    expect(normalized.reviewedBy).toBeNull();
+    expect(matchingApprovedException([normalized], binding)).toBeUndefined();
+    const { consumedBatchId, ...incomplete } = approved;
+    expect(matchingApprovedException([normalizeException(incomplete)], binding)).toBeUndefined();
+    const used = normalizeException({ ...approved, consumedBatchId: 999 });
+    expect(matchingApprovedException([used], binding)).toBeUndefined();
+  });
   it("uses only an exact approved, unconsumed exception, bound to the request item and unit", () => {
     expect(linkedBatchPayload(binding, false, [approved], "intent-2")).toEqual({
       quantity: 7, productionDate: binding.productionDate, recipeBacked: false, recipeExceptionId: 88, idempotencyKey: "intent-2",
