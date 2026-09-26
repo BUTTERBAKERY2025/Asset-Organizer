@@ -15,6 +15,8 @@ export const MANUAL_PRODUCTION_RESERVED_FIELDS = [
   "advanced_idempotency_key",
   "advanced_payload_fingerprint",
   "recipeBacked",
+  "recipeExceptionId",
+  "recipe_exception_id",
   "centralKitchenOrderItemId",
   "centralKitchenIdempotencyKey",
   "centralKitchenPayloadFingerprint",

@@ -18,6 +18,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { RecipeMaterialsPreview, useRecipeMaterialRequirements } from "@/components/central-kitchen/recipe-materials";
 import { getFinishReadiness } from "@/components/central-kitchen/finish-readiness";
 import { useVisualViewportDialog } from "@/components/central-kitchen/use-visual-viewport-dialog";
+import { RecipeExceptions, useOrderRecipeExceptions } from "@/components/central-kitchen/recipe-exceptions";
 
 type Batch = {
   id: number;
@@ -89,7 +90,8 @@ export function LinkedBatches({
   orderId: string | number;
   kitchenAccessible: boolean;
 }) {
-  const { canEdit } = usePermissions();
+  const { canEdit, canView } = usePermissions();
+  const exceptions = useOrderRecipeExceptions(orderId, canView("production"));
   const { toast } = useToast();
   const client = useQueryClient();
   const [finishError, setFinishError] = useState<FinishError | null>(null);
@@ -121,9 +123,10 @@ export function LinkedBatches({
     },
   });
 
-  if (!batches.length) return null;
   return (
-    <section className="rounded-lg border border-violet-200 bg-violet-50/40 p-4">
+    <div className="space-y-3">
+    {canView("production") && <RecipeExceptions orderId={orderId} />}
+    {batches.length > 0 && <section className="rounded-lg border border-violet-200 bg-violet-50/40 p-4">
       <h3 className="font-semibold">دفعات إنتاج مرتبطة</h3>
       <p className="mb-3 text-xs text-muted-foreground">
         الدفعات قيد التنفيذ تغطي الاحتياج قبل الشحن. الدفعات السابقة لا تُعاد
@@ -134,6 +137,7 @@ export function LinkedBatches({
           <LinkedBatchRow
             key={batch.id}
             batch={batch}
+            isException={exceptions.data?.exceptions.some(exception => exception.consumedBatchId === batch.id) === true}
             orderId={orderId}
             kitchenAccessible={kitchenAccessible}
             canFinish={canEdit("production")}
@@ -144,12 +148,14 @@ export function LinkedBatches({
           />
         ))}
       </div>
-    </section>
+    </section>}
+    </div>
   );
 }
 
 function LinkedBatchRow({
   batch,
+  isException,
   orderId,
   kitchenAccessible,
   canFinish,
@@ -159,6 +165,7 @@ function LinkedBatchRow({
   onClearFinishError,
 }: {
   batch: Batch;
+  isException: boolean;
   orderId: string | number;
   kitchenAccessible: boolean;
   canFinish: boolean;
@@ -402,8 +409,8 @@ function LinkedBatchRow({
               </>
             ) : (
               <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-                <p className="font-semibold">دفعة تاريخية غير مرتبطة بوصفة</p>
-                <p className="mt-1">سيستخدم الإنهاء القديم لتسجيل ناتج الدفعة ({batch.quantity}) في مخزون المنتج النهائي فقط. لا توجد لقطة مواد، ولن يُقرأ أو يُخصم أي مخزون خام.</p>
+                <p className="font-semibold">{isException ? "دفعة باستثناء معتمد دون وصفة" : "دفعة غير مرتبطة بوصفة"}</p>
+                <p className="mt-1">يسجل الإنهاء ناتج الدفعة ({batch.quantity}) في مخزون المنتج النهائي فقط. لا توجد لقطة مواد أو إثبات لاستهلاكها، ولن يُخصم مخزون خام.</p>
               </div>
             )}
             {finishError && <div role="alert" className="rounded-md border border-rose-300 bg-rose-50 p-3 text-sm text-rose-950"><p className="font-semibold">لم يتم إنهاء الدفعة</p><p className="mt-1">{finishError.outcomeUnknown ? "نتيجة الطلب غير معروفة. أغلق المراجعة واستخدم «إعادة التحقق» قبل أي محاولة أخرى." : finishError.message}</p></div>}

@@ -106,6 +106,7 @@ let fixture: {
   recipeBatchOrderId: number;
   recipeBatchOrderItemId: number;
   recipeBatchIdempotencyKey: string;
+  legacyBatchId: number;
   warehouseUser: any;
   sourceWarehouseUser: any;
 };
@@ -268,6 +269,7 @@ async function createApprovedRealOrder(productId = fixture.productId, quantity =
 
 async function createLinkedBatch(order: any, options: {
   recipeBacked: boolean;
+  recipeExceptionId?: number;
   productionDate: string;
   idempotencyKey?: string;
   quantity?: number;
@@ -282,6 +284,7 @@ async function createLinkedBatch(order: any, options: {
       quantity: options.quantity || 1,
       productionDate: options.productionDate,
       recipeBacked: options.recipeBacked,
+      ...(options.recipeExceptionId ? { recipeExceptionId: options.recipeExceptionId } : {}),
       idempotencyKey,
     },
   });
@@ -370,7 +373,7 @@ async function markTransferInTransit(transferId: number) {
     params: { id: String(transferId) },
     body: { status: "in_transit" },
   });
-  expect(response.statusCode).toBe(200);
+  expect(response.statusCode, JSON.stringify(response.body)).toBe(200);
 }
 
 async function supplyBalances() {
@@ -567,12 +570,40 @@ describe.sequential("recipe-backed central-kitchen batch materials (development 
       recipeBatchOrderId: 0,
       recipeBatchOrderItemId: 0,
       recipeBatchIdempotencyKey: "",
+      legacyBatchId: 0,
       warehouseUser,
       sourceWarehouseUser,
     };
     const { registerRoutes } = await import("../server/routes");
     await registerRoutes(createServer(), captureApp());
     fixture.recipe = await createApprovedRecipe();
+    // Construct a historical linked batch before prospective migration 043.
+    // Both this row and the migration DDL live in the rollback-only test transaction.
+    const legacyOrder = await createApprovedRealOrder();
+    const alreadyMigrated = (await databaseState.db.execute(sql`
+      SELECT to_regclass('central_kitchen_recipe_exceptions') IS NOT NULL AS applied
+    `)).rows[0].applied;
+    await databaseState.db.execute(sql`SET CONSTRAINTS ALL IMMEDIATE`);
+    if (alreadyMigrated) {
+      // If local development startup already applied 043, temporarily emulate
+      // a pre-migration row; the DDL and row are both rolled back after the suite.
+      await databaseState.db.execute(sql`ALTER TABLE daily_production_batches DISABLE TRIGGER trg_linked_recipe_exception`);
+    }
+    const legacy = await databaseState.db.execute(sql`
+      INSERT INTO daily_production_batches
+        (branch_id, product_id, product_name, quantity, unit, destination,
+         central_kitchen_order_item_id, production_date, recipe_backed, status, recorded_by)
+      VALUES (${kitchenBranchId}, ${productId}, 'Historical nonrecipe output', 2, 'tray',
+        'central_kitchen_order', ${legacyOrder.items[0].id}, '2099-01-04', false,
+        'in_progress', ${kitchenUser.id}) RETURNING id
+    `);
+    fixture.legacyBatchId = Number(legacy.rows[0].id);
+    await databaseState.db.execute(sql`SET CONSTRAINTS ALL IMMEDIATE`);
+    if (alreadyMigrated) {
+      await databaseState.db.execute(sql`ALTER TABLE daily_production_batches ENABLE TRIGGER trg_linked_recipe_exception`);
+    }
+    const { readFileSync } = await import("node:fs");
+    await databaseState.db.execute(sql.raw(readFileSync("migrations/043_recipe_exceptions.sql", "utf8")));
   }, 30_000);
 
   afterAll(async () => {
@@ -589,7 +620,7 @@ describe.sequential("recipe-backed central-kitchen batch materials (development 
       productionDate: "2099-01-01",
       idempotencyKey: createKey,
     });
-    expect(created.statusCode).toBe(201);
+    expect(created.statusCode, JSON.stringify(created.body)).toBe(201);
     expect(created.body).toMatchObject({ recipeBacked: true, status: "in_progress" });
     fixture.recipeBatchId = created.body.id;
     fixture.recipeBatchOrderId = order.id;
@@ -761,30 +792,75 @@ describe.sequential("recipe-backed central-kitchen batch materials (development 
     expect(afterSnapshots.rows).toEqual(beforeSnapshots.rows);
   });
 
-  it("does not infer recipe consumption for a legacy non-recipe linked batch", async () => {
-    const order = await createApprovedRealOrder();
-    const beforeMaterial = await materialState();
-    const created = await createLinkedBatch(order, {
-      recipeBacked: false,
-      productionDate: "2099-01-04",
+  it("requires a scoped responsible approval, exact identity and one-use consumption", async () => {
+    const order = await createApprovedRealOrder(fixture.noRecipeProductId);
+    const orderId = String(order.id), itemId = String(order.items[0].id);
+    const requestPath = "/api/central-kitchen-orders/:id/items/:itemId/recipe-exceptions";
+    const decisionPath = "/api/central-kitchen-orders/:id/recipe-exceptions/:exceptionId/approve";
+    const params = { id: orderId, itemId };
+    const requestBody = { quantity: 1, productionDate: "2099-03-10", reason: "No recipe available" };
+    const outsiderRequest = await invoke("post", requestPath, { user: fixture.outsiderUser, params, body: requestBody });
+    expect(outsiderRequest.statusCode).toBe(403);
+    const requested = await invoke("post", requestPath, { user: fixture.kitchenUser, params, body: requestBody });
+    expect(requested.statusCode, JSON.stringify(requested.body)).toBe(201);
+    expect(requested.body).toMatchObject({ orderId: order.id, itemId: order.items[0].id, status: "pending" });
+    const exId = requested.body.id;
+    const decisionParams = { id: orderId, exceptionId: String(exId) };
+    const ordinary = { ...fixture.kitchenUser, role: "manager", testPermissions: { ...permissions, production: ["view", "create", "edit", "approve"] } };
+    expect((await invoke("post", decisionPath, { user: ordinary, params: decisionParams, body: { reason: "Try" } })).statusCode).toBe(403);
+    expect((await invoke("post", decisionPath, { user: fixture.outsiderUser, params: decisionParams, body: { reason: "Try" } })).statusCode).toBe(403);
+    expect((await createLinkedBatch(order, { recipeBacked: false, recipeExceptionId: exId, productionDate: "2099-03-10" })).statusCode).toBe(409);
+    const approved = await invoke("post", decisionPath, { user: fixture.kitchenUser, params: decisionParams, body: { reason: "Responsible approval" } });
+    expect(approved.statusCode, JSON.stringify(approved.body)).toBe(200);
+    expect(approved.body).toMatchObject({ status: "approved", reviewedBy: fixture.kitchenUser.id });
+    expect((await invoke("post", decisionPath, { user: fixture.kitchenUser, params: decisionParams, body: { reason: "Again" } })).statusCode).toBe(409);
+    for (const [productionDate, quantity] of [["2099-03-11", 1], ["2099-03-10", 2]] as const) {
+      expect((await createLinkedBatch(order, { recipeBacked: false, recipeExceptionId: exId, productionDate, quantity })).statusCode).toBe(409);
+    }
+    const another = await createApprovedRealOrder(fixture.noRecipeProductId);
+    expect((await createLinkedBatch(another, { recipeBacked: false, recipeExceptionId: exId, productionDate: "2099-03-10" })).statusCode).toBe(409);
+    const intent = key("exception-consume");
+    const created = await createLinkedBatch(order, { recipeBacked: false, recipeExceptionId: exId, productionDate: "2099-03-10", idempotencyKey: intent });
+    expect(created.statusCode, JSON.stringify(created.body)).toBe(201);
+    const replay = await createLinkedBatch(order, { recipeBacked: false, recipeExceptionId: exId, productionDate: "2099-03-10", idempotencyKey: intent });
+    expect(replay.statusCode).toBe(200);
+    expect(replay.body.id).toBe(created.body.id);
+    expect((await createLinkedBatch(order, { recipeBacked: false, recipeExceptionId: exId, productionDate: "2099-03-10" })).statusCode).toBe(409);
+    const list = await invoke("get", "/api/central-kitchen-orders/:id/recipe-exceptions", { user: fixture.kitchenUser, params: { id: orderId } });
+    expect(list.body.canApprove).toBe(true);
+    expect(list.body.exceptions.find((row: any) => row.id === exId)).toMatchObject({ status: "consumed", consumedBatchId: created.body.id });
+    const rejectedRequest = await invoke("post", requestPath, { user: fixture.kitchenUser, params, body: { ...requestBody, productionDate: "2099-03-12" } });
+    const rejected = await invoke("post", "/api/central-kitchen-orders/:id/recipe-exceptions/:exceptionId/reject", {
+      user: fixture.kitchenUser,
+      params: { ...decisionParams, exceptionId: String(rejectedRequest.body.id) },
+      body: { reason: "Rejected" },
     });
-    expect(created.statusCode).toBe(201);
-    expect(created.body.recipeBacked).toBe(false);
+    expect(rejected.statusCode).toBe(200);
+    expect(rejected.body.status).toBe("rejected");
+    expect((await createLinkedBatch(order, {
+      recipeBacked: false, recipeExceptionId: rejected.body.id, productionDate: "2099-03-12",
+    })).statusCode).toBe(409);
+  });
+
+  it("does not infer recipe consumption for a legacy non-recipe linked batch", async () => {
+    const beforeMaterial = await materialState();
+    const created = { id: fixture.legacyBatchId };
+    const beforeFinished = Number((await batchEffects(created.id)).finishedQuantity);
 
     const finished = await invoke("post", "/api/daily-production/batches/:id/finish", {
       user: fixture.kitchenUser,
-      params: { id: String(created.body.id) },
+      params: { id: String(created.id) },
     });
     expect(finished.statusCode).toBe(200);
     expect(await materialState()).toEqual(beforeMaterial);
-    const effects = await batchEffects(created.body.id);
+    const effects = await batchEffects(created.id);
     expect(effects.movements).toEqual([]);
     expect(effects.logs).toHaveLength(1);
-    expect(effects.finishedQuantity).toBe("2");
+    expect(Number(effects.finishedQuantity)).toBe(beforeFinished + 2);
     const legacyRequirements = await invoke(
       "get",
       "/api/central-kitchen/production/batches/:batchId/material-requirements",
-      { user: fixture.kitchenUser, params: { batchId: String(created.body.id) } },
+      { user: fixture.kitchenUser, params: { batchId: String(created.id) } },
     );
     expect(legacyRequirements.body).toMatchObject({
       recipeBacked: false,
@@ -792,6 +868,74 @@ describe.sequential("recipe-backed central-kitchen batch materials (development 
       requirements: [],
       materialConsumptionStatus: "not_applicable",
     });
+  });
+
+  it("rolls back exception consumption with its failed batch transaction", async () => {
+    const order = await createApprovedRealOrder(fixture.noRecipeProductId);
+    const itemId = order.items[0].id;
+    const requested = await invoke("post", "/api/central-kitchen-orders/:id/items/:itemId/recipe-exceptions", {
+      user: fixture.kitchenUser,
+      params: { id: String(order.id), itemId: String(itemId) },
+      body: { quantity: 1, productionDate: "2099-04-02", reason: "No approved recipe" },
+    });
+    expect(requested.statusCode).toBe(201);
+    expect((await invoke("post", "/api/central-kitchen-orders/:id/recipe-exceptions/:exceptionId/approve", {
+      user: fixture.kitchenUser,
+      params: { id: String(order.id), exceptionId: String(requested.body.id) },
+      body: { reason: "Approved operational need" },
+    })).statusCode).toBe(200);
+    const rollback = new Error("ROLLBACK_EXCEPTION_BATCH");
+    await expect(databaseState.db.transaction(async (tx: any) => {
+      await tx.execute(sql`
+        INSERT INTO daily_production_batches
+          (branch_id, product_id, product_name, quantity, unit, destination,
+           central_kitchen_order_item_id, production_date, recipe_backed, recipe_exception_id,
+           status, recorded_by)
+        VALUES (${fixture.kitchenBranchId}, ${fixture.noRecipeProductId}, 'No recipe output',
+          1, 'tray', 'central_kitchen_order', ${itemId}, '2099-04-02',
+          false, ${requested.body.id}, 'in_progress', ${fixture.kitchenUser.id})
+      `);
+      const consumed = await tx.execute(sql`SELECT status FROM central_kitchen_recipe_exceptions WHERE id = ${requested.body.id}`);
+      expect(consumed.rows[0].status).toBe("consumed");
+      throw rollback;
+    })).rejects.toBe(rollback);
+    const state = await databaseState.db.execute(sql`
+      SELECT status FROM central_kitchen_recipe_exceptions WHERE id = ${requested.body.id}
+    `);
+    expect(state.rows[0].status).toBe("approved");
+    const created = await createLinkedBatch(order, {
+      recipeBacked: false, recipeExceptionId: requested.body.id, productionDate: "2099-04-02",
+    });
+    expect(created.statusCode, JSON.stringify(created.body)).toBe(201);
+  });
+
+  it("keeps a same-key retry to one consumed exception and one batch", async () => {
+    const order = await createApprovedRealOrder(fixture.noRecipeProductId);
+    const requested = await invoke("post", "/api/central-kitchen-orders/:id/items/:itemId/recipe-exceptions", {
+      user: fixture.kitchenUser,
+      params: { id: String(order.id), itemId: String(order.items[0].id) },
+      body: { quantity: 1, productionDate: "2099-04-03", reason: "No recipe" },
+    });
+    expect(requested.statusCode).toBe(201);
+    expect((await invoke("post", "/api/central-kitchen-orders/:id/recipe-exceptions/:exceptionId/approve", {
+      user: fixture.kitchenUser,
+      params: { id: String(order.id), exceptionId: String(requested.body.id) },
+      body: { reason: "Approved" },
+    })).statusCode).toBe(200);
+    const intent = key("parallel-exception");
+    const input = { recipeBacked: false, recipeExceptionId: requested.body.id, productionDate: "2099-04-03", idempotencyKey: intent };
+    // The rollback-only fixture owns one connection, so independent database
+    // transactions cannot be raced here without sharing a savepoint namespace.
+    const results = [await createLinkedBatch(order, input), await createLinkedBatch(order, input)];
+    expect(results.map(result => result.statusCode).sort()).toEqual([200, 201]);
+    expect(results[0].body.id).toBe(results[1].body.id);
+    const counts = await databaseState.db.execute(sql`
+      SELECT (SELECT count(*)::int FROM daily_production_batches
+        WHERE recipe_exception_id = ${requested.body.id}) AS batches,
+        (SELECT status FROM central_kitchen_recipe_exceptions
+        WHERE id = ${requested.body.id}) AS status
+    `);
+    expect(counts.rows[0]).toMatchObject({ batches: 1, status: "consumed" });
   });
 
   it("receives a fractional main-warehouse supply once and makes same-key confirmation replay safe", async () => {

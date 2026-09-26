@@ -262,6 +262,7 @@ import {
 import { apiCacheMiddleware, invalidateCacheForPath, invalidateCache, jsonSlimMiddleware } from "./api-cache";
 import { requireProductCatalogRead, noStoreProductCatalogRead } from "./product-catalog-access";
 import { registerBatchRoute } from "./batch-api";
+import { registerRecipeExceptionRoutes, assertApprovedRecipeException, RecipeExceptionError } from "./recipe-exceptions";
 import {
   canTransitionCentralKitchenOrder,
   centralKitchenRequestChangeSchema,
@@ -339,6 +340,7 @@ export async function registerRoutes(
 
   // Setup authentication
   await setupAuth(app);
+  registerRecipeExceptionRoutes(app);
   // قفل حساب المراجع الخارجي: مقصور على /api/audit/* و /api/auth/* فقط
   app.use(auditorApiLockdown);
 
@@ -8575,12 +8577,13 @@ export async function registerRoutes(
     isAuthenticated,
     requirePermission("production", "create"),
     async (req, res) => {
+      try {
       const orderId = centralKitchenOrderIdSchema.safeParse(req.params.id);
       const itemId = centralKitchenOrderIdSchema.safeParse(req.params.itemId);
       const body = centralKitchenLinkedBatchSchema.safeParse(req.body);
       if (!orderId.success || !itemId.success || !body.success) return res.status(400).json({ error: "بيانات دفعة الإنتاج غير صالحة" });
-      if (body.data.recipeBacked && !body.data.idempotencyKey) {
-        return res.status(400).json({ error: "الدفعة المرتبطة بالوصفة تتطلب idempotencyKey ضمن بيانات المتصفح" });
+      if (!body.data.idempotencyKey) {
+        return res.status(400).json({ error: "الدفعة المرتبطة بالطلب تتطلب idempotencyKey ضمن بيانات المتصفح" });
       }
       const key = centralKitchenRequestKey(req, body.data.idempotencyKey);
       if (!key.key) return res.status(400).json({ error: key.error });
@@ -8591,6 +8594,7 @@ export async function registerRoutes(
         quantity: body.data.quantity,
         productionDate: body.data.productionDate,
         recipeBacked: body.data.recipeBacked,
+        recipeExceptionId: body.data.recipeExceptionId ?? null,
       })).digest("hex");
       const [keyReplay] = await db.select({
         batch: dailyProductionBatches,
@@ -8606,7 +8610,8 @@ export async function registerRoutes(
         if (!(await canAccessBranch(req, keyReplay.order.centralKitchenId))) {
           return res.status(403).json({ error: "غير مصرح بالوصول إلى الدفعة الأصلية" });
         }
-        if (keyReplay.batch.centralKitchenPayloadFingerprint !== batchFingerprint) {
+        if (keyReplay.batch.centralKitchenPayloadFingerprint !== batchFingerprint
+          || keyReplay.batch.recipeExceptionId !== (body.data.recipeExceptionId ?? null)) {
           return res.status(409).json({ error: "مفتاح عدم التكرار مستخدم لدفعة مختلفة" });
         }
         const replaySnapshot = await getBatchMaterialRequirements(db, keyReplay.batch.id);
@@ -8656,10 +8661,23 @@ export async function registerRoutes(
             const existingSnapshot = await getBatchMaterialRequirements(tx, existing.id);
             if (existing.quantity !== body.data.quantity
               || existing.productId !== lockedItem.productId
-              || existingSnapshot.recipeBacked !== body.data.recipeBacked) {
+              || existing.recordedBy !== actor.id
+              || existing.centralKitchenIdempotencyKey !== key.key
+              || existing.recipeExceptionId !== (body.data.recipeExceptionId ?? null)
+              || existing.centralKitchenPayloadFingerprint !== batchFingerprint
+              || existingSnapshot?.recipeBacked !== body.data.recipeBacked) {
               throw new CentralKitchenLiveError("توجد دفعة مختلفة لهذا البند في التاريخ نفسه", 409);
             }
-            return { batch: existing, replayed: true, recipeBacked: existingSnapshot.recipeBacked };
+            return { batch: existing, replayed: true, recipeBacked: existingSnapshot?.recipeBacked === true };
+          }
+          if (body.data.recipeExceptionId) {
+            await assertApprovedRecipeException(tx, {
+              exceptionId: body.data.recipeExceptionId,
+              orderId: lockedOrder.id, itemId: lockedItem.id,
+              kitchenId: lockedOrder.centralKitchenId,
+              productId: lockedItem.productId!, unit: lockedItem.unit,
+              quantity: body.data.quantity, productionDate: body.data.productionDate,
+            });
           }
           const [allocatedDemands, [product]] = await Promise.all([
             getAllocatedKitchenDemands(
@@ -8676,6 +8694,11 @@ export async function registerRoutes(
           if (body.data.quantity > uncovered) {
             throw new CentralKitchenLiveError(`كمية الدفعة تتجاوز الاحتياج غير المغطى (${uncovered})`, 409);
           }
+          if (body.data.recipeBacked) {
+            // Migration 033 only permits recipe_backed=true after the immutable
+            // snapshot exists; retain that two-step transition in this transaction.
+            await tx.execute(sql`SELECT set_config('app.central_kitchen_snapshot_write', 'on', true)`);
+          }
           const [created] = await tx.insert(dailyProductionBatches).values({
             branchId: lockedOrder.centralKitchenId,
             productId: lockedItem.productId,
@@ -8689,6 +8712,8 @@ export async function registerRoutes(
             centralKitchenOrderItemId: lockedItem.id,
             centralKitchenIdempotencyKey: key.key,
             centralKitchenPayloadFingerprint: batchFingerprint,
+            recipeExceptionId: body.data.recipeExceptionId ?? null,
+            recipeBacked: body.data.recipeBacked ? null : false,
             recordedBy: actor.id,
           }).returning();
           if (body.data.recipeBacked) {
@@ -8714,6 +8739,9 @@ export async function registerRoutes(
         if (error instanceof CentralKitchenBatchMaterialsError) {
           return res.status(error.status).json({ error: error.message });
         }
+        if (error instanceof RecipeExceptionError) {
+          return res.status(error.status).json({ error: error.message });
+        }
         if ((error?.code || error?.cause?.code) === "23505") {
           const [replay] = await db.select().from(dailyProductionBatches).where(and(
             eq(dailyProductionBatches.centralKitchenOrderItemId, item.id),
@@ -8721,13 +8749,23 @@ export async function registerRoutes(
           )).limit(1);
           const replaySnapshot = replay ? await getBatchMaterialRequirements(db, replay.id) : null;
           if (replay?.quantity === body.data.quantity
+            && replay.recordedBy === actor.id
+            && replay.centralKitchenIdempotencyKey === key.key
+            && replay.recipeExceptionId === (body.data.recipeExceptionId ?? null)
             && replay.centralKitchenPayloadFingerprint === batchFingerprint
             && replaySnapshot?.recipeBacked === body.data.recipeBacked) {
             res.set("Idempotent-Replayed", "true");
             return res.json({ ...replay, recipeBacked: replaySnapshot.recipeBacked });
           }
         }
+        if ((error?.code || error?.cause?.code) === "23514") {
+          return res.status(409).json({ error: "استثناء الوصفة غير صالح أو لم يعد معتمداً" });
+        }
         throw error;
+      }
+      } catch (error) {
+        console.error("Linked batch creation failed:", error);
+        return res.status(500).json({ error: "تعذر إنشاء دفعة الإنتاج" });
       }
     },
   );

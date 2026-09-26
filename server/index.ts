@@ -252,6 +252,25 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
   if (catalogueColumns.rows.length !== 2) {
     throw new Error("Catalogue migration 039 is required before this release can start");
   }
+  const recipeExceptionSchema = await pool.query(`
+    SELECT to_regclass('central_kitchen_recipe_exceptions') IS NOT NULL AS exceptions_ready,
+      EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema()
+        AND table_name = 'daily_production_batches' AND column_name = 'recipe_exception_id') AS column_ready,
+      EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'daily_production_batches'::regclass
+        AND tgname = 'trg_linked_recipe_exception' AND tgenabled IN ('O', 'A') AND NOT tgisinternal) AS trigger_ready,
+      EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'daily_production_batches'::regclass
+        AND conname = 'fk_daily_production_recipe_exception' AND contype = 'f' AND convalidated) AS foreign_key_ready,
+      EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = current_schema()
+        AND tablename = 'daily_production_batches' AND indexname = 'uq_daily_production_recipe_exception'
+        AND indexdef LIKE 'CREATE UNIQUE INDEX%') AS unique_index_ready,
+      EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass('central_kitchen_recipe_exceptions')
+        AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%status%') AS state_check_ready
+  `);
+  if (!recipeExceptionSchema.rows[0]?.exceptions_ready || !recipeExceptionSchema.rows[0]?.column_ready
+    || !recipeExceptionSchema.rows[0]?.trigger_ready || !recipeExceptionSchema.rows[0]?.foreign_key_ready
+    || !recipeExceptionSchema.rows[0]?.unique_index_ready || !recipeExceptionSchema.rows[0]?.state_check_ready) {
+    throw new Error("Recipe exception migration 043 is required before this release can start");
+  }
   await registerRoutes(httpServer, app);
   
   // Ensure Supabase Storage bucket exists on startup

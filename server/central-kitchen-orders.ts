@@ -258,11 +258,16 @@ export const centralKitchenRuntimeSchema = z.object({
 export const centralKitchenLinkedBatchSchema = z.object({
   quantity: z.number().int().positive().max(1_000_000),
   productionDate: realCalendarDate,
-  // Only an explicit true enables prospective recipe snapshotting. Existing
-  // linked batches and callers retain their non-recipe behavior.
-  recipeBacked: z.boolean().default(false),
+  // Prospective linked batches must explicitly choose recipe snapshotting or
+  // a single approved nonrecipe exception. Historical rows remain untouched.
+  recipeBacked: z.boolean(),
+  recipeExceptionId: z.number().int().positive().optional(),
   idempotencyKey: centralKitchenIdempotencyKeySchema.optional(),
-}).strict();
+}).strict().superRefine((value, ctx) => {
+  if (value.recipeBacked === !!value.recipeExceptionId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "يجب اختيار وصفة أو استثناء معتمد واحد فقط" });
+  }
+});
 
 function validateExactItemSet(expectedIds: number[], submittedIds: number[]): string | null {
   if (expectedIds.length !== submittedIds.length || new Set(submittedIds).size !== submittedIds.length) {

@@ -1822,7 +1822,7 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
   // الشهرية (الإغلاق/إعادة الفتح بصلاحية edit)، ويتابع الموظفين والرواتب تفصيليًا،
   // مع رؤية مالية ورقابية. لا يشمل إدارة المستخدمين أو إعدادات النظام أو الصلاحيات.
   production_development_manager: [
-    { module: "production", actions: ["view", "create", "edit", "export"] },
+    { module: "production", actions: ["view", "create", "edit", "approve", "export"] },
     { module: "daily_production", actions: ["view", "create", "edit", "export"] },
     { module: "advanced_production", actions: ["view", "create", "edit", "export"] },
     { module: "ai_production_planner", actions: ["view", "create", "edit"] },
@@ -2033,7 +2033,7 @@ export const JOB_ROLE_PERMISSION_TEMPLATES: Record<
   // مدير إنتاج - الإنتاج والورديات ومراقبة الجودة
   production_manager: [
     { module: "dashboard", actions: ["view", "export"] },
-    { module: "production", actions: ["view", "create", "edit", "delete"] },
+    { module: "production", actions: ["view", "create", "edit", "approve", "delete"] },
     { module: "daily_production", actions: ["view", "create", "edit", "export", "print"] },
     { module: "advanced_production", actions: ["view", "create", "edit", "export"] },
     { module: "central_kitchen_orders", actions: ["view", "edit", "approve", "export", "print"] },
@@ -4260,6 +4260,7 @@ export const dailyProductionBatches = pgTable("daily_production_batches", {
     .references(() => centralKitchenOrderItems.id, { onDelete: "restrict" }),
   centralKitchenIdempotencyKey: varchar("central_kitchen_idempotency_key", { length: 128 }),
   centralKitchenPayloadFingerprint: varchar("central_kitchen_payload_fingerprint", { length: 64 }),
+  recipeExceptionId: integer("recipe_exception_id"),
   // NULL marks historical/non-recipe batches; recipe-backed batches are set
   // only by the dedicated snapshot workflow.
   recipeBacked: boolean("recipe_backed"),
@@ -4303,6 +4304,7 @@ export const insertDailyProductionBatchSchema = createInsertSchema(
   centralKitchenIdempotencyKey: true,
   centralKitchenPayloadFingerprint: true,
   recipeBacked: true,
+  recipeExceptionId: true,
 });
 
 export type DailyProductionBatch = typeof dailyProductionBatches.$inferSelect;

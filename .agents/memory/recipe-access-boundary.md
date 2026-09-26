@@ -14,3 +14,9 @@ Imported workbook sources are review references, not persisted or approved recip
 **Why:** Pastry source sheets contain unresolved mass/volume/piece differences and missing yields. Creating seemingly complete recipes with guessed conversions would affect real stock; shipping the formulas in public assets bypasses recipe permissions.
 
 **How to apply:** Clearly distinguish pending source entries from saved drafts. Convert only known same-dimension units, require explicit review for ambiguous amounts, and never describe source-list availability as an import into the live database.
+
+Recipe exceptions for new request-linked batches require production-responsible approval, not merely the ability to create or edit production.
+
+**Why:** The user chose approved exceptions rather than unconditional recipe enforcement. The approval must not turn into an unbounded bypass, or retroactively invalidate historical batches.
+
+**How to apply:** Bind approval to the exact item, quantity, unit and date; consume once atomically with creation, including on retry. Cancellation does not renew approval. Preserve unknown historical consumption; an exception never proves raw-material usage.

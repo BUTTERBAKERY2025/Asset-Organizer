@@ -78,6 +78,28 @@ export async function warmupPool() {
 
 export async function runStartupMigrations() {
   try {
+    if (process.env.NODE_ENV !== "production") {
+      const { readFile } = await import("node:fs/promises");
+      const { fileURLToPath } = await import("node:url");
+      const migration = await readFile(fileURLToPath(new URL("../migrations/043_recipe_exceptions.sql", import.meta.url)), "utf8");
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query(`CREATE TABLE IF NOT EXISTS application_schema_migrations (version text PRIMARY KEY, applied_at timestamp NOT NULL DEFAULT now())`);
+        await client.query("SELECT pg_advisory_xact_lock(430043)");
+        const applied = await client.query("SELECT 1 FROM application_schema_migrations WHERE version = $1", ["043_recipe_exceptions"]);
+        if (!applied.rowCount) {
+          await client.query(migration);
+          await client.query("INSERT INTO application_schema_migrations(version) VALUES ($1)", ["043_recipe_exceptions"]);
+        }
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
     const migrations = [
       `ALTER TABLE backups ADD COLUMN IF NOT EXISTS table_count integer`,
       `ALTER TABLE backups ADD COLUMN IF NOT EXISTS row_count integer`,

@@ -25,12 +25,13 @@ describe("central kitchen workflow rules", () => {
     const payload = {
       quantity: 1,
       productionDate: "2026-09-12",
+      recipeBacked: true,
       idempotencyKey: "fce0dba6-4900-4b0a-b0fd-de0c27a46015",
     };
     expect(centralKitchenLinkedBatchSchema.safeParse(payload).success).toBe(true);
     expect(centralKitchenLinkedBatchSchema.safeParse({
       quantity: 1, productionDate: "2026-09-12",
-    }).success).toBe(true);
+    }).success).toBe(false);
     expect(centralKitchenLinkedBatchSchema.safeParse({
       ...payload, idempotencyKey: "short",
     }).success).toBe(false);
