@@ -201,3 +201,31 @@ mtime_ms = 1790372101451
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/ef35abe1-1bed-4e8f-acfd-624ef503e003/f0981910-20ce-4718-a700-2b74008abf85"
 storage_version_token = "1790372116204058"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "vcg8fKr7CntjpenmhOR_H"
+uri = "file://docs/production-phase-one-rules.md"
+type = "text"
+title = "قواعد المرحلة الأولى — المحاور السبعة"
+description = "مسودة اعتماد توضح القواعد الحالية والمطلوبة وأدلة التحقق ومعايير القبول، دون ادعاء مراجعة البيانات الحية."
+logical_id = "0ab308fa-f8d2-47bd-a2ba-1a112cf2ea80"
+content_hash = "sha256:d2ce1a0bca7fab48003c494d8501fa442287cef7366045053b1943ca64ee39ce"
+size = 17764
+mtime_ms = 1790418911670
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/0ab308fa-f8d2-47bd-a2ba-1a112cf2ea80/6e4dce30-c259-495c-bd81-1cb34e08fdde"
+storage_version_token = "1790418940066684"
+content_type = "text/markdown"
+
+[[outputs]]
+id = "VLi6gINjulHDnmmuvOXwc"
+uri = "file://docs/production-phase-one-conflicts.md"
+type = "text"
+title = "سجل تعارضات المرحلة الأولى"
+description = "ثمانية بنود مصنفة حسب الأولوية والدليل، مع مسؤول القرار والإجراء المطلوب ومعيار الإغلاق."
+logical_id = "ab584421-ccce-4235-9812-23b72e6eb219"
+content_hash = "sha256:07446c25bc5eb998faf5c8bb16102cb4e83453258e732d228cd1821da1829bef"
+size = 7958
+mtime_ms = 1790418915658
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ccfdd11e-6206-49ce-b112-34cf69af608e/ab584421-ccce-4235-9812-23b72e6eb219/e865ab59-88f2-4f2f-89ce-2ba854ed8553"
+storage_version_token = "1790418941491691"
+content_type = "text/markdown"
