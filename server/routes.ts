@@ -8466,6 +8466,7 @@ export async function registerRoutes(
     isAuthenticated,
     requirePermission("central_kitchen_orders", "view"),
     async (req, res) => {
+      try {
       const parsed = z.object({ kitchenId: z.string().trim().min(1).max(255) }).strict().safeParse(req.query);
       if (!parsed.success) return res.status(400).json({ error: "معرف المطبخ غير صالح" });
       const kitchenId = parsed.data.kitchenId;
@@ -8532,6 +8533,13 @@ export async function registerRoutes(
         reservedQuantity: number; linkedUnfinishedQuantity: number; uncoveredQuantity: number;
       }>()).values());
       return res.json({ runtime, demands, totals: { byUnit } });
+      } catch (error) {
+        if (error instanceof CentralKitchenLiveError) {
+          return res.status(error.status).json({ error: error.message });
+        }
+        console.error("Central kitchen operations read failed:", error);
+        return res.status(500).json({ error: "تعذر تحميل احتياج تشغيل المطبخ" });
+      }
     },
   );
 

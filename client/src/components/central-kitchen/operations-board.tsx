@@ -41,7 +41,13 @@ export function OperationsBoard({ kitchens, kitchenId, onKitchenChange }: { kitc
     queryKey: ["/api/central-kitchen-orders/operations", kitchenId],
     queryFn: async () => {
       const response = await fetch(`/api/central-kitchen-orders/operations?kitchenId=${encodeURIComponent(kitchenId)}`, { credentials: "include", cache: "no-store" });
-      if (!response.ok) throw new Error(response.status === 403 ? "لا تملك صلاحية عرض هذا المطبخ." : "تعذر تحميل احتياج التشغيل.");
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(response.status === 403 ? "لا تملك صلاحية عرض هذا المطبخ."
+          : response.status === 409 && typeof body?.error === "string"
+            ? `${body.error}. راجع الأصناف المرتبطة بالطلبات المعتمدة مع المسؤول.`
+            : "تعذر تحميل احتياج التشغيل.");
+      }
       return response.json();
     },
     enabled: Boolean(kitchenId),

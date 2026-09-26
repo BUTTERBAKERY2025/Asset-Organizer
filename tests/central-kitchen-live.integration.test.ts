@@ -198,7 +198,8 @@ async function httpInvoke(method: string, path: string, options: Parameters<type
   try {
     const address = server.address() as { port: number };
     const resolvedPath = path.replace(/:([A-Za-z]+)/g, (_, name) => encodeURIComponent(options.params?.[name]));
-    const response = await fetch(`http://127.0.0.1:${address.port}${resolvedPath}`, {
+    const query = new URLSearchParams(options.query || {}).toString();
+    const response = await fetch(`http://127.0.0.1:${address.port}${resolvedPath}${query ? `?${query}` : ""}`, {
       method: method.toUpperCase(),
       headers: { "Content-Type": "application/json", ...options.headers },
       ...(options.body ? { body: JSON.stringify(options.body) } : {}),
@@ -876,6 +877,66 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     finishTransaction?.();
     await transactionPromise;
     await databaseState.pool?.end();
+  });
+
+  it("returns 409 for an archived approved product without terminating the operations endpoint", async () => {
+    await databaseState.db.execute(sql.raw("SAVEPOINT ck_archived_operations"));
+    try {
+    expect((await setRuntime("real")).statusCode).toBe(200);
+    const [catalog] = await databaseState.db.insert(products).values({
+      name: `CK operations archived ${key("archived")}`,
+      category: "test", unit: "tray", isActive: "true",
+    }).returning();
+    const created = await createOrder([{
+      productId: catalog.id, productName: catalog.name, unit: catalog.unit, requestedQuantity: 1,
+    }]);
+    expect(created.statusCode).toBe(201);
+    expect((await approve(created.body.id)).statusCode).toBe(200);
+    await databaseState.db.update(products).set({ isActive: "false" }).where(eq(products.id, catalog.id));
+    const unavailable = await httpInvoke("get", "/api/central-kitchen-orders/operations", {
+      user: fixture.kitchenUser, query: { kitchenId: fixture.kitchenBranchId },
+    });
+    expect(unavailable.statusCode).toBe(409);
+    expect(unavailable.body.error).toBe("المنتج غير مفعّل");
+    await databaseState.db.update(products).set({ isActive: "true" }).where(eq(products.id, catalog.id));
+    const recovered = await httpInvoke("get", "/api/central-kitchen-orders/operations", {
+      user: fixture.kitchenUser, query: { kitchenId: fixture.kitchenBranchId },
+    });
+    expect(recovered.statusCode).toBe(200);
+    expect(recovered.body.demands.some((row: { catalogId: number }) => row.catalogId === catalog.id)).toBe(true);
+    } finally {
+      // Do not let the real runtime or approved order contaminate later tests
+      // in this suite's intentionally shared rollback-only transaction.
+      await databaseState.db.execute(sql.raw("ROLLBACK TO SAVEPOINT ck_archived_operations"));
+      await databaseState.db.execute(sql.raw("RELEASE SAVEPOINT ck_archived_operations"));
+    }
+  });
+
+  it("returns 500 instead of rejecting an Express request when the operations database read fails", async () => {
+    const transaction = databaseState.db;
+    databaseState.db = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: () => Promise.reject(new Error("injected read failure")),
+          }),
+        }),
+      }),
+    };
+    try {
+      const failed = await httpInvoke("get", "/api/central-kitchen-orders/operations", {
+        user: fixture.kitchenUser, query: { kitchenId: fixture.kitchenBranchId },
+      });
+      expect(failed.statusCode).toBe(500);
+      expect(failed.body.error).toBe("تعذر تحميل احتياج تشغيل المطبخ");
+      expect(JSON.stringify(failed.body)).not.toContain("injected read failure");
+    } finally {
+      databaseState.db = transaction;
+    }
+    const recovered = await httpInvoke("get", "/api/central-kitchen-orders/operations", {
+      user: fixture.kitchenUser, query: { kitchenId: fixture.kitchenBranchId },
+    });
+    expect(recovered.statusCode).toBe(200);
   });
 
   it("requires runtime admin, keeps legacy orders shadow, and denies outsiders", async () => {
