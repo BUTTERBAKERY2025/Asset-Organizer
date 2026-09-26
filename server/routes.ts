@@ -8506,7 +8506,9 @@ export async function registerRoutes(
         const identity = row.productId
           ? { productId: row.productId }
           : { warehouseItemId: row.warehouseItemId! };
-        const allocated = await getAllocatedKitchenDemands(kitchenId, identity);
+        // This endpoint only reads already-approved real orders. Keep new selections
+        // and production mutations on the default active-catalog guard.
+        const allocated = await getAllocatedKitchenDemands(kitchenId, identity, db, { historicalRead: true });
         demands.push(...allocated.map((demand) => ({
           orderId: demand.orderId,
           orderItemId: demand.orderItemId,
@@ -8514,6 +8516,7 @@ export async function registerRoutes(
           neededDate: demand.neededDate,
           kind: demand.productId ? "product" as const : "warehouse" as const,
           catalogId: demand.productId || demand.warehouseItemId!,
+          catalogInactive: demand.catalogInactive ?? false,
           name: demand.name,
           unit: demand.unit,
           targetQuantity: demand.targetQuantity,

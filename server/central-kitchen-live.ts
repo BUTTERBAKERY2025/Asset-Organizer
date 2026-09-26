@@ -231,6 +231,7 @@ export type CentralKitchenDemandAllocation = {
   physicalUncoveredQuantity?: number;
   availableQuantity: number;
   uncoveredQuantity: number;
+  catalogInactive?: boolean;
 };
 
 export function allocateSharedCentralKitchenAvailability(
@@ -263,6 +264,7 @@ export async function getAllocatedKitchenDemands(
   kitchenId: string,
   identity: { productId: number } | { warehouseItemId: number },
   tx: Transaction = db,
+  options: { historicalRead?: true } = {},
 ): Promise<CentralKitchenDemandAllocation[]> {
   const catalogCondition = "productId" in identity
     ? eq(centralKitchenOrderItems.productId, identity.productId)
@@ -322,9 +324,10 @@ export async function getAllocatedKitchenDemands(
       linkedDirectFinishedQuantity: Number(finished?.quantity || 0),
     });
   }
-  const availability = await getKitchenAvailability(kitchenId, identity, tx);
+  const availability = await getKitchenAvailability(kitchenId, identity, tx, options);
   return allocateSharedCentralKitchenAvailability(demands, availability.availableQuantity).map(demand => ({
     ...demand,
+    catalogInactive: availability.catalogInactive,
     physicalUncoveredQuantity: demand.uncoveredQuantity,
     uncoveredQuantity: Math.max(0, Math.min(demand.uncoveredQuantity,
       demand.targetQuantity - demand.linkedUnfinishedQuantity
@@ -380,14 +383,16 @@ export async function getKitchenAvailability(
   kitchenId: string,
   identity: { productId: number } | { warehouseItemId: number },
   tx: Transaction = db,
-): Promise<CentralKitchenAvailabilityContract> {
+  options: { historicalRead?: true } = {},
+): Promise<CentralKitchenAvailabilityContract & { catalogInactive?: boolean }> {
   if ("productId" in identity) {
     const [catalog] = await tx.select({
       unit: products.unit, isActive: products.isActive, operationsEnabled: products.operationsEnabled,
     }).from(products)
       .where(eq(products.id, identity.productId)).limit(1);
     if (!catalog) throw new CentralKitchenLiveError("المنتج غير موجود", 404);
-    if (!isNewCatalogReferenceAllowed(catalog)) {
+    const catalogInactive = !isNewCatalogReferenceAllowed(catalog);
+    if (catalogInactive && !options.historicalRead) {
       throw new CentralKitchenLiveError("المنتج غير مفعّل", 409);
     }
     const unit = catalog?.unit?.trim() || "قطعة";
@@ -401,6 +406,7 @@ export async function getKitchenAvailability(
     ));
     return {
       kitchenId, kind: "product", catalogId: identity.productId, unit,
+      ...(options.historicalRead ? { catalogInactive } : {}),
       availableQuantity: Number(row.quantity) - Number(row.reserved),
       reservedQuantity: Number(row.reserved),
     };
@@ -416,9 +422,11 @@ export async function getKitchenAvailability(
       .limit(1),
   ]);
   if (!catalog) throw new CentralKitchenLiveError("صنف المستودع غير موجود", 404);
-  if (!catalog.isActive) throw new CentralKitchenLiveError("صنف المستودع غير مفعّل", 409);
+  const catalogInactive = !catalog.isActive;
+  if (catalogInactive && !options.historicalRead) throw new CentralKitchenLiveError("صنف المستودع غير مفعّل", 409);
   return {
     kitchenId, kind: "warehouse", catalogId: identity.warehouseItemId, unit: catalog?.unit || "",
+    ...(options.historicalRead ? { catalogInactive } : {}),
     availableQuantity: Number(row?.quantity || 0) - Number(row?.reserved || 0),
     reservedQuantity: Number(row?.reserved || 0),
   };

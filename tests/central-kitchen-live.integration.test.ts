@@ -879,7 +879,7 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
     await databaseState.pool?.end();
   });
 
-  it("returns 409 for an archived approved product without terminating the operations endpoint", async () => {
+  it("reads inactive approved product and warehouse demand with real stock while new references stay blocked", async () => {
     await databaseState.db.execute(sql.raw("SAVEPOINT ck_archived_operations"));
     try {
     expect((await setRuntime("real")).statusCode).toBe(200);
@@ -888,22 +888,62 @@ describe.sequential("central kitchen live inventory database-backed handlers", (
       category: "test", unit: "tray", isActive: "true",
     }).returning();
     const created = await createOrder([{
-      productId: catalog.id, productName: catalog.name, unit: catalog.unit, requestedQuantity: 1,
+      productId: catalog.id, productName: catalog.name, unit: catalog.unit, requestedQuantity: 4,
     }]);
     expect(created.statusCode).toBe(201);
     expect((await approve(created.body.id)).statusCode).toBe(200);
-    await databaseState.db.update(products).set({ isActive: "false" }).where(eq(products.id, catalog.id));
-    const unavailable = await httpInvoke("get", "/api/central-kitchen-orders/operations", {
+    const [material] = await databaseState.db.insert(warehouseItems).values({
+      name: `CK operations archived material ${key("material")}`,
+      category: "test", unit: "tray", currentStock: 2, isActive: true,
+    }).returning();
+    // Legacy approved real orders can retain a warehouse identity even though
+    // today's new-order picker deliberately rejects warehouse materials.
+    await databaseState.db.insert(centralKitchenOrderItems).values({
+      orderId: created.body.id, warehouseItemId: material.id,
+      productName: material.name, unit: material.unit, requestedQuantity: 3,
+      reportedAvailableQuantity: 0,
+    });
+    await databaseState.db.insert(finishedGoodsInventory).values({
+      branchId: fixture.kitchenBranchId, productId: catalog.id,
+      productName: catalog.name, productNameNormalized: catalog.name.toLowerCase(),
+      productCategory: "test", quantity: 3, reservedQuantity: 0,
+      unit: "tray", productionDate: "2098-01-01",
+    });
+    await databaseState.db.insert(branchStock).values({
+      branchId: fixture.kitchenBranchId, itemId: material.id, currentQuantity: 2,
+    });
+    await databaseState.db.update(products).set({ isActive: "false", operationsEnabled: false }).where(eq(products.id, catalog.id));
+    await databaseState.db.update(warehouseItems).set({ isActive: false }).where(eq(warehouseItems.id, material.id));
+    const historical = await httpInvoke("get", "/api/central-kitchen-orders/operations", {
       user: fixture.kitchenUser, query: { kitchenId: fixture.kitchenBranchId },
     });
-    expect(unavailable.statusCode).toBe(409);
-    expect(unavailable.body.error).toBe("المنتج غير مفعّل");
-    await databaseState.db.update(products).set({ isActive: "true" }).where(eq(products.id, catalog.id));
-    const recovered = await httpInvoke("get", "/api/central-kitchen-orders/operations", {
-      user: fixture.kitchenUser, query: { kitchenId: fixture.kitchenBranchId },
+    expect(historical.statusCode).toBe(200);
+    expect(historical.body.demands).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "product", catalogId: catalog.id, catalogInactive: true, targetQuantity: 4, availableQuantity: 3, uncoveredQuantity: 1 }),
+      expect.objectContaining({ kind: "warehouse", catalogId: material.id, catalogInactive: true, targetQuantity: 3, availableQuantity: 2, uncoveredQuantity: 1 }),
+    ]));
+    expect(await productBalance(fixture.kitchenBranchId, catalog.id)).toEqual({ quantity: 3, reserved: 0 });
+    expect(await warehouseBalance(fixture.kitchenBranchId, material.id)).toEqual({ quantity: 2, reserved: 0 });
+    for (const identity of [{ productId: catalog.id }, { warehouseItemId: material.id }]) {
+      const guarded = await httpInvoke("get", "/api/central-kitchen-orders/availability", {
+        user: fixture.kitchenUser, query: { kitchenId: fixture.kitchenBranchId, ...identity },
+      });
+      expect(guarded.statusCode).toBe(409);
+    }
+    const missing = await httpInvoke("get", "/api/central-kitchen-orders/availability", {
+      user: fixture.kitchenUser, query: { kitchenId: fixture.kitchenBranchId, productId: 2147483647 },
     });
-    expect(recovered.statusCode).toBe(200);
-    expect(recovered.body.demands.some((row: { catalogId: number }) => row.catalogId === catalog.id)).toBe(true);
+    expect(missing.statusCode).toBe(404);
+    const newProduct = await createOrder([{
+      productId: catalog.id, productName: catalog.name, unit: catalog.unit, requestedQuantity: 1,
+    }]);
+    expect(newProduct.statusCode).toBe(400);
+    expect(newProduct.body.error).toContain("غير مفعّل");
+    const newWarehouse = await createOrder([{
+      warehouseItemId: material.id, productName: material.name, unit: material.unit, requestedQuantity: 1,
+    }]);
+    expect(newWarehouse.statusCode).toBe(400);
+    expect(newWarehouse.body.error).toBe("بيانات الطلب غير صالحة");
     } finally {
       // Do not let the real runtime or approved order contaminate later tests
       // in this suite's intentionally shared rollback-only transaction.

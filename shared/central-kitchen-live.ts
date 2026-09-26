@@ -25,6 +25,8 @@ export type CentralKitchenOperationDemand = {
   neededDate: string | null;
   kind: "product" | "warehouse";
   catalogId: number;
+  /** Historical approved reference; new operations still reject this catalog. */
+  catalogInactive: boolean;
   name: string;
   unit: string;
   targetQuantity: number;
