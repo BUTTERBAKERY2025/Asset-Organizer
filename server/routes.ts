@@ -4,6 +4,7 @@ import { createServer, type Server } from "http";
 import memoize from "memoizee";
 import { storage } from "./storage";
 import { readEmployeeDocumentMetadata } from "./employee-documents-read";
+import { authenticatedUploadMatchesActor, makeAuthenticatedUploadName, mayDownloadUpload, resolveUploadBindings, validUploadKey, type UploadBinding } from "./upload-file-access";
 import { ProductionStockPostingError } from "./production-stock-posting";
 import { registerBranchBarHandoffRoutes } from "./branch-bar-handoffs";
 import { InactiveBranchStockReferenceError } from "./catalogue-branch-stock";
@@ -116,9 +117,8 @@ function parseQueryString(value: unknown): string | undefined {
 async function canUserViewAllCashiers(req: Request): Promise<boolean> {
   const user = getCurrentUser(req);
   if (user.role === 'admin' || user.role === 'manager') return true;
-  // Use cached permissions from auth middleware when available
-  const { getCachedPermissionsForUser } = await import("./auth");
-  const permissions = getCachedPermissionsForUser(user.id) || await storage.getUserPermissions(user.id);
+  // This grant is security-sensitive: bypass storage's worker-local permission cache.
+  const permissions = await storage.getUserPermissions(user.id, { bypassCache: true });
   for (const perm of permissions) {
     if (perm.module === 'cashier_performance' || perm.module === 'cashier_journal') {
       if (perm.actions.includes('approve')) return true;
@@ -641,10 +641,10 @@ export async function registerRoutes(
     return users.map(({ password, ...user }) => user);
   }, { promise: true, maxAge: 120000 }); // Cache for 2 minutes
 
-  // Per-user permissions - use storage's built-in cache (no extra memoize layer)
-  // This ensures cache invalidation works correctly when permissions are updated
+  // UI permissions must reflect cross-worker revocation on the next request.
+  // Storage itself has a worker-local TTL cache, so bypass it here.
   const getCachedPermissions = async (userId: string) => {
-    return await storage.getUserPermissions(userId);
+    return await storage.getUserPermissions(userId, { bypassCache: true });
   };
 
   const responseCache = new Map<string, { data: any; timestamp: number }>();
@@ -3300,7 +3300,8 @@ export async function registerRoutes(
           return res.status(403).json({ error: "غير مصرح بتعديل هذا العقد" });
         }
       }
-      const partialData = insertConstructionContractSchema.partial().parse(req.body);
+      const { createdBy: _createdBy, ...contractChanges } = req.body || {};
+      const partialData = insertConstructionContractSchema.partial().parse(contractChanges);
       const contract = await storage.updateContract(id, partialData);
       if (!contract) {
         return res.status(404).json({ error: "Contract not found" });
@@ -5498,7 +5499,8 @@ export async function registerRoutes(
         }
       }
 
-      const partialData = insertPaymentRequestSchema.partial().parse(bodyForUpdate);
+      const { requestedBy: _requestedBy, ...requestChanges } = bodyForUpdate;
+      const partialData = insertPaymentRequestSchema.partial().parse(requestChanges);
       const request = await storage.updatePaymentRequest(id, partialData);
       if (!request) {
         return res.status(404).json({ error: "Payment request not found" });
@@ -26425,7 +26427,8 @@ export async function registerRoutes(
         return res.status(400).json({ error: "معرف غير صالح" });
       }
       const currentUser = getCurrentUser(req);
-      const partialData = insertCampaignExpenseSchema.partial().parse(req.body);
+      const { createdBy: _createdBy, ...expenseChanges } = req.body || {};
+      const partialData = insertCampaignExpenseSchema.partial().parse(expenseChanges);
       
       // If status is being changed to approved, set approvedBy and approvedAt
       if (partialData.status === 'approved') {
@@ -27068,7 +27071,8 @@ export async function registerRoutes(
       if (isNaN(id)) {
         return res.status(400).json({ error: "معرف غير صالح" });
       }
-      const payment = await storage.updateInfluencerPayment(id, req.body);
+      const { createdBy: _createdBy, ...paymentChanges } = req.body || {};
+      const payment = await storage.updateInfluencerPayment(id, paymentChanges);
       if (!payment) {
         return res.status(404).json({ error: "المدفوعة غير موجودة" });
       }
@@ -27587,7 +27591,10 @@ export async function registerRoutes(
 
   app.post("/api/marketing/assets", isAuthenticated, requirePermission("marketing_assets", "create"), async (req, res) => {
     try {
-      const validatedData = insertMarketingAssetSchema.parse(req.body);
+      const validatedData = insertMarketingAssetSchema.parse({
+        ...req.body,
+        uploadedBy: getCurrentUser(req).id,
+      });
       const asset = await storage.createMarketingAsset(validatedData);
       res.status(201).json(asset);
     } catch (error) {
@@ -27605,7 +27612,8 @@ export async function registerRoutes(
       if (isNaN(id)) {
         return res.status(400).json({ error: "معرف غير صالح" });
       }
-      const partialData = insertMarketingAssetSchema.partial().parse(req.body);
+      const { uploadedBy: _uploadedBy, ...assetChanges } = req.body || {};
+      const partialData = insertMarketingAssetSchema.partial().parse(assetChanges);
       const asset = await storage.updateMarketingAsset(id, partialData);
       if (!asset) {
         return res.status(404).json({ error: "الأصل غير موجود" });
@@ -39634,8 +39642,7 @@ export async function registerRoutes(
         try {
           const folder = (typeof req.query.folder === 'string' ? req.query.folder : 'general').replace(/[^a-zA-Z0-9_-]/g, '_');
           const ext = path.extname(file.originalname).toLowerCase().replace(".", "");
-          const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-          const objectName = `${folder}/${uniqueSuffix}.${ext}`;
+          const objectName = makeAuthenticatedUploadName(folder || "general", ext, getCurrentUser(req).id);
 
           const supabaseResult = await uploadToSupabase(file.buffer, objectName, file.mimetype);
           if (!supabaseResult) {
@@ -39672,19 +39679,131 @@ export async function registerRoutes(
   // Serve general uploaded files (authenticated)
   app.get("/api/uploads/file/*", isAuthenticated, async (req, res) => {
     try {
-      const { downloadFromSupabase, isSupabaseAvailable } = await import("./supabase-storage");
+      const rawPath = req.params[0];
+      if (!validUploadKey(rawPath)) {
+        return res.status(400).json({ error: "اسم ملف غير صالح" });
+      }
+      const filename = rawPath;
+      const proxyUrl = `/api/uploads/file/${filename}`;
+      // Resolve references from the actual consumers, not from a caller-
+      // controlled folder prefix. Exact equality also supports legacy rows
+      // whose stored key still contains slashes.
+      const bindings = await resolveUploadBindings(sql`
+        SELECT 'journal' category, j.branch_id,
+          CASE WHEN j.created_by = ${getCurrentUser(req).id} THEN j.created_by ELSE j.cashier_id END owner_id,
+          NULL::text status, a.uploaded_by upload_actor_id
+          FROM journal_attachments a JOIN cashier_sales_journals j ON j.id = a.journal_id
+          WHERE a.file_path = ${filename} OR a.download_url = ${proxyUrl}
+        UNION ALL
+        SELECT 'document', d.branch_id, d.owner_id, CASE WHEN d.status = 'deleted' THEN 'deleted' ELSE d.access_level END,
+          COALESCE((SELECT v.changed_by FROM document_versions v
+            WHERE v.document_id = d.id AND v.file_path = d.file_path
+            ORDER BY v.version_number DESC LIMIT 1), d.created_by)
+          FROM documents d WHERE d.file_path = ${filename}
+        UNION ALL
+        SELECT 'document', d.branch_id, d.owner_id, CASE WHEN d.status = 'deleted' THEN 'deleted' ELSE d.access_level END, v.changed_by
+          FROM document_versions v JOIN documents d ON d.id = v.document_id WHERE v.file_path = ${filename}
+        UNION ALL
+        SELECT 'employee', e.branch_id, e.linked_user_id, NULL::text, NULL::varchar
+          FROM branch_employees e WHERE e.photo_url = ${proxyUrl}
+        UNION ALL
+        SELECT 'employee_document', e.branch_id, e.linked_user_id, NULL::text, NULL::varchar
+          FROM employee_documents d JOIN branch_employees e ON e.id = d.branch_employee_id WHERE d.file_url = ${proxyUrl}
+        UNION ALL
+        SELECT 'leave', l.branch_id, e.linked_user_id, NULL::text, NULL::varchar
+          FROM leave_requests l JOIN branch_employees e ON e.id = l.branch_employee_id WHERE l.attachment_url = ${proxyUrl}
+        UNION ALL
+        SELECT 'warning', w.branch_id, e.linked_user_id, NULL::text, NULL::varchar
+          FROM employee_warnings w JOIN branch_employees e ON e.id = w.branch_employee_id
+          WHERE w.attachment_url = ${proxyUrl}
+             OR EXISTS (SELECT 1 FROM jsonb_array_elements(
+               CASE WHEN jsonb_typeof(w.attachments) = 'array' THEN w.attachments ELSE '[]'::jsonb END
+             ) AS a WHERE a->>'url' = ${proxyUrl})
+        UNION ALL
+        SELECT 'onboarding', n.branch_id, NULL::varchar, NULL::text, NULL::varchar
+          FROM onboarding_notifications n WHERE n.selfie_photo_url = ${proxyUrl}
+        UNION ALL
+        SELECT 'application', a.target_branch_id, NULL::varchar, NULL::text, NULL::varchar
+          FROM employment_applications a
+          WHERE a.cv_url = ${proxyUrl} OR a.photo_url = ${proxyUrl} OR a.id_copy_url = ${proxyUrl}
+        UNION ALL
+        SELECT 'financial', NULL::varchar, d.uploaded_by, NULL::text, NULL::varchar
+          FROM financial_documents d WHERE d.storage_path = ${filename}
+        UNION ALL
+        SELECT 'shareholder', NULL::varchar, d.uploaded_by, NULL::text, d.uploaded_by
+          FROM shareholder_documents d WHERE d.file_url = ${proxyUrl}
+        UNION ALL
+        SELECT 'project_photo', l.branch_id, p.uploaded_by, NULL::text, p.uploaded_by
+          FROM project_daily_log_photos p JOIN project_daily_logs l ON l.id = p.daily_log_id WHERE p.photo_url = ${proxyUrl}
+        UNION ALL
+        SELECT 'field_photo', COALESCE(p.branch_id, c.branch_id), c.assigned_to, NULL::text, i.checked_by
+          FROM field_checklist_items i JOIN field_checklists c ON c.id = i.checklist_id
+          LEFT JOIN construction_projects p ON p.id = c.project_id
+          WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(
+            CASE WHEN jsonb_typeof(i.photos) = 'array' THEN i.photos ELSE '[]'::jsonb END
+          ) AS photo WHERE photo->>'url' = ${proxyUrl})
+        UNION ALL
+        SELECT 'shift_photo', s.branch_id, p.uploaded_by, NULL::text, NULL::varchar
+          FROM shift_photos p JOIN branch_shifts s ON s.id = p.shift_id WHERE p.photo_url = ${proxyUrl}
+        UNION ALL
+        SELECT 'shift_photo', s.branch_id, r.completed_by, NULL::text, NULL::varchar
+          FROM shift_checklist_responses r JOIN branch_shifts s ON s.id = r.shift_id WHERE r.photo_url = ${proxyUrl}
+        UNION ALL
+        SELECT 'shift_photo', s.branch_id, w.recorded_by, NULL::text, NULL::varchar
+          FROM daily_waste_log w JOIN branch_shifts s ON s.id = w.shift_id WHERE w.photo_url = ${proxyUrl}
+        UNION ALL
+        SELECT 'visitor', v.branch_id, NULL::varchar, NULL::text, NULL::varchar
+          FROM visitors v WHERE v.photo_url = ${proxyUrl}
+        UNION ALL
+        SELECT 'marketing_asset', a.branch_id, NULL::varchar, NULL::text, a.uploaded_by
+          FROM marketing_assets a WHERE a.file_url = ${proxyUrl} OR a.thumbnail_url = ${proxyUrl}
+        UNION ALL
+        SELECT 'contract_attachment', p.branch_id, c.created_by, NULL::text, c.created_by
+          FROM construction_contracts c JOIN construction_projects p ON p.id = c.project_id WHERE c.attachment_url = ${proxyUrl}
+        UNION ALL
+        SELECT 'project_expense', p.branch_id, e.created_by, NULL::text, e.created_by
+          FROM project_expenses e JOIN construction_projects p ON p.id = e.project_id WHERE e.attachment_url = ${proxyUrl}
+        UNION ALL
+        SELECT 'payment_request', p.branch_id, r.requested_by, NULL::text, r.requested_by
+          FROM payment_requests r JOIN construction_projects p ON p.id = r.project_id WHERE r.attachment_url = ${proxyUrl}
+        UNION ALL
+        -- Campaign expenses are listed by marketing_expenses/view without a
+        -- branch filter; older installs also lack the later branch_id field.
+        SELECT 'marketing_expense', NULL::varchar, e.created_by, NULL::text, e.created_by
+          FROM campaign_expenses e WHERE e.attachment_url = ${proxyUrl}
+        UNION ALL
+        SELECT 'influencer_payment', NULL::varchar, p.created_by, NULL::text, p.created_by
+          FROM influencer_payments p WHERE p.attachment_url = ${proxyUrl}
+      `, (query) => db.execute(query) as Promise<{ rows: UploadBinding[] }>,
+        (text, params) => pool.query(text, params) as Promise<{ rows: UploadBinding[] }>);
+      const authorized = await mayDownloadUpload(
+        bindings, getCurrentUser(req).id, isUserAdmin(req),
+        async (module) => {
+          // Use the same intrinsic roles, cached grants and restrictions as
+          // the corresponding resource GET endpoints.
+          let granted = false;
+          await requirePermission(module, "view")(req, res, () => { granted = true; });
+          return granted;
+        },
+        (branchId, category) =>
+          ["leave", "employee_document", "warning", "onboarding", "application"].includes(category) && hasCrossBranchHrReadAccess(req)
+            ? Promise.resolve(true)
+            : canAccessBranch(req, branchId),
+        () => canUserViewAllCashiers(req),
+        async (category) => (await storage.getPortalSetting(
+          category === "warning" ? PORTAL_SETTING_KEYS.SHOW_WARNINGS : PORTAL_SETTING_KEYS.SHOW_DOCUMENTS
+        )) === "true",
+        filename,
+      );
+      if (!authorized) {
+        if (res.headersSent) return;
+        return res.status(403).json({ error: "غير مصرح بالوصول إلى الملف" });
+      }
 
+      const { downloadFromSupabase, isSupabaseAvailable } = await import("./supabase-storage");
       if (!isSupabaseAvailable()) {
         return res.status(503).json({ error: "خدمة التخزين غير متاحة حالياً" });
       }
-      const pathModule = await import("path");
-
-      const rawPath = req.params[0];
-      if (!rawPath || rawPath.includes('..') || rawPath.includes('\0')) {
-        return res.status(400).json({ error: "اسم ملف غير صالح" });
-      }
-
-      const filename = rawPath.split('/').map((p: string) => pathModule.basename(p)).join('/');
 
       let result = await downloadFromSupabase(filename);
 
@@ -39703,6 +39822,36 @@ export async function registerRoutes(
             .replace(/[^a-zA-Z0-9\u0600-\u06FF._-]/g, '_');
           const recovered = await findLegacyMatch(sanitizedBase, ext);
           if (recovered) {
+            // A recovered physical key must not itself be associated with a
+            // different record. Never authorize by guessed storage prefix.
+            const collision = await db.execute(sql`
+              SELECT 1 FROM journal_attachments WHERE file_path = ${recovered} OR download_url = ${`/api/uploads/file/${recovered}`}
+              UNION ALL SELECT 1 FROM documents WHERE file_path = ${recovered}
+              UNION ALL SELECT 1 FROM document_versions WHERE file_path = ${recovered}
+              UNION ALL SELECT 1 FROM branch_employees WHERE photo_url = ${`/api/uploads/file/${recovered}`}
+              UNION ALL SELECT 1 FROM employee_documents WHERE file_url = ${`/api/uploads/file/${recovered}`}
+              UNION ALL SELECT 1 FROM leave_requests WHERE attachment_url = ${`/api/uploads/file/${recovered}`}
+              UNION ALL SELECT 1 FROM employee_warnings WHERE attachment_url = ${`/api/uploads/file/${recovered}`}
+                OR EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(attachments) = 'array' THEN attachments ELSE '[]'::jsonb END) AS a WHERE a->>'url' = ${`/api/uploads/file/${recovered}`})
+              UNION ALL SELECT 1 FROM onboarding_notifications WHERE selfie_photo_url = ${`/api/uploads/file/${recovered}`}
+              UNION ALL SELECT 1 FROM employment_applications WHERE cv_url = ${`/api/uploads/file/${recovered}`} OR photo_url = ${`/api/uploads/file/${recovered}`} OR id_copy_url = ${`/api/uploads/file/${recovered}`}
+              UNION ALL SELECT 1 FROM financial_documents WHERE storage_path = ${recovered}
+              UNION ALL SELECT 1 FROM shareholder_documents WHERE file_url = ${`/api/uploads/file/${recovered}`}
+              UNION ALL SELECT 1 FROM project_daily_log_photos WHERE photo_url = ${`/api/uploads/file/${recovered}`}
+              UNION ALL SELECT 1 FROM field_checklist_items WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(photos) = 'array' THEN photos ELSE '[]'::jsonb END) AS photo WHERE photo->>'url' = ${`/api/uploads/file/${recovered}`})
+              UNION ALL SELECT 1 FROM shift_photos WHERE photo_url = ${`/api/uploads/file/${recovered}`}
+              UNION ALL SELECT 1 FROM shift_checklist_responses WHERE photo_url = ${`/api/uploads/file/${recovered}`}
+              UNION ALL SELECT 1 FROM daily_waste_log WHERE photo_url = ${`/api/uploads/file/${recovered}`}
+              UNION ALL SELECT 1 FROM visitors WHERE photo_url = ${`/api/uploads/file/${recovered}`}
+              UNION ALL SELECT 1 FROM marketing_assets WHERE file_url = ${`/api/uploads/file/${recovered}`} OR thumbnail_url = ${`/api/uploads/file/${recovered}`}
+              UNION ALL SELECT 1 FROM construction_contracts WHERE attachment_url = ${`/api/uploads/file/${recovered}`}
+              UNION ALL SELECT 1 FROM project_expenses WHERE attachment_url = ${`/api/uploads/file/${recovered}`}
+              UNION ALL SELECT 1 FROM payment_requests WHERE attachment_url = ${`/api/uploads/file/${recovered}`}
+              UNION ALL SELECT 1 FROM campaign_expenses WHERE attachment_url = ${`/api/uploads/file/${recovered}`}
+              UNION ALL SELECT 1 FROM influencer_payments WHERE attachment_url = ${`/api/uploads/file/${recovered}`}
+              LIMIT 1
+            `);
+            if (collision.rows.length) return res.status(403).json({ error: "غير مصرح بالوصول إلى الملف" });
             console.log("[uploads/file] recovered legacy path", { requested: filename, recovered });
             result = await downloadFromSupabase(recovered);
           }
@@ -39807,9 +39956,10 @@ export async function registerRoutes(
           // Extract file type from extension
           const ext = path.extname(file.originalname).toLowerCase().replace(".", "");
           
-          // Generate unique filename
-          const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-          const objectName = `doc-${uniqueSuffix}.${ext}`;
+          // The proxy can attribute this object to the uploader even before a
+          // document/version row is created. Legacy unsigned objects remain
+          // restricted to admins via /api/uploads/file.
+          const objectName = makeAuthenticatedUploadName("doc-", ext, getCurrentUser(req).id);
           
           const supabaseResult = await uploadToSupabase(file.buffer, objectName, file.mimetype);
           if (!supabaseResult) {
@@ -39839,66 +39989,27 @@ export async function registerRoutes(
     }
   });
 
-  // Serve uploaded files (authenticated) - From Object Storage
+  // Legacy document URL: delegate to the upload route's exact binding,
+  // uploader provenance and per-record authorization before any storage IO.
+  // Keeping a separate document stream here would bypass those checks.
   app.get("/api/documents/file/:filename", isAuthenticated, requirePermission("documents", "view"), async (req, res) => {
-    try {
-      const { downloadFromSupabase } = await import("./supabase-storage");
-      const pathModule = await import("path");
-      const filename = pathModule.basename(req.params.filename);
-      if (!filename || filename === '.' || filename === '..' || filename.includes('\0')) {
-        return res.status(400).json({ error: "اسم ملف غير صالح" });
-      }
-      
-      // Download from Supabase Storage
-      const result = await downloadFromSupabase(filename);
-      if (result) {
-        const arrayBuffer = await result.data.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        
-        res.set({
-          "Content-Type": result.mimeType || "application/octet-stream",
-          "Content-Length": buffer.length.toString(),
-          "Content-Disposition": "inline",
-          "X-Frame-Options": "SAMEORIGIN",
-          "Cache-Control": "private, max-age=3600",
-        });
-        
-        res.send(buffer);
-        return;
-      }
-      
-      // Fallback to local storage for old files
-      const path = await import("path");
-      const fs = await import("fs");
-      const filePath = path.join("./uploads/documents", filename);
-      const resolvedPath = path.resolve(filePath);
-      const uploadsDir = path.resolve("./uploads/documents");
-      if (!resolvedPath.startsWith(uploadsDir)) {
-        return res.status(400).json({ error: "مسار ملف غير صالح" });
-      }
-      
-      if (fs.existsSync(resolvedPath)) {
-        return res.sendFile(resolvedPath);
-      }
-      
-      return res.status(404).json({ error: "الملف غير موجود" });
-    } catch (error) {
-      console.error("Error serving file:", error);
-      res.status(500).json({ error: "فشل في جلب الملف" });
+    const filename = req.params.filename;
+    if (!validUploadKey(filename) || filename.includes("/")) {
+      return res.status(400).json({ error: "اسم ملف غير صالح" });
     }
+    return res.redirect(302, `/api/uploads/file/${encodeURIComponent(filename)}`);
   });
 
   // Serve shared files (public access via share link) - From Object Storage
   app.get("/api/documents/shared-file/:shareLink/:filename", apiRateLimiter, async (req, res) => {
     try {
       const shareLink = req.params.shareLink;
-      if (!shareLink || !/^[a-f0-9]{32}$/.test(shareLink)) {
+      if (!shareLink || !/^(?:[a-f0-9]{32}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/.test(shareLink)) {
         return res.status(400).json({ error: "رابط مشاركة غير صالح" });
       }
       
-      const pathModule = await import("path");
-      const safeFilename = pathModule.basename(req.params.filename);
-      if (!safeFilename || safeFilename === '.' || safeFilename === '..' || safeFilename.includes('\0')) {
+      const safeFilename = req.params.filename;
+      if (!validUploadKey(safeFilename) || safeFilename.includes("/")) {
         return res.status(400).json({ error: "اسم ملف غير صالح" });
       }
       
@@ -39910,14 +40021,27 @@ export async function registerRoutes(
       if (share.expiresAt && new Date(share.expiresAt) < new Date()) {
         return res.status(403).json({ error: "انتهت صلاحية رابط المشاركة" });
       }
+      // This GET has no proof of the password checked by the POST endpoint.
+      // Do not turn a protected or exhausted share into an unguarded file URL.
+      if (share.shareType !== "public" || share.sharePassword ||
+          (share.maxAccessCount && (share.accessCount ?? 0) >= share.maxAccessCount)) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الملف" });
+      }
       
       const doc = await storage.getDocument(share.documentId);
       if (!doc) {
         return res.status(404).json({ error: "الوثيقة غير موجودة" });
       }
       
-      const expectedFilename = doc.filePath.split("/").pop();
-      if (safeFilename !== expectedFilename) {
+      if (doc.status === "deleted" || safeFilename !== doc.filePath) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الملف" });
+      }
+      // The share link authorizes THIS document, not a guessed object key
+      // copied into its writable filePath. Versions record their server-set
+      // editor; original files record their server-set creator.
+      const versions = await storage.getDocumentVersions(doc.id);
+      const uploader = versions.find(version => version.filePath === doc.filePath)?.changedBy || doc.createdBy;
+      if (!authenticatedUploadMatchesActor(safeFilename, uploader || "")) {
         return res.status(403).json({ error: "غير مصرح بالوصول لهذا الملف" });
       }
       
@@ -39965,7 +40089,7 @@ export async function registerRoutes(
   app.post("/api/documents/share/:shareLink", authRateLimiter, async (req, res) => {
     try {
       const shareLink = req.params.shareLink;
-      if (!shareLink || !/^[a-f0-9]{32}$/.test(shareLink)) {
+      if (!shareLink || !/^(?:[a-f0-9]{32}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/.test(shareLink)) {
         return res.status(400).json({ error: "رابط مشاركة غير صالح" });
       }
       const share = await storage.getDocumentShareByLink(shareLink);

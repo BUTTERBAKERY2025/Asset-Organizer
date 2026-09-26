@@ -13,50 +13,12 @@ import {
   logShareholderActivity,
 } from "./shareholder-security";
 
-// ============================================================
-// HIGH-PERFORMANCE IN-MEMORY CACHE FOR AUTH MIDDLEWARE
-// Eliminates repeated DB queries for user, branch access, and permissions
-// ============================================================
-interface CachedUserData {
-  user: any;
-  branchAccess: any[];
-  permissions: any[];
-  timestamp: number;
-}
-
-const AUTH_CACHE_TTL = 60_000; // 30 seconds - balance between performance and freshness
-const PERMISSIONS_CACHE_TTL = 120_000; // 1 minute for permissions (change less frequently)
-const authCache = new Map<string, CachedUserData>();
-
-// Clean up stale entries periodically
-setInterval(() => {
-  const now = Date.now();
-  const entries = Array.from(authCache.entries());
-  for (const [key, val] of entries) {
-    if (now - val.timestamp > AUTH_CACHE_TTL * 2) {
-      authCache.delete(key);
-    }
-  }
-}, 60_000);
-
-function getCachedAuth(userId: string): CachedUserData | null {
-  const cached = authCache.get(userId);
-  if (cached && Date.now() - cached.timestamp < AUTH_CACHE_TTL) {
-    return cached;
-  }
+// Cross-request auth caches are unsafe: a revocation on a different worker cannot
+// invalidate them. Keep this legacy API for callers that already fall back to DB.
+// This costs user/branch/permission reads per request, in exchange for immediate
+// revocation of deactivated accounts, roles, branch access and explicit grants.
+export function getCachedPermissionsForUser(_userId: string): any[] | null {
   return null;
-}
-
-function getCachedPermissions(userId: string): any[] | null {
-  const cached = authCache.get(userId);
-  if (cached && Date.now() - cached.timestamp < PERMISSIONS_CACHE_TTL) {
-    return cached.permissions;
-  }
-  return null;
-}
-
-export function getCachedPermissionsForUser(userId: string): any[] | null {
-  return getCachedPermissions(userId);
 }
 
 /**
@@ -75,7 +37,7 @@ export function hasCrossBranchHrReadAccess(req: any): boolean {
   if (user.role === "admin") return true;
   if (user.role === "hr_manager") return true;
   if (user.role === "hr_specialist") return true;
-  const perms = getCachedPermissionsForUser(user.id) || [];
+  const perms = (req as any).authPermissions || [];
   const hr = perms.find((p: any) => p.module === "hr_management");
   if (!hr) return false;
   const raw = hr.actions as unknown;
@@ -231,16 +193,8 @@ function operationsManagerActionsFor(module: string): string[] | undefined {
   );
 }
 
-function setCachedAuth(userId: string, user: any, branchAccess: any[], permissions: any[]) {
-  authCache.set(userId, { user, branchAccess, permissions, timestamp: Date.now() });
-}
-
-export function invalidateAuthCache(userId?: string) {
-  if (userId) {
-    authCache.delete(userId);
-  } else {
-    authCache.clear();
-  }
+export function invalidateAuthCache(_userId?: string) {
+  // Compatibility for existing write paths; there is no cross-request auth cache.
 }
 
 declare module "express-session" {
@@ -431,6 +385,16 @@ export const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
   message: { error: "تم تجاوز عدد محاولات تسجيل الدخول. يرجى المحاولة بعد 15 دقيقة." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  validate: { trustProxy: false, xForwardedForHeader: false },
+});
+
+const verifyPasswordRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: "تم تجاوز عدد محاولات التحقق. يرجى المحاولة بعد 15 دقيقة." },
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: false,
@@ -707,28 +671,6 @@ export async function setupAuth(app: Express) {
       }
 
       const userId = req.session.userId;
-      const cached = getCachedAuth(userId);
-      
-      if (cached) {
-        const { password: _, ...safeUser } = cached.user;
-        
-        if (safeUser.isActive === "inactive") {
-          invalidateAuthCache(userId);
-          req.session.destroy(() => {});
-          return res.status(403).json({ error: "حسابك معطّل. يرجى التواصل مع المسؤول." });
-        }
-
-        const activeBranch = req.session.activeBranchId 
-          ? await storage.getBranch(req.session.activeBranchId) 
-          : null;
-        
-        return res.json({
-          ...safeUser,
-          activeBranchId: req.session.activeBranchId || null,
-          activeBranch,
-          allowedBranches: cached.branchAccess,
-        });
-      }
 
       const user = await storage.getUser(userId);
       if (!user) {
@@ -772,42 +714,27 @@ export async function setupAuth(app: Express) {
       }
       
       const userId = req.session.userId;
-      const cached = getCachedAuth(userId);
-      
       let user: any, userBranches: any[], activeBranch: any, permissions: any[];
       
       const allBranchesPromise = storage.getAllBranches();
-
-      if (cached) {
-        const { password: _, ...safeUser } = cached.user;
-        user = safeUser;
-        userBranches = cached.branchAccess;
-        activeBranch = req.session.activeBranchId 
-          ? cached.branchAccess.find((b: any) => b.branchId === req.session.activeBranchId)
-            ? await storage.getBranch(req.session.activeBranchId) : null
-          : null;
-        permissions = cached.permissions || [];
-      } else {
-        const dbUser = await storage.getUser(userId);
-        if (!dbUser) {
-          req.session.destroy(() => {});
-          return res.json({ user: null, branches: [], permissions: [] });
-        }
-        if (dbUser.isActive === "inactive") {
-          req.session.destroy(() => {});
-          return res.status(403).json({ error: "حسابك معطّل" });
-        }
-        const { password: _, ...safeUser } = dbUser;
-        user = safeUser;
-        
-        const [ub, ab] = await Promise.all([
-          storage.getUserBranchAccess(dbUser.id),
-          req.session.activeBranchId ? storage.getBranch(req.session.activeBranchId) : Promise.resolve(null)
-        ]);
-        userBranches = ub;
-        activeBranch = ab;
-        permissions = [];
+      const dbUser = await storage.getUser(userId);
+      if (!dbUser) {
+        req.session.destroy(() => {});
+        return res.json({ user: null, branches: [], permissions: [] });
       }
+      if (dbUser.isActive === "inactive") {
+        req.session.destroy(() => {});
+        return res.status(403).json({ error: "حسابك معطّل" });
+      }
+      const { password: _, ...safeUser } = dbUser;
+      user = safeUser;
+      const [ub, ab] = await Promise.all([
+        storage.getUserBranchAccess(dbUser.id),
+        req.session.activeBranchId ? storage.getBranch(req.session.activeBranchId) : Promise.resolve(null)
+      ]);
+      userBranches = ub;
+      activeBranch = ab;
+      permissions = [];
       
       const allBranches = await allBranchesPromise;
       let filteredBranches: any[] = [];
@@ -836,20 +763,16 @@ export async function setupAuth(app: Express) {
         } else if (user.role === "attendance_clerk") {
           permissions = [{ module: "attendance_check", actions: ["view", "create", "edit"] }];
         } else {
-          const { getCachedPermissionsForUser } = await import("./auth");
-          permissions = getCachedPermissionsForUser(userId) || [];
-          if (permissions.length === 0) {
-            const userPerms = await storage.getUserPermissions(userId);
-            const permMap = new Map<string, string[]>();
-            for (const p of userPerms) {
-              if (!permMap.has(p.module)) permMap.set(p.module, []);
-              const acts = permMap.get(p.module)!;
-              for (const a of p.actions) {
-                if (!acts.includes(a)) acts.push(a);
-              }
+          const userPerms = await storage.getUserPermissions(userId, { bypassCache: true });
+          const permMap = new Map<string, string[]>();
+          for (const p of userPerms) {
+            if (!permMap.has(p.module)) permMap.set(p.module, []);
+            const acts = permMap.get(p.module)!;
+            for (const a of p.actions) {
+              if (!acts.includes(a)) acts.push(a);
             }
-            permissions = Array.from(permMap.entries()).map(([module, actions]) => ({ module, actions }));
           }
+          permissions = Array.from(permMap.entries()).map(([module, actions]) => ({ module, actions }));
         }
       }
       
@@ -927,7 +850,7 @@ export async function setupAuth(app: Express) {
   });
 
   // Re-authentication endpoint for sensitive operations
-  app.post("/api/auth/verify-password", async (req, res) => {
+  app.post("/api/auth/verify-password", verifyPasswordRateLimiter, async (req, res) => {
     res.set({
       'Cache-Control': 'no-store, no-cache, must-revalidate, private',
       'Pragma': 'no-cache',
@@ -1071,31 +994,8 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   // Update last activity timestamp
   req.session.lastActivity = now;
 
-  // Check in-memory cache first (eliminates DB queries for 30s)
-  const cached = getCachedAuth(userId);
-  if (cached) {
-    const user = cached.user;
-    if (user.isActive === "inactive") {
-      invalidateAuthCache(userId);
-      req.session.destroy(() => {});
-      return res.status(403).json({ message: "حسابك معطّل. يرجى التواصل مع المسؤول." });
-    }
-    (req as any).currentUser = user;
-    (req as any).userBranchAccess = cached.branchAccess;
-    (req as any).hasAllBranchesAccess = cached.branchAccess.length > 0;
-    
-    // Throttled session activity update (also on cache hits)
-    if (req.sessionID) {
-      const lastUpdate = sessionActivityThrottle.get(req.sessionID);
-      if (!lastUpdate || now - lastUpdate > 60_000) {
-        sessionActivityThrottle.set(req.sessionID, now);
-        storage.updateSessionActivity(req.sessionID).catch(() => {});
-      }
-    }
-    return next();
-  }
-
-  // Cache miss - fetch from DB (parallel queries)
+  // Always read authoritative user and branch grants. Cross-worker revocations
+  // must take effect on the next request, not after an in-process TTL expires.
   const [user, branchAccess] = await Promise.all([
     storage.getUser(userId),
     storage.getUserBranchAccess(userId)
@@ -1113,15 +1013,15 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   // Pre-fetch permissions in parallel for non-admin users (will be needed by requirePermission)
   let permissions: any[] = [];
   if (user.role !== "admin") {
-    permissions = await storage.getUserPermissions(userId);
+    permissions = await storage.getUserPermissions(userId, { bypassCache: true });
   }
-
-  // Store in cache
-  setCachedAuth(userId, user, branchAccess, permissions);
 
   (req as any).currentUser = user;
   (req as any).userBranchAccess = branchAccess;
   (req as any).hasAllBranchesAccess = branchAccess.length > 0;
+  // Fresh, request-local snapshot: permission middleware can reuse this read
+  // within this request, never across sessions or workers.
+  (req as any).authPermissions = permissions;
   
   // Update session activity throttled (only once per 60s per session)
   if (req.sessionID) {
@@ -1157,7 +1057,7 @@ export const requireProductWritePermission = (action: "create" | "edit"): Reques
     }
     if (user.role === "admin" || (user.role === "production_development_manager"
       && PRODUCTION_DEVELOPMENT_MANAGER_PERMISSIONS.products.includes(action))) return next();
-    const permissions = getCachedPermissions(user.id) || await storage.getUserPermissions(user.id);
+    const permissions = (req as any).authPermissions ?? await storage.getUserPermissions(user.id, { bypassCache: true });
     if (permissions.some((permission: any) => permission.module === "products"
       && Array.isArray(permission.actions) && permission.actions.includes(action))) return next();
     return requirePermission("operations", action)(req, res, next);
@@ -1278,8 +1178,8 @@ export const requirePermission = (module: string, action?: string): RequestHandl
       if (allowed?.includes(action ?? methodActions[req.method] ?? "edit")) return next();
     }
     
-    // Use cached permissions (pre-fetched by isAuthenticated middleware)
-    const permissions = getCachedPermissions(user.id) || await storage.getUserPermissions(user.id);
+    // Only reuse permissions fetched by isAuthenticated for this request.
+    const permissions = (req as any).authPermissions ?? await storage.getUserPermissions(user.id, { bypassCache: true });
     let modulePerm = permissions.find((p: any) => p.module === module);
     
     // Backward compatibility: attendance_check also accepts attendance permission
@@ -1408,8 +1308,7 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
       }
     }
     
-    // Use cached permissions (pre-fetched by isAuthenticated middleware)
-    const permissions = getCachedPermissions(user.id) || await storage.getUserPermissions(user.id);
+    const permissions = (req as any).authPermissions ?? await storage.getUserPermissions(user.id, { bypassCache: true });
     let modulePerm = permissions.find((p: any) => p.module === module);
 
     // Backward compatibility synonyms (mirrors requirePermission above).

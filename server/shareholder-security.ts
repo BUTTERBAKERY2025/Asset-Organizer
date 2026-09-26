@@ -5,7 +5,7 @@
 // الاستيراد الدائري — يعتمد فقط على db والمخطط.
 // ======================================================================
 import crypto from "crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
   shareholders,
@@ -58,7 +58,7 @@ export async function getTwoFactorConfig(): Promise<TwoFactorConfig> {
   }
 }
 
-async function enqueueOtpMessage(phone: string, name: string | null, code: string, cfg: TwoFactorConfig) {
+function otpMessageRows(phone: string, name: string | null, code: string, cfg: TwoFactorConfig) {
   const message =
     `رمز الدخول لبوابة المساهمين: ${code}\n` +
     `صالح لمدة 5 دقائق. لا تشارك هذا الرمز مع أي شخص.`;
@@ -75,7 +75,7 @@ async function enqueueOtpMessage(phone: string, name: string | null, code: strin
     message,
     relatedModule: "shareholder_otp",
   }));
-  await db.insert(notificationQueue).values(rows);
+  return rows;
 }
 
 export type IssueOtpResult =
@@ -100,52 +100,42 @@ export async function issueOtpForUser(
 
   const cfg = await getTwoFactorConfig();
 
-  const [existing] = await db
-    .select()
-    .from(shareholderOtpCodes)
-    .where(eq(shareholderOtpCodes.userId, userId))
-    .limit(1);
-
-  if (opts?.resend && existing) {
-    if (existing.sendCount >= MAX_SENDS) return { ok: false, error: "too_many_sends" };
-    const sinceLast = Date.now() - new Date(existing.lastSentAt).getTime();
-    if (sinceLast < RESEND_COOLDOWN_MS) {
-      return { ok: false, error: "cooldown", retryAfter: Math.ceil((RESEND_COOLDOWN_MS - sinceLast) / 1000) };
-    }
-  }
-
-  const code = genCode();
-  const codeHash = hashCode(code, userId);
-  const expiresAt = new Date(Date.now() + OTP_TTL_MS);
-  const now = new Date();
-
   try {
-    if (existing) {
-      await db
-        .update(shareholderOtpCodes)
-        .set({
-          codeHash,
-          channel: cfg.channel === "both" ? "both" : cfg.channel,
-          phone: sh.phone,
-          attempts: 0,
-          consumedAt: null,
-          expiresAt,
-          lastSentAt: now,
-          sendCount: opts?.resend ? existing.sendCount + 1 : 1,
-        })
-        .where(eq(shareholderOtpCodes.id, existing.id));
-    } else {
-      await db.insert(shareholderOtpCodes).values({
-        userId,
-        codeHash,
-        channel: cfg.channel === "both" ? "both" : cfg.channel,
+    return await db.transaction(async (tx): Promise<IssueOtpResult> => {
+      // Lock the account, not just its OTP row: the row may not exist yet.
+      // The two-key advisory lock is transaction-scoped and serializes first sends too.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(18473052, hashtext(${userId}))`);
+      const [existing] = await tx.select().from(shareholderOtpCodes)
+        .where(eq(shareholderOtpCodes.userId, userId)).limit(1).for("update");
+      if (opts?.resend && existing) {
+        if (existing.sendCount >= MAX_SENDS) return { ok: false, error: "too_many_sends" };
+        const sinceLast = Date.now() - new Date(existing.lastSentAt).getTime();
+        if (sinceLast < RESEND_COOLDOWN_MS) {
+          return { ok: false, error: "cooldown", retryAfter: Math.ceil((RESEND_COOLDOWN_MS - sinceLast) / 1000) };
+        }
+      }
+
+      const code = genCode();
+      const now = new Date();
+      const values = {
+        codeHash: hashCode(code, userId),
+        channel: cfg.channel,
         phone: sh.phone,
-        expiresAt,
+        attempts: 0,
+        consumedAt: null,
+        expiresAt: new Date(now.getTime() + OTP_TTL_MS),
         lastSentAt: now,
-      });
-    }
-    await enqueueOtpMessage(sh.phone, sh.fullName, code, cfg);
-    return { ok: true, phone: maskPhone(sh.phone), channel: cfg.channel };
+        sendCount: opts?.resend && existing ? existing.sendCount + 1 : 1,
+      };
+      if (existing) {
+        await tx.update(shareholderOtpCodes).set(values).where(eq(shareholderOtpCodes.id, existing.id));
+      } else {
+        await tx.insert(shareholderOtpCodes).values({ ...values, userId });
+      }
+      // Enqueue in the same transaction: a failed send never consumes a slot or replaces a code.
+      await tx.insert(notificationQueue).values(otpMessageRows(sh.phone, sh.fullName, code, cfg));
+      return { ok: true, phone: maskPhone(sh.phone), channel: cfg.channel };
+    });
   } catch (e) {
     console.error("issueOtpForUser failed:", e);
     return { ok: false, error: "send_failed" };
@@ -161,38 +151,32 @@ export type VerifyOtpResult =
  * ويزيد عداد المحاولات عند الخطأ، ويعلّمه مُستهلَكاً عند النجاح.
  */
 export async function verifyOtpForUser(userId: string, code: string): Promise<VerifyOtpResult> {
-  const [row] = await db
-    .select()
-    .from(shareholderOtpCodes)
-    .where(eq(shareholderOtpCodes.userId, userId))
-    .limit(1);
-  if (!row || row.consumedAt) return { ok: false, error: "no_challenge" };
-  if (new Date(row.expiresAt).getTime() < Date.now()) return { ok: false, error: "expired" };
-  if (row.attempts >= MAX_ATTEMPTS) return { ok: false, error: "too_many_attempts" };
+  return db.transaction(async (tx): Promise<VerifyOtpResult> => {
+    const [row] = await tx.select().from(shareholderOtpCodes)
+      .where(eq(shareholderOtpCodes.userId, userId)).limit(1).for("update");
+    if (!row || row.consumedAt) return { ok: false, error: "no_challenge" };
+    if (new Date(row.expiresAt).getTime() < Date.now()) return { ok: false, error: "expired" };
+    if (row.attempts >= MAX_ATTEMPTS) return { ok: false, error: "too_many_attempts" };
 
-  const actual = hashCode(String(code || ""), userId);
-  let match = false;
-  try {
-    match =
-      actual.length === row.codeHash.length &&
-      crypto.timingSafeEqual(Buffer.from(actual), Buffer.from(row.codeHash));
-  } catch {
-    match = false;
-  }
+    const actual = hashCode(String(code || ""), userId);
+    let match = false;
+    try {
+      match =
+        actual.length === row.codeHash.length &&
+        crypto.timingSafeEqual(Buffer.from(actual), Buffer.from(row.codeHash));
+    } catch {
+      match = false;
+    }
 
-  if (!match) {
-    await db
-      .update(shareholderOtpCodes)
-      .set({ attempts: row.attempts + 1 })
+    if (!match) {
+      await tx.update(shareholderOtpCodes).set({ attempts: row.attempts + 1 })
+        .where(eq(shareholderOtpCodes.id, row.id));
+      return { ok: false, error: "invalid" };
+    }
+    await tx.update(shareholderOtpCodes).set({ consumedAt: new Date() })
       .where(eq(shareholderOtpCodes.id, row.id));
-    return { ok: false, error: "invalid" };
-  }
-
-  await db
-    .update(shareholderOtpCodes)
-    .set({ consumedAt: new Date() })
-    .where(eq(shareholderOtpCodes.id, row.id));
-  return { ok: true };
+    return { ok: true };
+  });
 }
 
 /**

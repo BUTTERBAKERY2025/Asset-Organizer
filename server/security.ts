@@ -67,13 +67,48 @@ export function validateCsrfToken(sessionId: string, token: string): boolean {
   );
 }
 
+function configuredAppOrigins(): Set<string> {
+  const allowed = new Set<string>();
+
+  // These are application-owned URLs, not suffixes shared with other tenants.
+  for (const value of [
+    process.env.APP_PUBLIC_URL,
+    process.env.PUBLIC_SITE_URL,
+    process.env.VITE_PUBLIC_SITE_URL,
+  ]) {
+    if (!value) continue;
+    try {
+      const url = new URL(value);
+      if ((url.protocol === 'https:' || url.protocol === 'http:') &&
+          !url.username && !url.password && !url.search && !url.hash &&
+          url.pathname === '/') {
+        allowed.add(url.origin);
+      }
+    } catch {
+      // An invalid configured URL never broadens the allowlist.
+    }
+  }
+
+  // Replit supplies the exact preview/deployment hostnames for this app.
+  for (const host of [
+    process.env.REPLIT_DEV_DOMAIN,
+    ...(process.env.REPLIT_DOMAINS || '').split(','),
+  ]) {
+    const domain = host?.trim();
+    if (domain && /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i.test(domain) &&
+        !domain.includes('..')) {
+      allowed.add(`https://${domain.toLowerCase()}`);
+    }
+  }
+  return allowed;
+}
+
 export function csrfProtection(req: Request, res: Response, next: NextFunction) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
     return next();
   }
 
   const origin = req.headers.origin || req.headers.referer;
-  const host = req.headers.host;
 
   if (!origin) {
     console.warn(`[Security] CSRF blocked: no Origin/Referer header on ${req.method} ${req.path}`);
@@ -81,9 +116,30 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
   }
 
   try {
-    const originHost = new URL(origin).host;
-    if (originHost !== host && !originHost.endsWith('.replit.dev') && !originHost.endsWith('.replit.app') && !originHost.endsWith('.onrender.com')) {
-      console.warn(`[Security] CSRF blocked: origin ${origin} doesn't match host ${host}`);
+    const source = new URL(origin);
+    const validSource = (source.protocol === 'https:' || source.protocol === 'http:') &&
+      !source.username && !source.password && !source.hash &&
+      // Origin is a serialized origin, whereas Referer can contain a path/query.
+      (!req.headers.origin || origin === source.origin);
+    const allowed = configuredAppOrigins();
+
+    // The request's actual Host (never X-Forwarded-Host) supports same-origin
+    // writes even when a deployment's public URL was not configured.
+    const host = req.headers.host;
+    if (host && (req.protocol === 'http' || req.protocol === 'https') &&
+        /^(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*|\[[0-9a-f:.]+\])(?::[0-9]{1,5})?$/i.test(host)) {
+      try {
+        const requestUrl = new URL(`${req.protocol}://${host}`);
+        if (requestUrl.hostname && Number(requestUrl.port || 0) <= 65535) {
+          allowed.add(requestUrl.origin);
+        }
+      } catch {
+        // Invalid authority is never used as a same-origin source.
+      }
+    }
+
+    if (!validSource || !allowed.has(source.origin)) {
+      console.warn(`[Security] CSRF blocked: origin ${origin} is not an allowed app origin`);
       return res.status(403).json({ error: "طلب غير مصرح - مصدر غير معروف" });
     }
   } catch {

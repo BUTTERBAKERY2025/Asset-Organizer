@@ -311,7 +311,7 @@ async function detectVerticalGaps(
     const ctx = canvas.getContext("2d")!;
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    await page.render({ canvasContext: ctx, viewport } as any).promise;
+    await page.render({ canvas, canvasContext: ctx, viewport }).promise;
     const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
     // هل يحتوي الصف على محتوى فعلي (نص/جداول/صور)؟
     const rowHasContent = (y: number): boolean => {

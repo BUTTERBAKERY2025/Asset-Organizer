@@ -1,5 +1,4 @@
 import type { Express } from "express";
-import crypto from "node:crypto";
 import { db } from "./db";
 import { eq, and, ne, desc, sql, inArray, gte, lte, lt } from "drizzle-orm";
 import { isAuthenticated, requirePermission, getEffectiveBranchFilter, getCachedPermissionsForUser, hasCrossBranchHrReadAccess } from "./auth";
@@ -71,6 +70,7 @@ import {
 } from "./leave-helpers";
 import { storage } from "./storage";
 import { readEmployeeDocumentMetadata } from "./employee-documents-read";
+import { issueWarningPublicToken, warningPublicAccessCondition } from "./warning-public-token";
 
 function getUserId(req: any): string | null {
   return (req as any).user?.id || (req as any).user?.claims?.sub || null;
@@ -2730,7 +2730,7 @@ export function registerHrRoutes(app: Express) {
       }
       const safeBranchId = emp.branchId;
       // Generate a random URL-safe token used for the public WhatsApp signing link.
-      const publicToken = crypto.randomBytes(24).toString("base64url");
+      const publicToken = parsed.status && parsed.status !== "active" ? null : issueWarningPublicToken();
       const [created] = await db.insert(employeeWarnings).values({
         ...parsed,
         branchId: safeBranchId,
@@ -2774,7 +2774,7 @@ export function registerHrRoutes(app: Express) {
       const { branchId: _bId, branchEmployeeId: _eId, ...partial } =
         insertEmployeeWarningSchema.partial().parse(req.body) as any;
       const [updated] = await db.update(employeeWarnings)
-        .set({ ...partial, updatedAt: new Date() })
+        .set({ ...partial, ...(partial.status && partial.status !== "active" ? { publicToken: null } : {}), updatedAt: new Date() })
         .where(eq(employeeWarnings.id, id))
         .returning();
       res.json(updated);
@@ -2840,11 +2840,21 @@ export function registerHrRoutes(app: Express) {
       if (branchIds !== null && !branchIds.includes(existing.branchId)) {
         return res.status(403).json({ error: "ليس لديك صلاحية" });
       }
-      const publicToken = crypto.randomBytes(24).toString("base64url");
+      if (existing.status !== "active" || existing.signedAt ||
+          (existing.expiresAt && existing.expiresAt < new Date().toISOString().slice(0, 10))) {
+        return res.status(409).json({ error: "لا يمكن تجديد رابط إنذار غير نشط أو منتهي أو موقّع" });
+      }
+      const publicToken = issueWarningPublicToken();
       const [updated] = await db.update(employeeWarnings)
-        .set({ publicToken, signedAt: null, signatureData: null, signedIp: null, signedUserAgent: null, updatedAt: new Date() } as any)
-        .where(eq(employeeWarnings.id, id))
+        .set({ publicToken, updatedAt: new Date() })
+        .where(and(
+          eq(employeeWarnings.id, id),
+          eq(employeeWarnings.status, "active"),
+          sql`${employeeWarnings.signedAt} IS NULL`,
+          sql`(${employeeWarnings.expiresAt} IS NULL OR ${employeeWarnings.expiresAt} >= CURRENT_DATE::text)`,
+        ))
         .returning();
+      if (!updated) return res.status(409).json({ error: "لا يمكن تجديد رابط إنذار غير نشط أو منتهي أو موقّع" });
       res.json(updated);
     } catch (e: any) {
       console.error("[hr/warnings/regenerate-token] error:", e);
@@ -2894,7 +2904,7 @@ export function registerHrRoutes(app: Express) {
     try {
       const token = String(req.params.token || "").slice(0, 128);
       if (!token) return res.status(404).json({ error: "رابط غير صالح" });
-      const [w] = await db.select().from(employeeWarnings).where(eq(employeeWarnings.publicToken, token));
+      const [w] = await db.select().from(employeeWarnings).where(warningPublicAccessCondition(token));
       if (!w) return res.status(404).json({ error: "الإنذار غير موجود أو الرابط منتهي" });
       const [emp] = await db.select().from(branchEmployees).where(eq(branchEmployees.id, w.branchEmployeeId));
       const [br] = w.branchId ? await db.select().from(branches).where(eq(branches.id, w.branchId)) : [null];
@@ -2914,7 +2924,6 @@ export function registerHrRoutes(app: Express) {
         },
         employee: emp ? {
           id: emp.id, employeeName: emp.employeeName, jobTitle: emp.jobTitle,
-          nationalId: emp.iqamaNumber,
         } : null,
         branch: br ? { id: br.id, name: br.name, nameAr: (br as any).nameAr } : null,
         template: template ? { id: template.id, label: template.label, body: renderedBody } : null,
@@ -2953,7 +2962,7 @@ export function registerHrRoutes(app: Express) {
         updatedAt: new Date(),
       } as any).where(
         and(
-          eq(employeeWarnings.publicToken, token),
+          warningPublicAccessCondition(token),
           sql`${employeeWarnings.signedAt} IS NULL`,
         ),
       ).returning();
@@ -2961,8 +2970,8 @@ export function registerHrRoutes(app: Express) {
         // Either the token doesn't exist, or the warning is already signed.
         const [existing] = await db.select({ id: employeeWarnings.id, signedAt: employeeWarnings.signedAt })
           .from(employeeWarnings)
-          .where(eq(employeeWarnings.publicToken, token));
-        if (!existing) return res.status(404).json({ error: "الإنذار غير موجود" });
+          .where(warningPublicAccessCondition(token));
+        if (!existing) return res.status(404).json({ error: "الإنذار غير موجود أو الرابط منتهي" });
         return res.status(409).json({ error: "تم التوقيع على هذا الإنذار مسبقًا" });
       }
       res.json({ success: true, signedAt: updated[0].signedAt });
