@@ -125,12 +125,10 @@ export function LinkedBatches({
 
   return (
     <div className="space-y-3">
-    {canView("production") && <RecipeExceptions orderId={orderId} />}
     {batches.length > 0 && <section className="rounded-lg border border-violet-200 bg-violet-50/40 p-4">
       <h3 className="font-semibold">دفعات إنتاج مرتبطة</h3>
       <p className="mb-3 text-xs text-muted-foreground">
-        الدفعات قيد التنفيذ تغطي الاحتياج قبل الشحن. الدفعات السابقة لا تُعاد
-        ربطها بوصفة بأثر رجعي.
+        بدء الدفعة لا يعني إنهاءها؛ راجع حالتها وأنهِ الدفعة قيد التنفيذ صراحةً قبل احتسابها إنتاجاً مكتملاً. الدفعات السابقة لا تُعاد ربطها بوصفة بأثر رجعي.
       </p>
       <div className="space-y-3">
         {batches.map(batch => (
@@ -149,6 +147,7 @@ export function LinkedBatches({
         ))}
       </div>
     </section>}
+    {canView("production") && <RecipeExceptions orderId={orderId} />}
     </div>
   );
 }
@@ -259,21 +258,31 @@ function LinkedBatchRow({
         </div>
       </div>
 
-      <div className="mt-3">
+      {materials.isError ? <div className="mt-3">
         <RecipeMaterialsPreview
           query={materials}
           batchId={batch.id}
           kitchenId={materials.data?.kitchenId}
           onRetry={() => void refreshRequirements(false)}
         />
-      </div>
+      </div> : <details className="mt-3 rounded-md border p-2">
+        <summary className="cursor-pointer font-medium">تفاصيل الوصفة والمواد {readiness.kind === "shortage" ? "· يوجد نقص" : ""}</summary>
+        <div className="mt-3">
+          <RecipeMaterialsPreview
+            query={materials}
+            batchId={batch.id}
+            kitchenId={materials.data?.kitchenId}
+            onRetry={() => void refreshRequirements(false)}
+          />
+        </div>
+      </details>}
 
       {isInProgress && readiness.kind === "shortage" && (
         <div className="mt-3 flex flex-wrap items-start justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <div className="flex-1">
             <p className="font-semibold">لا يمكن إنهاء الدفعة الآن</p>
-            <p className="mt-1">يوجد نقص في رصيد مواد المطبخ. اطلب التوريد من الروابط أعلاه ثم أعد التحقق؛ المعاينة لا تحجز الرصيد.</p>
+            <p className="mt-1">يوجد نقص في رصيد مواد المطبخ. افتح تفاصيل الوصفة والمواد لروابط التوريد ثم أعد التحقق؛ المعاينة لا تحجز الرصيد.</p>
           </div>
           <Button type="button" size="sm" variant="outline" disabled={refreshing} onClick={() => void refreshRequirements(false)}>إعادة التحقق</Button>
         </div>

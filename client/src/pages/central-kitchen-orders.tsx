@@ -998,6 +998,7 @@ function DetailRoutingSection({ order, canConfigure, onConfigure }: { order: Kit
 }
 function OrderDetail({ showHeader = true, order, products, productsQuery, accessibleBranchIds, actionNotes, setActionNotes, pending, failed, canApprove, canEdit, canPrint, canExport, canConfigureRouting, onConfigureRouting, onAction }: { showHeader?: boolean; order: KitchenOrder; products: ProductOption[]; productsQuery: CatalogQueryLike; accessibleBranchIds: string[]; actionNotes: string; setActionNotes: (value: string) => void; pending: boolean; failed: boolean; canApprove: boolean; canEdit: boolean; canPrint: boolean; canExport: boolean; canConfigureRouting: boolean; onConfigureRouting: () => void; onAction: (action: "approve" | "prepare" | "dispatch" | "receive" | "resolve-discrepancy", details?: Record<string, unknown>) => void }) {
   const [section, setSection] = useState<"overview" | "items" | "decisions" | "changes" | "history">("decisions");
+  const detailNav = useRef<HTMLElement>(null);
   const changeTab = useRef({ id: order.id, shown: false });
   if (changeTab.current.id !== order.id) changeTab.current = { id: order.id, shown: false };
   if (order.allowedActions?.edit || order.allowedActions?.cancel) changeTab.current.shown = true;
@@ -1023,7 +1024,7 @@ function OrderDetail({ showHeader = true, order, products, productsQuery, access
   const allowAction = !!action && order.allowedActions?.[action] === true;
   const actionConfig = action ? { approve: { label: "اعتماد الطلب", icon: ShieldCheck }, prepare: { label: "تأكيد التجهيز", icon: PackagePlus }, dispatch: { label: "تأكيد الشحن", icon: Truck }, receive: { label: "تأكيد الاستلام", icon: Check } }[action] : null;
    return <>{showHeader ? <DialogHeader><div className="flex items-start justify-between gap-3 pl-8"><div><DialogTitle className="font-mono text-xl">{order.orderNumber}</DialogTitle><DialogDescription className="mt-1">طلب الفرع {order.requestBranchName || order.requestBranchId} من {order.centralKitchenName || order.centralKitchenId}</DialogDescription></div><div className="flex flex-wrap items-center gap-2"><StatusBadge status={order.status} /><OrderActionsMenu order={order} canPrint={canPrint && ["prepared", "dispatched", "received"].includes(status)} canExport={canExport} onPrint={() => printPreparationNote(order)} /></div></div></DialogHeader> : <div className="flex justify-end"><OrderActionsMenu order={order} canPrint={canPrint && ["prepared", "dispatched", "received"].includes(status)} canExport={canExport} onPrint={() => printPreparationNote(order)} /></div>}
-    <nav className="sticky top-0 z-10 flex min-w-0 flex-wrap gap-1 border-y bg-background py-2 sm:static" aria-label="أقسام تفاصيل الطلب">
+    <nav ref={detailNav} className="sticky top-0 z-10 flex min-w-0 flex-wrap gap-1 border-y bg-background py-2 sm:static" aria-label="أقسام تفاصيل الطلب">
       {([["decisions", actionConfig?.label || "القرارات"], ["overview", "نظرة عامة"], ["items", `البنود (${order.items?.length || 0})`], ...(changeTab.current.shown ? [["changes", "تعديل / إلغاء"]] as const : []), ["history", "السجل"]] as const).map(([key, label]) => <Button key={key} size="sm" className="min-h-11 shrink-0" variant={section === key ? "default" : "outline"} onClick={() => setSection(key)}>{label}</Button>)}
     </nav>
     <div hidden={section !== "overview"} className="space-y-4">
@@ -1054,6 +1055,10 @@ function OrderDetail({ showHeader = true, order, products, productsQuery, access
     </div>
     <div hidden={section !== "decisions"} className="space-y-4">
       {["received", "cancelled"].includes(status) && <DemandCommitments orderId={order.id} kitchenId={order.centralKitchenId} items={order.items || []} canConsent={canEdit} />}
+     {(status === "approved" || !!order.linkedBatches?.length) && <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-3 text-sm">
+       <p>بدء دفعة الإنتاج لا يعني إنهاءها. راجع الدفعات المرتبطة وأكمل الإنهاء من تبويب البنود قبل تسجيل كمية إنتاج مكتملة.</p>
+       <Button type="button" size="sm" variant="outline" className="mt-2 min-h-11" onClick={() => { detailNav.current?.scrollIntoView({ block: "start" }); setSection("items"); }}>متابعة الإنتاج / إنهاء الدفعات</Button>
+     </div>}
      {action === "prepare" && allowAction
        ? <PreparationEditor orderId={order.id} inventoryMode={order.inventoryMode} items={order.items || []} products={products} productsQuery={productsQuery} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={pending} onSubmit={items => onAction("prepare", { items })} />
       : action === "dispatch" && allowAction ? <><div className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">قبل إرسال الطلب: أسند سائقاً، وثّق كميات البنود المسلّمة (قد تكون أقل من الجاهز)، وانتظر تأكيده. يجب أن تطابق الكميات المرسلة المحضر تماماً. يُحفظ اسم السائق والمركبة من التكليف الرسمي لا من الإدخال اليدوي. <Link href={`/driver-deliveries?sourceType=kitchen&sourceId=${order.id}`} className="font-semibold underline">افتح مهمة التوصيل وتوثيق التسليم</Link></div><DispatchEditor items={order.items || []} pending={pending} failed={failed} onSubmit={details => onAction("dispatch", details)} /></>

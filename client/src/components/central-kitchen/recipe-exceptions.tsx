@@ -81,10 +81,14 @@ export function RecipeExceptions({ orderId, binding, allowRequest = false }: {
     {query.data?.exceptions.map(exception => <article key={exception.id} className="space-y-2 rounded-md border bg-background p-3 text-sm">
       <p className="font-semibold">استثناء #{exception.id} · بند #{exception.itemId} · {exception.quantity} {exception.unit} · {exception.productionDate}</p>
       <p>{statusLabels[exception.status]}{binding && matchingApprovedException([exception], binding) ? " · مطابق للدفعة الحالية" : ""}</p>
-      <p>السبب: {exception.reason}</p>
-      <p className="text-xs text-muted-foreground">الطلب: {exception.requestedBy} · {showTime(exception.requestedAt)}</p>
-      {exception.reviewedBy && <p className="text-xs text-muted-foreground">المراجع: {exception.reviewedBy} · {showTime(exception.reviewedAt)} · سبب القرار: {exception.reviewReason}</p>}
-      {exception.consumedBatchId && <p className="text-xs text-muted-foreground">استُخدم في الدفعة #{exception.consumedBatchId} · {showTime(exception.consumedAt)}</p>}
+      {exception.status === "pending" && <p>السبب: {exception.reason}</p>}
+      <details className="rounded border p-2">
+        <summary className="cursor-pointer">تفاصيل {exception.status === "pending" ? "الطلب" : "الاستثناء وسجل المراجعة"}</summary>
+        {exception.status !== "pending" && <p className="mt-2">السبب: {exception.reason}</p>}
+        <p className="mt-2 text-xs text-muted-foreground">الطلب: {exception.requestedBy} · {showTime(exception.requestedAt)}</p>
+        {exception.reviewedBy && <p className="text-xs text-muted-foreground">المراجع: {exception.reviewedBy} · {showTime(exception.reviewedAt)} · سبب القرار: {exception.reviewReason}</p>}
+        {exception.consumedBatchId && <p className="text-xs text-muted-foreground">استُخدم في الدفعة #{exception.consumedBatchId} · {showTime(exception.consumedAt)}</p>}
+      </details>
       {exception.status === "pending" && query.data?.canApprove && <div className="space-y-2">
         <Label htmlFor={`exception-decision-${exception.id}`}>سبب قرار المراجعة</Label>
         <Input id={`exception-decision-${exception.id}`} maxLength={2000} value={reviewReasons[exception.id] || ""} onChange={event => setReviewReasons(current => ({ ...current, [exception.id]: event.target.value }))} />
