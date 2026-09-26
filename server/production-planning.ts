@@ -7,6 +7,8 @@ import { productionPlanningQuerySchema, PRODUCTION_PLANNING_ROW_LIMIT, PRODUCTIO
   type ProductionPlanningResponse, type ProductionPlanningRow, type ProductionPlanningItem, type ProductionPlanningCheck } from "@shared/production-planning";
 import type { CentralKitchenWorkplanOrder } from "@shared/central-kitchen-workplan";
 import { isNewCatalogReferenceAllowed } from "@shared/catalog-activity";
+import { getProductionCoverage } from "./production-coverage";
+import type { ProductionItemCoverage } from "@shared/production-coverage";
 
 type SqlDatabase = CentralKitchenWorkplanDatabase;
 type Dependencies = {
@@ -187,10 +189,28 @@ export async function getProductionPlanning(req: Request, kitchenId: string, dat
     const mode = configuredMode === "real" || configuredMode === "shadow" || configuredMode === "paused"
       ? configuredMode : configuredMode === undefined ? "shadow" : "unknown";
     const advanced = await advancedRows(tx, kitchenId, date, today);
+    const coverage = await getProductionCoverage(tx, kitchenId);
     // The legacy workplan's "earlier" cohort is relative to the selected date;
     // a future earlier request must not be described as overdue.
     const overdueRequests = workplan.overdueEarlierOrders.filter(order => order.neededDate < today);
     const rows = [...workplan.orders, ...overdueRequests].map(centralRow).concat(advanced.rows);
+    const notApplicablePlan: ProductionItemCoverage = {
+      status: "not_applicable", reason: "advanced_plan_is_not_additional_request_demand",
+      persistedReserved: null, proposedFreeStock: null, prospectiveInProgress: null,
+      remainingProductionNeed: null, inProgressGuaranteed: false,
+    };
+    for (const row of rows) for (const item of row.items) {
+      const nonApproved = row.source === "central_request" && row.status !== "approved" && row.status !== "prepared";
+      item.coverage = row.source === "advanced_plan" ? notApplicablePlan
+        : coverage.items.get(item.id) ?? {
+          status: !coverage.metadata.complete ? "unknown" : nonApproved || row.inventoryMode === "shadow" ? "not_applicable" : "unknown",
+          reason: !coverage.metadata.complete ? "candidate_pool_truncated"
+            : nonApproved ? "request_not_open_approved"
+            : row.inventoryMode === "shadow" ? "shadow_inventory_mode" : "request_not_in_complete_eligible_pool",
+          persistedReserved: null, proposedFreeStock: null, prospectiveInProgress: null,
+          remainingProductionNeed: null, inProgressGuaranteed: false,
+        };
+    }
     const centralProductIds = [...new Set(rows.filter(row => row.source === "central_request")
       .flatMap(row => row.items.map(item => item.productId).filter((id): id is number => id !== null)))];
     if (centralProductIds.length) {
@@ -249,6 +269,7 @@ export async function getProductionPlanning(req: Request, kitchenId: string, dat
     return {
       kitchen: { ...workplan.kitchen, isCentralKitchen: true }, date, rows, checks,
       metadata: {
+        coverage: coverage.metadata,
         timezone: "Asia/Riyadh", generatedAt: now.toISOString(), actualRiyadhToday: today,
         stateBasis: "current_persisted_state_not_historical_as_of", allocationReadiness: "unknown",
         quantitySemantics: {
@@ -280,7 +301,8 @@ export function registerProductionPlanningRoute(app: Express, dependencies: Depe
     } catch (error) {
       if (error instanceof PlanningError || (error instanceof Error && "status" in error && typeof error.status === "number"))
         return res.status(error.status).json({ error: error.message });
-      throw error;
+      console.error("Production planning read failed", error);
+      return res.status(500).json({ error: "تعذر قراءة خطة الإنتاج حالياً" });
     }
   });
 }

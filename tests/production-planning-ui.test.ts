@@ -69,6 +69,7 @@ describe("planning authenticated-data render", () => {
     const data: ProductionPlanningResponse = {
       kitchen: { id: kitchenId, name: "المطبخ المركزي", isCentralKitchen: true }, date, rows, checks: [],
       metadata: {
+        coverage: { status: "calculated", scope: "all_open_eligible_requests_current_state", complete: true, candidateLimit: 10000, candidateCount: 2, note: "" },
         timezone: "Asia/Riyadh", generatedAt: "2026-01-01T00:00:00.000Z", actualRiyadhToday: date,
         stateBasis: "current_persisted_state_not_historical_as_of", allocationReadiness: "unknown",
         quantitySemantics: { planned: "", completed: "", inProgress: "", remaining: "" },

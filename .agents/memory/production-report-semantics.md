@@ -38,3 +38,9 @@ Preparation provenance is not extra production and is not the source composition
 **Why:** Mixed historical groups can contain both classified and unclassified preparations. Summing just known source values falsely presents a partial amount as the complete source total.
 
 **How to apply:** Only show numeric grouped source totals when every item is classified; otherwise show partial/unknown with null amounts. Preserve genuine recorded zero. Render only persisted proof references, and test against the writer's decimal-string quantities rather than invented numeric fixtures. Keep source quantities out of production summary totals.
+
+Coverage simulations must consider competing approved demand outside the displayed date and preserve ledger failures over weaker uncertainty explanations.
+
+**Why:** Filtering before sharing free stock can promise the same balance to different days. A generic uncertain-demand reason must not overwrite a reservation mismatch and accidentally certify a prepared item's reservation.
+
+**How to apply:** Keep simulation separate from presentation filters; finished production is already stock, preparation and its reservation are the same goods, and any later real reservation must revalidate atomically.

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ProductionItemCoverage, ProductionCoverageMetadata } from "./production-coverage";
 
 export const PRODUCTION_PLANNING_ROW_LIMIT = 250;
 export const PRODUCTION_PLANNING_OVERDUE_LOOKBACK_DAYS = 365;
@@ -16,6 +17,7 @@ export type ProductionPlanningSource = "central_request" | "advanced_plan";
 export type ProductionPlanningCohort = "date" | "overdue";
 export type ProductionPlanningItem = {
   id: number;
+  coverage?: ProductionItemCoverage;
   productName: string;
   productId: number | null;
   unit: string;
@@ -58,6 +60,7 @@ export type ProductionPlanningResponse = {
   rows: ProductionPlanningRow[];
   checks: ProductionPlanningCheck[];
   metadata: {
+    coverage: ProductionCoverageMetadata;
     timezone: "Asia/Riyadh";
     generatedAt: string;
     actualRiyadhToday: string;

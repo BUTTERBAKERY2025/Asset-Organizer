@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { filterPlanningRows, planningItemQuantities, planningIssueLabel, planningStatusLabel } from "./production-planning-model";
+import { CoverageScope, ItemCoverage } from "./production-coverage";
 
 type Props = {
   mode: "settings" | "planning";
@@ -65,6 +66,7 @@ export function ProductionPlanning({ mode, kitchens, kitchenId, onKitchenChange,
       mode === "settings" ? <SettingsReview data={data} /> :
       <div className="space-y-4">
         <Scope data={data} />
+        <CoverageScope metadata={data.metadata.coverage} />
         <Card><CardContent className="grid gap-3 p-4 sm:grid-cols-3">
           <div><Label htmlFor="planning-source">المصدر</Label><Select value={source} onValueChange={value => setSource(value as typeof source)}><SelectTrigger id="planning-source" className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">كل المصادر</SelectItem><SelectItem value="central_request">طلبات الفروع</SelectItem><SelectItem value="advanced_plan">أوامر الإنتاج</SelectItem></SelectContent></Select></div>
           <div><Label htmlFor="planning-status">الحالة</Label><Select value={status} onValueChange={setStatus}><SelectTrigger id="planning-status" className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">كل الحالات</SelectItem>{statuses.map(value => <SelectItem key={value} value={value}>{planningStatusLabel(value)}</SelectItem>)}</SelectContent></Select></div>
@@ -108,7 +110,7 @@ function Scope({ data }: { data: ProductionPlanningResponse }) {
     </div>
     <p className="text-xs text-muted-foreground">عدادات الصفوف المُعادة لكل مصدر على حدة؛ لا تجمع كميات مصادر أو وحدات مختلفة. السابق ضمن فترة البحث {number.format(data.metadata.cohorts.central_request.overdue.lookbackDays)} يومًا. التاريخ الفعلي بالرياض: {data.metadata.actualRiyadhToday}.</p>
     {data.metadata.truncated && <p role="alert" className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />بعض النتائج مقتطعة بسبب حد {number.format(data.metadata.rowLimitPerSourceAndCohort)} صف لكل مصدر وفترة؛ العدادات تخص المُعاد فقط ولا تمثل إجمالياً كاملاً.</p>}
-    <p className="text-xs text-muted-foreground">الكميات المكتملة والجارية تعتمد على دفعات إنتاج مرتبطة صراحةً فقط. غير متحقق لا يساوي صفرًا، ولا يُستنتج عجز صافٍ أو توافر مخزون.</p>
+    <p className="text-xs text-muted-foreground">الكميات المكتملة والجارية تعتمد على دفعات إنتاج مرتبطة صراحةً فقط. غير متحقق لا يساوي صفرًا؛ تقدير التغطية المستقل يُعرض فقط عندما يتحقق نطاقه وبياناته.</p>
   </CardContent></Card>;
 }
 
@@ -123,6 +125,7 @@ function PlanningRow({ row }: { row: ProductionPlanningRow }) {
         const quantities = planningItemQuantities(item);
         return <div key={item.id} className="rounded-lg border p-3 text-sm"><div className="font-semibold">{item.productName} <span className="font-normal text-muted-foreground">· {item.unit}</span></div>
           <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs sm:grid-cols-4">{([["مخطط", quantities.planned], ["مكتمل", quantities.completed], ["جارٍ", quantities.inProgress], ["متبقٍ", quantities.remaining]] as const).map(([label, value]) => <div key={label}><dt className="text-muted-foreground">{label}</dt><dd className="font-medium">{value}</dd></div>)}</dl>
+          <ItemCoverage coverage={item.coverage} unit={item.unit} advanced={row.source === "advanced_plan"} />
           {item.issues.length > 0 && <ul className="mt-2 space-y-1 text-xs text-amber-900">{item.issues.map((issue, index) => <li key={index}>{planningIssueLabel(issue)}</li>)}</ul>}
         </div>;
       })}</div>}
