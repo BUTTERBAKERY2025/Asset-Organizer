@@ -271,6 +271,30 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
     || !recipeExceptionSchema.rows[0]?.unique_index_ready || !recipeExceptionSchema.rows[0]?.state_check_ready) {
     throw new Error("Recipe exception migration 043 is required before this release can start");
   }
+  // Read-only gate; in production migration 044 is operator-applied, never
+  // inferred from old batches or installed by a request handler.
+  const phaseTwoSchema = await pool.query(`
+    SELECT to_regclass('advanced_production_request_links') IS NOT NULL AS table_ready,
+      EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema()
+        AND table_name = 'daily_production_batches' AND column_name = 'advanced_request_item_id') AS provenance_ready,
+      EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = to_regclass('advanced_production_request_links')
+        AND tgname = 'guard_advanced_request_link' AND tgenabled IN ('O','A')) AS link_guard,
+      EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'daily_production_batches'::regclass
+        AND tgname = 'guard_advanced_batch_request_provenance' AND tgenabled IN ('O','A')) AS provenance_guard,
+      EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'daily_production_batches'::regclass
+        AND tgname = 'guard_request_direct_coverage' AND tgenabled IN ('O','A')) AS direct_guard,
+      COALESCE(pg_get_functiondef(to_regprocedure('guard_request_direct_coverage()')) LIKE '%FOR NO KEY UPDATE%', false)
+        AS serialized_direct_guard,
+      COALESCE(pg_get_functiondef(to_regprocedure('guard_linked_request_order()')) LIKE '%NEW.request_branch_id IS DISTINCT FROM OLD.request_branch_id%', false)
+        AS branch_guard,
+      COALESCE(pg_get_functiondef(to_regprocedure('guard_linked_plan_order()')) LIKE '%NEW.target_branch_id IS DISTINCT FROM OLD.target_branch_id%', false)
+        AS target_guard
+  `);
+  if (!phaseTwoSchema.rows[0]?.table_ready || !phaseTwoSchema.rows[0]?.provenance_ready
+    || !phaseTwoSchema.rows[0]?.link_guard || !phaseTwoSchema.rows[0]?.provenance_guard
+    || !phaseTwoSchema.rows[0]?.direct_guard || !phaseTwoSchema.rows[0]?.serialized_direct_guard
+    || !phaseTwoSchema.rows[0]?.branch_guard || !phaseTwoSchema.rows[0]?.target_guard)
+    throw new Error("Manual migration 044_advanced_request_coverage required before release");
   await registerRoutes(httpServer, app);
   
   // Ensure Supabase Storage bucket exists on startup

@@ -61,6 +61,7 @@ function setup(rows: any[] = [plan(1, "date", 1), plan(1, "date", 2), plan(2, "o
     if (text.includes("SELECT a.id, a.order_number")) return { rows };
     if (text.includes("AS date_count")) return { rows: [{ date_count: 2, overdue_count: 1 }] };
     if (text.includes("FROM central_kitchen_orders o JOIN central_kitchen_order_items i")) return { rows: [] };
+    if (text.includes("FROM advanced_production_request_links l")) return { rows: [] };
     if (text.includes("FROM daily_production_batches b")) return { rows: [] };
     if (text.includes("FROM finished_goods_inventory WHERE branch_id")) return { rows: [] };
     if (text.includes("FROM central_kitchen_inventory_allocations a")) return { rows: [] };

@@ -9,7 +9,7 @@ type Entry = {
   productId: number | null; warehouseId: number | null; unit: string;
   substituteProductId?: number | null; substituteWarehouseId?: number | null; substituteUnit?: string | null;
   substitute: boolean; requested: unknown; prepared: unknown;
-  progress: bigint; reason: string | null;
+  progress: bigint; unstartedPlan?: bigint; reason: string | null;
 };
 const row = (value: unknown): Raw => value as Raw;
 const integer = (value: unknown): number | null => value !== null && value !== undefined
@@ -158,10 +158,17 @@ export function simulateProductionCoverage(
     pool.free -= proposed;
     const afterStock = outstanding - proposed;
     const progress = entry.progress < afterStock ? entry.progress : afterStock;
+    // A linked target is prospective plan capacity only. Active advanced
+    // batches are already in progress; finished advanced output is ready stock
+    // and must compete in the ordinary free-stock pool, not in this capacity.
+    const remainingAfterProgress = afterStock - progress;
+    const planned = (entry.unstartedPlan ?? 0n) < remainingAfterProgress
+      ? (entry.unstartedPlan ?? 0n) : remainingAfterProgress;
     result.set(entry.id, {
       status: "calculated", reason: null, persistedReserved: amount(own),
       proposedFreeStock: amount(proposed), prospectiveInProgress: amount(progress),
-      remainingProductionNeed: amount(afterStock - progress), inProgressGuaranteed: false,
+      linkedAdvancedPlanned: amount(planned),
+      remainingProductionNeed: amount(remainingAfterProgress - planned), inProgressGuaranteed: false,
     });
   }
   return result;
@@ -187,7 +194,8 @@ export async function getProductionCoverage(tx: WorkplanSqlExecutor, kitchenId: 
     SELECT b.central_kitchen_order_item_id AS item_id, b.branch_id, b.product_id, b.unit,
       b.quantity::text, b.status, i.product_id AS requested_product_id, i.unit AS requested_unit
     FROM daily_production_batches b
-    JOIN central_kitchen_order_items i ON i.id = b.central_kitchen_order_item_id
+    LEFT JOIN advanced_production_request_links l ON l.plan_item_id = b.advanced_production_order_item_id
+    JOIN central_kitchen_order_items i ON i.id = COALESCE(b.central_kitchen_order_item_id, l.request_item_id)
     JOIN central_kitchen_orders o ON o.id = i.order_id
     WHERE o.central_kitchen_id = ${kitchenId} AND o.status = 'approved'
       AND b.status = 'in_progress'
@@ -203,6 +211,29 @@ export async function getProductionCoverage(tx: WorkplanSqlExecutor, kitchenId: 
       previous.reason = "in_progress_identity_or_quantity_mismatch";
     else previous.quantity += quantity;
     progress.set(id, previous);
+  }
+  const plans = await tx.execute(sql`
+    SELECT l.request_item_id AS item_id, SUM(i.target_quantity)::text AS target,
+      COALESCE(SUM(b.active),0)::text AS active, COALESCE(SUM(b.finished),0)::text AS finished
+    FROM advanced_production_request_links l JOIN production_order_items i ON i.id = l.plan_item_id
+    JOIN central_kitchen_order_items ri ON ri.id = l.request_item_id
+    JOIN central_kitchen_orders ro ON ro.id = ri.order_id
+    LEFT JOIN LATERAL (
+      SELECT COALESCE(SUM(quantity) FILTER (WHERE status = 'in_progress'),0) AS active,
+        COALESCE(SUM(quantity) FILTER (WHERE status = 'finished'),0) AS finished
+      FROM daily_production_batches WHERE advanced_production_order_item_id = i.id
+    ) b ON true
+    WHERE ro.central_kitchen_id = ${kitchenId} AND ro.status = 'approved'
+    GROUP BY l.request_item_id
+  `);
+  const unstarted = new Map<number, { quantity: bigint; reason: string | null }>();
+  for (const raw of plans.rows) {
+    const p = row(raw), id = integer(p.item_id);
+    if (id === null) continue;
+    const target = micros(p.target), active = micros(p.active), finished = micros(p.finished);
+    unstarted.set(id, target === null || active === null || finished === null || target < active + finished
+      ? { quantity: 0n, reason: "linked_plan_batch_quantity_inconsistent" }
+      : { quantity: target - active - finished, reason: null });
   }
   const stock = await tx.execute(sql`
     SELECT 'product:' || id AS key, 'product' AS kind, product_id AS catalog_id, unit,
@@ -249,7 +280,8 @@ export async function getProductionCoverage(tx: WorkplanSqlExecutor, kitchenId: 
       substitute: r.replacement_item === true || r.substitute_quantity !== null || r.substitute_product_id !== null
         || r.substitute_warehouse_item_id !== null || r.dispatched_quantity !== null || r.received_quantity !== null,
       requested: r.requested_quantity, prepared: r.prepared_quantity,
-      progress: linked?.quantity ?? 0n, reason: linked?.reason ?? null,
+      progress: linked?.quantity ?? 0n, unstartedPlan: unstarted.get(id)?.quantity ?? 0n,
+      reason: linked?.reason ?? unstarted.get(id)?.reason ?? null,
     };
   });
   const sources: Source[] = stock.rows.map(raw => {

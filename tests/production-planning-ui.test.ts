@@ -8,15 +8,16 @@ import type { ProductionPlanningRow } from "@shared/production-planning";
 import { getProductionDashboardTab } from "../client/src/components/central-kitchen/production-dashboard-tabs";
 import { ProductionPlanning } from "../client/src/components/central-kitchen/production-planning";
 import { filterPlanningRows, planningItemQuantities, planningIssueLabel, planningQuantity, planningStatusLabel } from "../client/src/components/central-kitchen/production-planning-model";
+import { isSelectedDemandCandidate, validDemandLinkInput } from "../client/src/components/production/advanced-execution";
 
 const rows: ProductionPlanningRow[] = [
   { key: "central_request:1", source: "central_request", id: 1, number: "REQ-1", status: "approved", date: "2026-01-01", cohort: "date",
     originLabel: "فرع الشرق", inventoryMode: "shadow", directLink: "/central-kitchen-orders?orderId=1", issues: ["historical_inventory_mode_unknown"], items: [
-      { id: 1, productId: 1, productName: "خبز", unit: "قطعة", plannedQuantity: 5, completedQuantity: null, inProgressQuantity: null, remainingQuantity: null, issues: [], catalogMapping: "product", approvedRecipe: null },
+      { id: 1, productId: 1, productName: "خبز", unit: "قطعة", plannedQuantity: 5, completedQuantity: null, inProgressQuantity: null, remainingQuantity: null, issues: [], catalogMapping: "product", approvedRecipe: null, linkedAdvancedPlans: [{ planItemId: 2, planOrderId: 1, allocatedQuantity: 3, reason: "احتياج الفرع" }] },
     ] },
   { key: "advanced_plan:1", source: "advanced_plan", id: 1, number: "PLAN-1", status: "in_progress", date: "2025-12-31", cohort: "overdue",
     originLabel: "المطبخ المركزي", inventoryMode: null, directLink: "/advanced-production-orders/1", issues: [], items: [
-      { id: 2, productId: 2, productName: "عجينة", unit: "كجم", plannedQuantity: 5, completedQuantity: 0, inProgressQuantity: 2, remainingQuantity: 3, issues: [], catalogMapping: "product", approvedRecipe: true },
+      { id: 2, productId: 2, productName: "عجينة", unit: "كجم", plannedQuantity: 5, completedQuantity: 0, inProgressQuantity: 2, remainingQuantity: 3, issues: [], catalogMapping: "product", approvedRecipe: true, requestLink: { requestItemId: 1, requestOrderId: 1, requestedQuantity: 10, allocatedQuantity: 5, reason: "احتياج الفرع" } },
     ] },
 ];
 const staticHook = (): [string, () => void] => ["/production-dashboard", () => {}];
@@ -63,6 +64,33 @@ describe("planning filters and quantities", () => {
   });
 });
 
+describe("explicit branch-demand selector", () => {
+  it("allows only integer full-plan quantities, a positive selected item and a bounded nonempty reason", () => {
+    expect(validDemandLinkInput(5, 12, "حاجة الفرع")).toBe(true);
+    expect(validDemandLinkInput(0, 12, "حاجة الفرع")).toBe(false);
+    expect(validDemandLinkInput(1.5, 12, "حاجة الفرع")).toBe(false);
+    expect(validDemandLinkInput(5, 0, "حاجة الفرع")).toBe(false);
+    expect(validDemandLinkInput(5, null, "حاجة الفرع")).toBe(false);
+    expect(validDemandLinkInput(5, 12, "   ")).toBe(false);
+    expect(validDemandLinkInput(5, 12, "x".repeat(501))).toBe(false);
+  });
+
+  it("does not allow an inferred candidate, a previously linked item, or a selection from another page", () => {
+    const page = {
+      candidates: [
+        { requestItemId: 11, alreadyLinked: false },
+        { requestItemId: 12, alreadyLinked: true },
+      ],
+      offset: 50,
+    } as Parameters<typeof isSelectedDemandCandidate>[0];
+    expect(isSelectedDemandCandidate(page, 50, 11)).toBe(true);
+    expect(isSelectedDemandCandidate(page, 50, 12)).toBe(false);
+    expect(isSelectedDemandCandidate(page, 50, 13)).toBe(false);
+    expect(isSelectedDemandCandidate(page, 0, 11)).toBe(false);
+    expect(isSelectedDemandCandidate(undefined, 50, 11)).toBe(false);
+  });
+});
+
 describe("planning authenticated-data render", () => {
   it("shows returned-only scope, historic request mode and Arabic issue text without a login or network call", () => {
     const date = "2026-01-01", kitchenId = "kitchen-1";
@@ -90,6 +118,9 @@ describe("planning authenticated-data render", () => {
     expect(html).toContain("تشغيل ظلّي");
     expect(html).toContain("وضع الطلب");
     expect(html).toContain("وضع مخزون الطلب التاريخي غير معروف");
+    expect(html).toContain("احتياج الفرع");
+    expect(html).toContain("مرتبط:");
+    expect(html).toContain("خطة #1");
     expect(html).toContain("صف لكل مصدر وفترة");
     expect(html).not.toContain("historical_inventory_mode_unknown");
     expect(html).not.toContain(">in_progress<");

@@ -17,6 +17,9 @@ export type ProductionPlanningSource = "central_request" | "advanced_plan";
 export type ProductionPlanningCohort = "date" | "overdue";
 export type ProductionPlanningItem = {
   id: number;
+  /** Explicit association only; absent on older read responses, null on independent advanced items. */
+  requestLink?: { requestItemId: number; requestOrderId: number; requestedQuantity: number; allocatedQuantity: number; reason: string } | null;
+  linkedAdvancedPlans?: Array<{ planItemId: number; planOrderId: number; allocatedQuantity: number; reason: string }>;
   coverage?: ProductionItemCoverage;
   productName: string;
   productId: number | null;

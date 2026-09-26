@@ -15,6 +15,20 @@ const reservation = (itemId: number, quantity: string, component = "original") =
 });
 
 describe("read-only unified production coverage simulation", () => {
+  it("separates prospective unstarted plan targets from active output and finished ready stock", () => {
+    const first = simulateProductionCoverage([
+      { ...demand(1, "10"), progress: micros("2")!, unstartedPlan: micros("5")! },
+    ], [source("0")], []).get(1);
+    expect(first).toMatchObject({ prospectiveInProgress: 2, linkedAdvancedPlanned: 5, remainingProductionNeed: 3 });
+    // A finished plan unit is no longer in progress or unstarted. Its output
+    // joins normal stock and competes across requests, not a second plan pool.
+    const finished = simulateProductionCoverage([
+      { ...demand(1, "10"), unstartedPlan: micros("5")! },
+    ], [source("3")], []).get(1);
+    expect(finished).toMatchObject({
+      proposedFreeStock: 3, prospectiveInProgress: 0, linkedAdvancedPlanned: 5, remainingProductionNeed: 2,
+    });
+  });
   it("does not hide a ledger mismatch behind competing-demand uncertainty for a prepared reservation", () => {
     const result = simulateProductionCoverage([
       { ...demand(1), status: "prepared", prepared: "2" },

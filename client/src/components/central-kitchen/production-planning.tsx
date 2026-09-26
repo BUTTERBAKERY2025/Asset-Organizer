@@ -51,7 +51,7 @@ export function ProductionPlanning({ mode, kitchens, kitchenId, onKitchenChange,
   return <section dir="rtl" className="space-y-4" aria-label={mode === "settings" ? "مراجعة إعدادات الإنتاج" : "التخطيط الموحد"}>
     <Card className="border-violet-200 bg-violet-50/40"><CardContent className="space-y-4 p-4 sm:p-6">
       <div><h2 className="text-xl font-bold">{mode === "settings" ? "مراجعة إعدادات الإنتاج" : "التخطيط الموحد للإنتاج"}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">عرض للقراءة فقط للبيانات المحفوظة حالياً، وليس اعتماداً للإعدادات أو خطة تنفيذ. لا تخصيص ولا تعديل للمخزون أو الطلبات من هذه الشاشة. لا تُستنتج جاهزية المخزون المباشر أو مصدر المبيعات.</p></div>
+        <p className="mt-1 text-sm text-muted-foreground">عرض للقراءة فقط للبيانات المحفوظة حالياً، وليس اعتماداً للإعدادات أو خطة تنفيذ. الربط الصريح بين خطة وطلب ليس حجزاً للمخزون ولا يغيّر الطلب أو المواد. لا تُستنتج جاهزية المخزون المباشر أو مصدر المبيعات.</p></div>
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-[180px] flex-1 sm:max-w-64"><Label htmlFor={`planning-kitchen-${mode}`}>المطبخ المركزي</Label><Select value={kitchenId || undefined} onValueChange={onKitchenChange}><SelectTrigger id={`planning-kitchen-${mode}`} className="mt-1"><SelectValue placeholder="اختر المطبخ" /></SelectTrigger><SelectContent>{kitchens.map(kitchen => <SelectItem key={kitchen.id} value={kitchen.id}>{kitchen.name}</SelectItem>)}</SelectContent></Select></div>
         <div className="min-w-[170px]"><Label htmlFor={`planning-date-${mode}`}>تاريخ الخطة (توقيت الرياض)</Label><Input id={`planning-date-${mode}`} className="mt-1" type="date" value={date} onChange={event => onDateChange(event.target.value)} /></div>
@@ -125,6 +125,13 @@ function PlanningRow({ row }: { row: ProductionPlanningRow }) {
         const quantities = planningItemQuantities(item);
         return <div key={item.id} className="rounded-lg border p-3 text-sm"><div className="font-semibold">{item.productName} <span className="font-normal text-muted-foreground">· {item.unit}</span></div>
           <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs sm:grid-cols-4">{([["مخطط", quantities.planned], ["مكتمل", quantities.completed], ["جارٍ", quantities.inProgress], ["متبقٍ", quantities.remaining]] as const).map(([label, value]) => <div key={label}><dt className="text-muted-foreground">{label}</dt><dd className="font-medium">{value}</dd></div>)}</dl>
+          {row.source === "advanced_plan" && <div className="mt-2 text-xs">{item.requestLink ? <>
+            <Link href={`/central-kitchen-orders?orderId=${item.requestLink.requestOrderId}`} className="font-medium text-primary underline">طلب الفرع #{item.requestLink.requestOrderId} · البند #{item.requestLink.requestItemId}</Link>
+            <p>مرتبط: {number.format(item.requestLink.allocatedQuantity)} {item.unit} من طلب {number.format(item.requestLink.requestedQuantity)} {item.unit} · السبب: {item.requestLink.reason}</p>
+          </> : <p className="text-muted-foreground">خطة مستقلة: لا ربط صريح بطلب فرع؛ سبب السجلات التاريخية غير المرتبطة غير معروف.</p>}</div>}
+          {row.source === "central_request" && item.linkedAdvancedPlans && <div className="mt-2 text-xs">{item.linkedAdvancedPlans.length ? item.linkedAdvancedPlans.map(link =>
+            <p key={link.planItemId}><Link href={`/advanced-production-orders/${link.planOrderId}`} className="font-medium text-primary underline">خطة #{link.planOrderId} · البند #{link.planItemId}</Link> · {number.format(link.allocatedQuantity)} {item.unit} · السبب: {link.reason}</p>
+          ) : <p className="text-muted-foreground">لا توجد خطط مرتبطة صراحةً بهذا البند.</p>}</div>}
           <ItemCoverage coverage={item.coverage} unit={item.unit} advanced={row.source === "advanced_plan"} />
           {item.issues.length > 0 && <ul className="mt-2 space-y-1 text-xs text-amber-900">{item.issues.map((issue, index) => <li key={index}>{planningIssueLabel(issue)}</li>)}</ul>}
         </div>;

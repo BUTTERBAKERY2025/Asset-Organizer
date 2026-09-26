@@ -4091,6 +4091,14 @@ export const productionOrderItems = pgTable("production_order_items", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const advancedProductionRequestLinks = pgTable("advanced_production_request_links", {
+  planItemId: integer("plan_item_id").primaryKey().references(() => productionOrderItems.id, { onDelete: "restrict" }),
+  requestItemId: integer("request_item_id").notNull().references(() => centralKitchenOrderItems.id, { onDelete: "restrict" }),
+  reason: text("reason").notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, table => [index("idx_advanced_request_links_request").on(table.requestItemId)]);
+
 export const insertProductionOrderItemSchema = createInsertSchema(
   productionOrderItems,
 ).omit({
@@ -4254,6 +4262,8 @@ export const dailyProductionBatches = pgTable("daily_production_batches", {
   productionOrderId: integer("production_order_id"),
   advancedProductionOrderItemId: integer("advanced_production_order_item_id")
     .references(() => productionOrderItems.id, { onDelete: "restrict" }),
+  advancedRequestItemId: integer("advanced_request_item_id")
+    .references(() => centralKitchenOrderItems.id, { onDelete: "restrict" }),
   advancedIdempotencyKey: varchar("advanced_idempotency_key", { length: 128 }),
   advancedPayloadFingerprint: varchar("advanced_payload_fingerprint", { length: 64 }),
   centralKitchenOrderItemId: integer("central_kitchen_order_item_id")
@@ -4301,6 +4311,7 @@ export const insertDailyProductionBatchSchema = createInsertSchema(
   createdAt: true,
   finishedAt: true,
   centralKitchenOrderItemId: true,
+  advancedRequestItemId: true,
   centralKitchenIdempotencyKey: true,
   centralKitchenPayloadFingerprint: true,
   recipeBacked: true,

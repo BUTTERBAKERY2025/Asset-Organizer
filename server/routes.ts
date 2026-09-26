@@ -8520,24 +8520,32 @@ export async function registerRoutes(
           availableQuantity: demand.availableQuantity,
           reservedQuantity: demand.ownReservedQuantity,
           linkedUnfinishedQuantity: demand.linkedUnfinishedQuantity,
+          linkedAdvancedPlannedQuantity: demand.linkedAdvancedPlannedQuantity ?? 0,
+          linkedDirectFinishedQuantity: demand.linkedDirectFinishedQuantity ?? 0,
+          physicalUncoveredQuantity: demand.physicalUncoveredQuantity ?? demand.uncoveredQuantity,
           uncoveredQuantity: demand.uncoveredQuantity,
         })));
       }
       const byUnit = Array.from(demands.reduce((groups, demand) => {
         const total = groups.get(demand.unit) || {
           unit: demand.unit, targetQuantity: 0, availableQuantity: 0,
-          reservedQuantity: 0, linkedUnfinishedQuantity: 0, uncoveredQuantity: 0,
+          reservedQuantity: 0, linkedUnfinishedQuantity: 0, linkedAdvancedPlannedQuantity: 0,
+          linkedDirectFinishedQuantity: 0, physicalUncoveredQuantity: 0, uncoveredQuantity: 0,
         };
         total.targetQuantity += demand.targetQuantity;
         total.availableQuantity += demand.availableQuantity;
         total.reservedQuantity += demand.reservedQuantity;
         total.linkedUnfinishedQuantity += demand.linkedUnfinishedQuantity;
+        total.linkedAdvancedPlannedQuantity += demand.linkedAdvancedPlannedQuantity;
+        total.linkedDirectFinishedQuantity += demand.linkedDirectFinishedQuantity;
+        total.physicalUncoveredQuantity += demand.physicalUncoveredQuantity;
         total.uncoveredQuantity += demand.uncoveredQuantity;
         groups.set(demand.unit, total);
         return groups;
       }, new Map<string, {
         unit: string; targetQuantity: number; availableQuantity: number;
-        reservedQuantity: number; linkedUnfinishedQuantity: number; uncoveredQuantity: number;
+        reservedQuantity: number; linkedUnfinishedQuantity: number; linkedAdvancedPlannedQuantity: number;
+        linkedDirectFinishedQuantity: number; physicalUncoveredQuantity: number; uncoveredQuantity: number;
       }>()).values());
       return res.json({ runtime, demands, totals: { byUnit } });
       } catch (error) {
@@ -8691,6 +8699,8 @@ export async function registerRoutes(
           ]);
           const allocatedDemand = allocatedDemands.find((demand) => demand.orderItemId === lockedItem.id);
           if (!allocatedDemand) throw new CentralKitchenLiveError("لم يعد البند ضمن احتياج الإنتاج المعتمد", 409);
+          // A prospective plan target is not stock; don't remove it from the
+          // shared free-stock allocation. It does cap direct production capacity.
           const uncovered = allocatedDemand.uncoveredQuantity;
           if (body.data.quantity > uncovered) {
             throw new CentralKitchenLiveError(`كمية الدفعة تتجاوز الاحتياج غير المغطى (${uncovered})`, 409);
@@ -8760,7 +8770,7 @@ export async function registerRoutes(
           }
         }
         if ((error?.code || error?.cause?.code) === "23514") {
-          return res.status(409).json({ error: "استثناء الوصفة غير صالح أو لم يعد معتمداً" });
+          return res.status(409).json({ error: "تعارض تغطية طلب الإنتاج أو استثناء الوصفة؛ حدّث الاحتياج وأعد المحاولة" });
         }
         throw error;
       }

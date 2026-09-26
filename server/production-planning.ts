@@ -85,6 +85,11 @@ async function advancedRows(
     SELECT a.id, a.order_number, a.status, a.start_date, a.end_date, a.source_branch_id,
       source.name AS source_name, r.cohort,
       i.id AS item_id, i.product_id, i.product_name, i.target_quantity, i.execution_unit,
+      CASE WHEN request_order.central_kitchen_id = a.source_branch_id
+        AND request_order.request_branch_id = a.target_branch_id THEN link.request_item_id END AS linked_request_item_id,
+      CASE WHEN request_order.central_kitchen_id = a.source_branch_id
+        AND request_order.request_branch_id = a.target_branch_id THEN link.reason END AS link_reason,
+      request_item.order_id AS linked_request_order_id, request_item.requested_quantity AS linked_request_quantity,
       p.id AS mapped_product_id, p.unit AS product_unit, p.product_type, p.is_active, p.operations_enabled,
       EXISTS (
         SELECT 1 FROM central_kitchen_recipes recipe
@@ -95,6 +100,9 @@ async function advancedRows(
     JOIN advanced_production_orders a ON a.id = r.id
     JOIN branches source ON source.id = a.source_branch_id
     LEFT JOIN production_order_items i ON i.order_id = a.id
+    LEFT JOIN advanced_production_request_links link ON link.plan_item_id = i.id
+    LEFT JOIN central_kitchen_order_items request_item ON request_item.id = link.request_item_id
+    LEFT JOIN central_kitchen_orders request_order ON request_order.id = request_item.order_id
     LEFT JOIN products p ON p.id = i.product_id
     LEFT JOIN LATERAL (
       SELECT COALESCE(SUM(b.quantity) FILTER (WHERE b.status = 'finished'), 0) AS finished_quantity,
@@ -151,6 +159,11 @@ async function advancedRows(
     ];
     plan.items.push({
       id: numeric(row.item_id), productId, productName: label(row.product_name, "منتج غير مسمى"), unit,
+      requestLink: row.linked_request_item_id == null ? null : {
+        requestItemId: numeric(row.linked_request_item_id), requestOrderId: numeric(row.linked_request_order_id),
+        requestedQuantity: numeric(row.linked_request_quantity), allocatedQuantity: numeric(row.target_quantity),
+        reason: String(row.link_reason),
+      },
       plannedQuantity: numeric(row.target_quantity),
       completedQuantity: identityValid ? finished : null,
       inProgressQuantity: identityValid ? progress : null,
@@ -194,6 +207,29 @@ export async function getProductionPlanning(req: Request, kitchenId: string, dat
     // a future earlier request must not be described as overdue.
     const overdueRequests = workplan.overdueEarlierOrders.filter(order => order.neededDate < today);
     const rows = [...workplan.orders, ...overdueRequests].map(centralRow).concat(advanced.rows);
+    const requestIds = rows.filter(row => row.source === "central_request").flatMap(row => row.items.map(item => item.id));
+    if (requestIds.length) {
+      const links = await tx.execute(sql`
+        SELECT l.request_item_id, l.reason, i.id AS plan_item_id, i.order_id AS plan_order_id, i.target_quantity
+        FROM advanced_production_request_links l JOIN production_order_items i ON i.id = l.plan_item_id
+        JOIN advanced_production_orders p ON p.id = i.order_id
+        JOIN central_kitchen_order_items ri ON ri.id = l.request_item_id
+        JOIN central_kitchen_orders ro ON ro.id = ri.order_id
+        WHERE l.request_item_id IN (${sql.join(requestIds.map(id => sql`${id}`), sql`, `)})
+          AND p.source_branch_id = ro.central_kitchen_id AND p.target_branch_id = ro.request_branch_id
+        ORDER BY i.id
+      `);
+      const byRequest = new Map<number, ProductionPlanningItem["linkedAdvancedPlans"]>();
+      for (const raw of links.rows) {
+        const link = record(raw), id = numeric(link.request_item_id);
+        const list = byRequest.get(id) ?? [];
+        list.push({ planItemId: numeric(link.plan_item_id), planOrderId: numeric(link.plan_order_id),
+          allocatedQuantity: numeric(link.target_quantity), reason: String(link.reason) });
+        byRequest.set(id, list);
+      }
+      for (const row of rows.filter(row => row.source === "central_request"))
+        for (const item of row.items) item.linkedAdvancedPlans = byRequest.get(item.id) ?? [];
+    }
     const notApplicablePlan: ProductionItemCoverage = {
       status: "not_applicable", reason: "advanced_plan_is_not_additional_request_demand",
       persistedReserved: null, proposedFreeStock: null, prospectiveInProgress: null,
@@ -258,7 +294,7 @@ export async function getProductionPlanning(req: Request, kitchenId: string, dat
       { id: "recipe_evidence", title: "الوصفات المعتمدة الحالية", status: !displayedItems.length || uncertainRecipe.length ? "unknown" : missingRecipe.length ? "warning" : "pass",
         detail: `ضمن البنود المعروضة فقط (${displayedItems.length}): ${missingRecipe.length} بلا وصفة معتمدة حالية و${uncertainRecipe.length} غير قابل للتحقق؛ معلومة تخطيطية لا تعني نفاد المخزون ولا تنفي وصفة تاريخية مجمدة.` },
       { id: "source_separation", title: "فصل مصادر الطلب والخطة", status: "pass",
-        detail: "طلبات المطبخ والخطط المتقدمة مصادر مستقلة؛ لا تُجمع كمياتهما أو تُعتبر الخطة إنجازاً للطلب." },
+        detail: "تبقى الخطط المستقلة منفصلة؛ يرتبط بند الخطة بالطلب فقط برابط مثبت قبل التنفيذ، دون جمع المخطط كمخزون جاهز." },
       { id: "opening_balances", title: "أرصدة الافتتاح", status: "unknown",
         detail: "لم تُراجع أو تُطابق أرصدة الافتتاح أو تخصيص المخزون في هذه القراءة." },
       { id: "sales_source_role_approvals", title: "مصدر المبيعات واعتمادات الأدوار", status: "unknown",
@@ -276,7 +312,7 @@ export async function getProductionPlanning(req: Request, kitchenId: string, dat
           planned: "request item requested quantity / advanced plan item target quantity; source quantities never added together",
           completed: "explicitly linked, comparable finished production batches only; NOT prepared, dispatched or received fulfillment",
           inProgress: "explicitly linked, comparable in_progress production batches only",
-          remaining: "nonnegative advanced plan target minus explicitly linked finished and in_progress only when execution identity and linked coverage are verified; overproduction flagged separately; central request null because stock can fulfill it",
+          remaining: "advanced plan target minus explicit finished/in_progress; central request item remaining null because stock may fulfill it. Request coverage remainingProductionNeed is after free stock, active batches and distinct unstarted linked-plan capacity (not a guarantee).",
         },
         configuration: { inventoryMode: mode, source: configuredMode === undefined ? "runtime_default_shadow_no_row" : "central_kitchen_runtime" },
         cohorts: { central_request: centralCounts, advanced_plan: advanced.cohorts },
@@ -299,8 +335,9 @@ export function registerProductionPlanningRoute(app: Express, dependencies: Depe
     try {
       return res.json(await getProductionPlanning(req, parsed.data.kitchenId, parsed.data.date, dependencies));
     } catch (error) {
-      if (error instanceof PlanningError || (error instanceof Error && "status" in error && typeof error.status === "number"))
-        return res.status(error.status).json({ error: error.message });
+      if (error instanceof PlanningError) return res.status(error.status).json({ error: error.message });
+      if (error instanceof Error && "status" in error && typeof error.status === "number")
+        return res.status(error.status as number).json({ error: error.message });
       console.error("Production planning read failed", error);
       return res.status(500).json({ error: "تعذر قراءة خطة الإنتاج حالياً" });
     }

@@ -5,6 +5,8 @@ export type ProductionItemCoverage = {
   persistedReserved: number | null;
   proposedFreeStock: number | null;
   prospectiveInProgress: number | null;
+  /** Explicit unstarted advanced plan capacity after active/finished batches; not inventory or guaranteed work. */
+  linkedAdvancedPlanned?: number | null;
   remainingProductionNeed: number | null;
   /** In-progress is prospective only and is never counted as posted stock. */
   inProgressGuaranteed: false;

@@ -223,6 +223,12 @@ export type CentralKitchenDemandAllocation = {
   targetQuantity: number;
   ownReservedQuantity: number;
   linkedUnfinishedQuantity: number;
+  /** Explicit plan target allocation, not an unfinished batch or stock balance. */
+  linkedAdvancedPlannedQuantity?: number;
+  /** Finished direct output already belongs to ready stock; still consumes direct production capacity. */
+  linkedDirectFinishedQuantity?: number;
+  /** Physical estimate before prospective-plan/direct-finished capacity cap. */
+  physicalUncoveredQuantity?: number;
   availableQuantity: number;
   uncoveredQuantity: number;
 };
@@ -282,7 +288,7 @@ export async function getAllocatedKitchenDemands(
     ));
   const demands = [];
   for (const row of rows) {
-    const [[reservation], [linked]] = await Promise.all([
+    const [[reservation], [linked], [finished], planLinks] = await Promise.all([
       tx.select({
         quantity: sql<number>`COALESCE(SUM(${centralKitchenInventoryAllocations.reservedQuantity}), 0)`,
       }).from(centralKitchenInventoryAllocations).where(and(
@@ -295,16 +301,36 @@ export async function getAllocatedKitchenDemands(
         eq(dailyProductionBatches.centralKitchenOrderItemId, row.orderItemId),
         eq(dailyProductionBatches.status, "in_progress"),
       )),
+      tx.select({
+        quantity: sql<number>`COALESCE(SUM(${dailyProductionBatches.quantity}), 0)::int`,
+      }).from(dailyProductionBatches).where(and(
+        eq(dailyProductionBatches.centralKitchenOrderItemId, row.orderItemId),
+        eq(dailyProductionBatches.status, "finished"),
+      )),
+      tx.execute(sql`
+        SELECT COALESCE(SUM(i.target_quantity), 0) AS quantity
+        FROM advanced_production_request_links l JOIN production_order_items i ON i.id = l.plan_item_id
+        WHERE l.request_item_id = ${row.orderItemId}
+      `),
     ]);
     demands.push({
       ...row,
       targetQuantity: Number(row.targetQuantity),
       ownReservedQuantity: Number(reservation?.quantity || 0),
       linkedUnfinishedQuantity: Number(linked?.quantity || 0),
+      linkedAdvancedPlannedQuantity: Number(planLinks.rows[0]?.quantity || 0),
+      linkedDirectFinishedQuantity: Number(finished?.quantity || 0),
     });
   }
   const availability = await getKitchenAvailability(kitchenId, identity, tx);
-  return allocateSharedCentralKitchenAvailability(demands, availability.availableQuantity);
+  return allocateSharedCentralKitchenAvailability(demands, availability.availableQuantity).map(demand => ({
+    ...demand,
+    physicalUncoveredQuantity: demand.uncoveredQuantity,
+    uncoveredQuantity: Math.max(0, Math.min(demand.uncoveredQuantity,
+      demand.targetQuantity - demand.linkedUnfinishedQuantity
+        - (demand.linkedDirectFinishedQuantity ?? 0)
+        - (demand.linkedAdvancedPlannedQuantity ?? 0))),
+  }));
 }
 
 export async function getKitchenRuntime(

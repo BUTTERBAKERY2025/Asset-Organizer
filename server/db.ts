@@ -92,6 +92,15 @@ export async function runStartupMigrations() {
           await client.query(migration);
           await client.query("INSERT INTO application_schema_migrations(version) VALUES ($1)", ["043_recipe_exceptions"]);
         }
+        // Re-run the additive, idempotent script in development when guard
+        // hardening changes; old dev installations may carry the earlier 044.
+        const linkVersion = "044_advanced_request_coverage_hardened";
+        const linkApplied = await client.query("SELECT 1 FROM application_schema_migrations WHERE version = $1", [linkVersion]);
+        if (!linkApplied.rowCount) {
+          const linkMigration = await readFile(fileURLToPath(new URL("../migrations/044_advanced_request_coverage.sql", import.meta.url)), "utf8");
+          await client.query(linkMigration.replace(/^\s*BEGIN;\s*/i, "").replace(/\s*COMMIT;\s*$/i, ""));
+          await client.query("INSERT INTO application_schema_migrations(version) VALUES ($1)", [linkVersion]);
+        }
         await client.query("COMMIT");
       } catch (error) {
         await client.query("ROLLBACK");
