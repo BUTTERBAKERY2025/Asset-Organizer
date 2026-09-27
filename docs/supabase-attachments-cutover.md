@@ -3,8 +3,15 @@
 Production audit evidence: `documents` is recorded with `public=false`, but
 `storage.objects` has `public_upload` (INSERT), `public_download` (SELECT),
 and `public_delete` (DELETE) for `public` on `bucket_id='documents'`. Private
-bucket metadata alone does **not** cancel those policies. No remote changes
-were made as part of this change.
+bucket metadata alone does **not** cancel those policies.
+
+The server credential was verified in the workspace and the dedicated
+`app-private-attachments` bucket was provisioned privately with a 10 MiB
+limit and PNG/JPEG/WebP/PDF types. Synthetic upload and byte-identical
+retrieval worked through both attachment adapters; private-bucket anonymous
+download was denied. Synthetic objects were removed. The documents policies
+are still unchanged: Render credential setup and code rollout must be
+confirmed before applying the policy migration below.
 
 1. Configure `SUPABASE_URL` and **server-only**
    `SUPABASE_SERVICE_ROLE_KEY` on each server deployment. Never expose the
