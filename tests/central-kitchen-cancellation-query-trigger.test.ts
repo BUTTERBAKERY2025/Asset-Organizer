@@ -19,10 +19,10 @@ vi.mock("../client/src/hooks/use-toast", () => ({
 }));
 import { DemandCommitments } from "../client/src/components/central-kitchen/demand-commitments";
 
-// Render the actual conditional JSX from OrderDetail, not a duplicate condition.
-// This avoids exporting private production components just for a regression test.
+// Render the actual conditional JSX from OrderDetail, including its collapsed
+// details wrapper: CSS/HTML hiding must not suppress the two permission reads.
 const page = readFileSync("client/src/pages/central-kitchen-orders.tsx", "utf8");
-const expression = page.match(/\{\["received", "cancelled"\]\.includes\(status\) && <DemandCommitments[^]*?\/>\}/)?.[0];
+const expression = page.match(/\{\["received", "cancelled"\]\.includes\(status\) && <details[^>]*><summary[^>]*>سجل الالتزامات والاحتياج<\/summary><DemandCommitments[^]*?\/><\/details>\}/)?.[0];
 if (!expression) throw new Error("OrderDetail demand mount expression changed; review cancellation trigger");
 const compiled = transpileModule(
   `function renderTrigger(status, section, order, canEdit) {
@@ -55,11 +55,13 @@ describe("post-cancellation demand query mount", () => {
   it.each(["received", "cancelled"])(
     "%s mounts both reads even when Decisions is hidden",
     status => {
-      expect(page).toContain('<div hidden={section !== "decisions"} className="space-y-4">');
+      expect(page).toContain('<div hidden={section !== "decisions"} className="space-y-3">');
       const html = renderToStaticMarkup(renderTrigger(status, "summary", {
         id: 123, centralKitchenId: "test kitchen", items: [],
       }, true));
       expect(html).toContain('hidden=""');
+      expect(html).toContain("<summary");
+      expect(html).toContain("سجل الالتزامات والاحتياج");
       expect(html).toContain('role="alert"');
       expect(hooks.query).toHaveBeenCalledTimes(2);
       expect(hooks.query.mock.calls.map(([options]) => options)).toEqual([

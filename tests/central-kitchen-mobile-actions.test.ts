@@ -70,15 +70,15 @@ describe("kitchen workflow mobile quantity evidence", () => {
     expect(isBulkApprovalEligible({ status: "approved", allowedActions: { approve: true } })).toBe(false);
     expect(isBulkApprovalEligible({ status: "received", allowedActions: { approve: true } })).toBe(false);
   });
-  it("offers a real mobile substitute-picker trigger and preserves decimal material keyboards in preparation", () => {
+  it("offers a collapsible substitute-picker trigger and preserves decimal material keyboards in preparation", () => {
     const html = renderToStaticMarkup(React.createElement(QueryClientProvider, { client: new QueryClient() }, React.createElement(PreparationEditor, {
       orderId: 9, inventoryMode: "shadow", items: products,
       products: [{ id: 10, source: "product" as const, name: "خبز اختبار", unit: "قطعة" }],
       productsQuery: { isLoading: false, isError: false, refetch: vi.fn() },
       actionNotes: "", setActionNotes: vi.fn(), pending: false, onSubmit: vi.fn(),
     })));
-    expect(html).toContain("اختيار البديل");
-    expect(html).toContain("md:hidden");
+    expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>.*?إضافة بديل<\/button>/s);
+    expect(html).not.toContain("اختيار البديل");
     expect(html).toContain('inputMode="decimal"');
     expect(html).toContain('inputMode="numeric"');
   });

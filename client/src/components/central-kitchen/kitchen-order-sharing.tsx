@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Download, Loader2, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { getButterBakeryLogoDataUri } from "@/lib/company-logo-data";
@@ -172,9 +173,9 @@ export function OrderActionsMenu({ order, canPrint, canExport, onPrint }: {
       setExporting(null);
     }
   };
-  return <div className="flex flex-wrap items-center justify-end gap-2">
+   return <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
     {canPrint && <Button data-testid="order-print" size="sm" variant="outline" className="min-h-11" onClick={async () => { try { if (!await onPrint()) { const message = "حظر المتصفح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة."; setActionError(message); toast({ title: "حظر المتصفح نافذة الطباعة", description: message, variant: "destructive" }); } else setActionError(null); } catch (error) { const message = error instanceof Error ? error.message : "تعذرت الطباعة"; setActionError(message); toast({ title: "تعذرت الطباعة", description: message, variant: "destructive" }); } }}><Printer className="ml-1 h-4 w-4" />طباعة</Button>}
-    {canExport && <><Button data-testid="order-export-pdf" size="sm" variant="outline" className="min-h-11" disabled={!!exporting} onClick={() => void exportPdf()}>{exporting === "pdf" ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <Download className="ml-1 h-4 w-4" />}{exporting === "pdf" ? "جارٍ إنشاء PDF…" : "تصدير PDF"}</Button><Button data-testid="order-export-excel" size="sm" variant="outline" className="min-h-11" disabled={!!exporting} onClick={() => void exportExcel()}>{exporting === "excel" ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <Download className="ml-1 h-4 w-4" />}{exporting === "excel" ? "جارٍ إنشاء Excel…" : "تصدير Excel"}</Button></>}
+     {canExport && <DropdownMenu><DropdownMenuTrigger asChild><Button data-testid="order-export" size="sm" variant="outline" className="min-h-11" disabled={!!exporting}>{exporting ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <Download className="ml-1 h-4 w-4" />}{exporting ? "جارٍ التصدير…" : "تصدير"}</Button></DropdownMenuTrigger><DropdownMenuContent align="end" dir="rtl"><DropdownMenuItem data-testid="order-export-pdf" disabled={!!exporting} onSelect={() => void exportPdf()}>تصدير PDF</DropdownMenuItem><DropdownMenuItem data-testid="order-export-excel" disabled={!!exporting} onSelect={() => void exportExcel()}>تصدير Excel</DropdownMenuItem></DropdownMenuContent></DropdownMenu>}
     {actionError && <span role="alert" className="w-full text-xs text-red-700">{actionError}</span>}
   </div>;
 }
