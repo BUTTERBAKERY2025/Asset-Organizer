@@ -34,7 +34,8 @@ export async function enqueueDeliveryNotice(
 }
 
 type Assignment = {
-  id: string; source_type: string; source_id: number; driver_id: string;
+  id: string; source_type: string; source_id: number; driver_id: string | null;
+  transport_mode?: "internal" | "external";
   scheduled_at: Date | null; status: string; created_by: string;
 };
 type NoticeJob = {
@@ -53,7 +54,8 @@ async function activeDriver(id: string): Promise<boolean> {
     AND job_title='delivery'`, [id]);
   return !!rowCount;
 }
-type Source = { source: string | null; destination: string | null; warehouseId?: number };
+type Source = { source: string | null; destination: string | null; warehouseId?: number;
+  sourceWarehouseId?: number; destinationWarehouseId?: number };
 
 async function sourceFor(a: Assignment): Promise<Source | null> {
   const queries: Record<string, string> = {
@@ -64,6 +66,12 @@ async function sourceFor(a: Assignment): Promise<Source | null> {
       FROM finished_goods_transfers WHERE id=$1 AND destination_type='branch'`,
     kitchen_warehouse_shipment: `SELECT source_branch_id source,NULL::text destination,destination_warehouse_id "warehouseId"
       FROM kitchen_warehouse_shipments WHERE id=$1`,
+    reverse_movement: `SELECT coalesce(source_branch_id,
+        CASE WHEN source_warehouse_id IS NULL THEN 'main_warehouse' END) source,
+        coalesce(destination_branch_id,
+        CASE WHEN destination_warehouse_id IS NULL THEN 'main_warehouse' END) destination,
+        source_warehouse_id "sourceWarehouseId",destination_warehouse_id "destinationWarehouseId"
+        FROM reverse_movements WHERE id=$1`,
   };
   const query = queries[a.source_type];
   if (!query) throw new Error(`Unsupported delivery source: ${a.source_type}`);
@@ -99,10 +107,28 @@ async function warehouseManagers(): Promise<string[]> {
           AND o.allow=false AND (o.expires_at IS NULL OR o.expires_at>now()))`);
   return rows.map(r => r.id);
 }
+async function mainWarehouseKeepers(action: "edit" | "approve"): Promise<string[]> {
+  // Main warehouse is virtual: a keeper has no persisted primary branch ID.
+  // Respect direct selections and explicit revocations, as the request gate does.
+  const { rows } = await pool.query(`SELECT u.id FROM users u
+    WHERE u.role='warehouse_keeper' AND u.is_active='active'
+      AND (NOT EXISTS (SELECT 1 FROM user_permissions up WHERE up.user_id=u.id)
+        OR (EXISTS (SELECT 1 FROM user_permissions up WHERE up.user_id=u.id
+          AND up.module='warehouse' AND up.actions @> ARRAY['edit']::text[])
+          AND EXISTS (SELECT 1 FROM user_permissions up WHERE up.user_id=u.id
+          AND up.module='delivery_tasks' AND up.actions @> ARRAY['view',$1]::text[])))
+      AND NOT EXISTS (SELECT 1 FROM user_permission_overrides o
+        JOIN permissions p ON p.id=o.permission_id
+        WHERE o.user_id=u.id AND o.allow=false
+          AND (o.expires_at IS NULL OR o.expires_at>now())
+          AND ((p.module='warehouse' AND p.action='edit')
+            OR (p.module='delivery_tasks' AND p.action IN ('view',$1))))`, [action]);
+  return rows.map(r => r.id);
+}
 
 async function recipients(a: Assignment, s: Source, kind: NoticeType): Promise<string[]> {
   const ids: string[] = [];
-  if (assignmentEvent(kind)) return await activeDriver(a.driver_id) ? [a.driver_id] : [];
+  if (assignmentEvent(kind)) return a.driver_id && await activeDriver(a.driver_id) ? [a.driver_id] : [];
   if (kind === "cancelled") {
     const { rows } = await pool.query(`SELECT id FROM users WHERE id=$1 AND is_active='active'
       AND job_title='delivery'`, [a.driver_id]);
@@ -122,6 +148,15 @@ async function recipients(a: Assignment, s: Source, kind: NoticeType): Promise<s
   } else if (a.source_type === "material_transfer" || a.source_type === "finished_goods_transfer") {
     if (kind !== "cancelled") ids.push(...await warehouseRecipients(s,
       kind === "awaiting_receipt" ? "destination" : "source"));
+  } else if (a.source_type === "reverse_movement" && kind !== "cancelled") {
+    const destination = kind === "awaiting_receipt";
+    if (destination ? s.destinationWarehouseId : s.sourceWarehouseId)
+      ids.push(...await warehouseManagers());
+    const branch = destination ? s.destination : s.source;
+    if (branch) ids.push(...await warehouseRecipients({ source: branch, destination: branch },
+      destination ? "destination" : "source"));
+    if (branch === "main_warehouse")
+      ids.push(...await mainWarehouseKeepers(destination ? "approve" : "edit"));
   }
   return Array.from(new Set(ids));
 }
@@ -150,7 +185,7 @@ export async function filterAuthorizedDeliveryNoticeUsers(
   const source = removed || assignmentEvent(a.event_type) ? null : await sourceFor(a);
   if (!removed && !assignmentEvent(a.event_type) && !source) return [];
   const current = removed ? await activeDriver(a.detail!.previousDriverId!) ? [a.detail!.previousDriverId!] : []
-    : assignmentEvent(a.event_type) ? await activeDriver(a.driver_id) ? [a.driver_id] : []
+    : assignmentEvent(a.event_type) ? a.driver_id && await activeDriver(a.driver_id) ? [a.driver_id] : []
     : await recipients(a, source!, a.event_type);
   const { rows: active } = await pool.query(`SELECT id FROM users WHERE id=ANY($1::varchar[])
     AND is_active='active'`, [candidates]);
@@ -176,7 +211,7 @@ export async function queueOverdueDeliveryNotices(): Promise<number> {
   const { rowCount } = await pool.query(`
     INSERT INTO delivery_notification_outbox (assignment_id,event_type,revision)
     SELECT a.id,k.kind,
-      concat('deadline:',extract(epoch from a.scheduled_at)::bigint,':',a.driver_id)
+      concat('deadline:',extract(epoch from a.scheduled_at)::bigint,':',coalesce(a.driver_id,'carrier'))
     FROM delivery_assignments a
     CROSS JOIN LATERAL (VALUES ('overdue', interval '0 minutes'),('escalated', interval '60 minutes')) AS k(kind, delay)
     WHERE a.scheduled_at IS NOT NULL AND a.scheduled_at + k.delay <= now()
@@ -212,7 +247,7 @@ async function publish(job: NonNullable<Awaited<ReturnType<typeof claim>>>): Pro
   const deadline = job.event_type === "overdue" || job.event_type === "escalated";
   if (deadline && (["completed", "cancelled", "receipt_approved"].includes(a.status)
     || !a.scheduled_at || a.scheduled_at.getTime() + (job.event_type === "escalated" ? 60 * 60_000 : 0) > Date.now()
-    || job.revision !== `deadline:${Math.floor(a.scheduled_at.getTime() / 1000)}:${a.driver_id}`)) {
+    || job.revision !== `deadline:${Math.floor(a.scheduled_at.getTime() / 1000)}:${a.driver_id ?? "carrier"}`)) {
     await pool.query(`UPDATE delivery_notification_outbox SET published_at=now(),claimed_until=NULL WHERE id=$1`, [job.id]);
     return;
   }
@@ -236,10 +271,13 @@ async function publish(job: NonNullable<Awaited<ReturnType<typeof claim>>>): Pro
         VALUES ($1,$2,'delivery_task','banner',3,false,$3,$4,'فتح مهمة التوصيل',$5,true,true,
           'delivery_task','delivery_tasks',$3,$6,$7)
         ON CONFLICT (dedupe_key) DO NOTHING`, [
-         copy[job.event_type].title,
+          a.transport_mode === "external" && job.event_type === "awaiting_receipt"
+            ? "شحنة ناقل خارجي تنتظر الاستلام" : copy[job.event_type].title,
          assignmentEvent(job.event_type) && a.scheduled_at
            ? `${copy[job.event_type].content} الموعد: ${a.scheduled_at.toISOString()}.`
-           : copy[job.event_type].content,
+            : a.transport_mode === "external" && job.event_type === "awaiting_receipt"
+              ? "سجل المصدر خروج الشحنة مع الناقل الخارجي. أكّد الاستلام في المصدر قبل اعتماد الإيصال."
+              : copy[job.event_type].content,
         branch ? [branch] : [], [id],
         `/driver-deliveries?deliveryId=${encodeURIComponent(a.id)}`,
         `delivery:${job.id}:${id}`, a.created_by,

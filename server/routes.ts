@@ -231,7 +231,7 @@ import { registerBranchOperationsRoute } from "./branch-operations";
 import { registerBranchComplaintRoutes } from "./branch-complaints";
 import { registerMaintenanceTicketRoutes } from "./maintenance-tickets";
 import { registerCentralKitchenDemandRoutes } from "./central-kitchen-demand-routes";
-import { registerDeliveryRoutes } from "./delivery-routes";
+import { registerDeliveryRoutes, registerDeliverySchemaGate } from "./delivery-routes";
 import {
   getOrderSchedule,
   getOrderingPolicy,
@@ -625,6 +625,7 @@ export async function registerRoutes(
   registerSecurityRoutes(app);
   registerCentralKitchenRecipeRoutes(app);
   registerCentralKitchenDemandRoutes(app);
+  await registerDeliverySchemaGate(app);
   registerDeliveryRoutes(app);
   registerReverseLogisticsRoutes(app);
   registerKitchenWarehouseShippingRoutes(app);

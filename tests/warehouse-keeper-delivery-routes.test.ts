@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   assignments: new Map<number, any>(),
   eventCount: 0,
+  eventDetails: [] as any[],
 }));
 vi.mock("../server/db", () => {
   const query = async (sql: string, args: any[] = []) => {
@@ -24,7 +25,7 @@ vi.mock("../server/db", () => {
       const id = 101 + state.assignments.size;
       state.assignments.set(id, {
         id, source_type: args[0], source_id: args[1], driver_id: args[2], vehicle_number: args[3],
-        driver_name: "Driver", scheduled_at: null, status: "assigned", receiver_name: null,
+         driver_name: "Driver", transport_mode: "internal", scheduled_at: null, status: "assigned", receiver_name: null,
         notes: null, signature_data: null, proof_at: null, receipt_approved_by: null,
         receipt_approved_at: null, started_at: null, completed_at: null, failed_at: null,
         failure_reason: null, cancelled_at: null, cancellation_reason: null,
@@ -34,16 +35,24 @@ vi.mock("../server/db", () => {
       });
       return { rows: [{ id }], rowCount: 1 };
     }
-    if (sql.includes("FROM delivery_assignments a JOIN users u")) {
+     if (sql.includes("FROM delivery_assignments a LEFT JOIN users u")) {
       const row = state.assignments.get(Number(args[0]));
       return { rows: row ? [row] : [], rowCount: row ? 1 : 0 };
     }
-    if (sql.includes("INSERT INTO delivery_assignment_events")) return { rows: [{ id: ++state.eventCount }], rowCount: 1 };
+     if (sql.includes("SELECT kind FROM delivery_carrier_attachments")
+       || sql.includes("SELECT id,kind,mime_type,original_name FROM delivery_carrier_attachments"))
+       return { rows: [{ id: 1, kind: "shipment_photo" }, { id: 2, kind: "carrier_receipt" }], rowCount: 2 };
+     if (sql.includes("INSERT INTO delivery_assignment_events")) {
+       state.eventDetails.push({ action: args[2], detail: args[5] });
+       return { rows: [{ id: ++state.eventCount }], rowCount: 1 };
+     }
     if (sql.includes("UPDATE delivery_assignments SET")) {
       const row = state.assignments.get(Number(args[0]));
       if (row) {
         if (sql.includes("receipt_approved_by")) row.receipt_approved_by = args[2];
         if (sql.includes("status=$2")) row.status = args[1];
+         if (sql.includes("exception_reason=$")) row.exception_reason = args[3];
+         if (sql.includes("exception_resolution=$")) { row.exception_reason = null; row.exception_resolved_at = new Date(); }
       }
       return { rows: [], rowCount: row ? 1 : 0 };
     }
@@ -116,5 +125,32 @@ describe("warehouse keeper delivery source and destination boundaries (mocked da
     expect((await call("POST", "/api/deliveries/:id/approve-receipt",
       { ...receiver, id: "not-original" }, {}, { id })).statusCode).toBe(403);
     expect((await call("POST", "/api/deliveries/:id/approve-receipt", receiver, {}, { id })).statusCode).toBe(200);
+  });
+  it("lets the destination report post-receipt damage; blocks outsiders, duplicate and terminal exceptions", async () => {
+    const id = 404;
+    state.assignments.set(id, {
+      ...state.assignments.values().next().value,
+      id, source_id: 3, status: "receipt_approved", transport_mode: "external",
+      driver_id: null, vehicle_number: null, carrier: "road", waybill: "R-404", package_count: 1,
+      handover_recorded_at: new Date(), receipt_approved_by: receiver.id, receipt_approved_at: new Date(),
+      exception_reason: null, exception_resolved_at: null,
+    });
+    expect((await call("GET", "/api/deliveries/:id", receiver, {}, { id })).body.capabilities.canFail).toBe(true);
+    expect((await call("POST", "/api/deliveries/:id/fail", outsider, { reason: "damaged box" }, { id })).statusCode).toBe(403);
+    const reported = await call("POST", "/api/deliveries/:id/fail", receiver, { reason: "damaged box" }, { id });
+    expect(reported.statusCode).toBe(200);
+    expect(state.assignments.get(id).status).toBe("receipt_approved");
+    expect(state.assignments.get(id).exception_reason).toBe("damaged box");
+    expect(state.eventDetails.at(-1)?.action).toBe("carrier-exception");
+    expect((await call("GET", "/api/deliveries/:id", keeper, {}, { id })).body.capabilities.canComplete).toBe(false);
+    expect((await call("POST", "/api/deliveries/:id/complete", keeper, {}, { id })).statusCode).toBe(409);
+    expect((await call("POST", "/api/deliveries/:id/fail", receiver, { reason: "overwrite" }, { id })).statusCode).toBe(409);
+    expect((await call("POST", "/api/deliveries/:id/resolve-exception", receiver, { resolution: "not my action" }, { id })).statusCode).toBe(403);
+    expect((await call("POST", "/api/deliveries/:id/resolve-exception", keeper, { resolution: "documented follow-up" }, { id })).statusCode).toBe(200);
+    expect(state.eventDetails.at(-1)?.action).toBe("resolve-exception");
+    state.assignments.get(id).status = "completed";
+    expect((await call("POST", "/api/deliveries/:id/fail", keeper, { reason: "too late" }, { id })).statusCode).toBe(409);
+    state.assignments.get(id).status = "cancelled";
+    expect((await call("POST", "/api/deliveries/:id/fail", receiver, { reason: "too late" }, { id })).statusCode).toBe(409);
   });
 });

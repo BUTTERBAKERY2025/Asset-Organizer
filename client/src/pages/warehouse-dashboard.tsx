@@ -514,15 +514,15 @@ export default function WarehouseDashboardPage() {
                 <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50">
                   <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-sm font-bold text-orange-600">3</div>
                   <div>
-                    <p className="font-medium text-sm">{isRTL ? "تنفيذ التحويل" : "Execute Transfer"}</p>
-                    <p className="text-xs text-muted-foreground">{isRTL ? "شحن المواد للفرع" : "Ship materials to branch"}</p>
+                    <p className="font-medium text-sm">{isRTL ? "إسناد النقل وإرسال التحويل" : "Assign transport and dispatch transfer"}</p>
+                    <p className="text-xs text-muted-foreground">{isRTL ? "سائق داخلي أو شركة شحن مع توثيق المحضر والمرفقات، ثم إرسال المواد من التحويل الأصلي" : "Internal driver or carrier with handover evidence, then dispatch from the original transfer"}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50">
                   <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-sm font-bold text-green-600">4</div>
                   <div>
                     <p className="font-medium text-sm">{isRTL ? "استلام وتأكيد" : "Receive & Confirm"}</p>
-                    <p className="text-xs text-muted-foreground">{isRTL ? "الفرع يستلم ويوقع إلكترونياً" : "Branch receives and signs electronically"}</p>
+                    <p className="text-xs text-muted-foreground">{isRTL ? "الفرع يسجل الاستلام الفعلي بشكل مستقل، ثم يعتمد الإيصال ويغلق المرسل المهمة" : "Branch independently records physical receipt; receiver approves, then sender closes the task"}</p>
                   </div>
                 </div>
               </div>

@@ -101,6 +101,21 @@ export async function runStartupMigrations() {
           await client.query(linkMigration.replace(/^\s*BEGIN;\s*/i, "").replace(/\s*COMMIT;\s*$/i, ""));
           await client.query("INSERT INTO application_schema_migrations(version) VALUES ($1)", [linkVersion]);
         }
+        // Development-only, local-database-only additive delivery metadata.
+        // Never infer a remote environment from NODE_ENV alone: production
+        // migrations remain an operator action, not an application write.
+        const localUrl = new URL(connectionString);
+        if (!isSupabase && localUrl.hostname === "helium" && localUrl.pathname === "/heliumdb") {
+          const carrierVersion = "delivery_external_carriers_v1";
+          const carrierApplied = await client.query(
+            "SELECT 1 FROM application_schema_migrations WHERE version=$1", [carrierVersion]);
+          if (!carrierApplied.rowCount) {
+            const carrierMigration = await readFile(
+              fileURLToPath(new URL("../migrations/delivery_external_carriers.sql", import.meta.url)), "utf8");
+            await client.query(carrierMigration);
+            await client.query("INSERT INTO application_schema_migrations(version) VALUES ($1)", [carrierVersion]);
+          }
+        }
         await client.query("COMMIT");
       } catch (error) {
         await client.query("ROLLBACK");

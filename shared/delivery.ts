@@ -19,9 +19,18 @@ export interface DeliverySource {
 
 export interface DeliveryDTO extends DeliverySource {
   id: number;
-  driverId: string;
-  driverName: string;
-  vehicleNumber: string;
+  transportMode: "internal" | "external";
+  driverId: string | null;
+  driverName: string | null;
+  vehicleNumber: string | null;
+  carrier: "road" | "naqel" | "other" | null;
+  carrierName: string | null;
+  waybill: string | null;
+  trackingUrl: string | null;
+  packageCount: number | null;
+  attachments: Array<{ id: number; kind: "shipment_photo" | "carrier_receipt"; mimeType: string; originalName: string; downloadUrl: string }>;
+  exceptionReason: string | null;
+  exceptionResolvedAt: string | null;
   scheduledAt: string | null;
   status: DeliveryStatus;
   receiverName: string | null;
@@ -51,6 +60,7 @@ export interface DeliveryDTO extends DeliverySource {
     canFail: boolean;
     canReassign: boolean;
     canCancel: boolean;
+    canResolveException: boolean;
   };
 }
 

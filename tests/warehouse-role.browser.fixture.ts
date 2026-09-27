@@ -5,6 +5,7 @@
  * Mutations below change only process memory; restart the fixture to reset state.
  */
 import express from "express";
+import multer from "multer";
 import { createServer as createViteServer } from "vite";
 import { resolve } from "node:path";
 import assert from "node:assert/strict";
@@ -27,6 +28,9 @@ const actors = {
   admin: { id: "fixture-admin", username: "fixture-admin", firstName: "مدير", lastName: "النظام", name: "مدير النظام", role: "admin", branchId: null, activeBranchId: null, allowedBranches: [] },
 };
 const today = "2035-06-09T09:00:00.000Z";
+const evidenceUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } }).single("file");
+const evidenceBytes = new Map<number, Buffer>();
+let nextEvidenceId = 1;
 const catalog = Array.from({ length: 65 }, (_, i) => ({
   id: 8001 + i, name: `مادة تجريبية ${String(i + 1).padStart(2, "0")}`, nameEn: `Fixture material ${i + 1}`,
   sku: `FIX-MAT-${String(i + 1).padStart(3, "0")}`, barcode: null,
@@ -63,7 +67,9 @@ const deliveries: DeliveryDTO[] = [
     sourceLabel: "FIX-WH-002", sourceBranchId: "main_warehouse", sourceBranchName: "المستودع الرئيسي",
     destinationBranchId: "fixture_branch", destinationBranchName: "فرع الاختبار",
     items: transferItems(4102).map(x => ({ id: x.itemId, name: x.itemName, quantity: x.quantity, unit: x.unit })),
-    driverId: "fixture-driver", driverName: "سائق التوصيل", vehicleNumber: "FIX-123",
+    transportMode: "internal", driverId: "fixture-driver", driverName: "سائق التوصيل", vehicleNumber: "FIX-123",
+    carrier: null, carrierName: null, waybill: null, trackingUrl: null, packageCount: null,
+    attachments: [], exceptionReason: null, exceptionResolvedAt: null,
     scheduledAt: today, status: "assigned", receiverName: null, notes: null,
     proofPresent: false, proofAt: null, receiptApprovedBy: null, receiptApprovedAt: null,
     startedAt: null, completedAt: null, failedAt: null, failureReason: null,
@@ -71,7 +77,7 @@ const deliveries: DeliveryDTO[] = [
     handoverRecordedAt: null, handoverAcknowledgedAt: null, handoverItems: null,
     handoverInvalidated: false, capabilities: { canRecordHandover: false, canAcknowledgeHandover: false,
       canStart: false, canSubmitProof: false, canApproveReceipt: false, canComplete: false,
-      canFail: false, canReassign: false, canCancel: false } },
+      canFail: false, canReassign: false, canCancel: false, canResolveException: false } },
 ];
 function role(req: express.Request): Role | null {
   const selected = req.query.role;
@@ -101,22 +107,30 @@ function getTransfer(req: express.Request, res: express.Response): Transfer | nu
   return transfer;
 }
 function deliveryFor(actor: Role, delivery: DeliveryDTO) {
-  const own = actor === "driver" && delivery.driverId === actors.driver.id;
+  const external = delivery.transportMode === "external";
+  const own = !external && actor === "driver" && delivery.driverId === actors.driver.id;
   const source = actor === "keeper" || actor === "admin";
   const receiver = actor === "branch" && delivery.destinationBranchId === "fixture_branch";
   if (!own && !source && !receiver) return null;
-  return { ...delivery, sourceStatus: transfers.find(x => x.id === delivery.sourceId)?.status || delivery.sourceStatus, capabilities: {
-    canRecordHandover: source && delivery.status === "assigned" && !delivery.handoverRecordedAt,
-    canAcknowledgeHandover: own && delivery.status === "assigned" && !!delivery.handoverRecordedAt && !delivery.handoverAcknowledgedAt,
-    canStart: own && delivery.status === "assigned" && !!delivery.handoverAcknowledgedAt
-      && transfers.find(x => x.id === delivery.sourceId)?.status === "in_transit",
+  const transfer = transfers.find(x => x.id === delivery.sourceId);
+  const evidence = ["shipment_photo", "carrier_receipt"].every(kind => delivery.attachments.some(file => file.kind === kind));
+  return { ...delivery, sourceStatus: transfer?.status || delivery.sourceStatus, capabilities: {
+    canRecordHandover: source && delivery.status === "assigned" && transfer?.status === "approved"
+      && (external ? evidence : !delivery.handoverRecordedAt),
+    canAcknowledgeHandover: !external && own && delivery.status === "assigned" && !!delivery.handoverRecordedAt && !delivery.handoverAcknowledgedAt,
+    canStart: (external ? source && evidence && !!delivery.handoverRecordedAt : own && !!delivery.handoverAcknowledgedAt)
+      && delivery.status === "assigned" && transfer?.status === "in_transit",
     canSubmitProof: own && delivery.status === "in_transit"
-      && transfers.find(x => x.id === delivery.sourceId)?.status === "in_transit",
-    canApproveReceipt: receiver && delivery.status === "awaiting_receipt" && delivery.proofPresent && transfers.find(x => x.id === delivery.sourceId)?.status === "delivered",
-    canComplete: own && delivery.status === "receipt_approved",
-    canFail: own && ["assigned", "in_transit", "awaiting_receipt"].includes(delivery.status),
-    canReassign: source && delivery.status !== "completed",
+      && transfer?.status === "in_transit",
+    canApproveReceipt: receiver && delivery.status === "awaiting_receipt"
+      && (external ? evidence : delivery.proofPresent) && transfer?.status === "delivered" && transfer.receivedBy === actors.branch.id,
+    canComplete: (external ? source && evidence && !delivery.exceptionReason : own) && delivery.status === "receipt_approved"
+      && transfer?.status === "delivered" && transfer.receivedBy === delivery.receiptApprovedBy,
+    canFail: (external ? source : own) && transfer?.status === "in_transit"
+      && ["assigned", "in_transit", "awaiting_receipt"].includes(delivery.status),
+    canReassign: !external && source && delivery.status !== "completed",
     canCancel: source && delivery.status === "assigned",
+    canResolveException: external && source && !!delivery.exceptionReason && !delivery.exceptionResolvedAt,
   } };
 }
 
@@ -199,15 +213,23 @@ app.put("/api/warehouse/material-transfers/:id/status", (req, res) => {
   if (!transfer) return;
   const actor = role(req)!;
   const { status } = req.body || {};
+  const assignment = deliveries.find(x => x.sourceType === "material_transfer" && x.sourceId === transfer.id && x.status !== "cancelled");
+  const dispatchIdentity = assignment?.transportMode === "external"
+    ? req.body.driverName == null && req.body.vehicleNumber == null
+      || typeof req.body.driverName === "string" && !!req.body.driverName.trim()
+        && typeof req.body.vehicleNumber === "string" && !!req.body.vehicleNumber.trim()
+    : typeof req.body.driverName === "string" && !!req.body.driverName.trim()
+      && typeof req.body.vehicleNumber === "string" && !!req.body.vehicleNumber.trim();
   if (!["keeper", "admin"].includes(actor) || !(
     transfer.status === "pending" && status === "approved" ||
-    transfer.status === "approved" && status === "in_transit" && typeof req.body.driverName === "string" && !!req.body.driverName.trim()
-      && typeof req.body.vehicleNumber === "string" && !!req.body.vehicleNumber.trim()
+    transfer.status === "approved" && status === "in_transit" && dispatchIdentity
+      && (!assignment || !!assignment.handoverRecordedAt && (assignment.transportMode === "external" ||
+        !!assignment.handoverAcknowledgedAt))
   )) return deny(res, "Only keeper/admin may approve a pending transfer or dispatch an approved transfer with driver and vehicle");
   transfer.status = status;
   if (status === "in_transit") {
-    transfer.driverName = req.body.driverName;
-    transfer.vehicleNumber = req.body.vehicleNumber;
+    transfer.driverName = assignment?.transportMode === "external" ? assignment.carrierName || assignment.carrier || "" : req.body.driverName;
+    transfer.vehicleNumber = assignment?.transportMode === "external" ? assignment.waybill || "" : req.body.vehicleNumber;
     transfer.departureTime = today;
   }
   res.json(transfer);
@@ -215,7 +237,7 @@ app.put("/api/warehouse/material-transfers/:id/status", (req, res) => {
 app.post("/api/warehouse/material-transfers/:id/confirm-delivery", (req, res) => {
   const transfer = getTransfer(req, res);
   if (!transfer) return;
-  if (!["branch", "admin"].includes(role(req)!) || transfer.status !== "in_transit"
+  if (role(req) !== "branch" || transfer.destinationBranchId !== "fixture_branch" || transfer.status !== "in_transit"
     || !Array.isArray(req.body?.receivedItems)
     || req.body.receivedItems.length !== transferItems(transfer.id).length
     || !transferItems(transfer.id).every(item => req.body.receivedItems.some((line: { itemId: number; receivedQuantity: number }) =>
@@ -228,17 +250,75 @@ app.post("/api/warehouse/material-transfers/:id/confirm-delivery", (req, res) =>
   res.json(transfer);
 });
 app.post("/api/deliveries", (req, res) => {
-  if (!["keeper", "admin"].includes(role(req)!) || req.body?.driverId !== actors.driver.id
-    || typeof req.body.vehicleNumber !== "string" || !req.body.vehicleNumber.trim()) return deny(res);
+  const external = req.body?.transportMode === "external";
+  if (!["keeper", "admin"].includes(role(req)!) || (external
+    ? !["road", "naqel", "other"].includes(req.body.carrier)
+      || req.body.carrier === "other" && (typeof req.body.carrierName !== "string" || !req.body.carrierName.trim())
+      || typeof req.body.waybill !== "string" || !req.body.waybill.trim()
+      || !Number.isSafeInteger(req.body.packageCount) || req.body.packageCount < 1
+      || req.body.trackingUrl && (typeof req.body.trackingUrl !== "string" || !/^https:\/\/[^ ]+$/i.test(req.body.trackingUrl))
+      || req.body.driverId != null || req.body.vehicleNumber != null
+    : req.body?.transportMode != null && req.body.transportMode !== "internal"
+      || req.body?.driverId !== actors.driver.id
+      || typeof req.body.vehicleNumber !== "string" || !req.body.vehicleNumber.trim())) return deny(res, "Invalid carrier or driver assignment");
   const source = transfers.find(x => x.id === Number(req.body.sourceId) && x.status === "approved");
   if (req.body.sourceType !== "material_transfer" || !source || deliveries.some(x => x.sourceId === source.id)) return deny(res, "Source must be an unassigned approved transfer");
   const added: DeliveryDTO = { ...deliveries[0], id: 9201 + deliveries.length, sourceId: source.id, sourceLabel: source.transferNumber,
     destinationBranchId: source.destinationBranchId, destinationBranchName: source.destinationBranchName,
     items: transferItems(source.id).map(x => ({ id: x.itemId, name: x.itemName, quantity: x.quantity, unit: x.unit })),
-    vehicleNumber: req.body.vehicleNumber.trim(), status: "assigned", handoverRecordedAt: null,
-    handoverAcknowledgedAt: null, handoverItems: null, proofPresent: false, proofAt: null };
+    transportMode: external ? "external" : "internal", driverId: external ? null : actors.driver.id,
+    driverName: external ? null : actors.driver.name, vehicleNumber: external ? null : req.body.vehicleNumber.trim(),
+    carrier: external ? req.body.carrier : null, carrierName: external && req.body.carrier === "other" ? req.body.carrierName.trim() : null,
+    waybill: external ? req.body.waybill.trim() : null, trackingUrl: external ? req.body.trackingUrl || null : null,
+    packageCount: external ? req.body.packageCount : null, attachments: [], exceptionReason: null, exceptionResolvedAt: null,
+    status: "assigned", handoverRecordedAt: null, handoverAcknowledgedAt: null, handoverItems: null,
+    proofPresent: false, proofAt: null, receiptApprovedBy: null, receiptApprovedAt: null, startedAt: null,
+    completedAt: null, failedAt: null, failureReason: null };
   deliveries.push(added);
   res.status(201).json(deliveryFor(role(req)!, added));
+});
+app.post("/api/deliveries/:id/attachments", (req, res) => {
+  evidenceUpload(req, res, error => {
+    if (error) return res.status(400).json({ error: "Evidence file exceeds 10MB or upload is invalid" });
+    const item = deliveries.find(x => x.id === Number(req.params.id));
+    const transfer = item && transfers.find(x => x.id === item.sourceId);
+    if (!item || !deliveryFor(role(req)!, item)) return res.status(404).json({ error: "Delivery unavailable" });
+    if (!["keeper", "admin"].includes(role(req)!) || item.transportMode !== "external"
+      || item.status !== "assigned" || item.handoverRecordedAt || transfer?.status !== "approved")
+      return deny(res, "Carrier evidence upload is outside your source scope or state");
+    const kind = req.body?.kind;
+    const file = req.file;
+    const data = file?.buffer;
+    if (!data || !data.length || !["shipment_photo", "carrier_receipt"].includes(kind)) return res.status(400).json({ error: "File and kind are required" });
+    const mime = data.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))
+      && data.subarray(-12).equals(Buffer.from([0,0,0,0,73,69,78,68,174,66,96,130])) ? "image/png"
+      : data[0] === 255 && data[1] === 216 && data[2] === 255 && data[data.length - 2] === 255 && data[data.length - 1] === 217 ? "image/jpeg"
+      : data.subarray(0,4).toString() === "RIFF" && data.subarray(8,12).toString() === "WEBP"
+        && data.length >= 12 && data.readUInt32LE(4) + 8 === data.length ? "image/webp"
+      : data.subarray(0,5).toString() === "%PDF-" && data.subarray(-1024).toString("latin1").includes("%%EOF") ? "application/pdf" : null;
+    if (!mime || file!.mimetype !== mime || kind === "shipment_photo" && mime === "application/pdf")
+      return res.status(400).json({ error: "Unsupported file MIME/content" });
+    const id = nextEvidenceId++;
+    const attachment: DeliveryDTO["attachments"][number] = {
+      id, kind, mimeType: mime, originalName: file!.originalname.slice(0, 200),
+      downloadUrl: `/api/deliveries/${item.id}/attachments/${id}`,
+    };
+    evidenceBytes.set(id, data);
+    item.attachments.push(attachment);
+    res.status(201).json(attachment);
+  });
+});
+app.get("/api/deliveries/:id/attachments/:attachmentId", (req, res) => {
+  const item = deliveries.find(x => x.id === Number(req.params.id));
+  if (!item || !deliveryFor(role(req)!, item)) return res.status(404).json({ error: "Delivery unavailable" });
+  const file = item.attachments.find(x => x.id === Number(req.params.attachmentId));
+  if (!file) return res.status(404).json({ error: "Attachment unavailable" });
+  res.setHeader("Content-Type", file.mimeType);
+  res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(file.originalName)}`);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Content-Security-Policy", "sandbox");
+  res.send(evidenceBytes.get(file.id));
 });
 app.post("/api/deliveries/:id/:action", (req, res) => {
   const delivery = deliveries.find(x => x.id === Number(req.params.id));
@@ -251,11 +331,11 @@ app.post("/api/deliveries/:id/:action", (req, res) => {
     && Array.isArray(req.body?.items) && req.body.items.length === delivery.items.length
     && delivery.items.every(item => req.body.items.some((line: { id: number; quantity: number }) =>
       line.id === item.id && line.quantity === item.quantity))) {
-    delivery.handoverRecordedAt = today; delivery.handoverItems = delivery.items;
+    delivery.handoverRecordedAt = today; delivery.handoverItems = delivery.items.map(x => ({ ...x }));
   } else if (action === "acknowledge-handover" && current.capabilities.canAcknowledgeHandover) {
     delivery.handoverAcknowledgedAt = today;
   } else if (action === "start" && current.capabilities.canStart) {
-    delivery.status = "in_transit"; delivery.startedAt = today;
+    delivery.status = delivery.transportMode === "external" ? "awaiting_receipt" : "in_transit"; delivery.startedAt = today;
   } else if (action === "proof" && current.capabilities.canSubmitProof
     && typeof req.body?.receiverName === "string" && req.body.receiverName.trim()
     && typeof req.body.signatureData === "string" && req.body.signatureData.startsWith("data:image/")) {
@@ -265,6 +345,12 @@ app.post("/api/deliveries/:id/:action", (req, res) => {
     delivery.status = "receipt_approved"; delivery.receiptApprovedBy = actors[actor].id; delivery.receiptApprovedAt = today;
   } else if (action === "complete" && current.capabilities.canComplete) {
     delivery.status = "completed"; delivery.completedAt = today;
+  } else if (action === "fail" && current.capabilities.canFail && delivery.transportMode === "external"
+    && typeof req.body?.reason === "string" && req.body.reason.trim().length >= 3) {
+    delivery.exceptionReason = req.body.reason.trim(); delivery.exceptionResolvedAt = null; delivery.failedAt = today;
+  } else if (action === "resolve-exception" && current.capabilities.canResolveException
+    && typeof req.body?.resolution === "string" && req.body.resolution.trim().length >= 3) {
+    delivery.exceptionReason = null; delivery.exceptionResolvedAt = today;
   } else return deny(res, `Action ${action} is not permitted for ${actor} in ${delivery.status}`);
   delivery.updatedAt = today;
   return res.json(deliveryFor(actor, delivery));
@@ -327,7 +413,51 @@ async function main() {
       assert.equal((await call("/deliveries/9201/start", "driver", "POST")).status, 200);
       assert.equal((await call("/not-implemented", "admin")).status, 404);
       assert.equal((await call("/users", "admin", "POST", { username: "no-write" })).status, 404);
-      console.log("Synthetic API assertions passed. Browser UI not launched.");
+      const external = (await call("/deliveries", "keeper", "POST", {
+        sourceType: "material_transfer", sourceId: 4106, transportMode: "external",
+        carrier: "other", carrierName: "ناقل تجريبي", waybill: "FIX-WAYBILL-006", packageCount: 2,
+        trackingUrl: "https://example.invalid/fixture-waybill",
+      }));
+      assert.equal(external.status, 201);
+      const externalId = external.json.id;
+      assert.equal(external.json.driverId, null);
+      assert.equal((await call(`/deliveries/${externalId}/start`, "keeper", "POST")).status, 403);
+      assert.equal((await call(`/deliveries/${externalId}/handover`, "keeper", "POST", { items: external.json.items })).status, 403);
+      assert.equal((await call("/warehouse/material-transfers/4106/status", "keeper", "PUT", { status: "in_transit" })).status, 403);
+      const upload = async (actor: Role, kind: string, filename: string, mime: string, data: Uint8Array) => {
+        const form = new FormData();
+        form.append("kind", kind);
+        form.append("file", new Blob([data], { type: mime }), filename);
+        const response = await fetch(`http://127.0.0.1:${port}/api/deliveries/${externalId}/attachments?role=${actor}`, { method: "POST", body: form });
+        return { status: response.status, json: await response.json() };
+      };
+      const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9n1xZIoAAAAASUVORK5CYII=", "base64");
+      assert.equal((await upload("branch", "shipment_photo", "shipment.png", "image/png", png)).status, 403);
+      assert.equal((await upload("keeper", "shipment_photo", "fake.png", "image/png", Buffer.from("not an image"))).status, 400);
+      assert.equal((await upload("keeper", "shipment_photo", "shipment.png", "image/png", png)).status, 201);
+      assert.equal((await upload("keeper", "carrier_receipt", "receipt.pdf", "application/pdf", Buffer.from("%PDF-1.4\n%%EOF"))).status, 201);
+      assert.equal((await call(`/deliveries/${externalId}/handover`, "keeper", "POST", {
+        items: external.json.items.map((x: { id: number; quantity: number }, index: number) =>
+          ({ id: x.id, quantity: index === 0 ? x.quantity + 1 : x.quantity })),
+      })).status, 403);
+      assert.equal((await call(`/deliveries/${externalId}/handover`, "keeper", "POST", { items: external.json.items })).status, 200);
+      assert.equal((await upload("keeper", "carrier_receipt", "late.pdf", "application/pdf", Buffer.from("%PDF-1.4\n%%EOF"))).status, 403);
+      assert.equal((await call(`/deliveries/${externalId}/acknowledge-handover`, "driver", "POST")).status, 404);
+      assert.equal((await call("/warehouse/material-transfers/4106/status", "keeper", "PUT", { status: "in_transit" })).status, 200);
+      assert.equal((await call(`/deliveries/${externalId}/start`, "keeper", "POST")).json.status, "awaiting_receipt");
+      assert.equal((await call(`/deliveries/${externalId}/approve-receipt`, "branch", "POST")).status, 403);
+      assert.equal((await call(`/deliveries/${externalId}/fail`, "keeper", "POST", { reason: "Delayed at carrier" })).json.status, "awaiting_receipt");
+      assert.equal((await call(`/deliveries/${externalId}/complete`, "keeper", "POST")).status, 403);
+      assert.equal((await call("/warehouse/material-transfers/4106/confirm-delivery", "branch", "POST", {
+        receivedItems: transferItems(4106).map(x => ({ itemId: x.itemId, receivedQuantity: x.quantity })),
+      })).status, 200);
+      assert.equal((await call(`/deliveries/${externalId}/approve-receipt`, "keeper", "POST")).status, 403);
+      assert.equal((await call(`/deliveries/${externalId}/approve-receipt`, "branch", "POST")).json.status, "receipt_approved");
+      assert.equal((await call(`/deliveries/${externalId}/complete`, "keeper", "POST")).status, 403);
+      assert.equal((await call(`/deliveries/${externalId}/resolve-exception`, "keeper", "POST", { resolution: "Carrier delivered and branch received" })).status, 200);
+      assert.equal((await call(`/deliveries/${externalId}/complete`, "keeper", "POST")).json.status, "completed");
+      assert.equal((await call(`/deliveries/${externalId}/attachments/1`, "driver")).status, 404);
+      console.log("Synthetic internal and external API assertions passed. Browser UI not launched.");
     } finally { close(); }
   }
 }

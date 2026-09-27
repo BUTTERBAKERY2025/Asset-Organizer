@@ -32,3 +32,9 @@ Treat delivery notification event constraints as part of the core assignment dep
 **Why:** Notifications are enqueued inside the assignment transaction. A production CHECK constraint that excludes a newly introduced event type rolls back the entire assignment, not just its notification. Table existence alone does not prove schema readiness.
 
 **How to apply:** Verify allowed event values as well as handover columns before enabling new delivery flows. Never swallow enqueue failures to make assignment appear successful. Build the response inside the transaction so a projection failure cannot report failure after a successful commit; inspect persisted assignments before advising retries.
+
+External carriers are a transport mode, not fake driver accounts or a second inventory pipeline. Use documented carrier handover in place of the internal driver's acknowledgement, never in place of authenticated destination receipt.
+
+**Why:** The user wants a single simple shipping workspace with automatic source data, not repeated forms, separate shipping modules or multiple windows. Carrier tracking and a typed receiver name do not prove branch acceptance.
+
+**How to apply:** Keep source stock operations authoritative, evidence private and assignment-bound, and the next action in the existing detail view. When one UI action performs source dispatch followed by delivery tracking, refresh the authoritative state before retrying so a tracking failure cannot repeat dispatch. Do not silently resolve stock loss through a carrier exception note.

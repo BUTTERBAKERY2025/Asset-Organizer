@@ -516,6 +516,7 @@ export default function TransferRequestsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/warehouse/material-transfers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/deliveries"] });
       setIsUpdateStatusOpen(false);
       setSelectedTransfer(null);
       toast({ title: isRTL ? "تم تحديث حالة التحويل" : "Transfer status updated" });
@@ -547,6 +548,7 @@ export default function TransferRequestsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/warehouse/material-transfers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/warehouse/branch-stock"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/deliveries"] });
       setIsDeliveryConfirmOpen(false);
       setSelectedTransfer(null);
       toast({ title: isRTL ? "تم تأكيد الاستلام بنجاح" : "Delivery confirmed successfully" });
@@ -1599,7 +1601,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
         </div>}
 
         <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-3xl max-h-[90vh] min-w-0 overflow-x-hidden overflow-y-auto [&>*]:min-w-0">
             <DialogHeader>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <DialogTitle className="flex items-center gap-2">
@@ -1680,8 +1682,8 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                     {permissions.canExport("warehouse") && <div className="sr-only"><TransferDocument ref={printRef} transfer={selectedTransfer} items={transferItems} /></div>}
                     {isKeeper && selectedTransfer.sourceBranchId === "main_warehouse" && canView("delivery_tasks") && (
                       <div className="border-t border-border pt-4">
-                        <Button type="button" variant="outline" onClick={() => setDeliveryWorkspaceId(current => current === selectedTransfer.id ? null : selectedTransfer.id)}>
-                          <Truck className="me-2 h-4 w-4" />{isRTL ? "إسناد السائق ومتابعة التوصيل" : "Assign driver and track delivery"}
+                        <Button type="button" variant="outline" className="h-auto min-h-11 max-w-full whitespace-normal text-center" onClick={() => setDeliveryWorkspaceId(current => current === selectedTransfer.id ? null : selectedTransfer.id)}>
+                          <Truck className="me-2 h-4 w-4" />{isRTL ? "إسناد النقل الداخلي أو شركة الشحن ومتابعة التسليم" : "Assign internal driver or carrier and track delivery"}
                         </Button>
                         {deliveryWorkspaceId === selectedTransfer.id && <div className="mt-4 rounded-xl border border-border bg-card p-3">
                           <Suspense fallback={<Skeleton className="h-32 w-full" />}>
@@ -1692,6 +1694,13 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                               onChanged: () => {
                                 void queryClient.invalidateQueries({ queryKey: ["/api/warehouse/material-transfers"] });
                                 void refetchTransferItems();
+                                void fetch(`/api/warehouse/material-transfers/${selectedTransfer.id}`, { credentials: "include" })
+                                  .then(async response => {
+                                    if (!response.ok) throw new Error(`تعذر تحديث حالة التحويل (${response.status})`);
+                                    return response.json() as Promise<{ transfer: MaterialTransfer }>;
+                                  })
+                                  .then(({ transfer }) => setSelectedTransfer(current => current?.id === transfer.id ? transfer : current))
+                                  .catch(error => toast({ title: "تعذر تحديث تفاصيل التحويل", description: error instanceof Error ? error.message : undefined, variant: "destructive" }));
                               },
                             })}
                           </Suspense>
@@ -1922,8 +1931,8 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
               {/* Dispatch fields for in_transit status */}
               {statusUpdate.status === "in_transit" && (
                 <div className="space-y-3 border rounded-lg p-3 bg-blue-50 dark:bg-blue-950/20">
-                  <p className="text-sm font-medium text-blue-700 dark:text-blue-300">يجب إسناد السائق وتوثيق كمية كل بند واستلام تأكيد السائق قبل الإرسال. بيانات السائق والمركبة تؤخذ من مهمة التوصيل.</p>
-                  {selectedTransfer && canView("delivery_tasks") && <Button variant="outline" type="button" onClick={() => { setIsUpdateStatusOpen(false); setIsViewOpen(true); setDeliveryWorkspaceId(selectedTransfer.id); }}>إسناد السائق وتوثيق التسليم</Button>}
+                  <p className="text-sm font-medium text-blue-700 dark:text-blue-300">يجب إسناد التوصيل وتوثيق المحضر قبل الإرسال. السائق الداخلي يقر بالاستلام؛ شركة الشحن تتطلب صورة الشحنة وإيصال الناقل، ولا يتغير مخزون المصدر إلا عند إجراء الإرسال الأصلي.</p>
+                  {selectedTransfer && canView("delivery_tasks") && <Button variant="outline" type="button" onClick={() => { setIsUpdateStatusOpen(false); setIsViewOpen(true); setDeliveryWorkspaceId(selectedTransfer.id); }}>إسناد النقل وتوثيق التسليم</Button>}
                   <div className="grid grid-cols-1 gap-3">
                     <div className="space-y-1">
                       <Label className="text-xs">{isRTL ? "تاريخ الإرسال" : "Dispatch Date"}</Label>

@@ -1,6 +1,8 @@
 import type { Express, Request, Response } from "express";
 import type { PoolClient } from "pg";
 import { inflateSync } from "node:zlib";
+import { randomUUID } from "node:crypto";
+import multer from "multer";
 import { z } from "zod";
 import { pool } from "./db";
 import { enqueueDeliveryNotice, type DeliveryNoticeEvent } from "./delivery-notifications";
@@ -8,10 +10,16 @@ import { deliverySourceFingerprint } from "./delivery-dispatch-guard";
 import { isAuthenticated, requirePermission, getAllowedBranchIds, canAccessBranch } from "./auth";
 import { deliveryTransitionAllowed, receiptMatchesSource, type DeliveryDTO, type DeliverySource, type DeliverySourceType, type DeliveryStatus } from "@shared/delivery";
 import { canAccessDeliveryWorkspace } from "@shared/delivery-workspace-access";
+import { ObjectStorageService } from "./replit_integrations/object_storage/objectStorage";
+const objects = new ObjectStorageService();
+const uploadEvidence = multer({ storage: multer.memoryStorage(), limits: { files: 1, fileSize: 10 * 1024 * 1024 } }).single("file");
 
 type Assignment = {
-  id: string; source_type: DeliverySourceType; source_id: number; driver_id: string;
-  driver_name: string; vehicle_number: string; scheduled_at: Date | null; status: DeliveryStatus;
+  id: string; source_type: DeliverySourceType; source_id: number; driver_id: string | null;
+  driver_name: string | null; vehicle_number: string | null; scheduled_at: Date | null; status: DeliveryStatus;
+  transport_mode: "internal" | "external"; carrier: "road" | "naqel" | "other" | null;
+  carrier_name: string | null; waybill: string | null; tracking_url: string | null; package_count: number | null;
+  exception_reason: string | null; exception_resolution: string | null; exception_resolved_at: Date | null;
   receiver_name: string | null; notes: string | null; signature_data: string | null; proof_at: Date | null;
   receipt_approved_by: string | null; receipt_approved_at: Date | null; started_at: Date | null;
   completed_at: Date | null; failed_at: Date | null; failure_reason: string | null;
@@ -23,11 +31,43 @@ type Assignment = {
 };
 type SourceRow = DeliverySource & { receivedBy: string | null };
 const idSchema = z.coerce.number().int().positive();
-const createSchema = z.object({
+export const deliveryAssignmentCreateSchema = z.object({
   sourceType: z.enum(["kitchen", "material_transfer", "finished_goods_transfer", "kitchen_warehouse_shipment", "reverse_movement"]), sourceId: z.number().int().positive(),
-  driverId: z.string().min(1), vehicleNumber: z.string().trim().min(1).max(80),
+  transportMode: z.enum(["internal", "external"]).optional(),
+  driverId: z.string().min(1).optional(), vehicleNumber: z.string().trim().min(1).max(80).optional(),
+  carrier: z.enum(["road", "naqel", "other"]).optional(), carrierName: z.string().trim().min(2).max(160).optional(),
+  waybill: z.string().trim().min(1).max(160).optional(), trackingUrl: z.string().url().max(1000).optional(),
+  packageCount: z.number().int().positive().max(100000).optional(),
   scheduledAt: z.string().datetime({ offset: true }).optional(),
 }).strict();
+const resolutionSchema = z.object({ resolution: z.string().trim().min(3).max(2000) }).strict();
+export function validateTransport(p: z.infer<typeof deliveryAssignmentCreateSchema>) {
+  if (p.transportMode === "external") {
+    if (p.driverId || p.vehicleNumber || !p.carrier || !p.waybill || !p.packageCount
+      || (p.carrier === "other" && !p.carrierName) || (p.carrier !== "other" && p.carrierName))
+      throw new DeliveryError("External carrier fields invalid", 400);
+    if (p.trackingUrl && new URL(p.trackingUrl).protocol !== "https:")
+      throw new DeliveryError("Tracking URL must use HTTPS", 400);
+  } else if (!p.driverId || !p.vehicleNumber || p.carrier || p.carrierName || p.waybill || p.trackingUrl || p.packageCount)
+    throw new DeliveryError("Internal driver fields invalid", 400);
+}
+export function validateCarrierEvidence(file: { buffer: Buffer; mimetype: string }, kind: "shipment_photo" | "carrier_receipt") {
+  const data = file.buffer;
+  if (!data.length || data.length > 10 * 1024 * 1024)
+    throw new DeliveryError("Evidence file must be nonempty and no larger than 10MB", 400);
+  const detected = data.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) ? ["image/png","png"]
+    : data[0] === 255 && data[1] === 216 && data[2] === 255 ? ["image/jpeg","jpg"]
+    : data.subarray(0,4).toString() === "RIFF" && data.subarray(8,12).toString() === "WEBP" ? ["image/webp","webp"]
+    : data.subarray(0,5).toString() === "%PDF-" ? ["application/pdf","pdf"] : null;
+  if (!detected || (kind === "shipment_photo" && detected[0] === "application/pdf")
+    || file.mimetype !== detected[0]
+    || (detected[0] === "image/jpeg" && (data[data.length-2] !== 255 || data[data.length-1] !== 217))
+    || (detected[0] === "image/png" && !data.subarray(-12).equals(Buffer.from([0,0,0,0,73,69,78,68,174,66,96,130])))
+    || (detected[0] === "image/webp" && data.readUInt32LE(4) + 8 !== data.length)
+    || (detected[0] === "application/pdf" && !data.subarray(-1024).toString("latin1").includes("%%EOF")))
+    throw new DeliveryError("Unsupported file MIME/content", 400);
+  return { mimeType: detected[0], extension: detected[1] };
+}
 const proofSchema = z.object({
   signatureData: z.string().regex(/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/).max(400_000).min(120),
   receiverName: z.string().trim().min(2).max(160), notes: z.string().trim().max(2000).optional(),
@@ -164,6 +204,21 @@ const receiverScope = async (req: Request, s: SourceRow) =>
     : s.destinationWarehouseId != null ? warehouseReceiver(req) : s.destinationBranchId !== null && await canAccessBranch(req, s.destinationBranchId);
 const isDriver = (req: Request, row: Assignment) => req.currentUser?.role !== "warehouse_keeper"
   && req.currentUser?.id === row.driver_id && req.currentUser?.jobTitle === "delivery" && req.currentUser?.isActive === "active";
+export function carrierClosureReady(
+  receipt: { sourceType: DeliverySourceType; sourceStatus: string; receivedBy: string | null },
+  assignment: { receiptApprovedBy: string | null; exceptionReason: string | null; handoverRecordedAt: Date | null },
+  evidenceKinds: string[],
+) {
+  return !!assignment.handoverRecordedAt && !assignment.exceptionReason && !!assignment.receiptApprovedBy
+    && ["shipment_photo", "carrier_receipt"].every(kind => evidenceKinds.includes(kind))
+    && receiptMatchesSource(receipt.sourceType, receipt.sourceStatus, receipt.receivedBy, assignment.receiptApprovedBy);
+}
+export function carrierExceptionAllowed(
+  status: DeliveryStatus, sourceAvailable: boolean, exceptionReason: string | null,
+): boolean {
+  return sourceAvailable && !exceptionReason
+    && ["assigned", "in_transit", "awaiting_receipt", "receipt_approved"].includes(status);
+}
 async function driverExists(client: PoolClient, id: string, req: Request) {
   const allowed = req.currentUser?.role === "warehouse_keeper" ? null : getAllowedBranchIds(req);
   const result = await client.query(`SELECT id FROM users WHERE id = $1 AND job_title = 'delivery'
@@ -242,8 +297,8 @@ async function source(client: PoolClient, type: DeliverySourceType, id: number):
          substituteQuantity: Number(item.substituteQuantity) } : {}) })),
   };
 }
-const assignmentQuery = `SELECT a.*, concat_ws(' ', u.first_name, u.last_name) AS driver_name
-  FROM delivery_assignments a JOIN users u ON u.id=a.driver_id`;
+const assignmentQuery = `SELECT a.*, CASE WHEN u.id IS NOT NULL THEN concat_ws(' ', u.first_name, u.last_name) END AS driver_name
+  FROM delivery_assignments a LEFT JOIN users u ON u.id=a.driver_id`;
 async function assignment(client: PoolClient, id: number, lock = false): Promise<Assignment | null> {
   const { rows } = await client.query(`${assignmentQuery} WHERE a.id=$1${lock ? " FOR UPDATE OF a" : ""}`, [id]);
   return rows[0] || null;
@@ -264,9 +319,18 @@ async function dto(req: Request, res: Response, client: PoolClient, row: Assignm
     && await permitted(req, res, sourceModule(s.sourceType), "edit");
   const eligibleReceipt = receiptMatchesSource(s.sourceType, s.sourceStatus, s.receivedBy, requireUser(req).id);
   const iso = (v: Date | null) => v ? new Date(v).toISOString() : null;
+  const external = row.transport_mode === "external";
+  const files = external ? (await client.query(
+    "SELECT id,kind,mime_type,original_name FROM delivery_carrier_attachments WHERE assignment_id=$1 ORDER BY id", [row.id])).rows : [];
+  const evidenceReady = ["shipment_photo", "carrier_receipt"].every(kind => files.some(f => f.kind === kind));
   return {
-    ...s, id: Number(row.id), driverId: row.driver_id, driverName: row.driver_name?.trim() || row.driver_id,
+    ...s, id: Number(row.id), transportMode: row.transport_mode, driverId: row.driver_id,
+    driverName: row.driver_name?.trim() || row.driver_id,
     vehicleNumber: row.vehicle_number, scheduledAt: iso(row.scheduled_at), status: row.status,
+    carrier: row.carrier, carrierName: row.carrier_name, waybill: row.waybill, trackingUrl: row.tracking_url,
+    packageCount: row.package_count, exceptionReason: row.exception_reason, exceptionResolvedAt: iso(row.exception_resolved_at),
+    attachments: files.map(f => ({ id: Number(f.id), kind: f.kind, mimeType: f.mime_type,
+      originalName: f.original_name, downloadUrl: `/api/deliveries/${row.id}/attachments/${f.id}` })),
      receiverName: row.receiver_name, notes: row.notes,
      proofPresent: !(driver && row.status === "cancelled") && !!row.signature_data,
     proofAt: iso(row.proof_at), receiptApprovedBy: row.receipt_approved_by, receiptApprovedAt: iso(row.receipt_approved_at),
@@ -277,23 +341,30 @@ async function dto(req: Request, res: Response, client: PoolClient, row: Assignm
     handoverItems: row.handover_items,
     handoverInvalidated: row.handover_revision > 0 && !row.handover_recorded_at,
     capabilities: {
-      canRecordHandover: managerWrite && row.status === "assigned" && sourceHandoverReady(s) && !eligibleSourceReceipt(s),
-      canAcknowledgeHandover: driverWrite && row.status === "assigned" && !!row.handover_recorded_at
+      canRecordHandover: managerWrite && row.status === "assigned" && sourceHandoverReady(s) && !eligibleSourceReceipt(s) && (!external || evidenceReady),
+      canAcknowledgeHandover: !external && driverWrite && row.status === "assigned" && !!row.handover_recorded_at
         && !row.handover_acknowledged_at && row.handover_driver_id === row.driver_id
         && row.handover_vehicle_number === row.vehicle_number
         && row.handover_fingerprint === deliverySourceFingerprint(s.items),
-      canStart: driverWrite && (acknowledged(row) || ((sourceDispatched(s) || eligibleSourceReceipt(s))
+      canStart: (external ? managerWrite && !!row.handover_recorded_at && evidenceReady
+        : driverWrite && (acknowledged(row) || ((sourceDispatched(s) || eligibleSourceReceipt(s))
         && !row.handover_recorded_at && row.handover_revision === 0))
-        && (sourceDispatched(s) || eligibleSourceReceipt(s)) && deliveryTransitionAllowed(row.status, "start"),
-       canSubmitProof: driverWrite && (sourceDispatched(s) || eligibleSourceReceipt(s)) && deliveryTransitionAllowed(row.status, "proof"),
-       canApproveReceipt: receiver && eligibleReceipt && !!row.signature_data && !!row.proof_at
+        ) && (sourceDispatched(s) || eligibleSourceReceipt(s)) && deliveryTransitionAllowed(row.status, "start"),
+       canSubmitProof: !external && driverWrite && (sourceDispatched(s) || eligibleSourceReceipt(s)) && deliveryTransitionAllowed(row.status, "proof"),
+       canApproveReceipt: receiver && eligibleReceipt && (external ? evidenceReady : !!row.signature_data && !!row.proof_at)
          && deliveryTransitionAllowed(row.status, "approve-receipt"),
-       canComplete: driverWrite && !!row.signature_data && !!row.proof_at && !!row.receipt_approved_by
-        && receiptMatchesSource(s.sourceType, s.sourceStatus, s.receivedBy, row.receipt_approved_by)
+       canComplete: (external ? managerWrite && carrierClosureReady(s,
+         { receiptApprovedBy: row.receipt_approved_by, exceptionReason: row.exception_reason, handoverRecordedAt: row.handover_recorded_at },
+         files.map(f => f.kind)) : driverWrite && !!row.signature_data && !!row.proof_at && !!row.receipt_approved_by
+           && receiptMatchesSource(s.sourceType, s.sourceStatus, s.receivedBy, row.receipt_approved_by))
         && deliveryTransitionAllowed(row.status, "complete"),
-       canFail: (driverWrite || managerWrite) && sourceDispatched(s) && deliveryTransitionAllowed(row.status, "fail"),
-       canReassign: managerWrite && sourceAssignable(s) && !eligibleSourceReceipt(s) && deliveryTransitionAllowed(row.status, "reassign"),
+       canFail: external
+         ? (managerWrite || receiver) && carrierExceptionAllowed(row.status,
+           sourceDispatched(s) || eligibleSourceReceipt(s), row.exception_reason)
+         : (driverWrite || managerWrite) && sourceDispatched(s) && deliveryTransitionAllowed(row.status, "fail"),
+       canReassign: !external && managerWrite && sourceAssignable(s) && !eligibleSourceReceipt(s) && deliveryTransitionAllowed(row.status, "reassign"),
       canCancel: managerWrite && !eligibleSourceReceipt(s) && deliveryTransitionAllowed(row.status, "cancel"),
+      canResolveException: external && managerWrite && !!row.exception_reason && !row.exception_resolved_at,
     },
   };
 }
@@ -316,9 +387,33 @@ async function withClient<T>(fn: (client: PoolClient) => Promise<T>): Promise<T>
 async function event(client: PoolClient, id: number, actor: string, action: string, oldStatus: string | null, status: string, detail: object = {}) {
   const inserted = await client.query(`INSERT INTO delivery_assignment_events (assignment_id, actor_id, action, from_status, to_status, detail)
     VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`, [id, actor, action, oldStatus, status, JSON.stringify(detail)]);
-   if (["create", "reassign", "proof", "approve-receipt", "fail", "cancel"].includes(action))
+   if (["create", "reassign", "proof", "approve-receipt", "fail", "cancel",
+     "carrier-dispatched", "carrier-exception"].includes(action))
     await enqueueDeliveryNotice(client, id, Number(inserted.rows[0].id),
-       ({ create: "assigned", reassign: "reassigned", proof: "awaiting_receipt", "approve-receipt": "receipt_approved", fail: "failed", cancel: "cancelled" } as Record<string, DeliveryNoticeEvent>)[action]);
+       ({ create: "assigned", reassign: "reassigned", proof: "awaiting_receipt",
+         "carrier-dispatched": "awaiting_receipt", "carrier-exception": "failed",
+         "approve-receipt": "receipt_approved", fail: "failed", cancel: "cancelled" } as Record<string, DeliveryNoticeEvent>)[action]);
+}
+
+export async function registerDeliverySchemaGate(app: Express) {
+  const schema = await pool.query(`SELECT
+    to_regclass('delivery_carrier_attachments') IS NOT NULL AS files,
+    (SELECT count(*)::int FROM information_schema.columns WHERE table_schema=current_schema()
+      AND table_name='delivery_assignments' AND column_name IN
+      ('transport_mode','carrier','carrier_name','waybill','tracking_url','package_count',
+       'exception_reason','exception_resolution','exception_resolved_at')
+    )=9 AS fields,
+    (SELECT count(*)::int FROM information_schema.columns WHERE table_schema=current_schema()
+      AND table_name='delivery_assignments' AND column_name IN ('driver_id','vehicle_number')
+      AND is_nullable='YES')=2 AS nullable_driver,
+    EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('delivery_carrier_attachments')
+      AND contype='f' AND confrelid=to_regclass('delivery_assignments')) AS file_binding,
+    EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid=to_regclass('delivery_assignments')
+      AND conname='delivery_transport_fields_check' AND convalidated) AS constraint_ready`);
+  if (!schema.rows[0]?.files || !schema.rows[0]?.fields || !schema.rows[0]?.nullable_driver
+    || !schema.rows[0]?.file_binding || !schema.rows[0]?.constraint_ready)
+    app.use("/api/deliveries", (_req, res) =>
+      res.status(503).json({ error: "Delivery schema unavailable: apply migrations/delivery_external_carriers.sql" }));
 }
 
 export function registerDeliveryRoutes(app: Express) {
@@ -468,7 +563,8 @@ export function registerDeliveryRoutes(app: Express) {
   app.post("/api/deliveries", isAuthenticated, async (req, res) => {
     try {
       if (!canAccessDeliveryWorkspace(req.currentUser)) throw new DeliveryError("Delivery workspace access denied", 403);
-      const payload = createSchema.parse(req.body);
+      const payload = deliveryAssignmentCreateSchema.parse(req.body);
+      validateTransport(payload);
       if (!(await permitted(req, res, "delivery_tasks", "create"))
         || !(await permitted(req, res, sourceModule(payload.sourceType), "edit"))) throw new DeliveryError("Permission denied", 403);
       const result = await withClient(async client => {
@@ -481,13 +577,19 @@ export function registerDeliveryRoutes(app: Express) {
           const s = await source(client, payload.sourceType, payload.sourceId);
           if (!s || !managerScope(req, s, "create")) throw new DeliveryError("Source is outside your scope", 403);
            if (!sourceAssignable(s) || eligibleSourceReceipt(s)) throw new DeliveryError("Source is not eligible for assignment", 409);
-          await driverExists(client, payload.driverId, req);
+          if (payload.transportMode !== "external") await driverExists(client, payload.driverId!, req);
           const inserted = await client.query(`INSERT INTO delivery_assignments
-            (source_type,source_id,driver_id,vehicle_number,scheduled_at,created_by)
-            VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`, [payload.sourceType, payload.sourceId, payload.driverId, payload.vehicleNumber, payload.scheduledAt || null, requireUser(req).id]);
+            (source_type,source_id,driver_id,vehicle_number,scheduled_at,created_by,
+              transport_mode,carrier,carrier_name,waybill,tracking_url,package_count)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+            [payload.sourceType, payload.sourceId, payload.driverId || null, payload.vehicleNumber || null,
+             payload.scheduledAt || null, requireUser(req).id, payload.transportMode || "internal",
+             payload.carrier || null, payload.carrierName || null, payload.waybill || null,
+             payload.trackingUrl || null, payload.packageCount || null]);
           const id = Number(inserted.rows[0].id);
-           await event(client, id, requireUser(req).id, "create", null, "assigned",
-             { driverId: payload.driverId, vehicleNumber: payload.vehicleNumber });
+           await event(client, id, requireUser(req).id, payload.transportMode === "external" ? "create-carrier" : "create", null, "assigned",
+             { transportMode: payload.transportMode || "internal", driverId: payload.driverId, vehicleNumber: payload.vehicleNumber,
+               carrier: payload.carrier, waybill: payload.waybill, packageCount: payload.packageCount });
            // Build the response before committing: a failed source/assignment
            // read must not report a 500 after the assignment was persisted.
            const delivery = await dto(req, res, client, (await assignment(client, id))!, s);
@@ -499,7 +601,72 @@ export function registerDeliveryRoutes(app: Express) {
     } catch (e) { error(res, e); }
   });
 
-   for (const action of ["handover", "acknowledge-handover", "start", "proof", "approve-receipt", "complete", "fail", "reassign", "cancel"] as const) {
+  app.post("/api/deliveries/:id/attachments", isAuthenticated, (req, res) => {
+    uploadEvidence(req, res, async uploadError => {
+      try {
+        if (uploadError) throw new DeliveryError("Evidence file exceeds 10MB or upload is invalid", 400);
+        const id = idSchema.parse(req.params.id);
+        const kind = z.enum(["shipment_photo", "carrier_receipt"]).parse(req.body?.kind);
+        const file = req.file;
+        if (!file?.buffer.length) throw new DeliveryError("File is required", 400);
+        const data = file.buffer;
+        const detected = validateCarrierEvidence(file,kind);
+        const result = await withClient(async client => {
+          await client.query("BEGIN");
+          let path: string | null = null;
+          try {
+            const head = await assignment(client, id);
+            if (!head) throw new DeliveryError("Delivery not found", 404);
+            await client.query(`SELECT id FROM ${sourceTable(head.source_type)} WHERE id=$1 FOR UPDATE`, [head.source_id]);
+            const row = (await assignment(client,id,true))!;
+            const s = await source(client,row.source_type,row.source_id);
+            if (!s || row.transport_mode !== "external" || row.status !== "assigned" || row.handover_recorded_at
+              || !sourceHandoverReady(s) || eligibleSourceReceipt(s)
+              || !managerScope(req,s,"edit") || !(await permitted(req,res,"delivery_tasks","edit"))
+              || !(await permitted(req,res,sourceModule(s.sourceType),"edit")))
+              throw new DeliveryError("Carrier evidence upload is outside your source scope or state", 403);
+            path = `/objects/delivery-carriers/${id}/${randomUUID()}.${detected.extension}`;
+            await objects.uploadPrivateObject(path,data,detected.mimeType);
+            const { rows } = await client.query(`INSERT INTO delivery_carrier_attachments
+              (assignment_id,kind,storage_path,original_name,mime_type,uploaded_by)
+              VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`, [id,kind,path,file.originalname.slice(0,200),detected.mimeType,requireUser(req).id]);
+            await client.query("COMMIT");
+            return { id:Number(rows[0].id),kind,mimeType:detected.mimeType,originalName:file.originalname.slice(0,200),
+              downloadUrl:`/api/deliveries/${id}/attachments/${rows[0].id}` };
+          } catch (e) {
+            await client.query("ROLLBACK");
+            if (path) await objects.deletePrivateObject(path);
+            throw e;
+          }
+        });
+        if (!res.headersSent) res.status(201).json(result);
+      } catch (e) { error(res,e); }
+    });
+  });
+  app.get("/api/deliveries/:id/attachments/:attachmentId", isAuthenticated, async (req,res) => {
+    try {
+      const id = idSchema.parse(req.params.id), attachmentId = idSchema.parse(req.params.attachmentId);
+      const file = await withClient(async client => {
+        const row = await assignment(client,id);
+        if (!row) throw new DeliveryError("Delivery not found",404);
+        await dto(req,res,client,row);
+        const { rows } = await client.query(`SELECT storage_path,mime_type,original_name
+          FROM delivery_carrier_attachments WHERE assignment_id=$1 AND id=$2`,[id,attachmentId]);
+        if (!rows.length) throw new DeliveryError("Attachment not found",404);
+        return rows[0];
+      });
+      if (res.headersSent) return;
+      const downloaded = await objects.downloadPrivateObject(file.storage_path);
+      res.setHeader("Content-Type",file.mime_type);
+      res.setHeader("Content-Disposition",`attachment; filename*=UTF-8''${encodeURIComponent(file.original_name)}`);
+      res.setHeader("Cache-Control","private, no-store");
+      res.setHeader("X-Content-Type-Options","nosniff");
+      res.setHeader("Content-Security-Policy","sandbox");
+      res.send(downloaded.data);
+    } catch(e) { error(res,e); }
+  });
+
+   for (const action of ["handover", "acknowledge-handover", "start", "proof", "approve-receipt", "complete", "fail", "reassign", "cancel", "resolve-exception"] as const) {
     app.post(`/api/deliveries/:id/${action}`, isAuthenticated, async (req, res) => {
       try {
         const id = idSchema.parse(req.params.id);
@@ -507,6 +674,7 @@ export function registerDeliveryRoutes(app: Express) {
            : action === "proof" ? proofSchema.parse(req.body)
            : action === "fail" ? failSchema.parse(req.body)
            : action === "cancel" ? cancelSchema.parse(req.body)
+           : action === "resolve-exception" ? resolutionSchema.parse(req.body)
           : action === "reassign" ? reassignmentSchema.parse(req.body) : null;
         await withClient(async client => {
           await client.query("BEGIN");
@@ -523,24 +691,32 @@ export function registerDeliveryRoutes(app: Express) {
              const driver = isDriver(req, row)
                && await permitted(req, res, "delivery_tasks", "view")
                && await permitted(req, res, "delivery_tasks", "edit");
+            const external = row.transport_mode === "external";
             const sourceManager = managerScope(req, s, "edit");
-              const manager = (action === "handover" || action === "fail" || action === "reassign" || action === "cancel") && sourceManager
+              const manager = (external || action === "handover" || action === "fail" || action === "reassign" || action === "cancel") && sourceManager
               && await permitted(req, res, "delivery_tasks", "edit")
                && await permitted(req, res, sourceModule(s.sourceType), "edit")
                && await permitted(req, res, "delivery_tasks", "view")
                && await permitted(req, res, sourceModule(s.sourceType), "view");
-             const receiver = action === "approve-receipt" && await receiverScope(req, s)
+             const receiver = (action === "approve-receipt" || external && action === "fail") && await receiverScope(req, s)
               && await permitted(req, res, "delivery_tasks", "approve")
                && await permitted(req, res, s.destinationWarehouseId != null ? "warehouse" : sourceModule(s.sourceType), "edit");
             if (res.headersSent) throw new DeliveryError("Permission denied", 403);
+             if (external && ["acknowledge-handover","proof","reassign"].includes(action))
+               throw new DeliveryError("External shipment has no driver acknowledgement or driver proof",403);
              if (action === "approve-receipt" ? !receiver
                 : action === "handover" || action === "reassign" || action === "cancel" ? !manager
-              : action === "fail" ? !driver && !manager
-              : !driver) throw new DeliveryError("Permission denied", 403);
+              : action === "fail" ? !driver && !manager && !receiver
+              : external ? !manager : !driver) throw new DeliveryError("Permission denied", 403);
              if (action === "handover" || action === "acknowledge-handover") {
                if (row.status !== "assigned" || eligibleSourceReceipt(s)) throw new DeliveryError("Handover cannot be changed in this state", 409);
                if (action === "handover") {
                  if (!sourceHandoverReady(s)) throw new DeliveryError("Source is not ready for handover", 409);
+                 if (external) {
+                   const evidence = (await client.query("SELECT kind FROM delivery_carrier_attachments WHERE assignment_id=$1",[id])).rows;
+                   if (!["shipment_photo","carrier_receipt"].every(kind => evidence.some(e => e.kind === kind)))
+                     throw new DeliveryError("Shipment photo and carrier receipt required",409);
+                 }
                  const lines = (payload as z.infer<typeof handoverSchema>).items;
                  if (lines.length !== s.items.length || new Set(lines.map(i => i.id)).size !== s.items.length)
                    throw new DeliveryError("Handover must include every source line exactly once", 400);
@@ -567,23 +743,50 @@ export function registerDeliveryRoutes(app: Express) {
                await client.query("COMMIT");
                return;
              }
-             if (!deliveryTransitionAllowed(row.status, action)) throw new DeliveryError("Invalid delivery state transition", 409);
-             if (["fail", "reassign", "cancel"].includes(action) && eligibleSourceReceipt(s))
+             if (action === "resolve-exception") {
+               if (!external || !row.exception_reason || row.exception_resolved_at || eligibleSourceReceipt(s) && row.status === "completed")
+                 throw new DeliveryError("No open carrier exception to resolve",409);
+               const resolution = (payload as z.infer<typeof resolutionSchema>).resolution;
+               await client.query(`UPDATE delivery_assignments SET exception_resolution=$2,exception_resolved_at=now(),
+                 exception_reason=NULL,updated_at=now() WHERE id=$1`,[id,resolution]);
+               await event(client,id,requireUser(req).id,action,row.status,row.status,
+                 { reason:row.exception_reason,resolution,stockShipmentUnchanged:true });
+               await client.query("COMMIT");
+               return;
+             }
+             if (external && action === "fail"
+               ? !carrierExceptionAllowed(row.status, sourceDispatched(s) || eligibleSourceReceipt(s), row.exception_reason)
+               : !deliveryTransitionAllowed(row.status, action))
+               throw new DeliveryError("Invalid delivery state transition or unresolved carrier exception", 409);
+             if (["reassign", "cancel"].includes(action) || !external && action === "fail") {
+               if (eligibleSourceReceipt(s))
                throw new DeliveryError("Source receipt already recorded; delivery cannot be reset or cancelled", 409);
-             if (action === "fail" && !sourceDispatched(s))
+             }
+             if (action === "fail" && !external && !sourceDispatched(s))
                throw new DeliveryError("Source is no longer dispatched; cannot fail delivery", 409);
              if (action === "reassign" && !sourceAssignable(s))
                throw new DeliveryError("Source is no longer dispatched; cannot restart delivery", 409);
               if (action === "start" && !(sourceDispatched(s) || eligibleSourceReceipt(s)))
                throw new DeliveryError("Source is no longer awaiting receipt", 409);
               if (action === "start" && !acknowledged(row)
-                && (row.handover_recorded_at || row.handover_revision > 0))
+                && !external && (row.handover_recorded_at || row.handover_revision > 0))
                 throw new DeliveryError("Current driver must acknowledge the recorded handover", 409);
+              if (action === "start" && external && !row.handover_recorded_at)
+                throw new DeliveryError("Carrier handover is missing or changed",409);
               if (action === "proof" && !sourceDispatched(s) && !eligibleSourceReceipt(s))
                 throw new DeliveryError("Source is no longer awaiting receipt", 409);
             if (action === "proof") validateSignature((payload as z.infer<typeof proofSchema>).signatureData);
             if (action === "approve-receipt" || action === "complete") {
-              if (!row.signature_data || !row.proof_at) throw new DeliveryError("Signature proof required", 409);
+              if (!external && (!row.signature_data || !row.proof_at)) throw new DeliveryError("Signature proof required", 409);
+              if (external) {
+                const evidence = (await client.query("SELECT kind FROM delivery_carrier_attachments WHERE assignment_id=$1",[id])).rows;
+                if (!row.handover_recorded_at || !["shipment_photo","carrier_receipt"].every(kind => evidence.some(e => e.kind === kind)))
+                  throw new DeliveryError("Documented carrier handover required",409);
+                if (action === "complete" && !carrierClosureReady(s,
+                  { receiptApprovedBy: row.receipt_approved_by, exceptionReason: row.exception_reason, handoverRecordedAt: row.handover_recorded_at },
+                  evidence.map(e => e.kind)))
+                  throw new DeliveryError("Authenticated source receipt and resolved exception required before closing",409);
+              }
               if (!eligibleSourceReceipt(s)) throw new DeliveryError("Complete receipt in the source module first", 409);
               if (action === "approve-receipt" && !receiptMatchesSource(s.sourceType, s.sourceStatus, s.receivedBy, requireUser(req).id))
                 throw new DeliveryError("Only the authenticated source receipt actor can approve", 403);
@@ -596,10 +799,11 @@ export function registerDeliveryRoutes(app: Express) {
                  throw new DeliveryError("Reassignment requires a different driver; record a new handover to update the vehicle", 400);
                await driverExists(client, (payload as z.infer<typeof reassignmentSchema>).driverId, req);
              }
-            const next: DeliveryStatus = ({
+            const next: DeliveryStatus = external && action === "fail" ? row.status
+              : external && action === "start" ? "awaiting_receipt" : ({
               start: "in_transit", proof: "awaiting_receipt", "approve-receipt": "receipt_approved",
                complete: "completed", fail: "failed", reassign: "assigned", cancel: "cancelled",
-            } as const)[action];
+            } as Record<string, DeliveryStatus>)[action];
             const values: any[] = [id, next];
             let updates = "status=$2, updated_at=now()";
             const set = (column: string, value: unknown) => { values.push(value); updates += `, ${column}=$${values.length}`; };
@@ -611,7 +815,11 @@ export function registerDeliveryRoutes(app: Express) {
             }
             if (action === "approve-receipt") { set("receipt_approved_by", requireUser(req).id); updates += ", receipt_approved_at=now()"; }
             if (action === "complete") updates += ", completed_at=now()";
-            if (action === "fail") { set("failure_reason", (payload as z.infer<typeof failSchema>).reason); updates += ", failed_at=now()"; }
+            if (action === "fail") {
+              set("failure_reason", (payload as z.infer<typeof failSchema>).reason);
+              if (external) { set("exception_reason", (payload as z.infer<typeof failSchema>).reason); updates += ", exception_resolved_at=NULL,exception_resolution=NULL"; }
+              updates += ", failed_at=now()";
+            }
              if (action === "cancel") { set("cancellation_reason", (payload as z.infer<typeof cancelSchema>).reason); updates += ", cancelled_at=now()"; }
             if (action === "reassign") {
               const p = payload as z.infer<typeof reassignmentSchema>;
@@ -619,7 +827,9 @@ export function registerDeliveryRoutes(app: Express) {
                 updates += ", signature_data=NULL, receiver_name=NULL, notes=NULL, proof_at=NULL, receipt_approved_by=NULL, receipt_approved_at=NULL, started_at=NULL, failed_at=NULL, failure_reason=NULL, cancelled_at=NULL, cancellation_reason=NULL, handover_recorded_at=NULL, handover_acknowledged_at=NULL, handover_driver_id=NULL, handover_vehicle_number=NULL, handover_items=NULL, handover_fingerprint=NULL, handover_revision=handover_revision+1";
             }
             await client.query(`UPDATE delivery_assignments SET ${updates} WHERE id=$1`, values);
-            await event(client, id, requireUser(req).id, action, row.status, next, action === "reassign"
+            await event(client, id, requireUser(req).id,
+              external && action === "fail" ? "carrier-exception"
+              : external && action === "start" ? "carrier-dispatched" : action, row.status, next, action === "reassign"
                ? { previousDriverId: row.driver_id, previousVehicleNumber: row.vehicle_number,
                    previousProofAt: row.proof_at, previousReceiverName: row.receiver_name,
                    previousCancellationReason: row.cancellation_reason, previousFailureReason: row.failure_reason,

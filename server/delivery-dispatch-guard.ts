@@ -53,26 +53,37 @@ function normalize(items: DispatchItem[]) {
 export async function assertDeliveryDispatchReady(
   tx: DispatchTx,
   source: { sourceType: DispatchSourceType; sourceId: number; items?: DispatchItem[] },
-): Promise<{ driverId: string; driverName: string; vehicleNumber: string }> {
+): Promise<{ driverId: string | null; driverName: string; vehicleNumber: string | null }> {
   const { sourceType, sourceId } = source;
   const [assignment] = await rows(tx,
     sql`SELECT a.*, concat_ws(' ',u.first_name,u.last_name) AS driver_name,
       u.is_active AS driver_active,u.job_title AS driver_job
-      FROM delivery_assignments a JOIN users u ON u.id=a.driver_id
+      FROM delivery_assignments a LEFT JOIN users u ON u.id=a.driver_id
       WHERE a.source_type=${sourceType} AND a.source_id=${sourceId} FOR UPDATE OF a`,
     `SELECT a.*, concat_ws(' ',u.first_name,u.last_name) AS driver_name,
       u.is_active AS driver_active,u.job_title AS driver_job
-      FROM delivery_assignments a JOIN users u ON u.id=a.driver_id
+      FROM delivery_assignments a LEFT JOIN users u ON u.id=a.driver_id
       WHERE a.source_type=$1 AND a.source_id=$2 FOR UPDATE OF a`, [sourceType, sourceId]);
   const missing = () => { throw new DeliveryDispatchConflict("يجب إسناد سائق نشط وتوثيق التسليم له ثم تأكيد السائق قبل إرسال الشحنة. افتح صفحة مهام التوصيل."); };
-  if (!assignment || assignment.status !== "assigned" || assignment.driver_active !== "active"
-    || assignment.driver_job !== "delivery") missing();
-  if (!assignment.handover_recorded_at || !assignment.handover_acknowledged_at
-    || assignment.handover_acknowledged_at < assignment.handover_recorded_at
-    || assignment.handover_driver_id !== assignment.driver_id
-    || assignment.handover_vehicle_number !== assignment.vehicle_number
+  if (!assignment || assignment.status !== "assigned") missing();
+  const external = assignment.transport_mode === "external";
+  if (!external && (assignment.driver_active !== "active" || assignment.driver_job !== "delivery")) missing();
+  if (!assignment.handover_recorded_at
+    || (!external && (!assignment.handover_acknowledged_at
+      || assignment.handover_acknowledged_at < assignment.handover_recorded_at
+      || assignment.handover_driver_id !== assignment.driver_id
+      || assignment.handover_vehicle_number !== assignment.vehicle_number))
     || !assignment.handover_fingerprint || !Array.isArray(assignment.handover_items)
     || assignment.handover_revision < 1) missing();
+  if (external) {
+    if (!assignment.carrier || !assignment.waybill || !assignment.package_count || assignment.driver_id)
+      throw new DeliveryDispatchConflict("بيانات الناقل الخارجي غير مكتملة");
+    const evidence = await rows(tx,
+      sql`SELECT kind FROM delivery_carrier_attachments WHERE assignment_id=${assignment.id}`,
+      "SELECT kind FROM delivery_carrier_attachments WHERE assignment_id=$1", [assignment.id]);
+    if (!["shipment_photo", "carrier_receipt"].every(kind => evidence.some((e: any) => e.kind === kind)))
+      throw new DeliveryDispatchConflict("صورة الشحنة وإيصال الناقل مطلوبان قبل الإرسال");
+  }
 
   let actual: DispatchItem[];
   let sourceRows: Array<DispatchItem & { name: string }>;
@@ -133,8 +144,10 @@ export async function assertDeliveryDispatchReady(
   if (!current.length || new Set(current.map(item => item.id)).size !== current.length
     || JSON.stringify(current) !== JSON.stringify(frozen))
     throw new DeliveryDispatchConflict("بنود الشحنة أو كمياتها أو وحداتها لا تطابق محضر التسليم المؤكد؛ أعد توثيق المحضر وتأكيد السائق");
-  return { driverId: assignment.driver_id, driverName: assignment.driver_name,
-    vehicleNumber: assignment.vehicle_number };
+  return { driverId: assignment.driver_id ?? null, driverName: external
+    ? (assignment.carrier === "other" ? assignment.carrier_name : assignment.carrier === "road" ? "Road" : "Naqel")
+    : assignment.driver_name,
+    vehicleNumber: assignment.vehicle_number ?? null };
 }
 
 /** Source cancellation and its delivery task are committed or rolled back together. */

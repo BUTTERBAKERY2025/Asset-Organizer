@@ -191,8 +191,14 @@ describe("delivery notice outbox (local PostgreSQL only)", () => {
     await Promise.all([queueOverdueDeliveryNotices(), queueOverdueDeliveryNotices()]);
     const { rows } = await connection.query(`SELECT event_type,count(*)::int count
       FROM delivery_notification_outbox WHERE assignment_id=$1 GROUP BY event_type`, [taskId]);
+    // A previous test advanced this assignment's deadline: each distinct
+    // deadline has one notice, not one lifetime notice for the assignment.
     expect(Object.fromEntries(rows.map(r => [r.event_type, r.count])))
-      .toMatchObject({ failed: 1, overdue: 1, escalated: 1 });
+      .toMatchObject({ failed: 1, overdue: 2, escalated: 2 });
+    const duplicateRevisions = await connection.query(`SELECT event_type,revision,count(*)::int count
+      FROM delivery_notification_outbox WHERE assignment_id=$1
+      GROUP BY event_type,revision HAVING count(*)>1`, [taskId]);
+    expect(duplicateRevisions.rows).toEqual([]);
   });
 
   it("routes proof to destination editors, not source or unrelated branches", async () => {

@@ -160,7 +160,8 @@ export class ObjectStorageService {
   async getObjectEntityFile(objectPath: string): Promise<File> {
     // Server-owned maintenance evidence must never be served through generic
     // object or governance endpoints, even to another authenticated user.
-    if (decodeURIComponent(objectPath).startsWith("/objects/maintenance-tickets/")) {
+    if (["/objects/maintenance-tickets/", "/objects/delivery-carriers/"]
+      .some(prefix => decodeURIComponent(objectPath).startsWith(prefix))) {
       throw new ObjectNotFoundError();
     }
     const objectFile = this.getPrivateObjectFile(objectPath);
