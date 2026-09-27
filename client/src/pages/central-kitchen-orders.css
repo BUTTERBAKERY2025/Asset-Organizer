@@ -1,0 +1,102 @@
+/* Butter Bakery / kitchen desk: a calm ledger, not a stack of cards. */
+.kitchen-workspace .kitchen-order-list { min-width: 0; }
+.kitchen-workspace .kitchen-list-heading,
+.kitchen-workspace .kitchen-order-row {
+  display: grid;
+  grid-template-columns: minmax(130px,1.15fr) minmax(100px,1fr) minmax(105px,.82fr) minmax(122px,1fr) minmax(100px,.9fr) 34px;
+  column-gap: 12px;
+  align-items: center;
+  padding-inline: 16px;
+}
+.kitchen-workspace .kitchen-list-heading.has-selection,
+.kitchen-workspace .kitchen-order-row.has-selection {
+  grid-template-columns: 16px minmax(130px,1.15fr) minmax(100px,1fr) minmax(105px,.82fr) minmax(122px,1fr) minmax(100px,.9fr) 34px;
+}
+.kitchen-workspace .kitchen-list-heading {
+  min-height: 36px;
+  background: color-mix(in srgb, var(--color-secondary) 45%, var(--color-card));
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-muted-foreground);
+  font-size: 11px;
+  font-weight: 700;
+}
+.kitchen-workspace .kitchen-list-heading.has-selection::before { content: ""; }
+.kitchen-workspace .kitchen-order-row {
+  position: relative;
+  min-height: 64px;
+  padding-block: 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 75%, transparent);
+  background: var(--color-card);
+  transition: background-color 120ms ease;
+}
+.kitchen-workspace .kitchen-order-row:last-child { border-bottom: 0; }
+.kitchen-workspace .kitchen-order-row:hover,
+.kitchen-workspace .kitchen-order-row:focus-within { background: color-mix(in srgb, var(--color-secondary) 35%, var(--color-card)); z-index: 3; }
+.kitchen-workspace .kitchen-order-row.is-selected { background: color-mix(in srgb, var(--color-primary) 7%, var(--color-card)); box-shadow: inset -3px 0 var(--color-primary); }
+.kitchen-workspace .kitchen-order-row.needs-attention:not(.is-selected) { box-shadow: inset -3px 0 #c48736; }
+.kitchen-workspace .kitchen-row-popover {
+  position: absolute;
+  z-index: 6;
+  inset-inline-start: 16px;
+  top: calc(100% - 3px);
+  width: min(390px, calc(100vw - 70px));
+  max-height: 260px;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 130ms ease, transform 130ms ease, visibility 130ms;
+  font-size: 12px;
+}
+.kitchen-workspace .kitchen-row-popover.is-visible { opacity: 1; visibility: visible; transform: translateY(0); }
+.kitchen-workspace .kitchen-row-popover > div { border-color: var(--color-border); box-shadow: 0 12px 28px color-mix(in srgb, var(--color-foreground) 13%, transparent); }
+.kitchen-workspace .kitchen-row-mobile-preview { display: none; }
+@media (min-width: 1536px) {
+  .kitchen-workspace-split { grid-template-columns: minmax(0, 1fr) minmax(600px, 1.03fr); }
+  .kitchen-workspace-split .kitchen-list-heading,
+  .kitchen-workspace-split .kitchen-order-row {
+    grid-template-columns: minmax(105px,1.1fr) minmax(95px,1fr) minmax(95px,.9fr) minmax(100px,1fr) 30px;
+    column-gap: 8px;
+    padding-inline: 12px;
+  }
+  .kitchen-workspace-split .kitchen-list-heading.has-selection,
+  .kitchen-workspace-split .kitchen-order-row.has-selection {
+    grid-template-columns: 16px minmax(105px,1.1fr) minmax(95px,1fr) minmax(95px,.9fr) minmax(100px,1fr) 30px;
+  }
+  .kitchen-workspace-split .kitchen-row-step,
+  .kitchen-workspace-split .kitchen-list-heading > span:nth-last-child(2) { display: none; }
+}
+@media (max-width: 1023px) {
+  .kitchen-workspace .kitchen-list-heading,
+  .kitchen-workspace .kitchen-order-row,
+  .kitchen-workspace .kitchen-list-heading.has-selection,
+  .kitchen-workspace .kitchen-order-row.has-selection { grid-template-columns: 16px minmax(0,1fr) minmax(95px,auto) 78px 32px; gap: 8px; }
+  .kitchen-workspace .kitchen-list-heading:not(.has-selection),
+  .kitchen-workspace .kitchen-order-row:not(.has-selection) { grid-template-columns: minmax(0,1fr) minmax(95px,auto) 78px 32px; }
+  .kitchen-workspace .kitchen-row-branch,
+  .kitchen-workspace .kitchen-row-step,
+  .kitchen-workspace .kitchen-list-heading > span:nth-child(2),
+  .kitchen-workspace .kitchen-list-heading > span:nth-last-child(2) { display: none; }
+  .kitchen-workspace .kitchen-preview-toggle { display: inline-flex; }
+  .kitchen-workspace .kitchen-row-popover { display: none; }
+  .kitchen-workspace .kitchen-row-mobile-preview { display: block; grid-column: 1 / -1; padding-top: 8px; }
+}
+@media (max-width: 639px) {
+  .kitchen-workspace .kitchen-list-heading { display: none; }
+  .kitchen-workspace .kitchen-order-row,
+  .kitchen-workspace .kitchen-order-row.has-selection,
+  .kitchen-workspace .kitchen-order-row:not(.has-selection) {
+    grid-template-columns: minmax(0,1fr) auto;
+    gap: 6px 8px;
+    min-height: 0;
+    padding: 12px;
+  }
+  .kitchen-workspace .kitchen-row-select { grid-column: 2; grid-row: 1; justify-self: end; }
+  .kitchen-workspace .kitchen-row-number { grid-column: 1; grid-row: 1; }
+  .kitchen-workspace .kitchen-row-date { grid-column: 1; grid-row: 2; }
+  .kitchen-workspace .kitchen-row-date span { display: inline; margin-inline-end: 5px; }
+  .kitchen-workspace .kitchen-row-status { grid-column: 1; grid-row: 3; }
+  .kitchen-workspace .kitchen-row-actions { grid-column: 2; grid-row: 2 / span 2; flex-direction: column-reverse; align-self: end; }
+  .kitchen-workspace .kitchen-row-mobile-preview { grid-row: 4; }
+}

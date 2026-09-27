@@ -47,6 +47,7 @@ import { OrderActionsMenu, SheetPreviewDialog } from "@/components/central-kitch
 import { type PreparationSheet } from "@/components/central-kitchen/kitchen-order-share-model";
 import { kitchenOrderPrintHtml } from "@/components/central-kitchen/kitchen-order-pdf";
 import { formatKitchenSaudiDateTime } from "@/components/central-kitchen/display-format";
+import "./central-kitchen-orders.css";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   getCentralKitchenNextStep,
@@ -228,9 +229,9 @@ export default function CentralKitchenOrdersPage() {
   const navigationBranch = useBranchNavigation(branches, branchesLoading, userBranchId);
   const { canView, canCreate, canEdit, canApprove, canExport, hasPermission } = usePermissions();
   const operationsView = isKitchenOperationsPresentation(user, canApprove("central_kitchen_orders"));
-  const [desktop, setDesktop] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches);
+  const [desktop, setDesktop] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1536px)").matches);
   useEffect(() => {
-    const media = window.matchMedia("(min-width: 1024px)");
+    const media = window.matchMedia("(min-width: 1536px)");
     const update = () => setDesktop(media.matches);
     update();
     media.addEventListener("change", update);
@@ -255,6 +256,7 @@ export default function CentralKitchenOrdersPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [newOrdersNotice, setNewOrdersNotice] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<25 | 50 | 100>(25);
   const [sort, setSort] = useState<"priority" | "newest" | "oldest_waiting">(KITCHEN_DEFAULT_SORT);
   const [mobilePreviewId, setMobilePreviewId] = useState<string | null>(null);
   const [hoverPreviewId, setHoverPreviewId] = useState<string | null>(null);
@@ -279,6 +281,9 @@ export default function CentralKitchenOrdersPage() {
   const [detailId, setDetailId] = useState<string | number | null>(null);
   const detailBodyRef = useRef<HTMLDivElement>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  useEffect(() => {
+    if (!desktop && detailId !== null) setDetailDialogOpen(true);
+  }, [desktop, detailId]);
   const detailDialogStyle = useVisualViewportDialog({ open: detailId !== null && detailDialogOpen, maxHeight: 900, viewportFraction: 0.94 });
   const [actionNotes, setActionNotes] = useState("");
   const [pilotDays, setPilotDays] = useState("30");
@@ -334,7 +339,7 @@ export default function CentralKitchenOrdersPage() {
     window.addEventListener("offline", update);
     return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update); };
   }, []);
-  useEffect(() => { setPage(1); }, [branchFilter, stage, inventoryModeFilter, search, kitchenFilter, dateFilter, sort, focus]);
+  useEffect(() => { setPage(1); }, [branchFilter, stage, inventoryModeFilter, search, kitchenFilter, dateFilter, sort, focus, pageSize]);
   useEffect(() => {
     if (userBranchId) setDraft(current => current.sourceBranchId ? current : { ...current, sourceBranchId: userBranchId });
   }, [userBranchId]);
@@ -361,7 +366,7 @@ export default function CentralKitchenOrdersPage() {
     const params = new URLSearchParams();
     if (branchFilter !== "all") params.set("branchId", branchFilter);
     params.set("page", String(page));
-    params.set("pageSize", "25");
+    params.set("pageSize", String(pageSize));
     params.set("stage", stage);
     params.set("sort", sort);
     if (search.trim()) params.set("search", search.trim());
@@ -371,7 +376,7 @@ export default function CentralKitchenOrdersPage() {
     if (focus) params.set("focus", focus);
     const string = params.toString();
     return `/api/central-kitchen-orders${string ? `?${string}` : ""}`;
-  }, [branchFilter, page, stage, sort, search, kitchenFilter, dateFilter, inventoryModeFilter, focus]);
+  }, [branchFilter, page, pageSize, stage, sort, search, kitchenFilter, dateFilter, inventoryModeFilter, focus]);
   const ordersQuery = useQuery<KitchenOrderPage>({
     queryKey: [listUrl],
     enabled: !navigationBranch.isResolving
@@ -689,7 +694,6 @@ export default function CentralKitchenOrdersPage() {
     setBulkRunning(false);
     bulkGuard.current = false;
   };
-  const statusInfo = (status: string) => STATUS[normalized(status)] || { label: status || "قيد المراجعة", className: "bg-muted text-muted-foreground border-border" };
   const canSeeDemandReport = operationsView && canView("central_kitchen_orders");
   const canSeePilotMetrics = operationsView && canView("central_kitchen_orders");
   const canSeeSecondary = canSeePilotMetrics || canConfigureRouting;
@@ -710,7 +714,7 @@ export default function CentralKitchenOrdersPage() {
   };
   const selectDetail = (id: string | number) => {
     openDetail(id);
-    if (!desktop) setDetailDialogOpen(true);
+    if (!operationsView || !desktop) setDetailDialogOpen(true);
   };
   const openFullDetail = (id: string | number) => {
     openDetail(id);
@@ -744,7 +748,7 @@ export default function CentralKitchenOrdersPage() {
   };
 
   return <Layout>
-    <main dir="rtl" className="page-container space-y-4 bg-background pb-10 text-foreground">
+    <main dir="rtl" className="page-container kitchen-workspace space-y-4 bg-background pb-10 text-foreground">
       <PageHeader icon={Factory} tone="production" title={operationsView ? "تشغيل المطبخ اليومي" : "طلبات المطبخ"} description={operationsView ? "قائمة العمل والطلب المحدد في مساحة واحدة" : "رتّب ما يحتاج قراراً الآن، ثم افتح التفاصيل عند الحاجة"
       }
         className="kitchen-mobile-header"
@@ -808,8 +812,8 @@ export default function CentralKitchenOrdersPage() {
           </>}
         </div>
       </details>}
-      <section className={cn("grid items-start gap-4", operationsView ? "lg:grid-cols-[minmax(330px,0.82fr)_minmax(0,1.18fr)]" : "lg:grid-cols-[minmax(0,1fr)_360px]")}>
-      <Card className="min-w-0 overflow-hidden border-border bg-card shadow-sm">
+      <section className={cn("grid min-w-0 items-start gap-4", operationsView && "kitchen-workspace-split")}>
+      <Card className="min-w-0 overflow-visible border-border bg-card shadow-sm">
         <CardContent className="p-0">
           <div className="kitchen-queue-toolbar flex flex-wrap items-center gap-2 border-b border-border p-3">
             <div className="kitchen-search relative min-w-0 flex-[1_1_260px]"><Search className="absolute right-3 top-3 h-4 w-4 text-muted-foreground" /><Input aria-label="بحث في الطلبات" value={search} onChange={event => setSearch(event.target.value)} className="h-10 bg-background pr-9" placeholder="رقم الطلب أو الفرع أو المطبخ" /></div>
@@ -828,24 +832,31 @@ export default function CentralKitchenOrdersPage() {
       {ordersQuery.isLoading ? <Card><CardContent className="space-y-3 p-4">{Array.from({ length: 6 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</CardContent></Card> :
       ordersQuery.isError ? <Card><CardContent className="py-16 text-center"><p className="font-medium">تعذر تحميل الطلبات</p><p className="mt-1 text-sm text-muted-foreground">تحقق من الاتصال ثم أعد المحاولة.</p><Button className="mt-4" variant="outline" onClick={refresh}>إعادة المحاولة</Button></CardContent></Card> :
        filtered.length === 0 ? <div className="py-16 text-center"><PackagePlus className="mx-auto mb-3 h-9 w-9 text-muted-foreground" /><h2 className="font-semibold">لا توجد طلبات ضمن هذا العرض</h2><p className="mt-1 text-sm text-muted-foreground">غيّر المرحلة أو امسح البحث والفلاتر الثانوية.</p><Button variant="link" className="mt-2" onClick={() => { setSearch(""); setKitchenFilter("all"); setDateFilter("all"); setFocus(null); changeInventoryModeFilter("all"); }}>مسح الفلاتر</Button></div> :
-      <section className="divide-y divide-border p-1.5" aria-label="قائمة الطلبات">
-        {filtered.map(order => <div key={order.id} onMouseEnter={() => setHoverPreviewId(String(order.id))} onMouseLeave={() => setHoverPreviewId(current => current === String(order.id) ? null : current)} onFocusCapture={() => setFocusPreviewId(String(order.id))} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusPreviewId(current => current === String(order.id) ? null : current); }} className={cn("kitchen-order-row group relative grid w-full grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-xl border border-transparent p-3 text-right transition-colors hover:bg-muted/50 focus-within:ring-2 focus-within:ring-ring", operationsView ? "sm:grid-cols-[auto_minmax(0,1fr)]" : "sm:grid-cols-[auto_minmax(190px,1.25fr)_minmax(130px,.65fr)_minmax(220px,1fr)_18px] sm:items-center", String(detailId) === String(order.id) && "border-primary/30 bg-primary/5", queueOrderNeedsAttention(order) && "border-r-[3px] border-r-amber-500")}>
-          <button type="button" className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none" onClick={() => selectDetail(order.id)} aria-label={`الاطلاع على الطلب ${order.orderNumber}`} />
-          {(hasPermission("central_kitchen_orders", "print") || canApprove("central_kitchen_orders")) && <input type="checkbox" aria-label={`اختيار ${order.orderNumber} للإجراءات المجمعة`} disabled={["cancelled", "received"].includes(normalized(order.status))} checked={selectedOrderIds.has(String(order.id))} onChange={event => setSelectedOrderIds(current => { const next = new Set(current); if (event.target.checked) next.add(String(order.id)); else next.delete(String(order.id)); return next; })} className="relative z-20 mt-1 h-4 w-4 accent-primary sm:mt-0" />}
-          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><strong className="font-mono text-sm text-foreground">{order.orderNumber}</strong>{queueOrderNeedsAttention(order) && <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-900"><AlertTriangle className="h-3 w-3" />{isOpenDiscrepancy(order) ? "فروقات استلام مفتوحة" : ["requested", "pending", "draft"].includes(normalized(order.status)) ? "طلب جديد" : "متأخر عن موعد الحاجة"}</span>}</div><span className="mt-1 block truncate text-xs text-muted-foreground">{order.requestBranchName || branchName(order.requestBranchId)} <span className="px-1">←</span> {order.centralKitchenName || branchName(order.centralKitchenId)}</span></div>
-          <div className={cn("text-xs sm:block", operationsView && "col-start-2")}><span className="block text-[10px] text-muted-foreground">موعد الحاجة</span><strong className="font-medium">{readableDate(order.neededDate)} · {readableTime(order.neededTime)}</strong></div>
-          <div className={cn("col-span-2 rounded-lg border border-border bg-background p-2", !operationsView && "sm:col-span-1")}><NextStepSummary order={order} /><LateSubmissionBadge schedule={order.orderingSchedule} /></div>
-          {!operationsView && <ChevronLeft className="kitchen-order-next hidden h-4 w-4 text-muted-foreground sm:block" />}
-          <button type="button" className="relative z-20 col-span-full min-h-9 rounded border px-2 text-xs sm:hidden" aria-expanded={mobilePreviewId === String(order.id)} onClick={() => setMobilePreviewId(current => current === String(order.id) ? null : String(order.id))}>معاينة البنود</button>
-          <div className={cn("col-span-full text-xs", mobilePreviewId === String(order.id) ? "block" : hoverPreviewId === String(order.id) || focusPreviewId === String(order.id) ? "hidden sm:block" : "hidden")} aria-label={`معاينة الطلب ${order.orderNumber}`}>
-            <OrderRowPreview order={order} />
-          </div>
-        </div>)}
+      <section className="kitchen-order-list" aria-label="قائمة الطلبات">
+        <div className={cn("kitchen-list-heading", (hasPermission("central_kitchen_orders", "print") || canApprove("central_kitchen_orders")) && "has-selection")} aria-hidden="true"><span>الطلب</span><span>الفرع الطالب</span><span>موعد الحاجة</span><span>الحالة</span><span>المتابعة</span><span /></div>
+        {filtered.map(order => {
+          const id = String(order.id);
+          const attention = queueOrderNeedsAttention(order);
+          const discrepancy = isOpenDiscrepancy(order);
+          const step = getCentralKitchenNextStep({ status: order.status, inventoryMode: parseCentralKitchenInventoryMode(order.inventoryMode), discrepancyStatus: order.discrepancyStatus });
+          const previewVisible = hoverPreviewId === id || focusPreviewId === id;
+          return <div key={id} onMouseEnter={() => setHoverPreviewId(id)} onMouseLeave={() => setHoverPreviewId(current => current === id ? null : current)} onFocusCapture={() => setFocusPreviewId(id)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusPreviewId(current => current === id ? null : current); }} className={cn("kitchen-order-row", (hasPermission("central_kitchen_orders", "print") || canApprove("central_kitchen_orders")) && "has-selection", String(detailId) === id && "is-selected", attention && "needs-attention")}>
+            {(hasPermission("central_kitchen_orders", "print") || canApprove("central_kitchen_orders")) && <input type="checkbox" aria-label={`اختيار ${order.orderNumber} للإجراءات المجمعة`} disabled={["cancelled", "received"].includes(normalized(order.status))} checked={selectedOrderIds.has(id)} onChange={event => setSelectedOrderIds(current => { const next = new Set(current); if (event.target.checked) next.add(id); else next.delete(id); return next; })} className="kitchen-row-select h-4 w-4 accent-primary" />}
+            <div className="kitchen-row-number min-w-0"><button type="button" className="block max-w-full truncate text-right font-mono text-[13px] font-bold text-foreground hover:text-primary focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => selectDetail(order.id)} aria-label={`الاطلاع على الطلب ${order.orderNumber}`}>{order.orderNumber}</button><span className="block truncate text-[11px] text-muted-foreground">{order.centralKitchenName || branchName(order.centralKitchenId)}</span></div>
+            <div className="kitchen-row-branch min-w-0 truncate text-sm font-medium" title={order.requestBranchName || branchName(order.requestBranchId)}>{order.requestBranchName || branchName(order.requestBranchId)}</div>
+            <div className="kitchen-row-date min-w-0 text-xs tabular-nums"><span className="whitespace-nowrap">{readableDate(order.neededDate)}</span><span className="block text-[11px] text-muted-foreground">{readableTime(order.neededTime)}</span></div>
+            <div className="kitchen-row-status flex min-w-0 flex-wrap items-center gap-1"><StatusBadge status={order.status} />{attention && <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800" title={discrepancy ? "فروقات استلام مفتوحة" : "يتطلب الانتباه"}><AlertTriangle className="h-3 w-3" />{discrepancy ? "فروقات" : ["requested", "pending", "draft"].includes(normalized(order.status)) ? "جديد" : "متأخر"}</span>}{order.orderingSchedule?.isLate && <span className="text-[10px] text-amber-800">إرسال متأخر</span>}</div>
+            <div className="kitchen-row-step min-w-0 truncate text-xs text-muted-foreground" title={step.label}>{step.label}</div>
+            <div className="kitchen-row-actions flex items-center justify-end gap-1"><button type="button" className="kitchen-preview-toggle hidden rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`معاينة بنود الطلب ${order.orderNumber}`} aria-expanded={mobilePreviewId === id} onClick={() => setMobilePreviewId(current => current === id ? null : id)}>معاينة</button><button type="button" className="rounded-md p-1.5 text-primary hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => selectDetail(order.id)} aria-label={`فتح تفاصيل الطلب ${order.orderNumber}`}><ChevronLeft className="h-4 w-4" /></button></div>
+            <div className={cn("kitchen-row-popover", previewVisible && "is-visible")} aria-label={`معاينة الطلب ${order.orderNumber}`}><OrderRowPreview order={order} /></div>
+            {mobilePreviewId === id && <div className="kitchen-row-mobile-preview" aria-label={`معاينة الطلب ${order.orderNumber}`}><OrderRowPreview order={order} /></div>}
+          </div>;
+        })}
       </section>}
-      {!!ordersQuery.data && ordersQuery.data.totalPages > 1 && <div className="flex items-center justify-between border-t px-3 py-3 text-xs"><Button size="sm" variant="outline" disabled={page <= 1 || ordersQuery.isFetching} onClick={() => setPage(value => value - 1)}>السابق</Button><span>صفحة {ordersQuery.data.page} من {ordersQuery.data.totalPages}</span><Button size="sm" variant="outline" disabled={page >= ordersQuery.data.totalPages || ordersQuery.isFetching} onClick={() => setPage(value => value + 1)}>التالي</Button></div>}
+      {!!ordersQuery.data && <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-3 text-xs"><span className="text-muted-foreground">{ordersQuery.data.total ? `${(ordersQuery.data.page - 1) * ordersQuery.data.pageSize + 1}–${Math.min(ordersQuery.data.page * ordersQuery.data.pageSize, ordersQuery.data.total)} من ${ordersQuery.data.total} طلب` : "لا توجد نتائج"}</span><div className="flex items-center gap-2"><label htmlFor="kitchen-page-size" className="text-muted-foreground">لكل صفحة</label><select id="kitchen-page-size" className="h-9 rounded-md border border-input bg-background px-2" value={pageSize} onChange={event => setPageSize(Number(event.target.value) as 25 | 50 | 100)}><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select>{ordersQuery.data.totalPages > 1 && <><Button size="sm" variant="outline" disabled={page <= 1 || ordersQuery.isFetching} onClick={() => setPage(value => value - 1)}>السابق</Button><span className="whitespace-nowrap">صفحة {ordersQuery.data.page} من {ordersQuery.data.totalPages}</span><Button size="sm" variant="outline" disabled={page >= ordersQuery.data.totalPages || ordersQuery.isFetching} onClick={() => setPage(value => value + 1)}>التالي</Button></>}</div></div>}
         </CardContent>
       </Card>
-      <aside className={cn("hidden min-h-[520px] rounded-2xl border border-border bg-card shadow-sm lg:block", operationsView ? "sticky top-4 max-h-[calc(100dvh-2rem)] min-w-0 overflow-hidden" : "sticky top-4 p-4")} aria-label={operationsView ? "مساحة عمل الطلب المحدد" : "ملخص الطلب المحدد"}>
+      {operationsView && <aside className="sticky top-4 hidden min-h-[520px] max-h-[calc(100dvh-2rem)] min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-sm min-[1536px]:block" aria-label="مساحة عمل الطلب المحدد">
         {operationsView ? desktop && <div className="flex h-full max-h-[calc(100dvh-2rem)] flex-col">
           <div className="flex shrink-0 items-center justify-between border-b px-3 py-2">
             <span className="text-xs font-semibold text-muted-foreground">الطلب المحدد · تفاصيل وإجراءات</span>
@@ -873,7 +884,7 @@ export default function CentralKitchenOrdersPage() {
           onOpen={() => detailId !== null && openFullDetail(detailId)}
           onClear={closeDetail}
         />}
-      </aside>
+      </aside>}
       </section>
 
       {canSeeSecondary && <details className="rounded-xl border border-border bg-card" onToggle={event => setMetricsOpen(event.currentTarget.open)}>
@@ -949,7 +960,7 @@ export default function CentralKitchenOrdersPage() {
       </DialogContent>
     </Dialog>
 
-      <Dialog open={detailId !== null && detailDialogOpen && (!operationsView || !desktop)} onOpenChange={open => { if (workflowMutation.isPending) return; setDetailDialogOpen(open); if (!open && !desktop) closeDetail(); }}><DialogContent dir="rtl" style={{ ...detailDialogStyle, display: "flex", flexDirection: "column" }} className="kitchen-detail-dialog h-[94dvh] max-h-[900px] max-w-5xl gap-0 overflow-hidden p-0 sm:rounded-xl [&>button]:left-3 [&>button]:right-auto [&>button]:top-3 [&>button]:z-20 [&>button]:flex [&>button]:h-11 [&>button]:w-11 [&>button]:items-center [&>button]:justify-center">
+      <Dialog open={detailId !== null && detailDialogOpen && (!operationsView || !desktop)} onOpenChange={open => { if (workflowMutation.isPending) return; setDetailDialogOpen(open); if (!open) closeDetail(); }}><DialogContent dir="rtl" style={{ ...detailDialogStyle, display: "flex", flexDirection: "column" }} className="kitchen-detail-dialog h-[94dvh] max-h-[900px] max-w-5xl gap-0 overflow-hidden p-0 sm:rounded-xl [&>button]:left-3 [&>button]:right-auto [&>button]:top-3 [&>button]:z-20 [&>button]:flex [&>button]:h-11 [&>button]:w-11 [&>button]:items-center [&>button]:justify-center">
         <KitchenDetailHeader order={detailDenied || String(selectedDetail?.id) !== String(detailId) ? undefined : selectedDetail} canPrint={hasPermission("central_kitchen_orders", "print")} canExport={canExport("central_kitchen_orders")} />
         <div className="kitchen-detail-body min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 pb-8 sm:px-5">{detailDenied ? <DetailQueryError error={detailError} onRetry={() => detailQuery.refetch()} /> : (detailQuery.isLoading || (detailQuery.isFetching && detailQuery.isPlaceholderData)) ? <div className="space-y-3 py-8" aria-label="جارٍ تحميل تفاصيل الطلب">{Array.from({ length: 5 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</div> : !selectedDetail || String(selectedDetail.id) !== String(detailId) ? <DetailQueryError error={detailError} onRetry={() => detailQuery.refetch()} /> : <OrderDetail key={selectedDetail.id} showHeader={false} order={selectedDetail} products={products} productsQuery={productsQuery} accessibleBranchIds={branches.map(branch => branch.id)} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={workflowMutation.isPending} failed={workflowMutation.isError} canApprove={canApprove("central_kitchen_orders")} canEdit={canEdit("central_kitchen_orders")} canProduction={canView("production")} canReverseReturn={(user?.role === "branch_manager" && canEdit("central_kitchen_orders")) || (canView("warehouse") && canEdit("warehouse"))} canPrint={hasPermission("central_kitchen_orders", "print")} canExport={canExport("central_kitchen_orders")} canConfigureRouting={canConfigureRouting} onConfigureRouting={() => setSettingsOpen(true)} onAction={(action, details) => performDetailAction(selectedDetail, action, details)} />}</div>
       </DialogContent></Dialog>
@@ -961,7 +972,7 @@ function OrderRowPreview({ order }: { order: KitchenOrder }) {
   const preview = kitchenOrderPreview(order);
   return <div className="relative z-20 rounded-lg border border-border bg-card p-3 shadow-sm">
     <p className="font-medium">{preview.route} · {preview.status}</p>
-    {preview.lines.length ? <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1">{preview.lines.map((line, index) => <li key={`${index}-${line}`}>{line}</li>)}</ul>
+    {preview.lines.length ? <><ul className="mt-1 space-y-1">{preview.lines.slice(0, 5).map((line, index) => <li key={`${index}-${line}`} className="truncate" title={line}>{line}</li>)}</ul>{preview.lines.length > 5 && <p className="mt-2 text-muted-foreground">+ {preview.lines.length - 5} أصناف أخرى · افتح التفاصيل لعرضها</p>}</>
       : <p className="mt-1 text-muted-foreground">البنود غير متاحة في القائمة؛ افتح الطلب لعرضها.</p>}
   </div>;
 }
