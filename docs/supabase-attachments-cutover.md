@@ -1,7 +1,21 @@
-# Supabase attachment cutover (staged; not applied)
+# Supabase attachment cutover
 
-Production audit evidence: `documents` is recorded with `public=false`, but
-`storage.objects` has `public_upload` (INSERT), `public_download` (SELECT),
+## Verified completion — 2026-09-28
+
+After the user confirmed the Render server credential and updated deployment,
+the staged policy migration was applied to the existing Supabase project.
+Both buckets are private; storage.objects RLS is enabled and the three public
+policies have been removed. Real synthetic tests through both server adapters
+verified upload and byte-identical download, denied anonymous read/upload,
+and confirmed an anonymous delete attempt could not remove the file.
+All synthetic objects were cleaned up (confirmed by a database count).
+No existing attachments were deleted or moved. This verifies the storage
+service, not an authenticated browser journey on Render.
+
+The following records the audit and ordered cutover procedure for reference.
+
+Pre-cutover production audit: `documents` was recorded with `public=false`, but
+`storage.objects` had `public_upload` (INSERT), `public_download` (SELECT),
 and `public_delete` (DELETE) for `public` on `bucket_id='documents'`. Private
 bucket metadata alone does **not** cancel those policies.
 
@@ -9,9 +23,8 @@ The server credential was verified in the workspace and the dedicated
 `app-private-attachments` bucket was provisioned privately with a 10 MiB
 limit and PNG/JPEG/WebP/PDF types. Synthetic upload and byte-identical
 retrieval worked through both attachment adapters; private-bucket anonymous
-download was denied. Synthetic objects were removed. The documents policies
-are still unchanged: Render credential setup and code rollout must be
-confirmed before applying the policy migration below.
+download was denied. Synthetic objects were removed. Render credential setup
+and code rollout were confirmed before applying the policy migration below.
 
 1. Configure `SUPABASE_URL` and **server-only**
    `SUPABASE_SERVICE_ROLE_KEY` on each server deployment. Never expose the
