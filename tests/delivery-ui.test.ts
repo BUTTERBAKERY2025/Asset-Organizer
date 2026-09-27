@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { deliveryTiming } from "../client/src/components/delivery/delivery-ui";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { canOpenDeliverySource, DeliveryDetail, deliveryTiming } from "../client/src/components/delivery/delivery-ui";
 import type { Delivery } from "../client/src/pages/driver-deliveries";
 
 const scheduled = Date.parse("2026-01-01T10:00:00Z");
@@ -18,5 +20,37 @@ describe("delivery deadline indicators", () => {
     for (const status of ["receipt_approved", "completed", "cancelled"] as const)
       expect(deliveryTiming(task(status), scheduled + 90 * 60_000)).toBe("on_time");
     expect(deliveryTiming(task("in_transit", null), scheduled + 90 * 60_000)).toBe("on_time");
+  });
+});
+
+describe("delivery source access and receipt evidence", () => {
+  const delivery = {
+    id: 6, sourceId: 12, sourceType: "kitchen", sourceStatus: "dispatched",
+    status: "awaiting_receipt", scheduledAt: null, sourceBranchName: "Kitchen",
+    destinationBranchName: "Branch", items: [], driverName: "Driver",
+    vehicleNumber: "1", proofPresent: true, proofAt: "2026-01-01T10:00:00Z",
+    capabilities: {},
+  } as Delivery;
+  const proof = {
+    signatureData: "data:image/png;base64,abc", receiverName: "Recipient",
+    proofAt: delivery.proofAt, receiptApprovedBy: null, receiptApprovedAt: null,
+  };
+
+  it("does not offer a forbidden source route to a delivery-only driver", () => {
+    expect(canOpenDeliverySource("kitchen", () => false)).toBe(false);
+    expect(canOpenDeliverySource("reverse_movement", module => module === "warehouse")).toBe(true);
+    expect(canOpenDeliverySource("finished_goods_transfer", module => module === "warehouse")).toBe(false);
+    const html = renderToStaticMarkup(createElement(DeliveryDetail, { delivery, canOpenSource: false, proof }));
+    expect(html).not.toContain("/central-kitchen-orders");
+    expect(html).toContain("مستخدم مخوّل");
+    expect(renderToStaticMarkup(createElement(DeliveryDetail, { delivery, canOpenSource: true, proof }))).toContain("/central-kitchen-orders");
+  });
+
+  it("does not display cached proof from before reassignment or a new submission", () => {
+    const newer = { ...delivery, proofPresent: false, proofAt: null };
+    expect(renderToStaticMarkup(createElement(DeliveryDetail, { delivery: newer, proof }))).not.toContain("data:image/png");
+    const replaced = { ...delivery, proofAt: "2026-01-01T11:00:00Z" };
+    expect(renderToStaticMarkup(createElement(DeliveryDetail, { delivery: replaced, proof }))).not.toContain("data:image/png");
+    expect(renderToStaticMarkup(createElement(DeliveryDetail, { delivery, proof }))).toContain("data:image/png");
   });
 });

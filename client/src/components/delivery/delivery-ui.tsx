@@ -1,3 +1,4 @@
+import React from "react";
 import { CheckCircle2, CircleAlert, MapPin, Package, Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,9 @@ export function deliveryMatchesContext(
   return (deliveryId == null || delivery.id === deliveryId)
     && (!sourceType || (delivery.sourceType === sourceType && delivery.sourceId === sourceId));
 }
+export function deliveryDraftChanged(previous: Pick<Delivery, "id" | "driverId" | "proofAt"> | null, current: Pick<Delivery, "id" | "driverId" | "proofAt">): boolean {
+  return !previous || previous.id !== current.id || previous.driverId !== current.driverId || previous.proofAt !== current.proofAt;
+}
 export const deliverySourceLabel = (type: Delivery["sourceType"]) => ({
   kitchen: "طلب المطبخ المركزي",
   material_transfer: "نقل مواد",
@@ -40,6 +44,17 @@ export const deliverySourcePath = (delivery: Delivery) => delivery.sourceType ==
       : delivery.sourceType === "reverse_movement"
         ? `/reverse-logistics?movementId=${delivery.sourceId}`
         : `/kitchen-warehouse-shipping?shipmentId=${delivery.sourceId}&deliveryId=${delivery.id}`;
+// The delivery DTO can be viewed by the assigned driver without access to the source page.
+// Match the actual route guards in App.tsx rather than treating delivery access as source access.
+export function canOpenDeliverySource(type: Delivery["sourceType"], canView: (module: "central_kitchen_orders" | "warehouse" | "production") => boolean): boolean {
+  switch (type) {
+    case "kitchen": return canView("central_kitchen_orders");
+    case "material_transfer": return canView("warehouse");
+    case "finished_goods_transfer": return canView("production");
+    case "reverse_movement":
+    case "kitchen_warehouse_shipment": return canView("warehouse") || canView(type === "reverse_movement" ? "central_kitchen_orders" : "production");
+  }
+}
 export function DeliveryItemLabel({ item }: { item: Delivery["items"][number] }) {
   return <span>{item.name}{!!item.substituteQuantity && <span className="mt-1 block text-xs text-muted-foreground">تفصيل التجهيز: أصلي {item.originalQuantity || 0} {item.unit || ""} · بديل {item.substituteName || "بديل"} {item.substituteQuantity} {item.substituteUnit || item.unit || ""}</span>}</span>;
 }
@@ -71,17 +86,17 @@ export function DeliveryCard({ delivery, onOpen, now = Date.now() }: { delivery:
   </Card>;
 }
 
-export function DeliveryDetail({ delivery, proof, now = Date.now() }: { delivery: Delivery; now?: number; proof?: { signatureData: string | null; receiverName: string | null; proofAt: string | null; receiptApprovedBy: string | null; receiptApprovedAt: string | null } }) {
+export function DeliveryDetail({ delivery, proof, canOpenSource = false, now = Date.now() }: { delivery: Delivery; now?: number; canOpenSource?: boolean; proof?: { signatureData: string | null; receiverName: string | null; proofAt: string | null; receiptApprovedBy: string | null; receiptApprovedAt: string | null } }) {
   const receiptPath = deliverySourcePath(delivery);
   const timing = deliveryTiming(delivery, now);
   return <div className="space-y-4" dir="rtl">
     {timing !== "on_time" && <div role="status" className="rounded-xl border border-rose-300 bg-rose-50 p-4 text-sm font-medium text-rose-900">{timing === "escalated" ? "تصعيد: تجاوزت المهمة موعد التسليم بساعة أو أكثر. تابع مع المسؤول فوراً." : "المهمة متأخرة عن موعد التسليم المحدد. تابع إجراء التسليم الآن."} الموعد: {deliveryDate(delivery.scheduledAt)}</div>}
     <section className="rounded-xl bg-primary/8 p-4"><p className="text-xs font-semibold text-primary">خط السير</p><div className="mt-2 grid gap-3 text-sm md:grid-cols-2"><p><span className="text-muted-foreground">الاستلام من: </span>{delivery.sourceBranchName}</p><p><span className="text-muted-foreground">التسليم إلى: </span>{delivery.destinationBranchName}</p></div></section>
-    {delivery.status === "awaiting_receipt" && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><span className="flex items-center gap-2"><CircleAlert className="h-5 w-5" />{delivery.sourceStatus === "received" || delivery.sourceStatus === "delivered" ? "سُجل الاستلام في المصدر؛ على المستلم المعتمد العودة هنا لاعتماد الإيصال." : "التوقيع قُدم، لكن الاستلام الفعلي يجب تسجيله في المصدر أولاً ثم العودة لهذا التبويب لاعتماد الإيصال."}</span><a href={receiptPath} target="_blank" rel="noopener noreferrer" className="font-bold underline underline-offset-4">فتح استلام المصدر في تبويب جديد</a></div>}
+    {delivery.status === "awaiting_receipt" && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><span className="flex items-center gap-2"><CircleAlert className="h-5 w-5" />{delivery.sourceStatus === "received" || delivery.sourceStatus === "delivered" || delivery.sourceStatus === "inspected" ? "سُجل الاستلام في المصدر؛ على المستلم المعتمد العودة هنا لاعتماد الإيصال." : "التوقيع قُدم، لكن الاستلام الفعلي يجب تسجيله في المصدر أولاً ثم العودة لهذا التبويب لاعتماد الإيصال."}</span>{canOpenSource ? <a href={receiptPath} target="_blank" rel="noopener noreferrer" className="font-bold underline underline-offset-4">فتح استلام المصدر في تبويب جديد</a> : <span>يجب أن يسجل الاستلام مستخدم مخوّل للوصول إلى المصدر.</span>}</div>}
     {(delivery.capabilities.canStart || delivery.capabilities.canSubmitProof) && (delivery.sourceStatus === "received" || delivery.sourceStatus === "delivered" || delivery.sourceStatus === "inspected") && !delivery.proofPresent && <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-950">استكمل الإثبات، الاستلام مسجل ولن يعاد ترحيل المخزون.{delivery.capabilities.canStart ? " ابدأ المهمة لتوثيق الإثبات دون إعادة شحن المصدر." : ""}</div>}
     {delivery.status === "receipt_approved" && <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"><CheckCircle2 className="h-5 w-5" />تم اعتماد إيصال المصدر، يمكن للسائق إنهاء المهمة.</div>}
      <section><div className="mb-2 flex items-center gap-2"><Package className="h-4 w-4 text-primary" /><h3 className="font-bold">بنود الشحنة</h3></div><div className="overflow-hidden rounded-xl border border-border"><table className="w-full text-right text-sm"><thead className="bg-muted/60 text-muted-foreground"><tr><th className="p-3 font-medium">الصنف</th><th className="p-3 font-medium">الكمية</th></tr></thead><tbody>{delivery.items.map(item => <tr key={item.id} className="border-t border-border"><td className="p-3"><DeliveryItemLabel item={item} /></td><td className="p-3 font-semibold">{item.quantity} {item.unit || ""}</td></tr>)}</tbody></table></div></section>
     <section className="grid gap-2 rounded-xl border border-border p-4 text-sm md:grid-cols-2"><p><span className="text-muted-foreground">السائق: </span>{delivery.driverName}</p><p><span className="text-muted-foreground">المركبة: </span>{delivery.vehicleNumber}</p>{delivery.receiverName && <p><span className="text-muted-foreground">اسم المستلم: </span>{delivery.receiverName}</p>}{delivery.failureReason && <p className="text-destructive"><span>سبب التعذر: </span>{delivery.failureReason}</p>}{delivery.cancellationReason && <p className="text-destructive"><span>سبب إلغاء المهمة (الشحنة لم تُلغَ): </span>{delivery.cancellationReason}</p>}</section>
-    {proof?.signatureData && <section className="rounded-xl border border-border bg-muted/20 p-4"><p className="mb-3 font-bold">دليل التوقيع</p><img src={proof.signatureData} alt="توقيع المستلم المسجل" className="max-h-40 max-w-full rounded-lg border border-border bg-[#fbfaf7]" /><p className="mt-2 text-xs text-muted-foreground">سُجل {deliveryDate(proof.proofAt)}{proof.receiptApprovedAt ? ` · اعتُمد ${deliveryDate(proof.receiptApprovedAt)}` : ""}</p></section>}
+    {delivery.proofPresent && proof?.signatureData && proof.proofAt === delivery.proofAt && <section className="rounded-xl border border-border bg-muted/20 p-4"><p className="mb-3 font-bold">دليل التوقيع</p><img src={proof.signatureData} alt="توقيع المستلم المسجل" className="max-h-40 max-w-full rounded-lg border border-border bg-[#fbfaf7]" /><p className="mt-2 text-xs text-muted-foreground">سُجل {deliveryDate(proof.proofAt)}{proof.receiptApprovedAt ? ` · اعتُمد ${deliveryDate(proof.receiptApprovedAt)}` : ""}</p></section>}
   </div>;
 }

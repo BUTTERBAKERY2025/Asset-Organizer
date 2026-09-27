@@ -282,6 +282,9 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     expect(created.statusCode).toBe(201);
     const id = created.body.id;
     expect((await invoke("POST","/api/deliveries/:id/start",fixture.driver!,{}, { id })).statusCode).toBe(409);
+    expect(created.body.capabilities.canFail).toBe(false);
+    expect((await invoke("POST","/api/deliveries/:id/fail",fixture.driver!,
+      { reason: "Not yet dispatched" }, { id })).statusCode).toBe(409);
     const items = [{ id: sourceId, quantity: 3 }];
     expect((await invoke("POST","/api/deliveries/:id/handover",fixture.receiver!,{ items },{ id })).statusCode).toBe(403);
     expect((await invoke("POST","/api/deliveries/:id/handover",fixture.manager!,{ items: [{ id: sourceId, quantity: 4 }] },{ id })).statusCode).toBe(400);
@@ -435,6 +438,74 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     await client.query("UPDATE kitchen_warehouse_shipments SET received_by=$1 WHERE id=$2",
       [fixture.warehouseManager!.id, fixture.warehouseShipment]);
     expect((await invoke("POST", "/api/deliveries/:id/approve-receipt", fixture.warehouseManager!, {}, { id })).body.status).toBe("receipt_approved");
+  });
+
+  it("requires export and source read scope for reports without exposing a driver's other tasks", async () => {
+    expect((await invoke("GET", "/api/deliveries/reports", fixture.driver!)).statusCode).toBe(403);
+    expect((await invoke("GET", "/api/deliveries/capabilities", fixture.driver!)).body.canReport).toBe(false);
+    const viewOnly = await invoke("GET", "/api/deliveries/reports", fixture.manager!);
+    expect(viewOnly.statusCode).toBe(200);
+    expect(viewOnly.body.deliveries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceType: "kitchen", sourceId: fixture.source }),
+    ]));
+    expect((await invoke("GET", "/api/deliveries/capabilities", fixture.manager!)).body)
+      .toMatchObject({ canReport: true, canExport: false });
+    const original = state.permissions.get(fixture.manager!.id)!;
+    try {
+      grant(fixture.manager!, { delivery_tasks: ["view", "edit", "create", "export"],
+        central_kitchen_orders: ["view", "edit"], warehouse: ["view", "edit"], production: ["view", "edit"] });
+      expect((await invoke("GET", "/api/deliveries/capabilities", fixture.manager!)).body)
+        .toMatchObject({ canReport: true, canExport: true });
+      const report = await invoke("GET", "/api/deliveries/reports", fixture.manager!);
+      expect(report.statusCode).toBe(200);
+      expect(report.body.deliveries).toEqual(expect.arrayContaining([
+        expect.objectContaining({ sourceType: "kitchen", sourceId: fixture.source }),
+      ]));
+      expect(report.body.summary.total).toBe(report.body.deliveries.length);
+      grant(fixture.manager!, { delivery_tasks: ["view", "export"], warehouse: ["view"] });
+      const restricted = await invoke("GET", "/api/deliveries/reports", fixture.manager!);
+      expect(restricted.statusCode).toBe(200);
+      expect(restricted.body.deliveries.some((d: any) => d.sourceType === "kitchen")).toBe(false);
+      expect(restricted.body.deliveries.every((d: any) => d.sourceType === "material_transfer"
+        || d.sourceType === "reverse_movement" || d.sourceType === "kitchen_warehouse_shipment")).toBe(true);
+      grant(fixture.manager!, { delivery_tasks: ["view"], central_kitchen_orders: ["edit"] });
+      expect((await invoke("GET", "/api/deliveries/capabilities", fixture.manager!)).body)
+        .toMatchObject({ canReport: false, canExport: false });
+      expect((await invoke("GET", "/api/deliveries/reports", fixture.manager!)).statusCode).toBe(403);
+    } finally {
+      state.permissions.set(fixture.manager!.id, original);
+    }
+  });
+
+  it("denies a revoked driver write and hides old proof after cancellation", async () => {
+    const order = await client.query(`INSERT INTO central_kitchen_orders
+      (order_number,request_branch_id,central_kitchen_id,order_date,status,idempotency_key,payload_fingerprint,created_by)
+      VALUES ($1,$2,$3,current_date,'dispatched',$4,$5,$6) RETURNING id`,
+      [`${fixture.prefix}-cancel-proof`, fixture.destination, fixture.kitchen,
+        `${fixture.prefix}-cancel-proof-key`, "e".repeat(64), fixture.manager!.id]);
+    const created = await invoke("POST", "/api/deliveries", fixture.manager!, {
+      sourceType: "kitchen", sourceId: order.rows[0].id, driverId: fixture.driver!.id, vehicleNumber: "CP-1",
+    });
+    expect(created.statusCode).toBe(201);
+    const id = created.body.id;
+    // Viewer-role restrictions apply even when the identity is still the assigned driver.
+    const restricted = { ...fixture.driver!, role: "viewer" };
+    expect((await invoke("POST", "/api/deliveries/:id/start", restricted, {}, { id })).statusCode).toBe(403);
+    expect((await invoke("GET", "/api/deliveries/:id", restricted, {}, { id })).statusCode).toBe(403);
+    expect((await invoke("POST", "/api/deliveries/:id/start", fixture.driver!, {}, { id })).statusCode).toBe(200);
+    expect((await invoke("POST", "/api/deliveries/:id/proof", fixture.driver!,
+      { signatureData: png, receiverName: "Recipient" }, { id })).statusCode).toBe(200);
+    expect((await invoke("GET", "/api/deliveries/:id/proof", fixture.driver!, {}, { id })).body.signatureData).toBe(png);
+    expect((await invoke("POST", "/api/deliveries/:id/cancel", fixture.manager!,
+      { reason: "Carrier changed" }, { id })).statusCode).toBe(200);
+    expect((await invoke("GET", "/api/deliveries/:id", fixture.driver!, {}, { id })).body.proofPresent).toBe(false);
+    expect((await invoke("GET", "/api/deliveries/:id", fixture.manager!, {}, { id })).body.proofPresent).toBe(true);
+    expect((await invoke("GET", "/api/deliveries/:id/proof", fixture.driver!, {}, { id })).statusCode).toBe(403);
+    expect((await invoke("GET", "/api/deliveries/:id/proof", fixture.manager!, {}, { id })).body.signatureData).toBe(png);
+    expect((await invoke("POST", "/api/deliveries/:id/reassign", fixture.manager!,
+      { driverId: fixture.otherDriver!.id, vehicleNumber: "CP-2" }, { id })).statusCode).toBe(200);
+    expect((await invoke("GET", "/api/deliveries/:id/proof", fixture.driver!, {}, { id })).statusCode).toBe(403);
+    expect((await invoke("GET", "/api/deliveries/:id/proof", fixture.otherDriver!, {}, { id })).body.signatureData).toBeNull();
   });
 
   it("cancels only metadata with reason, enqueues once and can reassign same unreceived source safely", async () => {

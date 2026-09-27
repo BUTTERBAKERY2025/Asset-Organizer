@@ -243,7 +243,7 @@ async function assignment(client: PoolClient, id: number, lock = false): Promise
 async function dto(req: Request, res: Response, client: PoolClient, row: Assignment, src?: SourceRow): Promise<DeliveryDTO> {
   const s = src || await source(client, row.source_type, row.source_id);
   if (!s) throw new DeliveryError("Linked source no longer exists", 409);
-  const driver = isDriver(req, row);
+  const driver = isDriver(req, row) && await permitted(req, res, "delivery_tasks", "view");
   const manager = !driver && managerScope(req, s, "view") && await permitted(req, res, sourceModule(s.sourceType), "view")
     && await permitted(req, res, "delivery_tasks", "view");
   // Receipt rights are destination-specific and must grant a write action.
@@ -251,6 +251,7 @@ async function dto(req: Request, res: Response, client: PoolClient, row: Assignm
   const receiver = !driver && destination && await permitted(req, res, s.destinationWarehouseId != null ? "warehouse" : sourceModule(s.sourceType), "edit")
     && await permitted(req, res, "delivery_tasks", "approve");
   if (!driver && !manager && !receiver) throw new DeliveryError("Delivery is outside your scope", 403);
+  const driverWrite = driver && await permitted(req, res, "delivery_tasks", "edit");
   const managerWrite = manager && await permitted(req, res, "delivery_tasks", "edit")
     && await permitted(req, res, sourceModule(s.sourceType), "edit");
   const eligibleReceipt = receiptMatchesSource(s.sourceType, s.sourceStatus, s.receivedBy, requireUser(req).id);
@@ -258,7 +259,8 @@ async function dto(req: Request, res: Response, client: PoolClient, row: Assignm
   return {
     ...s, id: Number(row.id), driverId: row.driver_id, driverName: row.driver_name?.trim() || row.driver_id,
     vehicleNumber: row.vehicle_number, scheduledAt: iso(row.scheduled_at), status: row.status,
-    receiverName: row.receiver_name, notes: row.notes, proofPresent: !!row.signature_data,
+     receiverName: row.receiver_name, notes: row.notes,
+     proofPresent: !(driver && row.status === "cancelled") && !!row.signature_data,
     proofAt: iso(row.proof_at), receiptApprovedBy: row.receipt_approved_by, receiptApprovedAt: iso(row.receipt_approved_at),
     startedAt: iso(row.started_at), completedAt: iso(row.completed_at), failedAt: iso(row.failed_at),
     failureReason: row.failure_reason, cancellationReason: row.cancellation_reason, createdAt: new Date(row.created_at).toISOString(),
@@ -268,17 +270,20 @@ async function dto(req: Request, res: Response, client: PoolClient, row: Assignm
     handoverInvalidated: row.handover_revision > 0 && !row.handover_recorded_at,
     capabilities: {
       canRecordHandover: managerWrite && row.status === "assigned" && sourceHandoverReady(s) && !eligibleSourceReceipt(s),
-      canAcknowledgeHandover: driver && row.status === "assigned" && !!row.handover_recorded_at
-        && !row.handover_acknowledged_at && row.handover_driver_id === row.driver_id,
-      canStart: driver && (acknowledged(row) || ((sourceDispatched(s) || eligibleSourceReceipt(s))
+      canAcknowledgeHandover: driverWrite && row.status === "assigned" && !!row.handover_recorded_at
+        && !row.handover_acknowledged_at && row.handover_driver_id === row.driver_id
+        && row.handover_vehicle_number === row.vehicle_number
+        && row.handover_fingerprint === deliverySourceFingerprint(s.items),
+      canStart: driverWrite && (acknowledged(row) || ((sourceDispatched(s) || eligibleSourceReceipt(s))
         && !row.handover_recorded_at && row.handover_revision === 0))
         && (sourceDispatched(s) || eligibleSourceReceipt(s)) && deliveryTransitionAllowed(row.status, "start"),
-       canSubmitProof: driver && (sourceDispatched(s) || eligibleSourceReceipt(s)) && deliveryTransitionAllowed(row.status, "proof"),
-      canApproveReceipt: receiver && eligibleReceipt && !!row.signature_data && deliveryTransitionAllowed(row.status, "approve-receipt"),
-      canComplete: driver && !!row.signature_data && !!row.receipt_approved_by
+       canSubmitProof: driverWrite && (sourceDispatched(s) || eligibleSourceReceipt(s)) && deliveryTransitionAllowed(row.status, "proof"),
+       canApproveReceipt: receiver && eligibleReceipt && !!row.signature_data && !!row.proof_at
+         && deliveryTransitionAllowed(row.status, "approve-receipt"),
+       canComplete: driverWrite && !!row.signature_data && !!row.proof_at && !!row.receipt_approved_by
         && receiptMatchesSource(s.sourceType, s.sourceStatus, s.receivedBy, row.receipt_approved_by)
         && deliveryTransitionAllowed(row.status, "complete"),
-      canFail: (driver || managerWrite) && sourceDispatched(s) && deliveryTransitionAllowed(row.status, "fail"),
+       canFail: (driverWrite || managerWrite) && sourceDispatched(s) && deliveryTransitionAllowed(row.status, "fail"),
        canReassign: managerWrite && sourceAssignable(s) && !eligibleSourceReceipt(s) && deliveryTransitionAllowed(row.status, "reassign"),
       canCancel: managerWrite && !eligibleSourceReceipt(s) && deliveryTransitionAllowed(row.status, "cancel"),
     },
@@ -359,15 +364,26 @@ export function registerDeliveryRoutes(app: Express) {
       const branchScope = getAllowedBranchIds(req);
       const hasBranch = branchScope === null || branchScope.length > 0;
       const canAssign = hasBranch && create && (await permitted(req, res, "warehouse", "edit")
-        || await permitted(req, res, "central_kitchen_orders", "edit"));
-      const canExport = hasBranch && await permitted(req, res, "delivery_tasks", "export")
-        && (await permitted(req, res, "warehouse", "view") || await permitted(req, res, "central_kitchen_orders", "view"));
-      res.json({ canAssign, canExport });
+        || await permitted(req, res, "central_kitchen_orders", "edit")
+        || await permitted(req, res, "production", "edit"));
+      const canReport = hasBranch && req.currentUser?.jobTitle !== "delivery"
+        && await permitted(req, res, "delivery_tasks", "view")
+        && (await permitted(req, res, "warehouse", "view") || await permitted(req, res, "central_kitchen_orders", "view")
+          || await permitted(req, res, "production", "view"));
+      const canExport = canReport && await permitted(req, res, "delivery_tasks", "export");
+      res.json({ canAssign, canReport, canExport });
     } catch (e) { error(res, e); }
   });
 
   async function list(req: Request, res: Response, reports = false) {
     try {
+      if (reports && (req.currentUser?.jobTitle === "delivery"
+        || getAllowedBranchIds(req)?.length === 0
+        || !(await permitted(req, res, "delivery_tasks", "view"))
+        || !(await permitted(req, res, "warehouse", "view")
+          || await permitted(req, res, "central_kitchen_orders", "view")
+          || await permitted(req, res, "production", "view"))))
+        throw new DeliveryError("Permission denied", 403);
       const from = req.query.from ? z.string().date().parse(req.query.from) : null;
       const to = req.query.to ? z.string().date().parse(req.query.to) : null;
       const sourceBranchId = req.query.sourceBranchId ? z.string().min(1).max(100).parse(req.query.sourceBranchId) : null;
@@ -385,7 +401,9 @@ export function registerDeliveryRoutes(app: Express) {
           if (!s) continue;
           if (sourceBranchId && s.sourceBranchId !== sourceBranchId) continue;
           if (destinationBranchId && s.destinationBranchId !== destinationBranchId) continue;
-          if (!isDriver(req, row) && !(managerScope(req, s, "view") || await receiverScope(req, s))) continue;
+           if (reports ? !managerScope(req, s, "view")
+               || !(await permitted(req, res, sourceModule(s.sourceType), "view"))
+             : !isDriver(req, row) && !(managerScope(req, s, "view") || await receiverScope(req, s))) continue;
           try { result.push(await dto(req, res, client, row, s)); }
           catch (e) { if (!(e instanceof DeliveryError) || e.status !== 403) throw e; }
         }
@@ -398,15 +416,20 @@ export function registerDeliveryRoutes(app: Express) {
       res.json({ deliveries, summary });
     } catch (e) { error(res, e); }
   }
-  app.get("/api/deliveries/reports", isAuthenticated, (req, res) => void list(req, res, true));
-  app.get("/api/deliveries", isAuthenticated, (req, res) => void list(req, res));
+   app.get("/api/deliveries/reports", isAuthenticated, (req, res) => list(req, res, true));
+   app.get("/api/deliveries", isAuthenticated, (req, res) => list(req, res));
   app.get("/api/deliveries/:id/proof", isAuthenticated, async (req, res) => {
     try {
       const id = idSchema.parse(req.params.id);
-      const result = await withClient(async client => {
+       const result = await withClient(async client => {
         const row = await assignment(client, id);
         if (!row) throw new DeliveryError("Delivery not found", 404);
         await dto(req, res, client, row);
+         // Historical proof is retained for audit, not for a driver whose task
+         // was cancelled or reassigned. Source managers/receivers keep their
+         // scoped audit access.
+         if (row.status === "cancelled" && isDriver(req, row))
+           throw new DeliveryError("Proof is no longer available to the driver", 403);
         return {
           signatureData: row.signature_data, receiverName: row.receiver_name,
           proofAt: row.proof_at ? new Date(row.proof_at).toISOString() : null,
@@ -484,11 +507,15 @@ export function registerDeliveryRoutes(app: Express) {
             if (!row) throw new DeliveryError("Delivery not found", 404);
             const s = await source(client, row.source_type, row.source_id);
             if (!s) throw new DeliveryError("Linked source not found", 409);
-            const driver = isDriver(req, row);
+             const driver = isDriver(req, row)
+               && await permitted(req, res, "delivery_tasks", "view")
+               && await permitted(req, res, "delivery_tasks", "edit");
             const sourceManager = managerScope(req, s, "edit");
               const manager = (action === "handover" || action === "fail" || action === "reassign" || action === "cancel") && sourceManager
               && await permitted(req, res, "delivery_tasks", "edit")
-              && await permitted(req, res, sourceModule(s.sourceType), "edit");
+               && await permitted(req, res, sourceModule(s.sourceType), "edit")
+               && await permitted(req, res, "delivery_tasks", "view")
+               && await permitted(req, res, sourceModule(s.sourceType), "view");
              const receiver = action === "approve-receipt" && await receiverScope(req, s)
               && await permitted(req, res, "delivery_tasks", "approve")
                && await permitted(req, res, s.destinationWarehouseId != null ? "warehouse" : sourceModule(s.sourceType), "edit");
@@ -530,7 +557,9 @@ export function registerDeliveryRoutes(app: Express) {
              if (!deliveryTransitionAllowed(row.status, action)) throw new DeliveryError("Invalid delivery state transition", 409);
              if (["fail", "reassign", "cancel"].includes(action) && eligibleSourceReceipt(s))
                throw new DeliveryError("Source receipt already recorded; delivery cannot be reset or cancelled", 409);
-              if (["fail", "reassign"].includes(action) && !sourceAssignable(s))
+             if (action === "fail" && !sourceDispatched(s))
+               throw new DeliveryError("Source is no longer dispatched; cannot fail delivery", 409);
+             if (action === "reassign" && !sourceAssignable(s))
                throw new DeliveryError("Source is no longer dispatched; cannot restart delivery", 409);
               if (action === "start" && !(sourceDispatched(s) || eligibleSourceReceipt(s)))
                throw new DeliveryError("Source is no longer awaiting receipt", 409);
