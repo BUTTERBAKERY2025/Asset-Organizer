@@ -80,7 +80,7 @@ export function registerMediaTeamRoutes(app: Express) {
       const multer = (await import("multer")).default;
       const path = await import("path");
       const { uploadToSupabase, isSupabaseAvailable } = await import("./supabase-storage");
-      if (!isSupabaseAvailable()) return res.status(503).json({ error: "خدمة التخزين (Supabase) غير متاحة. تحقق من SUPABASE_URL و SUPABASE_ANON_KEY." });
+      if (!isSupabaseAvailable()) return res.status(503).json({ error: "خدمة حفظ المرفقات غير مهيأة. يرجى مراجعة المسؤول لإكمال إعداد التخزين الخاص على الخادم." });
 
       const upload = multer({
         storage: multer.memoryStorage(),

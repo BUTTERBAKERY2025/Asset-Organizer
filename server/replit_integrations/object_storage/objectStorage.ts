@@ -3,6 +3,7 @@ import { Response } from "express";
 import { randomUUID } from "crypto";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
+import { PrivateAttachmentUnavailableError, PrivateSupabaseStorage, isRenderPlatform, parsePrivateSupabasePath, privateAttachmentProvider } from "../../private-supabase-storage";
 import {
   ObjectAclPolicy,
   ObjectPermission,
@@ -43,6 +44,18 @@ export class ObjectNotFoundError extends Error {
 // The object storage service is used to interact with the object storage service.
 export class ObjectStorageService {
   constructor() {}
+  private readonly privateSupabase = new PrivateSupabaseStorage();
+
+  private privateProvider(path: string): "replit" | "supabase" {
+    privateAttachmentProvider(); // Validate explicit configuration even for legacy paths.
+    const supabasePath = parsePrivateSupabasePath(path);
+    if (supabasePath) return "supabase";
+    // Existing unmarked paths were written to Replit. Never reinterpret them
+    // as Supabase keys, even when a deployment switches providers.
+    if (isRenderPlatform())
+      throw new PrivateAttachmentUnavailableError("Legacy Replit attachment requires Replit storage");
+    return "replit";
+  }
 
   // Gets the public object search paths.
   getPublicObjectSearchPaths(): Array<string> {
@@ -160,7 +173,7 @@ export class ObjectStorageService {
   async getObjectEntityFile(objectPath: string): Promise<File> {
     // Server-owned maintenance evidence must never be served through generic
     // object or governance endpoints, even to another authenticated user.
-    if (["/objects/maintenance-tickets/", "/objects/delivery-carriers/"]
+    if (["/objects/maintenance-tickets/", "/objects/delivery-carriers/", "/objects/branch-complaints/"]
       .some(prefix => decodeURIComponent(objectPath).startsWith(prefix))) {
       throw new ObjectNotFoundError();
     }
@@ -193,6 +206,10 @@ export class ObjectStorageService {
 
   async isPrivateObjectStorageReady(): Promise<boolean> {
     try {
+      if (isRenderPlatform() && privateAttachmentProvider() === "replit") return false;
+      if (privateAttachmentProvider() === "supabase") return this.privateSupabase.isReady();
+    } catch { return false; }
+    try {
       // Replit's object-scoped credentials may correctly allow object reads and
       // writes while denying bucket metadata (bucket.exists returns 403). Probe
       // a reserved, non-user object with a read-only object metadata request.
@@ -206,6 +223,8 @@ export class ObjectStorageService {
   }
 
   async uploadPrivateObject(objectPath: string, data: Buffer, contentType: string): Promise<void> {
+    if (this.privateProvider(objectPath) === "supabase")
+      return this.privateSupabase.uploadPrivateObject(objectPath, data, contentType);
     const file = this.getPrivateObjectFile(objectPath);
     await pipeline(
       Readable.from([data]),
@@ -220,6 +239,8 @@ export class ObjectStorageService {
   }
 
   async downloadPrivateObject(objectPath: string): Promise<{ data: Buffer; contentType?: string; size?: number }> {
+    if (this.privateProvider(objectPath) === "supabase")
+      return this.privateSupabase.downloadPrivateObject(objectPath);
     const file = this.getPrivateObjectFile(objectPath);
     const [metadata] = await file.getMetadata();
     const chunks: Buffer[] = [];
@@ -235,6 +256,8 @@ export class ObjectStorageService {
   }
 
   async deletePrivateObject(objectPath: string): Promise<void> {
+    if (this.privateProvider(objectPath) === "supabase")
+      return this.privateSupabase.deletePrivateObject(objectPath);
     const file = this.getPrivateObjectFile(objectPath);
     await file.delete({ ignoreNotFound: true });
   }

@@ -11620,7 +11620,7 @@ export async function registerRoutes(
       }
       const { uploadToSupabase, isSupabaseAvailable } = await import("./supabase-storage");
       if (!isSupabaseAvailable()) {
-        return res.status(503).json({ error: "خدمة Supabase Storage غير متاحة - تحقق من المتغيرات SUPABASE_URL و SUPABASE_ANON_KEY" });
+        return res.status(503).json({ error: "خدمة حفظ المرفقات غير مهيأة. يرجى مراجعة المسؤول لإكمال إعداد التخزين الخاص على الخادم." });
       }
 
       const { sql } = await import("drizzle-orm");

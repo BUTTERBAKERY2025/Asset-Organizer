@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { ObjectStorageService } from "./replit_integrations/object_storage/objectStorage";
+import { newPrivateAttachmentPath } from "./private-supabase-storage";
 
 const COMPLAINT_OBJECT_PREFIX = "/objects/branch-complaints/";
 
@@ -27,7 +28,7 @@ export class ComplaintAttachmentStorage {
     if (!/^[a-z0-9]+$/i.test(extension)) {
       throw new Error("Invalid complaint attachment extension");
     }
-    const storagePath = `${COMPLAINT_OBJECT_PREFIX}${randomUUID()}.${extension.toLowerCase()}`;
+    const storagePath = newPrivateAttachmentPath("branch-complaints", `${randomUUID()}.${extension.toLowerCase()}`);
     await this.objects.uploadPrivateObject(storagePath, data, contentType);
     return { storagePath };
   }
@@ -49,6 +50,4 @@ export class ComplaintAttachmentStorage {
   }
 }
 
-// Complaints intentionally use Replit private Object Storage only. There is no
-// Supabase/public fallback: an unavailable private provider is a hard failure.
 export const complaintAttachmentStorage = new ComplaintAttachmentStorage();

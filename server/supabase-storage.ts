@@ -4,13 +4,17 @@ const rawSupabaseUrl = process.env.SUPABASE_URL;
 const supabaseUrl = rawSupabaseUrl
   ? rawSupabaseUrl.replace(/\/rest\/v1\/?$/i, '').replace(/\/$/, '')
   : undefined;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
+// Never use the anon key for server-side attachment operations. A private
+// bucket alone does not prevent broad storage.objects policies from granting
+// anon access; production must also remove those policies (see staged SQL).
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 
 function isValidUrl(url: string | undefined): boolean {
   if (!url) return false;
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    return parsed.protocol === 'https:' && !parsed.username && !parsed.password
+      && !parsed.search && !parsed.hash;
   } catch {
     return false;
   }
@@ -19,15 +23,17 @@ function isValidUrl(url: string | undefined): boolean {
 const hasValidCredentials = isValidUrl(supabaseUrl) && !!supabaseKey;
 
 if (!hasValidCredentials) {
-  console.warn('Supabase credentials not found or invalid. File upload/download will be unavailable until SUPABASE_URL and SUPABASE_ANON_KEY are configured.');
+  console.warn('Supabase attachment storage unavailable: configure SUPABASE_URL and server-only SUPABASE_SERVICE_ROLE_KEY. Anon credentials are not accepted.');
 }
 
 let supabase: SupabaseClient | null = null;
 if (hasValidCredentials) {
   try {
-    supabase = createClient(supabaseUrl!, supabaseKey!);
-  } catch (error) {
-    console.error('Failed to create Supabase client:', error);
+    supabase = createClient(supabaseUrl!, supabaseKey!, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  } catch {
+    console.error('Failed to create Supabase attachment client (invalid configuration).');
     supabase = null;
   }
 }
@@ -37,47 +43,8 @@ export { supabase };
 export const DOCUMENTS_BUCKET = 'documents';
 
 export async function ensureBucketExists(): Promise<boolean> {
-  if (!supabase) return false;
-  
-  try {
-    const { data: buckets } = await supabase.storage.listBuckets();
-    const bucketExists = buckets?.some(b => b.name === DOCUMENTS_BUCKET);
-    
-    if (!bucketExists) {
-      const { error } = await supabase.storage.createBucket(DOCUMENTS_BUCKET, {
-        public: false,
-        fileSizeLimit: 52428800, // 50MB
-        allowedMimeTypes: [
-          'application/pdf',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'application/vnd.ms-excel',
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          'application/vnd.ms-powerpoint',
-          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-          'image/jpeg',
-          'image/png',
-          'image/gif',
-          'image/webp',
-          'text/plain',
-          'text/csv',
-          'application/zip',
-          'application/x-rar-compressed',
-        ],
-      });
-      
-      if (error) {
-        console.error('Error creating bucket:', error);
-        return false;
-      }
-      console.log('Documents bucket created successfully');
-    }
-    
-    return true;
-  } catch (error) {
-    console.error('Error ensuring bucket exists:', error);
-    return false;
-  }
+  // Provisioning is an explicit deployment step, not a side effect of startup.
+  return isDocumentsBucketPrivate();
 }
 
 export async function uploadToSupabase(
@@ -86,7 +53,11 @@ export async function uploadToSupabase(
   mimeType: string
 ): Promise<{ path: string; storedPath: string } | null> {
   if (!supabase) {
-    console.error('Supabase client not initialized - check SUPABASE_URL and SUPABASE_ANON_KEY');
+    console.error('Supabase upload unavailable: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.');
+    return null;
+  }
+  if (!await isDocumentsBucketPrivate()) {
+    console.error('Supabase upload refused: documents bucket is missing, public, or its privacy cannot be verified.');
     return null;
   }
   
@@ -98,8 +69,6 @@ export async function uploadToSupabase(
     const baseName = filename.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9\u0600-\u06FF._-]/g, '_').substring(0, 100);
     const uniqueFilename = `${baseName}_${timestamp}_${randomSuffix}.${ext}`;
     
-    console.log('Uploading to Supabase:', { originalFilename: filename, uniqueFilename, mimeType, bufferSize: buffer.length });
-    
     const { data, error } = await supabase.storage
       .from(DOCUMENTS_BUCKET)
       .upload(uniqueFilename, buffer, {
@@ -108,18 +77,16 @@ export async function uploadToSupabase(
       });
     
     if (error) {
-      console.error('Supabase upload error:', error.message, error);
+      console.error('Supabase upload failed: storage rejected the write (check service role, bucket configuration, and allowed file type).');
       return null;
     }
-    
-    console.log('Supabase upload success:', data.path);
     
     return {
       path: uniqueFilename,
       storedPath: data.path,
     };
-  } catch (error) {
-    console.error('Error uploading to Supabase:', error);
+  } catch {
+    console.error('Supabase upload failed: storage request could not complete.');
     return null;
   }
 }
@@ -127,21 +94,18 @@ export async function uploadToSupabase(
 export async function downloadFromSupabase(
   filename: string
 ): Promise<{ data: Blob; mimeType: string } | null> {
-  if (!supabase) return null;
+  if (!supabase || !await isDocumentsBucketPrivate()) return null;
   
   try {
-    console.log('Downloading from Supabase:', filename);
-    
     const { data, error } = await supabase.storage
       .from(DOCUMENTS_BUCKET)
       .download(filename);
     
     if (error) {
       if (error.message?.includes('not found') || error.message?.includes('Object not found')) {
-        console.log('File not found in Supabase:', filename);
         return null;
       }
-      console.error('Supabase download error:', error);
+      console.error('Supabase download failed.');
       return null;
     }
     
@@ -149,30 +113,28 @@ export async function downloadFromSupabase(
       data,
       mimeType: data.type,
     };
-  } catch (error) {
-    console.error('Error downloading from Supabase:', error);
+  } catch {
+    console.error('Supabase download request failed.');
     return null;
   }
 }
 
 export async function deleteFromSupabase(filename: string): Promise<boolean> {
-  if (!supabase) return false;
+  if (!supabase || !await isDocumentsBucketPrivate()) return false;
   
   try {
-    console.log('Deleting from Supabase:', filename);
-    
     const { error } = await supabase.storage
       .from(DOCUMENTS_BUCKET)
       .remove([filename]);
     
     if (error) {
-      console.error('Supabase delete error:', error);
+      console.error('Supabase delete failed.');
       return false;
     }
     
     return true;
-  } catch (error) {
-    console.error('Error deleting from Supabase:', error);
+  } catch {
+    console.error('Supabase delete request failed.');
     return false;
   }
 }
@@ -190,7 +152,7 @@ export async function findLegacyMatch(
   sanitizedBase: string,
   ext: string,
 ): Promise<string | null> {
-  if (!supabase || !sanitizedBase || !ext) return null;
+  if (!supabase || !sanitizedBase || !ext || !await isDocumentsBucketPrivate()) return null;
   try {
     const { data, error } = await supabase.storage
       .from(DOCUMENTS_BUCKET)
@@ -200,7 +162,7 @@ export async function findLegacyMatch(
         sortBy: { column: 'created_at', order: 'desc' },
       });
     if (error) {
-      console.warn('findLegacyMatch list error:', error.message);
+      console.warn('Supabase legacy attachment lookup failed.');
       return null;
     }
     if (!data || data.length === 0) return null;
@@ -212,8 +174,8 @@ export async function findLegacyMatch(
     const re = new RegExp(`^${escapedBase}_\\d{13}_[a-f0-9]{8}\\.${escapedExt}$`, 'i');
     const match = data.find((f) => typeof f.name === 'string' && re.test(f.name));
     return match?.name ?? null;
-  } catch (err) {
-    console.warn('findLegacyMatch exception:', err);
+  } catch {
+    console.warn('Supabase legacy attachment lookup request failed.');
     return null;
   }
 }
@@ -228,10 +190,18 @@ export async function isDocumentsBucketPrivate(): Promise<boolean> {
   if (!supabase) return false;
   try {
     const { data, error } = await supabase.storage.listBuckets();
-    if (error) return false;
-    const bucket = data?.find((candidate) => candidate.name === DOCUMENTS_BUCKET);
-    return !!bucket && bucket.public === false;
+    if (error) {
+      console.error('Supabase documents bucket privacy check failed: bucket metadata unavailable.');
+      return false;
+    }
+    const bucket = data?.find((candidate) => candidate.id === DOCUMENTS_BUCKET && candidate.name === DOCUMENTS_BUCKET);
+    if (!bucket || bucket.public !== false) {
+      console.error('Supabase documents bucket privacy check failed: expected an existing private documents bucket.');
+      return false;
+    }
+    return true;
   } catch {
+    console.error('Supabase documents bucket privacy check failed: bucket metadata request failed.');
     return false;
   }
 }

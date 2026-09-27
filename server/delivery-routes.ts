@@ -11,6 +11,7 @@ import { isAuthenticated, requirePermission, getAllowedBranchIds, canAccessBranc
 import { deliveryTransitionAllowed, receiptMatchesSource, type DeliveryDTO, type DeliverySource, type DeliverySourceType, type DeliveryStatus } from "@shared/delivery";
 import { canAccessDeliveryWorkspace } from "@shared/delivery-workspace-access";
 import { ObjectStorageService } from "./replit_integrations/object_storage/objectStorage";
+import { newPrivateAttachmentPath, PrivateAttachmentUnavailableError } from "./private-supabase-storage";
 const objects = new ObjectStorageService();
 const uploadEvidence = multer({ storage: multer.memoryStorage(), limits: { files: 1, fileSize: 10 * 1024 * 1024 } }).single("file");
 
@@ -504,6 +505,8 @@ function eligibleSourceReceipt(s: SourceRow) {
 }
 function error(res: Response, e: unknown) {
   if (res.headersSent) return;
+  if (e instanceof PrivateAttachmentUnavailableError)
+    return res.status(503).json({ error: "مخزن المرفقات الخاص غير متاح حالياً" });
   if (e instanceof DeliveryError) return res.status(e.status).json({ error: e.message });
   if (e instanceof z.ZodError) return res.status(400).json({ error: "Invalid delivery payload", details: e.flatten() });
   if ((e as any)?.code === "23505") return res.status(409).json({ error: "This source already has an active assignment" });
@@ -810,8 +813,13 @@ export function registerDeliveryRoutes(app: Express) {
               || !managerScope(req,s,"edit") || !(await permitted(req,res,"delivery_tasks","edit"))
               || !(await permitted(req,res,sourceModule(s.sourceType),"edit")))
               throw new DeliveryError("Carrier evidence upload is outside your source scope or state", 403);
-            path = `/objects/delivery-carriers/${id}/${randomUUID()}.${detected.extension}`;
-            await objects.uploadPrivateObject(path,data,detected.mimeType);
+            if (!(await objects.isPrivateObjectStorageReady()))
+              throw new PrivateAttachmentUnavailableError();
+            path = newPrivateAttachmentPath("delivery-carriers", `${id}/${randomUUID()}.${detected.extension}`);
+            try { await objects.uploadPrivateObject(path,data,detected.mimeType); }
+            catch (storageError) {
+              throw new PrivateAttachmentUnavailableError("Private attachment upload failed", { cause: storageError });
+            }
             const { rows } = await client.query(`INSERT INTO delivery_carrier_attachments
               (assignment_id,kind,storage_path,original_name,mime_type,uploaded_by)
               VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`, [id,kind,path,file.originalname.slice(0,200),detected.mimeType,requireUser(req).id]);
@@ -819,8 +827,11 @@ export function registerDeliveryRoutes(app: Express) {
             return { id:Number(rows[0].id),kind,mimeType:detected.mimeType,originalName:file.originalname.slice(0,200),
               downloadUrl:`/api/deliveries/${id}/attachments/${rows[0].id}` };
           } catch (e) {
-            await client.query("ROLLBACK");
-            if (path) await objects.deletePrivateObject(path);
+            try { await client.query("ROLLBACK"); } catch { /* Preserve original error. */ }
+            if (path) {
+              try { await objects.deletePrivateObject(path); }
+              catch { console.error("Delivery attachment cleanup failed"); }
+            }
             throw e;
           }
         });
@@ -841,7 +852,11 @@ export function registerDeliveryRoutes(app: Express) {
         return rows[0];
       });
       if (res.headersSent) return;
-      const downloaded = await objects.downloadPrivateObject(file.storage_path);
+       let downloaded;
+       try { downloaded = await objects.downloadPrivateObject(file.storage_path); }
+       catch (storageError) {
+         throw new PrivateAttachmentUnavailableError("Private attachment download failed", { cause: storageError });
+       }
       res.setHeader("Content-Type",file.mime_type);
       res.setHeader("Content-Disposition",`attachment; filename*=UTF-8''${encodeURIComponent(file.original_name)}`);
       res.setHeader("Cache-Control","private, no-store");

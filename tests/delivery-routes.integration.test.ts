@@ -6,6 +6,12 @@ import pg from "pg";
 const state = vi.hoisted(() => ({
   client: null as any,
   permissions: new Map<string, any[]>(),
+  failAttachmentInsert: false,
+}));
+vi.mock("multer", () => ({
+  default: Object.assign(() => ({
+    single: () => (req: any, _res: any, callback: (error?: Error) => Promise<void>) => { void callback(); },
+  }), { memoryStorage: () => ({}) }),
 }));
 vi.mock("../server/db", () => ({
   db: {},
@@ -15,6 +21,8 @@ vi.mock("../server/db", () => ({
         if (sql === "BEGIN") return state.client.query("SAVEPOINT delivery_route_action");
         if (sql === "COMMIT") return state.client.query("RELEASE SAVEPOINT delivery_route_action");
         if (sql === "ROLLBACK") return state.client.query("ROLLBACK TO SAVEPOINT delivery_route_action");
+        if (state.failAttachmentInsert && /INSERT INTO delivery_carrier_attachments/.test(sql))
+          throw Error("metadata insert failed");
         return state.client.query(sql, values);
       },
       release: () => {},
@@ -36,6 +44,7 @@ vi.mock("../server/shareholder-security", () => ({
 }));
 
 import { csvCell, reportDateBounds, registerDeliveryRoutes } from "../server/delivery-routes";
+import { ObjectStorageService } from "../server/replit_integrations/object_storage/objectStorage";
 
 const handlers = new Map<string, any[]>();
 const app: any = {
@@ -71,23 +80,26 @@ const actor = (name: string, branchId: string, jobTitle = "employee"): Actor => 
 const grant = (user: Actor, modules: Record<string, string[]>) => {
   state.permissions.set(user.id, Object.entries(modules).map(([module, actions]) => ({ module, actions })));
 };
-async function invoke(method: string, path: string, user: Actor, body: any = {}, params: any = {}, query: any = {}) {
+async function invoke(method: string, path: string, user: Actor, body: any = {}, params: any = {}, query: any = {}, file?: any) {
   const route = handlers.get(`${method} ${path}`);
   if (!route) throw Error(`Missing route ${method} ${path}`);
-  const req: any = { currentUser: user, method, body, params, query, userBranchAccess: [],
+  const req: any = { currentUser: user, method, body, params, query, file, userBranchAccess: [],
     headers: {}, originalUrl: path, ip: "127.0.0.1" };
   if (user.role === "warehouse_keeper") req.authPermissions = state.permissions.get(user.id) || [];
   const res: any = {
     statusCode: 200, headersSent: false, body: null, csv: "",
     status(code: number) { this.statusCode = code; return this; },
-    json(data: any) { this.body = data; this.headersSent = true; return this; },
+    json(data: any) { this.body = data; this.headersSent = true; this.done?.(); return this; },
     setHeader() {},
+    send(data: any) { this.body = data; this.headersSent = true; this.done?.(); return this; },
     write(chunk: string) { this.headersSent = true; this.csv += chunk; return true; },
     end() { this.headersSent = true; },
   };
   // The first middleware is the real isAuthenticated; its session lookup is
   // deliberately excluded. All in-handler permission checks use real auth.ts.
+  const completed = new Promise<void>(resolve => { res.done = resolve; });
   await route[route.length - 1](req, res);
+  if (path.includes("/attachments") && method === "POST") await completed;
   return res;
 }
 const png = (() => {
@@ -183,6 +195,67 @@ describe("delivery routes against local PostgreSQL contracts", () => {
     if (client) { await client.query("ROLLBACK"); client.release(); }
     if (pool) await pool.end();
     state.client = null;
+  });
+
+  it("fails storage safely, preserves insert errors on cleanup, and serves authorized private bytes", async () => {
+    const id = Number((await client.query(`INSERT INTO delivery_assignments
+      (source_type,source_id,transport_mode,status,created_by,carrier,waybill,package_count)
+      VALUES ('kitchen',$1,'external','assigned',$2,'road','test-waybill',1) RETURNING id`,
+      [fixture.source, fixture.manager!.id])).rows[0].id);
+    const bytes = Buffer.from([255, 216, 255, 1, 255, 217]);
+    const stored = new Map<string, Buffer>();
+    const ready = vi.spyOn(ObjectStorageService.prototype, "isPrivateObjectStorageReady").mockResolvedValue(true);
+    const upload = vi.spyOn(ObjectStorageService.prototype, "uploadPrivateObject").mockImplementation(async (path, data) => {
+      stored.set(path, Buffer.from(data));
+    });
+    const remove = vi.spyOn(ObjectStorageService.prototype, "deletePrivateObject").mockImplementation(async path => {
+      stored.delete(path);
+    });
+    const download = vi.spyOn(ObjectStorageService.prototype, "downloadPrivateObject").mockImplementation(async path => {
+      const data = stored.get(path);
+      if (!data) throw Error("missing");
+      return { data, contentType: "image/jpeg", size: data.length };
+    });
+    const post = () => invoke("POST", "/api/deliveries/:id/attachments", fixture.manager!,
+      { kind: "shipment_photo" }, { id }, {}, { buffer: bytes, mimetype: "image/jpeg", originalname: "evidence.jpg" });
+    try {
+      upload.mockRejectedValueOnce(Error("provider offline"));
+      const failed = await post();
+      expect(failed.statusCode).toBe(503);
+      expect(failed.body).toEqual({ error: "مخزن المرفقات الخاص غير متاح حالياً" });
+      expect((await client.query("SELECT id FROM delivery_carrier_attachments WHERE assignment_id=$1", [id])).rowCount).toBe(0);
+
+      state.failAttachmentInsert = true;
+      const insertion = await post();
+      expect(insertion.statusCode).toBe(500);
+      expect(insertion.body.error).toBe("Delivery operation failed");
+      expect(remove).toHaveBeenCalled();
+      expect(stored.size).toBe(0);
+      state.failAttachmentInsert = false;
+
+      state.failAttachmentInsert = true;
+      remove.mockRejectedValueOnce(Error("cleanup also failed"));
+      const doubleFailure = await post();
+      expect(doubleFailure.statusCode).toBe(500);
+      expect(doubleFailure.body.error).toBe("Delivery operation failed");
+      state.failAttachmentInsert = false;
+      stored.clear(); // In-memory fake: cleanup was intentionally made to fail above.
+
+      const success = await post();
+      expect(success.statusCode).toBe(201);
+      const rows = (await client.query("SELECT id,storage_path FROM delivery_carrier_attachments WHERE assignment_id=$1", [id])).rows;
+      expect(rows).toHaveLength(1);
+      expect(stored.get(rows[0].storage_path)).toEqual(bytes);
+      const route = "/api/deliveries/:id/attachments/:attachmentId";
+      expect((await invoke("GET", route, fixture.outsiderUser!, {}, { id, attachmentId: rows[0].id })).statusCode).toBe(403);
+      const received = await invoke("GET", route, fixture.manager!, {}, { id, attachmentId: rows[0].id });
+      expect(received.statusCode).toBe(200);
+      expect(received.body).toEqual(bytes);
+      expect(download).toHaveBeenCalledWith(rows[0].storage_path);
+    } finally {
+      state.failAttachmentInsert = false;
+      ready.mockRestore(); upload.mockRestore(); remove.mockRestore(); download.mockRestore();
+    }
   });
 
   it("runs the real text is_active driver SQL and source projections", async () => {
