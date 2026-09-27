@@ -187,17 +187,32 @@ export const isBulkApprovalEligible = (order: Pick<KitchenOrder, "status" | "all
   normalized(order.status) === "requested" && order.allowedActions?.approve === true;
 
 export function kitchenDetailAccess(order: Pick<KitchenOrder, "allowedActions" | "centralKitchenId">, permissions: {
-  approve: boolean; edit: boolean; production: boolean; kitchenBranch: boolean;
+  approve: boolean; edit: boolean; production: boolean; kitchenBranch: boolean; sourceBranch: boolean;
 }) {
   return {
     approve: permissions.approve && order.allowedActions?.approve === true,
     prepare: permissions.edit && order.allowedActions?.prepare === true,
     dispatch: permissions.edit && order.allowedActions?.dispatch === true,
-    receive: permissions.edit && order.allowedActions?.receive === true,
-    resolveDiscrepancy: permissions.edit && order.allowedActions?.resolveDiscrepancy === true,
-    change: permissions.edit && (order.allowedActions?.edit === true || order.allowedActions?.cancel === true),
+    receive: permissions.edit && permissions.sourceBranch && order.allowedActions?.receive === true,
+    resolveDiscrepancy: permissions.edit && permissions.sourceBranch && order.allowedActions?.resolveDiscrepancy === true,
+    change: permissions.edit && permissions.sourceBranch && (order.allowedActions?.edit === true || order.allowedActions?.cancel === true),
     production: permissions.production && permissions.kitchenBranch,
   };
+}
+export const KITCHEN_DEFAULT_SORT = "newest" as const;
+export function kitchenOrderPreview(order: Pick<KitchenOrder, "items" | "requestBranchName" | "requestBranchId" | "centralKitchenName" | "centralKitchenId" | "status">) {
+  return {
+    route: `${order.requestBranchName || order.requestBranchId} ← ${order.centralKitchenName || order.centralKitchenId}`,
+    status: STATUS[normalized(order.status)]?.label || order.status,
+    lines: order.items?.map(item => `${item.productName}: ${item.requestedQuantity} ${item.unit}`) || [],
+  };
+}
+export function kitchenActionHeading(order: Pick<KitchenOrder, "status" | "allowedActions" | "discrepancyStatus">, access: ReturnType<typeof kitchenDetailAccess>) {
+  const status = normalized(order.status);
+  if (status === "received" && order.discrepancyStatus === "open" && access.resolveDiscrepancy) return "معالجة فروقات الاستلام";
+  const action = status === "requested" || status === "pending" || status === "draft" ? "approve" : status === "approved" ? "prepare" : status === "prepared" ? "dispatch" : status === "dispatched" ? "receive" : null;
+  const labels = { approve: "اعتماد الطلب", prepare: "تأكيد التجهيز", dispatch: "تأكيد الشحن", receive: "تأكيد الاستلام" };
+  return action && access[action] ? labels[action] : "الاطلاع على الطلب";
 }
 export function visibleKitchenDetail(order: KitchenOrder | undefined, id: string | number | null, denied: boolean) {
   return !denied && id !== null && String(order?.id) === String(id) ? order : undefined;
@@ -240,7 +255,10 @@ export default function CentralKitchenOrdersPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [newOrdersNotice, setNewOrdersNotice] = useState(0);
   const [page, setPage] = useState(1);
-  const [sort, setSort] = useState<"priority" | "newest" | "oldest_waiting">("priority");
+  const [sort, setSort] = useState<"priority" | "newest" | "oldest_waiting">(KITCHEN_DEFAULT_SORT);
+  const [mobilePreviewId, setMobilePreviewId] = useState<string | null>(null);
+  const [hoverPreviewId, setHoverPreviewId] = useState<string | null>(null);
+  const [focusPreviewId, setFocusPreviewId] = useState<string | null>(null);
   const [focus, setFocus] = useState<"new" | "overdue" | "dueToday" | "discrepancy" | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
   const [bulkReview, setBulkReview] = useState<Array<{ id: string; order?: KitchenOrder; error?: string; checked: boolean; result?: string }> | null>(null);
@@ -612,6 +630,7 @@ export default function CentralKitchenOrdersPage() {
     const access = kitchenDetailAccess(order, {
       approve: canApprove("central_kitchen_orders"), edit: canEdit("central_kitchen_orders"),
       production: canView("production"), kitchenBranch: branches.some(branch => branch.id === order.centralKitchenId),
+      sourceBranch: branches.some(branch => branch.id === order.requestBranchId),
     });
     if (!access[action === "resolve-discrepancy" ? "resolveDiscrepancy" : action] || detailDenied) return;
     const attempt = `${order.id}:${action}`;
@@ -671,6 +690,9 @@ export default function CentralKitchenOrdersPage() {
     bulkGuard.current = false;
   };
   const statusInfo = (status: string) => STATUS[normalized(status)] || { label: status || "قيد المراجعة", className: "bg-muted text-muted-foreground border-border" };
+  const canSeeDemandReport = operationsView && canView("central_kitchen_orders");
+  const canSeePilotMetrics = operationsView && canView("central_kitchen_orders");
+  const canSeeSecondary = canSeePilotMetrics || canConfigureRouting;
   const branchName = (id: string) => branches.find(branch => branch.id === id)?.name || id;
   const openDetail = (id: string | number) => {
     const value = String(id);
@@ -728,13 +750,13 @@ export default function CentralKitchenOrdersPage() {
         className="kitchen-mobile-header"
         actions={<div className="flex flex-wrap gap-2">
           {canView("warehouse") && <Button asChild variant="outline" size="sm" className="min-h-11"><a href="/transfer-requests?kitchenRaw=1">طلب مواد من المستودع الرئيسي</a></Button>}
-          <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex"><a href="/central-kitchen-demand-report"><BarChart3 className="ml-2 h-4 w-4" />تقرير الطلب غير الملبّى</a></Button>
+          {canSeeDemandReport && <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex"><a href="/central-kitchen-demand-report"><BarChart3 className="ml-2 h-4 w-4" />تقرير الطلب غير الملبّى</a></Button>}
           {canConfigureRouting && <Button variant="outline" size="sm" className="hidden min-h-11 sm:inline-flex" onClick={() => setSettingsOpen(true)} data-testid="kitchen-settings-trigger"><Settings className="ml-2 h-4 w-4" />إعدادات المطبخ</Button>}
           <Button variant="outline" size="sm" className="min-h-11" aria-label="تحديث الطلبات" onClick={refresh} data-testid="refresh-kitchen-orders"><RefreshCw className="h-4 w-4 sm:ml-2" /><span className="hidden sm:inline">تحديث</span></Button>
           {canCreate("central_kitchen_orders") && <Button size="sm" className="order-first min-h-11 sm:order-none" onClick={() => void openCreate()} data-testid="create-kitchen-order"><Plus className="ml-2 h-4 w-4" />طلب من المطبخ</Button>}
           <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="icon" className="h-11 w-11 sm:hidden" aria-label="خيارات طلبات المطبخ"><EllipsisVertical className="h-5 w-5" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" dir="rtl">
             {canConfigureRouting && <DropdownMenuItem className="min-h-11" onSelect={() => setSettingsOpen(true)}><Settings className="ml-2 h-4 w-4" />إعدادات المطبخ</DropdownMenuItem>}
-            <DropdownMenuItem asChild className="min-h-11"><a href="/central-kitchen-demand-report"><BarChart3 className="ml-2 h-4 w-4" />تقرير الطلب غير الملبّى</a></DropdownMenuItem>
+            {canSeeDemandReport && <DropdownMenuItem asChild className="min-h-11"><a href="/central-kitchen-demand-report"><BarChart3 className="ml-2 h-4 w-4" />تقرير الطلب غير الملبّى</a></DropdownMenuItem>}
           </DropdownMenuContent></DropdownMenu>
         </div>} />
       {!operationsView && <BranchSupplySources
@@ -807,12 +829,17 @@ export default function CentralKitchenOrdersPage() {
       ordersQuery.isError ? <Card><CardContent className="py-16 text-center"><p className="font-medium">تعذر تحميل الطلبات</p><p className="mt-1 text-sm text-muted-foreground">تحقق من الاتصال ثم أعد المحاولة.</p><Button className="mt-4" variant="outline" onClick={refresh}>إعادة المحاولة</Button></CardContent></Card> :
        filtered.length === 0 ? <div className="py-16 text-center"><PackagePlus className="mx-auto mb-3 h-9 w-9 text-muted-foreground" /><h2 className="font-semibold">لا توجد طلبات ضمن هذا العرض</h2><p className="mt-1 text-sm text-muted-foreground">غيّر المرحلة أو امسح البحث والفلاتر الثانوية.</p><Button variant="link" className="mt-2" onClick={() => { setSearch(""); setKitchenFilter("all"); setDateFilter("all"); setFocus(null); changeInventoryModeFilter("all"); }}>مسح الفلاتر</Button></div> :
       <section className="divide-y divide-border p-1.5" aria-label="قائمة الطلبات">
-        {filtered.map(order => <div key={order.id} role="button" tabIndex={0} onClick={() => selectDetail(order.id)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectDetail(order.id); } }} className={cn("kitchen-order-row grid w-full cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-xl border border-transparent p-3 text-right transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", operationsView ? "sm:grid-cols-[auto_minmax(0,1fr)]" : "sm:grid-cols-[auto_minmax(190px,1.25fr)_minmax(130px,.65fr)_minmax(220px,1fr)_18px] sm:items-center", String(detailId) === String(order.id) && "border-primary/30 bg-primary/5", queueOrderNeedsAttention(order) && "border-r-[3px] border-r-amber-500")}>
-          {(hasPermission("central_kitchen_orders", "print") || canApprove("central_kitchen_orders")) && <input type="checkbox" aria-label={`اختيار ${order.orderNumber} للإجراءات المجمعة`} disabled={["cancelled", "received"].includes(normalized(order.status))} checked={selectedOrderIds.has(String(order.id))} onClick={event => event.stopPropagation()} onChange={event => setSelectedOrderIds(current => { const next = new Set(current); if (event.target.checked) next.add(String(order.id)); else next.delete(String(order.id)); return next; })} className="mt-1 h-4 w-4 accent-primary sm:mt-0" />}
+        {filtered.map(order => <div key={order.id} onMouseEnter={() => setHoverPreviewId(String(order.id))} onMouseLeave={() => setHoverPreviewId(current => current === String(order.id) ? null : current)} onFocusCapture={() => setFocusPreviewId(String(order.id))} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusPreviewId(current => current === String(order.id) ? null : current); }} className={cn("kitchen-order-row group relative grid w-full grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-xl border border-transparent p-3 text-right transition-colors hover:bg-muted/50 focus-within:ring-2 focus-within:ring-ring", operationsView ? "sm:grid-cols-[auto_minmax(0,1fr)]" : "sm:grid-cols-[auto_minmax(190px,1.25fr)_minmax(130px,.65fr)_minmax(220px,1fr)_18px] sm:items-center", String(detailId) === String(order.id) && "border-primary/30 bg-primary/5", queueOrderNeedsAttention(order) && "border-r-[3px] border-r-amber-500")}>
+          <button type="button" className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none" onClick={() => selectDetail(order.id)} aria-label={`الاطلاع على الطلب ${order.orderNumber}`} />
+          {(hasPermission("central_kitchen_orders", "print") || canApprove("central_kitchen_orders")) && <input type="checkbox" aria-label={`اختيار ${order.orderNumber} للإجراءات المجمعة`} disabled={["cancelled", "received"].includes(normalized(order.status))} checked={selectedOrderIds.has(String(order.id))} onChange={event => setSelectedOrderIds(current => { const next = new Set(current); if (event.target.checked) next.add(String(order.id)); else next.delete(String(order.id)); return next; })} className="relative z-20 mt-1 h-4 w-4 accent-primary sm:mt-0" />}
           <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><strong className="font-mono text-sm text-foreground">{order.orderNumber}</strong>{queueOrderNeedsAttention(order) && <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-900"><AlertTriangle className="h-3 w-3" />{isOpenDiscrepancy(order) ? "فروقات استلام مفتوحة" : ["requested", "pending", "draft"].includes(normalized(order.status)) ? "طلب جديد" : "متأخر عن موعد الحاجة"}</span>}</div><span className="mt-1 block truncate text-xs text-muted-foreground">{order.requestBranchName || branchName(order.requestBranchId)} <span className="px-1">←</span> {order.centralKitchenName || branchName(order.centralKitchenId)}</span></div>
           <div className={cn("text-xs sm:block", operationsView && "col-start-2")}><span className="block text-[10px] text-muted-foreground">موعد الحاجة</span><strong className="font-medium">{readableDate(order.neededDate)} · {readableTime(order.neededTime)}</strong></div>
           <div className={cn("col-span-2 rounded-lg border border-border bg-background p-2", !operationsView && "sm:col-span-1")}><NextStepSummary order={order} /><LateSubmissionBadge schedule={order.orderingSchedule} /></div>
           {!operationsView && <ChevronLeft className="kitchen-order-next hidden h-4 w-4 text-muted-foreground sm:block" />}
+          <button type="button" className="relative z-20 col-span-full min-h-9 rounded border px-2 text-xs sm:hidden" aria-expanded={mobilePreviewId === String(order.id)} onClick={() => setMobilePreviewId(current => current === String(order.id) ? null : String(order.id))}>معاينة البنود</button>
+          <div className={cn("col-span-full text-xs", mobilePreviewId === String(order.id) ? "block" : hoverPreviewId === String(order.id) || focusPreviewId === String(order.id) ? "hidden sm:block" : "hidden")} aria-label={`معاينة الطلب ${order.orderNumber}`}>
+            <OrderRowPreview order={order} />
+          </div>
         </div>)}
       </section>}
       {!!ordersQuery.data && ordersQuery.data.totalPages > 1 && <div className="flex items-center justify-between border-t px-3 py-3 text-xs"><Button size="sm" variant="outline" disabled={page <= 1 || ordersQuery.isFetching} onClick={() => setPage(value => value - 1)}>السابق</Button><span>صفحة {ordersQuery.data.page} من {ordersQuery.data.totalPages}</span><Button size="sm" variant="outline" disabled={page >= ordersQuery.data.totalPages || ordersQuery.isFetching} onClick={() => setPage(value => value + 1)}>التالي</Button></div>}
@@ -836,6 +863,9 @@ export default function CentralKitchenOrdersPage() {
           </>}
         </div> : <OrderSummaryPane
           order={detailDenied || String(selectedDetail?.id) !== String(detailId) ? undefined : selectedDetail}
+          canApprove={canApprove("central_kitchen_orders")}
+          canEdit={canEdit("central_kitchen_orders")}
+          accessibleBranchIds={branches.map(branch => branch.id)}
           loading={detailId !== null && (detailQuery.isLoading || detailQuery.isFetching)}
           error={detailId !== null && detailDenied}
           queryError={detailError}
@@ -846,14 +876,14 @@ export default function CentralKitchenOrdersPage() {
       </aside>
       </section>
 
-      <details className="rounded-xl border border-border bg-card" onToggle={event => setMetricsOpen(event.currentTarget.open)}>
+      {canSeeSecondary && <details className="rounded-xl border border-border bg-card" onToggle={event => setMetricsOpen(event.currentTarget.open)}>
         <summary className="flex cursor-pointer list-none items-center gap-2 p-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><BarChart3 className="h-4 w-4" />التقارير والإعدادات الثانوية</summary>
         <div className="space-y-4 border-t p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">مؤشرات التجربة والتوسع</h2><p className="text-xs text-muted-foreground">قياس دورة الطلب وجودة التوريد قبل تفعيل المخزون الفعلي.</p></div><Select value={pilotDays} onValueChange={setPilotDays}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="7">آخر 7 أيام</SelectItem><SelectItem value="30">آخر 30 يوماً</SelectItem><SelectItem value="90">آخر 90 يوماً</SelectItem></SelectContent></Select></div>
-          {metricsQuery.isLoading ? <div className="grid gap-3 md:grid-cols-5">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-20" />)}</div> : metricsQuery.data ? <><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5"><MetricTile label="إجمالي الطلبات" value={metricsQuery.data.totalOrders} /><MetricTile label="متأخرة عن الحاجة" value={metricsQuery.data.overdueOrders} tone={metricsQuery.data.overdueOrders ? "danger" : "normal"} /><MetricTile label="فروقات مفتوحة" value={metricsQuery.data.openDiscrepancies} tone={metricsQuery.data.openDiscrepancies ? "warning" : "normal"} /><MetricTile label="متوسط اكتمال البنود" value={metricsQuery.data.fulfillmentRate === null ? "—" : `${metricsQuery.data.fulfillmentRate}%`} /><MetricTile label="طلبات بها فروقات" value={metricsQuery.data.discrepancyRate === null ? "—" : `${metricsQuery.data.discrepancyRate}%`} /></div><div className="grid gap-2 border-t pt-3 text-xs sm:grid-cols-2 lg:grid-cols-4"><StageTime label="الاعتماد" value={metricsQuery.data.averageStageHours.approval} /><StageTime label="التجهيز" value={metricsQuery.data.averageStageHours.preparation} /><StageTime label="الإرسال" value={metricsQuery.data.averageStageHours.dispatch} /><StageTime label="التوصيل" value={metricsQuery.data.averageStageHours.delivery} /></div><div className="text-xs text-muted-foreground">السجل التجريبي: {metricsQuery.data.shadowLedger.entryCount} حركة{metricsQuery.data.shadowLedger.byUnit.length ? ` · ${metricsQuery.data.shadowLedger.byUnit.map(entry => `${entry.direction === "projected_kitchen_out" ? "خصم" : "إضافة"} ${entry.quantity} ${entry.unit}`).join(" · ")}` : ""}</div></> : <p className="text-sm text-muted-foreground">تعذر تحميل مؤشرات التجربة.</p>}
+          {canSeePilotMetrics && <><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">مؤشرات التجربة والتوسع</h2><p className="text-xs text-muted-foreground">قياس دورة الطلب وجودة التوريد قبل تفعيل المخزون الفعلي.</p></div><Select value={pilotDays} onValueChange={setPilotDays}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="7">آخر 7 أيام</SelectItem><SelectItem value="30">آخر 30 يوماً</SelectItem><SelectItem value="90">آخر 90 يوماً</SelectItem></SelectContent></Select></div>
+          {metricsQuery.isLoading ? <div className="grid gap-3 md:grid-cols-5">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-20" />)}</div> : metricsQuery.data ? <><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5"><MetricTile label="إجمالي الطلبات" value={metricsQuery.data.totalOrders} /><MetricTile label="متأخرة عن الحاجة" value={metricsQuery.data.overdueOrders} tone={metricsQuery.data.overdueOrders ? "danger" : "normal"} /><MetricTile label="فروقات مفتوحة" value={metricsQuery.data.openDiscrepancies} tone={metricsQuery.data.openDiscrepancies ? "warning" : "normal"} /><MetricTile label="متوسط اكتمال البنود" value={metricsQuery.data.fulfillmentRate === null ? "—" : `${metricsQuery.data.fulfillmentRate}%`} /><MetricTile label="طلبات بها فروقات" value={metricsQuery.data.discrepancyRate === null ? "—" : `${metricsQuery.data.discrepancyRate}%`} /></div><div className="grid gap-2 border-t pt-3 text-xs sm:grid-cols-2 lg:grid-cols-4"><StageTime label="الاعتماد" value={metricsQuery.data.averageStageHours.approval} /><StageTime label="التجهيز" value={metricsQuery.data.averageStageHours.preparation} /><StageTime label="الإرسال" value={metricsQuery.data.averageStageHours.dispatch} /><StageTime label="التوصيل" value={metricsQuery.data.averageStageHours.delivery} /></div><div className="text-xs text-muted-foreground">السجل التجريبي: {metricsQuery.data.shadowLedger.entryCount} حركة{metricsQuery.data.shadowLedger.byUnit.length ? ` · ${metricsQuery.data.shadowLedger.byUnit.map(entry => `${entry.direction === "projected_kitchen_out" ? "خصم" : "إضافة"} ${entry.quantity} ${entry.unit}`).join(" · ")}` : ""}</div></> : <p className="text-sm text-muted-foreground">تعذر تحميل مؤشرات التجربة.</p>}</>}
           <OrderNotificationsOptIn />
         </div>
-      </details>
+      </details>}
     </main>
 
     <Dialog open={createOpen} onOpenChange={open => open ? setCreateOpen(true) : closeCreate()}><DialogContent dir="rtl" style={{ ...createDialogStyle, display: "flex", flexDirection: "column" }} className="h-[100dvh] w-screen max-w-none translate-y-[-50%] gap-0 overflow-hidden rounded-none border-0 p-0 sm:h-[min(820px,94dvh)] sm:w-[calc(100%-2rem)] sm:max-w-4xl sm:rounded-xl sm:border [&>button]:left-2 [&>button]:right-auto [&>button]:top-2 [&>button]:z-20 [&>button]:flex [&>button]:h-11 [&>button]:w-11 [&>button]:items-center [&>button]:justify-center"><DialogHeader className="shrink-0 border-b bg-background py-3 pl-14 pr-4 text-right sm:py-4"><DialogTitle>طلب من المطبخ</DialogTitle><DialogDescription className="mt-1">خطوة {createStep + 1} من 3 · {["بيانات المورد والطلب", "الأصناف", "المراجعة"][createStep]}</DialogDescription></DialogHeader>
@@ -927,6 +957,14 @@ export default function CentralKitchenOrdersPage() {
 }
 
 function StatusBadge({ status }: { status: string }) { const info = STATUS[normalized(status)] || { label: status, className: "bg-muted text-muted-foreground border-border" }; return <Badge variant="outline" className={cn("whitespace-nowrap font-medium", info.className)}>{info.label}</Badge>; }
+function OrderRowPreview({ order }: { order: KitchenOrder }) {
+  const preview = kitchenOrderPreview(order);
+  return <div className="relative z-20 rounded-lg border border-border bg-card p-3 shadow-sm">
+    <p className="font-medium">{preview.route} · {preview.status}</p>
+    {preview.lines.length ? <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1">{preview.lines.map((line, index) => <li key={`${index}-${line}`}>{line}</li>)}</ul>
+      : <p className="mt-1 text-muted-foreground">البنود غير متاحة في القائمة؛ افتح الطلب لعرضها.</p>}
+  </div>;
+}
 export function KitchenDetailHeader({ order, canPrint, canExport, inline = false }: { order?: KitchenOrder; canPrint: boolean; canExport: boolean; inline?: boolean }) {
   const title = order?.orderNumber || "تفاصيل طلب المطبخ";
   const description = order ? `${order.centralKitchenName || order.centralKitchenId} ← ${order.requestBranchName || order.requestBranchId}` : "تحميل بيانات الطلب وحالته";
@@ -943,7 +981,7 @@ function NextStepSummary({ order }: { order: KitchenOrder }) {
   const discrepancyOpen = isOpenDiscrepancy(order);
   return <div className="grid gap-1.5 text-[11px]">
     <div className="flex flex-wrap items-center gap-1.5"><span className="text-muted-foreground">حالة الدورة</span><StatusBadge status={order.status} />{discrepancyOpen && <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-900">غير مكتمل · فروقات مفتوحة</Badge>}</div>
-    <p><span className="text-muted-foreground">الإجراء التالي: </span><strong className={discrepancyOpen ? "text-amber-800" : "text-foreground"}>{step.label}</strong></p>
+    <p><span className="text-muted-foreground">الخطوة التالية في دورة الطلب: </span><strong className={discrepancyOpen ? "text-amber-800" : "text-foreground"}>{step.label}</strong></p>
     {!step.isComplete && <p className={order.nextResponsible?.unassigned ? "font-medium text-amber-700" : "text-foreground"}><span className="font-normal text-muted-foreground">المسؤول التالي: </span>{order.nextResponsible?.name || order.nextResponsible?.role || step.owner}{order.nextResponsible?.unassigned ? " (غير معيّن)" : ""}</p>}
     {inventoryMode === "shadow" && <span className="text-[10px] text-amber-700">ظلّي — تشغيلي فقط، لا حركة مخزون فعلية</span>}
     {inventoryMode === "unknown" && <span className="text-[10px] text-muted-foreground">وضع المخزون غير محدد — طلب قديم</span>}
@@ -978,7 +1016,7 @@ function DetailQueryError({ error, onRetry }: { error: unknown; onRetry: () => u
   const missing = status === 404;
   return <div className="py-12 text-center" role="alert"><p className="font-medium">{unauthenticated ? "انتهت الجلسة أو لم تسجّل الدخول" : forbidden ? "لا تملك صلاحية عرض هذا الطلب" : missing ? "الطلب غير موجود" : "تعذر تحميل تفاصيل الطلب"}</p><p className="mt-1 text-sm text-muted-foreground">{unauthenticated ? "سجّل الدخول مجدداً ثم افتح رابط الطلب." : forbidden ? "الطلب موجود لكن الوصول إليه خارج صلاحياتك أو نطاق فروعك." : missing ? "لم يُعثر على رقم الطلب في الرابط؛ تحقق من الرابط أو تواصل مع المرسل." : "تحقق من الاتصال ثم أعد المحاولة."}</p>{!forbidden && !unauthenticated && <Button variant="outline" className="mt-4" onClick={() => onRetry()}>إعادة المحاولة</Button>}</div>;
 }
-function OrderSummaryPane({ order, loading, error, queryError, onRetry, onOpen, onClear }: { order?: KitchenOrder; loading: boolean; error: boolean; queryError: unknown; onRetry: () => unknown; onOpen: () => void; onClear: () => void }) {
+function OrderSummaryPane({ order, loading, error, queryError, onRetry, onOpen, onClear, canApprove, canEdit, accessibleBranchIds }: { order?: KitchenOrder; loading: boolean; error: boolean; queryError: unknown; onRetry: () => unknown; onOpen: () => void; onClear: () => void; canApprove: boolean; canEdit: boolean; accessibleBranchIds: string[] }) {
   if (loading) return <div className="space-y-3 py-8" aria-label="جارٍ تحميل ملخص الطلب">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-12" />)}</div>;
   if (error) return <DetailQueryError error={queryError} onRetry={onRetry} />;
   if (!order) return <div className="flex min-h-[480px] flex-col items-center justify-center gap-2 px-6 text-center text-muted-foreground"><PackagePlus className="h-7 w-7" /><strong className="text-sm text-foreground">اختر طلباً من القائمة</strong><span className="text-xs leading-6">تظهر البنود ومسار الإجراء هنا دون ازدحام قائمة الانتظار.</span></div>;
@@ -987,6 +1025,11 @@ function OrderSummaryPane({ order, loading, error, queryError, onRetry, onOpen, 
     inventoryMode: parseCentralKitchenInventoryMode(order.inventoryMode),
     discrepancyStatus: order.discrepancyStatus,
   });
+  const heading = kitchenActionHeading(order, kitchenDetailAccess(order, {
+    approve: canApprove, edit: canEdit, production: false,
+    kitchenBranch: accessibleBranchIds.includes(order.centralKitchenId),
+    sourceBranch: accessibleBranchIds.includes(order.requestBranchId),
+  }));
   return <div data-testid="selected-order-summary" className="space-y-4">
     <div className="flex items-start justify-between gap-3 border-b pb-4"><div><span className="text-[10px] font-semibold tracking-wider text-muted-foreground">تفاصيل الطلب</span><h2 className="mt-1 font-mono text-lg font-bold text-foreground">{order.orderNumber}</h2></div><button type="button" className="rounded p-1 text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={onClear} aria-label="إغلاق ملخص الطلب"><X className="h-4 w-4" /></button></div>
     <div className="flex items-center gap-2"><div className="min-w-0 flex-1"><span className="block text-[10px] text-muted-foreground">من الفرع</span><strong className="block truncate text-xs">{order.requestBranchName || order.requestBranchId}</strong></div><ChevronLeft className="h-4 w-4 text-muted-foreground" /><div className="min-w-0 flex-1"><span className="block text-[10px] text-muted-foreground">إلى</span><strong className="block truncate text-xs">{order.centralKitchenName || order.centralKitchenId}</strong></div></div>
@@ -994,7 +1037,7 @@ function OrderSummaryPane({ order, loading, error, queryError, onRetry, onOpen, 
     {queueOrderNeedsAttention(order) && <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>{isOpenDiscrepancy(order) ? "تم الاستلام جزئياً أو مع فروقات مفتوحة؛ يبقى الطلب غير مكتمل حتى معالجة الفروقات صراحةً." : "تجاوز الطلب موعد الحاجة المحدد ولم يكتمل بعد."}</span></div>}
     <section><div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-semibold">البنود المطلوبة</h3><span className="text-[10px] text-muted-foreground">{order.items?.length ?? order.itemCount ?? 0} بنود</span></div><div className="divide-y border-y">{(order.items || []).slice(0, 5).map(item => <div key={item.id || item.productName} className="flex justify-between gap-3 py-2 text-xs"><span className="truncate">{item.productName}</span><strong className="shrink-0 font-medium">{item.requestedQuantity} {item.unit}</strong></div>)}{!order.items?.length && <p className="py-4 text-center text-xs text-muted-foreground">افتح التفاصيل لتحميل البنود الكاملة.</p>}{(order.items?.length || 0) > 5 && <p className="py-2 text-[10px] text-muted-foreground">+ {(order.items?.length || 0) - 5} بنود أخرى</p>}</div></section>
     {order.notes && <div className="border-r-2 border-primary bg-muted/40 p-3 text-xs"><span className="block text-[10px] text-muted-foreground">ملاحظة الفرع</span><p className="mt-1 leading-5">{order.notes}</p></div>}
-    <div className="border-t pt-3"><p className="mb-2 text-xs text-muted-foreground">{nextStep.isComplete ? nextStep.label : `التالي: ${nextStep.label} · ${order.nextResponsible?.name || order.nextResponsible?.role || nextStep.owner}`}</p><Button className="w-full" onClick={onOpen}>{nextStep.isComplete ? "فتح التفاصيل" : `فتح نموذج ${nextStep.label}`}</Button></div>
+    <div className="border-t pt-3"><p className="mb-2 text-xs text-muted-foreground">{nextStep.isComplete ? nextStep.label : `بانتظار ${nextStep.owner} · ${nextStep.label}`}</p><Button className="w-full" onClick={onOpen}>{heading}</Button></div>
   </div>;
 }
 function MetricTile({ label, value, tone = "normal" }: { label: string; value: string | number; tone?: "normal" | "warning" | "danger" }) { return <div className={cn("rounded-lg border bg-background p-3", tone === "warning" && "border-amber-200 bg-amber-50", tone === "danger" && "border-red-200 bg-red-50")}><span className="text-xs text-muted-foreground">{label}</span><strong className="mt-1 block text-2xl">{value}</strong></div>; }
@@ -1174,12 +1217,10 @@ export function OrderDetail({ showHeader = true, order, products, productsQuery,
   const client = useQueryClient();
   const [section, setSection] = useState<"overview" | "items" | "decisions" | "changes" | "history">("items");
   const detailNav = useRef<HTMLElement>(null);
-  const changeTab = useRef({ id: order.id, shown: false });
-  if (changeTab.current.id !== order.id) changeTab.current = { id: order.id, shown: false };
-  if (canEdit && (order.allowedActions?.edit || order.allowedActions?.cancel)) changeTab.current.shown = true;
   const access = kitchenDetailAccess(order, {
     approve: canApprove, edit: canEdit, production: canProduction,
     kitchenBranch: accessibleBranchIds.includes(order.centralKitchenId),
+    sourceBranch: accessibleBranchIds.includes(order.requestBranchId),
   });
   const journeyScope = useQuery<KitchenOrderJourney>({
     queryKey: ["/api/central-kitchen-order-journey", Number(order.id)],
@@ -1197,8 +1238,8 @@ export function OrderDetail({ showHeader = true, order, products, productsQuery,
   useEffect(() => {
     const changedOrder = previousOrderId.current !== order.id;
     previousOrderId.current = order.id;
-    setSection(current => changedOrder || current !== "changes" ? "items" : current);
-  }, [order.id, order.status]);
+    setSection(current => changedOrder || (current === "changes" && !access.change) ? "items" : current);
+  }, [order.id, order.status, access.change]);
   const status = normalized(order.status);
   const discrepancyQuantities = (order.items || []).reduce((totals, item) => ({
     damaged: totals.damaged + Math.max(0, Number(item.damagedQuantity || 0)),
@@ -1216,9 +1257,9 @@ export function OrderDetail({ showHeader = true, order, products, productsQuery,
   const actionConfig = action ? { approve: { label: "اعتماد الطلب", icon: ShieldCheck }, prepare: { label: "تأكيد التجهيز", icon: PackagePlus }, dispatch: { label: "تأكيد الشحن", icon: Truck }, receive: { label: "تأكيد الاستلام", icon: Check } }[action] : null;
    return <div className="min-w-0 space-y-3">{showHeader && <DialogHeader><div className="flex items-start justify-between gap-3 pl-8"><div><DialogTitle className="font-mono text-xl">{order.orderNumber}</DialogTitle><DialogDescription className="mt-1">طلب الفرع {order.requestBranchName || order.requestBranchId} من {order.centralKitchenName || order.centralKitchenId}</DialogDescription></div><div className="flex flex-wrap items-center gap-2"><StatusBadge status={order.status} /><OrderActionsMenu order={order} canPrint={canPrint && ["prepared", "dispatched", "received"].includes(status)} canExport={canExport} onPrint={() => printPreparationNote(order)} /></div></div></DialogHeader>}
     <nav ref={detailNav} className="sticky top-0 z-10 grid min-w-0 grid-cols-3 gap-1 bg-background py-1 sm:static sm:flex" aria-label="أقسام تفاصيل الطلب">
-      <Button size="sm" className="min-h-10 min-w-0 px-1 text-xs sm:px-3 sm:text-sm" variant={section === "decisions" ? "default" : "outline"} onClick={() => setSection("decisions")}>{allowAction ? actionConfig?.label : "حالة الإجراء"}</Button>
+      <Button size="sm" className="min-h-10 min-w-0 px-1 text-xs sm:px-3 sm:text-sm" variant={section === "decisions" ? "default" : "outline"} onClick={() => setSection("decisions")}>{kitchenActionHeading(order, access)}</Button>
       <Button size="sm" className="min-h-10 min-w-0 px-1 text-xs sm:px-3 sm:text-sm" variant={section === "items" ? "default" : "outline"} onClick={() => setSection("items")}>{showProduction ? "البنود والإنتاج" : "بنود الطلب"} ({order.items?.length || 0})</Button>
-      <DropdownMenu><DropdownMenuTrigger asChild><Button size="sm" className="min-h-10 min-w-0 px-1 text-xs sm:px-3 sm:text-sm" variant={["overview", "history", "changes"].includes(section) ? "secondary" : "ghost"}>المزيد</Button></DropdownMenuTrigger><DropdownMenuContent align="end" dir="rtl"><DropdownMenuItem onSelect={() => setSection("overview")}>معلومات الطلب</DropdownMenuItem><DropdownMenuItem onSelect={() => setSection("history")}>سجل الطلب</DropdownMenuItem>{changeTab.current.shown && <DropdownMenuItem onSelect={() => setSection("changes")}>تعديل / إلغاء</DropdownMenuItem>}</DropdownMenuContent></DropdownMenu>
+      <DropdownMenu><DropdownMenuTrigger asChild><Button size="sm" className="min-h-10 min-w-0 px-1 text-xs sm:px-3 sm:text-sm" variant={["overview", "history", "changes"].includes(section) ? "secondary" : "ghost"}>المزيد</Button></DropdownMenuTrigger><DropdownMenuContent align="end" dir="rtl"><DropdownMenuItem onSelect={() => setSection("overview")}>معلومات الطلب</DropdownMenuItem><DropdownMenuItem onSelect={() => setSection("history")}>سجل الطلب</DropdownMenuItem>{access.change && <DropdownMenuItem onSelect={() => setSection("changes")}>تعديل / إلغاء</DropdownMenuItem>}</DropdownMenuContent></DropdownMenu>
     </nav>
     <div hidden={section !== "overview"} className="space-y-3">
     <div className="grid gap-3 border-y py-4 text-sm md:grid-cols-3"><div><span className="block text-muted-foreground">تاريخ الحاجة</span><span className="mt-1 block font-medium">{readableDate(order.neededDate)}</span></div><div><span className="block text-muted-foreground">وقت الحاجة</span><span className="mt-1 block font-medium">{readableTime(order.neededTime)}</span></div><div><span className="block text-muted-foreground">تاريخ الإنشاء</span><span className="mt-1 block font-medium">{readableDate(order.createdAt)}</span></div></div>
@@ -1244,7 +1285,7 @@ export function OrderDetail({ showHeader = true, order, products, productsQuery,
     <section><h3 className="mb-3 font-semibold">مسار الطلب</h3><div className="space-y-3 border-r-2 border-muted pr-4">{order.events?.length ? order.events.map(event => <div className="relative" key={event.id}><span className="absolute -right-[23px] top-1 h-3 w-3 rounded-full border-2 border-background bg-primary" /><div className="flex flex-wrap items-center gap-2"><StatusBadge status={event.toStatus} /><span className="text-xs text-muted-foreground">{readableDate(event.createdAt)} · {formatKitchenSaudiDateTime(event.createdAt, { hour: "2-digit", minute: "2-digit" })}</span></div>{event.notes && <p className="mt-1 text-sm text-muted-foreground">{event.notes}</p>}</div>) : <p className="text-sm text-muted-foreground">لم تُسجل تحديثات إضافية بعد.</p>}</div></section>
     </div>
     <div hidden={section !== "changes"} className="space-y-4">
-      {canEdit && changeTab.current.shown && <RequestChangeControls key={order.id} order={order} />}
+      {access.change && <RequestChangeControls key={order.id} order={order} />}
     </div>
     <div hidden={section !== "decisions"} className="space-y-3">
      {action === "prepare" && allowAction
@@ -1252,7 +1293,7 @@ export function OrderDetail({ showHeader = true, order, products, productsQuery,
       : action === "dispatch" && allowAction ? <><p className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">وثّق محضر التسليم وتأكيد السائق من قسم التوصيل أدناه قبل الإرسال. السائق والمركبة محفوظان من التكليف الرسمي.</p><DispatchEditor orderId={Number(order.id)} items={order.items || []} pending={pending} failed={failed} onSubmit={details => onAction("dispatch", details)} /></>
       : action === "receive" && allowAction ? <ReceiptEditor items={order.items || []} pending={pending} failed={failed} onSubmit={details => onAction("receive", details)} />
       : actionConfig && allowAction && <ApproveEditor items={order.items || []} pending={pending} actionNotes={actionNotes} setActionNotes={setActionNotes} onSubmit={() => onAction("approve")} />}
-     {action && !allowAction && <p className="rounded-lg border bg-muted/20 p-3 text-sm text-muted-foreground">يمكنك عرض الطلب، لكن هذا الإجراء غير مسموح لك وفق التوجيه الحالي من الخادم.</p>}
+     {action && !allowAction && <p className="rounded-lg border bg-muted/20 p-3 text-sm text-muted-foreground">{status === "approved" ? "بانتظار تجهيز المطبخ." : "بانتظار الفريق المسؤول عن الخطوة التالية. يمكنك الاطلاع على الطلب دون تنفيذها."}</p>}
      {!action && status === "received" && nextStep.isComplete && <div className="flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800"><Check className="h-4 w-4" />تم توثيق استلام الطلب. حالة التوصيل ومخزون الفرع والبار مراحل مستقلة تظهر أدناه حسب الصلاحيات.</div>}
      {status === "received" && order.discrepancyStatus === "open" && access.resolveDiscrepancy && <div className="rounded-lg border border-amber-300 bg-amber-50 p-3"><div className="flex items-center gap-2 font-medium text-amber-900"><AlertTriangle className="h-4 w-4" />فروقات استلام مفتوحة</div><Input className="mt-3" value={actionNotes} onChange={event => setActionNotes(event.target.value)} placeholder="اكتب كيف تمت معالجة الناقص أو التالف" /><Button className="mt-3" disabled={pending || !actionNotes.trim()} onClick={() => onAction("resolve-discrepancy", { notes: actionNotes.trim() })}>إغلاق الفروقات بعد المعالجة</Button></div>}
      {canEdit && showProduction && <>{["received", "cancelled"].includes(status) && <details className="rounded-lg border p-2 text-sm"><summary className="cursor-pointer font-semibold">سجل الالتزامات والاحتياج</summary><DemandCommitments orderId={order.id} kitchenId={order.centralKitchenId} items={order.items || []} canConsent={canEdit} /></details>}</>}

@@ -13,3 +13,9 @@ Full real-page mounting can also work outside App when isolated fixture response
 **Why:** The kitchen page and its nested dialogs rendered successfully this way, permitting actual 360/390px viewport and visualViewport-only keyboard checks without the App-level suspension.
 
 **How to apply:** Block all fixture API mutations from reaching the real server, mount production page/components rather than approximations, and remove the temporary source/public harness plus any copied build artifact afterward. If using installed Puppeteer, use the system Chromium executable; its expected downloaded Chrome may be absent.
+
+Chromium fixtures may report `(hover: hover)` as false even after Puppeteer moves the mouse and CSS `:hover` matches.
+
+**Why:** Tailwind hover variants can include a hover-capability media query, so a mouse move alone may not reveal a hover-only preview in a headless fixture.
+
+**How to apply:** Check pointer media capabilities when diagnosing previews; verify keyboard focus and explicit touch controls too. Do not assume a hover simulation proves or disproves the interactive behavior without checking visibility.
