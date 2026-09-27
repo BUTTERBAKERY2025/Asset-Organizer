@@ -23,3 +23,9 @@ stale copies on existing clients, bump the cache version tokens (SW `CACHE_NAME`
 `STATIC_CACHE`/`API_CACHE`, and `persistentCache.ts` `CACHE_VERSION`) so old stores are
 purged on next load. Frontend-only change, but PROD needs a manual Render redeploy + one
 hard refresh for the new service worker to activate.
+
+Workflow details that determine the next permitted action also need fresh reads, not offline stale-response fallbacks.
+
+**Why:** A kitchen order can appear prepared in a fresh queue while a stale detail still offers preparation. Reloading the page does not guarantee freshness when a service worker answers slow requests from its own cache.
+
+**How to apply:** When list and detail disagree after a transition, compare the authoritative state first and inspect every response cache before advising a reload. Cache regression tests must use authenticated, successful responses large enough to cross the middleware's cache-size threshold; otherwise the tests can pass without exercising caching at all.

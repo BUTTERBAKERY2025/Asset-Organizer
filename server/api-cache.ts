@@ -111,6 +111,10 @@ function isProductCatalogReadPath(req: Request): boolean {
   return req.method === "GET" && /^\/api\/products(?:\/[^/]+)?$/.test(req.path);
 }
 
+function isCentralKitchenOrderReadPath(req: Request): boolean {
+  return req.method === "GET" && (req.path === "/api/central-kitchen-orders" || req.path.startsWith("/api/central-kitchen-orders/"));
+}
+
 export function invalidateCacheForUser(userId: string) {
   const keysToDelete: string[] = [];
   for (const [key] of Array.from(cache.entries())) {
@@ -142,7 +146,9 @@ export function apiCacheMiddleware(req: Request, res: Response, next: NextFuncti
     return next();
   }
 
-  if (isProductCatalogReadPath(req)) {
+  // These details include live workflow status and permission-derived actions.
+  // Never return an old response before the route's authorization checks.
+  if (isProductCatalogReadPath(req) || isCentralKitchenOrderReadPath(req)) {
     return next();
   }
 

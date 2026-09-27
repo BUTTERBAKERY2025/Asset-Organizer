@@ -356,7 +356,14 @@ export default function CentralKitchenOrdersPage() {
     enabled: createOpen && !!draft.sourceBranchId,
     retry: false,
   });
-  const detailQuery = useQuery<KitchenOrder>({ queryKey: [`/api/central-kitchen-orders/${detailId}`], enabled: detailId !== null });
+  const detailQuery = useQuery<KitchenOrder>({
+    queryKey: [`/api/central-kitchen-orders/${detailId}`],
+    enabled: detailId !== null,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchInterval: 30_000,
+    placeholderData: undefined,
+  });
   const products = productsQuery.data || [];
   useEffect(() => {
     if (createOpen) void productsQuery.refetch();

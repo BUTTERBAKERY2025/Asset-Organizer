@@ -76,6 +76,12 @@ self.addEventListener('fetch', (event) => {
     if (url.pathname === '/api/maintenance-tickets' || url.pathname.startsWith('/api/maintenance-tickets/')) {
       return;
     }
+    // Order status and allowed actions must come from the server, even on a slow
+    // connection. A cached approved detail can otherwise survive a prepare
+    // transition (and even a page reload) while the list shows prepared.
+    if (url.pathname === '/api/central-kitchen-orders' || url.pathname.startsWith('/api/central-kitchen-orders/')) {
+      return;
+    }
     const SAFE_STALE_ENDPOINTS = [
       '/api/branches', '/api/products', '/api/product-categories',
       '/api/departments', '/api/roles', '/api/operations/products',
