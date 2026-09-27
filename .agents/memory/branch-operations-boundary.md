@@ -38,3 +38,9 @@ The daily kitchen order workspace should compose existing delivery and branch/ba
 **Why:** The user explicitly prioritized fewer windows and repeated inputs after a live order required repeated navigation and proof submissions. Faster interaction must preserve source stock postings, independent recipients, and per-record audit history.
 
 **How to apply:** Put the actor's next permitted action first, show waiting ownership after success, and offer proof replacement explicitly rather than leaving an initial-send form open. Only batch actions with individually reviewed eligibility and separate idempotency/results. Pooled branch lots cannot prove that a specific order reached the bar; label that downstream view as shared context unless explicit provenance exists.
+
+Differentiate kitchen operations presentation from branch requester presentation without treating the presentation choice as authorization.
+
+**Why:** The user explicitly approved a daily operating workspace for production management and administrators, while branch staff should focus on requesting, tracking, and receiving rather than managing every kitchen.
+
+**How to apply:** Keep operational detail beside the queue on desktop and preserve filtering/navigation context. Enforce actual actions through server capabilities and branch scope. Label any page-limited demand summary clearly; never imply it includes unseen pages or nets against stock.
