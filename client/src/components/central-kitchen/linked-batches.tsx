@@ -85,13 +85,17 @@ export function LinkedBatches({
   batches,
   orderId,
   kitchenAccessible,
+  productionVisible = false,
 }: {
   batches: Batch[];
   orderId: string | number;
   kitchenAccessible: boolean;
+  /** True only when the journey confirms production is available for this kitchen. */
+  productionVisible?: boolean;
 }) {
   const { canEdit, canView } = usePermissions();
-  const exceptions = useOrderRecipeExceptions(orderId, canView("production"));
+  const canSeeProduction = productionVisible && kitchenAccessible && canView("production");
+  const exceptions = useOrderRecipeExceptions(orderId, canSeeProduction);
   const { toast } = useToast();
   const client = useQueryClient();
   const [finishError, setFinishError] = useState<FinishError | null>(null);
@@ -125,7 +129,8 @@ export function LinkedBatches({
 
   return (
     <div className="space-y-3">
-    {batches.length > 0 && <section className="rounded-lg border border-violet-200 bg-violet-50/40 p-4">
+    {!canSeeProduction && <p className="text-xs text-muted-foreground">تفاصيل الإنتاج غير متاحة هنا. بنود الطلب وإجراءاتها متاحة أعلاه.</p>}
+    {canSeeProduction && batches.length > 0 && <section className="rounded-lg border border-violet-200 bg-violet-50/40 p-4">
       <h3 className="font-semibold">دفعات إنتاج مرتبطة</h3>
       <p className="mb-3 text-xs text-muted-foreground">
         بدء الدفعة لا يعني إنهاءها؛ راجع حالتها وأنهِ الدفعة قيد التنفيذ صراحةً قبل احتسابها إنتاجاً مكتملاً. الدفعات السابقة لا تُعاد ربطها بوصفة بأثر رجعي.
@@ -135,7 +140,7 @@ export function LinkedBatches({
           <LinkedBatchRow
             key={batch.id}
             batch={batch}
-            isException={exceptions.data?.exceptions.some(exception => exception.consumedBatchId === batch.id) === true}
+            isException={!exceptions.isError && exceptions.data?.exceptions.some(exception => exception.consumedBatchId === batch.id) === true}
             orderId={orderId}
             kitchenAccessible={kitchenAccessible}
             canFinish={canEdit("production")}
@@ -147,7 +152,7 @@ export function LinkedBatches({
         ))}
       </div>
     </section>}
-    {canView("production") && <RecipeExceptions orderId={orderId} />}
+    {canSeeProduction && !exceptions.isError && !exceptions.isFetching && exceptions.data && <RecipeExceptions orderId={orderId} />}
     </div>
   );
 }

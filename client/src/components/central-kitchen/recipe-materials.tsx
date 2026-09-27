@@ -58,6 +58,7 @@ export function useRecipeMaterialRequirements(options: RecipeRequirementsOptions
     queryKey,
     enabled,
     staleTime: 10_000,
+    retry: false,
     queryFn: async () => {
       const url = batchOptions
         ? `/api/central-kitchen/production/batches/${batchOptions.batchId}/material-requirements`

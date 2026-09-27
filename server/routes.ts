@@ -8898,6 +8898,10 @@ export async function registerRoutes(
 
   app.get(
     "/api/central-kitchen-orders/:id",
+    (_req, res, next) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      next();
+    },
     isAuthenticated,
     requirePermission("central_kitchen_orders", "view"),
     async (req, res) => {

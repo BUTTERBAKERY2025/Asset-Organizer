@@ -44,3 +44,9 @@ Differentiate kitchen operations presentation from branch requester presentation
 **Why:** The user explicitly approved a daily operating workspace for production management and administrators, while branch staff should focus on requesting, tracking, and receiving rather than managing every kitchen.
 
 **How to apply:** Keep operational detail beside the queue on desktop and preserve filtering/navigation context. Enforce actual actions through server capabilities and branch scope. Label any page-limited demand summary clearly; never imply it includes unseen pages or nets against stock.
+
+Basic kitchen-order readers must be able to inspect the order without permissions for embedded production, recipes, delivery, or inventory.
+
+**Why:** Users reported that inspecting ordinary order contents produced wider-module permission errors. Optional child queries were mounted even when the caller only needed order contents.
+
+**How to apply:** Authorize basic order reads independently; gate optional child queries by both module permission and resource scope. A denied optional section must not block authorized order contents, while a denied base detail must hide the entire stale detail. Never grant wider module access merely to suppress those errors.

@@ -106,8 +106,13 @@ export function registerCentralKitchenJourneyRoute(
   canAccessOrder: (req: Request, detail: Detail) => Promise<boolean>,
 ) {
   app.get("/api/central-kitchen-orders/:id/journey", isAuthenticated,
-    requirePermission("central_kitchen_orders", "view"), async (req, res) => {
+    (_req, res, next) => {
+      // A revoked view grant is rejected by the next middleware, before the
+      // handler runs. That denial must not be cached either.
       res.setHeader("Cache-Control", "private, no-store");
+      next();
+    },
+    requirePermission("central_kitchen_orders", "view"), async (req, res) => {
       try {
         const id = Number(req.params.id);
         if (!/^[1-9]\d*$/.test(req.params.id) || !Number.isSafeInteger(id))

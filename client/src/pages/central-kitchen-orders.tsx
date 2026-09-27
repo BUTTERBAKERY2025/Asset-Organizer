@@ -186,6 +186,26 @@ const isOpenDiscrepancy = (order: KitchenOrder) => order.discrepancyStatus === "
 export const isBulkApprovalEligible = (order: Pick<KitchenOrder, "status" | "allowedActions">) =>
   normalized(order.status) === "requested" && order.allowedActions?.approve === true;
 
+export function kitchenDetailAccess(order: Pick<KitchenOrder, "allowedActions" | "centralKitchenId">, permissions: {
+  approve: boolean; edit: boolean; production: boolean; kitchenBranch: boolean;
+}) {
+  return {
+    approve: permissions.approve && order.allowedActions?.approve === true,
+    prepare: permissions.edit && order.allowedActions?.prepare === true,
+    dispatch: permissions.edit && order.allowedActions?.dispatch === true,
+    receive: permissions.edit && order.allowedActions?.receive === true,
+    resolveDiscrepancy: permissions.edit && order.allowedActions?.resolveDiscrepancy === true,
+    change: permissions.edit && (order.allowedActions?.edit === true || order.allowedActions?.cancel === true),
+    production: permissions.production && permissions.kitchenBranch,
+  };
+}
+export function visibleKitchenDetail(order: KitchenOrder | undefined, id: string | number | null, denied: boolean) {
+  return !denied && id !== null && String(order?.id) === String(id) ? order : undefined;
+}
+export function kitchenProductionScoped(access: boolean, journey: KitchenOrderJourney | undefined, id: string | number, failed: boolean) {
+  return access && !failed && journey?.orderId === Number(id) && journey.sections.production === true;
+}
+
 export default function CentralKitchenOrdersPage() {
   const [, navigateSupply] = useLocation();
   const { user } = useAuth();
@@ -201,7 +221,9 @@ export default function CentralKitchenOrdersPage() {
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
-  const canConfigureRouting = canEdit("central_kitchen_orders");
+  // Routing candidates/write require a privileged server role in addition to module edit.
+  const canConfigureRouting = canEdit("central_kitchen_orders")
+    && ["admin", "operations_manager", "production_development_manager"].includes(user?.role || "");
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [branchFilter, setBranchFilter] = useState(userBranchId || "all");
@@ -242,6 +264,7 @@ export default function CentralKitchenOrdersPage() {
   const detailDialogStyle = useVisualViewportDialog({ open: detailId !== null && detailDialogOpen, maxHeight: 900, viewportFraction: 0.94 });
   const [actionNotes, setActionNotes] = useState("");
   const [pilotDays, setPilotDays] = useState("30");
+  const [metricsOpen, setMetricsOpen] = useState(false);
   const [draft, setDraft] = useState({ sourceBranchId: userBranchId || "", centralKitchenId: "", neededDate: "", neededTime: "", notes: "", items: [emptyLine()] });
   const createSubmittingRef = useRef(false);
   const createSessionRef = useRef(0);
@@ -339,10 +362,20 @@ export default function CentralKitchenOrdersPage() {
     placeholderData: undefined,
   });
   const metricsUrl = `/api/central-kitchen-orders/pilot-metrics?days=${pilotDays}${branchFilter !== "all" ? `&branchId=${encodeURIComponent(branchFilter)}` : ""}`;
-  const metricsQuery = useQuery<PilotMetrics>({ queryKey: [metricsUrl], enabled: !navigationBranch.isResolving
+  const metricsQuery = useQuery<PilotMetrics>({ queryKey: [metricsUrl], enabled: metricsOpen && canView("central_kitchen_orders") && !navigationBranch.isResolving
     && (!navigationBranch.hasBranchParam || (!!navigationBranch.branchId && branchFilter === navigationBranch.branchId)) });
+  const detailQuery = useQuery<KitchenOrder>({
+    queryKey: [`/api/central-kitchen-orders/${detailId}`],
+    enabled: detailId !== null && canView("central_kitchen_orders"),
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchInterval: 30_000,
+    placeholderData: undefined,
+    retry: (count, error) => errorStatus(error) !== 403 && errorStatus(error) !== 401 && count < 2,
+  });
   const productsQuery = useQuery<ProductOption[]>({
     queryKey: ["/api/central-kitchen-orders/catalog-v2"],
+    enabled: canView("central_kitchen_orders") && (createOpen || !!(detailId && !detailQuery.isError && String(detailQuery.data?.id) === String(detailId) && canEdit("central_kitchen_orders") && detailQuery.data?.allowedActions?.prepare)),
     queryFn: async () => {
       let response: Response;
       try {
@@ -371,6 +404,7 @@ export default function CentralKitchenOrdersPage() {
   });
   const kitchensQuery = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["/api/central-kitchen-orders/kitchens"],
+    enabled: canView("central_kitchen_orders") && (filtersOpen || (createOpen && canCreate("central_kitchen_orders"))),
     staleTime: 0,
     refetchOnMount: "always",
   });
@@ -379,18 +413,7 @@ export default function CentralKitchenOrdersPage() {
     enabled: createOpen && !!draft.sourceBranchId,
     retry: false,
   });
-  const detailQuery = useQuery<KitchenOrder>({
-    queryKey: [`/api/central-kitchen-orders/${detailId}`],
-    enabled: detailId !== null,
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchInterval: 30_000,
-    placeholderData: undefined,
-  });
   const products = productsQuery.data || [];
-  useEffect(() => {
-    if (createOpen) void productsQuery.refetch();
-  }, [createOpen]);
   const centralKitchens = useMemo(() => {
     const merged = new Map<string, { id: string; name: string }>();
     for (const branch of kitchensQuery.data || []) merged.set(branch.id, branch);
@@ -563,6 +586,7 @@ export default function CentralKitchenOrdersPage() {
   });
   const preparationSheetMutation = useMutation({
     mutationFn: async () => {
+      if (!hasPermission("central_kitchen_orders", "print")) throw new Error("ليس لديك صلاحية طباعة ورقة التجهيز.");
       const response = await apiRequest("POST", "/api/central-kitchen-orders/preparation-sheet", {
         orderIds: Array.from(selectedOrderIds).map(Number),
       });
@@ -580,9 +604,24 @@ export default function CentralKitchenOrdersPage() {
       variant: "destructive",
     }),
   });
-  const selectedDetail = detailQuery.data;
+  // A failed refresh can leave the last successful result in React Query. Never render it after denial.
+  const detailDenied = !canView("central_kitchen_orders") || detailQuery.isError;
+  const detailError = !canView("central_kitchen_orders") ? new Error("403: صلاحية عرض الطلب غير متاحة") : detailQuery.error;
+  const selectedDetail = visibleKitchenDetail(detailQuery.data, detailId, detailDenied);
+  const performDetailAction = (order: KitchenOrder, action: "approve" | "prepare" | "dispatch" | "receive" | "resolve-discrepancy", details?: Record<string, unknown>) => {
+    const access = kitchenDetailAccess(order, {
+      approve: canApprove("central_kitchen_orders"), edit: canEdit("central_kitchen_orders"),
+      production: canView("production"), kitchenBranch: branches.some(branch => branch.id === order.centralKitchenId),
+    });
+    if (!access[action === "resolve-discrepancy" ? "resolveDiscrepancy" : action] || detailDenied) return;
+    const attempt = `${order.id}:${action}`;
+    if (workflowMutation.isPending || workflowSubmissionRef.current === attempt) return;
+    workflowSubmissionRef.current = attempt;
+    workflowMutation.mutate({ id: order.id, action, details });
+  };
   const pageNeeds = useMemo(() => summarizeKitchenOperations(ordersQuery.data?.data || []), [ordersQuery.data]);
   const reviewSelectedApprovals = async () => {
+    if (!canApprove("central_kitchen_orders")) return;
     setBulkLoading(true);
     setBulkReview(null);
     const rows = await Promise.all(Array.from(selectedOrderIds).map(async id => {
@@ -601,7 +640,7 @@ export default function CentralKitchenOrdersPage() {
     setBulkLoading(false);
   };
   const confirmBulkApprovals = async () => {
-    if (bulkGuard.current || !bulkReview?.some(row => row.checked && !row.result && !row.error)) return;
+    if (!canApprove("central_kitchen_orders") || bulkGuard.current || !bulkReview?.some(row => row.checked && !row.result && !row.error)) return;
     bulkGuard.current = true;
     setBulkRunning(true);
     const rows = [...bulkReview];
@@ -754,7 +793,7 @@ export default function CentralKitchenOrdersPage() {
             <div className="kitchen-search relative min-w-0 flex-[1_1_260px]"><Search className="absolute right-3 top-3 h-4 w-4 text-muted-foreground" /><Input aria-label="بحث في الطلبات" value={search} onChange={event => setSearch(event.target.value)} className="h-10 bg-background pr-9" placeholder="رقم الطلب أو الفرع أو المطبخ" /></div>
             <Button variant="outline" className="h-10" type="button" onClick={() => setFiltersOpen(open => !open)} aria-expanded={filtersOpen} aria-controls="kitchen-order-filters"><SlidersHorizontal className="ml-2 h-4 w-4" />تصفية</Button>
             <Select value={sort} onValueChange={value => setSort(value as typeof sort)}><SelectTrigger className="h-10 w-36"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="priority">الأولوية</SelectItem><SelectItem value="newest">الأحدث</SelectItem><SelectItem value="oldest_waiting">الأقدم انتظاراً</SelectItem></SelectContent></Select>
-            <DropdownMenu><DropdownMenuTrigger asChild><Button data-testid="sheet-actions-trigger" variant="outline" className="h-11" disabled={!selectedOrderIds.size || preparationSheetMutation.isPending}>{preparationSheetMutation.isPending ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <EllipsisVertical className="ml-1 h-4 w-4" />}المحدد ({selectedOrderIds.size})</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="text-right"><DropdownMenuItem onSelect={() => preparationSheetMutation.mutate()}>معاينة ورقة التجهيز</DropdownMenuItem>{canApprove("central_kitchen_orders") && <DropdownMenuItem onSelect={() => void reviewSelectedApprovals()}>مراجعة اعتماد الطلبات المحددة</DropdownMenuItem>}<DropdownMenuItem onSelect={() => setSelectedOrderIds(new Set())}>مسح التحديد</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
+            {(hasPermission("central_kitchen_orders", "print") || canApprove("central_kitchen_orders")) && <DropdownMenu><DropdownMenuTrigger asChild><Button data-testid="sheet-actions-trigger" variant="outline" className="h-11" disabled={!selectedOrderIds.size || preparationSheetMutation.isPending}>{preparationSheetMutation.isPending ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <EllipsisVertical className="ml-1 h-4 w-4" />}المحدد ({selectedOrderIds.size})</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="text-right">{hasPermission("central_kitchen_orders", "print") && <DropdownMenuItem onSelect={() => preparationSheetMutation.mutate()}>معاينة ورقة التجهيز</DropdownMenuItem>}{canApprove("central_kitchen_orders") && <DropdownMenuItem onSelect={() => void reviewSelectedApprovals()}>مراجعة اعتماد الطلبات المحددة</DropdownMenuItem>}<DropdownMenuItem onSelect={() => setSelectedOrderIds(new Set())}>مسح التحديد</DropdownMenuItem></DropdownMenuContent></DropdownMenu>}
             <span className="text-xs text-muted-foreground">{ordersQuery.data?.total || 0} طلب</span>
           </div>
           <div id="kitchen-order-filters" hidden={!filtersOpen} className="grid gap-2 border-b border-border p-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -769,7 +808,7 @@ export default function CentralKitchenOrdersPage() {
        filtered.length === 0 ? <div className="py-16 text-center"><PackagePlus className="mx-auto mb-3 h-9 w-9 text-muted-foreground" /><h2 className="font-semibold">لا توجد طلبات ضمن هذا العرض</h2><p className="mt-1 text-sm text-muted-foreground">غيّر المرحلة أو امسح البحث والفلاتر الثانوية.</p><Button variant="link" className="mt-2" onClick={() => { setSearch(""); setKitchenFilter("all"); setDateFilter("all"); setFocus(null); changeInventoryModeFilter("all"); }}>مسح الفلاتر</Button></div> :
       <section className="divide-y divide-border p-1.5" aria-label="قائمة الطلبات">
         {filtered.map(order => <div key={order.id} role="button" tabIndex={0} onClick={() => selectDetail(order.id)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectDetail(order.id); } }} className={cn("kitchen-order-row grid w-full cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-xl border border-transparent p-3 text-right transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", operationsView ? "sm:grid-cols-[auto_minmax(0,1fr)]" : "sm:grid-cols-[auto_minmax(190px,1.25fr)_minmax(130px,.65fr)_minmax(220px,1fr)_18px] sm:items-center", String(detailId) === String(order.id) && "border-primary/30 bg-primary/5", queueOrderNeedsAttention(order) && "border-r-[3px] border-r-amber-500")}>
-          <input type="checkbox" aria-label={`اختيار ${order.orderNumber} لورقة التجهيز`} disabled={["cancelled", "received"].includes(normalized(order.status))} checked={selectedOrderIds.has(String(order.id))} onClick={event => event.stopPropagation()} onChange={event => setSelectedOrderIds(current => { const next = new Set(current); if (event.target.checked) next.add(String(order.id)); else next.delete(String(order.id)); return next; })} className="mt-1 h-4 w-4 accent-primary sm:mt-0" />
+          {(hasPermission("central_kitchen_orders", "print") || canApprove("central_kitchen_orders")) && <input type="checkbox" aria-label={`اختيار ${order.orderNumber} للإجراءات المجمعة`} disabled={["cancelled", "received"].includes(normalized(order.status))} checked={selectedOrderIds.has(String(order.id))} onClick={event => event.stopPropagation()} onChange={event => setSelectedOrderIds(current => { const next = new Set(current); if (event.target.checked) next.add(String(order.id)); else next.delete(String(order.id)); return next; })} className="mt-1 h-4 w-4 accent-primary sm:mt-0" />}
           <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><strong className="font-mono text-sm text-foreground">{order.orderNumber}</strong>{queueOrderNeedsAttention(order) && <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-900"><AlertTriangle className="h-3 w-3" />{isOpenDiscrepancy(order) ? "فروقات استلام مفتوحة" : ["requested", "pending", "draft"].includes(normalized(order.status)) ? "طلب جديد" : "متأخر عن موعد الحاجة"}</span>}</div><span className="mt-1 block truncate text-xs text-muted-foreground">{order.requestBranchName || branchName(order.requestBranchId)} <span className="px-1">←</span> {order.centralKitchenName || branchName(order.centralKitchenId)}</span></div>
           <div className={cn("text-xs sm:block", operationsView && "col-start-2")}><span className="block text-[10px] text-muted-foreground">موعد الحاجة</span><strong className="font-medium">{readableDate(order.neededDate)} · {readableTime(order.neededTime)}</strong></div>
           <div className={cn("col-span-2 rounded-lg border border-border bg-background p-2", !operationsView && "sm:col-span-1")}><NextStepSummary order={order} /><LateSubmissionBadge schedule={order.orderingSchedule} /></div>
@@ -790,16 +829,16 @@ export default function CentralKitchenOrdersPage() {
             </div>
           </div>
           {detailId === null ? <div className="flex flex-1 flex-col items-center justify-center p-6 text-center"><PackagePlus className="mb-3 h-8 w-8 text-muted-foreground" /><strong>اختر طلباً من القائمة</strong><p className="mt-1 text-xs text-muted-foreground">تظهر إجراءات الطلب وسجله هنا، دون فتح نافذة جديدة.</p></div> : <>
-            <KitchenDetailHeader inline order={detailQuery.isError || String(selectedDetail?.id) !== String(detailId) ? undefined : selectedDetail} canPrint={hasPermission("central_kitchen_orders", "print")} canExport={canExport("central_kitchen_orders")} />
+            <KitchenDetailHeader inline order={detailDenied || String(selectedDetail?.id) !== String(detailId) ? undefined : selectedDetail} canPrint={hasPermission("central_kitchen_orders", "print")} canExport={canExport("central_kitchen_orders")} />
             <div ref={detailBodyRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4" data-testid="kitchen-inline-detail">
-              {detailQuery.isLoading || (detailQuery.isFetching && detailQuery.isPlaceholderData) ? <div aria-label="جارٍ تحميل تفاصيل الطلب" className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14" />)}</div> : detailQuery.isError || !selectedDetail || String(selectedDetail.id) !== String(detailId) ? <DetailQueryError error={detailQuery.error} onRetry={() => detailQuery.refetch()} /> : <OrderDetail key={selectedDetail.id} showHeader={false} order={selectedDetail} products={products} productsQuery={productsQuery} accessibleBranchIds={branches.map(branch => branch.id)} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={workflowMutation.isPending} failed={workflowMutation.isError} canApprove={canApprove("central_kitchen_orders")} canEdit={canEdit("central_kitchen_orders")} canPrint={hasPermission("central_kitchen_orders", "print")} canExport={canExport("central_kitchen_orders")} canConfigureRouting={canConfigureRouting} onConfigureRouting={() => setSettingsOpen(true)} onAction={(action, details) => { if (selectedDetail.allowedActions?.[action === "resolve-discrepancy" ? "resolveDiscrepancy" : action] !== true) return; const attempt = `${selectedDetail.id}:${action}`; if (workflowMutation.isPending || workflowSubmissionRef.current === attempt) return; workflowSubmissionRef.current = attempt; workflowMutation.mutate({ id: selectedDetail.id, action, details }); }} />}
+              {detailDenied ? <DetailQueryError error={detailError} onRetry={() => detailQuery.refetch()} /> : detailQuery.isLoading || (detailQuery.isFetching && detailQuery.isPlaceholderData) ? <div aria-label="جارٍ تحميل تفاصيل الطلب" className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14" />)}</div> : !selectedDetail || String(selectedDetail.id) !== String(detailId) ? <DetailQueryError error={detailError} onRetry={() => detailQuery.refetch()} /> : <OrderDetail key={selectedDetail.id} showHeader={false} order={selectedDetail} products={products} productsQuery={productsQuery} accessibleBranchIds={branches.map(branch => branch.id)} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={workflowMutation.isPending} failed={workflowMutation.isError} canApprove={canApprove("central_kitchen_orders")} canEdit={canEdit("central_kitchen_orders")} canProduction={canView("production")} canReverseReturn={(user?.role === "branch_manager" && canEdit("central_kitchen_orders")) || (canView("warehouse") && canEdit("warehouse"))} canPrint={hasPermission("central_kitchen_orders", "print")} canExport={canExport("central_kitchen_orders")} canConfigureRouting={canConfigureRouting} onConfigureRouting={() => setSettingsOpen(true)} onAction={(action, details) => performDetailAction(selectedDetail, action, details)} />}
             </div>
           </>}
         </div> : <OrderSummaryPane
-          order={selectedDetail}
+          order={detailDenied || String(selectedDetail?.id) !== String(detailId) ? undefined : selectedDetail}
           loading={detailId !== null && (detailQuery.isLoading || detailQuery.isFetching)}
-          error={detailId !== null && detailQuery.isError}
-          queryError={detailQuery.error}
+          error={detailId !== null && detailDenied}
+          queryError={detailError}
           onRetry={() => detailQuery.refetch()}
           onOpen={() => detailId !== null && openFullDetail(detailId)}
           onClear={closeDetail}
@@ -807,7 +846,7 @@ export default function CentralKitchenOrdersPage() {
       </aside>
       </section>
 
-      <details className="rounded-xl border border-border bg-card">
+      <details className="rounded-xl border border-border bg-card" onToggle={event => setMetricsOpen(event.currentTarget.open)}>
         <summary className="flex cursor-pointer list-none items-center gap-2 p-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><BarChart3 className="h-4 w-4" />التقارير والإعدادات الثانوية</summary>
         <div className="space-y-4 border-t p-4">
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">مؤشرات التجربة والتوسع</h2><p className="text-xs text-muted-foreground">قياس دورة الطلب وجودة التوريد قبل تفعيل المخزون الفعلي.</p></div><Select value={pilotDays} onValueChange={setPilotDays}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="7">آخر 7 أيام</SelectItem><SelectItem value="30">آخر 30 يوماً</SelectItem><SelectItem value="90">آخر 90 يوماً</SelectItem></SelectContent></Select></div>
@@ -864,7 +903,7 @@ export default function CentralKitchenOrdersPage() {
     </DialogContent></Dialog>
 
     {canConfigureRouting && <KitchenSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} branches={routingBranches} />}
-    <SheetPreviewDialog sheet={sheetPreview} open={sheetPreviewOpen} onOpenChange={setSheetPreviewOpen} canPrint={hasPermission("central_kitchen_orders", "print")} canExport={canExport("central_kitchen_orders")} />
+    <SheetPreviewDialog sheet={hasPermission("central_kitchen_orders", "print") ? sheetPreview : null} open={sheetPreviewOpen && hasPermission("central_kitchen_orders", "print")} onOpenChange={setSheetPreviewOpen} canPrint={hasPermission("central_kitchen_orders", "print")} canExport={canExport("central_kitchen_orders")} />
     <Dialog open={bulkLoading || bulkReview !== null} onOpenChange={open => { if (!open && !bulkRunning && !bulkLoading) setBulkReview(null); }}>
       <DialogContent dir="rtl" className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader className="text-right"><DialogTitle>مراجعة اعتماد الطلبات</DialogTitle><DialogDescription>الاعتماد فقط، لكل طلب على حدة. لا يتم شحن أو استلام أي صنف هنا.</DialogDescription></DialogHeader>
@@ -881,8 +920,8 @@ export default function CentralKitchenOrdersPage() {
     </Dialog>
 
       <Dialog open={detailId !== null && detailDialogOpen && (!operationsView || !desktop)} onOpenChange={open => { if (workflowMutation.isPending) return; setDetailDialogOpen(open); if (!open && !desktop) closeDetail(); }}><DialogContent dir="rtl" style={{ ...detailDialogStyle, display: "flex", flexDirection: "column" }} className="kitchen-detail-dialog h-[94dvh] max-h-[900px] max-w-5xl gap-0 overflow-hidden p-0 sm:rounded-xl [&>button]:left-3 [&>button]:right-auto [&>button]:top-3 [&>button]:z-20 [&>button]:flex [&>button]:h-11 [&>button]:w-11 [&>button]:items-center [&>button]:justify-center">
-        <KitchenDetailHeader order={detailQuery.isError || String(selectedDetail?.id) !== String(detailId) ? undefined : selectedDetail} canPrint={hasPermission("central_kitchen_orders", "print")} canExport={canExport("central_kitchen_orders")} />
-        <div className="kitchen-detail-body min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 pb-8 sm:px-5">{(detailQuery.isLoading || (detailQuery.isFetching && detailQuery.isPlaceholderData)) ? <div className="space-y-3 py-8" aria-label="جارٍ تحميل تفاصيل الطلب">{Array.from({ length: 5 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</div> : detailQuery.isError || !selectedDetail || String(selectedDetail.id) !== String(detailId) ? <DetailQueryError error={detailQuery.error} onRetry={() => detailQuery.refetch()} /> : <OrderDetail key={selectedDetail.id} showHeader={false} order={selectedDetail} products={products} productsQuery={productsQuery} accessibleBranchIds={branches.map(branch => branch.id)} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={workflowMutation.isPending} failed={workflowMutation.isError} canApprove={canApprove("central_kitchen_orders")} canEdit={canEdit("central_kitchen_orders")} canPrint={hasPermission("central_kitchen_orders", "print")} canExport={canExport("central_kitchen_orders")} canConfigureRouting={canConfigureRouting} onConfigureRouting={() => setSettingsOpen(true)} onAction={(action, details) => { if (selectedDetail.allowedActions?.[action === "resolve-discrepancy" ? "resolveDiscrepancy" : action] !== true) return; const attempt = `${selectedDetail.id}:${action}`; if (workflowMutation.isPending || workflowSubmissionRef.current === attempt) return; workflowSubmissionRef.current = attempt; workflowMutation.mutate({ id: selectedDetail.id, action, details }); }} />}</div>
+        <KitchenDetailHeader order={detailDenied || String(selectedDetail?.id) !== String(detailId) ? undefined : selectedDetail} canPrint={hasPermission("central_kitchen_orders", "print")} canExport={canExport("central_kitchen_orders")} />
+        <div className="kitchen-detail-body min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 pb-8 sm:px-5">{detailDenied ? <DetailQueryError error={detailError} onRetry={() => detailQuery.refetch()} /> : (detailQuery.isLoading || (detailQuery.isFetching && detailQuery.isPlaceholderData)) ? <div className="space-y-3 py-8" aria-label="جارٍ تحميل تفاصيل الطلب">{Array.from({ length: 5 }).map((_, i) => <Skeleton className="h-14 w-full" key={i} />)}</div> : !selectedDetail || String(selectedDetail.id) !== String(detailId) ? <DetailQueryError error={detailError} onRetry={() => detailQuery.refetch()} /> : <OrderDetail key={selectedDetail.id} showHeader={false} order={selectedDetail} products={products} productsQuery={productsQuery} accessibleBranchIds={branches.map(branch => branch.id)} actionNotes={actionNotes} setActionNotes={setActionNotes} pending={workflowMutation.isPending} failed={workflowMutation.isError} canApprove={canApprove("central_kitchen_orders")} canEdit={canEdit("central_kitchen_orders")} canProduction={canView("production")} canReverseReturn={(user?.role === "branch_manager" && canEdit("central_kitchen_orders")) || (canView("warehouse") && canEdit("warehouse"))} canPrint={hasPermission("central_kitchen_orders", "print")} canExport={canExport("central_kitchen_orders")} canConfigureRouting={canConfigureRouting} onConfigureRouting={() => setSettingsOpen(true)} onAction={(action, details) => performDetailAction(selectedDetail, action, details)} />}</div>
       </DialogContent></Dialog>
   </Layout>;
 }
@@ -1131,18 +1170,34 @@ function DetailRoutingSection({ order, canConfigure, onConfigure }: { order: Kit
     <div className="mt-2"><ReceiverRoutingNotice routing={requestBranch.data} loading={requestBranch.isLoading} error={requestBranch.isError} onRetry={() => void requestBranch.refetch()} /></div>
   </section>;
 }
-export function OrderDetail({ showHeader = true, order, products, productsQuery, accessibleBranchIds, actionNotes, setActionNotes, pending, failed, canApprove, canEdit, canPrint, canExport, canConfigureRouting, onConfigureRouting, onAction }: { showHeader?: boolean; order: KitchenOrder; products: ProductOption[]; productsQuery: CatalogQueryLike; accessibleBranchIds: string[]; actionNotes: string; setActionNotes: (value: string) => void; pending: boolean; failed: boolean; canApprove: boolean; canEdit: boolean; canPrint: boolean; canExport: boolean; canConfigureRouting: boolean; onConfigureRouting: () => void; onAction: (action: "approve" | "prepare" | "dispatch" | "receive" | "resolve-discrepancy", details?: Record<string, unknown>) => void }) {
+export function OrderDetail({ showHeader = true, order, products, productsQuery, accessibleBranchIds, actionNotes, setActionNotes, pending, failed, canApprove, canEdit, canProduction = false, canReverseReturn = false, canPrint, canExport, canConfigureRouting, onConfigureRouting, onAction }: { showHeader?: boolean; order: KitchenOrder; products: ProductOption[]; productsQuery: CatalogQueryLike; accessibleBranchIds: string[]; actionNotes: string; setActionNotes: (value: string) => void; pending: boolean; failed: boolean; canApprove: boolean; canEdit: boolean; canProduction?: boolean; canReverseReturn?: boolean; canPrint: boolean; canExport: boolean; canConfigureRouting: boolean; onConfigureRouting: () => void; onAction: (action: "approve" | "prepare" | "dispatch" | "receive" | "resolve-discrepancy", details?: Record<string, unknown>) => void }) {
   const client = useQueryClient();
-  const [section, setSection] = useState<"overview" | "items" | "decisions" | "changes" | "history">("decisions");
+  const [section, setSection] = useState<"overview" | "items" | "decisions" | "changes" | "history">("items");
   const detailNav = useRef<HTMLElement>(null);
   const changeTab = useRef({ id: order.id, shown: false });
   if (changeTab.current.id !== order.id) changeTab.current = { id: order.id, shown: false };
-  if (order.allowedActions?.edit || order.allowedActions?.cancel) changeTab.current.shown = true;
+  if (canEdit && (order.allowedActions?.edit || order.allowedActions?.cancel)) changeTab.current.shown = true;
+  const access = kitchenDetailAccess(order, {
+    approve: canApprove, edit: canEdit, production: canProduction,
+    kitchenBranch: accessibleBranchIds.includes(order.centralKitchenId),
+  });
+  const journeyScope = useQuery<KitchenOrderJourney>({
+    queryKey: ["/api/central-kitchen-order-journey", Number(order.id)],
+    enabled: access.production,
+    queryFn: async () => {
+      const response = await fetch(`/api/central-kitchen-orders/${order.id}/journey`, { credentials: "include", cache: "no-store" });
+      if (!response.ok) throw new Error(`${response.status}: تعذر التحقق من صلاحية الإنتاج`);
+      return response.json() as Promise<KitchenOrderJourney>;
+    },
+    staleTime: 0,
+    placeholderData: undefined,
+  });
+  const showProduction = kitchenProductionScoped(access.production, journeyScope.data, order.id, journeyScope.isError);
   const previousOrderId = useRef(order.id);
   useEffect(() => {
     const changedOrder = previousOrderId.current !== order.id;
     previousOrderId.current = order.id;
-    setSection(current => changedOrder || current !== "changes" ? "decisions" : current);
+    setSection(current => changedOrder || current !== "changes" ? "items" : current);
   }, [order.id, order.status]);
   const status = normalized(order.status);
   const discrepancyQuantities = (order.items || []).reduce((totals, item) => ({
@@ -1157,12 +1212,12 @@ export function OrderDetail({ showHeader = true, order, products, productsQuery,
     missingQuantity: discrepancyQuantities.missing,
   });
   const action = status === "requested" || status === "pending" || status === "draft" ? "approve" : status === "approved" ? "prepare" : status === "prepared" ? "dispatch" : status === "dispatched" ? "receive" : null;
-  const allowAction = !!action && order.allowedActions?.[action] === true;
+  const allowAction = !!action && access[action];
   const actionConfig = action ? { approve: { label: "اعتماد الطلب", icon: ShieldCheck }, prepare: { label: "تأكيد التجهيز", icon: PackagePlus }, dispatch: { label: "تأكيد الشحن", icon: Truck }, receive: { label: "تأكيد الاستلام", icon: Check } }[action] : null;
    return <div className="min-w-0 space-y-3">{showHeader && <DialogHeader><div className="flex items-start justify-between gap-3 pl-8"><div><DialogTitle className="font-mono text-xl">{order.orderNumber}</DialogTitle><DialogDescription className="mt-1">طلب الفرع {order.requestBranchName || order.requestBranchId} من {order.centralKitchenName || order.centralKitchenId}</DialogDescription></div><div className="flex flex-wrap items-center gap-2"><StatusBadge status={order.status} /><OrderActionsMenu order={order} canPrint={canPrint && ["prepared", "dispatched", "received"].includes(status)} canExport={canExport} onPrint={() => printPreparationNote(order)} /></div></div></DialogHeader>}
     <nav ref={detailNav} className="sticky top-0 z-10 grid min-w-0 grid-cols-3 gap-1 bg-background py-1 sm:static sm:flex" aria-label="أقسام تفاصيل الطلب">
-      <Button size="sm" className="min-h-10 min-w-0 px-1 text-xs sm:px-3 sm:text-sm" variant={section === "decisions" ? "default" : "outline"} onClick={() => setSection("decisions")}>{actionConfig?.label || "الإجراء الحالي"}</Button>
-      <Button size="sm" className="min-h-10 min-w-0 px-1 text-xs sm:px-3 sm:text-sm" variant={section === "items" ? "default" : "outline"} onClick={() => setSection("items")}>البنود والإنتاج ({order.items?.length || 0})</Button>
+      <Button size="sm" className="min-h-10 min-w-0 px-1 text-xs sm:px-3 sm:text-sm" variant={section === "decisions" ? "default" : "outline"} onClick={() => setSection("decisions")}>{allowAction ? actionConfig?.label : "حالة الإجراء"}</Button>
+      <Button size="sm" className="min-h-10 min-w-0 px-1 text-xs sm:px-3 sm:text-sm" variant={section === "items" ? "default" : "outline"} onClick={() => setSection("items")}>{showProduction ? "البنود والإنتاج" : "بنود الطلب"} ({order.items?.length || 0})</Button>
       <DropdownMenu><DropdownMenuTrigger asChild><Button size="sm" className="min-h-10 min-w-0 px-1 text-xs sm:px-3 sm:text-sm" variant={["overview", "history", "changes"].includes(section) ? "secondary" : "ghost"}>المزيد</Button></DropdownMenuTrigger><DropdownMenuContent align="end" dir="rtl"><DropdownMenuItem onSelect={() => setSection("overview")}>معلومات الطلب</DropdownMenuItem><DropdownMenuItem onSelect={() => setSection("history")}>سجل الطلب</DropdownMenuItem>{changeTab.current.shown && <DropdownMenuItem onSelect={() => setSection("changes")}>تعديل / إلغاء</DropdownMenuItem>}</DropdownMenuContent></DropdownMenu>
     </nav>
     <div hidden={section !== "overview"} className="space-y-3">
@@ -1171,25 +1226,25 @@ export function OrderDetail({ showHeader = true, order, products, productsQuery,
      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 px-3 py-2 text-xs"><span className="text-muted-foreground">وضع مخزون الطلب:</span><Badge variant="outline" className={parseCentralKitchenInventoryMode(order.inventoryMode) === "real" ? "border-emerald-300 bg-emerald-50 text-emerald-800" : parseCentralKitchenInventoryMode(order.inventoryMode) === "shadow" ? "border-amber-300 bg-amber-50 text-amber-800" : "border-border bg-muted text-muted-foreground"}>{parseCentralKitchenInventoryMode(order.inventoryMode) === "real" ? "فعلي — حجوزات من مخزون المطبخ" : parseCentralKitchenInventoryMode(order.inventoryMode) === "shadow" ? "ظلّي — تشغيلي فقط، لا حركة مخزون فعلية" : "غير محدد — طلب قديم، لا يثبت حركة مخزون"}</Badge></div>
      <OrderScheduleNotice schedule={order.orderingSchedule} />
      <LifecycleProgress status={status} discrepancyOpen={isOpenDiscrepancy(order)} />
-     <DetailRoutingSection order={order} canConfigure={canConfigureRouting} onConfigure={onConfigureRouting} />
+     {canConfigureRouting && <DetailRoutingSection order={order} canConfigure={canConfigureRouting} onConfigure={onConfigureRouting} />}
       {(order.events || []).filter(event => event.eventType === "edited").map(event => <details key={event.id} className="rounded border p-3 text-sm"><summary>تعديل الطلب · {readableDate(event.createdAt)} · {event.notes}</summary><p>تاريخ الاحتياج: {event.changeSnapshot?.before?.order?.neededDate || "—"} ← {event.changeSnapshot?.requested?.edit?.neededDate}</p>{event.changeSnapshot?.before?.items?.map(item => { const updated = event.changeSnapshot?.requested?.edit?.items.find(value => value.itemId === Number(item.id)); return <p key={item.id}>{item.productName}: توريد {item.requestedQuantity} ← {updated?.requestedQuantity} {item.unit} · المتوفر في الفرع {item.reportedAvailableQuantity == null ? "غير مسجل" : item.reportedAvailableQuantity} ← {updated?.reportedAvailableQuantity ?? "غير مسجل"} {item.unit}</p>; })}</details>)}
      <NextStepGuidance step={nextStep} inventoryMode={order.inventoryMode} />
-     <div className="flex justify-end"><a href="/production-reports?tab=operations" className="text-xs font-medium text-primary underline-offset-4 hover:underline">عرض تقرير العمليات المترابط</a></div>
+     {showProduction && <div className="flex justify-end"><a href="/production-reports?tab=operations" className="text-xs font-medium text-primary underline-offset-4 hover:underline">عرض تقرير العمليات المترابط</a></div>}
      {order.driverName && <div className="grid gap-3 rounded-md border bg-orange-50/40 p-3 text-sm md:grid-cols-2"><div><span className="text-muted-foreground">السائق: </span>{order.driverName}</div><div><span className="text-muted-foreground">المركبة: </span>{order.vehicleNumber}</div></div>}
     </div>
     <div hidden={section !== "items"} className="space-y-3">
      <OrderItemsTable items={order.items || []} showPreparation={["prepared", "dispatched", "received"].includes(status)} showShipment={["dispatched", "received"].includes(status)} />
-     {status === "received" && order.inventoryMode === "real" && <div className="space-y-2 rounded border p-3 text-sm"><strong>إرجاع منتج مستلم إلى المطبخ</strong>{(order.items || []).filter(item => item.productId && item.receivedQuantity != null && Number(item.receivedQuantity) > 0).map(item =>
+     {canReverseReturn && accessibleBranchIds.includes(order.requestBranchId) && status === "received" && order.inventoryMode === "real" && <div className="space-y-2 rounded border p-3 text-sm"><strong>إرجاع منتج مستلم إلى المطبخ</strong>{(order.items || []).filter(item => item.productId && item.receivedQuantity != null && Number(item.receivedQuantity) > 0).map(item =>
        <a key={item.id} className="block text-primary underline" href={`/reverse-logistics?orderItemId=${item.id}`}>إنشاء إرجاع للبند #{item.id} · {item.productName}</a>)}</div>}
-    {!!order.allocations?.length && <section className="rounded-lg border bg-emerald-50/30 p-4"><h3 className="font-semibold">الحجوزات والكميات المرحلة</h3><div className="mt-2 space-y-2 text-sm">{order.allocations.map(allocation => <div key={allocation.id} className="flex flex-wrap justify-between gap-2 rounded bg-background px-3 py-2"><span>بند #{allocation.orderItemId} · {allocation.component === "original" ? "الصنف الأصلي" : "بديل"} · {allocation.status}</span><span>محجوز {allocation.reservedQuantity} · مشحون {allocation.dispatchedQuantity} · محرر {allocation.releasedQuantity} {allocation.unit}</span></div>)}</div></section>}
-    <details className="rounded-md bg-muted/20 px-3 py-2 text-sm"><summary className="cursor-pointer font-semibold">الإنتاج والدفعات المرتبطة ({order.linkedBatches?.length || 0})</summary><div className="mt-2"><LinkedBatches batches={order.linkedBatches || []} orderId={order.id} kitchenAccessible={accessibleBranchIds.includes(order.centralKitchenId)} /></div></details>
-     {!!order.shadowInventoryEntries?.length && <section className="rounded-lg border border-dashed border-violet-300 bg-violet-50/40 p-4"><div className="mb-3 flex items-center justify-between gap-3"><div><h3 className="font-semibold text-violet-950">سجل المخزون التجريبي</h3><p className="text-xs text-violet-700">للمراجعة فقط — لم تتغير أرصدة المخزون الفعلية.</p></div><Badge variant="outline" className="border-violet-300 text-violet-800">SHADOW</Badge></div><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead className="text-right">الحركة المتوقعة</TableHead><TableHead className="text-right">الصنف</TableHead><TableHead className="text-right">المصدر</TableHead><TableHead className="text-right">الكمية</TableHead><TableHead className="text-right">النوع</TableHead></TableRow></TableHeader><TableBody>{order.shadowInventoryEntries.map(entry => <TableRow key={entry.id}><TableCell>{entry.direction === "projected_kitchen_out" ? "خصم متوقع من المطبخ" : "إضافة متوقعة للفرع"}</TableCell><TableCell>{entry.productName}</TableCell><TableCell><CatalogSourceBadge source={identitySource(entry)} /></TableCell><TableCell>{entry.quantity} {entry.unit}</TableCell><TableCell>{entry.component === "substitute" ? "بديل" : "أصلي"}</TableCell></TableRow>)}</TableBody></Table></div></section>}
+    {showProduction && !!order.allocations?.length && <section className="rounded-lg border bg-emerald-50/30 p-4"><h3 className="font-semibold">الحجوزات والكميات المرحلة</h3><div className="mt-2 space-y-2 text-sm">{order.allocations.map(allocation => <div key={allocation.id} className="flex flex-wrap justify-between gap-2 rounded bg-background px-3 py-2"><span>بند #{allocation.orderItemId} · {allocation.component === "original" ? "الصنف الأصلي" : "بديل"} · {allocation.status}</span><span>محجوز {allocation.reservedQuantity} · مشحون {allocation.dispatchedQuantity} · محرر {allocation.releasedQuantity} {allocation.unit}</span></div>)}</div></section>}
+    {showProduction && <details className="rounded-md bg-muted/20 px-3 py-2 text-sm"><summary className="cursor-pointer font-semibold">الإنتاج والدفعات المرتبطة ({order.linkedBatches?.length || 0})</summary><div className="mt-2"><LinkedBatches batches={order.linkedBatches || []} orderId={order.id} kitchenAccessible={accessibleBranchIds.includes(order.centralKitchenId)} productionVisible={showProduction} /></div></details>}
+     {showProduction && !!order.shadowInventoryEntries?.length && <section className="rounded-lg border border-dashed border-violet-300 bg-violet-50/40 p-4"><div className="mb-3 flex items-center justify-between gap-3"><div><h3 className="font-semibold text-violet-950">سجل المخزون التجريبي</h3><p className="text-xs text-violet-700">للمراجعة فقط — لم تتغير أرصدة المخزون الفعلية.</p></div><Badge variant="outline" className="border-violet-300 text-violet-800">SHADOW</Badge></div><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead className="text-right">الحركة المتوقعة</TableHead><TableHead className="text-right">الصنف</TableHead><TableHead className="text-right">المصدر</TableHead><TableHead className="text-right">الكمية</TableHead><TableHead className="text-right">النوع</TableHead></TableRow></TableHeader><TableBody>{order.shadowInventoryEntries.map(entry => <TableRow key={entry.id}><TableCell>{entry.direction === "projected_kitchen_out" ? "خصم متوقع من المطبخ" : "إضافة متوقعة للفرع"}</TableCell><TableCell>{entry.productName}</TableCell><TableCell><CatalogSourceBadge source={identitySource(entry)} /></TableCell><TableCell>{entry.quantity} {entry.unit}</TableCell><TableCell>{entry.component === "substitute" ? "بديل" : "أصلي"}</TableCell></TableRow>)}</TableBody></Table></div></section>}
     </div>
     <div hidden={section !== "history"} className="space-y-4">
     <section><h3 className="mb-3 font-semibold">مسار الطلب</h3><div className="space-y-3 border-r-2 border-muted pr-4">{order.events?.length ? order.events.map(event => <div className="relative" key={event.id}><span className="absolute -right-[23px] top-1 h-3 w-3 rounded-full border-2 border-background bg-primary" /><div className="flex flex-wrap items-center gap-2"><StatusBadge status={event.toStatus} /><span className="text-xs text-muted-foreground">{readableDate(event.createdAt)} · {formatKitchenSaudiDateTime(event.createdAt, { hour: "2-digit", minute: "2-digit" })}</span></div>{event.notes && <p className="mt-1 text-sm text-muted-foreground">{event.notes}</p>}</div>) : <p className="text-sm text-muted-foreground">لم تُسجل تحديثات إضافية بعد.</p>}</div></section>
     </div>
     <div hidden={section !== "changes"} className="space-y-4">
-      {changeTab.current.shown && <RequestChangeControls key={order.id} order={order} />}
+      {canEdit && changeTab.current.shown && <RequestChangeControls key={order.id} order={order} />}
     </div>
     <div hidden={section !== "decisions"} className="space-y-3">
      {action === "prepare" && allowAction
@@ -1199,8 +1254,8 @@ export function OrderDetail({ showHeader = true, order, products, productsQuery,
       : actionConfig && allowAction && <ApproveEditor items={order.items || []} pending={pending} actionNotes={actionNotes} setActionNotes={setActionNotes} onSubmit={() => onAction("approve")} />}
      {action && !allowAction && <p className="rounded-lg border bg-muted/20 p-3 text-sm text-muted-foreground">يمكنك عرض الطلب، لكن هذا الإجراء غير مسموح لك وفق التوجيه الحالي من الخادم.</p>}
      {!action && status === "received" && nextStep.isComplete && <div className="flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800"><Check className="h-4 w-4" />تم توثيق استلام الطلب. حالة التوصيل ومخزون الفرع والبار مراحل مستقلة تظهر أدناه حسب الصلاحيات.</div>}
-     {status === "received" && order.discrepancyStatus === "open" && order.allowedActions?.resolveDiscrepancy === true && <div className="rounded-lg border border-amber-300 bg-amber-50 p-3"><div className="flex items-center gap-2 font-medium text-amber-900"><AlertTriangle className="h-4 w-4" />فروقات استلام مفتوحة</div><Input className="mt-3" value={actionNotes} onChange={event => setActionNotes(event.target.value)} placeholder="اكتب كيف تمت معالجة الناقص أو التالف" /><Button className="mt-3" disabled={pending || !actionNotes.trim()} onClick={() => onAction("resolve-discrepancy", { notes: actionNotes.trim() })}>إغلاق الفروقات بعد المعالجة</Button></div>}
-     {["received", "cancelled"].includes(status) && <details className="rounded-lg border p-2 text-sm"><summary className="cursor-pointer font-semibold">سجل الالتزامات والاحتياج</summary><DemandCommitments orderId={order.id} kitchenId={order.centralKitchenId} items={order.items || []} canConsent={canEdit} /></details>}
+     {status === "received" && order.discrepancyStatus === "open" && access.resolveDiscrepancy && <div className="rounded-lg border border-amber-300 bg-amber-50 p-3"><div className="flex items-center gap-2 font-medium text-amber-900"><AlertTriangle className="h-4 w-4" />فروقات استلام مفتوحة</div><Input className="mt-3" value={actionNotes} onChange={event => setActionNotes(event.target.value)} placeholder="اكتب كيف تمت معالجة الناقص أو التالف" /><Button className="mt-3" disabled={pending || !actionNotes.trim()} onClick={() => onAction("resolve-discrepancy", { notes: actionNotes.trim() })}>إغلاق الفروقات بعد المعالجة</Button></div>}
+     {canEdit && showProduction && <>{["received", "cancelled"].includes(status) && <details className="rounded-lg border p-2 text-sm"><summary className="cursor-pointer font-semibold">سجل الالتزامات والاحتياج</summary><DemandCommitments orderId={order.id} kitchenId={order.centralKitchenId} items={order.items || []} canConsent={canEdit} /></details>}</>}
     </div>
     <OrderJourney key={order.id} orderId={Number(order.id)} status={order.status} onChanged={() => { void client.invalidateQueries({ queryKey: [`/api/central-kitchen-orders/${order.id}`] }); void client.invalidateQueries({ queryKey: ["/api/central-kitchen-orders"] }); }} onStageSelected={key => { setSection(key === "production" ? "items" : "decisions"); detailNav.current?.scrollIntoView({ block: "start", behavior: "smooth" }); }} />
   </div>;

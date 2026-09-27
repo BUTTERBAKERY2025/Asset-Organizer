@@ -20,6 +20,23 @@ const order = {
   linkedBatches: [], items: [{ productId: 7, dispatchedQuantity: 5, receivedQuantity: null }],
 };
 
+function journeyHandlers(
+  detail: (id: number) => Promise<typeof order>,
+  access: (req: any, order: typeof order) => Promise<boolean>,
+) {
+  let handlers: any[] = [];
+  registerCentralKitchenJourneyRoute({
+    get: (_path: string, ...callbacks: any[]) => { handlers = callbacks; },
+  } as any, detail, access);
+  return async (req: any, res: any) => {
+    for (const handler of handlers) {
+      let next = false;
+      await handler(req, res, () => { next = true; });
+      if (!next) break;
+    }
+  };
+}
+
 describe("read-only kitchen order journey", () => {
   it("does not invent production, stock, handoff completion or quantity counters", () => {
     const dto = composeKitchenOrderJourney(order, { production: "available", delivery: "absent", inventory: "available", bar: "available" },
@@ -66,11 +83,9 @@ describe("read-only kitchen order journey", () => {
   });
 
   it("validates ID, reuses detail visibility and sends no-store headers before downstream reads", async () => {
-    const handlers: Array<(req: any, res: any) => Promise<unknown>> = [];
-    const app = { get: (_path: string, ...callbacks: any[]) => handlers.push(callbacks.at(-1)) };
     const detail = vi.fn(async () => order);
     const access = vi.fn(async () => false);
-    registerCentralKitchenJourneyRoute(app as any, detail, access);
+    const invoke = journeyHandlers(detail, access);
     const reply = () => {
       const res: any = { code: 200, headers: {}, status(code: number) { this.code = code; return this; },
         setHeader(name: string, value: string) { this.headers[name] = value; },
@@ -78,23 +93,21 @@ describe("read-only kitchen order journey", () => {
       return res;
     };
     const invalid = reply();
-    await handlers[0]({ params: { id: "42abc" } }, invalid);
+    await invoke({ params: { id: "42abc" } }, invalid);
     expect(invalid.code).toBe(400);
     expect(detail).not.toHaveBeenCalled();
     const denied = reply();
-    await handlers[0]({ params: { id: "42" } }, denied);
+    await invoke({ params: { id: "42" } }, denied);
     expect(denied.code).toBe(403);
     expect(access).toHaveBeenCalledWith({ params: { id: "42" } }, order);
     expect(denied.headers["Cache-Control"]).toContain("no-store");
   });
 
   it("does not disclose delivery assignments to an order viewer with a delivery job title", async () => {
-    const handlers: any[] = [];
-    registerCentralKitchenJourneyRoute({ get: (_path: string, ...callbacks: any[]) => handlers.push(callbacks.at(-1)) } as any,
-      async () => order, async () => true);
+    const invoke = journeyHandlers(async () => order, async () => true);
     const res: any = { setHeader: vi.fn(), json(value: unknown) { this.body = value; return this; } };
     vi.mocked(pool.query).mockClear();
-    await handlers[0]({ params: { id: "42" }, currentUser: { jobTitle: "delivery" } }, res);
+    await invoke({ params: { id: "42" }, currentUser: { jobTitle: "delivery" } }, res);
     expect(res.body.sectionState.delivery).toBe("restricted");
     expect(res.body.delivery).toBeNull();
     expect(pool.query).not.toHaveBeenCalled();
