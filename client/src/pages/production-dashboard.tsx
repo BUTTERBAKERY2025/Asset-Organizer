@@ -1,20 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { Factory, ListChecks, Workflow } from "lucide-react";
+import { Factory, ListChecks, Workflow, BookOpen, ClipboardList, History, Settings2, CalendarRange } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
-import { PageHeader } from "@/components/dashboard/page-header";
 import { OperationsBoard } from "@/components/central-kitchen/operations-board";
 import { LegacyProductionDashboard } from "@/components/central-kitchen/legacy-production-dashboard";
 import { RecipeBook, RECIPE_PERMISSION_MODULE } from "@/components/central-kitchen/recipe-book";
 import { DailyWorkplan } from "@/components/central-kitchen/daily-workplan";
 import { ProductionPlanning } from "@/components/central-kitchen/production-planning";
 import { getProductionDashboardTab } from "@/components/central-kitchen/production-dashboard-tabs";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBranches } from "@/hooks/useBranches";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
+import "@/components/central-kitchen/production-workspace.css";
 
 type Kitchen = { id: string; name: string };
 export { getProductionDashboardTab } from "@/components/central-kitchen/production-dashboard-tabs";
@@ -49,15 +48,45 @@ export default function ProductionDashboardPage() {
     setTab(nextTab);
     setLocation(nextTab === "operations" ? "/production-dashboard" : `/production-dashboard?tab=${nextTab}`);
   };
-  return <Layout><main dir="rtl" className="page-container space-y-5 pb-10">
-    <PageHeader icon={Factory} tone="production" title="إنتاج المطبخ المركزي" description="دورة الطلب المعتمد → الإنتاج → المخزون → الإرسال" actions={<div className="flex flex-wrap gap-2"><a href="/production-reports?tab=operations" target="_blank" rel="noopener noreferrer" className="inline-flex"><Button variant="outline"><Workflow className="ml-2 h-4 w-4" />تقرير التشغيل المترابط</Button></a><Link href="/central-kitchen-orders" className="inline-flex"><Button><ListChecks className="ml-2 h-4 w-4" />طلبات الفروع</Button></Link></div>} />
-      <Tabs value={tab} onValueChange={changeTab} className="space-y-5"><TabsList className="h-auto flex-wrap rounded-xl bg-muted p-1"><TabsTrigger value="workplan" className="rounded-lg">خطة العمل اليومية</TabsTrigger><TabsTrigger value="operations" className="rounded-lg">التشغيل الحي</TabsTrigger>{canViewRecipes && <TabsTrigger value="recipes" className="rounded-lg">دفتر الوصفات</TabsTrigger>}<TabsTrigger value="legacy" className="rounded-lg">التقارير والأدوات السابقة <span className="mr-1 text-[10px] text-muted-foreground">(مصادر تاريخية)</span></TabsTrigger><TabsTrigger value="settings-review" className="rounded-lg">مراجعة الإعدادات</TabsTrigger><TabsTrigger value="unified-planning" className="rounded-lg">التخطيط الموحد</TabsTrigger></TabsList>
+  const navigation = [
+    { value: "operations", label: "التشغيل الحي", caption: "متابعة الدفعات", icon: Factory },
+    { value: "workplan", label: "خطة العمل", caption: "مهام اليوم", icon: ClipboardList },
+    { value: "unified-planning", label: "التخطيط", caption: "احتياجات الإنتاج", icon: CalendarRange },
+    ...(canViewRecipes ? [{ value: "recipes", label: "الوصفات", caption: "المقادير والتحضير", icon: BookOpen }] : []),
+    { value: "settings-review", label: "الإعدادات", caption: "مراجعة الجاهزية", icon: Settings2 },
+    { value: "legacy", label: "السجل والأدوات", caption: "بيانات النظام السابق", icon: History },
+  ];
+  return <Layout><main dir="rtl" className="page-container production-workspace pb-10">
+    <Tabs value={tab} onValueChange={changeTab}>
+      <div className="desk-shell">
+        <header className="desk-header">
+          <div>
+            <div className="desk-eyebrow">BUTTER BAKERY / مساحة عمل الإنتاج</div>
+            <h1 className="desk-heading">المطبخ المركزي</h1>
+            <p className="desk-subtitle">من تخطيط الاحتياج إلى تجهيز الطلب وإرساله للفرع</p>
+          </div>
+          <div className="desk-actions">
+            {hasPermission("production", "view") && <a href="/production-reports?tab=operations" target="_blank" rel="noopener noreferrer"><Workflow className="h-4 w-4" />تقرير التشغيل</a>}
+            {hasPermission("central_kitchen_orders", "view") && <Link href="/central-kitchen-orders"><ListChecks className="h-4 w-4" />طلبات الفروع</Link>}
+          </div>
+        </header>
+        <TabsList className="desk-nav" aria-label="أقسام مساحة عمل الإنتاج">
+          {navigation.map(({ value, label, caption, icon: Icon }) =>
+            <TabsTrigger key={value} value={value}>
+              <span className="desk-tab-title"><Icon className="h-4 w-4 shrink-0" aria-hidden="true" />{label}</span>
+              <span className="desk-tab-caption">{caption}</span>
+            </TabsTrigger>
+          )}
+        </TabsList>
+      </div>
+      <div className="desk-content">
       <TabsContent value="workplan"><DailyWorkplan kitchens={kitchens} kitchenId={kitchenId} onKitchenChange={setKitchenId} /></TabsContent>
       <TabsContent value="operations"><OperationsBoard kitchens={kitchens} kitchenId={kitchenId} onKitchenChange={setKitchenId} /></TabsContent>
        {canViewRecipes && <TabsContent value="recipes"><RecipeBook kitchens={kitchens} kitchenId={kitchenId} onKitchenChange={setKitchenId} /></TabsContent>}
       <TabsContent value="legacy"><LegacyProductionDashboard /></TabsContent>
        <TabsContent value="settings-review"><ProductionPlanning mode="settings" kitchens={kitchens} kitchenId={kitchenId} onKitchenChange={setKitchenId} date={planningDate} onDateChange={setPlanningDate} /></TabsContent>
        <TabsContent value="unified-planning"><ProductionPlanning mode="planning" kitchens={kitchens} kitchenId={kitchenId} onKitchenChange={setKitchenId} date={planningDate} onDateChange={setPlanningDate} /></TabsContent>
-    </Tabs>
+      </div>
+     </Tabs>
   </main></Layout>;
 }

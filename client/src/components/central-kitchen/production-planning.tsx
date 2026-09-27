@@ -6,11 +6,13 @@ import { AlertTriangle, ExternalLink, Factory, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { filterPlanningRows, planningItemQuantities, planningIssueLabel, planningStatusLabel } from "./production-planning-model";
+import { filterPlanningRows, planningItemQuantities, planningIssueLabel, planningPage, planningStatusLabel } from "./production-planning-model";
 import { CoverageScope, ItemCoverage } from "./production-coverage";
+import workspaceStyles from "./planning-workspace.css?raw";
 
 type Props = {
   mode: "settings" | "planning";
@@ -34,6 +36,15 @@ export function ProductionPlanning({ mode, kitchens, kitchenId, onKitchenChange,
   const [source, setSource] = useState<"all" | "central_request" | "advanced_plan">("all");
   const [status, setStatus] = useState("all");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [selectedCheck, setSelectedCheck] = useState<string | null>(null);
+  const [checkSearch, setCheckSearch] = useState("");
+  const [checkStatus, setCheckStatus] = useState("all");
+  const [checkPage, setCheckPage] = useState(1);
+  const [scopeKey, setScopeKey] = useState(`${kitchenId}:${date}:${mode}`);
+  const currentScope = `${kitchenId}:${date}:${mode}`;
+  if (scopeKey !== currentScope) { setScopeKey(currentScope); setSelectedKey(null); setSelectedCheck(null); setPage(1); setCheckPage(1); }
   const planning = useQuery<ProductionPlanningResponse>({
     queryKey: ["/api/production/planning", kitchenId, date],
     queryFn: async () => {
@@ -47,34 +58,62 @@ export function ProductionPlanning({ mode, kitchens, kitchenId, onKitchenChange,
   const data = planning.data?.kitchen.id === kitchenId && planning.data.date === date ? planning.data : undefined;
   const filtered = useMemo(() => filterPlanningRows(data?.rows || [], { source, status, search }), [data, source, status, search]);
   const statuses = useMemo(() => [...new Set((data?.rows || []).map(row => row.status))].sort(), [data]);
+  const { pageItems, currentPage, totalPages } = planningPage(filtered, page);
+  const checks = useMemo(() => (data?.checks || []).filter(check =>
+    (checkStatus === "all" || check.status === checkStatus) &&
+    (!checkSearch.trim() || `${check.title} ${check.detail}`.toLocaleLowerCase("ar").includes(checkSearch.trim().toLocaleLowerCase("ar")))
+  ), [data, checkStatus, checkSearch]);
+  const checkPagination = planningPage(checks, checkPage);
+  const selectedRow = data?.rows.find(row => row.key === selectedKey);
+  const check = data?.checks.find(item => item.id === selectedCheck);
+  const changeScope = (change: () => void) => { setSelectedKey(null); setSelectedCheck(null); setPage(1); setCheckPage(1); change(); };
 
-  return <section dir="rtl" className="space-y-4" aria-label={mode === "settings" ? "مراجعة إعدادات الإنتاج" : "التخطيط الموحد"}>
-    <Card className="border-violet-200 bg-violet-50/40"><CardContent className="space-y-4 p-4 sm:p-6">
-      <div><h2 className="text-xl font-bold">{mode === "settings" ? "مراجعة إعدادات الإنتاج" : "التخطيط الموحد للإنتاج"}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">عرض للقراءة فقط للبيانات المحفوظة حالياً، وليس اعتماداً للإعدادات أو خطة تنفيذ. الربط الصريح بين خطة وطلب ليس حجزاً للمخزون ولا يغيّر الطلب أو المواد. لا تُستنتج جاهزية المخزون المباشر أو مصدر المبيعات.</p></div>
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-[180px] flex-1 sm:max-w-64"><Label htmlFor={`planning-kitchen-${mode}`}>المطبخ المركزي</Label><Select value={kitchenId || undefined} onValueChange={onKitchenChange}><SelectTrigger id={`planning-kitchen-${mode}`} className="mt-1"><SelectValue placeholder="اختر المطبخ" /></SelectTrigger><SelectContent>{kitchens.map(kitchen => <SelectItem key={kitchen.id} value={kitchen.id}>{kitchen.name}</SelectItem>)}</SelectContent></Select></div>
-        <div className="min-w-[170px]"><Label htmlFor={`planning-date-${mode}`}>تاريخ الخطة (توقيت الرياض)</Label><Input id={`planning-date-${mode}`} className="mt-1" type="date" value={date} onChange={event => onDateChange(event.target.value)} /></div>
-        <Button type="button" variant="outline" onClick={() => planning.refetch()} disabled={!kitchenId || !date || planning.isFetching} aria-label="تحديث المراجعة والتخطيط"><RefreshCw className={`ml-2 h-4 w-4 ${planning.isFetching ? "animate-spin" : ""}`} />تحديث</Button>
+  return <section dir="rtl" className="planning-workspace space-y-3" aria-label={mode === "settings" ? "مراجعة إعدادات الإنتاج" : "التخطيط الموحد"}><style>{workspaceStyles}</style>
+    <div className="pw-shell"><div className="pw-top"><span className="pw-kicker">{mode === "settings" ? "مراجعة التشغيل" : "مكتب التخطيط"}</span><h2>{mode === "settings" ? "مراجعة إعدادات الإنتاج" : "التخطيط الموحد للإنتاج"}</h2><p>عرض للقراءة فقط للحالة المحفوظة حالياً؛ لا يُعتمد منه التنفيذ أو تخصيص المخزون. جاهزية التخصيص غير معروفة.</p></div>
+      <div className="pw-toolbar">
+        <div className="pw-field"><Label htmlFor={`planning-kitchen-${mode}`}>المطبخ المركزي</Label><Select value={kitchenId || ""} onValueChange={value => changeScope(() => onKitchenChange(value))}><SelectTrigger id={`planning-kitchen-${mode}`}><SelectValue placeholder="اختر المطبخ" /></SelectTrigger><SelectContent>{kitchens.map(kitchen => <SelectItem key={kitchen.id} value={kitchen.id}>{kitchen.name}</SelectItem>)}</SelectContent></Select></div>
+        <div className="pw-field"><Label htmlFor={`planning-date-${mode}`}>التاريخ · الرياض</Label><Input id={`planning-date-${mode}`} type="date" value={date} onChange={event => changeScope(() => onDateChange(event.target.value))} /></div>
+        {mode === "planning" ? <>
+          <div className="pw-field pw-search"><Label htmlFor="planning-search">بحث في الصفوف المُعادة</Label><Input id="planning-search" type="search" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="رقم أو مصدر أو صنف" /></div>
+          <div className="pw-field"><Label htmlFor="planning-source">المصدر</Label><Select value={source} onValueChange={value => { setSource(value as typeof source); setPage(1); }}><SelectTrigger id="planning-source"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">كل المصادر</SelectItem><SelectItem value="central_request">طلبات الفروع</SelectItem><SelectItem value="advanced_plan">أوامر الإنتاج</SelectItem></SelectContent></Select></div>
+          <div className="pw-field"><Label htmlFor="planning-status">الحالة</Label><Select value={status} onValueChange={value => { setStatus(value); setPage(1); }}><SelectTrigger id="planning-status"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">كل الحالات</SelectItem>{statuses.map(value => <SelectItem key={value} value={value}>{planningStatusLabel(value)}</SelectItem>)}</SelectContent></Select></div>
+        </> : <>
+          <div className="pw-field pw-search"><Label htmlFor="check-search">بحث في الفحوص</Label><Input id="check-search" type="search" value={checkSearch} onChange={event => { setCheckSearch(event.target.value); setCheckPage(1); }} placeholder="عنوان أو وصف الفحص" /></div>
+          <div className="pw-field"><Label htmlFor="check-status">نتيجة الفحص</Label><Select value={checkStatus} onValueChange={value => { setCheckStatus(value); setCheckPage(1); }}><SelectTrigger id="check-status"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">كل النتائج</SelectItem>{Object.entries(checkStyle).map(([value, style]) => <SelectItem key={value} value={value}>{style.label}</SelectItem>)}</SelectContent></Select></div>
+        </>}
+        <Button type="button" size="sm" variant="outline" onClick={() => planning.refetch()} disabled={!kitchenId || !date || planning.isFetching} aria-label="تحديث المراجعة والتخطيط"><RefreshCw className={`ml-2 h-4 w-4 ${planning.isFetching ? "animate-spin" : ""}`} />تحديث</Button>
       </div>
-    </CardContent></Card>
+    </div>
     {!kitchenId ? <Notice title="اختر مطبخاً مركزياً" detail="اختر المطبخ لعرض البيانات الخاصة به." /> :
       !date ? <Notice title="حدد تاريخ الخطة" detail="اختر تاريخاً صالحاً لعرض البيانات." /> :
       planning.isLoading || (planning.isFetching && !data) ? <div role="status" className="rounded-lg border p-6 text-sm text-muted-foreground">جارٍ تحميل بيانات {kitchens.find(k => k.id === kitchenId)?.name || "المطبخ"} بتاريخ {date}…</div> :
       planning.isError ? <Notice title="تعذر تحميل بيانات المطبخ والتاريخ المحددين" detail={planning.error instanceof Error ? planning.error.message : "تحقق من الاتصال وحاول مرة أخرى."} action={<Button variant="outline" onClick={() => planning.refetch()}>إعادة المحاولة</Button>} /> :
       !data ? <Notice title="لا توجد بيانات لهذا النطاق" detail="أعد تحميل الصفحة أو اختر مطبخاً وتاريخاً آخرين." /> :
-      mode === "settings" ? <SettingsReview data={data} /> :
-      <div className="space-y-4">
-        <Scope data={data} />
+       mode === "settings" ? <div className="pw-shell">
+         <div className="pw-statbar"><Stat label="فحوص معروضة" value={`${number.format(checks.length)} / ${number.format(data.checks.length)}`} /><Stat label="متحقق" value={number.format(data.checks.filter(c => c.status === "pass").length)} /><Stat label="يحتاج مراجعة" value={number.format(data.checks.filter(c => c.status === "warning").length)} /><Stat label="غير متحقق" value={number.format(data.checks.filter(c => c.status === "unknown").length)} /></div>
+         <p className="pw-note">فحوص الأصناف والوصفات تخص البنود المُعادة فقط، وليست تدقيقاً للكتالوج الكامل{data.metadata.truncated ? "؛ النتائج مقتطعة أيضاً" : ""}. «متحقق» يصف فحصاً محدداً فقط وليس موافقة أو تأكيد جاهزية التشغيل. حالة تخصيص المواد: غير معروفة. البيانات محفوظة وقت التوليد ({data.metadata.generatedAt}) لا لقطة تاريخية.</p>
+         {data.metadata.truncated && <p className="pw-warning">النتائج مقتطعة؛ لا تمثل جميع سجلات النظام.</p>}
+         <div className="pw-head pw-check"><span>الفحص</span><span>النتيجة</span><span>الملاحظة</span><span>التفاصيل</span></div>
+         {!checks.length ? <Notice title="لا توجد فحوص مطابقة" detail="لم تُرجع الخدمة فحوصاً أو لا توجد نتائج لعوامل التصفية الحالية؛ لا يمكن استنتاج حالة الإعدادات." /> : checkPagination.pageItems.map(item => <div key={item.id} className="pw-row pw-check"><strong className="pw-primary pw-ellipsis">{item.title}</strong><Badge variant="outline" className={checkStyle[item.status].className}>{checkStyle[item.status].label}</Badge><span className="pw-ellipsis" title={item.id === "configuration_mode" ? modeLabel[data.metadata.configuration.inventoryMode] : item.detail}>{item.id === "configuration_mode" ? `وضع التشغيل الحالي: ${modeLabel[data.metadata.configuration.inventoryMode]}` : item.detail}</span><Button size="sm" variant="outline" onClick={() => setSelectedCheck(item.id)}>عرض</Button></div>)}
+         <Pager current={checkPagination.currentPage} total={checkPagination.totalPages} count={checks.length} onChange={setCheckPage} />
+         <Dialog open={Boolean(check)} onOpenChange={open => !open && setSelectedCheck(null)}><DialogContent dir="rtl" className="max-w-2xl"><DialogHeader><DialogTitle>{check?.title}</DialogTitle><DialogDescription>نتيجة الفحص المحفوظة لهذا النطاق فقط</DialogDescription></DialogHeader>{check && <CheckDetail check={check} configuration={data.metadata.configuration} />}</DialogContent></Dialog>
+       </div> :
+       <div className="space-y-3">
+         <div className="pw-shell"><Scope data={data} />
+         <div className="pw-statbar"><Stat label="طلبات بتاريخ الخطة" value={number.format(data.summary.bySource.central_request.date)} /><Stat label="طلبات سابقة" value={number.format(data.summary.bySource.central_request.overdue)} /><Stat label="أوامر بتاريخ الخطة" value={number.format(data.summary.bySource.advanced_plan.date)} /><Stat label="أوامر سابقة" value={number.format(data.summary.bySource.advanced_plan.overdue)} /></div>
+         <p role="status" className="pw-note">المعروض {number.format(filtered.length)} من {number.format(data.rows.length)} سجل مُعاد. النتائج المفلترة لا تمثل إجمالي الطلبات خارج النطاق؛ لا تُجمع كميات وحدات أو مصادر مختلفة.</p>
+         <div className="pw-head"><span>الرقم / المصدر</span><span>الجهة</span><span>الحالة</span><span>التاريخ</span><span>الملخص</span><span>التفاصيل</span></div>
+         {!filtered.length ? <Notice title="لا توجد سجلات ضمن هذا النطاق" detail="غيّر عوامل التصفية أو المطبخ أو التاريخ. لا يعني ذلك عدم وجود طلبات خارج النطاق." /> :
+           pageItems.map(row => <div key={row.key} className="pw-row">
+             <div className="pw-main"><span className="pw-primary">{row.number}</span><span className="pw-sub">{sourceLabel[row.source]}{row.cohort === "overdue" ? " · سابق غير منتهٍ" : ""}</span></div>
+             <span className="pw-ellipsis" title={row.originLabel}>{row.originLabel}</span>
+             <span>{planningStatusLabel(row.status)}</span><span dir="ltr">{row.date}</span>
+             <div><span className="pw-ellipsis" title={row.items.map(item => item.productName).join("، ")}>{row.items.length ? row.items.map(item => item.productName).join("، ") : "لا توجد بنود مُعادة"}</span>{row.source === "central_request" && <span className="pw-sub">{row.inventoryMode === null ? modeLabel.unknown : modeLabel[row.inventoryMode]} · وضع الطلب</span>}{row.issues.length > 0 && <span className="pw-sub text-amber-800">{planningIssueLabel(row.issues[0])}{row.issues.length > 1 ? ` · +${row.issues.length - 1}` : ""}</span>}</div>
+             <Button className="pw-action" size="sm" variant="outline" onClick={() => setSelectedKey(row.key)}>عرض</Button>
+           </div>)}
+         <Pager current={currentPage} total={totalPages} count={filtered.length} onChange={setPage} /></div>
         <CoverageScope metadata={data.metadata.coverage} />
-        <Card><CardContent className="grid gap-3 p-4 sm:grid-cols-3">
-          <div><Label htmlFor="planning-source">المصدر</Label><Select value={source} onValueChange={value => setSource(value as typeof source)}><SelectTrigger id="planning-source" className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">كل المصادر</SelectItem><SelectItem value="central_request">طلبات الفروع</SelectItem><SelectItem value="advanced_plan">أوامر الإنتاج</SelectItem></SelectContent></Select></div>
-          <div><Label htmlFor="planning-status">الحالة</Label><Select value={status} onValueChange={setStatus}><SelectTrigger id="planning-status" className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">كل الحالات</SelectItem>{statuses.map(value => <SelectItem key={value} value={value}>{planningStatusLabel(value)}</SelectItem>)}</SelectContent></Select></div>
-          <div><Label htmlFor="planning-search">بحث بالرقم أو المصدر أو الصنف</Label><Input id="planning-search" className="mt-1" type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="بحث في الصفوف المُعادة" /></div>
-        </CardContent></Card>
-        <p role="status" className="text-sm text-muted-foreground">المعروض {number.format(filtered.length)} من {number.format(data.rows.length)} سجل مُعاد. النتائج المفلترة لا تمثل إجمالي الطلبات خارج النطاق.</p>
-        {!filtered.length ? <Notice title="لا توجد سجلات ضمن هذا النطاق" detail="غيّر عوامل التصفية أو المطبخ أو التاريخ. لا يعني ذلك عدم وجود طلبات خارج النطاق." /> :
-          <div className="space-y-4">{filtered.map(row => <PlanningRow key={row.key} row={row} />)}</div>}
+         <Dialog open={Boolean(selectedRow)} onOpenChange={open => !open && setSelectedKey(null)}><DialogContent dir="rtl" className="max-w-3xl"><DialogHeader><DialogTitle>تفاصيل {selectedRow?.number}</DialogTitle><DialogDescription>بيانات السجل المحفوظة والروابط الأصلية؛ لا تُستنتج جاهزية المخزون.</DialogDescription></DialogHeader>{selectedRow && <PlanningRow row={selectedRow} />}</DialogContent></Dialog>
       </div>}
   </section>;
 }
@@ -83,16 +122,7 @@ function Notice({ title, detail, action }: { title: string; detail: string; acti
   return <Card><CardContent className="flex items-start gap-3 p-6"><Factory aria-hidden="true" className="mt-1 h-5 w-5 text-muted-foreground" /><div><h3 className="font-semibold">{title}</h3><p className="mt-1 text-sm text-muted-foreground">{detail}</p>{action && <div className="mt-3">{action}</div>}</div></CardContent></Card>;
 }
 
-function SettingsReview({ data }: { data: ProductionPlanningResponse }) {
-  return <div className="space-y-4">
-    <p className="text-sm text-muted-foreground">مراجعة للمطبخ {data.kitchen.name} بتاريخ {data.date}. فحوص الأصناف والوصفات تخص البنود المُعادة فقط، وليست تدقيقاً للكتالوج الكامل{data.metadata.truncated ? "؛ النتائج مقتطعة أيضاً" : ""}. «متحقق» يصف فحصاً محدداً فقط وليس موافقة أو تأكيد جاهزية التشغيل. حالة تخصيص المواد: غير معروفة.</p>
-    {data.checks.length ? <div className="grid gap-3 md:grid-cols-2">{data.checks.map(check => <CheckCard key={check.id} check={check} configuration={data.metadata.configuration} />)}</div> :
-      <Notice title="لا تتوفر فحوص إعدادات" detail="لم تُرجع الخدمة فحوصاً لهذا المطبخ والتاريخ؛ لا يمكن استنتاج حالة الإعدادات." />}
-    <p className="text-xs text-muted-foreground">البيانات تعكس الحالة المحفوظة وقت التوليد ({data.metadata.generatedAt}) لا لقطة تاريخية بتاريخ الخطة؛ لا تتحقق هذه المراجعة من المخزون الحي أو مصدر المبيعات.</p>
-  </div>;
-}
-
-function CheckCard({ check, configuration }: { check: ProductionPlanningCheck; configuration: ProductionPlanningResponse["metadata"]["configuration"] }) {
+function CheckDetail({ check, configuration }: { check: ProductionPlanningCheck; configuration: ProductionPlanningResponse["metadata"]["configuration"] }) {
   const style = checkStyle[check.status];
   const relatedHref = check.actionHref || (check.id === "recipe_evidence" ? "/central-kitchen-recipes" : undefined);
   const detail = check.id === "configuration_mode"
@@ -102,16 +132,13 @@ function CheckCard({ check, configuration }: { check: ProductionPlanningCheck; c
 }
 
 function Scope({ data }: { data: ProductionPlanningResponse }) {
-  const { bySource } = data.summary;
-  return <Card><CardContent className="space-y-3 p-4">
-    <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
-      <p><strong>طلبات الفروع:</strong> بتاريخ الخطة {number.format(bySource.central_request.date)} · سابقة غير منتهية {number.format(bySource.central_request.overdue)}</p>
-      <p><strong>أوامر الإنتاج:</strong> بتاريخ الخطة {number.format(bySource.advanced_plan.date)} · سابقة غير منتهية {number.format(bySource.advanced_plan.overdue)}</p>
-    </div>
-    <p className="text-xs text-muted-foreground">عدادات الصفوف المُعادة لكل مصدر على حدة؛ لا تجمع كميات مصادر أو وحدات مختلفة. السابق ضمن فترة البحث {number.format(data.metadata.cohorts.central_request.overdue.lookbackDays)} يومًا. التاريخ الفعلي بالرياض: {data.metadata.actualRiyadhToday}.</p>
-    {data.metadata.truncated && <p role="alert" className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />بعض النتائج مقتطعة بسبب حد {number.format(data.metadata.rowLimitPerSourceAndCohort)} صف لكل مصدر وفترة؛ العدادات تخص المُعاد فقط ولا تمثل إجمالياً كاملاً.</p>}
-    <p className="text-xs text-muted-foreground">الكميات المكتملة والجارية تعتمد على دفعات إنتاج مرتبطة صراحةً فقط. غير متحقق لا يساوي صفرًا؛ تقدير التغطية المستقل يُعرض فقط عندما يتحقق نطاقه وبياناته.</p>
-  </CardContent></Card>;
+  return <><p className="pw-note">عدادات الصفوف المُعادة لكل مصدر على حدة. السابق ضمن فترة البحث {number.format(data.metadata.cohorts.central_request.overdue.lookbackDays)} يومًا. التاريخ الفعلي بالرياض: {data.metadata.actualRiyadhToday}. المكتمل والجاري من دفعات مرتبطة صراحة فقط؛ غير متحقق لا يساوي صفرًا.</p>
+    {data.metadata.truncated && <p role="alert" className="pw-warning flex items-start gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />بعض النتائج مقتطعة بسبب حد {number.format(data.metadata.rowLimitPerSourceAndCohort)} صف لكل مصدر وفترة؛ العدادات تخص المُعاد فقط ولا تمثل إجمالياً كاملاً.</p>}</>;
+}
+
+function Stat({ label, value }: { label: string; value: string }) { return <div className="pw-stat"><strong>{value}</strong><span>{label}</span></div>; }
+function Pager({ current, total, count, onChange }: { current: number; total: number; count: number; onChange: (page: number) => void }) {
+  return <div className="pw-foot"><span>عدد النتائج {number.format(count)} · الصفحة {number.format(current)} من {number.format(total)}</span><div className="flex gap-2"><Button size="sm" variant="outline" disabled={current <= 1} onClick={() => onChange(current - 1)}>السابق</Button><Button size="sm" variant="outline" disabled={current >= total} onClick={() => onChange(current + 1)}>التالي</Button></div></div>;
 }
 
 function PlanningRow({ row }: { row: ProductionPlanningRow }) {

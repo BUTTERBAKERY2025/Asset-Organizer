@@ -7,7 +7,7 @@ import type { ProductionPlanningResponse } from "@shared/production-planning";
 import type { ProductionPlanningRow } from "@shared/production-planning";
 import { getProductionDashboardTab } from "../client/src/components/central-kitchen/production-dashboard-tabs";
 import { ProductionPlanning } from "../client/src/components/central-kitchen/production-planning";
-import { filterPlanningRows, planningItemQuantities, planningIssueLabel, planningQuantity, planningStatusLabel } from "../client/src/components/central-kitchen/production-planning-model";
+import { filterPlanningRows, planningItemQuantities, planningIssueLabel, planningPage, planningQuantity, planningStatusLabel } from "../client/src/components/central-kitchen/production-planning-model";
 import { isSelectedDemandCandidate, validDemandLinkInput } from "../client/src/components/production/advanced-execution";
 
 const rows: ProductionPlanningRow[] = [
@@ -38,6 +38,13 @@ describe("production dashboard additive tabs", () => {
 });
 
 describe("planning filters and quantities", () => {
+  it("paginates only returned rows, clamps out-of-range pages and does not alter inputs", () => {
+    const page = planningPage(rows, 8, 1);
+    expect(page).toMatchObject({ currentPage: 2, totalPages: 2, pageItems: [rows[1]] });
+    expect(planningPage(rows, -4, 1).pageItems).toEqual([rows[0]]);
+    expect(planningPage([], 5)).toMatchObject({ currentPage: 1, totalPages: 1, pageItems: [] });
+    expect(rows).toHaveLength(2);
+  });
   it("filters by source, status, and search without merging different sources", () => {
     expect(filterPlanningRows(rows, { source: "central_request", status: "all", search: "خبز" }).map(row => row.key)).toEqual(["central_request:1"]);
     expect(filterPlanningRows(rows, { source: "advanced_plan", status: "in_progress", search: "PLAN-1" }).map(row => row.key)).toEqual(["advanced_plan:1"]);
@@ -118,9 +125,10 @@ describe("planning authenticated-data render", () => {
     expect(html).toContain("تشغيل ظلّي");
     expect(html).toContain("وضع الطلب");
     expect(html).toContain("وضع مخزون الطلب التاريخي غير معروف");
-    expect(html).toContain("احتياج الفرع");
-    expect(html).toContain("مرتبط:");
-    expect(html).toContain("خطة #1");
+    expect(html).toContain("عرض");
+    expect(html).toContain("PLAN-1");
+    expect(html).not.toContain("مرتبط:");
+    expect(html).not.toContain("خطة #1");
     expect(html).toContain("صف لكل مصدر وفترة");
     expect(html).not.toContain("historical_inventory_mode_unknown");
     expect(html).not.toContain(">in_progress<");

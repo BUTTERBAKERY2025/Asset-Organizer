@@ -1,0 +1,33 @@
+.planning-workspace { --pw-ink:#352b47; --pw-muted:#766b84; --pw-line:#e9e1ef; color:var(--pw-ink); }
+.planning-workspace .pw-shell { background:#fcfafd; border:1px solid var(--pw-line); border-radius:17px; overflow:hidden; box-shadow:0 8px 28px rgba(65,42,88,.045); }
+.planning-workspace .pw-top { background:linear-gradient(110deg,#f3eafa,#fcfafd 65%); border-bottom:1px solid var(--pw-line); padding:16px 20px; }
+.planning-workspace .pw-kicker { color:#78509a; font-size:11px; font-weight:800; letter-spacing:.06em; }
+.planning-workspace .pw-top h2 { font-size:20px; line-height:1.35; font-weight:800; margin-top:3px; }
+.planning-workspace .pw-top p { font-size:12px; color:var(--pw-muted); margin-top:4px; max-width:900px; }
+.planning-workspace .pw-toolbar { display:flex; flex-wrap:wrap; align-items:end; gap:9px; padding:12px 17px; background:#faf7fc; border-bottom:1px solid var(--pw-line); }
+.planning-workspace .pw-field { min-width:145px; flex:1 1 145px; max-width:220px; }
+.planning-workspace .pw-search { flex:2 1 230px; max-width:380px; }
+.planning-workspace .pw-field label { display:block; font-size:11px; font-weight:700; margin-bottom:5px; color:var(--pw-muted); }
+.planning-workspace .pw-field input, .planning-workspace .pw-field button { background:#fff; }
+.planning-workspace .pw-statbar { display:flex; overflow-x:auto; border-bottom:1px solid var(--pw-line); scrollbar-width:thin; }
+.planning-workspace .pw-stat { padding:12px 18px; min-width:137px; border-inline-end:1px solid var(--pw-line); white-space:nowrap; }
+.planning-workspace .pw-stat strong { display:block; font-size:20px; line-height:1.1; font-variant-numeric:tabular-nums; }
+.planning-workspace .pw-stat span { display:block; margin-top:4px; font-size:11px; color:var(--pw-muted); }
+.planning-workspace .pw-note { font-size:11px; color:var(--pw-muted); padding:9px 17px; border-bottom:1px solid var(--pw-line); }
+.planning-workspace .pw-warning { color:#8a5515; background:#fff9e9; border-bottom:1px solid #eddbab; padding:9px 17px; font-size:12px; }
+.planning-workspace .pw-head, .planning-workspace .pw-row { display:grid; grid-template-columns:minmax(115px,1fr) minmax(145px,1.25fr) minmax(115px,1fr) minmax(105px,.8fr) minmax(130px,1.2fr) 85px; gap:12px; align-items:center; }
+.planning-workspace .pw-check { grid-template-columns:minmax(180px,1.5fr) minmax(110px,1fr) minmax(200px,2fr) 85px; }
+.planning-workspace .pw-head { padding:10px 18px; background:#f4eef8; color:#766680; font-weight:700; font-size:11px; }
+.planning-workspace .pw-row { min-height:63px; padding:10px 18px; border-top:1px solid #f0ebf3; font-size:12px; }
+.planning-workspace .pw-row:hover, .planning-workspace .pw-row:focus-within { background:#f9f5fc; }
+.planning-workspace .pw-row > *, .planning-workspace .pw-head > * { min-width:0; }
+.planning-workspace .pw-primary { color:#50346d; font-weight:750; }
+.planning-workspace .pw-sub { display:block; color:var(--pw-muted); font-size:11px; margin-top:3px; }
+.planning-workspace .pw-ellipsis { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.planning-workspace .pw-foot { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; padding:11px 17px; border-top:1px solid var(--pw-line); font-size:12px; color:var(--pw-muted); }
+.planning-workspace .pw-detail-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.planning-workspace .pw-detail-grid > div { border:1px solid var(--pw-line); background:#faf7fc; border-radius:9px; padding:10px; }
+.planning-workspace .pw-detail-grid dt { color:var(--pw-muted); font-size:11px; }
+.planning-workspace .pw-detail-grid dd { font-size:13px; font-weight:700; margin-top:3px; }
+@media(max-width:1000px) { .planning-workspace .pw-head { display:none; } .planning-workspace .pw-row, .planning-workspace .pw-row.pw-check { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media(max-width:640px) { .planning-workspace .pw-top { padding:15px; } .planning-workspace .pw-stat { min-width:112px; padding:11px 13px; } .planning-workspace .pw-row, .planning-workspace .pw-row.pw-check { grid-template-columns:repeat(2,minmax(0,1fr)); padding:12px 15px; } .planning-workspace .pw-row .pw-main, .planning-workspace .pw-row .pw-action { grid-column:1/-1; } }

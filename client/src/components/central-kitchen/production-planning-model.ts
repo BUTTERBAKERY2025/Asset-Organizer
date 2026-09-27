@@ -2,6 +2,13 @@ import type { ProductionPlanningItem, ProductionPlanningRow, ProductionPlanningS
 
 export type PlanningFilters = { source: "all" | ProductionPlanningSource; status: string; search: string };
 
+export const PLANNING_PAGE_SIZE = 12;
+export function planningPage<T>(rows: readonly T[], page: number, pageSize = PLANNING_PAGE_SIZE) {
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(Math.max(1, Math.floor(Number.isFinite(page) ? page : 1)), totalPages);
+  return { pageItems: rows.slice((currentPage - 1) * pageSize, currentPage * pageSize), currentPage, totalPages };
+}
+
 const statusLabels: Record<string, string> = {
   draft: "مسودة", requested: "مطلوب", pending: "قيد الانتظار", approved: "معتمد",
   prepared: "مجهز", dispatched: "مرسل", received: "مستلم",
@@ -25,6 +32,11 @@ const issueLabels: Record<string, string> = {
 
 export function planningStatusLabel(status: string): string {
   return statusLabels[status.toLowerCase()] || "حالة غير معروفة؛ راجع السجل الأصلي";
+}
+
+/** Presentation only: preserve the raw persisted status for filters and unknown future values. */
+export function workplanStatusLabel(status: string): string {
+  return ({ ...statusLabels, finished: "منتهية", started: "بدأت", paused: "متوقفة", failed: "متعذرة" })[status.toLowerCase()] || status;
 }
 
 export function planningIssueLabel(issue: string): string {

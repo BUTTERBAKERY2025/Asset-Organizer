@@ -1,5 +1,4 @@
 import { useEffect, useCallback } from "react";
-import { PageHeader } from "@/components/dashboard/page-header";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,8 +10,8 @@ import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger }
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useBranches } from "@/hooks/useBranches";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
-  Factory,
   ClipboardList,
   BarChart3,
   Upload,
@@ -22,14 +21,12 @@ import {
   Clock,
   Package,
   Target,
-  Zap,
   RefreshCw,
   ChefHat,
   ShoppingCart,
   Activity,
   Trash2,
   FileBarChart2,
-  LayoutDashboard,
   Settings2,
   Layers,
 } from "lucide-react";
@@ -37,9 +34,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format } from "date-fns";
-import { ar } from "date-fns/locale";
 import { useProductionContext } from "@/contexts/ProductionContext";
+import { PRODUCT_CATALOG_READ_MODULES } from "@shared/schema";
 
 interface OrderStats {
   total: number;
@@ -83,16 +79,16 @@ interface ProductionHubData {
   branchId: string;
 }
 
-type QuickAction = { title: string; description: string; icon: typeof ChefHat; href: string; badge: string | null };
+type QuickAction = { title: string; description: string; icon: typeof ChefHat; href: string; module: "production" | "daily_production" | "operations" | "products"; action?: "view" | "create" };
 const QUICK_ACTIONS: QuickAction[] = [
-  { title: "الإنتاج اليومي", description: "تسجيل دفعات الإنتاج", icon: ChefHat,        href: "/daily-production",               badge: "جديد" },
-  { title: "رفع المبيعات",   description: "استيراد من Excel",     icon: Upload,         href: "/sales-data-uploads",             badge: null },
-  { title: "أوامر الإنتاج",  description: "إدارة ومتابعة",        icon: ClipboardList,  href: "/advanced-production-orders",     badge: null },
-  { title: "أمر جديد",       description: "إنشاء أمر إنتاج",      icon: Plus,           href: "/advanced-production-orders/new", badge: null },
-  { title: "التقارير",       description: "تقارير شاملة",         icon: FileBarChart2,  href: "/production-reports",             badge: "جديد" },
-  { title: "تقارير التشغيل", description: "التحليلات",            icon: BarChart3,      href: "/operations-reports",             badge: null },
-  { title: "المنتجات",       description: "كتالوج المنتجات",      icon: Package,        href: "/products",                       badge: null },
-  { title: "مخزون الإنتاج",  description: "الإنتاج النهائي",      icon: Layers,         href: "/finished-goods-inventory",       badge: "جديد" },
+  { title: "الإنتاج اليومي", description: "تسجيل دفعات الإنتاج", icon: ChefHat, href: "/daily-production", module: "daily_production" },
+  { title: "رفع المبيعات", description: "استيراد من Excel", icon: Upload, href: "/sales-data-uploads", module: "production" },
+  { title: "أوامر الإنتاج", description: "إدارة ومتابعة", icon: ClipboardList, href: "/advanced-production-orders", module: "production" },
+  { title: "أمر جديد", description: "إنشاء أمر إنتاج", icon: Plus, href: "/advanced-production-orders/new", module: "production", action: "create" },
+  { title: "التقارير", description: "تقارير شاملة", icon: FileBarChart2, href: "/production-reports", module: "production" },
+  { title: "تقارير التشغيل", description: "التحليلات", icon: BarChart3, href: "/operations-reports", module: "operations" },
+  { title: "المنتجات", description: "كتالوج المنتجات", icon: Package, href: "/products", module: "products" },
+  { title: "مخزون الإنتاج", description: "الإنتاج النهائي", icon: Layers, href: "/finished-goods-inventory", module: "production" },
 ];
 
 // Royal Violet palette for charts
@@ -110,6 +106,7 @@ const STATUS_COLORS = {
 } as const;
 
 export function LegacyProductionDashboard() {
+  const { hasPermission } = usePermissions();
   const {
     selectedBranch, setSelectedBranch,
     selectedDate, setSelectedDate,
@@ -119,24 +116,20 @@ export function LegacyProductionDashboard() {
     isLoading: commandCenterLoading,
     refetch: refetchCommandCenter,
   } = useProductionContext();
-
-  useEffect(() => {
-    if (!selectedBranch) setSelectedBranch("all");
-  }, [selectedBranch, setSelectedBranch]);
-
   const { branches, userBranchId, canSelectBranch } = useBranches();
 
   useEffect(() => {
-    if (userBranchId && !selectedBranch) setSelectedBranch(userBranchId);
-  }, [userBranchId, selectedBranch, setSelectedBranch]);
+    if (!selectedBranch && userBranchId) setSelectedBranch(userBranchId);
+    else if (!selectedBranch && canSelectBranch) setSelectedBranch("all");
+  }, [selectedBranch, setSelectedBranch, userBranchId, canSelectBranch]);
 
-  const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery<OrderStats>({
+  const { data: stats, isLoading: statsLoading, isError: statsError, refetch: refetchStats } = useQuery<OrderStats>({
     queryKey: ["/api/advanced-production-orders/stats", selectedBranch],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (selectedBranch && selectedBranch !== "all") params.set("branchId", selectedBranch);
       const res = await fetch(`/api/advanced-production-orders/stats?${params}`, { credentials: "include" });
-      if (!res.ok) return { total: 0, draft: 0, pending: 0, approved: 0, inProgress: 0, completed: 0, cancelled: 0, daily: 0, weekly: 0, longTerm: 0, totalEstimatedCost: 0 };
+      if (!res.ok) throw new Error("تعذر تحميل إحصاءات الأوامر");
       return res.json();
     },
     enabled: !!selectedBranch,
@@ -144,22 +137,12 @@ export function LegacyProductionDashboard() {
     placeholderData: (prev) => prev,
   });
 
-  const { data: hubData, isLoading: dailyLoading, refetch: refetchDaily } = useQuery<ProductionHubData>({
+  const { data: hubData, isLoading: dailyLoading, isError: dailyError, refetch: refetchDaily } = useQuery<ProductionHubData>({
     queryKey: ["/api/production/hub", selectedBranch, selectedDate],
     queryFn: async () => {
       const params = new URLSearchParams({ branchId: selectedBranch, date: selectedDate });
       const res = await fetch(`/api/production/hub?${params}`, { credentials: "include" });
-      if (!res.ok) {
-        return {
-          today: { totalBatches: 0, totalQuantity: 0, byDestination: {}, byCategory: {}, byHour: {} },
-          yesterday: { totalBatches: 0, totalQuantity: 0, byDestination: {}, byCategory: {}, byHour: {} },
-          deltas: { quantity: 0, batches: 0, quantityPercent: 0, batchesPercent: 0 },
-          target: { totalTarget: 0, totalProduced: 0, gap: 0, completionRate: 0 },
-          activeOrders: 0,
-          date: selectedDate,
-          branchId: selectedBranch,
-        };
-      }
+      if (!res.ok) throw new Error("تعذر تحميل بيانات الإنتاج");
       const data = await res.json();
       if (!data.target) data.target = { totalTarget: 0, totalProduced: 0, gap: 0, completionRate: 0 };
       return data;
@@ -245,14 +228,15 @@ export function LegacyProductionDashboard() {
   const totalOrders = orderStatusRows.reduce((s, r) => s + r.value, 0);
 
   return (
-    <div className="space-y-4 md:space-y-6" dir="rtl">
-        <PageHeader
-          icon={Factory}
-          tone="production"
-          title="لوحة الإنتاج"
-          description={`${format(new Date(selectedDate), "EEEE، dd MMMM yyyy", { locale: ar })}${lastUpdated ? ` • ${formatLastUpdated()}` : ""}`}
-          actions={
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+    <div className="desk-legacy space-y-4" dir="rtl">
+        <section className="rounded-xl border border-[#d9e2e4] bg-[#f5f8f7] p-3 sm:p-4" aria-label="تصفية السجل التاريخي">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div>
+              <h2 className="text-base font-bold">سجل الإنتاج والأدوات السابقة</h2>
+              <p className="text-xs text-muted-foreground">بيانات التقارير القديمة؛ ليست حالة التشغيل الحي. {lastUpdated ? `آخر تحديث ${formatLastUpdated()}` : ""}</p>
+            </div>
+          </div>
+            <div className="flex flex-wrap items-center gap-2">
               <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
                 <SelectTrigger className="w-[130px] sm:w-[160px] h-11 sm:h-10" data-testid="select-branch">
                   <SelectValue placeholder="كل الفروع" />
@@ -276,7 +260,7 @@ export function LegacyProductionDashboard() {
               <TooltipProvider>
                 <UITooltip>
                   <TooltipTrigger asChild>
-                    <Button
+                     <Button aria-label={autoRefresh ? "إيقاف التحديث التلقائي" : "تفعيل التحديث التلقائي"}
                       variant={autoRefresh ? "default" : "outline"}
                       size="icon"
                       onClick={() => setAutoRefresh(!autoRefresh)}
@@ -292,24 +276,28 @@ export function LegacyProductionDashboard() {
                 </UITooltip>
               </TooltipProvider>
 
-              <Button variant="outline" size="icon" onClick={handleRefresh} data-testid="btn-refresh" className="h-11 w-11 sm:h-10 sm:w-10">
+               <Button aria-label="تحديث البيانات" variant="outline" size="icon" onClick={handleRefresh} data-testid="btn-refresh" className="h-11 w-11 sm:h-10 sm:w-10">
                 <RefreshCw className={`h-4 w-4 ${dailyLoading ? "animate-spin" : ""}`} />
               </Button>
 
-              <Link href="/advanced-production-orders/new">
-                <Button data-testid="btn-new-order" className="h-11 sm:h-10 text-sm">
+              {hasPermission("production", "create") && <Link href="/advanced-production-orders/new" data-testid="btn-new-order" className="inline-flex h-10 items-center gap-1 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
                   <Plus className="h-4 w-4 ml-1" />
-                  <span className="hidden sm:inline">أمر جديد</span>
-                  <span className="sm:hidden">جديد</span>
-                </Button>
-              </Link>
+                  أمر جديد
+              </Link>}
             </div>
-          }
-        />
+        </section>
+        {(statsError || dailyError) && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">تعذر تحميل بعض بيانات السجل. لا تعرض القيم حتى يكتمل التحميل.<Button variant="outline" size="sm" onClick={handleRefresh}>إعادة المحاولة</Button></div>}
+        {(statsError || dailyError) && <div className="flex flex-wrap gap-2" aria-label="روابط الأدوات">
+          {QUICK_ACTIONS.filter(action => action.href === "/products"
+            ? PRODUCT_CATALOG_READ_MODULES.some(module => hasPermission(module, "view"))
+            : hasPermission(action.module, action.action || "view")).map(action =>
+            <Link key={action.href} href={action.href} className="rounded-md border px-3 py-2 text-xs font-semibold hover:bg-muted">{action.title}</Link>)}
+        </div>}
 
-        {/* Main KPI grid — unified KpiCard, Royal Violet tones */}
+        {!(statsError || dailyError) && <>
+        <div className="desk-section-heading"><h2>ملخص اليوم المحدد</h2><p>إنتاج تاريخ {selectedDate} مقارنة باليوم السابق</p></div>
         <div className="kpi-grid">
-          {dailyLoading && !dailyStats ? (
+          {(dailyLoading || dailyError) && !dailyStats ? (
             <>
               {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[110px] rounded-2xl" />)}
             </>
@@ -420,13 +408,13 @@ export function LegacyProductionDashboard() {
               <div className="text-center py-8 text-muted-foreground">
                 <Target className="h-10 w-10 mx-auto mb-2 opacity-40" />
                 <p className="text-sm">لا توجد أهداف إنتاج مُعدّة لهذا التاريخ</p>
-                <p className="text-xs mt-1">يمكنك إنشاء أمر إنتاج جديد لتحديد الأهداف</p>
+                 <p className="text-xs mt-1">تظهر الأهداف هنا عند إعدادها لهذا اليوم</p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Main content grid */}
+        <div className="desk-section-heading"><h2>تفاصيل السجل</h2><p>الأوامر والمقارنات من مصادر التقارير السابقة</p></div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
           {/* Left — Command Center + Comparison Chart */}
           <div className="lg:col-span-2 space-y-4 md:space-y-6">
@@ -434,15 +422,15 @@ export function LegacyProductionDashboard() {
             <Card className="border-border" data-testid="card-command-center">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                  <LayoutDashboard className="h-5 w-5 text-primary" />
-                  مركز القيادة الموحد
+                   <BarChart3 className="h-5 w-5 text-primary" />
+                   مؤشرات إضافية
                 </CardTitle>
-                <CardDescription>نظرة شاملة على الهدر والمقارنات</CardDescription>
+                 <CardDescription>تقارير الهدر والمقارنة في النظام السابق</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                   {/* Waste */}
-                  <Link href="/display-bar-waste" className="block group" data-testid="card-waste-kpi">
+                   {hasPermission("waste_tracking", "view") && <Link href="/display-bar-waste" className="block group" data-testid="card-waste-kpi">
                     <div className="rounded-xl border border-border bg-card p-4 hover:border-rose-300 dark:hover:border-rose-700 hover:shadow-sm transition-all cursor-pointer h-full">
                       <div className="flex items-center justify-between mb-3">
                         <div className="h-10 w-10 rounded-xl bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 flex items-center justify-center">
@@ -469,10 +457,10 @@ export function LegacyProductionDashboard() {
                         </div>
                       )}
                     </div>
-                  </Link>
+                   </Link>}
 
                   {/* Comparison */}
-                  <Link href="/production-comparisons" className="block group" data-testid="card-comparison-kpi">
+                   {hasPermission("production", "view") && <Link href="/production-comparisons" className="block group" data-testid="card-comparison-kpi">
                     <div className="rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer h-full">
                       <div className="flex items-center justify-between mb-3">
                         <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
@@ -499,7 +487,7 @@ export function LegacyProductionDashboard() {
                         </div>
                       )}
                     </div>
-                  </Link>
+                   </Link>}
                 </div>
               </CardContent>
             </Card>
@@ -514,7 +502,7 @@ export function LegacyProductionDashboard() {
                 <CardDescription>اليوم مقابل أمس والهدف</CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={280}>
+                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={comparisonData} margin={{ top: 16, right: 16, left: 8, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                     <XAxis dataKey="name" tick={{ fill: "var(--color-muted-foreground)", fontSize: 12 }} stroke="var(--color-border)" />
@@ -545,31 +533,21 @@ export function LegacyProductionDashboard() {
             <Card className="border-border" data-testid="card-quick-actions">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                  <Zap className="h-5 w-5 text-primary" />
-                  الوصول السريع
+                   <Layers className="h-5 w-5 text-primary" />
+                   أدوات وتقارير ذات صلة
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                  {QUICK_ACTIONS.map((action, index) => (
-                    <Link key={index} href={action.href}>
-                      <div
-                        className="group relative p-3 rounded-xl border border-border bg-card hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer h-full"
-                        data-testid={`quick-action-${index}`}
-                      >
-                        <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-2 group-hover:bg-primary/15 transition-colors">
-                          <action.icon className="h-4 w-4" />
-                        </div>
-                        <h4 className="text-xs font-semibold text-foreground mb-0.5">{action.title}</h4>
-                        <p className="text-[10px] text-muted-foreground line-clamp-1">{action.description}</p>
-                        {action.badge && (
-                          <Badge className="absolute top-2 left-2 text-[9px] px-1.5 py-0 bg-primary/15 text-primary border-0 hover:bg-primary/15">
-                            {action.badge}
-                          </Badge>
-                        )}
-                      </div>
-                    </Link>
-                  ))}
+                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-1">
+                   {QUICK_ACTIONS.filter(action => action.href === "/products"
+                     ? PRODUCT_CATALOG_READ_MODULES.some(module => hasPermission(module, "view"))
+                     : hasPermission(action.module, action.action || "view")).map((action) => (
+                     <Link key={action.href} href={action.href} className="flex min-w-0 items-center gap-2 rounded-lg border border-transparent px-2 py-2 hover:border-border hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-primary" data-testid={`quick-action-${QUICK_ACTIONS.indexOf(action)}`}>
+                       <action.icon className="h-4 w-4 shrink-0 text-primary" />
+                       <span className="min-w-0 flex-1 truncate text-xs font-semibold">{action.title}</span>
+                       <span className="hidden text-[10px] text-muted-foreground sm:inline">{action.description}</span>
+                     </Link>
+                   ))}
                 </div>
               </CardContent>
             </Card>
@@ -675,6 +653,7 @@ export function LegacyProductionDashboard() {
             </Card>
           </div>
         </div>
+        </>}
     </div>
   );
 }

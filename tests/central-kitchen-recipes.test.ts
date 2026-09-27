@@ -40,6 +40,11 @@ describe("central kitchen recipe contract", () => {
     )).toBe(false);
     for (const [role, permissions] of Object.entries(ROLE_PERMISSION_TEMPLATES)) {
       if (role === "admin") continue;
+      if (role === "production_development_manager") {
+        expect(permissions.find(permission => permission.module === "central_kitchen_recipes")?.actions)
+          .toEqual(["view", "create", "edit", "approve", "print"]);
+        continue;
+      }
       expect(
         permissions.some((permission) => permission.module === "central_kitchen_recipes"),
         `${role} must not auto-grant recipe access`,
