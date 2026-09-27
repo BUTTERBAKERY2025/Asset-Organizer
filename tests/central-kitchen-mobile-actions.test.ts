@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 vi.mock("../client/src/lib/queryClient", () => ({ apiRequest: vi.fn(), getQueryFn: vi.fn() }));
 vi.mock("../client/src/components/layout", () => ({ Layout: ({ children }: { children: React.ReactNode }) => children }));
-import { createKitchenSubmitGuard, DispatchEditor, ReceiptEditor, RequestChangeControls } from "../client/src/pages/central-kitchen-orders";
+import { createKitchenSubmitGuard, DispatchEditor, isBulkApprovalEligible, ReceiptEditor, RequestChangeControls } from "../client/src/pages/central-kitchen-orders";
 import { PreparationEditor } from "../client/src/components/central-kitchen/prepare-fulfillment";
 import { OrderLineEditor } from "../client/src/components/central-kitchen/order-line-editor";
 
@@ -42,9 +42,9 @@ describe("kitchen workflow mobile quantity evidence", () => {
     expect(submit).toHaveBeenCalledTimes(2);
   });
   it("shows prepared and sent quantities with a review action, using matching numeric keyboards", () => {
-    const html = renderToStaticMarkup(React.createElement(DispatchEditor, { items: products, pending: false, onSubmit: vi.fn() }));
+    const html = renderToStaticMarkup(React.createElement(QueryClientProvider, { client: new QueryClient() }, React.createElement(DispatchEditor, { items: products, pending: false, onSubmit: vi.fn() })));
     expect(html).toContain("مراجعة الإرسال");
-    expect(html).toContain("الجاهز:");
+    expect(html).toContain("الجاهز الأصلي:");
     expect(html).toContain('inputMode="numeric"');
     expect(html).toContain('inputMode="decimal"');
     expect(html).toContain('step="0.000001"');
@@ -59,9 +59,16 @@ describe("kitchen workflow mobile quantity evidence", () => {
   });
   it("disables both review buttons during an in-flight transition", () => {
     for (const Editor of [DispatchEditor, ReceiptEditor]) {
-      const html = renderToStaticMarkup(React.createElement(Editor, { items: products, pending: true, onSubmit: vi.fn() }));
+      const html = renderToStaticMarkup(React.createElement(QueryClientProvider, { client: new QueryClient() }, React.createElement(Editor, { items: products, pending: true, onSubmit: vi.fn() })));
       expect(html).toMatch(/<button[^>]*disabled=""[^>]*>.*?مراجعة (الإرسال|الاستلام)<\/button>/s);
     }
+  });
+  it("limits bulk review to requested orders explicitly approvable by the server", () => {
+    expect(isBulkApprovalEligible({ status: "requested", allowedActions: { approve: true } })).toBe(true);
+    expect(isBulkApprovalEligible({ status: "requested", allowedActions: { approve: false } })).toBe(false);
+    expect(isBulkApprovalEligible({ status: "requested" })).toBe(false);
+    expect(isBulkApprovalEligible({ status: "approved", allowedActions: { approve: true } })).toBe(false);
+    expect(isBulkApprovalEligible({ status: "received", allowedActions: { approve: true } })).toBe(false);
   });
   it("offers a real mobile substitute-picker trigger and preserves decimal material keyboards in preparation", () => {
     const html = renderToStaticMarkup(React.createElement(QueryClientProvider, { client: new QueryClient() }, React.createElement(PreparationEditor, {

@@ -8,6 +8,7 @@ import { authenticatedUploadMatchesActor, makeAuthenticatedUploadName, mayDownlo
 import { ProductionStockPostingError } from "./production-stock-posting";
 import { validateFinishedProductionTarget } from "./finished-production-target";
 import { registerBranchBarHandoffRoutes } from "./branch-bar-handoffs";
+import { registerCentralKitchenJourneyRoute } from "./central-kitchen-journey";
 import { InactiveBranchStockReferenceError } from "./catalogue-branch-stock";
 import {
   manualProductionOperations,
@@ -8063,6 +8064,8 @@ export async function registerRoutes(
     return (await canAccessBranch(req, order.requestBranchId))
       || (await canAccessBranch(req, order.centralKitchenId));
   };
+
+  registerCentralKitchenJourneyRoute(app, getCentralKitchenOrderDetail, canAccessCentralKitchenOrder);
 
   app.get(
     "/api/central-kitchen-orders",

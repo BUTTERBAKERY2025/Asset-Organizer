@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart3, CircleAlert, ClipboardList, Loader2, Plus, RefreshCw, Truck } from "lucide-react";
 import { Layout } from "@/components/layout";
 import { PageHeader } from "@/components/dashboard/page-header";
-import { DeliveryCard, DeliveryDetail, DeliveryItemLabel, deliveryDate, deliverySourceLabel, deliverySourcePath, deliveryStatus } from "@/components/delivery/delivery-ui";
+import { DeliveryCard, DeliveryDetail, DeliveryItemLabel, deliveryDate, deliveryMatchesContext, deliverySourceLabel, deliverySourcePath, deliveryStatus } from "@/components/delivery/delivery-ui";
 import { SignatureCapture } from "@/components/delivery/signature-capture";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,15 +33,25 @@ const fetchJson = async <T,>(path: string): Promise<T> => { const response = awa
 const dateValue = (offset = 0) => { const value = new Date(); value.setDate(value.getDate() + offset); return value.toISOString().slice(0, 10); };
 
 export default function DriverDeliveriesPage() {
+  return <Layout><DeliveryWorkspace /></Layout>;
+}
+
+export function DeliveryWorkspace({ embedded = false, sourceType, sourceId, deliveryId, onChanged }: { embedded?: boolean; sourceType?: "kitchen"; sourceId?: number; deliveryId?: number | null; onChanged?: () => void }) {
   const { toast } = useToast(); const client = useQueryClient();
+  const contextSource = sourceType && sourceId ? `${sourceType}:${sourceId}` : null;
+  const hasAuthoritativeId = embedded && deliveryId != null;
+  const validDeliveryId = deliveryId != null && Number.isSafeInteger(deliveryId) && deliveryId > 0;
    const [tab, setTab] = useState<"tasks" | "reports">("tasks"); const [status, setStatus] = useState<"active" | "all" | "completed" | "cancelled">("active");
-   const [detail, setDetail] = useState<Delivery | null>(null); const [createOpen, setCreateOpen] = useState(() => new URLSearchParams(window.location.search).has("sourceType")); const [assignOpen, setAssignOpen] = useState(false); const [assignmentMode, setAssignmentMode] = useState<"create" | "reassign">("create");
-   const [form, setForm] = useState({ sourceKey: (() => { const p = new URLSearchParams(window.location.search); return p.has("sourceType") && p.has("sourceId") ? `${p.get("sourceType")}:${p.get("sourceId")}` : ""; })(), driverId: "", vehicleNumber: "", scheduledAt: "" });
+   const [detail, setDetail] = useState<Delivery | null>(null); const [createOpen, setCreateOpen] = useState(false); const [assignOpen, setAssignOpen] = useState(false); const [assignmentMode, setAssignmentMode] = useState<"create" | "reassign">("create");
+   const [form, setForm] = useState({ sourceKey: contextSource || (!embedded ? (() => { const p = new URLSearchParams(window.location.search); return p.has("sourceType") && p.has("sourceId") ? `${p.get("sourceType")}:${p.get("sourceId")}` : ""; })() : ""), driverId: "", vehicleNumber: "", scheduledAt: "" });
   const [proof, setProof] = useState({ signatureData: null as string | null, hasInk: false, receiverName: "", notes: "" });
+  const [editingProof, setEditingProof] = useState(false);
    const [failureReason, setFailureReason] = useState(""); const [failureOpen, setFailureOpen] = useState(false); const [cancelOpen, setCancelOpen] = useState(false); const [cancelReason, setCancelReason] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
    const [clock, setClock] = useState(() => Date.now());
    const deepLinkConsumed = useRef(false);
+   const sourceLinkConsumed = useRef(false);
+  const selectionRef = useRef(0);
   const [range, setRange] = useState({ from: dateValue(-30), to: dateValue(), sourceBranchId: "all", destinationBranchId: "all", status: "all" });
   const pendingRef = useRef<string | null>(null);
    useEffect(() => {
@@ -49,7 +59,7 @@ export default function DriverDeliveriesPage() {
      return () => window.clearInterval(timer);
    }, []);
    useEffect(() => {
-     if (deepLinkConsumed.current) return;
+     if (embedded || deepLinkConsumed.current) return;
      deepLinkConsumed.current = true;
      const raw = new URLSearchParams(window.location.search).get("deliveryId");
      if (!raw) return;
@@ -58,23 +68,54 @@ export default function DriverDeliveriesPage() {
        toast({ title: "رابط مهمة توصيل غير صالح", variant: "destructive" });
        return;
      }
+     const request = ++selectionRef.current;
      void fetchJson<Delivery>(`/api/deliveries/${id}`).then(result => {
-       setDetail(result);
+       if (selectionRef.current === request) setDetail(result);
      }).catch(() => {
        toast({ title: "تعذر فتح المهمة", description: "المهمة غير موجودة أو لا تملك صلاحية الوصول إليها.", variant: "destructive" });
      });
-   }, [toast]);
-  const list = useQuery({ queryKey: ["/api/deliveries"], queryFn: () => fetchJson<{ deliveries: Delivery[] }>("/api/deliveries") });
+   }, [toast, embedded]);
+  const list = useQuery({ queryKey: ["/api/deliveries"], queryFn: () => fetchJson<{ deliveries: Delivery[] }>("/api/deliveries"), enabled: !hasAuthoritativeId });
+  const authoritativeDetail = useQuery({
+    queryKey: ["/api/deliveries", deliveryId, "workspace", contextSource],
+    queryFn: () => fetchJson<Delivery>(`/api/deliveries/${deliveryId}`),
+    enabled: hasAuthoritativeId && validDeliveryId,
+    retry: false,
+  });
+  const authoritativeMismatch = hasAuthoritativeId && authoritativeDetail.isSuccess
+    && !deliveryMatchesContext(authoritativeDetail.data, sourceType, sourceId, deliveryId);
   const portalCapabilities = useQuery({ queryKey: ["/api/deliveries/capabilities"], queryFn: () => fetchJson<PortalCapabilities>("/api/deliveries/capabilities") });
   const sources = useQuery({ queryKey: ["/api/deliveries/sources", createOpen || assignOpen], queryFn: () => fetchJson<{ sources: Source[] }>("/api/deliveries/sources"), enabled: createOpen || assignOpen });
   const drivers = useQuery({ queryKey: ["/api/deliveries/drivers", createOpen || assignOpen], queryFn: () => fetchJson<{ drivers: Driver[] }>("/api/deliveries/drivers"), enabled: createOpen || assignOpen });
   const reportUrl = `/api/deliveries/reports?${new URLSearchParams({ from: range.from, to: range.to, ...(range.sourceBranchId !== "all" ? { sourceBranchId: range.sourceBranchId } : {}), ...(range.destinationBranchId !== "all" ? { destinationBranchId: range.destinationBranchId } : {}), ...(range.status !== "all" ? { status: range.status } : {}) }).toString()}`;
   const reports = useQuery({ queryKey: [reportUrl], queryFn: () => fetchJson<Report>(reportUrl), enabled: tab === "reports" });
   const proofQuery = useQuery({ queryKey: ["/api/deliveries", detail?.id, "proof"], queryFn: () => fetchJson<Proof>(`/api/deliveries/${detail!.id}/proof`), enabled: !!detail?.proofPresent, retry: false });
-  const invalidate = () => client.invalidateQueries({ queryKey: ["/api/deliveries"] });
-  const action = useMutation({ mutationFn: async ({ endpoint, body }: { endpoint: string; body?: unknown }) => (await apiRequest("POST", endpoint, body)).json() as Promise<Delivery>, onSuccess: updated => { const endpoint = pendingRef.current; pendingRef.current = null; setActionError(null); if (endpoint === "/api/deliveries") setCreateOpen(false); if (endpoint?.endsWith("/reassign")) setAssignOpen(false); setDetail(updated); void invalidate(); toast({ title: "تم تحديث حالة المهمة" }); }, onError: error => { pendingRef.current = null; const message = error instanceof Error ? error.message : "أعد المحاولة، بيانات النموذج محفوظة."; setActionError(message); toast({ title: "لم يكتمل الإجراء", description: message, variant: "destructive" }); } });
-  const submitAction = (endpoint: string, body?: unknown) => { if (pendingRef.current || action.isPending) return; setActionError(null); pendingRef.current = endpoint; action.mutate({ endpoint, body }); };
-   const filtered = useMemo(() => (list.data?.deliveries || []).filter(item => status === "active" ? !["completed", "failed", "cancelled"].includes(item.status) : status === "completed" || status === "cancelled" ? item.status === status : true), [list.data, status]);
+  const invalidate = () => {
+    void client.invalidateQueries({ queryKey: ["/api/deliveries"] });
+    void client.invalidateQueries({ predicate: query => typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/central-kitchen-orders") });
+    void client.invalidateQueries({ queryKey: ["/api/central-kitchen-order-journey"] });
+    if (detail?.sourceType === "material_transfer" || detail?.sourceType === "reverse_movement") {
+      void client.invalidateQueries({ queryKey: ["/api/warehouse/branch-stock"] });
+      void client.invalidateQueries({ queryKey: ["/api/reverse-logistics/stock"] });
+    }
+    if (detail?.sourceType === "finished_goods_transfer") void client.invalidateQueries({ queryKey: ["/api/finished-goods-inventory"] });
+    onChanged?.();
+  };
+  const successCopy = (endpoint: string | null) => {
+    if (endpoint === "/api/deliveries") return "تم إسناد مهمة التوصيل";
+    if (endpoint?.endsWith("/proof")) return "تم إرسال إثبات التسليم، بانتظار اعتماد المستلم المعتمد";
+    if (endpoint?.endsWith("/approve-receipt")) return "تم اعتماد إيصال المصدر";
+    if (endpoint?.endsWith("/complete")) return "تم إنهاء المهمة";
+    if (endpoint?.endsWith("/start")) return "بدأت مهمة التوصيل";
+    if (endpoint?.endsWith("/handover")) return "تم توثيق محضر التسليم";
+    if (endpoint?.endsWith("/acknowledge-handover")) return "تم إقرار استلام الشحنة";
+    if (endpoint?.endsWith("/reassign")) return "تمت إعادة إسناد المهمة";
+    if (endpoint?.endsWith("/cancel")) return "تم إلغاء مهمة التوصيل دون إلغاء الشحنة";
+    return "تم تسجيل تعذر التسليم";
+  };
+  const action = useMutation({ mutationFn: async ({ endpoint, body }: { endpoint: string; body?: unknown }) => (await apiRequest("POST", endpoint, body)).json() as Promise<Delivery>, onSuccess: updated => { const endpoint = pendingRef.current; pendingRef.current = null; setActionError(null); if (endpoint === "/api/deliveries") setCreateOpen(false); if (endpoint?.endsWith("/reassign")) setAssignOpen(false); if (endpoint?.endsWith("/cancel")) setCancelOpen(false); if (endpoint?.endsWith("/fail")) setFailureOpen(false); if (endpoint?.endsWith("/proof")) setEditingProof(false); ++selectionRef.current; setDetail(updated); if (hasAuthoritativeId && updated.id === deliveryId) client.setQueryData(["/api/deliveries", deliveryId, "workspace", contextSource], updated); invalidate(); toast({ title: successCopy(endpoint) }); }, onError: error => { pendingRef.current = null; const message = error instanceof Error ? error.message : "أعد المحاولة، بيانات النموذج محفوظة."; setActionError(message); toast({ title: "لم يكتمل الإجراء", description: message, variant: "destructive" }); } });
+  const submitAction = (endpoint: string, body?: unknown) => { if (pendingRef.current || action.isPending) return; ++selectionRef.current; setActionError(null); pendingRef.current = endpoint; action.mutate({ endpoint, body }); };
+   const filtered = useMemo(() => (list.isError ? [] : list.data?.deliveries || []).filter(item => (!contextSource || `${item.sourceType}:${item.sourceId}` === contextSource) && (status === "active" ? !["completed", "failed", "cancelled"].includes(item.status) : status === "completed" || status === "cancelled" ? item.status === status : true)), [list.data, list.isError, status, contextSource]);
   const counts = useMemo(() => { const records = list.data?.deliveries || []; return { pickup: records.filter(x => x.status === "assigned").length, transit: records.filter(x => x.status === "in_transit").length, receipt: records.filter(x => x.status === "awaiting_receipt").length }; }, [list.data]);
   const selectedSource = (sources.data?.sources || []).find(source => `${source.sourceType}:${source.sourceId}` === form.sourceKey);
   const selectedDriver = (drivers.data?.drivers || []).find(driver => driver.id === form.driverId);
@@ -84,38 +125,101 @@ export default function DriverDeliveriesPage() {
     else if (selectedSource) submitAction("/api/deliveries", { sourceType: selectedSource.sourceType, sourceId: selectedSource.sourceId, driverId: form.driverId, vehicleNumber: form.vehicleNumber.trim(), ...(form.scheduledAt ? { scheduledAt: new Date(form.scheduledAt).toISOString() } : {}) });
   };
   const exportCsv = () => { const records = reports.data?.deliveries || []; const escape = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`; const rows = [["المصدر", "النوع", "السائق", "المركبة", "المستلم", "الحالة", "موعد التسليم"], ...records.map(d => [d.sourceLabel, d.sourceType, d.driverName, d.vehicleNumber, d.receiverName || "", deliveryStatus(d.status).label, deliveryDate(d.completedAt || d.scheduledAt)])]; const blob = new Blob(["\uFEFF" + rows.map(row => row.map(escape).join(",")).join("\n")], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `delivery-report-${range.from}-${range.to}.csv`; link.click(); URL.revokeObjectURL(url); };
-  const openDetail = async (item: Delivery) => { setDetail(item); try { setDetail(await fetchJson<Delivery>(`/api/deliveries/${item.id}`)); } catch { toast({ title: "تعذر تحديث تفاصيل المهمة", variant: "destructive" }); } };
+  const openDetail = async (item: Delivery) => { if (pendingRef.current) return; const request = ++selectionRef.current; if (detail?.id !== item.id) { setEditingProof(false); setProof({ signatureData: null, hasInk: false, receiverName: "", notes: "" }); } setDetail(item); try { const updated = await fetchJson<Delivery>(`/api/deliveries/${item.id}`); if (selectionRef.current === request) setDetail(updated); } catch { if (selectionRef.current === request) { setDetail(null); toast({ title: "تعذر تحديث تفاصيل المهمة أو تم سحب صلاحية الوصول", variant: "destructive" }); } } };
+  useEffect(() => {
+    if (hasAuthoritativeId || !list.isError) return;
+    ++selectionRef.current;
+    setDetail(null);
+  }, [hasAuthoritativeId, list.isError]);
+  useEffect(() => {
+    if (!contextSource) return;
+    ++selectionRef.current;
+    setDetail(null);
+    setForm(value => ({ ...value, sourceKey: contextSource }));
+    setCreateOpen(false);
+  }, [contextSource, deliveryId]);
+  useEffect(() => {
+    if (!hasAuthoritativeId || !validDeliveryId || !authoritativeDetail.isSuccess) return;
+    const found = authoritativeDetail.data;
+    if (!deliveryMatchesContext(found, sourceType, sourceId, deliveryId)) {
+      ++selectionRef.current;
+      setDetail(null);
+      return;
+    }
+    if (detail?.id !== found.id) {
+      setProof({ signatureData: null, hasInk: false, receiverName: "", notes: "" });
+      setEditingProof(false);
+      setDetail(found);
+    }
+  }, [hasAuthoritativeId, validDeliveryId, authoritativeDetail.data, authoritativeDetail.isSuccess, deliveryId, contextSource]);
+  useEffect(() => {
+    if (!hasAuthoritativeId || !authoritativeDetail.isError) return;
+    ++selectionRef.current;
+    setDetail(null);
+  }, [hasAuthoritativeId, authoritativeDetail.isError]);
+  useEffect(() => {
+    if (!embedded || hasAuthoritativeId || !contextSource || !list.isSuccess) return;
+    const match = list.data.deliveries.find(item => `${item.sourceType}:${item.sourceId}` === contextSource);
+    if (match && detail?.id !== match.id) void openDetail(match);
+    if (!match && detail && `${detail.sourceType}:${detail.sourceId}` === contextSource) setDetail(null);
+  }, [embedded, hasAuthoritativeId, contextSource, list.data, list.isSuccess]);
+  useEffect(() => {
+    if (embedded || sourceLinkConsumed.current || !list.isSuccess) return;
+    sourceLinkConsumed.current = true;
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("deliveryId") || !params.has("sourceType") || !params.has("sourceId")) return;
+    const source = `${params.get("sourceType")}:${params.get("sourceId")}`;
+    const match = list.data.deliveries.find(item => `${item.sourceType}:${item.sourceId}` === source);
+    if (match) void openDetail(match);
+  }, [embedded, list.data, list.isSuccess]);
    useEffect(() => {
-      if (!detail || !["assigned", "in_transit", "awaiting_receipt"].includes(detail.status)) return;
+      if (!detail || !["assigned", "in_transit", "awaiting_receipt", "receipt_approved"].includes(detail.status)) return;
      const id = detail.id;
      const refresh = () => {
        if (document.hidden) return;
+       const request = selectionRef.current;
        void fetchJson<Delivery>(`/api/deliveries/${id}`).then(updated =>
-         setDetail(current => current?.id === id ? updated : current)).catch(() => {
+         setDetail(current => current?.id === id && selectionRef.current === request && !pendingRef.current ? updated : current)).catch(() => {
+           if (selectionRef.current !== request) return;
            toast({ title: "تعذر تحديث المهمة", description: "قد تكون المهمة غير متاحة أو سُحبت صلاحيتك.", variant: "destructive" });
            setDetail(current => current?.id === id ? null : current);
+           void client.removeQueries({ queryKey: ["/api/deliveries", id, "proof"] });
          });
      };
+     const focusRefresh = () => {
+       void client.invalidateQueries({ queryKey: ["/api/deliveries"], exact: true });
+       refresh();
+     };
      document.addEventListener("visibilitychange", refresh);
-     return () => document.removeEventListener("visibilitychange", refresh);
-   }, [detail?.id, detail?.status, toast]);
-  return <Layout><main className="mx-auto min-h-[100dvh] max-w-6xl space-y-5 px-4 pb-10 pt-5 md:px-7" dir="rtl">
-    <PageHeader title="بوابة التوصيل" description="مهام السائقين، إثبات التسليم، واعتماد الاستلام من المصدر." />
-    <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center"><Tabs value={tab} onValueChange={value => setTab(value as "tasks" | "reports")}><TabsList className="h-12"><TabsTrigger value="tasks" className="min-h-10 gap-2"><Truck className="h-4 w-4" />المهام</TabsTrigger><TabsTrigger value="reports" className="min-h-10 gap-2"><BarChart3 className="h-4 w-4" />التقارير</TabsTrigger></TabsList></Tabs>{portalCapabilities.data?.canAssign && <Button className="min-h-12 gap-2" onClick={() => { setAssignmentMode("create"); setCreateOpen(true); }}><Plus className="h-5 w-5" />إسناد توصيل</Button>}</div>
-     {tab === "tasks" ? <><section className="grid grid-cols-3 gap-2 md:gap-4">{[["pickup", "بانتظار البدء", counts.pickup], ["transit", "في الطريق", counts.transit], ["receipt", "بانتظار الإيصال", counts.receipt]].map(([key, label, count]) => <Card key={String(key)} className="border-primary/15"><CardContent className="p-3 md:p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-bold text-primary">{count}</p></CardContent></Card>)}</section><div className="flex flex-wrap items-center justify-between gap-3"><Tabs value={status} onValueChange={value => setStatus(value as typeof status)}><TabsList><TabsTrigger value="active">النشطة</TabsTrigger><TabsTrigger value="all">الكل</TabsTrigger><TabsTrigger value="completed">المكتملة</TabsTrigger><TabsTrigger value="cancelled">الملغاة</TabsTrigger></TabsList></Tabs><Button variant="ghost" className="min-h-11 gap-2" onClick={() => list.refetch()}><RefreshCw className="h-4 w-4" />تحديث</Button></div>
-       {list.isLoading ? <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-40 w-full" />)}</div> : list.isError ? <State icon={<CircleAlert />} title="تعذر تحميل مهام التوصيل" action={() => list.refetch()} /> : filtered.length === 0 ? <State icon={<ClipboardList />} title="لا توجد مهام ضمن هذا العرض" text="ستظهر المهام المسندة لك أو ضمن نطاق إدارتك هنا." /> : <div className="grid gap-3 lg:grid-cols-2">{filtered.map(item => <DeliveryCard key={item.id} delivery={item} now={clock} onOpen={() => void openDetail(item)} />)}</div>}
+     window.addEventListener("focus", focusRefresh);
+     const timer = window.setInterval(refresh, 30_000);
+     return () => { document.removeEventListener("visibilitychange", refresh); window.removeEventListener("focus", focusRefresh); window.clearInterval(timer); };
+   }, [detail?.id, detail?.status, toast, client]);
+  return <main className={embedded ? "space-y-4" : "mx-auto min-h-[100dvh] max-w-6xl space-y-5 px-4 pb-10 pt-5 md:px-7"} dir="rtl">
+    {!embedded && <PageHeader title="بوابة التوصيل" description="مهام السائقين، إثبات التسليم، واعتماد الاستلام من المصدر." />}
+    {embedded && <h2 className="text-lg font-bold">توصيل الطلب</h2>}
+    <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">{!embedded && <Tabs value={tab} onValueChange={value => setTab(value as "tasks" | "reports")}><TabsList className="h-12"><TabsTrigger value="tasks" className="min-h-10 gap-2"><Truck className="h-4 w-4" />المهام</TabsTrigger><TabsTrigger value="reports" className="min-h-10 gap-2"><BarChart3 className="h-4 w-4" />التقارير</TabsTrigger></TabsList></Tabs>}{portalCapabilities.data?.canAssign && (!embedded || (!hasAuthoritativeId && list.isSuccess && !list.data.deliveries.some(item => `${item.sourceType}:${item.sourceId}` === contextSource))) && <Button className="min-h-12 gap-2" disabled={action.isPending} onClick={() => { setAssignmentMode("create"); setForm(value => ({ ...value, sourceKey: contextSource || value.sourceKey })); setCreateOpen(true); }}><Plus className="h-5 w-5" />إسناد توصيل</Button>}</div>
+     {tab === "tasks" ? <>{!embedded && <section className="grid grid-cols-3 gap-2 md:gap-4">{[["pickup", "بانتظار البدء", counts.pickup], ["transit", "في الطريق", counts.transit], ["receipt", "بانتظار الإيصال", counts.receipt]].map(([key, label, count]) => <Card key={String(key)} className="border-primary/15"><CardContent className="p-3 md:p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-bold text-primary">{count}</p></CardContent></Card>)}</section>}{!embedded && <div className="flex flex-wrap items-center justify-between gap-3"><Tabs value={status} onValueChange={value => setStatus(value as typeof status)}><TabsList><TabsTrigger value="active">النشطة</TabsTrigger><TabsTrigger value="all">الكل</TabsTrigger><TabsTrigger value="completed">المكتملة</TabsTrigger><TabsTrigger value="cancelled">الملغاة</TabsTrigger></TabsList></Tabs><Button variant="ghost" className="min-h-11 gap-2" onClick={() => list.refetch()}><RefreshCw className="h-4 w-4" />تحديث</Button></div>}
+       {hasAuthoritativeId ? (!validDeliveryId ? <State icon={<CircleAlert />} title="معرّف مهمة التوصيل غير صالح" /> : authoritativeDetail.isError ? <State icon={<CircleAlert />} title="تعذر فتح مهمة التوصيل أو سُحبت صلاحية الوصول" action={() => authoritativeDetail.refetch()} /> : authoritativeMismatch ? <State icon={<CircleAlert />} title="مهمة التوصيل لا تتبع هذا الطلب" /> : !authoritativeDetail.isSuccess || !detail || detail.id !== deliveryId ? <Skeleton className="h-40 w-full" /> : null) : list.isLoading ? <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-40 w-full" />)}</div> : list.isError ? <State icon={<CircleAlert />} title="تعذر تحميل مهام التوصيل" action={() => list.refetch()} /> : embedded && detail ? null : filtered.length === 0 ? <State icon={<ClipboardList />} title={embedded ? "لا توجد مهمة توصيل لهذا الطلب" : "لا توجد مهام ضمن هذا العرض"} text={embedded ? "يمكن إسناد مهمة عندما يصبح المصدر مؤهلاً وتتوفر الصلاحية." : "ستظهر المهام المسندة لك أو ضمن نطاق إدارتك هنا."} /> : <div className="grid gap-3 lg:grid-cols-2">{filtered.map(item => <DeliveryCard key={item.id} delivery={item} now={clock} onOpen={() => void openDetail(item)} />)}</div>}
     </> : <Reports range={range} setRange={setRange} reports={reports.data} loading={reports.isLoading} error={reports.isError} canExport={!!portalCapabilities.data?.canExport} knownDeliveries={list.data?.deliveries || []} onExport={exportCsv} />}
-    <AssignmentDialog open={createOpen || assignOpen} onOpenChange={open => { setCreateOpen(open); setAssignOpen(open); }} mode={assignmentMode} sources={sources.data?.sources || []} drivers={drivers.data?.drivers || []} loading={assignmentMode === "create" ? sources.isLoading || drivers.isLoading : drivers.isLoading} form={form} setForm={setForm} selectedSource={selectedSource} selectedDriver={selectedDriver} onSubmit={sendAssignment} pending={action.isPending} />
-      <Dialog open={!!detail} onOpenChange={open => { if (!open) { setDetail(null); setProof({ signatureData: null, hasInk: false, receiverName: "", notes: "" }); } }}><DialogContent className="max-h-[94dvh] overflow-y-auto sm:max-w-3xl"><DialogHeader><DialogTitle className="flex items-center justify-between gap-2"><span>{detail?.sourceLabel}</span>{detail && <Badge variant="outline" className={deliveryStatus(detail.status).className}>{deliveryStatus(detail.status).label}</Badge>}</DialogTitle><DialogDescription>تفاصيل المهمة من المصدر المعتمد.</DialogDescription></DialogHeader>{detail && <div className="space-y-5"><DeliveryDetail delivery={detail} now={clock} proof={proofQuery.data} />
-       <HandoverSection key={`${detail.id}:${detail.handoverRecordedAt || "new"}:${detail.driverId}`} delivery={detail} pending={action.isPending} onAction={submitAction} />
-      {detail.capabilities.canSubmitProof && <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4"><h3 className="font-bold">إثبات التسليم</h3><Label htmlFor="receiver">اسم المستلم</Label><Input id="receiver" className="min-h-12" value={proof.receiverName} onChange={e => setProof(p => ({ ...p, receiverName: e.target.value }))} placeholder="اكتب اسم المستلم" /><p className="text-xs text-muted-foreground">إدخال الاسم يوثق التسليم فقط ولا يعني التحقق من هوية المستلم.</p><SignatureCapture disabled={action.isPending} onChange={(signatureData, hasInk) => setProof(p => ({ ...p, signatureData, hasInk }))} /><Label htmlFor="notes">ملاحظات (اختياري)</Label><Textarea id="notes" value={proof.notes} onChange={e => setProof(p => ({ ...p, notes: e.target.value }))} /><Button className="min-h-12 w-full" disabled={!proof.hasInk || !proof.receiverName.trim() || action.isPending} onClick={() => submitAction(`/api/deliveries/${detail.id}/proof`, { signatureData: proof.signatureData, receiverName: proof.receiverName.trim(), notes: proof.notes.trim() || undefined })}>إرسال إثبات التسليم</Button></div>}
+    <AssignmentDialog open={createOpen || assignOpen} onOpenChange={open => { if (action.isPending) return; setCreateOpen(open); setAssignOpen(open); }} mode={assignmentMode} sources={sources.data?.sources || []} drivers={drivers.data?.drivers || []} loading={assignmentMode === "create" ? sources.isLoading || drivers.isLoading : drivers.isLoading} error={drivers.isError || (assignmentMode === "create" && sources.isError)} form={form} setForm={setForm} selectedSource={selectedSource} selectedDriver={selectedDriver} onSubmit={sendAssignment} pending={action.isPending} />
+      {detail && (!embedded || (!authoritativeMismatch && !authoritativeDetail.isError && (!hasAuthoritativeId || authoritativeDetail.isSuccess && validDeliveryId) && deliveryMatchesContext(detail, sourceType, sourceId, hasAuthoritativeId ? deliveryId : undefined))) && (embedded ? <section className="space-y-4 rounded-xl border bg-card p-4" aria-label="تفاصيل التوصيل">{renderDetail()}</section> : <Dialog open={!!detail} onOpenChange={open => { if (!open && !action.isPending) { ++selectionRef.current; setDetail(null); setProof({ signatureData: null, hasInk: false, receiverName: "", notes: "" }); } }}><DialogContent className="max-h-[94dvh] overflow-y-auto sm:max-w-3xl" dir="rtl">{renderDetail()}</DialogContent></Dialog>)}
+  </main>;
+
+  function renderDetail() {
+    if (!detail) return null;
+    return <>{embedded ? <header className="space-y-1"><h3 className="flex items-center justify-between gap-2 font-semibold"><span>{detail.sourceLabel}</span><Badge variant="outline" className={deliveryStatus(detail.status).className}>{deliveryStatus(detail.status).label}</Badge></h3><p className="text-sm text-muted-foreground">تفاصيل المهمة من المصدر المعتمد.</p></header> : <DialogHeader><DialogTitle className="flex items-center justify-between gap-2"><span>{detail.sourceLabel}</span><Badge variant="outline" className={deliveryStatus(detail.status).className}>{deliveryStatus(detail.status).label}</Badge></DialogTitle><DialogDescription>تفاصيل المهمة من المصدر المعتمد.</DialogDescription></DialogHeader>}<div className="space-y-4">
+      {detail.capabilities.canStart || detail.capabilities.canApproveReceipt || detail.capabilities.canComplete ? <div className="flex flex-wrap gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3">{detail.capabilities.canStart && <Button className="min-h-12" disabled={action.isPending} onClick={() => submitAction(`/api/deliveries/${detail.id}/start`)}>بدء التوصيل</Button>}{detail.capabilities.canApproveReceipt && <Button className="min-h-12" disabled={action.isPending} onClick={() => submitAction(`/api/deliveries/${detail.id}/approve-receipt`)}>اعتماد إيصال المصدر</Button>}{detail.capabilities.canComplete && <Button className="min-h-12" disabled={action.isPending} onClick={() => submitAction(`/api/deliveries/${detail.id}/complete`)}>إنهاء المهمة</Button>}</div> : null}
+      {detail.status === "awaiting_receipt" && detail.proofPresent && <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">تم إرسال إثبات التسليم. بانتظار تسجيل الاستلام من المصدر واعتماد الإيصال من المستلم المعتمد. {!embedded && <a className="font-semibold underline" href={deliverySourcePath(detail)} target="_blank" rel="noopener noreferrer">فتح استلام المصدر</a>}</div>}
+      {detail.capabilities.canSubmitProof && detail.proofPresent && !editingProof && <Button variant="outline" className="min-h-11" disabled={action.isPending} onClick={() => setEditingProof(true)}>تعديل الإثبات</Button>}
+      {detail.capabilities.canSubmitProof && (!detail.proofPresent || editingProof) && <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4"><h3 className="font-bold">{detail.proofPresent ? "تعديل إثبات التسليم" : "إثبات التسليم"}</h3><Label htmlFor="receiver">اسم المستلم</Label><Input id="receiver" className="min-h-12" value={proof.receiverName} onChange={e => setProof(p => ({ ...p, receiverName: e.target.value }))} placeholder="اكتب اسم المستلم" /><p className="text-xs text-muted-foreground">إدخال الاسم يوثق التسليم فقط ولا يعني التحقق من هوية المستلم.</p><SignatureCapture disabled={action.isPending} onChange={(signatureData, hasInk) => setProof(p => ({ ...p, signatureData, hasInk }))} /><Label htmlFor="notes">ملاحظات (اختياري)</Label><Textarea id="notes" value={proof.notes} onChange={e => setProof(p => ({ ...p, notes: e.target.value }))} /><Button className="min-h-12 w-full" disabled={!proof.hasInk || !proof.receiverName.trim() || action.isPending} onClick={() => submitAction(`/api/deliveries/${detail.id}/proof`, { signatureData: proof.signatureData, receiverName: proof.receiverName.trim(), notes: proof.notes.trim() || undefined })}>{detail.proofPresent ? "حفظ تعديل الإثبات" : "إرسال إثبات التسليم"}</Button></div>}
       {actionError && <div role="alert" className="rounded-xl border border-destructive/35 bg-destructive/10 p-3 text-sm text-destructive">لم يكتمل الإجراء: {actionError} بيانات النموذج ما زالت محفوظة ويمكنك إعادة المحاولة.</div>}
-       <div className="flex flex-wrap gap-2">{detail.capabilities.canStart && <Button className="min-h-12" disabled={action.isPending} onClick={() => submitAction(`/api/deliveries/${detail.id}/start`)}>بدء التوصيل</Button>}{detail.capabilities.canApproveReceipt && <Button className="min-h-12" disabled={action.isPending} onClick={() => submitAction(`/api/deliveries/${detail.id}/approve-receipt`)}>اعتماد إيصال المصدر</Button>}{detail.capabilities.canComplete && <Button className="min-h-12" disabled={action.isPending} onClick={() => submitAction(`/api/deliveries/${detail.id}/complete`)}>إنهاء المهمة</Button>}{detail.capabilities.canReassign && <Button variant="outline" className="min-h-12" onClick={() => { setAssignmentMode("reassign"); setForm({ sourceKey: "", driverId: detail.driverId, vehicleNumber: detail.vehicleNumber, scheduledAt: "" }); setAssignOpen(true); }}>إعادة إسناد</Button>}{detail.capabilities.canFail && <Button variant="destructive" className="min-h-12" onClick={() => setFailureOpen(true)}>تعذر التسليم</Button>}</div>
-        {["assigned", "in_transit", "awaiting_receipt"].includes(detail.status) && <Button variant="outline" onClick={() => void openDetail(detail)}>تحديث حالة المصدر والمهمة</Button>}
-       {detail.capabilities.canCancel && <Button variant="outline" onClick={() => setCancelOpen(true)}>إلغاء مهمة التوصيل</Button>}
-       <Dialog open={cancelOpen} onOpenChange={setCancelOpen}><DialogContent><DialogHeader><DialogTitle>إلغاء مهمة التوصيل فقط</DialogTitle><DialogDescription>الشحنة الأصلية والمخزون لا يتغيران. يمكن إعادة الإسناد قبل الاستلام الفعلي.</DialogDescription></DialogHeader><Textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="سبب الإلغاء" /><Button variant="destructive" disabled={cancelReason.trim().length < 3 || action.isPending} onClick={() => { submitAction(`/api/deliveries/${detail.id}/cancel`, { reason: cancelReason.trim() }); setCancelOpen(false); }}>تأكيد إلغاء المهمة دون إلغاء الشحنة</Button></DialogContent></Dialog>
-       <Dialog open={failureOpen} onOpenChange={setFailureOpen}><DialogContent><DialogHeader><DialogTitle>تسجيل تعذر التسليم</DialogTitle><DialogDescription>سجّل سببًا واضحًا قبل إرسال الحالة.</DialogDescription></DialogHeader><Textarea value={failureReason} onChange={e => setFailureReason(e.target.value)} placeholder="سبب التعذر" /><Button variant="destructive" className="min-h-12" disabled={!failureReason.trim() || action.isPending} onClick={() => { submitAction(`/api/deliveries/${detail.id}/fail`, { reason: failureReason.trim() }); setFailureOpen(false); }}>تأكيد التعذر</Button></DialogContent></Dialog></div>}</DialogContent></Dialog>
-  </main></Layout>;
+      <details className="rounded-xl border p-3"><summary className="cursor-pointer font-semibold">بنود الشحنة والإثبات وسجل المهمة</summary><div className="mt-4"><DeliveryDetail delivery={detail} now={clock} proof={proofQuery.isError ? undefined : proofQuery.data} /></div></details>
+      {(detail.capabilities.canRecordHandover || detail.capabilities.canAcknowledgeHandover || !!detail.handoverItems || detail.handoverInvalidated) && <details className="rounded-xl border p-3" open={detail.capabilities.canRecordHandover || detail.capabilities.canAcknowledgeHandover ? true : undefined}><summary className="cursor-pointer font-semibold">محضر تسليم الشحنة للسائق</summary><div className="mt-3"><HandoverSection key={`${detail.id}:${detail.handoverRecordedAt || "new"}:${detail.driverId}`} delivery={detail} pending={action.isPending} onAction={submitAction} /></div></details>}
+       <div className="flex flex-wrap gap-2">{detail.capabilities.canReassign && <Button variant="outline" className="min-h-12" disabled={action.isPending} onClick={() => { setAssignmentMode("reassign"); setForm({ sourceKey: "", driverId: detail.driverId, vehicleNumber: detail.vehicleNumber, scheduledAt: "" }); setAssignOpen(true); }}>إعادة إسناد</Button>}{detail.capabilities.canFail && <Button variant="destructive" className="min-h-12" disabled={action.isPending} onClick={() => setFailureOpen(true)}>تعذر التسليم</Button>}{detail.capabilities.canCancel && <Button variant="outline" disabled={action.isPending} onClick={() => setCancelOpen(true)}>إلغاء مهمة التوصيل</Button>}{["assigned", "in_transit", "awaiting_receipt", "receipt_approved"].includes(detail.status) && <Button variant="outline" disabled={action.isPending} onClick={() => void openDetail(detail)}>تحديث حالة المصدر والمهمة</Button>}</div>
+       <Dialog open={cancelOpen} onOpenChange={open => { if (!action.isPending) setCancelOpen(open); }}><DialogContent><DialogHeader><DialogTitle>إلغاء مهمة التوصيل فقط</DialogTitle><DialogDescription>الشحنة الأصلية والمخزون لا يتغيران. يمكن إعادة الإسناد قبل الاستلام الفعلي.</DialogDescription></DialogHeader><Textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="سبب الإلغاء" /><Button variant="destructive" disabled={cancelReason.trim().length < 3 || action.isPending} onClick={() => submitAction(`/api/deliveries/${detail.id}/cancel`, { reason: cancelReason.trim() })}>تأكيد إلغاء المهمة دون إلغاء الشحنة</Button></DialogContent></Dialog>
+       <Dialog open={failureOpen} onOpenChange={open => { if (!action.isPending) setFailureOpen(open); }}><DialogContent><DialogHeader><DialogTitle>تسجيل تعذر التسليم</DialogTitle><DialogDescription>سجّل سببًا واضحًا قبل إرسال الحالة.</DialogDescription></DialogHeader><Textarea value={failureReason} onChange={e => setFailureReason(e.target.value)} placeholder="سبب التعذر" /><Button variant="destructive" className="min-h-12" disabled={!failureReason.trim() || action.isPending} onClick={() => submitAction(`/api/deliveries/${detail.id}/fail`, { reason: failureReason.trim() })}>تأكيد التعذر</Button></DialogContent></Dialog></div></>;
+  }
 }
 
 function HandoverSection({ delivery, pending, onAction }: { delivery: Delivery; pending: boolean; onAction: (endpoint: string, body?: unknown) => void }) {
@@ -142,8 +246,8 @@ function HandoverSection({ delivery, pending, onAction }: { delivery: Delivery; 
   </section>;
 }
 
-function AssignmentDialog({ open, onOpenChange, mode, sources, drivers, loading, form, setForm, selectedSource, selectedDriver, onSubmit, pending }: { open: boolean; onOpenChange: (open: boolean) => void; mode: "create" | "reassign"; sources: Source[]; drivers: Driver[]; loading: boolean; form: { sourceKey: string; driverId: string; vehicleNumber: string; scheduledAt: string }; setForm: Dispatch<SetStateAction<{ sourceKey: string; driverId: string; vehicleNumber: string; scheduledAt: string }>>; selectedSource?: Source; selectedDriver?: Driver; onSubmit: () => void; pending: boolean }) {
-  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-xl" dir="rtl"><DialogHeader><DialogTitle>{mode === "create" ? "إسناد مهمة توصيل" : "إعادة إسناد المهمة"}</DialogTitle><DialogDescription>{mode === "create" ? "اختر شحنة جاهزة للتسليم للسائق (قبل الصرف أو بعده) وسائقًا من النطاق المسموح به." : "يلغى المحضر والإقرار السابقان ويلزم محضر وإقرار السائق الجديد. إن كانت الشحنة شُحنت بالفعل فلا تعِد صرفها من المصدر."}</DialogDescription></DialogHeader>{loading ? <div className="space-y-3"><Skeleton className="h-12" /><Skeleton className="h-12" /></div> : <div className="space-y-4">{mode === "create" && <div className="space-y-2"><Label>مصدر الشحنة</Label><Select value={form.sourceKey} onValueChange={sourceKey => setForm(v => ({ ...v, sourceKey }))}><SelectTrigger className="min-h-12"><SelectValue placeholder="اختر المصدر المؤهل" /></SelectTrigger><SelectContent>{sources.map(source => <SelectItem key={`${source.sourceType}:${source.sourceId}`} value={`${source.sourceType}:${source.sourceId}`}>{source.sourceLabel} — {source.destinationBranchName}</SelectItem>)}</SelectContent></Select>{selectedSource && <p className="text-xs text-muted-foreground">{selectedSource.items.length} بنود · من {selectedSource.sourceBranchName} إلى {selectedSource.destinationBranchName}</p>}</div>}<div className="space-y-2"><Label>السائق</Label><Select value={form.driverId} onValueChange={driverId => setForm(v => ({ ...v, driverId }))}><SelectTrigger className="min-h-12"><SelectValue placeholder="اختر السائق" /></SelectTrigger><SelectContent>{drivers.map(driver => <SelectItem key={driver.id} value={driver.id}>{driver.name} · {driver.jobTitle}</SelectItem>)}</SelectContent></Select></div><div className="grid gap-4 md:grid-cols-2"><div className="space-y-2"><Label htmlFor="vehicle">رقم المركبة</Label><Input id="vehicle" className="min-h-12" value={form.vehicleNumber} onChange={e => setForm(v => ({ ...v, vehicleNumber: e.target.value }))} /></div>{mode === "create" && <div className="space-y-2"><Label htmlFor="scheduled">موعد التوصيل</Label><Input id="scheduled" className="min-h-12" type="datetime-local" value={form.scheduledAt} onChange={e => setForm(v => ({ ...v, scheduledAt: e.target.value }))} /></div>}</div><Button className="min-h-12 w-full" disabled={!selectedDriver || pending} onClick={onSubmit}>{pending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}{mode === "create" ? "تأكيد الإسناد" : "تأكيد إعادة الإسناد"}</Button></div>}</DialogContent></Dialog>;
+function AssignmentDialog({ open, onOpenChange, mode, sources, drivers, loading, error, form, setForm, selectedSource, selectedDriver, onSubmit, pending }: { open: boolean; onOpenChange: (open: boolean) => void; mode: "create" | "reassign"; sources: Source[]; drivers: Driver[]; loading: boolean; error: boolean; form: { sourceKey: string; driverId: string; vehicleNumber: string; scheduledAt: string }; setForm: Dispatch<SetStateAction<{ sourceKey: string; driverId: string; vehicleNumber: string; scheduledAt: string }>>; selectedSource?: Source; selectedDriver?: Driver; onSubmit: () => void; pending: boolean }) {
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-xl" dir="rtl"><DialogHeader><DialogTitle>{mode === "create" ? "إسناد مهمة توصيل" : "إعادة إسناد المهمة"}</DialogTitle><DialogDescription>{mode === "create" ? "اختر شحنة جاهزة للتسليم للسائق (قبل الصرف أو بعده) وسائقًا من النطاق المسموح به." : "يلغى المحضر والإقرار السابقان ويلزم محضر وإقرار السائق الجديد. إن كانت الشحنة شُحنت بالفعل فلا تعِد صرفها من المصدر."}</DialogDescription></DialogHeader>{loading ? <div className="space-y-3"><Skeleton className="h-12" /><Skeleton className="h-12" /></div> : error ? <p role="alert" className="text-sm text-destructive">تعذر تحميل المصادر أو السائقين. أغلق النافذة وأعد المحاولة.</p> : <div className="space-y-4">{mode === "create" && <div className="space-y-2"><Label>مصدر الشحنة</Label><Select value={form.sourceKey} onValueChange={sourceKey => setForm(v => ({ ...v, sourceKey }))}><SelectTrigger className="min-h-12"><SelectValue placeholder="اختر المصدر المؤهل" /></SelectTrigger><SelectContent>{sources.map(source => <SelectItem key={`${source.sourceType}:${source.sourceId}`} value={`${source.sourceType}:${source.sourceId}`}>{source.sourceLabel} — {source.destinationBranchName}</SelectItem>)}</SelectContent></Select>{selectedSource && <p className="text-xs text-muted-foreground">{selectedSource.items.length} بنود · من {selectedSource.sourceBranchName} إلى {selectedSource.destinationBranchName}</p>}</div>}<div className="space-y-2"><Label>السائق</Label><Select value={form.driverId} onValueChange={driverId => setForm(v => ({ ...v, driverId }))}><SelectTrigger className="min-h-12"><SelectValue placeholder="اختر السائق" /></SelectTrigger><SelectContent>{drivers.map(driver => <SelectItem key={driver.id} value={driver.id}>{driver.name} · {driver.jobTitle}</SelectItem>)}</SelectContent></Select></div><div className="grid gap-4 md:grid-cols-2"><div className="space-y-2"><Label htmlFor="vehicle">رقم المركبة</Label><Input id="vehicle" className="min-h-12" value={form.vehicleNumber} onChange={e => setForm(v => ({ ...v, vehicleNumber: e.target.value }))} /></div>{mode === "create" && <div className="space-y-2"><Label htmlFor="scheduled">موعد التوصيل</Label><Input id="scheduled" className="min-h-12" type="datetime-local" value={form.scheduledAt} onChange={e => setForm(v => ({ ...v, scheduledAt: e.target.value }))} /></div>}</div><Button className="min-h-12 w-full" disabled={!selectedDriver || (mode === "create" && !selectedSource) || pending} onClick={onSubmit}>{pending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}{mode === "create" ? "تأكيد الإسناد" : "تأكيد إعادة الإسناد"}</Button></div>}</DialogContent></Dialog>;
 }
 
 function Reports({ range, setRange, reports, loading, error, canExport, knownDeliveries, onExport }: { range: { from: string; to: string; sourceBranchId: string; destinationBranchId: string; status: string }; setRange: Dispatch<SetStateAction<{ from: string; to: string; sourceBranchId: string; destinationBranchId: string; status: string }>>; reports?: Report; loading: boolean; error: boolean; canExport: boolean; knownDeliveries: Delivery[]; onExport: () => void }) {

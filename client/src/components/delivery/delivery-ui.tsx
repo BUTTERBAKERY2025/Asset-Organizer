@@ -15,6 +15,15 @@ const stages: Record<Delivery["status"], { label: string; className: string }> =
 };
 
 export const deliveryStatus = (status: Delivery["status"]) => stages[status];
+export function deliveryMatchesContext(
+  delivery: Pick<Delivery, "id" | "sourceType" | "sourceId">,
+  sourceType?: "kitchen",
+  sourceId?: number,
+  deliveryId?: number | null,
+): boolean {
+  return (deliveryId == null || delivery.id === deliveryId)
+    && (!sourceType || (delivery.sourceType === sourceType && delivery.sourceId === sourceId));
+}
 export const deliverySourceLabel = (type: Delivery["sourceType"]) => ({
   kitchen: "طلب المطبخ المركزي",
   material_transfer: "نقل مواد",

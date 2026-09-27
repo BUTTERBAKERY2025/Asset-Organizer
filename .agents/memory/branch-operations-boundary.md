@@ -32,3 +32,9 @@ Keep the board's top area in the existing system identity, without repeating low
 **Why:** On 2026-09-25 the user rejected the separate warm visual identity and repeated nested headings/panels; requested simple notifications for work needing intervention and explicitly limited the redesign to the top.
 
 **How to apply:** Keep alerts compact with details on demand; preserve access to distinct topics and partial-data warnings. Do not redesign the lower sections or introduce tabs without a new request.
+
+The daily kitchen order workspace should compose existing delivery and branch/bar operations in place, not create a parallel lifecycle or collapse independent approvals.
+
+**Why:** The user explicitly prioritized fewer windows and repeated inputs after a live order required repeated navigation and proof submissions. Faster interaction must preserve source stock postings, independent recipients, and per-record audit history.
+
+**How to apply:** Put the actor's next permitted action first, show waiting ownership after success, and offer proof replacement explicitly rather than leaving an initial-send form open. Only batch actions with individually reviewed eligibility and separate idempotency/results. Pooled branch lots cannot prove that a specific order reached the bar; label that downstream view as shared context unless explicit provenance exists.
