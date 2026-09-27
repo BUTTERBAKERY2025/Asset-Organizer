@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
-import { AlertTriangle, Loader2, PackagePlus, RefreshCw, Search } from "lucide-react";
+import { AlertTriangle, Loader2, PackagePlus, Plus, RefreshCw, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,8 +85,6 @@ const SHORTAGE_LABELS: Record<string, string> = {
 
 const catalogKey = (item: Pick<CentralKitchenCatalogItem, "id" | "source">) => `${item.source}:${item.id}`;
 const sourceLabel = (source: "product" | "warehouse") => source === "warehouse" ? "المستودع" : "المنتجات";
-const itemSource = (item: Pick<PreparationEditorItem, "productId" | "warehouseItemId">) =>
-  item.warehouseItemId != null ? "warehouse" : "product";
 
 function numberValue(value: unknown): number {
   const parsed = Number(value);
@@ -167,9 +165,10 @@ function ProductionReadiness({
     return <div className="mt-3 flex flex-wrap items-start justify-between gap-2 rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900"><div><p className="font-semibold">دليل الإنتاج غير متاح</p><p className="mt-1">{message} لا يوجد افتراض بأن الكمية المؤهلة تساوي صفراً.</p></div><Button type="button" size="sm" variant="outline" onClick={onRetry}><RefreshCw className="ml-1 h-3.5 w-3.5" />إعادة التحقق</Button></div>;
   }
   const data = query.data as ProductionFulfillmentReadiness;
-  return <div className="mt-3 rounded-md border border-violet-200 bg-violet-50/60 p-3 text-xs text-violet-950">
-    <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-semibold">الكمية المؤهلة من الإنتاج المكتمل المرتبط بالطلب</span><Badge variant="outline" className="border-violet-300 bg-background">{state.eligibleQuantity}</Badge></div>
-    {data.batches.length ? <div className="mt-2 flex flex-wrap gap-2">{data.batches.map(batch => <span key={batch.batchId} className="rounded border border-violet-200 bg-background px-2 py-1">دفعة #{batch.batchId} · {batch.quantity}</span>)}</div> : <p className="mt-2">لا توجد دفعة إنتاج مكتملة مؤهلة حالياً. أنشئ أو أنهِ دفعة مرتبطة بهذا الطلب من <a className="font-semibold underline underline-offset-2" href="/production-dashboard?tab=operations">غرفة تشغيل الإنتاج</a> أثناء اعتماد الطلب، ثم أعد التحقق.</p>}
+  return <div className="mt-1.5 text-xs text-violet-950">
+    <span className="font-medium">الإنتاج المكتمل المؤهل لهذا البند: </span><Badge variant="outline" className="border-violet-300 bg-violet-50">{state.eligibleQuantity}</Badge>
+    {!data.batches.length && <p className="mt-1">لا توجد دفعة إنتاج مكتملة مؤهلة حالياً. أنشئ أو أنهِ دفعة مرتبطة بهذا الطلب من <a className="font-semibold underline underline-offset-2" href="/production-dashboard?tab=operations">غرفة تشغيل الإنتاج</a> أثناء اعتماد الطلب، ثم أعد التحقق.</p>}
+    {!!data.batches.length && <details className="mt-1"><summary className="cursor-pointer">دفعات الإثبات</summary><div className="mt-1 flex flex-wrap gap-1">{data.batches.map(batch => <span key={batch.batchId} className="rounded border border-violet-200 bg-violet-50 px-2 py-1">دفعة #{batch.batchId} · {batch.quantity}</span>)}</div></details>}
   </div>;
 }
 
@@ -210,11 +209,15 @@ export function PreparationEditor({
       substituteUnit: item.substituteUnit || item.unit,
       substituteProductId: item.substituteProductId == null ? undefined : Number(item.substituteProductId),
       substituteWarehouseItemId: item.substituteWarehouseItemId == null ? undefined : Number(item.substituteWarehouseItemId),
-      substituteManualMode: false,
+      substituteManualMode: !!item.substituteProductName && item.substituteProductId == null && item.substituteWarehouseItemId == null,
       shortageReason: item.shortageReason || "",
       preparationNotes: item.preparationNotes || "",
     };
   }));
+  const [visibleSubstitutes, setVisibleSubstitutes] = useState<number[]>(() => items.flatMap((item, index) =>
+    Number(item.substituteQuantity) > 0 || !!item.substituteProductName || item.substituteProductId != null || item.substituteWarehouseItemId != null ? [index] : []
+  ));
+  const [notesOpen, setNotesOpen] = useState(() => !!actionNotes);
   const update = (index: number, changes: Partial<PreparationDraft>) => setDrafts(current => current.map((item, i) => i === index ? { ...item, ...changes } : item));
   const readinessQueries = useQueries({
     queries: items.map(item => {
@@ -289,10 +292,10 @@ export function PreparationEditor({
     }));
   };
 
-  return <section className="rounded-lg border border-indigo-200 bg-indigo-50/30 p-4">
-    <div className="mb-3"><h3 className="font-semibold">تسجيل التجهيز الفعلي</h3><p className="text-xs text-muted-foreground">سجّل الكمية الأصلية والبديلة. البديل يُحتسب دائماً بوحدة الصنف المطلوب.</p></div>
+  return <section className="rounded-lg border border-indigo-200 bg-indigo-50/30 p-3">
+    <h3 className="mb-2 font-semibold">تسجيل التجهيز الفعلي</h3>
     <CatalogQueryState query={productsQuery} count={products.length} />
-    <div className="space-y-3">{drafts.map((draft, index) => {
+    <div className="space-y-2">{drafts.map((draft, index) => {
       const item = items[index];
       const requested = numberValue(item?.requestedQuantity);
       const mode = getPrepareFulfillmentMode(item, inventoryMode);
@@ -300,26 +303,27 @@ export function PreparationEditor({
       const readiness = readinessState(query);
       const prepared = mode === "mixed" ? Number(draft.preparedFromStock || 0) + Number(draft.preparedFromProduction || 0) : Number(draft.preparedQuantity || 0);
       const shortage = Math.max(0, requested - prepared - Number(draft.substituteQuantity || 0));
-      return <div className="rounded-md border bg-background p-3" key={draft.itemId}>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><p className="font-medium">{item?.productName} <span className="mt-1 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">{sourceLabel(itemSource(item))}</span></p><Badge variant="outline">المطلوب: {requested} {item?.unit}</Badge></div>
+      return <div className="rounded-md border bg-background p-2.5" key={draft.itemId}>
+        <div className="mb-2 flex min-w-0 items-center justify-between gap-2"><p className="min-w-0 truncate font-medium" title={item?.productName}>{item?.productName}</p><span className="shrink-0 text-xs text-muted-foreground">المطلوب: {requested} {item?.unit}</span></div>
         {mode === "mixed" ? <>
-          <div className="mb-3 rounded-md border border-violet-200 bg-violet-50/60 p-3 text-xs text-violet-950"><p className="font-semibold">مصدر التجهيز المختلط</p><p className="mt-1">الإنتاج يُحتسب من دفعة وصفة مكتملة فقط. الإجمالي يستهلك مخزون المنتج النهائي مرة واحدة، ولا يضيف استهلاك مخزون إنتاج إضافياً.</p></div>
-          <div className="grid gap-3 md:grid-cols-2">
-             <div><Label className="text-xs" htmlFor={`stock-${draft.itemId}`}>جاهز من المخزون</Label><Input id={`stock-${draft.itemId}`} className="mt-1 min-h-11" type="number" inputMode="numeric" min="0" max={requested} step="1" value={draft.preparedFromStock} onChange={event => update(index, { preparedFromStock: event.target.value })} /></div>
-             <div><Label className="text-xs" htmlFor={`production-${draft.itemId}`}>إنتاج جديد مكتمل مرتبط بالطلب</Label><Input id={`production-${draft.itemId}`} className="mt-1 min-h-11" type="number" inputMode="numeric" min="0" max={requested} step="1" value={draft.preparedFromProduction} onChange={event => update(index, { preparedFromProduction: event.target.value })} /><p className="mt-1 text-[11px] text-muted-foreground">لا تُقبل هذه الكمية إلا من دليل دفعة مكتملة مرتبط بهذا البند.</p></div>
+          <div className="grid grid-cols-2 gap-2">
+             <div className="min-w-0"><Label className="text-xs" htmlFor={`stock-${draft.itemId}`}>جاهز من المخزون</Label><Input id={`stock-${draft.itemId}`} className="mt-1 h-9" type="number" inputMode="numeric" min="0" max={requested} step="1" value={draft.preparedFromStock} onChange={event => update(index, { preparedFromStock: event.target.value })} /></div>
+              <div className="min-w-0"><Label className="text-xs" htmlFor={`production-${draft.itemId}`}>إنتاج جديد مرتبط بالطلب</Label><Input id={`production-${draft.itemId}`} className="mt-1 h-9" type="number" inputMode="numeric" min="0" max={requested} step="1" value={draft.preparedFromProduction} onChange={event => update(index, { preparedFromProduction: event.target.value })} /></div>
           </div>
           <ProductionReadiness query={query} onRetry={() => query.refetch()} />
-         </> : <div><Label className="text-xs" htmlFor={`prepared-${draft.itemId}`}>الكمية الأصلية المجهزة</Label><Input id={`prepared-${draft.itemId}`} className="mt-1 min-h-11" type="number" inputMode={item.productId != null ? "numeric" : "decimal"} min="0" max={requested} step={item.productId != null ? "1" : "0.000001"} value={draft.preparedQuantity} onChange={event => update(index, { preparedQuantity: event.target.value })} /></div>}
-        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <details className="mt-1.5 text-xs text-muted-foreground"><summary className="cursor-pointer">تفاصيل الاحتساب</summary><p className="mt-1">الإنتاج يُحتسب من دفعة وصفة مكتملة فقط ومرتبطة بهذا البند. الإجمالي يستهلك مخزون المنتج النهائي مرة واحدة، ولا يضيف استهلاك مخزون إنتاج إضافياً.</p></details>
+          </> : <div><Label className="text-xs" htmlFor={`prepared-${draft.itemId}`}>الكمية الأصلية المجهزة</Label><Input id={`prepared-${draft.itemId}`} className="mt-1 h-9" type="number" inputMode={item.productId != null ? "numeric" : "decimal"} min="0" max={requested} step={item.productId != null ? "1" : "0.000001"} value={draft.preparedQuantity} onChange={event => update(index, { preparedQuantity: event.target.value })} /></div>}
+         <Button type="button" variant="ghost" size="sm" className="mt-1.5 h-8 px-2 text-xs" aria-expanded={visibleSubstitutes.includes(index)} onClick={() => setVisibleSubstitutes(current => current.includes(index) ? current.filter(value => value !== index) : [...current, index])}><Plus className="ml-1 h-3.5 w-3.5" />{visibleSubstitutes.includes(index) ? "إخفاء البديل" : "إضافة بديل"}{!visibleSubstitutes.includes(index) && Number(draft.substituteQuantity) > 0 && ` (${draft.substituteQuantity})`}</Button>
+         {visibleSubstitutes.includes(index) && <div className="mt-1 grid gap-2 md:grid-cols-3">
            <div><Label className="text-xs" htmlFor={`substitute-${draft.itemId}`}>كمية البديل</Label><Input id={`substitute-${draft.itemId}`} className="mt-1 min-h-11" type="number" inputMode={item.productId != null ? "numeric" : "decimal"} min="0" max={requested} step={item.productId != null ? "1" : "0.000001"} value={draft.substituteQuantity} onChange={event => update(index, { substituteQuantity: event.target.value })} /></div>
            <div><Label className="text-xs">اختيار البديل</Label><div className="mt-1"><SubstitutePicker disabled={Number(draft.substituteQuantity) <= 0} value={draft.substituteWarehouseItemId !== undefined ? `warehouse:${draft.substituteWarehouseItemId}` : draft.substituteProductId !== undefined ? `product:${draft.substituteProductId}` : draft.substituteManualMode ? "__manual" : undefined} onValueChange={value => { if (value === "__manual") update(index, { substituteManualMode: true, substituteProductId: undefined, substituteWarehouseItemId: undefined, substituteProductName: "" }); else { const selected = products.find(entry => catalogKey(entry) === value); if (selected) { const source = selected.source; update(index, { substituteManualMode: false, substituteProductId: source === "product" ? selected.id : undefined, substituteWarehouseItemId: source === "warehouse" ? selected.id : undefined, substituteProductName: selected.name, substituteUnit: item.unit }); } } }} products={products} /></div><Input className="mt-2 min-h-11" disabled={Number(draft.substituteQuantity) <= 0 || !draft.substituteManualMode} value={draft.substituteProductName} onChange={event => update(index, { substituteProductName: event.target.value })} placeholder="اسم البديل اليدوي" /></div>
           <div><Label className="text-xs">وحدة احتساب البديل</Label><Input className="mt-1" disabled value={draft.substituteUnit} /><p className="mt-1 text-[11px] text-muted-foreground">مطابقة لوحدة الطلب</p></div>
-        </div>
-        {shortage > 0 && <div className="mt-3 grid gap-3 md:grid-cols-2"><div><Label className="text-xs">سبب النقص ({shortage} {item?.unit})</Label><Select value={draft.shortageReason} onValueChange={value => update(index, { shortageReason: value })}><SelectTrigger className="mt-1"><SelectValue placeholder="اختر سبب النقص" /></SelectTrigger><SelectContent>{Object.entries(SHORTAGE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div><div><Label className="text-xs">ملاحظة التجهيز</Label><Input className="mt-1" value={draft.preparationNotes} onChange={event => update(index, { preparationNotes: event.target.value })} placeholder="تفاصيل النقص أو البديل" /></div></div>}
+         </div>}
+         {shortage > 0 && <div className="mt-2 grid gap-2 md:grid-cols-2"><div><Label className="text-xs">سبب النقص ({shortage} {item?.unit})</Label><Select value={draft.shortageReason} onValueChange={value => update(index, { shortageReason: value })}><SelectTrigger className="mt-1"><SelectValue placeholder="اختر سبب النقص" /></SelectTrigger><SelectContent>{Object.entries(SHORTAGE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div><div><Label className="text-xs">ملاحظة التجهيز</Label><Input className="mt-1" value={draft.preparationNotes} onChange={event => update(index, { preparationNotes: event.target.value })} placeholder="تفاصيل النقص أو البديل" /></div></div>}
       </div>;
     })}</div>
     {validationError && <div className="mt-3 flex items-center gap-2 rounded-md bg-amber-50 p-2 text-sm text-amber-800"><AlertTriangle className="h-4 w-4" />{validationError}</div>}
-    <div className="mt-4"><Label htmlFor="preparation-note">ملاحظة عامة (اختياري)</Label><Input id="preparation-note" className="mt-1" value={actionNotes} onChange={event => setActionNotes(event.target.value)} /><Button className="mt-3" disabled={pending || !!validationError} onClick={submit}>{pending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <PackagePlus className="ml-2 h-4 w-4" />}تأكيد الكميات والتجهيز</Button></div>
+    <div className="mt-2"><details open={notesOpen} onToggle={event => setNotesOpen(event.currentTarget.open)} className="text-sm"><summary className="cursor-pointer">ملاحظة عامة (اختياري)</summary><Label htmlFor="preparation-note" className="sr-only">ملاحظة عامة</Label><Input id="preparation-note" className="mt-1" value={actionNotes} onChange={event => setActionNotes(event.target.value)} /></details><Button className="mt-2" disabled={pending || !!validationError} onClick={submit}>{pending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <PackagePlus className="ml-2 h-4 w-4" />}تأكيد الكميات والتجهيز</Button></div>
   </section>;
 }
 
